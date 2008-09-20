@@ -1,0 +1,34 @@
+#VRML V2.0 utf8
+
+DEF Omni01 PointLight {
+  intensity 1
+  color 1 1 1
+  location -5.          -.5,0
+  on TRUE
+  radius 25
+}
+NavigationInfo { headlight FALSE }
+DEF Pyramid02 Transform {
+  translation 0 1 0
+	rotation 0,0,1, 0,
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.878 0.561 0.341
+        }
+      }
+      geometry DEF Pyramid02-FACES IndexedFaceSet {
+        ccw TRUE
+        solid TRUE
+        coord DEF Pyramid02-COORD Coordinate { point [
+          0 1 0, -0.5 0 0.5, 0.5 0 0.5, 0.5 0 -0.5, -0.5 0 -0.5, 
+          0 0 0]
+        }
+        coordIndex [
+          0, 1, 2, -1, 0, 2, 3, -1, 0, 3, 4, -1, 0, 4, 1, -1, 1, 5, 2, -1, 
+          2, 5, 3, -1, 3, 5, 4, -1, 4, 5, 1, -1]
+        }
+    }
+  ]
+}

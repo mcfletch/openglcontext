@@ -1,0 +1,480 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html lang="en-ca">
+<head>
+
+  
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+  
+  
+  <title>Using VRML97 with OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/tutorial.css">
+
+  
+  <meta name="author" content="Mike C. Fletcher">
+</head>
+
+
+<body style="direction: ltr;">
+
+<h1>Using VRML97 with OpenGLContext</h1>
+
+<p class="introduction">This document describes the (partial) VRML97
+implementation provided by the OpenGLContext and vrml packages.
+&nbsp;The VRML97 ISO standard is a large and complex specification, and
+the OpenGLContext implementation supports only a small subset of its
+functionality, hopefully a useful subset. &nbsp;You can load, render
+and
+re-save scenegraph's from VRML97 files, as well as render a number of
+the more common nodes.</p>
+
+
+<h2>What is Implemented?</h2>
+
+
+<p>OpenGLContext is only a partial implementation of <a href="http://www.web3d.org/resources/vrml_ref_manual/Book.html">VRML97</a>.&nbsp;
+It provides a subset targeted at the output of common 3-D modelers. In
+particular, the nodes which are implemented (at least partially) by
+OpenGLContext are as follows:<br>
+
+</p>
+
+<ul>
+
+  <li><a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Transform">Transform</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Group">Group</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Switch">Switch</a></li>
+
+  <li><a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#PointLight">PointLight</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#SpotLight">SpotLight</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#DirectionalLight">DirectionalLight</a></li>
+
+  <li><a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Background">Background</a><br>
+
+  </li>
+
+  <li><a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Shape">Shape</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Appearance">Appearance</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Material">Material</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#ImageTexture">ImageTexture</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#PixelTexture">PixelTexture</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#TextureTransform">TextureTransform</a></li>
+
+  <li><a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#IndexedFaceSet">IndexedFaceSet</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#IndexedLineSet">IndexedLineSet</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#PointSet">PointSet</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Box">Box</a></li>
+
+  <li><a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Sphere">Sphere</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Cone">Cone</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Cylinder">Cylinder</a></li>
+
+  <li><a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Text">Text</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#FontStyle">FontStyle</a>
+(with the FontTools package)</li>
+
+  <li><a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#OrientationInterpolator">OrientationInterpolator</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#ColorInterpolator">ColorInterpolator</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#ScalarInterpolator">ScalarInterpolator</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#PositionInterpolator">PositionInterpolator</a>,
+    <a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#CoordinateInterpolator">CoordinateInterpolator</a></li>
+
+  <li><a href="http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#TimeSensor">TimeSensor</a><br>
+
+  </li>
+
+</ul>
+
+
+
+<p>In addition, OpenGLContext provides a partial implementation of the
+VRML97 <a href="http://www.blaxxun.com/developer/contact/3d/nurbs/spec/nurbsproposal.html">NURBs
+extension</a> proposal by Blaxxun Interactive:<br>
+
+</p>
+
+<ul>
+
+  <li><a href="http://www.blaxxun.com/developer/contact/3d/nurbs/spec/nodes.htm#Polyline2D">Polyline2D</a>,<a href="http://www.blaxxun.com/developer/contact/3d/nurbs/spec/nodes.htm#NurbsCurve2D">NurbsCurve2D</a>,<a href="http://www.blaxxun.com/developer/contact/3d/nurbs/spec/nodes.htm#Contour2D">Contour2D</a></li>
+
+  <li><a href="http://www.blaxxun.com/developer/contact/3d/nurbs/spec/nodes.htm#NurbsSurface">NurbsSurface</a>,<a href="http://www.blaxxun.com/developer/contact/3d/nurbs/spec/nodes.htm#TrimmedSurface">TrimmedSurface</a>,</li>
+
+  <li><a href="http://www.blaxxun.com/developer/contact/3d/nurbs/spec/nodes.htm#NurbsCurve">NurbsCurve</a></li>
+
+</ul>
+
+<p>And OpenGLContext provides a number of specialized nodes which are
+not part of the VRML97 specification:<br>
+
+</p>
+
+<ul>
+
+  <li><a href="../pydoc/OpenGLContext.scenegraph.cubebackground.html">CubeBackground</a>
+-- A Background node with only cubic image map support (no sphere)</li>
+
+  <li><a href="../pydoc/OpenGLContext.scenegraph.spherebackground.html">SphereBackground</a>
+-- A Background node with only gradient sphere support (no cubic image
+map)</li>
+
+  <li><a href="../pydoc/OpenGLContext.scenegraph.imagetexture.html#MMImageTexture">MMImageTexture</a>
+-- A mip-mapped ImageTexture node, by default this is used to implement
+regular ImageTexture nodes<br>
+
+  </li>
+
+  <li><a href="../pydoc/OpenGLContext.scenegraph.indexedpolygons.html">IndexedPolygons</a>
+-- Array based geometry type suitable for rendering "vertex"-oriented
+geometry found in many 3-D file types, renders the entire node with a
+call to glDrawElementsui</li>
+
+  <li><a href="../pydoc/OpenGLContext.scenegraph.extrusions.html">Lathe,
+Screw and Spiral</a> -- GLE-based extruded geometry<br>
+
+  </li>
+
+</ul>
+
+<p>Despite the small number of implemented nodes in OpenGLContext, the
+parser and scenegraph structures of the vrml package support the entire
+VRML97 specification, so although particular nodes may not be rendered,
+many scenes may be loaded which include nodes other than those in the
+lists above.<br>
+
+</p>
+
+<h2>Loading VRML97 Files<br>
+
+</h2>
+
+
+<p>Basic operation of the VRML97 <a href="../pydoc/OpenGLContext.loaders.loaders.html">loader</a> is as
+follows:<br>
+
+</p>
+
+<pre>from OpenGLContext.loaders.loader import Loader<br>scenegraph = Loader.load( myurl, baseURL=None )<br></pre>
+
+<p>The URL can be either a single or multi-value string (i.e. a list of
+strings). &nbsp;If the base URL is not None, then the urls in myurl
+will
+be interpreted relative to the base URL. &nbsp;If the URL is a
+filename,
+the file will be opened, read, potentially un-gzipped, parsed, and
+converted to a scenegraph instance.<br>
+
+</p>
+
+<p class="technical">The VRML97 parser is based on SimpleParse 2.0.0,
+and uses the "cut" production to raise SyntaxError's when a file isn't
+properly formed. &nbsp;You can catch those, as well as IOErrors around
+the call to "load". &nbsp;Note, however, that for certain resources
+(image textures at the moment), the actual loading of the textures is
+done in separate worker threads, which will print messages if errors
+are
+encountered during loading.</p>
+
+<p>You can register a new prototype for use by the VRML97 loader by
+calling the standardPrototype function in the loader module with your
+new prototype as an argument:<br>
+
+</p>
+
+<pre>vrml97.standardPrototype( myNewPrototype )</pre>
+
+<p>The prototype's name, as reported by
+vrml.protofunctions.name(prototype) will then be bound to your
+prototype
+during loading. &nbsp;Note that you can replace any built-in prototype
+with this mechanism as well.<br>
+
+</p>
+
+<h2>Manipulating Nodes Programmatically</h2>
+
+<p>Basic operations with a scenegraph...<br>
+
+</p>
+
+<pre># Get a particular node-instance by it's VRML DEF name<br>myNamedNode = scenegraph.getDEF( "My-Named-Node" )<br># Give an instance a new VRML DEF name<br>scenegraph.regDefName( "My-New-Name", myNamedNode )<br># Get a prototype from the scenegraph's namespace<br>prototype = scenegraph.getProto( "Transform" )<br></pre>
+
+<p>The <a href="../pydoc/vrml.protofunctions.html">protofunctions</a>
+module provides for "safe" manipulation and query of node and prototype
+structures. &nbsp;Although you can normally access a node's DEF name as
+node.DEF, it's root scenegraph as node.root, and it's field definition
+as node.__class__.fieldname, it is possible for a prototype to define a
+field "DEF" or "root" which shadows those convenience properties.
+&nbsp;And using node.__class__ just isn't recommended anywhere.</p>
+
+
+<pre># get the root scenegraph for a node<br>scenegraph = protofunctions.root( node )<br># get a particular <a href="file:///P:/OpenGLContext/pydoc/vrml.field.html#Field">field definition</a> for a node/prototype by name<br>field = protofunctions.getField( node, 'name' )<br>field = protofunctions.getField( proto, 'name' )<br># get all fields for a node/prototype<br>fields = protofunctions.getFields( node )<br>fields = protofunctions.getFields( proto )<br></pre>
+
+<p>Sample of interacting with a VRML node...</p>
+
+<pre>from OpenGLContext.scenegraph import basenodes<br>transform = basenodes.Transform (<br>	translation = [0, 1,0],<br>	rotation = [0, 1,0,3.14159],<br>	children = [<br>		basenodes.Group ()<br>	],<br>)<br>print "Transform Translation", transform.translation<br>transform.translation = [2,3,4]<br>print "After Alteration", transform.translation<br>for child in transform.children:<br>	print child<br></pre>
+
+<p>Field-type equivalents. &nbsp;Note that there is coercian support...<br>
+
+</p>
+
+<table style="text-align: left; width: 100%;" border="0" cellpadding="5" cellspacing="3">
+
+  <tbody>
+
+    <tr>
+
+      <th style="vertical-align: top;">VRML FieldType<br>
+
+      </th>
+
+      <th style="vertical-align: top;">SFField Python Data Type<br>
+
+      </th>
+
+      <th style="vertical-align: top;">MFField Python Data Type<br>
+
+      </th>
+
+    </tr>
+
+    <tr>
+
+      <td style="vertical-align: top;">[SF/MF]Int32<br>
+
+      </td>
+
+      <td style="vertical-align: top;">int<br>
+
+      </td>
+
+      <td style="vertical-align: top;">Numeric-Python int array</td>
+
+    </tr>
+
+    <tr>
+
+      <td style="vertical-align: top;">[SF/MF]Float<br>
+
+      </td>
+
+      <td style="vertical-align: top;">float<br>
+
+      </td>
+
+      <td style="vertical-align: top;">Numeric-Python double array</td>
+
+    </tr>
+
+    <tr>
+
+      <td style="vertical-align: top;">[SF/MF]String<br>
+
+      </td>
+
+      <td style="vertical-align: top;">string (interpreted as UTF-8
+unicode)<br>
+
+      </td>
+
+      <td style="vertical-align: top;">list of strings</td>
+
+    </tr>
+
+    <tr>
+
+      <td style="vertical-align: top;">[SF/MF]Time<br>
+
+      </td>
+
+      <td style="vertical-align: top;">float (time-module float)<br>
+
+      </td>
+
+      <td style="vertical-align: top;">Numeric-Python double array</td>
+
+    </tr>
+
+    <tr>
+
+      <td style="vertical-align: top;">SFBool<br>
+
+      </td>
+
+      <td style="vertical-align: top;">int (0/1)<br>
+
+      </td>
+
+      <td style="vertical-align: top;"><br>
+
+      </td>
+
+    </tr>
+
+    <tr>
+
+      <td style="vertical-align: top;">[SF/MF]Vec2f<br>
+
+      </td>
+
+      <td style="vertical-align: top;">2-item Numeric-Python double
+array</td>
+
+      <td style="vertical-align: top;">x*2 Numeric-Python double array</td>
+
+    </tr>
+
+    <tr>
+
+      <td style="vertical-align: top;">[SF/MF]Color, [SF/MF]Vec3f<br>
+
+      </td>
+
+      <td style="vertical-align: top;">3-item Numeric-Python double
+array<br>
+
+      </td>
+
+      <td style="vertical-align: top;">x*3 Numeric-Python double array</td>
+
+    </tr>
+
+    <tr>
+
+      <td style="vertical-align: top;">[SF/MF]Rotation<br>
+
+      </td>
+
+      <td style="vertical-align: top;">4-item Numeric-Python double
+array<br>
+
+      </td>
+
+      <td style="vertical-align: top;">x*4 Numeric-Python double array</td>
+
+    </tr>
+
+    <tr>
+
+      <td style="vertical-align: top;">SFImage<br>
+
+      </td>
+
+      <td style="vertical-align: top;">Numeric-Python int array</td>
+
+      <td style="vertical-align: top;"><br>
+
+      </td>
+
+    </tr>
+
+  
+  </tbody>
+</table>
+
+
+<h2>The Scenegraph Cache<br>
+
+</h2>
+
+<p>Most rendering nodes in OpenGLContext are written to take advantage
+of the built-in scenegraph cache.&nbsp; The cache is used to store
+partial rendering solutions (for example, tessellations of vertex-based
+geometry) in order to allow per-frame operations to proceed as quickly
+as possible.&nbsp; The cache operates by watching for changes to fields
+on nodes to invalidate the cached data.&nbsp; Each node can have any
+number of cached pieces of data.<br>
+
+</p>
+
+<p>If you are wanting to write your own rendering node, the
+IndexedLineSet node provides a good example of using the cache for
+storing a display-list where the cache should be invalidated based on a
+number of different fields of two different nodes.<br>
+
+</p>
+
+<h2>Creating New Prototypes</h2>
+
+<p>If you would like to create a new node-type (prototype), you can
+either define the prototype using a VRML97 prototype or create it
+directly in Python.&nbsp; Prototypes are implemented as Python classes
+inheriting from the vrml.node.Node class.&nbsp; Normally you will also
+want to inherit from one of the marker classes in
+vrml.vrml97.nodetypes, which is what tells the scenegraph what roles
+your node can play in the graph.<br>
+
+</p>
+
+<p>You can find a very straightforward example of defining new
+node-types in OpenGLContext.scenegraph.extrusions, where three
+(non-standard) geometric node-types are added to the system.<br>
+
+</p>
+
+<p>To make your new node-type available to the VRML97 loader, you can
+call OpenGLContext.loaders.vrml97.standardPrototype( cls ) on your
+prototype class.&nbsp; This allows nodes in your VRML97 files to
+reference the nodes as built-ins.<br>
+
+</p>
+
+<p>There is a lot of sample code for creating your own scenegraph nodes
+in the scenegraph sub-package.&nbsp; If you run into difficulties, feel
+free to contact <a href="mailto:mcfletch@vrplumber.com">Mike</a> about
+them.<br>
+
+</p>
+
+<h2>Event Model</h2>
+
+<p>OpenGLContext has a more limited event model than that specified in
+VRML97.&nbsp; It allows for routing, and provides basic event
+setting/getting with the ability to define handlers for the events, but
+it does not attempt to implement the non-deterministic VRML behaviour.<br>
+
+</p>
+
+<p>Each field on each node sends a PyDispatcher event on setting,
+deletion or routing to an event.&nbsp; The field and event classes are
+both descriptors.&nbsp; They provide all sorts of support machinery for
+working with the field, including support for copying the node, and
+generating prototype descriptions.&nbsp; The field class has a very
+small C accelerator function which replaces the fget method (when
+available), without this performance will noticeably suffer.<br>
+
+</p>
+
+<p>You can define a method to be called before an event (but not a
+field) is set simply by defining a method named on_<span style="font-style: italic;">fieldname</span> where <span style="font-style: italic;">fieldname</span> is the name of the
+field.&nbsp; There are few examples of this in OpenGLContext, as this
+is a new feature in version 2.0.0 final.&nbsp; You will see it in the
+OpenGLContext.scenegraph.interpolators module.<br>
+
+</p>
+
+<p>ROUTE objects can be constructed either in VRML97 files, or by
+constructing the routes directly.&nbsp; ROUTEs are just regular nodes
+with 4 fields, source, sourceField, destination, and
+destinationField.&nbsp; On creation they are bound (i.e. they start
+routing between the source and destination).<br>
+
+</p>
+
+<p class="technical">Note that a ROUTE does <span style="font-weight: bold;">not</span> do a regular set on a field to
+which it is routed.&nbsp; It sets the value, but instead of sending a
+('set',destinationField) message, it sends a ('route',destinationField)
+message.&nbsp; This allows code to distinguish between a user sending a
+message by setting a field and an event cascade setting the
+field.&nbsp; The ROUTE machinery watches for the
+('route',destinationField) messages in order to do continued forwarding.<br>
+
+</p>
+
+<p class="footer"><a href="documentation.html"><img src="images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a>
+<a href="http://pyopengl.sourceforge.net/context/"><img src="images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a>
+<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a>
+A
+SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" align="middle"></a></p>
+
+</body>
+</html>

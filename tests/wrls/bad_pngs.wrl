@@ -1,0 +1,29 @@
+#VRML V2.0 utf8
+
+SimpleBackground { color 0,0,1 }
+DEF Omni01 PointLight {
+  intensity 1
+	ambientIntensity .5
+  color 1 1 1
+  location 1 3 0
+  on TRUE
+  radius 11.1
+}
+NavigationInfo { headlight FALSE }
+DEF Box01 Transform {
+	translation -2 0 0
+  children [
+    DEF TheBox Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.525 0.431 0.0314
+        }
+				texture ImageTexture {
+				 url [ "light1.png"]
+				}
+      }
+      geometry Box { size 4 0.5 4 }
+    }
+  ]
+}
+

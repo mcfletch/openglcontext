@@ -1,0 +1,18 @@
+#VRML V2.0 utf8
+
+DEF SCENE_BACKGROUND SimpleBackground { }
+DEF SCENE_LIGHTS Group { }
+DEF SCENE_OBJECTS Group { 
+	children [
+		Shape {
+			geometry Sphere { }
+			appearance Appearance {
+				material Material {
+					diffuseColor 1,0,0
+					shininess .8
+				}
+			}
+		}
+	]
+}
+

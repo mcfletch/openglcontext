@@ -1,0 +1,29 @@
+#VRML V2.0 utf8
+
+PROTO X [
+	exposedField SFVec3f translation 0,0,0
+	exposedField MFNode children []
+] {
+	DEF Root Transform {
+		translation IS translation
+		children [
+			DEF T Transform {
+				translation 4,0,0
+				children IS children
+			}
+			DEF U Transform {
+				translation -4,0,0
+				children IS children
+			}
+		]
+	}
+	ROUTE Root.rotation TO T.rotation
+}
+
+X {
+	children [ 
+		DEF S Shape { geometry Sphere {} appearance Appearance { material Material {}} }
+	]
+}
+
+

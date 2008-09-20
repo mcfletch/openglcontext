@@ -1,0 +1,28 @@
+#VRML V2.0 utf8
+
+Shape {
+  geometry Text {
+    string [ "Hello World", "VRML Text Node" ]
+    fontStyle FontStyle {
+			family [ "TYPEWRITER", "SERIF"]
+			style [ "BOLD"]
+    }
+  }
+  appearance Appearance { material Material { diffuseColor 1,1,1}}
+}
+Transform{
+	children [
+		Shape {
+		  geometry Text {
+			string [ "Shifted" ]
+			fontStyle FontStyle {
+					family [ "TYPEWRITER", "SERIF"]
+					style [ "BOLD"]
+					size 4
+			}
+		  }
+		  appearance Appearance { material Material { diffuseColor 0,1,0}}
+		}
+	]
+	translation 1,1,1,
+}

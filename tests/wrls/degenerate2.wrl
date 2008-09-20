@@ -1,0 +1,28 @@
+#VRML V2.0 utf8
+
+# Just degenerate geometry, nothing should show up...
+
+Shape {
+  appearance Appearance {
+    material Material {
+      diffuseColor .5 .5 .5
+      ambientIntensity 0.2
+      specularColor 0 0 0
+      shininess 0.05
+    }
+  }
+  geometry DEF Windows-FACES IndexedFaceSet {
+    ccw TRUE
+    solid TRUE
+    coord DEF Windows-COORD Coordinate { point [
+				-4.62 0.313 3.85, -4.62 0.315 3.85, -4.62 -4.06 3.85
+				 4.62 0.315 3.85,  4.62 0.313 3.85,  4.62 -4.06 3.85
+		]}
+    coordIndex [
+			0,1,2,-1
+			3,4,5,-1
+		]
+
+	}
+}
+

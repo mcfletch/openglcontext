@@ -1,0 +1,532 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+
+  
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+  
+  
+  <title>OpenGLContext Rendering Process</title>
+  <link rel="stylesheet" type="text/css" href="style/tutorial.css">
+
+  
+  <meta name="author" content="Mike C. Fletcher">
+</head>
+
+
+<body>
+
+<h1>OpenGLContext Rendering Process</h1>
+
+<p class="introduction">This document describes the process
+OpenGLContext uses to render a screen. &nbsp;It describes the
+RenderPass, RenderVisitor, and Visitor nodes, as well as their
+interactions with the Context and scenegraph-package nodes.</p>
+
+<h2>The Visitor Pattern in OpenGLContext<br>
+
+</h2>
+
+<p>OpenGLContext 2.0 uses a modified "visitor"/traversal pattern (the
+Visitor pattern is a common Computer Science pattern) to implement the
+rendering process. This pattern allows us to replace the entire
+rendering mechanism merely by replacing or specialising the classes
+which implement this pattern. &nbsp;It also localises most of the code
+executed during a rendering pass in a small number of modules, which
+makes understanding the code easier.<br>
+
+</p>
+
+<p>The idea of a visitor pattern (I will only discuss the OpenGLContext
+pattern, not the C.S. one) is that a visitor object is created which
+traverses a graph (a scenegraph in our case). &nbsp;For each node in the
+graph the visitor determines the appropriate methods to run for the
+given node, and then determines what set of children (if any) should be
+visited for the node.<br>
+
+</p>
+
+<p>In concrete terms, the visitor pattern is implemented by the
+OpenGLContext.visitor module. &nbsp;The Visitor class has two points of
+customization which are involved in the normal rendering pass
+implementation. &nbsp;The vmethods system is used to determine the set
+of methods to be run for a given node.&nbsp; Nodes may define a <code>renderedChildren(
+nodetypes)</code> method to specify what nodes should be considered
+their children for the purposes of visitation.<br>
+
+</p>
+
+<p>The registered vmethod (if it exists) is called for every registered
+class of the node's __mro__ field. &nbsp;To give an example, the
+__mro__ of the standard Transform node is:<br>
+
+</p>
+
+<ul>
+
+  <li>vrml.vrml97.basenodes.Transform</li>
+
+  <li>vrml.vrml97.nodetypes.Children</li>
+
+  <li>vrml.vrml97.nodetypes.Transforming</li>
+
+  <li>vrml.vrml97.nodetypes.Grouping</li>
+
+  <li>vrml.vrml97.nodetypes.Traversable</li>
+
+  <li>vrml.vrml97.node.Node</li>
+
+  <li>vrml.node.Node</li>
+
+  <li>object</li>
+
+</ul>
+
+<p>and the standard RenderVisitor class registers vmethods for
+vrml.vrml97.nodetypes.Transforming <span style="font-weight: bold;">and</span>&nbsp;vrml.vrml97.nodetypes.Grouping.
+&nbsp;So that a Transform node encountered during traversal will have
+both registered methods called (in the method resolution order).<br>
+
+</p>
+
+<p class="technical">The difference between the classic computer
+science pattern and the OpenGLContext pattern is that in the computer
+science pattern, the particular node is responsible for dispatching the
+visitor to each of its children. &nbsp;Because OpenGLContext generally
+tries to minimize and/or eliminate rendering-specific code in the
+scenegraph nodes, I introduced the concept of "virtual methods" for any
+given scenegraph node which would be held by the visitor (primarily for
+convenience).<br>
+
+</p>
+
+<p class="technical">Because there are a number of different possible
+traversal patterns (for instance, searching for a particular node in the
+hierarchy may wish to ignore Switch node's whichChoice value to allow
+for finding "switched off" content).&nbsp; At the moment, this
+functionality has been disabled, as providing it was introducing too
+much of a slowdown in the rendering process.&nbsp; The new, simpler,
+renderedChildren API provides considerably better performance.<br>
+
+</p>
+
+
+<h2>RenderVisitor -- Default Rendering Implementation</h2>
+
+<p>For most scenegraph nodes, there is a core functionality which is
+common across almost all rendering modes. &nbsp;For instance:<br>
+
+</p>
+
+<ul>
+
+  <li>Transforming nodes almost always want to modify the current
+model-view matrix. &nbsp;</li>
+
+  <li>Shape nodes almost always want to display their geometry (with
+various specializations based on whether this is a visible rendering
+pass or the like). &nbsp;</li>
+
+  <li>Lights, and Background nodes have common functionality which is
+dependent more on common attributes of the pass then on the particular
+identity of the pass.</li>
+
+  <li>Context, and/or the scenegraph node have standard rendering set
+up and tear-down functionality relating to clearing the buffers, setting
+up perspective matrices, and establishing the base model-view matrix
+representing the camera position.</li>
+
+</ul>
+
+<p>This common rendering code is localized in the
+OpenGLContext.rendervisitor module. &nbsp;This module defines a
+sub-class of the visitor.Visitor class with registered functions for
+implementing an "default" rendering pass (loosely an opaque rendering
+pass, but with specializations based on the attributes of the RenderPass
+node which allow for common optimizations (such as disabling lighting
+on non-visible rendering passes), and support other common rendering
+modes, such as Selection).<br>
+
+</p>
+
+<p>Let's take a look at a concrete example from the RenderVisitor
+module:<br>
+
+</p>
+
+<pre>	def Transform( self, node ):<br>		"""Render a transform object, return a finalisation token"""<br>		assert hasattr( node, "transform"), """Transforming node %s does not have a transform method"""%( self.__class__ )<br>		if self.transform:<br>			glMatrixMode(GL_MODELVIEW)<br>			try:<br>				glPushMatrix() # should do checks here to make sure we're not going over limit<br>			except GLerror, error:<br>				matrix = glGetDouble( GL_MODELVIEW_MATRIX )<br>				node.transform()<br>				return TransformOverflowToken( matrix)<br>			else:<br>				node.transform ()<br>				return TransformPopToken<br>		return None<br></pre>
+
+<p>This method is registered to be called for all
+vrml.vrml97.nodetypes.Transforming nodes. &nbsp;The single argument to
+the function is the node being processed. &nbsp;The method checks
+whether the current RenderPass (RenderVisitor) node's attribute
+"transform" is true, and if it is, sets about applying the node's
+transform() method within a child matrix. &nbsp;The return value from
+the function is a "token" which is a callable object which will be
+called in a "finally" block after the processing of the Transforming
+node, and all of its children, has completed. &nbsp;In this case, the
+tokens restore the previous matrix, either by calling glPopMatrix() or
+manually restoring the matrix if the model view matrix stack has
+overflowed.<br>
+
+</p>
+
+<p>The same general pattern is used throughout the RenderVisitor
+module. &nbsp;The registered methods determine whether they are
+applicable to the current rendering mode/pass, and if so, apply code
+which is as generic as possible to allow as much reuse as possible.
+&nbsp;As you will note from the example, there are cases where I've
+introduced methods to the nodes to perform particular operations (such
+as the .transform() method). &nbsp;Again, I've tried to keep these
+methods as general as possible to allow for reuse.</p>
+
+<p>In the case of the Context and/or Scenegraph, there is more logic
+required. &nbsp;OpenGLContext has two major modes of operation.<br>
+
+</p>
+
+<ul>
+
+  <li>In the first mode, OpenGLContext is merely providing a rendering
+context in which your raw OpenGL code may be rendered. &nbsp;In this
+mode, we want to defer the scene setup to the Context object itself,
+allowing the user to override simple methods to determine scene set up
+and rendering (Render, Lights, Background, Viewpoint). &nbsp;</li>
+
+  <li>In the second mode, OpenGLContext is responsible for the
+rendering of a scenegraph node which is specified by the Context's
+getSceneGraph() method. &nbsp;In this mode, we want to ignore the
+Context method callbacks (Lights, Background, Viewpoint and Render), and
+use scenegraph-specific methods. &nbsp;The first three are accomplished
+merely by checking for the presence of a Scenegraph, and otherwise using
+the Context methods. There is a specially registered node which the
+context returns from its renderedChildren method if there is no
+Scenegraph which calls the Render method of the Context.</li>
+
+</ul>
+
+<p class="technical">One question which is sure to come up, is how to
+Render scenegraph nodes while operating in the first mode. &nbsp;You can
+mode.visit( node ) on the rendering mode/pass passed to Context.Render(
+mode ). &nbsp;Note, however, that you should not do this for Scenegraph
+nodes, as they will likely interfere with the Context's
+already-processed Lights, Background, and Viewpoint customization points.</p>
+
+<h2>RenderPass -- Rendering Passes/Modes</h2>
+
+<p class="technical">You'll find throughout the OpenGLContext project
+that the RenderPass objects are referred to as "modes" or "mode".
+&nbsp;This is because the original OpenGLContext project had two
+separate objects, the mode (implementation of a particular rendering
+algorithm) and the pass (data storage for a particular iteration of the
+mode). &nbsp;When version 2.0 unified two objects into the single
+RenderPass class, I considered changing all instances of "mode", but as
+the obvious equivalent "pass" is a Python keyword, I decided to leave
+the original name. &nbsp;When reading, you can substitute mode and pass
+for each other with no loss of meaning under OpenGLContext 2.0.</p>
+
+<p>The OpenGLContext.renderpass module defines the default rendering
+passes used by OpenGLContext. &nbsp;There are two major sub-types of
+rendering pass:<br>
+
+</p>
+
+<ul>
+
+  <li>classes derived from RenderPass only, providing their own
+traversal mechanism</li>
+
+  <li>classes derived from VisitingRenderPass which inherit the
+traversal mechanism and default rendering methods from RenderVisitor
+(described above)</li>
+
+</ul>
+
+<p>All of the rendering passes derive a set of meta-data attributes
+from the RenderPass class, these include:<br>
+
+</p>
+
+<ul>
+
+  <li>passCount -- assigned by the overall rendering pass (see below)
+on creation, gives the pass's position in the rendering cycle (the only
+current use of this is to check whether this is the first rendering pass)<br>
+
+  </li>
+
+  <li>visible -- whether or not this rendering pass is visible
+(modifies the color buffers). &nbsp;This allows for considerable
+optimization if it is false, as textures, normals, and lighting can all
+be eliminated</li>
+
+  <li>transform -- whether or not to perform model-view matrix
+transformations. &nbsp;Almost all rendering passes perform these
+transformations, but "finding" visitors (see OpenGLContext.visitor.find)
+will set the flag to false</li>
+
+  <li>transparent -- whether or not this is a transparent-rendering
+pass, this allows geometry to sort faces and the like</li>
+
+  <li>selectNames -- whether or not this is a selection-rendering pass
+(i.e. whether or not to enable pushing and popping selection "names")</li>
+
+  <li>selectForced -- whether or not, during a selection-rendering pass
+a parent is "sensitive", which forces rendering of all children</li>
+
+  <li>stencil -- whether we are currently rendering into the stencil
+butter (normally false)<br>
+
+  </li>
+
+  <li>lighting -- whether or not lighting should be enabled/used for
+this particular rendering pass. &nbsp;If this value is false, geometry
+is free to ignore, for instance normals</li>
+
+  <li>lightingAmbient/lightingDiffuse -- whether or not, when lighting
+is active, the ambient or diffuse component of lights should be enabled
+(this is used by, for instance, stencil-shadow-based rendering passes to
+create ambient-only rendering passes). &nbsp;The Light nodes implement
+the specialization by examining the value of this attribute.</li>
+
+</ul>
+
+<p>In addition, there is the concept of an overall rendering pass,
+rather unimaginatively named "OverallPass". Individual rendering passes
+will defer to the overall rendering pass for attribute lookups which
+fail. The OverallPass object manages dispatching to its sub-passes. This
+allows us to replace the OverallPass's logic with custom code if we
+need, for instance, specialized handling of particular sub-passes.<br>
+
+</p>
+
+<p class="technical">This flexibility is used to good effect in the
+stencil-shadow-rendering sub-package, where it is necessary to create
+new rendering passes for every active Light node. See
+OpenGLContext.shadow.passes for the code.</p>
+
+<p>As a result, each individual rendering pass inherits the following
+meta-meta-data:<br>
+
+</p>
+
+<ul>
+
+  <li>viewport -- the results of glGetIntegerv( GL_VIEWPORT ) at the
+start of the overall rendering pass</li>
+
+  <li>projection -- the results of glGetDoublev( GL_PROJECTION_MATRIX )
+at the start of the overall rendering pass</li>
+
+  <li>modelView -- the results of glGetDoublev( GL_MODELVIEW_MATRIX )
+at the start of the overall rendering pass</li>
+
+  <li>lightPaths, viewpointPaths, backgroundPaths, fogPaths -- lists of
+nodepath objects pointing to each light, viewpoint, background or fog
+node in the scenegraph (these are found by the overall rendering pass
+via a visitor.find traversal before the individual rendering passes
+begin)</li>
+
+  <li>context -- a pointer to the context object rendering the pass</li>
+
+  <li>transparentObjects -- a list in which the default RenderVisitor
+implementation will store references to the model-view matrices and
+Shape nodes for each transparent object</li>
+
+  <li>selectable -- an ID to node mapping for each selectable node
+which has put it's "name" on the selection stack</li>
+
+</ul>
+
+<p class="technical">Note: the Context object provides facilities not
+explicitly enumerated above, which allows for considerable flexibility
+during the rendering process.</p>
+
+
+<p>The PassSet object is a simple specialization of the list type which
+instantiates a given OverallPass with a list of sub-passes and returns
+the value obtained by calling the new instance with the passed context
+as argument. Each Context object has an associated PassSet object which
+it uses to render itself. &nbsp;</p>
+
+<p>The default OverallPass Set includes the following rendering passes
+(in this order):<br>
+
+</p>
+
+<ul>
+
+  <li>OpaqueRenderPass -- a VisitingRenderPass which defers all
+operation to the RenderVisitor after specifying the appropriate
+meta-data. &nbsp;This pass will add all transparent objects to the
+overall pass's transparentObjects list. &nbsp;Because it is the first
+pass, it will also clear the buffers, and draw any background nodes</li>
+
+  <li>TransparentRenderPass -- a non-visiting RenderPass, this object
+sorts all of the registered transparent objects (registered by the
+OpaqueRenderPass) according to their depth in the scene, then
+re-establishes the stored model-view matrix, and calls the object's
+Render method (Note: at the moment only the IndexedFaceSet properly
+handles transparent rendering)</li>
+
+  <li>SelectRenderPass -- a VisitingRenderPass which does a traversal
+of the scenegraph for each registered pick event in the Context. This is
+a classic select-buffer-based selection mechanism, with minimal
+specialization beyond setting appropriate meta-data attributes and
+overriding the RenderVisitor ContextSetupDisplay method to create the
+appropriate projection-matrix.</li>
+
+</ul>
+
+<p>Together these define a fairly decent subset of the "normal"
+rendering processes for a (naive*) OpenGL rendering environment.<br>
+
+</p>
+
+<p class="technical">* Naive because the implementation does nothing to
+optimize the rendering of the scenegraph, and is as a result, not
+particularly usable for complex content</p>
+
+<h2>Triggering the RenderPass</h2>
+
+<p>So let's take a look at how the rendering process is triggered, from
+the moment the GUI library sends the "OnPaint" or equivalent event to
+the Context through to the calling of an individual RenderPass.<br>
+
+</p>
+
+<ol>
+
+  <li>event handler for the Context object, such as <span style="font-weight: bold;">wxOnPaint</span> for the wxPython Context
+sub-classes calls self.triggerRedraw(1) to force a redraw of the Context</li>
+
+  <li><span style="font-weight: bold;">Context.triggerRedraw</span> sets
+the "alreadyDrawn" flag to false, which tells the context that it needs
+to be redrawn at the next available opportunity, if not able to
+immediately draw, sets the redrawRequest event.</li>
+
+  
+  <ol>
+
+    <li>at the next available opportunity (which may be within the
+triggerRedraw method, depending on the threading status and/or whether
+or not we are currently in the middle of rendering), the context's
+OnDraw method will be called</li>
+
+  
+  </ol>
+
+  <li style="font-weight: bold;"><span style="font-weight: bold;">Context.</span>OnDraw</li>
+
+  
+  <ol>
+
+    <li>performs an event cascade (calls the DoEventCascade
+customization point while the scenegraph lock is held (by default this
+does nothing))</li>
+
+    <li>sets this Context instance as the current context</li>
+
+    
+    <ol>
+
+      <li>acquires the OpenGLContext contextLock</li>
+
+      <li>does the appropriate GUI library set current call</li>
+
+    
+    </ol>
+
+    <li>clears the redrawRequest event</li>
+
+    <li><span style="font-weight: bold;">calls the Context's
+renderPasses attribute</span> (normally an instance of the PassSet object
+discussed above) with the Context object as argument, receiving a flag
+specifying whether there was a visible change</li>
+
+    
+    <ol>
+
+      <li>if there was a change, swaps buffers</li>
+
+    
+    </ol>
+
+    <li>finally, un-sets the current context</li>
+
+  
+  </ol>
+
+  <li><span style="font-weight: bold;">PassSet.__call__</span></li>
+
+  
+  <ol>
+
+    <li><span style="font-weight: bold;"></span>instantiates a new
+OverallPass object with pointers to the three sub-passes as an argument</li>
+
+    <li>returns the result of calling the new OverallPass with the
+passed Context object</li>
+
+  
+  </ol>
+
+  <li style="font-weight: bold;">OverallPass.__init__</li>
+
+  
+  <ol>
+
+    <li>stores various matrices</li>
+
+    <li>sets up global structures (see above)</li>
+
+    <li>instantiates each sub-pass (with a pointer to the OverallPass,
+and the passCount for the given sub-pass)</li>
+
+  
+  </ol>
+
+  <li style="font-weight: bold;">OverallPass.__call__</li>
+
+  
+  <ol>
+
+    <li>iterates through the list of sub-pass instances calling each
+one in turn and tracking whether it reports a visible change</li>
+
+    <li>returns the sum of all the "changed" values (which is in turn
+returned by the PassSet to the Context's OnDraw method)</li>
+
+  
+  </ol>
+
+  <li>(Visiting)<span style="font-weight: bold;">RenderPass.__call__</span></li>
+
+  
+  <ol>
+
+    <li>generally checks whether the pass should be rendered or not
+(shouldDraw method)</li>
+
+    <li>if not, returns false (no visible change)</li>
+
+    <li>otherwise performs the pass-specific rendering and returns it's
+"visible" flag</li>
+
+  
+  </ol>
+
+</ol>
+
+<p>So, at this point, the RenderPass has been called, we are within the
+Context thread (with the lock held), and the OverallPass is initialised.
+&nbsp;Each RenderPass defines it's own __call__ method, but the ones
+likely of the most interest are the ones derived from
+VisitingRenderPass.</p>
+
+<p class="footer"><a href="documentation.html"><img src="images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/context/"><img src="images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> A
+SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" align="middle"></a></p>
+
+</body>
+</html>

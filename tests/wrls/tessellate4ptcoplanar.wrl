@@ -1,0 +1,25 @@
+#VRML V2.0 utf8
+
+# This file tests that 4 coplanar points get tessellated...
+# Should produce a "bow tie" pattern, not a triangle
+
+Shape {
+	appearance Appearance {
+		material Material {
+		}
+	}
+	geometry IndexedFaceSet {
+		coord DEF c Coordinate {
+			point [
+				-3,1,0
+				-3,-1,0
+				3,1,0
+				3,-1,0
+			]
+		}
+		coordIndex [
+			0,1,2,3
+		]
+	}
+}
+

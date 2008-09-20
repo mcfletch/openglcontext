@@ -1,0 +1,10 @@
+*.profile
+*.cvsignore
+*.pyc
+*.pyo
+*.html
+*.max
+*.db
+.directory
+callcontext.txt
+test.jpg

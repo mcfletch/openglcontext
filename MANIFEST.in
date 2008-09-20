@@ -1,0 +1,33 @@
+include MANIFEST.in
+include license.txt
+include readme.txt
+
+recursive-include tests *.jpg *.bmp *.png *.wrl
+exclude tests/axis.wrl
+exclude tests/flower.wrl
+exclude tests/test.jpg
+exclude tests/wrls/logo_installer.bmp
+exclude tests/wrls/pyopenglchapel.wrl
+
+recursive-include docs *.css *.png *.gif
+include docs/*.html
+include docs/images/*
+include docs/style/*
+include loaders/*
+include pydoc/*.py
+
+global-exclude *CVS*
+global-exclude *Cvs*
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pdb
+global-exclude *.db
+global-exclude *.max
+global-exclude *.gz
+global-exclude *.bat
+global-exclude *.profile
+global-exclude *.directory
+global-exclude *.cvsignore
+global-exclude *.ttf
+
+

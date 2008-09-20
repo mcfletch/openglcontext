@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN"
+"http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg
+   id="svg607"
+   sodipodi:version="0.32"
+   inkscape:version="0.37"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   width="210mm"
+   height="297mm"
+   sodipodi:docbase="/home/mcfletch/pylive/OpenGLContext/resources/sources"
+   sodipodi:docname="disk_icons.svg">
+  <defs
+     id="defs609" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="3.40569465"
+     inkscape:cx="-11.6587780"
+     inkscape:cy="832.769375"
+     inkscape:window-width="1592"
+     inkscape:window-height="1144"
+     showgrid="true"
+     inkscape:window-x="0"
+     inkscape:window-y="0" />
+  <path
+     style="font-size:12;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;"
+     d="M -34.875000 -45.437500 L -34.875000 60.281250 L 70.843750 60.281250 L 70.843750 -45.437500 L -34.875000 -45.437500 z M -31.968750 -39.562500 L -22.437500 -39.562500 L -22.437500 -32.218750 L -31.968750 -32.218750 L -31.968750 -39.562500 z "
+     id="path614" />
+  <rect
+     style="font-size:12;fill:#c1c157;fill-rule:evenodd;stroke:#000000;stroke-width:0.858424pt;fill-opacity:1;"
+     id="rect612"
+     width="73.03943634"
+     height="61.66144606"
+     x="-17.01050377"
+     y="-45.06445287" />
+  <rect
+     style="font-size:12;fill:#9ea69e;fill-rule:evenodd;stroke:#000000;stroke-width:1.04121pt;fill-opacity:1;"
+     id="rect615"
+     width="72.30536652"
+     height="42.57574738"
+     x="-16.88348579"
+     y="18.79917516" />
+  <path
+     style="font-size:12;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;"
+     d="M -34.875000 -45.437500 L -34.875000 60.281250 L 70.843750 60.281250 L 70.843750 -45.437500 L -34.875000 -45.437500 z M -31.968750 -39.562500 L -22.437500 -39.562500 L -22.437500 -32.218750 L -31.968750 -32.218750 L -31.968750 -39.562500 z "
+     id="path621"
+     transform="translate(120.4725,0.000000)" />
+  <rect
+     style="font-size:12;fill:#fff900;fill-rule:evenodd;stroke:#000000;stroke-width:0.858424pt;"
+     id="rect622"
+     width="73.03943634"
+     height="61.66144606"
+     x="-17.01050377"
+     y="-45.06445287"
+     transform="translate(120.4725,0.000000)" />
+  <rect
+     style="font-size:12;fill:#c3bfbf;fill-rule:evenodd;stroke:#000000;stroke-width:1.04121pt;fill-opacity:1;"
+     id="rect623"
+     width="72.30536652"
+     height="42.57574738"
+     x="-16.88348579"
+     y="18.79917516"
+     transform="translate(120.4725,0.000000)" />
+</svg>

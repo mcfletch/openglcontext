@@ -1,0 +1,159 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+
+  
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+  
+  
+  <title>OpenGLContext Event Model</title>
+  <link rel="stylesheet" type="text/css" href="style/tutorial.css">
+
+  
+  <meta name="author" content="Mike C. Fletcher">
+</head>
+
+
+<body>
+
+<h1>OpenGLContext Event Model<br>
+
+</h1>
+
+<p class="introduction">This document describes the mechanisms within
+OpenGLContext which allow for providing interactivity, both at the
+context and the scenegraph levels.&nbsp; This includes keyboard and
+mouse events, as well as timers and routes.<br>
+
+</p>
+
+
+<h2>Features of the Event Model</h2>
+
+<p>There are a number of user-level features which are implemented by
+the "event model" within OpenGLContext:<br>
+
+</p>
+
+<ul>
+
+  <li>field "watching" -- allows code to register callbacks for changes
+to given fields of given nodes<br>
+
+  </li>
+
+  <li>cache updates/invalidation -- uses field watching (with some
+other techniques) to automatically update scenegraph caches to reflect
+updated content<br>
+
+  </li>
+
+  <li>VRML 97-style routing tables -- allows construction of linked
+node structures so that updating fields of a particular node
+automatically update the linked fields<br>
+
+  </li>
+
+  <li>mouse/keyboard/timer event-handler registration -- allows code to
+respond to user interaction, mouse events also allow for per-node
+registration, allowing composable interactive objects to be created<br>
+
+  </li>
+
+</ul>
+
+<p>each of these features will be discussed below.<br>
+
+</p>
+
+<h2>Dispatcher</h2>
+
+<p>The PyDispatcher package is the primary mechanism
+used for event propagation within OpenGLContext 2.0.&nbsp; This module
+allows you to register functions to be notified when "senders" send
+particular signals.&nbsp; Each field of each node can generate signals
+when setting and/or deleting field values for the node.&nbsp;
+Similarly, each event manager registers functions with the dispatcher
+which are to be called when a particular event is received, then sends
+those events when the event is actually received.<br>
+
+</p>
+
+<h2>Field Watching<br>
+
+</h2>
+
+<p>Fields generate signals by default on set or delete.<br>
+
+Nothing generated during parser-mediated instantiation save for
+prototyped nodes<br>
+
+Normally not something you want to use directly, but it is what much of
+the rest of the interaction is built upon.<br>
+
+</p>
+
+<h2>Cache Invalidation<br>
+
+</h2>
+
+<p>Built upon field watching, nodes register dependencies on node,
+field pairs.&nbsp; If the node sends an update signal for that field,
+then the cache object is invalidated, and the node regenerates its
+cache data during the next rendering pass.<br>
+
+</p>
+
+<h2>Routing Tables<br>
+
+</h2>
+
+<p>Two major variants:<br>
+
+</p>
+
+<p>The ROUTE is a simple unidirectional channel through which updates
+to a particular field of a particular node are propagated along the arc
+of the route to the destination node, field pair.&nbsp; This allows you
+to create routing tables which tie together elements within a
+scenegraph so that code does not need to explicitly chase down
+dependent fields, it can simply allow route propagation to update the
+dependent fields.<br>
+
+</p>
+
+<p>The PROTO's IS mapping, which maps from a prototype node's fields to
+fields on nodes within the prototype's internal scenegraph.&nbsp; This
+is a bidirectional linkage, where changing the prototype's fields
+updates the internal nodes, and updating the internal node updates the
+prototype's corresponding field.<br>
+
+</p>
+
+<h2>Event Handlers</h2>
+
+<p>Most contexts derive from the EventHandlerMixIn class, which
+provides a method addEventHandler, which allows for registering event
+handlers for given event types (specified as strings).&nbsp; Individual
+EventHandler objects are responsible for each event type, and are
+responsible for processing events of their own type.&nbsp; Most
+(currently all) EventHandler objects use the PyDispatcher module to
+maintain the internal structures required to provide the registration
+tables for the handler callbacks.<br>
+
+</p>
+
+<pre>self.addEventHandler( "mousein", function = self.OnMouseIn )<br>self.addEventHandler( "mouseout", function = self.OnMouseOut )<br>self.addEventHandler( 'keyboard', name='&lt;up&gt;', state=1, modifiers=(0,0,0), function=self.forward )<br>self.addEventHandler( 'keypress', name='-', modifiers=(0,0,0), function=self.straighten)<br>self.addEventHandler( 'mousebutton', button=1, state = 1, modifiers=(0,0,0), function=self.startExamineMode)<br>self.addEventHandler( 'mousemove', buttons=(), modifiers=(0,0,0), function=self.RefreshTooltip)<br></pre>
+
+<p>&nbsp;Timer objects are also based on the same mechanism (with some
+significant extra machinery).<br>
+
+</p>
+
+
+<p class="footer"><a href="documentation.html"><img src="images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/context/"><img src="images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> A
+SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" align="middle"></a></p>
+
+</body>
+</html>

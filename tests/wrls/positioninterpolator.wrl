@@ -1,0 +1,49 @@
+#VRML V2.0 utf8
+
+DEF Pyramid01 Transform {
+  translation 0 0 0
+  children [
+  DEF Pyramid01-TIMER TimeSensor { loop TRUE cycleInterval 3.33 },
+  DEF Pyramid01-POS-INTERP PositionInterpolator {
+    key [0, 0.03, 0.06, 0.09, 0.12, 0.15, 0.18, 0.21, 0.24, 0.27, 0.3, 
+        0.33, 0.36, 0.39, 0.42, 0.45, 0.48, 0.51, 0.54, 0.57, 0.6, 
+        0.63, 0.66, 0.69, 0.72, 0.75, 0.78, 0.81, 0.84, 0.87, 0.9, 
+        0.93, 0.96, 0.99, 1, ]
+    keyValue [0 0 0, 0.0413 0.121 0, 0.0857 0.238 0, 0.133 0.35 0, 
+      0.183 0.457 0, 0.235 0.557 0, 0.288 0.649 0, 0.343 0.733 0, 
+      0.398 0.808 0, 0.415 0.854 0, 0.409 0.887 0, 0.399 0.916 0, 
+      0.384 0.943 0, 0.364 0.967 0, 0.339 0.988 0, 0.31 1.01 0, 
+      0.275 1.02 0, 0.236 1.03 0, 0.184 1.05 0, 0.121 1.06 0, 
+      0.0511 1.07 0, -0.0209 1.08 0, -0.0911 1.08 0, -0.155 1.08 0, 
+      -0.208 1.06 0, -0.247 1.03 0, -0.273 0.99 0, -0.292 0.941 0, 
+      -0.304 0.884 0, -0.309 0.818 0, -0.307 0.744 0, -0.297 0.661 0, 
+      -0.281 0.569 0, -0.257 0.469 0, -0.247 0.434 0, ] },
+  DEF Pyramid01-ROT-INTERP OrientationInterpolator {
+    key [0, 0.03, 0.06, 0.09, 0.12, 0.15, 0.18, 0.21, 0.24, 0.27, ]
+    keyValue [1 0 0 0, 0 0 1 -0.126, 0 0 1 -0.251, 0 0 1 -0.377, 
+      0 0 1 -0.503, 0 0 1 -0.628, 0 0 1 -0.754, 0 0 1 -0.88, 
+      0 0 1 -1.01, 0 0 1 -1.05, ] },
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.424 0.0314 0.533
+        }
+      }
+      geometry DEF Pyramid01-FACES IndexedFaceSet {
+        ccw TRUE
+        solid TRUE
+        coord DEF Pyramid01-COORD Coordinate { point [
+          0 1 0, -0.5 0 0.5, 0.5 0 0.5, 0.5 0 -0.5, -0.5 0 -0.5, 
+          0 0 0]
+        }
+        coordIndex [
+          0, 1, 2, -1, 0, 2, 3, -1, 0, 3, 4, -1, 0, 4, 1, -1, 1, 5, 2, -1, 
+          2, 5, 3, -1, 3, 5, 4, -1, 4, 5, 1, -1]
+        }
+    }
+  ]
+ROUTE Pyramid01-TIMER.fraction_changed TO Pyramid01-POS-INTERP.set_fraction
+ROUTE Pyramid01-POS-INTERP.value_changed TO Pyramid01.set_translation
+ROUTE Pyramid01-TIMER.fraction_changed TO Pyramid01-ROT-INTERP.set_fraction
+ROUTE Pyramid01-ROT-INTERP.value_changed TO Pyramid01.set_rotation
+}

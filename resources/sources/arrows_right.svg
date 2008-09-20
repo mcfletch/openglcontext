@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN"
+"http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<svg
+   id="svg1"
+   sodipodi:version="0.32"
+   inkscape:version="0.37"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   width="210mm"
+   height="297mm"
+   sodipodi:docbase="/home/mcfletch/pylive/OpenGLContext/resources/sources"
+   sodipodi:docname="arrows_right.svg">
+  <defs
+     id="defs3">
+    <linearGradient
+       id="linearGradient591">
+      <stop
+         style="stop-color:#00ff00;stop-opacity:1;"
+         offset="0.00000000"
+         id="stop592" />
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="1.00000000"
+         id="stop593" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient577">
+      <stop
+         style="stop-color:#ff0400;stop-opacity:1;"
+         offset="0.00000000"
+         id="stop578" />
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="1.00000000"
+         id="stop579" />
+    </linearGradient>
+    <radialGradient
+       xlink:href="#linearGradient577"
+       id="radialGradient580"
+       cx="0.50000000"
+       cy="0.50000000"
+       r="0.50000000"
+       fx="0.50000000"
+       fy="0.50000000" />
+    <linearGradient
+       xlink:href="#linearGradient577"
+       id="linearGradient581"
+       x1="0.00000000"
+       y1="0.00000000"
+       x2="1.00000000"
+       y2="0.00000000" />
+    <radialGradient
+       xlink:href="#linearGradient591"
+       id="radialGradient594"
+       cx="0.50000000"
+       cy="0.50000000"
+       r="0.50000000"
+       fx="0.50000000"
+       fy="0.50000000" />
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="1.05543582"
+     inkscape:cx="299.429910"
+     inkscape:cy="541.468134"
+     inkscape:window-width="1592"
+     inkscape:window-height="1144"
+     showgrid="true"
+     inkscape:window-x="0"
+     inkscape:window-y="0" />
+  <polygon
+     sodipodi:type="star"
+     style="font-size:12;fill:url(#radialGradient580);fill-opacity:0.75;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;"
+     id="polygon574"
+     sodipodi:arg1="-0.26179939"
+     sodipodi:arg2="0.36651914"
+     points="465.651,58.4206 408.018,108.995 417.006,185.143 351.098,145.959 281.454,178.039 298.353,103.248 246.322,46.9261 322.675,39.8865 360.162,-27.0023 390.452,43.4385 465.651,58.4206 "
+     sodipodi:sides="3"
+     sodipodi:cx="0"
+     sodipodi:cy="0"
+     sodipodi:r1="200"
+     transform="matrix(0.998938,-4.608082e-2,4.608082e-2,0.998938,0.120337,0.867601)"
+     sodipodi:r2="200" />
+  <path
+     style="font-size:12;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;"
+     d="M 125.68028 -2.5167757 L -57.756723 -108.16059 L -59.216654 105.0196 L 125.68028 -2.5167757 z "
+     id="path576" />
+  <polygon
+     sodipodi:type="star"
+     style="font-size:12;fill:url(#radialGradient594);fill-opacity:0.75;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;"
+     id="polygon586"
+     sodipodi:arg1="-0.26179939"
+     sodipodi:arg2="0.36651914"
+     points="465.651,58.4206 408.018,108.995 417.006,185.143 351.098,145.959 281.454,178.039 298.353,103.248 246.322,46.9261 322.675,39.8865 360.162,-27.0023 390.452,43.4385 465.651,58.4206 "
+     sodipodi:sides="3"
+     sodipodi:cx="0"
+     sodipodi:cy="0"
+     sodipodi:r1="200"
+     transform="matrix(0.998938,-4.608082e-2,4.608082e-2,0.998938,365.0805,0.867601)"
+     sodipodi:r2="200" />
+  <path
+     style="font-size:12;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;"
+     d="M 125.68028 -2.5167757 L -57.756723 -108.16059 L -59.216654 105.0196 L 125.68028 -2.5167757 z "
+     id="path587"
+     transform="translate(364.9602,0.000000)" />
+</svg>

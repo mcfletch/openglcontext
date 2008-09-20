@@ -1,0 +1,91 @@
+#VRML V2.0 utf8
+
+# This file tests the combine callback for polygon tessellation
+# including the normal-combining code...
+
+Shape {
+	appearance Appearance {
+		material Material {
+		}
+	}
+	geometry IndexedLineSet {
+		coord DEF c Coordinate {
+			point [
+				-3,1,0
+				-3,-3,0
+				3,1,0
+				3,-1,0
+				0,-3,0
+				
+			]
+		}
+		coordIndex [
+			0,1,2,3,4,0 -1
+		]
+		color Color {
+			color [
+				1,0,0
+				0,1,0
+				0,0,1
+				0,1,1
+				1,1,0
+				1,0,0
+			]
+		}
+	}
+}
+
+Transform {
+	translation -3,1,0
+	children [
+		Shape {
+		  geometry Text {
+		    string "A"
+			}
+		}
+	]
+}
+
+Transform {
+	translation -3,-3,0
+	children [
+		Shape {
+		  geometry Text {
+		    string "B"
+			}
+		}
+	]
+}
+
+Transform {
+	translation 3,1,0
+	children [
+		Shape {
+		  geometry Text {
+		    string "C"
+			}
+		}
+	]
+}
+
+Transform {
+	translation 3,-1,0
+	children [
+		Shape {
+		  geometry Text {
+		    string "D"
+			}
+		}
+	]
+}
+Transform {
+	translation 0,-3,0
+	children [
+		Shape {
+		  geometry Text {
+		    string "E"
+			}
+		}
+	]
+}
+

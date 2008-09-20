@@ -1,0 +1,61 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta http-equiv="content-type"
+ content="text/html; charset=ISO-8859-1">
+  <title>NeHe8 for OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/tutorial.css">
+  <meta name="author" content="Mike C. Fletcher">
+</head>
+<body>
+<h1>NeHe8 for OpenGLContext</h1>
+<p class="introduction">This&nbsp;document discusses the <a
+ href="http://nehe.gamedev.net/tutorials/lesson.asp?l=08">NeHe8 tutorial</a>
+by Jeff Molofee. &nbsp;It introduces blending and the Background
+customisation point for Contexts.</p>
+<p>See <a href="nehe7.html">NeHe7</a> for discussion of the Context
+setup procedure here...<br>
+</p>
+<pre>from OpenGLContext import testingcontext<br>BaseContext, MainFunction = testingcontext.getInteractive()<br>from OpenGLContext import interactivecontext, drawcube<br>from OpenGL.GL import *<br>from OpenGL.GLU import *<br>import time<br>from Image import open<br><br>class TestContext( BaseContext ):<br>	"""New customization point: Background<br><br>	Background, like Lights is called by the default<br>	RenderMode.SetupBindables method. It is used here<br>	because the blending mode used by the tutorial<br>	will not work unless the background is black.<br>	"""<br>	usage ="""Demonstrates blending functions:<br>	press 'b' to toggle blending functions<br>	press 'f' to toggle filter functions<br>	press 'l' to toggle lighting<br>	press '&lt;pageup&gt;' to speed up rotation<br>	press '&lt;pagedown&gt;' to slow down rotation<br>	"""<br>	initialPosition = (0,0,2)<br>	def OnInit( self ):<br>		"""Load the image on initial load of the application"""<br>		self.imageIDs = self.loadImages()<br>		self.currentFilter = 0 # index into imageIDs<br>		self.lightsOn = 0 # boolean<br>		self.blendOn = 1<br>		self.currentZOffset = -6<br>		self.rotationCycle = 8.0<br>		# note that these are different bindings from the tutorial,<br>		# as you can wander around with the arrow keys already...<br>		self.addEventHandler(<br>			'keypress', name = 'f', function = self.OnFilter<br>		)<br>		self.addEventHandler(<br>			'keypress', name = 'l', function = self.OnLightToggle<br>		)<br>		self.addEventHandler(<br>			'keypress', name = '&lt;pageup&gt;', function = self.OnSpeedUp<br>		)<br>		self.addEventHandler(<br>			'keypress', name = '&lt;pagedown&gt;', function = self.OnSlowDown<br>		)<br></pre>
+<p>Our first change from the NeHe7 tutorial code, and the only one in
+OnInit is to bind a handler from the blending functions. &nbsp;The
+Lights method is identical to the NeHe7 code, and not reproduced here.<br>
+</p>
+<pre>		self.addEventHandler(<br>			'keypress', name = 'b', function = self.OnBlendToggle<br>		)<br>		print self.usage<br>		glLightfv( GL_LIGHT1, GL_AMBIENT, (0.2, .2, .2, 1.0) );<br>		glLightfv(GL_LIGHT1, GL_DIFFUSE, (.8,.8,.8));<br>		glLightfv(GL_LIGHT1, GL_POSITION, (-2,0,3,1) );</pre>
+<p>The Background method is called if there is no scenegraph. &nbsp;It
+is called before Render, and is responsible for clearing the various
+buffers. &nbsp;This version simple clears the depth and colour buffers,
+setting the colour buffer to black (which is why we wanted it, since the
+tutorial's blending approach only works on a black background).</p>
+<pre>	def Background( self, mode = 0):<br>		"""Demo's use of GL_ONE assumes that background is black"""<br>		if mode.passCount == 0:<br>			glClearColor(0,0,0,0)<br>			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )<br></pre>
+<p>We provide a Render method as normal, disable culling (assumed by
+the tutorial) and do some rotation.</p>
+<pre>	def Render( self, mode = 0):<br>		BaseContext.Render( self, mode )<br>		glTranslatef(1.5,0.0,self.currentZOffset);<br>		glDisable( GL_CULL_FACE )<br>		glRotated( time.time()%(self.rotationCycle)/self.rotationCycle * -360, 1,0,0)<br></pre>
+<p>Now we call the "blend" method to select and enable the current
+blending mode before rendering our geometry. The rest of the Render
+method we've seen before.</p>
+<pre>		self.blend()<br><br>		glEnable(GL_TEXTURE_2D)<br>		# re-select our texture, could use other generated textures<br>		# if we had generated them earlier...<br>		glBindTexture(GL_TEXTURE_2D, self.imageIDs[self.currentFilter])   # 2d texture (x and y size)<br>		self.drawCube()<br>		glDisable(GL_TEXTURE_2D)<br><br>	BLENDSTYLES = [<br>		(),<br>		(GL_SRC_ALPHA, GL_ONE), # what the demo uses originally<br>		(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), # this is what should be used with sorted triangles<br>		(GL_SRC_ALPHA, GL_DST_ALPHA), # just for kicks...<br>	]<br>	def blend( self ):<br>		"""Choose and enable blending mode"""<br>		if self.blendOn == 0:<br>			glDisable(GL_BLEND);<br>			glEnable(GL_DEPTH_TEST);<br>			glDepthMask( ~0 )<br>		else:<br>			glEnable(GL_BLEND);<br>			glDisable(GL_DEPTH_TEST);<br>			glBlendFunc( * self.BLENDSTYLES[ self.blendOn] )<br>			glDepthMask( 0 ) # prevent updates to the depth buffer...<br></pre>
+<p>We add a handler for the keyboard callback used to select different
+blending functions. The loadImages method is identical to the NeHe7
+version and isn't copied here. The other keyboard callbacks, the
+Idle-time callback, and the drawCube function are also identical and not
+reproduced here.</p>
+<pre>	def OnBlendToggle( self, event ):<br>		self.blendOn = self.blendOn + 1<br>		if self.blendOn == len( self.BLENDSTYLES ):<br>			self.blendOn = 0<br>		print 'Blend now %s, %s'% [<br>			("None", "None"),<br>			("GL_SRC_ALPHA", "GL_ONE"),<br>			("GL_SRC_ALPHA", "GL_ONE_MINUS_SRC_ALPHA"),<br>			("GL_SRC_ALPHA", "GL_DST_ALPHA"),<br>		][ self.blendOn ]<br></pre>
+<p>You can find the complete code for this sample in
+OpenGLContext/tests/nehe8.py<br>
+</p>
+<p class="footer"><a href="documentation.html"><img
+ src="images/doc_icon.gif" title="" alt="Documentation"
+ style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a
+ href="http://pyopengl.sourceforge.net/context/"><img
+ src="images/context_logo_icon.png" title="" alt="OpenGLContext"
+ style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a
+ href="http://pyopengl.sourceforge.net/"><img align="middle" title=""
+ alt="PyOpenGL" src="images/pyopengl_icon.jpg"
+ style="border: 0px solid ; width: 32px; height: 32px;"></a> A
+SourceForge Open-Source project: <a href="http://sourceforge.net"><img
+ src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
+ style="border: 0px solid ; width: 88px; height: 31px;"
+ alt="SourceForge" title="" align="middle"></a></p>
+</body>
+</html>

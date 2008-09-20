@@ -1,0 +1,84 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta http-equiv="content-type"
+ content="text/html; charset=ISO-8859-1">
+  <title>NeHe7 for OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/tutorial.css">
+  <meta name="author" content="Mike C. Fletcher">
+</head>
+<body>
+<h1>NeHe7 for OpenGLContext</h1>
+<p class="introduction">This&nbsp;document discusses the <a
+ href="http://nehe.gamedev.net/tutorials/lesson.asp?l=07">NeHe7 tutorial</a>
+by Jeff Molofee. &nbsp;It introduces mip-mapped textures, and Contex
+support for lighting and keyboard-event callbacks.</p>
+<p>See <a href="nehe6.html">NeHe6</a> for discussion of the Context
+setup procedure here...<br>
+</p>
+<pre>from OpenGLContext import testingcontext<br>BaseContext, MainFunction = testingcontext.getInteractive()<br>from OpenGL.GL import *<br></pre>
+<p>The tutorial uses the GLU function gluBuild2DMipmaps, so we make the
+GLU functions available and continue with our normal setup routines.<br>
+</p>
+<pre>from OpenGL.GLU import *<br>import time<br>from Image import open<br><br>class TestContext( BaseContext ):<br>	usage ="""Demonstrates filter functions:<br>	press 'f' to toggle filter functions<br>	press 'l' to toggle lighting<br>	press '&lt;pageup&gt;' to speed up rotation<br>	press '&lt;pagedown&gt;' to slow down rotation<br>"""<br>	initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning<br>	def OnInit( self ):<br>		"""Load the image on initial load of the application"""<br></pre>
+<p>As required by the tutorial, we load a single image as 3 different
+textures, see the loadImages method below for the new code. &nbsp;The
+OnInit handler loads the textures and stores their textureIDs as a list
+of integers. &nbsp;It then does some basic instance setup bookkeeping.</p>
+<pre>		self.imageIDs = self.loadImages()<br><br>		self.currentFilter = 0 # index into imageIDs<br>		self.lightsOn = 1 # boolean<br>		self.currentZOffset = -6<br>		self.rotationCycle = 8.0<br></pre>
+<p>Now we register the keyboard callback functions. &nbsp;We register
+for "keypress" events, which are the "character" events from the
+keyboard, which allows repetition-by-holding in most Context
+environments (PyGame being the notable exception). &nbsp;See below for
+the definitions of the various callback methods.<br>
+</p>
+<pre>		## Adds event handlers for the given keys<br>		# Note that these are different bindings from the tutorial,<br>		# as you can wander around with the arrow keys already in<br>		# OpenGLContext<br>		self.addEventHandler(<br>			'keypress', name = 'f', function = self.OnFilter<br>		)<br>		self.addEventHandler(<br>			'keypress', name = 'l', function = self.OnLightToggle<br>		)<br>		self.addEventHandler(<br>			'keypress', name = '&lt;pageup&gt;', function = self.OnSpeedUp<br>		)<br>		self.addEventHandler(<br>			'keypress', name = '&lt;pagedown&gt;', function = self.OnSlowDown<br>		)<br>		print self.usage<br></pre>
+<p>As per the tutorial, we set up a global light-source which can be
+enabled/disabled by the 'l' callback.<br>
+</p>
+<pre>		glLightfv( GL_LIGHT1, GL_AMBIENT, (0.2, .2, .2, 1.0) );<br>		glLightfv(GL_LIGHT1, GL_DIFFUSE, (.8,.8,.8));<br>		glLightfv(GL_LIGHT1, GL_POSITION, (-2,0,3,1) );<br></pre>
+<p>As in the previous tutorial, we use PIL's open function to get the
+image data. &nbsp;Because the image is paletted, we convert it to RGB
+before storing it. &nbsp;The rest of the loadImages method is taken
+directly from the tutorial.</p>
+<pre>	def loadImages( self, imageName = "nehe_crate.bmp" ):<br>		"""Load an image from a file using PIL,<br>		produces 3 textures to demo filter types.<br><br>		Converts the paletted image to RGB format.<br>		"""<br>		im = open(imageName)<br>		try:<br>			## Note the conversion to RGB the crate bitmap is paletted!<br>			im = im.convert( 'RGB')<br>			ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBA", 0, -1)<br>		except SystemError:<br>			ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBX", 0, -1)<br>		IDs = []<br>		# a Nearest-filtered texture...<br>		ID = glGenTextures(1)<br>		IDs.append( ID )<br>		glBindTexture(GL_TEXTURE_2D, ID)<br>		glPixelStorei(GL_UNPACK_ALIGNMENT,1)<br>		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)<br>		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)<br>		glTexImage2D(GL_TEXTURE_2D, 0, 3, ix, iy, 0, GL_RGBA, GL_UNSIGNED_BYTE, image)<br>		# linear-filtered<br>		ID = glGenTextures(1)<br>		IDs.append( ID )<br>		glBindTexture(GL_TEXTURE_2D, ID)<br>		glPixelStorei(GL_UNPACK_ALIGNMENT,1)<br>		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR)<br>		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR)<br>		glTexImage2D(GL_TEXTURE_2D, 0, 3, ix, iy, 0, GL_RGBA, GL_UNSIGNED_BYTE, image)<br>		# linear + mip-mapping<br>		ID = glGenTextures(1)<br>		IDs.append( ID )<br>		glBindTexture(GL_TEXTURE_2D, ID)<br>		glPixelStorei(GL_UNPACK_ALIGNMENT,1)<br>		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR)<br>		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_NEAREST)<br>		gluBuild2DMipmaps(GL_TEXTURE_2D, 3, ix, iy, GL_RGBA, GL_UNSIGNED_BYTE, image)<br>		<br>		return IDs<br></pre>
+<p>The Lights method of the Context is called if there is no
+scenegraph. &nbsp;It is called before the Render method. &nbsp;In this
+code, it merely checks to see if the global light is to be enabled or
+disabled, then goes about doing the appropriate thing.</p>
+<pre>	def Lights (self, mode = 0):<br>		''' Setup the global lights for your scene, called by context before rendering'''<br>		if self.lightsOn:<br>			glEnable( GL_LIGHTING )<br>			glEnable(GL_LIGHT1);<br>			glDisable(GL_LIGHT0);<br>		else:<br>			glDisable( GL_LIGHTING )<br>			glDisable(GL_LIGHT1);<br>			glDisable(GL_LIGHT0);<br></pre>
+<p>We've seen just about everything in the Render and OnIdle methods
+before. &nbsp;The only difference is that we now use the texture ID
+corresponding to the currently-bound texture (as chosen by pressing the
+'f' key).</p>
+<pre>	def Render( self, mode = 0):<br>		BaseContext.Render( self, mode )<br>		glTranslatef(1.5,0.0,self.currentZOffset);<br>		glEnable(GL_TEXTURE_2D)<br>		glBindTexture(GL_TEXTURE_2D, self.imageIDs[self.currentFilter])<br>		<br>		glRotated( time.time()%(self.rotationCycle)/self.rotationCycle * -360, 1,0,0)<br>		self.drawCube()<br><br>	### Callback-handlers<br>	def OnIdle( self, ):<br>		self.triggerRedraw(1)<br>		return 1<br></pre>
+<p>The various keyboard-callback methods. &nbsp;Each of these simply
+updates state in the Context which was initialised by OnInit so that the
+next rendering pass will reflect the updated values.</p>
+<pre>	def OnFilter( self, event):<br>		"""Handles the key event telling us to change the filter"""<br>		self.currentFilter = (self.currentFilter + 1 ) % 3<br>		print 'Drawing filter now %s'% (<br>			["Nearest","Linear","Linear Mip-Mapped"][ self.currentFilter]<br>		)<br>	def OnLightToggle( self, event ):<br>		"""Handles the key event telling us to toggle the lighting"""<br>		self.lightsOn = not self.lightsOn<br>		print "Lights now %s"% (["off", "on"][self.lightsOn])<br>	def OnSpeedUp( self, event):<br>		"""Handles key event to speed up"""<br>		self.rotationCycle = self.rotationCycle /2.0<br>	def OnSlowDown( self, event ):<br>		"""Handles key event to slowdown"""<br>		self.rotationCycle = self.rotationCycle * 2.0<br></pre>
+<p>The drawCube method has only one minor change, the addition of
+Normals, which allow the faces to interact with the newly-defined
+lighting.</p>
+<pre>	def drawCube( self ):<br>		"Draw a cube with both normals and texture coordinates"<br>		glBegin(GL_QUADS);<br>		glNormal3f( 0.0, 0.0, 1.0)<br>		glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);<br>		glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);<br>		glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);<br>		glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);<br><br>		glNormal3f( 0.0, 0.0,-1.0);<br>		glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);<br>		glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);<br>		glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);<br>		glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);<br><br>		glNormal3f( 0.0, 1.0, 0.0)<br>		glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);<br>		glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0,  1.0);<br>		glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0,  1.0);<br>		glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);<br><br>		glNormal3f( 0.0,-1.0, 0.0)<br>		glTexCoord2f(1.0, 1.0); glVertex3f(-1.0, -1.0, -1.0);<br>		glTexCoord2f(0.0, 1.0); glVertex3f( 1.0, -1.0, -1.0);<br>		glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);<br>		glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);<br><br>		glNormal3f( 1.0, 0.0, 0.0)<br>		glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);<br>		glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);<br>		glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);<br>		glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);<br><br>		glNormal3f(-1.0, 0.0, 0.0)<br>		glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);<br>		glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);<br>		glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);<br>		glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);<br>		glEnd()<br></pre>
+<p>And finally, our old friend to make the module executable as a
+script.</p>
+<p></p>
+<pre>if __name__ == "__main__":<br>	## We only want to run the main function if we<br>	## are actually being executed as a script<br>	MainFunction ( TestContext)<br></pre>
+<p>You can find the complete code for this sample in
+OpenGLContext/tests/nehe7.py<br>
+</p>
+<p class="footer"><a href="documentation.html"><img
+ src="images/doc_icon.gif" title="" alt="Documentation"
+ style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a
+ href="http://pyopengl.sourceforge.net/context/"><img
+ src="images/context_logo_icon.png" title="" alt="OpenGLContext"
+ style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a
+ href="http://pyopengl.sourceforge.net/"><img align="middle" title=""
+ alt="PyOpenGL" src="images/pyopengl_icon.jpg"
+ style="border: 0px solid ; width: 32px; height: 32px;"></a> A
+SourceForge Open-Source project: <a href="http://sourceforge.net"><img
+ src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
+ style="border: 0px solid ; width: 88px; height: 31px;"
+ alt="SourceForge" title="" align="middle"></a></p>
+</body>
+</html>

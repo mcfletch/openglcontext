@@ -1,0 +1,72 @@
+#VRML V2.0 utf8
+Transform {
+  children [
+    Transform {
+      translation -2 0 0
+      children [
+	Transform {
+	  translation 0 2.5 0
+	  children Shape {
+	    geometry Text {
+	      string [ "Serif 3D
+No Back
+.25 thickness
+Red" ]
+	      fontStyle DEF FS FontStyle3D {
+					size 0.5
+					family ["Times New Roman" "Times" "SERIF" ]
+					justify "RIGHT"
+					renderBack FALSE
+					renderSides TRUE
+					thickness .25
+	      }
+	    }
+	    appearance DEF A1 Appearance { material Material { diffuseColor 1,0,0}}
+	  }
+	}
+    ] }
+	Transform {
+	  translation 0 2.5 0
+	  children Shape {
+	    appearance DEF A2 Appearance {
+	      material Material { diffuseColor 1 1 1  }
+	    }
+	    geometry Text {
+	      string [ "SANS 3D" "Front Only" "Size .4" ]
+	      fontStyle FontStyle3D {
+					size .4
+					family ["Arial" "SANS"]
+					justify "MIDDLE"
+					renderBack FALSE
+					renderSides FALSE
+	      }
+	    }
+	  }
+	}
+    Transform {
+      translation 3 0 0 
+      children [
+#	    Shape { geometry Cone {} appearance USE A1 }
+	    Transform {
+	      translation 0 2.5 0
+	      children Shape {
+			    appearance DEF A1 Appearance { material Material { diffuseColor 0,.8,.2}}
+	        geometry Text {
+	          string [ "Typewriter" "Full size" "everything rendered" "thickness 1" ]
+	          fontStyle FontStyle3D {
+							size 1.0
+							family ["Courier New", "TYPEWRITER"]
+							justify "BEGIN"
+							renderBack TRUE
+							renderSides TRUE
+							renderFront TRUE
+							thickness 1
+			      }
+	        }
+	      }
+	    }
+    ] }
+  ]
+}
+    Background { skyColor [ 1 1 1 0,0,0 ] skyAngle [1.9] }
+

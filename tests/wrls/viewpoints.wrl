@@ -1,0 +1,96 @@
+#VRML V2.0 utf8
+
+DEF cam1 Viewpoint {
+  position 3.06 1.26 11.2
+  orientation 0.129 -0.991 -0.0165 -0.256
+  fieldOfView 0.602
+  description "cam1"
+}
+DEF cam02 Viewpoint {
+  position -6.99 -1.22 4.48
+  orientation -0.23 0.965 -0.125 -1.03
+  fieldOfView 0.602
+  description "cam02"
+}
+DEF cam03 Viewpoint {
+  position -6.12 6.3 3.62
+  orientation 0.428 0.87 0.244 -1.16
+  fieldOfView 1.47
+  description "cam03"
+}
+DEF cam04 Viewpoint {
+  position 12.5 -3.71 15
+  orientation -0.363 -0.922 0.132 -0.75
+  fieldOfView 0.199
+  description "cam04"
+}
+DEF cam05 Viewpoint {
+  position 9.53 3.59 12.1
+  orientation 0.146 -0.988 -0.0507 -0.675
+  fieldOfView 0.315
+  description "cam05"
+}
+DEF Cone01 Transform {
+  translation 0 0.000432 0
+  children [
+      Transform {
+        translation 0 1 0
+        children [
+          Shape {
+            appearance Appearance {
+              material Material {
+                diffuseColor 0.835 0.604 0.898
+              }
+            }
+            geometry Cone { bottomRadius 1 height 2 }
+          }
+    ] }
+  ]
+}
+DEF Box01 Transform {
+  translation -0.181 0 -0.418
+  children [
+      Transform {
+        translation 0 -0.674 0
+        children [
+          Shape {
+            appearance Appearance {
+              material Material {
+                diffuseColor 0.345 0.694 0.102
+              }
+            }
+            geometry Box { size 3.41 1.35 2.84 }
+          }
+    ] }
+  ]
+}
+DEF Cylinder01 Transform {
+  translation 0.831 0 -1.45
+  children [
+      Transform {
+        translation 0 1.22 0
+        children [
+          Shape {
+            appearance Appearance {
+              material Material {
+                diffuseColor 0.898 0.604 0.843
+              }
+            }
+            geometry Cylinder { radius 0.355 height 2.45 }
+          }
+    ] }
+  ]
+}
+DEF Sphere01 Transform {
+  translation -1.43 0.465 -0.465
+  children [
+    Shape {
+      appearance Appearance {
+        material Material {
+          diffuseColor 0.525 0.231 0.0314
+        }
+      }
+      geometry Sphere { radius 0.445 }
+    }
+  ]
+}

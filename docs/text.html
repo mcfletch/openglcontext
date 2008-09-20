@@ -1,0 +1,200 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+
+  
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+  
+  
+  <title>Text with OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/tutorial.css">
+
+  
+  <meta name="author" content="Mike C. Fletcher">
+</head>
+
+
+<body>
+
+<h1>Text Nodes in OpenGLContext</h1>
+
+<p class="introduction">This document discusses rendering Text nodes in
+OpenGLContext.&nbsp; The most common font providers available are the
+GLUT bitmap provider (always available) and the FontTools-based
+polygonal text provider.&nbsp; Both of these are cross platform, as are
+the PyGame and wxPython-based bitmap providers.<br>
+
+</p>
+
+
+<p>Creating text with OpenGL is a rather involved process.&nbsp;
+Generally speaking, it is necessary either to rely on a third party
+library for rendering the text, or to manually generate the text from
+some data source.&nbsp; OpenGLContext provides a framework in which
+both approaches can be (and are) used.&nbsp; <br>
+
+</p>
+
+
+<p>The <a href="../pydoc/OpenGLContext.scenegraph.text.fontprovider.html">FontProvider</a>
+class provides registration point for objects (font providers) which
+wish to service requests from text nodes for representations of given <a href="http://www.web3d.org/resources/vrml_ref_manual/ch3-320.htm">FontStyles</a>
+(a VRML97 node).&nbsp; Each provider has a geometry "format" which
+specifies the particular type of text that instances can render
+('solid', 'outline', and 'bitmap' are the currently available
+formats).&nbsp; When searching for a font, FontProviders with formats
+which match the requested format will be given preference over those
+which do not match, but if no matching providers are available,
+whatever provider can match the style will be used.<br>
+
+</p>
+
+<p>The OpenGLContext text/font rendering system loosely follows the
+VRML97 text-rendering system. &nbsp;A Text node defines two attributes,
+string and fontStyle. &nbsp;String is actually an MFString value where
+each value is a line to be displayed. &nbsp;The FontStyle node defines
+the rendering parameters for the string value.<br>
+
+</p>
+
+<p>Here is an example of some VRML97 text content:<br>
+
+</p>
+
+<pre>#VRML V2.0 utf8<br><br>Shape {<br>  geometry Text {<br>    string [ "Hello World", "VRML Text Node" ]<br>    fontStyle FontStyle {<br>			family [ "TYPEWRITER", "SERIF"]<br>			style [ "BOLD"]<br>    }<br>  }<br>  appearance Appearance { material Material { diffuseColor 1,1,1}}<br>}</pre>
+
+<p>You can view this sample with a command line something like this:<br>
+
+</p>
+
+<pre>P:\OpenGLContext\tests&gt;vrml_view.py wrls\text_simple.wrl<br></pre>
+
+<pre><img src="file:///P:/OpenGLContext/docs/images/text_simple.png" title="" alt="Screenshot of the VRML content" style="width: 400px; height: 400px;" align="right"></pre>
+
+
+<p>Things that we will want to take note of:<br>
+
+</p>
+
+<ul>
+
+  <li>the "family" field of the FontStyle node controls the font-face
+used to render the text. &nbsp;VRML97 is a cross-platform international
+standard, so it tends toward abstraction, rather than concrete
+specification. &nbsp;However, you can specify a particular
+platform-specific name for a font-face as one of the values in the
+family field. &nbsp;OpenGLContext recognizes the following family values
+from the VRML97 standard (bracketed name describes the chosen font):</li>
+
+  
+  <ul>
+
+    <li>SERIF (Roman)</li>
+
+    <li>SANS (Arial)</li>
+
+    <li>ROMAN (Roman)</li>
+
+    <li>TYPEWRITER (Courier)</li>
+
+  
+  </ul>
+
+  <li>With FontTools installed, OpenGLContext can scan the system's
+installed fonts and query the font files for their font names, family
+names etc. This allows for matching font names with considerably more
+accuracy than is obtained without the FontTools module installed.&nbsp;
+It also allows the "family" types enumerated above to be intelligently
+queried, rather than using lowest-common-denominator defaults.<br>
+
+  </li>
+
+</ul>
+
+<ul>
+
+  <li>the "style" field of the FontStyle node controls the weight and
+slant characteristics of the font. &nbsp;OpenGLContext recognizes the
+following weight and/or slant values, which can be included in any order
+within the style field (first name in each set to match takes
+precedence):</li>
+
+  
+  <ul>
+
+    <li>weight -- thin, extralight, ultralight, light, normal, regular,
+plain, medium, semibold, demibold, bold, extrabold, ultrabold, black,
+heavy<br>
+
+    </li>
+
+    <li>slant -- italic<br>
+
+    </li>
+
+  
+  </ul>
+
+  <li>the "string" field of the Text node is encoded using UTF-8
+Unicode, which should allow for specifying content for non-English
+environments, but this has never been tested beyond the most rudimentary
+of sample content. &nbsp;There is no support for the left-to-right and
+top-to-bottom orientation reversals seen in the VRML97 specification.</li>
+
+  <li>rather than particular support for font colors and the like,
+OpenGLContext (following VRML97) simply applies the Shape node's
+appearance to the text geometry</li>
+
+  <li>there is currently no anti-aliasing support save in PyGame bitmap
+fonts<br>
+
+  </li>
+
+  <li>geometry created with the Text node is polygonal unless otherwise
+specified</li>
+
+  <li>the <a href="../pydoc/OpenGLContext.scenegraph.text.fontstyle3d.html#FontStyle3D">FontStyle3D</a>
+class provides mechanisms for describing extruded text<br>
+
+  </li>
+
+</ul>
+
+<p>The Font object is responsible for the actual rendering of the text.
+&nbsp;It is called by the Text node's render method with the string to
+be rendered. &nbsp;The Font is responsible for defining the appropriate
+font, decoding the text to Unicode, generating the correct display-lists
+for rendering characters in the given font, determining the display
+metrics for the characters, and performing text layout.<br>
+
+</p>
+
+<p>Further Reading:<br>
+
+</p>
+
+<ul>
+
+  <li>tests/glprint.py -- rough conversion of <a href="http://nehe.gamedev.net/tutorials/lesson.asp?l=13">NeHe tutorial
+#13</a> for WGL-based bitmap-text printing</li>
+
+  <li>tests/glutbitmapcharacter.py -- test of GLUT-based bitmap
+characters</li>
+
+  <li>pydoc documentation for the <a href="../pydoc/OpenGLContext.scenegraph.text.html">OpenGLContext/scenegraph/text</a>
+package<br>
+
+  </li>
+
+  <li>VRML97 specification <a href="http://www.web3d.org/resources/vrml_ref_manual/ch3-347.htm">Text</a>
+and <a href="http://www.web3d.org/resources/vrml_ref_manual/ch3-320.htm">FontStyle</a>
+nodes</li>
+
+</ul>
+
+<p class="footer"><a href="documentation.html"><img src="images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/context/"><img src="images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> A
+SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" align="middle"></a></p>
+
+</body>
+</html>

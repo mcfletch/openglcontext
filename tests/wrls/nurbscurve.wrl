@@ -1,0 +1,92 @@
+#VRML V2.0 utf8
+
+Transform {
+	rotation 0,1,0, 3.14159
+	children [
+		Viewpoint {
+			position 0,0,10
+			orientation 0,1,0, 3.14159
+		}
+	]
+}
+
+Transform {
+children [
+Shape {
+		appearance Appearance {
+			material Material {
+				diffuseColor 0 1 0
+     			emissiveColor 1 0 0
+			}
+		}
+		geometry NurbsCurve {
+			knot [0, 0, 0, .2, .4, .6, 1, 1, 1] 
+			tessellation 50
+			controlPoint [0 0 0, 1 1 0, 0 2 0, 2 3 0, -1 4 0, 5 5 0]
+		}
+}
+]
+}
+	
+Transform {
+translation 0 0 0
+children [
+DEF point Shape {
+		appearance DEF app Appearance {
+			material Material {diffuseColor 0 1 0}
+		}
+		geometry DEF geom Box {size .1 .1 .1}
+			
+}
+]
+}	
+
+Transform {
+translation 1 1 0
+children [
+	Shape {
+		appearance USE app
+		geometry USE geom
+			
+	}
+]
+}
+Transform {
+translation 0 2 0
+children [
+	Shape {
+		appearance USE app
+		geometry USE geom
+			
+	}
+]
+}
+Transform {
+translation 2 3 0
+children [
+	Shape {
+		appearance USE app
+		geometry USE geom
+			
+	}
+]
+}
+Transform {
+translation -1 4 0
+children [
+	Shape {
+		appearance USE app
+		geometry USE geom
+			
+	}
+]
+}Transform {
+translation 5 5 0
+children [
+	Shape {
+		appearance USE app
+		geometry USE geom
+			
+	}
+]
+}

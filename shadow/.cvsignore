@@ -1,0 +1,7 @@
+*.pyc
+*.pyo
+*.max
+*.db
+*.bat
+MANIFEST
+

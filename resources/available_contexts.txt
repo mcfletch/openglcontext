@@ -1,0 +1,4 @@
+pygame	PyGame
+wx	wxPython
+glut	GLUT
+tk	Tkinter

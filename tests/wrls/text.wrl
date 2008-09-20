@@ -1,0 +1,61 @@
+#VRML V2.0 utf8
+Transform {
+  children [
+    Transform {
+      translation -2 0 0
+      children [
+	Transform {
+	  translation 0 2.5 0
+	  children Shape {
+	    geometry Text {
+	      string [ "Blam
+Dee Diddle" "¦³Ý" ]
+	      fontStyle DEF FS FontStyle {
+					size 0.5
+					family "SERIF"
+					justify "RIGHT"
+	      }
+	    }
+	    appearance DEF A1 Appearance { material Material { diffuseColor 1,0,0}}
+	  }
+	}
+    ] }
+	Transform {
+	  translation 0 2.5 0
+	  children Shape {
+	    appearance DEF A2 Appearance {
+	      material Material { diffuseColor 1 1 1  }
+	    }
+	    geometry Text {
+	      string [ "Hi" "Diddle" "Dee" "Dee" ]
+	      fontStyle FontStyle {
+					size 0.1
+					family "SANS"
+					justify "MIDDLE"
+	      }
+	    }
+	  }
+	}
+    Transform {
+      translation 2 0 0 
+      children [
+#	    Shape { geometry Cone {} appearance USE A1 }
+	    Transform {
+	      translation 0 2.5 0
+	      children Shape {
+	        appearance USE A2
+	        geometry Text {
+	          string [ "á la" "Sailor's" "Life" "for" "Me" ]
+	          fontStyle FontStyle {
+							size 1.0
+							family "TYPEWRITER"
+							justify "LEFT"
+			      }
+	        }
+	      }
+	    }
+    ] }
+  ]
+}
+    Background { skyColor [ 1 1 1 0,0,0 ] skyAngle [1.9] }
+

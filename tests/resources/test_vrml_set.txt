@@ -1,0 +1,18 @@
+# VRML97 standard section for examples
+http://www.web3d.org/x3d/specifications/vrml/ISO_IEC_14772-All/part1/exampleD.2.wrl
+http://www.web3d.org/x3d/specifications/vrml/ISO_IEC_14772-All/part1/exampleD.3.wrl
+http://www.web3d.org/x3d/specifications/vrml/ISO_IEC_14772-All/part1/exampleD.4.wrl
+http://www.web3d.org/x3d/specifications/vrml/ISO_IEC_14772-All/part1/exampleD.6.wrl
+http://www.web3d.org/x3d/specifications/vrml/ISO_IEC_14772-All/part1/exampleD.9.wrl
+http://www.web3d.org/x3d/specifications/vrml/ISO_IEC_14772-All/part1/exampleD.10.wrl
+
+# RCCad program sample pages
+http://www.rccad.com/Gallery/Vrml/stratoracer.wrl
+http://www.rccad.com/Gallery/Vrml/Cessna_Card.wrl
+http://www.rccad.com/Gallery/Vrml/varieze.wrl
+http://www.rccad.com/Gallery/Vrml/P-82.wrl
+http://www.rccad.com/Gallery/Vrml/twin_plane.wrl
+http://www.rccad.com/Gallery/Vrml/Zagi-400.wrl
+
+# Some VRML97 models from other locations...
+http://www.telefragged.com/soup/vmrl/jhcanyon4.wrl

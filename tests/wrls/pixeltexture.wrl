@@ -1,0 +1,75 @@
+#VRML V2.0 utf8
+
+SimpleBackground { color 1,1,1 }
+DEF Omni01 PointLight {
+  intensity 1
+	ambientIntensity .5
+  color 1 1 1
+  location 1 5 10
+  on TRUE
+  radius 11.1
+}
+NavigationInfo { headlight FALSE }
+Transform {
+  translation -3.75 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material DEF MAT Material {
+          diffuseColor 0.525 0.431 0.0314
+        }
+				texture PixelTexture {
+					image  2,2,1 0xff 0x00
+											 0x00 0xff
+				}
+      }
+      geometry DEF GEOM Box { size 2 2 4 }
+    }
+	]
+}
+Transform {
+  translation -1.25 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material USE MAT
+				texture PixelTexture {
+					image  2,2,2 0xff80 0x00ff 
+											 0x0080 0xff00
+				}
+      }
+      geometry USE GEOM
+    }
+	]
+}
+Transform {
+  translation 1.25 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material USE MAT
+				texture PixelTexture {
+					image  2,2,3 0xff0000 0x00ff00
+											 0x0000ff 0xffffff
+				}
+      }
+      geometry USE GEOM
+    }
+	]
+}
+Transform {
+  translation 3.75 0 0
+  children [
+    Shape {
+      appearance Appearance {
+        material USE MAT
+				texture PixelTexture {
+					image  2,2,4 0xff000080 0x00ff00ff
+											 0x0000ff00 0xffffff80
+				}
+      }
+      geometry USE GEOM
+    }
+	]
+}
+

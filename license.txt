@@ -1,0 +1,82 @@
+The OpenGLContext project has a number of applicable licenses. 
+The majority of the code, and all core functionality is released
+under the OpenGLContext License (below).
+
+Exceptions are as follows:
+
+	The (unfinished) module fxcontext.py is released under the 
+	LGPL, and is only required and/or loaded if you use the 
+	Fox/FxPy GUI library.  This module is an extremely loose
+	interpretation of the FxPy gltest.py module.  Basically only
+	the approach and necessary calls were taken from that module.
+	
+	The dek_texturesurf demo is covered under the PyOpenGL 1.5.5
+	license.  See PyOpenGL's license for details.
+	
+	The NeHe demos and supporting media files are (c)2000 Jeff
+	Molofee, see files for details.
+	
+	The redbook demos are Copyright (c) 1993-1999, Silicon 
+	Graphics, Inc., see files for details.
+	
+	The obj loading module is derived from a module which is:
+		Copyright (c) 2006-2008 Alex Holkner
+		All rights reserved.
+	see files for details.
+
+Dependency copyright notices (note that all dependencies mentioned 
+here are optional, but depending on the OpenGLContext version may
+be included in the OpenGLContext distribution):
+
+	FontTools:
+		Copyright 1999-2002 by Just van Rossum, Letterror, The Netherlands.
+	SimpleParse:
+		Copyright (c) 1998-2003, Copyright by Mike C. Fletcher
+	TTFQuery:
+		Copyright (c) 2003, Michael C. Fletcher and Contributors
+		All rights reserved.
+	PyVRML97/mcf.vrml:
+		Copyright (c) 1995-2003, Michael C. Fletcher and Contributors
+		All rights reserved.
+	eGenix mxTextTools:
+	  Copyright (c) 1997-2000, Marc-Andre Lemburg
+	  Copyright (c) 2000-2002, eGenix.com Software GmbH
+
+
+OpenGLContext License
+
+	Copyright (c) 2000-2008, Michael C. Fletcher and Contributors
+	All rights reserved.
+	
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions
+	are met:
+	
+		Redistributions of source code must retain the above copyright
+		notice, this list of conditions and the following disclaimer.
+	
+		Redistributions in binary form must reproduce the above
+		copyright notice, this list of conditions and the following
+		disclaimer in the documentation and/or other materials
+		provided with the distribution.
+	
+		The name of Michael C. Fletcher, or the name of any Contributor,
+		may not be used to endorse or promote products derived from this 
+		software without specific prior written permission.
+	
+	THIS SOFTWARE IS NOT FAULT TOLERANT AND SHOULD NOT BE USED IN ANY
+	SITUATION ENDANGERING HUMAN LIFE OR PROPERTY.
+	
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+	``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+	LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+	FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+	COPYRIGHT HOLDERS AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+	INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+	(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+	SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+	HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+	STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+	OF THE POSSIBILITY OF SUCH DAMAGE. 
+

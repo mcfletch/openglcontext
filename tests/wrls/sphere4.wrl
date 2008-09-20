@@ -1,0 +1,37 @@
+#VRML V2.0 utf8
+
+DEF Spot02 SpotLight {
+  intensity 0.8
+  color 0.796 0.89 0.949
+  location -20.1 -5.9 -18.1
+  direction 0.716 0.254 0.65
+  cutOffAngle 0.785
+  beamWidth 0.75
+  on TRUE
+  radius 49.6
+}
+            DEF r_upperarm Transform {
+              translation -1.161 1.65 1.0366
+              rotation 0.947 -0.166 0.274 -3.33
+              children [
+                DEF r_forearm Transform {
+                  translation 0.00328 -0.184 0.0487
+                  rotation 0.414 0.842 -0.345 -0.515
+                  children [
+                    Shape {
+                      appearance Appearance {
+                        material Material {
+                          diffuseColor 0.831 0.831 0.831
+                          ambientIntensity 0.21
+                          specularColor 0.68 0.68 0.68
+                          shininess 0.269
+                          transparency 0
+                          emissiveColor 0.166 0.166 0.166
+                        }
+                      }
+                      geometry Sphere {}
+										}
+                  ]
+                }
+              ]
+            }
