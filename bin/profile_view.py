@@ -12,7 +12,6 @@ class TestContext(
 		"""Load the image on initial load of the application"""
 		filename = sys.argv[1]
 		self.load( filename )
-		vrmlcontext.VRMLContext.OnInit( self )
 		BaseContext.OnInit( self )
 
 def main():
