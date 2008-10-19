@@ -24,7 +24,6 @@ def getInteractive( preferenceList= None ):
 	if preferenceList is None:
 		preferenceList = PREFERENCELIST
 	
-	import pkg_resources
 	entrypoints = context.Context.getContextTypes()
 	for preference in preferenceList:
 		for entrypoint in entrypoints:

@@ -104,4 +104,5 @@ def lorentz( iterations = 100000, start=(0,-2,-1) ):
 
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	import sys, cProfile
+	cProfile.run( "MainFunction ( TestContext)", 'OpenGLContext.profile' )

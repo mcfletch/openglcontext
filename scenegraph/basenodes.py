@@ -23,13 +23,9 @@ but at the moment that looks too messy to bother with.
 
 def _load( ):
 	"""Load the registered node-types from package resource declarations"""
-	import pkg_resources
+	from OpenGLContext import plugins
 	from OpenGLContext.debug import logs
-	entrypoints = pkg_resources.iter_entry_points(
-		"OpenGLContext.scenegraph.nodes"
-	)
-	if not entrypoints:
-		raise RuntimeError( """Your system does not appear to have any registered node types, likely egg installation failure""" )
+	entrypoints = plugins.Node.all()
 	for entrypoint in entrypoints:
 		name = entrypoint.name 
 		try:

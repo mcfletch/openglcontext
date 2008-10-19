@@ -29,12 +29,11 @@ these classes which define the rendering callbacks
 which are available from the Context class.
 """
 from OpenGL.GL import *
-from OpenGLContext import renderpass, visitor, texturecache
+from OpenGLContext import renderpass, visitor, texturecache,plugins
 from OpenGLContext.scenegraph import cache
 from vrml.vrml97 import nodetypes
 from vrml import node
 import weakref, os, time, sys
-import pkg_resources
 
 try:
 	import threading, Queue
@@ -749,7 +748,7 @@ class Context(object):
 			return True
 	setDefaultTTFFont = classmethod( setDefaultTTFFont )
 
-	def getContextTypes( cls, type='OpenGLContext.vrmlcontext' ):
+	def getContextTypes( cls, type=plugins.InteractiveContext ):
 		"""Retrieve the set of defined context types
 		
 		type -- testing type key from setup.py for the registered modules
@@ -757,15 +756,9 @@ class Context(object):
 		returns list of setuptools entry-point objects which can be passed to 
 		getContextType( name ) to retrieve the actual context type.
 		"""
-		entrypoints = pkg_resources.iter_entry_points(
-			type
-		)
-		entrypoints = list(entrypoints)
-		if not entrypoints:
-			raise RuntimeError( """Your system does not appear to have any registered node types, likely egg installation failure""" )
-		return entrypoints
+		return type.all()
 	getContextTypes = classmethod( getContextTypes )
-	def getContextType( cls, entrypoint, type='OpenGLContext.testingcontext' ):
+	def getContextType( cls, entrypoint, type=plugins.InteractiveContext ):
 		"""Load a single context type via entry-point resolution
 		
 		returns a Context sub-class *or* None if there is no such

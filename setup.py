@@ -9,7 +9,7 @@ import os, sys
 from setuptools import setup
 # We don't technically require some of these, but they're so 
 # useful leaving them out doesn't make sense...
-install_requires = ['PyVRML97','PyOpenGL',]#'TTFQuery']
+#install_requires = ['PyVRML97','PyOpenGL',]#'TTFQuery']
 
 # Imaging does not like being installed as an egg on Linux 
 # in my tests, as the Package is named PIL, not Imaging... blah.
@@ -102,119 +102,25 @@ used to maintain and extend PyOpenGL.
 			}
 		},
 		# non python files of examples      
-		extras_require = {
-			# Numeric support should likely be dropped at some point...
-			'numeric':  ["PyVRML97[numeric]"],
-			'parsing': ["PyVRML97[parsing]"],
-			#'3dfonts': ["TTFQuery"],
-		},
-		dependency_links = [
-			# PyVRML97
-			"https://sourceforge.net/project/showfiles.php?group_id=19262",
-			# TTFQuery/FontTools-numpy
-			"https://sourceforge.net/project/showfiles.php?group_id=84080",
-			# Imaging/PIL (PIL doesn't resolve on non-win32 with easy_install otherwise)
-			"http://effbot.org/downloads/#Imaging",
-		],
+#		extras_require = {
+#			# Numeric support should likely be dropped at some point...
+#			'numeric':  ["PyVRML97[numeric]"],
+#			'parsing': ["PyVRML97[parsing]"],
+#			#'3dfonts': ["TTFQuery"],
+#		},
+#		dependency_links = [
+#			# PyVRML97
+#			"https://sourceforge.net/project/showfiles.php?group_id=19262",
+#			# TTFQuery/FontTools-numpy
+#			"https://sourceforge.net/project/showfiles.php?group_id=84080",
+#			# Imaging/PIL (PIL doesn't resolve on non-win32 with easy_install otherwise)
+#			"http://effbot.org/downloads/#Imaging",
+#		],
 		
 		entry_points = {
 			'gui_scripts': [
 				'choosecontext=OpenGLContext.bin.choosecontext:main',
 				'vrml_view = OpenGLContext.bin.vrml_view:main',
-			],
-			'OpenGLContext.context': [
-				'pygame=OpenGLContext.pygamecontext:PyGameContext',
-				'wx=OpenGLContext.wxcontext:wxContext',
-				'glut=OpenGLContext.glutcontext:GLUTContext',
-				'tk=OpenGLContext.tkcontext:TkContext',
-			],
-			'OpenGLContext.interactivecontext': [
-				'pygame=OpenGLContext.pygameinteractivecontext:PyGameInteractiveContext',
-				'wx=OpenGLContext.wxinteractivecontext:wxInteractiveContext',
-				'glut=OpenGLContext.glutinteractivecontext:GLUTInteractiveContext',
-				'tk=OpenGLContext.tkinteractivecontext:TkInteractiveContext',
-			],
-			'OpenGLContext.vrmlcontext': [
-				'pygame=OpenGLContext.pygamevrmlcontext:VRMLContext',
-				'wx=OpenGLContext.wxvrmlcontext:VRMLContext',
-				'glut=OpenGLContext.glutvrmlcontext:VRMLContext',
-			],
-			'OpenGLContext.loaders': [
-				'vrml97=OpenGLContext.loaders.vrml97:defaultHandler',
-				'obj=OpenGLContext.loaders.obj:defaultHandler',
-			],
-			'OpenGLContext.scenegraph.nodes': [
-				'Anchor = vrml.vrml97.basenodes:Anchor',
-				'Appearance = OpenGLContext.scenegraph.appearance:Appearance',
-				'AudioClip = vrml.vrml97.basenodes:AudioClip',
-				'Background = OpenGLContext.scenegraph.background:Background',
-				'Billboard = OpenGLContext.scenegraph.billboard:Billboard',
-				'Box = OpenGLContext.scenegraph.box:Box',
-				'Collision = OpenGLContext.scenegraph.collision:Collision',
-				'Color = vrml.vrml97.basenodes:Color',
-				'ColorInterpolator = OpenGLContext.scenegraph.interpolators:ColorInterpolator',
-				'Cone = OpenGLContext.scenegraph.quadrics:Cone',
-				'Coordinate = OpenGLContext.scenegraph.coordinate:Coordinate',
-				'CoordinateInterpolator = OpenGLContext.scenegraph.interpolators:CoordinateInterpolator',
-				'Cylinder = OpenGLContext.scenegraph.quadrics:Cylinder',
-				'CylinderSensor = vrml.vrml97.basenodes:CylinderSensor',
-				'DirectionalLight = OpenGLContext.scenegraph.light:DirectionalLight',
-				'ElevationGrid = vrml.vrml97.basenodes:ElevationGrid',
-				'Extrusion = vrml.vrml97.basenodes:Extrusion',
-				'Fog = vrml.vrml97.basenodes:Fog',
-				'FontStyle = OpenGLContext.scenegraph.text.fontstyle3d:FontStyle',
-				'Group = OpenGLContext.scenegraph.group:Group',
-				'ImageTexture = OpenGLContext.scenegraph.imagetexture:ImageTexture',
-				'IndexedFaceSet = OpenGLContext.scenegraph.indexedfaceset:IndexedFaceSet',
-				'IndexedLineSet = OpenGLContext.scenegraph.indexedlineset:IndexedLineSet',
-				'Inline = OpenGLContext.scenegraph.inline:Inline',
-				'LOD = OpenGLContext.scenegraph.lod:LOD',
-				'Material = OpenGLContext.scenegraph.material:Material',
-				'MouseOver = OpenGLContext.scenegraph.mouseover:MouseOver',
-				'MovieTexture = vrml.vrml97.basenodes:MovieTexture',
-				'NavigationInfo = vrml.vrml97.basenodes:NavigationInfo',
-				'Normal = vrml.vrml97.basenodes:Normal',
-				'NormalInterpolator = vrml.vrml97.basenodes:NormalInterpolator',
-				'OrientationInterpolator = OpenGLContext.scenegraph.interpolators:OrientationInterpolator',
-				'PixelTexture = OpenGLContext.scenegraph.imagetexture:PixelTexture',
-				'PlaneSensor = vrml.vrml97.basenodes:PlaneSensor',
-				'PointLight = OpenGLContext.scenegraph.light:PointLight',
-				'PointSet = OpenGLContext.scenegraph.pointset:PointSet',
-				'PositionInterpolator = OpenGLContext.scenegraph.interpolators:PositionInterpolator',
-				'ProximitySensor = vrml.vrml97.basenodes:ProximitySensor',
-				'ScalarInterpolator = OpenGLContext.scenegraph.interpolators:ScalarInterpolator',
-				'Shape = OpenGLContext.scenegraph.shape:Shape',
-				'Sound = vrml.vrml97.basenodes:Sound',
-				'Sphere = OpenGLContext.scenegraph.quadrics:Sphere',
-				'SphereSensor = vrml.vrml97.basenodes:SphereSensor',
-				'SpotLight = OpenGLContext.scenegraph.light:SpotLight',
-				'Switch = OpenGLContext.scenegraph.switch:Switch',
-				'Text = OpenGLContext.scenegraph.text.text:Text',
-				'TextureCoordinate = vrml.vrml97.basenodes:TextureCoordinate',
-				'TextureTransform = OpenGLContext.scenegraph.texturetransform:TextureTransform',
-				'TimeSensor = OpenGLContext.scenegraph.timesensor:TimeSensor',
-				'TouchSensor = vrml.vrml97.basenodes:TouchSensor',
-				'Transform = OpenGLContext.scenegraph.transform:Transform',
-				'Viewpoint = OpenGLContext.scenegraph.viewpoint:Viewpoint',
-				'VisibilitySensor = vrml.vrml97.basenodes:VisibilitySensor',
-				'WorldInfo = vrml.vrml97.basenodes:WorldInfo',
-				
-				'sceneGraph = OpenGLContext.scenegraph.scenegraph:SceneGraph',
-				'IndexedPolygons = OpenGLContext.scenegraph.indexedpolygons:IndexedPolygons',
-				'FontStyle3D = OpenGLContext.scenegraph.text.fontstyle3d:FontStyle3D',
-				'SimpleBackground = OpenGLContext.scenegraph.simplebackground:SimpleBackground',
-				'CubeBackground = OpenGLContext.scenegraph.cubebackground:CubeBackground',
-				'SphereBackground = OpenGLContext.scenegraph.spherebackground:SphereBackground',
-				'MMImageTexture = OpenGLContext.scenegraph.imagetexture:MMImageTexture',
-				
-				'Contour2D = OpenGLContext.scenegraph.nurbs:Contour2D',
-				'NurbsCurve = OpenGLContext.scenegraph.nurbs:NurbsCurve',
-				'NurbsCurve2D = OpenGLContext.scenegraph.nurbs:NurbsCurve2D',
-				'NurbsDomainDistanceSample = OpenGLContext.scenegraph.nurbs:NurbsDomainDistanceSample',
-				'NurbsSurface = OpenGLContext.scenegraph.nurbs:NurbsSurface',
-				'NurbsToleranceSample = OpenGLContext.scenegraph.nurbs:NurbsToleranceSample',
-				'Polyline2D = OpenGLContext.scenegraph.nurbs:Polyline2D',
-				'TrimmedSurface = OpenGLContext.scenegraph.nurbs:TrimmedSurface',
 			],
 		},
 		**extraArguments

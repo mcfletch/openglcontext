@@ -97,13 +97,9 @@ class _Loader( object ):
 	loadedHandlers = {}
 	def loadHandlers( self ):
 		"""Load all registered handlers"""
-		import pkg_resources
 		from OpenGLContext.debug import logs
-		entrypoints = pkg_resources.iter_entry_points(
-			"OpenGLContext.loaders"
-		)
-		if not entrypoints:
-			raise RuntimeError( """Your system does not appear to have any registered file-format loaders (normally you would have at least vrml97 and obj, likely setuptools registration failure)""" )
+		from OpenGLContext import plugins
+		entrypoints = plugins.Loader.all()
 		for entrypoint in entrypoints:
 			name = entrypoint.name 
 			try:
@@ -116,7 +112,7 @@ class _Loader( object ):
 				except Exception, err:
 					logs.context_log.warn( """Unable to initialize loader implementation for %s: %s""", name, err )
 				else:
-					for extension in loader.filename_extensions:
+					for extension in entrypoint.check:
 						self.loadedHandlers[ extension ] = loader 
 					logs.context_log.info( """Loaded loader implementation for %s: %s""", name, loader )
 		

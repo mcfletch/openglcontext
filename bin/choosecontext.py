@@ -7,7 +7,6 @@ from OpenGLContext.scenegraph.basenodes import *
 from vrml.vrml97 import nodetypes
 from OpenGLContext.events import mouseevents
 from gettext import gettext as _
-import pkg_resources
 
 class ChoiceContext( BaseContext ):
 	currentChoice = 0
