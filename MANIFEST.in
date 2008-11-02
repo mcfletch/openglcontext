@@ -13,7 +13,8 @@ recursive-include docs *.css *.png *.gif
 include docs/*.html
 include docs/images/*
 include docs/style/*
-include loaders/*
+include OpenGLContext/loaders/*
+include OpenGLContext/browser/*.wrl
 include pydoc/*.py
 
 global-exclude *CVS*

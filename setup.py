@@ -8,7 +8,6 @@ to install the package from the source archive.
 from distutils.core import setup
 import sys, os
 sys.path.insert(0, '.' )
-import metadata
 
 def is_package( path ):
 	return os.path.isfile( os.path.join( path, '__init__.py' ))
@@ -46,7 +45,7 @@ used to maintain and extend PyOpenGL.
 	### Now the actual set up call
 	setup (
 		name = "OpenGLContext",
-		version = "2.1.0a3",
+		version = "2.1.0a4",
 		description = "Demonstration and testing contexts for PyOpenGL/OpenGL-ctypes",
 		author = "Mike C. Fletcher",
 		author_email = "mcfletch@users.sourceforge.net",
