@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 '''Low-level Pygame bitmap fonts test'''
-from OpenGLContext.tests import _bitmap_font, _fontstyles
+import _bitmap_font, _fontstyles
 from OpenGLContext.scenegraph.text import pygamefont, fontprovider
 
 class TestContext( _bitmap_font.TestContext ):

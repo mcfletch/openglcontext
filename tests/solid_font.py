@@ -4,7 +4,7 @@ from OpenGL.GL import *
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
-from OpenGLContext.tests import _fontstyles#, _ttf_fonts
+import _fontstyles#, _ttf_fonts
 from OpenGLContext.debug.logs import text_log
 import sys, os, traceback
 

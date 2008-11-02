@@ -19,13 +19,6 @@ def find_packages( root ):
 			yield path.replace( '/','.' )
 
 if __name__ == "__main__":
-	dataDirectories = [
-		"docs",
-		os.path.join( "docs","images"),
-		os.path.join( "docs","style"),
-		os.path.join('tests','wrls'),
-		'resources',
-	]
 	extraArguments = {
 		'classifiers': [
 			"""License :: OSI Approved :: BSD License""",
@@ -60,45 +53,13 @@ used to maintain and extend PyOpenGL.
 		url = "http://pyopengl.sourceforge.net/context/",
 		license = "BSD-style, see license.txt for details",
 
-		packages = list(find_packages()),
-		package_dir = {
-			'OpenGLContext':'.',
-		},
-		install_requires = install_requires,
-		
+		packages = list(find_packages('OpenGLContext')),
 		# need to add executable scripts too...
-		zip_safe = False, # data-files are not zip-friendly at the moment..
-
-		include_package_data=True,
-		package_data = {
-			'OpenGLContext.tests': ['*.jpg','*.bmp','*.png','*.wrl','wrls/*.wrl'],
-		},
 		options = {
 			'sdist': {
 				'formats':['gztar','zip'],
 			}
 		},
 		# non python files of examples      
-#		extras_require = {
-#			# Numeric support should likely be dropped at some point...
-#			'numeric':  ["PyVRML97[numeric]"],
-#			'parsing': ["PyVRML97[parsing]"],
-#			#'3dfonts': ["TTFQuery"],
-#		},
-#		dependency_links = [
-#			# PyVRML97
-#			"https://sourceforge.net/project/showfiles.php?group_id=19262",
-#			# TTFQuery/FontTools-numpy
-#			"https://sourceforge.net/project/showfiles.php?group_id=84080",
-#			# Imaging/PIL (PIL doesn't resolve on non-win32 with easy_install otherwise)
-#			"http://effbot.org/downloads/#Imaging",
-#		],
-		
-		entry_points = {
-			'gui_scripts': [
-				'choosecontext=OpenGLContext.bin.choosecontext:main',
-				'vrml_view = OpenGLContext.bin.vrml_view:main',
-			],
-		},
 		**extraArguments
 	)

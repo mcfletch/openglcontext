@@ -4,7 +4,7 @@
 This version of the VRML-viewing demonstration functions as
 a demonstration of the shadow-casting package.
 """
-from OpenGLContext.tests import vrml_view
+from OpenGLContext.bin import vrml_view
 from OpenGLContext.shadow import shadowcontext
 
 class TestContext( shadowcontext.ShadowContext, vrml_view.TestContext ):

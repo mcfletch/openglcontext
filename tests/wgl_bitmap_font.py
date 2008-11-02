@@ -5,7 +5,7 @@ the bitmap fonts under WGL, so this test produces garbage
 rendering, as it can't guess how large the lines should
 be.
 '''
-from OpenGLContext.tests import _bitmap_font, _fontstyles
+import _bitmap_font, _fontstyles
 from OpenGLContext.scenegraph.text import wglfont
 
 class TestContext( _bitmap_font.TestContext ):

@@ -3,7 +3,7 @@ from OpenGL.GL import *
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
-from OpenGLContext.tests import _fontstyles
+import _fontstyles
 import sys
 
 MESSAGE = """Join the revolution!\nIt will be televised people.\nThere's no excuse."""

@@ -8,8 +8,8 @@ BaseContext = wxtestingcontext.BaseContext
 MainFunction = wxtestingcontext.main
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.text import wxfont
-from OpenGLContext.tests import _fontstyles
 from OpenGLContext.debug import logcontext
+import _fontstyles
 MESSAGE = """Join the revolution!\nIt will be televised people.\nThere's no excuse."""
 SHORT_TEST = "Short Str\nHere"
 VERTICAL_TEST = "A\nB\nC"

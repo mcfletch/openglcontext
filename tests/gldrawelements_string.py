@@ -5,7 +5,7 @@ BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 import string
-from OpenGLContext.tests import flower_geometry
+import flower_geometry
 
 points = array([[0,0,0],[1,0,0],[1,1,0],[0,1,0]], 'f')
 indices = array( range(len(points)), 'i')

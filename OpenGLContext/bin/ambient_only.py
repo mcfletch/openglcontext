@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 """VRML-viewing context that only renders ambient-lighting"""
-from OpenGLContext.tests import vrml_view
+from OpenGLContext.bin import vrml_view
 from OpenGLContext.shadow import passes
 
 class TestContext( vrml_view.TestContext ):

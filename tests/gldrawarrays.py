@@ -5,7 +5,7 @@ BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 import string
-from OpenGLContext.tests import flower_geometry
+import flower_geometry
 
 class TestContext( BaseContext):
 	def OnInit( self ):
