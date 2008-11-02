@@ -5,41 +5,18 @@ Run:
 	python setup.py install
 to install the package from the source archive.
 """
-import os, sys
-from setuptools import setup
-# We don't technically require some of these, but they're so 
-# useful leaving them out doesn't make sense...
-#install_requires = ['PyVRML97','PyOpenGL',]#'TTFQuery']
+from distutils.core import setup
+import sys, os
+sys.path.insert(0, '.' )
+import metadata
 
-# Imaging does not like being installed as an egg on Linux 
-# in my tests, as the Package is named PIL, not Imaging... blah.
-#if sys.platform == 'win32':
-#	install_requires.append( 'PIL' )
-#else:
-#	install_requires.append( 'Imaging' )
-
-def is_package( directory ):
-	dir,file = os.path.isdir( directory ), os.path.isfile( os.path.join( directory,'__init__.py' ))
-	if dir and file:
-		return True
-	return False
-
-def find_packages( where='.', rootPackage='OpenGLContext' ):
-	"""Grr, why can't you specify current directory?"""
-	yield rootPackage
-	set = [
-		(item,name)
-		for (item,name) in [
-			(item,os.path.join( where, item ))
-			for item in os.listdir( where )
-		]
-		if is_package( name )
-	]
-	for item,name in set:
-		subPackage = ".".join( (rootPackage, item) )
-		for package in find_packages( name, subPackage ):
-			yield package
-
+def is_package( path ):
+	return os.path.isfile( os.path.join( path, '__init__.py' ))
+def find_packages( root ):
+	"""Find all packages under this directory"""
+	for path, directories, files in os.walk( root ):
+		if is_package( path ):
+			yield path.replace( '/','.' )
 
 if __name__ == "__main__":
 	dataDirectories = [
