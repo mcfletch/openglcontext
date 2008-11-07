@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 """VRML97 load-and-view demonstration/test"""
+import OpenGL 
+OpenGL.ERROR_CHECKING = False 
 from OpenGLContext.testingcontext import getInteractive
 BaseContext, MainFunction = getInteractive()
 from OpenGLContext import vrmlcontext
