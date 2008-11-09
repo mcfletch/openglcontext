@@ -204,7 +204,7 @@ class ArrayGeometry(object):
 			polygonsort.distances(
 				self.centers
 			)
-		)
+		).astype( 'I' )
 		objectType = self.arguments[0]
 		assert objectType == GL_TRIANGLES, """Only triangles are sortable, a non-triangle mesh was told to be transparent!"""
 		glDrawElementsui(
