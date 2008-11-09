@@ -1,13 +1,21 @@
 #! /usr/bin/env python
-'''Tests operation of the ARB Occlusion Query extension
+'''Tests operation of the OpenGL1.5/ARB Occlusion Query extension
 '''
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, box
 from OpenGL.GL import *
 from OpenGL.GL.ARB.occlusion_query import *
+from OpenGL.extensions import alternate
 from OpenGLContext.arrays import array
 import string, time, sys
+
+glBeginQuery = alternate( glBeginQuery, glBeginQueryARB )
+glDeleteQueries = alternate( glDeleteQueries, glDeleteQueriesARB )
+glEndQuery = alternate( glEndQuery, glEndQueryARB )
+glGenQueries = alternate( glGenQueries, glGenQueriesARB )
+glGetQueryObjectiv = alternate( glGetQueryObjectiv, glGetQueryObjectivARB )
+glGetQueryObjectuiv = alternate( glGetQueryObjectiv, glGetQueryObjectuivARB )
 
 images = [
 	"nehe_glass.bmp",
@@ -29,23 +37,23 @@ class TestContext( BaseContext ):
 	currentSize = 0
 	def Render( self, mode = 0):
 		BaseContext.Render( self, mode )
-		query = glGenQueriesARB(1)
+		query = glGenQueries(1)
 		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 		glDepthMask(GL_FALSE);
-		glBeginQueryARB(GL_SAMPLES_PASSED_ARB, query);
+		glBeginQuery(GL_SAMPLES_PASSED, query);
 		# we'd want a different non-texture mode here, really...
 		self.shape.Render( mode )
-		glEndQueryARB(GL_SAMPLES_PASSED_ARB);
+		glEndQuery(GL_SAMPLES_PASSED);
 		glFlush()
 		ready = False 
 		print 'Waiting for completion of query (normal situation is 8 or 9 wait loop iterations)',
 		while not ready:
-			ready = glGetQueryObjectivARB(query,GL_QUERY_RESULT_AVAILABLE_ARB)
+			ready = glGetQueryObjectiv(query,GL_QUERY_RESULT_AVAILABLE)
 			if not ready:
 				print '.',
 		print
-		print 'Fragments affected:', glGetQueryObjectuivARB(query, GL_QUERY_RESULT_ARB )
-		glDeleteQueriesARB( [query] )
+		print 'Fragments affected:', glGetQueryObjectuiv(query, GL_QUERY_RESULT )
+		glDeleteQueries( [query] )
 
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glDepthMask(GL_TRUE);
@@ -53,9 +61,9 @@ class TestContext( BaseContext ):
 		
 	def OnInit( self ):
 		"""Scene set up and initial processing"""
-		haveExtension = self.extensions.initExtension( "GL.ARB.occlusion_query")
+		haveExtension = bool(glGenQueries)
 		if not haveExtension:
-			print 'GL_ARB_occlusion_query not supported!'
+			print 'OpenGL 1.5/GL_ARB_occlusion_query not supported!'
 			sys.exit(1)
 		print """When the box is offscreen number of pixels should drop to 0
 """
