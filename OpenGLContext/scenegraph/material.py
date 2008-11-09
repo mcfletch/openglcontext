@@ -4,6 +4,7 @@ from vrml.vrml97 import basenodes
 from vrml import protofunctions
 from OpenGLContext.arrays import zeros
 from OpenGLContext.scenegraph import cache
+import ctypes
 
 class Material(basenodes.Material):
 	"""Node specifying rendering properties affecting the lighting model
@@ -64,9 +65,9 @@ class Material(basenodes.Material):
 			quick = self.compile( mode=mode )
 		if not quick:
 			return 1.0
-		renderingData, shininess, alpha = quick
-		map ( glMaterial, self.faces, self.datamap, renderingData )
-		glMaterial( self.faces[0], GL_SHININESS, shininess )
+		renderingData, pointers, shininess, alpha = quick
+		map ( glMaterialfv, self.faces, self.datamap, pointers )
+		glMaterialf( self.faces[0], GL_SHININESS, shininess )
 		return alpha
 	def compile( self, mode=None ):
 		"""Compile material information into readily-rendered format"""
@@ -82,7 +83,13 @@ class Material(basenodes.Material):
 		renderingData[1,:3] = self.emissiveColor.astype( 'f' )
 		renderingData[2,:3] = self.specularColor.astype( 'f' )
 		renderingData[3,:3] = (diffuseColor*self.ambientIntensity).astype('f')
-		holder.data = renderingData, self.shininess*128, alpha
+		pointer = renderingData.ctypes.data
+		holder.data = (
+			renderingData,
+			[ctypes.c_void_p( pointer+(x*16)) for x in range(0,4)], 
+			self.shininess*128, 
+			alpha,
+		)
 		return holder.data
 
 	

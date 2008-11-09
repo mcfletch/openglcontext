@@ -82,15 +82,15 @@ class _Texture( nodetypes.Texture, node.Node ):
 		# now the stuff not related to the texture in particular
 		# i.e. the "image" half of the image texture
 		if self.repeatS:
-			glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
 		else:
-			glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
 		if self.repeatT:
-			glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 		else:
-			glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
-		glTexParameter( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.magFilter )
-		glTexParameter( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, self.minFilter )
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.magFilter )
+		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, self.minFilter )
 		### XXX something get's messed up heavily if we actually report the alpha channel's existence :(
 		return 0
 		
