@@ -316,6 +316,9 @@ class AABoundingBox( BoundingBox ):
 ##		if not result:
 ##			print "occlusion culling eliminated item", self.center, self.size
 		return result
+	def occlusionRender( self ):
+		"""Render this box to screen"""
+		doinchildmatrix.doInChildMatrix( self._occlusionRender )
 	def _occlusionRender(self):
 		"""Do the low-level rendering of the occlusion volume"""
 		glTranslate( *self.center )
