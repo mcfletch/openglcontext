@@ -48,19 +48,19 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
 				x,y,z = self.color * self.ambientIntensity
 			else:
 				x,y,z = 0.0, 0.0, 0.0
-			glLight(lightID, GL_AMBIENT, (x,y,z,1.0))
+			glLightfv(lightID, GL_AMBIENT, (x,y,z,1.0))
 
 			if mode.lightingDiffuse:
 				x,y,z = self.color
 			else:
 				x,y,z = 0.0, 0.0, 0.0
-			glLight(lightID, GL_DIFFUSE, (x,y,z,1.0))
+			glLightfv(lightID, GL_DIFFUSE, (x,y,z,1.0))
 
 			if hasattr( self, 'location' ):
 				x,y,z = self.location
 			else:
 				x,y,z = -self.direction
-			glLight(lightID, GL_POSITION, (x,y,z,self.pointSource))
+			glLightfv(lightID, GL_POSITION, (x,y,z,self.pointSource))
 			return 1
 		else:
 			return 0
@@ -78,9 +78,9 @@ class PointLight(basenodes.PointLight, Light):
 	def Light( self, lightID, mode = None):
 		"""Render the light (i.e. cause it to alter the scene"""
 		if super(PointLight,self).Light( lightID, mode ):
-			glLight(lightID, GL_CONSTANT_ATTENUATION, self.attenuation[0])
-			glLight(lightID, GL_LINEAR_ATTENUATION, self.attenuation[1])
-			glLight(lightID, GL_QUADRATIC_ATTENUATION, self.attenuation[2])
+			glLightf(lightID, GL_CONSTANT_ATTENUATION, self.attenuation[0])
+			glLightf(lightID, GL_LINEAR_ATTENUATION, self.attenuation[1])
+			glLightf(lightID, GL_QUADRATIC_ATTENUATION, self.attenuation[2])
 			return 1
 		else:
 			return 0
@@ -97,10 +97,10 @@ class SpotLight(basenodes.SpotLight, PointLight):
 		"""Render the light (i.e. cause it to alter the scene"""
 		if super(SpotLight,self).Light( lightID, mode ):
 			# now the spotlight-specific stuff
-			glLight(lightID, GL_SPOT_DIRECTION, self.direction)
-			glLight(lightID, GL_SPOT_CUTOFF, self.cutOffAngle* (180/pi))
+			glLightfv(lightID, GL_SPOT_DIRECTION, self.direction.astype( 'f'))
+			glLightf(lightID, GL_SPOT_CUTOFF, self.cutOffAngle* (180/pi))
 			# note no support for GL_SPOT_EXPONENT/beamWidth
-			glLight(lightID, GL_QUADRATIC_ATTENUATION, self.attenuation[2])
+			glLightf(lightID, GL_QUADRATIC_ATTENUATION, self.attenuation[2])
 			return 1
 		else:
 			return 0
