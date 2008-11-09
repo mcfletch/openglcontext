@@ -173,9 +173,8 @@ class VisitingRenderPass( RenderPass, rendervisitor.RenderVisitor ):
 						mode=self
 					):
 						yield child
-					else:
-						if __debug__:
-							visitor_log.info( 'Culling node %s (id=%s)', child, id(child))
+#					else:
+#						log.info( 'Culling child' )
 				else:
 					yield child
 		else:
