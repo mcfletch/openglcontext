@@ -51,7 +51,7 @@ class IndexedPolygons (
 	"""
 	#Fields
 	polygonSides = field.newField( 'polygonSides', 'SFInt32', 0, 3)
-	index = field.newField( 'index', 'MFInt32', 0, list)
+	index = field.newField( 'index', 'MFUInt32', 0, list)
 	normal = field.newField( 'normal', 'SFNode', 1, node.NULL)
 	solid = field.newField( 'solid', 'SFBool', 0, 1)
 	ccw = field.newField( 'ccw', 'SFBool', 0, 1)
