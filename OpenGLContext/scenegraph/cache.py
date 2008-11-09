@@ -31,19 +31,18 @@ Note:
 	The cache makes extensive use of weak references, and
 	was the failure case which exposed a number of problems
 	with the Python 2.2.2 weakref and weakkeydictionary
-	mechanisms.  Python 2.2.3 is *required* for use with
-	OpenGLContext as a result!
+	mechanisms.
 """
 from vrml import field, protofunctions
 import weakref
-from vrml.weakkeydictfix import WeakKeyDictionary
+#from vrml.weakkeydictfix import WeakKeyDictionary
 from pydispatch import dispatcher
 import weakref, traceback
 
-class Cache (WeakKeyDictionary):
-	"""Trivial sub-class of the WeakKeyDictionary
+class Cache (dict):
+	"""Trivial sub-class of a dict which has some convenience methods
 
-	Maps client: {
+	Maps id(client): {
 		key="": CacheHolder()
 	}
 
@@ -54,13 +53,13 @@ class Cache (WeakKeyDictionary):
 	"""
 	def getHolder( self, client, key = ""):
 		"""Return the cache holder for the given client and key"""
-		current = self.get(client)
+		current = self.get(id(client))
 		if current is not None:
 			return current.get( key)
 		return None
 	def getData( self, client, key="", default=None):
 		"""Return the data for given client and key, default otherwise"""
-		current = self.get( client )
+		current = self.get( id(client) )
 		if current is not None:
 			current = current.get( key )
 			if current is not None:
@@ -82,6 +81,16 @@ class Cache (WeakKeyDictionary):
 
 CACHE = Cache()
 getData = CACHE.getData
+
+def cleaner( cache, id ):
+	"""Return callback function that cleans the given id from cache"""
+	def clean_id( weak ):
+		try:
+			del cache[id]
+		except Exception, err:
+			pass 
+	return clean_id
+
 
 class CacheHolder( object ):
 	"""Holder for data values within a cache
@@ -120,17 +129,17 @@ class CacheHolder( object ):
 		cache -- the particular cache in which to store
 			ourselves.
 		"""
-		self.client = weakref.ref(client)
+		client_id = id(client)
+		self.client = weakref.ref(client, cleaner( cache,client_id) )
 		self.key = key
 		self.data = data
 		self.cache = weakref.ref( cache )
 		self.nodeDependencies = []
 
 		# get the cached values for this client node
-		
-		set = cache.get(client, None)
+		set = cache.get(client_id, None)
 		if set is None:
-			cache[ client ] = set = {}
+			cache[ client_id ] = set = {}
 		set[key] = self
 	
 	def depend( self, node, field=None ):
@@ -195,14 +204,15 @@ class CacheHolder( object ):
 			client = self.client()
 			if client is None:
 				return 0
-			current = cache.get( client )
+			client_id = id(client)
+			current = cache.get( client_id )
 			if current is None:
 				return 0
 			try:
 				del current[ self.key ]
 				if not current:
 					try:
-						del cache[ client ]
+						del cache[ client_id ]
 					except KeyError:
 						pass
 				try:
