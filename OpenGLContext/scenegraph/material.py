@@ -66,7 +66,7 @@ class Material(basenodes.Material):
 		if not quick:
 			return 1.0
 		renderingData, pointers, shininess, alpha = quick
-		map ( glMaterialfv, self.faces, self.datamap, pointers )
+		map ( glMaterialfv, self.faces, self.datamap, renderingData )
 		glMaterialf( self.faces[0], GL_SHININESS, shininess )
 		return alpha
 	def compile( self, mode=None ):
