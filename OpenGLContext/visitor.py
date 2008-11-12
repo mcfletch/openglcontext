@@ -345,9 +345,7 @@ class _Finder( Visitor ):
 			index, node = todo[0]
 			del todo[0]
 			del currentStack[index:]
-			currentStack.append( node )
-			if isinstance( node, self.desiredTypes ):
-				self.result.append( nodepath.NodePath(tuple(currentStack)) )
+			is_desired = isinstance( node, self.desiredTypes )
 			try:
 				children = self.children( node, types=childrenTypes )
 			except:
@@ -357,10 +355,19 @@ class _Finder( Visitor ):
 					node,
 				)
 			else:
-				todo[0:0]= [
-					(len(currentStack),child)
+				stack_length = len(currentStack)
+				new_items = [
+					(stack_length,child)
 					for child in children
 				]
+				if is_desired or new_items:
+					currentStack.append( node )
+					if is_desired:
+						self.result.append( 
+							nodepath.NodePath(tuple(currentStack)) 
+						)
+					if new_items:
+						todo[0:0]=new_items
 
 def find( sg, desiredTypes = ()):
 	"""Get list of node-paths to instances of desiredTypes

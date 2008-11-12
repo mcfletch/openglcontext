@@ -114,7 +114,7 @@ class Timer( eventmanager.EventManager ):
 		"""
 		if realTime is None:
 			realTime = systemtime.systemTime()
-		events = apply (function, (realTime,) + arguments, namedarguments)
+		events = function(realTime, *arguments, **namedarguments)
 		for event in events:
 			event.setTimer( self )
 			self.ProcessEvent( event )

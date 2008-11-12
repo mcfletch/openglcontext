@@ -42,10 +42,9 @@ class Grouping(object):
 	children = ChildrenSensitiveField( 'children', 1, [])
 	def renderedChildren( self, types= (nodetypes.Children, nodetypes.Rendering,) ):
 		"""List all children which are instances of given types"""
-		return [
-			child for child in self.children
-			if isinstance( child, types)
-		]
+		for child in self.children:
+			if isinstance( child, types):
+				yield child
 	def visible( self, frustum=None, matrix=None, occlusion=0, mode=None ):
 		"""Check whether this grouping node intersects frustum
 
