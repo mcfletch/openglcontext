@@ -10,7 +10,8 @@ from OpenGL.GL.ARB.vertex_shader import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGLContext.arrays import array
-import time, sys
+import time, sys,logging
+log = logging.getLogger( 'shaderobjects' )
 from OpenGL.extensions import alternate
 glCreateShader = alternate( 'glCreateShader', glCreateShader, glCreateShaderObjectARB )
 glShaderSource = alternate( 'glShaderSource', glShaderSource, glShaderSourceARB)
@@ -21,6 +22,9 @@ glValidateProgram = alternate( 'glValidateProgram',glValidateProgram,glValidateP
 glLinkProgram = alternate( 'glLinkProgram',glLinkProgram,glLinkProgramARB )
 glDeleteShader = alternate( 'glDeleteShader', glDeleteShader,glDeleteObjectARB )
 glUseProgram = alternate('glUseProgram',glUseProgram,glUseProgramObjectARB )
+
+glGetProgramInfoLog = alternate( glGetProgramInfoLog, glGetInfoLogARB )
+
 
 def compileShader( source, shaderType ):
 	"""Compile shader source of given type"""
@@ -45,6 +49,9 @@ def compileProgram(vertexSource=None, fragmentSource=None):
 		glAttachShader(program, fragmentShader)
 
 	glValidateProgram( program )
+	warnings = glGetProgramInfoLog( program )
+	if warnings:
+		log.warn( 'Program compilation log: %s', warnings )
 	glLinkProgram(program)
 
 	if vertexShader:
