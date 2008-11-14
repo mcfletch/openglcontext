@@ -66,7 +66,8 @@ class Texture( object ):
 		See:
 			glDeleteTextures
 		"""
-		glDeleteTextures( [self.texture])
+		if getattr(self,'texture', None) is not None:
+			glDeleteTextures( [self.texture])
 	def fromPIL( self, image ):
 		"""Automated storage of image data from a PIL Image instance
 
