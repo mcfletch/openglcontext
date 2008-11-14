@@ -4,6 +4,7 @@ from vrml.vrml97 import basenodes
 from vrml import protofunctions
 from OpenGLContext.arrays import zeros
 from OpenGLContext.scenegraph import cache
+from OpenGLContext import displaylist
 import ctypes
 
 class Material(basenodes.Material):
@@ -65,31 +66,31 @@ class Material(basenodes.Material):
 			quick = self.compile( mode=mode )
 		if not quick:
 			return 1.0
-		renderingData, pointers, shininess, alpha = quick
-		map ( glMaterialfv, self.faces, self.datamap, renderingData )
-		glMaterialf( self.faces[0], GL_SHININESS, shininess )
-		return alpha
+		quick()
+		return 1.0 - self.transparency
 	def compile( self, mode=None ):
 		"""Compile material information into readily-rendered format"""
 		holder = mode.cache.holder(self, None)
 		for field in protofunctions.getFields( self ):
 			# change to any field requires a recompile
 			holder.depend( self, field )
-		alpha = 1.0 - self.transparency
-		renderingData = zeros( (4,4),'f')
-		renderingData[:,3] = alpha
-		diffuseColor = self.diffuseColor.astype( 'f' )
-		renderingData[0,:3] = diffuseColor
-		renderingData[1,:3] = self.emissiveColor.astype( 'f' )
-		renderingData[2,:3] = self.specularColor.astype( 'f' )
-		renderingData[3,:3] = (diffuseColor*self.ambientIntensity).astype('f')
-		pointer = renderingData.ctypes.data
-		holder.data = (
-			renderingData,
-			[ctypes.c_void_p( pointer+(x*16)) for x in range(0,4)], 
-			self.shininess*128, 
-			alpha,
-		)
+		dl = displaylist.DisplayList( )
+		dl.start()
+		try:
+			alpha = 1.0 - self.transparency
+			renderingData = zeros( (4,4),'f')
+			renderingData[:,3] = alpha
+			diffuseColor = self.diffuseColor.astype( 'f' )
+			renderingData[0,:3] = diffuseColor
+			renderingData[1,:3] = self.emissiveColor.astype( 'f' )
+			renderingData[2,:3] = self.specularColor.astype( 'f' )
+			renderingData[3,:3] = (diffuseColor*self.ambientIntensity).astype('f')
+			pointer = renderingData.ctypes.data
+			holder.data = dl
+			map ( glMaterialfv, self.faces, self.datamap, renderingData )
+			glMaterialf( self.faces[0], GL_SHININESS, self.shininess*128 )
+		finally:
+			dl.end()
 		return holder.data
 
 	

@@ -185,9 +185,9 @@ class ArrayGeometry(object):
 
 		At the moment, is a simple call to glDrawArrays
 		"""
-		geometry_log.debug( 'Drawing array geometry: %s, %s', self.arguments, len(self.vertices) )
-		apply ( glDrawArrays, self.arguments)
-		geometry_log.debug( 'Finished array geometry' )
+#		geometry_log.debug( 'Drawing array geometry: %s, %s', self.arguments, len(self.vertices) )
+		glDrawArrays( *self.arguments )
+#		geometry_log.debug( 'Finished array geometry' )
 	def drawTransparent( self ):
 		"""Same as draw, but called when a transparent render is required
 
