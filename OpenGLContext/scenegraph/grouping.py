@@ -26,6 +26,37 @@ class ChildrenSensitiveField( node.MFNode ):
 		client.sensitive = 0
 		return value
 
+class ChildrenTypedField( ChildrenSensitiveField ):
+	"""Field sub-class/mix-in for iterating over children by node-types"""
+	fieldType = "MFNode"
+	def fset( self, client, value, notify=1 ):
+		"""On set, do regular set, then clear cache"""
+		result = super( ChildrenTypedField, self ).fset( client, value, notify )
+		self.getCache(client).clear()
+		return result
+	def fdel( self, client, notify=1):
+		"""On del, do regular del, then clear cache"""
+		value = super( ChildrenTypedField, self).fset( client, value, notify )
+		self.getCache(client).clear()
+		return value
+	def getCache( self,client ):
+		cache_key = '__typed_children_%s__'%(self.name,)
+		cache = getattr( client, cache_key, None )
+		if cache is None:
+			cache = {}
+			setattr( client, cache_key, cache )
+		return cache
+	def byType( self, client, types ):
+		cache = self.getCache(client)
+		new = cache.get( types )
+		if new is None:
+			new = [
+				x for x in self.fget( client ) 
+				if isinstance(x,types)
+			]
+			cache[ types ] = new 
+		return new
+
 class Grouping(object):
 	"""Light-weight grouping object based on VRML 97 Group Node
 
@@ -39,12 +70,10 @@ class Grouping(object):
 	Note that this is a Mix-in class for Node classes
 	"""
 	sensitive = field.newField( " sensitive", "SFBool", 0, 0)
-	children = ChildrenSensitiveField( 'children', 1, [])
+	children = ChildrenTypedField( 'children', 1, [])
 	def renderedChildren( self, types= (nodetypes.Children, nodetypes.Rendering,) ):
 		"""List all children which are instances of given types"""
-		for child in self.children:
-			if isinstance( child, types):
-				yield child
+		return self.__class__.children.byType( self, types )
 	def visible( self, frustum=None, matrix=None, occlusion=0, mode=None ):
 		"""Check whether this grouping node intersects frustum
 
