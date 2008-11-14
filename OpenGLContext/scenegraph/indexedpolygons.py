@@ -176,8 +176,11 @@ class IndexedPolygons (
 		centers = mode.cache.getData(self, key='centers')
 		if centers is None:
 			## cache centers for future rendering passes...
+			ordered_points = take( 
+				self.coord.point, self.index.astype('i'), 0 
+			)
 			centers = triangleutilities.centers(
-				take( self.coord.point, self.index, 0 ),
+				ordered_points,
 				vertexCount=self.polygonSides,
 				components = 3,
 			)
