@@ -2,3 +2,7 @@ MANIFEST
 *.profile
 callgrind.out*
 OpenGLContext.e4p
+OpenGLContext.e4p
+OpenGLContext.e4q
+OpenGLContext.e4s
+OpenGLContext.e4t
