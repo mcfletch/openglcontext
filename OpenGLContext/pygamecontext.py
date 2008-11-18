@@ -78,7 +78,7 @@ class PygameContext(
 	def CallVirtual(self, name, *args, **namedarguments):
 		"Call a potentially undefined method"
 		func = getattr(self, name, lambda *x, **y:1)
-		return apply(func, args, namedarguments)
+		return func( *args, **namedarguments)
 
 
 	def SwapBuffers (self):
