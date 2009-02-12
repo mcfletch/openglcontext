@@ -31,6 +31,7 @@ def main():
 		print usage
 		sys.exit(1)
 	try:
+		raise ImportError( "Don't want to use KCacheGrind any more" )
 		from lsprofcalltree import KCacheGrind
 	except ImportError, err:
 		return cProfile.run( 
