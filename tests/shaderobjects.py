@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 '''Tests rendering using the ARB shader objects extension...
 '''
+#import OpenGL 
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *

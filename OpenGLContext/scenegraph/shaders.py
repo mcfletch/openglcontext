@@ -115,8 +115,8 @@ class Shader( shaders.Shader ):
 		renderer = mode.cache.getData(self)
 		if renderer is None:
 			renderer = self.compile( mode )
-			if renderer:
-				glUseProgram( renderer )
+		if renderer:
+			glUseProgram( renderer )
 		return True, True, True, renderer
 	def compile(self,  mode ):
 		holder = mode.cache.holder(self,None)
@@ -131,5 +131,4 @@ class Shader( shaders.Shader ):
 	def renderPost( self, textureToken=None, mode=None ):
 		"""Cleanup after rendering of this node has completed"""
 		if textureToken: # actually program...
-			glFlush()
-			#glUseProgram( 0 )
+			glUseProgram( 0 )
