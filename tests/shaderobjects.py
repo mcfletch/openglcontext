@@ -4,78 +4,17 @@
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
-from OpenGL.GL.ARB.shader_objects import *
-from OpenGL.GL.ARB.fragment_shader import *
-from OpenGL.GL.ARB.vertex_shader import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGLContext.arrays import array
-import time, sys,logging
+from OpenGLContext.events.timer import Timer
+from OpenGLContext.scenegraph.basenodes import *
+from OpenGLContext.scenegraph.shaders import *
+import time, sys,logging,math
 log = logging.getLogger( 'shaderobjects' )
-from OpenGL.extensions import alternate
-glCreateShader = alternate( 'glCreateShader', glCreateShader, glCreateShaderObjectARB )
-glShaderSource = alternate( 'glShaderSource', glShaderSource, glShaderSourceARB)
-glCompileShader = alternate( 'glCompileShader', glCompileShader, glCompileShaderARB)
-glCreateProgram = alternate( 'glCreateProgram', glCreateProgram, glCreateProgramObjectARB)
-glAttachShader = alternate( 'glAttachShader', glAttachShader,glAttachObjectARB )
-glValidateProgram = alternate( 'glValidateProgram',glValidateProgram,glValidateProgramARB )
-glLinkProgram = alternate( 'glLinkProgram',glLinkProgram,glLinkProgramARB )
-glDeleteShader = alternate( 'glDeleteShader', glDeleteShader,glDeleteObjectARB )
-glUseProgram = alternate('glUseProgram',glUseProgram,glUseProgramObjectARB )
+log.warn( 'Context %s',  BaseContext )
 
-glGetProgramInfoLog = alternate( glGetProgramInfoLog, glGetInfoLogARB )
-
-
-def compileShader( source, shaderType ):
-	"""Compile shader source of given type"""
-	shader = glCreateShader(shaderType)
-	glShaderSource( shader, source )
-	glCompileShader( shader )
-	return shader
-
-
-def compileProgram(vertexSource=None, fragmentSource=None):
-	program = glCreateProgram()
-
-	if vertexSource:
-		vertexShader = compileShader(
-			vertexSource, GL_VERTEX_SHADER_ARB
-		)
-		glAttachShader(program, vertexShader)
-	if fragmentSource:
-		fragmentShader = compileShader(
-			fragmentSource, GL_FRAGMENT_SHADER_ARB
-		)
-		glAttachShader(program, fragmentShader)
-
-	glValidateProgram( program )
-	warnings = glGetProgramInfoLog( program )
-	if warnings:
-		log.warn( 'Program compilation log: %s', warnings )
-	glLinkProgram(program)
-
-	if vertexShader:
-		glDeleteShader(vertexShader)
-	if fragmentShader:
-		glDeleteShader(fragmentShader)
-
-	return program
-
-
-class TestContext( BaseContext ):
-	rotation = 0.00
-	def Render( self, mode = 0):
-		BaseContext.Render( self, mode )
-		glRotate( self.rotation, 0,1,0 )
-		self.rotation += .05
-		glUseProgram(self.program)
-		glutSolidSphere(1.0,32,32)
-		glTranslate( 1,0,2 )
-		glutSolidCube( 1.0 )
-	def OnInit( self ):
-		"""Scene set up and initial processing"""
-		self.program = compileProgram(
-[
+vertex_shader = [
 	'''
 	varying vec3 normal;
 	void main() {
@@ -83,8 +22,8 @@ class TestContext( BaseContext ):
 		gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
 	}
 	''',
-], 
-[
+]
+fragment_shader = [
 	'''
 	varying vec3 normal;
 	void main() {
@@ -102,7 +41,77 @@ class TestContext( BaseContext ):
 	}
 	''',
 ]
-)
+
+class TestContext( BaseContext ):
+	rotation = 0.00
+	
+	def OnInit( self ):
+		"""Scene set up and initial processing"""
+		t = Transform(
+			children = [
+				PointLight(
+					location = (1,4,10),
+				),
+			],
+		)
+		COMIC = Shader(
+			objects = [
+				GLSLObject(
+					shaders = [
+						GLSLShader( 
+							source = vertex_shader,
+							type='VERTEX',
+						),
+						GLSLShader( 
+							source = fragment_shader,
+							type='FRAGMENT',
+						),
+					],
+				),
+			],
+		)
+		self.sg = sceneGraph(
+			children = [
+				Transform(
+					DEF = 'scene',
+					children= [
+						Shape(
+							appearance = COMIC,
+							geometry = Sphere( radius = 2.0 ),
+						),
+						Transform(
+							translation = (-3,0,4),
+							children = [
+								Shape(
+									appearance = COMIC,
+									geometry = Sphere( radius = .75 ),
+								),
+							],
+						),
+						Transform(
+							translation = (-2,0,6),
+							children = [
+								Shape(
+									appearance = Appearance(
+										material = Material( diffuseColor = (0,0,1)),
+									),
+									geometry = Sphere( radius = .25 ),
+								),
+							],
+						),
+					],
+				),
+				t,
+			],
+		)
+		self.time = Timer( duration = 30.0, repeating = 1 )
+		self.time.addEventHandler( "fraction", self.OnTimerFraction )
+		self.time.register (self)
+		self.time.start ()
+	def OnTimerFraction( self, event ):
+		r = event.fraction()
+		self.sg.children[0].rotation = [0,1,0,r * math.pi *2]
+		
 
 
 if __name__ == "__main__":

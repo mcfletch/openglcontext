@@ -85,7 +85,11 @@ class Material(basenodes.Material):
 			renderingData[1,:3] = self.emissiveColor.astype( 'f' )
 			renderingData[2,:3] = self.specularColor.astype( 'f' )
 			renderingData[3,:3] = (diffuseColor*self.ambientIntensity).astype('f')
-			pointer = renderingData.ctypes.data
+			try:
+				pointer = renderingData.ctypes.data
+			except AttributeError, err:
+				import pdb 
+				pdb.set_trace()
 			holder.data = dl
 			map ( glMaterialfv, self.faces, self.datamap, renderingData )
 			glMaterialf( self.faces[0], GL_SHININESS, self.shininess*128 )

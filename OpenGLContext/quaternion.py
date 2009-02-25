@@ -131,14 +131,16 @@ class Quaternion(object):
 
 		Algo is from: http://www.gamasutra.com/features/19980703/quaternions_01.htm
 		"""
-		cosValue = sum(self.internal * other.internal)
+		fraction = float( fraction )
+		cosValue = float(sum(self.internal * other.internal))
 		# if the cosValue is negative, use negative target and cos values?
 		# not sure why, it's just done this way in the sample code
 		if cosValue < 0.0:
 			cosValue = -cosValue
 			target = -other.internal
 		else:
-			target = other.internal[:]
+			# TODO: figure out why other.internal[:] returns a 0-dim array!
+			target = other.internal[::]
 		if (1.0- cosValue) > minimalStep:
 			# regular spherical linear interpolation
 			angle = acos( cosValue )
@@ -148,7 +150,16 @@ class Quaternion(object):
 		else:
 			sourceScale = 1.0-fraction
 			targetScale = fraction
-		return self.__class__( (sourceScale * self.internal)+(targetScale * target) )
+		try:
+			return self.__class__( (sourceScale * self.internal)+(targetScale * target) )
+		except ValueError,  err:
+			import pdb
+			pdb.set_trace()
+			print sourceScale
+			print self.internal 
+			print targetScale
+			print target 
+			
 
 
 def test ():

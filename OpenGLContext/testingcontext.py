@@ -16,6 +16,7 @@ try:
 		PREFERENCELIST = (userPreference,)+ tuple([x for x in PREFERENCELIST if x !=userPreference])
 except IOError, err:
 	pass
+print 'PREFERENCELIST',  PREFERENCELIST
 
 def getInteractive( preferenceList= None ):
 	"""Retrieve the preferred testing context:
@@ -33,7 +34,8 @@ def getInteractive( preferenceList= None ):
 				except ImportError, err:
 					log.warn( """Failed loading testing context %r: %s""", entrypoint.name, err )
 				else:
-					def mainLoop( cls, *args, **named ):
-						return cls.ContextMainLoop( *args, **named )
-					return cls, mainLoop
+					if cls:
+						def mainLoop( cls, *args, **named ):
+							return cls.ContextMainLoop( *args, **named )
+						return cls, mainLoop
 	raise ImportError ("""Could not import a suitable vrml context for the preference set %s""" % ( preferenceList,) )
