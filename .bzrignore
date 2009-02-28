@@ -6,3 +6,8 @@ OpenGLContext.e4p
 OpenGLContext.e4q
 OpenGLContext.e4s
 OpenGLContext.e4t
+dist
+.eric4project
+*.~?~
+core
+core*
