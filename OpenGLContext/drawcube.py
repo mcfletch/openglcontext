@@ -11,56 +11,62 @@ texture coordinate information.
 """
 from OpenGL.GL import *
 
+def yieldVertices():
+	normal = ( 0.0, 0.0, 1.0)
+	yield (0.0, 0.0)+ normal + (-1.0, -1.0,  1.0);
+	yield (1.0, 0.0)+ normal + ( 1.0, -1.0,  1.0);
+	yield (1.0, 1.0)+ normal + ( 1.0,  1.0,  1.0);
+	yield (0.0, 0.0)+ normal + (-1.0, -1.0,  1.0);
+	yield (1.0, 1.0)+ normal + ( 1.0,  1.0,  1.0);
+	yield (0.0, 1.0)+ normal + (-1.0,  1.0,  1.0);
+
+	normal = ( 0.0, 0.0,-1.0);
+	yield (1.0, 0.0)+ normal + (-1.0, -1.0, -1.0);
+	yield (1.0, 1.0)+ normal + (-1.0,  1.0, -1.0);
+	yield (0.0, 1.0)+ normal + ( 1.0,  1.0, -1.0);
+	yield (1.0, 0.0)+ normal + (-1.0, -1.0, -1.0);
+	yield (0.0, 1.0)+ normal + ( 1.0,  1.0, -1.0);
+	yield (0.0, 0.0)+ normal + ( 1.0, -1.0, -1.0);
+
+	normal = ( 0.0, 1.0, 0.0)
+	yield (0.0, 1.0)+ normal + (-1.0,  1.0, -1.0);
+	yield (0.0, 0.0)+ normal + (-1.0,  1.0,  1.0);
+	yield (1.0, 0.0)+ normal + ( 1.0,  1.0,  1.0);
+	yield (0.0, 1.0)+ normal + (-1.0,  1.0, -1.0);
+	yield (1.0, 0.0)+ normal + ( 1.0,  1.0,  1.0);
+	yield (1.0, 1.0)+ normal + ( 1.0,  1.0, -1.0);
+
+	normal = ( 0.0,-1.0, 0.0)
+	yield (1.0, 1.0)+ normal + (-1.0, -1.0, -1.0);
+	yield (0.0, 1.0)+ normal + ( 1.0, -1.0, -1.0);
+	yield (0.0, 0.0)+ normal + ( 1.0, -1.0,  1.0);
+	yield (1.0, 1.0)+ normal + (-1.0, -1.0, -1.0);
+	yield (0.0, 0.0)+ normal + ( 1.0, -1.0,  1.0);
+	yield (1.0, 0.0)+ normal + (-1.0, -1.0,  1.0);
+
+	normal = ( 1.0, 0.0, 0.0)
+	yield (1.0, 0.0)+ normal + ( 1.0, -1.0, -1.0);
+	yield (1.0, 1.0)+ normal + ( 1.0,  1.0, -1.0);
+	yield (0.0, 1.0)+ normal + ( 1.0,  1.0,  1.0);
+	yield (1.0, 0.0)+ normal + ( 1.0, -1.0, -1.0);
+	yield (0.0, 1.0)+ normal + ( 1.0,  1.0,  1.0);
+	yield (0.0, 0.0)+ normal + ( 1.0, -1.0,  1.0);
+
+	normal = (-1.0, 0.0, 0.0)
+	yield (0.0, 0.0)+ normal + (-1.0, -1.0, -1.0);
+	yield (1.0, 0.0)+ normal + (-1.0, -1.0,  1.0);
+	yield (1.0, 1.0)+ normal + (-1.0,  1.0,  1.0);
+	yield (0.0, 0.0)+ normal + (-1.0, -1.0, -1.0);
+	yield (1.0, 1.0)+ normal + (-1.0,  1.0,  1.0);
+	yield (0.0, 1.0)+ normal + (-1.0,  1.0, -1.0);
+
 def drawCube():
 	"""Draw a cube 2,2,2 units centered around the origin"""
 	# draw six faces of a cube
 	glBegin(GL_TRIANGLES);
-	glNormal3f( 0.0, 0.0, 1.0)
-	glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-	glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-	glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-	glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-	glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-	glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
-
-	glNormal3f( 0.0, 0.0,-1.0);
-	glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-	glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-	glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-	glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-	glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-	glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
-
-	glNormal3f( 0.0, 1.0, 0.0)
-	glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-	glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0,  1.0);
-	glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0,  1.0);
-	glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-	glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0,  1.0);
-	glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-
-	glNormal3f( 0.0,-1.0, 0.0)
-	glTexCoord2f(1.0, 1.0); glVertex3f(-1.0, -1.0, -1.0);
-	glTexCoord2f(0.0, 1.0); glVertex3f( 1.0, -1.0, -1.0);
-	glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-	glTexCoord2f(1.0, 1.0); glVertex3f(-1.0, -1.0, -1.0);
-	glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-	glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-
-	glNormal3f( 1.0, 0.0, 0.0)
-	glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
-	glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-	glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-	glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
-	glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-	glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-
-	glNormal3f(-1.0, 0.0, 0.0)
-	glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-	glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-	glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
-	glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-	glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
-	glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
+	for record in yieldVertices():
+		glTexCoord2f( *record[:2] )
+		glNormal3f( *record[2:5] )
+		glVertex3f( *record[5:8] )
 	glEnd()
 	
