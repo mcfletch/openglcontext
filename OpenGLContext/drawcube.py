@@ -11,7 +11,7 @@ texture coordinate information.
 """
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
-import numpy
+from OpenGLContext.arrays import array
 
 def yieldVertices():
 	normal = ( 0.0, 0.0, 1.0)
@@ -69,7 +69,7 @@ def drawCube():
 	# draw six faces of a cube
 	global VBO 
 	if not VBO:
-		VBO = vbo.VBO( numpy.array( list(yieldVertices()), 'f') )
+		VBO = vbo.VBO( array( list(yieldVertices()), 'f') )
 	VBO.bind()
 	try:
 		glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
