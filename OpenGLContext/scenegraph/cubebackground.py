@@ -1,6 +1,8 @@
 """Panoramic image-cube Background node
 """
 from OpenGLContext.scenegraph import imagetexture
+from OpenGL.arrays import vbo
+from OpenGLContext.arrays import array
 from vrml import field, protofunctions, fieldtypes, node
 from vrml.vrml97 import basenodes, nodetypes
 
@@ -57,6 +59,8 @@ class _CubeBackground( object ):
 				glDisable( GL_COLOR_MATERIAL )
 				# yuck, why is this necessary with the previous line?
 				glColor3f( 1.0, 1.0, 1.0, )
+				if not self.VBO:
+					self.compile( mode )
 				if clear:
 					glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT)
 				try:
@@ -65,58 +69,20 @@ class _CubeBackground( object ):
 						# glGetDoublev can return None if uninitialised...
 						matrix = identity( 4, 'd')
 					forward = dot(matrix, [0,0,-1,0])
-					textures = [
-						(self.front, (0,0,1,0),[
-							((-1,-1,-1), (0,0)),
-							((1,-1,-1), (1,0)),
-							((1,1,-1), (1,1)),
-							((-1,1,-1), (0,1)),
-						]),
-						(self.right,(-1,0,0,0),[
-							((1,-1,-1), (0,0)),
-							((1,-1,1), (1,0)),
-							((1,1,1), (1,1)),
-							((1,1,-1), (0,1)),
-						]),
-						(self.back, (0,0,-1,0), [
-							((1,-1,1), (0,0)),
-							((-1,-1,1), (1,0)),
-							((-1,1,1), (1,1)),
-							((1,1,1), (0,1)),
-						]),
-						(self.left,(1,0,0,0),[
-							((-1,-1,1), (0,0)),
-							((-1,-1,-1), (1,0)),
-							((-1,1,-1), (1,1)),
-							((-1,1,1), (0,1)),
-						]),
-						(self.bottom,(0,1,0,0),[
-							((-1,-1,1), (0,0)),
-							((1,-1,1), (1,0)),
-							((1,-1,-1), (1,1)),
-							((-1,-1,-1), (0,1)),
-						]),
-						(self.top,(0,-1,0,0),[
-							((-1,1,-1), (0,0)),
-							((1,1,-1), (1,0)),
-							((1,1,1), (1,1)),
-							((-1,1,1), (0,1)),
-						]),
-					]
-					for texture, normal, data in textures:
-						if dot(forward, normal) <=0 and texture.components:
-							# we are facing it, and it's loaded/non-null
-							texture.render(lit=0, mode=mode)
-							try:
-								glBegin( GL_QUADS )
+					self.VBO.bind()
+					glInterleavedArrays( GL_T2F_V3F, 0, self.VBO )
+					try:
+						for offset,attr_name, normal, data in self.RENDER_DATA:
+							texture = getattr( self, attr_name )
+							if dot(forward, normal) <=0 and texture.components:
+								# we are facing it, and it's loaded/non-null
+								texture.render(lit=0, mode=mode)
 								try:
-									for point, coord in data:
-										glTexCoord2dv( coord )
-										glVertex3dv( point )
+									glDrawArrays( GL_TRIANGLES, offset, 6 )
 								finally:
-									glEnd()
-							finally:
-								texture.renderPost(mode=mode)
+									texture.renderPost(mode=mode)
+					finally:
+						self.VBO.unbind()
 				finally:
 					glEnable( GL_COLOR_MATERIAL )
 			finally:
@@ -125,6 +91,62 @@ class _CubeBackground( object ):
 				# now, completely wipe out the depth buffer,
 				# so this appears as a "background"...
 				glClear(GL_DEPTH_BUFFER_BIT)
+	
+	# TODO: should have one-per-context...
+	VBO = None
+	def compile( self, mode ):
+		"""Compile a VBO with our various triangles to render"""
+		if self.VBO:
+			return self.VBO
+		def vertices( ):
+			for (offset,attr,norm,(a,b,c,d)) in self.RENDER_DATA:
+				yield a[1]+a[0]
+				yield b[1]+b[0]
+				yield c[1]+c[0]
+				yield a[1]+a[0]
+				yield c[1]+c[0]
+				yield d[1]+d[0]
+		vb = self.VBO = vbo.VBO(array(list(vertices()),'f'))
+		return vb
+	RENDER_DATA = [
+		(0,'front',(0,0,1,0),[
+			((-1,-1,-1), (0,0)),
+			((1,-1,-1), (1,0)),
+			((1,1,-1), (1,1)),
+			((-1,1,-1), (0,1)),
+		]),
+		(6,'right',(-1,0,0,0),[
+			((1,-1,-1), (0,0)),
+			((1,-1,1), (1,0)),
+			((1,1,1), (1,1)),
+			((1,1,-1), (0,1)),
+		]),
+		(12,'back', (0,0,-1,0), [
+			((1,-1,1), (0,0)),
+			((-1,-1,1), (1,0)),
+			((-1,1,1), (1,1)),
+			((1,1,1), (0,1)),
+		]),
+		(18,'left',(1,0,0,0),[
+			((-1,-1,1), (0,0)),
+			((-1,-1,-1), (1,0)),
+			((-1,1,-1), (1,1)),
+			((-1,1,1), (0,1)),
+		]),
+		(24,'bottom',(0,1,0,0),[
+			((-1,-1,1), (0,0)),
+			((1,-1,1), (1,0)),
+			((1,-1,-1), (1,1)),
+			((-1,-1,-1), (0,1)),
+		]),
+		(30,'top',(0,-1,0,0),[
+			((-1,1,-1), (0,0)),
+			((1,1,-1), (1,0)),
+			((1,1,1), (1,1)),
+			((-1,1,1), (0,1)),
+		]),
+	]
+		
 
 class CubeBackground( _CubeBackground, nodetypes.Background, nodetypes.Children, node.Node  ):
 	"""Image-cube Background node
