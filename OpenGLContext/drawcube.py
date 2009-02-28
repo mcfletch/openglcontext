@@ -10,6 +10,8 @@ to replace the original which did not include
 texture coordinate information.
 """
 from OpenGL.GL import *
+from OpenGL.arrays import vbo
+import numpy
 
 def yieldVertices():
 	normal = ( 0.0, 0.0, 1.0)
@@ -60,13 +62,22 @@ def yieldVertices():
 	yield (1.0, 1.0)+ normal + (-1.0,  1.0,  1.0);
 	yield (0.0, 1.0)+ normal + (-1.0,  1.0, -1.0);
 
+VBO = None
+
 def drawCube():
 	"""Draw a cube 2,2,2 units centered around the origin"""
 	# draw six faces of a cube
-	glBegin(GL_TRIANGLES);
-	for record in yieldVertices():
-		glTexCoord2f( *record[:2] )
-		glNormal3f( *record[2:5] )
-		glVertex3f( *record[5:8] )
-	glEnd()
-	
+	global VBO 
+	if not VBO:
+		VBO = vbo.VBO( numpy.array( list(yieldVertices()), 'f') )
+	VBO.bind()
+	try:
+		glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
+		try:
+			glInterleavedArrays( GL_T2F_N3F_V3F, 0, VBO )
+			glDrawArrays( GL_TRIANGLES, 0, 36 )
+		finally:
+			glPopClientAttrib()
+	finally:
+		VBO.unbind()
+		
