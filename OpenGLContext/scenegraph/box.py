@@ -1,6 +1,7 @@
 """Box node for use in geometry attribute of Shapes"""
 from OpenGLContext.scenegraph import cache
-from OpenGLContext import displaylist
+from OpenGLContext.arrays import array
+from OpenGL.arrays import vbo
 from OpenGL.GL import *
 from vrml.vrml97 import basenodes
 from vrml import protofunctions
@@ -25,15 +26,10 @@ class Box( basenodes.Box ):
 	"""
 	def compile( self, mode=None ):
 		"""Compile the box as a display-list"""
-		dl = displaylist.DisplayList()
-		dl.start()
-		try:
-			drawBox( self.size )
-			holder = mode.cache.holder(self, dl)
-			holder.depend( self, protofunctions.getField(self, 'size') )
-			return dl
-		finally:
-			dl.end()
+		vb = vbo.VBO( array( list(yieldVertices( self.size )), 'f'))
+		holder = mode.cache.holder(self, vb)
+		holder.depend( self, protofunctions.getField(self, 'size') )
+		return vb
 	def render (
 			self,
 			visible = 1, # can skip normals and textures if not
@@ -44,10 +40,20 @@ class Box( basenodes.Box ):
 		):
 		"""Render the Box (build and) call the display list"""
 		# do we have a cached array-geometry?
-		dl = mode.cache.getData(self)
-		if not dl:
-			dl = self.compile( mode=mode )
-		dl()
+		vb = mode.cache.getData(self)
+		if not vb:
+			vb = self.compile( mode=mode )
+		if vb:
+			vb.bind()
+			try:
+				glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
+				try:
+					glInterleavedArrays( GL_T2F_N3F_V3F, 0, vb )
+					glDrawArrays( GL_TRIANGLES, 0, 36 )
+				finally:
+					glPopClientAttrib()
+			finally:
+				vb.unbind()
 		return 1
 	def boundingVolume( self ):
 		"""Create a bounding-volume object for this node"""
@@ -63,44 +69,54 @@ class Box( basenodes.Box ):
 			( (self, 'size'), ),
 		)
 
-def drawBox( (x,y,z) ):
-	"""Draw a box of given size centered around the origin,
-	based on the NeHe6 demo via the drawcube module"""
-	x,y,z = x/2.0, y/2.0, z/2.0
-	glBegin(GL_QUADS);
-	glNormal3f( 0.0, 0.0, 1.0)
-	glTexCoord2f(0.0, 0.0); glVertex3f(-x, -y, z)
-	glTexCoord2f(1.0, 0.0); glVertex3f( x, -y, z)
-	glTexCoord2f(1.0, 1.0); glVertex3f( x, y, z)
-	glTexCoord2f(0.0, 1.0); glVertex3f(-x, y, z)
+def yieldVertices(size):
+	x,y,z = size 
+	x,y,z = x/2.0,y/2.0,z/2.0
+	normal = ( 0.0, 0.0, 1.0)
+	yield (0.0, 0.0)+ normal + (-x,-y,z);
+	yield (1.0, 0.0)+ normal + (x,-y,z);
+	yield (1.0, 1.0)+ normal + (x,y,z);
+	yield (0.0, 0.0)+ normal + (-x,-y,z);
+	yield (1.0, 1.0)+ normal + (x,y,z);
+	yield (0.0, 1.0)+ normal + (-x,y,z);
 
-	glNormal3f( 0.0, 0.0,-1.0);
-	glTexCoord2f(1.0, 0.0); glVertex3f(-x, -y, -z)
-	glTexCoord2f(1.0, 1.0); glVertex3f(-x, y, -z)
-	glTexCoord2f(0.0, 1.0); glVertex3f( x, y, -z)
-	glTexCoord2f(0.0, 0.0); glVertex3f( x, -y, -z)
+	normal = ( 0.0, 0.0,-1.0);
+	yield (1.0, 0.0)+ normal + (-x,-y,-z);
+	yield (1.0, 1.0)+ normal + (-x,y,-z);
+	yield (0.0, 1.0)+ normal + (x,y,-z);
+	yield (1.0, 0.0)+ normal + (-x,-y,-z);
+	yield (0.0, 1.0)+ normal + (x,y,-z);
+	yield (0.0, 0.0)+ normal + (x,-y,-z);
 
-	glNormal3f( 0.0, 1.0, 0.0)
-	glTexCoord2f(0.0, 1.0); glVertex3f(-x, y, -z)
-	glTexCoord2f(0.0, 0.0); glVertex3f(-x, y, z)
-	glTexCoord2f(1.0, 0.0); glVertex3f( x, y, z)
-	glTexCoord2f(1.0, 1.0); glVertex3f( x, y, -z)
+	normal = ( 0.0, 1.0, 0.0)
+	yield (0.0, 1.0)+ normal + (-x,y,-z);
+	yield (0.0, 0.0)+ normal + (-x,y,z);
+	yield (1.0, 0.0)+ normal + (x,y,z);
+	yield (0.0, 1.0)+ normal + (-x,y,-z);
+	yield (1.0, 0.0)+ normal + (x,y,z);
+	yield (1.0, 1.0)+ normal + (x,y,-z);
 
-	glNormal3f( 0.0,-1.0, 0.0)
-	glTexCoord2f(1.0, 1.0); glVertex3f(-x, -y, -z)
-	glTexCoord2f(0.0, 1.0); glVertex3f( x, -y, -z)
-	glTexCoord2f(0.0, 0.0); glVertex3f( x, -y, z)
-	glTexCoord2f(1.0, 0.0); glVertex3f(-x, -y, z)
+	normal = ( 0.0,-1.0, 0.0)
+	yield (1.0, 1.0)+ normal + (-x,-y,-z);
+	yield (0.0, 1.0)+ normal + (x,-y,-z);
+	yield (0.0, 0.0)+ normal + (x,-y,z);
+	yield (1.0, 1.0)+ normal + (-x,-y,-z);
+	yield (0.0, 0.0)+ normal + (x,-y,z);
+	yield (1.0, 0.0)+ normal + (-x,-y,z);
 
-	glNormal3f( 1.0, 0.0, 0.0)
-	glTexCoord2f(1.0, 0.0); glVertex3f( x, -y, -z)
-	glTexCoord2f(1.0, 1.0); glVertex3f( x, y, -z)
-	glTexCoord2f(0.0, 1.0); glVertex3f( x, y, z)
-	glTexCoord2f(0.0, 0.0); glVertex3f( x, -y, z)
+	normal = ( 1.0, 0.0, 0.0)
+	yield (1.0, 0.0)+ normal + (x,-y,-z);
+	yield (1.0, 1.0)+ normal + (x,y,-z);
+	yield (0.0, 1.0)+ normal + (x,y,z);
+	yield (1.0, 0.0)+ normal + (x,-y,-z);
+	yield (0.0, 1.0)+ normal + (x,y,z);
+	yield (0.0, 0.0)+ normal + (x,-y,z);
 
-	glNormal3f(-1.0, 0.0, 0.0)
-	glTexCoord2f(0.0, 0.0); glVertex3f(-x, -y, -z)
-	glTexCoord2f(1.0, 0.0); glVertex3f(-x, -y, z)
-	glTexCoord2f(1.0, 1.0); glVertex3f(-x, y, z)
-	glTexCoord2f(0.0, 1.0); glVertex3f(-x, y, -z)
-	glEnd()
+	normal = (-1.0, 0.0, 0.0)
+	yield (0.0, 0.0)+ normal + (-x,-y,-z);
+	yield (1.0, 0.0)+ normal + (-x,-y,z);
+	yield (1.0, 1.0)+ normal + (-x,y,z);
+	yield (0.0, 0.0)+ normal + (-x,-y,-z);
+	yield (1.0, 1.0)+ normal + (-x,y,z);
+	yield (0.0, 1.0)+ normal + (-x,y,-z);
+
