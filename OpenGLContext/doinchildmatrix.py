@@ -15,6 +15,7 @@ def doInChildMatrix( function, *args, **named ):
 	after completion (regardless of whether an error
 	occurs).
 	"""
+	# This code is not OpenGL 3.1 compatible
 	glMatrixMode( GL_MODELVIEW )
 	try:
 		glPushMatrix()

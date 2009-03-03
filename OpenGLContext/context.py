@@ -191,7 +191,8 @@ class Context(object):
 		method processed after their initialization has
 		completed.  The default implementation here simply
 		calls OnInit directly w/ appropriate setCurrent
-		and unsetCurrent calls.
+		and unsetCurrent calls and calls the glutInit()
+		function with an empty argument-list.
 
 		Note:
 			The only context currently known to require
@@ -566,6 +567,7 @@ class Context(object):
 		code, at which point it will probably stop calling this
 		customization point.
 		"""
+		# This code is not OpenGL 3.1 compatible
 		glMatrixMode(GL_PROJECTION);
 		# load the identity matrix (reset the view)
 		glLoadIdentity()
@@ -598,6 +600,7 @@ class Context(object):
 		and if there is no self.SetupBindables( mode ) method
 		available on the Context.
 		"""
+		# This code is not OpenGL 3.1 compatible
 		if mode.visible and mode.lighting:
 			# Enable lighting calculations
 			glEnable(GL_LIGHTING);

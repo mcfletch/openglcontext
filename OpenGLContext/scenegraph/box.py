@@ -26,10 +26,31 @@ class Box( basenodes.Box ):
 	"""
 	def compile( self, mode=None ):
 		"""Compile the box as a display-list"""
-		vb = vbo.VBO( array( list(yieldVertices( self.size )), 'f'))
-		holder = mode.cache.holder(self, vb)
+		if vbo.get_implementation():
+			vb = vbo.VBO( array( list(yieldVertices( self.size )), 'f'))
+			def draw( ):
+				vb.bind()
+				try:
+					glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
+					try:
+						glInterleavedArrays( GL_T2F_N3F_V3F, 0, vb )
+						glDrawArrays( GL_TRIANGLES, 0, 36 )
+					finally:
+						glPopClientAttrib()
+				finally:
+					vb.unbind()
+		else:
+			vb = array( list(yieldVertices( self.size )), 'f')
+			def draw( ):
+				glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
+				try:
+					glInterleavedArrays( GL_T2F_N3F_V3F, 0, vb )
+					glDrawArrays( GL_TRIANGLES, 0, 36 )
+				finally:
+					glPopClientAttrib()
+		holder = mode.cache.holder(self, draw)
 		holder.depend( self, protofunctions.getField(self, 'size') )
-		return vb
+		return draw
 	def render (
 			self,
 			visible = 1, # can skip normals and textures if not
@@ -44,16 +65,7 @@ class Box( basenodes.Box ):
 		if not vb:
 			vb = self.compile( mode=mode )
 		if vb:
-			vb.bind()
-			try:
-				glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
-				try:
-					glInterleavedArrays( GL_T2F_N3F_V3F, 0, vb )
-					glDrawArrays( GL_TRIANGLES, 0, 36 )
-				finally:
-					glPopClientAttrib()
-			finally:
-				vb.unbind()
+			vb()
 		return 1
 	def boundingVolume( self ):
 		"""Create a bounding-volume object for this node"""
