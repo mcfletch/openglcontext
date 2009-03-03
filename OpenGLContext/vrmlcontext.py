@@ -56,7 +56,10 @@ class VRMLContext(object):
 	def OnInit( self ):
 		"""Initialise the VRMLContext keyboard shortcuts"""
 		self.addEventHandler( 'keypress', name = '<escape>',function = self.OnQuit )
-		self.addEventHandler( 'keypress', name = 'f',function = self.OnFrameRate )
+		self.addEventHandler( 
+			'keypress', name = 'f',modifiers = (False,False,True), # ALT
+			function = self.OnFrameRate 
+		)
 		self.addEventHandler( 'keyboard', name = '<pagedown>', function = self.OnNextViewpoint )
 
 
@@ -70,6 +73,7 @@ class VRMLContext(object):
 		sys.exit( 0 )
 	def OnFrameRate( self, event=None ):
 		"""Print the current frame-rate values"""
+		
 		print """%s frames : %s avg fps : %s curr fps"""% self.frameCounter.summary()
 	def OnNextViewpoint( self, event=None ):
 		"""Go to the next viewpoint for the scenegraph"""

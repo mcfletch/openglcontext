@@ -8,6 +8,7 @@ XXX This node needs some serious optimization.  Possible approaches:
 		fairly simplistic mechanism, as it won't need the
 		tesselator, and it can simply process the values
 		as a stream of instructions.
+		OpenGL 3.x deprecates display-lists...
 	GL_TRIANGLE_STRIP, GL_QUAD_STRIP -- can dramatically
 		reduce memory bandwidth, requires some serious
 		analysis of the topology to get a decent result
@@ -341,7 +342,9 @@ class IFSCompiler( object ):
 					**set
 				))
 			else:
-				yield polygon.Polygon( polygonIndex, self.target, current, ccw=self.target.ccw)
+				yield polygon.Polygon( 
+					polygonIndex, self.target, current, ccw=self.target.ccw,
+				)
 				polygonIndex +=1
 				current = []
 		if current:

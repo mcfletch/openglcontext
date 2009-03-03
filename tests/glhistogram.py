@@ -14,6 +14,8 @@ from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 import numpy
 from OpenGL.GL import *
+from OpenGL.GL.ARB.imaging import *
+
 import string
 
 class TestContext( BaseContext ):
@@ -33,7 +35,7 @@ class TestContext( BaseContext ):
 		
 	def Render( self, mode = 0):
 		BaseContext.Render( self, mode )
-		if glGetHistogram:
+		if glInitImagingARB():
 			# enter histogram mode...
 			glHistogram(GL_HISTOGRAM, 256, GL_LUMINANCE, GL_FALSE)
 			glEnable( GL_HISTOGRAM )
@@ -81,7 +83,8 @@ class TestContext( BaseContext ):
 			glLoadMatrixd( matrix ) # should have un-decorated alias for this...
 			
 			glMatrixMode(GL_MODELVIEW);
-	
+		else:
+			print 'No ARB imaging extension supported'
 
 	def Background(self, mode = 0):
 		'''Clear the background for a particular rendering mode'''
