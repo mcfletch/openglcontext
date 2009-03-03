@@ -531,6 +531,8 @@ class DisplayListCompiler( IFSCompiler ):
 	Note that this implementation is basically without real purpose, 
 	the arraygeometry version should be much faster on all modern 
 	hardware, particularly if VBO support is available.
+	
+	Also note that display lists are deprecated in OpenGL 3.x
 	"""
 	def weight( cls, target ):
 		"""Determine weighting for the target for this style of compilation"""
