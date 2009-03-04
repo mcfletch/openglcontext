@@ -28,7 +28,12 @@ def drawCube():
 				try:
 					glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
 					try:
-						glInterleavedArrays( GL_T2F_N3F_V3F, 0, data )
+						glEnable( GL_VERTEX_ARRAY )
+						glEnable( GL_NORMAL_ARRAY )
+						glEnable( GL_TEXTURE_COORD_ARRAY )
+						glVertexPointer( len(data), GL_FLOAT, 32, data+20 )
+						glNormalPointer( len(data), GL_FLOAT, 32, data+8 )
+						glTexCoordPointer( len(data), GL_FLOAT, 32, data )
 						glDrawArrays( GL_TRIANGLES, 0, 36 )
 					finally:
 						glPopClientAttrib()
@@ -41,6 +46,8 @@ def drawCube():
 				try:
 					glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
 					try:
+						# interleaved arrays is not 3.1 compatible,
+						# but this is the old-code path...
 						glInterleavedArrays( GL_T2F_N3F_V3F, 0, data )
 						glDrawArrays( GL_TRIANGLES, 0, 36 )
 					finally:
