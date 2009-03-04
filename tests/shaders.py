@@ -24,6 +24,8 @@ glDeleteShader = alternate( 'glDeleteShader', glDeleteShader,glDeleteObjectARB )
 glUseProgram = alternate('glUseProgram',glUseProgram,glUseProgramObjectARB )
 
 glGetProgramInfoLog = alternate( glGetProgramInfoLog, glGetInfoLogARB )
+glGetUniformLocation = alternate( glGetUniformLocation, glGetUniformLocationARB )
+glUniform3fv = alternate( glUniform3fv, glUniform3fvARB )
 
 
 def compileShader( source, shaderType ):
@@ -64,11 +66,13 @@ def compileProgram(vertexSource=None, fragmentSource=None):
 
 class TestContext( BaseContext ):
 	rotation = 0.00
+	light_location = (0,10,0)
 	def Render( self, mode = 0):
 		BaseContext.Render( self, mode )
 		glRotate( self.rotation, 0,1,0 )
 		self.rotation += .05
 		glUseProgram(self.program)
+		glUniform3fv( self.light_uniform_loc, 1, self.light_location )
 		glutSolidSphere(1.0,32,32)
 		glTranslate( 1,0,2 )
 		glutSolidCube( 1.0 )
@@ -86,12 +90,13 @@ class TestContext( BaseContext ):
 ], 
 [
 	'''
+	uniform vec3 light_location;
 	varying vec3 normal;
 	void main() {
 		float intensity;
 		vec4 color;
 		vec3 n = normalize(normal);
-		vec3 l = normalize(gl_LightSource[0].position).xyz;
+		vec3 l = normalize(light_location).xyz;
 	
 		// quantize to 5 steps (0, .25, .5, .75 and 1)
 		intensity = (floor(dot(l, n) * 4.0) + 1.0)/4.0;
@@ -103,6 +108,7 @@ class TestContext( BaseContext ):
 	''',
 ]
 )
+		self.light_uniform_loc = glGetUniformLocation( self.program, 'light_location' )
 
 
 if __name__ == "__main__":
