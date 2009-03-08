@@ -10,72 +10,31 @@ from OpenGL.GL.ARB.vertex_shader import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGLContext.arrays import array
-import time, sys,logging
+from OpenGLContext.events.timer import Timer
+import time, sys,logging,math
 log = logging.getLogger( 'shaderobjects' )
-from OpenGL.extensions import alternate
-glCreateShader = alternate( 'glCreateShader', glCreateShader, glCreateShaderObjectARB )
-glShaderSource = alternate( 'glShaderSource', glShaderSource, glShaderSourceARB)
-glCompileShader = alternate( 'glCompileShader', glCompileShader, glCompileShaderARB)
-glCreateProgram = alternate( 'glCreateProgram', glCreateProgram, glCreateProgramObjectARB)
-glAttachShader = alternate( 'glAttachShader', glAttachShader,glAttachObjectARB )
-glValidateProgram = alternate( 'glValidateProgram',glValidateProgram,glValidateProgramARB )
-glLinkProgram = alternate( 'glLinkProgram',glLinkProgram,glLinkProgramARB )
-glDeleteShader = alternate( 'glDeleteShader', glDeleteShader,glDeleteObjectARB )
-glUseProgram = alternate('glUseProgram',glUseProgram,glUseProgramObjectARB )
 
-glGetProgramInfoLog = alternate( glGetProgramInfoLog, glGetInfoLogARB )
-glGetUniformLocation = alternate( glGetUniformLocation, glGetUniformLocationARB )
-glUniform3fv = alternate( glUniform3fv, glUniform3fvARB )
-
-
-def compileShader( source, shaderType ):
-	"""Compile shader source of given type"""
-	shader = glCreateShader(shaderType)
-	glShaderSource( shader, source )
-	glCompileShader( shader )
-	return shader
-
-
-def compileProgram(vertexSource=None, fragmentSource=None):
-	program = glCreateProgram()
-
-	if vertexSource:
-		vertexShader = compileShader(
-			vertexSource, GL_VERTEX_SHADER_ARB
-		)
-		glAttachShader(program, vertexShader)
-	if fragmentSource:
-		fragmentShader = compileShader(
-			fragmentSource, GL_FRAGMENT_SHADER_ARB
-		)
-		glAttachShader(program, fragmentShader)
-
-	glValidateProgram( program )
-	warnings = glGetProgramInfoLog( program )
-	if warnings:
-		log.warn( 'Program compilation log: %s', warnings )
-	glLinkProgram(program)
-
-	if vertexShader:
-		glDeleteShader(vertexShader)
-	if fragmentShader:
-		glDeleteShader(fragmentShader)
-
-	return program
-
+from OpenGLContext.scenegraph.shaders import compileProgram, glUseProgram, glUniform3fv
 
 class TestContext( BaseContext ):
 	rotation = 0.00
-	light_location = (0,10,0)
+	rotation_2 = 0.00
+	light_location = (0,10,5)
 	def Render( self, mode = 0):
 		BaseContext.Render( self, mode )
 		glRotate( self.rotation, 0,1,0 )
-		self.rotation += .05
+		glRotate( self.rotation_2, 1,0,1 )
 		glUseProgram(self.program)
 		glUniform3fv( self.light_uniform_loc, 1, self.light_location )
 		glutSolidSphere(1.0,32,32)
 		glTranslate( 1,0,2 )
 		glutSolidCube( 1.0 )
+		glTranslate( 2,0,0 )
+		glFrontFace(GL_CW)
+		try:
+			glutSolidTeapot( 1.0)
+		finally:
+			glFrontFace(GL_CCW)
 	def OnInit( self ):
 		"""Scene set up and initial processing"""
 		self.program = compileProgram(
@@ -109,7 +68,14 @@ class TestContext( BaseContext ):
 ]
 )
 		self.light_uniform_loc = glGetUniformLocation( self.program, 'light_location' )
-
+		self.time = Timer( duration = 2.0, repeating = 1 )
+		self.time.addEventHandler( "fraction", self.OnTimerFraction )
+		self.time.register (self)
+		self.time.start ()
+	def OnTimerFraction( self, event ):
+		self.rotation = event.fraction() * 360
+		self.rotation_2 = -event.fraction() * 360
+		
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
