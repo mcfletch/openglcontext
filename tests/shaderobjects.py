@@ -16,7 +16,8 @@ import time, sys,logging,math
 log = logging.getLogger( 'shaderobjects' )
 log.warn( 'Context %s',  BaseContext )
 
-vertex_shader = [
+vertex_shaders = [
+	#TOON
 	'''
 	varying vec3 normal;
 	void main() {
@@ -25,7 +26,8 @@ vertex_shader = [
 	}
 	''',
 ]
-fragment_shader = [
+fragment_shaders = [
+	#TOON
 	'''
 	varying vec3 normal;
 	void main() {
@@ -44,8 +46,11 @@ fragment_shader = [
 	''',
 ]
 
+
 class TestContext( BaseContext ):
 	rotation = 0.00
+	
+	current_shader = 0
 	
 	def OnInit( self ):
 		"""Scene set up and initial processing"""
@@ -56,38 +61,48 @@ class TestContext( BaseContext ):
 				),
 			],
 		)
-		COMIC = Shader(
-			objects = [
-				GLSLObject(
-					shaders = [
-						GLSLShader( 
-							source = vertex_shader,
-							type='VERTEX',
-						),
-						GLSLShader( 
-							source = fragment_shader,
-							type='FRAGMENT',
+		self.shaders = []
+		for i,(vert,frag) in enumerate(zip( vertex_shaders,fragment_shaders)):
+			self.shaders.append(
+				Shader(
+					objects = [
+						GLSLObject(
+							shaders = [
+								GLSLShader( 
+									DEF = 'Vert_SHADER_%s'%(i),
+									source = vert,
+									type='VERTEX',
+								),
+								GLSLShader( 
+									DEF = 'Frag_SHADER_%s'%(i),
+									source = frag,
+									type='FRAGMENT',
+								),
+							],
 						),
 					],
-				),
-			],
-		)
+				)
+			)
+		self.shapes = [
+			Shape(
+				appearance = self.shaders[0],
+				geometry = Sphere( radius = 2.0 ),
+			),
+			Shape(
+				appearance = self.shaders[0],
+				geometry = Sphere( radius = .75 ),
+			),
+		]
 		self.sg = sceneGraph(
 			children = [
 				Transform(
 					DEF = 'scene',
 					children= [
-						Shape(
-							appearance = COMIC,
-							geometry = Sphere( radius = 2.0 ),
-						),
+						self.shapes[0],
 						Transform(
 							translation = (-3,0,4),
 							children = [
-								Shape(
-									appearance = COMIC,
-									geometry = Sphere( radius = .75 ),
-								),
+								self.shapes[1]
 							],
 						),
 						Transform(
@@ -110,10 +125,15 @@ class TestContext( BaseContext ):
 		self.time.addEventHandler( "fraction", self.OnTimerFraction )
 		self.time.register (self)
 		self.time.start ()
+		self.addEventHandler( "keypress", name="n", function = self.OnNext)
 	def OnTimerFraction( self, event ):
 		r = event.fraction()
 		self.sg.children[0].rotation = [0,1,0,r * math.pi *2]
-		
+	def OnNext( self, event ):
+		self.current_shader += 1
+		shader = self.shaders[ self.current_shader % len(self.shaders) ]
+		for shape in self.shapes:
+			shape.appearance = shader 
 
 
 if __name__ == "__main__":
