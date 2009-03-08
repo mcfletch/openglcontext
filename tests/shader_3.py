@@ -7,6 +7,7 @@ from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGLContext.scenegraph.shaders import compileProgram, glUseProgram
+from OpenGL.GLUT import glutSolidTeapot
 
 class TestContext( BaseContext ):
 	"""This shader adds a simple linear fog to the shader
@@ -26,7 +27,8 @@ class TestContext( BaseContext ):
 			void main() {
 				float fog; // amount of fog to apply
 				float fog_coord; // distance for fog calculation...
-				gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+				gl_Position = ftransform();
+				//gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
 				// ecPosition is the eye-coordinate position...
 				
 				fog_coord = abs(gl_Position.z);
@@ -65,6 +67,8 @@ class TestContext( BaseContext ):
 		for func,var,values in self.UNIFORM_VALUES:
 			loc = self.UNIFORM_LOCATIONS[var]
 			func( loc, *values )
+		glRotate( 45, 0,1,0 )
+		glScale( 3,3,3 )
 		try:
 			self.vbo.bind()
 			try:
