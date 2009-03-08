@@ -2,6 +2,7 @@
 from OpenGL.GL import *
 from OpenGLContext import displaylist
 from OpenGLContext.scenegraph import cache, coordinatebounded
+from OpenGLContext.scenegraph import vertex 
 from vrml.vrml97 import basenodes
 import warnings
 from vrml import protofunctions
@@ -17,6 +18,8 @@ class IndexedLineSet(
 	colors.
 
 	http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#IndexedLineSet
+	
+	# This code is not OpenGL 3.1 compatible
 	"""
 	def compile( self, mode=None ):
 		"""Compile the IndexedLineSet into a display-list
@@ -124,7 +127,51 @@ class IndexedLineSet(
 			dl()
 		return 1
 
-			
+	def yeildVertices( self ):
+		"""Yield set of vertices to be rendered..."""
+		# this is an unfinished start to getting OpenGL 3.1 operation
+		if self.coord and len(self.coord.point) and len(self.coordIndex):
+			points = self.coord.point
+			indices = expandIndices( self.coordIndex )
+			currentColor = None
+			#XXX should do sanity checks here...
+			if self.color and len(self.color.color):
+				colors = self.color.color
+				if self.colorPerVertex:
+					if len(self.colorIndex):
+						colorIndices = expandIndices( self.colorIndex )
+					else:
+						colorIndices = indices
+				else:
+					if len(self.colorIndex):
+						# each item represents a single polyline colour
+						colorIndices = self.colorIndex
+					else:
+						# each item in color used in turn by each polyline
+						colorIndices = range(len(indices))
+				# compile the color-friendly ILS
+				for index in range(len(indices)):
+					polyline = indices[index]
+					color = colorIndices[index]
+					try:
+						color = int(color)
+					except (TypeError,ValueError), err:
+						for i,c in map(None, polyline, color):
+							if c is not None:
+								# numpy treats None as retrieve all??? why?
+								currentColor = colors[c]
+							yield currentColor, points[i]
+					else:
+						for i in polyline:
+							yield colors[color], points[i]
+						yield None
+			else:
+				for index in range(len(indices)):
+					polyline = indices[index]
+					for i in polyline:
+						yield None, points[i]
+					yield None
+
 def expandIndices( indices ):
 	"""Create a set of poly-line definitions"""
 	items = []

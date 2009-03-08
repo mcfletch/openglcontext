@@ -257,6 +257,7 @@ class AABoundingBox( BoundingBox ):
 		node which is determining whether to cull the node
 		to which this bounding box is attached)
 		"""
+		# This code is not OpenGL 3.1 compatible
 		points = self.getPoints()
 		glDisable(GL_LIGHTING)
 		try:
@@ -293,6 +294,7 @@ class AABoundingBox( BoundingBox ):
 			yet have the instrumentation in the rendering
 			engine to support that :( .
 		"""
+		# This code is not OpenGL 3.1 compatible
 		from OpenGL.GL.HP import occlusion_test
 		glDepthMask(GL_FALSE)
 		try:
