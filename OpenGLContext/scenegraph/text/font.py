@@ -212,6 +212,7 @@ class RenderSelectMixIn( object ):
 
 	def _leftJustifyQuads( self, lines, fontStyle, mode=None ):
 		"""Draw left-justified quadrangles"""
+		# This code is not OpenGL 3.1 compatible
 		spacing = self.getSpacing( fontStyle=fontStyle, mode=mode )
 		adjust = self.verticalAdjust( spacing, lines, fontStyle=fontStyle, mode=mode )
 		hAdjust = 0.0
@@ -232,6 +233,7 @@ class RenderSelectMixIn( object ):
 			glEnd()
 	def _centerJustifyQuads( self, lines, fontStyle, mode=None ):
 		"""Draw center-justified quadrangles"""
+		# This code is not OpenGL 3.1 compatible
 		spacing = self.getSpacing( fontStyle=fontStyle, mode=mode )
 		adjust = self.verticalAdjust( spacing, lines, fontStyle=fontStyle, mode=mode )
 		hAdjust = 0.0
@@ -253,6 +255,7 @@ class RenderSelectMixIn( object ):
 			glEnd()
 	def _rightJustifyQuads( self, lines, fontStyle, mode=None ):
 		"""Draw right-justified quadrangles"""
+		# This code is not OpenGL 3.1 compatible
 		spacing = self.getSpacing( fontStyle=fontStyle, mode=mode )
 		adjust = self.verticalAdjust( spacing, lines, fontStyle=fontStyle, mode=mode )
 		hAdjust = 0.0
@@ -290,7 +293,25 @@ class NoDepthBufferMixIn( object ):
 				glDepthMask( GL_TRUE )
 
 class BitmapFontMixIn( object ):
-	"""Mix-in providing justification routines for bitmap fonts"""
+	"""Mix-in providing justification routines for bitmap fonts
+	
+	For OpenGL 3.1 and beyond, we'll need some more 
+	bookkeeping done at the font level, basically we'll
+	have X textures/shaders per font.  The characters to 
+	render for the shader will all be composed into a single 
+	VBO to be rendered.  Changing the text will update the 
+	VBO set (which is a fairly small data-set, as it's just 
+	the quads involved).
+	
+	Each character needs a reference to the texture involved 
+	as well as the texture-coordinates for the 4 vertices.
+	
+	So we're going to wind up getting a general "compile" 
+	operation that iterates over all lines which use a Font,
+	gathering the (translated) coordinates to pass to the 
+	renderer, when those are all gathered, we render the 
+	data-set to the card in one go...
+	"""
 	def render( self, *args, **named ):
 		"""Special depth-buffer mode for direct-to-screen bitmap fonts
 
