@@ -61,6 +61,7 @@ class VPCurve( nodetypes.Rendering, nodetypes.Children, node.Node ):
 	def compile( self, mode=None ):
 		"""Compile the VPCurve into a display-list
 		"""
+		# This code is not OpenGL 3.1 compatible
 		if self.pos.any():
 			dl = displaylist.DisplayList()
 			#XXX should do sanity checks here...
