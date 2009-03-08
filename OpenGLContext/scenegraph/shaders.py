@@ -5,6 +5,7 @@ from OpenGL.GL.ARB.fragment_shader import *
 from OpenGL.GL.ARB.vertex_shader import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
+from OpenGL import error
 from OpenGLContext.arrays import array
 from vrml.vrml97 import shaders
 import time, sys,logging
@@ -20,33 +21,62 @@ glLinkProgram = alternate( 'glLinkProgram',glLinkProgram,glLinkProgramARB )
 glDeleteShader = alternate( 'glDeleteShader', glDeleteShader,glDeleteObjectARB )
 glUseProgram = alternate('glUseProgram',glUseProgram,glUseProgramObjectARB )
 glGetProgramInfoLog = alternate( glGetProgramInfoLog, glGetInfoLogARB )
-
+glGetShaderInfoLog = alternate( glGetShaderInfoLog, glGetInfoLogARB )
 
 def compileProgram(vertexSource=None, fragmentSource=None):
 	program = glCreateProgram()
+	if isinstance( vertexSource, (str,unicode)):
+		vertexSource = [ vertexSource ]
+	if isinstance( fragmentSource, (str,unicode)):
+		fragmentSource = [ fragmentSource ]
 
 	if vertexSource:
 		vertexShader = compileShader(
 			vertexSource, GL_VERTEX_SHADER_ARB
 		)
+		shader_log = glGetShaderInfoLog( vertexShader )
+		if shader_log:
+			log.info( '''Shader compilation generated log: %s''', shader_log )
 		glAttachShader(program, vertexShader)
+	else:
+		vertexShader = None
 	if fragmentSource:
 		fragmentShader = compileShader(
 			fragmentSource, GL_FRAGMENT_SHADER_ARB
 		)
+		shader_log = glGetShaderInfoLog( fragmentShader )
+		if shader_log:
+			log.info( '''Shader compilation generated log: %s''', shader_log )
 		glAttachShader(program, fragmentShader)
+	else:
+		fragmentShader = None
 
 	glValidateProgram( program )
-	warnings = glGetProgramInfoLog( program )
-	if warnings:
-		log.warn( 'Program compilation log: %s', warnings )
+#	if glGetProgramiv:
+#		validation = glGetProgramiv( program, GL_VALIDATE_STATUS )
+#		if not validation:
+#			raise RuntimeError(
+#				"""Validation failure""",
+#				validation,
+#				glGetProgramInfoLog( program ),
+#			)
 	glLinkProgram(program)
+	
+#	if glGetProgramiv:
+#		link_status = glGetProgramiv( program, GL_LINK_STATUS )
+#		if not link_status:
+#			raise RuntimeError(
+#				"""Link failure""",
+#				link_status,
+#				glGetProgramInfoLog( program ),
+#			)
 
 	if vertexShader:
 		glDeleteShader(vertexShader)
 	if fragmentShader:
 		glDeleteShader(fragmentShader)
-
+	if glIsProgram:
+		assert glIsProgram( program ), ("""Program does not seem to have compiled!""", vertexSource, fragmentSource )
 	return program
 def compileShader( source, shaderType ):
 	"""Compile shader source of given type"""
@@ -58,6 +88,7 @@ def compileShader( source, shaderType ):
 class FloatUniform( shaders.FloatUniform ):
 	"""Uniform (variable) binding for a shader
 	"""
+	
 class IntUniform( shaders.IntUniform ):
 	"""Uniform (variable) binding for a shader (integer form)
 	"""
@@ -116,7 +147,11 @@ class Shader( shaders.Shader ):
 		if renderer is None:
 			renderer = self.compile( mode )
 		if renderer:
-			glUseProgram( renderer )
+			try:
+				glUseProgram( renderer )
+			except error.GLError, err:
+				log.error( '''Failure compiling: %s''', self.toString() )
+				raise
 		return True, True, True, renderer
 	def compile(self,  mode ):
 		holder = mode.cache.holder(self,None)
