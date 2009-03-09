@@ -3,6 +3,7 @@ from OpenGL.GL import *
 from OpenGL.GL.ARB.shader_objects import *
 from OpenGL.GL.ARB.fragment_shader import *
 from OpenGL.GL.ARB.vertex_shader import *
+from OpenGL.GL.ARB.vertex_program import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGL import error
@@ -22,6 +23,8 @@ glDeleteShader = alternate( 'glDeleteShader', glDeleteShader,glDeleteObjectARB )
 glUseProgram = alternate('glUseProgram',glUseProgram,glUseProgramObjectARB )
 glGetProgramInfoLog = alternate( glGetProgramInfoLog, glGetInfoLogARB )
 glGetShaderInfoLog = alternate( glGetShaderInfoLog, glGetInfoLogARB )
+glGetAttribLocation = alternate( glGetAttribLocation, glGetAttribLocationARB )
+glVertexAttribPointer = alternate( glVertexAttribPointer, glVertexAttribPointerARB )
 
 def compileProgram(vertexSource=None, fragmentSource=None):
 	program = glCreateProgram()
