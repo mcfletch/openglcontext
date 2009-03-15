@@ -33,12 +33,15 @@ class TestContext( BaseContext ):
 			'''
 			attribute vec3 position;
 			attribute vec3 color;
+			varying vec4 baseColor;
 			void main() {
 				gl_Position = gl_ModelViewProjectionMatrix * vec4( position,1.0);
-				gl_FrontColor = vec4(color,1.0);
+				baseColor = vec4(color,1.0);
 			}''',
-			'''void main() {
-				gl_FragColor = gl_Color;
+			'''
+			varying vec4 baseColor;
+			void main() {
+				gl_FragColor = baseColor;
 			}''',
 		)
 		self.vbo = vbo.VBO(
