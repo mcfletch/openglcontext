@@ -75,11 +75,18 @@ off-white and turning black."""
 		print '  <f> make time pass faster'
 		self.addEventHandler( "keypress", name="s", function = self.OnSlower)
 		self.addEventHandler( "keypress", name="f", function = self.OnFaster)
+		self.addEventHandler( "keypress", name="h", function = self.OnHigher)
+		self.addEventHandler( "keypress", name="l", function = self.OnLower)
+		
 		self.time = Timer( duration = 1.0, repeating = 1 )
 		self.time.addEventHandler( "fraction", self.OnTimerFraction )
 		self.time.register (self)
 		self.time.start ()
 		glPointSize( pointSize )
+		self.time2 = Timer( duration = 5.0, repeating = 1 )
+		self.time2.addEventHandler( "cycle", self.OnLower )
+		self.time2.register (self)
+		self.time2.start ()
 
 	### Timer callback
 	def OnTimerFraction( self, event ):
@@ -150,6 +157,15 @@ off-white and turning black."""
 			self.text.string = [ "Current multiplier: %s"%( self.time.internal.multiplier,)]
 		else:
 			print "faster",self.time.internal.multiplier
+	def OnHigher( self, event ):
+		global initialVelocityVector
+		initialVelocityVector *= [1,1.25,1]
+	def OnLower( self, event ):
+		global initialVelocityVector
+		if hasattr(event,'count') and not event.count() % 4:
+			initialVelocityVector[:] = [1.5,20,1.5]
+		else:
+			initialVelocityVector /= [1,1.5,1]
 		
 
 if __name__ == "__main__":
