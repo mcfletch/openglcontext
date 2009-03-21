@@ -40,6 +40,9 @@ class Box( basenodes.Box ):
 						glNormalPointer( GL_FLOAT, 32, vb+8 )
 						glVertexPointer( 3, GL_FLOAT, 32, vb+20 )
 						glDrawArrays( GL_TRIANGLES, 0, 36 )
+						glDisable( GL_VERTEX_ARRAY )
+						glDisable( GL_NORMAL_ARRAY )
+						glDisable( GL_TEXTURE_COORD_ARRAY )
 					finally:
 						glPopClientAttrib()
 				finally:

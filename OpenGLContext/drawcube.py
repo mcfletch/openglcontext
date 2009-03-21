@@ -31,9 +31,9 @@ def drawCube():
 						glEnable( GL_VERTEX_ARRAY )
 						glEnable( GL_NORMAL_ARRAY )
 						glEnable( GL_TEXTURE_COORD_ARRAY )
-						glVertexPointer( len(data), GL_FLOAT, 32, data+20 )
-						glNormalPointer( len(data), GL_FLOAT, 32, data+8 )
-						glTexCoordPointer( len(data), GL_FLOAT, 32, data )
+						glVertexPointer( 3, GL_FLOAT, 32, data+20 )
+						glNormalPointer( GL_FLOAT, 32, data+8 )
+						glTexCoordPointer( 2, GL_FLOAT, 32, data )
 						glDrawArrays( GL_TRIANGLES, 0, 36 )
 					finally:
 						glPopClientAttrib()

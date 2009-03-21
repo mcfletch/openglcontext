@@ -149,12 +149,12 @@ class ArrayGeometry(object):
 				glColorMaterial( GL_FRONT_AND_BACK, GL_DIFFUSE)
 				glEnable( GL_COLOR_MATERIAL )
 				glEnableClientState( GL_COLOR_ARRAY )
-				self.callBound( glColorPointerd, self.colours)
+				self.callBound( glColorPointerf, self.colours)
 #			else:
 #				glDisableClientState( GL_COLOR_ARRAY )
 			if lit and self.normals is not None:
 				glEnableClientState( GL_NORMAL_ARRAY )
-				self.callBound( glNormalPointerd, self.normals)
+				self.callBound( glNormalPointerf, self.normals)
 				glEnable(GL_NORMALIZE); # should do this explicitly eventually
 			else:
 				glDisable( GL_LIGHTING )
@@ -162,7 +162,7 @@ class ArrayGeometry(object):
 				
 			if visible and textured and self.textures is not None:
 				glEnableClientState( GL_TEXTURE_COORD_ARRAY )
-				self.callBound( glTexCoordPointerd, self.textures )
+				self.callBound( glTexCoordPointerf, self.textures )
 #			else:
 #				glDisableClientState( GL_TEXTURE_COORD_ARRAY )
 			glFrontFace( self.ccw)

@@ -461,7 +461,6 @@ class IndexedPolygonsCompiler( IFSCompiler ):
 				)
 			)
 		):
-			print 'indexed appropriate'
 			return 1.05
 		return False
 	weight = classmethod( weight )

@@ -73,8 +73,6 @@ class IndexedPolygons (
 		textured -- can skip textureCoordinates if not
 		transparent -- need to sort triangle geometry...
 		"""
-		#print 'indexed polygons', len(self.index), bool(self.coord), bool(self.normal), bool(self.texCoord), bool(self.color)
-		#print self.toString()
 		if not len(self.index):
 			return 1
 		glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
@@ -128,7 +126,7 @@ class IndexedPolygons (
 			# make the color field alter the diffuse color
 			glColorMaterial( GL_FRONT_AND_BACK, GL_DIFFUSE)
 			glEnable( GL_COLOR_MATERIAL )
-			self.callBound( glColorPointerd, color )
+			self.callBound( glColorPointerf, color )
 			glEnableClientState( GL_COLOR_ARRAY )
 			return 1
 		else:
@@ -138,7 +136,7 @@ class IndexedPolygons (
 		normal = vbos.normal
 		if len(normal):
 			# make the color field alter the diffuse color
-			self.callBound( glNormalPointerd , normal )
+			self.callBound( glNormalPointerf , normal )
 			glEnableClientState( GL_NORMAL_ARRAY )
 			glEnable(GL_NORMALIZE); # should do this explicitly eventually
 			return 1
@@ -153,7 +151,7 @@ class IndexedPolygons (
 		"""Enable the normal array if possible"""
 		tex = vbos.texCoord
 		if len(tex):
-			self.callBound( glTexCoordPointerd, tex )
+			self.callBound( glTexCoordPointerf, tex )
 			glEnableClientState( GL_TEXTURE_COORD_ARRAY )
 			return 1
 		else:
@@ -162,7 +160,7 @@ class IndexedPolygons (
 		"""Enable the point array if possible"""
 		coord = vbos.coord
 		if len(coord):
-			self.callBound( glVertexPointerd, coord )
+			self.callBound( glVertexPointerf, coord )
 			glEnableClientState(GL_VERTEX_ARRAY);
 			return 1
 		else:
