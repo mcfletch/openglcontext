@@ -1,0 +1,47 @@
+"""Teapot node for use in geometry attribute of Shapes"""
+from OpenGLContext.scenegraph import cache
+from OpenGLContext.arrays import array
+from OpenGL.arrays import vbo
+from OpenGL.GL import *
+from OpenGL.GLUT import glutSolidTeapot
+from vrml.vrml97 import nodetypes
+from vrml import node, field, fieldtypes
+
+class Teapot( nodetypes.Geometry, node.Node ):
+	"""Simple Teapot geometry (glutSolidTeapot)
+	"""
+	PROTO = 'Teapot'
+	size = field.newField( 'size','SFFloat',1,1.0 )
+	wire = field.newField( 'solid','SFBool',1,False)
+	def render (
+			self,
+			visible = 1, # can skip normals and textures if not
+			lit = 1, # can skip normals if not
+			textured = 1, # can skip textureCoordinates if not
+			transparent = 0, # XXX should sort triangle geometry...
+			mode = None, # the renderpass object for which we compile
+		):
+		"""Render the Teapot"""
+		glFrontFace(GL_CW)
+		try:
+			if self.wire:
+				glutWireTeapot( self.size )
+			else:
+				glutSolidTeapot( self.size )
+		finally:
+			glFrontFace(GL_CCW)
+
+	def boundingVolume( self ):
+		"""Create a bounding-volume object for this node"""
+		from OpenGLContext.scenegraph import boundingvolume
+		current = boundingvolume.getCachedVolume( self )
+		if current:
+			return current
+		return boundingvolume.cacheVolume(
+			self,
+			boundingvolume.AABoundingBox(
+				# This vastly overestimates the size!
+				size = [self.size*2,self.size*2,self.size*2],
+			),
+			( (self, 'size'), ),
+		)

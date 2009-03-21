@@ -48,7 +48,7 @@ class TestContext( BaseContext ):
 					url = [images[0]]
 				),
 			),
-			geometry = Box(),
+			geometry = Teapot(),
 		)
 
 		
