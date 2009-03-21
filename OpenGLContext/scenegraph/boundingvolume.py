@@ -25,13 +25,23 @@ Notes regarding general implementation:
 """
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
+from OpenGL.GL.ARB.occlusion_query import *
+from OpenGL.GL.HP.occlusion_test import *
 from OpenGL.GLUT import glutSolidCube
 from vrml.vrml97 import nodetypes
 from vrml import node, field, protofunctions
 from OpenGLContext import frustum, utilities, doinchildmatrix
 from OpenGLContext.scenegraph import cache
 from OpenGLContext.debug.logs import bounding_log as log
+from OpenGL.extensions import alternate
 import exceptions
+
+glBeginQuery = alternate( glBeginQuery, glBeginQueryARB )
+glDeleteQueries = alternate( glDeleteQueries, glDeleteQueriesARB )
+glEndQuery = alternate( glEndQuery, glEndQueryARB )
+glGenQueries = alternate( glGenQueries, glGenQueriesARB )
+glGetQueryObjectiv = alternate( glGetQueryObjectiv, glGetQueryObjectivARB )
+glGetQueryObjectuiv = alternate( glGetQueryObjectiv, glGetQueryObjectuivARB )
 
 try:
 	from vrml.arrays import frustcullaccel
@@ -223,10 +233,11 @@ class AABoundingBox( BoundingBox ):
 	"""
 	center = field.newField( 'center', 'SFVec3f', 0, (0,0,0))
 	size = field.newField( 'size','SFVec3f',0,(0,0,0))
+	query = field.newField( 'query', 'SFInt32',0,0)
 	def visible( self, frust, matrix=None, occlusion=0, mode=None ):
 		"""Allow for occlusion-checking as well as frustum culling"""
 		result = super( AABoundingBox, self).visible( frust, matrix, occlusion, mode )
-		if result and occlusion:
+		if result and False and occlusion:
 			return self.occlusionVisible( mode=mode )
 		return result
 	def getPoints(self):
@@ -284,40 +295,49 @@ class AABoundingBox( BoundingBox ):
 	def occlusionVisible( self, mode=None ):
 		"""Render this bounding volume for an occlusion test
 
-		This requires that the GL_HP_occlusion_test
-		extension be available.
-
-		Note:
-			We will someday want to avoid doing this test
-			if the time required to do the occlusion test
-			is > the time to render our children.  We don't
-			yet have the instrumentation in the rendering
-			engine to support that :( .
+		Requires one of:
+			OpenGL 2.x
+			ARB_occlusion_query 
+			GL_HP_occlusion_test
 		"""
-		# This code is not OpenGL 3.1 compatible
-		from OpenGL.GL.HP import occlusion_test
-		glDepthMask(GL_FALSE)
-		try:
-			if not DEBUG_RENDER_VOLUMES:
-				glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE)
+		if (False and glGenQueries):
+			query = self.query 
+			if not self.query:
+				self.query = query = glGenQueries(1)
+			glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 			try:
-				glDisable(GL_LIGHTING)
-				try:
-					glEnable(occlusion_test.GL_OCCLUSION_TEST_HP)
-					try:
-						doinchildmatrix.doInChildMatrix( self._occlusionRender )
-					finally:
-						glDisable(occlusion_test.GL_OCCLUSION_TEST_HP)
-				finally:
-					glEnable(GL_LIGHTING)
+				glDepthMask(GL_FALSE);
+				glBeginQuery(GL_SAMPLES_PASSED, query);
+				doinchildmatrix.doInChildMatrix( self._occlusionRender )
 			finally:
-				glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE)
-		finally:
-			glDepthMask(GL_TRUE)
-		result = glGetBooleanv(occlusion_test.GL_OCCLUSION_TEST_RESULT_HP)
-##		if not result:
-##			print "occlusion culling eliminated item", self.center, self.size
-		return result
+				glEndQuery(GL_SAMPLES_PASSED);
+			# TODO: need to actually retrieve the value, be we want to 
+			# finish all child queries at this level before checking that 
+			# this particular query passed fragments or not...
+		else:
+			# This code is not OpenGL 3.1 compatible
+			glDepthMask(GL_FALSE)
+			try:
+				if not DEBUG_RENDER_VOLUMES:
+					glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE)
+				try:
+					glDisable(GL_LIGHTING)
+					try:
+						glEnable(occlusion_test.GL_OCCLUSION_TEST_HP)
+						try:
+							doinchildmatrix.doInChildMatrix( self._occlusionRender )
+						finally:
+							glDisable(occlusion_test.GL_OCCLUSION_TEST_HP)
+					finally:
+						glEnable(GL_LIGHTING)
+				finally:
+					glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE)
+			finally:
+				glDepthMask(GL_TRUE)
+			result = glGetBooleanv(occlusion_test.GL_OCCLUSION_TEST_RESULT_HP)
+	##		if not result:
+	##			print "occlusion culling eliminated item", self.center, self.size
+			return result
 	def occlusionRender( self ):
 		"""Render this box to screen"""
 		doinchildmatrix.doInChildMatrix( self._occlusionRender )

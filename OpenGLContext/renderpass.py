@@ -124,7 +124,12 @@ class VisitingRenderPass( RenderPass, rendervisitor.RenderVisitor ):
 	basic algorithm.
 	"""
 	frustum = None # storage of the frustum
-	frustumCulling = -1 # whether to cull using the frustum (experimental), -1 triggers query, 0 no, 1 yes
+	# whether to cull using the frustum
+	#   -1 -- automatic choice preferring query cull, bb cull, no cull
+	#   2 -- query-based culling 
+	#   1 -- bounding-box culling 
+	#   0 -- no culling (slow!)
+	frustumCulling = -1 
 	def __call__( self ):
 		"""Do the rendering pass
 
@@ -150,9 +155,11 @@ class VisitingRenderPass( RenderPass, rendervisitor.RenderVisitor ):
 		base = super( VisitingRenderPass, self).children( node )
 		if self.frustumCulling == -1:
 			context = self.overall.context
-			if hasattr( context, 'USE_FRUSTUM_CULLING') and context.USE_FRUSTUM_CULLING:
-				if hasattr( context, 'USE_OCCLUSION_CULLING') and context.USE_OCCLUSION_CULLING:
-					if context.extensions.initExtension( "GL_HP_occlusion_test"):
+			if getattr( context, 'USE_FRUSTUM_CULLING',None):
+				if getattr( context, 'USE_OCCLUSION_CULLING',None):
+					if context.extensions.initExtension( 'ARB_occlusion_query' ):
+						self.__class__.frustumCulling = 2
+					elif context.extensions.initExtension( "GL_HP_occlusion_test"):
 						self.__class__.frustumCulling = 2
 					else:
 						self.__class__.frustumCulling = 1
@@ -161,9 +168,6 @@ class VisitingRenderPass( RenderPass, rendervisitor.RenderVisitor ):
 			else:
 				self.__class__.frustumCulling = 0
 		if self.frustumCulling and self.frustum:
-			## We need to track the current transform and use that as
-			## "matrix", not the whole model-view matrix. :(
-			## that's expensive :(
 			matrix = self.currentStack.transformMatrix()
 			for child in base:
 				if hasattr( child, 'visible'):
@@ -173,8 +177,6 @@ class VisitingRenderPass( RenderPass, rendervisitor.RenderVisitor ):
 						mode=self
 					):
 						yield child
-#					else:
-#						log.info( 'Culling child' )
 				else:
 					yield child
 		else:

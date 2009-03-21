@@ -17,35 +17,11 @@ log = logging.getLogger( 'shaderobjects' )
 log.warn( 'Context %s',  BaseContext )
 
 vertex_shaders = [
-	#TOON
-	'''
-	varying vec3 normal;
-	void main() {
-		normal = gl_NormalMatrix * gl_Normal;
-		gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
-	}
-	''',
+	'./resources/toon.vert.txt',
 ]
 fragment_shaders = [
-	#TOON
-	'''
-	varying vec3 normal;
-	void main() {
-		float intensity;
-		vec4 color;
-		vec3 n = normalize(normal);
-		vec3 l = normalize(gl_LightSource[0].position).xyz;
-	
-		// quantize to 5 steps (0, .25, .5, .75 and 1)
-		intensity = (floor(dot(l, n) * 4.0) + 1.0)/4.0;
-		color = vec4(intensity*1.0, intensity*0.5, intensity*0.5,
-			intensity*1.0);
-	
-		gl_FragColor = color;
-	}
-	''',
+	'./resources/toon.frag.txt',
 ]
-
 
 class TestContext( BaseContext ):
 	rotation = 0.00
@@ -70,12 +46,12 @@ class TestContext( BaseContext ):
 							shaders = [
 								GLSLShader( 
 									DEF = 'Vert_SHADER_%s'%(i),
-									source = vert,
+									url = vert,
 									type='VERTEX',
 								),
 								GLSLShader( 
 									DEF = 'Frag_SHADER_%s'%(i),
-									source = frag,
+									url = frag,
 									type='FRAGMENT',
 								),
 							],
@@ -83,6 +59,9 @@ class TestContext( BaseContext ):
 					],
 				)
 			)
+		self.shaders.extend([
+			
+		])
 		self.shapes = [
 			Shape(
 				appearance = self.shaders[0],
@@ -134,6 +113,7 @@ class TestContext( BaseContext ):
 		shader = self.shaders[ self.current_shader % len(self.shaders) ]
 		for shape in self.shapes:
 			shape.appearance = shader 
+			print shader.toString()
 
 
 if __name__ == "__main__":

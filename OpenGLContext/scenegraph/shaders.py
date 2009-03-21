@@ -8,7 +8,10 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGL import error
 from OpenGLContext.arrays import array
+from OpenGLContext import context
 from vrml.vrml97 import shaders
+from vrml import fieldtypes,protofunctions
+
 import time, sys,logging
 log = logging.getLogger( 'OpenGLContext.scenegraph.shaders' )
 from OpenGL.extensions import alternate
@@ -95,11 +98,54 @@ class FloatUniform( shaders.FloatUniform ):
 class IntUniform( shaders.IntUniform ):
 	"""Uniform (variable) binding for a shader (integer form)
 	"""
+
+class ShaderURLField( fieldtypes.MFString ):
+	"""Field for managing interactions with a Shader's URL value"""
+	fieldType = "MFString"
+	def fset( self, client, value, notify=1 ):
+		"""Set the client's URL, then try to load the image"""
+		value = super(ShaderURLField, self).fset( client, value, notify )
+		import threading
+		threading.Thread(
+			name = "Background load of %s"%(value),
+			target = self.loadBackground,
+			args = ( client, value, context.Context.allContexts,),
+		).start()
+		return value
+	def loadBackground( self, client, url, contexts ):
+		from OpenGLContext.loaders.loader import Loader, loader_log
+		try:
+			baseNode = protofunctions.root(client)
+			if baseNode:
+				baseURI = baseNode.baseURI
+			else:
+				baseURI = None
+			result = Loader( url, baseURL = baseURI )
+		except IOError:
+			pass
+		else:
+			if result:
+				baseURL, filename, file, headers = result
+				client.source = file.read()
+				for context in contexts:
+					c = context()
+					if c:
+						c.triggerRedraw(1)
+				return
+		
+		# should set client.image to something here to indicate
+		# failure to the user.
+		log.warn( """Unable to load any shader from the url %s for the node %s""", url, str(client))
+
+
 class GLSLShader( shaders.GLSLShader ):
 	"""GLSL-based shader node"""
+	url = ShaderURLField( 'url', 'MFString', 1)
 	def compile(self, holder):
 		holder.depend( self,  'source')
 		holder.depend( self,  'type')
+		if not self.source:
+			return False
 		if self.type == 'VERTEX':
 			return compileShader(
 				self.source, 
@@ -131,16 +177,18 @@ class GLSLObject( shaders.GLSLObject ):
 			if subShader:
 				glAttachShader(program, subShader )
 				subShaders.append( subShader )
-			else:
-				log.warn( 'Failure compiling: %s', shader )
-		glValidateProgram( program )
-		warnings = glGetProgramInfoLog( program )
-		if warnings:
-			log.error( 'Shader compile log: %s', warnings )
-		glLinkProgram(program)
-		for subShader in subShaders:
-			glDeleteShader( subShader )
-		return program
+			elif shader.source:
+				log.info( 'Failure compiling: %s', shader )
+		if len(subShaders) == len(self.shaders):
+			glValidateProgram( program )
+			warnings = glGetProgramInfoLog( program )
+			if warnings:
+				log.error( 'Shader compile log: %s', warnings )
+			glLinkProgram(program)
+			for subShader in subShaders:
+				glDeleteShader( subShader )
+			return program
+		return None
 		
 class Shader( shaders.Shader ):
 	"""Shader is a programmable substitute for an Appearance node"""
