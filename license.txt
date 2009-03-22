@@ -24,6 +24,13 @@ Exceptions are as follows:
 		All rights reserved.
 	see files for details.
 
+	The GLSL shaders from the OpenGL Shading Language (2nd Ed)
+	are: 
+
+		Copyright (C) 2002-2004  3Dlabs Inc. Ltd.
+
+	See tests/resources/3Dlabs-License.txt
+
 Dependency copyright notices (note that all dependencies mentioned 
 here are optional, but depending on the OpenGLContext version may
 be included in the OpenGLContext distribution):

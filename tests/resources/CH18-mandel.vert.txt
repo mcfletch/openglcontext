@@ -1,0 +1,36 @@
+//
+// Vertex shader for drawing the Mandelbrot set
+//
+// Authors: Dave Baldwin, Steve Koren, Randi Rost
+//          based on a shader by Michael Rivero
+//
+// Copyright (c) 2002-2005: 3Dlabs, Inc.
+//
+// See 3Dlabs-License.txt for license information
+//
+// Note: this version uses fixed-mode for all configuration parameters
+// for the vertex shader...
+
+uniform float Shininess;
+uniform float Specular;
+uniform float Diffuse;
+
+varying float LightIntensity;
+varying vec3  Position;
+
+void main()
+{
+    vec3 ecPosition = vec3(gl_ModelViewMatrix * gl_Vertex);
+    vec3 tnorm      = normalize(gl_NormalMatrix * gl_Normal);
+    vec3 lightVec   = normalize(gl_LightSource[0].position.xyz - ecPosition);
+    vec3 reflectVec = reflect(-lightVec, tnorm);
+    vec3 viewVec    = normalize(-ecPosition);
+    float spec      = max(dot(reflectVec, viewVec), 0.0);
+    spec            = pow(spec, Shininess);
+    LightIntensity  = Diffuse * 
+                          max(dot(lightVec, tnorm), 0.0) +
+                          Specular * spec;
+    Position        = vec3(gl_MultiTexCoord0 - 0.5) * 5.0;
+    gl_Position     = ftransform();
+
+}

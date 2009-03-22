@@ -1,4 +1,8 @@
-// Toon shader from the orange book second edition (c) 3D Labs
+// Lighthouse 3D Tutorial toon shader
+// 	http://www.lighthouse3d.com/opengl/glsl/index.php?toon2
+// By way of:
+//  http://www.pygame.org/wiki/GLSLExample
+
 varying vec3 normal;
 void main() {
 	normal = gl_NormalMatrix * gl_Normal;

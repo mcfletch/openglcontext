@@ -110,3 +110,13 @@ Node( 'NurbsSurface', 'OpenGLContext.scenegraph.nurbs.NurbsSurface' )
 Node( 'NurbsToleranceSample', 'OpenGLContext.scenegraph.nurbs.NurbsToleranceSample' )
 Node( 'Polyline2D', 'OpenGLContext.scenegraph.nurbs.Polyline2D' )
 Node( 'TrimmedSurface', 'OpenGLContext.scenegraph.nurbs.TrimmedSurface' )
+
+for suffix in ('1f','2f','3f','4f','m2','m3','m4','m2x3','m3x2','m2x4','m4x2','m3x4','m4x3'):
+
+	Node( 'FloatUniform'+suffix,'OpenGLContext.scenegraph.shaders.FloatUniform'+suffix )
+for suffix in ('1i','2i','3i','4i'):
+	Node( 'IntUniform'+suffix,'OpenGLContext.scenegraph.shaders.FloatUniform'+suffix )
+Node( 'ShaderURLField','OpenGLContext.scenegraph.shaders.FloatUniform' )
+Node( 'GLSLShader','OpenGLContext.scenegraph.shaders.FloatUniform' )
+Node( 'GLSLObject','OpenGLContext.scenegraph.shaders.FloatUniform' )
+Node( 'Shader','OpenGLContext.scenegraph.shaders.FloatUniform' )

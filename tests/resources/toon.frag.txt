@@ -1,3 +1,7 @@
+// Lighthouse 3D Tutorial toon shader
+// 	http://www.lighthouse3d.com/opengl/glsl/index.php?toon2
+// By way of:
+//  http://www.pygame.org/wiki/GLSLExample
 varying vec3 normal;
 void main() {
 	float intensity;

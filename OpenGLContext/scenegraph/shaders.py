@@ -10,7 +10,7 @@ from OpenGL import error
 from OpenGLContext.arrays import array
 from OpenGLContext import context
 from vrml.vrml97 import shaders
-from vrml import fieldtypes,protofunctions
+from vrml import field,node,fieldtypes,protofunctions
 
 import time, sys,logging
 log = logging.getLogger( 'OpenGLContext.scenegraph.shaders' )
@@ -35,14 +35,10 @@ def compileProgram(vertexSource=None, fragmentSource=None):
 		vertexSource = [ vertexSource ]
 	if isinstance( fragmentSource, (str,unicode)):
 		fragmentSource = [ fragmentSource ]
-
 	if vertexSource:
 		vertexShader = compileShader(
 			vertexSource, GL_VERTEX_SHADER_ARB
 		)
-		shader_log = glGetShaderInfoLog( vertexShader )
-		if shader_log:
-			log.info( '''Shader compilation generated log: %s''', shader_log )
 		glAttachShader(program, vertexShader)
 	else:
 		vertexShader = None
@@ -50,9 +46,6 @@ def compileProgram(vertexSource=None, fragmentSource=None):
 		fragmentShader = compileShader(
 			fragmentSource, GL_FRAGMENT_SHADER_ARB
 		)
-		shader_log = glGetShaderInfoLog( fragmentShader )
-		if shader_log:
-			log.info( '''Shader compilation generated log: %s''', shader_log )
 		glAttachShader(program, fragmentShader)
 	else:
 		fragmentShader = None
@@ -89,15 +82,91 @@ def compileShader( source, shaderType ):
 	shader = glCreateShader(shaderType)
 	glShaderSource( shader, source )
 	glCompileShader( shader )
+	shader_log = glGetShaderInfoLog( shader )
+	if shader_log:
+		log.info( '''Shader compilation generated log: %s''', shader_log )
 	return shader
 
-class FloatUniform( shaders.FloatUniform ):
-	"""Uniform (variable) binding for a shader
-	"""
-	
-class IntUniform( shaders.IntUniform ):
+class _Uniform( object ):
+	"""Uniform common operations"""
+	location = field.newField( 'location','SFUInt32',1, 0L )
+	warned = False
+	def getLocation( self, shader ):
+		"""Retrieve our uniform location"""
+		location = self.location
+		if not location:
+			location = self.location = glGetUniformLocation( shader, self.name )
+			self.warned=False
+			if location == -1:
+				if not self.warned:
+					log.warn( 'Unable to resolve uniform name %s', self.name )
+					self.warned=True
+				return None
+		return location 
+
+class FloatUniform( _Uniform, shaders.FloatUniform ):
+	"""Uniform (variable) binding for a shader"""
+	def render( self, shader, shader_id, mode ):
+		"""Set this uniform value for the given shader
+		
+		This is called at render-time to update the value...
+		"""
+		location = self.getLocation( shader_id )
+		if location is not None:
+			value = self.value
+			assert value.shape[-len(self.shape):] == self.shape,(value.shape,self.shape, value)
+			return self.baseFunction( location, value.shape[0], value )
+		return None
+class IntUniform( _Uniform, shaders.IntUniform ):
 	"""Uniform (variable) binding for a shader (integer form)
 	"""
+
+
+def _uniformCls( suffix ):
+	def buildAlternate( function_name ):
+		if globals().has_key( function_name+'ARB' ):
+			function = alternate( 
+				globals()[function_name], globals()[function_name+'ARB'] 
+			)
+		else:
+			function = globals()[function_name]
+		globals()[function_name] = function
+		return function
+		
+	def buildCls( suffix, size, function, base ):
+		name = 'FloatUniform'+suffix
+		cls = type( name, (base,), {
+			'suffix': suffix,
+			'PROTO': name,
+			'baseFunction': function,
+			'shape': size,
+		} )
+		globals()[name] = cls 
+	
+	function_name = 'glUniform'
+	if suffix.startswith( 'm' ):
+		size = suffix[1:]
+		function_name = 'glUniformMatrix%sfv'%( size, )
+		function = buildAlternate( function_name )
+		size = map( int, size.split('x' ))
+		if len(size) == 1:
+			size = [size[0],size[0]]
+		size = tuple(size)
+		buildCls( suffix, size, function, FloatUniform )
+	else:
+		if suffix.endswith( 'i' ):
+			base = IntUniform
+		else:
+			base = FloatUniform
+		function_name = 'glUniform%sv'%( suffix, )
+		function = buildAlternate( function_name )
+		size = (int(suffix[:1]), )
+		buildCls( suffix, size, function, base )
+
+FLOAT_UNIFORM_SUFFIXES = ('1f','2f','3f','4f','m2','m3','m4','m2x3','m3x2','m2x4','m4x2','m3x4','m4x3')
+INT_UNIFORM_SUFFIXES = ('1i','2i','3i','4i')
+for suffix in FLOAT_UNIFORM_SUFFIXES + INT_UNIFORM_SUFFIXES:
+	_uniformCls( suffix )
 
 class ShaderURLField( fieldtypes.MFString ):
 	"""Field for managing interactions with a Shader's URL value"""
@@ -166,8 +235,31 @@ class GLSLShader( shaders.GLSLShader ):
 class GLSLObject( shaders.GLSLObject ):
 	"""GLSL-based shader object (compiled set of shaders)"""
 	IMPLEMENTATION = 'GLSL'
-	def compile(self, holder):
+	shapeMap = {
+	}
+	def render( self, mode ):
+		"""Render this shader in the current mode"""
+		renderer = mode.cache.getData(self)
+		if not renderer:
+			renderer = self.compile( mode )
+		if renderer:
+			try:
+				glUseProgram( renderer )
+			except error.GLError, err:
+				log.error( '''Failure compiling: %s''', self.toString()[:50] )
+				raise
+			else:
+				for uniform in self.uniforms:
+					uniform.render( self, renderer, mode )
+				for attribute in self.attributes:
+					attribute.render( self, renderer, mode )
+		return True,True,True,renderer 
+		
+	def compile(self, mode):
 		"""Compile into GLSL linked object"""
+		holder = mode.cache.getHolder(self)
+		if holder is None:
+			holder = mode.cache.holder(self,None)
 		holder.depend( self,  'shaders' )
 		program = glCreateProgram()
 		subShaders = []
@@ -189,32 +281,38 @@ class GLSLObject( shaders.GLSLObject ):
 				glDeleteShader( subShader )
 			return program
 		return None
+	def program( self, mode ):
+		"""Retrieve our program ID"""
+		return mode.cache.getData( self )
+	def renderPost( self, token, mode ):
+		"""Post-render cleanup..."""
+		if token:
+			glUseProgram( 0 )
+	def getVariable( self, name ):
+		"""Retrieve uniform/attribute by name"""
+		for uniform in self.uniforms:
+			if uniform.name == name:
+				return uniform 
+		return None
 		
 class Shader( shaders.Shader ):
 	"""Shader is a programmable substitute for an Appearance node"""
+	current = field.newField( 'current','SFNode',1, node.NULL )
+	uniformIDs = None
+	attributeIDs = None
 	def render (self, mode=None):
 		"""Render the shader"""
-		renderer = mode.cache.getData(self)
-		if renderer is None:
-			renderer = self.compile( mode )
-		if renderer:
-			try:
-				glUseProgram( renderer )
-			except error.GLError, err:
-				log.error( '''Failure compiling: %s''', self.toString() )
-				raise
-		return True, True, True, renderer
-	def compile(self,  mode ):
-		holder = mode.cache.holder(self,None)
-		for object in self.objects:
-			if object.IMPLEMENTATION == 'GLSL':
-				renderer = object.compile(holder)
-				if renderer:
-					holder.data = renderer 
-					return renderer
-			# TODO: invalidate holder here...
-		log.warn( 'Shader not loaded' )
+		current = self.current
+		if not current:
+			for object in self.objects:
+				if object.IMPLEMENTATION == 'GLSL':
+					self.current = current = object 
+		if current:
+			return current.render( mode )
+		else:
+			return True,True,True,None
 	def renderPost( self, textureToken=None, mode=None ):
 		"""Cleanup after rendering of this node has completed"""
-		if textureToken: # actually program...
-			glUseProgram( 0 )
+		if self.current:
+			return self.current.renderPost( textureToken, mode )
+
