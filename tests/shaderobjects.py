@@ -125,7 +125,7 @@ class TestContext( BaseContext ):
 		self.addEventHandler( "keypress", name="n", function = self.OnNext)
 		
 		# MANDELBROT explorer...
-		print 'Explore mandelbrot with asdw (center) zx (zoom) and rf (iterations)'
+		print 'Explore Orange-book mandelbrot with:\n   asdw (center) zx (zoom) and rf (iterations)'
 		self.addEventHandler( "keypress", name="a", function = self.OnMand)
 		self.addEventHandler( "keypress", name="d", function = self.OnMand)
 		self.addEventHandler( "keypress", name="s", function = self.OnMand)
