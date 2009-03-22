@@ -156,11 +156,13 @@ class TestContext( BaseContext ):
 			zoom.value = zoom.value * 1.05
 			print 'zoom value', zoom.value
 		elif event.name == 'r':
-			iterations.value += 1
+			iterations.value += 5
+			print 'max iterations', iterations.value[0]
 		elif event.name == 'f':
-			iterations.value -= 1
-			if iterations.value[0] == 0:
+			iterations.value -= 5
+			if iterations.value[0] <= 0:
 				iterations.value = 1
+			print 'max iterations', iterations.value[0]
 		directions = { 'a':(-1,0),'d':(1,0),'w':(0,1),'s':(0,-1) }
 		if directions.has_key( event.name ):
 			step = zoom.value / 10.0
