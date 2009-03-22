@@ -89,7 +89,7 @@ def compileShader( source, shaderType ):
 
 class _Uniform( object ):
 	"""Uniform common operations"""
-	location = field.newField( 'location','SFUInt32',1, 0L )
+	location = field.newField( ' location','SFUInt32',1, 0L )
 	warned = False
 	def getLocation( self, shader ):
 		"""Retrieve our uniform location"""
@@ -297,7 +297,7 @@ class GLSLObject( shaders.GLSLObject ):
 		
 class Shader( shaders.Shader ):
 	"""Shader is a programmable substitute for an Appearance node"""
-	current = field.newField( 'current','SFNode',1, node.NULL )
+	current = field.newField( ' current','SFNode',1, node.NULL )
 	uniformIDs = None
 	attributeIDs = None
 	def render (self, mode=None):

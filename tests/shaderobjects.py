@@ -17,8 +17,8 @@ log = logging.getLogger( 'shaderobjects' )
 log.warn( 'Context %s',  BaseContext )
 
 shaders = [
-	Shader( objects = [o] )
-	for o in [
+	Shader( objects = [o], DEF='Shader_%s'%(i,) )
+	for i,o in enumerate([
 	GLSLObject(
 		uniforms = [
 			FloatUniform2f(name = 'henry',value = [0,1]),
@@ -50,7 +50,7 @@ shaders = [
 			),
 		],
 	)
-	]
+	])
 ]
 
 
@@ -80,7 +80,7 @@ class TestContext( BaseContext ):
 			),
 			Shape(
 				appearance = self.shaders[0],
-				geometry = Box( size=(1,1,1) ),
+				geometry = Box( size=(3,3,3) ),
 			),
 		]
 		self.sg = sceneGraph(
@@ -110,7 +110,7 @@ class TestContext( BaseContext ):
 				),
 				t,
 				Transform(
-					translation = (2,0,3),
+					translation = (5,0,3),
 					children = [
 						self.shapes[2]
 					],
@@ -121,9 +121,11 @@ class TestContext( BaseContext ):
 		self.time.addEventHandler( "fraction", self.OnTimerFraction )
 		self.time.register (self)
 		self.time.start ()
+		print 'press "n" for next shader'
 		self.addEventHandler( "keypress", name="n", function = self.OnNext)
 		
 		# MANDELBROT explorer...
+		print 'Explore mandelbrot with asdw (center) zx (zoom) and rf (iterations)'
 		self.addEventHandler( "keypress", name="a", function = self.OnMand)
 		self.addEventHandler( "keypress", name="d", function = self.OnMand)
 		self.addEventHandler( "keypress", name="s", function = self.OnMand)
@@ -165,6 +167,7 @@ class TestContext( BaseContext ):
 			vec = array(directions[event.name],'f') * step 
 			center.value = center.value + vec
 			print 'new center', center.value
+		
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
