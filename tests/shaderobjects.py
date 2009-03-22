@@ -35,7 +35,7 @@ shaders = [
 			FloatUniform1f(name="Specular", value=.8 ),
 			
 			FloatUniform1f(name="MaxIterations", value=10 ),
-			FloatUniform2f(name="Center",value=(0,0), DEF='MAND_CENT'),
+			FloatUniform2f(name="Center",value=(-0.64854502,0.4284441), DEF='MAND_CENT'),
 			FloatUniform1f(name="Zoom",value=1.0, DEF='MAND_ZOOM' ),
 			FloatUniform3f(name="InnerColor",value=(1,0,0)),
 			FloatUniform3f(name="OuterColor1",value=(0,1,0)),

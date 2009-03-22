@@ -114,8 +114,14 @@ class FloatUniform( _Uniform, shaders.FloatUniform ):
 		location = self.getLocation( shader_id )
 		if location is not None:
 			value = self.value
-			assert value.shape[-len(self.shape):] == self.shape,(value.shape,self.shape, value)
-			return self.baseFunction( location, value.shape[0], value )
+			shape = value.shape 
+			shape_length = len(self.shape)
+			assert shape[-shape_length:] == self.shape,(shape,self.shape, value)
+			if shape[:-shape_length]:
+				size = reduce( operator.mul, shape[:-shape_length] )
+			else:
+				size = 1
+			return self.baseFunction( location, size, value )
 		return None
 class IntUniform( _Uniform, shaders.IntUniform ):
 	"""Uniform (variable) binding for a shader (integer form)
