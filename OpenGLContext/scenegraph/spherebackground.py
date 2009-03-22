@@ -95,7 +95,7 @@ class _SphereBackground( object ):
 				l, # length...
 				3, # components
 			),
-			'd',
+			'f',
 		)
 		# calculate the coordinates...
 		fraction = cos( pi/SEGMENTS)
@@ -112,7 +112,7 @@ class _SphereBackground( object ):
 		vertices[doStart:-1:2,0] = sin(pi/(SEGMENTS*.9)) * vertices[doStart:-1:2,2]
 		
 		
-		colors = zeros( shape(vertices), 'd')
+		colors = zeros( shape(vertices), 'f')
 		# now put in the colors
 		colors[doStart:-1] = repeat(colorSet[doStart:-1,1:],2, 0)
 		if doStart:
@@ -166,13 +166,13 @@ class _SphereBackground( object ):
 			maxSky = 0
 		if len(self.skyAngle):
 			if maxSky < pi:
-				skys = zeros( (len(self.skyColor)+1,4), 'd')
+				skys = zeros( (len(self.skyColor)+1,4), 'f')
 				skys[1:-1,0] = self.skyAngle
 				skys[:-1,1:] = self.skyColor
 				skys[-1] = skys[-2]
 				skys[-1,0] = pi
 			else:
-				skys = zeros( (len(self.skyColor),4), 'd')
+				skys = zeros( (len(self.skyColor),4), 'f')
 				skys[1:,0] = self.skyAngle
 				skys[:,1:] = self.skyColor
 				
@@ -189,7 +189,7 @@ class _SphereBackground( object ):
 			# just to be sure, we sort by angle...
 			skys = setSort( skys)
 		else:
-			skys = zeros((0,4),'d')
+			skys = zeros((0,4),'f')
 		# now need to cap skys to ground's minimum value...
 		if len(self.groundAngle):
 			# no capping if no grounds, so require angles
@@ -206,7 +206,7 @@ class _SphereBackground( object ):
 				if capAngle > MAXANGLE:
 					skys = self.pushOut(skys, MAXANGLE-(pi/4), MAXANGLE )
 
-			grounds = zeros( (len(self.groundColor),4), 'd')
+			grounds = zeros( (len(self.groundColor),4), 'f')
 			grounds[0,0] = pi
 			grounds[1:,0] = groundA
 			grounds[:,1:] = self.groundColor

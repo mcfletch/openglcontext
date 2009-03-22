@@ -41,6 +41,7 @@ def distances( centers, modelView=None, projection=None, viewport=None ):
 		projection = glGetDoublev( GL_PROJECTION_MATRIX )
 	if viewport is None:
 		viewport = glGetIntegerv( GL_VIEWPORT )
+	# TODO: calculate this on our side, we've got all the data...
 	return array(map(
 		gluProject,
 			centers[:,0],
@@ -49,7 +50,7 @@ def distances( centers, modelView=None, projection=None, viewport=None ):
 			[modelView]*len(centers),
 			[projection]*len(centers),
 			[viewport]*len(centers),
-	), 'd')[:,2]
+	), 'f')[:,2]
 	
 
 def indices( zFloats ):
@@ -83,13 +84,13 @@ if __name__ == "__main__":
 			[0,0,0],[1,0,0],[1,1,0],
 			[0,0,0],[1,0,0],[1,1,-1],
 			[0,0,-1],[1,0,-1],[1,1,-1],
-		], 'd')
+		], 'f')
 	)
 	test2(
 		array( [
 			[0,0,0],[1,0,0],[1,1,-1],
 			[0,0,0],[1,0,0],[1,1,0],
 			[0,0,-1],[1,0,-1],[1,1,-1],
-		], 'd')
+		], 'f')
 	)
 	

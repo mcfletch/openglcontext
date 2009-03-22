@@ -35,22 +35,22 @@ def normalise( vector ):
 def pointNormal2Plane( point, normal ):
 	"""Create parametric equation of plane from point and normal
 	"""
-	point = asarray(point,'d')
+	point = asarray(point,'f')
 	normal = normalise(normal)
-	result = zeros((4,),'d')
+	result = zeros((4,),'f')
 	result[:3] = normal
 	result[3] = - dot(normal, point)
 	return result
 
 def plane2PointNormal( (a,b,c,d) ):
 	"""Get a point and normal from a plane equation"""
-	return asarray((-d*a,-d*b,-d*c),'d'), asarray((a,b,c),'d')
+	return asarray((-d*a,-d*b,-d*c),'f'), asarray((a,b,c),'f')
 
 def combineNormals( normals, weights=None ):
 	"""Given set of N normals, return (weighted) combination"""
 	normals = asarray( normals,'d')
 	if weights:
-		weights = reshape(asarray( weights, 'd'),(len(weights),1))
+		weights = reshape(asarray( weights, 'f'),(len(weights),1))
 		final = sum(normals*weights, 0)
 	else:
 		final = sum(normals,0)
@@ -73,7 +73,7 @@ def coplanar( points ):
 	non-zero (not colinear), if the normalised cross-product
 	is all equal, the points are collinear...
 	"""
-	points = asarray( points, 'd' )
+	points = asarray( points, 'f' )
 	if len(points) < 4:
 		return True
 	a,b = points[:2]

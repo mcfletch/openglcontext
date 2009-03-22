@@ -100,7 +100,7 @@ class Polygon( list ):
 			# now check to see if the three vertices are co-linear.
 			# lengths will cancel out if collinear...
 			if len(currentVertices) == 3:
-				a,b,c = [asarray(x.point,'d') for x in currentVertices]
+				a,b,c = [asarray(x.point,'f') for x in currentVertices]
 				if not vectorutilities.colinear( (a,b,c) ):
 					#that's it, I think, no other sanity checks?
 					result.extend( currentVertices )

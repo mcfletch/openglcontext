@@ -33,7 +33,7 @@ class PointSet(
 		if not len(points):
 			# can't render nothing
 			return 1
-		glVertexPointerd(points)
+		glVertexPointerf(points)
 		glEnableClientState( GL_VERTEX_ARRAY )
 
 		if visible and self.color:
@@ -50,7 +50,7 @@ class PointSet(
 			else:
 				glColorMaterial( GL_FRONT_AND_BACK, GL_DIFFUSE)
 				glEnable( GL_COLOR_MATERIAL )
-				glColorPointerd ( colors )
+				glColorPointerf ( colors )
 				glEnableClientState( GL_COLOR_ARRAY )
 		glDisable( GL_LIGHTING )
 		glDrawArrays( GL_POINTS, 0, len(points))

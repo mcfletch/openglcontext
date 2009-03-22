@@ -385,7 +385,7 @@ class ArrayGeometryCompiler( IFSCompiler ):
 		# vertices is now a list of vertices such that
 		# every three vertices represents a single triangle
 		# good time to build normals if required...
-		vertexArray = array([vertex.point for vertex in vertices],'d')
+		vertexArray = array([vertex.point for vertex in vertices],'f')
 		if len(vertexArray) == 0:
 			return DUMMY_RENDER
 		else:
@@ -407,18 +407,18 @@ class ArrayGeometryCompiler( IFSCompiler ):
 						normalArray.append( normalArray[-1] )
 					else:
 						normalArray.append( (0,0,1))
-				normalArray = array(normalArray,'d')
+				normalArray = array(normalArray,'f')
 			
 			if self.target.color and len(self.target.color.color):
 				try:
-					colorArray = array([vertex.color for vertex in vertices],'d')
+					colorArray = array([vertex.color for vertex in vertices],'f')
 				except TypeError:
 					colorArray = None
 					geometry_log.warn("""%s tessellation appears to have created invalid color for tesselated vertex""",self.target)
 			else:
 				colorArray = None
 			if self.target.texCoord and len(self.target.texCoord.point):
-				textureCoordinateArray = array([vertex.textureCoordinate for vertex in vertices],'d')
+				textureCoordinateArray = array([vertex.textureCoordinate for vertex in vertices],'f')
 			else:
 				textureCoordinateArray = None
 			geometry_log.debug(
@@ -645,7 +645,7 @@ def build_normalPerVertex( vertices, creaseAngle, vertexArray=None ):
 		data-array, if not provided, generated from vertices
 	'''
 	if vertexArray is None:
-		vertexArray = array([vertex.point for vertex in vertices],'d')
+		vertexArray = array([vertex.point for vertex in vertices],'f')
 	faceNormals = triangleutilities.normalPerFace( vertexArray )
 	vertexNormals = repeat(faceNormals,[3]*len(faceNormals),0)
 	faceNormals = array(vertexNormals[:])

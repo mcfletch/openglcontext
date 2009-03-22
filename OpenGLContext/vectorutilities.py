@@ -14,9 +14,9 @@ def crossProduct( set1, set2):
 	where x is the number of 3-element vectors
 	in the longer set
 	"""
-	set1 = asarray( set1, 'd')
+	set1 = asarray( set1, 'f')
 	set1 = reshape( set1, (-1, 3))
-	set2 = asarray( set2, 'd')
+	set2 = asarray( set2, 'f')
 	set2 = reshape( set2, (-1, 3))
 	ux = set1[:,0]
 	uy = set1[:,1]
@@ -35,9 +35,9 @@ def crossProduct4( set1, set2 ):
 
 	Identical to crossProduct otherwise.
 	"""
-	set1 = asarray( set1, 'd',)
+	set1 = asarray( set1, 'f',)
 	set1 = reshape( set1, (-1, 4))
-	set2 = asarray( set2, 'd',)
+	set2 = asarray( set2, 'f',)
 	set2 = reshape( set2, (-1, 4))
 	ux = set1[:,0]
 	uy = set1[:,1]
@@ -63,7 +63,7 @@ def magnitude( vectors ):
 	returns a double array with x elements,
 	where x is the number of 3-element vectors
 	"""
-	vectors = asarray( vectors,'d')
+	vectors = asarray( vectors,'f')
 	if not (len(shape(vectors))==2 and shape(vectors)[1] in (3,4)):
 		vectors = reshape( vectors, (-1,3))
 	vectors = vectors*vectors
@@ -85,7 +85,7 @@ def normalise( vectors ):
 	Will raise ZeroDivisionError if there are 0-magnitude
 	vectors in the set.
 	"""
-	vectors = asarray( vectors, 'd')
+	vectors = asarray( vectors, 'f')
 	vectors = reshape( vectors, (-1,3)) # Numpy 23.7 and 64-bit machines fail here, upgrade to 23.8
 	mags = reshape( magnitude( vectors ), (-1, 1))
 	mags = where( mags, mags, 1.0)
@@ -116,7 +116,7 @@ if __name__ == "__main__":
 		data = array( [
 			[0,0,0],[1,0,0],[0,1,0],
 			[1,0,0],[0,0,0],[0,1,0],
-		],'d')
+		],'f')
 		print magnitude( data )
 		try:
 			normalise( data )
@@ -125,7 +125,7 @@ if __name__ == "__main__":
 		data = array( [
 			[1,1,0],[1,0,0],[0,1,0],
 			[1,0,1],[0,1,1],[1,1,0],
-		],'d')
+		],'f')
 		print normalise( data )
 		print normalise( [2.0,2.0,0.0] )
 		print crossProduct( data, [-1,0,0])

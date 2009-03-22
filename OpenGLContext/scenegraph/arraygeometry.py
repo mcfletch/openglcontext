@@ -143,7 +143,7 @@ class ArrayGeometry(object):
 		glPushAttrib(GL_ALL_ATTRIB_BITS)
 		try:
 			glEnableClientState( GL_VERTEX_ARRAY )
-			self.callBound( glVertexPointerd, self.vertices)
+			self.callBound( glVertexPointerf, self.vertices)
 			if visible and self.colours is not None:
 				# make the color field alter the diffuse color, should instead be aware of current material/lighting...
 				glColorMaterial( GL_FRONT_AND_BACK, GL_DIFFUSE)

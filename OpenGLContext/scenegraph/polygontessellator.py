@@ -128,7 +128,7 @@ class PolygonTessellator(object):
 				if hasattr( vertex , attribute ) :
 					value = getattr( vertex, attribute)
 					if value is not None:
-						value = arrays.asarray(value,'d') * weight
+						value = arrays.asarray(value,'f') * weight
 						if accumulator is None:
 							accumulator = value
 						else:

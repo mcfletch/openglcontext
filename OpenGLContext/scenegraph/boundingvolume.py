@@ -257,7 +257,7 @@ class AABoundingBox( BoundingBox ):
 				for x in (cx-sx,cx+sx)
 					for y in (cy-sy,cy+sy)
 						for z in (cz-sz,cz+sz)
-			],'d')
+			],'f')
 		return self.points
 	def debugRender( self ):
 		"""Render this bounding box for debugging mode

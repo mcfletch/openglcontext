@@ -24,7 +24,7 @@ def basisVectors( vertices, components = 3, ccw=1 ):
 	which is 1/3 of the length of the original
 	vertices array.
 	"""
-	vertices = asarray( vertices, 'd')
+	vertices = asarray( vertices, 'f')
 	if len(shape(vertices))==2 and shape(vertices)[1] in (3,4):
 		# don't reshape...
 		pass
@@ -53,7 +53,7 @@ def centers( vertices, vertexCount=3, components = 3  ):
 	of vertexCount by components floats, you'll get a
 	ValueError raised.
 	"""
-	vertices = asarray( vertices, 'd')
+	vertices = asarray( vertices, 'f')
 	targetShape = (-1, vertexCount, components)
 	vertices = reshape( vertices, targetShape)
 	# the center is the average of the vertices
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 		data = array( [
 			[0,0,0],[1,0,0],[0,1,0],
 			[1,0,0],[0,0,0],[0,1,0],
-		],'d')
+		],'f')
 		print normalPerFace( data )
 		print centers( data )
 	test()

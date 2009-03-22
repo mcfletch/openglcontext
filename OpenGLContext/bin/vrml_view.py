@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 """VRML97 load-and-view demonstration/test"""
 import OpenGL 
+#OpenGL.FULL_LOGGING = True
 OpenGL.ERROR_CHECKING = False 
 #OpenGL.ERROR_ON_COPY = True
 from OpenGLContext.testingcontext import getInteractive

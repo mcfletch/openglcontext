@@ -25,7 +25,7 @@ from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.loaders import base
 from OpenGLContext.debug.logs import loader_log, DEBUG
 from vrml.vrml97 import parseprocessor
-import urllib
+import urllib,threading
 
 ##loader_log.setLevel( DEBUG )
 
@@ -72,6 +72,7 @@ class VRML97Handler( base.BaseHandler ):
 	during parsing.
 	"""
 	filename_extensions = ['.wrl', '.wrl.gz', '.wrz', '.vrml', '.vrml.gz']
+	LOCK = threading.RLock()
 	def __init__( self, prototypes ):
 		"""Initialise the file-handler
 
@@ -81,18 +82,22 @@ class VRML97Handler( base.BaseHandler ):
 		self.prototypes = prototypes
 	def parse( self, data, baseURL, *args, **named ):
 		"""Parse the loaded data (with the provided meta-information)"""
-		success, results, next = _parser.parse(
-			data,
-			processor = parseprocessor.ParseProcessor(
-				basePrototypes = self.prototypes,
-				baseURI = baseURL,
+		self.LOCK.acquire()
+		try:
+			success, results, next = _parser.parse(
+				data,
+				processor = parseprocessor.ParseProcessor(
+					basePrototypes = self.prototypes,
+					baseURI = baseURL,
+				)
 			)
-		)
-		if success:
-			sg = results[1]
-		else:
-			sg = None
-		return success, sg
+			if success:
+				sg = results[1]
+			else:
+				sg = None
+			return success, sg
+		finally:
+			self.LOCK.release()
 	def dumps( cls, node ):
 		"""Dump node's representation to a VRML97 string"""
 		return linearise.Lineariser().linear( node )
