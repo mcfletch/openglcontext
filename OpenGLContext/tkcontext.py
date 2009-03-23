@@ -78,7 +78,6 @@ class TkContext (
 			self.after( 10, self.tkOnIdle)
 	def SwapBuffers( self ):
 		"""Customisation point: swap OpenGL buffers"""
-		glFlush()
 		self.tk.call(self._w, 'swapbuffers')
 	def setCurrent (self):
 		"""Customisation point: Acquire the GL "focus" """

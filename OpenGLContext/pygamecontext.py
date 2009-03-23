@@ -83,7 +83,6 @@ class PygameContext(
 
 	def SwapBuffers (self):
 		"flip opengl doublebuffers"
-		glFlush()
 		pygame.display.flip()
 
 

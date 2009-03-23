@@ -56,7 +56,6 @@ class FXContext(
 		self.glcanvas.makeNonCurrent()
 		context.Context.unsetCurrent( self )
 	def SwapBuffers( self ):
-		glFlush()
 		if self.glvisual.isDoubleBuffer(): self.glcanvas.swapBuffers()
 		
 

@@ -85,7 +85,6 @@ class TestContext( BaseContext ):
 		else:
 			self.right();
 			self.left();
-		glFlush();
 
 
 	def left( self ):

@@ -78,7 +78,6 @@ class TestContext( BaseContext):
 
 			# Draw
 			glDrawArrays(GL_TRIANGLES, 0, len(flower_geometry.points_expanded));
-			glFlush()
 
 			glTranslate( 2,0,0)
 

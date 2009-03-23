@@ -138,7 +138,6 @@ class GLUTContext(
 		self.triggerRedraw(1)
 	def SwapBuffers (self,):
 		"""Implementation: swap the buffers"""
-		glFlush()
 		glutSwapBuffers() # should really check to be sure we are double buffered
 
 	def ContextMainLoop( cls, *args, **named ):

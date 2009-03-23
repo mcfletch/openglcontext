@@ -31,7 +31,6 @@ class TestContext( BaseContext ):
 					glDrawPixels( int(width), int(height), GL_RGBA, GL_UNSIGNED_BYTE, displayImage )
 				print 'Level %s --> %s * %s'%( level, width, height )
 				glBitmap(0,0,0,0,0,height*2,None)
-				glFlush()
 		else:
 			print '''Haven't loaded the texture yet!'''
 	def OnInit( self ):

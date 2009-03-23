@@ -502,7 +502,6 @@ class SelectRenderPass( VisitingRenderPass ):
 				self.selectable = {}
 				self.visit( client )
 				## following two lines get the results of the render...
-				glFlush()
 				nameStack = list(glRenderMode(GL_RENDER))
 				## and now update the event...
 				for event in set:

@@ -249,7 +249,6 @@ class wxContext(
 		glcanvas.GLCanvas.SetCurrent(self)
 	def SwapBuffers (self): # happens to match the wx method
 		"""Swap the GL buffers (force flush as we do)"""
-		glFlush()
 		glcanvas.GLCanvas.SwapBuffers(self)
 	def getDefaultIcons( cls ):
 		"""Get the OpenGLContext icons as a wxPython wxIconBundle

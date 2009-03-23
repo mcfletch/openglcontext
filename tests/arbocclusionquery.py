@@ -44,7 +44,6 @@ class TestContext( BaseContext ):
 		# we'd want a different non-texture mode here, really...
 		self.shape.Render( mode )
 		glEndQuery(GL_SAMPLES_PASSED);
-		glFlush()
 		ready = False 
 		print 'Waiting for completion of query (normal situation is 8 or 9 wait loop iterations)',
 		while not ready:
