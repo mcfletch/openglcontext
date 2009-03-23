@@ -57,6 +57,13 @@ shaders = [
 			GLSLShader( url = './resources/grid.frag.txt', type='FRAGMENT'),
 		],
 	),
+	GLSLObject(
+		uniforms = [
+		],
+		shaders = [
+			GLSLShader( url = './resources/discard.frag.txt', type='FRAGMENT'),
+		],
+	),
 	])
 ]
 
