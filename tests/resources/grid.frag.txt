@@ -1,0 +1,19 @@
+// Aliased checkboard pattern...
+// this is a rather poorly designed shader, as it has multiple
+// branches and doesn't have any configurability.
+
+void main() {
+	if (gl_TexCoord[0].x > .5) {
+		if (gl_TexCoord[0].y > .5) {
+			gl_FragColor = mix( gl_Color, vec4( 0,0,0,1 ), .5);
+		} else {
+			gl_FragColor = mix( gl_Color, vec4( 1,1,1,1 ), .5);
+		}
+	} else {
+		if (gl_TexCoord[0].y > .5) {
+			gl_FragColor = mix( gl_Color, vec4( 1,1,1,1 ), .5);
+		} else {
+			gl_FragColor = mix( gl_Color, vec4( 0,0,0,1 ), .5);
+		}
+	}
+}
