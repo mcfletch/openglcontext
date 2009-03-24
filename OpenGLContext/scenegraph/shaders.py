@@ -126,6 +126,20 @@ class FloatUniform( _Uniform, shaders.FloatUniform ):
 class IntUniform( _Uniform, shaders.IntUniform ):
 	"""Uniform (variable) binding for a shader (integer form)
 	"""
+	
+class TextureUniform( _Uniform, shaders.TextureUniform ):
+	"""Uniform (variable) binding for a texture sampler"""
+	baseFunction = staticmethod( glUniform1i )
+	def render( self, shader, shader_id, mode, index ):
+		"""Bind the actual uniform value"""
+		location = self.getLocation( shader_id )
+		if location is not None:
+			if self.value:
+				glActiveTexture( GL_TEXTURE0 + index )
+				self.value.render( mode.visible, mode.lighting, mode )
+				self.baseFunction( location, index )
+				return True 
+		return False
 
 
 def _uniformCls( suffix ):
@@ -257,6 +271,11 @@ class GLSLObject( shaders.GLSLObject ):
 			else:
 				for uniform in self.uniforms:
 					uniform.render( self, renderer, mode )
+				# TODO: retrieve maximum texture count and restrict to that...
+				i = 0
+				for texture in self.textures:
+					if texture.render( self, renderer, mode, i ):
+						i += 1
 				for attribute in self.attributes:
 					attribute.render( self, renderer, mode )
 		return True,True,True,renderer 

@@ -1,4 +1,5 @@
 // Aliased checkboard pattern discarding "white"
+// loosely based on orange book chapter 11.3
 
 void main() {
 	if (gl_TexCoord[0].x > .5) {

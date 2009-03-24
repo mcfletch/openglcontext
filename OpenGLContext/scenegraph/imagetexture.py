@@ -93,8 +93,7 @@ class _Texture( nodetypes.Texture, node.Node ):
 		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, self.minFilter )
 		### XXX something get's messed up heavily if we actually report the alpha channel's existence :(
 		return 0
-		
-		
+	
 	def renderPost(self, mode=None):
 		"""Called after rendering geometry to disable the texture
 

@@ -64,6 +64,17 @@ shaders = [
 			GLSLShader( url = './resources/discard.frag.txt', type='FRAGMENT'),
 		],
 	),
+	GLSLObject(
+		textures = [
+			TextureUniform(
+				value = ImageTexture( url='nehe_wall.bmp' ),
+				name = 'SimpleTexture',
+			),
+		],
+		shaders = [
+			GLSLShader( url = './resources/simpletexture.frag.txt', type='FRAGMENT'),
+		],
+	),
 	])
 ]
 
@@ -148,7 +159,11 @@ class TestContext( BaseContext ):
 		self.addEventHandler( "keypress", name="x", function = self.OnMand)
 		self.addEventHandler( "keypress", name="r", function = self.OnMand)
 		self.addEventHandler( "keypress", name="f", function = self.OnMand)
-		
+
+
+		self.addEventHandler( "keypress", name="l", function = self.OnLeak)
+
+
 	def OnTimerFraction( self, event ):
 		r = event.fraction()
 		self.sg.children[0].rotation = [0,1,0,r * math.pi *2]
@@ -183,7 +198,14 @@ class TestContext( BaseContext ):
 			vec = array(directions[event.name],'f') * step 
 			center.value = center.value + vec
 			print 'new center', center.value
-		
+	def OnLeak( self, event ):
+		from OpenGLContext.debug import leaks
+		if leaks.whole_set:
+			leaks.delta()
+		else:
+			leaks.init()
+		import pdb
+		pdb.set_trace()
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
