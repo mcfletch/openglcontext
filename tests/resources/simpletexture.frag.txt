@@ -1,0 +1,21 @@
+// Aliased checkboard pattern discarding "white"
+// loosely based on orange book chapter 11.3
+
+uniform sampler2D SimpleTexture;
+
+void main() {
+	vec4 tex_color = texture2D(SimpleTexture, gl_TexCoord[0].st);
+	if (gl_TexCoord[0].x > .5) {
+		if (gl_TexCoord[0].y > .5) {
+			gl_FragColor = tex_color;
+		} else {
+			discard;
+		}
+	} else {
+		if (gl_TexCoord[0].y > .5) {
+			discard;
+		} else {
+			gl_FragColor = tex_color;
+		}
+	}
+}
