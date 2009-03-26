@@ -304,7 +304,9 @@ class GLSLObject( shaders.GLSLObject ):
 			glLinkProgram(program)
 			for subShader in subShaders:
 				glDeleteShader( subShader )
+			holder.data = program
 			return program
+		holder.data = 0
 		return None
 	def program( self, mode ):
 		"""Retrieve our program ID"""

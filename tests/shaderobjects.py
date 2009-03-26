@@ -204,8 +204,6 @@ class TestContext( BaseContext ):
 			leaks.delta()
 		else:
 			leaks.init()
-		import pdb
-		pdb.set_trace()
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
