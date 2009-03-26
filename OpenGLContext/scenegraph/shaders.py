@@ -7,6 +7,7 @@ from OpenGL.GL.ARB.vertex_program import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGL import error
+from OpenGL.arrays import vbo
 from OpenGLContext.arrays import array
 from OpenGLContext import context
 from vrml.vrml97 import shaders
@@ -28,6 +29,9 @@ glGetProgramInfoLog = alternate( glGetProgramInfoLog, glGetInfoLogARB )
 glGetShaderInfoLog = alternate( glGetShaderInfoLog, glGetInfoLogARB )
 glGetAttribLocation = alternate( glGetAttribLocation, glGetAttribLocationARB )
 glVertexAttribPointer = alternate( glVertexAttribPointer, glVertexAttribPointerARB )
+glEnableVertexAttribArray = alternate( glEnableVertexAttribArray, glEnableVertexAttribArray )
+glDisableVertexAttribArray = alternate( glDisableVertexAttribArray, glDisableVertexAttribArrayARB )
+
 
 def compileProgram(vertexSource=None, fragmentSource=None):
 	program = glCreateProgram()
@@ -87,22 +91,78 @@ def compileShader( source, shaderType ):
 		log.info( '''Shader compilation generated log: %s''', shader_log )
 	return shader
 
+class _Buffer( shaders.ShaderBuffer ):
+	"""VBO based buffer implementation for generic geometry"""
+	GL_USAGE_MAPPING = {
+		'STREAM_DRAW': GL_STREAM_DRAW,
+		'STREAM_READ': GL_STREAM_READ,
+		'STREAM_COPY': GL_STREAM_COPY,
+		'STATIC_DRAW': GL_STATIC_DRAW,
+		'STATIC_READ': GL_STATIC_READ,
+		'STATIC_COPY': GL_STATIC_COPY,
+		'DYNAMIC_DRAW': GL_DYNAMIC_DRAW,
+		'DYNAMIC_READ': GL_DYNAMIC_READ,
+		'DYNAMIC_COPY': GL_DYNAMIC_COPY,
+	}
+	GL_TYPE_MAPPING = {
+		'ARRAY': GL_ARRAY_BUFFER,
+		'ELEMENT': GL_ELEMENT_ARRAY_BUFFER,
+	}
+	def gl_usage( self ):
+		return self.GL_USAGE_MAPPING.get( self.usage )
+	def gl_target( self ):
+		return self.GL_TYPE_MAPPING.get( self.type )
+	def vbo( self, mode ):
+		"""Render this buffer on the mode"""
+		uploaded = mode.cache.getData( self, 'buffer' )
+		if uploaded is None:
+			uploaded = vbo.VBO( self.buffer, usage=self.gl_usage(), target=self.gl_type() ) # TODO: stream type
+			holder = mode.cache.holder( self, uploaded, 'buffer' )
+			holder.depend( self, 'buffer' )
+		return uploaded
+	def bind( self, mode ):
+		"""Bind this buffer so that we can perform e.g. mappings on it"""
+		return self.vbo().bind()
+
+class ShaderBuffer( _Buffer ):
+	"""Regular vertex-buffer mechanism"""
+class ShaderIndexBuffer( _Buffer ):
+	"""Index array buffer mechanism"""
+	
+class ShaderAttribute( shaders.ShaderAttribute ):
+	"""VBO-based buffer implementation for generic geomtry indices"""
+	def render( self, shader, shader_id, mode ):
+		"""Set this uniform value for the given shader
+		
+		This is called at render-time to update the value...
+		"""
+		location = shader.getLocation( self.name, uniform=False )
+		if location is not None and location != -1:
+			vbo = self.buffer.bind( mode )
+			glVertexAttribPointer( 
+				location, self.size, vbo+self.offset, self.stride 
+			)
+			glEnableVertexAttribPointer( location )
+			return (vbo,location)
+		return None
+	def renderPost( self, mode, token=None ):
+		if token:
+			vbo,location = token 
+			vbo.unbind()
+			glDisableVertexAttribArray( location )
+		location = shader.getLocation( self.name, uniform=False )
+		if location is not None and location != -1:
+			vbo = self.buffer.bind( mode )
+			glVertexAttribPointer( 
+				location, self.size, vbo+self.offset, self.stride 
+			)
+			glEnableVertexAttribPointer( location )
+			return location
+		
+
 class _Uniform( object ):
 	"""Uniform common operations"""
-	location = field.newField( ' location','SFUInt32',1, 0L )
 	warned = False
-	def getLocation( self, shader ):
-		"""Retrieve our uniform location"""
-		location = self.location
-		if not location:
-			location = self.location = glGetUniformLocation( shader, self.name )
-			self.warned=False
-			if location == -1:
-				if not self.warned:
-					log.warn( 'Unable to resolve uniform name %s', self.name )
-					self.warned=True
-				return None
-		return location 
 
 class FloatUniform( _Uniform, shaders.FloatUniform ):
 	"""Uniform (variable) binding for a shader"""
@@ -111,8 +171,8 @@ class FloatUniform( _Uniform, shaders.FloatUniform ):
 		
 		This is called at render-time to update the value...
 		"""
-		location = self.getLocation( shader_id )
-		if location is not None:
+		location = shader.getLocation( mode, self.name, uniform=True )
+		if location is not None and location != -1:
 			value = self.value
 			shape = value.shape 
 			shape_length = len(self.shape)
@@ -132,8 +192,8 @@ class TextureUniform( _Uniform, shaders.TextureUniform ):
 	baseFunction = staticmethod( glUniform1i )
 	def render( self, shader, shader_id, mode, index ):
 		"""Bind the actual uniform value"""
-		location = self.getLocation( shader_id )
-		if location is not None:
+		location = shader.getLocation( mode, self.name, uniform=True )
+		if location is not None and location != -1:
 			if self.value:
 				glActiveTexture( GL_TEXTURE0 + index )
 				self.value.render( mode.visible, mode.lighting, mode )
@@ -230,9 +290,10 @@ class ShaderURLField( fieldtypes.MFString ):
 class GLSLShader( shaders.GLSLShader ):
 	"""GLSL-based shader node"""
 	url = ShaderURLField( 'url', 'MFString', 1)
-	def compile(self, holder):
+	def holderDepend( self, holder ):
 		holder.depend( self,  'source')
 		holder.depend( self,  'type')
+	def compile(self):
 		if not self.source:
 			return False
 		if self.type == 'VERTEX':
@@ -252,17 +313,19 @@ class GLSLShader( shaders.GLSLShader ):
 			)
 			return None
 
+class _GLSLObjectCache( object ):
+	shader = None 
+	locationMap = None
+
 class GLSLObject( shaders.GLSLObject ):
 	"""GLSL-based shader object (compiled set of shaders)"""
 	IMPLEMENTATION = 'GLSL'
-	shapeMap = {
-	}
 	def render( self, mode ):
 		"""Render this shader in the current mode"""
 		renderer = mode.cache.getData(self)
 		if not renderer:
 			renderer = self.compile( mode )
-		if renderer:
+		if renderer is not None:
 			try:
 				glUseProgram( renderer )
 			except error.GLError, err:
@@ -279,18 +342,21 @@ class GLSLObject( shaders.GLSLObject ):
 				for attribute in self.attributes:
 					attribute.render( self, renderer, mode )
 		return True,True,True,renderer 
-		
+	def holderDepend( self, holder ):
+		"""Make this holder depend on our compilation vars"""
+		for shader in self.shaders:
+			# TODO: cache links...
+			shader.holderDepend( holder )
+		holder.depend( self,  'shaders' )
+		return holder
 	def compile(self, mode):
 		"""Compile into GLSL linked object"""
-		holder = mode.cache.getHolder(self)
-		if holder is None:
-			holder = mode.cache.holder(self,None)
-		holder.depend( self,  'shaders' )
+		holder = self.holderDepend( mode.cache.holder(self,None) )
 		program = glCreateProgram()
 		subShaders = []
 		for shader in self.shaders:
 			# TODO: cache links...
-			subShader = shader.compile(holder)
+			subShader = shader.compile()
 			if subShader:
 				glAttachShader(program, subShader )
 				subShaders.append( subShader )
@@ -310,7 +376,10 @@ class GLSLObject( shaders.GLSLObject ):
 		return None
 	def program( self, mode ):
 		"""Retrieve our program ID"""
-		return mode.cache.getData( self )
+		renderer = mode.cache.getData( self )
+		if renderer is None:
+			renderer = self.compile( mode )
+		return renderer
 	def renderPost( self, token, mode ):
 		"""Post-render cleanup..."""
 		if token:
@@ -321,6 +390,26 @@ class GLSLObject( shaders.GLSLObject ):
 			if uniform.name == name:
 				return uniform 
 		return None
+	def getLocation( self, mode, name, uniform=True ):
+		"""Retrieve attribute/uniform location"""
+		locationMap = mode.cache.getData( self, 'locationMap' )
+		if locationMap is None:
+			locationMap = {}
+			holder = mode.cache.holder( self, locationMap, 'locationMap' )
+			holder = self.holderDepend( 
+				mode.cache.holder(self,locationMap,'locationMap') 
+			)
+		try:
+			return locationMap[ name ]
+		except KeyError, err:
+			if uniform:
+				location = glGetUniformLocation( self.program(mode), name )
+			else:
+				location = glGetAttributeLocation( self.program(mode), name )
+			locationMap[ name ] = location 
+			if location == -1:
+				log.warn( 'Unable to resolve uniform name %s', name )
+			return location 
 		
 class Shader( shaders.Shader ):
 	"""Shader is a programmable substitute for an Appearance node"""
