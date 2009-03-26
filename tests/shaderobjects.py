@@ -186,6 +186,9 @@ class TestContext( BaseContext ):
 			print 'zoom value', zoom.value
 		elif event.name == 'r':
 			iterations.value += 5
+			if iterations.value[0] > 105:
+				# limit of floating-point precision...
+				iterations.value = 105
 			print 'max iterations', iterations.value[0]
 		elif event.name == 'f':
 			iterations.value -= 5

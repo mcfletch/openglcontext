@@ -772,32 +772,41 @@ class OverallPass (object):
 			RenderVisitor.SceneGraphLights
 			RenderVisitor.SceneGraphBackground
 		"""
-		bindables = visitor.find(
-			self.context,
-			(
-				nodetypes.Bindable,
-				nodetypes.Light,
-				nodetypes.TimeDependent,
-			),
-		)
-		self.lightPaths = []
-		self.viewpointPaths = []
-		self.backgroundPaths = []
-		self.fogPaths = []
-
-		for path in bindables:
-			if isinstance( path[-1], nodetypes.Light ):
-				if path[-1].on:
-					self.lightPaths.append( path )
-			elif isinstance( path[-1], nodetypes.Background ):
-				self.backgroundPaths.append( path )
-			elif isinstance( path[-1], nodetypes.Viewpoint ):
-				self.viewpointPaths.append( path )
-			elif isinstance( path[-1], nodetypes.Fog ):
-				self.fogPaths.append( path )
-			elif hasattr( path[-1], 'bind' ):
-				path[-1].bind( self.context )
-			
+		bindables = None
+		for (attribute,nodeType,match) in [
+			('lightPaths',nodetypes.Light,lambda x: x.on),
+			('backgroundPaths',nodetypes.Background, None),
+			('viewpointPaths',nodetypes.Viewpoint, None),
+			('fogPaths',nodetypes.Fog, None),
+			('otherBinds',None,lambda x: hasattr(x,'bind')),
+		]:
+			cached = self.context.cache.getData( self.context, attribute )
+			# TODO: need to be able to watch all hierarchy-defining fields 
+			# for the entire path to be able to watch for path changes!
+			if cached is None:
+				holder = self.context.cache.holder( self.context, None, attribute )
+				if not bindables:
+					bindables = visitor.find(
+						self.context,
+						(
+							nodetypes.Bindable,
+							nodetypes.Light,
+							nodetypes.TimeDependent,
+						),
+					)
+				set = []
+				for path in bindables:
+					if (not nodeType) or isinstance( path[-1], nodeType ):
+						if (match and match( path[-1] )) or not match:
+							set.append( path )
+#							for node in path:
+#								holder.depend( node.hier_fields )
+					elif hasattr( path[-1], 'bind' ):
+						path[-1].bind( self.context )
+				holder.data = set 
+				setattr( self, attribute, set )
+			else:
+				setattr( self, attribute, cached )
 
 
 class PassSet( list ):
