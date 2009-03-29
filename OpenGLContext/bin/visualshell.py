@@ -23,7 +23,9 @@ class TestFrame( wx.Frame ):
 	):
 		wx.Frame.__init__( self, parent, id, title, pos, size, style, name )
 		self.CreateControls( style )
-		self.SetIcons( self.context.getDefaultIcons())
+		icons = self.context.getDefaultIcons()
+		if icons:
+			self.SetIcons( )
 
 	def CreateShellEnvironment( self ):
 		"""Create the working shell environment"""

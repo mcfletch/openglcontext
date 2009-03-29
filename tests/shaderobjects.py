@@ -16,6 +16,9 @@ import time, sys,logging,math
 log = logging.getLogger( 'shaderobjects' )
 log.warn( 'Context %s',  BaseContext )
 
+logging.getLogger( 'OpenGLContext.scenegraph.shaders' ).setLevel( logging.DEBUG )
+
+
 shaders = [
 	Shader( objects = [o], DEF='Shader_%s'%(i,) )
 	for i,o in enumerate([
@@ -75,6 +78,7 @@ shaders = [
 			GLSLShader( url = './resources/simpletexture.frag.txt', type='FRAGMENT'),
 		],
 	),
+		
 	])
 ]
 
@@ -140,6 +144,50 @@ class TestContext( BaseContext ):
 						self.shapes[2]
 					],
 				),
+#				Transform(
+##					translation = (0,5,0),
+#					children = [
+#					ShaderGeometry(
+#						# test of shader geometry "shape" type...
+#						DEF = 'ShaderGeom',
+#						uniforms = [
+#						],
+#						attributes = [
+#							ShaderAttribute(
+#								name = 'pos',
+#								offset = 0,
+#								stride = 12,
+#								size = 3,
+#								dataType = 'FLOAT',
+#								buffer = ShaderBuffer(
+#									buffer = [ 0,0,0, 1,0,0, .5,.5,0 ],
+#								),
+#							),
+#						],
+#						appearance = 	Shader(
+#							objects = [GLSLObject(
+#								DEF = 'ShaderGeom_shader',
+#								shaders = [
+#									GLSLShader( 
+#										source = [
+#											"""attribute vec3 position; 
+#											void main() { 
+#												gl_Position = vec4(position,1.0); 
+#											}""",
+#										],
+#										type = "VERTEX",
+#									),
+#									GLSLShader(
+#										source = ["""void main() { 
+#		gl_FragColor = vec4( 0,1,0,1);
+#		}"""],
+#										type = "FRAGMENT",
+#									),
+#								],
+#							),]
+#						),
+#					),],
+#				),
 			],
 		)
 		self.time = Timer( duration = 30.0, repeating = 1 )
@@ -179,10 +227,10 @@ class TestContext( BaseContext ):
 		center = shader.objects[0].getVariable( 'Center' )
 		iterations = shader.objects[0].getVariable( 'MaxIterations' )
 		if event.name == 'z':
-			zoom.value = zoom.value * .95
+			zoom.value = zoom.value * .85
 			print 'zoom value', zoom.value
 		elif event.name == 'x':
-			zoom.value = zoom.value * 1.05
+			zoom.value = zoom.value * 1.15
 			print 'zoom value', zoom.value
 		elif event.name == 'r':
 			iterations.value += 5

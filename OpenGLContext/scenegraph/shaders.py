@@ -86,9 +86,6 @@ def compileShader( source, shaderType ):
 	shader = glCreateShader(shaderType)
 	glShaderSource( shader, source )
 	glCompileShader( shader )
-	shader_log = glGetShaderInfoLog( shader )
-	if shader_log:
-		log.info( '''Shader compilation generated log: %s''', shader_log )
 	return shader
 
 class _Buffer( shaders.ShaderBuffer ):
@@ -116,13 +113,15 @@ class _Buffer( shaders.ShaderBuffer ):
 		"""Render this buffer on the mode"""
 		uploaded = mode.cache.getData( self, 'buffer' )
 		if uploaded is None:
-			uploaded = vbo.VBO( self.buffer, usage=self.gl_usage(), target=self.gl_type() ) # TODO: stream type
+			uploaded = vbo.VBO( self.buffer, usage=self.gl_usage(), target=self.gl_target() ) # TODO: stream type
 			holder = mode.cache.holder( self, uploaded, 'buffer' )
 			holder.depend( self, 'buffer' )
 		return uploaded
 	def bind( self, mode ):
 		"""Bind this buffer so that we can perform e.g. mappings on it"""
-		return self.vbo().bind()
+		vbo = self.vbo(mode)
+		vbo.bind()
+		return vbo
 
 class ShaderBuffer( _Buffer ):
 	"""Regular vertex-buffer mechanism"""
@@ -136,29 +135,21 @@ class ShaderAttribute( shaders.ShaderAttribute ):
 		
 		This is called at render-time to update the value...
 		"""
-		location = shader.getLocation( self.name, uniform=False )
+		location = shader.getLocation( mode, self.name, uniform=False )
 		if location is not None and location != -1:
 			vbo = self.buffer.bind( mode )
 			glVertexAttribPointer( 
-				location, self.size, vbo+self.offset, self.stride 
+				location, self.size, GL_FLOAT, False, self.stride, 
+				vbo+self.offset
 			)
-			glEnableVertexAttribPointer( location )
+			glEnableVertexAttribArray( location )
 			return (vbo,location)
 		return None
-	def renderPost( self, mode, token=None ):
+	def renderPost( self, mode, shader, token=None ):
 		if token:
 			vbo,location = token 
 			vbo.unbind()
 			glDisableVertexAttribArray( location )
-		location = shader.getLocation( self.name, uniform=False )
-		if location is not None and location != -1:
-			vbo = self.buffer.bind( mode )
-			glVertexAttribPointer( 
-				location, self.size, vbo+self.offset, self.stride 
-			)
-			glEnableVertexAttribPointer( location )
-			return location
-		
 
 class _Uniform( object ):
 	"""Uniform common operations"""
@@ -254,12 +245,13 @@ class ShaderURLField( fieldtypes.MFString ):
 	def fset( self, client, value, notify=1 ):
 		"""Set the client's URL, then try to load the image"""
 		value = super(ShaderURLField, self).fset( client, value, notify )
-		import threading
-		threading.Thread(
-			name = "Background load of %s"%(value),
-			target = self.loadBackground,
-			args = ( client, value, context.Context.allContexts,),
-		).start()
+		if value:
+			import threading
+			threading.Thread(
+				name = "Background load of %s"%(value),
+				target = self.loadBackground,
+				args = ( client, value, context.Context.allContexts,),
+			).start()
 		return value
 	def loadBackground( self, client, url, contexts ):
 		from OpenGLContext.loaders.loader import Loader, loader_log
@@ -289,7 +281,8 @@ class ShaderURLField( fieldtypes.MFString ):
 
 class GLSLShader( shaders.GLSLShader ):
 	"""GLSL-based shader node"""
-	url = ShaderURLField( 'url', 'MFString', 1)
+	url = ShaderURLField( 'url', 'MFString', list)
+	compileLog = field.newField( ' compileLog', 'SFString', '' )
 	def holderDepend( self, holder ):
 		holder.depend( self,  'source')
 		holder.depend( self,  'type')
@@ -297,12 +290,12 @@ class GLSLShader( shaders.GLSLShader ):
 		if not self.source:
 			return False
 		if self.type == 'VERTEX':
-			return compileShader(
+			shader = compileShader(
 				self.source, 
 				GL_VERTEX_SHADER_ARB
 			)
 		elif self.type == 'FRAGMENT':
-			return compileShader(
+			shader = compileShader(
 				self.source, GL_FRAGMENT_SHADER_ARB
 			)
 		else:
@@ -312,6 +305,12 @@ class GLSLShader( shaders.GLSLShader ):
 				self, 
 			)
 			return None
+		# we succeeded in doing the compilation, check for errors
+		shader_log = glGetShaderInfoLog( shader )
+		if shader_log:
+			self.compileLog = shader_log 
+		return shader
+		
 
 class _GLSLObjectCache( object ):
 	shader = None 
@@ -329,7 +328,10 @@ class GLSLObject( shaders.GLSLObject ):
 			try:
 				glUseProgram( renderer )
 			except error.GLError, err:
-				log.error( '''Failure compiling: %s''', self.toString()[:50] )
+				log.error( '''Failure compiling: %s''', '\n'.join([
+					'%s: %s'%(shader.url or shader.source,shader.compileLog)
+					for shader in self.shaders
+				]))
 				raise
 			else:
 				for uniform in self.uniforms:
@@ -339,8 +341,6 @@ class GLSLObject( shaders.GLSLObject ):
 				for texture in self.textures:
 					if texture.render( self, renderer, mode, i ):
 						i += 1
-				for attribute in self.attributes:
-					attribute.render( self, renderer, mode )
 		return True,True,True,renderer 
 	def holderDepend( self, holder ):
 		"""Make this holder depend on our compilation vars"""
@@ -361,7 +361,7 @@ class GLSLObject( shaders.GLSLObject ):
 				glAttachShader(program, subShader )
 				subShaders.append( subShader )
 			elif shader.source:
-				log.info( 'Failure compiling: %s', shader )
+				log.info( 'Failure compiling: %s %s', shader.compileLog, shader.url or shader.source )
 		if len(subShaders) == len(self.shaders):
 			glValidateProgram( program )
 			warnings = glGetProgramInfoLog( program )
@@ -384,6 +384,7 @@ class GLSLObject( shaders.GLSLObject ):
 		"""Post-render cleanup..."""
 		if token:
 			glUseProgram( 0 )
+			# TODO: unbind our attributes...
 	def getVariable( self, name ):
 		"""Retrieve uniform/attribute by name"""
 		for uniform in self.uniforms:
@@ -405,7 +406,7 @@ class GLSLObject( shaders.GLSLObject ):
 			if uniform:
 				location = glGetUniformLocation( self.program(mode), name )
 			else:
-				location = glGetAttributeLocation( self.program(mode), name )
+				location = glGetAttribLocation( self.program(mode), name )
 			locationMap[ name ] = location 
 			if location == -1:
 				log.warn( 'Unable to resolve uniform name %s', name )
@@ -432,3 +433,45 @@ class Shader( shaders.Shader ):
 		if self.current:
 			return self.current.renderPost( textureToken, mode )
 
+class ShaderGeometry( shaders.ShaderGeometry ):
+	"""Renderable geometry type using shaders"""
+	def Render (self, mode = None):
+		"""Do run-time rendering of the Shape for the given mode"""
+		if not self.attributes or not self.appearance:
+			return None 
+		_,_,_,token = self.appearance.render( mode )
+		if token is not None:
+			try:
+				current = self.appearance.current
+				if not current:
+					return False
+				tokens = []
+				for attribute in self.attributes:
+					sub_token = attribute.render( current, token, mode )
+					tokens.append( (attribute,sub_token) )
+				try:
+					if self.uniforms:
+						for uniform in self.uniforms:
+							uniform.render( current, token, mode )
+					if self.slices:
+						# now iterate over our slices...
+						for slice in self.slices:
+							for uniform in slice.uniforms:
+								uniform.render( current, token, mode )
+							glDrawArrays( 
+								GL_TRIANGLES, slice.offset, slice.count 
+							)
+					else:
+						# TODO: don't currently have a good way to get 
+						# the proper dimension for the arrays...
+						pass 
+				finally:
+					for attribute,token in tokens:
+						attribute.renderPost( mode,token )
+			finally:
+				self.appearance.renderPost( token, mode )
+				glBindBuffer( GL_ARRAY_BUFFER,0 )
+
+class ShaderSlice( shaders.ShaderSlice ):
+	"""Slice of a shader to render"""
+	
