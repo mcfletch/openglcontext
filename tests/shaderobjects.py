@@ -121,7 +121,6 @@ class TestContext( BaseContext ):
 		]
 		self.sg = sceneGraph(
 			children = [
-				PointLight( location = (10,10,10) ),
 				Transform(
 					DEF = 'scene',
 					children= [
@@ -196,6 +195,7 @@ class TestContext( BaseContext ):
 #						),
 #					),],
 #				),
+				PointLight( location = (10,10,10) ),
 			],
 		)
 		self.time = Timer( duration = 30.0, repeating = 1 )
