@@ -78,6 +78,13 @@ shaders = [
 			GLSLShader( url = './resources/simpletexture.frag.txt', type='FRAGMENT'),
 		],
 	),
+	GLSLObject(
+		shaders = [
+			GLSLShader( url = 'res://simpleshader_vert_txt', type='VERTEX'),
+			GLSLShader( url = 'res://simpleshader_frag_txt', type='FRAGMENT'),
+		],
+	),
+	
 		
 	])
 ]
@@ -114,6 +121,7 @@ class TestContext( BaseContext ):
 		]
 		self.sg = sceneGraph(
 			children = [
+				PointLight( location = (10,10,10) ),
 				Transform(
 					DEF = 'scene',
 					children= [
