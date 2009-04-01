@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 '''Shader sample-code for OpenGLContext
 '''
-import OpenGL 
-OpenGL.FULL_LOGGING = True
+#import OpenGL 
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
