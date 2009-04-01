@@ -64,6 +64,7 @@ Note:
 from OpenGLContext.debug.logs import loader_log, DEBUG
 from OpenGLContext.loaders import base, loader
 from OpenGLContext.scenegraph import basenodes
+import md5
 
 class OBJHandler( base.BaseHandler ):
 	"""Scenegraph loader which loads individual OBJ files as scenegraphs"""
@@ -81,10 +82,12 @@ class OBJHandler( base.BaseHandler ):
 		"""
 		sg = basenodes.sceneGraph(
 		)
+		
 		# these three are shared among all shapes
-		coord = basenodes.Coordinate()
-		normal = basenodes.Normal()
-		texCoord = basenodes.TextureCoordinate()
+		hash = md5.md5( baseURL ).hexdigest()
+		coord = basenodes.Coordinate( DEF='Coord-%s'%(hash,) )
+		normal = basenodes.Normal(DEF='Norm-%s'%(hash,))
+		texCoord = basenodes.TextureCoordinate(DEF='TexCoord-%s'%(hash,))
 
 		mesh = None # transforms
 		group = None # shape

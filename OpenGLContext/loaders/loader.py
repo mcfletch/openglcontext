@@ -7,6 +7,7 @@ Note that there is a long associated with the loader
 """
 from OpenGLContext.debug.logs import loader_log, DEBUG
 import urllib, os
+from cStringIO import StringIO
 
 ##loader_log.setLevel( DEBUG )
 
@@ -75,15 +76,28 @@ class _Loader( object ):
 			filename = url
 			baseURL = urllib.pathname2url( filename )
 		except (IOError,TypeError,ValueError), err:
-			# try to download
-			try:
-				loader_log.debug( "download: %s", url )
-				filename, headers = self.download( url )
-				loader_log.debug( "downloaded to: %s", filename )
-				file = open( filename, 'rb')
-				baseURL = url
-			except (IOError, TypeError, ValueError), err:
-				return (None, None,None,None)
+			if url.startswith( 'res://' ):
+				# virtual URL in our resources directories...
+				module = url[6:]
+				if '.' not in module:
+					# TODO: check for other bad values?
+					name = 'OpenGLContext.resources.%s'%(module,)
+					module = __import__(name, {}, {}, name.split('.'))
+					filename = module.source
+					file = StringIO( module.data )
+					baseURL = url 
+				else:
+					raise ValueError( 'Invalid character in resource url: %s'%(url,))
+			else:
+				# try to download
+				try:
+					loader_log.debug( "download: %s", url )
+					filename, headers = self.download( url )
+					loader_log.debug( "downloaded to: %s", filename )
+					file = open( filename, 'rb')
+					baseURL = url
+				except (IOError, TypeError, ValueError), err:
+					return (None, None,None,None)
 		self.cache[ url ] = filename
 		self.cache[ baseURL ] = filename
 		return baseURL, file, filename, headers
