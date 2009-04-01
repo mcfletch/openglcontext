@@ -310,6 +310,9 @@ class GLSLShader( shaders.GLSLShader ):
 		if shader_log:
 			self.compileLog = shader_log 
 		return shader
+	def visible( self, *args, **named ):
+		return True 
+	
 		
 
 class _GLSLObjectCache( object ):
@@ -403,10 +406,13 @@ class GLSLObject( shaders.GLSLObject ):
 		try:
 			return locationMap[ name ]
 		except KeyError, err:
+			#name = name + ('\000'*(9-len(name)))
+			program = self.program(mode)
+			glUseProgram( program )
 			if uniform:
-				location = glGetUniformLocation( self.program(mode), name )
+				location = glGetUniformLocation( program, name )
 			else:
-				location = glGetAttribLocation( self.program(mode), name )
+				location = glGetAttribLocation( program, name )
 			locationMap[ name ] = location 
 			if location == -1:
 				log.warn( 'Unable to resolve uniform name %s', name )
