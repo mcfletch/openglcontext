@@ -63,7 +63,7 @@ class TestContext( BaseContext ):
 								buffer = buffer,
 							),
 							ShaderAttribute(
-								name = 'color',
+								name = 'Color',
 								offset = 12,
 								stride = 24,
 								size = 3,
@@ -79,11 +79,11 @@ class TestContext( BaseContext ):
 										source = [
 											"""
 			attribute vec3 position;
-			attribute vec3 color;
+			attribute vec3 Color;
 			varying vec4 baseColor;
 			void main() {
 				gl_Position = gl_ModelViewProjectionMatrix * vec4( position,1.0);
-				baseColor = vec4(color,1.0);
+				baseColor = vec4(Color,1.0);
 			}""",
 										],
 										type = "VERTEX",
@@ -91,7 +91,7 @@ class TestContext( BaseContext ):
 									GLSLShader(
 										source = ["""varying vec4 baseColor;
 			void main() { 
-				gl_FragColor = baseColor;
+				gl_FragColor = vec4( 0.0, 1.0, 0.0, 1.0 );
 			}"""],
 										type = "FRAGMENT",
 									),

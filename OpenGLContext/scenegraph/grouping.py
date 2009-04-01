@@ -86,9 +86,9 @@ class Grouping(object):
 			from current OpenGL state if not provided.
 		"""
 		
-		return self.boundingVolume().visible( frustum, matrix, occlusion=occlusion, mode=mode )
+		return self.boundingVolume(mode).visible( frustum, matrix, occlusion=occlusion, mode=mode )
 
-	def boundingVolume( self ):
+	def boundingVolume( self, mode ):
 		"""Calculate the bounding volume for this node
 
 		The bounding volume for a grouping node is
@@ -108,7 +108,7 @@ class Grouping(object):
 		for child in self.children:
 			try:
 				if hasattr(child, 'boundingVolume'):
-					volume = child.boundingVolume()
+					volume = child.boundingVolume(mode)
 					volumes.append( volume )
 					dependencies.append( (volume, None) )
 				else:

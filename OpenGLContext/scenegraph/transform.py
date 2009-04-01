@@ -53,7 +53,7 @@ class Transform(grouping.Grouping, basenodes.Transform):
 				glRotated( -sa * RADTODEG, sx,sy,sz)
 		if centered:
 			glTranslated( *(-self.center))
-	def boundingVolume( self ):
+	def boundingVolume( self, mode ):
 		"""Calculate the bounding volume for this node
 
 		The bounding volume for a grouping node is
@@ -80,7 +80,7 @@ class Transform(grouping.Grouping, basenodes.Transform):
 		for child in self.children:
 			try:
 				if hasattr(child, 'boundingVolume'):
-					volume = child.boundingVolume()
+					volume = child.boundingVolume(mode)
 					volumes.append( volume )
 					dependencies.append( (volume, None) )
 			except boundingvolume.UnboundedObject:
@@ -88,7 +88,7 @@ class Transform(grouping.Grouping, basenodes.Transform):
 		try:
 			volume = boundingvolume.BoundingBox.union(
 				volumes,
-				self.localMatrix()
+				self.localMatrix(mode)
 			)
 		except boundingvolume.UnboundedObject:
 			unbounded = 1
@@ -96,14 +96,24 @@ class Transform(grouping.Grouping, basenodes.Transform):
 			volume = boundingvolume.UnboundedVolume()
 		return boundingvolume.cacheVolume( self, volume, dependencies )
 	
-	def localMatrix( self ):
+	def localMatrix( self, mode=None ):
 		"""Calculate the transform's matrix manually"""
+		data = mode.cache.getData( self, 'localMatrix' )
+		if data is not None:
+			return data 
 		d = self.__dict__
-		return transformmatrix.transformMatrix (
+		data = transformmatrix.transformMatrix (
 			translation = d.get( "translation"),
 			rotation = d.get( "rotation"),
 			scale = d.get( "scale"),
 			scaleOrientation = d.get( "scaleOrientation"),
 			center = d.get( "center"),
 		)
+		holder = mode.cache.holder( self, data, 'localMatrix' )
+		for attr in ('translation','rotation','scale','scaleOrientation','center'):
+			holder.depend( self, attr )
+		return data 
+
+	
+	
 

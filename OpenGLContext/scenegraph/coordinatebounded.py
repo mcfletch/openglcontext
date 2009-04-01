@@ -8,7 +8,7 @@ class CoordinateBounded( object ):
 	coordinate-based node-types, provides the boundingVolume
 	method required by the Frustum-culling API.
 	"""
-	def boundingVolume( self ):
+	def boundingVolume( self, mode ):
 		"""Create a bounding-volume object for this node
 
 		This is our coord's boundingVolume, with the

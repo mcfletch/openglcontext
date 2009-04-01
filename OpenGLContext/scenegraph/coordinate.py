@@ -8,7 +8,7 @@ class Coordinate( basenodes.Coordinate ):
 	Reference:
 		http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Coordinate
 	"""
-	def boundingVolume( self ):
+	def boundingVolume( self, mode ):
 		"""Create a bounding-volume object for this node"""
 		from OpenGLContext.scenegraph import boundingvolume
 		current = boundingvolume.getCachedVolume( self )

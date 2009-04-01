@@ -16,7 +16,7 @@ class Switch(basenodes.Switch):
 			if isinstance( node, types):
 				return [node]
 			return []
-	def boundingVolume( self ):
+	def boundingVolume( self, mode ):
 		"""Calculate the bounding volume for this node
 
 		The bounding volume for a grouping node is
@@ -36,7 +36,7 @@ class Switch(basenodes.Switch):
 		for child in self.renderedChildren():
 			try:
 				if hasattr(child, 'boundingVolume'):
-					volume = child.boundingVolume()
+					volume = child.boundingVolume(mode)
 					volumes.append( volume )
 					dependencies.append( (volume, None) )
 				else:

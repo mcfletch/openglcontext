@@ -31,7 +31,7 @@ class Teapot( nodetypes.Geometry, node.Node ):
 		finally:
 			glFrontFace(GL_CCW)
 
-	def boundingVolume( self ):
+	def boundingVolume( self, mode ):
 		"""Create a bounding-volume object for this node"""
 		from OpenGLContext.scenegraph import boundingvolume
 		current = boundingvolume.getCachedVolume( self )

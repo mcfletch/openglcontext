@@ -75,7 +75,7 @@ class Box( basenodes.Box ):
 		if vb:
 			vb()
 		return 1
-	def boundingVolume( self ):
+	def boundingVolume( self, mode ):
 		"""Create a bounding-volume object for this node"""
 		from OpenGLContext.scenegraph import boundingvolume
 		current = boundingvolume.getCachedVolume( self )

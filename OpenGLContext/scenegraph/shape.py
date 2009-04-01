@@ -72,7 +72,7 @@ class Shape( basenodes.Shape ):
 				mode=mode,
 			)
 
-	def boundingVolume( self ):
+	def boundingVolume( self, mode ):
 		"""Create a bounding-volume object for this node
 
 		This is our geometry's boundingVolume, with the
@@ -84,7 +84,7 @@ class Shape( basenodes.Shape ):
 			return current
 		if self.geometry:
 			if hasattr( self.geometry, 'boundingVolume'):
-				volume = self.geometry.boundingVolume()
+				volume = self.geometry.boundingVolume(mode)
 			else:
 				# is considered always visible
 				volume = boundingvolume.UnboundedVolume()
@@ -107,7 +107,9 @@ class Shape( basenodes.Shape ):
 			from current OpenGL state if not provided.
 		"""
 		try:
-			return self.boundingVolume().visible( frustum, matrix, occlusion=occlusion, mode=mode )
+			return self.boundingVolume(mode).visible( 
+				frustum, matrix, occlusion=occlusion, mode=mode 
+			)
 		except Exception, err:
 			fh = cStringIO.StringIO()
 			tb = traceback.print_exc( file=fh )
