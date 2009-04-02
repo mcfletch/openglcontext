@@ -1,0 +1,37 @@
+// Orange-book fixed-function replacement shader for vertex shader 
+// assumes linked against lights.vert.txt
+
+void main() {
+	// Clear the light intensity accumulators
+	//vec4 amb, diff, spec, color;
+	//vec3 normal = gl_Normal;
+	vec4 ecPosition  = gl_ModelViewMatrix * gl_Vertex;     
+	//vec3 ecPosition3 = (vec3(ecPosition)) / ecPosition.w;
+	//vec3 eye = vec3(0.0, 0.0, 1.0);
+	//int i;
+	
+	//amb  = vec4(0.0); 
+	//diff = vec4(0.0); 
+	//spec = vec4(0.0); 
+
+	// Loop through enabled lights, compute contribution from each 
+	// here we're using legacy values, note that this assumes that 
+	// all lights are enabled, which isn't likely correct.
+	//for (i = 0; i < gl_MaxLights; i++) 
+	//{ 
+	//	if (gl_LightSource[i].position.w == 0.0) {
+	//		DirectionalLight(i, normal, amb, diff, spec); 
+	//	} else if (gl_LightSource[i].spotCutoff == 180.0) {
+	//		PointLight(i, eye, ecPosition3, normal, amb, diff, spec); 
+	//	} else {
+	//		SpotLight(i, eye, ecPosition3, normal, amb, diff, spec); 
+	//	}
+	//}
+
+	//color = gl_FrontLightModelProduct.sceneColor + 
+	//	amb * gl_FrontMaterial.ambient + 
+	//	diff * gl_FrontMaterial.diffuse;
+	//color += spec * gl_FrontMaterial.specular; 
+	//gl_FrontColor = vec4( 0,1,0, .5 );
+	gl_Position = ecPosition;
+}

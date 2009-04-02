@@ -254,6 +254,28 @@ class ShaderURLField( fieldtypes.MFString ):
 			).start()
 		return value
 	def loadBackground( self, client, url, contexts ):
+		overall = [None]* len(url)
+		threads = []
+		for i,value in enumerate(url):
+			import threading
+			t = threading.Thread(
+				name = "Background load of %s"%(value),
+				target = self.subLoad,
+				args = ( client, value, i, overall),
+			)
+			t.start()
+			threads.append( t )
+		for t in threads:
+			t.join()
+		result = [ x for x in overall if x is not None ]
+		if len(result) == len(overall):
+			client.source = '\n'.join( result )
+			for context in contexts:
+				c = context()
+				if c:
+					c.triggerRedraw(1)
+			return
+	def subLoad( self, client, urlFragment, i, overall ):
 		from OpenGLContext.loaders.loader import Loader, loader_log
 		try:
 			baseNode = protofunctions.root(client)
@@ -261,23 +283,17 @@ class ShaderURLField( fieldtypes.MFString ):
 				baseURI = baseNode.baseURI
 			else:
 				baseURI = None
-			result = Loader( url, baseURL = baseURI )
+			result = Loader( urlFragment, baseURL = baseURI )
 		except IOError:
 			pass
 		else:
 			if result:
 				baseURL, filename, file, headers = result
-				client.source = file.read()
-				for context in contexts:
-					c = context()
-					if c:
-						c.triggerRedraw(1)
-				return
-		
+				overall[i] = file.read()
+				return True
 		# should set client.image to something here to indicate
 		# failure to the user.
 		log.warn( """Unable to load any shader from the url %s for the node %s""", url, str(client))
-
 
 class GLSLShader( shaders.GLSLShader ):
 	"""GLSL-based shader node"""

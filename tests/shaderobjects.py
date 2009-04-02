@@ -32,6 +32,18 @@ shaders = [
 		],
 	),
 	GLSLObject(
+		shaders = [
+			GLSLShader( 
+				url = [ 
+					'res://lights_vert_txt',
+					#'res://legacy_lighting_vert_txt', 
+				],
+				type='VERTEX'
+			),
+			GLSLShader( url = 'res://simpleshader_frag_txt', type='FRAGMENT'),
+		],
+	),
+	GLSLObject(
 		uniforms = [
 			FloatUniform1f(name="Shininess", value=.9 ),
 			FloatUniform1f(name="Diffuse", value=.9 ),
