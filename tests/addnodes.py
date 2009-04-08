@@ -30,27 +30,30 @@ class TestContext( BaseContext ):
 	def OnAdd( self, event ):
 		"""Add a new box to the scene"""
 		children = self.sg.children[0].children
-		cube = 10
-		position = ( 
-			(random.random()-.5)*cube,
-			(random.random()-.5)*cube,
-			(random.random()-.5)*cube 
-		)
-		color = (random.random(),random.random(),random.random())
-		children.append( Transform(
-			translation = position,
-			children = [
-				Shape(
-					geometry = Teapot( size=.2),
-					appearance = Appearance(
-						material=Material( 
-							diffuseColor = color,
-						)
+		if len(children) > 128:
+			children[:] = []
+		else:
+			cube = 10
+			position = ( 
+				(random.random()-.5)*cube,
+				(random.random()-.5)*cube,
+				(random.random()-.5)*cube 
+			)
+			color = (random.random(),random.random(),random.random())
+			children.append( Transform(
+				translation = position,
+				children = [
+					Shape(
+						geometry = Teapot( size=.2),
+						appearance = Appearance(
+							material=Material( 
+								diffuseColor = color,
+							)
+						),
 					),
-				),
-			],
-		))
-		#self.sg.children[0].children = children
+				],
+			))
+			#self.sg.children[0].children = children
 		
 
 if __name__ == "__main__":
