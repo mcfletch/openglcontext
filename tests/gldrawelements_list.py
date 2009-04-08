@@ -1,5 +1,9 @@
 #! /usr/bin/env python
 '''Test of the glDrawElements function taken from a list'''
+import sys
+if sys.argv[1:]:
+	import OpenGL 
+	OpenGL.ERROR_ON_COPY = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
@@ -45,7 +49,7 @@ class TestContext( BaseContext ):
 		]
 		if self.useArrays:
 			VertexArray=array(VertexArray, 'f')    #Here's the problem line
-			IndiceArray=array(IndiceArray, 'i')
+			IndiceArray=array(IndiceArray, 'I')
 		glVertexPointerf(VertexArray)
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glDrawElementsui(
