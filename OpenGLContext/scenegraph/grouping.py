@@ -3,7 +3,8 @@ from OpenGL.GL import *
 from vrml.vrml97 import nodetypes
 from vrml import node, field
 from OpenGLContext.scenegraph import boundingvolume
-
+from pydispatch.dispatcher import connect 
+import weakref
 
 class ChildrenSensitiveField( node.MFNode ):
 	"""Field sub-class/mix-in for checking children for sensitivity"""
@@ -26,25 +27,38 @@ class ChildrenSensitiveField( node.MFNode ):
 		client.sensitive = 0
 		return value
 
+def _cacheClear( signal, sender, subsignal=None, subvalue=None ):
+	(typ,field) = signal 
+	cache = field.getCache( sender )
+	if cache is not None:
+		if subsignal is not None:
+			# just update the cache with the single change...
+			if subsignal == 'new':
+				for key,current in cache.items():
+					if isinstance( subvalue, key ):
+						current.append( subvalue )
+			elif subsignal == 'del':
+				for key,current in cache.items():
+					if subvalue in current:
+						current.remove( subvalue )
+		else:
+			cache.clear()
+
 class ChildrenTypedField( ChildrenSensitiveField ):
 	"""Field sub-class/mix-in for iterating over children by node-types"""
 	fieldType = "MFNode"
-	def fset( self, client, value, notify=1 ):
-		"""On set, do regular set, then clear cache"""
-		result = super( ChildrenTypedField, self ).fset( client, value, notify )
-		self.getCache(client).clear()
-		return result
-	def fdel( self, client, notify=1):
-		"""On del, do regular del, then clear cache"""
-		value = super( ChildrenTypedField, self).fset( client, value, notify )
-		self.getCache(client).clear()
-		return value
 	def getCache( self,client ):
 		cache_key = '__typed_children_%s__'%(self.name,)
 		cache = getattr( client, cache_key, None )
 		if cache is None:
 			cache = {}
 			setattr( client, cache_key, cache )
+			connect( 
+				_cacheClear,
+				signal = ('set',self),
+				sender = client,
+				weak = False,
+			)
 		return cache
 	def byType( self, client, types ):
 		cache = self.getCache(client)
