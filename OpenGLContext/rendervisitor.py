@@ -16,6 +16,7 @@ from vrml.vrml97 import nodetypes
 from OpenGLContext.scenegraph import nodepath
 from OpenGLContext.debug.logs import visitor_log, DEBUG
 from OpenGLContext import visitor, frustum, doinchildmatrix
+from OpenGLContext.arrays import array
 
 RADTODEG = 180/math.pi
 class RenderVisitor( visitor.Visitor ):
@@ -183,8 +184,8 @@ class RenderVisitor( visitor.Visitor ):
 		"""
 		if self.lightingDiffuse:
 			glEnable(lightID)
-			glLight(lightID, GL_DIFFUSE, (1.0,1.0,1.0,1.0))
-			glLight(lightID, GL_POSITION, (0.0,0.0,10.0,1.0))
+			glLight(lightID, GL_DIFFUSE, array((1.0,1.0,1.0,1.0),'f'))
+			glLight(lightID, GL_POSITION, array((0.0,0.0,10.0,1.0),'f'))
 
 	def SceneGraphBackground( self, node ):
 		"""Render background for a scenegraph
