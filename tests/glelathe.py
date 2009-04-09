@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 '''Test of gleLathe and related functions
 '''
+#import OpenGL 
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
