@@ -106,14 +106,18 @@ class _Buffer( shaders.ShaderBuffer ):
 		'ELEMENT': GL_ELEMENT_ARRAY_BUFFER,
 	}
 	def gl_usage( self ):
-		return self.GL_USAGE_MAPPING.get( self.usage )
+		return self.GL_USAGE_MAPPING[ self.usage ]
 	def gl_target( self ):
-		return self.GL_TYPE_MAPPING.get( self.type )
+		return self.GL_TYPE_MAPPING[ self.type ]
 	def vbo( self, mode ):
 		"""Render this buffer on the mode"""
 		uploaded = mode.cache.getData( self, 'buffer' )
 		if uploaded is None:
-			uploaded = vbo.VBO( self.buffer, usage=self.gl_usage(), target=self.gl_target() ) # TODO: stream type
+			uploaded = vbo.VBO( 
+				self.buffer, 
+				usage=self.gl_usage(), 
+				target=self.gl_target(),
+			) # TODO: stream type
 			holder = mode.cache.holder( self, uploaded, 'buffer' )
 			holder.depend( self, 'buffer' )
 		return uploaded

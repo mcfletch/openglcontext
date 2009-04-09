@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 '''Tests rendering using the ARB shader objects extension...
 '''
-import OpenGL 
-OpenGL.FULL_LOGGING = True
+#import OpenGL 
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
@@ -53,6 +53,12 @@ class TestContext( BaseContext ):
 								count=9,
 							),
 						],
+						uniforms = [
+							FloatUniform3f( 
+								name = 'mixColor',
+								value = [1.0,0.0,0.0],
+							),
+						],
 						attributes = [
 							ShaderAttribute(
 								name = 'position',
@@ -80,10 +86,11 @@ class TestContext( BaseContext ):
 											"""
 			attribute vec3 position;
 			attribute vec3 Color;
+			uniform vec3 mixColor;
 			varying vec4 baseColor;
 			void main() {
 				gl_Position = gl_ModelViewProjectionMatrix * vec4( position,1.0);
-				baseColor = vec4(Color,1.0);
+				baseColor = mix( vec4(mixColor,1.0), vec4(Color,1.0), .5 );
 			}""",
 										],
 										type = "VERTEX",

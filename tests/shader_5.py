@@ -54,7 +54,6 @@ class TestContext( BaseContext ):
 				[  2, 1, 0,  0,1,1 ],
 			],'f')
 		)
-		print self.buffer.buffer
 		self.position_location = glGetAttribLocation( 
 			self.shader, 'position' 
 		)
