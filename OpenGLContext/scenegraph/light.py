@@ -3,6 +3,7 @@ from OpenGL.GL import *
 from math import pi
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import node
+from OpenGLContext.arrays import array
 
 class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
 	"""Abstract base class for all lights
@@ -48,19 +49,19 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
 				x,y,z = self.color * self.ambientIntensity
 			else:
 				x,y,z = 0.0, 0.0, 0.0
-			glLightfv(lightID, GL_AMBIENT, (x,y,z,1.0))
+			glLightfv(lightID, GL_AMBIENT, array((x,y,z,1.0),'f'))
 
 			if mode.lightingDiffuse:
 				x,y,z = self.color
 			else:
 				x,y,z = 0.0, 0.0, 0.0
-			glLightfv(lightID, GL_DIFFUSE, (x,y,z,1.0))
+			glLightfv(lightID, GL_DIFFUSE, array((x,y,z,1.0),'f'))
 
 			if hasattr( self, 'location' ):
 				x,y,z = self.location
 			else:
 				x,y,z = -self.direction
-			glLightfv(lightID, GL_POSITION, (x,y,z,self.pointSource))
+			glLightfv(lightID, GL_POSITION, array((x,y,z,self.pointSource),'f'))
 			return 1
 		else:
 			return 0
