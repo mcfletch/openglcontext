@@ -1,15 +1,15 @@
-from OpenGLContext import atlas 
+from OpenGLContext.atlas import AtlasManager,NumpyAdapter
 from OpenGLContext.arrays import zeros, array, allclose, dot
 import unittest
 
 class TestAtlas( unittest.TestCase ):
 	"""Tests for generic atlas algorithms"""
 	def setUp( self ):
-		self.atlasManager = atlas.AtlasManager( max_size=256 )
+		self.atlasManager = AtlasManager( max_size=256 )
 	
 	def test_assignment( self ):
 		"""Test that assignments go to the correct strips"""
-		map = self.atlasManager.add( zeros( (64,64,4),'B' ) )
+		map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' )) )
 		assert len(self.atlasManager.components) == 1
 		assert len(self.atlasManager.components[4]) == 1
 		atlas = self.atlasManager.components[4][0]
@@ -17,7 +17,7 @@ class TestAtlas( unittest.TestCase ):
 		assert len(atlas.strips) == 1, len(atlas.strips)
 		
 		# this one should pack into the same strip
-		map = self.atlasManager.add( zeros( (64,64,4),'B' ) )
+		map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' )) )
 		assert len(self.atlasManager.components) == 1
 		assert len(self.atlasManager.components[4]) == 1
 		atlas = self.atlasManager.components[4][0]
@@ -25,7 +25,7 @@ class TestAtlas( unittest.TestCase ):
 		assert len(atlas.strips) == 1, len(atlas.strips)
 		
 		# this one should pack into another strip
-		map = self.atlasManager.add( zeros( (32,32,4),'B' ) )
+		map = self.atlasManager.add( NumpyAdapter( zeros( (32,32,4),'B' ) ))
 		assert len(self.atlasManager.components) == 1
 		assert len(self.atlasManager.components[4]) == 1
 		atlas = self.atlasManager.components[4][0]
@@ -34,7 +34,7 @@ class TestAtlas( unittest.TestCase ):
 
 	def test_matrix( self ):
 		"""Test that a texture matrix can produce a proper scale/offset"""
-		map = self.atlasManager.add( zeros( (64,64,4),'B' ) )
+		map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))
 		matrix = map.matrix()
 		assert matrix is not None 
 		bottom_left = dot( array( [0,0,1],'f'), matrix )
@@ -42,7 +42,7 @@ class TestAtlas( unittest.TestCase ):
 		top_right = dot( array( [1,1,1],'f'), matrix )
 		assert allclose( top_right, [.25,.25,1] ), top_right
 
-		map = self.atlasManager.add( zeros( (64,64,4),'B' ) )
+		map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))
 		matrix = map.matrix()
 		assert matrix is not None 
 		bottom_left = dot( array( [0,0,1],'f'), matrix )
@@ -54,9 +54,9 @@ class TestAtlas( unittest.TestCase ):
 		assert allclose( set, [[.25,0,1],[.5,.25,1]] ), (set,matrix)
 
 	def test_release( self ):
-		map = self.atlasManager.add( zeros( (64,64,4),'B' ) )
+		map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))
 		del map
 		print 'creating second'
-		map2 = self.atlasManager.add( zeros( (64,64,4),'B' ) )
+		map2 = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))
 		assert map2.offset == (0,0), map2.offset
 		

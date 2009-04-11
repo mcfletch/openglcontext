@@ -1,8 +1,20 @@
 """Texture atlas implementation"""
 import math, weakref
-from OpenGL.GL import glGetIntegerv, GL_MAX_TEXTURE_SIZE
+from OpenGL.GL import *
 from OpenGLContext.arrays import zeros, array, dot
 from OpenGLContext import texture
+
+class NumpyAdapter( object ):
+	def __init__( self, array ):
+		self.size = array.shape[:-1]
+		if array.shape[-1] == 3:
+			self.mode = 'RGB'
+		elif array.shape[-1] == 4:
+			self.mode = 'RGBA'
+		elif array.shape[-1] == 2:
+			self.mode = 'LA'
+		else:
+			self.mode = 'L'
 
 class _Strip( object ):
 	"""Strip within the atlas which takes particular set of images"""
@@ -29,17 +41,13 @@ class _Strip( object ):
 		if self.atlas.max_size-last >= x:
 			return last 
 		return -1
-	def add( self, array, start=None ):
+	def add( self, image, start=None ):
 		"""Add the given numpy array to our atlas' image"""
-		local = self.atlas.local( )
-		x,y,d = array.shape
+		x,y = image.size
 		if start is None:
 			start = self.start_coord( x )
-		local[ start:start+x,self.yoffset:self.yoffset+y,:] = array 
-		array = local[ start:start+x,self.yoffset:self.yoffset+y,:]
-		# array now points to the value as a sub-array
 		offset = (start,self.yoffset)
-		map = Map( self.atlas, offset, (x,y), array )
+		map = Map( self.atlas, offset, (x,y), image )
 		self.maps.append( weakref.ref( map, self._remover( offset )) )
 		return map
 	def _remover( self, offset ):
@@ -81,18 +89,16 @@ class Atlas( object ):
 		self.max_size = max_size
 		self.need_updates = []
 	
-	def add( self, array ):
-		"""Insert a numpy array of values as a sub-texture
+	def add( self, image ):
+		"""Insert a PIL image of values as a sub-texture
 		
 		Has to find a place within the atlas to insert the 
 		sub-texture and then return the offset/scale factors...
 		"""
-		local = self.local()
-		max_x,max_y,components = local.shape 
-		x,y,d = array.shape 
-		assert d == components, """Adding texture to atlas with different number of components"""
+		max_x = max_y = self.max_size
+		x,y = image.size 
 		strip,start = self.choose_strip( max_x, max_y, x, y )
-		return strip.add( array, start=start )
+		return strip.add( image, start=start )
 	def choose_strip( self, max_x,max_y, x,y ):
 		"""Find the strip to which we should be added"""
 		candidates = [ 
@@ -131,11 +137,6 @@ class Atlas( object ):
 			x = y = self.max_size
 			self._size = (x,y,self.components)
 		return self._size
-	def local( self ):
-		"""Set up our local array for storage"""
-		if self._local is None:
-			self._local = zeros( self.size(), self.dataType )
-		return self._local
 	
 	def render( self, mode=None ):
 		"""Render this texture to the context"""
@@ -170,11 +171,11 @@ class Map( object ):
 	"""Object representing a sub-texture within a texture atlas"""
 	_matrix = None
 	_uploaded = False
-	def __init__( self, atlas, offset, size, array ):
+	def __init__( self, atlas, offset, size, image ):
 		self.atlas = atlas 
 		self.offset = offset 
 		self.size = size
-		self.array = array
+		self.image = image
 	def matrix( self ):
 		"""Calculate a 3x3 transform matrix for texcoords
 		
@@ -209,11 +210,11 @@ class Map( object ):
 		return self._matrix
 	
 	def update( self, tex ):
-		"""Update our texture with the new data in array"""
-		tex.update( self.offset, self.size, self.array )
+		"""Update our texture with the new data in image"""
+		tex.update( self.offset, self.size, self.image )
 		self._uploaded = True
-		assert array.size == self.array.size 
-		self.array = array 
+		assert image.size == self.image.size 
+		self.image = image 
 
 class AtlasManager( object ):
 	"""Collection of atlases within the renderer"""
@@ -221,22 +222,32 @@ class AtlasManager( object ):
 		self.components = {}
 		self.max_size = max_size
 		self.max_child_size = max_child_size
-	def add( self, array ):
-		"""Add the given array to the texture atlas"""
-		x,y,d = array.shape
+	FORMAT_MAPPING = {
+		'L':(1,GL_LUMINANCE), 
+		'LA':(2,GL_LUMINANCE_ALPHA),
+		'RGB':(3,GL_RGB),
+		'RGBA':(4,GL_RGBA),
+	}
+	def formatToComponents( self, format ):
+		"""Convert PIL format to component count"""
+		return self.FORMAT_MAPPING[ format ][0]
+	def add( self, image ):
+		"""Add the given image to the texture atlas"""
+		x,y = image.size
 		if x > self.max_child_size:
 			raise AtlasError( """X size (%s) > %s"""%( x,self.max_child_size ) )
 		if y > self.max_child_size:
 			raise AtlasError( """Y size (%s) > %s"""%( y,self.max_child_size ) )
+		d = self.formatToComponents( image.mode )
 		atlases = self.components.setdefault( d, [])
 		for atlas in atlases:
 			try:
-				return atlas.add( array )
+				return atlas.add( image )
 			except AtlasError, err:
 				pass 
 		atlas = Atlas( d, max_size=self.max_size or self.calculate_max_size() )
 		atlases.append( atlas )
-		return atlas.add( array )
+		return atlas.add( image )
 	_MAX_MAX_SIZE = 4096
 	def calculate_max_size( self ):
 		"""Calculate the maximum size of a texture
