@@ -37,21 +37,21 @@ class TestAtlas( unittest.TestCase ):
 		map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))
 		matrix = map.matrix()
 		assert matrix is not None 
-		bottom_left = dot( array( [0,0,1],'f'), matrix )
-		assert allclose( bottom_left, [0,0,1] ), bottom_left
-		top_right = dot( array( [1,1,1],'f'), matrix )
-		assert allclose( top_right, [.25,.25,1] ), top_right
+		bottom_left = dot( array( [0,0,0,1],'f'), matrix )
+		assert allclose( bottom_left, [0,0,0,1] ), bottom_left
+		top_right = dot( array( [1,1,0,1],'f'), matrix )
+		assert allclose( top_right, [.25,.25,0,1] ), top_right
 
 		map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))
 		matrix = map.matrix()
 		assert matrix is not None 
-		bottom_left = dot( array( [0,0,1],'f'), matrix )
-		assert allclose( bottom_left, [.25,0,1] ), (bottom_left,matrix)
-		top_right = dot( array( [1,1,1],'f'), matrix )
-		assert allclose( top_right, [.5,.25,1] ), (top_right,matrix)
+		bottom_left = dot( array( [0,0,0,1],'f'), matrix )
+		assert allclose( bottom_left, [.25,0,0,1] ), (bottom_left,matrix)
+		top_right = dot( array( [1,1,0,1],'f'), matrix )
+		assert allclose( top_right, [.5,.25,0,1] ), (top_right,matrix)
 
-		set = dot( array( [[0,0,1],[1,1,1]],'f'), matrix )
-		assert allclose( set, [[.25,0,1],[.5,.25,1]] ), (set,matrix)
+		set = dot( array( [[0,0,0,1],[1,1,0,1]],'f'), matrix )
+		assert allclose( set, [[.25,0,0,1],[.5,.25,0,1]] ), (set,matrix)
 
 	def test_release( self ):
 		map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))

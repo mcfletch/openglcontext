@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 '''Test of texture atlas behaviour...'''
+import OpenGL 
+OpenGL.FULL_LOGGING = True
 from OpenGL.GL import *
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
@@ -13,6 +15,7 @@ from OpenGLContext import atlas as atlasmodule
 class TestContext( BaseContext ):
 	def OnInit( self ):
 		"""Initialize the texture atlas test"""
+		
 		
 	def setupFontProviders( self ):
 		"""Load font providers for the context

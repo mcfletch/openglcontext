@@ -2,7 +2,14 @@
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.debug.logs import texture_log
-import traceback
+import traceback,weakref 
+
+def _textureDeleter( textureID ):
+	"""Create function to clean up the texture on deletion"""
+	def cleanup( ref ):
+		if glDeleteTextures:
+			glDeleteTextures( [textureID] )
+	return cleanup
 
 class Texture( object ):
 	"""Holder for an OpenGL compiled texture
@@ -28,6 +35,7 @@ class Texture( object ):
 		self.components = 0
 		self.format = format
 		self.texture = glGenTextures(1)
+		self.cleanup = _textureDeleter( self.texture )
 		if image is not None:
 			self.fromPIL( image )
 	def store(
@@ -81,15 +89,6 @@ class Texture( object ):
 			GL_UNSIGNED_BYTE,
 			data
 		)
-		
-		
-	def __del__( self, glDeleteTextures = glDeleteTextures ):
-		"""Clean up the OpenGL display-list resources
-		See:
-			glDeleteTextures
-		"""
-		if getattr(self,'texture', None) is not None:
-			glDeleteTextures( [self.texture])
 	def fromPIL( self, image ):
 		"""Automated storage of image data from a PIL Image instance
 
@@ -102,13 +101,17 @@ class Texture( object ):
 		image = self.ensureRGB( image )
 		image = self.ensurePow2( image )
 		components, format = getLengthFormat( image )
-		x, y, image = image.size[0], image.size[1], image.tostring("raw", image.mode, 0, -1)
+		x, y, image = image.size[0], image.size[1], self.pilAsString( image )
 		self.store(
 			components, format,
 			x,y,
 			image,
 		)
 		return components
+	@staticmethod
+	def pilAsString( image ):
+		"""Convert PIL image to string pointer"""
+		return image.tostring("raw", image.mode, 0, -1)
 	def ensureRGB( self, image ):
 		"""Ensure that the PIL image is in RGB mode
 

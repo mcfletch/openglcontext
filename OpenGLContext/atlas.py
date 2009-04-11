@@ -3,6 +3,7 @@ import math, weakref
 from OpenGL.GL import *
 from OpenGLContext.arrays import zeros, array, dot
 from OpenGLContext import texture
+from vrml.vrml97 import transformmatrix
 
 class NumpyAdapter( object ):
 	def __init__( self, array ):
@@ -49,6 +50,7 @@ class _Strip( object ):
 		offset = (start,self.yoffset)
 		map = Map( self.atlas, offset, (x,y), image )
 		self.maps.append( weakref.ref( map, self._remover( offset )) )
+		self.atlas.need_updates.append( weakref.ref(map) )
 		return map
 	def _remover( self, offset ):
 		def remover( *args ):
@@ -68,7 +70,6 @@ class _Strip( object ):
 
 class AtlasError( Exception ):
 	"""Raised when we can't/shouldn't append to this atlas"""
-	
 
 class Atlas( object ):
 	"""Collection of textures packed into a single texture
@@ -88,6 +89,7 @@ class Atlas( object ):
 		self.strips = []
 		self.max_size = max_size
 		self.need_updates = []
+		self.texture = None
 	
 	def add( self, image ):
 		"""Insert a PIL image of values as a sub-texture
@@ -138,34 +140,26 @@ class Atlas( object ):
 			self._size = (x,y,self.components)
 		return self._size
 	
-	def render( self, mode=None ):
+	def render( self ):
 		"""Render this texture to the context"""
-		tex = self.bind( mode )
+		if self.texture is None:
+			format = [0, GL_LUMINANCE, GL_LUMINANCE_ALPHA, GL_RGB, GL_RGBA ][self.components]
+			self.texture = texture.Texture(format=format)
+			x,y,d = self.size()
+			self.texture.store( 
+				d,
+				format,
+				x,y,
+				None 
+			)
+		self.texture()
 		needs = self.need_updates[:]
 		del self.need_updates[:len(needs)]
 		for need in needs:
-			need.update( tex )
-		return result
-	
-	def bind( self, mode=None ):
-		"""Bind this texture for use on mode"""
-		tex = mode.cache.getData(self)
-		if not tex:
-			tex = self.compile( mode=mode )
-		return tex
-	def compile( self, mode=None ):
-		# enable the texture...
-		tex( )
-		# need to check each map for dirty status 
-		# update any dirty maps 
-		# then do a regular bind with our texture...
-		format = [0, GL_LUMINANCE, GL_LUMINANCE_ALPHA, GL_RGB, GL_RGBA ][self.components]
-		tex = texture.Texture( format=format )
-		x,y,d = self.size()
-		# empty init...
-		tex.store( self.components, format, x,y, None )
-		holder = mode.cache.holder(self, tex)
-		return tex
+			need = need()
+			if need is not None:
+				need.update( self.texture )
+		return self.texture
 
 class Map( object ):
 	"""Object representing a sub-texture within a texture atlas"""
@@ -176,6 +170,7 @@ class Map( object ):
 		self.offset = offset 
 		self.size = size
 		self.image = image
+		self.components = self.atlas.components
 	def matrix( self ):
 		"""Calculate a 3x3 transform matrix for texcoords
 		
@@ -195,26 +190,31 @@ class Map( object ):
 			tx,ty,d = self.atlas.size()
 			tx,ty = float(tx),float(ty)
 			x,y = self.offset
-			translate = array([
-				[1,0,0],
-				[0,1,0],
-				[x/tx,y/ty,1],
-			],'f')
-			x,y = self.size 
-			scale = array([
-				[x/tx,0,0],
-				[0,y/tx,0],
-				[0,0,1],
-			],'f')
-			self._matrix = dot( scale, translate )
+			sx,sy = self.size 
+			self._matrix = transformmatrix.transformMatrix (
+				translation = (x/tx,y/ty,0),
+				scale = (sx/tx,sy/ty,1),
+			)
 		return self._matrix
 	
-	def update( self, tex ):
-		"""Update our texture with the new data in image"""
-		tex.update( self.offset, self.size, self.image )
-		self._uploaded = True
-		assert image.size == self.image.size 
+	def replace( self, image ):
+		self._uploaded = False 
 		self.image = image 
+		self.atlas.need_updates.append( weakref.ref(self) )
+	def update( self, texture ):
+		"""Update our texture with the new data in image"""
+		texture.update( 
+			self.offset, self.size, 
+			texture.pilAsString( self.image),
+		)
+		self._uploaded = True
+	def __call__( self ):
+		"""Enable/call our texture"""
+		self.atlas.render()
+		# should also load our texture-transform matrix.
+		glMatrixMode( GL_TEXTURE )
+		glLoadMatrixf( self.matrix() )
+		glMatrixMode( GL_MODELVIEW )
 
 class AtlasManager( object ):
 	"""Collection of atlases within the renderer"""

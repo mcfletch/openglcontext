@@ -38,7 +38,7 @@ class _Texture( nodetypes.Texture, node.Node ):
 		Uses the TextureCache to try to minimise the
 		number of textures created
 		"""
-		return mode.context.textureCache.getTexture( image, texture.Texture )
+		return mode.context.textureCache.getTexture( image, texture.Texture, mode=mode )
 
 	def render (
 			self,
