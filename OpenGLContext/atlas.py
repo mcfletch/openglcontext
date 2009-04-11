@@ -124,21 +124,33 @@ class Map( object ):
 		self.size = size
 		self.array = array
 	def matrix( self ):
-		"""Calculate a 3x3 transform matrix for texcoords"""
+		"""Calculate a 3x3 transform matrix for texcoords
+		
+		To manipulate texture coordinates with this matrix 
+		they need to be in homogenous coordinates, i.e. a 
+		"regular" 2d coordinate of (x,y) becomes (x,y,1.0)
+		so that it can pick up the translations.
+		
+		dot( coord, matrix ) produces the transformed 
+		coordinate for processing.
+		
+		returns 3x3
+		"""
 		if self._matrix is None:
 			# translate by self.offset/atlas.size
 			# scale by self.size/atlas.size
+			tx,ty,d = self.atlas.size()
+			tx,ty = float(tx),float(ty)
 			x,y = self.offset
 			translate = array([
 				[1,0,0],
 				[0,1,0],
-				[x,y,1],
+				[x/tx,y/ty,1],
 			],'f')
 			x,y = self.size 
-			tx,ty,d = self.atlas.size()
 			scale = array([
-				[x/float(tx),0,0],
-				[0,y/float(tx),0],
+				[x/tx,0,0],
+				[0,y/tx,0],
 				[0,0,1],
 			],'f')
 			self._matrix = dot( scale, translate )
