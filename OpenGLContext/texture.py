@@ -18,13 +18,15 @@ class Texture( object ):
 		texture -- OpenGL textureID as returned by a call
 			to glGenTextures(1), will be freed when the
 			Texture object is deleted
+		format -- GL_RGB/GL_RGBA/GL_LUMINANCE
 	"""
-	def __init__( self, image=None ):
+	def __init__( self, image=None, format=None ):
 		"""Initialise the texture, if image is not None, store it
 
 		image -- optional PIL image to store
 		"""
 		self.components = 0
+		self.format = format
 		self.texture = glGenTextures(1)
 		if image is not None:
 			self.fromPIL( image )
@@ -45,6 +47,7 @@ class Texture( object ):
 			glBindTexture, glPixelStorei, glTexImage2D
 		"""
 		self.components = components
+		self.format = format
 		# make our ID current
 		glBindTexture(GL_TEXTURE_2D, self.texture)
 		glPixelStorei(GL_UNPACK_ALIGNMENT,1)
@@ -60,6 +63,25 @@ class Texture( object ):
 		"""
 		glBindTexture(GL_TEXTURE_2D, self.texture)
 		glEnable(GL_TEXTURE_2D)
+	
+	def update( self, lower_left, size, data ):
+		"""Update the texture with new data"""
+		glBindTexture(GL_TEXTURE_2D, self.texture)
+		glPixelStorei(GL_UNPACK_ALIGNMENT,1)
+		# copy the texture into the current texture ID
+		glPixelStorei(GL_PACK_ALIGNMENT,1)
+		return glTexSubImage2D( 
+			GL_TEXTURE_2D,
+			0,
+			lower_left[0],
+			lower_left[1],
+			size[0],
+			size[1],
+			self.format,
+			GL_UNSIGNED_BYTE,
+			data
+		)
+		
 		
 	def __del__( self, glDeleteTextures = glDeleteTextures ):
 		"""Clean up the OpenGL display-list resources
@@ -113,7 +135,10 @@ class Texture( object ):
 		# should check whether it needs it first!
 		newSize = bestSize(image.size[0]),bestSize(image.size[1])
 		if newSize != image.size:
-			texture_log.info( "Non-power-of-2 image %s found resizing: %s", image.size, image.info )
+			texture_log.warn( 
+				"Non-power-of-2 image %s found resizing: %s", 
+				image.size, image.info,
+			)
 			image = image.resize( newSize, BICUBIC )
 		return image
 	
@@ -161,7 +186,7 @@ def getLengthFormat( image ):
 
 	This returns the number of components, and the OpenGL
 	mode constant describing the PIL image's format.  It
-	currently only supports GL_RGBA, GL_RGB and GL_LUIMANCE
+	currently only supports GL_RGBA, GL_RGB and GL_LUMINANCE
 	formats (PIL: RGBA, RGBX, RGB, and L), the Texture
 	object's ensureRGB converts Paletted images to RGB
 	before they reach this function.

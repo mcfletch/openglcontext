@@ -1,7 +1,8 @@
 """Texture atlas implementation"""
-import math 
+import math, weakref
 from OpenGL.GL import glGetIntegerv, GL_MAX_TEXTURE_SIZE
 from OpenGLContext.arrays import zeros, array, dot
+from OpenGLContext import texture
 
 class _Strip( object ):
 	"""Strip within the atlas which takes particular set of images"""
@@ -10,24 +11,52 @@ class _Strip( object ):
 		self.atlas = atlas
 		self.height = height 
 		self.width = 0
-		self.full = False
 		self.yoffset = yoffset
 		self.maps = []
-	def add( self, array ):
+	def start_coord( self, x ):
+		"""Do we have an empty space sufficient to fit image of width x?
+		
+		return starting coordinate or -1 if not enough space...
+		"""
+		last = 0
+		for map in self.maps:
+			referenced = map()
+			if referenced is not None:
+				if referenced.offset[0]-last >= x:
+					return last
+				else:
+					last = referenced.offset[0]+referenced.size[0]
+		if self.atlas.max_size-last >= x:
+			return last 
+		return -1
+	def add( self, array, start=None ):
 		"""Add the given numpy array to our atlas' image"""
 		local = self.atlas.local( )
 		x,y,d = array.shape
-		assert local.shape[0] - (self.width+x) >= 0
-		assert local.shape[1] - (self.yoffset+y) >= 0
-		local[ self.width:self.width+x,self.yoffset:self.yoffset+y,:] = array 
-		array = local[ self.width:self.width+x,self.yoffset:self.yoffset+y,:]
+		if start is None:
+			start = self.start_coord( x )
+		local[ start:start+x,self.yoffset:self.yoffset+y,:] = array 
+		array = local[ start:start+x,self.yoffset:self.yoffset+y,:]
 		# array now points to the value as a sub-array
-		offset = (self.width,self.yoffset)
-		self.width += x
-		if self.width >= local.shape[0]:
-			self.full = True 
+		offset = (start,self.yoffset)
 		map = Map( self.atlas, offset, (x,y), array )
+		self.maps.append( weakref.ref( map, self._remover( offset )) )
 		return map
+	def _remover( self, offset ):
+		def remover( *args ):
+			self.onRemove( )
+		return remover 
+	def onRemove( self, *args, **named ):
+		"""Remove map by offset (normally a weakref-release callback)"""
+		update = False
+		for mapRef in self.maps:
+			referenced = mapRef()
+			if referenced is None:
+				try:
+					self.maps.remove( mapRef )
+				except ValueError, err:
+					pass 
+				update = True 
 
 class AtlasError( Exception ):
 	"""Raised when we can't/shouldn't append to this atlas"""
@@ -50,6 +79,7 @@ class Atlas( object ):
 		self.dataType = dataType
 		self.strips = []
 		self.max_size = max_size
+		self.need_updates = []
 	
 	def add( self, array ):
 		"""Insert a numpy array of values as a sub-texture
@@ -61,27 +91,29 @@ class Atlas( object ):
 		max_x,max_y,components = local.shape 
 		x,y,d = array.shape 
 		assert d == components, """Adding texture to atlas with different number of components"""
-		strip = self.choose_strip( max_x, max_y, x, y )
-		return strip.add( array )
+		strip,start = self.choose_strip( max_x, max_y, x, y )
+		return strip.add( array, start=start )
 	def choose_strip( self, max_x,max_y, x,y ):
 		"""Find the strip to which we should be added"""
 		candidates = [ 
 			s 
 			for s in self.strips 
 			if (
-				not s.full and 
-				s.height >= y and 
-				(s.width + x <= max_x)
+				s.height >= y
 			) 
 		]
 		for strip in candidates:
 			if strip.height == y:
-				return strip 
+				start = strip.start_coord( x )
+				if start > -1:
+					return strip, start
 		for strip in candidates:
 			strip_mag = math.floor(math.log( strip.height, 2 ))
 			img_mag = math.floor(math.log( y, 2 ))
 			if strip_mag == img_mag:
-				return strip 
+				start = strip.start_coord( x )
+				if start > -1:
+					return strip, start
 		if self.strips:
 			last = self.strips[-1]
 			current_height = last.yoffset + last.height 
@@ -91,7 +123,8 @@ class Atlas( object ):
 			raise AtlasError( """Insufficient space to store in this atlas""" )
 		strip = _Strip( self, height=y, yoffset= current_height )
 		self.strips.append( strip )
-		return strip
+		start = strip.start_coord( x )
+		return strip, start
 	
 	def size( self ):
 		if self._size is None:
@@ -106,13 +139,32 @@ class Atlas( object ):
 	
 	def render( self, mode=None ):
 		"""Render this texture to the context"""
-		local = self.local( )
-		return local
+		tex = self.bind( mode )
+		needs = self.need_updates[:]
+		del self.need_updates[:len(needs)]
+		for need in needs:
+			need.update( tex )
+		return result
+	
 	def bind( self, mode=None ):
 		"""Bind this texture for use on mode"""
+		tex = mode.cache.getData(self)
+		if not tex:
+			tex = self.compile( mode=mode )
+		return tex
+	def compile( self, mode=None ):
+		# enable the texture...
+		tex( )
 		# need to check each map for dirty status 
 		# update any dirty maps 
 		# then do a regular bind with our texture...
+		format = [0, GL_LUMINANCE, GL_LUMINANCE_ALPHA, GL_RGB, GL_RGBA ][self.components]
+		tex = texture.Texture( format=format )
+		x,y,d = self.size()
+		# empty init...
+		tex.store( self.components, format, x,y, None )
+		holder = mode.cache.holder(self, tex)
+		return tex
 
 class Map( object ):
 	"""Object representing a sub-texture within a texture atlas"""
@@ -155,10 +207,11 @@ class Map( object ):
 			],'f')
 			self._matrix = dot( scale, translate )
 		return self._matrix
-		
-	def update( self, array ):
+	
+	def update( self, tex ):
 		"""Update our texture with the new data in array"""
-		self._uploaded = False 
+		tex.update( self.offset, self.size, self.array )
+		self._uploaded = True
 		assert array.size == self.array.size 
 		self.array = array 
 
