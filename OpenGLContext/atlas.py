@@ -1,9 +1,11 @@
 """Texture atlas implementation"""
-import math, weakref
+import math, weakref, logging
 from OpenGL.GL import *
-from OpenGLContext.arrays import zeros, array, dot
+from OpenGLContext.arrays import zeros, array, dot, ArrayType
 from OpenGLContext import texture
 from vrml.vrml97 import transformmatrix
+
+log = logging.getLogger( 'OpenGLContext.atlas' )
 
 class NumpyAdapter( object ):
 	def __init__( self, array ):
@@ -16,6 +18,12 @@ class NumpyAdapter( object ):
 			self.mode = 'LA'
 		else:
 			self.mode = 'L'
+		self.info = { }
+		self.array = array 
+	def tostring( self,*args,**named ):
+		return self.array 
+	def resize( self, *args, **named ):
+		raise RuntimeError( """Don't support numpy image resizing""" )
 
 class _Strip( object ):
 	"""Strip within the atlas which takes particular set of images"""
@@ -43,7 +51,7 @@ class _Strip( object ):
 			return last 
 		return -1
 	def add( self, image, start=None ):
-		"""Add the given numpy array to our atlas' image"""
+		"""Add the given PIL image to our atlas' image"""
 		x,y = image.size
 		if start is None:
 			start = self.start_coord( x )
@@ -90,6 +98,11 @@ class Atlas( object ):
 		self.max_size = max_size
 		self.need_updates = []
 		self.texture = None
+		log.info( 
+			'Allocating a %s-component texture atlas of size %sx%s',
+			components,
+			max_size,max_size,
+		)
 	
 	def add( self, image ):
 		"""Insert a PIL image of values as a sub-texture
@@ -162,7 +175,12 @@ class Atlas( object ):
 		return self.texture
 
 class Map( object ):
-	"""Object representing a sub-texture within a texture atlas"""
+	"""Object representing a sub-texture within a texture atlas
+	
+	A Map object is a dependent version of an OpenGLContext.texture.Texture
+	object, i.e. it tries to offer the same API, but with support for 
+	Atlas-based maps instead of stand-alone ones.
+	"""
 	_matrix = None
 	_uploaded = False
 	def __init__( self, atlas, offset, size, image ):
@@ -172,17 +190,17 @@ class Map( object ):
 		self.image = image
 		self.components = self.atlas.components
 	def matrix( self ):
-		"""Calculate a 3x3 transform matrix for texcoords
+		"""Calculate a 4x4 transform matrix for texcoords
 		
 		To manipulate texture coordinates with this matrix 
 		they need to be in homogenous coordinates, i.e. a 
-		"regular" 2d coordinate of (x,y) becomes (x,y,1.0)
+		"regular" 2d coordinate of (x,y) becomes (x,y,0.0,1.0)
 		so that it can pick up the translations.
 		
 		dot( coord, matrix ) produces the transformed 
 		coordinate for processing.
 		
-		returns 3x3
+		returns 4x4 translation matrix
 		"""
 		if self._matrix is None:
 			# translate by self.offset/atlas.size
@@ -198,11 +216,16 @@ class Map( object ):
 		return self._matrix
 	
 	def replace( self, image ):
+		"""Replace our current image with given (PIL) image"""
 		self._uploaded = False 
 		self.image = image 
 		self.atlas.need_updates.append( weakref.ref(self) )
 	def update( self, texture ):
-		"""Update our texture with the new data in image"""
+		"""Update texture with (new) data in self.image
+		
+		This just calls texture.update with our metadata
+		in order to do the actual copy of the data-pointer.
+		"""
 		texture.update( 
 			self.offset, self.size, 
 			texture.pilAsString( self.image),
@@ -233,6 +256,8 @@ class AtlasManager( object ):
 		return self.FORMAT_MAPPING[ format ][0]
 	def add( self, image ):
 		"""Add the given image to the texture atlas"""
+		if isinstance( image, ArrayType ):
+			image = NumpyAdapter( image )
 		x,y = image.size
 		if x > self.max_child_size:
 			raise AtlasError( """X size (%s) > %s"""%( x,self.max_child_size ) )

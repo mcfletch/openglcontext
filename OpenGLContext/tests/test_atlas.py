@@ -54,9 +54,9 @@ class TestAtlas( unittest.TestCase ):
 		assert allclose( set, [[.25,0,0,1],[.5,.25,0,1]] ), (set,matrix)
 
 	def test_release( self ):
-		map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))
+		map = self.atlasManager.add( zeros( (64,64,4),'B' ) )
 		del map
 		print 'creating second'
-		map2 = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))
+		map2 = self.atlasManager.add( zeros( (64,64,4),'B' ) )
 		assert map2.offset == (0,0), map2.offset
 		
