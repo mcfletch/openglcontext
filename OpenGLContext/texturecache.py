@@ -20,7 +20,7 @@ class TextureCache( object ):
 			return current
 		try:
 			self.textures[ID] = current =  self.atlases.add( pil )
-		except atlas.AtlasManager, err:
+		except atlas.AtlasError, err:
 			self.textures[ID] = current = textureClass(pil)
 		return current
 	

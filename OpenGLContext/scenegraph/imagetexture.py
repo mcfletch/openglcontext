@@ -104,6 +104,11 @@ class _Texture( nodetypes.Texture, node.Node ):
 		"""
 		try:
 			glDisable( GL_TEXTURE_2D )
+			glMatrixMode( GL_TEXTURE )
+			try:
+				glLoadIdentity()
+			finally:
+				glMatrixMode( GL_MODELVIEW )
 		except GLerror:
 			if glGetBoolean( GL_TEXTURE_2D ):
 				texture_log.error( """Unable to disable GL_TEXTURE_2D for node %s""", self )
