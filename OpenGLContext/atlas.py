@@ -182,6 +182,7 @@ class Map( object ):
 	Atlas-based maps instead of stand-alone ones.
 	"""
 	_matrix = None
+	_coords = None
 	_uploaded = False
 	def __init__( self, atlas, offset, size, image ):
 		self.atlas = atlas 
@@ -214,6 +215,15 @@ class Map( object ):
 				scale = (sx/tx,sy/ty,1),
 			)
 		return self._matrix
+	def coords( self ):
+		"""Return our bottom-left and top-right coordinate pairs"""
+		if self._coords is None:
+			tx,ty,d = self.atlas.size()
+			tx,ty = float(tx),float(ty)
+			x,y = self.offset
+			sx,sy = self.size 
+			self._coords = array( ((x/tx,y/ty),((x+sx)/tx,(y+sy)/ty)), 'f')
+		return self._coords
 	
 	def replace( self, image ):
 		"""Replace our current image with given (PIL) image"""

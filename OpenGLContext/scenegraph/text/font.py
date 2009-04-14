@@ -418,7 +418,6 @@ class PolygonalFontMixIn(object):
 			glCallLists( line.lists )
 			glTranslate( 0, -height, 0.0)
 	
-
 class Line( object ):
 	"""Holds meta-data about a rendered line of text"""
 	width = None
