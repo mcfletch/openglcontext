@@ -100,7 +100,7 @@ class PyGameBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font
 			alpha = surfarray.array_alpha( letter_render )
 			colour[:,:,1] = alpha
 			colour = colour[:,:,:2]
-			colour = contiguous( colour )
+			colour = contiguous( colour ).astype( 'B' )
 			# This produces what looks like garbage, but displays correctly
 			colour.shape = (colour.shape[1],colour.shape[0],)+colour.shape[2:]
 			return colour, font.CharacterMetrics(

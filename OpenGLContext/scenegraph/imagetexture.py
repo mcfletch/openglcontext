@@ -120,7 +120,17 @@ class _Texture( nodetypes.Texture, node.Node ):
 		if tex:
 			return tex.components in (2,4)
 		return 0
-
+	@classmethod
+	def forTexture( cls, tex, mode ):
+		"""Create a fake image texture node for the given on-card texture object"""
+		instance = cls(
+			image = Image.new(
+				texture.NumpyAdapter.shapeToMode( tex.components ),
+				(1,1), '#ff00ff'
+			)
+		)
+		holder = mode.cache.holder(instance, tex)
+		return instance
 
 try:
 	import Image

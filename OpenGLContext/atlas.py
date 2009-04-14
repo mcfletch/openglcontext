@@ -7,24 +7,6 @@ from vrml.vrml97 import transformmatrix
 
 log = logging.getLogger( 'OpenGLContext.atlas' )
 
-class NumpyAdapter( object ):
-	def __init__( self, array ):
-		self.size = array.shape[:-1]
-		if array.shape[-1] == 3:
-			self.mode = 'RGB'
-		elif array.shape[-1] == 4:
-			self.mode = 'RGBA'
-		elif array.shape[-1] == 2:
-			self.mode = 'LA'
-		else:
-			self.mode = 'L'
-		self.info = { }
-		self.array = array 
-	def tostring( self,*args,**named ):
-		return self.array 
-	def resize( self, *args, **named ):
-		raise RuntimeError( """Don't support numpy image resizing""" )
-
 class _Strip( object ):
 	"""Strip within the atlas which takes particular set of images"""
 	def __init__( self, atlas, height, yoffset ):
@@ -173,6 +155,19 @@ class Atlas( object ):
 			if need is not None:
 				need.update( self.texture )
 		return self.texture
+	
+	def debugImageTexture( self, mode ):
+		"""Create a debugging image texture for this texture atlas 
+		"""
+		from OpenGLContext.scenegraph.imagetexture import ImageTexture,Image
+		from OpenGLContext.texture import NumpyAdapter
+		from vrml import protofunctions
+		format = NumpyAdapter.shapeToMode( self.components )
+		instance = ImageTexture(
+			image = Image.new(format, (1,1), '#ffff00'),
+		)
+		holder = mode.cache.holder(instance, self.texture)
+		return instance
 
 class Map( object ):
 	"""Object representing a sub-texture within a texture atlas
@@ -267,7 +262,7 @@ class AtlasManager( object ):
 	def add( self, image ):
 		"""Add the given image to the texture atlas"""
 		if isinstance( image, ArrayType ):
-			image = NumpyAdapter( image )
+			image = texture.NumpyAdapter( image )
 		x,y = image.size
 		if x > self.max_child_size:
 			raise AtlasError( """X size (%s) > %s"""%( x,self.max_child_size ) )

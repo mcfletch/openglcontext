@@ -2,6 +2,7 @@
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.debug.logs import texture_log
+from OpenGLContext.arrays import ArrayType
 import traceback,weakref 
 
 def _textureDeleter( textureID ):
@@ -10,6 +11,25 @@ def _textureDeleter( textureID ):
 		if glDeleteTextures:
 			glDeleteTextures( [textureID] )
 	return cleanup
+
+class NumpyAdapter( object ):
+	@classmethod
+	def shapeToMode( cls, size ):
+		return {
+			3: 'RGB',
+			4: 'RGBA',
+			2: 'LA',
+			1: 'L',
+		}[ size ]
+	def __init__( self, array ):
+		self.size = array.shape[:-1]
+		self.mode = self.shapeToMode( array.shape[-1] )
+		self.info = { }
+		self.array = array 
+	def tostring( self,*args,**named ):
+		return self.array 
+	def resize( self, *args, **named ):
+		raise RuntimeError( """Don't support numpy image resizing""" )
 
 class Texture( object ):
 	"""Holder for an OpenGL compiled texture
@@ -98,8 +118,11 @@ class Texture( object ):
 
 		Returns the number of components in the image
 		"""
-		image = self.ensureRGB( image )
-		image = self.ensurePow2( image )
+		if isinstance( image, ArrayType ):
+			image = NumpyAdapter( image )
+		else:
+			image = self.ensureRGB( image )
+			image = self.ensurePow2( image )
 		components, format = getLengthFormat( image )
 		x, y, image = image.size[0], image.size[1], self.pilAsString( image )
 		self.store(
