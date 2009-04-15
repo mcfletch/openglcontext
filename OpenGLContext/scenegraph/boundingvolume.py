@@ -29,9 +29,8 @@ from OpenGL.GL.ARB.occlusion_query import *
 from OpenGL.GL.HP.occlusion_test import *
 from OpenGL.GLUT import glutSolidCube
 from vrml.vrml97 import nodetypes
-from vrml import node, field, protofunctions
+from vrml import node, field, protofunctions, cache
 from OpenGLContext import frustum, utilities, doinchildmatrix
-from OpenGLContext.scenegraph import cache
 from OpenGLContext.debug.logs import bounding_log as log
 from OpenGL.extensions import alternate
 import exceptions

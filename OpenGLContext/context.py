@@ -30,9 +30,8 @@ which are available from the Context class.
 """
 from OpenGL.GL import *
 from OpenGLContext import renderpass, visitor, texturecache,plugins
-from OpenGLContext.scenegraph import cache
 from vrml.vrml97 import nodetypes
-from vrml import node
+from vrml import node,cache
 import weakref, os, time, sys
 
 try:
@@ -127,7 +126,7 @@ class Context(object):
 			context.
 			See setupExtensionManager
 
-		cache -- cache.Cache instance used for optimising the
+		cache -- vrml.cache.Cache instance used for optimising the
 			rendering of scenegraphs.
 			See setupCache
 
