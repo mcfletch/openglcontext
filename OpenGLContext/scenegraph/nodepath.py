@@ -1,7 +1,9 @@
 """node-path implementation for OpenGLContext
 """
 from vrml.vrml97 import nodepath, nodetypes
+from vrml.cache import CACHE
 from OpenGLContext import quaternion
+from OpenGL.GL import glMultMatrixf
 
 class _NodePath( object ):
 	"""OpenGLContext-specific node-path class
@@ -22,16 +24,12 @@ class _NodePath( object ):
 		transform down to the node, without needing a full
 		traversal of the scenegraph.
 		"""
-		nodes = [
-			node
-			for node in self
-			if (
-				isinstance(node, nodetypes.Transforming) and
-				hasattr( node, "transform")
-			)
-		]
-		for node in nodes:
-			node.transform(mode, translate, scale, rotate)
+		matrix = self.transformMatrix( 
+			translate=translate, scale=scale, rotate=rotate
+		)
+		glMultMatrixf( 
+			matrix
+		)
 	def quaternion( self ):
 		"""Get summary quaternion for all rotations in stack"""
 		nodes = [
