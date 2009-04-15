@@ -266,7 +266,7 @@ class Visitor( object ):
 			"""
 			tokens = None
 			previousStack = self.currentStack
-			self.currentStack = self.currentStack + (node,)
+			self.currentStack = self.currentStack + [node]
 			try:
 				for method in self.vmethods(node):
 					try:
@@ -357,7 +357,7 @@ class _Finder( Visitor ):
 			else:
 				stack_length = len(currentStack)
 				new_items = [
-					(stack_length,child)
+					(stack_length+1,child)
 					for child in children
 				]
 				if is_desired or new_items:
@@ -382,6 +382,8 @@ def find( sg, desiredTypes = ()):
 		rendering procedure, so is quite possible for
 		non-rendering nodes to be missed by the search.
 	"""
+	if not isinstance( desiredTypes, tuple ):
+		desiredTypes = (desiredTypes, )
 	f = _Finder( desiredTypes )
 	f.visit( sg )
 	return f.result
