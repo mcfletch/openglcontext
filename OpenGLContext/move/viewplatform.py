@@ -4,6 +4,7 @@ from OpenGLContext.arrays import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
 from OpenGLContext import quaternion
+from vrml.vrml97 import transformmatrix
 
 RADTODEG = 180/pi
 
@@ -135,11 +136,28 @@ class ViewPlatform(object):
 		# setup camera
 		glMatrixMode(GL_PROJECTION)
 		apply ( gluPerspective, self.frustum)
+#		print 'frustum args', self.frustum
 		glMatrixMode(GL_MODELVIEW)
 		x,y,z,r = self.quaternion.XYZR()
 		glRotate( r*RADTODEG, x,y,z )
 		apply( glTranslate, ( negative (self.position))[:3])
 
+	def matrix( self ):
+		"""Calculate our matrix"""
+		fovy, aspect, zNear, zFar = self.frustum
+		persp = transformmatrix.perspectiveMatrix( 
+			radians(fovy),
+			aspect,
+			zNear,
+			zFar
+		)
+#		print 'perspective', persp
+		rotate = self.quaternion.matrix()
+		# inverse of translation matrix...
+#		print 'rotate', rotate
+		translate = transformmatrix.transMatrix(self.position)[1]
+#		print 'translate', translate
+		return dot(persp,dot( translate, rotate) )
 
 	def getNearFar( self ):
 		"""Return the near and far frustum depths
