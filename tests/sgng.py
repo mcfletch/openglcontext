@@ -54,20 +54,11 @@ class TestContext( BaseContext ):
 	def Render( self, mode=None ):
 		"""Render the scene via paths instead of sg"""
 		matrix = self.getViewPlatform().matrix()
-#		other = glGetDoublev( GL_MODELVIEW_MATRIX )
-#		print 'view matrix', matrix
-#		glMatrixMode( GL_PROJECTION )
-#		previous = glGetFloatv( GL_PROJECTION_MATRIX )
-#		glLoadMatrixf( matrix )
-#		glLoadMatrixf( previous )
-#		print 'view delta', previous - matrix
-##		glLoadIdentity()
+		# clear the projection matrix set up by legacy sg
+		glMatrixMode( GL_PROJECTION )
+		glLoadIdentity()
 		glMatrixMode( GL_MODELVIEW )
-#		print 'Proj', previous 
-#		print 'Model', other 
-#		print 'Combined', dot(previous,other)
-#		print 'Calculated', matrix
-#		glLoadIdentity()
+		glLoadMatrixf( matrix )
 		for path in self.paths:
 			tmatrix = path.transformMatrix()
 			glPushMatrix()

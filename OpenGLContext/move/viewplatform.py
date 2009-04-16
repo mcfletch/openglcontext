@@ -151,13 +151,10 @@ class ViewPlatform(object):
 			zNear,
 			zFar
 		)
-#		print 'perspective', persp
 		rotate = self.quaternion.matrix()
 		# inverse of translation matrix...
-#		print 'rotate', rotate
 		translate = transformmatrix.transMatrix(self.position)[1]
-#		print 'translate', translate
-		return dot(persp,dot( translate, rotate) )
+		return dot(translate,dot( rotate, persp ))
 
 	def getNearFar( self ):
 		"""Return the near and far frustum depths
