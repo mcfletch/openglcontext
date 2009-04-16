@@ -113,7 +113,6 @@ class Performer( object ):
 					self.integrate( value, path )
 	def onChildRemove( self, sender, value ):
 		"""Invalidate all paths where sender has value as its child IFF child no longer in renderedChildren"""
-		print 'onChildRemove'
 		if hasattr( sender, 'renderedChildren' ):
 			children = sender.renderedChildren()
 			if value not in children:
@@ -169,7 +168,7 @@ class TestContext( BaseContext ):
 	def OnAdd( self, event ):
 		"""Add a new box to the scene"""
 		children = scene.children[2].children
-		if len(children) > 128:
+		if len(children) > 20:
 			children[:] = []
 		else:
 			cube = 10
