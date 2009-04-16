@@ -15,23 +15,36 @@ scene = sceneGraph(
 		Transform(
 			DEF = "pivot",
 			children = [
-				Shape(
-					geometry = IndexedFaceSet(
-						coord = Coordinate(
-							point = [[-1,-1,0],[1,-1,0],[1,1,0],[-1,1,0]],
+				Switch(
+					whichChoice = 0,
+					choice = [
+						Shape(
+							geometry = IndexedFaceSet(
+								coord = Coordinate(
+									point = [[-1,-1,0],[1,-1,0],[1,1,0],[-1,1,0]],
+								),
+								coordIndex = [ 0,1,2,3 ],
+								texCoord = TextureCoordinate(
+									point = [[0,0],[1,0],[1,1],[0,1]],
+								),
+								texCoordIndex = [0,1,2,3 ],
+							),
+							appearance = Appearance(
+								texture = ImageTexture(
+									url = "nehe_glass.bmp",
+								),
+							),
 						),
-						coordIndex = [ 0,1,2,3 ],
-						texCoord = TextureCoordinate(
-							point = [[0,0],[1,0],[1,1],[0,1]],
+						Shape(
+							geometry = Teapot(),
+							appearance = Appearance(
+								texture = ImageTexture(
+									url = "nehe_glass.bmp",
+								),
+							),
 						),
-						texCoordIndex = [0,1,2,3 ],
-					),
-					appearance = Appearance(
-						texture = ImageTexture(
-							url = "nehe_glass.bmp",
-						),
-					),
-				)
+					],
+				),
 			],
 		),
 		PointLight(
