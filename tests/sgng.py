@@ -58,13 +58,10 @@ class TestContext( BaseContext ):
 		glMatrixMode( GL_PROJECTION )
 		glLoadIdentity()
 		glMatrixMode( GL_MODELVIEW )
-		glLoadMatrixf( matrix )
 		for path in self.paths:
 			tmatrix = path.transformMatrix()
-			glPushMatrix()
-			glMultMatrixd( tmatrix )
+			glLoadMatrixd( dot(tmatrix,matrix) )
 			path[-1].Render( mode=mode )
-			glPopMatrix()
 	def OnTimerFraction( self, event ):
 		"""Modify the node"""
 		self.trans.rotation = 0,0,1,(self.rot*event.fraction())
