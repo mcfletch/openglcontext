@@ -52,6 +52,7 @@ scene = sceneGraph(
 			],
 		),
 		PointLight(
+			color = (1,0,0),
 			location = (0,0,8),
 		),
 		Group(),
@@ -138,6 +139,27 @@ class Performer( object ):
 						except KeyError, err:
 							pass
 			self.paths[key][:] = filtered
+	def Render( self, context, mode ):
+		"""Render the geometry attached to this performer's scenegraph"""
+		matrix = context.getViewPlatform().matrix()
+		# clear the projection matrix set up by legacy sg
+		glMatrixMode( GL_PROJECTION )
+		glLoadIdentity()
+		glMatrixMode( GL_MODELVIEW )
+		id = 0
+		for path in self.paths.get( nodetypes.Light, ()):
+			tmatrix = path.transformMatrix()
+			glLoadMatrixd( dot(tmatrix,matrix) )
+			path[-1].Light( GL_LIGHT0+id, mode=mode )
+			id += 1
+			if id >= (context.MAX_LIGHTS-1):
+				break
+		
+		for path in self.paths[ nodetypes.Rendering ]:
+			tmatrix = path.transformMatrix()
+			glLoadMatrixd( dot(tmatrix,matrix) )
+			path[-1].Render( mode=mode )
+		
 
 class TestContext( BaseContext ):
 	rot = 6.283
@@ -151,17 +173,10 @@ class TestContext( BaseContext ):
 		self.time.start ()
 		self.performer = Performer( scene )
 		self.addEventHandler( "keypress", name="a", function = self.OnAdd)
+		self.MAX_LIGHTS = glGetIntegerv( GL_MAX_LIGHTS )
 	def Render( self, mode=None ):
 		"""Render the scene via paths instead of sg"""
-		matrix = self.getViewPlatform().matrix()
-		# clear the projection matrix set up by legacy sg
-		glMatrixMode( GL_PROJECTION )
-		glLoadIdentity()
-		glMatrixMode( GL_MODELVIEW )
-		for path in self.performer.paths[ nodetypes.Rendering ]:
-			tmatrix = path.transformMatrix()
-			glLoadMatrixd( dot(tmatrix,matrix) )
-			path[-1].Render( mode=mode )
+		self.performer.Render( self, mode=mode )
 	def OnTimerFraction( self, event ):
 		"""Modify the node"""
 		self.trans.rotation = 0,0,1,(self.rot*event.fraction())
@@ -185,7 +200,8 @@ class TestContext( BaseContext ):
 						geometry = Teapot( size=.2),
 						appearance = Appearance(
 							material=Material( 
-								diffuseColor = color,
+#								diffuseColor = color,
+								diffuseColor = (.8,.8,.8),
 							)
 						),
 					),
@@ -193,5 +209,7 @@ class TestContext( BaseContext ):
 			))
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	import cProfile
+	cProfile.run( "MainFunction ( TestContext)", 'new.profile' )
+
 
