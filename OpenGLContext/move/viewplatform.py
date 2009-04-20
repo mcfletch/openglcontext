@@ -136,25 +136,30 @@ class ViewPlatform(object):
 		# setup camera
 		glMatrixMode(GL_PROJECTION)
 		apply ( gluPerspective, self.frustum)
-#		print 'frustum args', self.frustum
+		print 'frustum args', self.frustum
 		glMatrixMode(GL_MODELVIEW)
 		x,y,z,r = self.quaternion.XYZR()
 		glRotate( r*RADTODEG, x,y,z )
 		apply( glTranslate, ( negative (self.position))[:3])
 
-	def matrix( self ):
+	def viewMatrix( self ):
 		"""Calculate our matrix"""
 		fovy, aspect, zNear, zFar = self.frustum
-		persp = transformmatrix.perspectiveMatrix( 
+		return transformmatrix.perspectiveMatrix( 
 			radians(fovy),
 			aspect,
 			zNear,
 			zFar
 		)
+	def modelMatrix( self ):
+		"""Calculate our model-side matrix"""
 		rotate = self.quaternion.matrix()
 		# inverse of translation matrix...
 		translate = transformmatrix.transMatrix(self.position)[1]
-		return dot(translate,dot( rotate, persp ))
+		return dot( translate,rotate )
+	def matrix( self ):
+		"""Calculate total model-view matrix for this view platform"""
+		return dot( self.modelMatrix(), self.viewMatrix())
 
 	def getNearFar( self ):
 		"""Return the near and far frustum depths

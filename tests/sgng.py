@@ -141,11 +141,18 @@ class Performer( object ):
 			self.paths[key][:] = filtered
 	def Render( self, context, mode ):
 		"""Render the geometry attached to this performer's scenegraph"""
-		matrix = context.getViewPlatform().matrix()
+		vp = context.getViewPlatform()
 		# clear the projection matrix set up by legacy sg
 		glMatrixMode( GL_PROJECTION )
+		current = glGetDoublev( GL_PROJECTION_MATRIX )
+#		glMultMatrixd( vp.viewMatrix() )
+		print 'delta in view matrix', (current-vp.viewMatrix()).astype( 'f' )
+		print 'vp matrix', vp.viewMatrix().astype('f')
+		print 'curr matrix', current.astype('f')
 		glLoadIdentity()
 		glMatrixMode( GL_MODELVIEW )
+#		matrix = vp.modelMatrix()
+		matrix = vp.matrix()
 		id = 0
 		for path in self.paths.get( nodetypes.Light, ()):
 			tmatrix = path.transformMatrix()
