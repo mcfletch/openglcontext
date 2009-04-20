@@ -62,7 +62,9 @@ class _CubeBackground( object ):
 				if not self.VBO:
 					self.compile( mode )
 				if clear:
-					glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT)
+					glClear(
+						GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT
+					)
 				try:
 					matrix = glGetDoublev( GL_MODELVIEW_MATRIX )
 					if matrix is None:

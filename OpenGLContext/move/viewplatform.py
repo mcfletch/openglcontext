@@ -136,7 +136,6 @@ class ViewPlatform(object):
 		# setup camera
 		glMatrixMode(GL_PROJECTION)
 		apply ( gluPerspective, self.frustum)
-		print 'frustum args', self.frustum
 		glMatrixMode(GL_MODELVIEW)
 		x,y,z,r = self.quaternion.XYZR()
 		glRotate( r*RADTODEG, x,y,z )

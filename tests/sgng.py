@@ -11,6 +11,7 @@ from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot
 from vrml.vrml97 import nodetypes
 from vrml import olist
+from vrml.vrml97.transformmatrix import RADTODEG
 import weakref,random
 from pydispatch.dispatcher import connect
 
@@ -52,10 +53,18 @@ scene = sceneGraph(
 			],
 		),
 		PointLight(
-			color = (1,1,1),
-			location = (0,0,8),
+			color = (1,0,0),
+			location = (4,4,8),
 		),
 		Group(),
+		CubeBackground(
+			backUrl = "pimbackground_BK.jpg",
+			frontUrl = "pimbackground_FR.jpg",
+			leftUrl = "pimbackground_RT.jpg",
+			rightUrl = "pimbackground_LF.jpg",
+			topUrl = "pimbackground_UP.jpg",
+			bottomUrl = "pimbackground_DN.jpg",
+		),
 	],
 )
 
@@ -66,6 +75,11 @@ class Performer( object ):
 		nodetypes.Bindable,
 		nodetypes.Light,
 		nodetypes.Traversable,
+		nodetypes.Background,
+		nodetypes.TimeDependent,
+		nodetypes.Fog,
+		nodetypes.Viewpoint,
+		nodetypes.NavigationInfo,
 	]
 	def __init__( self, scene ):
 		self.scene = scene 
@@ -139,28 +153,43 @@ class Performer( object ):
 						except KeyError, err:
 							pass
 			self.paths[key][:] = filtered
+	def currentBackground( self ):
+		"""Find our current background node"""
+		paths = self.paths.get( nodetypes.Background, () )
+		for background in paths:
+			if background[-1].bound:
+				return background
+		if paths:
+			current = paths[0]
+			current[-1].bound = 1
+			return current 
+		return None
+		
 	def Render( self, context, mode ):
 		"""Render the geometry attached to this performer's scenegraph"""
 		vp = context.getViewPlatform()
 		# clear the projection matrix set up by legacy sg
 		glMatrixMode( GL_PROJECTION )
-		current = glGetDoublev( GL_PROJECTION_MATRIX )
 		glLoadMatrixd( vp.viewMatrix() )
-		print 'delta in view matrix', (current-vp.viewMatrix()).astype( 'f' )
-		print 'vp matrix', vp.viewMatrix().astype('f')
-		print 'curr matrix', current.astype('f')
-#		glLoadIdentity()
 		glMatrixMode( GL_MODELVIEW )
 		matrix = vp.modelMatrix()
-#		matrix = vp.matrix()
+		
+		bPath = self.currentBackground( )
+		if bPath is not None:
+			glLoadIdentity()
+			x,y,z,r = vp.quaternion.XYZR()
+			glRotate( r*RADTODEG, x,y,z )
+			bPath.transform(visitor, translate=0,scale=0, rotate=1 )
+			bPath[-1].Render( mode=mode, clear=(mode.passCount==0) )
+		
 		id = 0
-#		for path in self.paths.get( nodetypes.Light, ()):
-#			tmatrix = path.transformMatrix()
-#			glLoadMatrixd( dot(tmatrix,matrix) )
-#			path[-1].Light( GL_LIGHT0+id, mode=mode )
-#			id += 1
-#			if id >= (context.MAX_LIGHTS-1):
-#				break
+		for path in self.paths.get( nodetypes.Light, ()):
+			tmatrix = path.transformMatrix()
+			glLoadMatrixd( dot(tmatrix,matrix) )
+			path[-1].Light( GL_LIGHT0+id, mode=mode )
+			id += 1
+			if id >= (context.MAX_LIGHTS-1):
+				break
 		
 		for path in self.paths[ nodetypes.Rendering ]:
 			tmatrix = path.transformMatrix()
@@ -204,7 +233,7 @@ class TestContext( BaseContext ):
 				translation = position,
 				children = [
 					Shape(
-						geometry = Sphere(), #Box( size=(.2,.2,.2)),#Teapot( size=.2),
+						geometry = Teapot( size=.2),
 						appearance = Appearance(
 							material=Material( 
 #								diffuseColor = color,
