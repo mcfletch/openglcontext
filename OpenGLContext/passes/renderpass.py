@@ -837,7 +837,7 @@ class PassSet( list ):
 		)
 		return overall()
 
-defaultRenderPasses = PassSet(
+visitingDefaultRenderPasses = PassSet(
 	OverallPass,
 	[
 		OpaqueRenderPass,
@@ -845,3 +845,21 @@ defaultRenderPasses = PassSet(
 		SelectRenderPass,
 	],
 )
+USE_PERFORMER = True
+PERFORMER = None
+class _defaultRenderPasses( object ):
+	def __call__( self,context ):
+		global PERFORMER
+		if PERFORMER is None:
+			if USE_PERFORMER:
+				from OpenGLContext.passes.flat import FlatPass
+				sg = context.getSceneGraph()
+				if sg is not None:
+					PERFORMER = FlatPass( context.getSceneGraph(), context.allContexts )
+				else:
+					return visitingDefaultRenderPasses( context )
+			else:
+				return visitingDefaultRenderPasses( context )
+		print 'Using performer'
+		return PERFORMER( context )
+defaultRenderPasses = _defaultRenderPasses()

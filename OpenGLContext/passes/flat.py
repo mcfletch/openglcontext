@@ -126,6 +126,7 @@ class FlatPass( object ):
 			current[-1].bound = 1
 			return current 
 		return None
+	
 	def Render( self, context, mode ):
 		"""Render the geometry attached to this performer's scenegraph"""
 		vp = context.getViewPlatform()
@@ -134,10 +135,10 @@ class FlatPass( object ):
 		glLoadMatrixd( self.getProjection() )
 		glMatrixMode( GL_MODELVIEW )
 		matrix = self.getModelView()
+		glLoadIdentity()
 		
 		bPath = self.currentBackground( )
 		if bPath is not None:
-			glLoadIdentity()
 			glMultMatrixf( vp.quaternion.matrix( dtype='f') )
 			bPath.transform(mode, translate=0,scale=0, rotate=1 )
 			bPath[-1].Render( mode=mode, clear=(mode.passCount==0) )
@@ -145,6 +146,13 @@ class FlatPass( object ):
 			### default VRML background is black
 			glClearColor(0.0,0.0,0.0,1.0)
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+		# Set up generic "geometric" rendering parameters
+		glDisable( GL_CULL_FACE )
+		glFrontFace( GL_CCW )
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS)
+		glEnable(GL_CULL_FACE)
+		glCullFace(GL_BACK)
 		
 		# okay, now visible presentations
 		id = 0
@@ -153,25 +161,40 @@ class FlatPass( object ):
 			glLoadMatrixd( dot(tmatrix,matrix) )
 			path[-1].Light( GL_LIGHT0+id, mode=mode )
 			id += 1
-			if id >= (context.MAX_LIGHTS-1):
+			if id >= (self.MAX_LIGHTS-1):
 				break
+		if not id:
+			# default VRML lighting...
+			from OpenGLContext.scenegraph import light
+			l = light.DirectionalLight( direction = (0,0,-1.0))
+			glLoadMatrixd( matrix )
+			l.Light( GL_LIGHT0, mode = mode )
 		# opaque-only rendering pass...
 		for path in self.paths[ nodetypes.Rendering ]:
 			tmatrix = path.transformMatrix()
 			glLoadMatrixd( dot(tmatrix,matrix) )
 			path[-1].Render( mode=mode )
 	
+	def textureSort( self, paths ):
+		"""Sort paths by texture usage as texture-set, path-set sets"""
+	def appearanceGroup( self, paths ):
+		"""Group paths according to appearance values"""
+		
+	MAX_LIGHTS = -1
 	def __call__( self, context ):
 		"""Overall rendering pass interface for the context client"""
 		mode = self 
 		vp = context.getViewPlatform()
 		# These values are temporarily stored locally, we are 
 		# in the context lock, so we're not causing conflicts
+		if self.MAX_LIGHTS == -1:
+			self.MAX_LIGHTS = glGetIntegerv( GL_MAX_LIGHTS )
 		self.context = context
 		self.cache = context.cache
 		self.projection = vp.viewMatrix()
 		self.viewport = context.getViewPort()
 		self.modelView = vp.modelMatrix()
+		
 		
 		# We're here setting up legacy OpenGL settings 
 		# eventually these will be uniform setups...

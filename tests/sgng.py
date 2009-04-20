@@ -75,15 +75,16 @@ class TestContext( BaseContext ):
 	rot = 6.283
 	initialPosition = (0,0,3)
 	def OnInit( self ):
-		sg = scene
-		self.trans = sg.children[0]
+		self.sg = scene
+		self.trans = self.sg.children[0]
 		self.time = Timer( duration = 8.0, repeating = 1 )
 		self.time.addEventHandler( "fraction", self.OnTimerFraction )
 		self.time.register (self)
 		self.time.start ()
-		self.renderPasses = self.performer = flat.FlatPass( scene, [self] )
+		#self.renderPasses = self.performer = flat.FlatPass( scene, [self] )
 		self.addEventHandler( "keypress", name="a", function = self.OnAdd)
-		self.MAX_LIGHTS = glGetIntegerv( GL_MAX_LIGHTS )
+		glEnable( GL_CULL_FACE )
+		glFrontFace( GL_CCW )
 	def OnTimerFraction( self, event ):
 		"""Modify the node"""
 		self.trans.rotation = 0,0,1,(self.rot*event.fraction())
@@ -104,12 +105,15 @@ class TestContext( BaseContext ):
 				translation = position,
 				children = [
 					Shape(
-						geometry = Teapot( size=.2),
+						geometry = Box( size=(.4,.4,.4) ), #Teapot( size=.2),
 						appearance = Appearance(
 							material=Material( 
 #								diffuseColor = color,
 								diffuseColor = (.8,.8,.8),
-							)
+							),
+							texture = ImageTexture(
+								url = ["pimbackground_FR.jpg"]
+							),
 						),
 					),
 				],

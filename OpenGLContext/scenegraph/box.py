@@ -28,28 +28,27 @@ class Box( basenodes.Box ):
 		"""Compile the box as a display-list"""
 		if vbo.get_implementation():
 			vb = vbo.VBO( array( list(yieldVertices( self.size )), 'f'))
-			def draw( ):
+			def draw( textured=True,lit=True ):
 				vb.bind()
 				try:
 					glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
 					try:
-						glEnable( GL_VERTEX_ARRAY )
-						glEnable( GL_NORMAL_ARRAY )
-						glEnable( GL_TEXTURE_COORD_ARRAY )
-						glTexCoordPointer( 2, GL_FLOAT, 32, vb )
-						glNormalPointer( GL_FLOAT, 32, vb+8 )
+						glEnableClientState( GL_VERTEX_ARRAY )
+						if lit:
+							glEnableClientState( GL_NORMAL_ARRAY )
+							glNormalPointer( GL_FLOAT, 32, vb+8 )
+						if textured:
+							glEnableClientState( GL_TEXTURE_COORD_ARRAY )
+							glTexCoordPointer( 2, GL_FLOAT, 32, vb )
 						glVertexPointer( 3, GL_FLOAT, 32, vb+20 )
 						glDrawArrays( GL_TRIANGLES, 0, 36 )
-						glDisable( GL_VERTEX_ARRAY )
-						glDisable( GL_NORMAL_ARRAY )
-						glDisable( GL_TEXTURE_COORD_ARRAY )
 					finally:
 						glPopClientAttrib()
 				finally:
 					vb.unbind()
 		else:
 			vb = array( list(yieldVertices( self.size )), 'f')
-			def draw( ):
+			def draw(textured=True,lit=True):
 				glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
 				try:
 					glInterleavedArrays( GL_T2F_N3F_V3F, 0, vb )
@@ -73,7 +72,7 @@ class Box( basenodes.Box ):
 		if not vb:
 			vb = self.compile( mode=mode )
 		if vb:
-			vb()
+			vb(textured=textured,lit=lit)
 		return 1
 	def boundingVolume( self, mode ):
 		"""Create a bounding-volume object for this node"""

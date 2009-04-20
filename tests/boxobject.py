@@ -1,9 +1,11 @@
 #! /usr/bin/env python
 '''Tests rendering of the Box geometry object
 '''
+#import OpenGL 
+#OpenGL.FULL_LOGGING = True 
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
-from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, box
+from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, box, scenegraph,light
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 import string, time
@@ -26,9 +28,9 @@ sizes = [
 class TestContext( BaseContext ):
 	currentImage = 0
 	currentSize = 0
-	def Render( self, mode = 0):
-		BaseContext.Render( self, mode )
-		self.shape.Render( mode )
+#	def Render( self, mode = 0):
+#		BaseContext.Render( self, mode )
+#		self.shape.Render( mode )
 	def OnInit( self ):
 		"""Scene set up and initial processing"""
 		print """You should see an elongated box over a white background
@@ -53,6 +55,12 @@ class TestContext( BaseContext ):
 					url = [images[0]]
 				),
 			),
+		)
+		self.sg = scenegraph.SceneGraph(
+			children = [ 
+				self.shape, 
+#				light.PointLight( location=(4,4,8)), 
+			],
 		)
 	def OnImageSwitch( self, event=None ):
 		"""Choose a new mapped texture"""

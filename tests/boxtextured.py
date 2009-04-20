@@ -1,3 +1,5 @@
+#import OpenGL 
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
@@ -9,7 +11,8 @@ class TestContext( BaseContext ):
 		self.sg = sceneGraph(
 			children = [
 				Transform(
-					rotation = (0,1,0,.8),
+#					translation = (3,0,0),
+# 					rotation = (0,1,0,.8),
 					children = [
 						Shape(
 							geometry = Box( size=(4,4,2) ),
@@ -24,11 +27,9 @@ class TestContext( BaseContext ):
 						),
 					],
 				),
+				Shape( geometry = Box( size = (4,.3,.3)) ),
 			],
 		)
-	def getSceneGraph( self ):
-		"""With older OpenGLContext versions need to explicitly return this"""
-		return self.sg
 
 if __name__ == "__main__":
 	MainFunction( TestContext )
