@@ -29,7 +29,8 @@ these classes which define the rendering callbacks
 which are available from the Context class.
 """
 from OpenGL.GL import *
-from OpenGLContext import renderpass, visitor, texturecache,plugins
+from OpenGLContext import visitor, texturecache,plugins
+from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node,cache
 import weakref, os, time, sys
@@ -81,7 +82,7 @@ class Context(object):
 			See: getSceneGraph
 
 		renderPasses -- callable object, normally an instance of
-			OpenGLContext.renderpass.PassSet which implements the
+			OpenGLContext.passes.renderpass.PassSet which implements the
 			rendering algorithm for the Context
 
 		alreadyDrawn -- flag which is set/checked to determine

@@ -43,7 +43,8 @@ After the lighting passes are finished, the standard selection
 rendering passes can occur.
 """
 from OpenGL.GL import *
-from OpenGLContext import renderpass, visitor, rendervisitor, doinchildmatrix, frustum
+from OpenGLContext import visitor, rendervisitor, doinchildmatrix, frustum
+from OpenGLContext.passes import renderpass
 from OpenGLContext.scenegraph import cache, basenodes
 from OpenGLContext.shadow import edgeset
 from OpenGLContext.debug import state

@@ -6,7 +6,7 @@ a test for the (LGPL) gl2ps extension, which is not part
 of the core OpenGLContext library.
 """
 from OpenGLContext.bin import vrml_view
-from OpenGLContext import gl2psrenderpass
+from OpenGLContext.passes import gl2psrenderpass
 from OpenGL.GL import GL_RGBA
 try:
 	from OpenGL import gl2ps

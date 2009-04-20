@@ -9,6 +9,7 @@ from OpenGLContext import visitor
 from OpenGLContext.events.timer import Timer
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot
+from OpenGLContext.passes import flat
 from vrml.vrml97 import nodetypes
 from vrml import olist
 from vrml.vrml97.transformmatrix import RADTODEG
@@ -68,138 +69,6 @@ scene = sceneGraph(
 	],
 )
 
-class Performer( object ):
-	"""Object which does performer-style optimizations of scenegraph"""
-	INTERESTING_TYPES = [
-		nodetypes.Rendering,
-		nodetypes.Bindable,
-		nodetypes.Light,
-		nodetypes.Traversable,
-		nodetypes.Background,
-		nodetypes.TimeDependent,
-		nodetypes.Fog,
-		nodetypes.Viewpoint,
-		nodetypes.NavigationInfo,
-	]
-	def __init__( self, scene, contexts ):
-		self.scene = scene 
-		self.contexts = contexts
-		self.paths = {
-		}
-		self.nodePaths = {}
-		self.integrate( scene )
-		connect(
-			self.onChildAdd,
-			signal = olist.OList.NEW_CHILD_EVT,
-		)
-		connect(
-			self.onChildRemove,
-			signal = olist.OList.DEL_CHILD_EVT,
-		)
-	def integrate( self, node, parentPath=None ):
-		"""Integrate any children of node which are of interest"""
-		if parentPath is None:
-			parentPath = nodepath.NodePath( [] )
-		todo = [ (node,parentPath) ]
-		while todo:
-			next,parents = todo.pop(0)
-			path = parents + next 
-			np = self.npFor( next )
-			np.append( path )
-			if hasattr( next, 'bind' ):
-				for context in self.contexts:
-					next.bind( context )
-			after = self.npFor(next)
-			for typ in self.INTERESTING_TYPES:
-				if isinstance( next, typ ):
-					self.paths.setdefault( typ, []).append( path )
-			if hasattr(next, 'renderedChildren'):
-				# watch for next's changes...
-				for child in next.renderedChildren( ):
-					todo.append( (child,path) )
-	def npFor( self, node ):
-		"""For some reason setdefault isn't working for the weakkeydict"""
-		current = self.nodePaths.get( id(node) )
-		if current is None:
-			self.nodePaths[id(node)] = current = []
-		return current
-	def onChildAdd( self, sender, value ):
-		"""Sender has a new child named value"""
-		if hasattr( sender, 'renderedChildren' ):
-			children = sender.renderedChildren()
-			if value in children:
-				for path in self.npFor( sender ):
-					self.integrate( value, path )
-	def onChildRemove( self, sender, value ):
-		"""Invalidate all paths where sender has value as its child IFF child no longer in renderedChildren"""
-		if hasattr( sender, 'renderedChildren' ):
-			children = sender.renderedChildren()
-			if value not in children:
-				for path in self.npFor( sender ):
-					for childPath in path.iterchildren():
-						if childPath[-1] is value:
-							childPath.invalidate()
-				self.purge()
-	def purge( self ):
-		"""Purge all references to path"""
-		for key,values in self.paths.items():
-			filtered = []
-			for v in values:
-				if not v.broken:
-					filtered.append( v )
-				else:
-					np = self.npFor( v )
-					while v in np:
-						np.remove( v )
-					if not np:
-						try:
-							del self.nodePaths[id(v)]
-						except KeyError, err:
-							pass
-			self.paths[key][:] = filtered
-	def currentBackground( self ):
-		"""Find our current background node"""
-		paths = self.paths.get( nodetypes.Background, () )
-		for background in paths:
-			if background[-1].bound:
-				return background
-		if paths:
-			current = paths[0]
-			current[-1].bound = 1
-			return current 
-		return None
-	def Render( self, context, mode ):
-		"""Render the geometry attached to this performer's scenegraph"""
-		vp = context.getViewPlatform()
-		# clear the projection matrix set up by legacy sg
-		glMatrixMode( GL_PROJECTION )
-		glLoadMatrixd( vp.viewMatrix() )
-		glMatrixMode( GL_MODELVIEW )
-		matrix = vp.modelMatrix()
-		
-		bPath = self.currentBackground( )
-		if bPath is not None:
-			glLoadIdentity()
-			glMultMatrixf( vp.quaternion.matrix( dtype='f') )
-			bPath.transform(visitor, translate=0,scale=0, rotate=1 )
-			bPath[-1].Render( mode=mode, clear=(mode.passCount==0) )
-		elif mode.passCount == 0:
-			### default VRML background is black
-			glClearColor(0.0,0.0,0.0,1.0)
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
-		
-		id = 0
-		for path in self.paths.get( nodetypes.Light, ()):
-			tmatrix = path.transformMatrix()
-			glLoadMatrixd( dot(tmatrix,matrix) )
-			path[-1].Light( GL_LIGHT0+id, mode=mode )
-			id += 1
-			if id >= (context.MAX_LIGHTS-1):
-				break
-		for path in self.paths[ nodetypes.Rendering ]:
-			tmatrix = path.transformMatrix()
-			glLoadMatrixd( dot(tmatrix,matrix) )
-			path[-1].Render( mode=mode )
 		
 
 class TestContext( BaseContext ):
@@ -212,12 +81,9 @@ class TestContext( BaseContext ):
 		self.time.addEventHandler( "fraction", self.OnTimerFraction )
 		self.time.register (self)
 		self.time.start ()
-		self.performer = Performer( scene, [self] )
+		self.renderPasses = self.performer = flat.FlatPass( scene, [self] )
 		self.addEventHandler( "keypress", name="a", function = self.OnAdd)
 		self.MAX_LIGHTS = glGetIntegerv( GL_MAX_LIGHTS )
-	def Render( self, mode=None ):
-		"""Render the scene via paths instead of sg"""
-		self.performer.Render( self, mode=mode )
 	def OnTimerFraction( self, event ):
 		"""Modify the node"""
 		self.trans.rotation = 0,0,1,(self.rot*event.fraction())

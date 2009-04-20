@@ -3,7 +3,8 @@
 '''
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
-from OpenGLContext import drawcube, gl2psrenderpass
+from OpenGLContext import drawcube
+from OpenGLContext.passes import gl2psrenderpass
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, reshape
 import string, time, os

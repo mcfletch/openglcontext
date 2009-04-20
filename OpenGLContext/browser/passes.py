@@ -1,6 +1,6 @@
 from OpenGL.GL import *
 from OpenGL.GLU import *
-from OpenGLContext import renderpass
+from OpenGLContext.passes import renderpass
 
 class PassMixIn(object):
 	"""Rendering-pass mix-in which is visual-aware"""

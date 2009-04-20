@@ -96,7 +96,7 @@ class Shape( basenodes.Shape ):
 		)
 
 	def visible( self, frustum=None, matrix=None, occlusion=0, mode=None ):
-		"""Check whether this grouping node intersects frustum
+		"""Check whether this renderable node intersects frustum
 
 		frustum -- the bounding volume frustum with a planes
 			attribute which defines the plane equations for
