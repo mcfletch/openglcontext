@@ -89,24 +89,3 @@ def coplanar( points ):
 		return True
 	vecs = vectorutilities.normalise(vecs)
 	return allclose( vecs[0], vecs )
-
-
-if __name__ == "__main__":
-	for p,n in [
-		([0,1,0], [0,-1,0]),
-		([1,0,0], [1,0,0]),
-		([0,0,1], [0,0,1]),
-	]:
-		plane = pointNormal2Plane(p,n)
-		print 'plane', plane
-		p1,n1 = plane2PointNormal(plane)
-		print 'p', p, p1
-		print 'n', n, n1
-		assert allclose( p, p1)
-		assert allclose(n, n1)
-	assert coplanar( [[0,0,1],[0,1,1],[0,1,2],[0,1,3],[0,0,1],[0,1,1]] )
-	assert not coplanar( [[0,0,1],[0,1,1],[0,1,2],[0,1,3],[0,0,1],[1,1,1]] )
-	assert not coplanar( [[0,0,1],[1,1,1],[0,1,2],[0,1,3],[0,0,1],[0,1,1]] )
-	assert not coplanar( [[0,0,1.005],[1,1,1],[0,1,2],[0,1,3],[0,0,1],[0,1,1]] )
-	
-	

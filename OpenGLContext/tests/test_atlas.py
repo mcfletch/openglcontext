@@ -1,4 +1,5 @@
-from OpenGLContext.atlas import AtlasManager,NumpyAdapter
+from OpenGLContext.atlas import AtlasManager
+from OpenGLContext.texture import NumpyAdapter
 from OpenGLContext.arrays import zeros, array, allclose, dot
 import unittest
 
