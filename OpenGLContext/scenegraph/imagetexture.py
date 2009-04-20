@@ -59,39 +59,29 @@ class _Texture( nodetypes.Texture, node.Node ):
 		"""
 		if not visible:
 			return None
-		try:
-			if not self.image:
-				return None 
-		except ValueError, err:
-			if not len(self.image):
-				return None
-		if mode.transparent:
-			# there is an alpha component...
-			glEnable (GL_BLEND)
-			glBlendFunc (GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA)
-		elif self.transparent(mode):
-			return 1
-		tex = mode.cache.getData(self)
-		if not tex:
-			tex = self.compile( mode=mode )
-
-		# enable the texture...
-		tex( )
-		
-		
-		# now the stuff not related to the texture in particular
-		# i.e. the "image" half of the image texture
-		if self.repeatS:
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-		else:
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
-		if self.repeatT:
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-		else:
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.magFilter )
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, self.minFilter )
-		### XXX something get's messed up heavily if we actually report the alpha channel's existence :(
+		tex = self.cached( mode )
+		if tex:
+			if mode.transparent:
+				# there is an alpha component...
+				glEnable (GL_BLEND)
+				glBlendFunc (GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA)
+			elif self.transparent(mode):
+				return 1
+			tex( )
+			# now the stuff not related to the texture in particular
+			# i.e. the "image" half of the image texture
+			if self.repeatS:
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+			else:
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+			if self.repeatT:
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+			else:
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+			glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.magFilter )
+			glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, self.minFilter )
+			### XXX something get's messed up heavily if we actually report the alpha channel's existence :(
+			return 0
 		return 0
 	
 	def renderPost(self, mode=None):
@@ -112,11 +102,22 @@ class _Texture( nodetypes.Texture, node.Node ):
 		except GLerror:
 			if glGetBoolean( GL_TEXTURE_2D ):
 				texture_log.error( """Unable to disable GL_TEXTURE_2D for node %s""", self )
-	def transparent( self, mode=None ):
-		"""Does this texture have an alpha component?"""
+				
+	def cached( self, mode=None ):
+		"""Retrieve cached texture for this mode"""
+		try:
+			if not self.image:
+				return None 
+		except ValueError, err:
+			if not len(self.image):
+				return None
 		tex = mode.cache.getData(self)
 		if not tex:
 			tex = self.compile( mode=mode )
+		return tex
+	def transparent( self, mode=None ):
+		"""Does this texture have an alpha component?"""
+		tex = self.cached( mode )
 		if tex:
 			return tex.components in (2,4)
 		return 0

@@ -34,13 +34,27 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 
 def distances( centers, modelView=None, projection=None, viewport=None ):
-	"""Get distances to centers into view-space coords"""
+	"""Get distances to centers into view-space coords
+	
+	Does the equivalent of gluUnproject for all points in centers
+	"""
 	if modelView is None:
-		modelView = glGetDoublev( GL_MODELVIEW_MATRIX )
+		modelView = glGetFloatv( GL_MODELVIEW_MATRIX )
 	if projection is None:
-		projection = glGetDoublev( GL_PROJECTION_MATRIX )
+		projection = glGetFloatv( GL_PROJECTION_MATRIX )
 	if viewport is None:
 		viewport = glGetIntegerv( GL_VIEWPORT )
+	translated = dot( centers, dot( modelView, projection ) ).astype('f')
+	# now map to the viewport...
+	# this operation is described in the gluUnproject documentation...
+	translated[:] += 1.0
+	translated[:] /= 2.0
+	translated[:,0] *= view[2]
+	translated[:,1] *= view[3]
+	translated[:,0] += view[0]
+	translated[:,1] += view[1]
+	return translated.astype( 'f' )
+	
 	# TODO: calculate this on our side, we've got all the data...
 	return array(map(
 		gluProject,

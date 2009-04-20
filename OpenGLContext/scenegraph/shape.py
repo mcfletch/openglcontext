@@ -72,6 +72,9 @@ class Shape( basenodes.Shape ):
 				visible = mode.visible,
 				mode=mode,
 			)
+	def sortKey( self, mode ):
+		"""Produce the sorting key for this shape's appearance/shaders/etc"""
+		return self.appearance.sortKey( mode )
 
 	def boundingVolume( self, mode ):
 		"""Create a bounding-volume object for this node

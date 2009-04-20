@@ -1,6 +1,9 @@
 """Appearance node based on VRML 97 model"""
 from vrml.vrml97 import basenodes
 from OpenGL.GL import glColor3f
+from OpenGLContext.arrays import array 
+
+LOCAL_ORIGIN = array.array( [[0,0,0,1.0]], 'f')
 
 class Appearance(basenodes.Appearance):
 	"""Specifies visual properties for geometry
@@ -62,3 +65,31 @@ class Appearance(basenodes.Appearance):
 			if self.textureTransform:
 				self.textureTransform.renderPost(textureToken,mode=mode)
 	
+
+	def sortKey( self, mode ):
+		"""Produce the sorting key for this shape's appearance/shaders/etc
+		
+		key is:
+			(
+				(not transparent), # opaque first, then transparent...
+				distance, # front-to-back for opaque, back-to-front for transparent
+				'legacy', 
+				textures, # (grouping)
+				material-params # (grouping)
+			)
+		"""
+		if self.material:
+			materialParams = self.material.sortKey( mode )
+			transparent = bool(self.material.transparency)
+		else:
+			transparent = False
+			materialParams = None
+		textureToken = None
+		if self.texture:
+			transparent = transparent or self.texture.transparent( mode )
+			tex = self.texture.cached( mode )
+			textureToken = (tex.texture,)
+		# distance calculation...
+		polygonsort.distances(
+			mode. LOCAL_ORIGIN, 
+		)
