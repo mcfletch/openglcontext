@@ -52,7 +52,7 @@ scene = sceneGraph(
 			],
 		),
 		PointLight(
-			color = (1,0,0),
+			color = (1,1,1),
 			location = (0,0,8),
 		),
 		Group(),
@@ -145,22 +145,22 @@ class Performer( object ):
 		# clear the projection matrix set up by legacy sg
 		glMatrixMode( GL_PROJECTION )
 		current = glGetDoublev( GL_PROJECTION_MATRIX )
-#		glMultMatrixd( vp.viewMatrix() )
+		glLoadMatrixd( vp.viewMatrix() )
 		print 'delta in view matrix', (current-vp.viewMatrix()).astype( 'f' )
 		print 'vp matrix', vp.viewMatrix().astype('f')
 		print 'curr matrix', current.astype('f')
-		glLoadIdentity()
+#		glLoadIdentity()
 		glMatrixMode( GL_MODELVIEW )
-#		matrix = vp.modelMatrix()
-		matrix = vp.matrix()
+		matrix = vp.modelMatrix()
+#		matrix = vp.matrix()
 		id = 0
-		for path in self.paths.get( nodetypes.Light, ()):
-			tmatrix = path.transformMatrix()
-			glLoadMatrixd( dot(tmatrix,matrix) )
-			path[-1].Light( GL_LIGHT0+id, mode=mode )
-			id += 1
-			if id >= (context.MAX_LIGHTS-1):
-				break
+#		for path in self.paths.get( nodetypes.Light, ()):
+#			tmatrix = path.transformMatrix()
+#			glLoadMatrixd( dot(tmatrix,matrix) )
+#			path[-1].Light( GL_LIGHT0+id, mode=mode )
+#			id += 1
+#			if id >= (context.MAX_LIGHTS-1):
+#				break
 		
 		for path in self.paths[ nodetypes.Rendering ]:
 			tmatrix = path.transformMatrix()
@@ -204,7 +204,7 @@ class TestContext( BaseContext ):
 				translation = position,
 				children = [
 					Shape(
-						geometry = Teapot( size=.2),
+						geometry = Sphere(), #Box( size=(.2,.2,.2)),#Teapot( size=.2),
 						appearance = Appearance(
 							material=Material( 
 #								diffuseColor = color,
