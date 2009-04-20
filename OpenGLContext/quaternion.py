@@ -94,16 +94,20 @@ class Quaternion(object):
 		if not scale:
 			return (0,1,0,0)
 		return (x / scale, y / scale, z / scale, 2 * aw )
-	def matrix( self ):
-		"""Get a rotation matrix representing this rotation"""
+	def matrix( self, dtype='f' ):
+		"""Get a rotation matrix representing this rotation
+		
+		dtype -- specifies the result-type of the matrix, defaults 
+			to 'f' in order to match real-world precision of matrix 
+			operations in video cards
+		"""
 		w,x,y,z = self.internal
 		return array([
 			[ 1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y, 0],
 			[ 2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x, 0],
 			[ 2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y, 0],
 			[ 0,0,0,1],
-		])
-
+		], dtype=dtype)
 	def __getitem__( self, x ):
 		return self.internal[x]
 	def __len__( self ):
@@ -153,13 +157,11 @@ class Quaternion(object):
 		try:
 			return self.__class__( (sourceScale * self.internal)+(targetScale * target) )
 		except ValueError,  err:
-			import pdb
-			pdb.set_trace()
 			print sourceScale
 			print self.internal 
 			print targetScale
 			print target 
-			
+			raise
 
 
 def test ():

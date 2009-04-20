@@ -81,8 +81,9 @@ class Performer( object ):
 		nodetypes.Viewpoint,
 		nodetypes.NavigationInfo,
 	]
-	def __init__( self, scene ):
+	def __init__( self, scene, contexts ):
 		self.scene = scene 
+		self.contexts = contexts
 		self.paths = {
 		}
 		self.nodePaths = {}
@@ -105,6 +106,9 @@ class Performer( object ):
 			path = parents + next 
 			np = self.npFor( next )
 			np.append( path )
+			if hasattr( next, 'bind' ):
+				for context in self.contexts:
+					next.bind( context )
 			after = self.npFor(next)
 			for typ in self.INTERESTING_TYPES:
 				if isinstance( next, typ ):
@@ -164,7 +168,6 @@ class Performer( object ):
 			current[-1].bound = 1
 			return current 
 		return None
-		
 	def Render( self, context, mode ):
 		"""Render the geometry attached to this performer's scenegraph"""
 		vp = context.getViewPlatform()
@@ -177,10 +180,13 @@ class Performer( object ):
 		bPath = self.currentBackground( )
 		if bPath is not None:
 			glLoadIdentity()
-			x,y,z,r = vp.quaternion.XYZR()
-			glRotate( r*RADTODEG, x,y,z )
+			glMultMatrixf( vp.quaternion.matrix( dtype='f') )
 			bPath.transform(visitor, translate=0,scale=0, rotate=1 )
 			bPath[-1].Render( mode=mode, clear=(mode.passCount==0) )
+		elif mode.passCount == 0:
+			### default VRML background is black
+			glClearColor(0.0,0.0,0.0,1.0)
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 		
 		id = 0
 		for path in self.paths.get( nodetypes.Light, ()):
@@ -190,7 +196,6 @@ class Performer( object ):
 			id += 1
 			if id >= (context.MAX_LIGHTS-1):
 				break
-		
 		for path in self.paths[ nodetypes.Rendering ]:
 			tmatrix = path.transformMatrix()
 			glLoadMatrixd( dot(tmatrix,matrix) )
@@ -207,7 +212,7 @@ class TestContext( BaseContext ):
 		self.time.addEventHandler( "fraction", self.OnTimerFraction )
 		self.time.register (self)
 		self.time.start ()
-		self.performer = Performer( scene )
+		self.performer = Performer( scene, [self] )
 		self.addEventHandler( "keypress", name="a", function = self.OnAdd)
 		self.MAX_LIGHTS = glGetIntegerv( GL_MAX_LIGHTS )
 	def Render( self, mode=None ):
