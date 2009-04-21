@@ -1,6 +1,7 @@
 """Flat rendering mechanism using structural scenegraph observation"""
 from OpenGLContext.scenegraph import nodepath
 from OpenGL.GL import *
+from OpenGL.GLU import gluUnProject
 from OpenGLContext.arrays import array, dot
 from vrml.vrml97 import nodetypes
 from vrml import olist
@@ -141,7 +142,32 @@ class FlatPass( object ):
 		glMatrixMode( GL_MODELVIEW )
 		matrix = self.getModelView()
 		glLoadIdentity()
+
+
+		# opaque-only rendering pass...
+		# TODO: sort here...
+		matrices = [
+			(dot(p.transformMatrix(),matrix),p)
+			for p in self.paths[ nodetypes.Rendering ]
+		]
+		toRender = [
+			(p[-1].sortKey( mode,m ), m, p )
+			for (m,p) in matrices
+		]
+		toRender.sort()
+
+
+		events = context.getPickEvents()
+		if events:
+			self.selectRender( mode, toRender, events )
+			events.clear()
 		
+		self.visible = True
+		self.transparent = False 
+		self.lighting = True
+		self.textured = True 
+		
+
 		bPath = self.currentBackground( )
 		if bPath is not None:
 			glMultMatrixf( vp.quaternion.matrix( dtype='f') )
@@ -179,17 +205,6 @@ class FlatPass( object ):
 			l = light.DirectionalLight( direction = (0,0,-1.0))
 			glLoadMatrixd( matrix )
 			l.Light( GL_LIGHT0, mode = mode )
-		# opaque-only rendering pass...
-		# TODO: sort here...
-		matrices = [
-			(dot(p.transformMatrix(),matrix),p)
-			for p in self.paths[ nodetypes.Rendering ]
-		]
-		toRender = [
-			(p[-1].sortKey( mode,m ), m, p )
-			for (m,p) in matrices
-		]
-		toRender.sort()
 		transparentSetup = False
 		# TODO: query render for all objects...
 		
@@ -211,12 +226,6 @@ class FlatPass( object ):
 		glDepthMask( 1 ) # allow updates to the depth buffer
 		self.matrix = matrix
 		
-		events = context.getPickEvents()
-		print 'have events', len(events)
-		if events:
-			self.selectRender( mode, toRender, events )
-
-			events.clear()
 	def selectRender( self, mode, toRender, events ):
 		"""Render each of these paths to color buffer"""
 		glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
@@ -243,10 +252,14 @@ class FlatPass( object ):
 			key = tuple(event.getPickPoint())
 			pickPoints.setdefault( key, []).append( event )
 		for point,eventSet in pickPoints.items():
+			# get the pixel colour (id) under the cursor.
 			pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
 			pixel = long( pixel.view( '<I' )[0][0][0] )
 			paths = map.get( pixel, [] )
 			event.setObjectPaths( paths )
+			# get the depth value under the cursor...
+			pixel = glReadPixels( point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT )
+			event.viewCoordinate = point[0],point[1],pixel[0][0]
 			event.modelViewMatrix = matrix
 			event.projectionMatrix = self.projection
 			event.viewport = self.viewport
@@ -275,11 +288,6 @@ class FlatPass( object ):
 		self.viewport = (0,0) + context.getViewPort()
 		self.modelView = vp.modelMatrix()
 		self.eyePoint = vp.position
-		
-		self.visible = True
-		self.transparent = False 
-		self.lighting = True
-		self.textured = True 
 		
 		# We're here setting up legacy OpenGL settings 
 		# eventually these will be uniform setups...
