@@ -34,14 +34,14 @@ def loadData( data ):
 class TestContext( BaseContext ):
 	initialPosition = (-5,0,5) # set initial camera position, tutorial does the re-positioning
 ##	USE_FRUSTUM_CULLING = 0
-	def Render( self, mode = 0):
-		BaseContext.Render( self, mode )
-		if mode.visible and not mode.transparent:
-			self.shape.Render( mode )
-			glTranslate( -3,0,-4 )
-			glColor( .5,.5,.5, 1)
-			drawcube.drawCube()
-			glDisable(GL_TEXTURE_2D)
+#	def Render( self, mode = 0):
+#		BaseContext.Render( self, mode )
+#		if mode.visible and not mode.transparent:
+#			self.shape.Render( mode )
+#			glTranslate( -3,0,-4 )
+#			glColor( .5,.5,.5, 1)
+#			drawcube.drawCube()
+#			glDisable(GL_TEXTURE_2D)
 		
 	def OnInit( self ):
 		"""Load the image on initial load of the application"""
@@ -60,6 +60,20 @@ class TestContext( BaseContext ):
 				coordIndex = indices,
 				solid = 0,
 			),
+		)
+		self.sg = sceneGraph(
+			children = [
+				self.shape,
+				Transform( 
+					translation = (0,0,-5), 
+					children=[
+						Shape( 
+							geometry=Teapot(),
+							appearance=Appearance( material=Material()),
+						),
+					],
+				),
+			],
 		)
 
 TESTDATA = """-1 0 0

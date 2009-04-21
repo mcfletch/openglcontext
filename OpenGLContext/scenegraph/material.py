@@ -97,4 +97,7 @@ class Material(basenodes.Material):
 			dl.end()
 		return holder.data
 
-	
+	def sortKey( self, mode ):
+		"""Produce the sorting key for this shape's appearance/shaders/etc
+		"""
+		

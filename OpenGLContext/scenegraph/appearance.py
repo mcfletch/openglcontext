@@ -2,6 +2,7 @@
 from vrml.vrml97 import basenodes
 from OpenGL.GL import glColor3f
 from OpenGLContext.arrays import array 
+from OpenGLContext.scenegraph import polygonsort
 
 LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
@@ -78,8 +79,10 @@ class Appearance(basenodes.Appearance):
 				material-params # (grouping)
 			)
 		"""
+		# TODO: this is now pretty expensive, should cache it...
 		if self.material:
-			materialParams = self.material.sortKey( mode )
+			#materialParams = self.material.sortKey( mode )
+			materialParams = None
 			transparent = bool(self.material.transparency)
 		else:
 			transparent = False
@@ -87,8 +90,8 @@ class Appearance(basenodes.Appearance):
 		textureToken = None
 		if self.texture:
 			transparent = transparent or self.texture.transparent( mode )
-			tex = self.texture.cached( mode )
-			textureToken = (tex.texture,)
+#			tex = self.texture.cached( mode )
+#			textureToken = (tex.texture,)
 		# distance calculation...
 		distance = polygonsort.distances(
 			LOCAL_ORIGIN,
@@ -96,3 +99,6 @@ class Appearance(basenodes.Appearance):
 			projection = mode.getProjection(),
 			viewport = mode.getViewport(),
 		)[0]
+		if not transparent:
+			distance = - distance 
+		return transparent, distance, materialParams

@@ -36,7 +36,8 @@ class Shape( basenodes.Shape ):
 				lit, textured, alpha, textureToken = self.appearance.render (mode=mode)
 				if alpha < 1.0:# is currently somewhat transparent
 					print 'transparent'
-					mode.addTransparent( self )
+					if not mode.transparent:
+						mode.addTransparent( self )
 					if textured:
 						# undo the texture setup (since we won't render anything just now)
 						self.appearance.renderPost(textureToken, mode=mode)
@@ -72,6 +73,29 @@ class Shape( basenodes.Shape ):
 				visible = mode.visible,
 				mode=mode,
 			)
+	def RenderTransparent( self, mode ):
+		if not self.geometry:
+			return False
+		textureToken = None
+		if self.appearance:
+			lit, textured, alpha, textureToken = self.appearance.render ( 
+				mode=mode 
+			)
+		else:
+			lit = 0
+			textured = 0
+			glColor3f( 1,1,1)
+		if lit and mode.lighting:
+			glEnable(GL_LIGHTING)
+		else:
+			glDisable(GL_LIGHTING)
+		## do the actual work of rendering it transparently...
+		self.geometry.render(
+			lit = lit, textured = textured, transparent=1, mode=mode
+		)
+		if self.appearance:
+			self.appearance.renderPost( textureToken, mode=mode )
+		
 	def sortKey( self, mode ):
 		"""Produce the sorting key for this shape's appearance/shaders/etc"""
 		return self.appearance.sortKey( mode )

@@ -175,14 +175,34 @@ class FlatPass( object ):
 			l.Light( GL_LIGHT0, mode = mode )
 		# opaque-only rendering pass...
 		# TODO: sort here...
-		for path in self.paths[ nodetypes.Rendering ]:
+		toRender = [
+			(p[-1].sortKey( mode ), p )
+			for p in self.paths[ nodetypes.Rendering ]
+		]
+		toRender.sort()
+		transparentSetup = False
+		print 'Sort keys', [x[0] for x in toRender]
+		for key,path in toRender:
+			print 'sort key', key
 			tmatrix = path.transformMatrix()
 			
 			localMatrix = dot(tmatrix,matrix)
 			self.matrix = localMatrix
 			glLoadMatrixd( localMatrix )
-			
-			path[-1].Render( mode=mode )
+			self.transparent = key[0]
+			if key[0] != transparentSetup:
+				glEnable(GL_BLEND);
+				glEnable(GL_DEPTH_TEST);
+				glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
+#				glDepthMask( 0 )
+			if key[0]:
+				path[-1].RenderTransparent( mode=self )
+			else:
+				print 'non-transparent render'
+				path[-1].Render( mode=self )
+		glDisable(GL_BLEND);
+		glEnable(GL_DEPTH_TEST);
+		glDepthMask( 1 ) # allow updates to the depth buffer
 	
 	def textureSort( self, paths ):
 		"""Sort paths by texture usage as texture-set, path-set sets"""
@@ -201,7 +221,7 @@ class FlatPass( object ):
 		self.context = context
 		self.cache = context.cache
 		self.projection = vp.viewMatrix()
-		self.viewport = context.getViewPort()
+		self.viewport = (0,0) + context.getViewPort()
 		self.modelView = vp.modelMatrix()
 		self.eyePoint = vp.position
 		

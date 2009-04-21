@@ -42,6 +42,10 @@ def project( points, modelView=None, projection=None, viewport=None, astype='f' 
 	if viewport is None:
 		viewport = glGetIntegerv( GL_VIEWPORT )
 	M = dot( modelView, projection )
+	if points.shape[-1] != 4:
+		newpoints = ones( points.shape[:-1]+(4,), 'f')
+		newpoints[:,:3] = points 
+		points = newpoints
 	v = dot( points, M )
 	# now convert to normalized coordinates...
 	v /= v[:,3]
@@ -52,7 +56,7 @@ def project( points, modelView=None, projection=None, viewport=None, astype='f' 
 	v[:,0:2] += viewport[0:2]
 	return v.astype(astype)
 
-def distances( centers, modelView=None, projection=None, viewport=None, astype='f' ):
+def distances( points, modelView=None, projection=None, viewport=None, astype='f' ):
 	"""Get eye-space Z coordinates for given centers 
 	
 	Does less work than a full project operation, as it 
@@ -64,10 +68,14 @@ def distances( centers, modelView=None, projection=None, viewport=None, astype='
 		projection = glGetFloatv( GL_PROJECTION_MATRIX )
 	if viewport is None:
 		viewport = glGetIntegerv( GL_VIEWPORT )
+	if points.shape[-1] != 4:
+		newpoints = ones( points.shape[:-1]+(4,), 'f')
+		newpoints[:,:3] = points 
+		points = newpoints
 	M = dot( modelView, projection )
-	v = dot( centers, M )
+	v = dot( points, M )
 	# now convert to normalized coordinates...
-	v /= v[:,3]
+	v /= v[:,3].reshape( (-1,1))
 	return ((v[:,2]+1.0)/2.0).astype(astype)
 	
 
