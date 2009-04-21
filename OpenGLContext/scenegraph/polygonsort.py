@@ -33,10 +33,30 @@ from OpenGLContext.arrays import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
-def distances( centers, modelView=None, projection=None, viewport=None ):
-	"""Get distances to centers into view-space coords
+def project( points, modelView=None, projection=None, viewport=None, astype='f' ):
+	"""Do the equivalent of a gluProject on all points (transform to eye coords)"""
+	if modelView is None:
+		modelView = glGetFloatv( GL_MODELVIEW_MATRIX )
+	if projection is None:
+		projection = glGetFloatv( GL_PROJECTION_MATRIX )
+	if viewport is None:
+		viewport = glGetIntegerv( GL_VIEWPORT )
+	M = dot( modelView, projection )
+	v = dot( points, M )
+	# now convert to normalized coordinates...
+	v /= v[:,3]
+	v = v[:,:3]
+	v += 1.0
+	v[:,0:2] *= viewport[2:3]
+	v /= 2.0
+	v[:,0:2] += viewport[0:2]
+	return v.astype(astype)
+
+def distances( centers, modelView=None, projection=None, viewport=None, astype='f' ):
+	"""Get eye-space Z coordinates for given centers 
 	
-	Does the equivalent of gluUnproject for all points in centers
+	Does less work than a full project operation, as it 
+	doesn't need to calculate the x/y values.
 	"""
 	if modelView is None:
 		modelView = glGetFloatv( GL_MODELVIEW_MATRIX )
@@ -44,27 +64,11 @@ def distances( centers, modelView=None, projection=None, viewport=None ):
 		projection = glGetFloatv( GL_PROJECTION_MATRIX )
 	if viewport is None:
 		viewport = glGetIntegerv( GL_VIEWPORT )
-	translated = dot( centers, dot( modelView, projection ) ).astype('f')
-	# now map to the viewport...
-	# this operation is described in the gluUnproject documentation...
-	translated[:] += 1.0
-	translated[:] /= 2.0
-	translated[:,0] *= view[2]
-	translated[:,1] *= view[3]
-	translated[:,0] += view[0]
-	translated[:,1] += view[1]
-	return translated.astype( 'f' )
-	
-	# TODO: calculate this on our side, we've got all the data...
-	return array(map(
-		gluProject,
-			centers[:,0],
-			centers[:,1],
-			centers[:,2],
-			[modelView]*len(centers),
-			[projection]*len(centers),
-			[viewport]*len(centers),
-	), 'f')[:,2]
+	M = dot( modelView, projection )
+	v = dot( centers, M )
+	# now convert to normalized coordinates...
+	v /= v[:,3]
+	return ((v[:,2]+1.0)/2.0).astype(astype)
 	
 
 def indices( zFloats ):
