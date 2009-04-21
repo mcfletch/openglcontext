@@ -88,9 +88,9 @@ class Appearance(basenodes.Appearance):
 			transparent = False
 			materialParams = None
 		textureToken = []
+		# correctness of rendering requires the back-to-front 
+		# rendering for transparent textures...
 		if not transparent:
-			# correctness of rendering requires the back-to-front 
-			# rendering for transparent textures...
 			if self.texture:
 				transparent = transparent or self.texture.transparent( mode )
 				tex = self.texture.cached( mode )
@@ -105,5 +105,8 @@ class Appearance(basenodes.Appearance):
 		)[0]
 		if transparent:
 			distance = - distance 
-		return transparent, textureToken, distance, textureToken, materialParams
+		return (
+			transparent, textureToken, distance, 
+			materialParams
+		)
 	
