@@ -3,7 +3,7 @@ from vrml.vrml97 import basenodes
 from OpenGL.GL import glColor3f
 from OpenGLContext.arrays import array 
 
-LOCAL_ORIGIN = array.array( [[0,0,0,1.0]], 'f')
+LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
 class Appearance(basenodes.Appearance):
 	"""Specifies visual properties for geometry
@@ -90,6 +90,9 @@ class Appearance(basenodes.Appearance):
 			tex = self.texture.cached( mode )
 			textureToken = (tex.texture,)
 		# distance calculation...
-		polygonsort.distances(
-			mode. LOCAL_ORIGIN, 
-		)
+		distance = polygonsort.distances(
+			LOCAL_ORIGIN,
+			modelView = mode.getModelView(),
+			projection = mode.getProjection(),
+			viewport = mode.getViewport(),
+		)[0]

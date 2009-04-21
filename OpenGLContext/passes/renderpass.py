@@ -860,6 +860,6 @@ class _defaultRenderPasses( object ):
 					return visitingDefaultRenderPasses( context )
 			else:
 				return visitingDefaultRenderPasses( context )
-		print 'Using performer'
+			print 'Using performer'
 		return PERFORMER( context )
 defaultRenderPasses = _defaultRenderPasses()

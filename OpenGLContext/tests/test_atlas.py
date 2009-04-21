@@ -57,7 +57,6 @@ class TestAtlas( unittest.TestCase ):
 	def test_release( self ):
 		map = self.atlasManager.add( zeros( (64,64,4),'B' ) )
 		del map
-		print 'creating second'
 		map2 = self.atlasManager.add( zeros( (64,64,4),'B' ) )
 		assert map2.offset == (0,0), map2.offset
 		

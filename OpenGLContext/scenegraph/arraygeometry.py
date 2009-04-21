@@ -172,7 +172,7 @@ class ArrayGeometry(object):
 				glDisable( GL_CULL_FACE )
 			# do the actual rendering
 			if visible and transparent:
-				self.drawTransparent()
+				self.drawTransparent( mode = mode )
 			else:
 				self.draw()
 			# cleanup the environment
@@ -188,7 +188,7 @@ class ArrayGeometry(object):
 #		geometry_log.debug( 'Drawing array geometry: %s, %s', self.arguments, len(self.vertices) )
 		glDrawArrays( *self.arguments )
 #		geometry_log.debug( 'Finished array geometry' )
-	def drawTransparent( self ):
+	def drawTransparent( self, mode ):
 		"""Same as draw, but called when a transparent render is required
 
 		This uses triangleutilities and polygonsort to render
@@ -202,7 +202,10 @@ class ArrayGeometry(object):
 			self.centers = triangleutilities.centers( self.vertices )
 		indices = polygonsort.indices(
 			polygonsort.distances(
-				self.centers
+				self.centers, 
+				modelView = mode.getModelView(),
+				projection = mode.getProjection(),
+				viewport = mode.getViewport(),
 			)
 		).astype( 'I' )
 		objectType = self.arguments[0]

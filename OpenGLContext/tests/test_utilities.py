@@ -1,5 +1,6 @@
 from OpenGLContext.arrays import *
 from OpenGLContext.utilities import *
+from OpenGLContext.vectorutilities import *
 import unittest
 
 class TestUtilities( unittest.TestCase ):
@@ -19,3 +20,42 @@ class TestUtilities( unittest.TestCase ):
 		assert not coplanar( [[0,0,1],[0,1,1],[0,1,2],[0,1,3],[0,0,1],[1,1,1]] )
 		assert not coplanar( [[0,0,1],[1,1,1],[0,1,2],[0,1,3],[0,0,1],[0,1,1]] )
 		assert not coplanar( [[0,0,1.005],[1,1,1],[0,1,2],[0,1,3],[0,0,1],[0,1,1]] )
+
+	def test_magnitude( self ):
+		data = array( [
+			[0,0,0],[1,0,0],[0,1,0],
+			[1,0,0],[0,0,0],[0,1,0],
+		],'f')
+		mag = magnitude( data )
+		assert allclose( mag, [0,1,1,1,0,1] ), mag
+	def test_normalize( self ):
+		data = array( [
+			[2,0,0],[0,2,0],[0,0,2],
+			[1,1,0],[-1,1,0],
+		], 'f')
+		norms = normalise( data )
+		
+		self._allclose( norms, array([
+			[1,0,0],[0,1,0],[0,0,1],
+			[1/sqrt(2),1/sqrt(2),0],[-1/sqrt(2),1/sqrt(2),0],
+		],'f') )
+	def test_normalize_zero( self ):
+		data = array( [[ 0,0,0 ]],'f')
+		result = normalise( data )
+		assert allclose( result, [[0,0,0]] )
+	def test_crossProduct( self ):
+		data = array([
+			[0,1,0],[1,0,0],[0,0,1],
+			[1,1,0],
+		],'f')
+		cps = crossProduct( data, [-1,0,0] )
+		expected = array([
+			[0,0,1],[0,0,0],[0,-1,0],
+			[0,0,1],
+		],'f')
+		self._allclose( cps, expected )
+	def _allclose( self, target, expected ):
+		for a,b in zip( target, expected ):
+			assert allclose( a,b),(a,b)
+		
+		

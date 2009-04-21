@@ -111,24 +111,3 @@ def colinear( points ):
 	return None
 
 
-if __name__ == "__main__":
-	def test():
-		data = array( [
-			[0,0,0],[1,0,0],[0,1,0],
-			[1,0,0],[0,0,0],[0,1,0],
-		],'f')
-		print magnitude( data )
-		try:
-			normalise( data )
-		except ZeroDivisionError:
-			print 'got zero div'
-		data = array( [
-			[1,1,0],[1,0,0],[0,1,0],
-			[1,0,1],[0,1,1],[1,1,0],
-		],'f')
-		print normalise( data )
-		print normalise( [2.0,2.0,0.0] )
-		print crossProduct( data, [-1,0,0])
-		print crossProduct( [0,0,1], [-1,0,0])
-	test()
-		

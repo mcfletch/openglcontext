@@ -158,7 +158,11 @@ class FlatPass( object ):
 		id = 0
 		for path in self.paths.get( nodetypes.Light, ()):
 			tmatrix = path.transformMatrix()
-			glLoadMatrixd( dot(tmatrix,matrix) )
+			
+			localMatrix = dot(tmatrix,matrix)
+			self.matrix = localMatrix
+			glLoadMatrixd( localMatrix )
+			
 			path[-1].Light( GL_LIGHT0+id, mode=mode )
 			id += 1
 			if id >= (self.MAX_LIGHTS-1):
@@ -170,9 +174,14 @@ class FlatPass( object ):
 			glLoadMatrixd( matrix )
 			l.Light( GL_LIGHT0, mode = mode )
 		# opaque-only rendering pass...
+		# TODO: sort here...
 		for path in self.paths[ nodetypes.Rendering ]:
 			tmatrix = path.transformMatrix()
-			glLoadMatrixd( dot(tmatrix,matrix) )
+			
+			localMatrix = dot(tmatrix,matrix)
+			self.matrix = localMatrix
+			glLoadMatrixd( localMatrix )
+			
 			path[-1].Render( mode=mode )
 	
 	def textureSort( self, paths ):
@@ -194,7 +203,7 @@ class FlatPass( object ):
 		self.projection = vp.viewMatrix()
 		self.viewport = context.getViewPort()
 		self.modelView = vp.modelMatrix()
-		
+		self.eyePoint = vp.position
 		
 		# We're here setting up legacy OpenGL settings 
 		# eventually these will be uniform setups...

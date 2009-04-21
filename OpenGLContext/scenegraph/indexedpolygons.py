@@ -195,7 +195,10 @@ class IndexedPolygons (
 		
 		# get distances to the viewer
 		centers = polygonsort.distances(
-			centers
+			centers,
+			modelView = mode.getModelView(),
+			projection = mode.getProjection(),
+			viewport = mode.getViewport(),
 		)
 		assert len(centers) == len(self.index)//self.polygonSides
 		# get the center indices in sorted order
