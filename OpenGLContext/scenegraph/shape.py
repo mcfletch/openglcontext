@@ -96,9 +96,9 @@ class Shape( basenodes.Shape ):
 		if self.appearance:
 			self.appearance.renderPost( textureToken, mode=mode )
 		
-	def sortKey( self, mode ):
+	def sortKey( self, mode, matrix ):
 		"""Produce the sorting key for this shape's appearance/shaders/etc"""
-		return self.appearance.sortKey( mode )
+		return self.appearance.sortKey( mode, matrix )
 
 	def boundingVolume( self, mode ):
 		"""Create a bounding-volume object for this node

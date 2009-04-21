@@ -155,7 +155,13 @@ class Atlas( object ):
 			if need is not None:
 				need.update( self.texture )
 		return self.texture
-	
+	def cached( self, mode ):
+		"""Get cached version of this texture
+		
+		Note: currently we do *not* properly use mode-level caching
+		for the texture object
+		"""
+		return self.render()
 	def debugImageTexture( self, mode ):
 		"""Create a debugging image texture for this texture atlas 
 		"""
@@ -236,6 +242,10 @@ class Map( object ):
 			texture.pilAsString( self.image),
 		)
 		self._uploaded = True
+	@property 
+	def texture( self ):
+		"""Retrieve our texture"""
+		return self.atlas.cached( None )
 	def __call__( self ):
 		"""Enable/call our texture"""
 		self.atlas.render()

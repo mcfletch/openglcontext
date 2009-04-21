@@ -65,11 +65,41 @@ class TestContext( BaseContext ):
 			children = [
 				self.shape,
 				Transform( 
-					translation = (0,0,-5), 
+					translation = (-5,0,-5), 
 					children=[
 						Shape( 
 							geometry=Teapot(),
 							appearance=Appearance( material=Material()),
+						),
+					],
+				),
+				Transform( 
+					translation = (-4,0,-4), 
+					children=[
+						Shape( 
+							geometry=Teapot(),
+							appearance=Appearance( 
+								material=Material(),
+								texture = ImageTexture(
+									url = 'pimbackground_LF.jpg',
+								),
+							),
+						),
+					],
+				),
+				Transform( 
+					translation = (-6.001,0,-4), 
+					children=[
+						Shape( 
+							geometry=Teapot(),
+							appearance=Appearance( 
+								material=Material(
+									transparency = .5,
+								),
+								texture = ImageTexture(
+									url = 'pimbackground_LF.jpg',
+								),
+							),
 						),
 					],
 				),

@@ -67,7 +67,7 @@ class Appearance(basenodes.Appearance):
 				self.textureTransform.renderPost(textureToken,mode=mode)
 	
 
-	def sortKey( self, mode ):
+	def sortKey( self, mode, matrix ):
 		"""Produce the sorting key for this shape's appearance/shaders/etc
 		
 		key is:
@@ -87,18 +87,23 @@ class Appearance(basenodes.Appearance):
 		else:
 			transparent = False
 			materialParams = None
-		textureToken = None
-		if self.texture:
-			transparent = transparent or self.texture.transparent( mode )
-#			tex = self.texture.cached( mode )
-#			textureToken = (tex.texture,)
+		textureToken = []
+		if not transparent:
+			# correctness of rendering requires the back-to-front 
+			# rendering for transparent textures...
+			if self.texture:
+				transparent = transparent or self.texture.transparent( mode )
+				tex = self.texture.cached( mode )
+				if tex:
+					textureToken = [tex.texture]
 		# distance calculation...
 		distance = polygonsort.distances(
 			LOCAL_ORIGIN,
-			modelView = mode.getModelView(),
+			modelView = matrix,
 			projection = mode.getProjection(),
 			viewport = mode.getViewport(),
 		)[0]
-		if not transparent:
+		if transparent:
 			distance = - distance 
-		return transparent, distance, materialParams
+		return transparent, textureToken, distance, textureToken, materialParams
+	

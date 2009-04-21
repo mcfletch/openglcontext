@@ -175,30 +175,28 @@ class FlatPass( object ):
 			l.Light( GL_LIGHT0, mode = mode )
 		# opaque-only rendering pass...
 		# TODO: sort here...
-		toRender = [
-			(p[-1].sortKey( mode ), p )
+		matrices = [
+			(dot(p.transformMatrix(),matrix),p)
 			for p in self.paths[ nodetypes.Rendering ]
+		]
+		toRender = [
+			(p[-1].sortKey( mode,m ), m, p )
+			for (m,p) in matrices
 		]
 		toRender.sort()
 		transparentSetup = False
-		print 'Sort keys', [x[0] for x in toRender]
-		for key,path in toRender:
-			print 'sort key', key
-			tmatrix = path.transformMatrix()
-			
-			localMatrix = dot(tmatrix,matrix)
-			self.matrix = localMatrix
-			glLoadMatrixd( localMatrix )
+		for key,tmatrix,path in toRender:
+			self.matrix = tmatrix
+			glLoadMatrixd( tmatrix )
 			self.transparent = key[0]
 			if key[0] != transparentSetup:
 				glEnable(GL_BLEND);
 				glEnable(GL_DEPTH_TEST);
 				glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
-#				glDepthMask( 0 )
+				glDepthMask( 0 )
 			if key[0]:
 				path[-1].RenderTransparent( mode=self )
 			else:
-				print 'non-transparent render'
 				path[-1].Render( mode=self )
 		glDisable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
