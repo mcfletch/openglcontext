@@ -5,8 +5,13 @@ from OpenGLContext.arrays import array, dot
 from vrml.vrml97 import nodetypes
 from vrml import olist
 from vrml.vrml97.transformmatrix import RADTODEG
-import weakref,random
+import weakref,random, sys, ctypes
 from pydispatch.dispatcher import connect
+
+if sys.maxint > 2L<<32:
+	BIGINTS = True 
+else:
+	BIGINTS = False
 
 class FlatPass( object ):
 	"""Flat rendering pass with a single function to render scenegraph 
@@ -149,7 +154,8 @@ class FlatPass( object ):
 		# Set up generic "geometric" rendering parameters
 		glDisable( GL_CULL_FACE )
 		glFrontFace( GL_CCW )
-		glEnable(GL_DEPTH_TEST);
+		glEnable(GL_DEPTH_TEST)
+		glEnable(GL_LIGHTING)
 		glDepthFunc(GL_LESS)
 		glEnable(GL_CULL_FACE)
 		glCullFace(GL_BACK)
@@ -185,6 +191,8 @@ class FlatPass( object ):
 		]
 		toRender.sort()
 		transparentSetup = False
+		# TODO: query render for all objects...
+		
 		for key,tmatrix,path in toRender:
 			self.matrix = tmatrix
 			glLoadMatrixd( tmatrix )
@@ -201,6 +209,51 @@ class FlatPass( object ):
 		glDisable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
 		glDepthMask( 1 ) # allow updates to the depth buffer
+		self.matrix = matrix
+		
+		events = context.getPickEvents()
+		print 'have events', len(events)
+		if events:
+			self.selectRender( mode, toRender, events )
+
+			events.clear()
+	def selectRender( self, mode, toRender, events ):
+		"""Render each of these paths to color buffer"""
+		glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
+		glDisable( GL_LIGHTING )
+		glEnable( GL_COLOR_MATERIAL )
+		self.visible = False
+		self.transparent = False 
+		self.lighting = False
+		self.textured = False 
+		matrix = self.matrix
+		map = {}
+		idHolder = array( [0,0,0,0], 'b' )
+		idSetter = idHolder.view( '<I' )
+		for id,(key,tmatrix,path) in enumerate(toRender):
+			id += 50
+			idSetter[0] = id
+			glColor4bv( idHolder )
+			self.matrix = tmatrix
+			glLoadMatrixd( tmatrix )
+			path[-1].Render( mode=self )
+			map[id] = path 
+		pickPoints = {}
+		for event in events.values():
+			key = tuple(event.getPickPoint())
+			pickPoints.setdefault( key, []).append( event )
+		for point,eventSet in pickPoints.items():
+			pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
+			pixel = long( pixel.view( '<I' )[0][0][0] )
+			paths = map.get( pixel, [] )
+			event.setObjectPaths( paths )
+			event.modelViewMatrix = matrix
+			event.projectionMatrix = self.projection
+			event.viewport = self.viewport
+#			if hasattr( mode.context, 'ProcessEvent'):
+#				mode.context.ProcessEvent( event )
+		glColor4f( 0.0,0.0,0.0, 1.0)
+		glDisable( GL_COLOR_MATERIAL )
 	
 	def textureSort( self, paths ):
 		"""Sort paths by texture usage as texture-set, path-set sets"""
@@ -222,6 +275,11 @@ class FlatPass( object ):
 		self.viewport = (0,0) + context.getViewPort()
 		self.modelView = vp.modelMatrix()
 		self.eyePoint = vp.position
+		
+		self.visible = True
+		self.transparent = False 
+		self.lighting = True
+		self.textured = True 
 		
 		# We're here setting up legacy OpenGL settings 
 		# eventually these will be uniform setups...
