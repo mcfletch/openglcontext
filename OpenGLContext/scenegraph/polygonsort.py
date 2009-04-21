@@ -75,9 +75,8 @@ def distances( points, modelView=None, projection=None, viewport=None, astype='f
 	M = dot( modelView, projection )
 	v = dot( points, M )
 	# now convert to normalized eye coordinates...
-#	print 'pre-division', v[0]
-	v = divide_safe(v, v[:,3].reshape( (-1,1)), v )
-	return nan_to_num(((v[:,2]+1.0)/2.0).astype(astype))
+	v /= v[:,3].reshape( (-1,1))
+	return ((v[:,2]+1.0)/2.0).astype(astype)
 	
 
 def indices( zFloats ):
