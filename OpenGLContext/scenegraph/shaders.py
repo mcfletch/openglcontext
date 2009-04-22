@@ -12,6 +12,9 @@ from OpenGLContext.arrays import array
 from OpenGLContext import context
 from vrml.vrml97 import shaders
 from vrml import field,node,fieldtypes,protofunctions
+from OpenGLContext.scenegraph import polygonsort
+from OpenGLContext.arrays import array
+LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
 import time, sys,logging
 log = logging.getLogger( 'OpenGLContext.scenegraph.shaders' )
@@ -332,7 +335,6 @@ class GLSLShader( shaders.GLSLShader ):
 		return shader
 	def visible( self, *args, **named ):
 		return True 
-	
 		
 
 class _GLSLObjectCache( object ):
@@ -437,6 +439,10 @@ class GLSLObject( shaders.GLSLObject ):
 			if location == -1:
 				log.warn( 'Unable to resolve uniform name %s', name )
 			return location 
+	def sortKey( self, mode, matrix ):
+		"""Produce the sorting key for this shape's appearance/shaders/etc"""
+		# TODO: figure out how to handle 
+		return False,[],None
 		
 class Shader( shaders.Shader ):
 	"""Shader is a programmable substitute for an Appearance node"""
@@ -445,19 +451,30 @@ class Shader( shaders.Shader ):
 	attributeIDs = None
 	def render (self, mode=None):
 		"""Render the shader"""
+		current = self.currentImplementation()
+		if current:
+			return current.render( mode )
+		else:
+			return True,True,True,None
+	def currentImplementation( self ):
 		current = self.current
 		if not current:
 			for object in self.objects:
 				if object.IMPLEMENTATION == 'GLSL':
 					self.current = current = object 
-		if current:
-			return current.render( mode )
-		else:
-			return True,True,True,None
+		return self.current
+		
 	def renderPost( self, textureToken=None, mode=None ):
 		"""Cleanup after rendering of this node has completed"""
 		if self.current:
 			return self.current.renderPost( textureToken, mode )
+	def sortKey( self, mode, matrix ):
+		"""Produce the sorting key for this shape's appearance/shaders/etc"""
+		current = self.currentImplementation()
+		if current:
+			return current.sortKey( mode, matrix )
+		else:
+			return (False,[],None)
 
 class ShaderGeometry( shaders.ShaderGeometry ):
 	"""Renderable geometry type using shaders"""
@@ -497,6 +514,22 @@ class ShaderGeometry( shaders.ShaderGeometry ):
 			finally:
 				self.appearance.renderPost( token, mode )
 				glBindBuffer( GL_ARRAY_BUFFER,0 )
+	def sortKey( self, mode, matrix ):
+		"""Produce the sorting key for this shape's appearance/shaders/etc"""
+		# distance calculation...
+		distance = polygonsort.distances(
+			LOCAL_ORIGIN,
+			modelView = matrix,
+			projection = mode.getProjection(),
+			viewport = mode.getViewport(),
+		)[0]
+		if self.appearance:
+			key = self.appearance.sortKey( mode, matrix )
+		else:
+			key = (False,[],None)
+		if key[0]:
+			distance = -distance
+		return key[0:2]+ (distance,) + key[1:]
 
 class ShaderSlice( shaders.ShaderSlice ):
 	"""Slice of a shader to render"""
