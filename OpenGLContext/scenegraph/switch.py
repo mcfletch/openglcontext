@@ -1,12 +1,29 @@
 """VRML97 Switch node"""
 from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext.scenegraph import boundingvolume
+from pydispatch import dispatcher
+SWITCH_CHANGE_SIGNAL = 'switch-choice-change'
 
 class Switch(basenodes.Switch):
 	"""Switch node based on VRML 97 Switch
 	Reference:
 		http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Switch
 	"""
+	def __init__( self, *args, **named ):
+		"""Setup watcher for whichChoice and children"""
+		super(Switch,self).__init__( *args, **named )
+		dispatcher.connect( self._onSwitchChange, signal=('set',self.__class__.whichChoice), sender=self )
+	def _onSwitchChange( self ):
+		"""Generate signal telling the world that switch's child has changed"""
+		if self.whichChoice < 0 or self.whichChoice >= len(self.choice):
+			value = None 
+		else:
+			value = self.choice[self.whichChoice]
+		dispatcher.send(
+			sender = self,
+			signal = SWITCH_CHANGE_SIGNAL,
+			value = value,
+		)
 	def renderedChildren( self, types= (nodetypes.Children, nodetypes.Rendering,) ):
 		"""Children is not the source, choice is"""
 		if self.whichChoice < 0 or self.whichChoice >= len(self.choice):

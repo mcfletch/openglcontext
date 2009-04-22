@@ -1,5 +1,5 @@
 """Flat rendering mechanism using structural scenegraph observation"""
-from OpenGLContext.scenegraph import nodepath
+from OpenGLContext.scenegraph import nodepath,switch
 from OpenGL.GL import *
 from OpenGL.GLU import gluUnProject
 from OpenGLContext.arrays import array, dot
@@ -60,6 +60,10 @@ class FlatPass( object ):
 			self.onChildRemove,
 			signal = olist.OList.DEL_CHILD_EVT,
 		)
+		connect(
+			self.onSwitchChange,
+			signal = switch.SWITCH_CHANGE_SIGNAL,
+		)
 	def integrate( self, node, parentPath=None ):
 		"""Integrate any children of node which are of interest"""
 		if parentPath is None:
@@ -89,6 +93,13 @@ class FlatPass( object ):
 		if current is None:
 			self.nodePaths[id(node)] = current = []
 		return current
+	def onSwitchChange( self, sender, value ):
+		for path in self.npFor( sender ):
+			for childPath in path.iterchildren():
+				if childPath[-1] is not value:
+					childPath.invalidate()
+			self.integrate( value, path )
+		self.purge()
 	def onChildAdd( self, sender, value ):
 		"""Sender has a new child named value"""
 		if hasattr( sender, 'renderedChildren' ):
@@ -162,7 +173,6 @@ class FlatPass( object ):
 		if events:
 			self.selectRender( mode, toRender, events )
 			events.clear()
-#			glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
 		glLoadIdentity()
 		self.matrix = matrix
 		self.visible = True
