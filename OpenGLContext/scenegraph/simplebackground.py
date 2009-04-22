@@ -25,10 +25,10 @@ class SimpleBackground(nodetypes.Background, nodetypes.Children, node.Node ):
 	"""
 	color = field.newField( 'color', 'SFColor', 1, [0.0, 0.0, 0.0])
 	bound = field.newField( 'bound', 'SFBool', 1, 0)
-	def Render (self, mode = None):
+	def Render (self, mode = None, clear=True):
 		# should only do this on visible passes...
 		if mode.passCount == 0:
-			if self.bound:
+			if self.bound and clear:
 				r,g,b = self.color
 				glClearColor( r,g,b, 1.0 )
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
