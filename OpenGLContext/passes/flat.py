@@ -162,8 +162,9 @@ class FlatPass( object ):
 		if events:
 			self.selectRender( mode, toRender, events )
 			events.clear()
-			glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
-		
+#			glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
+		glLoadIdentity()
+		self.matrix = matrix
 		self.visible = True
 		self.transparent = False 
 		self.lighting = True
