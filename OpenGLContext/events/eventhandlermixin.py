@@ -57,7 +57,7 @@ class EventHandlerMixin:
 		"""
 		manager = self.getEventManager( eventType )
 		if manager:
-			apply( manager.registerCallback, arguments, namedarguments )
+			manager.registerCallback( *arguments, **namedarguments )
 		else:
 			raise KeyError( """Unrecognised EventManager type %s"""%( repr(eventType)))
 	def captureEvents( self, eventType, manager=None ):

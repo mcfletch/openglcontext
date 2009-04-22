@@ -4,11 +4,13 @@ from OpenGL.GL import *
 from OpenGL.GLU import gluUnProject
 from OpenGLContext.arrays import array, dot
 from OpenGLContext import frustum
+from OpenGLContext.debug.logs import getTraceback
 from vrml.vrml97 import nodetypes
 from vrml import olist
 from vrml.vrml97.transformmatrix import RADTODEG
-import weakref,random, sys, ctypes
+import weakref,random, sys, ctypes, logging
 from pydispatch.dispatcher import connect
+log = logging.getLogger( 'OpenGLContext.passes.flat' )
 
 if sys.maxint > 2L<<32:
 	BIGINTS = True 
@@ -21,6 +23,25 @@ class FlatPass( object ):
 	Uses structural scenegraph observations to allow the actual
 	rendering pass be a simple iteration over the paths known 
 	to be active in the scenegraph.
+	
+	Rendering Attributes:
+	
+		visible -- whether we are currently rendering a visible pass
+		transparent -- whether we are currently doing a transparent pass
+		lighting -- whether we currently are rendering a lit pass
+		context -- context for which we are rendering 
+		cache -- cache of the context for which we are rendering 
+		projection -- projection matrix of current view platform
+		modelView -- model-view matrix of current view platform 
+		viewport -- 4-component viewport definition for current context 
+		frustum -- viewing-frustum definition for current view platform
+		MAX_LIGHTS -- queried maximum number of lights
+		
+
+		passCount -- not used, always set to 0 for code that expects
+			a passCount to be available.
+		transform -- ignored, legacy code only 
+
 	"""
 	passCount = 0
 	visible = True 
@@ -47,6 +68,11 @@ class FlatPass( object ):
 		nodetypes.NavigationInfo,
 	]
 	def __init__( self, scene, contexts ):
+		"""Initialize the FlatPass for this scene and set of contexts 
+		
+		scene -- the scenegraph to manage as a flattened hierarchy
+		contexts -- set of (weakrefs to) contexts to be serviced
+		"""
 		self.scene = scene 
 		self.contexts = contexts
 		self.paths = {
@@ -147,18 +173,12 @@ class FlatPass( object ):
 			return current 
 		return None
 	
-	def Render( self, context, mode ):
-		"""Render the geometry attached to this performer's scenegraph"""
-		vp = context.getViewPlatform()
-		# clear the projection matrix set up by legacy sg
-		glMatrixMode( GL_PROJECTION )
-		glLoadMatrixd( self.getProjection() )
-		glMatrixMode( GL_MODELVIEW )
-		matrix = self.getModelView()
-		glLoadIdentity()
-
-
+	def renderSet( self, matrix ):
+		"""Calculate ordered rendering set to display"""
 		# ordered set of things to work with...
+		
+		# TODO: use child.visible here with occlusion queries
+		# to filter toRender down...
 		matrices = [
 			(p.transformMatrix(),p)
 			for p in self.paths.get( nodetypes.Rendering, ())
@@ -168,7 +188,7 @@ class FlatPass( object ):
 			for (m,p) in matrices
 		]
 		toRender = [
-			(p[-1].sortKey( mode,m ), mp, p )
+			(p[-1].sortKey( self,m ), mp, p )
 			for (mp,m,p) in expanded
 			if (p and (
 				(not hasattr(p[-1],'visible')) or 
@@ -180,11 +200,20 @@ class FlatPass( object ):
 			))
 		]
 		toRender.sort( key = lambda x: x[0])
+		return toRender
+	
+	def Render( self, context, mode ):
+		"""Render the geometry attached to this performer's scenegraph"""
+		vp = context.getViewPlatform()
+		# clear the projection matrix set up by legacy sg
+		glMatrixMode( GL_PROJECTION )
+		glLoadMatrixd( self.getProjection() )
+		glMatrixMode( GL_MODELVIEW )
+		matrix = self.getModelView()
+		glLoadIdentity()
+
+		toRender = self.renderSet( matrix )
 		
-		# TODO: use child.visible here with occlusion queries
-		# to filter toRender down...
-
-
 		events = context.getPickEvents()
 		if events:
 			self.selectRender( mode, toRender, events )
@@ -196,16 +225,7 @@ class FlatPass( object ):
 		self.lighting = True
 		self.textured = True 
 		
-
-		bPath = self.currentBackground( )
-		if bPath is not None:
-			glMultMatrixf( vp.quaternion.matrix( dtype='f') )
-			bPath.transform(mode, translate=0,scale=0, rotate=1 )
-			bPath[-1].Render( mode=mode, clear=(mode.passCount==0) )
-		elif mode.passCount == 0:
-			### default VRML background is black
-			glClearColor(0.0,0.0,0.0,1.0)
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+		self.legacyBackgroundRender( vp,matrix )
 		# Set up generic "geometric" rendering parameters
 		glDisable( GL_CULL_FACE )
 		glFrontFace( GL_CCW )
@@ -215,27 +235,8 @@ class FlatPass( object ):
 		glEnable(GL_CULL_FACE)
 		glCullFace(GL_BACK)
 		
-		# okay, now visible presentations
-		id = 0
-		for path in self.paths.get( nodetypes.Light, ()):
-			tmatrix = path.transformMatrix()
-			
-			localMatrix = dot(tmatrix,matrix)
-			self.matrix = localMatrix
-			glLoadMatrixd( localMatrix )
-			
-			path[-1].Light( GL_LIGHT0+id, mode=mode )
-			id += 1
-			if id >= (self.MAX_LIGHTS-1):
-				break
-		if not id:
-			# default VRML lighting...
-			from OpenGLContext.scenegraph import light
-			l = light.DirectionalLight( direction = (0,0,-1.0))
-			glLoadMatrixd( matrix )
-			l.Light( GL_LIGHT0, mode = mode )
+		self.legacyLightRender( matrix )
 		transparentSetup = False
-		# TODO: query render for all objects...
 		
 		for key,tmatrix,path in toRender:
 			self.matrix = tmatrix
@@ -247,24 +248,74 @@ class FlatPass( object ):
 				glEnable(GL_DEPTH_TEST);
 				glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
 				glDepthMask( 0 )
-			if key[0]:
-				path[-1].RenderTransparent( mode=self )
-			else:
-				path[-1].Render( mode=self )
+			try:
+				if key[0]:
+					function = path[-1].RenderTransparent
+				else:
+					function = path[-1].Render
+				function( mode=self )
+			except Exception, err:
+				log.error(
+					"""Failure in %s: %s""",
+					function,
+					getTraceback( err ),
+				)
 		glDisable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
 		glDepthMask( 1 ) # allow updates to the depth buffer
 		self.matrix = matrix
-		
+	
+	def legacyBackgroundRender( self, vp,matrix ):
+		"""Do legacy background rendering"""
+		bPath = self.currentBackground( )
+		if bPath is not None:
+			glMultMatrixf( vp.quaternion.matrix( dtype='f') )
+			bPath.transform(self, translate=0,scale=0, rotate=1 )
+			bPath[-1].Render( mode=self, clear=True )
+		else:
+			### default VRML background is black
+			glClearColor(0.0,0.0,0.0,1.0)
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+	
+	def legacyLightRender( self, matrix ):
+		"""Do legacy light-rendering operation"""
+		# okay, now visible presentations
+		id = 0
+		for path in self.paths.get( nodetypes.Light, ()):
+			tmatrix = path.transformMatrix()
+			
+			localMatrix = dot(tmatrix,matrix)
+			self.matrix = localMatrix
+			glLoadMatrixd( localMatrix )
+			
+			path[-1].Light( GL_LIGHT0+id, mode=self )
+			id += 1
+			if id >= (self.MAX_LIGHTS-1):
+				break
+		if not id:
+			# default VRML lighting...
+			from OpenGLContext.scenegraph import light
+			l = light.DirectionalLight( direction = (0,0,-1.0))
+			glLoadMatrixd( matrix )
+			l.Light( GL_LIGHT0, mode = self )
+		self.matrix = matrix
+	
 	def selectRender( self, mode, toRender, events ):
-		"""Render each of these paths to color buffer"""
+		"""Render each path to color buffer
+		
+		We render all geometry as non-transparent geometry with 
+		unique colour values for each object.  We should be able 
+		to handle up to 2**24 objects before that starts failing.
+		"""
 		glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
 		glDisable( GL_LIGHTING )
 		glEnable( GL_COLOR_MATERIAL )
+		
 		self.visible = False
 		self.transparent = False 
 		self.lighting = False
 		self.textured = False 
+		
 		matrix = self.matrix
 		map = {}
 		idHolder = array( [0,0,0,0], 'b' )
@@ -298,11 +349,6 @@ class FlatPass( object ):
 		glColor4f( 0.0,0.0,0.0, 1.0)
 		glDisable( GL_COLOR_MATERIAL )
 	
-	def textureSort( self, paths ):
-		"""Sort paths by texture usage as texture-set, path-set sets"""
-	def appearanceGroup( self, paths ):
-		"""Group paths according to appearance values"""
-		
 	MAX_LIGHTS = -1
 	def __call__( self, context ):
 		"""Overall rendering pass interface for the context client"""
@@ -317,7 +363,7 @@ class FlatPass( object ):
 		self.projection = vp.viewMatrix()
 		self.viewport = (0,0) + context.getViewPort()
 		self.modelView = vp.modelMatrix()
-		self.eyePoint = vp.position
+		# TODO: calculate from view platform instead
 		self.frustum = frustum.Frustum.fromViewingMatrix(
 			dot(self.modelView,self.projection),
 			normalize = 1
