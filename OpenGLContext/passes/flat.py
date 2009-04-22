@@ -72,7 +72,9 @@ class FlatPass( object ):
 			np.append( path )
 			if hasattr( next, 'bind' ):
 				for context in self.contexts:
-					next.bind( context )
+					context = context()
+					if context is not None:
+						next.bind( context )
 			after = self.npFor(next)
 			for typ in self.INTERESTING_TYPES:
 				if isinstance( next, typ ):
@@ -144,8 +146,7 @@ class FlatPass( object ):
 		glLoadIdentity()
 
 
-		# opaque-only rendering pass...
-		# TODO: sort here...
+		# ordered set of things to work with...
 		matrices = [
 			(dot(p.transformMatrix(),matrix),p)
 			for p in self.paths[ nodetypes.Rendering ]
@@ -154,13 +155,14 @@ class FlatPass( object ):
 			(p[-1].sortKey( mode,m ), m, p )
 			for (m,p) in matrices
 		]
-		toRender.sort()
+		toRender.sort( key = lambda x: x[0])
 
 
 		events = context.getPickEvents()
 		if events:
 			self.selectRender( mode, toRender, events )
 			events.clear()
+			glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
 		
 		self.visible = True
 		self.transparent = False 
@@ -256,15 +258,15 @@ class FlatPass( object ):
 			pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
 			pixel = long( pixel.view( '<I' )[0][0][0] )
 			paths = map.get( pixel, [] )
-			event.setObjectPaths( paths )
+			event.setObjectPaths( [paths] )
 			# get the depth value under the cursor...
 			pixel = glReadPixels( point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT )
 			event.viewCoordinate = point[0],point[1],pixel[0][0]
 			event.modelViewMatrix = matrix
 			event.projectionMatrix = self.projection
 			event.viewport = self.viewport
-#			if hasattr( mode.context, 'ProcessEvent'):
-#				mode.context.ProcessEvent( event )
+			if hasattr( mode.context, 'ProcessEvent'):
+				mode.context.ProcessEvent( event )
 		glColor4f( 0.0,0.0,0.0, 1.0)
 		glDisable( GL_COLOR_MATERIAL )
 	
