@@ -3,6 +3,7 @@ from OpenGLContext.scenegraph import nodepath,switch
 from OpenGL.GL import *
 from OpenGL.GLU import gluUnProject
 from OpenGLContext.arrays import array, dot
+from OpenGLContext import frustum
 from vrml.vrml97 import nodetypes
 from vrml import olist
 from vrml.vrml97.transformmatrix import RADTODEG
@@ -159,14 +160,29 @@ class FlatPass( object ):
 
 		# ordered set of things to work with...
 		matrices = [
-			(dot(p.transformMatrix(),matrix),p)
-			for p in self.paths[ nodetypes.Rendering ]
+			(p.transformMatrix(),p)
+			for p in self.paths.get( nodetypes.Rendering, ())
 		]
-		toRender = [
-			(p[-1].sortKey( mode,m ), m, p )
+		expanded = [
+			(dot(m,matrix),m,p)
 			for (m,p) in matrices
 		]
+		toRender = [
+			(p[-1].sortKey( mode,m ), mp, p )
+			for (mp,m,p) in expanded
+			if (p and (
+				(not hasattr(p[-1],'visible')) or 
+				p[-1].visible(
+					self.frustum, m,
+					occlusion=False,
+					mode=self
+				)
+			))
+		]
 		toRender.sort( key = lambda x: x[0])
+		
+		# TODO: use child.visible here with occlusion queries
+		# to filter toRender down...
 
 
 		events = context.getPickEvents()
@@ -224,6 +240,7 @@ class FlatPass( object ):
 		for key,tmatrix,path in toRender:
 			self.matrix = tmatrix
 			glLoadMatrixd( tmatrix )
+			
 			self.transparent = key[0]
 			if key[0] != transparentSetup:
 				glEnable(GL_BLEND);
@@ -301,6 +318,10 @@ class FlatPass( object ):
 		self.viewport = (0,0) + context.getViewPort()
 		self.modelView = vp.modelMatrix()
 		self.eyePoint = vp.position
+		self.frustum = frustum.Frustum.fromViewingMatrix(
+			dot(self.modelView,self.projection),
+			normalize = 1
+		)
 		
 		# We're here setting up legacy OpenGL settings 
 		# eventually these will be uniform setups...
