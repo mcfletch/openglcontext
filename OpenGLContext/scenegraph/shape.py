@@ -1,9 +1,11 @@
 """Renderable geometry composed of a geometry object with applied appearance"""
 from OpenGL.GL import *
 from vrml.vrml97 import basenodes
-from OpenGLContext.scenegraph import boundingvolume
+from OpenGLContext.scenegraph import boundingvolume, polygonsort
 from OpenGLContext.debug.logs import visitor_log
+from OpenGLContext.arrays import array
 import traceback, cStringIO
+LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
 class Shape( basenodes.Shape ):
 	"""Defines renderable objects by binding Appearance to a geometry node
@@ -98,7 +100,20 @@ class Shape( basenodes.Shape ):
 		
 	def sortKey( self, mode, matrix ):
 		"""Produce the sorting key for this shape's appearance/shaders/etc"""
-		return self.appearance.sortKey( mode, matrix )
+		# distance calculation...
+		distance = polygonsort.distances(
+			LOCAL_ORIGIN,
+			modelView = matrix,
+			projection = mode.getProjection(),
+			viewport = mode.getViewport(),
+		)[0]
+		if self.appearance:
+			key = self.appearance.sortKey( mode, matrix )
+		else:
+			key = (False,[],None)
+		if key[0]:
+			distance = -distance
+		return key[0:2]+ (distance,) + key[1:]
 
 	def boundingVolume( self, mode ):
 		"""Create a bounding-volume object for this node

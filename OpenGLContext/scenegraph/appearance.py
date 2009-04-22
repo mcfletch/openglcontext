@@ -4,7 +4,6 @@ from OpenGL.GL import glColor3f
 from OpenGLContext.arrays import array 
 from OpenGLContext.scenegraph import polygonsort
 
-LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
 class Appearance(basenodes.Appearance):
 	"""Specifies visual properties for geometry
@@ -96,17 +95,8 @@ class Appearance(basenodes.Appearance):
 				tex = self.texture.cached( mode )
 				if tex:
 					textureToken = [tex.texture]
-		# distance calculation...
-		distance = polygonsort.distances(
-			LOCAL_ORIGIN,
-			modelView = matrix,
-			projection = mode.getProjection(),
-			viewport = mode.getViewport(),
-		)[0]
-		if transparent:
-			distance = - distance 
 		return (
-			transparent, textureToken, distance, 
+			transparent, textureToken,
 			materialParams
 		)
 	
