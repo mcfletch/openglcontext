@@ -16,69 +16,29 @@ if sys.maxint > 2L<<32:
 	BIGINTS = True 
 else:
 	BIGINTS = False
-
-class FlatPass( object ):
-	"""Flat rendering pass with a single function to render scenegraph 
 	
-	Uses structural scenegraph observations to allow the actual
-	rendering pass be a simple iteration over the paths known 
-	to be active in the scenegraph.
+class SGObserver( object ):
+	"""Observer of a scenegraph that creates a flat set of paths 
 	
-	Rendering Attributes:
-	
-		visible -- whether we are currently rendering a visible pass
-		transparent -- whether we are currently doing a transparent pass
-		lighting -- whether we currently are rendering a lit pass
-		context -- context for which we are rendering 
-		cache -- cache of the context for which we are rendering 
-		projection -- projection matrix of current view platform
-		modelView -- model-view matrix of current view platform 
-		viewport -- 4-component viewport definition for current context 
-		frustum -- viewing-frustum definition for current view platform
-		MAX_LIGHTS -- queried maximum number of lights
-		
-
-		passCount -- not used, always set to 0 for code that expects
-			a passCount to be available.
-		transform -- ignored, legacy code only 
-
+	Uses dispatcher watches to observe any changes to the (rendering)
+	structure of a scenegraph and uses it to update an internal set 
+	of paths for all renderable objects in the scenegraph.
 	"""
-	passCount = 0
-	visible = True 
-	transparent = False 
-	transform = True
-	lighting = True
-	lightingAmbient = True
-	lightingDiffuse = True
-	
-	selectNames = False
-	selectForced = False
-
-	cache = None
-	
-	INTERESTING_TYPES = [
-		nodetypes.Rendering,
-		nodetypes.Bindable,
-		nodetypes.Light,
-		nodetypes.Traversable,
-		nodetypes.Background,
-		nodetypes.TimeDependent,
-		nodetypes.Fog,
-		nodetypes.Viewpoint,
-		nodetypes.NavigationInfo,
-	]
+	INTERESTING_TYPES = []
 	def __init__( self, scene, contexts ):
 		"""Initialize the FlatPass for this scene and set of contexts 
 		
 		scene -- the scenegraph to manage as a flattened hierarchy
-		contexts -- set of (weakrefs to) contexts to be serviced
+		contexts -- set of (weakrefs to) contexts to be serviced, 
+			normally is a reference to Context.allContexts
 		"""
 		self.scene = scene 
 		self.contexts = contexts
 		self.paths = {
 		}
 		self.nodePaths = {}
-		self.integrate( scene )
+		if scene:
+			self.integrate( scene )
 		connect(
 			self.onChildAdd,
 			signal = olist.OList.NEW_CHILD_EVT,
@@ -161,6 +121,58 @@ class FlatPass( object ):
 						except KeyError, err:
 							pass
 			self.paths[key][:] = filtered
+
+class FlatPass( SGObserver ):
+	"""Flat rendering pass with a single function to render scenegraph 
+	
+	Uses structural scenegraph observations to allow the actual
+	rendering pass be a simple iteration over the paths known 
+	to be active in the scenegraph.
+	
+	Rendering Attributes:
+	
+		visible -- whether we are currently rendering a visible pass
+		transparent -- whether we are currently doing a transparent pass
+		lighting -- whether we currently are rendering a lit pass
+		context -- context for which we are rendering 
+		cache -- cache of the context for which we are rendering 
+		projection -- projection matrix of current view platform
+		modelView -- model-view matrix of current view platform 
+		viewport -- 4-component viewport definition for current context 
+		frustum -- viewing-frustum definition for current view platform
+		MAX_LIGHTS -- queried maximum number of lights
+		
+
+		passCount -- not used, always set to 0 for code that expects
+			a passCount to be available.
+		transform -- ignored, legacy code only 
+
+	"""
+	passCount = 0
+	visible = True 
+	transparent = False 
+	transform = True
+	lighting = True
+	lightingAmbient = True
+	lightingDiffuse = True
+	
+	# this are now obsolete...
+	selectNames = False
+	selectForced = False
+
+	cache = None
+	
+	INTERESTING_TYPES = [
+		nodetypes.Rendering,
+		nodetypes.Bindable,
+		nodetypes.Light,
+		nodetypes.Traversable,
+		nodetypes.Background,
+		nodetypes.TimeDependent,
+		nodetypes.Fog,
+		nodetypes.Viewpoint,
+		nodetypes.NavigationInfo,
+	]
 	def currentBackground( self ):
 		"""Find our current background node"""
 		paths = self.paths.get( nodetypes.Background, () )
@@ -179,28 +191,39 @@ class FlatPass( object ):
 		
 		# TODO: use child.visible here with occlusion queries
 		# to filter toRender down...
-		matrices = [
-			(p.transformMatrix(),p)
-			for p in self.paths.get( nodetypes.Rendering, ())
-		]
-		expanded = [
-			(dot(m,matrix),m,p)
-			for (m,p) in matrices
-		]
-		toRender = [
-			(p[-1].sortKey( self,m ), mp, p )
-			for (mp,m,p) in expanded
-			if (p and (
-				(not hasattr(p[-1],'visible')) or 
-				p[-1].visible(
-					self.frustum, m,
-					occlusion=False,
-					mode=self
-				)
-			))
-		]
+		toRender = []
+		for path in self.paths.get( nodetypes.Rendering, ()):
+			tmatrix = path.transformMatrix()
+			mvmatrix = dot(tmatrix,matrix)
+			sortKey = path[-1].sortKey( self, tmatrix )
+			if hasattr( path[-1], 'boundingVolume' ):
+				bvolume = path[-1].boundingVolume( self )
+			else:
+				bvolume = None
+			toRender.append( (sortKey, mvmatrix,tmatrix,bvolume, path ) )
+		# TODO: allow 
+		toRender = self.frustumVisibilityFilter( toRender )
 		toRender.sort( key = lambda x: x[0])
 		return toRender
+	def frustumVisibilityFilter( self, records ):
+		"""Filter records for visibility using frustum planes
+		
+		This does per-object culling based on frustum lookups
+		rather than object query values.  It should be fast 
+		*if* the frustcullaccel module is available, if not 
+		it will be dog-slow.
+		"""
+		result = []
+		frustum = self.frustum
+		for record in records:
+			(key,mv,tm,bv,path) = record 
+			if bv.visible( 
+				frustum, tm,
+				occlusion=False,
+				mode=self
+			):
+				result.append( record )
+		return result
 	
 	def Render( self, context, mode ):
 		"""Render the geometry attached to this performer's scenegraph"""
@@ -238,9 +261,9 @@ class FlatPass( object ):
 		self.legacyLightRender( matrix )
 		transparentSetup = False
 		
-		for key,tmatrix,path in toRender:
-			self.matrix = tmatrix
-			glLoadMatrixd( tmatrix )
+		for key,mvmatrix,tmatrix,bvolume,path in toRender:
+			self.matrix = mvmatrix
+			glLoadMatrixd( mvmatrix )
 			
 			self.transparent = key[0]
 			if key[0] != transparentSetup:
@@ -320,7 +343,7 @@ class FlatPass( object ):
 		map = {}
 		idHolder = array( [0,0,0,0], 'b' )
 		idSetter = idHolder.view( '<I' )
-		for id,(key,tmatrix,path) in enumerate(toRender):
+		for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
 			id += 50
 			idSetter[0] = id
 			glColor4bv( idHolder )
