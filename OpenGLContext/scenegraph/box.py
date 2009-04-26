@@ -1,5 +1,5 @@
 """Box node for use in geometry attribute of Shapes"""
-from OpenGLContext.scenegraph import cache
+from vrml import cache
 from OpenGLContext.arrays import array
 from OpenGL.arrays import vbo
 from OpenGL.GL import *

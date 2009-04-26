@@ -363,9 +363,11 @@ class Context(object):
 			* calls self.unlockScenegraph()
 			* calls self.setCurrent()
 			* calls self.renderPasses( self )
+				See: passes sub-package
 				See: visitor.py, rendervisitor.py, renderpass.py,
 				shadow/passes.py for examples of render-pass-sets
 				which can be triggered.
+				See: flat.py for standard second-generation renderer
 
 				The RenderPasses define the core of the rendering
 				mechanism.  The default rendering passes will defer

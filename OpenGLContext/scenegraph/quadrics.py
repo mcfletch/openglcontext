@@ -5,7 +5,8 @@ from OpenGL.GLUT import *
 from vrml import field, protofunctions, node
 from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext import displaylist
-from OpenGLContext.scenegraph import cache, boundingvolume
+from vrml import cache
+from OpenGLContext.scenegraph import boundingvolume
 
 class Quadric( nodetypes.Geometry, node.Node ):
 	"""Base-class for the various quadratic-type geometry classes"""

@@ -1,7 +1,7 @@
 """VRML97-like Text node"""
 from vrml.vrml97 import basenodes
 from OpenGLContext.scenegraph.text import fontprovider
-from OpenGLContext.scenegraph import cache
+from vrml import cache
 from vrml import protofunctions
 
 class Text( basenodes.Text ):

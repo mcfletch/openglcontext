@@ -1,7 +1,8 @@
 """IndexedLineSet VRML97 node implemented using display-lists"""
 from OpenGL.GL import *
 from OpenGLContext import displaylist
-from OpenGLContext.scenegraph import cache, coordinatebounded
+from vrml import cache
+from OpenGLContext.scenegraph import coordinatebounded
 from OpenGLContext.scenegraph import vertex 
 from vrml.vrml97 import basenodes
 import warnings

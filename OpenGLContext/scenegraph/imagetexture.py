@@ -4,7 +4,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 import traceback
 from OpenGLContext import texture, context
-from OpenGLContext.scenegraph import cache
+from vrml import cache
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import node, field, protofunctions, fieldtypes
 from OpenGLContext.debug.logs import context_log, texture_log

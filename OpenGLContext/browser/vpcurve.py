@@ -1,7 +1,7 @@
 """VPython-style curve object, similar to an IndexedLineSet"""
 from OpenGL.GL import *
 from OpenGLContext import displaylist
-from OpenGLContext.scenegraph import cache
+from vrml import cache
 from vrml.vrml97 import nodetypes
 from vrml import node, field, protofunctions
 from OpenGLContext.arrays import concatenate, asarray

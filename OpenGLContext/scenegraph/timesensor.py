@@ -2,7 +2,7 @@
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import protofunctions
 from OpenGLContext.events import timer
-from OpenGLContext.scenegraph import cache
+from vrml import cache
 
 class TimeSensor(basenodes.TimeSensor):
 	"""TimeSensor node based on VRML 97 TimeSensor

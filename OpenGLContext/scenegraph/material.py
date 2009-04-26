@@ -3,7 +3,7 @@ from OpenGL.GL import *
 from vrml.vrml97 import basenodes
 from vrml import protofunctions
 from OpenGLContext.arrays import zeros
-from OpenGLContext.scenegraph import cache
+from vrml import cache
 from OpenGLContext import displaylist
 import ctypes
 

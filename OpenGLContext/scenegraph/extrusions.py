@@ -1,7 +1,7 @@
 """GLE-based extrusion node-types"""
 from vrml import node, field
 from vrml.vrml97 import nodetypes
-from OpenGLContext.scenegraph import cache
+from vrml import cache
 from OpenGLContext import displaylist
 from OpenGL.GLE import *
 from math import pi

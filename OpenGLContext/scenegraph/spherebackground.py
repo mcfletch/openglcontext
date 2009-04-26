@@ -3,7 +3,7 @@ from math import *
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
 
-from OpenGLContext.scenegraph import cache
+from vrml import cache
 from vrml import field, protofunctions, node
 from vrml.vrml97 import nodetypes
 from OpenGLContext import displaylist
