@@ -120,7 +120,14 @@ class TestContext( BaseContext ):
 			))
 
 if __name__ == "__main__":
+	from OpenGLContext.passes import renderpass 
+	import sys
+	if sys.argv[1:]:
+		name = 'old.profile'
+		renderpass.USE_PERFORMER = False
+	else:
+		name = 'new.profile'
 	import cProfile
-	cProfile.run( "MainFunction ( TestContext)", 'new.profile' )
+	cProfile.run( "MainFunction ( TestContext)", name )
 
 
