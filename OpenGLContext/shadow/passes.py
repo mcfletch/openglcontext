@@ -43,9 +43,10 @@ After the lighting passes are finished, the standard selection
 rendering passes can occur.
 """
 from OpenGL.GL import *
-from OpenGLContext import visitor, rendervisitor, doinchildmatrix, frustum
-from OpenGLContext.passes import renderpass
-from OpenGLContext.scenegraph import cache, basenodes
+from OpenGLContext import visitor, doinchildmatrix, frustum
+from OpenGLContext.passes import renderpass, rendervisitor
+from vrml import cache
+from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.shadow import edgeset
 from OpenGLContext.debug import state
 from vrml import protofunctions
