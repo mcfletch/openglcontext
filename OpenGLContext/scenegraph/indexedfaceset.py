@@ -61,8 +61,9 @@ from math import pi, sqrt
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
+from vrml import cache
 from OpenGLContext import triangleutilities, displaylist
-from OpenGLContext.scenegraph import arraygeometry, cache, coordinatebounded
+from OpenGLContext.scenegraph import arraygeometry, coordinatebounded
 from OpenGLContext.scenegraph import polygon, vertex, polygontessellator, indexedpolygons
 from OpenGLContext.debug.logs import geometry_log
 from vrml.vrml97 import basenodes
