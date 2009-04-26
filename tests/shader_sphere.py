@@ -32,28 +32,12 @@ def sphere( phi=pi/8.0 ):
 	coords[:,:,0] *= scale
 	coords[:,:,2] *= scale
 	
-#	sqrt( x**2 + z**2) = (sin(steps).reshape( (-1,1))
-#	# scale factor for x and y
-#	# (x/r)**2 + (y/r)**2/r + z**2 == sqrt(1) == 1 (unit sphere)
-#	# 1-(z**2) == (x**2 + y**2)/r
-#	# r = (x**2 + y**2)/(1-(z**2))
-#	lengths = 1-(coords[:,:,1]**2)
-#	
-#	
-#	import pdb 
-#	pdb.set_trace()
-#	r = (coords[:,:,0]**2 + coords[:,:,2]**2)/(1-coords[:,:,1]**2)
-#	
-#	# now normalize the coordinates...
-#	coords /= sqrt( sum( abs(coords), axis=2 ) ).reshape( (ystep,ystep,1))
-	indices = zeros( (ystep-1,ystep-1,6),dtype='H' )
+	indices = zeros( (zstep-1,ystep-1,6),dtype='H' )
 	# all indices now render the first rectangle...
-#	import pdb
-#	pdb.set_trace()
 	indices[:] = (0,0+ystep,0+ystep+xstep, 0,0+ystep+xstep,0+xstep)
 	xoffsets = arange(0,ystep-1,1,dtype='H').reshape( (-1,1))
 	indices += xoffsets
-	yoffsets = arange(0,ystep-1,1,dtype='H').reshape( (-1,1,1))
+	yoffsets = arange(0,zstep-1,1,dtype='H').reshape( (-1,1,1))
 	#yoffsets = (xoffsets * ystep).reshape( (-1,1,1,))
 	indices += (yoffsets * ystep)
 	return coords.reshape((-1,3)), indices.reshape((-1,))
@@ -76,11 +60,11 @@ class TestContext( BaseContext ):
 	"""
 	
 	def OnInit( self ):
-		coords,indices = sphere( pi/2.0 )
-		print 'coordinates', coords 
-		print 'indices', indices
-		print 'taken', take(coords,indices).reshape( (-1,3))
-		self.coordLength = len(coords)
+		coords,indices = sphere( pi/64 )
+		print 'coordinates', coords.shape
+#		print 'indices', indices
+#		print 'taken', take(coords,indices).reshape( (-1,3))
+		self.coordLength = len(indices)
 		self.coords = vbo.VBO( coords )
 		self.indices = vbo.VBO( indices, target = 'GL_ELEMENT_ARRAY_BUFFER' )
 		glEnableClientState(GL_VERTEX_ARRAY);
