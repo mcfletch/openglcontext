@@ -11,8 +11,124 @@ from OpenGLContext.arrays import *
 from OpenGLContext.debug.logs import geometry_log
 from math import pi
 
-class VBOHolder( object ):
+class Holder( object ):
 	"""Substitutes as object to hold vbo values"""
+	coord=None
+	normal = None 
+	color = None 
+	texCoord = None
+	def _enableColors( self, node):
+		"""Enable the colour array if possible"""
+		color = self.color
+		if color is not None:
+			# make the color field alter the diffuse color
+			glColorMaterial( GL_FRONT_AND_BACK, GL_DIFFUSE)
+			glEnable( GL_COLOR_MATERIAL )
+			glColorPointer( 3,GL_FLOAT,0,color )
+			glEnableClientState( GL_COLOR_ARRAY )
+			return 1
+		else:
+			return 0
+	def _enableNormals( self, node ):
+		"""Enable the normal array if possible"""
+		normal = self.normal
+		if normal is not None:
+			# make the color field alter the diffuse color
+			glNormalPointer( GL_FLOAT, 0, normal )
+			glEnableClientState( GL_NORMAL_ARRAY )
+			glEnable(GL_NORMALIZE); # should do this explicitly eventually
+			return 1
+		else:
+			glDisable( GL_LIGHTING )
+			geometry_log.warn(
+				"""%s does not define normals, but is being rendered as lit geometry! This is likely an error in your content""",
+				node,
+			)
+			return 0
+	def _enableTextures( self, node ):
+		"""Enable the normal array if possible"""
+		tex = self.texCoord
+		if tex is not None:
+			glTexCoordPointer( 2,GL_FLOAT,0, tex )
+			glEnableClientState( GL_TEXTURE_COORD_ARRAY )
+			return 1
+		else:
+			return 0
+	def _enableCoords( self, node):
+		"""Enable the point array if possible"""
+		coord = self.coord
+		if coord is not None:
+			glVertexPointer( 3,GL_FLOAT, 0, coord )
+			glEnableClientState(GL_VERTEX_ARRAY);
+			return 1
+		else:
+			return 0
+
+class VBOHolder( Holder ):
+	"""VBO-based holder"""
+	def _enableColors( self, node):
+		"""Enable the colour array if possible"""
+		color = self.color
+		if color is not None:
+			# make the color field alter the diffuse color
+			glColorMaterial( GL_FRONT_AND_BACK, GL_DIFFUSE)
+			glEnable( GL_COLOR_MATERIAL )
+			color.bind()
+			try:
+				glColorPointer( 3,GL_FLOAT,0,color )
+			finally:
+				color.unbind()
+			glEnableClientState( GL_COLOR_ARRAY )
+			return 1
+		else:
+			return 0
+	def _enableNormals( self, node ):
+		"""Enable the normal array if possible"""
+		normal = self.normal
+		if normal is not None:
+			# make the color field alter the diffuse color
+			normal.bind()
+			try:
+				glNormalPointer( GL_FLOAT, 0, normal )
+			finally:
+				normal.unbind()
+			glEnableClientState( GL_NORMAL_ARRAY )
+			glEnable(GL_NORMALIZE); # should do this explicitly eventually
+			return 1
+		else:
+			glDisable( GL_LIGHTING )
+			geometry_log.warn(
+				"""%s does not define normals, but is being rendered as lit geometry! This is likely an error in your content""",
+				node,
+			)
+			return 0
+	def _enableTextures( self, node ):
+		"""Enable the normal array if possible"""
+		tex = self.texCoord
+		if tex is not None:
+			tex.bind()
+			try:
+				glTexCoordPointer( 2,GL_FLOAT,0, tex )
+			finally:
+				tex.unbind()
+			glEnableClientState( GL_TEXTURE_COORD_ARRAY )
+			return 1
+		else:
+			return 0
+	def _enableCoords( self, node):
+		"""Enable the point array if possible"""
+		coord = self.coord
+		if coord is not None:
+			coord.bind()
+			try:
+				glVertexPointer( 3,GL_FLOAT, 0, coord )
+			finally:
+				coord.unbind()
+			glEnableClientState(GL_VERTEX_ARRAY);
+			return 1
+		else:
+			return 0
+	
 
 class IndexedPolygons (
 	coordinatebounded.CoordinateBounded,
@@ -79,16 +195,16 @@ class IndexedPolygons (
 		glPushAttrib(GL_ALL_ATTRIB_BITS)
 		try:
 			vbos = self.get_vbos(mode)
-			if not self._enableCoords(vbos=vbos):
+			if not vbos._enableCoords( self ):
 				return 1
 			if visible:
 				# potentially enable colour and texture arrays
 				# do we have a colour-array to enable
-				self._enableColors(vbos=vbos)
+				vbos._enableColors(self)
 			if textured:
-				self._enableTextures(vbos=vbos)
+				vbos._enableTextures(self)
 			if lit:
-				self._enableNormals(vbos=vbos)
+				vbos._enableNormals(self)
 				
 			# calculate GL constant for # of sides
 			if self.polygonSides == 3:
@@ -119,52 +235,6 @@ class IndexedPolygons (
 			glPopAttrib()
 			glPopClientAttrib()
 		return 1
-	def _enableColors( self, vbos):
-		"""Enable the colour array if possible"""
-		color = vbos.color
-		if len(color):
-			# make the color field alter the diffuse color
-			glColorMaterial( GL_FRONT_AND_BACK, GL_DIFFUSE)
-			glEnable( GL_COLOR_MATERIAL )
-			self.callBound( glColorPointerf, color )
-			glEnableClientState( GL_COLOR_ARRAY )
-			return 1
-		else:
-			return 0
-	def _enableNormals( self, vbos ):
-		"""Enable the normal array if possible"""
-		normal = vbos.normal
-		if len(normal):
-			# make the color field alter the diffuse color
-			self.callBound( glNormalPointerf , normal )
-			glEnableClientState( GL_NORMAL_ARRAY )
-			glEnable(GL_NORMALIZE); # should do this explicitly eventually
-			return 1
-		else:
-			glDisable( GL_LIGHTING )
-			geometry_log.warn(
-				"""%s does not define normals, but is being rendered as lit geometry! This is likely an error in your content""",
-				self,
-			)
-			return 0
-	def _enableTextures( self, vbos ):
-		"""Enable the normal array if possible"""
-		tex = vbos.texCoord
-		if len(tex):
-			self.callBound( glTexCoordPointerf, tex )
-			glEnableClientState( GL_TEXTURE_COORD_ARRAY )
-			return 1
-		else:
-			return 0
-	def _enableCoords( self, vbos):
-		"""Enable the point array if possible"""
-		coord = vbos.coord
-		if len(coord):
-			self.callBound( glVertexPointerf, coord )
-			glEnableClientState(GL_VERTEX_ARRAY);
-			return 1
-		else:
-			return 0
 	
 	def drawTransparent( self, constant, mode=None ):
 		"""Fairly complex mechanism for drawing sorted polygons"""
@@ -206,8 +276,6 @@ class IndexedPolygons (
 		sortedIndices = self.index[:]
 		sortedIndices = reshape( sortedIndices, (-1,self.polygonSides))
 		sortedIndices = take( sortedIndices, indices, 0 )
-		
-
 		# okay, now we can render...
 		glDrawElementsui(
 			constant,
@@ -230,21 +298,22 @@ class IndexedPolygons (
 				holder = mode.cache.holder(self, key = "vbos", data = vbos)
 				for field,attr in self.NODE_FIELDS:
 					node = getattr( self, field )
-					value = getattr( node, attr, ())
-					if len(value):
+					value = getattr( node, attr, None)
+					if value is not None:
 						setattr( vbos,field, vbo.VBO( value ))
+						# TODO: this is *way* too general, as it will 
+						# cause the *entire* set of VBOs to be discarded 
+						# and recreated whenever *anything* changes!
 						holder.depend( node, attr )
-					else:
-						setattr( vbos,field, value)
-					holder.depend( self, field )
+						holder.depend( self, field )
 		else:
-			vbos = VBOHolder()
+			vbos = Holder()
 			for field,attr in self.NODE_FIELDS:
 				node = getattr( self, field )
 				if node:
 					value = getattr( node, attr, ())
-					if len(value):
-						setattr( vbos,field, vbo.VBO( value ))
+					setattr( vbos,field, vbo.VBO( value ))
+					
 		return vbos
 	def callBound( self, function, array ):
 		if hasattr( array, 'bind' ):
