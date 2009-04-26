@@ -43,10 +43,7 @@ def sphere( phi=pi/8.0 ):
 	yoffsets = arange(0,zstep-1,1,dtype='H').reshape( (-1,1,1))
 	#yoffsets = (xoffsets * ystep).reshape( (-1,1,1,))
 	indices += (yoffsets * ystep)
-	print 'tex coordinates', coords.reshape((-1,5))[:,3:5]
 	return coords.reshape((-1,5)), indices.reshape((-1,))
-	
-
 
 class TestContext( BaseContext ):
 	"""OpenGL 3.1 deprecates non-vertex-attribute drawing
@@ -64,10 +61,7 @@ class TestContext( BaseContext ):
 	"""
 	
 	def OnInit( self ):
-		coords,indices = sphere( pi/8 )
-		print 'coordinates', coords.shape
-#		print 'indices', indices
-#		print 'taken', take(coords,indices).reshape( (-1,3))
+		coords,indices = sphere( pi/128 )
 		self.coordLength = len(indices)
 		self.coords = vbo.VBO( coords )
 		self.indices = vbo.VBO( indices, target = 'GL_ELEMENT_ARRAY_BUFFER' )
@@ -82,15 +76,17 @@ class TestContext( BaseContext ):
 		BaseContext.Render( self, mode )
 		self.texture.render( mode=mode )
 		self.coords.bind()
+		# TODO: use attributes rather than legacy operations...
 		glVertexPointer( 3, GL_FLOAT,20,self.coords)
 		glTexCoordPointer( 3, GL_FLOAT,20,self.coords+12)
 		glNormalPointer( GL_FLOAT,20,self.coords )
 		self.indices.bind()
+		# Can loop loading matrix and calling just this function 
+		# for each sphere you want to render...
+		# include both scale and position in the matrix...
 		glDrawElements( GL_TRIANGLES, self.coordLength, GL_UNSIGNED_SHORT, self.indices )
 		
 
 if __name__ == "__main__":
-#	coords,indices = sphere( pi/2 )
-#	print take( coords, indices )
 	MainFunction ( TestContext)
 
