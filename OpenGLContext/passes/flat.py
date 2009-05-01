@@ -217,11 +217,14 @@ class FlatPass( SGObserver ):
 		frustum = self.frustum
 		for record in records:
 			(key,mv,tm,bv,path) = record 
-			if bv.visible( 
-				frustum, tm,
-				occlusion=False,
-				mode=self
-			):
+			if bv is not None:
+				if bv.visible( 
+					frustum, tm,
+					occlusion=False,
+					mode=self
+				):
+					result.append( record )
+			else:
 				result.append( record )
 		return result
 	
