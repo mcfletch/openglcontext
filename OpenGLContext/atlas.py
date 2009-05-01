@@ -251,7 +251,7 @@ class Map( object ):
 		self.atlas.render()
 		# should also load our texture-transform matrix.
 		glMatrixMode( GL_TEXTURE )
-		glLoadMatrixf( self.matrix() )
+		glLoadMatrixd( self.matrix() )
 		glMatrixMode( GL_MODELVIEW )
 
 class AtlasManager( object ):
