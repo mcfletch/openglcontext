@@ -1,6 +1,11 @@
 #! /usr/bin/env python
 '''Simple demo of a rotating image mapped to a square
 '''
+import OpenGL 
+OpenGL.ERROR_CHECKING = False 
+OpenGL.STORE_POINTERS = False 
+OpenGL.ERROR_ON_COPY = True
+
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
@@ -27,13 +32,15 @@ scene = sceneGraph(
 						Shape(
 							geometry = IndexedFaceSet(
 								coord = Coordinate(
-									point = [[-1,-1,0],[1,-1,0],[1,1,0],[-1,1,0]],
+									point = [
+										[-1,-1,0],[1,-1,0],[1,1,0],[-1,1,0]
+									],
 								),
-								coordIndex = [ 0,1,2,3 ],
+								coordIndex = [ 0,1,2,-1,0,2,3 ],
 								texCoord = TextureCoordinate(
 									point = [[0,0],[1,0],[1,1],[0,1]],
 								),
-								texCoordIndex = [0,1,2,3 ],
+								texCoordIndex = [0,1,2,-1,0,2,3 ],
 							),
 							appearance = Appearance(
 								texture = ImageTexture(
