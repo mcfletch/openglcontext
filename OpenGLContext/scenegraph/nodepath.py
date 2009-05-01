@@ -3,7 +3,7 @@
 from vrml.vrml97 import nodepath, nodetypes
 from vrml.cache import CACHE
 from OpenGLContext import quaternion
-from OpenGL.GL import glMultMatrixf
+from OpenGL.GL import glMultMatrixd
 
 class _NodePath( object ):
 	"""OpenGLContext-specific node-path class
@@ -27,7 +27,7 @@ class _NodePath( object ):
 		matrix = self.transformMatrix( 
 			translate=translate, scale=scale, rotate=rotate
 		)
-		glMultMatrixf( 
+		glMultMatrixd( 
 			matrix
 		)
 	def quaternion( self ):
