@@ -53,6 +53,7 @@ class _CubeBackground( object ):
 		else.
 		"""
 		if mode.passCount == 0:
+			glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
 			try:
 				glDisable( GL_DEPTH_TEST ) # we don't want to do anything with the depth buffer...
 				glDisable( GL_LIGHTING )
@@ -93,6 +94,7 @@ class _CubeBackground( object ):
 				# now, completely wipe out the depth buffer,
 				# so this appears as a "background"...
 				glClear(GL_DEPTH_BUFFER_BIT)
+				glPopClientAttrib()
 	
 	# TODO: should have one-per-context...
 	VBO = None
