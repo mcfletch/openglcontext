@@ -35,10 +35,9 @@ class _SphereBackground( object ):
 			first = displaylist.DisplayList()
 			first.start()
 			try:
-				glVertexPointerd(vertices)
-				glColorPointerd ( colors )
+				glVertexPointerf(vertices)
+				glColorPointerf ( colors )
 				glEnableClientState( GL_VERTEX_ARRAY )
-				glDisableClientState( GL_NORMAL_ARRAY )
 				glEnableClientState( GL_COLOR_ARRAY )
 				glDrawArrays( GL_TRIANGLE_STRIP, 0, len(vertices))
 			finally:
@@ -118,7 +117,7 @@ class _SphereBackground( object ):
 		if doStart:
 			colors[0] = colorSet[0,1:]
 		colors[-1] = colorSet[-1,1:]
-		return vertices, colors
+		return vertices.astype('f'), colors.astype('f')
 		
 	def Render( self, mode, clear = 1 ):
 		"""Render the Background
