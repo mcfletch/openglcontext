@@ -3,6 +3,7 @@
 '''
 import OpenGL 
 #OpenGL.FULL_LOGGING = True
+OpenGL.ERROR_ON_COPY = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
@@ -62,6 +63,7 @@ class TestContext( BaseContext ):
 	
 	def OnInit( self ):
 		coords,indices = sphere( pi/128 )
+		coords = ascontiguousarray( coords )
 		self.coordLength = len(indices)
 		self.coords = vbo.VBO( coords )
 		self.indices = vbo.VBO( indices, target = 'GL_ELEMENT_ARRAY_BUFFER' )
@@ -75,6 +77,8 @@ class TestContext( BaseContext ):
 		"""Render the geometry for the scene."""
 		BaseContext.Render( self, mode )
 		self.texture.render( mode=mode )
+#		import pdb
+#		pdb.set_trace()
 		self.coords.bind()
 		# TODO: use attributes rather than legacy operations...
 		glVertexPointer( 3, GL_FLOAT,20,self.coords)
@@ -88,5 +92,7 @@ class TestContext( BaseContext ):
 		
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	import cProfile
+	cProfile.run( 'MainFunction ( TestContext)', 'sphere.profile' )
+	
 
