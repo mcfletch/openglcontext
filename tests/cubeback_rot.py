@@ -1,5 +1,8 @@
 #! /usr/bin/env python
 '''CubeBackground object test (image cube background)'''
+import OpenGL 
+OpenGL.ERROR_ON_COPY = True
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGLContext.loaders.loader import Loader
