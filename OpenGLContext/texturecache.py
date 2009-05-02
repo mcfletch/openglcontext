@@ -13,23 +13,25 @@ class TextureCache( object ):
 	def __init__( self, atlasSize=None ):
 		self.textures = weakref.WeakValueDictionary()
 		self.atlases = atlas.AtlasManager( max_size = atlasSize )
-	def getTexture( self, pil, textureClass, mode=None ):
+	def getTexture( self, pil, textureClass, mode=None, repeating=False ):
 		"""Get a texture for the given pil image and textureClass"""
+		current = None
 		if hasattr( pil, 'info' ):
 			ID = pil.info.get('url')
-			if ID is not None:
-				current = self.textures.get( ID )
-				if current:
-					return current
-			try:
-				self.textures[ID] = current =  self.atlases.add( pil )
-			except atlas.AtlasError, err:
-				self.textures[ID] = current = textureClass(pil)
 		else:
+			ID = None
 			# don't have a URL, can't cache...
+		if ID is not None:
+			current = self.textures.get( (ID,repeating))
+			if current:
+				return current
+		if repeating:
+			current = textureClass(pil)
+		else:
 			try:
 				current =  self.atlases.add( pil )
 			except atlas.AtlasError, err:
 				current = textureClass(pil)
+		if ID is not None and current is not None:
+			self.textures[(ID,repeating)] = current
 		return current
-	

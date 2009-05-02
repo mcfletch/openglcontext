@@ -49,21 +49,21 @@ class Appearance(basenodes.Appearance):
 		textureToken = None
 		if self.texture:
 			textured = 1
-			if self.textureTransform:
-				# only need this if we are textured
-				textureToken = self.textureTransform.render (mode=mode)
 			if self.texture.render( lit=lit, mode=mode ):
 				if alpha==1.0:
 					alpha = .5
+			if self.textureTransform:
+				# only need this if we are textured
+				textureToken = self.textureTransform.render (mode=mode)
 		else:
 			textured = 0
 		return lit, textured, alpha, textureToken
 	def renderPost( self, textureToken=None, mode=None ):
 		"""Cleanup after rendering of this node has completed"""
 		if self.texture:
-			self.texture.renderPost(mode=mode)
 			if self.textureTransform:
 				self.textureTransform.renderPost(textureToken,mode=mode)
+			self.texture.renderPost(mode=mode)
 	
 
 	def sortKey( self, mode, matrix ):
