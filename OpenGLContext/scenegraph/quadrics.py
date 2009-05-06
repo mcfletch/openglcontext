@@ -1,10 +1,11 @@
-"""Quadratic geometry types (cone, sphere, cylinder, etc)"""
+"""Quadratic geometry types (cone, sphere, cylinder, etc)
+
+This implementation does not use the gluQuadric objects, it 
+does direct creation via numpy operations.
+"""
 from OpenGL.GL import *
-from OpenGL.GLU import *
-from OpenGL.GLUT import *
 from vrml import field, protofunctions, node
 from vrml.vrml97 import basenodes, nodetypes
-from OpenGLContext import displaylist
 from vrml import cache
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.arrays import *
@@ -170,14 +171,14 @@ class Cone( basenodes.Cone, Quadric ):
 	@classmethod
 	def cone( 
 		cls, height=2.0, radius=1.0, bottom=True, side=True,
-		phi = pi/16, longAngle=(pi*2), top=False
+		phi = pi/16, longAngle=(pi*2), top=False, cylinder=False
 	):
 		"""Generate a VBO data-set to render a cone"""
 		tip = (0,height/2.0,0)
 		longsteps = arange( 0,longAngle+0.000003, phi )
 		ystep = len(longsteps)
 		zstep = 0
-		if top:
+		if top and cylinder:
 			zstep += 2
 		if side:
 			zstep += 2
@@ -188,22 +189,26 @@ class Cone( basenodes.Cone, Quadric ):
 		coords[:,:,0] = sin(longsteps) * radius
 		coords[:,:,2] = cos(longsteps) * radius
 		coords[:,:,3] = longsteps/(2*pi)
-		def fill_disk( area ):
+		def fill_disk( area, ycoord, normal=(0,-1,0), degenerate=1 ):
 			"""fill in disk elements for given area"""
+			other = not degenerate
 			# disk texture coordinates
-			area[:,:,1] = -(height/2.0)
+			area[:,:,1] = ycoord
 			# x and z are 0 at center
-			area[1,:,0] = 0.0 
-			area[1,:,2] = 0.0
-			area[0,:,3] = sin( longsteps ) / 2.0 + .5
-			area[0,:,4] = cos( longsteps ) / 2.0 + .5
-			area[1,:,3:5] = .5
+			area[degenerate,:,0] = 0.0 
+			area[degenerate,:,2] = 0.0
+			area[other,:,3] = sin( longsteps ) / 2.0 + .5
+			area[other,:,4] = cos( longsteps ) / 2.0 + .5
+			area[degenerate,:,3:5] = .5
 			# normal for the disk is all the same...
-			area[:,:,5:8] = (0,-1,0)
+			area[:,:,5:8] = normal
 		def fill_sides( area ):
 			"""Fill in side-of-cylinder/cone components"""
-			area[0,:,0:3] = (0,height/2.0,0)
-			area[1:4,:,1] = -height/2.0
+			if not cylinder:
+				area[0,:,0:3] = (0,height/2.0,0)
+			else:
+				area[0,:,1] = height/2.0
+			area[1,:,1] = -height/2.0
 			area[0,:,4] = 0
 			area[1,:,4] = 1.0
 			# normals for the sides...
@@ -214,45 +219,34 @@ class Cone( basenodes.Cone, Quadric ):
 				)
 			)
 			area[0:2,-1,5:8] = area[0:2,0,5:8]
-			
+		
+		offset = 0
+		tocompress = {}
+		if top and cylinder:
+			fill_disk( coords[offset:offset+2],height/2.0,(0,1,0), degenerate=0 )
+			tocompress[offset] = 0
+			offset += 2
 		if side:
-			fill_sides( coords[0:2] )
-#			coords[0,:,0:3] = (0,height/2.0,0)
-#			coords[1:4,:,1] = -height/2.0
-#			coords[0,:,4] = 0
-#			coords[1,:,4] = 1.0
-#			# normals for the sides...
-#			coords[0:2,:-1,5:8] = vectorutilities.normalise(
-#				vectorutilities.crossProduct( 
-#					coords[0,:-1,0:3] - coords[1,:-1,0:3],
-#					coords[1,:-1,0:3] - coords[1,1:,0:3]
-#				)
-#			)
-#			coords[0:2,-1,5:8] = coords[0:2,0,5:8]
-			if bottom:
-				# disk texture coordinates
-				fill_disk( coords[2:4] )
-		elif bottom:
-			fill_disk( coords )
+			fill_sides( coords[offset:offset+2] )
+			offset += 2
+		if bottom:
+			# disk texture coordinates
+			fill_disk( coords[offset:offset+2], -height/2.0, (0,-1,0), degenerate=1 )
+			tocompress[offset] = 1
+			offset += 2
+		
 		# now the indices, same as all quadratics
 		indices = mesh_indices( zstep, ystep )
-		# compress out degenerate indices if present...
 		new_indices = []
-		if side:
-			new_indices.append(
-				indices[0].reshape((-1,3))[::2]
-			)
-			new_indices.append(
-				indices[1].reshape((-1,3))
-			)
-			if bottom:
-				new_indices.append(
-					indices[2].reshape((-1,3))[1::2]
-				)
-		elif bottom:
-			new_indices.append(
-				indices[0].reshape((-1,3))[1::2]
-			)
+		for (i,iSet) in enumerate( indices ):
+			iSet = iSet.reshape( (-1,3) )
+			if i in tocompress:
+				if not tocompress[i]:
+					iSet = iSet[::2]
+				else:
+					iSet = iSet[1::2]
+			new_indices.append( iSet ) 
+		# compress out degenerate indices if present...
 		indices = concatenate( new_indices )
 		return coords.reshape( (-1,8)), indices.reshape( (-1,))
 	
@@ -281,45 +275,17 @@ class Cone( basenodes.Cone, Quadric ):
 
 class Cylinder( basenodes.Cylinder, Quadric ):
 	"""Cylinder geometry rendered with GLU quadratic calls"""
-	stacks = field.newField( ' stacks', 'SFInt32', 1, 2 )
-	loops = field.newField( ' loops', 'SFInt32', 1, 1 )
-	def generate( self, quadratic ):
-		"""Do the actual per-node generation of the geometry"""
-		glPushMatrix()
-		try:
-			glTranslated( 0,-self.height/2.0, 0)
-			glRotated( -90, 1,0,0)
-			if self.side:
-				gluCylinder(
-					quadratic,
-					self.radius,
-					self.radius,
-					self.height,
-					self.slices,
-					self.stacks,
-				)
-			if self.top:
-				glTranslated( 0, 0, self.height)
-				gluDisk(
-					quadratic,
-					0.0,
-					self.radius,
-					self.slices,
-					self.loops,
-				)
-				glTranslated( 0, 0, -self.height)
-			if self.bottom:
-				# draw a disk facing downward from the current position
-				glRotated( 180, 1,0,0)
-				gluDisk(
-					quadratic,
-					0.0,
-					self.radius,
-					self.slices,
-					self.loops,
-				)
-		finally:
-			glPopMatrix()
+	def compile( self, mode=None ):
+		"""Compile this sphere for use on mode"""
+		coords,indices = Cone.cone( 
+			self.height, self.radius, self.bottom, self.side,
+			top=self.top, cylinder=True,
+		)
+		vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
+		holder = mode.cache.holder( self, vbos )
+		holder.depend( self, 'radius' )
+		holder.depend( self, 'height' )
+		return vbos
 	def boundingVolume( self, mode=None ):
 		"""Create a bounding-volume object for this node
 
