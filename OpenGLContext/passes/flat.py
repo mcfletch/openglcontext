@@ -236,56 +236,58 @@ class FlatPass( SGObserver ):
 		glLoadMatrixd( self.getProjection() )
 		glMatrixMode( GL_MODELVIEW )
 		matrix = self.getModelView()
+		self.matrix = matrix
 		glLoadIdentity()
 
 		toRender = self.renderSet( matrix )
 		
 		events = context.getPickEvents()
-		if events:
+		if events or mode.context.DEBUG_SELECTION:
 			self.selectRender( mode, toRender, events )
 			events.clear()
-		glLoadIdentity()
-		self.matrix = matrix
-		self.visible = True
-		self.transparent = False 
-		self.lighting = True
-		self.textured = True 
-		
-		self.legacyBackgroundRender( vp,matrix )
-		# Set up generic "geometric" rendering parameters
-		glDisable( GL_CULL_FACE )
-		glFrontFace( GL_CCW )
-		glEnable(GL_DEPTH_TEST)
-		glEnable(GL_LIGHTING)
-		glDepthFunc(GL_LESS)
-		glEnable(GL_CULL_FACE)
-		glCullFace(GL_BACK)
-		
-		self.legacyLightRender( matrix )
-		transparentSetup = False
-		
-		for key,mvmatrix,tmatrix,bvolume,path in toRender:
-			self.matrix = mvmatrix
-			glLoadMatrixd( mvmatrix )
+		if not mode.context.DEBUG_SELECTION:
+			glLoadIdentity()
+			self.matrix = matrix
+			self.visible = True
+			self.transparent = False 
+			self.lighting = True
+			self.textured = True 
 			
-			self.transparent = key[0]
-			if key[0] != transparentSetup:
-				glEnable(GL_BLEND);
-				glEnable(GL_DEPTH_TEST);
-				glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
-				glDepthMask( 0 )
-			try:
-				if key[0]:
-					function = path[-1].RenderTransparent
-				else:
-					function = path[-1].Render
-				function( mode=self )
-			except Exception, err:
-				log.error(
-					"""Failure in %s: %s""",
-					function,
-					getTraceback( err ),
-				)
+			self.legacyBackgroundRender( vp,matrix )
+			# Set up generic "geometric" rendering parameters
+			glDisable( GL_CULL_FACE )
+			glFrontFace( GL_CCW )
+			glEnable(GL_DEPTH_TEST)
+			glEnable(GL_LIGHTING)
+			glDepthFunc(GL_LESS)
+			glEnable(GL_CULL_FACE)
+			glCullFace(GL_BACK)
+			
+			self.legacyLightRender( matrix )
+			transparentSetup = False
+			
+			for key,mvmatrix,tmatrix,bvolume,path in toRender:
+				self.matrix = mvmatrix
+				glLoadMatrixd( mvmatrix )
+				
+				self.transparent = key[0]
+				if key[0] != transparentSetup:
+					glEnable(GL_BLEND);
+					glEnable(GL_DEPTH_TEST);
+					glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
+					glDepthMask( 0 )
+				try:
+					if key[0]:
+						function = path[-1].RenderTransparent
+					else:
+						function = path[-1].Render
+					function( mode=self )
+				except Exception, err:
+					log.error(
+						"""Failure in %s: %s""",
+						function,
+						getTraceback( err ),
+					)
 		glDisable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
 		glDepthMask( 1 ) # allow updates to the depth buffer
@@ -350,8 +352,8 @@ class FlatPass( SGObserver ):
 			id += 50
 			idSetter[0] = id
 			glColor4bv( idHolder )
-			self.matrix = tmatrix
-			glLoadMatrixd( tmatrix )
+			self.matrix = mvmatrix
+			glLoadMatrixd( mvmatrix )
 			path[-1].Render( mode=self )
 			map[id] = path 
 		pickPoints = {}

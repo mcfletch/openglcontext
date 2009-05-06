@@ -148,6 +148,8 @@ class Context(object):
 	renderPasses = renderpass.defaultRenderPasses
 	frameCounter = None
 	contextDefinition = None
+	
+	DEBUG_SELECTION = False
 
 	### State flags/values
 	# Set to false to trigger a redraw on the next available iteration
