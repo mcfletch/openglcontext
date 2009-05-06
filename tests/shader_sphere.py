@@ -12,15 +12,15 @@ from OpenGLContext.arrays import *
 from OpenGLContext.scenegraph.shaders import *
 from OpenGLContext.scenegraph.basenodes import ImageTexture
 
-def sphere( phi=pi/8.0 ):
+def sphere( phi=pi/8.0, latAngle=pi, longAngle=(pi*2) ):
 	"""Create arrays for rendering a unit-sphere
 	
 	phi -- angle between points on the sphere (stacks/slices)
 	
 	Note: creates 'H' type indices...
 	"""
-	latsteps = arange( 0,pi+0.000003, phi )
-	longsteps = arange( 0,pi*2+0.000003, phi )
+	latsteps = arange( 0,latAngle+0.000003, phi )
+	longsteps = arange( 0,longAngle+0.000003, phi )
 	return _partialSphere( latsteps,longsteps )
 
 def _partialSphere( latsteps, longsteps ):
@@ -80,7 +80,7 @@ class TestContext( BaseContext ):
 	"""
 	
 	def OnInit( self ):
-		coords,indices = sphere( pi/128 )
+		coords,indices = sphere( pi/128, pi/2, pi*2 )
 		coords = ascontiguousarray( coords )
 		self.coordLength = len(indices)
 		self.coords = vbo.VBO( coords )
