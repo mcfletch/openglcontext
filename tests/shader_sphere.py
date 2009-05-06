@@ -97,6 +97,9 @@ class TestContext( BaseContext ):
 		self.texture.render( mode=mode )
 		self.coords.bind()
 		# TODO: use attributes rather than legacy operations...
+		glEnableClientState(GL_VERTEX_ARRAY)
+		glEnableClientState(GL_NORMAL_ARRAY)
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY)
 		glVertexPointer( 3, GL_FLOAT,20,self.coords)
 		glTexCoordPointer( 3, GL_FLOAT,20,self.coords+12)
 		glNormalPointer( GL_FLOAT,20,self.coords )

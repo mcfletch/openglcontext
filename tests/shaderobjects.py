@@ -281,5 +281,7 @@ class TestContext( BaseContext ):
 			leaks.init()
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	import cProfile
+	cProfile.run( "MainFunction( TestContext )", 'shaderobjects.profile' )
+	#MainFunction ( TestContext)
 
