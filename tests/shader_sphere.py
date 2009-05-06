@@ -21,6 +21,10 @@ def sphere( phi=pi/8.0 ):
 	"""
 	latsteps = arange( 0,pi+0.000003, phi )
 	longsteps = arange( 0,pi*2+0.000003, phi )
+	return _partialSphere( latsteps,longsteps )
+
+def _partialSphere( latsteps, longsteps ):
+	"""Create a partial-sphere data-set for latsteps and longsteps"""
 	ystep = len(longsteps)
 	zstep = len(latsteps)
 	xstep = 1
@@ -45,15 +49,19 @@ def sphere( phi=pi/8.0 ):
 	indices += (yoffsets * ystep)
 	
 	# now optimize/simplify the data-set...
+	new_indices = []
 	
-	if len(indices) >= 2:
-		indices = concatenate(
-			(
-				indices[0].reshape( (-1,3))[::2],
-				indices[1:-1].reshape( (-1,3) ),
-				indices[-1].reshape( (-1,3) )[1::2],
-			)
-		)
+	for (i,iSet) in enumerate(indices ):
+		angle = latsteps[i]
+		nextAngle = latsteps[i+1]
+		if allclose(angle%(pi*2),0):
+			iSet = iSet.reshape( (-1,3))[::2]
+		elif allclose(nextAngle%(pi),0):
+			iSet = iSet.reshape( (-1,3))[1::2]
+		else:
+			iSet = iSet.reshape( (-1,3))
+		new_indices.append( iSet )
+	indices = concatenate( new_indices )
 	return coords.reshape((-1,5)), indices.reshape((-1,))
 
 class TestContext( BaseContext ):
@@ -87,8 +95,6 @@ class TestContext( BaseContext ):
 		"""Render the geometry for the scene."""
 		BaseContext.Render( self, mode )
 		self.texture.render( mode=mode )
-#		import pdb
-#		pdb.set_trace()
 		self.coords.bind()
 		# TODO: use attributes rather than legacy operations...
 		glVertexPointer( 3, GL_FLOAT,20,self.coords)
