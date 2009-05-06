@@ -44,6 +44,17 @@ def sphere( phi=pi/8.0 ):
 	yoffsets = arange(0,zstep-1,1,dtype='H').reshape( (-1,1,1))
 	#yoffsets = (xoffsets * ystep).reshape( (-1,1,1,))
 	indices += (yoffsets * ystep)
+	
+	# now optimize/simplify the data-set...
+	
+	if len(indices) >= 3:
+		indices = concatenate(
+			(
+				indices[0].reshape( (-1,3))[::2],
+				indices[1:-1].reshape( (-1,3) ),
+				indices[-1].reshape( (-1,3) )[1::2],
+			)
+		)
 	return coords.reshape((-1,5)), indices.reshape((-1,))
 
 class TestContext( BaseContext ):
@@ -96,3 +107,5 @@ if __name__ == "__main__":
 	cProfile.run( 'MainFunction ( TestContext)', 'sphere.profile' )
 	
 
+#	sphere( pi/4 )
+	
