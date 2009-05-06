@@ -19,20 +19,20 @@ def sphere( phi=pi/8.0 ):
 	
 	Note: creates 'H' type indices...
 	"""
-	zsteps = arange( 0,pi+0.000003, phi )
-	steps = arange( 0,pi*2+0.000003, phi )
-	ystep = len(steps)
-	zstep = len(zsteps)
+	latsteps = arange( 0,pi+0.000003, phi )
+	longsteps = arange( 0,pi*2+0.000003, phi )
+	ystep = len(longsteps)
+	zstep = len(latsteps)
 	xstep = 1
 	coords = zeros((zstep,ystep,5), 'f')
-	coords[:,:,0] = sin(steps)
-	coords[:,:,1] = cos(zsteps).reshape( (-1,1))
-	coords[:,:,2] = cos(steps)
-	coords[:,:,3] = steps/(2*pi)
-	coords[:,:,4] = zsteps.reshape( (-1,1))/ pi
+	coords[:,:,0] = sin(longsteps)
+	coords[:,:,1] = cos(latsteps).reshape( (-1,1))
+	coords[:,:,2] = cos(longsteps)
+	coords[:,:,3] = longsteps/(2*pi)
+	coords[:,:,4] = latsteps.reshape( (-1,1))/ pi
 	
 	# now scale by sin of y's 
-	scale = sin(zsteps).reshape( (-1,1))
+	scale = sin(latsteps).reshape( (-1,1))
 	coords[:,:,0] *= scale
 	coords[:,:,2] *= scale
 	
@@ -42,12 +42,11 @@ def sphere( phi=pi/8.0 ):
 	xoffsets = arange(0,ystep-1,1,dtype='H').reshape( (-1,1))
 	indices += xoffsets
 	yoffsets = arange(0,zstep-1,1,dtype='H').reshape( (-1,1,1))
-	#yoffsets = (xoffsets * ystep).reshape( (-1,1,1,))
 	indices += (yoffsets * ystep)
 	
 	# now optimize/simplify the data-set...
 	
-	if len(indices) >= 3:
+	if len(indices) >= 2:
 		indices = concatenate(
 			(
 				indices[0].reshape( (-1,3))[::2],
