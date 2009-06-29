@@ -845,21 +845,21 @@ visitingDefaultRenderPasses = PassSet(
 		SelectRenderPass,
 	],
 )
-USE_PERFORMER = True
-PERFORMER = None
+USE_FLAT = True
+FLAT = None
 class _defaultRenderPasses( object ):
 	def __call__( self,context ):
-		global PERFORMER
-		if PERFORMER is None:
-			if USE_PERFORMER:
+		global FLAT
+		if FLAT is None:
+			if USE_FLAT:
 				from OpenGLContext.passes.flat import FlatPass
 				sg = context.getSceneGraph()
 				if sg is not None:
-					PERFORMER = FlatPass( context.getSceneGraph(), context.allContexts )
+					FLAT = FlatPass( context.getSceneGraph(), context.allContexts )
 				else:
 					return visitingDefaultRenderPasses( context )
 			else:
 				return visitingDefaultRenderPasses( context )
-			print 'Using performer'
-		return PERFORMER( context )
+			print 'Using FLAT'
+		return FLAT( context )
 defaultRenderPasses = _defaultRenderPasses()

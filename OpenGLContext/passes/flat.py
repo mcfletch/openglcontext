@@ -229,7 +229,7 @@ class FlatPass( SGObserver ):
 		return result
 	
 	def Render( self, context, mode ):
-		"""Render the geometry attached to this performer's scenegraph"""
+		"""Render the geometry attached to this flat-renderer's scenegraph"""
 		vp = context.getViewPlatform()
 		# clear the projection matrix set up by legacy sg
 		glMatrixMode( GL_PROJECTION )

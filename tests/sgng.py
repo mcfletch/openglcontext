@@ -88,7 +88,6 @@ class TestContext( BaseContext ):
 		self.time.addEventHandler( "fraction", self.OnTimerFraction )
 		self.time.register (self)
 		self.time.start ()
-		#self.renderPasses = self.performer = flat.FlatPass( scene, [self] )
 		self.addEventHandler( "keypress", name="a", function = self.OnAdd)
 		glEnable( GL_CULL_FACE )
 		glFrontFace( GL_CCW )
@@ -131,7 +130,7 @@ if __name__ == "__main__":
 	import sys
 	if sys.argv[1:]:
 		name = 'old.profile'
-		renderpass.USE_PERFORMER = False
+		renderpass.USE_FLAT = False
 	else:
 		name = 'new.profile'
 	import cProfile
