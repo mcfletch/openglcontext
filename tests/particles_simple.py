@@ -40,8 +40,8 @@ class TestContext( BaseContext ):
 a water-fountain, with individual droplets starting
 blue and turning white."""
 		if glPointParameterf:
-			glPointParameterf( GL_POINT_SIZE_MIN, 10.0 )
-			glPointParameterf( GL_POINT_SIZE_MAX, 20.0 )
+			glPointParameterf( GL_POINT_SIZE_MIN, 7.0 )
+			glPointParameterf( GL_POINT_SIZE_MAX, 10.0 )
 		self.points = PointSet(
 			coord = Coordinate(
 				point = [emitter]*count
