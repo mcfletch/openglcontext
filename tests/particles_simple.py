@@ -24,7 +24,7 @@ emitter = (0,0,0)
 count = 3000
 initialColor = (1,.9,.9)
 pointSize = 1.5
-colorVelocities = [-1,-.9,-.7]
+colorVelocities = [1,.9,.7]
 initialVelocityVector = array( [1.5,20.,1.5], 'd')
 
 class TestContext( BaseContext ):
@@ -38,7 +38,10 @@ class TestContext( BaseContext ):
 		BaseContext.OnInit( self )
 		print """You should see something that looks vaguely like
 a water-fountain, with individual droplets starting
-off-white and turning black."""
+blue and turning white."""
+		if glPointParameterf:
+			glPointParameterf( GL_POINT_SIZE_MIN, 10.0 )
+			glPointParameterf( GL_POINT_SIZE_MAX, 20.0 )
 		self.points = PointSet(
 			coord = Coordinate(
 				point = [emitter]*count
@@ -48,6 +51,9 @@ off-white and turning black."""
 			)
 		)
 		self.shape = Shape(
+			appearance = Appearance(
+				texture = ImageTexture( url='_particle.png' ),
+			),
 			geometry = self.points,
 		)
 		self.text = Text(

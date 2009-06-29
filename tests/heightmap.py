@@ -40,6 +40,8 @@ class TestContext( BaseContext ):
 		# render the regular geometry 
 		if mode.visible:
 			#glDisable( GL_LIGHTING )
+			glEnable(GL_AUTO_NORMAL)
+			glEnable(GL_NORMALIZE)
 			glScalef( 1.0, 0.002, 1 )
 			glColor3f( .8,0,0)
 			glVertexPointerf( self.data )

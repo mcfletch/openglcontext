@@ -53,9 +53,15 @@ class PointSet(
 				glColorPointerf ( colors )
 				glEnableClientState( GL_COLOR_ARRAY )
 		glDisable( GL_LIGHTING )
+		if textured:
+			# TODO: check for version/extension first!
+			# point-sprites instead of regular points...
+			glEnable(GL_POINT_SPRITE);
+			glTexEnvi(GL_POINT_SPRITE, GL_COORD_REPLACE, GL_TRUE)
 		glDrawArrays( GL_POINTS, 0, len(points))
 		glDisableClientState( GL_VERTEX_ARRAY )
 		glDisable( GL_COLOR_MATERIAL )
+		glDisable( GL_POINT_SPRITE )
 		glDisableClientState( GL_COLOR_ARRAY )
 		return 1
 	def boundingVolume( self, mode=None ):
