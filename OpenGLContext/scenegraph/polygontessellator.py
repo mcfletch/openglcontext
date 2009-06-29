@@ -30,12 +30,18 @@ class PolygonTessellator(object):
 		"""Initialise the PolygonTessellator"""
 		self.reset()
 		self.ccw = ccw
-		self.controller = controller = gluNewTess()
-		gluTessCallback( controller, GLU_TESS_COMBINE, self.combine )
-		gluTessCallback( controller, GLU_TESS_VERTEX, self.vertex )
-		gluTessCallback( controller, GLU_TESS_BEGIN, self.begin )
-		gluTessCallback( controller, GLU_TESS_END, self.end )
-		gluTessProperty( controller, GLU_TESS_WINDING_RULE, windingRule )
+		self.windingRule = windingRule
+	_controller = None
+	@property
+	def controller( self ):
+		if not self._controller:
+			self._controller = controller = gluNewTess()
+			gluTessCallback( controller, GLU_TESS_COMBINE, self.combine )
+			gluTessCallback( controller, GLU_TESS_VERTEX, self.vertex )
+			gluTessCallback( controller, GLU_TESS_BEGIN, self.begin )
+			gluTessCallback( controller, GLU_TESS_END, self.end )
+			gluTessProperty( controller, GLU_TESS_WINDING_RULE, self.windingRule )
+		return self._controller
 	def reset( self, forceTriangles = 1 ):
 		"""Reset the tessellator for a new polygon"""
 		self.result = []
