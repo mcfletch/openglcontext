@@ -3,6 +3,13 @@ from OpenGL.GL import *
 from vrml.vrml97 import basenodes
 from OpenGLContext.debug.logs import geometry_log
 from OpenGLContext.scenegraph import coordinatebounded
+from OpenGLContext.arrays import array
+from OpenGL.extensions import alternate
+from OpenGL.GL.ARB.point_parameters import *
+
+glPointParameterf = alternate( glPointParameterf, glPointParameterfARB )
+glPointParameterfv = alternate( glPointParameterfv, glPointParameterfvARB )
+RESET_ATTENUATION = array( [1,0,0],'f')
 
 class PointSet(
 	coordinatebounded.CoordinateBounded,
@@ -58,10 +65,19 @@ class PointSet(
 			# point-sprites instead of regular points...
 			glEnable(GL_POINT_SPRITE);
 			glTexEnvi(GL_POINT_SPRITE, GL_COORD_REPLACE, GL_TRUE)
+		if glPointParameterf:
+			glPointParameterf( GL_POINT_SIZE_MIN, self.minSize )
+			glPointParameterf( GL_POINT_SIZE_MAX, self.maxSize )
+			glPointParameterfv( GL_POINT_DISTANCE_ATTENUATION, self.attenuation )
 		glDrawArrays( GL_POINTS, 0, len(points))
 		glDisableClientState( GL_VERTEX_ARRAY )
 		glDisable( GL_COLOR_MATERIAL )
-		glDisable( GL_POINT_SPRITE )
+		if textured:
+			glDisable( GL_POINT_SPRITE )
+		if glPointParameterf:
+			glPointParameterf( GL_POINT_SIZE_MIN, 0.0 )
+			glPointParameterf( GL_POINT_SIZE_MAX, 1.0 )
+			glPointParameterfv( GL_POINT_DISTANCE_ATTENUATION, RESET_ATTENUATION )
 		glDisableClientState( GL_COLOR_ARRAY )
 		return 1
 	def boundingVolume( self, mode=None ):

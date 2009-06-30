@@ -39,16 +39,16 @@ class TestContext( BaseContext ):
 		print """You should see something that looks vaguely like
 a water-fountain, with individual droplets starting
 blue and turning white."""
-		if glPointParameterf:
-			glPointParameterf( GL_POINT_SIZE_MIN, 7.0 )
-			glPointParameterf( GL_POINT_SIZE_MAX, 10.0 )
 		self.points = PointSet(
 			coord = Coordinate(
 				point = [emitter]*count
 			),
 			color = Color(
 				color = [initialColor]*count
-			)
+			),
+			minSize = 7.0,
+			maxSize = 10.0,
+			attenuation = [0,1,0],
 		)
 		self.shape = Shape(
 			appearance = Appearance(
@@ -79,10 +79,16 @@ blue and turning white."""
 		self.colorVelocities = array( colorVelocities, 'd')
 		print '  <s> make time pass more slowly'
 		print '  <f> make time pass faster'
+		print '  <h> higher'
+		print '  <l> (L) lower'
+		print '  <[> smaller drops'
+		print '  <]> larger drops'
 		self.addEventHandler( "keypress", name="s", function = self.OnSlower)
 		self.addEventHandler( "keypress", name="f", function = self.OnFaster)
 		self.addEventHandler( "keypress", name="h", function = self.OnHigher)
 		self.addEventHandler( "keypress", name="l", function = self.OnLower)
+		self.addEventHandler( "keypress", name="]", function = self.OnLarger)
+		self.addEventHandler( "keypress", name="[", function = self.OnSmaller)
 		
 		self.time = Timer( duration = 1.0, repeating = 1 )
 		self.time.addEventHandler( "fraction", self.OnTimerFraction )
@@ -172,6 +178,12 @@ blue and turning white."""
 			initialVelocityVector[:] = [1.5,20,1.5]
 		else:
 			initialVelocityVector /= [1,1.5,1]
+	def OnLarger( self, event ):
+		self.points.minSize += 1.0
+		self.points.maxSize += 1.0
+	def OnSmaller( self, event ):
+		self.points.minSize = max((0.0,self.points.minSize-1.0))
+		self.points.maxSize = max((1.0,self.points.maxSize-1.0))
 		
 
 if __name__ == "__main__":
