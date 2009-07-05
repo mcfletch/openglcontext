@@ -23,7 +23,10 @@ def getTraceback(error):
 try:
 	import logging
 	Log = logging.getLogger
-	logging.basicConfig()
+	logging.basicConfig( ) #level=logging.INFO )
+	logging.getLogger( 'OpenGL.extensions' ).setLevel(
+		logging.INFO 
+	)
 	WARN = logging.WARN
 	ERROR = logging.ERROR
 	INFO = logging.INFO

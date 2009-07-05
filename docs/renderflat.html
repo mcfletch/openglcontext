@@ -1,0 +1,174 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+
+  
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+  
+  
+  
+  <title>OpenGLContext Rendering Process</title><link rel="stylesheet" type="text/css" href="style/tutorial.css">
+
+  
+  <meta name="author" content="Mike C. Fletcher"></head>
+
+<body>
+
+<h1>OpenGLContext "Flat" Rendering</h1>
+
+<p class="introduction">This document describes OpenGLContext's new
+"flat" rendering process. &nbsp;This process uses client-side (not
+GL-side) calculations to produce composed transformation matrices which
+are directly loaded before rendering geometry. &nbsp;The rendering
+process is considerably less involved than the <a href="renderprocess.html">original set</a> of separate "RenderPass" objects which would traverse the scenegraph for each pass.</p><h2>Observables and Tree Updates</h2><p>PyVRML97
+allows for watching updates to properties of nodes. &nbsp;OpenGLContext
+uses this to watch for all updates to node fields within a scenegraph.
+&nbsp;For each path to each node, it records a NodePath object which
+can calculate (and cache) the combined transform matrices for the path.</p><p>With
+this data structure (essentially a list of matrices and Render nodes),
+the scenegraph can be rendered with a number of simple iterations,
+rather than with a complex traversal mechanism (which traditionally was
+a significant factor of OpenGLContext run-time).</p>The default flat
+render pass also includes "colour select" rendering. &nbsp;That is, it
+can do a selection rendering pass which can be queried to process
+incoming mouse events to find the object under the mouse. &nbsp;This
+avoids the use of the legacy select render mode.<br><h2>Triggering the RenderPass</h2>
+
+<p>So let's take a look at how the rendering process is triggered, from
+the moment the GUI library sends the "OnPaint" or equivalent event to
+the Context through to the calling of an individual RenderPass.<br>
+
+</p>
+
+<ol>
+
+  <li>event handler for the Context object, such as <span style="font-weight: bold;">wxOnPaint</span> for the wxPython Context
+sub-classes calls self.triggerRedraw(1) to force a redraw of the Context</li>
+
+  <li><span style="font-weight: bold;">Context.triggerRedraw</span> sets
+the "alreadyDrawn" flag to false, which tells the context that it needs
+to be redrawn at the next available opportunity, if not able to
+immediately draw, sets the redrawRequest event.</li>
+
+  
+  <ol>
+
+    <li>at the next available opportunity (which may be within the
+triggerRedraw method, depending on the threading status and/or whether
+or not we are currently in the middle of rendering), the context's
+OnDraw method will be called</li>
+
+  
+  </ol>
+
+  <li style="font-weight: bold;"><span style="font-weight: bold;">Context.</span>OnDraw</li>
+
+  
+  <ol>
+
+    <li>performs an event cascade (calls the DoEventCascade
+customization point while the scenegraph lock is held (by default this
+does nothing))</li>
+
+    <li>sets this Context instance as the current context</li>
+
+    
+    <ol>
+
+      <li>acquires the OpenGLContext contextLock</li>
+
+      <li>does the appropriate GUI library set current call</li>
+
+    
+    </ol>
+
+    <li>clears the redrawRequest event</li>
+
+    <li><span style="font-weight: bold;">calls the Context's
+renderPasses attribute</span> receiving a flag
+specifying whether there was a visible change (flat *always* returns True here)</li>
+
+    
+    <ol>
+
+      <li>if there was a change, swaps buffers</li>
+
+    
+    </ol>
+
+    <li>finally, un-sets the current context</li>
+
+  
+  </ol>
+
+  <li><span style="font-weight: bold;">PassSet.__call__</span></li>
+
+  
+  <ol>
+
+    <li><span style="font-weight: bold;"></span>instantiates a new
+OverallPass object with pointers to the three sub-passes as an argument</li>
+
+    <li>returns the result of calling the new OverallPass with the
+passed Context object</li>
+
+  
+  </ol>
+
+  <li style="font-weight: bold;">OverallPass.__init__</li>
+
+  
+  <ol>
+
+    <li>stores various matrices</li>
+
+    <li>sets up global structures (see above)</li>
+
+    <li>instantiates each sub-pass (with a pointer to the OverallPass,
+and the passCount for the given sub-pass)</li>
+
+  
+  </ol>
+
+  <li style="font-weight: bold;">OverallPass.__call__</li>
+
+  
+  <ol>
+
+    <li>iterates through the list of sub-pass instances calling each
+one in turn and tracking whether it reports a visible change</li>
+
+    <li>returns the sum of all the "changed" values (which is in turn
+returned by the PassSet to the Context's OnDraw method)</li>
+
+  
+  </ol>
+
+  <li>(Visiting)<span style="font-weight: bold;">RenderPass.__call__</span></li>
+
+  
+  <ol>
+
+    <li>generally checks whether the pass should be rendered or not
+(shouldDraw method)</li>
+
+    <li>if not, returns false (no visible change)</li>
+
+    <li>otherwise performs the pass-specific rendering and returns it's
+"visible" flag</li>
+
+  
+  </ol>
+
+</ol>
+
+<p>So, at this point, the RenderPass has been called, we are within the
+Context thread (with the lock held), and the OverallPass is initialised.
+&nbsp;Each RenderPass defines it's own __call__ method, but the ones
+likely of the most interest are the ones derived from
+VisitingRenderPass.</p>
+
+<p class="footer"><a href="documentation.html"><img src="images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/context/"><img src="images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> A
+SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" align="middle"></a></p>
+
+</body></html>

@@ -6,7 +6,7 @@ BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGLContext.scenegraph.shaders import compileProgram, glUseProgram
+from OpenGLContext.scenegraph.shaders import *
 from OpenGL.GLUT import glutSolidTeapot
 
 class TestContext( BaseContext ):

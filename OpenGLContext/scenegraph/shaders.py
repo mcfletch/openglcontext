@@ -19,22 +19,22 @@ LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 import time, sys,logging
 log = logging.getLogger( 'OpenGLContext.scenegraph.shaders' )
 from OpenGL.extensions import alternate
-glCreateShader = alternate( 'glCreateShader', glCreateShader, glCreateShaderObjectARB )
-glShaderSource = alternate( 'glShaderSource', glShaderSource, glShaderSourceARB)
-glCompileShader = alternate( 'glCompileShader', glCompileShader, glCompileShaderARB)
-glCreateProgram = alternate( 'glCreateProgram', glCreateProgram, glCreateProgramObjectARB)
-glAttachShader = alternate( 'glAttachShader', glAttachShader,glAttachObjectARB )
-glValidateProgram = alternate( 'glValidateProgram',glValidateProgram,glValidateProgramARB )
-glLinkProgram = alternate( 'glLinkProgram',glLinkProgram,glLinkProgramARB )
-glDeleteShader = alternate( 'glDeleteShader', glDeleteShader,glDeleteObjectARB )
-glUseProgram = alternate('glUseProgram',glUseProgram,glUseProgramObjectARB )
+glCreateShader = alternate( glCreateShader, glCreateShaderObjectARB )
+glShaderSource = alternate( glShaderSource, glShaderSourceARB)
+glCompileShader = alternate( glCompileShader, glCompileShaderARB)
+glCreateProgram = alternate( glCreateProgram, glCreateProgramObjectARB)
+glAttachShader = alternate( glAttachShader,glAttachObjectARB )
+glValidateProgram = alternate( glValidateProgram,glValidateProgramARB )
+glLinkProgram = alternate( glLinkProgram,glLinkProgramARB )
+glDeleteShader = alternate( glDeleteShader,glDeleteObjectARB )
+glUseProgram = alternate( glUseProgram,glUseProgramObjectARB )
 glGetProgramInfoLog = alternate( glGetProgramInfoLog, glGetInfoLogARB )
 glGetShaderInfoLog = alternate( glGetShaderInfoLog, glGetInfoLogARB )
 glGetAttribLocation = alternate( glGetAttribLocation, glGetAttribLocationARB )
 glVertexAttribPointer = alternate( glVertexAttribPointer, glVertexAttribPointerARB )
 glEnableVertexAttribArray = alternate( glEnableVertexAttribArray, glEnableVertexAttribArray )
 glDisableVertexAttribArray = alternate( glDisableVertexAttribArray, glDisableVertexAttribArrayARB )
-
+glGetUniformLocation = alternate( glGetUniformLocation, glGetUniformLocationARB )
 
 def compileProgram(vertexSource=None, fragmentSource=None):
 	program = glCreateProgram()
@@ -199,7 +199,6 @@ class TextureUniform( _Uniform, shaders.TextureUniform ):
 				return True 
 		return False
 
-
 def _uniformCls( suffix ):
 	def buildAlternate( function_name ):
 		if globals().has_key( function_name+'ARB' ):
@@ -245,6 +244,7 @@ FLOAT_UNIFORM_SUFFIXES = ('1f','2f','3f','4f','m2','m3','m4','m2x3','m3x2','m2x4
 INT_UNIFORM_SUFFIXES = ('1i','2i','3i','4i')
 for suffix in FLOAT_UNIFORM_SUFFIXES + INT_UNIFORM_SUFFIXES:
 	_uniformCls( suffix )
+
 
 class ShaderURLField( fieldtypes.MFString ):
 	"""Field for managing interactions with a Shader's URL value"""
