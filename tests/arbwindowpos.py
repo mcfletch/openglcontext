@@ -15,6 +15,8 @@ malformed parameters to the glWindowPos2dvARB function.
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
+from OpenGL.constants import *
+from OpenGL import error
 import math, random, traceback, sys
 from OpenGLContext.events.timer import Timer
 
@@ -55,14 +57,14 @@ class TestContext( BaseContext ):
 		
 		try:
 			window_pos.glWindowPos2dvARB(())
-		except (GLerror,ValueError), err:
+		except (error.CopyError,GLerror,ValueError), err:
 			print 'Correct handling of incorrect parameters', err
 		except Exception, err:
 			traceback.print_exc()
 			print 'Incorrect handling of incorrect parameters'
 		try:
 			window_pos.glWindowPos3dvARB(())
-		except (GLerror, ValueError), err:
+		except (error.CopyError,GLerror, ValueError), err:
 			print 'Correct handling of incorrect parameters', err
 		except Exception, err:
 			traceback.print_exc()
@@ -96,7 +98,9 @@ class TestContext( BaseContext ):
 				type,
 				self.data,
 			)
-			window_pos.glWindowPos2dvARB((self.x,self.getViewPort()[1]-self.y))
+			window_pos.glWindowPos2fvARB(
+				GLfloat_2(self.x,self.getViewPort()[1]-self.y)
+			)
 			glDrawPixels(
 				self.width,
 				self.height,
