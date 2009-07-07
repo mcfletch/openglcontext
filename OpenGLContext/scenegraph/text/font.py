@@ -426,7 +426,7 @@ class Line( object ):
 	def __init__( self, base, font, mode=None ):
 		self.font = weakref.proxy(font)
 		self.base = base
-		self.lists = font.lists( base, mode=mode )
+		self.lists = array( font.lists( base, mode=mode ),'I')
 		self.width = self._width( mode=mode )
 		self.height = font.lineHeight( mode=mode )
 	def _width( self, mode=None ):
