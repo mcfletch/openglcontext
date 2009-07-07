@@ -1,9 +1,6 @@
 """Shader node implementation"""
 from OpenGL.GL import *
-from OpenGL.GL.ARB.shader_objects import *
-from OpenGL.GL.ARB.fragment_shader import *
-from OpenGL.GL.ARB.vertex_shader import *
-from OpenGL.GL.ARB.vertex_program import *
+from OpenGL.GL.shaders import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGL import error
@@ -19,22 +16,6 @@ LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 import time, sys,logging
 log = logging.getLogger( 'OpenGLContext.scenegraph.shaders' )
 from OpenGL.extensions import alternate
-glCreateShader = alternate( glCreateShader, glCreateShaderObjectARB )
-glShaderSource = alternate( glShaderSource, glShaderSourceARB)
-glCompileShader = alternate( glCompileShader, glCompileShaderARB)
-glCreateProgram = alternate( glCreateProgram, glCreateProgramObjectARB)
-glAttachShader = alternate( glAttachShader,glAttachObjectARB )
-glValidateProgram = alternate( glValidateProgram,glValidateProgramARB )
-glLinkProgram = alternate( glLinkProgram,glLinkProgramARB )
-glDeleteShader = alternate( glDeleteShader,glDeleteObjectARB )
-glUseProgram = alternate( glUseProgram,glUseProgramObjectARB )
-glGetProgramInfoLog = alternate( glGetProgramInfoLog, glGetInfoLogARB )
-glGetShaderInfoLog = alternate( glGetShaderInfoLog, glGetInfoLogARB )
-glGetAttribLocation = alternate( glGetAttribLocation, glGetAttribLocationARB )
-glVertexAttribPointer = alternate( glVertexAttribPointer, glVertexAttribPointerARB )
-glEnableVertexAttribArray = alternate( glEnableVertexAttribArray, glEnableVertexAttribArray )
-glDisableVertexAttribArray = alternate( glDisableVertexAttribArray, glDisableVertexAttribArrayARB )
-glGetUniformLocation = alternate( glGetUniformLocation, glGetUniformLocationARB )
 
 def compileProgram(vertexSource=None, fragmentSource=None):
 	program = glCreateProgram()
@@ -58,24 +39,24 @@ def compileProgram(vertexSource=None, fragmentSource=None):
 		fragmentShader = None
 
 	glValidateProgram( program )
-#	if glGetProgramiv:
-#		validation = glGetProgramiv( program, GL_VALIDATE_STATUS )
-#		if not validation:
-#			raise RuntimeError(
-#				"""Validation failure""",
-#				validation,
-#				glGetProgramInfoLog( program ),
-#			)
+	if glGetProgramiv:
+		validation = glGetProgramiv( program, GL_VALIDATE_STATUS )
+		if not validation:
+			raise RuntimeError(
+				"""Validation failure""",
+				validation,
+				glGetProgramInfoLog( program ),
+			)
 	glLinkProgram(program)
 	
-#	if glGetProgramiv:
-#		link_status = glGetProgramiv( program, GL_LINK_STATUS )
-#		if not link_status:
-#			raise RuntimeError(
-#				"""Link failure""",
-#				link_status,
-#				glGetProgramInfoLog( program ),
-#			)
+	if glGetProgramiv:
+		link_status = glGetProgramiv( program, GL_LINK_STATUS )
+		if not link_status:
+			raise RuntimeError(
+				"""Link failure""",
+				link_status,
+				glGetProgramInfoLog( program ),
+			)
 
 	if vertexShader:
 		glDeleteShader(vertexShader)
@@ -200,16 +181,6 @@ class TextureUniform( _Uniform, shaders.TextureUniform ):
 		return False
 
 def _uniformCls( suffix ):
-	def buildAlternate( function_name ):
-		if globals().has_key( function_name+'ARB' ):
-			function = alternate( 
-				globals()[function_name], globals()[function_name+'ARB'] 
-			)
-		else:
-			function = globals()[function_name]
-		globals()[function_name] = function
-		return function
-		
 	def buildCls( suffix, size, function, base ):
 		name = 'FloatUniform'+suffix
 		cls = type( name, (base,), {
@@ -224,7 +195,7 @@ def _uniformCls( suffix ):
 	if suffix.startswith( 'm' ):
 		size = suffix[1:]
 		function_name = 'glUniformMatrix%sfv'%( size, )
-		function = buildAlternate( function_name )
+		function = globals()[function_name] 
 		size = map( int, size.split('x' ))
 		if len(size) == 1:
 			size = [size[0],size[0]]
@@ -236,7 +207,7 @@ def _uniformCls( suffix ):
 		else:
 			base = FloatUniform
 		function_name = 'glUniform%sv'%( suffix, )
-		function = buildAlternate( function_name )
+		function = globals()[function_name] 
 		size = (int(suffix[:1]), )
 		buildCls( suffix, size, function, base )
 
