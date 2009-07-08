@@ -96,8 +96,8 @@ class SolidGlyph( OutlineGlyph ):
 			for points, normals in data:
 				gleExtrusion(
 					points, normals,
-					(0,1,0), # up
-					[(0,0,1),(0,0,0),(0,0,-distance),(0,0,-distance-1.0)], # spine
+					array((0,1,0),'d'), # up
+					array([(0,0,1),(0,0,0),(0,0,-distance),(0,0,-distance-1.0)],'d'), # spine
 					None,
 				)
 				if __debug__:

@@ -30,6 +30,7 @@ BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGLContext import interactivecontext, drawcube
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from OpenGL.constants import GLfloat_3,GLfloat_4
 import time
 from Image import open
 
@@ -77,9 +78,9 @@ class TestContext( BaseContext ):
 			'keypress', name = 'b', function = self.OnBlendToggle
 		)
 		print self.usage
-		glLightfv( GL_LIGHT1, GL_AMBIENT, (0.2, .2, .2, 1.0) );
-		glLightfv(GL_LIGHT1, GL_DIFFUSE, (.8,.8,.8));
-		glLightfv(GL_LIGHT1, GL_POSITION, (-2,0,3,1) );
+		glLightfv( GL_LIGHT1, GL_AMBIENT, GLfloat_4(0.2, .2, .2, 1.0) );
+		glLightfv(GL_LIGHT1, GL_DIFFUSE, GLfloat_3(.8,.8,.8));
+		glLightfv(GL_LIGHT1, GL_POSITION, GLfloat_4(-2,0,3,1) );
 		
 
 	def Lights (self, mode = 0):
