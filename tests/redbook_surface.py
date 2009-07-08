@@ -60,14 +60,14 @@ class TestContext( BaseContext ):
 		BaseContext.Render( self, mode )
 
 		glClearColor (0.0, 0.0, 0.0, 0.0);
-		glMaterialfv(GL_FRONT, GL_DIFFUSE, [0.7, 0.7, 0.7, 1.0]);
-		glMaterialfv(GL_FRONT, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0]);
-		glMaterialfv(GL_FRONT, GL_SHININESS, [100.0]);
+		glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'));
+		glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'));
+		glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'));
 
 		glEnable(GL_AUTO_NORMAL);
 		glEnable(GL_NORMALIZE);
 
-		knots= array ([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], "d")
+		knots= array ([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], "f")
 		glPushMatrix();
 		try:
 			glRotatef(330.0, 1.,0.,0.);
@@ -96,7 +96,7 @@ class TestContext( BaseContext ):
 		gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 25.0);
 		gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL);
 	def buildControlPoints( self ):
-		ctlpoints = zeros( (4,4,3), 'd')
+		ctlpoints = zeros( (4,4,3), 'f')
 		for u in range( 4 ):
 			for v in range( 4):
 				ctlpoints[u][v][0] = 2.0*(u - 1.5)

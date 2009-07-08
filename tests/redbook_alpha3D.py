@@ -73,8 +73,8 @@ class TestContext( BaseContext ):
 	def OnInit( self ):
 		"""Setup running params"""
 
-		glMaterialfv(GL_FRONT, GL_SPECULAR, (1.0, 1.0, 1.0, 0.15) );
-		glMaterialfv(GL_FRONT, GL_SHININESS, (100.0, ) );
+		glMaterialfv(GL_FRONT, GL_SPECULAR, array((1.0, 1.0, 1.0, 0.15),'f') );
+		glMaterialfv(GL_FRONT, GL_SHININESS, array((100.0, ),'f') );
 
 		self.sphereList = glGenLists(1);
 		if not self.sphereList:
@@ -100,7 +100,7 @@ class TestContext( BaseContext ):
 	def Lights( self, mode = None ):
 		"""Setup global illumination"""
 		
-		glLightfv(GL_LIGHT0, GL_POSITION, (0.5, 0.5, 1.0, 0.0), );
+		glLightfv(GL_LIGHT0, GL_POSITION, array( (0.5, 0.5, 1.0, 0.0),'f') );
 		glEnable(GL_LIGHTING);
 		glEnable(GL_LIGHT0);
 	def Background( self, mode = 0):
@@ -126,8 +126,8 @@ class TestContext( BaseContext ):
 
 		glPushMatrix ();
 		glTranslatef (-0.15, -0.15, self.solidZ);
-		glMaterialfv(GL_FRONT, GL_EMISSION, ( 0.0, 0.0, 0.0, 1.0), );
-		glMaterialfv(GL_FRONT, GL_DIFFUSE, (0.75, 0.75, 0.0, 1.0), );
+		glMaterialfv(GL_FRONT, GL_EMISSION, array(( 0.0, 0.0, 0.0, 1.0),'f'), );
+		glMaterialfv(GL_FRONT, GL_DIFFUSE, array((0.75, 0.75, 0.0, 1.0),'f'), );
 		glCallList (self.sphereList);
 		glPopMatrix ();
 
@@ -135,8 +135,8 @@ class TestContext( BaseContext ):
 		glTranslatef (0.15, 0.15, self.transparentZ);
 		glRotatef (15.0, 1.0, 1.0, 0.0);
 		glRotatef (30.0, 0.0, 1.0, 0.0);
-		glMaterialfv(GL_FRONT, GL_EMISSION, ( 0.0, 0.3, 0.3, 0.6), );
-		glMaterialfv(GL_FRONT, GL_DIFFUSE, ( 0.0, 0.8, 0.8, 0.8), );
+		glMaterialfv(GL_FRONT, GL_EMISSION,array( ( 0.0, 0.3, 0.3, 0.6),'f') );
+		glMaterialfv(GL_FRONT, GL_DIFFUSE,array( ( 0.0, 0.8, 0.8, 0.8),'f') );
 		glEnable (GL_BLEND);
 		glDepthMask (GL_FALSE);
 		glBlendFunc (GL_SRC_ALPHA, GL_ONE); # note assumption that background is black...

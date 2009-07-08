@@ -61,40 +61,40 @@ class TestContext( BaseContext ):
 		BaseContext.Render( self, mode )
 ##		self.theNurb = gluNewNurbsRenderer();
 
-		knots = array(  [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], 'd')
+		knots = array(  [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], 'f')
 		edgePt = array(  [
 			[0.0, 0.0],
 			[1.0, 0.0],
 			[1.0, 1.0],
 			[0.0, 1.0],
 			[0.0, 0.0],
-		], 'd') # /* counter clockwise */
+		], 'f') # /* counter clockwise */
 		curvePt = array( [
 			[0.25, 0.5],
 			[0.25, 0.75],
 			[0.75, 0.75],
 			[0.75, 0.5],
-		],'d') # /* clockwise */ 
-		curveKnots = array( [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], 'd')
+		],'f') # /* clockwise */ 
+		curveKnots = array( [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], 'f')
 		pwlPt = array([
 			[0.75, 0.5],
 			[0.5, 0.25],
 			[0.25, 0.5],
-		],'d') # /* clockwise */ 
+		],'f') # /* clockwise */ 
 
 
 		try:
 				
 
 			glClearColor (0.0, 0.0, 0.0, 0.0);
-			glMaterialfv(GL_FRONT, GL_DIFFUSE, [0.7, 0.7, 0.7, 1.0]);
-			glMaterialfv(GL_FRONT, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0]);
-			glMaterialfv(GL_FRONT, GL_SHININESS, [100.0]);
+			glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'));
+			glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'));
+			glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'));
 
 			glEnable(GL_AUTO_NORMAL);
 			glEnable(GL_NORMALIZE);
 
-			knots= [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+			knots= array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],'f')
 			glPushMatrix();
 			try:
 				glRotatef(330.0, 1.,0.,0.);
@@ -122,7 +122,6 @@ class TestContext( BaseContext ):
 						gluEndTrim (self.theNurb);
 				finally:
 					gluEndSurface(self.theNurb);
-				print 'finished render'
 			finally:
 				glPopMatrix();
 		except:
@@ -136,7 +135,7 @@ class TestContext( BaseContext ):
 		gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 100.0);
 		gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL);
 	def buildControlPoints( self ):
-		ctlpoints = zeros( (4,4,3), 'd')
+		ctlpoints = zeros( (4,4,3), 'f')
 		for u in range( 4 ):
 			for v in range( 4):
 				ctlpoints[u][v][0] = 2.0*(u - 1.5)
