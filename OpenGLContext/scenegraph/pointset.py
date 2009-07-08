@@ -6,9 +6,14 @@ from OpenGLContext.scenegraph import coordinatebounded
 from OpenGLContext.arrays import array
 from OpenGL.extensions import alternate
 from OpenGL.GL.ARB.point_parameters import *
+from OpenGL.GL.EXT.point_parameters import *
 
-glPointParameterf = alternate( glPointParameterf, glPointParameterfARB )
-glPointParameterfv = alternate( glPointParameterfv, glPointParameterfvARB )
+glPointParameterf = alternate( 
+    glPointParameterf, glPointParameterfARB,glPointParameterfEXT 
+)
+glPointParameterfv = alternate( 
+    glPointParameterfv, glPointParameterfvARB, glPointParameterfEXT 
+)
 RESET_ATTENUATION = array( [1,0,0],'f')
 
 class PointSet(
@@ -65,6 +70,7 @@ class PointSet(
 			# point-sprites instead of regular points...
 			glEnable(GL_POINT_SPRITE);
 			glTexEnvi(GL_POINT_SPRITE, GL_COORD_REPLACE, GL_TRUE)
+		glPointSize( self.size )
 		if glPointParameterf:
 			glPointParameterf( GL_POINT_SIZE_MIN, self.minSize )
 			glPointParameterf( GL_POINT_SIZE_MAX, self.maxSize )
@@ -78,6 +84,7 @@ class PointSet(
 			glPointParameterf( GL_POINT_SIZE_MIN, 0.0 )
 			glPointParameterf( GL_POINT_SIZE_MAX, 1.0 )
 			glPointParameterfv( GL_POINT_DISTANCE_ATTENUATION, RESET_ATTENUATION )
+		glPointSize( 1.0 )
 		glDisableClientState( GL_COLOR_ARRAY )
 		return 1
 	def boundingVolume( self, mode=None ):

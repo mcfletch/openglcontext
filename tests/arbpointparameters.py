@@ -35,10 +35,14 @@ class TestContext( BaseContext ):
 		self.color = Color(
 			color = map(None,line, [0]*len(line), line2 ),
 		)
-		maxPointSize = 4.0
-		glPointSize( maxPointSize )
-		glPointParameterfvARB( GL_POINT_DISTANCE_ATTENUATION_ARB, (0.,0.,1))
-		glPointParameterfARB( GL_POINT_SIZE_MAX_ARB, maxPointSize )
+		self.geometry = PointSet(
+			coord = self.coordinate,
+			color = self.color,
+			size = 4.0,
+			minSize = 0.25,
+			maxSize = 4.0,
+			attenuation = (0,0,1),
+		)
 		self.sg = sceneGraph(
 			children = [
 				Transform(
@@ -47,10 +51,7 @@ class TestContext( BaseContext ):
 					rotation = (1,0,0,1.57),
 					children = [
 						Shape(
-							geometry = PointSet(
-								coord = self.coordinate,
-								color = self.color,
-							),
+							geometry = self.geometry,
 						),
 					],
 				),
@@ -71,13 +72,13 @@ class TestContext( BaseContext ):
 		self.color.color = colors
 	def OnDisableExtension( self, event ):
 		if self.usingExtension:
-			glPointParameterfvARB( GL_POINT_DISTANCE_ATTENUATION_ARB, (1.,0.,0.))
-			print 'point attenuation', glGetFloat( GL_POINT_DISTANCE_ATTENUATION_ARB )
+			self.geometry.attenuation = (1,0,0)
 			self.usingExtension = False
+			print 'attenuation:', self.geometry.attenuation
 		else:
-			glPointParameterfvARB( GL_POINT_DISTANCE_ATTENUATION_ARB, (0.,0.,1))
-			print 'point attenuation', glGetFloat( GL_POINT_DISTANCE_ATTENUATION_ARB )
+			self.geometry.attenuation = (0,0,1)
 			self.usingExtension = True
+			print 'attenuation:', self.geometry.attenuation
 		
 
 if __name__ == "__main__":
