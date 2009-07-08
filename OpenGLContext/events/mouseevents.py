@@ -3,6 +3,7 @@ from OpenGLContext.events import event, eventmanager
 from OpenGLContext.debug.logs import event_log, DEBUG
 from OpenGL.GLU import *
 from OpenGLContext.scenegraph import nodepath
+from OpenGLContext.arrays import array
 ##event_log.setLevel( DEBUG )
 
 class MouseEvent( event.Event ):
@@ -103,12 +104,14 @@ class MouseEvent( event.Event ):
 			x,y,z = viewCoordinate
 			if isinstance( z, (int,long)):
 				z = z / (2.0**32-1.0)
-
+		viewport = self.viewport
+		if viewport is not None:
+			viewport = array(viewport,'i')
 		worldCoordinate = gluUnProject(
 			x,y,z,
 			self.modelViewMatrix,
 			self.projectionMatrix,
-			self.viewport,
+			viewport,
 		)
 		if viewCoordinate is None:
 			self.worldCoordinate = worldCoordinate
