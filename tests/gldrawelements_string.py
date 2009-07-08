@@ -8,7 +8,7 @@ import string
 import flower_geometry
 
 points = array([[0,0,0],[1,0,0],[1,1,0],[0,1,0]], 'f')
-indices = array( range(len(points)), 'i')
+indices = array( range(len(points)), 'I')
 
 class TestContext( BaseContext ):
 	def OnInit( self ):
