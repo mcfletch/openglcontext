@@ -129,9 +129,9 @@ class Lathe( GLEGeom ):
 	def do( self ):
 		super( Lathe, self).do()
 		gleLathe(
-			self.contour,
-			self.normals,
-			self.up,
+			self.contour.astype('d'),
+			self.normals.astype('d'),
+			self.up.astype('d'),
 			self.startRadius, # start radius for spiral
 			self.deltaRadius, # delta radius for spiral
 			self.startZ, # start Z for spiral
@@ -165,9 +165,9 @@ class Screw( GLEGeom ):
 	def do( self ):
 		super( Screw, self).do()
 		gleScrew(
-			self.contour,
-			self.normals,
-			self.up,
+			self.contour.astype('d'),
+			self.normals.astype('d'),
+			self.up.astype('d'),
 			self.startZ, # z start
 			self.endZ, # z end
 			self.totalAngle*RAD_TO_DEG, # rotations,
@@ -201,9 +201,9 @@ class Spiral( GLEGeom ):
 	def do( self ):
 		super( Spiral, self).do()
 		gleSpiral(
-			self.contour,
-			self.normals,
-			self.up,
+			self.contour.astype('d'),
+			self.normals.astype('d'),
+			self.up.astype('d'),
 			self.startRadius, # start radius for spiral
 			self.deltaRadius, # delta radius for spiral
 			self.startZ, # start Z for spiral
