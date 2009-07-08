@@ -16,7 +16,7 @@ class TestContext( BaseContext ):
 			1.0, 1.0, 0.0,
 			0.0, 1.0, 0.0 
 		], 'f')
-		indices = [2, 3, 0, 1 ]
+		indices = array([2, 3, 0, 1 ],'I')
 		glInterleavedArrays(
 			GL_V3F, # 3 vertex floats/item
 			0, # tight packing

@@ -1,4 +1,5 @@
 """Low-level holder for vertex information"""
+from OpenGLContext.arrays import array
 
 class Vertex(object):
 	"""Holds a single vertex during operations
@@ -30,7 +31,7 @@ class Vertex(object):
 			index array (i.e. coordIndex[metaIndex], colorIndex[metaIndex],...
 			is the index which produced the vertex.
 		"""
-		self.point = point
+		self.point = array( point,'d')
 		self.color = color
 		self.normal = normal
 		self.textureCoordinate = textureCoordinate

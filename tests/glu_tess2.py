@@ -4,6 +4,7 @@ from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from OpenGLContext.arrays import array
 
 
 outline = [
@@ -66,7 +67,7 @@ class TestContext( BaseContext ):
 			gluTessBeginContour( self.tess )
 			try:
 				for (x,y) in outline:
-					vertex = (x/scale,y/scale,0.0)
+					vertex = array((x/scale,y/scale,0.0),'d')
 					gluTessVertex(self.tess, vertex, vertex)
 			finally:
 				gluTessEndContour( self.tess )
