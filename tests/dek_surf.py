@@ -5,6 +5,7 @@ BaseContext, MainFunction = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
+from OpenGLContext.scenegraph.basenodes import *
 import string, time
 
 ## Control points for the bezier surface
@@ -37,15 +38,9 @@ texpts = array([
 
 
 class TestContext( BaseContext ):
-	def Render( self, mode= 0 ):
+	def Render( self, mode ):
 		BaseContext.Render( self, mode )
-		glEnable(GL_DEPTH_TEST)
-		glEnable( GL_LIGHT0 )
-		glLight( GL_LIGHT0, GL_SPOT_DIRECTION, (-10,0,-10))
-		glLight( GL_LIGHT0, GL_SPOT_CUTOFF, 1.57 )
-		glLight( GL_LIGHT0, GL_DIFFUSE, (0,0,1))
-		glLight( GL_LIGHT0, GL_POSITION, (10,0,10))
-		
+		self.light.Light( GL_LIGHT0, mode )
 		glCallList( self.surfaceID )
 		
 	def buildDisplayList( self):
@@ -66,7 +61,12 @@ class TestContext( BaseContext ):
 		"""Initialise"""
 		print """Should see curvy surface with no texture"""
 		self.surfaceID = self.buildDisplayList()
-		
+		self.light = SpotLight(
+			direction = (-10,0,-10),
+			cutOffAngle = 1.57,
+			color = (0,0,1),
+			location = (10,0,10),
+		)
 	
 
 if __name__ == "__main__":
