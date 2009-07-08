@@ -38,25 +38,24 @@ def compileProgram(vertexSource=None, fragmentSource=None):
 	else:
 		fragmentShader = None
 
-	glValidateProgram( program )
-	if glGetProgramiv:
-		validation = glGetProgramiv( program, GL_VALIDATE_STATUS )
-		if not validation:
-			raise RuntimeError(
-				"""Validation failure""",
-				validation,
-				glGetProgramInfoLog( program ),
-			)
 	glLinkProgram(program)
+	# Validation has to occur *after* linking
+	glValidateProgram( program )
 	
-	if glGetProgramiv:
-		link_status = glGetProgramiv( program, GL_LINK_STATUS )
-		if not link_status:
-			raise RuntimeError(
-				"""Link failure""",
-				link_status,
-				glGetProgramInfoLog( program ),
-			)
+	validation = glGetProgramiv( program, GL_VALIDATE_STATUS )
+	if validation == GL_FALSE:
+		raise RuntimeError(
+			"""Validation failure (%s): %s"""%(
+			validation,
+			glGetProgramInfoLog( program ),
+		))
+	link_status = glGetProgramiv( program, GL_LINK_STATUS )
+	if link_status == GL_FALSE:
+		raise RuntimeError(
+			"""Link failure (%s): %s"""%(
+			link_status,
+			glGetProgramInfoLog( program ),
+		))
 
 	if vertexShader:
 		glDeleteShader(vertexShader)
@@ -315,12 +314,17 @@ class _GLSLObjectCache( object ):
 class GLSLObject( shaders.GLSLObject ):
 	"""GLSL-based shader object (compiled set of shaders)"""
 	IMPLEMENTATION = 'GLSL'
+	compileLog = field.newField( ' compileLog', 'SFString', '' )
 	def render( self, mode ):
 		"""Render this shader in the current mode"""
 		renderer = mode.cache.getData(self)
-		if not renderer:
+		if renderer is None:
 			renderer = self.compile( mode )
-		if renderer is not None:
+			if renderer is False:
+				log.warn("""%s""",
+					self.compileLog,
+				)
+		if renderer not in (None,False):
 			try:
 				glUseProgram( renderer )
 			except error.GLError, err:
@@ -359,11 +363,23 @@ class GLSLObject( shaders.GLSLObject ):
 			elif shader.source:
 				log.info( 'Failure compiling: %s %s', shader.compileLog, shader.url or shader.source )
 		if len(subShaders) == len(self.shaders):
-			glValidateProgram( program )
-			warnings = glGetProgramInfoLog( program )
-			if warnings:
-				log.error( 'Shader compile log: %s', warnings )
 			glLinkProgram(program)
+			glValidateProgram( program )
+			validation = glGetProgramiv( program, GL_VALIDATE_STATUS )
+			if validation == GL_FALSE:
+				self.compileLog += """Validation failure (%s): %s"""%(
+					validation,
+					glGetProgramInfoLog( program ),
+				)
+				program = False 
+			else:
+				link_status = glGetProgramiv( program, GL_LINK_STATUS )
+				if link_status == GL_FALSE:
+					self.compileLog += """Link failure (%s): %s"""%(
+						link_status,
+						glGetProgramInfoLog( program ),
+					)
+					program = False
 			for subShader in subShaders:
 				glDeleteShader( subShader )
 			holder.data = program
