@@ -1,17 +1,24 @@
 #! /usr/bin/env python
-'''In this tutorial, we create a simple piece of shader-based geometry
+'''Shader-based Rendering: First steps
+
+This tutorial introduces modern OpenGL mechanisms for rendering 
+3D geometry via programmable Graphics Processing Units (GPUs,
+a.k.a. video cards).  Although we will use a few legacy OpenGL 
+features for simplicity, later tutorials will eliminate these 
+entry points to produce legacy-free code.
 
 We assume you know:
 
-	* Programming (in Python)
+	* General programming (with Python)
 	* Some highschool level math
 
 We'll learn:
 
-	* What a vertex shader *must* do.
+	* What a vertex shader *must* do in GLSL.
 	* What a fragment shader *must* do.
 	* What a VBO object looks like.
 	* How to activate and deactivate shaders and VBOs.
+	* How to render simple geometry.
 
 First we do our imports, the OpenGLContext testingcontext allows
 for the use of Pygame, wxPython, or GLUT GUI systems with the same 
@@ -33,7 +40,7 @@ to use, the creation of offset objects, and even basic slice-based
 updating of the content in the VBO.'''
 from OpenGL.arrays import vbo
 '''OpenGLContext.arrays is just an abstraction point which imports 
-either Numpy (definitely prefered) or the older Numeric library 
+either Numpy (preferred) or the older Numeric library 
 with a number of compatability functions to make Numeric look like 
 the newer Numpy module.'''
 from OpenGLContext.arrays import *
@@ -268,11 +275,9 @@ class TestContext( BaseContext ):
 				self.vbo.unbind()
 		finally:
 			glUseProgram( 0 )
-		
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
-
 '''
 Terms:
 
@@ -281,4 +286,21 @@ Terms:
 		a near and far clipping plane, as well as clipping planes 
 		for the left, right, top and bottom
 	
+	GLSL -- the OpenGL Shading Language, there are two levels 
+		of shading language defined within OpenGL, the earlier of 
+		the two is a low-level assembly-like language.  The later,
+		GLSL is a slightly higher-level C-like language, this is 
+		the language we will be using in these tutorials.  There 
+		are also third-party languages, such as Cg, which can 
+		compile the same source-code down to e.g. 
+		DirectX and/or OpenGL renderers.
+
+	legacy -- OpenGL is an old standard, the traditional API has 
+		been largely deprecated by the OpenGL standards board, the 
+		vendors generally support the old APIs, but their use is 
+		officially discouraged.  The Legacy APIs had a single 
+		rendering model which was customized via a large number of 
+		global state values.  The new APIs are considerably more 
+		flexible, but require somewhat more effort to use.
+
 '''
