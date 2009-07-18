@@ -6,7 +6,7 @@ BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGLContext.scenegraph.shaders import compileProgram, glUseProgram
+from OpenGL.GL.shaders import *
 
 class TestContext( BaseContext ):
 	"""This shader just passes gl_Color from an input array to 
@@ -15,14 +15,21 @@ class TestContext( BaseContext ):
 	"""
 	
 	def OnInit( self ):
+		try:
+			compileShader( ''' void main() { ''', GL_VERTEX_SHADER )
+		except RuntimeError, err:
+			print 'Example of shader compile error', err 
+		else:
+			raise RuntimeError( """Didn't catch compilation error!""" )
 		self.shader = compileProgram(
+			compileShader(
 			'''void main() {
 				gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
 				gl_FrontColor = gl_Color;
-			}''',
-			'''void main() {
+			}''',GL_VERTEX_SHADER),
+			compileShader('''void main() {
 				gl_FragColor = gl_Color;
-			}''',
+			}''',GL_FRAGMENT_SHADER),
 		)
 		self.vbo = vbo.VBO(
 			array( [

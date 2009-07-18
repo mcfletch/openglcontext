@@ -44,11 +44,9 @@ either Numpy (preferred) or the older Numeric library
 with a number of compatability functions to make Numeric look like 
 the newer Numpy module.'''
 from OpenGLContext.arrays import *
-'''OpenGLContext.scenegraph.shaders is OpenGLContext's library 
-which defines the node-based shader system.  We pull out just two 
-things, neither of which has anything to do with the scenegraph
-implementation.'''
-from OpenGLContext.scenegraph.shaders import compileProgram, glUseProgram
+'''OpenGL.GL.shaders is a convenience library for accessing the 
+shader functionality.'''
+from OpenGL.GL.shaders import *
 
 '''OpenGLContext contexts are all sub-classes of Context, with 
 various mix-ins providing support for different windowing classes,
@@ -108,10 +106,10 @@ class TestContext( BaseContext ):
 		variables used here is a (built-in) global, so we don't have 
 		to declare their data-types.
 		'''
-		VERTEX_SHADER = ("""
+		VERTEX_SHADER = compileShader("""
 		void main() {
 			gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
-		}""")
+		}""", GL_VERTEX_SHADER)
 		'''After a vertex is processed by the vertex shader, it passes 
 		through a number of fixed-function processes, including the 
 		"clipping" process, which may turn a single vertex into multiple
@@ -147,10 +145,10 @@ class TestContext( BaseContext ):
 		is a pure green opaque (the last 1) value.  We assign the value 
 		to the (global, built-in) gl_FragColor value and we are finished.
 		'''
-		FRAGMENT_SHADER = ("""
+		FRAGMENT_SHADER = compileShader("""
 		void main() {
 			gl_FragColor = vec4( 0, 1, 0, 1 );
-		}""")
+		}""", GL_FRAGMENT_SHADER)
 		'''Now that we have defined our shaders, we need to compile them 
 		into a program on our video card which can be applied to geometry.
 		The compileProgram convenience function does these operations:

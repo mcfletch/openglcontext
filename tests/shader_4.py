@@ -8,10 +8,7 @@ BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGLContext.scenegraph.shaders import (
-	compileProgram, glUseProgram, glGetAttribLocation, 
-	glVertexAttribPointer,
-)
+from OpenGL.GL.shaders import *
 
 class TestContext( BaseContext ):
 	"""OpenGL 3.1 deprecates non-vertex-attribute drawing
@@ -30,19 +27,19 @@ class TestContext( BaseContext ):
 	
 	def OnInit( self ):
 		self.shader = compileProgram(
-			'''
+			compileShader('''
 			attribute vec3 position;
 			attribute vec3 color;
 			varying vec4 baseColor;
 			void main() {
 				gl_Position = gl_ModelViewProjectionMatrix * vec4( position,1.0);
 				baseColor = vec4(color,1.0);
-			}''',
-			'''
+			}''',GL_VERTEX_SHADER),
+			compileShader('''
 			varying vec4 baseColor;
 			void main() {
 				gl_FragColor = baseColor;
-			}''',
+			}''',GL_FRAGMENT_SHADER),
 		)
 		self.vbo = vbo.VBO(
 			array( [

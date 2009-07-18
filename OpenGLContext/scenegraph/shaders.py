@@ -17,59 +17,6 @@ import time, sys,logging
 log = logging.getLogger( 'OpenGLContext.scenegraph.shaders' )
 from OpenGL.extensions import alternate
 
-def compileProgram(vertexSource=None, fragmentSource=None):
-	program = glCreateProgram()
-	if isinstance( vertexSource, (str,unicode)):
-		vertexSource = [ vertexSource ]
-	if isinstance( fragmentSource, (str,unicode)):
-		fragmentSource = [ fragmentSource ]
-	if vertexSource:
-		vertexShader = compileShader(
-			vertexSource, GL_VERTEX_SHADER_ARB
-		)
-		glAttachShader(program, vertexShader)
-	else:
-		vertexShader = None
-	if fragmentSource:
-		fragmentShader = compileShader(
-			fragmentSource, GL_FRAGMENT_SHADER_ARB
-		)
-		glAttachShader(program, fragmentShader)
-	else:
-		fragmentShader = None
-
-	glLinkProgram(program)
-	# Validation has to occur *after* linking
-	glValidateProgram( program )
-	
-	validation = glGetProgramiv( program, GL_VALIDATE_STATUS )
-	if validation == GL_FALSE:
-		raise RuntimeError(
-			"""Validation failure (%s): %s"""%(
-			validation,
-			glGetProgramInfoLog( program ),
-		))
-	link_status = glGetProgramiv( program, GL_LINK_STATUS )
-	if link_status == GL_FALSE:
-		raise RuntimeError(
-			"""Link failure (%s): %s"""%(
-			link_status,
-			glGetProgramInfoLog( program ),
-		))
-
-	if vertexShader:
-		glDeleteShader(vertexShader)
-	if fragmentShader:
-		glDeleteShader(fragmentShader)
-	if glIsProgram:
-		assert glIsProgram( program ), ("""Program does not seem to have compiled!""", vertexSource, fragmentSource )
-	return program
-def compileShader( source, shaderType ):
-	"""Compile shader source of given type"""
-	shader = glCreateShader(shaderType)
-	glShaderSource( shader, source )
-	glCompileShader( shader )
-	return shader
 
 class _Buffer( shaders.ShaderBuffer ):
 	"""VBO based buffer implementation for generic geometry"""
@@ -180,8 +127,7 @@ class TextureUniform( _Uniform, shaders.TextureUniform ):
 		return False
 
 def _uniformCls( suffix ):
-	def buildCls( suffix, size, function, base ):
-		name = 'FloatUniform'+suffix
+	def buildCls( name, suffix, size, function, base ):
 		cls = type( name, (base,), {
 			'suffix': suffix,
 			'PROTO': name,
@@ -199,16 +145,19 @@ def _uniformCls( suffix ):
 		if len(size) == 1:
 			size = [size[0],size[0]]
 		size = tuple(size)
-		buildCls( suffix, size, function, FloatUniform )
+		name = 'FloatUniform'+suffix
+		buildCls( name, suffix, size, function, FloatUniform )
 	else:
 		if suffix.endswith( 'i' ):
 			base = IntUniform
+			name = 'IntUniform'+suffix
 		else:
 			base = FloatUniform
+			name = 'FloatUniform'+suffix
 		function_name = 'glUniform%sv'%( suffix, )
 		function = globals()[function_name] 
 		size = (int(suffix[:1]), )
-		buildCls( suffix, size, function, base )
+		buildCls( name, suffix, size, function, base )
 
 FLOAT_UNIFORM_SUFFIXES = ('1f','2f','3f','4f','m2','m3','m4','m2x3','m3x2','m2x4','m4x2','m3x4','m4x3')
 INT_UNIFORM_SUFFIXES = ('1i','2i','3i','4i')
@@ -282,26 +231,26 @@ class GLSLShader( shaders.GLSLShader ):
 	def compile(self):
 		if not self.source:
 			return False
-		if self.type == 'VERTEX':
-			shader = compileShader(
-				self.source, 
-				GL_VERTEX_SHADER_ARB
-			)
-		elif self.type == 'FRAGMENT':
-			shader = compileShader(
-				self.source, GL_FRAGMENT_SHADER_ARB
-			)
-		else:
-			log.error(
-				'Unknown shader type: %s in %s', 
-				self.type, 
-				self, 
-			)
+		try:
+			if self.type == 'VERTEX':
+				shader = compileShader(
+					self.source, 
+					GL_VERTEX_SHADER
+				)
+			elif self.type == 'FRAGMENT':
+				shader = compileShader(
+					self.source, GL_FRAGMENT_SHADER
+				)
+			else:
+				log.error(
+					'Unknown shader type: %s in %s', 
+					self.type, 
+					self, 
+				)
+				return None
+		except RuntimeError, err:
+			self.compileLog = err.args[0]
 			return None
-		# we succeeded in doing the compilation, check for errors
-		shader_log = glGetShaderInfoLog( shader )
-		if shader_log:
-			self.compileLog = shader_log 
 		return shader
 	def visible( self, *args, **named ):
 		return True 

@@ -5,8 +5,8 @@ from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
+from OpenGL.GL.shaders import *
 from OpenGLContext.arrays import *
-from OpenGLContext.scenegraph.shaders import *
 from OpenGL.GLUT import glutSolidTeapot
 
 class TestContext( BaseContext ):
@@ -21,7 +21,7 @@ class TestContext( BaseContext ):
 	)
 	def OnInit( self ):
 		self.shader = compileProgram(
-			'''
+			compileShader('''
 			uniform float end_fog;
 			uniform vec4 fog_color;
 			void main() {
@@ -36,10 +36,10 @@ class TestContext( BaseContext ):
 				fog = (end_fog - fog_coord)/end_fog;
 				fog = clamp( fog, 0.0, 1.0);
 				gl_FrontColor = mix(fog_color, gl_Color, fog);
-			}''',
-			'''void main() {
+			}''',GL_VERTEX_SHADER),
+			compileShader('''void main() {
 				gl_FragColor = gl_Color;
-			}''',
+			}''',GL_FRAGMENT_SHADER),
 		)
 		self.vbo = vbo.VBO(
 			array( [
