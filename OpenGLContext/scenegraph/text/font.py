@@ -385,7 +385,7 @@ class PolygonalFontMixIn(object):
 			else:
 				height = line.height
 			# should do justification here...
-			if line.lists:
+			if len(line.lists):
 				glCallLists( line.lists )
 				glTranslate( -line.width, -height, 0.0)
 			else:
@@ -422,7 +422,7 @@ class Line( object ):
 	"""Holds meta-data about a rendered line of text"""
 	width = None
 	height = None
-	lists = None
+	lists = ()
 	def __init__( self, base, font, mode=None ):
 		self.font = weakref.proxy(font)
 		self.base = base
