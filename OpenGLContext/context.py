@@ -33,7 +33,8 @@ from OpenGLContext import visitor, texturecache,plugins
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node,cache
-import weakref, os, time, sys
+import weakref, os, time, sys, logging 
+log = logging.getLogger( 'OpenGLContext.context' )
 
 try:
 	import threading, Queue
@@ -253,6 +254,68 @@ class Context(object):
 		callbacks, but you'll normally want to call the base-class
 		implementation somewhere in that overridden method.
 		"""
+		self.addEventHandler( 'keyboard', name = '<escape>',
+			function = self.OnQuit )
+		self.addEventHandler( 
+			'keypress', name = 'f',modifiers = (False,False,True), # ALT
+			function = self.OnFrameRate 
+		)
+		self.addEventHandler( 'keyboard', name = '<pagedown>', 
+			function = self.OnNextViewpoint )
+		self.addEventHandler( 'keypress', name = 's', 
+			modifiers = (False,False,True),
+			function = self.OnSaveImage )
+		
+	def OnQuit( self, event=None ):
+		"""Quit the application (forcibly)"""
+		import sys
+		sys.exit( 0 )
+	def OnFrameRate( self, event=None ):
+		"""Print the current frame-rate values"""
+		if self.frameCounter:
+			self.frameCounter.display = not (self.frameCounter.display)
+	def OnNextViewpoint( self, event=None ):
+		"""Go to the next viewpoint for the scenegraph"""
+		sg = self.getSceneGraph()
+		if sg:
+			current = getattr( sg, 'boundViewpoint', None )
+			if current:
+				current.isBound = False
+				current.set_bound = False
+		self.triggerRedraw( 1 )
+	def OnSaveImage( self, event=None ):
+		"""Save our current screen to disk (if possible)"""
+		try:
+			import Image # get PIL's functionality...
+		except ImportError, err:
+			log.error( "Unable to import PIL" )
+		else:
+			width, height = self.getViewPort()
+			glPixelStorei(GL_PACK_ALIGNMENT, 1)
+			data = glReadPixelsub(0, 0, width, height, GL_RGBA)
+			if hasattr( data, 'tostring' ):
+				string = data.tostring()
+			else:
+				string = data
+			image = Image.fromstring( 
+				'RGBA', 
+				(int(width),int(height)), 
+				string 
+			)
+			image = image.transpose( Image.FLIP_TOP_BOTTOM)
+			import sys
+			script = sys.argv[0]
+			count = 0
+			template = '%s-screen-%04i.png'
+			saved = False
+			while not saved:
+				count += 1
+				test = template%( script,count, )
+				if not os.path.exists( test ):
+					log.warn( 'Saving to file: %s', test )
+					image.save( test, 'PNG' )
+					saved = True 
+		
 	def setupThreading( self ):
 		"""Setup primitives (locks, events) for threading
 		"""
@@ -403,6 +466,9 @@ class Context(object):
 		try:
 			visibleChange = self.renderPasses( self )
 			if visibleChange:
+				# TODO: make this a general HUD renderer...
+				if self.frameCounter.display:
+					self.frameCounter.Render( self )
 				self.SwapBuffers()
 				if self.frameCounter is not None:
 					self.frameCounter.addFrame( time.clock()-t )

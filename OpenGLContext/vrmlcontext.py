@@ -55,33 +55,8 @@ class VRMLContext(object):
 		
 	def OnInit( self ):
 		"""Initialise the VRMLContext keyboard shortcuts"""
-		self.addEventHandler( 'keypress', name = '<escape>',function = self.OnQuit )
-		self.addEventHandler( 
-			'keypress', name = 'f',modifiers = (False,False,True), # ALT
-			function = self.OnFrameRate 
-		)
-		self.addEventHandler( 'keyboard', name = '<pagedown>', function = self.OnNextViewpoint )
-
 
 	def load( self, filename ):
 		"""Load given url, replacing current scenegraph"""
 		self.sg = Loader.load( filename )
-
-	def OnQuit( self, event=None ):
-		"""Quit the application (forcibly)"""
-		import sys
-		sys.exit( 0 )
-	def OnFrameRate( self, event=None ):
-		"""Print the current frame-rate values"""
-		
-		print """%s frames : %s avg fps : %s curr fps"""% self.frameCounter.summary()
-	def OnNextViewpoint( self, event=None ):
-		"""Go to the next viewpoint for the scenegraph"""
-		sg = self.getSceneGraph()
-		if sg:
-			current = getattr( sg, 'boundViewpoint', None )
-			if current:
-				current.isBound = False
-				current.set_bound = False
-		self.triggerRedraw( 1 )
 		

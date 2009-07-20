@@ -51,20 +51,6 @@ class BrowserContext(BaseContext):
 		"""Get the scene graph for the context (or None)"""
 		return self.scene
 
-	def OnQuit( self, event=None ):
-		"""Quit the application (forcibly)"""
-		import sys
-		sys.exit( 0 )
-	def OnFrameRate( self, event=None ):
-		"""Print the current frame-rate values"""
-		if self.frameCount:
-			print """%s frames in %ss: %s fps"""%(
-				self.frameCount,
-				self.frameTime,
-				round( self.frameCount/self.frameTime,5),
-			)
-		else:
-			print 'No frames rendered successfully yet!'
 	def OnDraw (self, *arguments, **namedarguments):
 		"""Override to provide frame-rate reporting"""
 		t = time.clock()
