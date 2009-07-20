@@ -3,7 +3,7 @@ from OpenGLContext import interactivecontext, context
 from OpenGLContext.move import viewplatform
 from OpenGL.GL import *
 import math
-class ViewPlatformMixin:
+class ViewPlatformMixin(object):
 	"""Mix-in for Context classes providing ViewPlatform support
 
 	The viewplatform module provides a ViewPlatform object
@@ -101,6 +101,7 @@ class ViewPlatformMixin:
 			* Mouse-button-2 (right) for entering "examine" mode
 			* '-' for straightening the view platform
 		"""
+		super( ViewPlatformMixin, self ).setupDefaultEventCallbacks()
 		from OpenGLContext.move import direct, smooth
 		self.setMovementManager( smooth.Smooth( self.getViewPlatform() ) )
 	def setMovementManager( self, manager ):
