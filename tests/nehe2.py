@@ -1,33 +1,15 @@
 #! /usr/bin/env python
-'''Draw simple, unlit geometry
+'''=Simple Unlit Geometry (NeHe 2)=
 
-Based on:
-	OpenGL Tutorial #2.
-
-	Project Name: Jeff Molofee's OpenGL Tutorial
-
-	Project Description: Creating Your First Polygon & Quad
-
-	Authors Name: Jeff Molofee (aka NeHe)
-
-	Authors Web Site: nehe.gamedev.net
-
-	COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee
-
-		If you plan to put this program on your web page or a cdrom of
-		any sort, let me know via email, I'm curious to see where
-		it ends up :)
-
-			If you use the code for your own projects please give me credit,
-			or mention my web site somewhere in your program or it's docs.
-
+This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=02 NeHe2 tutorial] by Jeff Molofee.
 '''
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
-	"""This context customizes two points in the BaseContext.
+	"""Rendering Context with custom viewpoint and render"""
+	'''This context customizes two points in the BaseContext.
 
 	The first point is the initialPosition attribute.  By
 	default, the OpenGLContext contexts position your
@@ -48,7 +30,7 @@ class TestContext( BaseContext ):
 	Note: the results of this Demo will be different than the
 	tutorial code because the OpenGLContext is automatically
 	enabling lighting.
-	"""
+	'''
 	initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
 	def Render( self, mode = 0):
 		"""Render the geometry for the scene."""
@@ -77,4 +59,19 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
+"""Based on:
+	OpenGL Tutorial #2.
+	Project Name: Jeff Molofee's OpenGL Tutorial
+	Project Description: Creating Your First Polygon & Quad
+	Authors Name: Jeff Molofee (aka NeHe)
+	Authors Web Site: nehe.gamedev.net
+	COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee
 
+	If you plan to put this program on your web page or a cdrom of
+	any sort, let me know via email, I'm curious to see where
+	it ends up :)
+
+	If you use the code for your own projects please give me
+	credit, or mention my web site somewhere in your program 
+	or it's docs.
+"""

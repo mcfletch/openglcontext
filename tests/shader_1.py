@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Shader-based Rendering: First steps=
+'''=First steps=
 
 [shader_1.py-screen-0001.png Screenshot]
 

@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Shader-based Rendering: Varying Values=
+'''=Varying Values=
 
 [shader_2.py-screen-0001.png Screenshot]
 
