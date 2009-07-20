@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=First steps=
+'''=First steps (Basic Geometry)=
 
 [shader_1.py-screen-0001.png Screenshot]
 
@@ -63,18 +63,22 @@ class TestContext( BaseContext ):
 	segfaults or other extreme behaviour).
 	'''
 	def OnInit( self ):
-		'''The compileProgram function is a testing/convenience 
-		function which performs a number of base operations using 
-		the OpenGL.GL.shaders convenience functions which abstract 
-		away the various shader implementations available under 
-		OpenGL.  (GLSL Shaders started as extensions and later 
-		became part of Core OpenGL, which is the normal way that 
-		OpenGL is improved/extended).
+		'''The OpenGL.GL.shaders.compileProgram function is a
+		convenience function which performs a number of base 
+		operations using to abstract away much of the complexity 
+		of shader setup.  GLSL Shaders started as extensions to OpenGL
+		and later became part of Core OpenGL, but some drivers 
+		will not support the "core" versions of the shader APIs.
+		This extension mechanism is the "normal" way to extend 
+		OpenGL, but it makes for messy APIs.
 		
-		compileProgram assumes that you are attempting to compile 
-		a single vertex shader and a single fragment shader. There
-		are (uncommon) other types of shaders (including geometry 
-		shaders, which are comparatively very new).
+		Each "shader program" consists of a number of simpler 
+		components "shaders" which are linked together.  There are 
+		two common shader types at the moment, the vertex and fragment 
+		shaders.  Newer hardware may include other shader types, such 
+		as geometry shaders.
+		
+		=Vertex Shader=
 		
 		Our first shader is the VERTEX_SHADER, which must calculate
 		a vertex position for each vertex which is to be generated.
@@ -107,6 +111,10 @@ class TestContext( BaseContext ):
 		the C-like GLSL syntax to return nothing (void).  Each of the 
 		variables used here is a (built-in) global, so we don't have 
 		to declare their data-types.
+		
+		The OpenGL.GL.shaders.compileShader function 
+		compiles the shader and checks for any compilation errors.
+		(Using glCreateShader, glShaderSource, and glCompileShader).
 		'''
 		VERTEX_SHADER = compileShader("""
 		void main() {
@@ -124,11 +132,12 @@ class TestContext( BaseContext ):
 		triangles from the original one triangle (the same is true of 
 		all of the clipping plans for the frustum).
 		
+		=Fragment Shader=
+		
 		The fixed-function operations will generate "fragments", which 
 		can be loosely thought of as a "possible pixel". They may 
 		represent a sub-sampling interpolation value, or a value that 
 		will eventually be hidden behind another pixel (overdrawn).
-		
 		Our renderer will be given a (large number of) fragments each 
 		of which will have a position calculated based on the area 
 		of the triangle vertices (gl_Position values) that our vertex 
@@ -154,8 +163,7 @@ class TestContext( BaseContext ):
 		The compileProgram convenience function does these operations:
 		
 			* creates a shader "program" (glCreateProgram)
-			* for each of the vertex and fragment shader, if provided
-				* compiles the shader (glCreateShader, glShaderSource,glCompileShader)
+			* for each of the shaders provided
 				* attaches the shader to the program 
 			* links the program (glLinkProgram)
 			* validates the program (glValidateProgram,glGetProgramiv)
@@ -167,7 +175,9 @@ class TestContext( BaseContext ):
 		to render.
 		'''
 		self.shader = compileProgram(VERTEX_SHADER,FRAGMENT_SHADER)
-		'''Modern OpenGL wants you to load your data onto your video 
+		'''=Vertex Buffer Data Objects (VBOs)=
+		
+		Modern OpenGL wants you to load your data onto your video 
 		card as much as possible.  For geometric data, this is generally 
 		done via a Vertex Buffer Object.  These are flexible data-storage
 		areas reserved on the card, with various strategies available
@@ -223,7 +233,9 @@ class TestContext( BaseContext ):
 		'''
 	def Render( self, mode):
 		"""Render the geometry for the scene."""
-		'''We tell OpenGL to use our compiled shader, this is 
+		'''=Rendering=
+		
+		We tell OpenGL to use our compiled shader, this is 
 		a simple GLuint that is an opaque token that describes the shader 
 		for OpenGL.  Until we Use the shader, the GL is using the 
 		fixed-function (legacy) rendering pipeline.

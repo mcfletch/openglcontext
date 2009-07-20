@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Attribute Values=
+'''=Attribute Values (Tweening)=
 
 [shader_4.py-screen-0001.png Screenshot]
 [shader_4.py-screen-0002.png Screenshot]

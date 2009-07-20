@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Varying Values=
+'''=Varying Values (Colours)=
 
 [shader_2.py-screen-0001.png Screenshot]
 

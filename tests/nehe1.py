@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 '''=Context Setup (NeHe 1)=
 
+[nehe1.py-screen-0001.png Screenshot]
+
 This tutorial is based loosely on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=01 NeHe1 tutorial] by Jeff Molofee, though the code is entirely unique to OpenGLContext.  It demonstrates the creation of a basic rendering Context. Note: OpenGLContext takes care of most of the setup seen in the NeHe code (though doing so also means that there's less direct control of the setup process), leaving a very simple core script.
 
 The first thing we do is get a Context class.  OpenGLContext provides a "testingcontext" module which allows you to use whatever context-type the user has specified as "prefered".  The testingcontext module provides a function "getInteractive" which takes an optional list of the context-name to retrieve, and returns an appropriate Context sub-class and a MainFunction which is called to start the Context's rendering loop.
