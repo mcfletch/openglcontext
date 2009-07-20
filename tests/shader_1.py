@@ -1,11 +1,13 @@
 #! /usr/bin/env python
-'''Shader-based Rendering: First steps
+'''=Shader-based Rendering: First steps=
+
+[shader_1.py-screen-0001.png Screenshot]
 
 This tutorial introduces modern OpenGL mechanisms for rendering 
-3D geometry via programmable Graphics Processing Units (GPUs,
-a.k.a. video cards).  Although we will use a few legacy OpenGL 
-features for simplicity, later tutorials will eliminate these 
-entry points to produce legacy-free code.
+3D geometry via the GL Shading Language (GLSL).  Although we will 
+use a few legacy OpenGL features for simplicity in early tutorials,
+later tutorials will eliminate these entry points to produce 
+legacy-free code.
 
 We assume you know:
 
@@ -20,7 +22,7 @@ We'll learn:
 	* How to activate and deactivate shaders and VBOs.
 	* How to render simple geometry.
 
-First we do our imports, the OpenGLContext testingcontext allows
+First we do our imports, the [http://pyopengl.sourceforge.net/context OpenGLContext] testingcontext allows
 for the use of Pygame, wxPython, or GLUT GUI systems with the same 
 code.  These imports retrieve an appropriate context for this 
 machine.
@@ -127,12 +129,10 @@ class TestContext( BaseContext ):
 		represent a sub-sampling interpolation value, or a value that 
 		will eventually be hidden behind another pixel (overdrawn).
 		
-		The fragments have each "varying" attribute interpolated between 
-		the values at the vertices of the triangles, in our example 
-		this is just the "position" value, so our renderer will be 
-		given a (large number of) fragments each of which will have 
-		a position interpolated between the values that our vertex 
-		shader generated in the step above.
+		Our renderer will be given a (large number of) fragments each 
+		of which will have a position calculated based on the area 
+		of the triangle vertices (gl_Position values) that our vertex 
+		shader generated.
 		
 		The fragment shader only *needs* to do one thing, which is to 
 		generate a gl_FragColor value, that is, to determine what colour 
@@ -219,7 +219,7 @@ class TestContext( BaseContext ):
 		should be rendered in model-space.  OpenGLContext has created 
 		a default Model-View matrix for a perspective scene where the 
 		camera is sitting 10 units from the origin.  It has cleared the 
-		screen to black and is ready to accept rendering commands.
+		screen to white and is ready to accept rendering commands.
 		'''
 	def Render( self, mode):
 		"""Render the geometry for the scene."""
@@ -270,12 +270,20 @@ class TestContext( BaseContext ):
 				'''
 			finally:
 				self.vbo.unbind()
+				glDisableClientState(GL_VERTEX_ARRAY);
 		finally:
 			glUseProgram( 0 )
+'''We need to actually run the code when operating as a top-level 
+script.  The TestingContext import above also gave us an appropriate
+mainloop function to call.'''
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
 '''
+When run from the command-line, we should see a triangle and a 
+rectangle in solid green floating over a white background, as seen
+in our screenshot above.
+
 Terms:
 
 	frustum -- the viewing "stage" of your world, i.e. the part 
