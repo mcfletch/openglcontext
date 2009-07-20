@@ -149,7 +149,7 @@ class TestContext( BaseContext ):
 		geometry will fade into the white background.  Our shaders will 
 		*not* be called for any fragments where there was no geometry 
 		present, so if we were to choose black here, our geometry would 
-		appear as largely-black objects on a white plain, instead of 
+		appear as largely-black objects on a white plane, instead of 
 		appearing to fade into a fog.
 		'''
 		glUniform1f( self.UNIFORM_LOCATIONS['end_fog'],15)
