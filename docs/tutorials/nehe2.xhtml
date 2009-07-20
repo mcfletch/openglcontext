@@ -3,7 +3,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>NeHe Translations: Simple Unlit Geometry (NeHe 2)</title>
+<title>NeHe Translations: Creating Your First Polygon &amp; Quad (NeHe 2)</title>
     <link href="./tutorial.css" type="text/css" rel="stylesheet" />
 </head>
 <body>
@@ -13,65 +13,90 @@
 	</tr>
 	<tr>
 	<td><a href="nehe1.xhtml">Previous</a></td>
-	<td align="center">NeHe Translations: Simple Unlit Geometry (NeHe 2)</td>
-	<td align="right"><a href="index.xhtml">Index</a></td>
+	<td align="center">NeHe Translations: Creating Your First Polygon &amp; Quad (NeHe 2)</td>
+	<td align="right"><a href="nehe3.xhtml">Next</a></td>
 	</tr>
 </thead></table>
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Simple Unlit Geometry (NeHe 2)</h1>
+	<h1 class="title">Creating Your First Polygon &amp; Quad (NeHe 2)</h1>
+	<div class="paragraph">
+	<img src="nehe2.py-screen-0001.png" alt="Screenshot" class="" />
+</div>
+	<div class="paragraph">Introduces:</div>
+	<ul class="">
+	<li class="">glBegin/glEnd</li>
+	<li class="">glVertex</li>
+	<li class="">glTranslate</li>
+</ul>
 	<div class="paragraph">This tutorial is based on the 
 	<a href="http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=02" class="">NeHe2 tutorial</a>
-	 by Jeff Molofee.
+	 by Jeff Molofee and assumes that you are reading along 
+with the tutorial, so that only changes from the tutorial are noted 
+here.
+</div>
+	<div class="paragraph">The previous tutorial discussed this setup procedure at length.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 class TestContext( BaseContext ):
-	"""Rendering Context with custom viewpoint and render"""
+	"""Rendering Context with custom viewpoint and render
+	Note: will have slightly different results as OpenGLContext
+	automatically enables lighting.
+	"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">This context customizes two points in the BaseContext.</div>
-	<div class="paragraph">The first point is the initialPosition attribute.  By
-default, the OpenGLContext contexts position your
-eye/camera at (0,0,10), which makes it easy to see most
-meter-sized geometry located at the origin.  Since the
-tutorial manually repositions the geometry to be in a
-good viewing position under the assumption that the eye
-is at (0,0,0), we need to make that assumption valid.</div>
-	<div class="paragraph">The second point is the Render method.  This method is
-called by most RenderMode subclasses to provide the
-scene graph rendering.  (The exception being the
-transparent objects RenderMode.)  The mode parameter
-will be a constant from the OpenGLContext.constants
-module (or potentially another integer if a user-generated
-rendering mode is being used).</div>
-	<div class="paragraph">Note: the results of this Demo will be different than the
-tutorial code because the OpenGLContext is automatically
-enabling lighting.
+	<div class="paragraph">The first customization is the initialPosition attribute.  By
+	default, the OpenGLContext contexts position your
+	eye/camera at (0,0,10), which makes it easy to see most
+	meter-sized geometry located at the origin.  Since the
+	NeHe tutorial manually repositions the geometry to be in a
+	good viewing position under the assumption that the eye
+	is at (0,0,0), we need to make that assumption valid.
 </div>
 </div>
-	<div class="code-sample">
-	initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
-	def Render( self, mode = 0):
+	<div class="code-sample">	initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
+</div>
+	<div class="commentary">
+	<div class="paragraph">The second customization is the Render method.  This method is
+	called if there is no SceneGraph present in the Context.
+	(Such as in our tutorial).
+</div>
+</div>
+	<div class="code-sample">	def Render( self, mode):
 		"""Render the geometry for the scene."""
-		## Triggers the default operations, which allows for, for example, transparent rendering
-		BaseContext.Render( self, mode )
-		## Moves the drawing origin 6 units into the screen and 1.5 units to the left
-		glDisable( GL_CULL_FACE )
-		glTranslatef(-1.5,0.0,-6.0);
-		## Starts the geometry generation mode
-		glBegin(GL_TRIANGLES)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Prevents OpenGL from removing faces which face backward</div>
+</div>
+	<div class="code-sample">		glDisable( GL_CULL_FACE )
+</div>
+	<div class="commentary">
+	<div class="paragraph">Moves the drawing origin 6 units into the screen and 1.5 units to the left</div>
+</div>
+	<div class="code-sample">		glTranslatef(-1.5,0.0,-6.0);
+</div>
+	<div class="commentary">
+	<div class="paragraph">Starts the (legacy) geometry generation mode</div>
+</div>
+	<div class="code-sample">		glBegin(GL_TRIANGLES)
 		glVertex3f( 0.0,  1.0, 0.0)
 		glVertex3f(-1.0, -1.0, 0.0)
 		glVertex3f( 1.0, -1.0, 0.0)
 		glEnd()
-		## Moves the drawing origin again, cumulative change is now (1.5,0.0,6.0)
-		glTranslatef(3.0,0.0,0.0);
-		## Starts a different geometry generation mode
-		glBegin(GL_QUADS)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Moves the drawing origin again, cumulative change is now (1.5,0.0,6.0)</div>
+</div>
+	<div class="code-sample">		glTranslatef(3.0,0.0,0.0);
+</div>
+	<div class="commentary">
+	<div class="paragraph">Starts a different geometry generation mode</div>
+</div>
+	<div class="code-sample">		glBegin(GL_QUADS)
 		glVertex3f(-1.0,-1.0, 0.0)
 		glVertex3f( 1.0,-1.0, 0.0)
 		glVertex3f( 1.0, 1.0, 0.0)
@@ -79,20 +104,20 @@ enabling lighting.
 		glEnd();
 if __name__ == "__main__":
 	MainFunction ( TestContext)
-"""Based on:
-	OpenGL Tutorial #2.
-	Project Name: Jeff Molofee's OpenGL Tutorial
-	Project Description: Creating Your First Polygon &amp; Quad
-	Authors Name: Jeff Molofee (aka NeHe)
-	Authors Web Site: nehe.gamedev.net
-	COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee
-	If you plan to put this program on your web page or a cdrom of
-	any sort, let me know via email, I'm curious to see where
-	it ends up :)
-	If you use the code for your own projects please give me
-	credit, or mention my web site somewhere in your program 
-	or it's docs.
-"""
+</div>
+	<div class="commentary">
+	<div class="paragraph">
+Author: 
+	<a href="http://nehe.gamedev.net" class="">Jeff Molofee (aka NeHe)</a>
+</div>
+	<div class="paragraph">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
+	<div class="paragraph">If you plan to put this program on your web page or a cdrom of
+any sort, let me know via email, I'm curious to see where
+it ends up :)</div>
+	<div class="paragraph">If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program 
+or it's docs.
+</div>
 </div>
 <table width="100%"><thead>
 	<tr>
@@ -100,10 +125,10 @@ if __name__ == "__main__":
 	</tr>
 	<tr>
 	<td><a href="nehe1.xhtml">Previous</a></td>
-	<td align="center">NeHe Translations: Simple Unlit Geometry (NeHe 2)</td>
-	<td align="right"><a href="index.xhtml">Index</a></td>
+	<td align="center">NeHe Translations: Creating Your First Polygon &amp; Quad (NeHe 2)</td>
+	<td align="right"><a href="nehe3.xhtml">Next</a></td>
 	</tr>
 </thead></table>
-<div class="metadata">This document was generated by <code>bzr branch http://bazaar.launchpad.net/%7Emcfletch/pyopengl/directdocs/</code> on 2009-07-20T03:34:58.521798 from nehe2.py</div>
+<div class="metadata">This document was generated by <code>bzr branch http://bazaar.launchpad.net/%7Emcfletch/pyopengl/directdocs/</code> on 2009-07-20T13:52:05.049237 from nehe2.py</div>
 </body>
 </html>

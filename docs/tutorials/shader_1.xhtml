@@ -3,7 +3,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Introduction to Shaders: First steps</title>
+<title>Introduction to Shaders: First steps (Basic Geometry)</title>
     <link href="./tutorial.css" type="text/css" rel="stylesheet" />
 </head>
 <body>
@@ -13,14 +13,14 @@
 	</tr>
 	<tr>
 	<td><a href="index.xhtml">Index</a></td>
-	<td align="center">Introduction to Shaders: First steps</td>
+	<td align="center">Introduction to Shaders: First steps (Basic Geometry)</td>
 	<td align="right"><a href="shader_2.xhtml">Next</a></td>
 	</tr>
 </thead></table>
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">First steps</h1>
+	<h1 class="title">First steps (Basic Geometry)</h1>
 	<div class="paragraph">
 	<img src="shader_1.py-screen-0001.png" alt="Screenshot" class="" />
 </div>
@@ -104,17 +104,20 @@ is the TestingContext we imported above.</div>
 	<div class="code-sample">	def OnInit( self ):
 </div>
 	<div class="commentary">
-	<div class="paragraph">The compileProgram function is a testing/convenience 
-		function which performs a number of base operations using 
-		the OpenGL.GL.shaders convenience functions which abstract 
-		away the various shader implementations available under 
-		OpenGL.  (GLSL Shaders started as extensions and later 
-		became part of Core OpenGL, which is the normal way that 
-		OpenGL is improved/extended).</div>
-	<div class="paragraph">compileProgram assumes that you are attempting to compile 
-a single vertex shader and a single fragment shader. There
-are (uncommon) other types of shaders (including geometry 
-shaders, which are comparatively very new).</div>
+	<div class="paragraph">The OpenGL.GL.shaders.compileProgram function is a
+		convenience function which performs a number of base 
+		operations using to abstract away much of the complexity 
+		of shader setup.  GLSL Shaders started as extensions to OpenGL
+		and later became part of Core OpenGL, but some drivers 
+		will not support the "core" versions of the shader APIs.
+		This extension mechanism is the "normal" way to extend 
+		OpenGL, but it makes for messy APIs.</div>
+	<div class="paragraph">Each "shader program" consists of a number of simpler 
+components "shaders" which are linked together.  There are 
+two common shader types at the moment, the vertex and fragment 
+shaders.  Newer hardware may include other shader types, such 
+as geometry shaders.</div>
+	<h1 class="title">Vertex Shader</h1>
 	<div class="paragraph">Our first shader is the VERTEX_SHADER, which must calculate
 a vertex position for each vertex which is to be generated.
 Normally this is one vertex for each vertex we pass into the 
@@ -141,7 +144,10 @@ with a simple dot-product of the model-view matrix and the
 vertex to be transformed.  The main() function is defined using 
 the C-like GLSL syntax to return nothing (void).  Each of the 
 variables used here is a (built-in) global, so we don't have 
-to declare their data-types.
+to declare their data-types.</div>
+	<div class="paragraph">The OpenGL.GL.shaders.compileShader function 
+compiles the shader and checks for any compilation errors.
+(Using glCreateShader, glShaderSource, and glCompileShader).
 </div>
 </div>
 	<div class="code-sample">		VERTEX_SHADER = compileShader("""
@@ -160,11 +166,12 @@ generate two vertices that are at the points where the
 triangle intersects the near clipping plane and create 3
 triangles from the original one triangle (the same is true of 
 all of the clipping plans for the frustum).</div>
+	<h1 class="title">Fragment Shader</h1>
 	<div class="paragraph">The fixed-function operations will generate "fragments", which 
 can be loosely thought of as a "possible pixel". They may 
 represent a sub-sampling interpolation value, or a value that 
-will eventually be hidden behind another pixel (overdrawn).</div>
-	<div class="paragraph">Our renderer will be given a (large number of) fragments each 
+will eventually be hidden behind another pixel (overdrawn).
+Our renderer will be given a (large number of) fragments each 
 of which will have a position calculated based on the area 
 of the triangle vertices (gl_Position values) that our vertex 
 shader generated.</div>
@@ -190,7 +197,7 @@ to the (global, built-in) gl_FragColor value and we are finished.
 		The compileProgram convenience function does these operations:</div>
 	<ul class="">
 	<li class="">creates a shader "program" (glCreateProgram)</li>
-	<li class="">for each of the vertex and fragment shader, if provided	* compiles the shader (glCreateShader, glShaderSource,glCompileShader)	* attaches the shader to the program </li>
+	<li class="">for each of the shaders provided	* attaches the shader to the program </li>
 	<li class="">links the program (glLinkProgram)</li>
 	<li class="">validates the program (glValidateProgram,glGetProgramiv)</li>
 	<li class="">cleans up and returns the shader program</li>
@@ -204,11 +211,12 @@ to render.
 	<div class="code-sample">		self.shader = compileProgram(VERTEX_SHADER,FRAGMENT_SHADER)
 </div>
 	<div class="commentary">
+	<h1 class="title">Vertex Buffer Data Objects (VBOs)</h1>
 	<div class="paragraph">Modern OpenGL wants you to load your data onto your video 
-		card as much as possible.  For geometric data, this is generally 
-		done via a Vertex Buffer Object.  These are flexible data-storage
-		areas reserved on the card, with various strategies available
-		for streaming data in/out.</div>
+card as much as possible.  For geometric data, this is generally 
+done via a Vertex Buffer Object.  These are flexible data-storage
+areas reserved on the card, with various strategies available
+for streaming data in/out.</div>
 	<div class="paragraph">For our purposes we can think of the VBO as a place on the card
 to which we are going to copy our vertex-description data.  We'll
 use a Numpy array to define this data, as it's a convenient format
@@ -261,10 +269,11 @@ look at those later.
 		"""Render the geometry for the scene."""
 </div>
 	<div class="commentary">
+	<h1 class="title">Rendering</h1>
 	<div class="paragraph">We tell OpenGL to use our compiled shader, this is 
-		a simple GLuint that is an opaque token that describes the shader 
-		for OpenGL.  Until we Use the shader, the GL is using the 
-		fixed-function (legacy) rendering pipeline.
+a simple GLuint that is an opaque token that describes the shader 
+for OpenGL.  Until we Use the shader, the GL is using the 
+fixed-function (legacy) rendering pipeline.
 </div>
 </div>
 	<div class="code-sample">		glUseProgram(self.shader)
@@ -366,10 +375,10 @@ in our screenshot above.</div>
 	</tr>
 	<tr>
 	<td><a href="index.xhtml">Index</a></td>
-	<td align="center">Introduction to Shaders: First steps</td>
+	<td align="center">Introduction to Shaders: First steps (Basic Geometry)</td>
 	<td align="right"><a href="shader_2.xhtml">Next</a></td>
 	</tr>
 </thead></table>
-<div class="metadata">This document was generated by <code>bzr branch http://bazaar.launchpad.net/%7Emcfletch/pyopengl/directdocs/</code> on 2009-07-20T03:34:58.288404 from shader_1.py</div>
+<div class="metadata">This document was generated by <code>bzr branch http://bazaar.launchpad.net/%7Emcfletch/pyopengl/directdocs/</code> on 2009-07-20T13:52:04.806596 from shader_1.py</div>
 </body>
 </html>
