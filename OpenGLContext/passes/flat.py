@@ -245,6 +245,10 @@ class FlatPass( SGObserver ):
 		if events or mode.context.DEBUG_SELECTION:
 			self.selectRender( mode, toRender, events )
 			events.clear()
+		glMatrixMode( GL_PROJECTION )
+		glLoadMatrixd( self.getProjection() )
+		glMatrixMode( GL_MODELVIEW )
+		matrix = self.getModelView()
 		if not mode.context.DEBUG_SELECTION:
 			glLoadIdentity()
 			self.matrix = matrix
@@ -273,7 +277,6 @@ class FlatPass( SGObserver ):
 				self.transparent = key[0]
 				if key[0] != transparentSetup:
 					glEnable(GL_BLEND);
-					glEnable(GL_DEPTH_TEST);
 					glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
 					glDepthMask( 0 )
 				try:
@@ -370,16 +373,19 @@ class FlatPass( SGObserver ):
 			paths = map.get( pixel, [] )
 			event.setObjectPaths( [paths] )
 			# get the depth value under the cursor...
-			pixel = glReadPixels( point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT )
+			pixel = glReadPixels( 
+				point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT 
+			)
 			event.viewCoordinate = point[0],point[1],pixel[0][0]
 			event.modelViewMatrix = matrix
 			event.projectionMatrix = self.projection
 			event.viewport = self.viewport
 			if hasattr( mode.context, 'ProcessEvent'):
 				mode.context.ProcessEvent( event )
-		glColor4f( 0.0,0.0,0.0, 1.0)
+		glColor4f( 1.0,1.0,1.0, 1.0)
 		glDisable( GL_COLOR_MATERIAL )
-	
+#		glEnable( GL_LIGHTING )
+		
 	MAX_LIGHTS = -1
 	def __call__( self, context ):
 		"""Overall rendering pass interface for the context client"""

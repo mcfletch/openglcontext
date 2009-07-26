@@ -59,6 +59,7 @@ class FrameCounter( node.Node ):
 		glOrtho( 0, tx, 0, ty, -1, 1 )
 		glMatrixMode( GL_MODELVIEW )
 		glLoadIdentity()
+		glColor4f( 1.0,1.0,1.0, 1.0)
 		try:
 			glTranslated( 10,margin*2,0.0 )
 			count,avg,last = self.summary()
@@ -68,3 +69,4 @@ class FrameCounter( node.Node ):
 			)
 		finally:
 			glEnable( GL_DEPTH_TEST )
+			glLoadIdentity()
