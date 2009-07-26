@@ -27,6 +27,9 @@ try:
 	logging.getLogger( 'OpenGL.extensions' ).setLevel(
 		logging.INFO 
 	)
+	logging.getLogger( 'OpenGL.acceleratesupport' ).setLevel(
+		logging.DEBUG
+	)
 	WARN = logging.WARN
 	ERROR = logging.ERROR
 	INFO = logging.INFO
