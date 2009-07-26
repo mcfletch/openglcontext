@@ -353,15 +353,10 @@ class FlatPass( SGObserver ):
 		matrix = self.matrix
 		map = {}
 		
-#		min_x,min_y,max_x,max_y = (0,0,0,0)
 		pickPoints = {}
 		for event in events.values():
 			key = tuple(event.getPickPoint())
 			pickPoints.setdefault( key, []).append( event )
-#			min_x = min((key[0],min_x))
-#			max_x = max((key[0],max_x))
-#			min_y = min((key[1],min_y))
-#			max_y = min((key[1],max_y))
 		
 		idHolder = array( [0,0,0,0], 'b' )
 		idSetter = idHolder.view( '<I' )
