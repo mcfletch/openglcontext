@@ -1,71 +1,33 @@
 """Logging facilities for OpenGLContext
 
-If the logging package (from Python 2.3) is available,
-we use it for our logging needs, otherwise we use a
-simplistic locally-defined class for logging.
+Requires Python 2.4+ traceback module as well as the 
+Python 2.4+ logging module.
 """
 import traceback
-try:
-	from cStringIO import StringIO
-except ImportError, err:
-	from StringIO import StringIO
-def getTraceback(error):
+def getTraceback(error=None):
 	"""Get formatted exception"""
-	exception = str(error)
-	file = StringIO()
 	try:
-		traceback.print_exc( limit=10, file = file )
-		exception = file.getvalue()
-	finally:
-		file.close()
-	return exception
+		return traceback.format_exc( 10 )
+	except Exception, err:
+		return str(error)
 
-try:
-	import logging
-	Log = logging.getLogger
-	logging.basicConfig( ) #level=logging.INFO )
-	logging.getLogger( 'OpenGL.extensions' ).setLevel(
-		logging.INFO 
-	)
-	logging.getLogger( 'OpenGL.acceleratesupport' ).setLevel(
-		logging.DEBUG
-	)
-	WARN = logging.WARN
-	ERROR = logging.ERROR
-	INFO = logging.INFO
-	DEBUG = logging.DEBUG
-	logging.Logger.getTraceback = staticmethod( getTraceback )
-except ImportError:
-	# does not have the logging package installed
-	import sys
-	DEBUG = 10
-	INFO = 20
-	WARN = 30
-	ERROR = 40
-	class Log( object ):
-		"""Stand-in logging facility"""
-		level = WARN
-		def __init__( self, name ):
-			self.name = name
-		def debug(self, message, *arguments):
-			if self.level <= DEBUG:
-				sys.stderr.write( 'DEBUG:%s:%s\n'%(self.name, message%arguments))
-		def warn( self, message, *arguments ):
-			if self.level <= WARN:
-				sys.stderr.write( 'WARN:%s:%s\n'%(self.name, message%arguments))
-		def error( self, message, *arguments ):
-			if self.level <= ERROR:
-				sys.stderr.write( 'ERR :%s:%s\n'%(self.name, message%arguments))
-		def info( self, message, *arguments ):
-			if self.level <= INFO:
-				sys.stderr.write( 'INFO:%s:%s\n'%(self.name, message%arguments))
-		def setLevel( self, level ):
-			self.level = level
-
-
-	Log.getTraceback = staticmethod( getTraceback )
+import logging
+Log = logging.getLogger
+logging.basicConfig( ) #level=logging.INFO )
+logging.getLogger( 'OpenGL.extensions' ).setLevel(
+	logging.INFO 
+)
+logging.getLogger( 'OpenGL.acceleratesupport' ).setLevel(
+	logging.DEBUG
+)
+WARN = logging.WARN
+ERROR = logging.ERROR
+INFO = logging.INFO
+DEBUG = logging.DEBUG
+logging.Logger.getTraceback = staticmethod( getTraceback )
 
 ### Now the actual logs...
+# TODO: eliminate this centralized declaration stuff...
 context_log = Log( "context" )
 visitor_log = Log( "context.visitor")
 content_log = Log( "context.content")
@@ -78,12 +40,3 @@ event_log = Log( "context.events")
 shadow_log = Log( "context.content.shadow")
 extension_log = Log( "context.extensions")
 movement_log = Log( "context.move")
-
-opengl_log = Log( "OpenGL")
-
-#movement_log.setLevel( DEBUG )
-#text_log.setLevel(DEBUG)
-#context_log.setLevel( DEBUG )
-#visitor_log.setLevel( DEBUG )
-#loader_log.setLevel( DEBUG )
-#geometry_log.setLevel( DEBUG )

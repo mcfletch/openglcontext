@@ -862,6 +862,6 @@ class _defaultRenderPasses( object ):
 					return visitingDefaultRenderPasses( context )
 			else:
 				return visitingDefaultRenderPasses( context )
-			print 'Using FLAT'
+			visitor_log.info( 'Using Flat/Legacy-reduced renderer' )
 		return FLAT( context )
 defaultRenderPasses = _defaultRenderPasses()

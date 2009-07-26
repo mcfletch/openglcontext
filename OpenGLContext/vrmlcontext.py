@@ -11,8 +11,6 @@ import os, sys, time, traceback
 from OpenGLContext import framecounter
 
 from OpenGLContext.loaders.loader import Loader
-##from OpenGLContext.debug import loggl
-##loggl.enable()
 
 class VRMLContext(object):
 	"""VRML97-loading Context testing class
