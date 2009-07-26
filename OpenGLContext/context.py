@@ -36,6 +36,9 @@ from vrml import node,cache
 import weakref, os, time, sys, logging 
 log = logging.getLogger( 'OpenGLContext.context' )
 
+class LockingError( Exception ):
+	pass
+
 try:
 	import threading, Queue
 	contextLock = threading.RLock()
@@ -385,7 +388,8 @@ class Context(object):
 		"""Set the OpenGL focus to this context
 		"""
 		assert inContextThread(), """setCurrent called from outside of the context/GUI thread! %s"""%( threading.currentThread())
-		contextLock.acquire( blocking )
+		if not contextLock.acquire( blocking ):
+			raise LockingError( """Cannot acquire without blocking""" )
 		Context.currentContext = self
 		self.lockScenegraph()
 	def unsetCurrent( self ):
