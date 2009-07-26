@@ -8,7 +8,7 @@ module which implements the shadow-casting rendering
 algorithm.
 """
 from __future__ import generators
-import time, weakref, traceback, sys
+import time, weakref, traceback, sys, logging
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
@@ -19,6 +19,7 @@ from OpenGLContext.debug.logs import visitor_log, INFO, DEBUG
 from OpenGLContext.scenegraph import nodepath
 from vrml.vrml97 import nodetypes
 from vrml import node
+log = logging.getLogger( 'context.passes' )
 
 class RenderPass(object):
 	"""A particular pass of a particular rendering mode
@@ -862,6 +863,6 @@ class _defaultRenderPasses( object ):
 					return visitingDefaultRenderPasses( context )
 			else:
 				return visitingDefaultRenderPasses( context )
-			visitor_log.info( 'Using Flat/Legacy-reduced renderer' )
+			log.warn( 'Using Flat/Legacy-reduced renderer' )
 		return FLAT( context )
 defaultRenderPasses = _defaultRenderPasses()
