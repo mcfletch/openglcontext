@@ -352,6 +352,17 @@ class FlatPass( SGObserver ):
 		
 		matrix = self.matrix
 		map = {}
+		
+#		min_x,min_y,max_x,max_y = (0,0,0,0)
+		pickPoints = {}
+		for event in events.values():
+			key = tuple(event.getPickPoint())
+			pickPoints.setdefault( key, []).append( event )
+#			min_x = min((key[0],min_x))
+#			max_x = max((key[0],max_x))
+#			min_y = min((key[1],min_y))
+#			max_y = min((key[1],max_y))
+		
 		idHolder = array( [0,0,0,0], 'b' )
 		idSetter = idHolder.view( '<I' )
 		for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
@@ -362,10 +373,6 @@ class FlatPass( SGObserver ):
 			glLoadMatrixd( mvmatrix )
 			path[-1].Render( mode=self )
 			map[id] = path 
-		pickPoints = {}
-		for event in events.values():
-			key = tuple(event.getPickPoint())
-			pickPoints.setdefault( key, []).append( event )
 		for point,eventSet in pickPoints.items():
 			# get the pixel colour (id) under the cursor.
 			pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
