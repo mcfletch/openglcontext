@@ -470,10 +470,6 @@ class Context(object):
 		try:
 			visibleChange = self.renderPasses( self )
 			if visibleChange:
-				# TODO: make this a general HUD renderer...
-				if self.frameCounter.display:
-					self.frameCounter.Render( self )
-				self.SwapBuffers()
 				if self.frameCounter is not None:
 					self.frameCounter.addFrame( time.clock()-t )
 				return 1

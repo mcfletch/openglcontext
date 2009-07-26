@@ -291,6 +291,9 @@ class FlatPass( SGObserver ):
 		glDisable(GL_BLEND);
 		glEnable(GL_DEPTH_TEST);
 		glDepthMask( 1 ) # allow updates to the depth buffer
+		if context.frameCounter.display:
+			context.frameCounter.Render( context )
+		context.SwapBuffers()
 		self.matrix = matrix
 	
 	def legacyBackgroundRender( self, vp,matrix ):

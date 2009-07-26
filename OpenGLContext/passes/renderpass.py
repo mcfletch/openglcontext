@@ -678,6 +678,8 @@ class OverallPass (object):
 			except Exception, error:
 				traceback.print_exc( limit=6 )
 				sys.stderr.write( """Exception in rendering object %s"""%(passObject))
+		if self.visibleChange:
+			self.context.SwapBuffers()
 		return changed
 
 	def setSubPasses( self, passes ):
