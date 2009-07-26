@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 '''MouseInEvent/MouseOutEvent demonstration
 '''
+import OpenGL 
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
