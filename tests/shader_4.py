@@ -175,7 +175,11 @@ class TestContext( BaseContext ):
 	fraction as our tween_fraction value.'''
 	tween_fraction = 0.0
 	def OnTimerFraction( self, event ):
-		self.tween_fraction = event.fraction()
+		frac = event.fraction()
+		if frac > .5:
+			frac = 1.0-frac 
+		frac *= 2
+		self.tween_fraction =frac
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
