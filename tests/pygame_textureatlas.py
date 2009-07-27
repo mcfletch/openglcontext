@@ -31,14 +31,11 @@ class TestContext( BaseContext ):
 		self.tc = texturecache.TextureCache( atlasSize=256)
 		self.maps = {}
 		self.box = Box( size=(.5,.5,.5))
-#		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST )
-#		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST )
 		self.shape = Shape(
 			geometry = Box( ),
 			appearance = Appearance(
 			),
 		)
-		#
 		vertex = compileShader( '''
 			attribute vec2 coord;
 			attribute vec2 tex;
@@ -51,11 +48,15 @@ class TestContext( BaseContext ):
 			}
 		''', GL_VERTEX_SHADER)
 		fragment = compileShader('''
+			// render transparency map as texture of given colour
 			uniform sampler2D atlas;
 			uniform vec3 color;
 			varying vec2 texcoord;
 			void main() {
 				vec4 tex_color = texture(atlas, texcoord );
+				if (tex_color.r < .05) {
+					discard;
+				}
 				gl_FragColor = vec4(
 					color.r,
 					color.g,
@@ -118,19 +119,16 @@ class TestContext( BaseContext ):
 				points[j:j+6,:2] = vertices
 				ll = (x+w,0)
 			self.vbo = vbo.VBO( points )
-#			print 'points', points[:,2:]
-#		self.shape.Render( mode = mode )
+		self.shape.Render( mode = mode )
 		
 		if self.vbo is not None:
-#			glTranslated( 5, 0, 0 )
 			glUseProgram( self.shader )
 			self.vbo.bind()
 			
 			glActiveTexture(GL_TEXTURE1)
 			glEnable( GL_TEXTURE_2D )
+			# atlas.render() doesn't work here, need to fix that!
 			self.img.render( visible=True, mode=mode )
-#			self.atlas.render()
-			print 'atlas components', self.atlas.components
 			glUniform1i( self.atlas_loc, 1 ) # texture *unit* 0
 			glUniform3f( self.color_loc, 1.0, 0.0, 0.0 ) # texture *unit* 0
 			
@@ -146,14 +144,13 @@ class TestContext( BaseContext ):
 				2, GL_FLOAT,False, 4*4, 
 				self.vbo+(2*4)
 			)
-			glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA)
-			glEnable(GL_BLEND)
 			glDrawArrays(GL_TRIANGLES, 0, 6*len(self.testText))
 			self.vbo.unbind()
 			glDisableVertexAttribArray( self.coord__loc )
 			glDisableVertexAttribArray( self.tex__loc )
 			glUseProgram( 0 )
-			glDisable( GL_BLEND )
+			glDisable( GL_TEXTURE_2D )
+			glActiveTexture(GL_TEXTURE0)
 		
 	def setupFontProviders( self ):
 		"""Load font providers for the context
