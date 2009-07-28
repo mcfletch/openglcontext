@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Diffuse (and Ambient) Lighting=
+'''=Diffuse, Ambient, Directional Lighting=
 
 [shader_5.py-screen-0001.png Screenshot]
 
@@ -7,7 +7,8 @@ This tutorial builds on earlier tutorials by adding:
 
 	* ambient lighting 
 	* diffuse lighting 
-	* normals, lights, GLSL structures
+	* directional lights (e.g. the Sun)
+	* normals, the normal matrix
 
 Lighting is one of the most complex aspects of the rendering 
 process.  No-one has yet come up with a "perfect" simulation 
@@ -19,7 +20,10 @@ material should look like under some approximation of a particular
 lighting environment.  Traditional (legacy) OpenGL had a particular 
 lighting model which often "worked" for simple visualizations of 
 geometry.  This tutorial is going to show you how to start creating 
-a similar lighting effect.
+a similar lighting effect (known as
+[http://en.wikipedia.org/wiki/Phong_shading Phong Shading], though 
+we will not introduce the specular components until the next 
+tutorial).
 
 == Ambient Lighting ==
 
@@ -29,18 +33,30 @@ which otherwise isn't accounted for by your lighting model.
 
 In Legacy OpenGL, ambient light was handled as a setting declaring
 each surface's ambient reflectance (a colour), with a set of two 
-"light sources" which would be reflected.  The first light source was
-the simplest, this was a simple global ambient value, which was applied
-to all surfaces.  The ambient contribution for each material here is
-simply:
+"light sources" which would be reflected.
 
-	Global_ambient * Material_ambient 
+	* Global ambient light
+	* Per-light ambient contribution
 
-which provides a "base" colour for each material.  You can think of 
-this as the not-quite-black colour of objects with no direct lights 
-hitting them and no local objects reflecting light onto them.  The
-material's ambient value can be thought of as "how much of the ambient
-light does the material re-emit" (as opposed to absorbing).
+The global light can be thought of as "light that is always there",
+even if there are no active lights, so some (ambient) light that is 
+always present in the environment even if no defined lights are 
+active.  Per-light ambient contributions are only calculated if the 
+light is active, but otherwise works identically to global ambient.
+You can think of this as "how much turning on this light increases
+the global ambient light level".
+
+The ambient contribution for each material here is simply:
+
+	Light ambient * Material_ambient 
+
+there is no other information involved in the ambient light 
+calculation.  It doesn't matter where the light is in relation 
+to the material, or the angle of incidence of the light, or the 
+angle at which you are viewing the material.
+
+The material's ambient value can be thought of as "how much of 
+the ambient light does the material re-emit" (as opposed to absorbing).
 
 Note, that all of the ambient values here are 4-component colours.
 
@@ -53,6 +69,16 @@ would have a very high "diffuse" lighting value.  A diffuse surface
 emits light in *all* directions whenever hit by a light, but the amount 
 of light it emits is controlled by the angle at which the light hits 
 the surface.
+
+(Technically this is called
+[http://en.wikipedia.org/wiki/Lambertian_reflectance Lambertian Reflectance]).
+
+In order to calculate the diffuse lighting value, we need a number 
+of pieces of information:
+
+	* the angle between the surface and the light
+	* the diffuse intensity of the light 
+	* the diffuse reflectance of the material 
 
 
 '''
