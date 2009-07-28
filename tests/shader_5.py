@@ -10,14 +10,54 @@ This tutorial builds on earlier tutorials by adding:
 	* normals, lights, GLSL structures
 
 Lighting is one of the most complex aspects of the rendering 
-process.  There are a multitude of ways of simulating how 
-light interacts with surfaces, from the traditional OpenGL 
-phong-like lighting model, through complex sub-surface scattering
-mechanisms required to create "realistic" skin.  This tutorial 
-is merely going to introduce the basics of lighting calculations.
+process.  No-one has yet come up with a "perfect" simulation 
+of rendering for use in real-time graphics (even non-real-time 
+graphics haven't really solved the problem for every material).
+
+So every OpenGL renderer is an approximation of what a particular 
+material should look like under some approximation of a particular 
+lighting environment.  Traditional (legacy) OpenGL had a particular 
+lighting model which often "worked" for simple visualizations of 
+geometry.  This tutorial is going to show you how to start creating 
+a similar lighting effect.
+
+== Ambient Lighting ==
+
+Ambient lighting is used to simulate the "radiant" effect in lighting,
+that is, the effect of light which is "bouncing around" the environment 
+which otherwise isn't accounted for by your lighting model.
+
+In Legacy OpenGL, ambient light was handled as a setting declaring
+each surface's ambient reflectance (a colour), with a set of two 
+"light sources" which would be reflected.  The first light source was
+the simplest, this was a simple global ambient value, which was applied
+to all surfaces.  The ambient contribution for each material here is
+simply:
+
+	Global_ambient * Material_ambient 
+
+which provides a "base" colour for each material.  You can think of 
+this as the not-quite-black colour of objects with no direct lights 
+hitting them and no local objects reflecting light onto them.  The
+material's ambient value can be thought of as "how much of the ambient
+light does the material re-emit" (as opposed to absorbing).
+
+Note, that all of the ambient values here are 4-component colours.
+
+== Diffuse Lighting ==
+
+Diffuse lighting is used to simulate re-emission from a surface where 
+the re-emittance isn't "ordered" (that is, is diffused).  A "non-shiny"
+surface which re-emits everything that hits it (think snow, for instance)
+would have a very high "diffuse" lighting value.  A diffuse surface 
+emits light in *all* directions whenever hit by a light, but the amount 
+of light it emits is controlled by the angle at which the light hits 
+the surface.
+
+
 '''
-import OpenGL 
-OpenGL.FULL_LOGGING = True
+#import OpenGL 
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
@@ -34,7 +74,22 @@ class TestContext( BaseContext ):
 	"""
 	def OnInit( self ):
 		"""Initialize the context"""
-		vertex = compileShader("""
+		dLight = """
+		vec2 dLight( 
+			in vec3 light_pos, // light position
+			in vec3 frag_normal // geometry normal
+		) {
+			// returns vec2( ambientMult, diffuseMult )
+			float n_dot_pos = max( 0.0, dot( 
+				frag_normal, normalize(light_pos)
+			));
+			return vec2( 1.0, n_dot_pos );
+		}		
+		"""
+		
+		vertex = compileShader( dLight + 
+		"""
+		uniform vec4 Global_ambient;
 		
 		uniform vec4 Light_ambient;
 		uniform vec4 Light_diffuse;
@@ -47,16 +102,6 @@ class TestContext( BaseContext ):
 		attribute vec3 Vertex_normal;
 		
 		varying vec4 baseColor;
-		vec2 dLight( 
-			in vec3 light_pos, // light position
-			in vec3 frag_normal // geometry normal
-		) {
-			// returns vec2( ambientMult, diffuseMult )
-			float n_dot_pos = max( 0.0, dot( 
-				frag_normal, normalize(light_pos)
-			));
-			return vec2( 1.0, n_dot_pos );
-		}		
 		void main() {
 			gl_Position = gl_ModelViewProjectionMatrix * vec4( 
 				Vertex_position, 1.0
@@ -70,10 +115,16 @@ class TestContext( BaseContext ):
 			vec4 ambient = vec4( .1, .1, .1, .1 );
 			vec4 diffuse = vec4( 0.0, 1.0, 0.0, 1.0 );
 			
-			baseColor = clamp( (
-				Light_ambient * Material_ambient * weights.x
-			)+ (
-				Light_diffuse * Material_diffuse * weights.y 
+			baseColor = clamp( 
+			(
+				// global component 
+				(Global_ambient * Material_ambient)
+				// material's interaction with light's contribution 
+				// to the ambient lighting...
+				+ (Light_ambient * Material_ambient * weights.x)
+				// material's interaction with the direct light from 
+				// the light.
+				+ (Light_diffuse * Material_diffuse * weights.y)
 			), 0.0, 1.0);
 		}""", GL_VERTEX_SHADER)
 		fragment = compileShader("""
@@ -112,19 +163,10 @@ class TestContext( BaseContext ):
 				[  1, 1, 1, 1,0,2],
 			],'f')
 		)
-		'''As with uniforms, we must use opaque "location" values 
-		to refer to our attributes when calling into the GL.'''
-		self.position_location = glGetAttribLocation( 
-			self.shader, 'position' 
-		)
-		self.normal_location = glGetAttribLocation(
-			self.shader, 'norm',
-		)
-		self.color_location = glGetUniformLocation(
-			self.shader, 'color',
-		)
-		
+		'''Since we have so many more uniforms and attributes, we'll 
+		use a bit of iteration to set up the values for ourselves.'''
 		for uniform in (
+			'Global_ambient',
 			'Light_ambient','Light_diffuse','Light_location',
 			'Material_ambient','Material_diffuse',
 		):
@@ -132,7 +174,6 @@ class TestContext( BaseContext ):
 			if location in (None,-1):
 				print 'Warning, no uniform: %s'%( uniform )
 			setattr( self, uniform+ '_loc', location )
-			
 		for attribute in (
 			'Vertex_position','Vertex_normal',
 		):
@@ -152,12 +193,16 @@ class TestContext( BaseContext ):
 		try:
 			self.vbo.bind()
 			try:
+				'''We add a strong red tinge so you can see the 
+				global ambient light's contribution.'''
+				glUniform4f( self.Global_ambient_loc, .3,.05,.05,.1 )
+				
 				glUniform4f( self.Light_ambient_loc, .2,.2,.2, 1.0 )
 				glUniform4f( self.Light_diffuse_loc, 1,1,1,1 )
 				glUniform3f( self.Light_location_loc, 2,2,10 )
+				
 				glUniform4f( self.Material_ambient_loc, .2,.2,.2, 1.0 )
 				glUniform4f( self.Material_diffuse_loc, 1,1,1, 1 )
-				
 				
 				glEnableVertexAttribArray( self.Vertex_position_loc )
 				glEnableVertexAttribArray( self.Vertex_normal_loc )
