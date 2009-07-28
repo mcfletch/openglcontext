@@ -1,0 +1,347 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+<title>Introduction to Shaders: Diffuse, Ambient, Directional Lighting</title>
+    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+</head>
+<body>
+<table width="100%"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="shader_4.xhtml">Previous</a></td>
+	<td align="center">Introduction to Shaders: Diffuse, Ambient, Directional Lighting</td>
+	<td align="right"><a href="index.xhtml">Index</a></td>
+	</tr>
+</thead></table>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title">Diffuse, Ambient, Directional Lighting</h1>
+	<div class="paragraph">
+	<img src="shader_5.py-screen-0001.png" alt="Screenshot" class="" />
+	<img src="shader_5.py-screen-0002.png" alt="Screenshot" class="" />
+</div>
+	<div class="paragraph">This tutorial builds on earlier tutorials by adding:</div>
+	<ul class="">
+	<li class="">ambient lighting </li>
+	<li class="">diffuse lighting </li>
+	<li class="">directional lights (e.g. the Sun)</li>
+	<li class="">normals, the normal matrix</li>
+</ul>
+	<div class="paragraph">Lighting is one of the most complex aspects of the rendering 
+process.  No-one has yet come up with a "perfect" simulation 
+of rendering for use in real-time graphics (even non-real-time 
+graphics haven't really solved the problem for every material).</div>
+	<div class="paragraph">So every OpenGL renderer is an approximation of what a particular 
+material should look like under some approximation of a particular 
+lighting environment.  Traditional (legacy) OpenGL had a particular 
+lighting model which often "worked" for simple visualizations of 
+geometry.  This tutorial is going to show you how to start creating 
+a similar lighting effect (known as
+	<a href="http://en.wikipedia.org/wiki/Phong_shading" class="">Phong Shading</a>
+	, though 
+we will not introduce the specular components until the next 
+tutorial).
+</div>
+	<h1 class="title">Ambient Lighting</h1>
+	<div class="paragraph">Ambient lighting is used to simulate the "radiant" effect in lighting,
+that is, the effect of light which is "bouncing around" the environment 
+which otherwise isn't accounted for by your lighting model.</div>
+	<div class="paragraph">In Legacy OpenGL, ambient light was handled as a setting declaring
+each surface's ambient reflectance (a colour), with a set of two 
+"light sources" which would be reflected.</div>
+	<ul class="">
+	<li class="">Global ambient light</li>
+	<li class="">Per-light ambient contribution</li>
+</ul>
+	<div class="paragraph">The global light can be thought of as "light that is always there",
+even if there are no active lights, so some (ambient) light that is 
+always present in the environment even if no defined lights are 
+active.  Per-light ambient contributions are only calculated if the 
+light is active, but otherwise works identically to global ambient.
+You can think of this as "how much turning on this light increases
+the global ambient light level".</div>
+	<div class="paragraph">The ambient contribution for each material here is simply:</div>
+	<div class="paragraph">Light ambient * Material_ambient </div>
+	<div class="paragraph">there is no other information involved in the ambient light 
+calculation.  It doesn't matter where the light is in relation 
+to the material, or the angle of incidence of the light, or the 
+angle at which you are viewing the material.</div>
+	<div class="paragraph">Our shaders are going to assume that there is only 1 active non-global 
+ambient light.  Legacy OpenGL allows at least 8 active lights, all 
+of which would be involved in the ambient light calculations
+(when enabled).</div>
+	<div class="paragraph">The material's ambient value can be thought of as "how much of 
+the ambient light does the material re-emit" (as opposed to absorbing).
+Note, that all of the ambient values here are 4-component colours, so 
+the material's ambient value may actually change the colour of the 
+ambient reflected light.  Similarly, a strongly coloured ambient light 
+will tend to give all materials a strong "undercast" of that colour.
+</div>
+</div>
+	<div class="code-sample">from OpenGLContext import testingcontext
+BaseContext, MainFunction = testingcontext.getInteractive()
+from OpenGL.GL import *
+from OpenGL.arrays import vbo
+from OpenGLContext.arrays import *
+from OpenGL.GL.shaders import *
+from OpenGLContext.events.timer import Timer
+class TestContext( BaseContext ):
+	"""Demonstrates use of attribute types in GLSL
+	"""
+	def OnInit( self ):
+		"""Initialize the context"""
+</div>
+	<div class="commentary">
+	<h1 class="title">Diffuse Lighting</h1>
+	<div class="paragraph">Diffuse lighting is used to simulate re-emission from a surface
+where the re-emittance isn't "ordered" (that is, is diffused).
+A "non-shiny" surface which re-emits everything that hits it
+(think snow, for instance) would have a very high "diffuse"
+lighting value.  A diffuse surface  emits light in *all*
+directions whenever hit by a light, but the amount 
+of light it emits is controlled by the angle at which the light
+hits the surface.</div>
+	<div class="paragraph">(Technically this is called
+	<a href="http://en.wikipedia.org/wiki/Lambertian_reflectance" class="">Lambertian Reflectance</a>
+	).
+</div>
+	<div class="paragraph">In order to calculate the diffuse lighting value, we need a number 
+of pieces of information:</div>
+	<ul class="">
+	<li class="">the angle between the surface and the light</li>
+	<li class="">the diffuse intensity of the light </li>
+	<li class="">the diffuse reflectance of the material </li>
+</ul>
+	<div class="paragraph">To calculate the angle between the surface and the light, we need 
+some way of determining which direction any particular part of a 
+surface is pointing.  In OpenGL this has been traditionally 
+accomplished by passing in a Normal value for each vertex and 
+interpolating those Normals across the surface.</div>
+	<div class="paragraph">Unlike the Normals you calculated in algebra and geometry class,
+the Normal on a particular vertex does *not* have to be the cross 
+product of two adjacent edges.  Instead, it is the value that 
+a human being has assigned that makes the vertex look right.
+It will often be a blending of the "natural" (calculated) Normals 
+of the adjacent faces, as this will tend to create a "smooth" look 
+that makes the two faces appear to be one continuous surface.</div>
+	<div class="paragraph">Once we have a Normal, we also need the light's direction in order 
+to calculate the angle between them.  For this tutorial we'll use 
+the simplest possible light, an infinitely far "directional" light 
+which loosely models the behaviour of sunlight on the surface of
+the Earth.</div>
+	<div class="paragraph">This light has a direction, with all rays from the light 
+considered to be travelling in parallel in this direction.  Thus
+the relative position of the light (which is "infinitely" far away,
+which means all of the relative positions are the same) 
+has no effect on the angle at which the light's rays will strike 
+a surface. A directional light is, inessence, just a normalized 
+vector which points from the "location" of the light to the origin.</div>
+	<div class="paragraph">With our normal and our directional light, we can apply Lambert's 
+law to calculate the diffuse component multiplier for any given 
+vertex.  Lambert's law looks for the cosine of the two vectors 
+(the Normal and the Light Location vector), which is calculated 
+by taking the dot product of the two (normalized) vectors.</div>
+	<div class="paragraph">Our GLSL function dLight (below) will calculate the factor 
+which controls the diffuse light contribution of a single light.
+Both of the values passed in must be *normalized* vectors.
+</div>
+</div>
+	<div class="code-sample">		
+		dLight = """
+		float dLight( 
+			in vec3 light_pos, // light position
+			in vec3 frag_normal // geometry normal
+		) {
+			// returns vec2( ambientMult, diffuseMult )
+			float n_dot_pos = max( 0.0, dot( 
+				frag_normal, light_pos
+			));
+			return n_dot_pos;
+		}		
+		"""
+		vertex = compileShader( dLight + 
+		"""
+		uniform vec4 Global_ambient;
+		uniform vec4 Light_ambient;
+		uniform vec4 Light_diffuse;
+		uniform vec3 Light_location;
+		uniform vec4 Material_ambient;
+		uniform vec4 Material_diffuse;
+		attribute vec3 Vertex_position;
+		attribute vec3 Vertex_normal;
+		varying vec4 baseColor;
+		void main() {
+			gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+				Vertex_position, 1.0
+			);
+			vec3 EC_Light_location = gl_NormalMatrix * Light_location;
+			float diffuse_weight = dLight(
+				normalize(EC_Light_location),
+				normalize(gl_NormalMatrix * Vertex_normal)
+			);
+			vec4 ambient = vec4( .1, .1, .1, .1 );
+			vec4 diffuse = vec4( 0.0, 1.0, 0.0, 1.0 );
+			baseColor = clamp( 
+			(
+				// global component 
+				(Global_ambient * Material_ambient)
+				// material's interaction with light's contribution 
+				// to the ambient lighting...
+				+ (Light_ambient * Material_ambient)
+				// material's interaction with the direct light from 
+				// the light.
+				+ (Light_diffuse * Material_diffuse * diffuse_weight)
+			), 0.0, 1.0);
+		}""", GL_VERTEX_SHADER)
+</div>
+	<div class="commentary">
+	<div class="paragraph">== Eye Space or Not? ==
+In our vertex shader, we actually use the "eye space" forms 
+of the two vectors for the angular calculation.  For Lambertian
+Reflectance we could as easily have left the coordinates in 
+"model space" to do the calculations:</div>
+</div>
+	<div class="code-sample">		"""			
+		vec2 weights = dLight(
+			normalize(Light_location),
+			normalize(Vertex_normal)
+		);"""
+</div>
+	<div class="commentary">
+	<div class="paragraph">Most documentation, however, describes most lighting
+		calculations in "eye space" forms, as it tends to simplify 
+		the calculations for more involved lighting forms.</div>
+	<div class="paragraph">Our fragment shader here is extremely simple.  We could
+actually do per-fragment lighting calculations, but it wouldn't
+particularly improve our rendering with simple diffuse shading.
+</div>
+</div>
+	<div class="code-sample">		fragment = compileShader("""
+		varying vec4 baseColor;
+		void main() {
+			gl_FragColor = baseColor;
+		}
+		""", GL_FRAGMENT_SHADER)
+		self.shader = compileProgram(vertex,fragment)
+</div>
+	<div class="commentary">
+	<div class="paragraph">We're going to create slightly less "flat" geometry for this 
+		lesson, we'll create a set of 4 faces in a "bow window" 
+		arrangement that makes it easy to see the effect of the direct 
+		lighting.</div>
+</div>
+	<div class="code-sample">		self.vbo = vbo.VBO(
+			array( [
+				[ -1, 0, 0, -1,0,1],
+				[  0, 0, 1, -1,0,2],
+				[  0, 1, 1, -1,0,2],
+				[ -1, 0, 0, -1,0,1],
+				[  0, 1, 1, -1,0,2],
+				[ -1, 1, 0, -1,0,1],
+				[  0, 0, 1, -1,0,2],
+				[  1, 0, 1, 1,0,2],
+				[  1, 1, 1, 1,0,2],
+				[  0, 0, 1, -1,0,2],
+				[  1, 1, 1, 1,0,2],
+				[  0, 1, 1, -1,0,2],
+				[  1, 0, 1, 1,0,2],
+				[  2, 0, 0, 1,0,1],
+				[  2, 1, 0, 1,0,1],
+				[  1, 0, 1, 1,0,2],
+				[  2, 1, 0, 1,0,1],
+				[  1, 1, 1, 1,0,2],
+			],'f')
+		)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Since we have so many more uniforms and attributes, we'll 
+		use a bit of iteration to set up the values for ourselves.</div>
+</div>
+	<div class="code-sample">		for uniform in (
+			'Global_ambient',
+			'Light_ambient','Light_diffuse','Light_location',
+			'Material_ambient','Material_diffuse',
+		):
+			location = glGetUniformLocation( self.shader, uniform )
+			if location in (None,-1):
+				print 'Warning, no uniform: %s'%( uniform )
+			setattr( self, uniform+ '_loc', location )
+		for attribute in (
+			'Vertex_position','Vertex_normal',
+		):
+			location = glGetAttribLocation( self.shader, attribute )
+			if location in (None,-1):
+				print 'Warning, no attribute: %s'%( uniform )
+			setattr( self, attribute+ '_loc', location )
+	def Render( self, mode = None):
+		"""Render the geometry for the scene."""
+		BaseContext.Render( self, mode )
+		glUseProgram(self.shader)
+</div>
+	<div class="commentary">
+	<div class="paragraph">We pass in the current (for this frame) value of our 
+		animation fraction.  The timer will generate events to update
+		this value during idle time.</div>
+</div>
+	<div class="code-sample">		try:
+			self.vbo.bind()
+			try:
+</div>
+	<div class="commentary">
+	<div class="paragraph">We add a strong red tinge so you can see the 
+				global ambient light's contribution.</div>
+</div>
+	<div class="code-sample">				glUniform4f( self.Global_ambient_loc, .3,.05,.05,.1 )
+				glUniform4f( self.Light_ambient_loc, .2,.2,.2, 1.0 )
+				glUniform4f( self.Light_diffuse_loc, 1,1,1,1 )
+				glUniform3f( self.Light_location_loc, 2,2,10 )
+				glUniform4f( self.Material_ambient_loc, .2,.2,.2, 1.0 )
+				glUniform4f( self.Material_diffuse_loc, 1,1,1, 1 )
+				glEnableVertexAttribArray( self.Vertex_position_loc )
+				glEnableVertexAttribArray( self.Vertex_normal_loc )
+				stride = 6*4
+				glVertexAttribPointer( 
+					self.Vertex_position_loc, 
+					3, GL_FLOAT,False, stride, self.vbo 
+				)
+				glVertexAttribPointer( 
+					self.Vertex_normal_loc, 
+					3, GL_FLOAT,False, stride, self.vbo+12
+				)
+				glDrawArrays(GL_TRIANGLES, 0, 18)
+			finally:
+				self.vbo.unbind()
+</div>
+	<div class="commentary">
+	<div class="paragraph">As with the legacy pointer operations, we want to 
+				clean up our array enabling so that any later calls 
+				will not cause seg-faults when they try to read records
+				from these arrays (potentially beyond the end of the
+				arrays).</div>
+</div>
+	<div class="code-sample">
+				glDisableVertexAttribArray( self.Vertex_position_loc )
+				glDisableVertexAttribArray( self.Vertex_normal_loc )
+		finally:
+			glUseProgram( 0 )
+if __name__ == "__main__":
+	MainFunction ( TestContext)
+</div>
+<table width="100%"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="shader_4.xhtml">Previous</a></td>
+	<td align="center">Introduction to Shaders: Diffuse, Ambient, Directional Lighting</td>
+	<td align="right"><a href="index.xhtml">Index</a></td>
+	</tr>
+</thead></table>
+<div class="metadata">This document was generated by <code>bzr branch http://bazaar.launchpad.net/%7Emcfletch/pyopengl/directdocs/</code> on 2009-07-28T16:51:02.636670 from shader_5.py</div>
+</body>
+</html>

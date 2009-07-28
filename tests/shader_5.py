@@ -2,6 +2,7 @@
 '''=Diffuse, Ambient, Directional Lighting=
 
 [shader_5.py-screen-0001.png Screenshot]
+[shader_5.py-screen-0002.png Screenshot]
 
 This tutorial builds on earlier tutorials by adding:
 
@@ -55,44 +56,24 @@ calculation.  It doesn't matter where the light is in relation
 to the material, or the angle of incidence of the light, or the 
 angle at which you are viewing the material.
 
+Our shaders are going to assume that there is only 1 active non-global 
+ambient light.  Legacy OpenGL allows at least 8 active lights, all 
+of which would be involved in the ambient light calculations
+(when enabled).
+
 The material's ambient value can be thought of as "how much of 
 the ambient light does the material re-emit" (as opposed to absorbing).
-
-Note, that all of the ambient values here are 4-component colours.
-
-== Diffuse Lighting ==
-
-Diffuse lighting is used to simulate re-emission from a surface where 
-the re-emittance isn't "ordered" (that is, is diffused).  A "non-shiny"
-surface which re-emits everything that hits it (think snow, for instance)
-would have a very high "diffuse" lighting value.  A diffuse surface 
-emits light in *all* directions whenever hit by a light, but the amount 
-of light it emits is controlled by the angle at which the light hits 
-the surface.
-
-(Technically this is called
-[http://en.wikipedia.org/wiki/Lambertian_reflectance Lambertian Reflectance]).
-
-In order to calculate the diffuse lighting value, we need a number 
-of pieces of information:
-
-	* the angle between the surface and the light
-	* the diffuse intensity of the light 
-	* the diffuse reflectance of the material 
-
-
+Note, that all of the ambient values here are 4-component colours, so 
+the material's ambient value may actually change the colour of the 
+ambient reflected light.  Similarly, a strongly coloured ambient light 
+will tend to give all materials a strong "undercast" of that colour.
 '''
-#import OpenGL 
-#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL.shaders import *
-'''This is our only new import, it's a utility Timer object 
-from OpenGLContext which will generate events with "fraction()"
-values that can be used for animations.'''
 from OpenGLContext.events.timer import Timer
 
 class TestContext( BaseContext ):
@@ -100,19 +81,78 @@ class TestContext( BaseContext ):
 	"""
 	def OnInit( self ):
 		"""Initialize the context"""
+		'''== Diffuse Lighting ==
+
+		Diffuse lighting is used to simulate re-emission from a surface
+		where the re-emittance isn't "ordered" (that is, is diffused).
+		A "non-shiny" surface which re-emits everything that hits it
+		(think snow, for instance) would have a very high "diffuse"
+		lighting value.  A diffuse surface  emits light in *all*
+		directions whenever hit by a light, but the amount 
+		of light it emits is controlled by the angle at which the light
+		hits the surface.
+
+		(Technically this is called
+		[http://en.wikipedia.org/wiki/Lambertian_reflectance Lambertian Reflectance]).
+
+		In order to calculate the diffuse lighting value, we need a number 
+		of pieces of information:
+
+			* the angle between the surface and the light
+			* the diffuse intensity of the light 
+			* the diffuse reflectance of the material 
+
+		To calculate the angle between the surface and the light, we need 
+		some way of determining which direction any particular part of a 
+		surface is pointing.  In OpenGL this has been traditionally 
+		accomplished by passing in a Normal value for each vertex and 
+		interpolating those Normals across the surface.
+
+		Unlike the Normals you calculated in algebra and geometry class,
+		the Normal on a particular vertex does *not* have to be the cross 
+		product of two adjacent edges.  Instead, it is the value that 
+		a human being has assigned that makes the vertex look right.
+		It will often be a blending of the "natural" (calculated) Normals 
+		of the adjacent faces, as this will tend to create a "smooth" look 
+		that makes the two faces appear to be one continuous surface.
+
+		Once we have a Normal, we also need the light's direction in order 
+		to calculate the angle between them.  For this tutorial we'll use 
+		the simplest possible light, an infinitely far "directional" light 
+		which loosely models the behaviour of sunlight on the surface of
+		the Earth.
+
+		This light has a direction, with all rays from the light 
+		considered to be travelling in parallel in this direction.  Thus
+		the relative position of the light (which is "infinitely" far away,
+		which means all of the relative positions are the same) 
+		has no effect on the angle at which the light's rays will strike 
+		a surface. A directional light is, inessence, just a normalized 
+		vector which points from the "location" of the light to the origin.
+
+		With our normal and our directional light, we can apply Lambert's 
+		law to calculate the diffuse component multiplier for any given 
+		vertex.  Lambert's law looks for the cosine of the two vectors 
+		(the Normal and the Light Location vector), which is calculated 
+		by taking the dot product of the two (normalized) vectors.
+		
+		Our GLSL function dLight (below) will calculate the factor 
+		which controls the diffuse light contribution of a single light.
+		Both of the values passed in must be *normalized* vectors.
+		'''
+		
 		dLight = """
-		vec2 dLight( 
+		float dLight( 
 			in vec3 light_pos, // light position
 			in vec3 frag_normal // geometry normal
 		) {
 			// returns vec2( ambientMult, diffuseMult )
 			float n_dot_pos = max( 0.0, dot( 
-				frag_normal, normalize(light_pos)
+				frag_normal, light_pos
 			));
-			return vec2( 1.0, n_dot_pos );
+			return n_dot_pos;
 		}		
 		"""
-		
 		vertex = compileShader( dLight + 
 		"""
 		uniform vec4 Global_ambient;
@@ -133,7 +173,7 @@ class TestContext( BaseContext ):
 				Vertex_position, 1.0
 			);
 			vec3 EC_Light_location = gl_NormalMatrix * Light_location;
-			vec2 weights = dLight(
+			float diffuse_weight = dLight(
 				normalize(EC_Light_location),
 				normalize(gl_NormalMatrix * Vertex_normal)
 			);
@@ -147,12 +187,30 @@ class TestContext( BaseContext ):
 				(Global_ambient * Material_ambient)
 				// material's interaction with light's contribution 
 				// to the ambient lighting...
-				+ (Light_ambient * Material_ambient * weights.x)
+				+ (Light_ambient * Material_ambient)
 				// material's interaction with the direct light from 
 				// the light.
-				+ (Light_diffuse * Material_diffuse * weights.y)
+				+ (Light_diffuse * Material_diffuse * diffuse_weight)
 			), 0.0, 1.0);
 		}""", GL_VERTEX_SHADER)
+		'''== Eye Space or Not? ==
+In our vertex shader, we actually use the "eye space" forms 
+of the two vectors for the angular calculation.  For Lambertian
+Reflectance we could as easily have left the coordinates in 
+"model space" to do the calculations:'''
+		"""			
+		vec2 weights = dLight(
+			normalize(Light_location),
+			normalize(Vertex_normal)
+		);"""
+		'''Most documentation, however, describes most lighting
+		calculations in "eye space" forms, as it tends to simplify 
+		the calculations for more involved lighting forms.
+		
+		Our fragment shader here is extremely simple.  We could
+		actually do per-fragment lighting calculations, but it wouldn't
+		particularly improve our rendering with simple diffuse shading.
+		'''
 		fragment = compileShader("""
 		varying vec4 baseColor;
 		void main() {
