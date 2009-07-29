@@ -84,9 +84,12 @@ class TestContext( BaseContext ):
 		'''== Diffuse Lighting ==
 
 		Diffuse lighting is used to simulate re-emission from a surface
-		where the re-emittance isn't "ordered" (that is, is diffused).
+		where the re-emittance isn't "ordered" (that is, the re-emitted
+		light is is diffused).
+		
 		A "non-shiny" surface which re-emits everything that hits it
-		(think snow, for instance) would have a very high "diffuse"
+		(think snow, or a rough wooden board, for instance) would have 
+		a very high "diffuse"
 		lighting value.  A diffuse surface  emits light in *all*
 		directions whenever hit by a light, but the amount 
 		of light it emits is controlled by the angle at which the light
@@ -127,7 +130,7 @@ class TestContext( BaseContext ):
 		the relative position of the light (which is "infinitely" far away,
 		which means all of the relative positions are the same) 
 		has no effect on the angle at which the light's rays will strike 
-		a surface. A directional light is, inessence, just a normalized 
+		a surface. A directional light is, in essence, just a normalized 
 		vector which points from the "location" of the light to the origin.
 
 		With our normal and our directional light, we can apply Lambert's 
@@ -153,6 +156,12 @@ class TestContext( BaseContext ):
 			return n_dot_pos;
 		}		
 		"""
+		'''Our vertex shader is going to do all the work for us,
+		it defines a large number of uniform values that store the 
+		various light and material parameters.  We also define two 
+		per-vertex attributes to store the position and normal
+		assigned by the user.
+		'''
 		vertex = compileShader( dLight + 
 		"""
 		uniform vec4 Global_ambient;
@@ -172,14 +181,12 @@ class TestContext( BaseContext ):
 			gl_Position = gl_ModelViewProjectionMatrix * vec4( 
 				Vertex_position, 1.0
 			);
+			
 			vec3 EC_Light_location = gl_NormalMatrix * Light_location;
 			float diffuse_weight = dLight(
 				normalize(EC_Light_location),
 				normalize(gl_NormalMatrix * Vertex_normal)
 			);
-			
-			vec4 ambient = vec4( .1, .1, .1, .1 );
-			vec4 diffuse = vec4( 0.0, 1.0, 0.0, 1.0 );
 			
 			baseColor = clamp( 
 			(
@@ -193,11 +200,18 @@ class TestContext( BaseContext ):
 				+ (Light_diffuse * Material_diffuse * diffuse_weight)
 			), 0.0, 1.0);
 		}""", GL_VERTEX_SHADER)
-		'''== Eye Space or Not? ==
-In our vertex shader, we actually use the "eye space" forms 
-of the two vectors for the angular calculation.  For Lambertian
-Reflectance we could as easily have left the coordinates in 
-"model space" to do the calculations:'''
+		'''The actual lighting calculation is simply adding the various 
+		contributors together in order to find the final colour, then 
+		clamping the result to the range 0.0 to 1.0.  We could have let 
+		OpenGL do this clamping itself, the call is done here simply 
+		to illustrate the effect.
+		
+		== Eye Space or Not? ==
+		
+		In our vertex shader, we actually use the "eye space" forms 
+		of the two vectors for the angular calculation.  For Lambertian
+		Reflectance we could as easily have left the coordinates in 
+		"model space" to do the calculations:'''
 		"""			
 		vec2 weights = dLight(
 			normalize(Light_location),
@@ -205,7 +219,7 @@ Reflectance we could as easily have left the coordinates in
 		);"""
 		'''Most documentation, however, describes most lighting
 		calculations in "eye space" forms, as it tends to simplify 
-		the calculations for more involved lighting forms.
+		the calculations for more involved lighting.
 		
 		Our fragment shader here is extremely simple.  We could
 		actually do per-fragment lighting calculations, but it wouldn't
@@ -220,7 +234,7 @@ Reflectance we could as easily have left the coordinates in
 		
 		self.shader = compileProgram(vertex,fragment)
 		'''We're going to create slightly less "flat" geometry for this 
-		lesson, we'll create a set of 4 faces in a "bow window" 
+		lesson, we'll create a set of 6 faces in a "bow window" 
 		arrangement that makes it easy to see the effect of the direct 
 		lighting.'''
 		self.vbo = vbo.VBO(
@@ -271,23 +285,21 @@ Reflectance we could as easily have left the coordinates in
 		"""Render the geometry for the scene."""
 		BaseContext.Render( self, mode )
 		glUseProgram(self.shader)
-		'''We pass in the current (for this frame) value of our 
-		animation fraction.  The timer will generate events to update
-		this value during idle time.'''
 		try:
 			self.vbo.bind()
 			try:
 				'''We add a strong red tinge so you can see the 
 				global ambient light's contribution.'''
 				glUniform4f( self.Global_ambient_loc, .3,.05,.05,.1 )
-				
+				'''In legacy OpenGL we would be using different 
+				special-purpose calls to set these variables.'''
 				glUniform4f( self.Light_ambient_loc, .2,.2,.2, 1.0 )
 				glUniform4f( self.Light_diffuse_loc, 1,1,1,1 )
 				glUniform3f( self.Light_location_loc, 2,2,10 )
 				
 				glUniform4f( self.Material_ambient_loc, .2,.2,.2, 1.0 )
 				glUniform4f( self.Material_diffuse_loc, 1,1,1, 1 )
-				
+				'''We only have the two per-vertex attributes'''
 				glEnableVertexAttribArray( self.Vertex_position_loc )
 				glEnableVertexAttribArray( self.Vertex_normal_loc )
 				stride = 6*4
@@ -302,11 +314,7 @@ Reflectance we could as easily have left the coordinates in
 				glDrawArrays(GL_TRIANGLES, 0, 18)
 			finally:
 				self.vbo.unbind()
-				'''As with the legacy pointer operations, we want to 
-				clean up our array enabling so that any later calls 
-				will not cause seg-faults when they try to read records
-				from these arrays (potentially beyond the end of the
-				arrays).'''
+				'''Need to cleanup, as always.'''
 				glDisableVertexAttribArray( self.Vertex_position_loc )
 				glDisableVertexAttribArray( self.Vertex_normal_loc )
 		finally:
@@ -314,3 +322,6 @@ Reflectance we could as easily have left the coordinates in
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
+'''Our next tutorial will cover the rest of the Phong rendering 
+algorithm, by adding "specular highlights" (shininess) to the 
+surface.'''
