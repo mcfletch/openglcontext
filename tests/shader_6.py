@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Specular Highlights, Directional Lighting=
+'''=Specular Highlights, Indexed Rendering, Directional Lighting=
 
 [shader_6.py-screen-0001.png Screenshot]
 
@@ -8,9 +8,10 @@ This tutorial builds on earlier tutorials by adding:
 	* specular lighting (Phong Lighting)
 	* specular lighting (Blinn-Phong Lighting)
 	* per-fragment lighting
+	* Sphere geometry object (indexed rendering)
 
 This tutorial completes the 
-[http://en.wikipedia.org/wiki/Phong_shading Phong Shading],
+[http://en.wikipedia.org/wiki/Phong_shading Phong Shading]
 rendering code that we started in the last tutorial by adding 
 "specular" highlights to the material.  Specular highlights are 
 basically "shininess", that is, the tendancy of a material to 
@@ -26,7 +27,16 @@ from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL.shaders import *
-from OpenGLContext.events.timer import Timer
+'''This is our only new import.  The Sphere geometry is a simple 
+mechanism that generates a "compiled" piece of sphere geometry 
+as a pair of two VBOs and a count that tells us how many vertices 
+need to be rendered from the VBOs to render the geometry.  The first 
+VBO contains the per-vertex data which is to be rendered, while the 
+second contains indices into that first VBO which allows triangles 
+to be generated which share the vertex records.  In "smooth" geometry 
+vertices tend to be shared, so this rendering method tends to be 
+more efficient than using expanded arrays of vertices.
+'''
 from OpenGLContext.scenegraph.basenodes import Sphere
 
 class TestContext( BaseContext ):
@@ -109,9 +119,7 @@ class TestContext( BaseContext ):
 			return vec2( n_dot_pos, n_dot_half);
 		}		
 		"""
-		'''Since we have an extremely low-polygon model, we would not 
-		see our "shininess" effect if we were to render lighting only 
-		at each vertex, so we are going to use per-fragment rendering.
+		'''We are going to use per-fragment rendering.
 		As a result, our vertex shader becomes very simple, just arranging
 		for the Normals to be varied across the surface.
 		'''
@@ -127,15 +135,18 @@ class TestContext( BaseContext ):
 			);
 			baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
 		}""", GL_VERTEX_SHADER)
-		'''The actual lighting calculation is simply adding the various 
-		contributors together in order to find the final colour, then 
-		clamping the result to the range 0.0 to 1.0.  We could have let 
-		OpenGL do this clamping itself, the call is done here simply 
-		to illustrate the effect.
+		'''Our fragment shader looks much like our previous tutorial's 
+		vertex shader.  As before, we have lots of uniform values,
+		but now we also calculate the light's half-vector (in eye-space 
+		coordinates).  The dLight function does the core Blinn 
+		calculation, and we simply use the resulting factor to add to 
+		the colour value for the fragment.
 		
-		Our fragment shader here is extremely simple.  We could
-		actually do per-fragment lighting calculations, but it wouldn't
-		particularly improve our rendering with simple diffuse shading.
+		Note the use of the eye-coordinate-space to simplify the 
+		half-vector calculation, the eye-space eye-vector is always 
+		the same value (pointing down the negative Z axis), 
+		and the eye-space eye-coordinate is always (0,0,0), so the 
+		eye-to-vertex vector is always the eye-space vector position.
 		'''
 		fragment = compileShader( dLight + """
 		uniform vec4 Global_ambient;
@@ -152,34 +163,57 @@ class TestContext( BaseContext ):
 		
 		varying vec3 baseNormal;
 		void main() {
-			vec3 EC_Light_location = gl_NormalMatrix * Light_location;
-			vec3 Light_half = EC_Light_location - vec3( 0,0,-10 );
+			// normalized eye-coordinate Light location
+			vec3 EC_Light_location = normalize(
+				gl_NormalMatrix * Light_location
+			);
+			// half-vector calculation 
+			vec3 Light_half = normalize(
+				EC_Light_location - vec3( 0,0,-10 )
+			);
 			vec2 weights = dLight(
-				normalize(EC_Light_location),
-				normalize(Light_half),
+				EC_Light_location,
+				Light_half,
 				baseNormal,
 				Material_shininess
 			);
 			
 			gl_FragColor = clamp( 
 			(
-				// global component 
 				(Global_ambient * Material_ambient)
-				// material's interaction with light's contribution 
-				// to the ambient lighting...
 				+ (Light_ambient * Material_ambient)
-				// material's interaction with the direct light from 
-				// the light.
 				+ (Light_diffuse * Material_diffuse * weights.x)
-				// material's shininess...
+				// material's shininess is the only change here...
 				+ (Light_specular * Material_specular * weights.y)
 			), 0.0, 1.0);
 		}
 		""", GL_FRAGMENT_SHADER)
 		
 		self.shader = compileProgram(vertex,fragment)
+		'''Here's the call that creates the two VBOs and the 
+		count of records to render from them. If you're curious 
+		you can read through the source code of the 
+		OpenGLContext.scenegraph.quadrics module to read the 
+		mechanism that generates the values.
 		
-		self.coords,self.indices,self.count = Sphere( radius = 1 ).compile()
+		The sphere is a simple rendering mechanism, as for a 
+		unit-sphere at the origin, the sphere's normals are the 
+		same as the sphere's vertex coordinate.  The complexity 
+		comes primarily in generating the triangle indices that 
+		link the points generated.
+		'''
+		self.coords,self.indices,self.count = Sphere( 
+			radius = 1 
+		).compile()
+		'''We have a few more uniforms to control the specular 
+		components.  Real-world coding would also calculate the 
+		light's half-vector and provide it as a uniform (so that 
+		it would only need to be calculated once), but we are going 
+		to do the half-vector calculation in the shader to make 
+		it obvious what is going on.  The legacy OpenGL pipeline 
+		provides the value pre-calculated as part of the light structure 
+		in GLSL.
+		'''
 		for uniform in (
 			'Global_ambient',
 			'Light_ambient','Light_diffuse','Light_location',
@@ -198,33 +232,62 @@ class TestContext( BaseContext ):
 			if location in (None,-1):
 				print 'Warning, no attribute: %s'%( uniform )
 			setattr( self, attribute+ '_loc', location )
-		
 	
 	def Render( self, mode = None):
 		"""Render the geometry for the scene."""
 		BaseContext.Render( self, mode )
 		glUseProgram(self.shader)
 		try:
+			'''==Indexed VBO Rendering==
+			
+			You'll notice here that we are binding two different VBO 
+			objects.  As we mentioned above, the Sphere renderer 
+			generated both VBOs, but doesn't the second binding replace 
+			the first binding?  That is, why doesn't OpenGL try to read 
+			the Vertex data out of the indices VBO?
+			
+			OpenGL defines multiple binding "targets" for VBOs, the 
+			first VBO (vertices) was bound to the GL_ARRAY_BUFFER
+			target (the default for the class), which is used for reading 
+			per-vertex data arrays, while the indices buffer was defined
+			as targetting the GL_ELEMENT_ARRAY_BUFFER, which is used
+			solely for reading indices.
+			
+			Each target can be bound to a different VBO, and thus we can
+			bind both VBOs at the same time without confusion.
+			'''
 			self.coords.bind()
 			self.indices.bind()
+			'''Here, being lazy, we use the numpy array's nbytes value 
+			to specify the stride between records.  The VBO object has 
+			a "data" value which is the data-set which was initially 
+			passed to the VBO constructor.  The first element in this 
+			array is a single vertex record.  This array happens to have 
+			8 floating-point values (24 bytes), the first three being 
+			the vertex position, the next two being the texture coordinate 
+			and the last three being the vertex normal.  We'll ignore 
+			the texture coordinate for now.
+			'''
 			stride = self.coords.data[0].nbytes
 			try:
-				'''We add a strong red tinge so you can see the 
-				global ambient light's contribution.'''
-				glUniform4f( self.Global_ambient_loc, .3,.05,.05,.1 )
+				glUniform4f( self.Global_ambient_loc, .05,.05,.05,.1 )
 				'''In legacy OpenGL we would be using different 
 				special-purpose calls to set these variables.'''
 				glUniform4f( self.Light_ambient_loc, .2,.2,.2, 1.0 )
 				glUniform4f( self.Light_diffuse_loc, .5,.5,.5,1 )
+				'''We set up a yellow-ish specular component in the 
+				light and move it to rest "just over our right shoulder"
+				in relation to the initial camera.'''
 				glUniform4f( self.Light_specular_loc, 1.0,1.0,.5,1 )
-				light = array( [2,1,10],'f')
-				glUniform3f( self.Light_location_loc, *light )
+				glUniform3f( self.Light_location_loc, 4,2,10 )
 				
 				glUniform4f( self.Material_ambient_loc, .2,.2,.2, 1.0 )
-				glUniform4f( self.Material_specular_loc, 1.0,.8,.8, 1.0 )
-				glUniform1f( self.Material_shininess_loc, .995)
 				glUniform4f( self.Material_diffuse_loc, .5,.5,.5, 1 )
-				'''We only have the two per-vertex attributes'''
+				'''We make the material have a bright specular white 
+				colour and an extremely "shiny" surface (which makes 
+				the specular highlight smaller).'''
+				glUniform4f( self.Material_specular_loc, .8,.8,.8, 1.0 )
+				glUniform1f( self.Material_shininess_loc, .995)
 				glEnableVertexAttribArray( self.Vertex_position_loc )
 				glEnableVertexAttribArray( self.Vertex_normal_loc )
 				glVertexAttribPointer( 
@@ -235,14 +298,25 @@ class TestContext( BaseContext ):
 					self.Vertex_normal_loc, 
 					3, GL_FLOAT,False, stride, self.coords+(5*4)
 				)
+				'''Here we introduce the OpenGL call which renders via 
+				an index-array rather than just rendering vertices in 
+				definition order.  The last two arguments tell OpenGL 
+				what data-type we've used for the indices (the Sphere 
+				renderer uses shorts).  The indices VBO is actually 
+				just passing the value c_void_p( 0 ) (i.e. a null pointer),
+				which causes OpenGL to use the currently bound VBO for 
+				the GL_ELEMENT_ARRAY_BUFFER target.
+				'''
 				glDrawElements(
 					GL_TRIANGLES, self.count,
 					GL_UNSIGNED_SHORT, self.indices
 				)
 			finally:
+				'''Note the need to unbind *both* VBOs, we have to free 
+				*both* VBO targets to avoid any other rendering operation 
+				from trying to access the VBOs.'''
 				self.coords.unbind()
 				self.indices.unbind()
-				'''Need to cleanup, as always.'''
 				glDisableVertexAttribArray( self.Vertex_position_loc )
 				glDisableVertexAttribArray( self.Vertex_normal_loc )
 		finally:
@@ -250,6 +324,8 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
-'''Our next tutorial will cover the rest of the Phong rendering 
-algorithm, by adding "specular highlights" (shininess) to the 
-surface.'''
+'''Our per-fragment Blinn-Phong rendering engine is a very simplistic 
+model of real-world lighting.  Our next tutorial will begin to 
+reduce the "simplifying assumptions" in our current tutorials,
+such as the use of "directional lights at infinite distance",
+to allow us to model "point lights" and/or "spot lights".'''
