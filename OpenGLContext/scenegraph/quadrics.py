@@ -84,8 +84,9 @@ class Sphere( basenodes.Sphere, Quadric ):
 		coords = copy( coords )
 		coords[:,0:3] *= self.radius
 		vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
-		holder = mode.cache.holder( self, vbos )
-		holder.depend( self, 'radius' )
+		if hasattr(mode,'cache'):
+			holder = mode.cache.holder( self, vbos )
+			holder.depend( self, 'radius' )
 		return vbos
 	
 	@classmethod

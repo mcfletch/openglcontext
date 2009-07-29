@@ -27,6 +27,7 @@ from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL.shaders import *
 from OpenGLContext.events.timer import Timer
+from OpenGLContext.scenegraph.basenodes import Sphere
 
 class TestContext( BaseContext ):
 	"""Demonstrates use of attribute types in GLSL
@@ -83,6 +84,10 @@ class TestContext( BaseContext ):
 		Phong rendering would achieve.  The value is, however, considered
 		close to "real world" materials, so the Blinn method is generally 
 		preferred to Phong.
+		
+		Traditionally, n_dot_pos would be cut off at 0.0, but that would 
+		create extremely hard-edged cut-offs for specular color.  Here 
+		we "fudge" the result by 0.05
 		'''
 		dLight = """
 		vec2 dLight( 
@@ -96,7 +101,7 @@ class TestContext( BaseContext ):
 				frag_normal, light_pos
 			));
 			float n_dot_half = 0.0;
-			if (n_dot_pos > 0.0) {
+			if (n_dot_pos > -.05) {
 				n_dot_half = pow(max(0.0,dot( 
 					half_light, frag_normal
 				)), shininess);
@@ -173,30 +178,8 @@ class TestContext( BaseContext ):
 		""", GL_FRAGMENT_SHADER)
 		
 		self.shader = compileProgram(vertex,fragment)
-		self.vbo = vbo.VBO(
-			array( [
-				[ -1, 0, 0, -1,0,1],
-				[  0, 0, 1, -1,0,2],
-				[  0, 1, 1, -1,0,2],
-				[ -1, 0, 0, -1,0,1],
-				[  0, 1, 1, -1,0,2],
-				[ -1, 1, 0, -1,0,1],
-				
-				[  0, 0, 1, -1,0,2],
-				[  1, 0, 1, 1,0,2],
-				[  1, 1, 1, 1,0,2],
-				[  0, 0, 1, -1,0,2],
-				[  1, 1, 1, 1,0,2],
-				[  0, 1, 1, -1,0,2],
-				
-				[  1, 0, 1, 1,0,2],
-				[  2, 0, 0, 1,0,1],
-				[  2, 1, 0, 1,0,1],
-				[  1, 0, 1, 1,0,2],
-				[  2, 1, 0, 1,0,1],
-				[  1, 1, 1, 1,0,2],
-			],'f')
-		)
+		
+		self.coords,self.indices,self.count = Sphere( radius = 1 ).compile()
 		for uniform in (
 			'Global_ambient',
 			'Light_ambient','Light_diffuse','Light_location',
@@ -222,7 +205,9 @@ class TestContext( BaseContext ):
 		BaseContext.Render( self, mode )
 		glUseProgram(self.shader)
 		try:
-			self.vbo.bind()
+			self.coords.bind()
+			self.indices.bind()
+			stride = self.coords.data[0].nbytes
 			try:
 				'''We add a strong red tinge so you can see the 
 				global ambient light's contribution.'''
@@ -232,28 +217,31 @@ class TestContext( BaseContext ):
 				glUniform4f( self.Light_ambient_loc, .2,.2,.2, 1.0 )
 				glUniform4f( self.Light_diffuse_loc, .5,.5,.5,1 )
 				glUniform4f( self.Light_specular_loc, 1.0,1.0,.5,1 )
-				light = array( [0,0,10],'f')
+				light = array( [2,1,10],'f')
 				glUniform3f( self.Light_location_loc, *light )
 				
 				glUniform4f( self.Material_ambient_loc, .2,.2,.2, 1.0 )
-				glUniform4f( self.Material_specular_loc, .8,.8,.8, 1.0 )
-				glUniform1f( self.Material_shininess_loc, .8)
+				glUniform4f( self.Material_specular_loc, 1.0,.8,.8, 1.0 )
+				glUniform1f( self.Material_shininess_loc, .995)
 				glUniform4f( self.Material_diffuse_loc, .5,.5,.5, 1 )
 				'''We only have the two per-vertex attributes'''
 				glEnableVertexAttribArray( self.Vertex_position_loc )
 				glEnableVertexAttribArray( self.Vertex_normal_loc )
-				stride = 6*4
 				glVertexAttribPointer( 
 					self.Vertex_position_loc, 
-					3, GL_FLOAT,False, stride, self.vbo 
+					3, GL_FLOAT,False, stride, self.coords
 				)
 				glVertexAttribPointer( 
 					self.Vertex_normal_loc, 
-					3, GL_FLOAT,False, stride, self.vbo+12
+					3, GL_FLOAT,False, stride, self.coords+(5*4)
 				)
-				glDrawArrays(GL_TRIANGLES, 0, 18)
+				glDrawElements(
+					GL_TRIANGLES, self.count,
+					GL_UNSIGNED_SHORT, self.indices
+				)
 			finally:
-				self.vbo.unbind()
+				self.coords.unbind()
+				self.indices.unbind()
 				'''Need to cleanup, as always.'''
 				glDisableVertexAttribArray( self.Vertex_position_loc )
 				glDisableVertexAttribArray( self.Vertex_normal_loc )
