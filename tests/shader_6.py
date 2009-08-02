@@ -17,9 +17,6 @@ rendering code that we started in the last tutorial by adding
 basically "shininess", that is, the tendancy of a material to 
 re-emit light *in a particular direction* based on the angle of 
 incidence of the light ray.
-
-Since the changes from the last tutorial are quite small, this 
-will be a fairly short tutorial.
 '''
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
@@ -27,8 +24,8 @@ from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL.shaders import *
-'''This is our only new import.  The Sphere geometry is a simple 
-mechanism that generates a "compiled" piece of sphere geometry 
+'''This is our only new import.  The Sphere geometry node 
+generates a "compiled" piece of sphere geometry 
 as a pair of two VBOs and a count that tells us how many vertices 
 need to be rendered from the VBOs to render the geometry.  The first 
 VBO contains the per-vertex data which is to be rendered, while the 
@@ -271,8 +268,6 @@ class TestContext( BaseContext ):
 			stride = self.coords.data[0].nbytes
 			try:
 				glUniform4f( self.Global_ambient_loc, .05,.05,.05,.1 )
-				'''In legacy OpenGL we would be using different 
-				special-purpose calls to set these variables.'''
 				glUniform4f( self.Light_ambient_loc, .2,.2,.2, 1.0 )
 				glUniform4f( self.Light_diffuse_loc, .5,.5,.5,1 )
 				'''We set up a yellow-ish specular component in the 
@@ -284,8 +279,10 @@ class TestContext( BaseContext ):
 				glUniform4f( self.Material_ambient_loc, .2,.2,.2, 1.0 )
 				glUniform4f( self.Material_diffuse_loc, .5,.5,.5, 1 )
 				'''We make the material have a bright specular white 
-				colour and an extremely "shiny" surface (which makes 
-				the specular highlight smaller).'''
+				colour and an extremely "shiny" surface.  The shininess 
+				value has the effect of reducing the area of the
+				highlight, as the cos of the angle is raised 
+				to the power of the (fractional) shininess.'''
 				glUniform4f( self.Material_specular_loc, .8,.8,.8, 1.0 )
 				glUniform1f( self.Material_shininess_loc, .995)
 				glEnableVertexAttribArray( self.Vertex_position_loc )
@@ -325,7 +322,9 @@ class TestContext( BaseContext ):
 if __name__ == "__main__":
 	MainFunction ( TestContext)
 '''Our per-fragment Blinn-Phong rendering engine is a very simplistic 
-model of real-world lighting.  Our next tutorial will begin to 
+model of real-world lighting, and is currently limited to a single
+directional light.  Our next tutorial will begin to 
 reduce the "simplifying assumptions" in our current tutorials,
 such as the use of "directional lights at infinite distance",
 to allow us to model "point lights" and/or "spot lights".'''
+
