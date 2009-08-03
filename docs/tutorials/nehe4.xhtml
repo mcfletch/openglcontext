@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+<title>NeHe Translations: Animating Rotation of a Polygon (NeHe 4)</title>
+    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+</head>
+<body>
+<table width="100%"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="nehe3.xhtml">Previous</a></td>
+	<td align="center">NeHe Translations: Animating Rotation of a Polygon (NeHe 4)</td>
+	<td align="right"><a href="nehe5.xhtml">Next</a></td>
+	</tr>
+</thead></table>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title">Animating Rotation of a Polygon (NeHe 4)</h1>
+	<div class="paragraph">
+	<img src="nehe4.py-screen-0001.png" alt="Screenshot" class="" />
+</div>
+	<div class="paragraph">This tutorial uses the (legacy) OpenGL glRotated function to 
+setup a model-view matrix which animates the spin of geometry 
+about an axis.</div>
+	<div class="paragraph">This tutorial is based on the 
+	<a href="http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=04" class="">NeHe4 tutorial</a>
+	 by Jeff Molofee and assumes that you are reading along 
+with the tutorial, so that only changes from the tutorial are noted 
+here.
+</div>
+	<div class="paragraph"></div>
+</div>
+	<div class="code-sample">from OpenGLContext import testingcontext
+BaseContext, MainFunction = testingcontext.getInteractive()
+from OpenGL.GL import *
+</div>
+	<div class="commentary">
+	<div class="paragraph">The time module is used to provide crude animation support</div>
+</div>
+	<div class="code-sample">import time
+class TestContext( BaseContext ):
+	"""This context customizes 3 points in the BaseContext"""
+	initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
+</div>
+	<div class="commentary">
+	<div class="paragraph">
+The OnIdle method (if present) is called whenever the GUI library
+has completed all pending event processing and signals an "idle"
+state.  By calling:</div>
+	<div class="paragraph">self.triggerRedraw( force = 1 )</div>
+	<div class="paragraph">We force a redraw of the context to show the next "frame" of the
+animation.
+</div>
+</div>
+	<div class="code-sample">	def OnIdle( self, ):
+		"""Request refresh of the context whenever idle"""
+		self.triggerRedraw(1)
+		return 1
+	def Render( self, mode = 0):
+		"""Render the scene geometry"""
+		BaseContext.Render( self, mode )
+		glDisable( GL_LIGHTING) # context lights by default
+		glDisable( GL_CULL_FACE)
+		glTranslatef(-1.5,0.0,-6.0);
+</div>
+	<div class="commentary">
+	<div class="paragraph">The call to time.time creates a float value which is
+		converted to a fraction of three seconds then multiplied
+		by 360 (degrees) to get the current appropriate rotation
+		for an object spinning at 1/3 rps.</div>
+	<div class="paragraph">Note that OpenGL uses *degrees*, not radians!
+</div>
+</div>
+	<div class="code-sample">		glRotated( time.time()%(3.0)/3 * 360, 0,1,0)
+		glBegin(GL_TRIANGLES)
+		glColor3f(1,0,0)
+		glVertex3f( 0.0,  1.0, 0.0)
+		glColor3f(0,1,0)
+		glVertex3f(-1.0, -1.0, 0.0)
+		glColor3f(0,0,1)
+		glVertex3f( 1.0, -1.0, 0.0)
+		glEnd()
+</div>
+	<div class="commentary">
+	<div class="paragraph">Note the need to re-load the identity matrix, as the 
+		glRotated/glTranslatef functions modify the current matrix.
+</div>
+</div>
+	<div class="code-sample">		glLoadIdentity()
+		glTranslatef(1.5,0.0,-6.0);
+</div>
+	<div class="commentary">
+	<div class="paragraph">Animating as above, but at 1 rev/s</div>
+</div>
+	<div class="code-sample">		glRotated( time.time()%(1.0)/1 * -360, 1,0,0)
+		glColor3f(0.5,0.5,1.0)
+		glBegin(GL_QUADS)
+		glVertex3f(-1.0, 1.0, 0.0)
+		glVertex3f( 1.0, 1.0, 0.0)
+		glVertex3f( 1.0,-1.0, 0.0)
+		glVertex3f(-1.0,-1.0, 0.0)
+		glEnd()
+if __name__ == "__main__":
+	MainFunction ( TestContext)
+</div>
+	<div class="commentary">
+	<div class="paragraph">
+Author: 
+	<a href="http://nehe.gamedev.net" class="">Jeff Molofee (aka NeHe)</a>
+</div>
+	<div class="paragraph">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
+	<div class="paragraph">If you plan to put this program on your web page or a cdrom of
+any sort, let me know via email, I'm curious to see where
+it ends up :)</div>
+	<div class="paragraph">If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program 
+or it's docs.
+</div>
+</div>
+<table width="100%"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="nehe3.xhtml">Previous</a></td>
+	<td align="center">NeHe Translations: Animating Rotation of a Polygon (NeHe 4)</td>
+	<td align="right"><a href="nehe5.xhtml">Next</a></td>
+	</tr>
+</thead></table>
+<div class="metadata">This document was generated by <code>bzr branch http://bazaar.launchpad.net/%7Emcfletch/pyopengl/directdocs/</code> on 2009-08-03T00:22:52.403948 from nehe4.py</div>
+</body>
+</html>
