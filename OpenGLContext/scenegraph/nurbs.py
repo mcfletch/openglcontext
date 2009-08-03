@@ -11,20 +11,17 @@ from vrml.vrml97 import nurbs, nodetypes
 from vrml import node, field, fieldtypes
 from OpenGL.GLU import *
 from OpenGL.GL import *
+from OpenGL.GLU.EXT.object_space_tess import *
 from OpenGLContext.debug.logs import geometry_log, context_log
 from OpenGLContext import arrays
-try:
-	from OpenGL.GLU.EXT import object_space_tess
-	context_log.info( """GLU Nurbs object_space_tess extension loaded""")
-except ImportError:
-	object_space_tess = None
 
-def initialise( context ):
+object_space_tess = None
+
+def initialise( context=None ):
 	"""Initialise the NURBs extensions for a context"""
 	global object_space_tess
-	object_space_tess = context.extensions.initExtension(
-		"GLU.EXT.object_space_tess"
-	)
+	if object_space_tess is None:
+		object_space_tess = gluInitObjectSpaceTessEXT()
 	return bool( object_space_tess )
 
 class Polyline2D( nurbs.Polyline2D ):
@@ -72,17 +69,17 @@ class Contour2D( nurbs.Contour2D ):
 
 def defaultSampling( ):
 	"""Get a default sampling node"""
-	if object_space_tess:
+	if initialise():
 		return NurbsToleranceSample(
 			method = "object",
 			parametric = 1,
-			tolerance = 0.5
+			tolerance = 5
 		)
 	else:
 		return NurbsToleranceSample(
 			method = "screen",
 			parametric = 1,
-			tolerance = .5
+			tolerance = 5
 		)
 		
 
@@ -358,14 +355,14 @@ class NurbsToleranceSample( NurbsSampling ):
 			GLU_PARAMETRIC_ERROR
 		)
 		if self.method == 'object':
-			if not object_space_tess:
+			if not initialise():
 				# do regular (non-extension) screen sampling...
 				geometry_log.warn( """%s declares 'object' sampling method, extension: object_space_tess not available -> ignoring""", self)
 				self.method = 'screen'
 			else:
 				methods = (
-					object_space_tess.GLU_OBJECT_PATH_LENGTH_EXT,
-					object_space_tess.GLU_OBJECT_PARAMETRIC_ERROR_EXT
+					GLU_OBJECT_PATH_LENGTH_EXT,
+					GLU_OBJECT_PARAMETRIC_ERROR_EXT
 				)
 		elif self.method != 'screen':
 			geometry_log.warn( """%s declares %s sampling method, unknown type -> ignoring""", self, repr( self.method))
@@ -373,9 +370,13 @@ class NurbsToleranceSample( NurbsSampling ):
 
 		gluNurbsProperty( nurbObject, GLU_SAMPLING_METHOD, method )
 		if self.parametric:
-			gluNurbsProperty( nurbObject, GLU_PARAMETRIC_TOLERANCE, self.tolerance )
+			gluNurbsProperty( 
+				nurbObject, GLU_PARAMETRIC_TOLERANCE, self.tolerance 
+			)
 		else:
-			gluNurbsProperty( nurbObject, GLU_SAMPLING_TOLERANCE, self.tolerance )
+			gluNurbsProperty( 
+				nurbObject, GLU_SAMPLING_TOLERANCE, self.tolerance 
+			)
 
 class NurbsDomainDistanceSample( NurbsSampling ):
 	"""Domain-distance parametric u and v coordinate sampling
