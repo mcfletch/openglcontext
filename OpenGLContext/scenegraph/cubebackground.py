@@ -53,48 +53,42 @@ class _CubeBackground( object ):
 		else.
 		"""
 		if mode.passCount == 0:
+			glPushAttrib( GL_ALL_ATTRIB_BITS )
 			glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
 			try:
-				glDisable( GL_DEPTH_TEST ) # we don't want to do anything with the depth buffer...
 				glDisable( GL_LIGHTING )
 				glDisable( GL_COLOR_MATERIAL )
-				# yuck, why is this necessary with the previous line?
-				glColor3f( 1.0, 1.0, 1.0, )
 				if not self.VBO:
 					self.compile( mode )
 				if clear:
 					glClear(
 						GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT
 					)
+				# we don't want to do anything with the depth buffer
+				# once we've cleared it...
+				glDepthMask( GL_FALSE ) 
+				matrix = glGetDoublev( GL_MODELVIEW_MATRIX )
+				if matrix is None:
+					# glGetDoublev can return None if uninitialised...
+					matrix = identity( 4, 'd')
+				forward = dot(matrix, [0,0,-1,0])
+				self.VBO.bind()
+				glInterleavedArrays( GL_T2F_V3F, 0, self.VBO )
 				try:
-					matrix = glGetDoublev( GL_MODELVIEW_MATRIX )
-					if matrix is None:
-						# glGetDoublev can return None if uninitialised...
-						matrix = identity( 4, 'd')
-					forward = dot(matrix, [0,0,-1,0])
-					self.VBO.bind()
-					glInterleavedArrays( GL_T2F_V3F, 0, self.VBO )
-					try:
-						for offset,attr_name, normal, data in self.RENDER_DATA:
-							texture = getattr( self, attr_name )
-							if dot(forward, normal) <=0 and texture.components:
-								# we are facing it, and it's loaded/non-null
-								texture.render(lit=0, mode=mode)
-								try:
-									glDrawArrays( GL_TRIANGLES, offset, 6 )
-								finally:
-									texture.renderPost(mode=mode)
-					finally:
-						self.VBO.unbind()
+					for offset,attr_name, normal, data in self.RENDER_DATA:
+						texture = getattr( self, attr_name )
+						if dot(forward, normal) <=0 and texture.components:
+							# we are facing it, and it's loaded/non-null
+							texture.render(lit=0, mode=mode)
+							try:
+								glDrawArrays( GL_TRIANGLES, offset, 6 )
+							finally:
+								texture.renderPost(mode=mode)
 				finally:
-					glEnable( GL_COLOR_MATERIAL )
+					self.VBO.unbind()
 			finally:
-				glEnable( GL_DEPTH_TEST )
-				glEnable( GL_LIGHTING )
-				# now, completely wipe out the depth buffer,
-				# so this appears as a "background"...
-				glClear(GL_DEPTH_BUFFER_BIT)
 				glPopClientAttrib()
+				glPopAttrib()
 	
 	# TODO: should have one-per-context...
 	VBO = None
