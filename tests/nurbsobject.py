@@ -14,9 +14,6 @@ from OpenGLContext.scenegraph import nurbs
 
 class TestContext( BaseContext ):
 	initialPosition = (0,0,3) # set initial camera position, tutorial does the re-positioning
-	def Render( self, mode = 0):
-		BaseContext.Render( self, mode )
-		mode.visit( self.shape )
 	def buildControlPoints( self ):
 		ctlpoints = zeros( (4,4,3), 'd')
 		for u in range( 4 ):
@@ -93,6 +90,9 @@ with an ice-cream-cone-shaped trimming curve
 					),
 				]
 			),
+		)
+		self.sg = sceneGraph(
+			children = [ self.shape ],
 		)
 
 if __name__ == "__main__":

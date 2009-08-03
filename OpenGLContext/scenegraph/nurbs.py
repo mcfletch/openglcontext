@@ -82,7 +82,7 @@ def defaultSampling( ):
 		return NurbsToleranceSample(
 			method = "screen",
 			parametric = 1,
-			tolerance = 20
+			tolerance = .5
 		)
 		
 
