@@ -16,6 +16,8 @@ include docs/style/*
 include OpenGLContext/loaders/*
 include OpenGLContext/browser/*.wrl
 include pydoc/*.py
+exclude docs/tutorials/*.xhtml
+exclude docs/tutorials/*.png
 
 global-exclude *CVS*
 global-exclude *Cvs*

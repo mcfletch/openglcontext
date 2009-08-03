@@ -289,7 +289,7 @@ class Context(object):
 	def OnSaveImage( self, event=None ):
 		"""Save our current screen to disk (if possible)"""
 		try:
-			import Image # get PIL's functionality...
+			from PIL import Image # get PIL's functionality...
 		except ImportError, err:
 			log.error( "Unable to import PIL" )
 		else:

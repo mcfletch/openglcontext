@@ -137,7 +137,7 @@ class _Texture( nodetypes.Texture, node.Node ):
 		return instance
 
 try:
-	import Image
+	from PIL import Image
 	from ImageFile import Parser
 	context_log.info( """Loaded Python Image Library (PIL)""" )
 except ImportError:

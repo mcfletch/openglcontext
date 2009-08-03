@@ -15,7 +15,7 @@ from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 import time
-from Image import open
+from PIL.Image import open
 '''The tutorial uses the GLU function gluBuild2DMipmaps, so we make the
 GLU functions available and continue with our normal setup routines.'''
 from OpenGL.GLU import *

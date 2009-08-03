@@ -106,13 +106,13 @@ class TestContext( BaseContext ):
 
 	def loadImage( self, imageName = "nehe_wall.bmp" ):
 		"""Load an image from a file using PIL."""
-		from Image import open
+		from PIL.Image import open
 		glActiveTexture(GL_TEXTURE0_ARB);
 		return texture.Texture( open(imageName) )
 	def loadLightMap( self, imageName = "lightmap1.jpg" ):
 		"""Load an image from a file using PIL as a lightmap (greyscale)
 		"""
-		from Image import open
+		from PIL.Image import open
 		glActiveTextureARB(GL_TEXTURE1); 
 		return texture.Texture( open(imageName) )
 		

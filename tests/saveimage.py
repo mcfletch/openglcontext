@@ -74,7 +74,7 @@ class TestContext( BaseContext ):
 	def OnSave( self, event=None):
 		self.SaveTo( 'test.jpg' )
 	def SaveTo( self, filename, format="JPEG" ):
-		import Image
+		from PIL import Image
 		if not len(self.capturedImage):
 			self.OnCaptureColour()
 		data = self.capturedImage
@@ -89,7 +89,7 @@ class TestContext( BaseContext ):
 		print 'Saved image to %s'% (os.path.abspath( filename))
 		return image
 	def OnCaptureColour( self , event=None):
-		import Image # get PIL's functionality...
+		from PIL import Image # get PIL's functionality...
 		width, height = self.getViewPort()
 		glPixelStorei(GL_PACK_ALIGNMENT, 1)
 		if self.typedFunction:

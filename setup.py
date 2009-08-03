@@ -39,7 +39,7 @@ if __name__ == "__main__":
 			"""Environment :: X11 Applications""",
 			"""Environment :: Win32 (MS Windows)""",
 		],
-		'download_url': "https://sourceforge.net/project/showfiles.php?group_id=5988",
+		'download_url': "https://sourceforge.net/projects/pyopengl/files/OpenGLContext",
 		'keywords': 'PyOpenGL,OpenGL,Context,OpenGLContext,render,3D,TrueType,text,VRML,VRML97,scenegraph',
 		'long_description' : """Demonstration and Testing Contexts for PyOpenGL
 

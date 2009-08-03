@@ -156,7 +156,7 @@ class Texture( object ):
 			filtering (from PIL) to do the resizing). Otherwise
 			just returns the same image object.
 		"""
-		from Image import BICUBIC
+		from PIL.Image import BICUBIC
 		### Now resize non-power-of-two images...
 		# should check whether it needs it first!
 		newSize = bestSize(image.size[0]),bestSize(image.size[1])

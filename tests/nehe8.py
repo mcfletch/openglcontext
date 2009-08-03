@@ -16,7 +16,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.constants import GLfloat_3,GLfloat_4
 import time
-from Image import open
+from PIL.Image import open
 
 class TestContext( BaseContext ):
 	"""Blending modes demonstration"""

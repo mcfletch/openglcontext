@@ -47,7 +47,7 @@ class TestContext( BaseContext ):
 	def OnSave( self, event):
 		self.SaveTo( 'test.jpg' )
 	def SaveTo( self, filename, format="JPEG" ):
-		import Image # get PIL's functionality...
+		from PIL import Image # get PIL's functionality...
 		width, height = self.getViewPort()
 		glPixelStorei(GL_PACK_ALIGNMENT, 1)
 		data = glReadPixelsub(0, 0, width, height, GL_RGB)
@@ -61,7 +61,7 @@ class TestContext( BaseContext ):
 		print 'Saved image to %s'% (os.path.abspath( filename))
 		return image
 	def SaveToUB( self ):
-		import Image # get PIL's functionality...
+		from PIL import Image # get PIL's functionality...
 		width, height = self.getViewPort()
 		glPixelStorei(GL_PACK_ALIGNMENT, 1)
 		data = glReadPixelsub(0, 0, width, height, GL_RGB)

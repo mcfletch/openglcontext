@@ -27,13 +27,13 @@ class TestContext( BaseContext ):
 		the texture to an ID then loading the texture into memory.
 		This didn't seem clear to me somehow in the tutorial.
 		"""
-		from Image import open
+		from PIL.Image import open
 		multitexture.glActiveTextureARB(multitexture.GL_TEXTURE0_ARB);
 		return texture.Texture( open(imageName) )
 	def loadLightMap( self, imageName = "lightmap1.jpg" ):
 		"""Load an image from a file using PIL as a lightmap (greyscale)
 		"""
-		from Image import open
+		from PIL.Image import open
 		multitexture.glActiveTextureARB(multitexture.GL_TEXTURE1_ARB); 
 		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
 		return texture.Texture( open(imageName) )

@@ -25,7 +25,7 @@ from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 import time, os
-from Image import open
+from PIL.Image import open
 from vrml import arrays
 
 class TestContext( BaseContext ):
