@@ -37,7 +37,6 @@ class Shape( basenodes.Shape ):
 			if self.appearance:
 				lit, textured, alpha, textureToken = self.appearance.render (mode=mode)
 				if alpha < 1.0:# is currently somewhat transparent
-					print 'transparent'
 					if not mode.transparent:
 						mode.addTransparent( self )
 					if textured:
