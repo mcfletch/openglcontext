@@ -4,7 +4,6 @@
   
   <title>OpenGLContext Documentation</title><link rel="stylesheet" type="text/css" href="style/tutorial.css">
   <meta name="author" content="Mike C. Fletcher"></head>
-
 <body>
 <h1>OpenGLContext Documentation</h1>
 <p class="introduction">This document collects <a href="index.html">OpenGLContext</a>-specific
@@ -18,7 +17,9 @@ well.</p>
 description, and the pydoc-generated reference. &nbsp;The NeHe tutorial
 translations should be useful for beginning OpenGL programmers.</p>
 <ul>
-  <li><a href="renderprocess.html"> The Rendering Process</a> -- The
+  <li><a href="tutorials/index.xhtml">Tutorials</a> --
+Documentation for users unfamiliary with OpenGL, Shaders and the like,
+includes the NeHe translations and the Introduction to Shaders tutorials</li><li><a href="renderflat.html"> The Rendering Process</a> -- The
 rendering algorithm(s), including the scenegraph traversal mechanism(s),
 used by OpenGLContext when rendering a scene</li>
   <li><a href="vrml97.html">Using VRML97</a> -- Tutorial on using the
@@ -33,31 +34,7 @@ FontStyle scenegraph nodes, general notes regarding support of text in
 OpenGLContext</li>
   <li><a href="numeric_arrays.html">Using Numeric Python</a> -- Overview
 of using Numeric Python within OpenGLContext (and PyOpenGL), with
-emphasis on the basics of Numeric Python, rather than PyOpenGL specifics.</li><li><a href="tutorials/index.xhtml">Tutorials</a> -- Tutorials for shaders, NeHe translations</li>
-  <li> NeHe Tutorial Translations --&nbsp;OpenGLContext ports of NeHe's
-tutorials #1-8, with discussion of the differences between the original
-and the OpenGLContext version</li>
-  <ul>
-    <li><a href="nehe1.html">1</a> --&nbsp;Basic Context setup and
-operation</li>
-    <li><a href="nehe2.html">2</a> --&nbsp;Drawing polygons with
-glBegin/glEnd and glVertex, introduces the Render customisation point</li>
-    <li><a href="nehe3.html">3</a> -- Adds colour to the previous
-tutorial</li>
-    <li><a href="nehe4.html">4</a> --&nbsp;Adds glRotate-based rotation
-to previous, introduces the&nbsp;OnIdle customisation point</li>
-    <li><a href="nehe5.html">5</a> --&nbsp;Draws "solids" (closed,
-multiple-face shapes)</li>
-    <li><a href="nehe6.html">6</a> --&nbsp;Introduces texture-mapping,
-loading images with PIL and the OnInit customisation point</li>
-    <li><a href="nehe7.html">7</a> --&nbsp;Shows mip-mapping and texture
-filtering, introduces the Lighting customisation point and the
-addEventHandler method</li>
-    <li><a href="nehe8.html">8</a> --&nbsp;Shows simple blending (which
-is used for most OpenGL transparency), introduces the Background
-customisation point</li>
-  </ul>
-  <li><a href="../pydoc/OpenGL.html">OpenGL</a> pydoc -- automatically
+emphasis on the basics of Numeric Python, rather than PyOpenGL specifics.</li><li><a href="../pydoc/OpenGL.html">OpenGL</a> pydoc -- automatically
 generated documentation for the entire OpenGL package. Allows you to
 browse, for example, the extensions current supported (e.g.
 OpenGL.GL.ARB), and the functions wrapped</li>
