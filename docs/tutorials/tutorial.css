@@ -1,19 +1,40 @@
 /* OpenGLContext shader tutorial stylesheet */
 
 body {
-	background-color: black;
-	color: white;
-	font-family: arial, helvetica;
+	background-color: #FFFFFF; 
+	color: #000000;
+	font-family: Arial, Helvetica;
+	margin: 0;
 }
-
-h1 {
+a:link {
+	color: #3333e0;
+	text-decoration: none;
+}
+a:visited {
+	color: #1111aa;
+	text-decoration: none;
+}
+a:active {
+	color: #111133;
+	text-decoration: none;
+}
+.navtable {
+	background-image: url(../images/greypinstripe.png);
+}
+h1,h2,h3 {
+	color: #111144;
+	background-image: url(../images/greypinstripe.png);
 	font-size: 110%;
+}
+h1 {
+	border-top-style: solid; 
+	border-top-width: 1 
 	padding: .25em;
 	margin: 0;
 }
 
 .commentary {
-	background-color: #003000;
+	background-color: #f7f7f7;
 	margin: 2em;
 	padding: 1em;
 	border: thin blue solid;
@@ -24,8 +45,8 @@ h1 {
 }
 
 .code-sample {
+	background-color: #ffffcc; 
 	color: black;
-	background-color: white;
 	white-space: pre;
 	margin-left: 3em;
 	margin-right: 3em;
@@ -45,4 +66,8 @@ a {
 img {
 	float: right;
 	border: thin solid black;
+}
+
+div.path {
+	padding-bottom: 2em;
 }
