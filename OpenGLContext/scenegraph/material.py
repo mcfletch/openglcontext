@@ -74,6 +74,7 @@ class Material(basenodes.Material):
 		for field in protofunctions.getFields( self ):
 			# change to any field requires a recompile
 			holder.depend( self, field )
+#		def dl():
 		dl = displaylist.DisplayList( )
 		dl.start()
 		try:
@@ -85,16 +86,11 @@ class Material(basenodes.Material):
 			renderingData[1,:3] = self.emissiveColor.astype( 'f' )
 			renderingData[2,:3] = self.specularColor.astype( 'f' )
 			renderingData[3,:3] = (diffuseColor*self.ambientIntensity).astype('f')
-			try:
-				pointer = renderingData.ctypes.data
-			except AttributeError, err:
-				import pdb 
-				pdb.set_trace()
-			holder.data = dl
 			map ( glMaterialfv, self.faces, self.datamap, renderingData )
 			glMaterialf( self.faces[0], GL_SHININESS, self.shininess*128 )
 		finally:
 			dl.end()
+		holder.data = dl
 		return holder.data
 
 	def sortKey( self, mode ):
