@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+<title>Scenegraph NURBs: RedBook Trim (with Scenegraph)</title>
+    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+</head>
+<body>
+<table width="100%" class="navtable"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="molehill.xhtml">Previous</a></td>
+	<td align="center">Scenegraph NURBs: RedBook Trim (with Scenegraph)</td>
+	<td align="right"><a href="index.xhtml">Index</a></td>
+	</tr>
+</thead></table>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title">RedBook Trim (with Scenegraph)</h1>
+	<div class="paragraph">
+	<img src="nurbsobject.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+</div>
+	<div class="paragraph">Nurbs object test (draw trimmed NURBs surface geometry)</div>
+	<div class="paragraph">The test data arrays are taken from the RedBook trim demo
+</div>
+</div>
+	<div class="code-sample">from OpenGLContext import testingcontext
+BaseContext, MainFunction = testingcontext.getInteractive()
+from OpenGL.GL import *
+from OpenGLContext.arrays import *
+import string, time
+from OpenGLContext.scenegraph.basenodes import *
+from OpenGLContext.scenegraph import nurbs
+class TestContext( BaseContext ):
+	"""RedBook Trimmed Nurbs Demo"""
+</div>
+	<div class="commentary">
+	<div class="paragraph">Setup a reasonably close camera.</div>
+</div>
+	<div class="code-sample">	initialPosition = (0,0,3)
+	def buildControlPoints( self ):
+		"""Build control points for the main surface"""
+</div>
+	<div class="commentary">
+	<div class="paragraph">We create a single 4x4x3 grid that holds the control 
+		points for the main surface.  Basically we're just creating 
+		a "mound" that tapers off on the edges here.
+</div>
+</div>
+	<div class="code-sample">		ctlpoints = zeros( (4,4,3), 'd')
+		for u in range( 4 ):
+			for v in range( 4):
+				ctlpoints[u][v][0] = 2.0*(u - 1.5)
+				ctlpoints[u][v][1] = 2.0*(v - 1.5);
+				if (u == 1 or u ==2) and (v == 1 or v == 2):
+					ctlpoints[u][v][2] = 3.0;
+				else:
+					ctlpoints[u][v][2] = -3.0;
+		return ctlpoints
+	def OnInit( self ):
+		"""Create the scenegraph"""
+		print """You should see a multi-coloured Nurbs surface
+with an ice-cream-cone-shaped trimming curve
+(a hole cut out of it)."""
+</div>
+	<div class="commentary">
+	<div class="paragraph">GLU Nurbs trims via contours which are applied in the 
+		same was as tessellation, i.e. your outermost contour will 
+		trim off the edges of your nurbs, while inner contours will 
+		cut "holes" in to the Nurbs.  Since we don't want to trim off 
+		the edge of the hill, we define a contour that includes all 
+		of the surface.  The coordinates are in the parametric 
+		coordinate system, so 0.0 is the start and 1.0 is the finish.
+</div>
+</div>
+	<div class="code-sample">		trimmingContour = [
+			Contour2D(
+				children = [
+					Polyline2D(
+						# outside edge
+						point = array(  [
+							[0.0, 0.0],
+							[1.0, 0.0],
+							[1.0, 1.0],
+							[0.0, 1.0],
+							[0.0, 0.0],
+						], 'd')
+					),
+				],
+			),
+			Contour2D(
+				children = [
+					Polyline2D(
+						# inside edge
+						point = array([
+							[0.75, 0.5],
+							[0.5, 0.25],
+							[0.25, 0.5],
+						],'d')
+					),
+					NurbsCurve2D(
+						knot = array( [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], 'd'),
+						controlPoint = array( [
+							[0.25, 0.5],
+							[0.25, 0.75],
+							[0.75, 0.75],
+							[0.75, 0.5],
+						],'d')
+					)
+				]
+			),
+		]
+		knots = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+</div>
+	<div class="commentary">
+	<div class="paragraph">The color array is indexed to the control-point array 
+		when/if it is provided.  Here we make a progression of colours 
+		across the surface</div>
+</div>
+	<div class="code-sample">
+		color = zeros( (4,4,3), 'd' )
+		color[0,:,:] = (1.,0,0)
+		color[1,:,:] = (.66,.33,0)
+		color[2,:,:] = (.33,.66,0)
+		color[3,:,:] = (0,1.,0)
+		self.shape = Shape(
+			appearance = Appearance(
+				material = Material(),
+			),
+			geometry = TrimmedSurface(
+				surface = NurbsSurface(
+					controlPoint = self.buildControlPoints(),
+					color = color,
+					vDimension = 4,
+					uDimension = 4,
+					uKnot = knots,
+					vKnot = knots,
+				),
+				trimmingContour = trimmingContour,
+			),
+		)
+		self.sg = sceneGraph(
+			children = [ 
+				Transform(
+					scale = [.5,.5,.5],
+					rotation = [1,0,0,-.5],
+					children = [self.shape],
+				),
+			],
+		)
+if __name__ == "__main__":
+	MainFunction ( TestContext)
+</div>
+<table width="100%" class="navtable"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="molehill.xhtml">Previous</a></td>
+	<td align="center">Scenegraph NURBs: RedBook Trim (with Scenegraph)</td>
+	<td align="right"><a href="index.xhtml">Index</a></td>
+	</tr>
+	<tr class="meta-links">
+		<td colspan="3">
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
+		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
+		</td>
+	</tr>
+</thead></table>
+</body>
+</html>

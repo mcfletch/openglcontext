@@ -128,7 +128,7 @@ NeHe tutorials."""
 	def loadImage( self, imageName = "nehe_wall.bmp" ):
 		"""Load an image file as a 2D texture using PIL
 		"""
-		from Image import open
+		from PIL.Image import open
 		im = texture.Texture( open(imageName) )
 		return im
 	def setupTexture( self ):
