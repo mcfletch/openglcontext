@@ -63,11 +63,14 @@ a {
 	font-size: 50%;
 }
 
-img {
+img.wiki {
 	float: right;
 	border: thin solid black;
 }
 
 div.path {
 	padding-bottom: 2em;
+}
+.meta-links td {
+	text-align: center;
 }
