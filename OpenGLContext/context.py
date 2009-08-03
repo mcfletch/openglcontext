@@ -295,13 +295,13 @@ class Context(object):
 		else:
 			width, height = self.getViewPort()
 			glPixelStorei(GL_PACK_ALIGNMENT, 1)
-			data = glReadPixelsub(0, 0, width, height, GL_RGBA)
+			data = glReadPixelsub(0, 0, width, height, GL_RGB)
 			if hasattr( data, 'tostring' ):
 				string = data.tostring()
 			else:
 				string = data
 			image = Image.fromstring( 
-				'RGBA', 
+				'RGB', 
 				(int(width),int(height)), 
 				string 
 			)
