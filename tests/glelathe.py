@@ -9,6 +9,7 @@ from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from math import pi
 from OpenGLContext.scenegraph import extrusions
+from OpenGLContext.scenegraph.basenodes import *
 
 contour = array([
 	(0,0), (1,0),
@@ -23,7 +24,6 @@ normals = array([
 
 	
 
-from OpenGLContext.scenegraph.basenodes import *
 class TestContext( BaseContext ):
 	def OnInit( self ):
 		"""Load the image on initial load of the application"""
@@ -32,7 +32,9 @@ through a circle.  A drill-like screw should penetrate the
 center of the washer.  Around the washer should be a cone-
 shaped "spring", which should extend some distance downward."""
 		appearance = Appearance(
-			material=Material(),
+			material=Material(
+				shininess = 1.0,
+			),
 			texture = ImageTexture(
 				url = "wrls/irradiation.jpg",
 			),
@@ -43,49 +45,76 @@ shaped "spring", which should extend some distance downward."""
 		self.sg = sceneGraph(
 			children = [
 				Transform(
-					rotation = (1,0,0, 1.9),
-					scale = (.8,.8,.8),
+					DEF = 'Screw-Trans',
 					children = [
-						Shape(
-							geometry = extrusions.Lathe(
-								contour = contour,
-								normals = normals,
-								startRadius = 1.5,
-								textureMode = 'cylinder vertex',
-							),
-							appearance = appearance,
-						),
-						Shape(
-							geometry = extrusions.Screw(
-								contour = contour,
-								normals = normals,
-								startZ = -5,
-								endZ = 5,
-								totalAngle = 5 * pi,
-								textureMode = 'flat normal model',
-							),
-							appearance = Appearance(
-								material=Material(),
-							),
-						),
-						Shape(
-							geometry = extrusions.Spiral(
-								contour = contour,
-								normals = normals,
-								startRadius = 3,
-								deltaRadius = 1.5,
-								startZ = 0,
-								deltaZ = 1.5,
-								totalAngle = 8 * pi,
-								textureMode = 'cylinder vertex model',
-							),
-							appearance = appearance,
+						Transform(
+							rotation = (1,0,0, 1.57),
+							scale = (.8,.8,.8),
+							children = [
+								Shape(
+									geometry = extrusions.Lathe(
+										contour = contour,
+										normals = normals,
+										startRadius = 1.5,
+										textureMode = 'cylinder vertex',
+									),
+									appearance = appearance,
+								),
+								Shape(
+									geometry = extrusions.Screw(
+										contour = contour,
+										normals = normals,
+										startZ = -5,
+										endZ = 5,
+										totalAngle = 5 * pi,
+										textureMode = 'flat normal model',
+									),
+									appearance = Appearance(
+										material=Material(),
+									),
+								),
+								Shape(
+									geometry = extrusions.Spiral(
+										contour = contour,
+										normals = normals,
+										startRadius = 3,
+										deltaRadius = 1.5,
+										startZ = 0,
+										deltaZ = 1.5,
+										totalAngle = 8 * pi,
+										textureMode = 'cylinder vertex model',
+									),
+									appearance = appearance,
+								),
+							],
 						),
 					],
+				),
+				OrientationInterpolator(
+					DEF = 'Rot',
+					key = [0,.25,.5,.75,1.0],
+					keyValue = [ 
+						0,1,0,0,  
+						0,1,0,1.57,  
+						0,1,0,3.14159,
+						0,1,0,4.71,
+						0,1,0,0,
+						],
+				),
+				TimeSensor(
+					DEF = 'T',
+					cycleInterval = 30.0,
+					loop = True,
 				),
 				PointLight( location = (20,10,4) ),
 				PointLight( location = (-20,10,-4), color=(.3,.3,.5) ),
 			],
+		)
+		self.sg.addRoute( 
+			'T','fraction_changed','Rot','set_fraction' 
+		)
+		self.sg.addRoute( 
+			'Rot','value_changed','Screw-Trans','set_rotation'
 		)
 	
 

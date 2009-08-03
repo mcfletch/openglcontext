@@ -118,3 +118,5 @@ for suffix in ('1i','2i','3i','4i'):
 Node( 'GLSLShader','OpenGLContext.scenegraph.shaders.GLSLShader' )
 Node( 'GLSLObject','OpenGLContext.scenegraph.shaders.GLSLObject' )
 Node( 'Shader','OpenGLContext.scenegraph.shaders.Shader' )
+Node( 'ROUTE','vrml.route.ROUTE' )
+Node( 'IS','vrml.route.IS' )

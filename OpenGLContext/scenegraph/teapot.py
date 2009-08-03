@@ -9,6 +9,10 @@ from vrml import node, field, fieldtypes
 
 class Teapot( nodetypes.Geometry, node.Node ):
 	"""Simple Teapot geometry (glutSolidTeapot)
+	
+	Note: this teapot is *not* optimized with display-lists,
+	the raw glutSolidTeapot/glutWireTeapot calls are used 
+	for each frame!
 	"""
 	PROTO = 'Teapot'
 	size = field.newField( 'size','SFFloat',1,1.0 )
