@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Specular Highlights, Indexed Rendering, Directional Lighting=
+'''=Specular Highlights, Indexed Geometry, Directional Lighting=
 
 [shader_6.py-screen-0001.png Screenshot]
 

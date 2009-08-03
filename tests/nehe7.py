@@ -1,47 +1,32 @@
 #! /usr/bin/env python
-'''Texture Filters, Basic Lighting & Keyboard Control
+'''=Texture Filters, Lighting and Keyboard Control (NeHe 7)=
 
-Note: keys are different from tutorial, arrows move, pageup/pagedown control
-speed of rotation
+[nehe7.py-screen-0001.png Screenshot]
+[nehe7.py-screen-0002.png Screenshot]
 
-Based on:
-	OpenGL Tutorial #7.
+This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=07 NeHe7 tutorial] by Jeff Molofee and assumes that you are reading along 
+with the tutorial, so that only changes from the tutorial are noted 
+here.
 
-	Project Name: Jeff Molofee's OpenGL Tutorial
-
-	Project Description: Texture Filters, Basic Lighting & Keyboard Control
-
-	Authors Name: Jeff Molofee (aka NeHe)
-
-	Authors Web Site: nehe.gamedev.net
-
-	COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee
-
-		If you plan to put this program on your web page or a cdrom of
-		any sort, let me know via email, I'm curious to see where
-		it ends up :)
-
-			If you use the code for your own projects please give me credit,
-			or mention my web site somewhere in your program or it's docs.
+Note that key-bindings are different from the tutorial:
+arrows move, pageup/pagedown control speed of rotation
 '''
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
 import time
 from Image import open
+'''The tutorial uses the GLU function gluBuild2DMipmaps, so we make the
+GLU functions available and continue with our normal setup routines.'''
 from OpenGL.GLU import *
 from OpenGL.constants import GLfloat_3,GLfloat_4
 
 class TestContext( BaseContext ):
-	"""New customization point: Lights, New feature: keyboard event handlers
-
-	Context.Lights is called by the default rendering passes
-	if there is no scenegraph present.
-
+	"""Texture Filters, Lighting, Keyboard Control"""
+	'''
 	Uses the addEventHandler method for registering new event handlers
 	for given keyboard and mouse events.
-	"""
-	
+	'''
 	usage ="""Demonstrates filter functions:
 	press 'f' to toggle filter functions
 	press 'l' to toggle lighting
@@ -51,15 +36,21 @@ class TestContext( BaseContext ):
 	initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
 	def OnInit( self ):
 		"""Load the image on initial load of the application"""
+		'''As required by the tutorial, we load a single image as 3
+		different textures, see the loadImages method below for the 
+		new code.  The OnInit handler loads the textures and stores
+		their textureIDs as a list of integers.  It then does some 
+		basic instance setup bookkeeping.'''
 		self.imageIDs = self.loadImages()
 		self.currentFilter = 0 # index into imageIDs
 		self.lightsOn = 1 # boolean
 		self.currentZOffset = -6
 		self.rotationCycle = 8.0
 		
-		## Adds event handlers for the given keys
-		# Note that these are different bindings from the tutorial,
-		# as you can wander around with the arrow keys already...
+		'''Adds event handlers for the given keys
+		Note that these are different bindings from the tutorial,
+		as you can wander around with the arrow keys already...
+		'''
 		self.addEventHandler(
 			'keypress', name = 'f', function = self.OnFilter
 		)
@@ -75,6 +66,10 @@ class TestContext( BaseContext ):
 			state=0,
 		)
 		print self.usage
+		'''Here we are setting the lighting parameters during init,
+		as they do not change for the entire run of the application,
+		normally code would set these values every time they change,
+		often once per render-pass.'''
 		glLightfv( GL_LIGHT1, GL_AMBIENT, GLfloat_4(0.2, .2, .2, 1.0) );
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, GLfloat_3(.8,.8,.8));
 		glLightfv(GL_LIGHT1, GL_POSITION, GLfloat_4(-2,0,3,1) );
@@ -124,9 +119,13 @@ class TestContext( BaseContext ):
 		)
 		print 'finished mip-mapped'
 		return IDs
-
+	'''Context.Lights is called by the default rendering passes
+	iff there is no scenegraph present.  You can use it to set up 
+	your entire lighting setup, or as here, simply enable the 
+	appropriate pre-configured lights.
+	'''
 	def Lights (self, mode = 0):
-		''' Setup the global lights for your scene, called by context before rendering'''
+		"""Setup the global (legacy) lights"""
 		if self.lightsOn:
 			glEnable( GL_LIGHTING )
 			glEnable(GL_LIGHT1);
@@ -142,8 +141,13 @@ class TestContext( BaseContext ):
 		# re-select our texture, could use other generated textures
 		# if we had generated them earlier...
 		glBindTexture(GL_TEXTURE_2D, self.imageIDs[self.currentFilter])
-		
-		glRotated( time.time()%(self.rotationCycle)/self.rotationCycle * -360, 1,0,0)
+		'''Animation based on our rotation cycle, note that if we 
+		change the rotation cycle there is a discontinuity where the 
+		current rotation "jumps" to the new calculated angle.'''
+		glRotated( 
+			time.time()%(self.rotationCycle)/self.rotationCycle * -360, 
+			1,0,0
+		)
 		self.drawCube()
 
 	### Callback-handlers
@@ -167,8 +171,9 @@ class TestContext( BaseContext ):
 	def OnSlowDown( self, event ):
 		"""Handles key event to slowdown"""
 		self.rotationCycle = self.rotationCycle * 2.0
-		
-			
+	'''The drawCube method has only one minor change, the addition 
+	of Normals, which allow the faces to interact with the 
+	newly-defined lighting.'''
 	def drawCube( self ):
 		"Draw a cube with both normals and texture coordinates"
 		glBegin(GL_QUADS);
@@ -212,4 +217,16 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
+'''
+Author: [http://nehe.gamedev.net Jeff Molofee (aka NeHe)]
 
+COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee
+
+If you plan to put this program on your web page or a cdrom of
+any sort, let me know via email, I'm curious to see where
+it ends up :)
+
+If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program 
+or it's docs.
+'''

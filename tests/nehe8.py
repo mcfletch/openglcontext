@@ -1,29 +1,13 @@
 #! /usr/bin/env python
-'''Blending modes in OpenGL
+'''=Blending Modes (NeHe 8)=
 
-Based on:
-	OpenGL Tutorial #8.
+[nehe8.py-screen-0001.png Screenshot]
+[nehe8.py-screen-0002.png Screenshot]
+[nehe8.py-screen-0003.png Screenshot]
 
-	Project Name: OpenGL Tutorial By Tom Stanis
-
-	Project Description: Blending In OpenGL
-
-	Authors Name: Tom Stanis / Jeff Molofee (aka NeHe)
-
-	Authors Web Site: www.hypercosm.com (Tom's)
-					  nehe.gamedev.net (NeHe's)
-
-	COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee / Tom Stanis
-
-		If you plan to put this program on your web page or a cdrom of
-		any sort, let me know via email, I'm curious to see where
-		it ends up :)
-
-			If you use the code for your own projects please give us credit,
-			or mention our web sites somewhere in your program or it's docs.
-
-	* Modified by NeHe Feb 2000
-
+This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=08 NeHe8 tutorial] by Jeff Molofee and assumes that you are reading along 
+with the tutorial, so that only changes from the tutorial are noted 
+here.
 '''
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
@@ -35,13 +19,7 @@ import time
 from Image import open
 
 class TestContext( BaseContext ):
-	"""New customization point: Background
-
-	Background, like Lights is called by the default
-	RenderMode.SetupBindables method. It is used here
-	because the blending mode used by the tutorial
-	will not work unless the background is black.
-	"""
+	"""Blending modes demonstration"""
 	usage ="""Demonstrates blending functions:
 	press 'b' to toggle blending functions
 	press 'f' to toggle filter functions
@@ -74,15 +52,19 @@ class TestContext( BaseContext ):
 			'keyboard', name = '<pagedown>', function = self.OnSlowDown,
 			state=0,
 		)
+		'''Our first change from the NeHe7 tutorial code, and the 
+		only one in OnInit is to bind a handler for changing the blending
+		functions.'''
 		self.addEventHandler(
 			'keypress', name = 'b', function = self.OnBlendToggle
 		)
 		print self.usage
+		'''The Lights setup and the Lights method are identical to 
+		the code from the NeHe7 translation'''
 		glLightfv( GL_LIGHT1, GL_AMBIENT, GLfloat_4(0.2, .2, .2, 1.0) );
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, GLfloat_3(.8,.8,.8));
 		glLightfv(GL_LIGHT1, GL_POSITION, GLfloat_4(-2,0,3,1) );
 		
-
 	def Lights (self, mode = 0):
 		'''Setup the global lights for your scene'''
 		if self.lightsOn:
@@ -93,31 +75,45 @@ class TestContext( BaseContext ):
 			glDisable( GL_LIGHTING )
 			glDisable(GL_LIGHT1);
 			glDisable(GL_LIGHT0);
-	def Background( self, mode = 0):
+	'''New customization point: Background
+
+	Background, like Lights is called by the default
+	RenderMode.SetupBindables method. It is used here
+	because the blending mode used by the tutorial
+	will not work unless the background is black.
+	'''
+	def Background( self, mode):
 		"""Demo's use of GL_ONE assumes that background is black"""
 		if mode.passCount == 0:
 			glClearColor(0,0,0,0)
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
-	def Render( self, mode = 0):
+	def Render( self, mode):
 		BaseContext.Render( self, mode )
 		glTranslatef(1.5,0.0,self.currentZOffset);
+		'''We don't want to filter out back-facing faces'''
 		glDisable( GL_CULL_FACE )
-		glRotated( time.time()%(self.rotationCycle)/self.rotationCycle * -360, 1,0,0)
+		glRotated( 
+			time.time()%(self.rotationCycle)/self.rotationCycle * -360, 
+			1,0,0
+		)
 		self.blend()
 		
 		glEnable(GL_TEXTURE_2D)
-		# re-select our texture, could use other generated textures
-		# if we had generated them earlier...
-		glBindTexture(GL_TEXTURE_2D, self.imageIDs[self.currentFilter])   # 2d texture (x and y size)
+		'''Re-select our texture, could use other generated textures
+		if we had generated them earlier...'''
+		glBindTexture(GL_TEXTURE_2D, self.imageIDs[self.currentFilter])
 		self.drawCube()
 		glDisable(GL_TEXTURE_2D)
-
+	'''There are multiple blending mechanisms that could be used, the 
+	original tutorial uses the first value declared here.  The second 
+	is what you would use to render back-to-front-sorted triangles to 
+	appear transluscent.  The third is just to show the effect.'''
 	BLENDSTYLES = [
 		(),
-		(GL_SRC_ALPHA, GL_ONE), # what the demo uses originally
-		(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), # this is what should be used with sorted triangles
-		(GL_SRC_ALPHA, GL_DST_ALPHA), # just for kicks...
+		(GL_SRC_ALPHA, GL_ONE),
+		(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA),
+		(GL_SRC_ALPHA, GL_DST_ALPHA),
 	]
 	def blend( self ):
 		"""Choose and enable blending mode"""
@@ -130,7 +126,7 @@ class TestContext( BaseContext ):
 			glDisable(GL_DEPTH_TEST);
 			glBlendFunc( * self.BLENDSTYLES[ self.blendOn] )
 			glDepthMask( 0 ) # prevent updates to the depth buffer...
-		
+	'''The rest of the tutorial matches the NeHe7 translation.'''
 	def loadImages( self, imageName = "nehe_glass.bmp" ):
 		"""Load an image from a file using PIL,
 		produces 3 textures to demo filter types
@@ -172,9 +168,7 @@ class TestContext( BaseContext ):
 		self.triggerRedraw(1)
 		return 1
 	def OnBlendToggle( self, event ):
-		self.blendOn = self.blendOn + 1
-		if self.blendOn == len( self.BLENDSTYLES ):
-			self.blendOn = 0
+		self.blendOn = (self.blendOn + 1)%len( self.BLENDSTYLES )
 		print 'Blend now %s, %s'% [
 			("None", "None"),
 			("GL_SRC_ALPHA", "GL_ONE"),
@@ -197,8 +191,6 @@ class TestContext( BaseContext ):
 		"""Handles key event to slowdown"""
 		print 'slow down'
 		self.rotationCycle = self.rotationCycle * 2.0
-
-			
 	def drawCube( self ):
 		"Draw a cube with both normals and texture coordinates"
 		glBegin(GL_QUADS);
@@ -242,3 +234,17 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	MainFunction(TestContext)
+'''
+Author: [http://nehe.gamedev.net Jeff Molofee (aka NeHe)]
+Author: [http://www.hypercosm.com Tom Stanis]
+
+COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee / Tom Stanis
+
+If you plan to put this program on your web page or a cdrom of
+any sort, let me know via email, I'm curious to see where
+it ends up :)
+
+If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program 
+or it's docs.
+'''
