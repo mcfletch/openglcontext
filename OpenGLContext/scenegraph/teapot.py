@@ -3,7 +3,7 @@ from vrml import cache
 from OpenGLContext.arrays import array
 from OpenGL.arrays import vbo
 from OpenGL.GL import *
-from OpenGL.GLUT import glutSolidTeapot
+from OpenGL.GLUT import glutSolidTeapot, glutWireTeapot
 from vrml.vrml97 import nodetypes
 from vrml import node, field, fieldtypes
 
@@ -12,7 +12,7 @@ class Teapot( nodetypes.Geometry, node.Node ):
 	"""
 	PROTO = 'Teapot'
 	size = field.newField( 'size','SFFloat',1,1.0 )
-	wire = field.newField( 'solid','SFBool',1,False)
+	solid = field.newField( 'solid','SFBool',1,True)
 	def render (
 			self,
 			visible = 1, # can skip normals and textures if not
@@ -24,7 +24,7 @@ class Teapot( nodetypes.Geometry, node.Node ):
 		"""Render the Teapot"""
 		glFrontFace(GL_CW)
 		try:
-			if self.wire:
+			if not self.solid:
 				glutWireTeapot( self.size )
 			else:
 				glutSolidTeapot( self.size )
