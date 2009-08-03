@@ -9,6 +9,16 @@ from distutils.core import setup
 import sys, os
 sys.path.insert(0, '.' )
 
+def find_version( ):
+	for line in open( os.path.join(
+		'OpenGLContext','__init__.py',
+	)):
+		if line.strip().startswith( '__version__' ):
+			return eval(line.strip().split('=')[1].strip())
+	raise RuntimeError( """No __version__ = 'string' in __init__.py""" )
+
+version = find_version()
+
 def is_package( path ):
 	return os.path.isfile( os.path.join( path, '__init__.py' ))
 def find_packages( root ):
@@ -45,7 +55,7 @@ used to maintain and extend PyOpenGL.
 	### Now the actual set up call
 	setup (
 		name = "OpenGLContext",
-		version = "2.1.0a4",
+		version = version,
 		description = "Demonstration and testing contexts for PyOpenGL/OpenGL-ctypes",
 		author = "Mike C. Fletcher",
 		author_email = "mcfletch@users.sourceforge.net",
