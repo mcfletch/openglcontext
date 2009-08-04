@@ -11,4 +11,4 @@ dist
 *.~?~
 core
 core*
-OpenGLContext/resources/*.py
+pydoc/*.html
