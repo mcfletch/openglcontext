@@ -20,6 +20,8 @@ XXX currently there's no way to override a built-in node, that could
 be provided by having e.g. a precedence declaration for the nodes,
 but at the moment that looks too messy to bother with.
 """
+__all__ = []
+PROTOTYPES = {}
 
 def _load( ):
 	"""Load the registered node-types from package resource declarations"""
@@ -34,6 +36,8 @@ def _load( ):
 			logs.context_log.warn( """Unable to load node implementation for %s: %s""", name, err )
 		else:
 			globals()[ name ] = classObject
+			PROTOTYPES[ name ] = classObject
+			__all__.append( name )
 			logs.context_log.debug( """Loaded node implementation for %s: %s""", name, classObject )
 
 _load()
