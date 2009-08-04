@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+<title>Scenegraph Nodes: Particle System (PointSet)</title>
+    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+</head>
+<body>
+<table width="100%" class="navtable"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="nurbsobject.xhtml">Previous</a></td>
+	<td align="center">Scenegraph Nodes: Particle System (PointSet)</td>
+	<td align="right"><a href="index.xhtml">Index</a></td>
+	</tr>
+</thead></table>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title">Particle System (PointSet)</h1>
+	<div class="paragraph">
+	<img src="particles_simple.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<img src="particles_simple.py-screen-0002.png" alt="Screenshot" class=" wiki" />
+	<img src="particles_simple.py-screen-0003.png" alt="Screenshot" class=" wiki" />
+</div>
+	<div class="paragraph">This tutorial demonstrates the creation of a "particle system"
+which in this case creates a crude simulation of a water fountain.
+We use Numpy to do the heavy lifting of the actual updates to 
+the particles.  We use the PointSet object's ability to render 
+using the applied texture as a sprite (GL.ARB.point_parameters).
+</div>
+</div>
+	<div class="code-sample">from OpenGLContext import testingcontext
+BaseContext, MainFunction = testingcontext.getInteractive()
+from OpenGL.GL import *
+from OpenGLContext.arrays import *
+from OpenGLContext.events.timer import Timer
+import random
+from OpenGLContext.scenegraph.basenodes import *
+try:
+	import RandomArray
+except ImportError, err:
+	RandomArray = None
+try:
+	from OpenGLContext.scenegraph.text import glutfont
+except ImportError:
+	glutfont = None
+</div>
+	<div class="commentary">
+	<div class="paragraph">These are the parameters we're going to use to create our 
+simulation.  Particle systems would normally encapsulate these 
+in a node somewhere, but we want to see what we're doing.</div>
+	<ul class="">
+	<li class="">gravity -- applied to each in-play droplet </li>
+	<li class="">emitter -- location from which to emit </li>
+	<li class="">count -- number of points allocated </li>
+	<li class="">initialColor -- initial colour for each droplet </li>
+	<li class="">pointSize -- how big the droplets are </li>
+	<li class="">colorVelocities -- change in colour over time </li>
+	<li class="">initialVelocityVector -- nozzle speed of the droplets</li>
+</ul>
+</div>
+	<div class="code-sample">gravity = -9.8 #m/(s**2)
+emitter = (0,0,0)
+count = 3000
+initialColor = (1,.9,.9)
+pointSize = 1.5
+colorVelocities = [1,.9,.7]
+initialVelocityVector = array( [1.5,20.,1.5], 'd')
+class TestContext( BaseContext ):
+	"""Particle testing code context object"""
+	initialPosition = (0,7,20)
+	lastFraction = 0.0
+	def OnInit( self ):
+		"""Do all of our setup functions..."""
+		BaseContext.OnInit( self )
+		print """You should see something that looks vaguely like
+a water-fountain, with individual droplets starting
+blue and turning white."""
+</div>
+	<div class="commentary">
+	<div class="paragraph">The PointSet node will do the actual work of rendering 
+		our points into the GL.  We start it off with all points 
+		at the emitter location and with initial colour.</div>
+</div>
+	<div class="code-sample">		self.points = PointSet(
+			coord = Coordinate(
+				point = [emitter]*count
+			),
+			color = Color(
+				color = [initialColor]*count
+			),
+			minSize = 7.0,
+			maxSize = 10.0,
+			attenuation = [0,1,0],
+		)
+</div>
+	<div class="commentary">
+	<div class="paragraph">We use a simple Appearance node to apply a texture to the 
+		PointSet, the PointSet will use this to enable sprite-based 
+		rendering if the extension(s) are available.</div>
+</div>
+	<div class="code-sample">		self.shape = Shape(
+			appearance = Appearance(
+				texture = ImageTexture( url='_particle.png' ),
+			),
+			geometry = self.points,
+		)
+		self.text = Text(
+			string = ["""Current multiplier: 1.0"""],
+			fontStyle = FontStyle(
+				family='SANS', format = 'bitmap',
+				justify = 'MIDDLE',
+			),
+		)
+		self.sg = sceneGraph( children = [
+			self.shape,
+			SimpleBackground( color = (.5,.5,.5),),
+			Transform(
+				translation = (0,-1,0),
+				children = [
+					Shape(
+						geometry = self.text
+					),
+				],
+			),
+		] )
+		self.velocities = array([ (0,0,0)]*count, 'd')
+		self.colorVelocities = array( colorVelocities, 'd')
+		print '  &lt;s> make time pass more slowly'
+		print '  &lt;f> make time pass faster'
+		print '  &lt;h> higher'
+		print '  &lt;l> (L) lower'
+		print '  &lt;[> smaller drops'
+		print '  &lt;]> larger drops'
+		self.addEventHandler( "keypress", name="s", function = self.OnSlower)
+		self.addEventHandler( "keypress", name="f", function = self.OnFaster)
+		self.addEventHandler( "keypress", name="h", function = self.OnHigher)
+		self.addEventHandler( "keypress", name="l", function = self.OnLower)
+		self.addEventHandler( "keypress", name="]", function = self.OnLarger)
+		self.addEventHandler( "keypress", name="[", function = self.OnSmaller)
+</div>
+	<div class="commentary">
+	<div class="paragraph">First timer will provide the general simulation heartbeat.</div>
+</div>
+	<div class="code-sample">		self.time = Timer( duration = 1.0, repeating = 1 )
+		self.time.addEventHandler( "fraction", self.OnTimerFraction )
+		self.time.register (self)
+		self.time.start ()
+</div>
+	<div class="commentary">
+	<div class="paragraph">Second timer provides a cycle on which the fountain 
+		reduces/increases the speed at which droplets are started.</div>
+</div>
+	<div class="code-sample">		self.time2 = Timer( duration = 5.0, repeating = 1 )
+		self.time2.addEventHandler( "cycle", self.OnLower )
+		self.time2.register (self)
+		self.time2.start ()
+	### Timer callback
+	def OnTimerFraction( self, event ):
+		"""Perform the particle-system simulation calculations"""
+		points = self.points.coord.point
+		colors = self.points.color.color
+</div>
+	<div class="commentary">
+	<div class="paragraph">Our calculations are going to need to know how much time 
+		has passed since our last event.  This is complicated by the 
+		fact that a "fraction" event is cyclic, returning to 0.0 after 
+		1.0.</div>
+</div>
+	<div class="code-sample">		f = event.fraction()
+		if f &lt; self.lastFraction:
+			f += 1.0
+		deltaFraction = (f-self.lastFraction)
+		self.lastFraction = event.fraction()
+</div>
+	<div class="commentary">
+	<div class="paragraph">If we have received an event which is so soon after a 
+		previous event as to have a 0.0s delta (this does happen 
+		on some platforms), then we need to ignore this simulation 
+		tick.</div>
+</div>
+	<div class="code-sample">		if not deltaFraction:
+			return
+</div>
+	<div class="commentary">
+	<div class="paragraph">Each droplet has been moving at their current velocity 
+		for deltaFraction seconds, update their position with the 
+		results of this speed * time.  You'll note that this is not 
+		precisely accurate for a body under acceleration, but it 
+		makes for easy calculations.  Two machines running 
+		the same simulation will get *different* results here, as 
+		a faster machine will apply acceleration more frequently,
+		resulting in a faster total velocity.</div>
+</div>
+	<div class="code-sample">		points = points + (self.velocities*deltaFraction)
+</div>
+	<div class="commentary">
+	<div class="paragraph">We also cycle the droplet's colour value, though with 
+		the applied texture it's somewhat hard to see.</div>
+</div>
+	<div class="code-sample">		colors = colors + (self.colorVelocities*deltaFraction)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Now, apply acceleration to the current velocities such 
+		that the droplets have a new velocity for the next simulation 
+		tick.</div>
+</div>
+	<div class="code-sample">		self.velocities[:,1] = self.velocities[:,1] + (gravity * deltaFraction)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Find all droplets which have "retired" by falling below the 
+		y==0.0 plane.</div>
+</div>
+	<div class="code-sample">		below = less_equal( points[:,1], 0.0)
+		dead = nonzero(below)
+		if isinstance( dead, tuple ):
+			# weird numpy change here...
+			dead = dead[0]
+		if len(dead):
+</div>
+	<div class="commentary">
+	<div class="paragraph">Move all dead droplets back to the emitter.</div>
+</div>
+	<div class="code-sample">			def put( a, ind, b ):
+				for i in ind:
+					a[i] = b
+			put( points, dead, emitter)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Re-spawn up to half of the droplets...</div>
+</div>
+	<div class="code-sample">			dead = dead[:(len(dead)//2)+1]
+			if len(dead):
+</div>
+	<div class="commentary">
+	<div class="paragraph">Reset color to initialColor, as we are sending out 
+				these droplets right now.</div>
+</div>
+	<div class="code-sample">				put( colors, dead, initialColor)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Assign slightly randomized versions of our initial 
+				velocity for each of the re-spawned droplets.  Replace 
+				the current velocities with the new velocities.</div>
+</div>
+	<div class="code-sample">				if RandomArray:
+					velocities = (RandomArray.random( (len(dead),3) ) + [-.5, 0.0, -.5 ]) * initialVelocityVector
+				else:
+					velocities = [
+						array( (random.random()-.5, random.random(), random.random()-.5), 'f')* initialVelocityVector
+						for x in xrange(len(dead))
+					]
+				def copy( a, ind, b ):
+					for x in xrange(len(ind)):
+						i = ind[x]
+						a[i] = b[x]
+				copy( self.velocities, dead, velocities)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Now re-set the point/color fields so that the nodes notice 
+		the array has changed and they update the GL with the changed 
+		values.</div>
+</div>
+	<div class="code-sample">		self.points.coord.point = points
+		self.points.color.color = colors
+</div>
+	<div class="commentary">
+	<div class="paragraph">Set up keyboard callbacks</div>
+</div>
+	<div class="code-sample">
+	def OnSlower( self, event ):
+		self.time.internal.multiplier = self.time.internal.multiplier /2.0
+		if glutfont:
+			self.text.string = [ "Current multiplier: %s"%( self.time.internal.multiplier,)]
+		else:
+			print "slower",self.time.internal.multiplier
+	def OnFaster( self, event ):
+		self.time.internal.multiplier = self.time.internal.multiplier * 2.0
+		if glutfont:
+			self.text.string = [ "Current multiplier: %s"%( self.time.internal.multiplier,)]
+		else:
+			print "faster",self.time.internal.multiplier
+	def OnHigher( self, event ):
+		global initialVelocityVector
+		initialVelocityVector *= [1,1.25,1]
+	def OnLower( self, event ):
+		global initialVelocityVector
+		if hasattr(event,'count') and not event.count() % 4:
+			initialVelocityVector[:] = [1.5,20,1.5]
+		else:
+			initialVelocityVector /= [1,1.5,1]
+	def OnLarger( self, event ):
+		self.points.minSize += 1.0
+		self.points.maxSize += 1.0
+	def OnSmaller( self, event ):
+		self.points.minSize = max((0.0,self.points.minSize-1.0))
+		self.points.maxSize = max((1.0,self.points.maxSize-1.0))
+if __name__ == "__main__":
+	MainFunction ( TestContext)
+</div>
+<table width="100%" class="navtable"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="nurbsobject.xhtml">Previous</a></td>
+	<td align="center">Scenegraph Nodes: Particle System (PointSet)</td>
+	<td align="right"><a href="index.xhtml">Index</a></td>
+	</tr>
+	<tr class="meta-links">
+		<td colspan="3">
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
+		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
+		</td>
+	</tr>
+</thead></table>
+</body>
+</html>
