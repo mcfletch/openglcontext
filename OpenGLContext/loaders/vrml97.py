@@ -45,14 +45,13 @@ def standardPrototype( prototype, key ):
 	name = protofunctions.name( prototype )
 	STANDARD_PROTOTYPES[name] = prototype
 	if name != key:
-		loader_log.info( "Standard prototype %r is known by the key %r instead of it's prototype name", name, key )
+		loader_log.warn( "Standard prototype %r is known by the key %r instead of it's prototype name", name, key )
 	return name
 
 ### Update from the basenodes dictionary of OpenGLContext
-for key,value in basenodes.__dict__.items():
+for key,value in basenodes.PROTOTYPES.items():
 	try:
-		if issubclass(value, node.Node):
-			name = standardPrototype( value, key )
+		name = standardPrototype( value, key )
 	except TypeError:
 		pass
 
