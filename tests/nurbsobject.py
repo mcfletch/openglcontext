@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=RedBook Trim=
+'''=RedBook NURBS Trim=
 
 [nurbsobject.py-screen-0001.png Screenshot]
 

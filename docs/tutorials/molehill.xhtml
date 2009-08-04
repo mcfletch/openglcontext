@@ -3,7 +3,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Scenegraph NURBs: Mark J Kilgard's Molehill Demo</title>
+<title>Scenegraph Nodes: Molehill NURBS Introduction</title>
     <link href="./tutorial.css" type="text/css" rel="stylesheet" />
 </head>
 <body>
@@ -13,14 +13,14 @@
 	</tr>
 	<tr>
 	<td><a href="index.xhtml">Index</a></td>
-	<td align="center">Scenegraph NURBs: Mark J Kilgard's Molehill Demo</td>
+	<td align="center">Scenegraph Nodes: Molehill NURBS Introduction</td>
 	<td align="right"><a href="nurbsobject.xhtml">Next</a></td>
 	</tr>
 </thead></table>
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Mark J Kilgard's Molehill Demo</h1>
+	<h1 class="title">Molehill NURBS Introduction</h1>
 	<div class="paragraph">
 	<img src="molehill.py-screen-0001.png" alt="Screenshot" class=" wiki" />
 </div>
@@ -150,26 +150,47 @@ class TestContext( BaseContext ):
 		in both u and v dimensions). They only vary in the control 
 		points and colours with which we will render them.</div>
 </div>
-	<div class="code-sample">		self.shapes = [
-			Shape(
-				appearance = Appearance(
-					material = Material(
-						diffuseColor = color,
-					),
-				),
-				geometry = NurbsSurface(
-					controlPoint = pts,
-					vDimension = 4,
-					uDimension = 4,
-					uKnot = knots,
-					vKnot = knots,
+	<div class="code-sample">		self.shapes = []
+		for pts,color in zip((pts1,pts2,pts3,pts4),colors):
+			appearance = Appearance(
+				material = Material(
+					diffuseColor = color,
 				),
 			)
-			for pts,color in zip((pts1,pts2,pts3,pts4),colors)
-		]
 </div>
 	<div class="commentary">
-	<div class="paragraph">Scenegraph is set up so that the initial view looks
+	<div class="paragraph">The actual NURBS surfaces are simple NurbsSurface 
+			instances, with no trimming or other complex operations.</div>
+</div>
+	<div class="code-sample">			self.shapes.append(
+				Shape(
+					appearance = appearance,
+					geometry = NurbsSurface(
+						controlPoint = pts,
+						vDimension = 4,
+						uDimension = 4,
+						uKnot = knots,
+						vKnot = knots,
+					),
+				)
+			)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Here we render the control points so you can see them in 
+			relation to the surface.</div>
+</div>
+	<div class="code-sample">			self.shapes.append(
+				Shape(
+					geometry = PointSet(
+						coord = Coordinate( 
+							point = pts,
+						),
+					),
+				)
+			)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Scenegraph is transformed so that the initial view looks
 		approximately like the original code</div>
 </div>
 	<div class="code-sample">		self.sg = sceneGraph(
@@ -200,7 +221,7 @@ implied. This program is -not- in the public domain.</div>
 	</tr>
 	<tr>
 	<td><a href="index.xhtml">Index</a></td>
-	<td align="center">Scenegraph NURBs: Mark J Kilgard's Molehill Demo</td>
+	<td align="center">Scenegraph Nodes: Molehill NURBS Introduction</td>
 	<td align="right"><a href="nurbsobject.xhtml">Next</a></td>
 	</tr>
 	<tr class="meta-links">

@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Mark J Kilgard's Molehill Demo=
+'''=Molehill NURBS Introduction=
 
 [molehill.py-screen-0001.png Screenshot]
 
@@ -95,24 +95,39 @@ class TestContext( BaseContext ):
 		'''All of the shapes have the same structure (number of knots 
 		in both u and v dimensions). They only vary in the control 
 		points and colours with which we will render them.'''
-		self.shapes = [
-			Shape(
-				appearance = Appearance(
-					material = Material(
-						diffuseColor = color,
-					),
-				),
-				geometry = NurbsSurface(
-					controlPoint = pts,
-					vDimension = 4,
-					uDimension = 4,
-					uKnot = knots,
-					vKnot = knots,
+		self.shapes = []
+		for pts,color in zip((pts1,pts2,pts3,pts4),colors):
+			appearance = Appearance(
+				material = Material(
+					diffuseColor = color,
 				),
 			)
-			for pts,color in zip((pts1,pts2,pts3,pts4),colors)
-		]
-		'''Scenegraph is set up so that the initial view looks
+			'''The actual NURBS surfaces are simple NurbsSurface 
+			instances, with no trimming or other complex operations.'''
+			self.shapes.append(
+				Shape(
+					appearance = appearance,
+					geometry = NurbsSurface(
+						controlPoint = pts,
+						vDimension = 4,
+						uDimension = 4,
+						uKnot = knots,
+						vKnot = knots,
+					),
+				)
+			)
+			'''Here we render the control points so you can see them in 
+			relation to the surface.'''
+			self.shapes.append(
+				Shape(
+					geometry = PointSet(
+						coord = Coordinate( 
+							point = pts,
+						),
+					),
+				)
+			)
+		'''Scenegraph is transformed so that the initial view looks
 		approximately like the original code'''
 		self.sg = sceneGraph(
 			children = [ 
