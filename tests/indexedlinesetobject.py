@@ -7,9 +7,6 @@ from OpenGLContext.scenegraph.basenodes import *
 
 class TestContext( BaseContext ):
 	initialPosition = (0,0,3) # set initial camera position, tutorial does the re-positioning
-	def Render( self, mode = 0):
-		BaseContext.Render( self, mode )
-		self.shape.Render( mode )
 	def cpv( self, event=None ):
 		"""colorPerVertex toggle"""
 		self.shape.geometry.colorPerVertex = not self.shape.geometry.colorPerVertex
@@ -39,9 +36,9 @@ class TestContext( BaseContext ):
 				colorIndex = range( len(coords)),#[0], #
 			),
 		)
-##	def OnIdle( self ):
-##		self.shape.geometry.colorPerVertex = not self.shape.geometry.colorPerVertex
-##		self.triggerRedraw(1)
+		self.sg = sceneGraph(
+			children = [ self.shape ],
+		)
 		
 if __name__ == "__main__":
 	MainFunction ( TestContext)
