@@ -55,8 +55,11 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
 				x,y,z = self.color
 			else:
 				x,y,z = 0.0, 0.0, 0.0
-			glLightfv(lightID, GL_DIFFUSE, array((x,y,z,1.0),'f'))
-
+			glLightfv(
+				lightID, 
+				GL_DIFFUSE, 
+				array((x,y,z,1.0),'f')*self.intensity
+			)
 			if hasattr( self, 'location' ):
 				x,y,z = self.location
 			else:
