@@ -109,7 +109,7 @@ with rotating lighting in three colours."""
 				DEF = 'Intensity-Interp',
 			),
 			TimeSensor(
-				cycleInterval = 10.0,
+				cycleInterval = 3.0,
 				loop = True,
 				DEF = 'Timer',
 			),
