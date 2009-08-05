@@ -3,6 +3,7 @@ from vrml.vrml97 import basenodes, nodetypes
 from vrml import protofunctions
 from OpenGLContext.events import timer
 from vrml import cache
+from pydispatch import dispatcher
 
 class TimeSensor(basenodes.TimeSensor):
 	"""TimeSensor node based on VRML 97 TimeSensor
@@ -32,7 +33,9 @@ class TimeSensor(basenodes.TimeSensor):
 				holder.depend( self, field )
 			timerObject.register( context )
 			timerObject.start ()
-			timerObject.addEventHandler( "fraction", function = self.onFraction )
+			timerObject.addEventHandler( 
+				"fraction", function = self.onFraction 
+			)
 			timerObject.addEventHandler( "cycle", function = self.onCycle )
 		return timerObject
 	def bind( self, context ):
@@ -41,8 +44,6 @@ class TimeSensor(basenodes.TimeSensor):
 		return True
 	def onFraction( self, event ):
 		"""Handle a fractional event from our Timer"""
-##		import pdb
-##		pdb.set_trace()
 		self.fraction_changed = event.fraction()
 		self.time = event.value()
 	def onCycle( self, event ):
