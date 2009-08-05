@@ -314,6 +314,8 @@ class FlatPass( SGObserver ):
 	def legacyLightRender( self, matrix ):
 		"""Do legacy light-rendering operation"""
 		# okay, now visible presentations
+		for remaining in range(0,self.MAX_LIGHTS-1):
+			glDisable( GL_LIGHT0 + remaining )
 		id = 0
 		for path in self.paths.get( nodetypes.Light, ()):
 			tmatrix = path.transformMatrix()
