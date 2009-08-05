@@ -43,7 +43,7 @@ with an ice-cream-cone-shaped trimming curve
 (a hole cut out of it)."""
 		
 		'''GLU Nurbs trims via contours which are applied in the 
-		same was as tessellation, i.e. your outermost contour will 
+		same way as tessellation, i.e. your outermost contour will 
 		trim off the edges of your nurbs, while inner contours will 
 		cut "holes" in to the Nurbs.  Since we don't want to trim off 
 		the edge of the hill, we define a contour that includes all 
