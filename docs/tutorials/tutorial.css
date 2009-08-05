@@ -74,3 +74,11 @@ div.path {
 .meta-links td {
 	text-align: center;
 }
+
+.source-reference {
+	margin-left: 3em;
+	margin-right: 3em;
+	text-align: center;
+	font-size: 80%;
+	color: grey;
+}
