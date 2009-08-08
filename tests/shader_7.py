@@ -32,14 +32,6 @@ class TestContext( BaseContext ):
 	def OnInit( self ):
 		"""Initialize the context"""
 		
-		lightStruct = """
-		struct LightSource {
-			vec4 ambient;
-			vec4 diffuse;
-			vec4 specular;
-			vec4 position;
-		};
-		"""
 		materialStruct = """
 		struct Material {
 			vec4 ambient;
@@ -81,7 +73,7 @@ class TestContext( BaseContext ):
 			baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
 		}""", GL_VERTEX_SHADER)
 		fragment = compileShader( 
-			dLight + lightStruct + materialStruct + """
+			dLight + materialStruct + """
 		uniform Material material;
 		uniform vec4 Global_ambient;
 		// see below for why we aren't using an array of 
@@ -98,18 +90,10 @@ class TestContext( BaseContext ):
 			int POSITION = 3;
 			
 			int i;
-			LightSource light;
-			for (i=0;i<3;i++) {
-				//
-				light = LightSource(
-					lights[i*4+AMBIENT],
-					lights[i*4+DIFFUSE],
-					lights[i*4+SPECULAR],
-					lights[i*4+POSITION]
-				);
+			for (i=0;i<12;i=i+4) {
 				// normalized eye-coordinate Light location
 				vec3 EC_Light_location = normalize(
-					gl_NormalMatrix * light.position.xyz
+					gl_NormalMatrix * lights[i+POSITION].xyz
 				);
 				// half-vector calculation 
 				vec3 Light_half = normalize(
@@ -123,9 +107,9 @@ class TestContext( BaseContext ):
 				);
 				fragColor = (
 					fragColor 
-					+ (light.ambient * material.ambient)
-					+ (light.diffuse * material.diffuse * weights.x)
-					+ (light.specular * material.specular * weights.y)
+					+ (lights[i+AMBIENT] * material.ambient)
+					+ (lights[i+DIFFUSE] * material.diffuse * weights.x)
+					+ (lights[i+SPECULAR] * material.specular * weights.y)
 				);
 			}
 			gl_FragColor = fragColor;
@@ -143,6 +127,25 @@ class TestContext( BaseContext ):
 		apparently the GL implementations consider this a special case,
 		rather than a generic type of functionality to be supported.
 
+		An array-of-structures value looks like this when declared in GLSL:
+		'''
+		lightStruct = """
+		// NOTE: this does not work, it compiles, but you will 
+		// not be able to fill in the individual members...
+		struct LightSource {
+			vec4 ambient;
+			vec4 diffuse;
+			vec4 specular;
+			vec4 position;
+		};
+		uniform LightSource lights[3];
+		"""
+		'''But when you attempt to retrieve the location for the Uniform 
+		via:
+		
+			glGetUniformLocation( shader, 'lights[0].ambient' )
+		
+		you will always get a -1 (invalid) location.
 		OpenGL 3.1 introduced the concept of Uniform Buffers, which allow 
 		for packing Uniform data into VBO storage, but it's not yet clear
 		whether they will support array-of-structure specification.
