@@ -166,7 +166,7 @@ class TestContext( BaseContext ):
 			);
 			// half-vector calculation 
 			vec3 Light_half = normalize(
-				EC_Light_location - vec3( 0,0,-10 )
+				EC_Light_location - vec3( 0,0,-1 )
 			);
 			vec2 weights = dLight(
 				EC_Light_location,
@@ -268,23 +268,23 @@ class TestContext( BaseContext ):
 			stride = self.coords.data[0].nbytes
 			try:
 				glUniform4f( self.Global_ambient_loc, .05,.05,.05,.1 )
-				glUniform4f( self.Light_ambient_loc, .2,.2,.2, 1.0 )
-				glUniform4f( self.Light_diffuse_loc, .5,.5,.5,1 )
+				glUniform4f( self.Light_ambient_loc, .1,.1,.1, 1.0 )
+				glUniform4f( self.Light_diffuse_loc, .25,.25,.25,1 )
 				'''We set up a yellow-ish specular component in the 
 				light and move it to rest "just over our right shoulder"
 				in relation to the initial camera.'''
-				glUniform4f( self.Light_specular_loc, 1.0,1.0,.5,1 )
-				glUniform3f( self.Light_location_loc, 4,2,10 )
+				glUniform4f( self.Light_specular_loc, 0.0,1.0,0,1 )
+				glUniform3f( self.Light_location_loc, 6,2,4 )
 				
-				glUniform4f( self.Material_ambient_loc, .2,.2,.2, 1.0 )
-				glUniform4f( self.Material_diffuse_loc, .5,.5,.5, 1 )
+				glUniform4f( self.Material_ambient_loc, .1,.1,.1, 1.0 )
+				glUniform4f( self.Material_diffuse_loc, .15,.15,.15, 1 )
 				'''We make the material have a bright specular white 
 				colour and an extremely "shiny" surface.  The shininess 
 				value has the effect of reducing the area of the
 				highlight, as the cos of the angle is raised 
 				to the power of the (fractional) shininess.'''
-				glUniform4f( self.Material_specular_loc, .8,.8,.8, 1.0 )
-				glUniform1f( self.Material_shininess_loc, .995)
+				glUniform4f( self.Material_specular_loc, 1.0,1.0,1.0, 1.0 )
+				glUniform1f( self.Material_shininess_loc, .95)
 				glEnableVertexAttribArray( self.Vertex_position_loc )
 				glEnableVertexAttribArray( self.Vertex_normal_loc )
 				glVertexAttribPointer( 
