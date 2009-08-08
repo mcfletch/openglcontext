@@ -82,3 +82,12 @@ div.path {
 	font-size: 80%;
 	color: grey;
 }
+
+.introduction {
+	margin: 1em;
+	color: darkgrey;
+}
+.path-body {
+	margin-left: .5em;
+	margin-right: .5em;
+}

@@ -324,7 +324,4 @@ if __name__ == "__main__":
 '''Our per-fragment Blinn-Phong rendering engine is a very simplistic 
 model of real-world lighting, and is currently limited to a single
 directional light.  Our next tutorial will begin to 
-reduce the "simplifying assumptions" in our current tutorials,
-such as the use of "directional lights at infinite distance",
-to allow us to model "point lights" and/or "spot lights".'''
-
+reduce these "simplifying assumptions".'''
