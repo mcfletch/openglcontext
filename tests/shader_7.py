@@ -31,7 +31,22 @@ class TestContext( BaseContext ):
 	"""
 	def OnInit( self ):
 		"""Initialize the context"""
+		'''We have previously been using values named Material_ambient,
+		Material_diffuse, etceteras to specify our Material's properties.
+		GLSL allows us to bind these kinds of values together into a 
+		structure.  The structure doesn't provide many benefits other 
+		than keeping the namespaces of your code clean and allowing for 
+		declaring multiple uniforms of the same type, such as a "front" 
+		and "back" material.
 		
+		We are going to define a very simple Material struct which is 
+		a subset of the built-in gl_MaterialParameters structure 
+		(which also has an "emission" parameter).  GLSL defines two 
+		built-in Material uniforms gl_FrontMaterial and gl_BackMaterial.
+		It is possible (though seldom done) to fill in these uniform 
+		values with glUniform calls rather than the legacy glMaterial
+		calls.
+		'''
 		materialStruct = """
 		struct Material {
 			vec4 ambient;
@@ -40,6 +55,13 @@ class TestContext( BaseContext ):
 			float shininess;
 		};
 		"""
+		'''Note that each sub-element must be terminated with a semi-colon
+		';' character, and that qualifiers (in, out, uniform, etceteras)
+		are not allowed within the structure definition.
+		
+		Our light-weighting code has not changed from the previous 
+		tutorial.
+		'''
 		dLight = """
 		vec2 dLight( 
 			in vec3 light_pos, // light position
@@ -60,6 +82,10 @@ class TestContext( BaseContext ):
 			return vec2( n_dot_pos, n_dot_half);
 		}		
 		"""
+		'''Our vertex shader is also unchanged.  We could move many 
+		of the operations currently done in our fragment shader here 
+		to reduce the processing load for our shader.
+		'''
 		vertex = compileShader( 
 		"""
 		attribute vec3 Vertex_position;
@@ -72,6 +98,20 @@ class TestContext( BaseContext ):
 			);
 			baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
 		}""", GL_VERTEX_SHADER)
+		'''To create a uniform with a structure type, we simply use 
+		the structure as the data-type declaration for the uniform.
+		As opposed to using e.g. vec4 or vec3, we use Material (our 
+		structure name defined above) and give the uniform a name.
+		
+		We also define a "lights" uniform which is declared as a sized 
+		array of 12 vec4s.  Each light we have defined (so far)
+		is composed to 4 4-component vectors, ambient, diffuse and 
+		specular colour, along with the "position" (direction) vector.
+		
+		The for-loop in the code should look familiar from C coding.
+		We iterate over each light in our array of lights accumulating 
+		the results into the fragColor variable we've defined.
+		'''
 		fragment = compileShader( 
 			dLight + materialStruct + """
 		uniform Material material;
@@ -140,12 +180,13 @@ class TestContext( BaseContext ):
 		};
 		uniform LightSource lights[3];
 		"""
-		'''But when you attempt to retrieve the location for the Uniform 
+		'''When you attempt to retrieve the location for the Uniform 
 		via:
 		
 			glGetUniformLocation( shader, 'lights[0].ambient' )
 		
 		you will always get a -1 (invalid) location.
+		
 		OpenGL 3.1 introduced the concept of Uniform Buffers, which allow 
 		for packing Uniform data into VBO storage, but it's not yet clear
 		whether they will support array-of-structure specification.
@@ -170,7 +211,7 @@ class TestContext( BaseContext ):
 		self.uniform_locations['lights'] = glGetUniformLocation( 
 			self.shader, 'lights' 
 		)
-
+	'''Our individually-specified uniform values'''
 	UNIFORM_VALUES = [
 		('Global_ambient',(.05,.05,.05,1.0)),
 		('material.ambient',(.2,.2,.2,1.0)),
@@ -178,6 +219,10 @@ class TestContext( BaseContext ):
 		('material.specular',(.8,.8,.8,1.0)),
 		('material.shininess',(.995,)),
 	]
+	'''The parameters we use to specify our lights, note that 
+	the first item in the tuples is dropped, it is the value 
+	that *should* work in glGetUniformLocation, but does not.
+	'''
 	LIGHTS = array([
 		x[1] for x in [
 			('lights[0].ambient',(.05,.05,.05,1.0)),
@@ -203,6 +248,21 @@ class TestContext( BaseContext ):
 			self.indices.bind()
 			stride = self.coords.data[0].nbytes
 			try:
+				'''Here's our only change to the rendering process,
+				we pass in the entire array of light-related data with 
+				a single call to glUniform4fv.  The 'v' forms of 
+				glUniform all allow for passing arrays of values,
+				and all require that you specify the number of elements 
+				being passed (here 12).
+				
+				Aside: Incidentally, Uniforms are actually stored with 
+				the shader until the shader is re-linked, so specifying 
+				the uniforms on each rendering pass (as we do here) is 
+				not necessary.  The shader merely needs to be "in use"
+				during the glUniform call, and this is a convenient,
+				if inefficient, way to ensure it is in use at the time 
+				we are calling glUniform.
+				'''
 				glUniform4fv( 
 					self.uniform_locations['lights'],
 					12,
