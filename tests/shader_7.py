@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Multiple Lights, GLSL Looping and Structures=
+'''=Multiple Lights, GLSL Arrays and Structures=
 
 [shader_7.py-screen-0001.png Screenshot]
 
@@ -7,7 +7,7 @@ This tutorial builds on earlier tutorials by adding:
 
 	* Multiple Lights
 	* GLSL Structures (for defining a Material)
-	* GLSL Looping (for processing multiple lights)
+	* GLSL Arrays/Looping (for processing multiple lights)
 
 Until now, our tutorials have had a single light.  This tutorial 
 is going to demonstrate how to use simple looping in GLSL to 
@@ -31,7 +31,9 @@ class TestContext( BaseContext ):
 	"""
 	def OnInit( self ):
 		"""Initialize the context"""
-		'''We have previously been using values named Material_ambient,
+		'''==GLSL Structures==
+		
+		We have previously been using values named Material_ambient,
 		Material_diffuse, etceteras to specify our Material's properties.
 		GLSL allows us to bind these kinds of values together into a 
 		structure.  The structure doesn't provide many benefits other 
@@ -57,10 +59,13 @@ class TestContext( BaseContext ):
 		"""
 		'''Note that each sub-element must be terminated with a semi-colon
 		';' character, and that qualifiers (in, out, uniform, etceteras)
-		are not allowed within the structure definition.
+		are not allowed within the structure definition.  This statement 
+		has to occur *before* any use of the structure to declare a 
+		variable as being of this type.
 		
 		Our light-weighting code has not changed from the previous 
-		tutorial.
+		tutorial.  It is still a Blinn-Phong calculation based on the 
+		half-vector of light and view vector.
 		'''
 		dLight = """
 		vec2 dLight( 
@@ -102,22 +107,37 @@ class TestContext( BaseContext ):
 		the structure as the data-type declaration for the uniform.
 		As opposed to using e.g. vec4 or vec3, we use Material (our 
 		structure name defined above) and give the uniform a name.
+		'''
+		"""uniform Material material;"""
+		'''==GLSL Arrays==
 		
-		We also define a "lights" uniform which is declared as a sized 
-		array of 12 vec4s.  Each light we have defined (so far)
-		is composed to 4 4-component vectors, ambient, diffuse and 
-		specular colour, along with the "position" (direction) vector.
+		Each light we have defined (so far) is composed to 4 4-component
+		vectors, ambient, diffuse and specular colour, along with the
+		"position" (direction) vector.  If we wanted to provide, for 
+		instance, 3 lights of this type, we *could* create 12 different 
+		uniform values, and set each of these uniforms individually.  
 		
-		The for-loop in the code should look familiar from C coding.
+		GLSL, however, provides for array data-types.  The array types 
+		must be "sized" (have a specific, final size) in order to be 
+		usable, so no "pointer" types are available, but we don't need 
+		them for this type of operation.  We can define a "lights"
+		uniform which is declared as a sized array of 12 vec4 elements:'''
+		"""uniform vec4 lights[ 12 ];"""
+		'''And we can loop over "lights" using 0-indexed [i] indices,
+		where i must be an integer.  The for loop will be familiar to 
+		those who have used C looping:'''
+		"""for (i=0;i<12;i=i+4) { blah; }"""
+		'''Note that you must declare the iterator variable ("i" here)
+	
 		We iterate over each light in our array of lights accumulating 
-		the results into the fragColor variable we've defined.
+		the results into the fragColor variable we've defined.  The 
+		global component is used to initialize the variable, with the 
+		contribution of each light added to the result.
 		'''
 		fragment = compileShader( 
 			dLight + materialStruct + """
 		uniform Material material;
 		uniform vec4 Global_ambient;
-		// see below for why we aren't using an array of 
-		// LightSource structures...
 		uniform vec4 lights[ 12 ]; // 3 possible lights 4 vec4's each 
 		
 		varying vec3 baseNormal;
@@ -155,7 +175,7 @@ class TestContext( BaseContext ):
 			gl_FragColor = fragColor;
 		}
 		""", GL_FRAGMENT_SHADER)
-		'''==Why not an Array of Structures?==
+		'''===Why not an Array of Structures?===
 
 		Originally this tutorial was going to use an array of LightSource
 		structures as a Uniform, with the components of the structures 
@@ -201,6 +221,14 @@ class TestContext( BaseContext ):
 			if location in (None,-1):
 				print 'Warning, no uniform: %s'%( uniform )
 			self.uniform_locations[uniform] = location
+		'''There's no real reason to treat the "lights" uniform specially,
+		other than that we want to call attention to it.  We get the 
+		uniform as normal.  Note that we *could* also retrieve a 
+		sub-element of the array by specifying 'lights[3]' or the like.
+		'''
+		self.uniform_locations['lights'] = glGetUniformLocation( 
+			self.shader, 'lights' 
+		)
 		for attribute in (
 			'Vertex_position','Vertex_normal',
 		):
@@ -208,9 +236,6 @@ class TestContext( BaseContext ):
 			if location in (None,-1):
 				print 'Warning, no attribute: %s'%( uniform )
 			setattr( self, attribute+ '_loc', location )
-		self.uniform_locations['lights'] = glGetUniformLocation( 
-			self.shader, 'lights' 
-		)
 	'''Our individually-specified uniform values'''
 	UNIFORM_VALUES = [
 		('Global_ambient',(.05,.05,.05,1.0)),
@@ -222,21 +247,29 @@ class TestContext( BaseContext ):
 	'''The parameters we use to specify our lights, note that 
 	the first item in the tuples is dropped, it is the value 
 	that *should* work in glGetUniformLocation, but does not.
+	What actually gets passed in is a single float array with 
+	12 4-float values representing all of the data-values for 
+	all of the enabled lights.
+	
+	You'll notice that we're using 0.0 as the 'w' coordinate 
+	for the light positions.  We're using this to flag that the 
+	position is actually a *direction*.  This will become useful 
+	in the next tutorial.
 	'''
 	LIGHTS = array([
 		x[1] for x in [
 			('lights[0].ambient',(.05,.05,.05,1.0)),
 			('lights[0].diffuse',(.3,.3,.3,1.0)),
 			('lights[0].specular',(1.0,0.0,0.0,1.0)),
-			('lights[0].position',(4.0,2.0,10.0,1.0)),
+			('lights[0].position',(4.0,2.0,10.0,0.0)),
 			('lights[1].ambient',(.05,.05,.05,1.0)),
 			('lights[1].diffuse',(.3,.3,.3,1.0)),
 			('lights[1].specular',(0.0,1.0,0.0,1.0)),
-			('lights[1].position',(-4.0,2.0,10.0,1.0)),
+			('lights[1].position',(-4.0,2.0,10.0,0.0)),
 			('lights[2].ambient',(.05,.05,.05,1.0)),
 			('lights[2].diffuse',(.3,.3,.3,1.0)),
 			('lights[2].specular',(0.0,0.0,1.0,1.0)),
-			('lights[2].position',(-4.0,2.0,-10.0,1.0)),
+			('lights[2].position',(-4.0,2.0,-10.0,0.0)),
 		]
 	], 'f')
 	def Render( self, mode = None):
@@ -301,3 +334,5 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
+'''Our next tutorial will show how to generalize our shader code to 
+provide for PointLight and SpotLight rendering.'''
