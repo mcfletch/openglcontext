@@ -8,7 +8,6 @@ This tutorial builds on earlier tutorials by adding:
 	* Point Light Sources (PointLights)
 	* Per-vertex angle/direction calculations
 	* Per-vertex attenuation (light fall-off) calculations
-	* Conditional (if) statements
 
 This tutorial includes rather a lot of changes to our shaders.
 We are going to make the shaders capable of rendering either a
@@ -57,7 +56,9 @@ class TestContext( BaseContext ):
 		
 		varying vec3 baseNormal;
 		"""
-		'''For the first time in many tutorials we're altering out 
+		'''==Lighting Attenuation=
+		
+		For the first time in many tutorials we're altering out 
 		lighting calculation.  We're adding 2 inputs to the function,
 		the first is the distance from the fragment to the light,
 		the second is the attenuation vector for the in-process light.
@@ -65,6 +66,25 @@ class TestContext( BaseContext ):
 		multiplier for this light.  For our directional lights this 
 		was always 1.0, but now our light's ambient contribution can 
 		be controlled by attenuation.
+		
+		The core calculation for attenuation looks like this:
+		'''
+		"""attenuation = clamp(
+			0.0,
+			1.0,
+			1.0 / (
+				attenuations.x + 
+				(attenuations.y * distance) +
+				(attenuations.z * distance * distance)
+			)
+		);"""
+		'''The default attenuation for legacy OpenGL was
+		(1.0, 0.0, 0.0), which is to say, no attenuation at all.
+		The attenuation values are not particularly "human friendly",
+		but they give you some control over the distance at which 
+		lights cause effects.  Keep in mind when using attenuation
+		coefficients that smaller values mean the light goes farther,
+		so a coefficient of .5 is "brighter" than a coefficient of 1.0.
 		'''
 		dLight = """
 		vec3 dLight( 
@@ -105,6 +125,27 @@ class TestContext( BaseContext ):
 			return vec3( attenuation, n_dot_pos, n_dot_half);
 		}		
 		"""
+		'''==Calculating Distance and Direction==
+		
+		Our new lights are "point sources", that is, they have a 
+		model-space location which is not at "infinite distance".
+		Because of this, unlike "directional lights", we have to 
+		recalculate the light position/location/direction vector 
+		for each fragment.  We also need to know the distance of 
+		the light from each fragment.
+		
+		While we could perform those calculations in the fragment 
+		shader, the vectors and distances we need vary smoothly 
+		across the triangles involved, so we'll calculate them at 
+		each vertex and allow the hardware to interpolate them.
+		We'll have to normalize the interpolated values, but this 
+		is less processor intensive than doing the calculations 
+		for each fragment.
+		
+		We are doing our vector calculations in model-space, there 
+		is no reason we couldn't do them in view-space.  For these 
+		particular calculations the results wind up the same.
+		'''
 		vertex = compileShader( 
 			lightConst + 
 		"""

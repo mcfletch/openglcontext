@@ -289,7 +289,11 @@ whether they will support array-of-structure specification.
 	that *should* work in glGetUniformLocation, but does not.
 	What actually gets passed in is a single float array with 
 	12 4-float values representing all of the data-values for 
-	all of the enabled lights.
+	all of the enabled lights.</div>
+	<div class="paragraph">You'll notice that we're using 0.0 as the 'w' coordinate 
+for the light positions.  We're using this to flag that the 
+position is actually a *direction*.  This will become useful 
+in later tutorials where we have multiple light-types.
 </div>
 </div>
 	<div class="code-sample">	LIGHTS = array([
@@ -297,15 +301,15 @@ whether they will support array-of-structure specification.
 			('lights[0].ambient',(.05,.05,.05,1.0)),
 			('lights[0].diffuse',(.3,.3,.3,1.0)),
 			('lights[0].specular',(1.0,0.0,0.0,1.0)),
-			('lights[0].position',(4.0,2.0,10.0,1.0)),
+			('lights[0].position',(4.0,2.0,10.0,0.0)),
 			('lights[1].ambient',(.05,.05,.05,1.0)),
 			('lights[1].diffuse',(.3,.3,.3,1.0)),
 			('lights[1].specular',(0.0,1.0,0.0,1.0)),
-			('lights[1].position',(-4.0,2.0,10.0,1.0)),
+			('lights[1].position',(-4.0,2.0,10.0,0.0)),
 			('lights[2].ambient',(.05,.05,.05,1.0)),
 			('lights[2].diffuse',(.3,.3,.3,1.0)),
 			('lights[2].specular',(0.0,0.0,1.0,1.0)),
-			('lights[2].position',(-4.0,2.0,-10.0,1.0)),
+			('lights[2].position',(-4.0,2.0,-10.0,0.0)),
 		]
 	], 'f')
 	def Render( self, mode = None):
@@ -373,8 +377,8 @@ if __name__ == "__main__":
 	MainFunction ( TestContext)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our next tutorial will show how to generalize our shader code to 
-provide for PointLight and SpotLight rendering.</div>
+	<div class="paragraph">Our next tutorial will optimize the directional light code here 
+so that it is less wasteful of GPU resources.</div>
 </div>
 <div class="source-reference">This code-walkthrough tutorial is generated from the shader_7.py script in the 
 OpenGLContext source distribution.</div>
