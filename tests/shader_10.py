@@ -1,22 +1,11 @@
 #! /usr/bin/env python
-'''=Optimizations for Directional Lights=
+'''=Spot-Lights=
 
-[shader_8.py-screen-0001.png Screenshot]
+[shader_10.py-screen-0001.png Screenshot]
 
 This tutorial builds on earlier tutorials by adding:
 
-	* Optimizing the Point-light code using Vertex shader
-	* Using constant/common declaration blocks
-
-This very short tutorial simply optimizes the code we created 
-in our last tutorial.  Fragment shaders are called for every 
-fragment (possible pixel) that is not "culled".  As a result,
-they tend to be called far more often than vertex shaders.
-
-Our current code is very wasteful in that it does all of the light 
-calculations for every fragment.  We'll split out the calculations 
-so that the vertex shader provides interpolated values to the 
-fragment shader.
+	* Directional shielded Point Lights (Spot Lights)
 '''
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
@@ -30,24 +19,9 @@ class TestContext( BaseContext ):
 	"""Demonstrates use of attribute types in GLSL
 	"""
 	LIGHT_COUNT = 3
-	LIGHT_SIZE = 4
+	LIGHT_SIZE = 7
 	def OnInit( self ):
 		"""Initialize the context"""
-		'''==Sharing Declarations=
-		
-		Since we are going to use these values in both the 
-		vertex and fragment shaders, it is handy to separate out 
-		the constants we'll use into a separate block of code that 
-		we can add to both shaders.  The use of the constants also 
-		makes the code far easier to read than using the bare numbers.
-		
-		Note that the varying baseNormal value is part of the lighting
-		calculation, so we have included it in our common lighting
-		declarations.
-		
-		We've also parameterized the LIGHT count and size, so that 
-		we can use them in both Python and GLSL code.
-		'''
 		lightConst = """
 		const int LIGHT_COUNT = %s;
 		const int LIGHT_SIZE = %s;
@@ -56,46 +30,74 @@ class TestContext( BaseContext ):
 		const int DIFFUSE = 1;
 		const int SPECULAR = 2;
 		const int POSITION = 3;
+		const int ATTENUATION = 4;
+		//SPOT_PARAMS [ spot_exponent, cos_spot_cutoff, ignored, is_spot ]
+		const int SPOT_PARAMS = 5;
+		const int SPOT_DIR = 6;
 		
 		uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
 		varying vec3 EC_Light_half[LIGHT_COUNT];
 		varying vec3 EC_Light_location[LIGHT_COUNT]; 
+		varying float Light_distance[LIGHT_COUNT]; 
 		
 		varying vec3 baseNormal;
 		"""%( self.LIGHT_COUNT, self.LIGHT_SIZE )
-		'''As you can see, we're going to create two new varying values,
-		the EC_Light_half and EC_Light_location values.  These are 
-		going to hold the normalized partial calculations for the lights.
-		The other declarations are the same as before, they are just 
-		being shared between the shaders.
-		
-		Our dLight calculation hasn't changed.
-		'''
 		dLight = """
-		vec2 dLight( 
-			in vec3 light_pos, // light position
+		vec3 dLight( 
+			in vec3 light_pos, // light position/direction
 			in vec3 half_light, // half-way vector between light and view
 			in vec3 frag_normal, // geometry normal
-			in float shininess
+			in float shininess, // shininess exponent
+			in float distance, // distance for attenuation calculation...
+			in vec4 attenuations, // attenuation parameters...
+			in vec4 spot_params, // spot control parameters...
+			in vec4 spot_direction // model-space direction
 		) {
-			// returns vec2( ambientMult, diffuseMult )
+			// returns vec3( ambientMult, diffuseMult, specularMult )
+			
 			float n_dot_pos = max( 0.0, dot( 
 				frag_normal, light_pos
 			));
 			float n_dot_half = 0.0;
+			float attenuation = 1.0;
 			if (n_dot_pos > -.05) {
-				n_dot_half = pow(max(0.0,dot( 
-					half_light, frag_normal
-				)), shininess);
+				float spot_effect = 1.0;
+				if (spot_params.w != 0.0) {
+					// is a spot...
+					float spot_cos = dot(
+						gl_NormalMatrix * normalize(spot_direction.xyz),
+						normalize(-light_pos)
+					);
+					if (spot_cos <= spot_params.y) {
+						// is a spot, and is outside the cone-of-light...
+						return vec3( 0.0, 0.0, 0.0 );
+					} else {
+						spot_effect = pow( spot_cos, spot_params.x );
+					}
+				}
+				n_dot_half = pow(
+					max(0.0,dot( 
+						half_light, frag_normal
+					)), 
+					shininess
+				);
+				if (distance != 0.0) {
+					attenuation = clamp(
+						0.0,
+						1.0,
+						1.0 / (
+							attenuations.x + 
+							(attenuations.y * distance) +
+							(attenuations.z * distance * distance)
+						)
+					);
+					n_dot_pos *= attenuation;
+					n_dot_half *= attenuation;
+				}
 			}
-			return vec2( n_dot_pos, n_dot_half);
+			return vec3( attenuation, n_dot_pos, n_dot_half);
 		}		
 		"""
-		'''Our new vertex shader has a loop in it.  It iterates over the 
-		set of lights doing the partial calculations for half-vector 
-		and eye-space location.  It stores the results of these in our
-		new, varying array values.
-		'''
 		vertex = compileShader( 
 			lightConst + 
 		"""
@@ -107,22 +109,33 @@ class TestContext( BaseContext ):
 				Vertex_position, 1.0
 			);
 			baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+			vec3 light_direction;
 			for (int i = 0; i< LIGHT_COUNT; i++ ) {
-				EC_Light_location[i] = normalize(
-					gl_NormalMatrix * lights[(i*LIGHT_SIZE)+POSITION].xyz
-				);
+				if (lights[(i*LIGHT_SIZE)+POSITION].w == 0.0) {
+					// directional rather than positional light...
+					EC_Light_location[i] = normalize(
+						gl_NormalMatrix *
+						lights[(i*LIGHT_SIZE)+POSITION].xyz
+					);
+					Light_distance[i] = 0.0;
+				} else {
+					// positional light, we calculate distance in 
+					// model-view space here, so we take a partial 
+					// solution...
+					vec3 ms_vec = (
+						lights[(i*LIGHT_SIZE)+POSITION].xyz -
+						Vertex_position
+					);
+					light_direction = gl_NormalMatrix * ms_vec;
+					EC_Light_location[i] = normalize( light_direction );
+					Light_distance[i] = abs(length( ms_vec ));
+				}
 				// half-vector calculation 
 				EC_Light_half[i] = normalize(
 					EC_Light_location[i] - vec3( 0,0,-1 )
 				);
 			}
 		}""", GL_VERTEX_SHADER)
-		'''Our fragment shader looks much the same, save that we 
-		have now moved the complex half-vector and eye-space location 
-		calculations out.  We've also separated out the concept of 
-		which light we are processing and what array-offset we are 
-		using, to make it clearer which value is being accessed.
-		'''
 		fragment = compileShader( 
 			lightConst + dLight + """
 		struct Material {
@@ -140,24 +153,26 @@ class TestContext( BaseContext ):
 			int i,j;
 			for (i=0;i<LIGHT_COUNT;i++) {
 				j = i* LIGHT_SIZE;
-				vec2 weights = dLight(
-					EC_Light_location[i],
-					EC_Light_half[i],
-					baseNormal,
-					material.shininess
+				vec3 weights = dLight(
+					normalize(EC_Light_location[i]),
+					normalize(EC_Light_half[i]),
+					normalize(baseNormal),
+					material.shininess,
+					Light_distance[i],
+					lights[j+ATTENUATION],
+					lights[j+SPOT_PARAMS],
+					lights[j+SPOT_DIR]
 				);
 				fragColor = (
 					fragColor 
-					+ (lights[j+AMBIENT] * material.ambient)
-					+ (lights[j+DIFFUSE] * material.diffuse * weights.x)
-					+ (lights[j+SPECULAR] * material.specular * weights.y)
+					+ (lights[j+AMBIENT] * material.ambient * weights.x)
+					+ (lights[j+DIFFUSE] * material.diffuse * weights.y)
+					+ (lights[j+SPECULAR] * material.specular * weights.z)
 				);
 			}
 			gl_FragColor = fragColor;
 		}
 		""", GL_FRAGMENT_SHADER)
-		
-		'''The rest of our code is very familiar.'''
 		self.shader = compileProgram(vertex,fragment)
 		self.coords,self.indices,self.count = Sphere( 
 			radius = 1 
@@ -178,27 +193,40 @@ class TestContext( BaseContext ):
 			if location in (None,-1):
 				print 'Warning, no attribute: %s'%( uniform )
 			setattr( self, attribute+ '_loc', location )
+		
 	UNIFORM_VALUES = [
 		('Global_ambient',(.05,.05,.05,1.0)),
 		('material.ambient',(.2,.2,.2,1.0)),
-		('material.diffuse',(.5,.5,.5,1.0)),
+		('material.diffuse',(.8,.8,.8,1.0)),
 		('material.specular',(.8,.8,.8,1.0)),
-		('material.shininess',(.995,)),
+		('material.shininess',(.5,)),
 	]
 	LIGHTS = array([
+	
 		x[1] for x in [
 			('lights[0].ambient',(.05,.05,.05,1.0)),
-			('lights[0].diffuse',(.3,.3,.3,1.0)),
-			('lights[0].specular',(1.0,0.0,0.0,1.0)),
-			('lights[0].position',(4.0,2.0,10.0,0.0)),
+			('lights[0].diffuse',(.1,1.0,.1,1.0)),
+			('lights[0].specular',(0.0,.25,0.0,1.0)),
+			('lights[0].position',(2.5,3.5,2.5,1.0)),
+			('lights[0].attenuation',(0.0,.125,0.0,1.0)),
+			('lights[0].spot_params',(2,cos(.2),0.0,1.0)),
+			('lights[0].spot_dir',(-8,-20,-8.0,1.0)),
+			
 			('lights[1].ambient',(.05,.05,.05,1.0)),
-			('lights[1].diffuse',(.3,.3,.3,1.0)),
-			('lights[1].specular',(0.0,1.0,0.0,1.0)),
-			('lights[1].position',(-4.0,2.0,10.0,0.0)),
+			('lights[1].diffuse',(.8,.1,.1,1.0)),
+			('lights[1].specular',(1.0,0.0,0.0,1.0)),
+			('lights[1].position',(-2.5,2.5,2.5,1.0)),
+			('lights[1].attenuation',(0.0,0.0,.125,1.0)),
+			('lights[1].spot_params',(2.0,cos(.25),0.0,1.0)),
+			('lights[1].spot_dir',(2.5,-5.5,-2.5,1.0)),
+			
 			('lights[2].ambient',(.05,.05,.05,1.0)),
-			('lights[2].diffuse',(.3,.3,.3,1.0)),
+			('lights[2].diffuse',(.1,.1,.8,1.0)),
 			('lights[2].specular',(0.0,0.0,1.0,1.0)),
-			('lights[2].position',(-4.0,2.0,-10.0,0.0)),
+			('lights[2].position',(0.0,-3.06,3.06,1.0)),
+			('lights[2].attenuation',(2.0,0.0,0.0,1.0)),
+			('lights[2].spot_params',(0.0,0.0,0.0,0.0)),
+			('lights[2].spot_dir',(0.0,0.0,-1.0,1.0)),
 		]
 	], 'f')
 	def Render( self, mode = None):
@@ -210,8 +238,6 @@ class TestContext( BaseContext ):
 			self.indices.bind()
 			stride = self.coords.data[0].nbytes
 			try:
-				'''Note the use of the parameterized values to specify 
-				the size of the light-parameter array.'''
 				glUniform4fv( 
 					self.uniform_locations['lights'],
 					self.LIGHT_COUNT * self.LIGHT_SIZE,
@@ -250,5 +276,3 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
-'''With our shaders now reasonably optimized, we can move on to 
-creating point-lights (as opposed to our current directional lights).'''
