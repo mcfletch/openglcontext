@@ -3,7 +3,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Introduction to Shaders: Multiple Lights, GLSL Looping and Structures</title>
+<title>Introduction to Shaders: Multiple Lights, GLSL Arrays and Structures</title>
     <link href="./tutorial.css" type="text/css" rel="stylesheet" />
 </head>
 <body>
@@ -13,14 +13,14 @@
 	</tr>
 	<tr>
 	<td><a href="shader_6.xhtml">Previous</a></td>
-	<td align="center">Introduction to Shaders: Multiple Lights, GLSL Looping and Structures</td>
-	<td align="right"><a href="index.xhtml">Index</a></td>
+	<td align="center">Introduction to Shaders: Multiple Lights, GLSL Arrays and Structures</td>
+	<td align="right"><a href="shader_8.xhtml">Next</a></td>
 	</tr>
 </thead></table>
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Multiple Lights, GLSL Looping and Structures</h1>
+	<h1 class="title">Multiple Lights, GLSL Arrays and Structures</h1>
 	<div class="paragraph">
 	<img src="shader_7.py-screen-0001.png" alt="Screenshot" class=" wiki" />
 </div>
@@ -28,7 +28,7 @@
 	<ul class="">
 	<li class="">Multiple Lights</li>
 	<li class="">GLSL Structures (for defining a Material)</li>
-	<li class="">GLSL Looping (for processing multiple lights)</li>
+	<li class="">GLSL Arrays/Looping (for processing multiple lights)</li>
 </ul>
 	<div class="paragraph">Until now, our tutorials have had a single light.  This tutorial 
 is going to demonstrate how to use simple looping in GLSL to 
@@ -53,13 +53,14 @@ class TestContext( BaseContext ):
 		"""Initialize the context"""
 </div>
 	<div class="commentary">
+	<h1 class="title">GLSL Structures</h1>
 	<div class="paragraph">We have previously been using values named Material_ambient,
-		Material_diffuse, etceteras to specify our Material's properties.
-		GLSL allows us to bind these kinds of values together into a 
-		structure.  The structure doesn't provide many benefits other 
-		than keeping the namespaces of your code clean and allowing for 
-		declaring multiple uniforms of the same type, such as a "front" 
-		and "back" material.</div>
+Material_diffuse, etceteras to specify our Material's properties.
+GLSL allows us to bind these kinds of values together into a 
+structure.  The structure doesn't provide many benefits other 
+than keeping the namespaces of your code clean and allowing for 
+declaring multiple uniforms of the same type, such as a "front" 
+and "back" material.</div>
 	<div class="paragraph">We are going to define a very simple Material struct which is 
 a subset of the built-in gl_MaterialParameters structure 
 (which also has an "emission" parameter).  GLSL defines two 
@@ -81,9 +82,12 @@ calls.
 	<div class="commentary">
 	<div class="paragraph">Note that each sub-element must be terminated with a semi-colon
 		';' character, and that qualifiers (in, out, uniform, etceteras)
-		are not allowed within the structure definition.</div>
+		are not allowed within the structure definition.  This statement 
+		has to occur *before* any use of the structure to declare a 
+		variable as being of this type.</div>
 	<div class="paragraph">Our light-weighting code has not changed from the previous 
-tutorial.
+tutorial.  It is still a Blinn-Phong calculation based on the 
+half-vector of light and view vector.
 </div>
 </div>
 	<div class="code-sample">		dLight = """
@@ -129,22 +133,45 @@ tutorial.
 	<div class="paragraph">To create a uniform with a structure type, we simply use 
 		the structure as the data-type declaration for the uniform.
 		As opposed to using e.g. vec4 or vec3, we use Material (our 
-		structure name defined above) and give the uniform a name.</div>
-	<div class="paragraph">We also define a "lights" uniform which is declared as a sized 
-array of 12 vec4s.  Each light we have defined (so far)
-is composed to 4 4-component vectors, ambient, diffuse and 
-specular colour, along with the "position" (direction) vector.</div>
-	<div class="paragraph">The for-loop in the code should look familiar from C coding.
-We iterate over each light in our array of lights accumulating 
-the results into the fragColor variable we've defined.
+		structure name defined above) and give the uniform a name.
+</div>
+</div>
+	<div class="code-sample">		"""uniform Material material;"""
+</div>
+	<div class="commentary">
+	<h1 class="title">GLSL Arrays</h1>
+	<div class="paragraph">Each light we have defined (so far) is composed to 4 4-component
+vectors, ambient, diffuse and specular colour, along with the
+"position" (direction) vector.  If we wanted to provide, for 
+instance, 3 lights of this type, we *could* create 12 different 
+uniform values, and set each of these uniforms individually.  </div>
+	<div class="paragraph">GLSL, however, provides for array data-types.  The array types 
+must be "sized" (have a specific, final size) in order to be 
+usable, so no "pointer" types are available, but we don't need 
+them for this type of operation.  We can define a "lights"
+uniform which is declared as a sized array of 12 vec4 elements:</div>
+</div>
+	<div class="code-sample">		"""uniform vec4 lights[ 12 ];"""
+</div>
+	<div class="commentary">
+	<div class="paragraph">And we can loop over "lights" using 0-indexed [i] indices,
+		where i must be an integer.  The for loop will be familiar to 
+		those who have used C looping:</div>
+</div>
+	<div class="code-sample">		"""for (i=0;i&lt;12;i=i+4) { blah; }"""
+</div>
+	<div class="commentary">
+	<div class="paragraph">Note that you must declare the iterator variable ("i" here)</div>
+	<div class="paragraph">We iterate over each light in our array of lights accumulating 
+the results into the fragColor variable we've defined.  The 
+global component is used to initialize the variable, with the 
+contribution of each light added to the result.
 </div>
 </div>
 	<div class="code-sample">		fragment = compileShader( 
 			dLight + materialStruct + """
 		uniform Material material;
 		uniform vec4 Global_ambient;
-		// see below for why we aren't using an array of 
-		// LightSource structures...
 		uniform vec4 lights[ 12 ]; // 3 possible lights 4 vec4's each 
 		varying vec3 baseNormal;
 		void main() {
@@ -226,6 +253,17 @@ whether they will support array-of-structure specification.
 			if location in (None,-1):
 				print 'Warning, no uniform: %s'%( uniform )
 			self.uniform_locations[uniform] = location
+</div>
+	<div class="commentary">
+	<div class="paragraph">There's no real reason to treat the "lights" uniform specially,
+		other than that we want to call attention to it.  We get the 
+		uniform as normal.  Note that we *could* also retrieve a 
+		sub-element of the array by specifying 'lights[3]' or the like.
+</div>
+</div>
+	<div class="code-sample">		self.uniform_locations['lights'] = glGetUniformLocation( 
+			self.shader, 'lights' 
+		)
 		for attribute in (
 			'Vertex_position','Vertex_normal',
 		):
@@ -233,9 +271,6 @@ whether they will support array-of-structure specification.
 			if location in (None,-1):
 				print 'Warning, no attribute: %s'%( uniform )
 			setattr( self, attribute+ '_loc', location )
-		self.uniform_locations['lights'] = glGetUniformLocation( 
-			self.shader, 'lights' 
-		)
 </div>
 	<div class="commentary">
 	<div class="paragraph">Our individually-specified uniform values</div>
@@ -252,6 +287,9 @@ whether they will support array-of-structure specification.
 	<div class="paragraph">The parameters we use to specify our lights, note that 
 	the first item in the tuples is dropped, it is the value 
 	that *should* work in glGetUniformLocation, but does not.
+	What actually gets passed in is a single float array with 
+	12 4-float values representing all of the data-values for 
+	all of the enabled lights.
 </div>
 </div>
 	<div class="code-sample">	LIGHTS = array([
@@ -296,8 +334,7 @@ if inefficient, way to ensure it is in use at the time
 we are calling glUniform.
 </div>
 </div>
-	<div class="code-sample">
-				glUniform4fv( 
+	<div class="code-sample">				glUniform4fv( 
 					self.uniform_locations['lights'],
 					12,
 					self.LIGHTS
@@ -335,6 +372,10 @@ we are calling glUniform.
 if __name__ == "__main__":
 	MainFunction ( TestContext)
 </div>
+	<div class="commentary">
+	<div class="paragraph">Our next tutorial will show how to generalize our shader code to 
+provide for PointLight and SpotLight rendering.</div>
+</div>
 <div class="source-reference">This code-walkthrough tutorial is generated from the shader_7.py script in the 
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
@@ -343,8 +384,8 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr>
 	<td><a href="shader_6.xhtml">Previous</a></td>
-	<td align="center">Introduction to Shaders: Multiple Lights, GLSL Looping and Structures</td>
-	<td align="right"><a href="index.xhtml">Index</a></td>
+	<td align="center">Introduction to Shaders: Multiple Lights, GLSL Arrays and Structures</td>
+	<td align="right"><a href="shader_8.xhtml">Next</a></td>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
