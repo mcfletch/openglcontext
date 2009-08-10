@@ -44,6 +44,9 @@ class TestContext( BaseContext ):
 		Note that the varying baseNormal value is part of the lighting
 		calculation, so we have included it in our common lighting
 		declarations.
+		
+		We've also parameterized the LIGHT count and size, so that 
+		we can use them in both Python and GLSL code.
 		'''
 		lightConst = """
 		const int LIGHT_COUNT = %s;
@@ -154,7 +157,7 @@ class TestContext( BaseContext ):
 		}
 		""", GL_FRAGMENT_SHADER)
 		
-		'''The rest of our code is unchanged from the previous tutorial.'''
+		'''The rest of our code is very familiar.'''
 		self.shader = compileProgram(vertex,fragment)
 		self.coords,self.indices,self.count = Sphere( 
 			radius = 1 
@@ -207,6 +210,8 @@ class TestContext( BaseContext ):
 			self.indices.bind()
 			stride = self.coords.data[0].nbytes
 			try:
+				'''Note the use of the parameterized values to specify 
+				the size of the light-parameter array.'''
 				glUniform4fv( 
 					self.uniform_locations['lights'],
 					self.LIGHT_COUNT * self.LIGHT_SIZE,

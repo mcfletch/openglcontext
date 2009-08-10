@@ -259,7 +259,10 @@ class TestContext( BaseContext ):
 		('material.specular',(.8,.8,.8,1.0)),
 		('material.shininess',(2.0,)),
 	]
-	'''We've '''
+	'''We've created 3 equal-distance lights here, in red, green and 
+	blue.  The green light uses linear attenuation, the red quadratic
+	and the blue constant.
+	'''
 	LIGHTS = array([
 		x[1] for x in [
 			('lights[0].ambient',(.05,.05,.05,1.0)),
@@ -275,10 +278,10 @@ class TestContext( BaseContext ):
 			('lights[1].attenuation',(0.0,0.0,.2,1.0)),
 			
 			('lights[2].ambient',(.05,.05,.05,1.0)),
-			('lights[2].diffuse',(.1,.1,.8,1.0)),
-			('lights[2].specular',(0.0,0.0,1.0,1.0)),
+			('lights[2].diffuse',(.1,.1,.5,1.0)),
+			('lights[2].specular',(0.0,0.0,.5,1.0)),
 			('lights[2].position',(0.0,-3.06,3.06,1.0)),
-			('lights[2].attenuation',(2.0,0.0,0.0,1.0)),
+			('lights[2].attenuation',(1.0,0.0,0.0,1.0)),
 		]
 	], 'f')
 	def Render( self, mode = None):
@@ -290,6 +293,8 @@ class TestContext( BaseContext ):
 			self.indices.bind()
 			stride = self.coords.data[0].nbytes
 			try:
+				'''Again, we're using the parameterized light size/count 
+				to pass in the array.'''
 				glUniform4fv( 
 					self.uniform_locations['lights'],
 					self.LIGHT_COUNT * self.LIGHT_SIZE,
