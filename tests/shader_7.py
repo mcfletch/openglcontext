@@ -254,7 +254,7 @@ class TestContext( BaseContext ):
 	You'll notice that we're using 0.0 as the 'w' coordinate 
 	for the light positions.  We're using this to flag that the 
 	position is actually a *direction*.  This will become useful 
-	in the next tutorial.
+	in later tutorials where we have multiple light-types.
 	'''
 	LIGHTS = array([
 		x[1] for x in [
@@ -334,5 +334,5 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
-'''Our next tutorial will show how to generalize our shader code to 
-provide for PointLight and SpotLight rendering.'''
+'''Our next tutorial will optimize the directional light code here 
+so that it is less wasteful of GPU resources.'''
