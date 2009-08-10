@@ -269,13 +269,13 @@ class TestContext( BaseContext ):
 			('lights[0].diffuse',(.1,.8,.1,1.0)),
 			('lights[0].specular',(0.0,1.0,0.0,1.0)),
 			('lights[0].position',(2.5,2.5,2.5,1.0)),
-			('lights[0].attenuation',(0.0,.2,0.0,1.0)),
+			('lights[0].attenuation',(0.0,.10,0.0,1.0)),
 			
 			('lights[1].ambient',(.05,.05,.05,1.0)),
 			('lights[1].diffuse',(.8,.1,.1,1.0)),
 			('lights[1].specular',(1.0,0.0,0.0,1.0)),
 			('lights[1].position',(-2.5,2.5,2.5,1.0)),
-			('lights[1].attenuation',(0.0,0.0,.2,1.0)),
+			('lights[1].attenuation',(0.0,0.0,.10,1.0)),
 			
 			('lights[2].ambient',(.05,.05,.05,1.0)),
 			('lights[2].diffuse',(.1,.1,.5,1.0)),

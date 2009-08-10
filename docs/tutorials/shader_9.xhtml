@@ -29,7 +29,6 @@
 	<li class="">Point Light Sources (PointLights)</li>
 	<li class="">Per-vertex angle/direction calculations</li>
 	<li class="">Per-vertex attenuation (light fall-off) calculations</li>
-	<li class="">Conditional (if) statements</li>
 </ul>
 	<div class="paragraph">This tutorial includes rather a lot of changes to our shaders.
 We are going to make the shaders capable of rendering either a
@@ -50,6 +49,8 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
 	"""Demonstrates use of attribute types in GLSL
 	"""
+	LIGHT_COUNT = 3
+	LIGHT_SIZE = 5
 	def OnInit( self ):
 		"""Initialize the context"""
 </div>
@@ -65,8 +66,8 @@ class TestContext( BaseContext ):
 </div>
 </div>
 	<div class="code-sample">		lightConst = """
-		const int LIGHT_COUNT = 3;
-		const int LIGHT_SIZE = 5;
+		const int LIGHT_COUNT = %s;
+		const int LIGHT_SIZE = %s;
 		const int AMBIENT = 0;
 		const int DIFFUSE = 1;
 		const int SPECULAR = 2;
@@ -77,21 +78,42 @@ class TestContext( BaseContext ):
 		varying vec3 EC_Light_location[LIGHT_COUNT]; 
 		varying float Light_distance[LIGHT_COUNT]; 
 		varying vec3 baseNormal;
-		"""
+		"""%( self.LIGHT_COUNT, self.LIGHT_SIZE )
 </div>
 	<div class="commentary">
+	<h1 class="title">Lighting Attenuation</h1>
 	<div class="paragraph">For the first time in many tutorials we're altering out 
-		lighting calculation.  We're adding 2 inputs to the function,
-		the first is the distance from the fragment to the light,
-		the second is the attenuation vector for the in-process light.
-		We are also going to return one extra value, the ambient-light 
-		multiplier for this light.  For our directional lights this 
-		was always 1.0, but now our light's ambient contribution can 
-		be controlled by attenuation.
+lighting calculation.  We're adding 2 inputs to the function,
+the first is the distance from the fragment to the light,
+the second is the attenuation vector for the in-process light.
+We are also going to return one extra value, the ambient-light 
+multiplier for this light.  For our directional lights this 
+was always 1.0, but now our light's ambient contribution can 
+be controlled by attenuation.</div>
+	<div class="paragraph">The core calculation for attenuation looks like this:
 </div>
 </div>
-	<div class="code-sample">
-		dLight = """
+	<div class="code-sample">		"""attenuation = clamp(
+			0.0,
+			1.0,
+			1.0 / (
+				attenuations.x + 
+				(attenuations.y * distance) +
+				(attenuations.z * distance * distance)
+			)
+		);"""
+</div>
+	<div class="commentary">
+	<div class="paragraph">The default attenuation for legacy OpenGL was
+		(1.0, 0.0, 0.0), which is to say, no attenuation at all.
+		The attenuation values are not particularly "human friendly",
+		but they give you some control over the distance at which 
+		lights cause effects.  Keep in mind when using attenuation
+		coefficients that smaller values mean the light goes farther,
+		so a coefficient of .5 is "brighter" than a coefficient of 1.0.
+</div>
+</div>
+	<div class="code-sample">		dLight = """
 		vec3 dLight( 
 			in vec3 light_pos, // light position/direction
 			in vec3 half_light, // half-way vector between light and view
@@ -130,7 +152,28 @@ class TestContext( BaseContext ):
 			return vec3( attenuation, n_dot_pos, n_dot_half);
 		}		
 		"""
-		vertex = compileShader( 
+</div>
+	<div class="commentary">
+	<h1 class="title">Calculating Distance and Direction</h1>
+	<div class="paragraph">Our new lights are "point sources", that is, they have a 
+model-space location which is not at "infinite distance".
+Because of this, unlike "directional lights", we have to 
+recalculate the light position/location/direction vector 
+for each fragment.  We also need to know the distance of 
+the light from each fragment.</div>
+	<div class="paragraph">While we could perform those calculations in the fragment 
+shader, the vectors and distances we need vary smoothly 
+across the triangles involved, so we'll calculate them at 
+each vertex and allow the hardware to interpolate them.
+We'll have to normalize the interpolated values, but this 
+is less processor intensive than doing the calculations 
+for each fragment.</div>
+	<div class="paragraph">We are doing our vector calculations for the light location
+and distance in model-space.  You could do them in view-space 
+as well.
+</div>
+</div>
+	<div class="code-sample">		vertex = compileShader( 
 			lightConst + 
 		"""
 		attribute vec3 Vertex_position;
@@ -167,7 +210,19 @@ class TestContext( BaseContext ):
 				);
 			}
 		}""", GL_VERTEX_SHADER)
-		fragment = compileShader( 
+</div>
+	<div class="commentary">
+	<div class="paragraph">Our fragment shader is only slightly modified to use our 
+		new dLight function.  We need a larger "weights" variable and 
+		need to pass in more information.  We also need to multiply 
+		the per-light ambient value by the new weight we've added.</div>
+	<div class="paragraph">You will also notice that since we are using the 'i' variable 
+to directly index the varying arrays, we've introduced a 'j' 
+variable that tracks the offset into the light array which 
+begins the current light.
+</div>
+</div>
+	<div class="code-sample">		fragment = compileShader( 
 			lightConst + dLight + """
 		struct Material {
 			vec4 ambient;
@@ -200,7 +255,11 @@ class TestContext( BaseContext ):
 			gl_FragColor = fragColor;
 		}
 		""", GL_FRAGMENT_SHADER)
-		self.shader = compileProgram(vertex,fragment)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Our general uniform setup should look familiar by now.</div>
+</div>
+	<div class="code-sample">		self.shader = compileProgram(vertex,fragment)
 		self.coords,self.indices,self.count = Sphere( 
 			radius = 1 
 		).compile()
@@ -225,25 +284,32 @@ class TestContext( BaseContext ):
 		('material.ambient',(.2,.2,.2,1.0)),
 		('material.diffuse',(.5,.5,.5,1.0)),
 		('material.specular',(.8,.8,.8,1.0)),
-		('material.shininess',(3.0,)),
+		('material.shininess',(2.0,)),
 	]
-	LIGHTS = array([
+</div>
+	<div class="commentary">
+	<div class="paragraph">We've created 3 equal-distance lights here, in red, green and 
+	blue.  The green light uses linear attenuation, the red quadratic
+	and the blue constant.
+</div>
+</div>
+	<div class="code-sample">	LIGHTS = array([
 		x[1] for x in [
 			('lights[0].ambient',(.05,.05,.05,1.0)),
 			('lights[0].diffuse',(.1,.8,.1,1.0)),
 			('lights[0].specular',(0.0,1.0,0.0,1.0)),
-			('lights[0].position',(2.0,2.0,2.0,1.0)),
+			('lights[0].position',(2.5,2.5,2.5,1.0)),
 			('lights[0].attenuation',(0.0,.2,0.0,1.0)),
 			('lights[1].ambient',(.05,.05,.05,1.0)),
 			('lights[1].diffuse',(.8,.1,.1,1.0)),
 			('lights[1].specular',(1.0,0.0,0.0,1.0)),
-			('lights[1].position',(-2.0,2.0,2.0,1.0)),
+			('lights[1].position',(-2.5,2.5,2.5,1.0)),
 			('lights[1].attenuation',(0.0,0.0,.2,1.0)),
 			('lights[2].ambient',(.05,.05,.05,1.0)),
-			('lights[2].diffuse',(.3,.3,.3,1.0)),
-			('lights[2].specular',(0.0,0.0,1.0,1.0)),
-			('lights[2].position',(-4.0,2.0,-5.0,1.0)),
-			('lights[2].attenuation',(0.0,1.0,0.0,1.0)),
+			('lights[2].diffuse',(.1,.1,.5,1.0)),
+			('lights[2].specular',(0.0,0.0,.5,1.0)),
+			('lights[2].position',(0.0,-3.06,3.06,1.0)),
+			('lights[2].attenuation',(1.0,0.0,0.0,1.0)),
 		]
 	], 'f')
 	def Render( self, mode = None):
@@ -255,9 +321,15 @@ class TestContext( BaseContext ):
 			self.indices.bind()
 			stride = self.coords.data[0].nbytes
 			try:
+</div>
+	<div class="commentary">
+	<div class="paragraph">Again, we're using the parameterized light size/count 
+				to pass in the array.</div>
+</div>
+	<div class="code-sample">
 				glUniform4fv( 
 					self.uniform_locations['lights'],
-					12,
+					self.LIGHT_COUNT * self.LIGHT_SIZE,
 					self.LIGHTS
 				)
 				for uniform,value in self.UNIFORM_VALUES:

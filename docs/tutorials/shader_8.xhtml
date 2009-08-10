@@ -49,6 +49,8 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
 	"""Demonstrates use of attribute types in GLSL
 	"""
+	LIGHT_COUNT = 3
+	LIGHT_SIZE = 4
 	def OnInit( self ):
 		"""Initialize the context"""
 </div>
@@ -61,12 +63,14 @@ we can add to both shaders.  The use of the constants also
 makes the code far easier to read than using the bare numbers.</div>
 	<div class="paragraph">Note that the varying baseNormal value is part of the lighting
 calculation, so we have included it in our common lighting
-declarations.
+declarations.</div>
+	<div class="paragraph">We've also parameterized the LIGHT count and size, so that 
+we can use them in both Python and GLSL code.
 </div>
 </div>
 	<div class="code-sample">		lightConst = """
-		const int LIGHT_COUNT = 3;
-		const int LIGHT_SIZE = 4;
+		const int LIGHT_COUNT = %s;
+		const int LIGHT_SIZE = %s;
 		const int AMBIENT = 0;
 		const int DIFFUSE = 1;
 		const int SPECULAR = 2;
@@ -75,7 +79,7 @@ declarations.
 		varying vec3 EC_Light_half[LIGHT_COUNT];
 		varying vec3 EC_Light_location[LIGHT_COUNT]; 
 		varying vec3 baseNormal;
-		"""
+		"""%( self.LIGHT_COUNT, self.LIGHT_SIZE )
 </div>
 	<div class="commentary">
 	<div class="paragraph">As you can see, we're going to create two new varying values,
@@ -176,7 +180,7 @@ declarations.
 		""", GL_FRAGMENT_SHADER)
 </div>
 	<div class="commentary">
-	<div class="paragraph">The rest of our code is unchanged from the previous tutorial.</div>
+	<div class="paragraph">The rest of our code is very familiar.</div>
 </div>
 	<div class="code-sample">		self.shader = compileProgram(vertex,fragment)
 		self.coords,self.indices,self.count = Sphere( 
@@ -230,9 +234,14 @@ declarations.
 			self.indices.bind()
 			stride = self.coords.data[0].nbytes
 			try:
-				glUniform4fv( 
+</div>
+	<div class="commentary">
+	<div class="paragraph">Note the use of the parameterized values to specify 
+				the size of the light-parameter array.</div>
+</div>
+	<div class="code-sample">				glUniform4fv( 
 					self.uniform_locations['lights'],
-					12,
+					self.LIGHT_COUNT * self.LIGHT_SIZE,
 					self.LIGHTS
 				)
 				for uniform,value in self.UNIFORM_VALUES:
