@@ -347,4 +347,11 @@ if __name__ == "__main__":
 	MainFunction ( TestContext)
 '''We've now built a fairly complete per-pixel Phong renderer.  As an 
 exercise, you may wish to modify the spotlight equations above to match 
-the legacy OpenGL mechanism.'''
+the legacy OpenGL mechanism.
+
+Further reading:
+
+	The [http://www.lighthouse3d.com/opengl/glsl/index.php?lights Lighthouse GLSL Lighting Tutorial] uses legacy entry points for 
+	geometry and tries to precisely reproduce the legacy pipeline.
+	The OpenGL Shading Language (Orange Book) Chapter 9 -- Emulating OpenGL Fixed Functionality
+'''
