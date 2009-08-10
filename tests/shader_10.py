@@ -6,6 +6,11 @@
 This tutorial builds on earlier tutorials by adding:
 
 	* Directional shielded Point Lights (Spot Lights)
+	
+Spot Lights are a commonly seen pattern. They are basically 
+Point Light sources which have shields/reflectors which block 
+light in most directions, while focussing the light (to some 
+degree) in a particular direction.
 '''
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
@@ -19,9 +24,37 @@ class TestContext( BaseContext ):
 	"""Demonstrates use of attribute types in GLSL
 	"""
 	LIGHT_COUNT = 3
+	'''Note that we're going to add 2 new vec4 fields to our light,
+	the legacy GL has 2 floats and a direction vector, but we're 
+	combining all the values into a uniform vector set.'''
 	LIGHT_SIZE = 7
 	def OnInit( self ):
 		"""Initialize the context"""
+		'''As you can see, we've created a new 4-element vector 
+		called SPOT_PARAMS which holds 3 "meaningful" float values.
+		The first element cos_spot_cutoff represents the cosign of 
+		the angle beyond which the light is cut off. This angle is 
+		measured from the light's spot_direction compared with the 
+		light_location vector.  In effect, it is a check to see if 
+		the fragment is within the cone of the light.  The use of the 
+		*cosine* of the angle is to allow for very fast checks against 
+		the dot-product of the normalized vectors.
+		
+		The second element, spot_exponent, is used to calculate the 
+		amount of "spotiness" of the spotlight, that is, the amount 
+		to which the spotlight focusses light on the center of the 
+		beam versus the outside of the beam.  A higher spot_exponent
+		will cause the spotlight to "focus" more, a lower exponent 
+		will cause the spotlight to act more like a "shielded" 
+		point-light (such as a lamp with blockers rather than reflectors).
+		
+		The last component of the SPOT_PARAMS is being used as a simple 
+		flag to tell us whether to apply the spot calculation.  We could 
+		have shaved a whole vec4 by packing the spot_exponent into the 
+		ATTENUATION vector's unused .w component, and then packing the 
+		spot_cutoff into the spot_direction's unused .w, but that becomes 
+		a bit awkward looking.
+		'''
 		lightConst = """
 		const int LIGHT_COUNT = %s;
 		const int LIGHT_SIZE = %s;
@@ -31,7 +64,7 @@ class TestContext( BaseContext ):
 		const int SPECULAR = 2;
 		const int POSITION = 3;
 		const int ATTENUATION = 4;
-		//SPOT_PARAMS [ spot_exponent, cos_spot_cutoff, ignored, is_spot ]
+		//SPOT_PARAMS [ cos_spot_cutoff, spot_exponent, ignored, is_spot ]
 		const int SPOT_PARAMS = 5;
 		const int SPOT_DIR = 6;
 		
@@ -42,6 +75,26 @@ class TestContext( BaseContext ):
 		
 		varying vec3 baseNormal;
 		"""%( self.LIGHT_COUNT, self.LIGHT_SIZE )
+		'''Our dLight function receives its final tweaks here.  We 
+		provide the two vec4 spot elements for the current light.
+		The spotlight operation modifies the point-light code such that 
+		the "attenuation" numerator is either 1.0 (for non-directional 
+		point-lights) or a calculated value for spot-lights.
+		
+		To calculate this value, we take the (cos of the) angle between 
+		the light direction (spot_direction) and the vector between 
+		the fragment and the light location (-light_pos).  If this value 
+		is lower than our spot_cutoff, then we do not want to provide 
+		any lighting whatsoever from this light, so we short-circuit and 
+		return a null vector of weights. 
+		
+		If the value is higher than the cutoff, we calculate the
+		"spotiness" multiplier.  Here we are *not* using the OpenGL 
+		standard method, instead we calculate the fraction of total 
+		cosine-space which is displayed and raise it to the power of our 
+		spot_exponent value.
+		
+		'''
 		dLight = """
 		vec3 dLight( 
 			in vec3 light_pos, // light position/direction
@@ -68,11 +121,18 @@ class TestContext( BaseContext ):
 						gl_NormalMatrix * normalize(spot_direction.xyz),
 						normalize(-light_pos)
 					);
-					if (spot_cos <= spot_params.y) {
+					if (spot_cos <= spot_params.x) {
 						// is a spot, and is outside the cone-of-light...
 						return vec3( 0.0, 0.0, 0.0 );
 					} else {
-						spot_effect = pow( spot_cos, spot_params.x );
+						if (spot_cos == 1.0) {
+							spot_effect = 1.0;
+						} else {
+							spot_effect = pow( 
+								(1.0-spot_params.x)/(1.0-spot_cos), 
+								spot_params.y 
+							);
+						}
 					}
 				}
 				n_dot_half = pow(
@@ -82,15 +142,11 @@ class TestContext( BaseContext ):
 					shininess
 				);
 				if (distance != 0.0) {
-					attenuation = clamp(
-						0.0,
-						1.0,
-						1.0 / (
+					attenuation = spot_effect / (
 							attenuations.x + 
 							(attenuations.y * distance) +
 							(attenuations.z * distance * distance)
-						)
-					);
+						);
 					n_dot_pos *= attenuation;
 					n_dot_half *= attenuation;
 				}
@@ -98,6 +154,7 @@ class TestContext( BaseContext ):
 			return vec3( attenuation, n_dot_pos, n_dot_half);
 		}		
 		"""
+		'''Nothing needs to change in our vertex shader.'''
 		vertex = compileShader( 
 			lightConst + 
 		"""
@@ -136,6 +193,8 @@ class TestContext( BaseContext ):
 				);
 			}
 		}""", GL_VERTEX_SHADER)
+		'''Our only change for the fragment shader is to pass in the 
+		spot components of the current light when calling dLight.'''
 		fragment = compileShader( 
 			lightConst + dLight + """
 		struct Material {
@@ -173,6 +232,7 @@ class TestContext( BaseContext ):
 			gl_FragColor = fragColor;
 		}
 		""", GL_FRAGMENT_SHADER)
+		'''Our uniform/geometry handling code is unchanged.'''
 		self.shader = compileProgram(vertex,fragment)
 		self.coords,self.indices,self.count = Sphere( 
 			radius = 1 
@@ -193,14 +253,22 @@ class TestContext( BaseContext ):
 			if location in (None,-1):
 				print 'Warning, no attribute: %s'%( uniform )
 			setattr( self, attribute+ '_loc', location )
-		
+	'''We'll dial down the shininess on our material a little so that 
+	it's easier to see the spotlight cones on the sphere.'''
 	UNIFORM_VALUES = [
 		('Global_ambient',(.05,.05,.05,1.0)),
 		('material.ambient',(.2,.2,.2,1.0)),
 		('material.diffuse',(.8,.8,.8,1.0)),
 		('material.specular',(.8,.8,.8,1.0)),
-		('material.shininess',(.5,)),
+		('material.shininess',(.8,)),
 	]
+	'''Our lights array now has more fields per light.  The spotlight 
+	vectors always have to be present, even if we are not using them 
+	for a particular light.  We're going to define 3 lights here with 
+	fairly high "spotiness" values so that we can see the focussed 
+	beam effect on the sphere.  The spot exponents in this case tend to 
+	cause an area in the center of the beam to saturate completely.
+	'''
 	LIGHTS = array([
 	
 		x[1] for x in [
@@ -209,7 +277,7 @@ class TestContext( BaseContext ):
 			('lights[0].specular',(0.0,.25,0.0,1.0)),
 			('lights[0].position',(2.5,3.5,2.5,1.0)),
 			('lights[0].attenuation',(0.0,.125,0.0,1.0)),
-			('lights[0].spot_params',(2,cos(.2),0.0,1.0)),
+			('lights[0].spot_params',(cos(.2),1.5,0.0,1.0)),
 			('lights[0].spot_dir',(-8,-20,-8.0,1.0)),
 			
 			('lights[1].ambient',(.05,.05,.05,1.0)),
@@ -217,18 +285,19 @@ class TestContext( BaseContext ):
 			('lights[1].specular',(1.0,0.0,0.0,1.0)),
 			('lights[1].position',(-2.5,2.5,2.5,1.0)),
 			('lights[1].attenuation',(0.0,0.0,.125,1.0)),
-			('lights[1].spot_params',(2.0,cos(.25),0.0,1.0)),
+			('lights[1].spot_params',(cos(.25),2.0,0.0,1.0)),
 			('lights[1].spot_dir',(2.5,-5.5,-2.5,1.0)),
 			
 			('lights[2].ambient',(.05,.05,.05,1.0)),
-			('lights[2].diffuse',(.1,.1,.8,1.0)),
-			('lights[2].specular',(0.0,0.0,1.0,1.0)),
+			('lights[2].diffuse',(.1,.1,1.0,1.0)),
+			('lights[2].specular',(0.0,1.0,1.0,1.0)),
 			('lights[2].position',(0.0,-3.06,3.06,1.0)),
 			('lights[2].attenuation',(2.0,0.0,0.0,1.0)),
-			('lights[2].spot_params',(0.0,0.0,0.0,0.0)),
-			('lights[2].spot_dir',(0.0,0.0,-1.0,1.0)),
+			('lights[2].spot_params',(cos(.15),.75,0.0,1.0)),
+			('lights[2].spot_dir',(0.0,3.06,-3.06,1.0)),
 		]
 	], 'f')
+	'''Nothing else needs to change from the previous tutorial.'''
 	def Render( self, mode = None):
 		"""Render the geometry for the scene."""
 		BaseContext.Render( self, mode )
@@ -276,3 +345,6 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)
+'''We've now built a fairly complete per-pixel Phong renderer.  As an 
+exercise, you may wish to modify the spotlight equations above to match 
+the legacy OpenGL mechanism.'''
