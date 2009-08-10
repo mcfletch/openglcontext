@@ -28,6 +28,8 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
 	"""Demonstrates use of attribute types in GLSL
 	"""
+	LIGHT_COUNT = 3
+	LIGHT_SIZE = 5
 	def OnInit( self ):
 		"""Initialize the context"""
 		'''Our common light-model declarations are getting slightly 
@@ -40,8 +42,8 @@ class TestContext( BaseContext ):
 		easiest to just ignore the w value.
 		'''
 		lightConst = """
-		const int LIGHT_COUNT = 3;
-		const int LIGHT_SIZE = 5;
+		const int LIGHT_COUNT = %s;
+		const int LIGHT_SIZE = %s;
 		
 		const int AMBIENT = 0;
 		const int DIFFUSE = 1;
@@ -55,7 +57,7 @@ class TestContext( BaseContext ):
 		varying float Light_distance[LIGHT_COUNT]; 
 		
 		varying vec3 baseNormal;
-		"""
+		"""%( self.LIGHT_COUNT, self.LIGHT_SIZE )
 		'''==Lighting Attenuation=
 		
 		For the first time in many tutorials we're altering out 
@@ -142,9 +144,9 @@ class TestContext( BaseContext ):
 		is less processor intensive than doing the calculations 
 		for each fragment.
 		
-		We are doing our vector calculations in model-space, there 
-		is no reason we couldn't do them in view-space.  For these 
-		particular calculations the results wind up the same.
+		We are doing our vector calculations for the light location
+		and distance in model-space.  You could do them in view-space 
+		as well.
 		'''
 		vertex = compileShader( 
 			lightConst + 
@@ -184,6 +186,16 @@ class TestContext( BaseContext ):
 				);
 			}
 		}""", GL_VERTEX_SHADER)
+		'''Our fragment shader is only slightly modified to use our 
+		new dLight function.  We need a larger "weights" variable and 
+		need to pass in more information.  We also need to multiply 
+		the per-light ambient value by the new weight we've added.
+		
+		You will also notice that since we are using the 'i' variable 
+		to directly index the varying arrays, we've introduced a 'j' 
+		variable that tracks the offset into the light array which 
+		begins the current light.
+		'''
 		fragment = compileShader( 
 			lightConst + dLight + """
 		struct Material {
@@ -219,6 +231,7 @@ class TestContext( BaseContext ):
 			gl_FragColor = fragColor;
 		}
 		""", GL_FRAGMENT_SHADER)
+		'''Our general uniform setup should look familiar by now.'''
 		self.shader = compileProgram(vertex,fragment)
 		self.coords,self.indices,self.count = Sphere( 
 			radius = 1 
@@ -244,27 +257,28 @@ class TestContext( BaseContext ):
 		('material.ambient',(.2,.2,.2,1.0)),
 		('material.diffuse',(.5,.5,.5,1.0)),
 		('material.specular',(.8,.8,.8,1.0)),
-		('material.shininess',(3.0,)),
+		('material.shininess',(2.0,)),
 	]
+	'''We've '''
 	LIGHTS = array([
 		x[1] for x in [
 			('lights[0].ambient',(.05,.05,.05,1.0)),
 			('lights[0].diffuse',(.1,.8,.1,1.0)),
 			('lights[0].specular',(0.0,1.0,0.0,1.0)),
-			('lights[0].position',(2.0,2.0,2.0,1.0)),
+			('lights[0].position',(2.5,2.5,2.5,1.0)),
 			('lights[0].attenuation',(0.0,.2,0.0,1.0)),
 			
 			('lights[1].ambient',(.05,.05,.05,1.0)),
 			('lights[1].diffuse',(.8,.1,.1,1.0)),
 			('lights[1].specular',(1.0,0.0,0.0,1.0)),
-			('lights[1].position',(-2.0,2.0,2.0,1.0)),
+			('lights[1].position',(-2.5,2.5,2.5,1.0)),
 			('lights[1].attenuation',(0.0,0.0,.2,1.0)),
 			
 			('lights[2].ambient',(.05,.05,.05,1.0)),
-			('lights[2].diffuse',(.3,.3,.3,1.0)),
+			('lights[2].diffuse',(.1,.1,.8,1.0)),
 			('lights[2].specular',(0.0,0.0,1.0,1.0)),
-			('lights[2].position',(-4.0,2.0,-5.0,1.0)),
-			('lights[2].attenuation',(0.0,1.0,0.0,1.0)),
+			('lights[2].position',(0.0,-3.06,3.06,1.0)),
+			('lights[2].attenuation',(2.0,0.0,0.0,1.0)),
 		]
 	], 'f')
 	def Render( self, mode = None):
@@ -278,7 +292,7 @@ class TestContext( BaseContext ):
 			try:
 				glUniform4fv( 
 					self.uniform_locations['lights'],
-					12,
+					self.LIGHT_COUNT * self.LIGHT_SIZE,
 					self.LIGHTS
 				)
 				for uniform,value in self.UNIFORM_VALUES:

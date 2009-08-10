@@ -29,6 +29,8 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
 	"""Demonstrates use of attribute types in GLSL
 	"""
+	LIGHT_COUNT = 3
+	LIGHT_SIZE = 4
 	def OnInit( self ):
 		"""Initialize the context"""
 		'''==Sharing Declarations=
@@ -44,8 +46,8 @@ class TestContext( BaseContext ):
 		declarations.
 		'''
 		lightConst = """
-		const int LIGHT_COUNT = 3;
-		const int LIGHT_SIZE = 4;
+		const int LIGHT_COUNT = %s;
+		const int LIGHT_SIZE = %s;
 		
 		const int AMBIENT = 0;
 		const int DIFFUSE = 1;
@@ -57,7 +59,7 @@ class TestContext( BaseContext ):
 		varying vec3 EC_Light_location[LIGHT_COUNT]; 
 		
 		varying vec3 baseNormal;
-		"""
+		"""%( self.LIGHT_COUNT, self.LIGHT_SIZE )
 		'''As you can see, we're going to create two new varying values,
 		the EC_Light_half and EC_Light_location values.  These are 
 		going to hold the normalized partial calculations for the lights.
@@ -207,7 +209,7 @@ class TestContext( BaseContext ):
 			try:
 				glUniform4fv( 
 					self.uniform_locations['lights'],
-					12,
+					self.LIGHT_COUNT * self.LIGHT_SIZE,
 					self.LIGHTS
 				)
 				for uniform,value in self.UNIFORM_VALUES:
