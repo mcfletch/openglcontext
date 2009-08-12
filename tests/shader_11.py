@@ -12,6 +12,8 @@ This tutorial:
 		geometry renderers
 	
 '''
+from __future__ import with_statement 
+import contextlib
 from OpenGLContext import testingcontext
 BaseContext, MainFunction = testingcontext.getInteractive()
 from OpenGL.GL import *
@@ -309,10 +311,7 @@ class TestContext( BaseContext ):
 	def Render( self, mode = None):
 		"""Render the geometry for the scene."""
 		BaseContext.Render( self, mode )
-		glUseProgram(self.shader)
-		try:
-			self.coords.bind()
-			self.indices.bind()
+		with contextlib.nested(self.coords,self.indices,self.shader):
 			stride = self.coords.data[0].nbytes
 			try:
 				glUniform1iv( 
@@ -349,12 +348,8 @@ class TestContext( BaseContext ):
 					GL_UNSIGNED_SHORT, self.indices
 				)
 			finally:
-				self.coords.unbind()
-				self.indices.unbind()
 				glDisableVertexAttribArray( self.Vertex_position_loc )
 				glDisableVertexAttribArray( self.Vertex_normal_loc )
-		finally:
-			glUseProgram( 0 )
 
 if __name__ == "__main__":
 	MainFunction ( TestContext)

@@ -92,6 +92,11 @@ class Texture( object ):
 		glBindTexture(GL_TEXTURE_2D, self.texture)
 		glEnable(GL_TEXTURE_2D)
 	
+	__enter__ = __call__
+	def __exit__( self, typ, val, tb ):
+		"""Disable for context-manager behaviour"""
+		glDisable( GL_TEXTURE_2D )
+	
 	def update( self, lower_left, size, data ):
 		"""Update the texture with new data"""
 		glBindTexture(GL_TEXTURE_2D, self.texture)
