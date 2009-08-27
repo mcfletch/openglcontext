@@ -3,18 +3,7 @@
 
 [shader_1.py-screen-0001.png Screenshot]
 
-This tutorial introduces modern OpenGL mechanisms for rendering 
-3D geometry via the GL Shading Language (GLSL).  Although we will 
-use a few legacy OpenGL features for simplicity in early tutorials,
-later tutorials will eliminate these entry points to produce 
-legacy-free code.
-
-We assume you know:
-
-	* General programming (with Python)
-	* Some highschool level math
-
-We'll learn:
+In this tutorial we'll learn:
 
 	* What a vertex shader *must* do in GLSL.
 	* What a fragment shader *must* do.
@@ -25,6 +14,8 @@ We'll learn:
 First we do our imports, the [http://pyopengl.sourceforge.net/context OpenGLContext] testingcontext allows
 for the use of Pygame, wxPython, or GLUT GUI systems with the same 
 code.  These imports retrieve an appropriate context for this 
+machine.  If you have not installed any "extra" packages, such as 
+Pygame or wxPython, this will likely be a GLUT context on your 
 machine.
 '''
 from OpenGLContext import testingcontext

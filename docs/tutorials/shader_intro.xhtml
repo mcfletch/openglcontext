@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+<title>Introduction to Shaders: Requirements/Setup</title>
+    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+</head>
+<body>
+<table width="100%" class="navtable"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="index.xhtml">Index</a></td>
+	<td align="center">Introduction to Shaders: Requirements/Setup</td>
+	<td align="right"><a href="shader_1.xhtml">Next</a></td>
+	</tr>
+</thead></table>
+	<div class="commentary">
+	<h1 class="title">Requirements/Setup</h1>
+	<div class="paragraph">This tutorial introduces modern, low-level 3D rendering 
+techniques.  It tries to avoid the use of "legacy" OpenGL 
+entry points as much as possible.  Though legacy OpenGL 
+is likely to be supported on most desktop/laptop hardware 
+for the foreseeable future, their use is technically 
+discouraged.</div>
+	<div class="paragraph">We assume you know:</div>
+	<ul class="">
+	<li class="">General programming (with Python)</li>
+	<li class="">Some highschool level math</li>
+</ul>
+	<h1 class="title">Package Installation</h1>
+	<div class="paragraph">This tutorial requires at least the following packages:</div>
+	<ul class="">
+	<li class="">
+	<a href="http://pyopengl.sourceforge.net/context" class="">OpenGLContext 2.1.0a5</a>
+	 -- provides the overall rendering code (
+	<a href="http://pyopengl.sourceforge.net/documentation/installation.html" class="">Installation Notes</a>
+	).
+</li>
+	<li class="">
+	<a href="http://pyopengl.sourceforge.net" class="">PyOpenGL 3.0.1a3</a>
+	 -- the actual     rendering interface we're learning to use in this tutorial.
+</li>
+	<li class="">
+	<a href="http://numpy.scipy.org/" class="">Numpy</a>
+	 -- provides the multi-dimensional     array structures we'll use for passing data into PyOpenGL 
+</li>
+	<li class="">
+	<a href="http://sourceforge.net/projects/pyvrml97/" class="">PyVRML97</a>
+	 -- provides     a VRML97 rendering and scenegraph mechanism which is core to     OpenGLContext
+</li>
+	<li class="">
+	<a href="http://pydispatcher.sourceforge.net/" class="">PyDispatcher</a>
+	 -- provides     routing/observation support for PyVRML97
+</li>
+</ul>
+	<div class="paragraph">For platforms other than Win32 I recommend using 
+	<a href="http://pypi.python.org/pypi/virtualenv" class="">virtualenv</a>
+	 environment in order 
+to run this tutorial, as many of the packages above are not available 
+in distribution packaging systems yet.  Numpy is normally available on 
+Linux platforms with a recent build, so you may wish to use the 
+platform build.
+</div>
+	<div class="paragraph">To set up the packages on a Linux Machine using virtualenv:</div>
+</div>
+	<div class="code-sample">"""virtualenv tutorial 
+cd tutorial
+source bin/activate 
+easy_install  PyDispatcher PyVRML97 PyOpenGL OpenGLContext"""
+</div>
+	<div class="commentary">
+	<h1 class="title">System Requirements</h1>
+	<div class="paragraph">This tutorial requires a very modern OpenGL implementation.  Your 
+card/driver should likely support OpenGL 2.x natively, though 
+OpenGL 1.5+ extensions may work.</div>
+	<div class="paragraph">It is known *not* to work on the following theoretically capable 
+configurations:</div>
+	<ul class="">
+	<li class="">Mac Radeon 9600, OS-X 10.4/10.5 (does not support vertex 	attribute arrays)</li>
+</ul>
+	<div class="paragraph">Note that there are alternative code-paths that can be used, but 
+that the tutorial does not currently explore those paths in the 
+interest of making the introductory tutorial easier to follow.
+</div>
+</div>
+<div class="source-reference">This code-walkthrough tutorial is generated from the shader_intro.py script in the 
+OpenGLContext source distribution.</div>
+<table width="100%" class="navtable"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="index.xhtml">Index</a></td>
+	<td align="center">Introduction to Shaders: Requirements/Setup</td>
+	<td align="right"><a href="shader_1.xhtml">Next</a></td>
+	</tr>
+	<tr class="meta-links">
+		<td colspan="3">
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
+		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
+		</td>
+	</tr>
+</thead></table>
+</body>
+</html>
