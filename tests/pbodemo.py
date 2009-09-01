@@ -26,7 +26,11 @@ def _cleaner( vbo ):
     return clean
 
 def map_buffer( vbo, access=GL_READ_WRITE ):
-    """Map the given buffer into a numpy array..."""
+    """Map the given buffer into a numpy array...
+    
+    Method taken from:
+     http://www.mail-archive.com/numpy-discussion@lists.sourceforge.net/msg01161.html
+    """
     func = ctypes.pythonapi.PyBuffer_FromMemory
     func.restype = ctypes.py_object
     vp = glMapBuffer( vbo.target, access )
@@ -53,8 +57,10 @@ class TestContext( BaseContext ):
             GL_UNSIGNED_BYTE,
             self.vbo,
         )
-        data = map_buffer( self.vbo )
-        print len([x for x in data if x != 255]), 'non-white pixels'
+        # map_buffer returns an Byte view, we want an 
+        # UInt view of that same data...
+        data = map_buffer( self.vbo ).view( 'I' )
+        print data
         del data
         self.vbo.unbind()
         
