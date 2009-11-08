@@ -4,8 +4,8 @@ import OpenGL
 #OpenGL.FULL_LOGGING = True
 OpenGL.ERROR_CHECKING = False 
 #OpenGL.ERROR_ON_COPY = True
-from OpenGLContext.testingcontext import getInteractive
-BaseContext, MainFunction = getInteractive()
+from OpenGLContext import testingcontext
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import vrmlcontext
 import sys
 
@@ -30,7 +30,7 @@ def main():
 	if not sys.argv[1:2]:
 		print usage
 		sys.exit(1)
-	return MainFunction ( TestContext)
+	return TestContext.ContextMainLoop()
 
 
 if __name__ == "__main__":

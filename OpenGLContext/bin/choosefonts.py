@@ -2,7 +2,7 @@
 '''Test of text objects
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 import string, time, sys, os
@@ -184,5 +184,5 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

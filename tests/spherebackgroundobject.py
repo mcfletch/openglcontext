@@ -2,7 +2,7 @@
 '''SphereBackground object testing code
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import context
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
@@ -70,5 +70,5 @@ class TestContext( BaseContext ):
 		return sg
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

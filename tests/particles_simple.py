@@ -12,7 +12,7 @@ the particles.  We use the PointSet object's ability to render
 using the applied texture as a sprite (GL.ARB.point_parameters).
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from OpenGLContext.events.timer import Timer
@@ -230,4 +230,4 @@ blue and turning white."""
 		self.points.maxSize = max((1.0,self.points.maxSize-1.0))
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

@@ -5,7 +5,7 @@ Well, okay, inspired is a bit much for such a tiny piece of
 code :) .
 """
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 import string, time
 from OpenGLContext import drawcube
@@ -22,5 +22,5 @@ class TestContext( BaseContext ):
 		return 1
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

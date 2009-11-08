@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """Retrieve OpenGL state values and print to console"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 import string
 
 from OpenGLContext.scenegraph import basenodes
@@ -349,4 +349,4 @@ stringarguments = [
 ]
      	
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

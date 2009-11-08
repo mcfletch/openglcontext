@@ -4,7 +4,7 @@
 #import OpenGL 
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
@@ -111,5 +111,5 @@ class TestContext( BaseContext ):
 		)
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

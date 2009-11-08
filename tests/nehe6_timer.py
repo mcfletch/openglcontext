@@ -14,7 +14,7 @@ for speeding, slowing and reversing the state of
 rotation.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 import string
@@ -133,7 +133,7 @@ NeHe tutorials."""
 		glEnd()
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''
 Author: [http://nehe.gamedev.net Jeff Molofee (aka NeHe)]
 

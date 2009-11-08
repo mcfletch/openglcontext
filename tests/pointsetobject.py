@@ -2,7 +2,7 @@
 '''PointSet object test (draw line of coloured dots)
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.arrays import *
 from math import pi
 
@@ -53,5 +53,5 @@ class TestContext( BaseContext ):
 		
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

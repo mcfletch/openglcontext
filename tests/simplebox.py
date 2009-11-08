@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 
 scene = sceneGraph(
@@ -30,4 +30,4 @@ class TestContext( BaseContext ):
 		self.sg = scene
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

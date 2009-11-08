@@ -4,7 +4,7 @@
 Based on nehe6
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 
 from OpenGLContext import drawcube
 from OpenGLContext.scenegraph.basenodes import *
@@ -64,5 +64,5 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

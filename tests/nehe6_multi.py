@@ -8,7 +8,7 @@ rotating cube demo adds multiple-texture support with
 a "light map" modulating the base texture.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import texture
 from OpenGL.GL import *
 from OpenGL.GL.ARB.multitexture import *
@@ -162,7 +162,7 @@ def mTexture( a,b ):
 	glMultiTexCoord2f(GL_TEXTURE1, a,b) 
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''
 Author: [http://nehe.gamedev.net Jeff Molofee (aka NeHe)]
 

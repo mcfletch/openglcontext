@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.arrays import arange
 
 from OpenGLContext.scenegraph.basenodes import *
@@ -105,4 +105,4 @@ def lorentz( iterations = 100000, start=(0,-2,-1) ):
 
 if __name__ == "__main__":
 	import sys, cProfile
-	cProfile.run( "MainFunction ( TestContext)", 'OpenGLContext.profile' )
+	cProfile.run( "TestContext.ContextMainLoop()", 'OpenGLContext.profile' )

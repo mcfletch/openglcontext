@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """Retrieve OpenGL Light state values and print to console"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GLU import *
 
@@ -11,5 +11,5 @@ class TestContext( BaseContext ):
 		print 'extensions', gluGetString( GLU_EXTENSIONS )
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

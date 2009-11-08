@@ -2,7 +2,7 @@
 '''Test point parameter rendering code
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.arrays import *
 from math import pi
 import sys
@@ -82,5 +82,5 @@ class TestContext( BaseContext ):
 		
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

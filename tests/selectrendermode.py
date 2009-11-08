@@ -6,7 +6,7 @@ use push/pop of the name-stack to report selection during
 the rendermode.SelectRenderMode pass.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube, context, interactivecontext
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -81,5 +81,5 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

@@ -13,7 +13,7 @@ functions, as well as testing for proper operation under
 malformed parameters to the glWindowPos2dvARB function.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.constants import *
 from OpenGL import error
@@ -111,4 +111,4 @@ class TestContext( BaseContext ):
 		
 		
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

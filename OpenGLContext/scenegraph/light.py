@@ -69,6 +69,11 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
 		else:
 			return 0
 	
+	def createShadowMap( self, mode ):
+		"""Create a shadow map for this light..."""
+		
+		
+	
 
 class PointLight(basenodes.PointLight, Light):
 	"""PointLight node

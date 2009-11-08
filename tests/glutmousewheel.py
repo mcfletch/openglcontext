@@ -2,7 +2,7 @@
 '''Test FreeGLUT glutMouseWheelFunc extension to GLUT
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive( ('glut',) )
+BaseContext = testingcontext.getInteractive( 'glut' )
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 
@@ -35,7 +35,7 @@ class TestContext( BaseContext ):
 		print 'CloseWM'
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 	print 'Code after the mainloop exits'
 	
 

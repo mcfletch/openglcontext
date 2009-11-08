@@ -4,7 +4,7 @@
 import OpenGL
 OpenGL.UNSIGNED_BYTE_IMAGES_AS_STRING = False
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube
 from OpenGLContext.scenegraph import imagetexture
 from OpenGL.GL import *
@@ -159,5 +159,5 @@ class TestContext( BaseContext ):
 		self.capturedSize = (width,height,1)
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

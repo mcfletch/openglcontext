@@ -19,7 +19,7 @@ so that the vertex shader provides interpolated values to the
 fragment shader.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -249,6 +249,6 @@ class TestContext( BaseContext ):
 			glUseProgram( 0 )
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''With our shaders now reasonably optimized, we can move on to 
 creating point-lights (as opposed to our current directional lights).'''

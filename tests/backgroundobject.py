@@ -2,7 +2,7 @@
 '''Tests operation of SimpleBackground object -> solid color background
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import context
 from OpenGLContext.scenegraph import simplebackground
 from OpenGL.GL import *
@@ -31,5 +31,5 @@ class TestContext( BaseContext ):
 		glEnd()
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

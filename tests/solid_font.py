@@ -2,7 +2,7 @@
 '''Low-level tests of solid fonts'''
 from OpenGL.GL import *
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 import _fontstyles#, _ttf_fonts
 from OpenGLContext.debug.logs import text_log
@@ -75,6 +75,6 @@ class TestContext( BaseContext ):
 			
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 
 

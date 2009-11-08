@@ -16,7 +16,7 @@ here.
 The previous tutorial discussed this setup procedure at length.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
@@ -63,7 +63,7 @@ class TestContext( BaseContext ):
 		glEnd();
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''
 Author: [http://nehe.gamedev.net Jeff Molofee (aka NeHe)]
 

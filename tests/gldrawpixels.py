@@ -11,7 +11,7 @@ RGB image).
 '''
 
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 import string
 
@@ -89,4 +89,4 @@ black square.
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 		
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

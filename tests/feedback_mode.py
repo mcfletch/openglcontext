@@ -1,5 +1,5 @@
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
@@ -54,5 +54,5 @@ class TestContext( BaseContext ):
 				
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

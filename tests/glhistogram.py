@@ -11,7 +11,7 @@ RGB image).
 '''
 
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 import numpy
 from OpenGL.GL import *
 from OpenGL.GL.ARB.imaging import *
@@ -92,4 +92,4 @@ class TestContext( BaseContext ):
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 		
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

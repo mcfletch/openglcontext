@@ -2,7 +2,7 @@
 '''Test of transparent, sorted IndexedFaceSet geometry
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -240,7 +240,7 @@ ICOSDATA = """-4.769095 1.349644 0.011604
 
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 
 
 

@@ -4,7 +4,7 @@
 Based on nehe6
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph import imagetexture
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
@@ -66,5 +66,5 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

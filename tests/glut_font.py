@@ -3,7 +3,7 @@
 '''
 from OpenGL.GL import *
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.text import glutfont
 
@@ -36,4 +36,4 @@ class TestContext( BaseContext ):
 			font.render( SHORT_TEST )
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

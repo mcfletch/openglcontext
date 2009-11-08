@@ -7,7 +7,7 @@ OpenGL.STORE_POINTERS = False
 OpenGL.ERROR_ON_COPY = True
 
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph import nodepath
 from OpenGLContext import visitor
@@ -134,6 +134,6 @@ if __name__ == "__main__":
 	else:
 		name = 'new.profile'
 	import cProfile
-	cProfile.run( "MainFunction ( TestContext)", name )
+	cProfile.run( "TestContext.ContextMainLoop()", name )
 
 

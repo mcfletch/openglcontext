@@ -15,6 +15,6 @@ class TestContext( _bitmap_font.TestContext ):
 		)
 	testingClass = pygamefont.PyGameBitmapFont
 if __name__ == "__main__":
-	_bitmap_font.MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 
 

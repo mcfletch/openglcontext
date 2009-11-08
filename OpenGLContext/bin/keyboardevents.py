@@ -2,7 +2,7 @@
 '''Demonstrate capture of keyboard and keypress events
 '''
 from OpenGLContext import testingcontext, vrmlcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 
@@ -90,5 +90,5 @@ class TestContext( vrmlcontext.VRMLContext, BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

@@ -55,7 +55,7 @@ if __name__ == '__main__':
 	testExclusion()
 	# now test the stuff that needs a run-time context...
 	from OpenGLContext import testingcontext
-	BaseContext, MainFunction = testingcontext.getInteractive()
+	BaseContext = testingcontext.getInteractive()
 	class TestContext( BaseContext ):
 		currentImage = 0
 		currentSize = 0
@@ -89,5 +89,5 @@ if __name__ == '__main__':
 							pass
 						break
 			glMatrixMode(GL_MODELVIEW);
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 	

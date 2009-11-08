@@ -69,7 +69,7 @@ ambient reflected light.  Similarly, a strongly coloured ambient light
 will tend to give all materials a strong "undercast" of that colour.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -321,7 +321,7 @@ class TestContext( BaseContext ):
 			glUseProgram( 0 )
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''Our next tutorial will cover the rest of the Phong rendering 
 algorithm, by adding "specular highlights" (shininess) to the 
 surface.'''

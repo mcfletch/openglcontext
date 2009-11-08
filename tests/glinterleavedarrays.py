@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 '''Test of the glInterleavedArrays function (draws two quads)'''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 
@@ -49,5 +49,5 @@ GL_N3F_V3F variant."""
 
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

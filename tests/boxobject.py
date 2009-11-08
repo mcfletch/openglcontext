@@ -4,7 +4,7 @@
 #import OpenGL 
 #OpenGL.FULL_LOGGING = True 
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, box, scenegraph,light
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
@@ -78,5 +78,5 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

@@ -19,7 +19,7 @@ to bind together similar information into namespaces for easier
 reference.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -333,6 +333,6 @@ class TestContext( BaseContext ):
 			glUseProgram( 0 )
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''Our next tutorial will optimize the directional light code here 
 so that it is less wasteful of GPU resources.'''

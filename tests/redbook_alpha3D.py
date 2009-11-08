@@ -48,7 +48,7 @@
  */
 """
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import context
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -146,5 +146,5 @@ class TestContext( BaseContext ):
 		glPopMatrix ();
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

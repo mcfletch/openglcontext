@@ -6,7 +6,7 @@ from OpenGL.GL import *
 from OpenGL.GL.shaders import *
 from OpenGL.arrays import vbo
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 import _fontstyles
 import sys, math
@@ -162,6 +162,6 @@ class TestContext( BaseContext ):
 			self.getTTFFiles(),
 		)
 if __name__ == "__main__":
-	MainFunction ( TestContext )
+	TestContext.ContextMainLoop()
 
 

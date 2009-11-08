@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """Multi-texturing test/sample"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext import texture
 import sys
@@ -65,4 +65,4 @@ def mTexture( a,b ):
 	multitexture.glMultiTexCoord2fARB(multitexture.GL_TEXTURE1_ARB, a,b) 
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

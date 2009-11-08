@@ -4,7 +4,7 @@
 #import OpenGL 
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from math import pi
@@ -119,5 +119,5 @@ shaped "spring", which should extend some distance downward."""
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

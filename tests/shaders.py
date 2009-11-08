@@ -2,7 +2,7 @@
 '''Tests rendering using the ARB shader objects extension...
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GL.ARB.shader_objects import *
 from OpenGL.GL.ARB.fragment_shader import *
@@ -78,5 +78,5 @@ class TestContext( BaseContext ):
 		
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

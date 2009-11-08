@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 '''CubeBackground object test (image cube background)'''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import context
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
@@ -29,5 +29,5 @@ class TestContext( BaseContext ):
 		)
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

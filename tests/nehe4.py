@@ -13,7 +13,7 @@ here.
 
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 '''The time module is used to provide crude animation support'''
 import time
@@ -76,7 +76,7 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''
 Author: [http://nehe.gamedev.net Jeff Molofee (aka NeHe)]
 

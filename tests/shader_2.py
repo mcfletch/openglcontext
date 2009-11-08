@@ -18,7 +18,7 @@ recognize something, go back to the previous tutorial's
 introduction.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -190,7 +190,7 @@ class TestContext( BaseContext ):
 			glUseProgram( 0 )
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 
 '''
 Terms:

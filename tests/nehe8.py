@@ -10,7 +10,7 @@ with the tutorial, so that only changes from the tutorial are noted
 here.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import interactivecontext, drawcube
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -233,7 +233,7 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction(TestContext)
+	TestContext.ContextMainLoop()
 '''
 Author: [http://nehe.gamedev.net Jeff Molofee (aka NeHe)]
 Author: [http://www.hypercosm.com Tom Stanis]

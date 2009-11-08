@@ -21,7 +21,7 @@ Chapter 9.
 Our imports are by now quite familiar...
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGL.GL.shaders import *
@@ -177,6 +177,6 @@ class TestContext( BaseContext ):
 			glUseProgram( 0 )
 		
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''You may wish to use the keyboard "arrow" keys to walk around in the 
 "foggy" world and see the effect update as your move closer to or further away from the geometry.'''

@@ -4,7 +4,7 @@
 import OpenGL 
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 
 class TestContext( BaseContext ):
@@ -50,5 +50,5 @@ class TestContext( BaseContext ):
 		)
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

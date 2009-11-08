@@ -6,4 +6,4 @@ from OpenGLContext.scenegraph.text import glutfont
 class TestContext( _bitmap_font.TestContext ):
 	testingClass = glutfont.GLUTBitmapFont
 if __name__ == "__main__":
-	_bitmap_font.MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

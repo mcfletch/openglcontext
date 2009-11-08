@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """Demonstrate/test usage of glGetTexImage"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph import imagetexture
 
 from OpenGL.GL import *
@@ -59,4 +59,4 @@ class TestContext( BaseContext ):
 		
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

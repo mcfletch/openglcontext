@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """Retrieve OpenGL polygon stipple state values and print to console"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 import string
 
 #from arraystuff import *
@@ -16,5 +16,5 @@ class TestContext( BaseContext ):
 		print  repr(glGetPolygonStipple())
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

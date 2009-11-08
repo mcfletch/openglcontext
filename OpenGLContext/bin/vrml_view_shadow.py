@@ -21,5 +21,5 @@ if __name__ == "__main__":
 	if not sys.argv[1:2]:
 		print usage
 		sys.exit(1)
-	vrml_view.MainFunction ( TestContext )
+	TestContext.ContextMainLoop()
 

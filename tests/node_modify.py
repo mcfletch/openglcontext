@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """Test of routing the modification of one node to another"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 import os, sys
 from OpenGLContext.events.timer import Timer
 try:
@@ -37,4 +37,4 @@ transform which contains the other box."""
 		self.trans.rotation = x,y,z,(self.rot*event.fraction())
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

@@ -16,7 +16,7 @@ Note that the legacy OpenGL lighting model described here can be
 replaced when using shader-based geometry.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 '''We'll load the whole set of VRML97 base nodes and get the value 
 of pi to some reasonable accuracy (from numpy).'''
 from OpenGLContext.scenegraph.basenodes import *
@@ -221,5 +221,5 @@ with rotating lighting in three colours."""
 			light.intensity = value 
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

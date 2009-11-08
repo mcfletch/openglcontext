@@ -2,7 +2,7 @@
 '''Simple demo of a rotating image mapped to a square
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.events.timer import Timer
 from OpenGL.GL import *
@@ -54,5 +54,5 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

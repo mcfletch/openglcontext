@@ -8,7 +8,7 @@ scenegraph NURBs nodes.  It implements the RedBook trimmed-nurbs
 demo using the scenegraph API.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 import string, time
@@ -124,4 +124,4 @@ with an ice-cream-cone-shaped trimming curve
 		)
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

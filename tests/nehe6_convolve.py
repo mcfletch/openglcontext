@@ -22,7 +22,7 @@ Based on:
 			or mention my web site somewhere in your program or it's docs.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 import time, os
 from PIL.Image import open
@@ -191,5 +191,5 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

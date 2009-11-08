@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """Retrieve OpenGL material state values and print to console"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 import string
 
 ##from arraystuff import *
@@ -22,5 +22,5 @@ parameters = [
 ]
 		
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

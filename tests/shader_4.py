@@ -29,7 +29,7 @@ value we will pass into our shader.  This kind of "tweening"
 can be used to animate continuous mesh models smoothly.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -180,9 +180,10 @@ class TestContext( BaseContext ):
 			frac = 1.0-frac 
 		frac *= 2
 		self.tween_fraction =frac
+		self.triggerRedraw()
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''On-GPU tweening would be likely to use an extremely large array 
 with a character's key-frame poses stored in sequence (as opposed to
 being packed into huge vertex records).  The animation code would choose

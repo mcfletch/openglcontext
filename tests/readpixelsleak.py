@@ -2,7 +2,7 @@
 '''Test leak on glReadPixelsub
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, reshape
@@ -89,5 +89,5 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	print 'Press "s" to save the buffer to the file test.jpg'
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

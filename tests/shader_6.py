@@ -19,7 +19,7 @@ re-emit light *in a particular direction* based on the angle of
 incidence of the light ray.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -320,7 +320,7 @@ class TestContext( BaseContext ):
 			glUseProgram( 0 )
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''Our per-fragment Blinn-Phong rendering engine is a very simplistic 
 model of real-world lighting, and is currently limited to a single
 directional light.  Our next tutorial will begin to 

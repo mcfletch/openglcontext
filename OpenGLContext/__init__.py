@@ -35,13 +35,10 @@ VRMLContext( 'pygame', 'OpenGLContext.pygamevrmlcontext.VRMLContext' )
 VRMLContext( 'wx', 'OpenGLContext.wxvrmlcontext.VRMLContext' )
 VRMLContext( 'glut', 'OpenGLContext.glutvrmlcontext.VRMLContext' )
 
-Context( 'qt', 'OpenGLContext_qt.qtcontext.QtContext' )
-InteractiveContext( 
-    'qt', 'OpenGLContext_qt.qtcontext.QtInteractiveContext' 
-)
-VRMLContext( 
-    'qt', 'OpenGLContext_qt.qtcontext.VRMLContext' 
-)
+try:
+    import OpenGLContext_qt
+except ImportError, err:
+    pass
 
 Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml'] )
 Loader( 'obj', 'OpenGLContext.loaders.obj.defaultHandler', ['.obj'] )

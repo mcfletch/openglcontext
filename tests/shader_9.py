@@ -18,7 +18,7 @@ natural effect where the intensity of a light falls off over
 distance due to the spreading of the light rays.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -332,6 +332,6 @@ class TestContext( BaseContext ):
 			glUseProgram( 0 )
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''There is only one light-type missing from the legacy OpenGL 
 lighting model, that's the topic of our next tutorial.'''

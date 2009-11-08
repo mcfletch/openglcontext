@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """Simple GLU Tess-object test w/out combine callback"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph import polygontessellator, vertex
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -66,4 +66,4 @@ class TestContext( BaseContext ):
 			glEnd()
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

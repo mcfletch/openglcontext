@@ -1,7 +1,7 @@
 # -*- coding: latin-1 -*-
 """Simple GLU Tess-object test w/out combine callback"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import array
@@ -75,4 +75,4 @@ class TestContext( BaseContext ):
 			gluTessEndPolygon(self.tess)
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

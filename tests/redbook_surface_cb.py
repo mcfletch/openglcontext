@@ -50,7 +50,7 @@ surface itself.
 """
 
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -164,7 +164,7 @@ class TestContext( BaseContext ):
 
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 
 
 

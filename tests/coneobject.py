@@ -2,7 +2,7 @@
 '''Tests rendering of the Box geometry object
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
@@ -73,5 +73,5 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

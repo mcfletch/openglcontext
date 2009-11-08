@@ -1,7 +1,7 @@
 '''Test of text objects with fontprovider
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.text import wglfontprovider, fontprovider
@@ -51,6 +51,6 @@ class TestContext( BaseContext ):
 			
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 
 

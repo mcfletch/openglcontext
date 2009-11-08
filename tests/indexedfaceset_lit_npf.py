@@ -6,7 +6,7 @@ Material
 Normal-per-face generation
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
@@ -235,7 +235,7 @@ ICOSDATA = """-4.769095 1.349644 0.011604
 
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 
 
 

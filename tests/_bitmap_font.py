@@ -1,7 +1,7 @@
 '''Low-level tests of bitmap-based fonts'''
 from OpenGL.GL import *
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 import _fontstyles
 import sys
@@ -94,6 +94,6 @@ class TestContext( BaseContext ):
 			
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 
 

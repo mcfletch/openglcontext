@@ -2,7 +2,7 @@
 '''Tests operation of the OpenGL1.5/ARB Occlusion Query extension
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, box
 from OpenGL.GL import *
 from OpenGL.GL.ARB.occlusion_query import *
@@ -101,5 +101,5 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

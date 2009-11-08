@@ -4,7 +4,7 @@ import OpenGL
 OpenGL.ERROR_ON_COPY = True
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.loaders.loader import Loader
 from math import pi
 from OpenGLContext.events.timer import Timer
@@ -85,5 +85,5 @@ class TestContext( BaseContext ):
 		self.triggerRedraw(1)
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 '''DEK's Texturesurf demo, tests glEvalMesh2'''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
@@ -110,4 +110,4 @@ class TestContext( BaseContext ):
 	
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 '''Test of the glDrawArrays function (draws flower)'''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 import string
@@ -20,4 +20,4 @@ class TestContext( BaseContext):
 		glDrawArrays(GL_TRIANGLES, 0, len(flower_geometry.points_expanded))
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

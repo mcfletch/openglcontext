@@ -10,7 +10,7 @@ with the tutorial, so that only changes from the tutorial are noted
 here.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 import time
@@ -107,7 +107,7 @@ class TestContext( BaseContext ):
 		glEnd()
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''
 Author: [http://nehe.gamedev.net Jeff Molofee (aka NeHe)]
 

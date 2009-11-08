@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """IndexedLineSet object test (draw circle in multiple or single colors)"""
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext.arrays import *
 from OpenGLContext.scenegraph.basenodes import *
 
@@ -41,5 +41,5 @@ class TestContext( BaseContext ):
 		)
 		
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

@@ -10,7 +10,7 @@ XXX There's a problem with the demo in that, after a few
 	disappears.  Not sure what's going on there.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 import string, sys
@@ -111,4 +111,4 @@ class TestContext( BaseContext):
 			vertex_array_object.glDeleteObjectBufferATI(buffer2)
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()

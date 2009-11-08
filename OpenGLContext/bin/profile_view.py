@@ -3,8 +3,8 @@
 import OpenGL 
 OpenGL.ERROR_CHECKING = False 
 #OpenGL.ERROR_ON_COPY = True
-from OpenGLContext.testingcontext import getInteractive
-BaseContext, MainFunction = getInteractive()
+from OpenGLContext import testingcontext
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import vrmlcontext
 import sys
 
@@ -35,12 +35,12 @@ def main():
 		from lsprofcalltree import KCacheGrind
 	except ImportError, err:
 		return cProfile.run( 
-			"MainFunction ( TestContext)", 'OpenGLContext.profile' 
+			"TestContext.ContextMainLoop()", 'OpenGLContext.profile' 
 		)
 	else:
 		PROFILER = cProfile.Profile()
 		def top( ):
-			return MainFunction( TestContext )
+			return TestContext.ContextMainLoop()
 		PROFILER.runcall( top )
 		def newfile( base ):
 			new = base 

@@ -19,7 +19,7 @@ Pygame or wxPython, this will likely be a GLUT context on your
 machine.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 '''Now we import the PyOpenGL functionality we'll be using.
 
 OpenGL.GL contains the standard OpenGL functions that you can 
@@ -281,7 +281,7 @@ script.  The TestingContext import above also gave us an appropriate
 mainloop function to call.'''
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''
 When run from the command-line, we should see a triangle and a 
 rectangle in solid green floating over a white background, as seen

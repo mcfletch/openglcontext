@@ -6,7 +6,7 @@ Material
 Normal-per-vertex generation
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
@@ -88,7 +88,7 @@ TESTDATA = """-1 0 0
 ##
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 
 
 

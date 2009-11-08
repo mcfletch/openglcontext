@@ -13,7 +13,7 @@ light in most directions, while focussing the light (to some
 degree) in a particular direction.
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -344,7 +344,7 @@ class TestContext( BaseContext ):
 			glUseProgram( 0 )
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''We've now built a fairly complete per-pixel Phong renderer.  As an 
 exercise, you may wish to modify the spotlight equations above to match 
 the legacy OpenGL mechanism.

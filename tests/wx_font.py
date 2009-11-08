@@ -5,7 +5,6 @@ from OpenGL.GL import *
 from OpenGLContext import wxtestingcontext
 import wx
 BaseContext = wxtestingcontext.BaseContext
-MainFunction = wxtestingcontext.main
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.text import wxfont
 from OpenGLContext.debug import logcontext
@@ -51,6 +50,6 @@ def rpixels():
 
 
 if __name__ == "__main__":
-	MainFunction( TestContext)
+	TestContext.ContextMainLoop()
 
 

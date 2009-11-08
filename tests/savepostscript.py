@@ -2,7 +2,7 @@
 '''Demo of saving vector images from PyOpenGL using gl2ps
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube
 from OpenGLContext.passes import gl2psrenderpass
 from OpenGL.GL import *
@@ -69,5 +69,5 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
 	print 'Press "s" to save the buffer to the file test.eps'
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 

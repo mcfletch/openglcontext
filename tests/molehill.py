@@ -9,7 +9,7 @@ OpenGLContext Nurbs extension (patterned after the Blaxxun
 Nurbs extension).
 '''
 from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 import string, time
@@ -140,7 +140,7 @@ class TestContext( BaseContext ):
 		)
 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 '''
 Original Demo:
 
