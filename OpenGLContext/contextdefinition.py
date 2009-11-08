@@ -24,7 +24,7 @@ class ContextDefinition( node.Node ):
 	rgb = field.newField( "rgb", "SFBool", 1, True)
 	alpha = field.newField( "alpha", "SFBool", 1, True)
 	
-	multisampleBuffer = field.newField( "multisample", "SFInt32", 1, -1)
-	multisampleSamples = field.newField( "multisample", "SFInt32", 1, -1)
+	multisampleBuffer = field.newField( "multisampleBuffer", "SFInt32", 1, -1)
+	multisampleSamples = field.newField( "multisampleSamples", "SFInt32", 1, -1)
 	stereo = field.newField( "stereo", "SFInt32", 1, -1)
 	
