@@ -28,14 +28,20 @@ from OpenGLContext.plugins import Context,InteractiveContext,VRMLContext,Loader,
 Context( 'pygame', 'OpenGLContext.pygamecontext.PyGameContext' )
 Context( 'wx', 'OpenGLContext.wxcontext.wxContext' )
 Context( 'glut', 'OpenGLContext.glutcontext.GLUTContext' )
-Context( 'tk', 'OpenGLContext.tkcontext.TkContext' )
 InteractiveContext( 'pygame', 'OpenGLContext.pygameinteractivecontext.PygameInteractiveContext' )
 InteractiveContext( 'wx', 'OpenGLContext.wxinteractivecontext.wxInteractiveContext' )
 InteractiveContext( 'glut', 'OpenGLContext.glutinteractivecontext.GLUTInteractiveContext' )
-InteractiveContext( 'tk', 'OpenGLContext.tkinteractivecontext.TkInteractiveContext' )
 VRMLContext( 'pygame', 'OpenGLContext.pygamevrmlcontext.VRMLContext' )
 VRMLContext( 'wx', 'OpenGLContext.wxvrmlcontext.VRMLContext' )
 VRMLContext( 'glut', 'OpenGLContext.glutvrmlcontext.VRMLContext' )
+
+Context( 'qt', 'OpenGLContext_qt.qtcontext.QtContext' )
+InteractiveContext( 
+    'qt', 'OpenGLContext_qt.qtcontext.QtInteractiveContext' 
+)
+VRMLContext( 
+    'qt', 'OpenGLContext_qt.qtcontext.VRMLContext' 
+)
 
 Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml'] )
 Loader( 'obj', 'OpenGLContext.loaders.obj.defaultHandler', ['.obj'] )
