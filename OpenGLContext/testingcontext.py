@@ -6,7 +6,7 @@ not use this module for real world applications, as it is
 unlikely that nontrivial code will be completely stable across
 all interactive context classes."""
 
-PREFERENCELIST = ('pygame', 'wx', 'glut', 'tk' )
+PREFERENCELIST = ('pygame', 'wx', 'glut', )
 import traceback, string, os
 from OpenGLContext.debug.logs import context_log as log
 try:
