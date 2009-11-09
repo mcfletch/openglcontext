@@ -166,7 +166,7 @@ class Context(object):
     PROTO = "Context"
     DEF = "#Context"
     
-    def __init__ (self, definition):
+    def __init__ (self, definition=None):
         """Establish the Context working environment
 
         setupThreading, initializeEventManagers,
@@ -175,7 +175,7 @@ class Context(object):
         establishes pickEvents
         and then calls OnInit
         """
-        self.contextDefinition = definition
+        self.contextDefinition = definition or self.contextDefinition
         self.setupThreading()
         self.setupExtensionManager( )
         self.initializeEventManagers( )
@@ -286,12 +286,18 @@ class Context(object):
                 current.isBound = False
                 current.set_bound = False
         self.triggerRedraw( 1 )
-    def OnSaveImage( self, event=None ):
+    def OnSaveImage( 
+        self, event=None, 
+        template='%(script)s-screen-%(count)04i.png', 
+        script=None,
+        date=None,
+    ):
         """Save our current screen to disk (if possible)"""
         try:
             from PIL import Image # get PIL's functionality...
         except ImportError, err:
             log.error( "Unable to import PIL" )
+            saved = False
         else:
             width, height = self.getViewPort()
             glPixelStorei(GL_PACK_ALIGNMENT, 1)
@@ -306,18 +312,22 @@ class Context(object):
                 string 
             )
             image = image.transpose( Image.FLIP_TOP_BOTTOM)
-            import sys
-            script = sys.argv[0]
+            if script is None:
+                import sys
+                script = sys.argv[0]
+            if date is None:
+                import datetime
+                date = datetime.datetime.now().isoformat()
             count = 0
-            template = '%s-screen-%04i.png'
             saved = False
-            while not saved:
+            while (not saved) and count < 9999:
                 count += 1
-                test = template%( script,count, )
+                test = template%locals()
                 if not os.path.exists( test ):
                     log.warn( 'Saving to file: %s', test )
                     image.save( test, 'PNG' )
                     saved = True 
+        return saved 
         
     def setupThreading( self ):
         """Setup primitives (locks, events) for threading
@@ -900,6 +910,32 @@ class Context(object):
 ##	def getUserContextPreferences( cls ):
 ##		"""Retrieve user-specific context preferences"""
 ##		raise NotImplementedError( """Don't have preferences working yet""" )
+    @staticmethod
+    def fromConfig( cfg ):
+        """Given a ConfigParser instance, produce a configured sub-class"""
+        from OpenGLContext import plugins
+        from OpenGLContext import contextdefinition
+        type = gui = None
+        if cfg.has_option( 'context', 'type' ):
+            type = cfg.get( 'context', 'type' )
+        if cfg.has_option( 'context', 'gui' ):
+            gui = cfg.get( 'context', 'gui' )
+        if type is None:
+            type = 'vrml'
+        for plug_type in [
+            plugins.InteractiveContext,
+            plugins.VRMLContext,
+            plugins.Context,
+        ]:
+            if type == plug_type.type_key:
+                type = plug_type 
+        baseCls = Context.getContextType( gui, type )
+        baseCls = type( 'TestingContext', (baseCls,), {
+            'contextDefinition': contextdefinition.ContextDefinition.fromConfig(
+                cfg,
+            ),
+        } )
+        return baseCls
 
 ### Context render-calling child...
 class _ContextRenderNode( nodetypes.Rendering, nodetypes.Children, node.Node ):
