@@ -62,19 +62,23 @@ def main():
         cls = context.Context.getContextType( None, plugins.VRMLContext )
     class SaveAndExit( cls ):
         """Context which exits after the first rendering pass"""
+        pass_count = 1
         def OnDraw( self, *args, **named ):
             super( SaveAndExit, self ).OnDraw( *args, **named )
-            result = self.OnSaveImage(
+            self.setCurrent()
+            width,height = self.OnSaveImage(
                 template = output_name,
                 script = script_name,
                 overwrite=True,
             )
-            if result:
-                log.info( 'Wrote Image' )
+            self.unsetCurrent()
+            if ((not width) or (not height)) and self.pass_count < 100:
+                log.warn( 'Did not write retrying' )
+                self.pass_count += 1
+                self.triggerRedraw( 1 )
             else:
-                log.warn( 'Did not write image!' )
-            sys.exit( 0 )
-            os._exit( 0 )
+                sys.exit( 0 )
+                os._exit( 0 )
     testingcontext.CONFIGURED_BASE = SaveAndExit
     # now, execute the script...
     try:
