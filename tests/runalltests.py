@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 """Script to run the "standard" set of OpenGLContext scripts (in this directory)"""
-import OpenGLContext,os,sys,subprocess,datetime
+import OpenGLContext,os,sys,subprocess,datetime, webbrowser
 from OpenGLContext import testingcontext
 PYTHON = sys.executable
 TEST_RUNNER = os.path.join( os.path.dirname( OpenGLContext.__file__ ), 'bin','gltest.py' )
@@ -182,6 +182,8 @@ def main(scripts):
     else:
         sys.stderr.write( 'Success' )
         sys.stderr.write( '\n' )
+    webbrowser.open_new_tab( os.path.join('test-results','index.html' ))
+    
 
 if __name__ == "__main__":
     if sys.argv[1:]:

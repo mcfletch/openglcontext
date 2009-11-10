@@ -65,6 +65,7 @@ def main():
             result = self.OnSaveImage(
                 template = output_name,
                 script = script_name,
+                overwrite=True,
             )
             if result:
                 log.info( 'Wrote Image' )
