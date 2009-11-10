@@ -14,12 +14,12 @@ def getTraceback(error=None):
 import logging
 Log = logging.getLogger
 logging.basicConfig( ) #level=logging.INFO )
-logging.getLogger( 'OpenGL.extensions' ).setLevel(
-	logging.INFO 
-)
-logging.getLogger( 'OpenGL.acceleratesupport' ).setLevel(
-	logging.DEBUG
-)
+#logging.getLogger( 'OpenGL.extensions' ).setLevel(
+#	logging.INFO 
+#)
+#logging.getLogger( 'OpenGL.acceleratesupport' ).setLevel(
+#	logging.DEBUG
+#)
 WARN = logging.WARN
 ERROR = logging.ERROR
 INFO = logging.INFO
