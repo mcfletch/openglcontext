@@ -291,6 +291,7 @@ class Context(object):
         template='%(script)s-screen-%(count)04i.png', 
         script=None,
         date=None,
+        overwrite=False,
     ):
         """Save our current screen to disk (if possible)"""
         try:
@@ -300,6 +301,8 @@ class Context(object):
             saved = False
         else:
             width, height = self.getViewPort()
+            if not width or not height:
+                return False 
             glPixelStorei(GL_PACK_ALIGNMENT, 1)
             data = glReadPixelsub(0, 0, width, height, GL_RGB)
             if hasattr( data, 'tostring' ):
@@ -320,10 +323,10 @@ class Context(object):
                 date = datetime.datetime.now().isoformat()
             count = 0
             saved = False
-            while (not saved) and count < 9999:
+            while (not saved) and count <= 9999:
                 count += 1
                 test = template%locals()
-                if not os.path.exists( test ):
+                if overwrite or (not os.path.exists( test )):
                     log.warn( 'Saving to file: %s', test )
                     image.save( test, 'PNG' )
                     saved = True 
