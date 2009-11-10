@@ -336,6 +336,8 @@ class Context(object):
                     image.save( test, 'PNG' )
                     saved = True 
                     return (width,height)
+                else:
+                    log.info( 'Existing file: %s', test )
         return (0,0)
         
     def setupThreading( self ):
