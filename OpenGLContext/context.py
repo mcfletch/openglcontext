@@ -303,10 +303,11 @@ class Context(object):
         except ImportError, err:
             log.error( "Unable to import PIL" )
             saved = False
+            return (0,0)
         else:
             width, height = self.getViewPort()
             if not width or not height:
-                return False 
+                return (width,height)
             glPixelStorei(GL_PACK_ALIGNMENT, 1)
             data = glReadPixelsub(0, 0, width, height, GL_RGB)
             if hasattr( data, 'tostring' ):
@@ -334,7 +335,8 @@ class Context(object):
                     log.warn( 'Saving to file: %s', test )
                     image.save( test, 'PNG' )
                     saved = True 
-        return saved 
+                    return (width,height)
+        return (0,0)
         
     def setupThreading( self ):
         """Setup primitives (locks, events) for threading
