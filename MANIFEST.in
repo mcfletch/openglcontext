@@ -15,6 +15,7 @@ include docs/*.html
 include docs/images/*
 include docs/style/*
 include OpenGLContext/resources/*.txt
+include OpenGLContext/tests/resources/*.txt
 include OpenGLContext/loaders/*
 include OpenGLContext/browser/*.wrl
 include pydoc/*.py
