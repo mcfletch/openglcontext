@@ -8,7 +8,11 @@ includes the expected results.
 """
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError, err:
+    # old style?
+    import Image
 
 def depth(
 	x=0,y=0,width=-1,height=-1,

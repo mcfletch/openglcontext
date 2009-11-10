@@ -29,7 +29,10 @@ class TestContext( BaseContext ):
         the texture to an ID then loading the texture into memory.
         This didn't seem clear to me somehow in the tutorial.
         """
-        from PIL.Image import open
+        try:
+            from PIL.Image import open
+        except ImportError, err:
+            from Image import open
         im = open(imageName)
         try:
             ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBA", 0, -1)

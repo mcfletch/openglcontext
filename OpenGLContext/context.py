@@ -295,7 +295,11 @@ class Context(object):
     ):
         """Save our current screen to disk (if possible)"""
         try:
-            from PIL import Image # get PIL's functionality...
+            try:
+                from PIL import Image # get PIL's functionality...
+            except ImportError, err:
+                # old style?
+                import Image
         except ImportError, err:
             log.error( "Unable to import PIL" )
             saved = False

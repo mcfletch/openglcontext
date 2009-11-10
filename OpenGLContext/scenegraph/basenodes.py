@@ -32,7 +32,7 @@ def _load( ):
 		name = entrypoint.name 
 		try:
 			classObject = entrypoint.load()
-		except ImportError, err:
+		except (ImportError,AttributeError), err:
 			logs.context_log.warn( """Unable to load node implementation for %s: %s""", name, err )
 		else:
 			globals()[ name ] = classObject

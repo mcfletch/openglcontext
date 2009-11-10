@@ -25,7 +25,10 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 import time, os,sys
-from PIL.Image import open
+try:
+    from PIL.Image import open
+except ImportError, err:
+    from Image import open
 from OpenGL.GL.ARB.imaging import *
 from OpenGLContext import arrays
 

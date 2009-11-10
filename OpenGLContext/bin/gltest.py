@@ -58,6 +58,8 @@ def main():
         cls = context.Context.fromConfig( cfg )
     else:
         cls = context.Context.getContextType( 'pygame', plugins.VRMLContext )
+    if cls is None:
+        cls = context.Context.getContextType( None, plugins.VRMLContext )
     class SaveAndExit( cls ):
         """Context which exits after the first rendering pass"""
         def OnDraw( self, *args, **named ):

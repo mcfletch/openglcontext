@@ -12,7 +12,10 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 import time
-from PIL.Image import open
+try:
+    from PIL.Image import open
+except ImportError, err:
+    from Image import open
 
 class TestContext( BaseContext ):
 	"""NeHe 6 Demo"""

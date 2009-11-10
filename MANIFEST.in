@@ -8,6 +8,7 @@ exclude tests/flower.wrl
 exclude tests/test.jpg
 exclude tests/wrls/logo_installer.bmp
 exclude tests/wrls/pyopenglchapel.wrl
+include tests/*.py
 
 recursive-include docs *.css *.png *.gif
 include docs/*.html
@@ -18,6 +19,8 @@ include OpenGLContext/browser/*.wrl
 include pydoc/*.py
 exclude docs/tutorials/*.xhtml
 exclude docs/tutorials/*.png
+exclude tests/test-results/*.png
+exclude tests/test-results/*.html
 
 global-exclude *CVS*
 global-exclude *Cvs*
