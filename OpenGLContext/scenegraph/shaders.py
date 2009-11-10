@@ -219,7 +219,7 @@ class ShaderURLField( fieldtypes.MFString ):
 				return True
 		# should set client.image to something here to indicate
 		# failure to the user.
-		log.warn( """Unable to load any shader from the url %s for the node %s""", url, str(client))
+		log.warn( """Unable to load any shader from the url %s for the node %s""", urlFragment, str(client))
 
 class GLSLShader( shaders.GLSLShader ):
 	"""GLSL-based shader node"""
