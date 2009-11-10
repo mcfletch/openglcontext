@@ -6,7 +6,10 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 import string
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError, err:
+    import Image
 import flower_geometry
 from vrml import arrays
 
