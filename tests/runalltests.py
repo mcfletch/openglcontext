@@ -174,12 +174,14 @@ def main(scripts):
         if failures:
             sys.stderr.write( 'FAILED:\n' )
             sys.stderr.write( "\n".join( failures ))
+            sys.stderr.write( '\n' )
         if skips:
             sys.stderr.write( 'Skipped:\n' )
             sys.stderr.write( "\n".join( skips ))
+            sys.stderr.write( '\n' )
     else:
         sys.stderr.write( 'Success' )
-    sys.stderr.write( '\n' )
+        sys.stderr.write( '\n' )
 
 if __name__ == "__main__":
     if sys.argv[1:]:

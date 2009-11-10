@@ -12,6 +12,7 @@ from OpenGLContext import plugins, context, contextdefinition
 
 # Test-runner can specify the base-class explicitly...
 CONFIGURED_BASE = None
+REQUIRED_EXTENSION_MISSING = 3 # process return-code for a missing extension
 
 def getVRML( preference= None ):
     """Retrieve the preferred testing context:

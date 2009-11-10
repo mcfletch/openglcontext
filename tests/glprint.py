@@ -12,6 +12,7 @@ We're going to have to use the wxPython context explicitly, so that
 we have a single API for getting a window handle.
 '''
 from OpenGLContext.wxinteractivecontext import wxInteractiveContext
+from OpenGLContext import testingcontext
 from OpenGL.GL import *
 from math import cos, sin
 import sys
@@ -19,7 +20,8 @@ try:
 	from OpenGL.WGL import *
 	import win32ui, win32con
 except ImportError, err:
-	raise ImportError( """Unable to import Win32 text modules: %s"""%(err,))
+	print """Unable to import Win32 text modules: %s"""%(err,)
+	sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
 
 '''Our "font" class takes care of creating the display-lists 
 which perform the actual rendering of characters.  The Win32ui 

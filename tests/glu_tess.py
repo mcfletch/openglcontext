@@ -54,11 +54,11 @@ class TestContext( BaseContext ):
 		]
 		vertices.reverse()
 		for type, vertices in self.tess.tessellate( vertices, forceTriangles=0 ):
-			print ' geometry type %s, %s vertices (GL_TRIANGLES=%s GL_TRIANGLE_FAN=%s GL_TRIANGLE_STRIP=%s)'%(
-				type,
-				len(vertices),
-				GL_TRIANGLES, GL_TRIANGLE_FAN, GL_TRIANGLE_STRIP
-			)
+#			print ' geometry type %s, %s vertices (GL_TRIANGLES=%s GL_TRIANGLE_FAN=%s GL_TRIANGLE_STRIP=%s)'%(
+#				type,
+#				len(vertices),
+#				GL_TRIANGLES, GL_TRIANGLE_FAN, GL_TRIANGLE_STRIP
+#			)
 			glNormal( 0,0,-1 )
 			glBegin( type )
 			for v in vertices:

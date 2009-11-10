@@ -41,7 +41,12 @@ def main():
         log.error( """Couldn't find script file: %s""", script )
     script_name = os.path.splitext(os.path.basename( script ))[0]
     
-    output_name = os.path.join( options.output, '%(script)s-%(count)s.png' )
+    ref_name = os.path.join( options.output, '%(script_name)s-ref.png'%locals() )
+    if not os.path.exists( ref_name ):
+        output_name = ref_name
+        log.warn( 'Recording reference image for %s', script_name )
+    else:
+        output_name = os.path.join( options.output, '%(script)s-new.png' )
     
     if options.configs:
         configs = [c for c in options.configs if c]
@@ -57,11 +62,14 @@ def main():
         """Context which exits after the first rendering pass"""
         def OnDraw( self, *args, **named ):
             super( SaveAndExit, self ).OnDraw( *args, **named )
-            self.OnSaveImage(
+            result = self.OnSaveImage(
                 template = output_name,
                 script = script_name,
             )
-            log.warn( 'Wrote Image' )
+            if result:
+                log.info( 'Wrote Image' )
+            else:
+                log.warn( 'Did not write image!' )
             sys.exit( 0 )
             os._exit( 0 )
     testingcontext.CONFIGURED_BASE = SaveAndExit
@@ -73,6 +81,7 @@ def main():
     sys.path.insert(0, os.path.dirname(script))
     g = {}
     g['__name__'] = '__main__'
+    g['__file__'] = script
     execfile( script, g )
     
 if __name__ == "__main__":

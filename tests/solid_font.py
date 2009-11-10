@@ -20,7 +20,7 @@ MESSAGE = unicode("The quick brown fox jumped over the lazy dog", 'latin-1')
 class TestContext( BaseContext ):
 	testingClass = None
 	currentFont = None
-	currentStyle = -1
+	currentStyle = 0
 	def setupFontProviders( self ):
 		"""Load font providers for the context
 
@@ -54,7 +54,7 @@ class TestContext( BaseContext ):
 					renderBack = 1,
 				))
 		self.styles = styles
-		self.OnNextStyle()
+		self.setStyle( self.currentStyle )
 	def setStyle (self, index = 0):
 		"""Set the current font style"""
 		self.currentStyle = index%(len(self.styles))

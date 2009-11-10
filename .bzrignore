@@ -12,3 +12,4 @@ dist
 core
 core*
 pydoc/*.html
+test-results

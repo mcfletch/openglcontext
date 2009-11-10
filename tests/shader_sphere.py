@@ -111,9 +111,9 @@ class TestContext( BaseContext ):
 		
 
 if __name__ == "__main__":
-	import cProfile
-	cProfile.run( 'TestContext.ContextMainLoop()', 'sphere.profile' )
-	
+	#import cProfile
+	#cProfile.run( 'TestContext.ContextMainLoop()', 'sphere.profile' )
+	TestContext.ContextMainLoop()
 
 #	sphere( pi/4 )
 	
