@@ -100,7 +100,6 @@ shader_6.py
 shader_7.py
 shader_8.py
 shader_9.py
-shader_intro.py
 shader_sphere.py
 shader_spike.py
 shadergeometry.py
