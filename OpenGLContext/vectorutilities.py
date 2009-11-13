@@ -110,4 +110,9 @@ def colinear( points ):
 			return (a,b,c)
 	return None
 
-
+def orientToXYZR( a, b ):
+    """Calculate axis/angle rotation transforming vec a -> vec b"""
+    an,bn = normalise( (a,b) )
+    angle = arccos(dot(an,bn))
+    x,y,z = crossProduct( a, b )[0]
+    return (x,y,z,angle)
