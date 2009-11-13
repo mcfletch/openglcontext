@@ -199,12 +199,6 @@ class Context(object):
         calls OnInit directly w/ appropriate setCurrent
         and unsetCurrent calls and calls the glutInit()
         function with an empty argument-list.
-
-        Note:
-            The only context currently known to require
-            this customization is the wxPython-on-GTK context,
-            everything else completes context initialization
-            before calling Context.__init__.
         """
         self.setCurrent()
         try:
