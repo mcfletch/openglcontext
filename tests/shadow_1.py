@@ -7,7 +7,12 @@ after this C tutorial:
 
     http://www.paulsprojects.net/tutorials/smt/smt.html
 
-with alterations to work with OpenGLContext.
+with alterations to work with OpenGLContext.  A number of 
+fixes came from looking at Ian Mallett's OpenGL Library:
+
+    http://www.geometrian.com/Programs.php
+    
+
 '''
 import OpenGL 
 from OpenGLContext import testingcontext
@@ -18,7 +23,9 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.ARB.depth_texture import *
 from OpenGL.GL.ARB.shadow import *
-from OpenGLContext.arrays import array, frombuffer, sin, cos, pi, dot
+from OpenGLContext.arrays import (
+    array, frombuffer, sin, cos, pi, dot, allclose, transpose,
+)
 from OpenGL.arrays import vbo
 from OpenGLContext.events.timer import Timer
 
@@ -62,16 +69,14 @@ class TestContext( BaseContext ):
             glPopMatrix()
     
     def getTextureMatrix( self, lightProj, lightView ):
-        glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
-        try:
-            glLoadMatrixf(BIAS_MATRIX)
-            glMultMatrixf(lightProj)
-            glMultMatrixf(lightView)
-            return glGetFloatv(GL_TRANSPOSE_MODELVIEW_MATRIX)
-        finally:
-            glPopMatrix()
-        
+        """Texture-matrix transforming eye-space into texture-space"""
+        return transpose(
+            dot(
+                dot( lightView, lightProj ),
+                BIAS_MATRIX
+            )
+        )
+    
     def Render( self, mode):
         BaseContext.Render( self, mode )
         if mode.visible and mode.lighting and not mode.transparent:
@@ -110,8 +115,15 @@ class TestContext( BaseContext ):
             mode.visible = True 
             mode.textured = False 
 
-#            glPolygonOffset(.05, .05)
-#            glEnable(GL_POLYGON_OFFSET_FILL) 
+            # our back-facing polygons are otherwise going to have 
+            # floating-point-accuracy "moire" effects where the second 
+            # rendering pass writes "dark" onto the ambient light.
+            # Subtle, but annoying.
+            # first 1.0 just gives us the raw fragment value,
+            # second says "multiply it by the smallest discernable difference"
+            # within the depth buffer (i.e. +1.0 units )
+            glPolygonOffset(1.0, 1.0)
+            glEnable(GL_POLYGON_OFFSET_FILL) 
 
             self.drawScene( mode )
             
@@ -148,26 +160,11 @@ class TestContext( BaseContext ):
             
             # Third pass, now we do the shadow tests...
             
-            print 'THIRD PASS'
-#            glClear(GL_DEPTH_BUFFER_BIT)
             mode.lightingAmbient = False
             mode.lightingDiffuse = True 
             self.light.Light( GL_LIGHT0, mode=mode )
             
             textureMatrix = self.getTextureMatrix( lightProj, lightView )
-#            textureMatrix = dot(
-#                dot( lightView,lightProj ),
-#                BIAS_MATRIX
-#            )
-#            textureMatrix = dot(
-#                dot( lightProj,lightView, ),
-#                BIAS_MATRIX
-#            )
-#            textureMatrix = dot(
-#                BIAS_MATRIX,
-#                dot( lightProj,lightView, ),
-#            )
-#            tmd = dot(textureMatrix,array([1,0,0,0],'f'))
             
             glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
             glTexGenfv(GL_S, GL_EYE_PLANE, textureMatrix[0]);
@@ -207,9 +204,6 @@ class TestContext( BaseContext ):
             glAlphaFunc(GL_GEQUAL, 0.999)
             glEnable(GL_ALPHA_TEST)
             
-#            glBlendFunc(GL_SRC_COLOR,GL_DST_COLOR)
-#            glEnable (GL_BLEND)
-            
             self.drawScene( mode )
             
             glDisable(GL_TEXTURE_2D)
@@ -222,7 +216,6 @@ class TestContext( BaseContext ):
             glDisable(GL_ALPHA_TEST);            
             
             mode.lightingAmbient = True 
-#            glDisable( GL_BLEND )
             
         else:
             self.drawScene( mode )
