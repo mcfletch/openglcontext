@@ -53,6 +53,44 @@ class TestContext( BaseContext ):
         """Draw our scene at current animation point"""
         self.shape.Render( mode )
     
+    shadowTexture = None
+    shadowMapSize = 256
+    def setupShadowContext( self ):
+        """Create a shadow-rendering context/texture"""
+        # TODO: render to a pixel-buffer-object instead, when 
+        # available...
+        texture = glGenTextures( 1 )
+        glBindTexture( GL_TEXTURE_2D, texture )
+        shadowMapSize = self.shadowMapSize
+        glTexImage2D( 
+            GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 
+            shadowMapSize, shadowMapSize, 0,
+            GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
+        )
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+        '''We assume here that shadowMapSize is smaller than the size 
+        of the viewport.  Real world implementations would normally 
+        render to a Pixel Buffer Object (off-screen render) to an 
+        appropriately sized texture, regardless of screen size, falling 
+        back to this implementation *only* if there was no PBO support 
+        on the machine.
+        '''
+        glViewport( 0,0, shadowMapSize, shadowMapSize )
+        return texture
+    def closeShadowContext( self, texture ):
+        """Close our shadow-rendering context/texture"""
+        shadowMapSize = self.shadowMapSize
+        glBindTexture(GL_TEXTURE_2D, texture)
+        glCopyTexSubImage2D(
+            GL_TEXTURE_2D, 0, 0, 0, 0, 0, shadowMapSize, shadowMapSize
+        )
+        w,h = self.getViewPort()
+        glViewport( 0,0,w,h)
+        return texture
+    
     def Render( self, mode):
         BaseContext.Render( self, mode )
         if mode.visible and mode.lighting and not mode.transparent:
@@ -66,21 +104,9 @@ class TestContext( BaseContext ):
             glDepthFunc(GL_LEQUAL)
             glEnable(GL_DEPTH_TEST)
             
-            # TODO: render to a pixel-buffer-object instead, when 
-            # available...
-            texture = glGenTextures( 1 )
-            glBindTexture( GL_TEXTURE_2D, texture )
-            shadowMapSize = 256
-            glTexImage2D( 
-                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 
-                shadowMapSize, shadowMapSize, 0,
-                GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
-            )
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
-            
+            '''We invoke our setupShadowContext method to establish the 
+            texture we'll use as our target'''
+            texture = self.setupShadowContext()
             '''==Setup Scene with Light as Camera==
             
             The algorithm requires us to set up the scene to render 
@@ -114,14 +140,6 @@ class TestContext( BaseContext ):
             glLoadMatrixf( lightView )
             glMatrixMode( GL_MODELVIEW )
             glLoadMatrixf( lightModel )
-            '''We assume here that shadowMapSize is smaller than the size 
-            of the viewport.  Real world implementations would normally 
-            render to a Pixel Buffer Object (off-screen render) to an 
-            appropriately sized texture, regardless of screen size, falling 
-            back to this implementation *only* if there was no PBO support 
-            on the machine.
-            '''
-            glViewport( 0,0, shadowMapSize, shadowMapSize )
             '''We want to avoid depth-buffer artefacts where the front-face 
             appears to be ever-so-slightly behind itself due to multiplication
             and transformation artefacts.  So we render the *back* of the 
@@ -167,16 +185,11 @@ class TestContext( BaseContext ):
             glEnable(GL_POLYGON_OFFSET_FILL) 
             '''And now we draw our scene into the depth-buffer.'''
             self.drawScene( mode )
-            
-            glBindTexture(GL_TEXTURE_2D, texture)
-            
-            glCopyTexSubImage2D(
-                GL_TEXTURE_2D, 0, 0, 0, 0, 0, shadowMapSize, shadowMapSize
-            )
+            '''Our closeShadowContext will copy the current depth buffer into 
+            our depth texture.'''
+            self.closeShadowContext( texture )
             
             '''Restore "regular" rendering...'''
-            w,h = self.getViewPort()
-            glViewport( 0,0,w,h)
             glDisable(GL_POLYGON_OFFSET_FILL) 
             glCullFace( GL_BACK )
             glShadeModel( GL_SMOOTH )
