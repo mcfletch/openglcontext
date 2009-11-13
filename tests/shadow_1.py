@@ -51,15 +51,6 @@ class TestContext( BaseContext ):
         """Draw our scene at current animation point"""
         self.shape.Render( mode )
     
-    def getTextureMatrix( self, lightProj, lightView ):
-        """Texture-matrix transforming eye-space into texture-space"""
-        return transpose(
-            dot(
-                dot( lightView, lightProj ),
-                BIAS_MATRIX
-            )
-        )
-    
     def Render( self, mode):
         BaseContext.Render( self, mode )
         if mode.visible and mode.lighting and not mode.transparent:
@@ -69,6 +60,8 @@ class TestContext( BaseContext ):
             glDepthFunc(GL_LEQUAL);
             glEnable(GL_DEPTH_TEST);
             
+            # TODO: render to a pixel-buffer-object instead, when 
+            # available...
             texture = glGenTextures( 1 )
             glBindTexture( GL_TEXTURE_2D, texture )
             shadowMapSize = 256
@@ -118,7 +111,7 @@ class TestContext( BaseContext ):
                 GL_TEXTURE_2D, 0, 0, 0, 0, 0, shadowMapSize, shadowMapSize
             )
             
-            # Restore "regular" rendering...
+            '''Restore "regular" rendering...'''
             w,h = self.getViewPort()
             glViewport( 0,0,w,h)
             glDisable(GL_POLYGON_OFFSET_FILL) 
@@ -133,8 +126,8 @@ class TestContext( BaseContext ):
             platform = self.getViewPlatform()
             platform.render()
 
-#            # Second rendering pass, render "ambient" light into 
-#            # the scene...
+            '''Second rendering pass, render "ambient" light into 
+            the scene...'''
             mode.visible = True
             mode.lighting = True 
             mode.lightingAmbient = True 
@@ -143,29 +136,28 @@ class TestContext( BaseContext ):
             self.light.Light( GL_LIGHT0, mode=mode )
             self.drawScene( mode )
             
-            # Third pass, now we do the shadow tests...
-            
+            '''Third pass, now we do the shadow tests...
+            We do *not* want ambient light added on this pass,
+            but we *do* want diffuse light...'''
             mode.lightingAmbient = False
             mode.lightingDiffuse = True 
             self.light.Light( GL_LIGHT0, mode=mode )
             
-            textureMatrix = self.getTextureMatrix( lightProj, lightView )
-            
-            glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-            glTexGenfv(GL_S, GL_EYE_PLANE, textureMatrix[0]);
-            glEnable(GL_TEXTURE_GEN_S);
-
-            glTexGeni(GL_T, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-            glTexGenfv(GL_T, GL_EYE_PLANE, textureMatrix[1]);
-            glEnable(GL_TEXTURE_GEN_T);
-
-            glTexGeni(GL_R, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-            glTexGenfv(GL_R, GL_EYE_PLANE, textureMatrix[2]);
-            glEnable(GL_TEXTURE_GEN_R);
-
-            glTexGeni(GL_Q, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR);
-            glTexGenfv(GL_Q, GL_EYE_PLANE, textureMatrix[3]);
-            glEnable(GL_TEXTURE_GEN_Q);
+            textureMatrix = transpose(
+                dot(
+                    dot( lightView, lightProj ),
+                    BIAS_MATRIX
+                )
+            )
+            for token,gen_token,row in [
+                (GL_S,GL_TEXTURE_GEN_S,textureMatrix[0]),
+                (GL_T,GL_TEXTURE_GEN_T,textureMatrix[1]),
+                (GL_R,GL_TEXTURE_GEN_R,textureMatrix[2]),
+                (GL_Q,GL_TEXTURE_GEN_Q,textureMatrix[3]),
+            ]:
+                glTexGeni(token, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR)
+                glTexGenfv(token, GL_EYE_PLANE, row )
+                glEnable(gen_token)
             
             glBindTexture(GL_TEXTURE_2D, texture);
             glEnable(GL_TEXTURE_2D);
