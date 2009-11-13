@@ -37,7 +37,7 @@ replaced when using shader-based geometry.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 </div>
 	<div class="commentary">
 	<div class="paragraph">We'll load the whole set of VRML97 base nodes and get the value 
@@ -282,7 +282,7 @@ a specified number of times, 0 means do not loop).
 		for light in self.lights:
 			light.intensity = value 
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 <div class="source-reference">This code-walkthrough tutorial is generated from the lightobject.py script in the 
 OpenGLContext source distribution.</div>

@@ -49,7 +49,7 @@ can be used to animate continuous mesh models smoothly.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -229,8 +229,9 @@ for uniform values, save for the varying keyword.
 			frac = 1.0-frac 
 		frac *= 2
 		self.tween_fraction =frac
+		self.triggerRedraw()
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">On-GPU tweening would be likely to use an extremely large array 

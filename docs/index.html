@@ -1,14 +1,13 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-<head>
-  <title>OpenGLContext 2.0</title>
+<html><head><title>OpenGLContext 2.0</title>
+
+
+
+  
 
   
   
-  <link rel="stylesheet" type="text/css" href="style/sitestyle.css">
-</head>
-
-<body style="background-color: rgb(255, 255, 255); color: rgb(0, 0, 0);" topmargin="0" leftmargin="0">
+  <link rel="stylesheet" type="text/css" href="style/sitestyle.css"></head><body style="background-color: rgb(255, 255, 255); color: rgb(0, 0, 0);" topmargin="0" leftmargin="0">
 
 <table style="width: 100%;" border="0" cellpadding="4">
 
@@ -18,12 +17,12 @@
 
       <th style="vertical-align: middle;" rowspan="1" colspan="1">
       
-      <div><map name="FPMap0">
-      <area href="http://pyopengl.sourceforge.net/" shape="rect" coords="0, 0, 29, 32">
-      <area href="documentation.html" shape="rect" coords="1, 31, 30, 66">
-      <area href="https://sourceforge.net/projects/pyopengl/" shape="rect" coords="0, 66, 29, 102">
-      <area href="http://pyopengl.sourceforge.net/context/" shape="default">
-      <area href="http://pyopengl.sourceforge.net/context/" coords="0, 0, 10000, 10000" shape="rect">
+      <div><map name="FPMap0"><area href="http://pyopengl.sourceforge.net/" shape="rect" coords="0, 0, 29, 32"><area href="documentation.html" shape="rect" coords="1, 31, 30, 66"><area href="https://sourceforge.net/projects/pyopengl/" shape="rect" coords="0, 66, 29, 102"><area href="http://pyopengl.sourceforge.net/context/" shape="default"><area href="http://pyopengl.sourceforge.net/context/" coords="0, 0, 10000, 10000" shape="rect">
+      
+      
+      
+      
+      
       </map>
 
       <img src="images/context_logo.gif" title="" alt="OpenGLContext 2.0" style="border: 0px solid ; height: 128px; width: 128px;" usemap="#testing" height="128" width="128"></div>
@@ -57,12 +56,12 @@ A Learning Environment for PyOpenGL and Python 2.x</th>
       </p>
 
       
-      <p><a href="https://sourceforge.net/projects/pyopengl/">Project-Page</a><br>
+      <p><a href="https://launchpad.net/openglcontext">Project-Page</a><br>
 
       </p>
 
       
-      <p><a href="https://sourceforge.net/project/showfiles.php?group_id=5988">Download<br>
+      <p><a href="http://pypi.python.org/pypi/OpenGLContext">Download<br>
 
       </a></p>
 
@@ -75,8 +74,8 @@ A Learning Environment for PyOpenGL and Python 2.x</th>
 
       <td style="vertical-align: top;">
       
-      <p class="typewriter">OpenGLContext is a learning environment for
-      <a href="http://pyopengl.sourceforge.net/">PyOpenGL</a>. &nbsp;It
+      <p class="typewriter">OpenGLContext is a testing and learning environment for
+      <a href="http://pyopengl.sourceforge.net/">PyOpenGL</a>.&nbsp; It
 provides sample code for:<br>
 
       </p>
@@ -84,34 +83,76 @@ provides sample code for:<br>
       
       <ul>
 
+        <li>Modern OpenGL Features (in a series of <a href="tutorials/index.xhtml">tutorials</a> and example scripts)<br>
+</li>
+        <ul>
+          <li>Shaders</li>
+          <li>Vertex Buffer Objects</li>
+          <li>Pixel Buffer Objects</li>
+        </ul>
+        <li>PyOpenGL Usage with Common GUI Libraries</li>
+        <ul>
+          <li>Pygame</li>
+          <li>wxPython</li>
+          <li>GLUT</li>
+          <li>Qt (in the OpenGLContext_qt project, due to license restrictions)</li>
+        </ul>
         <li>Rendering common scenegraph objects</li>
+
 
         
         <ul>
 
-          <li>geometry (point-sets, indexed line-sets, indexed
-face-sets,&nbsp;polygonal text, trimmed NURBs, particle systems)</li>
+          <li>geometry</li>
+          <ul>
+            <li>point-sets</li>
+            <li>line-sets</li>
+            <li>face-sets</li>
+            <li>polygonal text</li>
+            <li>trimmed NURBs</li>
+            <li>basic particle systems</li>
+            <li>extruded shapes (via GLE)<br>
+            </li>
+          </ul>
 
-          <li>materials and&nbsp;textures (incl. mip-mapping,
-multi-texturing, and loading from disk with PIL)<br>
+
+          <li>materials and&nbsp;textures</li>
+          <ul>
+            <li>mip-mapping</li>
+            <li>multi-texturing</li>
+            <li>loading from disk with PIL</li>
+          </ul>
+
+
+          <li>transforms</li>
+          <ul>
+            <li>incl. support for manually calculating
+forward and reverse transformation matrices<br>
 
           </li>
+          </ul>
 
-          <li>transforms (incl. support for manually calculating
-forward and reverse transformation matrices)<br>
 
-          </li>
+          <li>backgrounds</li>
+          <ul>
+            <li>solid-colour</li>
+            <li>spherical</li>
+            <li>image-cube</li>
+          </ul>
 
-          <li>backgrounds (solid-colour, spherical and image-cube)</li>
 
           <li>lights</li>
 
         
         </ul>
 
-        <li>glBlend-based transparent-geometry rendering</li>
+        
+        <ul>
+          <li>glBlend-based (sorted) transparent-geometry rendering</li>
+        </ul>
 
-        <li>glSelectBuffer-based mouse selection and interaction</li>
+
+        <li>Color-id-rendered mouse selection and interaction</li>
 
         <li>Frustum culling</li>
 
@@ -125,7 +166,7 @@ forward and reverse transformation matrices)<br>
         
         </ul>
 
-        <li>glStencilBuffer-based shadow rendering (preliminary)</li>
+        <li>glStencilBuffer-based shadow rendering (defunct)</li>
 
         <li>Tessellating polygons</li>
 
@@ -142,9 +183,10 @@ beginning OpenGL programmer:<br>
       <ul>
 
         <li>Simple 3D navigation (camera manipulation, fly and examine
-modes)<br>
-
+modes)</li>
+        <li>.obj loader (converts obj format files to VRML97 nodes)<br>
         </li>
+
 
         <li>Optional VRML97 loader (the scenegraph engine is based
 loosely on VRML97)</li>
@@ -156,25 +198,21 @@ handling</li>
 multiple GUI libraries</li>
 
         
-        <ul>
-
-          <li>wxPython</li>
-
-          <li>PyGame</li>
-
-          <li>GLUT</li>
-
-        
-        </ul>
+        <ul></ul>
 
       
       </ul>
 
       
       
+      <p>OpenGLContext is the primary mechanism used to test the PyOpenGL distribution (all
+non-trivial tests for PyOpenGL are defined and run as OpenGLContext
+scripts).&nbsp; The source distribution's <code>tests/</code> directory contains a script <code>runalltests.py</code> which executes the tests, captures their results and formats them into a results page.<br>
+</p>
       <p>See the <a href="documentation.html">documentation</a> page
 for more details, or <a href="https://sourceforge.net/project/showfiles.php?group_id=5988">download</a>
 and play with the code in the tests directory.</p>
+
 
       </td>
 
@@ -195,5 +233,4 @@ Open-Source Project:<br>
   </tbody>
 </table>
 
-</body>
-</html>
+</body></html>

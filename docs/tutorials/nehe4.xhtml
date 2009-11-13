@@ -36,7 +36,7 @@ here.
 	<div class="paragraph"></div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 </div>
 	<div class="commentary">
@@ -106,7 +106,7 @@ animation.
 		glVertex3f(-1.0,-1.0, 0.0)
 		glEnd()
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">

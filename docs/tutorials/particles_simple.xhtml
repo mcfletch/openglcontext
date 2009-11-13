@@ -34,7 +34,7 @@ using the applied texture as a sprite (GL.ARB.point_parameters).
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from OpenGLContext.events.timer import Timer
@@ -300,7 +300,7 @@ blue and turning white."""
 		self.points.minSize = max((0.0,self.points.minSize-1.0))
 		self.points.maxSize = max((1.0,self.points.maxSize-1.0))
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 <div class="source-reference">This code-walkthrough tutorial is generated from the particles_simple.py script in the 
 OpenGLContext source distribution.</div>

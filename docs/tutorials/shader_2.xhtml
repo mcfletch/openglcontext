@@ -39,7 +39,7 @@ introduction.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -221,7 +221,7 @@ to the address 12 to the GL.
 		finally:
 			glUseProgram( 0 )
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">

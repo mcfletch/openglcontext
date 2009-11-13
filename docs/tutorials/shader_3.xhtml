@@ -39,7 +39,7 @@ Chapter 9.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGL.GL.shaders import *
@@ -203,7 +203,7 @@ appearing to fade into a fog.
 		finally:
 			glUseProgram( 0 )
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">You may wish to use the keyboard "arrow" keys to walk around in the 

@@ -41,7 +41,7 @@ incidence of the light ray.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -366,7 +366,7 @@ bind both VBOs at the same time without confusion.
 		finally:
 			glUseProgram( 0 )
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">Our per-fragment Blinn-Phong rendering engine is a very simplistic 

@@ -84,7 +84,7 @@ will tend to give all materials a strong "undercast" of that colour.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -342,7 +342,7 @@ particularly improve our rendering with simple diffuse shading.
 		finally:
 			glUseProgram( 0 )
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">Our next tutorial will cover the rest of the Phong rendering 

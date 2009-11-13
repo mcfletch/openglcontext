@@ -34,6 +34,7 @@ we have a single API for getting a window handle.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext.wxinteractivecontext import wxInteractiveContext
+from OpenGLContext import testingcontext
 from OpenGL.GL import *
 from math import cos, sin
 import sys
@@ -41,7 +42,8 @@ try:
 	from OpenGL.WGL import *
 	import win32ui, win32con
 except ImportError, err:
-	raise ImportError( """Unable to import Win32 text modules: %s"""%(err,))
+	print """Unable to import Win32 text modules: %s"""%(err,)
+	sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
 </div>
 	<div class="commentary">
 	<div class="paragraph">Our "font" class takes care of creating the display-lists 

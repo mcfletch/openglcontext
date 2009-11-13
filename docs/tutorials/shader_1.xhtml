@@ -43,7 +43,7 @@ machine.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 </div>
 	<div class="commentary">
 	<div class="paragraph">Now we import the PyOpenGL functionality we'll be using.</div>
@@ -332,7 +332,7 @@ mainloop function to call.</div>
 </div>
 	<div class="code-sample">
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">

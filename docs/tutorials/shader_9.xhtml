@@ -40,7 +40,7 @@ distance due to the spreading of the light rays.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -362,7 +362,7 @@ begins the current light.
 		finally:
 			glUseProgram( 0 )
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">There is only one light-type missing from the legacy OpenGL 

@@ -34,13 +34,16 @@ here.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGLContext import interactivecontext, drawcube
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.constants import GLfloat_3,GLfloat_4
 import time
-from PIL.Image import open
+try:
+    from PIL.Image import open
+except ImportError, err:
+    from Image import open
 class TestContext( BaseContext ):
 	"""Blending modes demonstration"""
 	usage ="""Demonstrates blending functions:
@@ -267,7 +270,7 @@ will not work unless the background is black.
 		glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
 		glEnd()
 if __name__ == "__main__":
-	MainFunction(TestContext)
+	TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">

@@ -30,7 +30,7 @@ demo using the scenegraph API.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
-BaseContext, MainFunction = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 import string, time
@@ -154,7 +154,7 @@ with an ice-cream-cone-shaped trimming curve
 			],
 		)
 if __name__ == "__main__":
-	MainFunction ( TestContext)
+	TestContext.ContextMainLoop()
 </div>
 <div class="source-reference">This code-walkthrough tutorial is generated from the nurbsobject.py script in the 
 OpenGLContext source distribution.</div>
