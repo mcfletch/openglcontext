@@ -2,8 +2,10 @@
 from OpenGL.GL import *
 from math import pi
 from vrml.vrml97 import basenodes, nodetypes
+from vrml.vrml97 import transformmatrix
 from vrml import node
-from OpenGLContext.arrays import array
+from OpenGLContext.arrays import array, dot
+from OpenGLContext import vectorutilities
 
 class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
     """Abstract base class for all lights
@@ -72,8 +74,27 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
     def createShadowMap( self, mode ):
         """Create a shadow map for this light..."""
         
-    
-    
+    def viewMatrix( self, cutOffAngle=pi/3, aspect=1.0, near=0.1, far=10000 ):
+        """Calculate viewing matrix for our light
+        
+        Calculate our projection matrix, note that this assumes that 
+        we are a spot-like light with a narrow field-of-view 
+        (cutOffAngle).
+        """
+        return transformmatrix.perspectiveMatrix( 
+            cutOffAngle,
+            aspect,
+            near,
+            far
+        )
+    def modelMatrix( self ):
+        """Calculate our model-side matrix"""
+        rot = vectorutilities.orientToXYZR( (0,0,-1), self.direction )
+        # inverse of rotation matrix, hmm...
+        rotate = transformmatrix.rotMatrix( rot )[1]
+        # inverse of translation matrix...
+        translate = transformmatrix.transMatrix(self.location)[1]
+        return dot( translate,rotate )
 
 class PointLight(basenodes.PointLight, Light):
     """PointLight node
@@ -113,6 +134,7 @@ class SpotLight(basenodes.SpotLight, PointLight):
             return 1
         else:
             return 0
+    
 
 class DirectionalLight (basenodes.DirectionalLight, Light):
     '''A Directional Light node

@@ -51,23 +51,6 @@ class TestContext( BaseContext ):
         """Draw our scene at current animation point"""
         self.shape.Render( mode )
     
-    def getLightMatrices( self ):
-        glPushMatrix()
-        try:
-            glLoadIdentity()
-            gluPerspective( 60.0, 1.0, .5, 300.0 )
-            lightProj = glGetFloatv( GL_MODELVIEW_MATRIX )
-            glLoadIdentity()
-            gluLookAt( 
-                self.lightPosition[0],self.lightPosition[1],self.lightPosition[2],
-                0.0, 0.0, 0.0, # origin
-                0.0, 1.0, 0.0 # up-vector 
-            )
-            lightView = glGetFloatv( GL_MODELVIEW_MATRIX )
-            return lightProj,lightView 
-        finally:
-            glPopMatrix()
-    
     def getTextureMatrix( self, lightProj, lightView ):
         """Texture-matrix transforming eye-space into texture-space"""
         return transpose(
@@ -99,7 +82,9 @@ class TestContext( BaseContext ):
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
             
-            lightProj,lightView = self.getLightMatrices()
+            lightProj = self.light.viewMatrix( pi/3, near=.1, far=10000.0)
+            lightView = self.light.modelMatrix( )
+            
             glMatrixMode( GL_PROJECTION )
             glLoadMatrixf( lightProj )
             glMatrixMode( GL_MODELVIEW )
@@ -259,10 +244,11 @@ class TestContext( BaseContext ):
         self.time.register (self)
         self.time.start ()
         
-        self.light = PointLight(
+        self.light = SpotLight(
             location = [0,5,10],
             color = [1,.5,.5],
             ambientIntensity = 0.5,
+            direction = [0,-5,-10],
         )
         
     lightPosition = array( [0,5,10],'f')
@@ -274,7 +260,7 @@ class TestContext( BaseContext ):
         self.lightPosition[0] = xz[0]
         self.lightPosition[2] = xz[1]
         self.light.location = self.lightPosition
-#        print self.light.location
+        self.light.direction = -self.lightPosition
         
 
 if __name__ == "__main__":
