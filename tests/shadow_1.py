@@ -1,9 +1,15 @@
 #! /usr/bin/env python
-'''Attempt to get a depth-texture-based shadow demo
+'''=Shadows from Scratch=
+
+In this tutorial, we'll create basic ARB_shadow-based 
+shadow-rendering code.  This tutorial follows roughly 
+after this C tutorial:
+
+    http://www.paulsprojects.net/tutorials/smt/smt.html
+
+with alterations to work with OpenGLContext.
 '''
 import OpenGL 
-#OpenGL.USE_ACCELERATE = False
-#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
@@ -18,15 +24,6 @@ from OpenGLContext.events.timer import Timer
 
 import string, time
 import ctypes,weakref
-
-LIGHT_VERT = """
-    void main() {
-        gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
-    }"""
-LIGHT_FRAG = """
-    void main() {
-        gl_FragColor = vec4( 0,0,0,0 );
-    }"""
 
 BIAS_MATRIX = array([
     [0.5, 0.0, 0.0, 0.0],
@@ -68,10 +65,7 @@ class TestContext( BaseContext ):
         glMatrixMode(GL_MODELVIEW)
         glPushMatrix()
         try:
-            glLoadMatrixf([[0.5,0.0,0.0,0.0],
-                           [0.0,0.5,0.0,0.0],
-                           [0.0,0.0,0.5,0.0],
-                           [0.5,0.5,0.5,1.0]])
+            glLoadMatrixf(BIAS_MATRIX)
             glMultMatrixf(lightProj)
             glMultMatrixf(lightView)
             return glGetFloatv(GL_TRANSPOSE_MODELVIEW_MATRIX)
@@ -84,6 +78,9 @@ class TestContext( BaseContext ):
             # is the regular opaque rendering pass...
             # Okay, first rendering pass, render geometry into depth 
             # texture from the perspective of the light...
+            glDepthFunc(GL_LEQUAL);
+            glEnable(GL_DEPTH_TEST);
+            
             texture = glGenTextures( 1 )
             glBindTexture( GL_TEXTURE_2D, texture )
             shadowMapSize = 256
@@ -152,7 +149,7 @@ class TestContext( BaseContext ):
             # Third pass, now we do the shadow tests...
             
             print 'THIRD PASS'
-            glClear(GL_DEPTH_BUFFER_BIT)
+#            glClear(GL_DEPTH_BUFFER_BIT)
             mode.lightingAmbient = False
             mode.lightingDiffuse = True 
             self.light.Light( GL_LIGHT0, mode=mode )
@@ -284,7 +281,7 @@ class TestContext( BaseContext ):
         self.lightPosition[0] = xz[0]
         self.lightPosition[2] = xz[1]
         self.light.location = self.lightPosition
-        print self.light.location
+#        print self.light.location
         
 
 if __name__ == "__main__":
