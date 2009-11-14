@@ -3,9 +3,10 @@
 
 In this tutorial, we will:
 
- * create basic ARB_shadow-based shadow-rendering
-   * render geometry into a depth-buffer
-   * use the depth-buffer to filter a multi-pass renderer
+    * setup basic ARB_shadow-based shadow-rendering
+    * render geometry into the "back buffer" depth-buffer
+    * copy the depth-buffer into a depth-texture image
+    * use the depth-texture to filter a multi-pass renderer
 
 This tutorial follows roughly after this C tutorial:
 
@@ -18,6 +19,7 @@ Ian Mallett's OpenGL Library v1.4:
     http://www.geometrian.com/Programs.php
 '''
 import OpenGL 
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
@@ -46,36 +48,40 @@ class TestContext( BaseContext ):
     currentSize = 0
     lightTexture = None
     lightTransform = None
+    initialPosition = (.5,1,3)
     
     sceneList = None
     
     def drawScene( self, mode ):
         """Draw our scene at current animation point"""
-        self.shape.Render( mode )
+        mode.visit( self.geometry )
+        #self.shape.Render( mode )
     
     shadowTexture = None
-    shadowMapSize = 256
+    shadowMapSize = 1024
     def setupShadowContext( self ):
         """Create a shadow-rendering context/texture"""
-        # TODO: render to a pixel-buffer-object instead, when 
-        # available...
-        texture = glGenTextures( 1 )
-        glBindTexture( GL_TEXTURE_2D, texture )
         shadowMapSize = self.shadowMapSize
-        glTexImage2D( 
-            GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 
-            shadowMapSize, shadowMapSize, 0,
-            GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
-        )
+        if not self.shadowTexture:
+            texture = glGenTextures( 1 )
+            glBindTexture( GL_TEXTURE_2D, texture )
+            glTexImage2D( 
+                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 
+                shadowMapSize, shadowMapSize, 0,
+                GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
+            )
+            self.shadowTexture = texture
+        else:
+            texture = self.shadowTexture
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
         '''We assume here that shadowMapSize is smaller than the size 
         of the viewport.  Real world implementations would normally 
-        render to a Pixel Buffer Object (off-screen render) to an 
+        render to a Frame Buffer Object (off-screen render) to an 
         appropriately sized texture, regardless of screen size, falling 
-        back to this implementation *only* if there was no PBO support 
+        back to this implementation *only* if there was no FBO support 
         on the machine.
         '''
         glViewport( 0,0, shadowMapSize, shadowMapSize )
@@ -128,7 +134,9 @@ class TestContext( BaseContext ):
                 have methods to retrieve their matrices, so we would simply
                 dot those matrices with the matrices we retrieve here.
             '''
-            lightView = self.light.viewMatrix( pi/3, near=.1, far=10000.0)
+            lightView = self.light.viewMatrix( 
+                pi/6, near=.3, far=100.0
+            )
             lightModel = self.light.modelMatrix( )
             '''This is a bit wasteful, as we've already loaded our 
             projection and model-view matrices for our view-platform into 
@@ -140,14 +148,7 @@ class TestContext( BaseContext ):
             glLoadMatrixf( lightView )
             glMatrixMode( GL_MODELVIEW )
             glLoadMatrixf( lightModel )
-            '''We want to avoid depth-buffer artefacts where the front-face 
-            appears to be ever-so-slightly behind itself due to multiplication
-            and transformation artefacts.  So we render the *back* of the 
-            objects into the depth buffer, rather than the *front*.  This will 
-            cause artefacts if there are un-closed objects in the scene,
-            as we will see with our Teapot object.
-            '''
-            glCullFace( GL_FRONT )
+            #glCullFace( GL_FRONT )
             '''Because we *only* care about the depth buffer, we can set 
             a few OpenGL flags to optimize the rendering process.'''
             glShadeModel( GL_FLAT )
@@ -161,26 +162,26 @@ class TestContext( BaseContext ):
 
             '''==Offset Polygons to avoid Artefacts==
             
-            When we render our third pass, we'll be comparing depth values 
-            to those generated here.  We are rendering back-facing polygons 
-            to avoid artefacts in the front-facing polygons where precision 
-            of the depth-buffer causes the polygon to appear to be 
-            ever-so-slightly "behind" itself when transformed via the 
-            texture matrix.
+            We want to avoid depth-buffer artefacts where the front-face 
+            appears to be ever-so-slightly behind itself due to multiplication
+            and transformation artefacts.  The original tutorial uses 
+            rendering of the *back* faces of objects into the depth buffer,
+            but with "open" geometry such as the Utah Teapot, we wind up with 
+            nasty artefacts where e.g. the area on the body around the spout 
+            isn't shadowed because there's no back-faces in front of it.
             
-            However, similar artefacts show up in the rendering of the 
-            back-facing polygons, where the third rendering pass can wind up 
-            seeing the back-facing polygons as being "in front of" themselves,
-            basically declaring them to be "lit".  When the light is in front 
-            of the camera and slightly to the side this results in a moire
-            pattern of faint lighting on the back-facing (from the point of
-            view of the light) faces.  The effect is subtle, but annoying.
+            Even with the original approach, using a polygon offset will tend 
+            to avoid "moire" effects in the shadows where precision issues 
+            cause the depths in the buffer to pass back and forth across the 
+            LEQUAL threshold as they cross the surface of the object.
             
-            To avoid it, we use a polygon-offset operation.  The first 1.0
-            just gives us the raw fragment depth-value, the second 1.0, the 
-            parameter "units" says to take 1.0 depth-buffer units and add it 
-            to the depth-value from multiplying 1.0 times the raw depth value.
+            To avoid these problems, we use a polygon-offset operation.  
+            The first 1.0 gives us the raw fragment depth-value, the 
+            second 1.0, the parameter "units" says to take 1.0 
+            depth-buffer units and subtract it from the depth-value 
+            from the previous step.
             '''
+            # glCullFace( GL_BACK ) # Original tutorial approach...
             glPolygonOffset(1.0, 1.0)
             glEnable(GL_POLYGON_OFFSET_FILL) 
             '''And now we draw our scene into the depth-buffer.'''
@@ -194,15 +195,25 @@ class TestContext( BaseContext ):
             glCullFace( GL_BACK )
             glShadeModel( GL_SMOOTH )
             glColorMask( 1,1,1,1 )
-            glClear(GL_DEPTH_BUFFER_BIT)
             '''We want to restore our view-platform's matrices, so we 
             ask it to render, restoring identity matrices before doing 
             so.'''
             platform = self.getViewPlatform()
             platform.render( identity = True )
-
-            '''Second rendering pass, render "ambient" light into 
-            the scene...'''
+            
+            '''=Render Ambient-lit Geometry=
+            
+            Our geometry will be written with two passes, the first will 
+            write all geometry with "ambient" light only.  The second will 
+            write "direct" (diffuse) light filtered by the depth texture.
+            
+            Since our depth buffer currently has the camera's view rendered 
+            into it, we need to clear it.
+            '''
+            glClear(GL_DEPTH_BUFFER_BIT)
+            '''Again, we configure the mode to tell the geometry how to 
+            render itself.  Here we want to have almost everything save 
+            the diffuse lighting calculations performed.'''
             mode.visible = True
             mode.lighting = True 
             mode.lightingAmbient = True 
@@ -211,99 +222,108 @@ class TestContext( BaseContext ):
             self.light.Light( GL_LIGHT0, mode=mode )
             self.drawScene( mode )
             
-            '''Third pass, now we do the shadow tests...
+            '''=Render Diffuse Lighting Filtered by Shadow Map=
+            
             We do *not* want ambient light added on this pass,
-            but we *do* want diffuse light...'''
-            mode.lightingAmbient = False
+            but we *do* want diffuse light, so we configure the mode.
+            '''
+            mode.lightingAmbient = True
             mode.lightingDiffuse = True 
             self.light.Light( GL_LIGHT0, mode=mode )
-            
+            '''The texture matrix translates from camera eye-space into 
+            light eye-space.  See the original tutorial for an explanation 
+            of how the mapping is done, and how it interacts with the 
+            current projection matrix.
+            '''
             textureMatrix = transpose(
                 dot(
                     dot( lightModel, lightView ),
                     BIAS_MATRIX
                 )
             )
-            for token,gen_token,row in [
+            texGenData = [
                 (GL_S,GL_TEXTURE_GEN_S,textureMatrix[0]),
                 (GL_T,GL_TEXTURE_GEN_T,textureMatrix[1]),
                 (GL_R,GL_TEXTURE_GEN_R,textureMatrix[2]),
                 (GL_Q,GL_TEXTURE_GEN_Q,textureMatrix[3]),
-            ]:
+            ]
+            for token,gen_token,row in texGenData:
+                '''We want to generate coordinates as a linear mapping 
+                with each "eye plane" corresponding to a row of our 
+                translation matrix.'''
                 glTexGeni(token, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR)
                 glTexGenfv(token, GL_EYE_PLANE, row )
                 glEnable(gen_token)
-            
+            '''Now use our light's depth-texture, created above.'''
             glBindTexture(GL_TEXTURE_2D, texture);
             glEnable(GL_TEXTURE_2D);
-
-            # Enable shadow comparison
+            '''Enable shadow comparison.  "R" here is not "red", but 
+            the third of 4 texture coordinates, i.e. the transformed 
+            Z-depth of the coordinate, as we saw in texGenData above.'''
             glTexParameteri(
                 GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE,
                 GL_COMPARE_R_TO_TEXTURE
             )
-
-            # Shadow comparison should be true (ie not in shadow) if r<=texture
+            '''Shadow comparison should be true (ie not in shadow) 
+            if R <= value stored in the texture.  That is, if the 
+            eye-space Z coordinate multiplied by our transformation 
+            matrix is at a lower depth (closer) than the depth value 
+            stored in the texture, then that coordinate is "in the light".
+            '''
             glTexParameteri(
                 GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL
             )
-
-            # Shadow comparison should generate an INTENSITY result
+            '''Shadow comparison should generate an INTENSITY result.'''
             glTexParameteri(
                 GL_TEXTURE_2D, GL_DEPTH_TEXTURE_MODE, GL_INTENSITY
             )
-            
-            glAlphaFunc(GL_GEQUAL, 0.999)
+            '''Accept anything as "lit" which gives this value.'''
+            glAlphaFunc(GL_EQUAL, 1.0)
             glEnable(GL_ALPHA_TEST)
             
             self.drawScene( mode )
             
             glDisable(GL_TEXTURE_2D)
-
-            glDisable(GL_TEXTURE_GEN_S)
-            glDisable(GL_TEXTURE_GEN_T)
-            glDisable(GL_TEXTURE_GEN_R)
-            glDisable(GL_TEXTURE_GEN_Q)
+            for _,gen_token,_ in texGenData:
+                glDisable(gen_token)
             glDisable(GL_LIGHTING);
             glDisable(GL_ALPHA_TEST);            
-            
+            '''Just to be sure, set the ambient light setting back to 
+            its previous value for the mode.'''
             mode.lightingAmbient = True 
-            
         else:
             self.drawScene( mode )
-#        self.vbo.bind()
-#        glReadPixels(
-#            0, 0, 
-#            300, 300, 
-#            GL_RGBA, 
-#            GL_UNSIGNED_BYTE,
-#            self.vbo,
-#        )
-#        # map_buffer returns an Byte view, we want an 
-#        # UInt view of that same data...
-#        data = map_buffer( self.vbo ).view( 'I' )
-#        print data
-#        del data
-#        self.vbo.unbind()
         
     def OnInit( self ):
         """Scene set up and initial processing"""
         if not glInitShadowARB() or not glInitDepthTextureARB():
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
-#        self.vbo = vbo.VBO( 
-#            None,
-#            target = GL_PIXEL_PACK_BUFFER,
-#            usage = GL_DYNAMIC_READ,
-#            size = 300*300*4,
-#        )
-        self.shape = Shape(
-            geometry = Teapot( size=2.5 ),
-            appearance = Appearance(
-                material = Material(
-                    diffuseColor =(1,0,0),
-                    ambientIntensity = .2,
-                ),
-            ),
+        self.shape = Teapot( size=.5 )
+        self.geometry = Transform(
+            children = [
+                Transform( 
+                    translation = (x*1.5,y,z),
+                    children = [
+                        Shape(
+                            geometry = self.shape,
+                            appearance = Appearance(
+                                material = Material(
+                                    diffuseColor =(
+                                        1.0-(x/2.0),
+                                        1.0-(y/2.0),
+                                        z/2.0+.5
+                                    ),
+                                    ambientIntensity = .2,
+                                    shininess = .5,
+                                ),
+                            ),
+                        )
+                    ],
+                )
+                for x in range( 2 )
+                for y in range( 2 )
+                for z in range( 2 )
+            ],
         )
         self.time = Timer( duration = 8.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
@@ -330,5 +350,7 @@ class TestContext( BaseContext ):
         
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(
+        size = (1024,1024),
+    )
 
