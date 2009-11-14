@@ -271,6 +271,7 @@ class Context(object):
         """Print the current frame-rate values"""
         if self.frameCounter:
             self.frameCounter.display = not (self.frameCounter.display)
+            print '%sfps'%( self.frameCounter.summary()[1], )
     def OnNextViewpoint( self, event=None ):
         """Go to the next viewpoint for the scenegraph"""
         sg = self.getSceneGraph()
