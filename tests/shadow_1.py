@@ -135,7 +135,7 @@ class TestContext( BaseContext ):
                 dot those matrices with the matrices we retrieve here.
             '''
             lightView = self.light.viewMatrix( 
-                pi/6, near=.3, far=100.0
+                pi/3, near=.3, far=100.0
             )
             lightModel = self.light.modelMatrix( )
             '''This is a bit wasteful, as we've already loaded our 
@@ -301,28 +301,50 @@ class TestContext( BaseContext ):
         self.shape = Teapot( size=.5 )
         self.geometry = Transform(
             children = [
-                Transform( 
-                    translation = (x*1.5,y,z),
+                Transform(
+                    translation = (0,-.38,0),
                     children = [
                         Shape(
-                            geometry = self.shape,
+                            DEF = 'Floor',
+                            geometry = Box( size=(5,.05,5)),
+                            appearance = Appearance( material=Material(
+                                diffuseColor = (.7,.7,.7),
+                                shininess = .8,
+                                ambientIntensity = .1,
+                            )),
+                        ),
+                    ],
+                ),
+                Transform( 
+                    translation = (0,0,0),
+                    children = [
+                        Shape(
+                            geometry = Teapot( size = .5 ),
                             appearance = Appearance(
                                 material = Material(
-                                    diffuseColor =(
-                                        1.0-(x/2.0),
-                                        1.0-(y/2.0),
-                                        z/2.0+.5
-                                    ),
+                                    diffuseColor =( .5,1.0,.5 ),
                                     ambientIntensity = .2,
                                     shininess = .5,
                                 ),
                             ),
                         )
                     ],
-                )
-                for x in range( 2 )
-                for y in range( 2 )
-                for z in range( 2 )
+                ),
+                Transform( 
+                    translation = (2,3.62,0),
+                    children = [
+                        Shape(
+                            geometry = Box( size=(.1,8,.1) ),
+                            appearance = Appearance(
+                                material = Material(
+                                    diffuseColor =( 1.0,0,0 ),
+                                    ambientIntensity = .4,
+                                    shininess = 0.0,
+                                ),
+                            ),
+                        )
+                    ],
+                ),
             ],
         )
         self.time = Timer( duration = 8.0, repeating = 1 )
