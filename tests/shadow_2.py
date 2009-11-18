@@ -12,10 +12,11 @@ This tutorial is a minor revision of our previous shadow tutorial,
 the only change is to add off-screen rendering of the depth-texture 
 rather than rendering on the back-buffer of the screen.
 '''
-import OpenGL 
+import OpenGL,sys,os,traceback
+#sys.path.insert( 0, '.')
 from OpenGLContext import testingcontext
 '''Import the previous tutorial as BaseContext'''
-from shadow_2 import TestingContext as BaseContext
+from shadow_1 import TestContext as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -33,51 +34,38 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Scene set up and initial processing"""
         super( TestContext, self ).OnInit()
-        if not glInitFrameBufferEXT():
+        if not glInitFramebufferObjectARB():
             print 'Missing required extensions!'
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
     
     shadowFBO = None 
     shadowDepth = None
     shadowTexture = None
-    shadowMapSize = 1024
+    shadowMapSize = 2048
     def setupShadowContext( self ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
         if not self.shadowFBO:
             self.shadowFBO = glGenFramebuffers(1)
-        '''We bind the FBO, both to configure and to render to it...'''
-        glBindFramebufferEXT(GL_FRAMEBUFFER, self.shadowFBO )
-        if not self.shadowDepth:
-            '''Create a new render buffer'''
-            self.shadowDepth = glGenRenderbuffers(1)
-            '''Make it current so we can configure it'''
-            glBindRenderbuffer(GL_RENDERBUFFER, self.shadowDepth)
-            '''Tell it how much memory of what type to reserve'''
+            glBindFramebuffer(GL_FRAMEBUFFER, self.shadowFBO )
+            self.shadowColor = glGenRenderbuffers(1)
+            glBindRenderbuffer(GL_RENDERBUFFER, self.shadowColor)      
             glRenderbufferStorage(
-                GL_RENDERBUFFER, 
-                GL_DEPTH_COMPONENT,
-                shadowMapSize, 
+                GL_RENDERBUFFER,
+                GL_RGBA4,
+                shadowMapSize,
                 shadowMapSize,
             )
-            '''Make it the FBO's bound (attached) depth buffer'''
             glFramebufferRenderbuffer(
                 GL_FRAMEBUFFER,
-                GL_DEPTH_ATTACHMENT,
-                GL_RENDERBUFFER, 
-                self.shadowDepth,
+                GL_COLOR_ATTACHMENT0,
+                GL_RENDERBUFFER,
+                self.shadowColor,
             )
         else:
-            glBindRenderbuffer(GL_RENDERBUFFER, self.shadowDepth)
-        glPushAttrib(GL_VIEWPORT_BIT)
-        glViewport(0,0,shadowMapSize,shadowMapSize)
-            
+            '''We bind the FBO, both to configure and to render to it...'''
+            glBindFramebuffer(GL_FRAMEBUFFER, self.shadowFBO )
         if not self.shadowTexture:
-            '''We create a single texture and tell OpenGL 
-            its data-format parameters.  The None at the end of the 
-            argument list tells OpenGL not to initialize the data, i.e. 
-            not to read it from anywhere.
-            '''
             texture = glGenTextures( 1 )
             glBindTexture( GL_TEXTURE_2D, texture )
             glTexImage2D( 
@@ -86,26 +74,34 @@ class TestContext( BaseContext ):
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
             self.shadowTexture = texture
+            glFramebufferTexture2D(
+                GL_FRAMEBUFFER, 
+                GL_DEPTH_ATTACHMENT, 
+                GL_TEXTURE_2D, 
+                texture, 
+                0 #mip-map level...
+            )
+            glBindTexture( GL_TEXTURE_2D, 0 )
         else:
             texture = self.shadowTexture
-        '''These parameters simply keep us from doing interpolation on the 
-        data-values for the texture.  If we were to use, for instance 
-        GL_LINEAR interpolation, our shadows would tend to get "moire" 
-        patterns.  The cutoff threshold for the shadow would get crossed 
-        halfway across each shadow-map texel as the neighbouring pixels'
-        values were blended.'''
+            glBindTexture( GL_TEXTURE_2D, texture )
+        glPushAttrib(GL_VIEWPORT_BIT)
+        '''We use the same "nearest" filtering as before'''
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
-        '''We assume here that shadowMapSize is smaller than the size 
-        of the viewport.  Real world implementations would normally 
-        render to a Frame Buffer Object (off-screen render) to an 
-        appropriately sized texture, regardless of screen size, falling 
-        back to this implementation *only* if there was no FBO support 
-        on the machine.
-        '''
-        glViewport( 0,0, shadowMapSize, shadowMapSize )
+        '''Unlike in the previous tutorial, we now *know* this is a 
+        valid size for the viewport...'''
+        glViewport(0,0,shadowMapSize,shadowMapSize)
+        try:
+            checkFramebufferStatus( )
+        except Exception, err:
+            traceback.print_exc()
+            os._exit( 1 )
+        glBindTexture( GL_TEXTURE_2D, 0 )
+        glClear(GL_DEPTH_BUFFER_BIT)
+        
         return texture
     def closeShadowContext( self, texture ):
         """Close our shadow-rendering context/texture"""
@@ -114,16 +110,8 @@ class TestContext( BaseContext ):
         glCopyTexSubImage2D, which is performed entirely "on card", so 
         is reasonably fast, though not as fast as having rendered into an 
         FBO in the first place.'''
-        glBindFramebufferEXT(GL_FRAMEBUFFER, None )
-
-        shadowMapSize = self.shadowMapSize
-        glBindTexture(GL_TEXTURE_2D, texture)
-        glCopyTexSubImage2D(
-            GL_TEXTURE_2D, 0, 0, 0, 0, 0, shadowMapSize, shadowMapSize
-        )
-        w,h = self.getViewPort()
-        glViewport( 0,0,w,h)
-        glDisable( GL_TEXTURE_2D )
+        glBindFramebuffer(GL_FRAMEBUFFER, 0 )
+        glPopAttrib(GL_VIEWPORT_BIT)
         return texture
 
 if __name__ == "__main__":
