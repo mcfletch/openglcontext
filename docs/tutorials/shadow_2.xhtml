@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+<title>Special Effects: Shadows in FrameBufferObject</title>
+    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+</head>
+<body>
+<table width="100%" class="navtable"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="shadow_1.xhtml">Previous</a></td>
+	<td align="center">Special Effects: Shadows in FrameBufferObject</td>
+	<td align="right"><a href="index.xhtml">Index</a></td>
+	</tr>
+</thead></table>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title">Shadows in FrameBufferObject</h1>
+	<div class="paragraph">
+	<img src="shadow_2.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+</div>
+	<div class="paragraph">In this tutorial, we will:</div>
+	<ul class="">
+	<li class="">subclass our previous shadow tutorial code </li>
+	<li class="">use Frame Buffer Objects to render the depth-texture </li>
+</ul>
+	<div class="paragraph">This tutorial is a minor revision of our previous shadow tutorial,
+the only change is to add off-screen rendering of the depth-texture 
+rather than rendering on the back-buffer of the screen.
+</div>
+</div>
+	<div class="code-sample">import OpenGL,sys,os,traceback
+from OpenGLContext import testingcontext
+</div>
+	<div class="commentary">
+	<div class="paragraph">Import the previous tutorial as BaseContext</div>
+</div>
+	<div class="code-sample">from shadow_1 import TestContext as BaseContext
+from OpenGLContext.scenegraph.basenodes import *
+from OpenGL.GL import *
+from OpenGL.GLU import *
+from OpenGL.GL.ARB.depth_texture import *
+from OpenGL.GL.ARB.shadow import *
+</div>
+	<div class="commentary">
+	<div class="paragraph">Import the OpenGL extension we're going to use</div>
+</div>
+	<div class="code-sample">from OpenGL.GL.ARB.framebuffer_object import *
+from OpenGLContext.arrays import (
+    array, sin, cos, pi, dot, transpose,
+)
+from OpenGLContext.events.timer import Timer
+class TestContext( BaseContext ):
+    """Shadow rendering tutorial code"""
+    def OnInit( self ):
+        """Scene set up and initial processing"""
+        super( TestContext, self ).OnInit()
+        if not glInitFramebufferObjectARB():
+            print 'Missing required extensions!'
+            sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
+    shadowFBO = None 
+    shadowDepth = None
+    shadowTexture = None
+    shadowMapSize = 2048
+    def setupShadowContext( self ):
+        """Create a shadow-rendering context/texture"""
+        shadowMapSize = self.shadowMapSize
+        if not self.shadowFBO:
+            self.shadowFBO = glGenFramebuffers(1)
+            glBindFramebuffer(GL_FRAMEBUFFER, self.shadowFBO )
+            self.shadowColor = glGenRenderbuffers(1)
+            glBindRenderbuffer(GL_RENDERBUFFER, self.shadowColor)      
+            glRenderbufferStorage(
+                GL_RENDERBUFFER,
+                GL_RGBA4,
+                shadowMapSize,
+                shadowMapSize,
+            )
+            glFramebufferRenderbuffer(
+                GL_FRAMEBUFFER,
+                GL_COLOR_ATTACHMENT0,
+                GL_RENDERBUFFER,
+                self.shadowColor,
+            )
+        else:
+</div>
+	<div class="commentary">
+	<div class="paragraph">We bind the FBO, both to configure and to render to it...</div>
+</div>
+	<div class="code-sample">            glBindFramebuffer(GL_FRAMEBUFFER, self.shadowFBO )
+        if not self.shadowTexture:
+            texture = glGenTextures( 1 )
+            glBindTexture( GL_TEXTURE_2D, texture )
+            glTexImage2D( 
+                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 
+                shadowMapSize, shadowMapSize, 0,
+                GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
+            )
+            self.shadowTexture = texture
+            glFramebufferTexture2D(
+                GL_FRAMEBUFFER, 
+                GL_DEPTH_ATTACHMENT, 
+                GL_TEXTURE_2D, 
+                texture, 
+                0 #mip-map level...
+            )
+            glBindTexture( GL_TEXTURE_2D, 0 )
+        else:
+            texture = self.shadowTexture
+            glBindTexture( GL_TEXTURE_2D, texture )
+        glPushAttrib(GL_VIEWPORT_BIT)
+</div>
+	<div class="commentary">
+	<div class="paragraph">We use the same "nearest" filtering as before</div>
+</div>
+	<div class="code-sample">        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Unlike in the previous tutorial, we now *know* this is a 
+        valid size for the viewport...</div>
+</div>
+	<div class="code-sample">        glViewport(0,0,shadowMapSize,shadowMapSize)
+        try:
+            checkFramebufferStatus( )
+        except Exception, err:
+            traceback.print_exc()
+            os._exit( 1 )
+        glBindTexture( GL_TEXTURE_2D, 0 )
+        glClear(GL_DEPTH_BUFFER_BIT)
+        return texture
+    def closeShadowContext( self, texture ):
+        """Close our shadow-rendering context/texture"""
+</div>
+	<div class="commentary">
+	<div class="paragraph">This is the function that actually copies the depth-buffer into 
+        the depth-texture specified.  The operation is a standard OpenGL 
+        glCopyTexSubImage2D, which is performed entirely "on card", so 
+        is reasonably fast, though not as fast as having rendered into an 
+        FBO in the first place.</div>
+</div>
+	<div class="code-sample">        glBindFramebuffer(GL_FRAMEBUFFER, 0 )
+        glPopAttrib(GL_VIEWPORT_BIT)
+        return texture
+if __name__ == "__main__":
+</div>
+	<div class="commentary">
+	<div class="paragraph">We specify a large size for the context because we need at least 
+    this large a context to render our 1024x1024 depth texture.</div>
+</div>
+	<div class="code-sample">
+    TestContext.ContextMainLoop(
+        size = (1024,1024),
+    )
+</div>
+<div class="source-reference">This code-walkthrough tutorial is generated from the shadow_2.py script in the 
+OpenGLContext source distribution.</div>
+<table width="100%" class="navtable"><thead>
+	<tr>
+		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
+	</tr>
+	<tr>
+	<td><a href="shadow_1.xhtml">Previous</a></td>
+	<td align="center">Special Effects: Shadows in FrameBufferObject</td>
+	<td align="right"><a href="index.xhtml">Index</a></td>
+	</tr>
+	<tr class="meta-links">
+		<td colspan="3">
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
+		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
+		</td>
+	</tr>
+</thead></table>
+</body>
+</html>

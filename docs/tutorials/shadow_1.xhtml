@@ -14,7 +14,7 @@
 	<tr>
 	<td><a href="index.xhtml">Index</a></td>
 	<td align="center">Special Effects: Shadows with ARB Shadow</td>
-	<td align="right"><a href="index.xhtml">Index</a></td>
+	<td align="right"><a href="shadow_2.xhtml">Next</a></td>
 	</tr>
 </thead></table>
 	<div class="code-sample">#! /usr/bin/env python
@@ -92,7 +92,15 @@ class TestContext( BaseContext ):
         the core entry points (constants) throughout.</div>
 </div>
 	<div class="code-sample">        if not glInitShadowARB() or not glInitDepthTextureARB():
+            print 'Missing required extensions!'
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
+</div>
+	<div class="commentary">
+	<div class="paragraph">Configure some parameters to make for really-nice shadows 
+        at the expense of some extra calculations</div>
+</div>
+	<div class="code-sample">        glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
+        glEnable( GL_POLYGON_SMOOTH )
 </div>
 	<div class="commentary">
 	<div class="paragraph">This simple scene is a Teapot and a tall thin box on a flat 
@@ -578,7 +586,7 @@ OpenGLContext source distribution.</div>
 	<tr>
 	<td><a href="index.xhtml">Index</a></td>
 	<td align="center">Special Effects: Shadows with ARB Shadow</td>
-	<td align="right"><a href="index.xhtml">Index</a></td>
+	<td align="right"><a href="shadow_2.xhtml">Next</a></td>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">

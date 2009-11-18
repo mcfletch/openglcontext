@@ -34,13 +34,13 @@ discouraged.</div>
 	<div class="paragraph">This tutorial requires at least the following packages:</div>
 	<ul class="">
 	<li class="">
-	<a href="http://pyopengl.sourceforge.net/context" class="">OpenGLContext 2.1.0a5</a>
+	<a href="http://pyopengl.sourceforge.net/context" class="">OpenGLContext</a>
 	 -- provides the overall rendering code (
 	<a href="http://pyopengl.sourceforge.net/documentation/installation.html" class="">Installation Notes</a>
 	).
 </li>
 	<li class="">
-	<a href="http://pyopengl.sourceforge.net" class="">PyOpenGL 3.0.1a3</a>
+	<a href="http://pyopengl.sourceforge.net" class="">PyOpenGL</a>
 	 -- the actual     rendering interface we're learning to use in this tutorial.
 </li>
 	<li class="">
@@ -69,9 +69,12 @@ platform build.
 	<div class="code-sample">"""virtualenv tutorial 
 cd tutorial
 source bin/activate 
-easy_install  PyDispatcher PyVRML97 PyOpenGL OpenGLContext"""
+easy_install  OpenGLContext-full"""
 </div>
 	<div class="commentary">
+	<div class="paragraph">You'll need to have GLUT, GLE and the like installed via your 
+system's package manager.  See the OpenGLContext installation notes 
+for details.</div>
 	<h1 class="title">System Requirements</h1>
 	<div class="paragraph">This tutorial requires a very modern OpenGL implementation.  Your 
 card/driver should likely support OpenGL 2.x natively, though 
@@ -79,7 +82,8 @@ OpenGL 1.5+ extensions may work.</div>
 	<div class="paragraph">It is known *not* to work on the following theoretically capable 
 configurations:</div>
 	<ul class="">
-	<li class="">Mac Radeon 9600, OS-X 10.4/10.5 (does not support vertex 	attribute arrays)</li>
+	<li class="">Mac Radeon 9600, OS-X 10.4/10.5 (does not support vertex     attribute arrays)</li>
+	<li class="">nVidia GeForce 7600 GS rev a1 (does not properly     compile the 11th tutorial (link error)).</li>
 </ul>
 	<div class="paragraph">Note that there are alternative code-paths that can be used, but 
 that the tutorial does not currently explore those paths in the 
