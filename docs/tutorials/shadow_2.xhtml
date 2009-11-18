@@ -66,7 +66,8 @@ class TestContext( BaseContext ):
     shadowFBO = None 
     shadowDepth = None
     shadowTexture = None
-    shadowMapSize = 2048
+    shadowMapSize = 4096
+    FILTER_TYPE = GL_NEAREST 
     def setupShadowContext( self ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
@@ -119,7 +120,7 @@ class TestContext( BaseContext ):
 	<div class="paragraph">We use the same "nearest" filtering as before</div>
 </div>
 	<div class="code-sample">        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.FILTER_TYPE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
 </div>
@@ -135,6 +136,7 @@ class TestContext( BaseContext ):
             os._exit( 1 )
         glBindTexture( GL_TEXTURE_2D, 0 )
         glClear(GL_DEPTH_BUFFER_BIT)
+        glEnable( GL_POLYGON_SMOOTH )
         return texture
     def closeShadowContext( self, texture ):
         """Close our shadow-rendering context/texture"""
@@ -148,6 +150,7 @@ class TestContext( BaseContext ):
 </div>
 	<div class="code-sample">        glBindFramebuffer(GL_FRAMEBUFFER, 0 )
         glPopAttrib(GL_VIEWPORT_BIT)
+        glDisable( GL_POLYGON_SMOOTH )
         return texture
 if __name__ == "__main__":
 </div>

@@ -7,6 +7,7 @@ In this tutorial, we will:
 
     * subclass our previous shadow tutorial code 
     * use Frame Buffer Objects to render the depth-texture 
+    * render to a larger texture than the screen-size
 
 This tutorial is a minor revision of our previous shadow tutorial,
 the only change is to add off-screen rendering of the depth-texture 
@@ -41,6 +42,7 @@ class TestContext( BaseContext ):
     shadowDepth = None
     shadowTexture = None
     shadowMapSize = 2048
+    FILTER_TYPE = GL_NEAREST 
     def setupShadowContext( self ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
@@ -87,7 +89,7 @@ class TestContext( BaseContext ):
         glPushAttrib(GL_VIEWPORT_BIT)
         '''We use the same "nearest" filtering as before'''
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.FILTER_TYPE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
         '''Unlike in the previous tutorial, we now *know* this is a 
@@ -100,7 +102,7 @@ class TestContext( BaseContext ):
             os._exit( 1 )
         glBindTexture( GL_TEXTURE_2D, 0 )
         glClear(GL_DEPTH_BUFFER_BIT)
-        
+        glEnable( GL_POLYGON_SMOOTH )
         return texture
     def closeShadowContext( self, texture ):
         """Close our shadow-rendering context/texture"""
@@ -111,6 +113,7 @@ class TestContext( BaseContext ):
         FBO in the first place.'''
         glBindFramebuffer(GL_FRAMEBUFFER, 0 )
         glPopAttrib(GL_VIEWPORT_BIT)
+        glDisable( GL_POLYGON_SMOOTH )
         return texture
 
 if __name__ == "__main__":
