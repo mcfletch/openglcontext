@@ -9,15 +9,15 @@ discouraged.
 
 We assume you know:
 
-	* General programming (with Python)
-	* Some highschool level math
+    * General programming (with Python)
+    * Some highschool level math
 
 == Package Installation ==
 
 This tutorial requires at least the following packages:
 
-    * [http://pyopengl.sourceforge.net/context OpenGLContext 2.1.0a5] -- provides the overall rendering code ([http://pyopengl.sourceforge.net/documentation/installation.html Installation Notes]).
-    * [http://pyopengl.sourceforge.net PyOpenGL 3.0.1a3] -- the actual 
+    * [http://pyopengl.sourceforge.net/context OpenGLContext] -- provides the overall rendering code ([http://pyopengl.sourceforge.net/documentation/installation.html Installation Notes]).
+    * [http://pyopengl.sourceforge.net PyOpenGL] -- the actual 
         rendering interface we're learning to use in this tutorial.
     * [http://numpy.scipy.org/ Numpy] -- provides the multi-dimensional 
         array structures we'll use for passing data into PyOpenGL 
@@ -38,8 +38,12 @@ To set up the packages on a Linux Machine using virtualenv:'''
 """virtualenv tutorial 
 cd tutorial
 source bin/activate 
-easy_install  PyDispatcher PyVRML97 PyOpenGL OpenGLContext"""
-'''== System Requirements ==
+easy_install  OpenGLContext-full"""
+'''You'll need to have GLUT, GLE and the like installed via your 
+system's package manager.  See the OpenGLContext installation notes 
+for details.
+
+== System Requirements ==
 
 This tutorial requires a very modern OpenGL implementation.  Your 
 card/driver should likely support OpenGL 2.x natively, though 
@@ -48,8 +52,10 @@ OpenGL 1.5+ extensions may work.
 It is known *not* to work on the following theoretically capable 
 configurations:
 
-	* Mac Radeon 9600, OS-X 10.4/10.5 (does not support vertex 
-		attribute arrays)
+    * Mac Radeon 9600, OS-X 10.4/10.5 (does not support vertex 
+        attribute arrays)
+    * nVidia GeForce 7600 GS rev a1 (does not properly 
+        compile the 11th tutorial (link error)).
 
 Note that there are alternative code-paths that can be used, but 
 that the tutorial does not currently explore those paths in the 
