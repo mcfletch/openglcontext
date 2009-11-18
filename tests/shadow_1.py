@@ -71,7 +71,12 @@ class TestContext( BaseContext ):
         '''We test for the two extensions, though we are actually using 
         the core entry points (constants) throughout.'''
         if not glInitShadowARB() or not glInitDepthTextureARB():
+            print 'Missing required extensions!'
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
+        '''Configure some parameters to make for really-nice shadows 
+        at the expense of some extra calculations'''
+        glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
+        glEnable( GL_POLYGON_SMOOTH )
         '''This simple scene is a Teapot and a tall thin box on a flat 
         box.  It's not particularly exciting, but it does let us see the 
         shadows quite clearly.'''
