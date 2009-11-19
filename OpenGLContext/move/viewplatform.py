@@ -137,13 +137,13 @@ class ViewPlatform(object):
         glMatrixMode(GL_PROJECTION)
         if identity:
             glLoadIdentity()
-        apply ( gluPerspective, self.frustum)
+        gluPerspective(*self.frustum)
         glMatrixMode(GL_MODELVIEW)
         if identity:
             glLoadIdentity()
         x,y,z,r = self.quaternion.XYZR()
         glRotate( r*RADTODEG, x,y,z )
-        apply( glTranslate, ( negative (self.position))[:3])
+        glTranslate( *negative (self.position)[:3])
 
     def viewMatrix( self ):
         """Calculate our matrix"""

@@ -51,7 +51,7 @@ class TestFrame( wx.Frame ):
 		}
 		for module in basenodes, extrusions, arrays:
 			for name in dir(module):
-				if not environment.has_key( name ):
+				if name not in environment:
 					environment[name] = getattr( module, name )
 		return environment
 	def CreateControls( self, style=None ):

@@ -42,9 +42,9 @@ def _newNode( cls, named ):
 	"""Construct new instance of cls, set proper color, and add to objects"""
 	if not scene.visible:
 		scene.visible = 1
-	if not [k for k in ('color','red','green','blue') if named.has_key(k)]:
+	if not [k for k in ('color','red','green','blue') if k in named]:
 		named['color'] = scene.foreground
-	if named.has_key( 'display' ):
+	if 'display' in named:
 		target = named['display']
 		del named['display'] # XXX fix when have backref added
 	else:

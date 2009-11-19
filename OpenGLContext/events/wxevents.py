@@ -177,6 +177,6 @@ keyboardMapping = {
 	13: '<return>',
 }
 for integer in range (256):
-	if not keyboardMapping.has_key( integer ):
+	if not integer in keyboardMapping:
 		keyboardMapping[integer] = chr( integer ).lower()
-	
+del integer	

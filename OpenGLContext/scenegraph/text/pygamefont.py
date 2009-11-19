@@ -149,7 +149,7 @@ class _PyGameFontProvider (fontprovider.TTFFontProvider):
 		"""Create a new font for the given fontStyle and mode"""
 		fontFile, weight, italics, size = key = self.match(fontStyle, mode)
 		# do we already have this filename + size established?
-		if self.fonts.has_key( key ):
+		if key in self.fonts:
 			return self.fonts.get( key )
 		bitmapFont = PyGameBitmapFont( fontStyle, filename = fontFile )
 		self.addFont( fontStyle, bitmapFont )

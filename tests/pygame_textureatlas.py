@@ -76,7 +76,7 @@ class TestContext( BaseContext ):
 		if mode.visible and not self._rendered:
 			self._rendered = True
 			for char in self.testText:
-				if not self.maps.has_key( char ):
+				if not char in self.maps:
 					dataArray, metrics = self.font.createCharTexture(
 						char, mode=mode 
 					)

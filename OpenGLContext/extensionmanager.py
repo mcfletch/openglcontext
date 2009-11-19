@@ -34,7 +34,7 @@ class ExtensionManager( object ):
 
         moduleName -- the "cleaned" module name being queried
         """
-        return self.modules.has_key( moduleName ) and (
+        return moduleName in self.modules and (
             not not self.modules.get( moduleName )
         )
     
@@ -58,7 +58,7 @@ class ExtensionManager( object ):
         # check here to see if already loaded for context...
         log.debug( """initExtension %r""", moduleName )
         moduleName = cleanModuleName( moduleName )
-        if self.modules.has_key( moduleName ):
+        if moduleName in self.modules:
             log.debug( """already have extension %r initialised""", moduleName )
             return self.modules.get( moduleName )
         try:

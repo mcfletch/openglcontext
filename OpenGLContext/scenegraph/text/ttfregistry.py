@@ -38,7 +38,7 @@ class TTFRegistry( ttffiles.Registry ):
 		"""Get all (general) fonts for a given family"""
 		if minor is None:
 			major = major.upper()
-			if self.DEFAULT_FAMILY_SETS.has_key( major ):
+			if major in self.DEFAULT_FAMILY_SETS:
 				result = []
 				for maj,min in self.DEFAULT_FAMILY_SETS[ major ]:
 					result.extend( ttffiles.Registry.familyMembers( self, maj,min))
@@ -52,7 +52,7 @@ class TTFRegistry( ttffiles.Registry ):
 		if current:
 			return current
 		# okay, what if the user has explicitly specified one...
-		if self.DEFAULT_FAMILY_SETS.has_key(type):
+		if type in self.DEFAULT_FAMILY_SETS:
 			# check for one in the application data directory...
 			if mode and mode.context:
 				current = mode.context.getDefaultTTFFont( type.lower())
@@ -105,7 +105,7 @@ class TTFRegistry( ttffiles.Registry ):
 		if fontStyle and fontStyle.family:
 			for specifier in fontStyle.family:
 				try:
-					if self.DEFAULT_FAMILY_SETS.has_key( specifier.upper()):
+					if specifier.upper() in self.DEFAULT_FAMILY_SETS:
 						return self.defaultFont( specifier, mode=mode )
 					fontName = self.matchName( specifier, single=1)
 				except (KeyError,RuntimeError):

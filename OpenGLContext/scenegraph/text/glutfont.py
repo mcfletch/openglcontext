@@ -95,7 +95,7 @@ class _GLUTFontProvider (fontprovider.FontProvider):
 		family, size = self.match(fontStyle, mode)
 		# get pre-existing font, register for this fontStyle
 		fontHash = self.fontHash( family,size )
-		if self.fonts.has_key( fontHash ):
+		if fontHash in self.fonts:
 			current = self.fonts.get( fontHash )
 			self.addFont( fontStyle, current )
 			return current

@@ -97,7 +97,7 @@ class FontProvider( object ):
 		mode -- the active rendering mode
 		"""
 		key = self.key (fontStyle)
-		if self.fonts.has_key( key ):
+		if key in self.fonts:
 			return self.fonts.get( key )
 		return self.create( fontStyle, mode )
 	def key( self, fontStyle= None ):

@@ -503,7 +503,7 @@ class IndexedPolygonsCompiler( IFSCompiler ):
 		seenVertices = {}
 		sourceArrays = list(enumerate(sources))
 		for vertex in vertices:
-			if not seenVertices.has_key( vertex.indexKey ):
+			if not vertex.indexKey in seenVertices:
 				i = len(arrays[0])
 				seenVertices[ vertex.indexKey ] = i
 				indices.append( i )

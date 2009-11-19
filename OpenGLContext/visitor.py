@@ -26,7 +26,7 @@ def parents( c, seen=None ):
 		seen[c] = None
 		items = [c]
 		for base in c.__bases__:
-			if not seen.has_key(base):
+			if not base in seen:
 				items.extend( parents(base, seen))
 		if setLocal:
 			c._old_style_class_parents_ = items
@@ -117,7 +117,7 @@ class Visitor( object ):
 		"""
 		cls = type(self)
 		objType = obj.__class__
-		if not cls.__dict__.has_key('_visitor_cmethods'):
+		if not '_visitor_cmethods' in cls.__dict__:
 			setattr(cls, '_visitor_cmethods', {})
 		try:
 			return self._visitor_cmethods[ objType ]

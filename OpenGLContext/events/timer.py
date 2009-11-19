@@ -34,7 +34,7 @@ class Timer( eventmanager.EventManager ):
 			our timerClass to instantiate the InternalTime.
 			See documentation on InternalTime  for details.
 		"""
-		self.internal = apply( self.timerClass, arguments, namedarguments )
+		self.internal = self.timerClass(*arguments, **namedarguments )
 		eventmanager.EventManager.__init__ (self)
 	def __repr__( self ):
 		"""Get an useful representation of the Timer"""

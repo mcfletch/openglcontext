@@ -63,7 +63,7 @@ class _Loader( object ):
 		returns (baseURL, file, filename, headers)
 		"""
 		headers = None
-		if self.cache.has_key( url ):
+		if url in self.cache:
 			filename = self.cache.get( url )
 			loader_log.debug( "cached: %s %s", url, filename )
 			try:

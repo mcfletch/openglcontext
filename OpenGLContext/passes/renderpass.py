@@ -574,7 +574,7 @@ class SelectRenderPass( VisitingRenderPass ):
 		name = id(node)
 		if name > 0xffffffff:
 			name = name & 0xffffffff
-		while self.selectable.has_key(name):
+		while name in self.selectable:
 			name = (name + 1) & 0xffffffff
 		glPushName( name )
 		self.addSelectable( name, node )

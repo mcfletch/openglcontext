@@ -115,7 +115,7 @@ class Font(object):
 		"""
 		needed = []
 		for character in string:
-			if not self.glyphs.has_key( character):
+			if not character in self.glyphs:
 				needed.append( character )
 		if needed:
 			self.withFont( self._createGlyphs, needed )
@@ -130,7 +130,7 @@ class Font(object):
 		Returns a compiled glyph for the given character in
 		this font.
 		"""
-		if not self.glyphs.has_key( character):
+		if not character in self.glyphs:
 			self.withFont( self._createGlyph, character, self.quality )
 		return self.glyphs.get (character)
 	def _createGlyph( self, character, quality ):
@@ -138,7 +138,7 @@ class Font(object):
 		if __debug__:
 			text_log.info( """Retrieving glyph for character %r""", character)
 		glyphName = glyphquery.glyphName( self.font, character, self.encoding )
-		if self.glyphNames.has_key( glyphName ):
+		if glyphName in self.glyphNames:
 			# whadda-ya-know, it's the same glyph as another character
 			glyph = self.glyphNames[ glyphName ]
 			self.glyphs[character] = glyph

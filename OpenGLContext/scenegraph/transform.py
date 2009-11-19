@@ -32,7 +32,7 @@ class Transform(grouping.Grouping, basenodes.Transform):
 		rx,ry,rz,ra = self.rotation
 		if rotate and ra:
 			glRotated( ra * RADTODEG, rx,ry,rz)
-		if self.__dict__.has_key('scale'):
+		if 'scale' in self.__dict__:
 			tupScale = tuple(self.scale)
 			if tupScale == NULLSCALE:
 				del self.scale

@@ -66,7 +66,7 @@ class WGLFont( font.Font ):
 		thread and within the rendering pass!
 		"""
 		for char in value:
-			if not self._displayLists.has_key( char ):
+			if not char in self._displayLists:
 				self.fastCreate( value, mode )
 				break; # we just created all of them we can
 		items = filter( None, map( self._displayLists.get, value))
@@ -95,7 +95,7 @@ class WGLFont( font.Font ):
 			font
 		)
 		for char in source:
-			if not self._displayLists.has_key(char):
+			if not char in self._displayLists:
 				base, metrics = self._createSingleChar(wgldc, char)
 				self._displayLists[char] = (base,metrics)
 		

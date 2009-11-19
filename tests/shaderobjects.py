@@ -268,7 +268,7 @@ class TestContext( BaseContext ):
 					iterations.value = 1
 				print 'max iterations', iterations.value[0]
 		directions = { 'a':(-1,0),'d':(1,0),'w':(0,1),'s':(0,-1) }
-		if directions.has_key( event.name ):
+		if event.name in directions:
 			step = zoom.value / 10.0
 			vec = array(directions[event.name],'f') * step 
 			center.value = center.value + vec
