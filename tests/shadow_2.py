@@ -22,8 +22,9 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.ARB.depth_texture import *
 from OpenGL.GL.ARB.shadow import *
-'''Import the OpenGL extension we're going to use'''
-from OpenGL.GL.ARB.framebuffer_object import *
+'''Import the PyOpenGL convenience wrappers for the FrameBufferObject
+extension(s) we're going to use'''
+from OpenGL.GL.framebufferobjects import *
 from OpenGLContext.arrays import (
     array, sin, cos, pi, dot, transpose,
 )
@@ -34,9 +35,21 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Scene set up and initial processing"""
         super( TestContext, self ).OnInit()
-        if not glInitFramebufferObjectARB():
+        if not glBindFramebuffer:
             print 'Missing required extensions!'
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
+        '''Decide how big our depth-texture should be...'''
+        self.shadowMapSize = min(
+            (
+                glGetIntegerv( GL_MAX_TEXTURE_SIZE ),
+                2048,
+            )
+        )
+        if self.shadowMapSize < 256:
+            print 'Warning: your hardware only supports extremely small textures!'
+        print 'Using shadow map of %sx%s pixels'%( 
+            self.shadowMapSize,self.shadowMapSize 
+        )
     
     shadowFBO = None 
     shadowDepth = None

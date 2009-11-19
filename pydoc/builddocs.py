@@ -4,7 +4,7 @@ import gldoc, pydoc2
 
 if __name__ == "__main__":
     excludes = [
-        "wxPython.wx",
+        "wx",
         "Numeric",
         "numpy",
         "_tkinter",
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     modules = [
         "OpenGLContext",
         "OpenGLContext_qt",
-        "wxPython.glcanvas",
+        "wx.glcanvas",
         "vrml",
         "vrml_accelerate",
         'logging',

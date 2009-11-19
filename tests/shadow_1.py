@@ -270,7 +270,7 @@ class TestContext( BaseContext ):
                 dot those matrices with the matrices we retrieve here.
             '''
             lightView = self.light.viewMatrix( 
-                pi/3, near=.3, far=100.0
+                pi/3, near=.1, far=30.0
             )
             lightModel = self.light.modelMatrix( )
             '''This is a bit wasteful, as we've already loaded our 
@@ -315,7 +315,6 @@ class TestContext( BaseContext ):
             from the previous step, making the depth buffer record values 
             1.0 units less than the geometry's natural value.
             '''
-            # glCullFace( GL_BACK ) # Original tutorial approach...
             glPolygonOffset(1.0, 1.0)
             glEnable(GL_POLYGON_OFFSET_FILL) 
             '''And now we draw our scene into the depth-buffer.'''
@@ -326,7 +325,6 @@ class TestContext( BaseContext ):
             
             '''Restore "regular" rendering...'''
             glDisable(GL_POLYGON_OFFSET_FILL) 
-            glCullFace( GL_BACK )
             glShadeModel( GL_SMOOTH )
             glColorMask( 1,1,1,1 )
             '''We want to restore our view-platform's matrices, so we 
