@@ -100,6 +100,7 @@ class TestContext( BaseContext ):
                     translation = (0,0,0),
                     children = [
                         Shape(
+                            DEF = 'Tea',
                             geometry = Teapot( size = .5 ),
                             appearance = Appearance(
                                 material = Material(
@@ -115,6 +116,7 @@ class TestContext( BaseContext ):
                     translation = (2,3.62,0),
                     children = [
                         Shape(
+                            DEF = 'Pole',
                             geometry = Box( size=(.1,8,.1) ),
                             appearance = Appearance(
                                 material = Material(
@@ -179,16 +181,15 @@ class TestContext( BaseContext ):
     the texture, so you can use a depth texture without needing to figure 
     out in which format your depth texture happens to be.
     
-    Depth texture sizes can have an extremely large effect on the quality 
+    Depth texture sizes can have a large effect on the quality 
     of the shadows produced.  If your texture only has a couple of dozen 
     pixels covering a particular piece of geometry then the shadows on that 
     piece of geometry are going to be extremely pixelated.  This is
-    particularly so if your light has a wide-angle cutoff, as the more of the 
-    scene that is rendered into the texture, the smaller each object appears 
-    in the buffer.
+    particularly so if your light has a wide-angle cutoff.  As more of the 
+    scene is rendered into the texture, each object covers fewer pixels.
     '''
     shadowTexture = None
-    shadowMapSize = 1024
+    shadowMapSize = 512
     def setupShadowContext( self ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
@@ -223,8 +224,10 @@ class TestContext( BaseContext ):
         render to a Frame Buffer Object (off-screen render) to an 
         appropriately sized texture, regardless of screen size, falling 
         back to this implementation *only* if there was no FBO support 
-        on the machine.
+        on the machine.  We will develop the FBO-based rendering in the 
+        next tutorial.
         '''
+        glPushAttrib(GL_VIEWPORT_BIT)
         glViewport( 0,0, shadowMapSize, shadowMapSize )
         return texture
     
@@ -426,7 +429,7 @@ class TestContext( BaseContext ):
                 GL_TEXTURE_2D, GL_DEPTH_TEXTURE_MODE, GL_ALPHA
             )
             '''Accept anything as "lit" which gives this value.'''
-            glAlphaFunc(GL_EQUAL, 1.0)
+            glAlphaFunc(GL_GEQUAL, .99)
             glEnable(GL_ALPHA_TEST)
             
             self.drawScene( mode )
@@ -455,14 +458,14 @@ class TestContext( BaseContext ):
         glCopyTexSubImage2D(
             GL_TEXTURE_2D, 0, 0, 0, 0, 0, shadowMapSize, shadowMapSize
         )
-        w,h = self.getViewPort()
-        glViewport( 0,0,w,h)
+        '''Now restore the viewport and disable the (depth) texture.'''
+        glPopAttrib(GL_VIEWPORT_BIT)
         glDisable( GL_TEXTURE_2D )
         return texture
 
 if __name__ == "__main__":
     '''We specify a large size for the context because we need at least 
-    this large a context to render our 1024x1024 depth texture.'''
+    this large a context to render our depth texture.'''
     TestContext.ContextMainLoop(
-        size = (1024,1024),
+        size = (512,512),
     )
