@@ -127,6 +127,7 @@ class TestContext( BaseContext ):
                     translation = (0,0,0),
                     children = [
                         Shape(
+                            DEF = 'Tea',
                             geometry = Teapot( size = .5 ),
                             appearance = Appearance(
                                 material = Material(
@@ -142,6 +143,7 @@ class TestContext( BaseContext ):
                     translation = (2,3.62,0),
                     children = [
                         Shape(
+                            DEF = 'Pole',
                             geometry = Box( size=(.1,8,.1) ),
                             appearance = Appearance(
                                 material = Material(
@@ -218,17 +220,16 @@ which can be used as a lookup table.  The specialization is that the
 GL will lookup the *current* bit-depth of the depth buffer when creating 
 the texture, so you can use a depth texture without needing to figure 
 out in which format your depth texture happens to be.</div>
-	<div class="paragraph">Depth texture sizes can have an extremely large effect on the quality 
+	<div class="paragraph">Depth texture sizes can have a large effect on the quality 
 of the shadows produced.  If your texture only has a couple of dozen 
 pixels covering a particular piece of geometry then the shadows on that 
 piece of geometry are going to be extremely pixelated.  This is
-particularly so if your light has a wide-angle cutoff, as the more of the 
-scene that is rendered into the texture, the smaller each object appears 
-in the buffer.
+particularly so if your light has a wide-angle cutoff.  As more of the 
+scene is rendered into the texture, each object covers fewer pixels.
 </div>
 </div>
 	<div class="code-sample">    shadowTexture = None
-    shadowMapSize = 1024
+    shadowMapSize = 512
     def setupShadowContext( self ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
@@ -271,10 +272,12 @@ in the buffer.
         render to a Frame Buffer Object (off-screen render) to an 
         appropriately sized texture, regardless of screen size, falling 
         back to this implementation *only* if there was no FBO support 
-        on the machine.
+        on the machine.  We will develop the FBO-based rendering in the 
+        next tutorial.
 </div>
 </div>
-	<div class="code-sample">        glViewport( 0,0, shadowMapSize, shadowMapSize )
+	<div class="code-sample">        glPushAttrib(GL_VIEWPORT_BIT)
+        glViewport( 0,0, shadowMapSize, shadowMapSize )
         return texture
     def Render( self, mode):
         BaseContext.Render( self, mode )
@@ -321,7 +324,7 @@ dot those matrices with the matrices we retrieve here.
 </div>
 </div>
 	<div class="code-sample">            lightView = self.light.viewMatrix( 
-                pi/3, near=.3, far=100.0
+                pi/3, near=.1, far=30.0
             )
             lightModel = self.light.modelMatrix( )
 </div>
@@ -374,8 +377,7 @@ from the previous step, making the depth buffer record values
 1.0 units less than the geometry's natural value.
 </div>
 </div>
-	<div class="code-sample">            # glCullFace( GL_BACK ) # Original tutorial approach...
-            glPolygonOffset(1.0, 1.0)
+	<div class="code-sample">            glPolygonOffset(1.0, 1.0)
             glEnable(GL_POLYGON_OFFSET_FILL) 
 </div>
 	<div class="commentary">
@@ -393,7 +395,6 @@ from the previous step, making the depth buffer record values
 	<div class="paragraph">Restore "regular" rendering...</div>
 </div>
 	<div class="code-sample">            glDisable(GL_POLYGON_OFFSET_FILL) 
-            glCullFace( GL_BACK )
             glShadeModel( GL_SMOOTH )
             glColorMask( 1,1,1,1 )
 </div>
@@ -526,7 +527,7 @@ as simple.
 	<div class="commentary">
 	<div class="paragraph">Accept anything as "lit" which gives this value.</div>
 </div>
-	<div class="code-sample">            glAlphaFunc(GL_EQUAL, 1.0)
+	<div class="code-sample">            glAlphaFunc(GL_GEQUAL, .99)
             glEnable(GL_ALPHA_TEST)
             self.drawScene( mode )
 </div>
@@ -562,19 +563,22 @@ as simple.
         glCopyTexSubImage2D(
             GL_TEXTURE_2D, 0, 0, 0, 0, 0, shadowMapSize, shadowMapSize
         )
-        w,h = self.getViewPort()
-        glViewport( 0,0,w,h)
+</div>
+	<div class="commentary">
+	<div class="paragraph">Now restore the viewport and disable the (depth) texture.</div>
+</div>
+	<div class="code-sample">        glPopAttrib(GL_VIEWPORT_BIT)
         glDisable( GL_TEXTURE_2D )
         return texture
 if __name__ == "__main__":
 </div>
 	<div class="commentary">
 	<div class="paragraph">We specify a large size for the context because we need at least 
-    this large a context to render our 1024x1024 depth texture.</div>
+    this large a context to render our depth texture.</div>
 </div>
 	<div class="code-sample">
     TestContext.ContextMainLoop(
-        size = (1024,1024),
+        size = (512,512),
     )
 </div>
 <div class="source-reference">This code-walkthrough tutorial is generated from the shadow_1.py script in the 
