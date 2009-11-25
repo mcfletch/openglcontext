@@ -89,10 +89,15 @@ class TestContext( BaseContext ):
             approach.  What it *would* do is allow us to use a 
             Multisampling buffer.  If you want to do antialiased off-screen 
             rendering you'll likely need that approach.
+            
+            Interestingly (annoyingly), the ARB spec states that the format can 
+            only be one of a very limited set of formats, but the spec'd color 
+            format isn't actually supported on nVidia hardware. The GL_RGBA
+            value does appear to be supported on both ATI and nVidia hardware.
             '''
             glRenderbufferStorage(
                 GL_RENDERBUFFER,
-                GL_RGBA4,
+                GL_RGBA,
                 shadowMapSize,
                 shadowMapSize,
             )
@@ -141,14 +146,14 @@ class TestContext( BaseContext ):
             texture = self.shadowTexture
             glBindTexture( GL_TEXTURE_2D, texture )
         glPushAttrib(GL_VIEWPORT_BIT)
+        '''Unlike in the previous tutorial, we now *know* this is a 
+        valid size for the viewport in the off-screen context.'''
+        glViewport(0,0,shadowMapSize,shadowMapSize)
         '''We use the same "nearest" filtering as before'''
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.FILTER_TYPE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
-        '''Unlike in the previous tutorial, we now *know* this is a 
-        valid size for the viewport in the off-screen context.'''
-        glViewport(0,0,shadowMapSize,shadowMapSize)
         '''This function in the OpenGL.GL.framebufferobjects wrapper will 
         raise an OpenGL.error.GLError if the FBO is not properly configured.'''
         checkFramebufferStatus( )
