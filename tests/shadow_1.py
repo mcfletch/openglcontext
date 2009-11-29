@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Shadows with ARB Shadow=
+'''=ARB Shadow on the Back Buffer=
 
 [shadow_1.py-screen-0001.png Screenshot]
 
@@ -33,7 +33,7 @@ The process works as follows:
         are "shadowed"
 
 Most confusion during the process comes during the creation of a matrix 
-which maps the eye-space of the camera (render pass 3) into the eye-space 
+which maps the eye-space of the camera (render pass 3) into the clip-space 
 of the light (render pass 1).  The actual calculations are simple, but 
 knowing in which order to combine the matrices can be confusing.
 
@@ -54,33 +54,57 @@ from OpenGLContext.arrays import (
 )
 from OpenGLContext.events.timer import Timer
 
-BIAS_MATRIX = array([
-    [0.5, 0.0, 0.0, 0.0],
-    [0.0, 0.5, 0.0, 0.0],
-    [0.0, 0.0, 0.5, 0.0],
-    [0.5, 0.5, 0.5, 1.0],
-], 'f')
-
 class TestContext( BaseContext ):
     """Shadow rendering tutorial code"""
     '''We're going to get up nice and close to our geometry in the 
     initial view'''
     initialPosition = (.5,1,3)
+    
+    '''=Scene Set Up=
+
+    Our tutorial requires a number of OpenGL extensions.  We're going 
+    to test for these extensions using the glInit* functions.  These are 
+    PyOpenGL-2.x style queries which will return True if the extension is 
+    available.  PyOpenGL 3.x also allows you to do bool( entryPoint ) to 
+    check if an entry point is available, but that does not allow you to 
+    check for extensions which *only* define new constants.
+    '''
     def OnInit( self ):
-        """Scene set up and initial processing"""
-        '''We test for the two extensions, though we are actually using 
-        the core entry points (constants) throughout.'''
+        """Initialize the context with GL active"""
         if not glInitShadowARB() or not glInitDepthTextureARB():
             print 'Missing required extensions!'
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
-        '''Configure some parameters to make for really-nice shadows 
+        '''Configure some parameters to make for nice shadows 
         at the expense of some extra calculations'''
         glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
         glEnable( GL_POLYGON_SMOOTH )
+        '''We create the geometry for our scene in a method to allow 
+        later tutorials to subclass and provide more.'''
+        self.geometry = self.createGeometry()
+        '''To make the demo a little more interesting, we're going to 
+        animate the light's position and direction.  Here we're setting up 
+        a raw Timer object.  OpenGLContext scenegraph timers can't be used 
+        as we're not using the scenegraph mechanisms.
+        '''
+        self.time = Timer( duration = 8.0, repeating = 1 )
+        self.time.addEventHandler( "fraction", self.OnTimerFraction )
+        self.time.register (self)
+        self.time.start ()
+        '''Here's the light we're going to use to cast the shadows.'''
+        self.light = SpotLight(
+            location = [0,5,10],
+            color = [1,.5,.5],
+            ambientIntensity = 0.5,
+            direction = [0,-5,-10],
+        )
+        self.addEventHandler( "keypress", name="s", function = self.OnToggleTimer)
+    
+    def createGeometry( self ):
+        """Create a simple VRML scenegraph to be rendered with shadows"""
         '''This simple scene is a Teapot and a tall thin box on a flat 
         box.  It's not particularly exciting, but it does let us see the 
         shadows quite clearly.'''
-        self.geometry = Transform(
+        return Transform(
             children = [
                 Transform(
                     translation = (0,-.38,0),
@@ -130,23 +154,6 @@ class TestContext( BaseContext ):
                 ),
             ],
         )
-        '''To make the demo a little more interesting, we're going to 
-        animate the light's position and direction.  Here we're setting up 
-        a raw Timer object.  OpenGLContext scenegraph timers can't be used 
-        as we're not using the scenegraph mechanisms.
-        '''
-        self.time = Timer( duration = 8.0, repeating = 1 )
-        self.time.addEventHandler( "fraction", self.OnTimerFraction )
-        self.time.register (self)
-        self.time.start ()
-        '''Here's the light we're going to use to cast the shadows.'''
-        self.light = SpotLight(
-            location = [0,5,10],
-            color = [1,.5,.5],
-            ambientIntensity = 0.5,
-            direction = [0,-5,-10],
-        )
-        
     def OnTimerFraction( self, event ):
         """Update light position/direction"""
         '''Every cycle we want to do a full rotation, and we want the 
@@ -162,132 +169,186 @@ class TestContext( BaseContext ):
         self.light.location = position
         '''We point the light at the origin, mostly because it's easy.'''
         self.light.direction = -position
-    
-    def drawScene( self, mode ):
-        """Draw our scene at current animation point"""
-        '''Because we are not using a scenegraph, our "mode" object is one
-        of the older multi-pass (non-flat) rendering modes.  This has the 
-        advantage of being able to render arbitrary geometry recursively,
-        though it is slower than the flat rendering modes for larger 
-        scenegraphs.
-        '''
-        mode.visit( self.geometry )
-    
-    '''=Setting up the Depth Texture=
-    
-    The depth texture is a specialized form of floating-point texture 
-    which can be used as a lookup table.  The specialization is that the 
-    GL will lookup the *current* bit-depth of the depth buffer when creating 
-    the texture, so you can use a depth texture without needing to figure 
-    out in which format your depth texture happens to be.
-    
-    Depth texture sizes can have a large effect on the quality 
-    of the shadows produced.  If your texture only has a couple of dozen 
-    pixels covering a particular piece of geometry then the shadows on that 
-    piece of geometry are going to be extremely pixelated.  This is
-    particularly so if your light has a wide-angle cutoff.  As more of the 
-    scene is rendered into the texture, each object covers fewer pixels.
-    '''
-    shadowTexture = None
-    shadowMapSize = 512
-    def setupShadowContext( self ):
-        """Create a shadow-rendering context/texture"""
-        shadowMapSize = self.shadowMapSize
-        if not self.shadowTexture:
-            '''We create a single texture and tell OpenGL 
-            its data-format parameters.  The None at the end of the 
-            argument list tells OpenGL not to initialize the data, i.e. 
-            not to read it from anywhere.
-            '''
-            texture = glGenTextures( 1 )
-            glBindTexture( GL_TEXTURE_2D, texture )
-            glTexImage2D( 
-                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 
-                shadowMapSize, shadowMapSize, 0,
-                GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
-            )
-            self.shadowTexture = texture
+    def OnToggleTimer( self, event ):
+        """Allow the user to pause/restart the timer."""
+        if self.time.active:
+            self.time.pause()
         else:
-            texture = self.shadowTexture
-        '''These parameters simply keep us from doing interpolation on the 
-        data-values for the texture.  If we were to use, for instance 
-        GL_LINEAR interpolation, our shadows would tend to get "moire" 
-        patterns.  The cutoff threshold for the shadow would get crossed 
-        halfway across each shadow-map texel as the neighbouring pixels'
-        values were blended.'''
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
-        '''We assume here that shadowMapSize is smaller than the size 
-        of the viewport.  Real world implementations would normally 
-        render to a Frame Buffer Object (off-screen render) to an 
-        appropriately sized texture, regardless of screen size, falling 
-        back to this implementation *only* if there was no FBO support 
-        on the machine.  We will develop the FBO-based rendering in the 
-        next tutorial.
-        '''
-        glPushAttrib(GL_VIEWPORT_BIT)
-        glViewport( 0,0, shadowMapSize, shadowMapSize )
-        return texture
+            self.time.resume()
+
+    '''=Overall Rendering Process=
     
+    OpenGLContext does a lot of "boilerplate" setup code to establish 
+    a perspective and model-view matrix, clear the background, and 
+    generally get you to a "normal 3D rendering" setup before it calls 
+    this method (Render).  It will *not* call this method if we have 
+    a scenegraph as self.sg, as then it will use to optimized "Flat"
+    rendering engine.
+    
+    The overall process for the shadow rendering code looks like this:
+    
+        * for each light, render a depth-texture and calculate a texture 
+          matrix 
+        * restore the perspective and model-view matrices for the camera 
+        * render the scene with only ambient lighting 
+        * for each light, render the scene with diffuse and specular lighting 
+          with the depth-texture and texture matrix filtering the areas 
+          which are affected.
+    
+    We only want to apply this process for the "normal diffuse" rendering 
+    mode, not, for instance, for the mouse-selection passes or the 
+    transparent rendering pass (transparent shadows will have to wait for 
+    another tutorial).
+    '''
     def Render( self, mode):
         BaseContext.Render( self, mode )
         if mode.visible and mode.lighting and not mode.transparent:
             '''These settings tell us we are being asked to do a 
             regular opaque rendering pass (with lighting).  This is 
-            where we are going to do our shadow-rendering multi-pass.
+            where we are going to do our shadow-rendering multi-pass.'''
+            texture,textureMatrix = self.renderLightTexture( self.light, mode )
+            '''Since our depth buffer currently has the light's view rendered 
+            into it, we need to clear it before we render our geometry in the 
+            camera's view.'''
+            glClear(GL_DEPTH_BUFFER_BIT)
+            '''OpenGLContext's camera is represented by a "View Platform"
+            this camera's view has already been set up once during this 
+            rendering pass, but our light-texture-rendering pass will have 
+            reset the matrices to match the light's perspective.
             
-            =Rendering Geometry into a Depth Texture=
-            
-            We're going to render our scene into the depth buffer,
-            so we'll explicitly specify the depth operation.  The use 
-            of GL_LEQUAL means that we can rewrite the same geometry 
-            to the depth buffer multiple times and (save for floating-point 
-            artefacts), should see the geometry render each time.
+            The view platform object has a method to render the matrices 
+            using regular OpenGL legacy calls (the "Flat" renderer calculates 
+            these values directly).  We just call this method to have the 
+            platform restore its state.  The "identity" parameter tells the 
+            platform to do a glLoadIdentity() call for each matrix first.
             '''
-            glDepthFunc(GL_LEQUAL)
-            glEnable(GL_DEPTH_TEST)
-            '''We invoke our setupShadowContext method to establish the 
-            texture we'll use as our target'''
-            texture = self.setupShadowContext()
-            '''==Setup Scene with Light as Camera==
+            platform = self.getViewPlatform()
+            platform.render( identity = True )
             
-            The algorithm requires us to set up the scene to render 
-            from the point of view of our light.  We're going to use 
-            a pair of methods on the light to do the calculations.
-            These do the same calculations as "gluPerspective" for 
-            the viewMatrix, and a pair of rotation,translation 
-            transformations for the model-view matrix.
+            self.renderAmbient( mode )
+            '''Now we do the diffuse/specular lighting for our light.'''
+            self.renderDiffuse( self.light, texture, textureMatrix, mode )
+        else:
+            '''If we are *not* doing the shadowed opaque rendering pass,
+            just visit the "scenegraph" with our mode.'''
+            self.drawScene( mode )
+    '''Let's get the simple part out of the way first, drawing the geometry.
+    OpenGLContext has two different rendering engines.  One is an 
+    optimized "Flat" renderer, and the other is a hierarchic "traversing" 
+    renderer which uses a visitor pattern to traverse the scenegraph for 
+    each pass.  For our purposes, this slower traversing renderer is 
+    sufficient, and is easily invoked.'''
+    def drawScene( self, mode ):
+        """Draw our scene at current animation point"""
+        mode.visit( self.geometry )
+    
+    '''=Rendering Light Depth Texture=
+    
+    The depth texture is created by rendering the scene from the 
+    point-of-view of the light.  In this version of the tutorial,
+    we'll render the depth texture into the Context's regular 
+    "back" buffer and then copy it into the texture.
+    '''
+    def renderLightTexture( self, light, mode ):
+        """Render ourselves into a texture for the given light"""
+        '''We're going to render our scene into the depth buffer,
+        so we'll explicitly specify the depth operation.  The use 
+        of GL_LEQUAL means that we can rewrite the same geometry 
+        to the depth buffer multiple times and (save for floating-point 
+        artefacts), should see the geometry render each time.
+        '''
+        glDepthFunc(GL_LEQUAL)
+        glEnable(GL_DEPTH_TEST)
+        '''Our setupShadowContext method will reset our viewport to match 
+        the size of the depth-texture we're creating.'''
+        glPushAttrib(GL_VIEWPORT_BIT)
+        '''We invoke our setupShadowContext method to establish the 
+        texture we'll use as our target.  This tutorial is just going 
+        to reset the viewport to a subset of the back-buffer (the regular 
+        rendering target for OpenGL).  Later tutorials will set up an 
+        off-screen rendering target (a Frame Buffer Object) by overriding 
+        this method-call.'''
+        texture = self.setupShadowContext(light)
+        '''==Setup Scene with Light as Camera==
+        
+        The algorithm requires us to set up the scene to render 
+        from the point of view of our light.  We're going to use 
+        a pair of methods on the light to do the calculations.
+        These do the same calculations as "gluPerspective" for 
+        the viewMatrix, and a pair of rotation,translation 
+        transformations for the model-view matrix.
+        
+        Note: 
+        
+            For VRML97 scenegraphs, this wouldn't be sufficient,
+            as we can have multiple lights, and lights can be children
+            of arbitrary Transforms, and can appear multiple times
+            within the same scenegraph.
+            
+            We would have to calculate the matrices for each path that 
+            leads to a light, not just for each light. The node-paths 
+            have methods to retrieve their matrices, so we would simply
+            dot those matrices with the matrices we retrieve here.
+            
+            The complexity of supporting these features doesn't 
+            particularly suit an introductory tutorial.
+        '''
+        lightView = self.light.viewMatrix( 
+            pi/3, near=.1, far=30.0
+        )
+        lightModel = self.light.modelMatrix( )
+        '''The texture matrix translates from camera eye-space into 
+        light eye-space.  See the original tutorial for an explanation 
+        of how the mapping is done, and how it interacts with the 
+        current projection matrix.
+        
+        Things to observe about the calculation of the matrix compared 
+        to the values in the original tutorial:
+        
+         * we are explicitly taking the transpose of the result matrix 
+         * the order of operations is the reverse of the calculations in 
+           the tutorial
+         * we take the transpose of the matrix so that matrix[0] is a row 
+           in the sense that the tutorial uses it
+        
+        This pattern of reversing order-of-operations and taking the 
+        transpose happens frequently in PyOpenGL when working with matrix 
+        code from C sources.
+        
+        Note:
+        
+            A number of fixes to matrix multiply order came from 
+            comparing results with [http://www.geometrian.com/Programs.php Ian Mallett's OpenGL Library v1.4].
+        '''
+        textureMatrix = transpose(
+            dot(
+                dot( lightModel, lightView ),
+                self.BIAS_MATRIX
+            )
+        )
+        '''This is a bit wasteful, as we've already loaded our 
+        projection and model-view matrices for our view-platform into 
+        the GL.  Real-world implementations would normally do the 
+        light-rendering pass before doing their world-view setup.
+        We'll restore the platform values later on.
+        '''
+        glMatrixMode( GL_PROJECTION )
+        glLoadMatrixf( lightView )
+        glMatrixMode( GL_MODELVIEW )
+        glLoadMatrixf( lightModel )
+        try:
+            '''Because we *only* care about the depth buffer, we can mask 
+            out the color buffer entirely. We can use frustum-culling 
+            to only render those objects which intersect with the light's 
+            frustum (this is done automatically by the render-visiting code
+            we use for drawing).
             
             Note: 
-            
-                For VRML97 scenegraphs, this wouldn't be sufficient,
-                as we can have multiple lights, and lights can be children
-                of arbitrary Transforms, and can appear multiple times
-                within the same scenegraph.
-                
-                We would have to calculate the matrices for each path that 
-                leads to a light, not just for each light. The node-paths 
-                have methods to retrieve their matrices, so we would simply
-                dot those matrices with the matrices we retrieve here.
+                The glColorMask call does not prevent OpenGL from ever 
+                attempting to write to the color buffer, it just masks 
+                regular drawing operations.  A call to glClear() for 
+                instance, could still clear the colour buffer.
             '''
-            lightView = self.light.viewMatrix( 
-                pi/3, near=.1, far=30.0
-            )
-            lightModel = self.light.modelMatrix( )
-            '''This is a bit wasteful, as we've already loaded our 
-            projection and model-view matrices for our view-platform into 
-            the GL.  Real-world implementations would normally do the 
-            light-rendering pass before doing their world-view setup.
-            We'll restore the platform values later on.
-            '''
-            glMatrixMode( GL_PROJECTION )
-            glLoadMatrixf( lightView )
-            glMatrixMode( GL_MODELVIEW )
-            glLoadMatrixf( lightModel )
-            '''Because we *only* care about the depth buffer, we can mask 
-            out the color buffer entirely.'''
             glColorMask( 0,0,0,0 )
             '''We reconfigure the mode to tell the geometry to optimize its
             rendering process, for instance by disabling normal
@@ -295,7 +356,6 @@ class TestContext( BaseContext ):
             mode.lighting = False 
             mode.textured = False 
             mode.visible = False
-
             '''==Offset Polygons to avoid Artefacts==
             
             We want to avoid depth-buffer artefacts where the front-face 
@@ -326,113 +386,206 @@ class TestContext( BaseContext ):
             into our depth texture and deactivate the texture.'''
             self.closeShadowContext( texture )
             
+            '''Return the configured texture into which we will render'''
+            return texture, textureMatrix
+        finally:
             '''Restore "regular" rendering...'''
             glDisable(GL_POLYGON_OFFSET_FILL) 
             glShadeModel( GL_SMOOTH )
             glColorMask( 1,1,1,1 )
-            '''We want to restore our view-platform's matrices, so we 
-            ask it to render, restoring identity matrices before doing 
-            so.'''
-            platform = self.getViewPlatform()
-            platform.render( identity = True )
-            '''=Render Ambient-lit Geometry=
-            
-            Our geometry will be written with two passes, the first will 
-            write all geometry with "ambient" light only.  The second will 
-            write "direct" (diffuse) light filtered by the depth texture.
-            
-            Since our depth buffer currently has the camera's view rendered 
-            into it, we need to clear it.
+            '''Now restore the viewport.'''
+            glPopAttrib(GL_VIEWPORT_BIT)
+    '''The setup of the bias matrix was discussed at some length in the original 
+    tutorial.  In sum, the depth-buffer is going to return values in the -1 to 1
+    range, while the texture has values in range 0-1.  The bias matrix simply maps 
+    from -1 to 1 to 0 to 1.  We multiply this by the "raw" translation matrix 
+    to get the final texture matrix which translates from camera eye coordinates 
+    to texture clip coordinates.'''
+    BIAS_MATRIX = array([
+        [0.5, 0.0, 0.0, 0.0],
+        [0.0, 0.5, 0.0, 0.0],
+        [0.0, 0.0, 0.5, 0.0],
+        [0.5, 0.5, 0.5, 1.0],
+    ], 'f')
+    '''==Generating the Depth-Texture==
+    
+    Depth texture sizes can have a large effect on the quality 
+    of the shadows produced.  If your texture only has a couple of dozen 
+    pixels covering a particular piece of geometry then the shadows on that 
+    piece of geometry are going to be extremely pixelated.  This is
+    particularly so if your light has a wide-angle cutoff.  As more of the 
+    scene is rendered into the texture, each object covers fewer pixels.
+    '''
+    shadowTexture = None
+    shadowMapSize = 512
+    def setupShadowContext( self, light=None, mode=None ):
+        """Create a shadow-rendering context/texture"""
+        shadowMapSize = self.shadowMapSize
+        if not self.shadowTexture:
+            '''We create a single texture and tell OpenGL 
+            its data-format parameters.  The None at the end of the 
+            argument list tells OpenGL not to initialize the data, i.e. 
+            not to read it from anywhere.
             '''
-            glClear(GL_DEPTH_BUFFER_BIT)
-            '''Again, we configure the mode to tell the geometry how to 
-            render itself.  Here we want to have almost everything save 
-            the diffuse lighting calculations performed.'''
-            mode.visible = True
-            mode.lighting = True 
-            mode.lightingAmbient = True 
-            mode.lightingDiffuse = False 
-            mode.textured = True
-            self.light.Light( GL_LIGHT0, mode=mode )
-            self.drawScene( mode )
-            '''=Render Diffuse/Specular Lighting Filtered by Shadow Map=
-            
-            If we were to turn *off* ambient lighting, we would find that 
-            our shadowed geometry would be darker whereever there happened
-            to be a hole in the geometry through which light was hitting 
-            (the back of) the geometry.  With fully closed geometry, not 
-            a problem, but a problem for our Teapot object.  We could solve 
-            this with a blend operation which only blended brighter pixels,
-            but simply re-calculating ambient lighting in this pass is about 
-            as simple.
+            texture = glGenTextures( 1 )
+            glBindTexture( GL_TEXTURE_2D, texture )
+            '''The use of GL_DEPTH_COMPONENT here marks the use of the 
+            ARB_depth_texture extension.  The GL_DEPTH_COMPONENT constant 
+            tells OpenGL to use the current OpenGL bit-depth as the format 
+            for the texture.  So if our context has a 16-bit depth channel,
+            we will use that.  If it uses 24-bit depth, we'll use that.
             '''
-            mode.lightingAmbient = True
-            mode.lightingDiffuse = True 
-            self.light.Light( GL_LIGHT0, mode=mode )
-            '''The texture matrix translates from camera eye-space into 
-            light eye-space.  See the original tutorial for an explanation 
-            of how the mapping is done, and how it interacts with the 
-            current projection matrix.
-            
-            Note:
-                A number of fixes to matrix multiply order came from 
-                comparing results with [http://www.geometrian.com/Programs.php Ian Mallett's OpenGL Library v1.4].
-            '''
-            textureMatrix = transpose(
-                dot(
-                    dot( lightModel, lightView ),
-                    BIAS_MATRIX
-                )
+            glTexImage2D( 
+                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 
+                shadowMapSize, shadowMapSize, 0,
+                GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
-            texGenData = [
-                (GL_S,GL_TEXTURE_GEN_S,textureMatrix[0]),
-                (GL_T,GL_TEXTURE_GEN_T,textureMatrix[1]),
-                (GL_R,GL_TEXTURE_GEN_R,textureMatrix[2]),
-                (GL_Q,GL_TEXTURE_GEN_Q,textureMatrix[3]),
-            ]
-            for token,gen_token,row in texGenData:
-                '''We want to generate coordinates as a linear mapping 
-                with each "eye plane" corresponding to a row of our 
-                translation matrix.  We're going to generate texture 
-                coordinates that are linear in the eye-space of the 
-                camera and then transform them with the eye-planes 
-                into texture-lookups within the depth-texture.'''
-                glTexGeni(token, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR)
-                glTexGenfv(token, GL_EYE_PLANE, row )
-                glEnable(gen_token)
-            '''Now enable our light's depth-texture, created above.'''
-            glBindTexture(GL_TEXTURE_2D, texture);
-            glEnable(GL_TEXTURE_2D);
-            '''Enable shadow comparison.  "R" here is not "red", but 
-            the third of 4 texture coordinates, i.e. the transformed 
-            Z-depth of the generated texture coordinate, now in eye-space 
-            of the light.'''
-            glTexParameteri(
-                GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE,
-                GL_COMPARE_R_TO_TEXTURE
-            )
-            '''Shadow comparison should be true (ie not in shadow) 
-            if R <= value stored in the texture.  That is, if the 
-            eye-space Z coordinate multiplied by our transformation 
-            matrix is at a lower depth (closer) than the depth value 
-            stored in the texture, then that coordinate is "in the light".
-            '''
-            glTexParameteri(
-                GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL
-            )
-            '''I don't see any real reason to prefer ALPHA versus 
-            INTENSITY for the generated values, but I like the symetry 
-            of using glAlphaFunc with Alpha values.  The original tutorial 
-            used intensity values, however, so there may be some subtle 
-            reason to use them.'''
-            glTexParameteri(
-                GL_TEXTURE_2D, GL_DEPTH_TEXTURE_MODE, GL_ALPHA
-            )
-            '''Accept anything as "lit" which gives this value.'''
-            glAlphaFunc(GL_GEQUAL, .99)
-            glEnable(GL_ALPHA_TEST)
-            
-            self.drawScene( mode )
+            self.shadowTexture = texture
+        else:
+            texture = self.shadowTexture
+        '''These parameters simply keep us from doing interpolation on the 
+        data-values for the texture.  If we were to use, for instance 
+        GL_LINEAR interpolation, our shadows would tend to get "moire" 
+        patterns.  The cutoff threshold for the shadow would get crossed 
+        halfway across each shadow-map texel as the neighbouring pixels'
+        values were blended.'''
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+        '''We assume here that shadowMapSize is smaller than the size 
+        of the viewport.  Real world implementations would normally 
+        render to a Frame Buffer Object (off-screen render) to an 
+        appropriately sized texture, regardless of screen size, falling 
+        back to this implementation *only* if there was no FBO support 
+        on the machine.  We will develop the FBO-based rendering in the 
+        next tutorial.
+        '''
+        glViewport( 0,0, shadowMapSize, shadowMapSize )
+        return texture
+    def closeShadowContext( self, texture ):
+        """Close our shadow-rendering context/texture"""
+        '''This is the function that actually copies the depth-buffer into 
+        the depth-texture we've created.  The operation is a standard OpenGL 
+        glCopyTexSubImage2D, which is performed entirely "on card", so 
+        is reasonably fast, though not as fast as having rendered into an 
+        FBO in the first place.  We'll look at that in the next tutorial.
+        '''
+        shadowMapSize = self.shadowMapSize
+        glBindTexture(GL_TEXTURE_2D, texture)
+        glCopyTexSubImage2D(
+            GL_TEXTURE_2D, 0, 0, 0, 0, 0, shadowMapSize, shadowMapSize
+        )
+        glDisable( GL_TEXTURE_2D )
+        return texture
+    
+    '''=Render Ambient-lit Geometry=
+    
+    Our second rendering pass draws the ambient light to the scene.  It 
+    also fills in the depth buffer which will filter out geometry which 
+    is behind shadowed geometry which would otherwise "bleed through".
+    '''
+    def renderAmbient( self, mode ):
+        """Render ambient-only lighting for geometry"""
+        '''Again, we configure the mode to tell the geometry how to 
+        render itself.  Here we want to have almost everything save 
+        the diffuse lighting calculations performed.'''
+        mode.visible = True
+        mode.lighting = True 
+        mode.lightingAmbient = True 
+        mode.lightingDiffuse = False 
+        mode.textured = True
+        '''As with the geometry, the light will respect the mode's 
+        parameters for lighting.'''
+        self.light.Light( GL_LIGHT0, mode=mode )
+        self.drawScene( mode )
+    
+    '''=Render Diffuse/Specular Lighting Filtered by Shadow Map=
+    
+    This rendering pass is where the magic of the shadow-texture algorithm
+    happens.  Our process looks like this:
+   
+        * configure the GL to synthesize texture coordinates in 
+          eye-linear space (the camera's eye coordinate space)
+        * load our texture matrix into the "eye planes" of the texture 
+          coordinate pipeline, there they server to transform the 
+          texture coordinates into the clip-space coordinates of the 
+          depth texture 
+        * configure the GL to generate an "alpha" value by comparing 
+          the "R" (Z) component of the generated texture coordinates 
+          to the Z component stored in the depth-texture.  That is,
+          generate a 1.0 alpha where the camera-Z component is 
+          less-than-or-equal-to the depth in the depth texture.
+        * configure the GL to only pass fragments where the alpha is 
+          greater than .99
+    '''
+    def renderDiffuse( self, light, texture, textureMatrix, mode, id=0 ):
+        """Render lit-pass for given light"""
+        '''If we were to turn *off* ambient lighting, we would find that 
+        our shadowed geometry would be darker whereever there happened
+        to be a hole in the geometry through which light was hitting 
+        (the back of) the geometry.  With fully closed geometry, not 
+        a problem, but a problem for our Teapot object.  We could solve 
+        this with a blend operation which only blended brighter pixels,
+        but simply re-calculating ambient lighting in this pass is about 
+        as simple.
+        '''
+        mode.lightingAmbient = True
+        mode.lightingDiffuse = True 
+        '''Again, the light looks at the mode parameters to determine how 
+        to configure itself.'''
+        self.light.Light( GL_LIGHT0 + id, mode=mode )
+        texGenData = [
+            (GL_S,GL_TEXTURE_GEN_S,textureMatrix[0]),
+            (GL_T,GL_TEXTURE_GEN_T,textureMatrix[1]),
+            (GL_R,GL_TEXTURE_GEN_R,textureMatrix[2]),
+            (GL_Q,GL_TEXTURE_GEN_Q,textureMatrix[3]),
+        ]
+        for token,gen_token,row in texGenData:
+            '''We want to generate coordinates as a linear mapping 
+            with each "eye plane" corresponding to a row of our 
+            translation matrix.  We're going to generate texture 
+            coordinates that are linear in the eye-space of the 
+            camera and then transform them with the eye-planes 
+            into texture-lookups within the depth-texture.'''
+            glTexGeni(token, GL_TEXTURE_GEN_MODE, GL_EYE_LINEAR)
+            glTexGenfv(token, GL_EYE_PLANE, row )
+            glEnable(gen_token)
+        '''Now enable our light's depth-texture, created above.'''
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glEnable(GL_TEXTURE_2D);
+        '''Enable shadow comparison.  "R" here is not "red", but 
+        the third of 4 texture coordinates, i.e. the transformed 
+        Z-depth of the generated texture coordinate, now in eye-space 
+        of the light.'''
+        glTexParameteri(
+            GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE,
+            GL_COMPARE_R_TO_TEXTURE
+        )
+        '''Shadow comparison should be true (ie not in shadow) 
+        if R <= value stored in the texture.  That is, if the 
+        eye-space Z coordinate multiplied by our transformation 
+        matrix is at a lower depth (closer) than the depth value 
+        stored in the texture, then that coordinate is "in the light".
+        '''
+        glTexParameteri(
+            GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL
+        )
+        '''I don't see any real reason to prefer ALPHA versus 
+        INTENSITY for the generated values, but I like the symetry 
+        of using glAlphaFunc with Alpha values.  The original tutorial 
+        used intensity values, however, so there may be some subtle 
+        reason to use them.'''
+        glTexParameteri(
+            GL_TEXTURE_2D, GL_DEPTH_TEXTURE_MODE, GL_ALPHA
+        )
+        '''Accept anything as "lit" which gives this value or greater.'''
+        glAlphaFunc(GL_GEQUAL, .99)
+        glEnable(GL_ALPHA_TEST)
+        
+        try:
+            return self.drawScene( mode )
+        finally:
             '''Okay, so now we need to do cleanup and get back to a regular 
             rendering mode...'''
             glDisable(GL_TEXTURE_2D)
@@ -441,27 +594,6 @@ class TestContext( BaseContext ):
             glDisable(GL_LIGHTING);
             glDisable(GL_ALPHA_TEST);            
             mode.lightingAmbient = True 
-        else:
-            '''If we are *not* doing the shadowed opaque rendering pass,
-            just visit the "scenegraph" with our mode.'''
-            self.drawScene( mode )
-        
-    def closeShadowContext( self, texture ):
-        """Close our shadow-rendering context/texture"""
-        '''This is the function that actually copies the depth-buffer into 
-        the depth-texture specified.  The operation is a standard OpenGL 
-        glCopyTexSubImage2D, which is performed entirely "on card", so 
-        is reasonably fast, though not as fast as having rendered into an 
-        FBO in the first place.'''
-        shadowMapSize = self.shadowMapSize
-        glBindTexture(GL_TEXTURE_2D, texture)
-        glCopyTexSubImage2D(
-            GL_TEXTURE_2D, 0, 0, 0, 0, 0, shadowMapSize, shadowMapSize
-        )
-        '''Now restore the viewport and disable the (depth) texture.'''
-        glPopAttrib(GL_VIEWPORT_BIT)
-        glDisable( GL_TEXTURE_2D )
-        return texture
 
 if __name__ == "__main__":
     '''We specify a large size for the context because we need at least 
