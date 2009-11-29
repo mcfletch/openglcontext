@@ -1,12 +1,12 @@
 #! /usr/bin/env python
-'''=Shadows in FrameBufferObject=
+'''=Shadows in a Frame Buffer Object=
 
 [shadow_2.py-screen-0001.png Screenshot]
 
 In this tutorial, we will:
 
     * subclass our previous shadow tutorial code 
-    * use Frame Buffer Objects to render the depth-texture 
+    * use Frame Buffer Objects (FBO) to render the depth-texture 
     * render to a larger texture than the screen-size
 
 This tutorial is a minor revision of our previous shadow tutorial,
@@ -17,7 +17,6 @@ import OpenGL,sys,os,traceback
 from OpenGLContext import testingcontext
 '''Import the previous tutorial as BaseContext'''
 from shadow_1 import TestContext as BaseContext
-from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.ARB.depth_texture import *
@@ -28,7 +27,6 @@ from OpenGL.GL.framebufferobjects import *
 from OpenGLContext.arrays import (
     array, sin, cos, pi, dot, transpose,
 )
-from OpenGLContext.events.timer import Timer
 
 class TestContext( BaseContext ):
     """Shadow rendering tutorial code"""
@@ -58,14 +56,13 @@ class TestContext( BaseContext ):
     passes.  The new item is the FrameBufferObject which represents the 
     off-screen context into which we will be rendering.'''
     shadowFBO = None 
-    shadowColor = None
     shadowTexture = None
     '''We override this default in the init function.'''
     shadowMapSize = 2048
     '''Should you wish to experiment with different filtering functions,
     we'll parameterize the filtering operation here.'''
     FILTER_TYPE = GL_NEAREST 
-    def setupShadowContext( self ):
+    def setupShadowContext( self,light=None, mode=None ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
         if not self.shadowFBO:
@@ -74,44 +71,6 @@ class TestContext( BaseContext ):
             self.shadowFBO = glGenFramebuffers(1)
             '''It has to be bound to configure it.'''
             glBindFramebuffer(GL_FRAMEBUFFER, self.shadowFBO )
-            '''The creation of a colour render buffer would not seem to be 
-            necessary, after all, we are filtering out all of the colour-buffer 
-            updates.  Unfortunately, at least on ATI's 3xxx series, it seems 
-            there must be a colour buffer even if there are no updates to it.
-            '''
-            self.shadowColor = glGenRenderbuffers(1)
-            glBindRenderbuffer(GL_RENDERBUFFER, self.shadowColor)
-            '''We are not going to actually use the buffer, so rather than 
-            rendering to a texture, we'll just allocate the storage on the 
-            back-end.  Note that if we *did* need to access the values,
-            we *could* do a glCopyTexSubImage2D as we did in the previous
-            tutorial, but that would obviate much of  the value of the FBO
-            approach.  What it *would* do is allow us to use a 
-            Multisampling buffer.  If you want to do antialiased off-screen 
-            rendering you'll likely need that approach.
-            
-            Interestingly (annoyingly), the ARB spec states that the format can 
-            only be one of a very limited set of formats, but the spec'd color 
-            format isn't actually supported on nVidia hardware. The GL_RGBA
-            value does appear to be supported on both ATI and nVidia hardware.
-            '''
-            glRenderbufferStorage(
-                GL_RENDERBUFFER,
-                GL_RGBA,
-                shadowMapSize,
-                shadowMapSize,
-            )
-            '''Now we attach our newly-created colour buffer to the FBO object,
-            which makes it the (first) colour rendering buffer for the virtual
-            context the FBO represents.  As noted above, while it wouldn't seem 
-            necessary, real-world tests suggest that there always needs to be 
-            at least one colour-buffer attached.'''
-            glFramebufferRenderbuffer(
-                GL_FRAMEBUFFER,
-                GL_COLOR_ATTACHMENT0,
-                GL_RENDERBUFFER,
-                self.shadowColor,
-            )
         else:
             '''We've already got the FBO with its colour buffer, just bind to 
             render into it.'''
@@ -154,9 +113,19 @@ class TestContext( BaseContext ):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.FILTER_TYPE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+        
+        '''Disable drawing to the colour buffers entirely.  Without this our 
+        framebuffer would be incomplete, as it would not have any colour buffer 
+        into which to render.'''
+        glDrawBuffer( GL_NONE )
         '''This function in the OpenGL.GL.framebufferobjects wrapper will 
         raise an OpenGL.error.GLError if the FBO is not properly configured.'''
-        checkFramebufferStatus( )
+        try:
+            checkFramebufferStatus( )
+        except Exception, err:
+            traceback.print_exc()
+            import os
+            os._exit(1)
         '''Un-bind the texture so that regular rendering isn't trying to 
         lookup a texture in our depth-buffer-bound texture.'''
         glBindTexture( GL_TEXTURE_2D, 0 )
@@ -169,9 +138,12 @@ class TestContext( BaseContext ):
         and restore the viewport.'''
         glBindFramebuffer(GL_FRAMEBUFFER, 0 )
         glPopAttrib(GL_VIEWPORT_BIT)
+        glDrawBuffer( GL_BACK )
         return texture
 
 if __name__ == "__main__":
     '''Our display size is now irrelevant to our rendering algorithm, so we 
     won't bother specifying a size.'''
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(
+        depthBuffer = 24,
+    )
