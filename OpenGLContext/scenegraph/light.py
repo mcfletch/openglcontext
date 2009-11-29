@@ -71,9 +71,6 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
         else:
             return 0
     
-    def createShadowMap( self, mode ):
-        """Create a shadow map for this light..."""
-        
     def viewMatrix( self, cutOffAngle=pi/3, aspect=1.0, near=0.1, far=10000 ):
         """Calculate viewing matrix for our light
         
