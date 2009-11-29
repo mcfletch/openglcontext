@@ -1,3 +1,3 @@
-#! /bin/sh
+#! /bin/bash
 
-scp tutorials/* mcfletch,pyopengl@web.sourceforge.net:/home/groups/p/py/pyopengl/htdocs/context/tutorials/
+rsync -avP -e ssh ./tutorials/* mcfletch,pyopengl@web.sourceforge.net:htdocs/context/tutorials/

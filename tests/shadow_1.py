@@ -243,12 +243,18 @@ class TestContext( BaseContext ):
             platform.render( identity = True )
             '''We do our ambient rendering pass.'''
             self.renderAmbient( mode )
-            '''Then we do the diffuse/specular lighting for our lights.'''
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_ONE,GL_ONE);
-            for i,(light,(texture,textureMatrix)) in enumerate(shadowTokens):
-                self.renderDiffuse( light, texture, textureMatrix, mode, id=i )
-            glDisable(GL_BLEND)
+            '''Then we do the diffuse/specular lighting for our lights.
+            We want to make our "extra light" blend into the current light 
+            reflected from the surfaces at 1:1 ratio, so we enable blending 
+            before doing the diffuse/specular pass.
+            '''
+            glEnable(GL_BLEND)
+            glBlendFunc(GL_ONE,GL_ONE)
+            try:
+                for i,(light,(texture,textureMatrix)) in enumerate(shadowTokens):
+                    self.renderDiffuse( light, texture, textureMatrix, mode, id=i )
+            finally:
+                glDisable(GL_BLEND)
         else:
             '''If we are *not* doing the shadowed opaque rendering pass,
             just visit the "scenegraph" with our mode.'''

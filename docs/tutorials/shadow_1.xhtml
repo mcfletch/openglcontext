@@ -293,13 +293,19 @@ first.
 	<div class="code-sample">            self.renderAmbient( mode )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Then we do the diffuse/specular lighting for our lights.</div>
+	<div class="paragraph">Then we do the diffuse/specular lighting for our lights.
+            We want to make our "extra light" blend into the current light 
+            reflected from the surfaces at 1:1 ratio, so we enable blending 
+            before doing the diffuse/specular pass.
 </div>
-	<div class="code-sample">            glEnable(GL_BLEND);
-            glBlendFunc(GL_ONE,GL_ONE);
-            for i,(light,(texture,textureMatrix)) in enumerate(shadowTokens):
-                self.renderDiffuse( light, texture, textureMatrix, mode, id=i )
-            glDisable(GL_BLEND)
+</div>
+	<div class="code-sample">            glEnable(GL_BLEND)
+            glBlendFunc(GL_ONE,GL_ONE)
+            try:
+                for i,(light,(texture,textureMatrix)) in enumerate(shadowTokens):
+                    self.renderDiffuse( light, texture, textureMatrix, mode, id=i )
+            finally:
+                glDisable(GL_BLEND)
         else:
 </div>
 	<div class="commentary">
