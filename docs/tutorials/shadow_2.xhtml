@@ -3,7 +3,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
     <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Special Effects: Shadows in FrameBufferObject</title>
+<title>Depth-map Shadows: Shadows in a Frame Buffer Object</title>
     <link href="./tutorial.css" type="text/css" rel="stylesheet" />
 </head>
 <body>
@@ -13,22 +13,22 @@
 	</tr>
 	<tr>
 	<td><a href="shadow_1.xhtml">Previous</a></td>
-	<td align="center">Special Effects: Shadows in FrameBufferObject</td>
+	<td align="center">Depth-map Shadows: Shadows in a Frame Buffer Object</td>
 	<td align="right"><a href="index.xhtml">Index</a></td>
 	</tr>
 </thead></table>
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Shadows in FrameBufferObject</h1>
+	<h1 class="title">Shadows in a Frame Buffer Object</h1>
 	<div class="paragraph">
 	<img src="shadow_2.py-screen-0001.png" alt="Screenshot" class=" wiki" />
 </div>
 	<div class="paragraph">In this tutorial, we will:</div>
 	<ul class="">
 	<li class="">subclass our previous shadow tutorial code </li>
-	<li class="">use Frame Buffer Objects to render the depth-texture </li>
-	<li class="">render to a larger texture than the screen-size</li>
+	<li class="">use Frame Buffer Objects (FBO) to render the depth-texture </li>
+	<li class="">render to a texture larger than the screen-size</li>
 </ul>
 	<div class="paragraph">This tutorial is a minor revision of our previous shadow tutorial,
 the only change is to add off-screen rendering of the depth-texture 
@@ -36,13 +36,11 @@ rather than rendering on the back-buffer of the screen.
 </div>
 </div>
 	<div class="code-sample">import OpenGL,sys,os,traceback
-from OpenGLContext import testingcontext
 </div>
 	<div class="commentary">
 	<div class="paragraph">Import the previous tutorial as BaseContext</div>
 </div>
 	<div class="code-sample">from shadow_1 import TestContext as BaseContext
-from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.ARB.depth_texture import *
@@ -53,10 +51,6 @@ from OpenGL.GL.ARB.shadow import *
 extension(s) we're going to use.  (Requires PyOpenGL 3.0.1b2 or above).</div>
 </div>
 	<div class="code-sample">from OpenGL.GL.framebufferobjects import *
-from OpenGLContext.arrays import (
-    array, sin, cos, pi, dot, transpose,
-)
-from OpenGLContext.events.timer import Timer
 class TestContext( BaseContext ):
     """Shadow rendering tutorial code"""
     def OnInit( self ):
@@ -89,15 +83,6 @@ class TestContext( BaseContext ):
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">As before, we want to store our depth-texture between rendering 
-    passes.  The new item is the FrameBufferObject which represents the 
-    off-screen context into which we will be rendering.</div>
-</div>
-	<div class="code-sample">    shadowFBO = None 
-    shadowColor = None
-    shadowTexture = None
-</div>
-	<div class="commentary">
 	<div class="paragraph">We override this default in the init function.</div>
 </div>
 	<div class="code-sample">    shadowMapSize = 2048
@@ -107,71 +92,26 @@ class TestContext( BaseContext ):
     we'll parameterize the filtering operation here.</div>
 </div>
 	<div class="code-sample">    FILTER_TYPE = GL_NEAREST 
-    def setupShadowContext( self ):
+    def setupShadowContext( self,light=None, mode=None ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
-        if not self.shadowFBO:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Creating FBOs is expensive, so we want to create and configure 
-            our FBO once and reuse it.</div>
+	<div class="paragraph">As with the previous tutorial, we want to cache our texture (and FBO),
+        so we check to see if the values have already been set up.</div>
 </div>
-	<div class="code-sample">            self.shadowFBO = glGenFramebuffers(1)
+	<div class="code-sample">        token = mode.cache.getData(light,key=self.textureCacheKey)
+        if not token:
+</div>
+	<div class="commentary">
+	<div class="paragraph">A cache miss, so we need to do the setup.</div>
+</div>
+	<div class="code-sample">            fbo = glGenFramebuffers(1)
 </div>
 	<div class="commentary">
 	<div class="paragraph">It has to be bound to configure it.</div>
 </div>
-	<div class="code-sample">            glBindFramebuffer(GL_FRAMEBUFFER, self.shadowFBO )
-</div>
-	<div class="commentary">
-	<div class="paragraph">The creation of a colour render buffer would not seem to be 
-            necessary, after all, we are filtering out all of the colour-buffer 
-            updates.  Unfortunately, at least on ATI's 3xxx series, it seems 
-            there must be a colour buffer even if there are no updates to it.
-</div>
-</div>
-	<div class="code-sample">            self.shadowColor = glGenRenderbuffers(1)
-            glBindRenderbuffer(GL_RENDERBUFFER, self.shadowColor)
-</div>
-	<div class="commentary">
-	<div class="paragraph">We are not going to actually use the buffer, so rather than 
-            rendering to a texture, we'll just allocate the storage on the 
-            back-end.  Note that if we *did* need to access the values,
-            we *could* do a glCopyTexSubImage2D as we did in the previous
-            tutorial, but that would obviate much of  the value of the FBO
-            approach.  What it *would* do is allow us to use a 
-            Multisampling buffer.  If you want to do antialiased off-screen 
-            rendering you'll likely need that approach.
-</div>
-</div>
-	<div class="code-sample">            glRenderbufferStorage(
-                GL_RENDERBUFFER,
-                GL_RGBA4,
-                shadowMapSize,
-                shadowMapSize,
-            )
-</div>
-	<div class="commentary">
-	<div class="paragraph">Now we attach our newly-created colour buffer to the FBO object,
-            which makes it the (first) colour rendering buffer for the virtual
-            context the FBO represents.  As noted above, while it wouldn't seem 
-            necessary, real-world tests suggest that there always needs to be 
-            at least one colour-buffer attached.</div>
-</div>
-	<div class="code-sample">            glFramebufferRenderbuffer(
-                GL_FRAMEBUFFER,
-                GL_COLOR_ATTACHMENT0,
-                GL_RENDERBUFFER,
-                self.shadowColor,
-            )
-        else:
-</div>
-	<div class="commentary">
-	<div class="paragraph">We've already got the FBO with its colour buffer, just bind to 
-            render into it.</div>
-</div>
-	<div class="code-sample">            glBindFramebuffer(GL_FRAMEBUFFER, self.shadowFBO )
-        if not self.shadowTexture:
+	<div class="code-sample">            glBindFramebuffer(GL_FRAMEBUFFER, fbo )
 </div>
 	<div class="commentary">
 	<div class="paragraph">The texture itself is the same as the last tutorial.</div>
@@ -183,7 +123,6 @@ class TestContext( BaseContext ):
                 shadowMapSize, shadowMapSize, 0,
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
-            self.shadowTexture = texture
 </div>
 	<div class="commentary">
 	<div class="paragraph">We attach the texture to the FBO's depth attachment point.  There 
@@ -201,14 +140,26 @@ which currently always must be 0.
                 texture, 
                 0 #mip-map level...
             )
+            holder = mode.cache.holder( light,(fbo,texture),key=self.textureCacheKey)
         else:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Just make the texture current to configure parameters.</div>
+	<div class="paragraph">We've already got the FBO with its colour buffer, just bind to 
+            render into it.</div>
 </div>
-	<div class="code-sample">            texture = self.shadowTexture
-            glBindTexture( GL_TEXTURE_2D, texture )
-        glPushAttrib(GL_VIEWPORT_BIT)
+	<div class="code-sample">            fbo,texture = token
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo )
+</div>
+	<div class="commentary">
+	<div class="paragraph">Make the texture current to configure parameters.</div>
+</div>
+	<div class="code-sample">            glBindTexture( GL_TEXTURE_2D, texture )
+</div>
+	<div class="commentary">
+	<div class="paragraph">Unlike in the previous tutorial, we now *know* this is a 
+        valid size for the viewport in the off-screen context.</div>
+</div>
+	<div class="code-sample">        glViewport(0,0,shadowMapSize,shadowMapSize)
 </div>
 	<div class="commentary">
 	<div class="paragraph">We use the same "nearest" filtering as before</div>
@@ -219,16 +170,22 @@ which currently always must be 0.
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Unlike in the previous tutorial, we now *know* this is a 
-        valid size for the viewport in the off-screen context.</div>
+	<div class="paragraph">Disable drawing to the colour buffers entirely.  Without this our 
+        framebuffer would be incomplete, as it would not have any colour buffer 
+        into which to render.</div>
 </div>
-	<div class="code-sample">        glViewport(0,0,shadowMapSize,shadowMapSize)
+	<div class="code-sample">        glDrawBuffer( GL_NONE )
 </div>
 	<div class="commentary">
 	<div class="paragraph">This function in the OpenGL.GL.framebufferobjects wrapper will 
         raise an OpenGL.error.GLError if the FBO is not properly configured.</div>
 </div>
-	<div class="code-sample">        checkFramebufferStatus( )
+	<div class="code-sample">        try:
+            checkFramebufferStatus( )
+        except Exception, err:
+            traceback.print_exc()
+            import os
+            os._exit(1)
 </div>
 	<div class="commentary">
 	<div class="paragraph">Un-bind the texture so that regular rendering isn't trying to 
@@ -237,7 +194,11 @@ which currently always must be 0.
 	<div class="code-sample">        glBindTexture( GL_TEXTURE_2D, 0 )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Clear the depth buffer (texture) on each pass.</div>
+	<div class="paragraph">Clear the depth buffer (texture) on each pass.  Our previous 
+        tutorial didn't need to do this here because the back-buffer was 
+        shared with the regular rendering pass and the OpenGLContext renderer
+        had already called glClear() during it's regular context setup.
+</div>
 </div>
 	<div class="code-sample">        glClear(GL_DEPTH_BUFFER_BIT)
         return texture
@@ -246,10 +207,10 @@ which currently always must be 0.
 </div>
 	<div class="commentary">
 	<div class="paragraph">This is a very simple function now, we just disable the FBO,
-        and restore the viewport.</div>
+        and restore the draw buffer to the regular "back" buffer.</div>
 </div>
 	<div class="code-sample">        glBindFramebuffer(GL_FRAMEBUFFER, 0 )
-        glPopAttrib(GL_VIEWPORT_BIT)
+        glDrawBuffer( GL_BACK )
         return texture
 if __name__ == "__main__":
 </div>
@@ -257,8 +218,18 @@ if __name__ == "__main__":
 	<div class="paragraph">Our display size is now irrelevant to our rendering algorithm, so we 
     won't bother specifying a size.</div>
 </div>
-	<div class="code-sample">
-    TestContext.ContextMainLoop()
+	<div class="code-sample">    TestContext.ContextMainLoop(
+        depthBuffer = 24,
+    )
+</div>
+	<div class="commentary">
+	<div class="paragraph">There are a number of possible next steps to take:</div>
+	<ul class="">
+	<li class="">create cube-maps for point light sources</li>
+	<li class="">create multiple depth maps which cover successively farther "tranches"   of the camera view frustum to produce higher-resolution shadows </li>
+	<li class="">use shaders to combine the opaque and diffuse/specular passes into a   single rendering pass </li>
+	<li class="">use shaders to do "Percentage Closer Filtering" on the shadow-map values   in order to antialias the shadow edges.</li>
+</ul>
 </div>
 <div class="source-reference">This code-walkthrough tutorial is generated from the shadow_2.py script in the 
 OpenGLContext source distribution.</div>
@@ -268,7 +239,7 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr>
 	<td><a href="shadow_1.xhtml">Previous</a></td>
-	<td align="center">Special Effects: Shadows in FrameBufferObject</td>
+	<td align="center">Depth-map Shadows: Shadows in a Frame Buffer Object</td>
 	<td align="right"><a href="index.xhtml">Index</a></td>
 	</tr>
 	<tr class="meta-links">
