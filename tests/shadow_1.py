@@ -83,15 +83,15 @@ class TestContext( BaseContext ):
         '''
         self.geometry = self.createGeometry()
         '''To make the demo a little more interesting, we're going to 
-        animate the light's position and direction.  Here we're setting up 
-        a raw Timer object.  OpenGLContext scenegraph timers can't be used 
+        animate the first light's position and direction.  Here we're setting 
+        up a raw Timer object.  OpenGLContext scenegraph timers can't be used 
         as we're not using the scenegraph mechanisms.
         '''
         self.time = Timer( duration = 8.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
         self.time.register (self)
         self.time.start ()
-        '''Here's the light we're going to use to cast the shadows.'''
+        '''Here are the lights we're going to use to cast shadows.'''
         self.lights = [
             SpotLight(
                 location = [0,5,10],
@@ -442,12 +442,18 @@ class TestContext( BaseContext ):
     def setupShadowContext( self, light=None, mode=None ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
+        '''We don't want to re-generate the depth-texture for every frame,
+        so we want to keep a cached version of it around.  OpenGLContext has 
+        an explicit caching mechanism which allows us to check and store the 
+        value easily.  The cache can hold different elements for a single node,
+        so we use a cache key to specify that we're storing the shadow texture 
+        for the node.'''
         texture = mode.cache.getData(light,key=self.textureCacheKey)
         if not texture:
-            '''We create a single texture and tell OpenGL 
-            its data-format parameters.  The None at the end of the 
-            argument list tells OpenGL not to initialize the data, i.e. 
-            not to read it from anywhere.
+            '''We didn't find the texture in the cache, so we need to generate it.
+            
+            We create a single texture and tell OpenGL to make it the current 
+            2D texture.
             '''
             texture = glGenTextures( 1 )
             glBindTexture( GL_TEXTURE_2D, texture )
@@ -456,12 +462,16 @@ class TestContext( BaseContext ):
             tells OpenGL to use the current OpenGL bit-depth as the format 
             for the texture.  So if our context has a 16-bit depth channel,
             we will use that.  If it uses 24-bit depth, we'll use that.
+            
+            The None at the end of the argument list tells OpenGL not to
+            initialize the data, i.e. not to read it from anywhere.
             '''
             glTexImage2D( 
                 GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, 
                 shadowMapSize, shadowMapSize, 0,
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
+            '''Now we store the texture in the cache for later passes.'''
             holder = mode.cache.holder( light,texture,key=self.textureCacheKey)
         '''These parameters simply keep us from doing interpolation on the 
         data-values for the texture.  If we were to use, for instance 

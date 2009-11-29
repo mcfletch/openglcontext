@@ -56,10 +56,11 @@ class TestContext( BaseContext ):
     def setupShadowContext( self,light=None, mode=None ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
+        '''As with the previous tutorial, we want to cache our texture (and FBO),
+        so we check to see if the values have already been set up.'''
         token = mode.cache.getData(light,key=self.textureCacheKey)
         if not token:
-            '''Creating FBOs is expensive, so we want to create and configure 
-            our FBO once and reuse it.'''
+            '''A cache miss, so we need to do the setup.'''
             fbo = glGenFramebuffers(1)
             '''It has to be bound to configure it.'''
             glBindFramebuffer(GL_FRAMEBUFFER, fbo )
@@ -128,7 +129,7 @@ class TestContext( BaseContext ):
     def closeShadowContext( self, texture ):
         """Close our shadow-rendering context/texture"""
         '''This is a very simple function now, we just disable the FBO,
-        and restore the viewport.'''
+        and restore the draw buffer to the regular "back" buffer.'''
         glBindFramebuffer(GL_FRAMEBUFFER, 0 )
         glDrawBuffer( GL_BACK )
         return texture
@@ -139,3 +140,13 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop(
         depthBuffer = 24,
     )
+'''There are a number of possible next steps to take:
+
+    * create cube-maps for point light sources
+    * create multiple depth maps which cover successively farther "tranches" 
+      of the camera view frustum to produce higher-resolution shadows 
+    * use shaders to combine the opaque and diffuse/specular passes into a 
+      single rendering pass 
+    * use shaders to do "Percentage Closer Filtering" on the shadow-map values 
+      in order to antialias the shadow edges.
+'''
