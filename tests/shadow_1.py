@@ -79,7 +79,8 @@ class TestContext( BaseContext ):
         glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
         glEnable( GL_POLYGON_SMOOTH )
         '''We create the geometry for our scene in a method to allow 
-        later tutorials to subclass and provide more.'''
+        later tutorials to subclass and provide more interesting scenes.
+        '''
         self.geometry = self.createGeometry()
         '''To make the demo a little more interesting, we're going to 
         animate the light's position and direction.  Here we're setting up 
@@ -91,12 +92,22 @@ class TestContext( BaseContext ):
         self.time.register (self)
         self.time.start ()
         '''Here's the light we're going to use to cast the shadows.'''
-        self.light = SpotLight(
-            location = [0,5,10],
-            color = [1,.5,.5],
-            ambientIntensity = 0.5,
-            direction = [0,-5,-10],
-        )
+        self.lights = [
+            SpotLight(
+                location = [0,5,10],
+                color = [1,.95,.95],
+                intensity = .5,
+                ambientIntensity = 0.10,
+                direction = [0,-5,-10],
+            ),
+            SpotLight(
+                location = [3,3,3],
+                color = [.75,.75,1.0],
+                intensity = .5,
+                ambientIntensity = .05,
+                direction = [-3,-3,-3],
+            ),
+        ]
         self.addEventHandler( "keypress", name="s", function = self.OnToggleTimer)
     
     def createGeometry( self ):
@@ -159,16 +170,17 @@ class TestContext( BaseContext ):
         '''Every cycle we want to do a full rotation, and we want the 
         light to be 10 units from the y axis in the x,z plane. 
         All else is math.'''
+        light = self.lights[0]
         a = event.fraction() * 2 * pi
         xz = array( [
             sin(a),cos(a),
         ],'f') * 10 # radius
-        position = self.light.location
+        position = light.location
         position[0] = xz[0]
         position[2] = xz[1]
-        self.light.location = position
+        light.location = position
         '''We point the light at the origin, mostly because it's easy.'''
-        self.light.direction = -position
+        light.direction = -position
     def OnToggleTimer( self, event ):
         """Allow the user to pause/restart the timer."""
         if self.time.active:
@@ -201,15 +213,19 @@ class TestContext( BaseContext ):
     another tutorial).
     '''
     def Render( self, mode):
+        assert mode
         BaseContext.Render( self, mode )
         if mode.visible and mode.lighting and not mode.transparent:
             '''These settings tell us we are being asked to do a 
             regular opaque rendering pass (with lighting).  This is 
             where we are going to do our shadow-rendering multi-pass.'''
-            texture,textureMatrix = self.renderLightTexture( self.light, mode )
+            shadowTokens = [
+                (light,self.renderLightTexture( light, mode ))
+                for light in self.lights 
+            ]
             '''Since our depth buffer currently has the light's view rendered 
-            into it, we need to clear it before we render our geometry in the 
-            camera's view.'''
+            into it, we need to clear it before we render our geometry from the 
+            camera's viewpoint.'''
             glClear(GL_DEPTH_BUFFER_BIT)
             '''OpenGLContext's camera is represented by a "View Platform"
             this camera's view has already been set up once during this 
@@ -218,21 +234,26 @@ class TestContext( BaseContext ):
             
             The view platform object has a method to render the matrices 
             using regular OpenGL legacy calls (the "Flat" renderer calculates 
-            these values directly).  We just call this method to have the 
-            platform restore its state.  The "identity" parameter tells the 
-            platform to do a glLoadIdentity() call for each matrix first.
+            and loads these values directly).  We just call this method to 
+            have the platform restore its state.  The "identity" parameter 
+            tells the platform to do a glLoadIdentity() call for each matrix 
+            first.
             '''
             platform = self.getViewPlatform()
             platform.render( identity = True )
-            
+            '''We do our ambient rendering pass.'''
             self.renderAmbient( mode )
-            '''Now we do the diffuse/specular lighting for our light.'''
-            self.renderDiffuse( self.light, texture, textureMatrix, mode )
+            '''Then we do the diffuse/specular lighting for our lights.'''
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_ONE,GL_ONE);
+            for i,(light,(texture,textureMatrix)) in enumerate(shadowTokens):
+                self.renderDiffuse( light, texture, textureMatrix, mode, id=i )
+            glDisable(GL_BLEND)
         else:
             '''If we are *not* doing the shadowed opaque rendering pass,
             just visit the "scenegraph" with our mode.'''
             self.drawScene( mode )
-    '''Let's get the simple part out of the way first, drawing the geometry.
+    '''Let's get the simple part out of the way first; drawing the geometry.
     OpenGLContext has two different rendering engines.  One is an 
     optimized "Flat" renderer, and the other is a hierarchic "traversing" 
     renderer which uses a visitor pattern to traverse the scenegraph for 
@@ -268,7 +289,7 @@ class TestContext( BaseContext ):
         rendering target for OpenGL).  Later tutorials will set up an 
         off-screen rendering target (a Frame Buffer Object) by overriding 
         this method-call.'''
-        texture = self.setupShadowContext(light)
+        texture = self.setupShadowContext(light,mode)
         '''==Setup Scene with Light as Camera==
         
         The algorithm requires us to set up the scene to render 
@@ -293,10 +314,10 @@ class TestContext( BaseContext ):
             The complexity of supporting these features doesn't 
             particularly suit an introductory tutorial.
         '''
-        lightView = self.light.viewMatrix( 
+        lightView = light.viewMatrix( 
             pi/3, near=.1, far=30.0
         )
-        lightModel = self.light.modelMatrix( )
+        lightModel = light.modelMatrix( )
         '''The texture matrix translates from camera eye-space into 
         light eye-space.  See the original tutorial for an explanation 
         of how the mapping is done, and how it interacts with the 
@@ -416,12 +437,13 @@ class TestContext( BaseContext ):
     particularly so if your light has a wide-angle cutoff.  As more of the 
     scene is rendered into the texture, each object covers fewer pixels.
     '''
-    shadowTexture = None
     shadowMapSize = 512
+    textureCacheKey = 'shadowTexture'
     def setupShadowContext( self, light=None, mode=None ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
-        if not self.shadowTexture:
+        texture = mode.cache.getData(light,key=self.textureCacheKey)
+        if not texture:
             '''We create a single texture and tell OpenGL 
             its data-format parameters.  The None at the end of the 
             argument list tells OpenGL not to initialize the data, i.e. 
@@ -440,9 +462,7 @@ class TestContext( BaseContext ):
                 shadowMapSize, shadowMapSize, 0,
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
-            self.shadowTexture = texture
-        else:
-            texture = self.shadowTexture
+            holder = mode.cache.holder( light,texture,key=self.textureCacheKey)
         '''These parameters simply keep us from doing interpolation on the 
         data-values for the texture.  If we were to use, for instance 
         GL_LINEAR interpolation, our shadows would tend to get "moire" 
@@ -478,7 +498,6 @@ class TestContext( BaseContext ):
         )
         glDisable( GL_TEXTURE_2D )
         return texture
-    
     '''=Render Ambient-lit Geometry=
     
     Our second rendering pass draws the ambient light to the scene.  It 
@@ -497,9 +516,9 @@ class TestContext( BaseContext ):
         mode.textured = True
         '''As with the geometry, the light will respect the mode's 
         parameters for lighting.'''
-        self.light.Light( GL_LIGHT0, mode=mode )
+        for i,light in enumerate( self.lights ):
+            light.Light( GL_LIGHT0+i, mode=mode )
         self.drawScene( mode )
-    
     '''=Render Diffuse/Specular Lighting Filtered by Shadow Map=
     
     This rendering pass is where the magic of the shadow-texture algorithm
@@ -530,11 +549,11 @@ class TestContext( BaseContext ):
         but simply re-calculating ambient lighting in this pass is about 
         as simple.
         '''
-        mode.lightingAmbient = True
+        mode.lightingAmbient = False
         mode.lightingDiffuse = True 
         '''Again, the light looks at the mode parameters to determine how 
         to configure itself.'''
-        self.light.Light( GL_LIGHT0 + id, mode=mode )
+        light.Light( GL_LIGHT0 + id, mode=mode )
         texGenData = [
             (GL_S,GL_TEXTURE_GEN_S,textureMatrix[0]),
             (GL_T,GL_TEXTURE_GEN_T,textureMatrix[1]),
@@ -552,8 +571,8 @@ class TestContext( BaseContext ):
             glTexGenfv(token, GL_EYE_PLANE, row )
             glEnable(gen_token)
         '''Now enable our light's depth-texture, created above.'''
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, texture)
+        glEnable(GL_TEXTURE_2D)
         '''Enable shadow comparison.  "R" here is not "red", but 
         the third of 4 texture coordinates, i.e. the transformed 
         Z-depth of the generated texture coordinate, now in eye-space 
@@ -582,7 +601,6 @@ class TestContext( BaseContext ):
         '''Accept anything as "lit" which gives this value or greater.'''
         glAlphaFunc(GL_GEQUAL, .99)
         glEnable(GL_ALPHA_TEST)
-        
         try:
             return self.drawScene( mode )
         finally:
@@ -591,8 +609,9 @@ class TestContext( BaseContext ):
             glDisable(GL_TEXTURE_2D)
             for _,gen_token,_ in texGenData:
                 glDisable(gen_token)
-            glDisable(GL_LIGHTING);
-            glDisable(GL_ALPHA_TEST);            
+            glDisable(GL_LIGHTING)
+            glDisable(GL_LIGHT0+id)
+            glDisable(GL_ALPHA_TEST)
             mode.lightingAmbient = True 
 
 if __name__ == "__main__":

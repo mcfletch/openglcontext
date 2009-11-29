@@ -7,14 +7,13 @@ In this tutorial, we will:
 
     * subclass our previous shadow tutorial code 
     * use Frame Buffer Objects (FBO) to render the depth-texture 
-    * render to a larger texture than the screen-size
+    * render to a texture larger than the screen-size
 
 This tutorial is a minor revision of our previous shadow tutorial,
 the only change is to add off-screen rendering of the depth-texture 
 rather than rendering on the back-buffer of the screen.
 '''
 import OpenGL,sys,os,traceback
-from OpenGLContext import testingcontext
 '''Import the previous tutorial as BaseContext'''
 from shadow_1 import TestContext as BaseContext
 from OpenGL.GL import *
@@ -24,9 +23,6 @@ from OpenGL.GL.ARB.shadow import *
 '''Import the PyOpenGL convenience wrappers for the FrameBufferObject
 extension(s) we're going to use.  (Requires PyOpenGL 3.0.1b2 or above).'''
 from OpenGL.GL.framebufferobjects import *
-from OpenGLContext.arrays import (
-    array, sin, cos, pi, dot, transpose,
-)
 
 class TestContext( BaseContext ):
     """Shadow rendering tutorial code"""
@@ -52,11 +48,6 @@ class TestContext( BaseContext ):
         print 'Using shadow map of %sx%s pixels'%( 
             self.shadowMapSize,self.shadowMapSize 
         )
-    '''As before, we want to store our depth-texture between rendering 
-    passes.  The new item is the FrameBufferObject which represents the 
-    off-screen context into which we will be rendering.'''
-    shadowFBO = None 
-    shadowTexture = None
     '''We override this default in the init function.'''
     shadowMapSize = 2048
     '''Should you wish to experiment with different filtering functions,
@@ -65,17 +56,13 @@ class TestContext( BaseContext ):
     def setupShadowContext( self,light=None, mode=None ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
-        if not self.shadowFBO:
+        token = mode.cache.getData(light,key=self.textureCacheKey)
+        if not token:
             '''Creating FBOs is expensive, so we want to create and configure 
             our FBO once and reuse it.'''
-            self.shadowFBO = glGenFramebuffers(1)
+            fbo = glGenFramebuffers(1)
             '''It has to be bound to configure it.'''
-            glBindFramebuffer(GL_FRAMEBUFFER, self.shadowFBO )
-        else:
-            '''We've already got the FBO with its colour buffer, just bind to 
-            render into it.'''
-            glBindFramebuffer(GL_FRAMEBUFFER, self.shadowFBO )
-        if not self.shadowTexture:
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo )
             '''The texture itself is the same as the last tutorial.'''
             texture = glGenTextures( 1 )
             glBindTexture( GL_TEXTURE_2D, texture )
@@ -84,7 +71,6 @@ class TestContext( BaseContext ):
                 shadowMapSize, shadowMapSize, 0,
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
-            self.shadowTexture = texture
             '''We attach the texture to the FBO's depth attachment point.  There 
             is also a combined depth-stencil attachment point when certain 
             extensions are available.  We don't actually need a stencil buffer 
@@ -100,11 +86,14 @@ class TestContext( BaseContext ):
                 texture, 
                 0 #mip-map level...
             )
+            holder = mode.cache.holder( light,(fbo,texture),key=self.textureCacheKey)
         else:
-            '''Just make the texture current to configure parameters.'''
-            texture = self.shadowTexture
+            '''We've already got the FBO with its colour buffer, just bind to 
+            render into it.'''
+            fbo,texture = token
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo )
+            '''Make the texture current to configure parameters.'''
             glBindTexture( GL_TEXTURE_2D, texture )
-        glPushAttrib(GL_VIEWPORT_BIT)
         '''Unlike in the previous tutorial, we now *know* this is a 
         valid size for the viewport in the off-screen context.'''
         glViewport(0,0,shadowMapSize,shadowMapSize)
@@ -129,7 +118,11 @@ class TestContext( BaseContext ):
         '''Un-bind the texture so that regular rendering isn't trying to 
         lookup a texture in our depth-buffer-bound texture.'''
         glBindTexture( GL_TEXTURE_2D, 0 )
-        '''Clear the depth buffer (texture) on each pass.'''
+        '''Clear the depth buffer (texture) on each pass.  Our previous 
+        tutorial didn't need to do this here because the back-buffer was 
+        shared with the regular rendering pass and the OpenGLContext renderer
+        had already called glClear() during it's regular context setup.
+        '''
         glClear(GL_DEPTH_BUFFER_BIT)
         return texture
     def closeShadowContext( self, texture ):
@@ -137,7 +130,6 @@ class TestContext( BaseContext ):
         '''This is a very simple function now, we just disable the FBO,
         and restore the viewport.'''
         glBindFramebuffer(GL_FRAMEBUFFER, 0 )
-        glPopAttrib(GL_VIEWPORT_BIT)
         glDrawBuffer( GL_BACK )
         return texture
 
