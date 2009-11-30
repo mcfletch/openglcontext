@@ -154,6 +154,7 @@ class Context(object):
     contextDefinition = None
     
     DEBUG_SELECTION = False
+    DEBUG_FRUSTUM = True
 
     ### State flags/values
     # Set to false to trigger a redraw on the next available iteration
