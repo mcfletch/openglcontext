@@ -26,9 +26,6 @@ sizes = [
 class TestContext( BaseContext ):
     currentImage = 0
     currentSize = 0
-    def Render( self, mode = 0):
-        BaseContext.Render( self, mode )
-        self.shape.Render( mode )
     def OnInit( self ):
         """Scene set up and initial processing"""
         print """You should see an elongated box over a white background
@@ -43,19 +40,20 @@ class TestContext( BaseContext ):
         self.addEventHandler(
             'keypress', name = 's', function = self.OnSizeSwitch
         )
+        self.shape = Shape(
+            geometry = Teapot( size=sizes[0] ),
+            appearance = Appearance(
+                material = Material(
+                    diffuseColor =(1,1,1)
+                ),
+                texture = ImageTexture(
+                    url = [images[0]]
+                ),
+            ),
+        )
         self.sg = sceneGraph(
             children = [
-                Shape(
-                    geometry = Teapot( size=sizes[0] ),
-                    appearance = Appearance(
-                        material = Material(
-                            diffuseColor =(1,1,1)
-                        ),
-                        texture = ImageTexture(
-                            url = [images[0]]
-                        ),
-                    ),
-                )
+                self.shape,
             ]
         )
     def OnImageSwitch( self, event=None ):
