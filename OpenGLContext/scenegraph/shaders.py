@@ -5,11 +5,11 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGL import error
 from OpenGL.arrays import vbo
-from OpenGLContext.arrays import array
+from OpenGLContext.arrays import array,reshape
 from OpenGLContext import context
 from vrml.vrml97 import shaders
 from vrml import field,node,fieldtypes,protofunctions
-from OpenGLContext.scenegraph import polygonsort
+from OpenGLContext.scenegraph import polygonsort,boundingvolume
 from OpenGLContext.arrays import array
 LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
@@ -56,7 +56,7 @@ class _Buffer( shaders.ShaderBuffer ):
         vbo = self.vbo(mode)
         vbo.bind()
         return vbo
-
+    
 class ShaderBuffer( _Buffer ):
     """Regular vertex-buffer mechanism"""
 class ShaderIndexBuffer( _Buffer ):
@@ -84,6 +84,64 @@ class ShaderAttribute( shaders.ShaderAttribute ):
             vbo,location = token 
             vbo.unbind()
             glDisableVertexAttribArray( location )
+    
+    def bufferView( self ):
+        """Retrieve a view of our buffer that is just this attribute's values"""
+        if not self.buffer:
+            raise AttributeError( 'No buffer currently' )
+        buffer = self.buffer.buffer
+        # okay, now slice-and-dice it...
+        # TODO: watch for cases where the buffer is something 
+        # other than the native-size?  Shouldn't be possible given 
+        # the typed nature of the buffer property.
+        shape = buffer.shape
+        offset = self.offset//buffer.itemsize
+        stride = self.stride//buffer.itemsize
+        # okay, are we a multi-dimensional buffer?
+        if len(shape) == 2:
+            if stride%shape[-1]:
+                # is not evenly divisble...
+                raise ValueError( 
+                    """Stride %s is not evenly divisible into matrix shape %s"""%(
+                        stride, shape
+                    ) 
+                )
+            else:
+                step = stride//shape[-1]
+            # TODO: support higher-order shapes
+            if step > 1:
+                return buffer[::step,offset:offset+self.size]
+            else:
+                return buffer[:,offset:offset+self.size]
+        elif len(shape) == 1:
+            # we're a ravelled array...
+            buffer = reshape( buffer, (-1,stride))
+            return buffer[:,offset:offset+self.size]
+        else:
+            raise NotImplemented( 
+                """Haven't implemented view support for N dimensional arrays"""
+            )
+    def boundingVolume( self, mode ):
+        """Calculate bounding volume of this attribute's current values"""
+        current = boundingvolume.getCachedVolume( self )
+        if current:
+            return current 
+        try:
+            buffer = self.bufferView()
+        except AttributeError, err:
+            bv = boundingvolume.BoundingVolume()
+        else:
+            bv = boundingvolume.AABoundingBox.fromPoints( buffer )
+            print 'buffer points', buffer
+        return boundingvolume.cacheVolume( 
+            self, bv, (
+                (self,None),
+                (self,'buffer'),
+                (self,'offset'),
+                (self,'stride'),
+                (self.buffer,'buffer'),
+            ),
+        )
 
 class _Uniform( object ):
     """Uniform common operations"""
@@ -466,6 +524,49 @@ class ShaderGeometry( shaders.ShaderGeometry ):
         if key[0]:
             distance = -distance
         return key[0:2]+ (distance,) + key[1:]
+    
+    def boundingVolume( self, mode ):
+        """Create a bounding-volume object for this node
+
+        This is our geometry's boundingVolume, with the
+        addition that any dependent volume must be dependent
+        on our geometry field.
+        """
+        bb = None
+        for attrib in self.attributes:
+            if attrib.isCoord:
+                bv = attrib.boundingVolume( mode )
+                if bv and bb:
+                    bb = boundingvolume.AABoundingBox.union( (bb,bv))
+                elif bv:
+                    bb = bv 
+        if not bb:
+            # can't determine bounding box, so have to go with the 
+            # always-visible version...
+            return boundingvolume.UnboundedVolume()
+        return bb
+    def visible( self, frustum=None, matrix=None, occlusion=0, mode=None ):
+        """Check whether this renderable node intersects frustum
+
+        frustum -- the bounding volume frustum with a planes
+            attribute which defines the plane equations for
+            each active clipping plane
+        matrix -- the active OpenGL transformation matrix for
+            this node, used to determine the transforms for
+            the grouping-node's bounding volumes.  Is calculated
+            from current OpenGL state if not provided.
+        """
+        try:
+            return self.boundingVolume(mode).visible( 
+                frustum, matrix, occlusion=occlusion, mode=mode 
+            )
+        except Exception, err:
+            tb = traceback.format_exc( )
+            log.warn(
+                """Failure during Shape.visible check for %r:\n%s""",
+                self,
+                tb
+            )
 
 class ShaderSlice( shaders.ShaderSlice ):
     """Slice of a shader to render"""
