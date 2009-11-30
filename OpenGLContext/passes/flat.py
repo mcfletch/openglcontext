@@ -258,41 +258,19 @@ class FlatPass( SGObserver ):
             
             self.legacyBackgroundRender( vp,matrix )
             # Set up generic "geometric" rendering parameters
-            glDisable( GL_CULL_FACE )
             glFrontFace( GL_CCW )
             glEnable(GL_DEPTH_TEST)
+            glDepthFunc( GL_LESS )
             glEnable(GL_LIGHTING)
             glDepthFunc(GL_LESS)
             glEnable(GL_CULL_FACE)
             glCullFace(GL_BACK)
             
             self.legacyLightRender( matrix )
-            transparentSetup = False
             
-            for key,mvmatrix,tmatrix,bvolume,path in toRender:
-                self.matrix = mvmatrix
-                glLoadMatrixd( mvmatrix )
-                
-                self.transparent = key[0]
-                if key[0] != transparentSetup:
-                    glEnable(GL_BLEND);
-                    glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
-                    glDepthMask( 0 )
-                try:
-                    if key[0]:
-                        function = path[-1].RenderTransparent
-                    else:
-                        function = path[-1].Render
-                    function( mode=self )
-                except Exception, err:
-                    log.error(
-                        """Failure in %s: %s""",
-                        function,
-                        getTraceback( err ),
-                    )
-        glDisable(GL_BLEND);
-        glEnable(GL_DEPTH_TEST);
-        glDepthMask( 1 ) # allow updates to the depth buffer
+            self.renderOpaque( toRender )
+            self.renderTransparent( toRender )
+            
         if context.frameCounter.display:
             context.frameCounter.Render( context )
         context.SwapBuffers()
@@ -334,6 +312,57 @@ class FlatPass( SGObserver ):
             glLoadMatrixd( matrix )
             l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
+
+    def renderOpaque( self, toRender ):
+        """Render the opaque geometry from toRender (in reverse order)"""
+        self.transparent = False
+        for key,mvmatrix,tmatrix,bvolume,path in toRender:
+            if not key[0]:
+                self.matrix = mvmatrix
+                glLoadMatrixd( mvmatrix )
+                try:
+                    path[-1].Render( mode = self )
+                    if self.context.DEBUG_FRUSTUM:
+                        bvolume.debugRender( )
+                except Exception, err:
+                    log.error(
+                        """Failure in %s: %s""",
+                        path[-1].Render,
+                        getTraceback( err ),
+                    )
+    def renderTransparent( self, toRender ):
+        """Render the transparent geometry from toRender (in forward order)"""
+        self.transparent = True 
+        setup = False 
+        try:
+            for key,mvmatrix,tmatrix,bvolume,path in toRender:
+                if key[0]:
+                    if not setup:
+                        setup = True 
+                        glEnable(GL_BLEND)
+                        glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
+                        glDepthMask( 0 )
+                        glDepthFunc( GL_LEQUAL )
+                        
+                    self.matrix = mvmatrix
+                    glLoadMatrixd( mvmatrix )
+                    try:
+                        path[-1].RenderTransparent( mode = self )
+                        if self.context.DEBUG_FRUSTUM:
+                            bvolume.debugRender( )
+                    except Exception, err:
+                        log.error(
+                            """Failure in %s: %s""",
+                            path[-1].Render,
+                            getTraceback( err ),
+                        )
+        finally:
+            self.transparent = False 
+            if setup:
+                glDisable( GL_BLEND )
+                glDepthMask( 1 )
+                glDepthFunc( GL_LEQUAL )
+                glEnable( GL_DEPTH_TEST )
     
     def selectRender( self, mode, toRender, events ):
         """Render each path to color buffer
