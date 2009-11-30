@@ -164,6 +164,7 @@ class BoundingBox( BoundingVolume ):
     def getPoints(self):
         """Return set of points to test against the frustum"""
         return self.points
+    @staticmethod
     def union( boxes, matrix = None ):
         """Create BoundingBox union for the given bounding boxes
 
@@ -192,29 +193,17 @@ class BoundingBox( BoundingVolume ):
         """
         points = []
         for box in boxes:
-            set = box.getPoints()
-            if len(set) > 0:
-                points.append( set )
+            if box:
+                set = box.getPoints()
+                if len(set) > 0:
+                    points.append( set )
         if not points:
             return BoundingVolume()
         points = tuple(points)
         points = concatenate(points)
         if matrix is not None:
             points = dot( points, matrix )
-        xes,yes,zes = points[:,0],points[:,1],points[:,2]
-        maxX,maxY,maxZ = xes[argmax(xes)],yes[argmax(yes)],zes[argmax(zes)]
-        minX,minY,minZ = xes[argmin(xes)],yes[argmin(yes)],zes[argmin(zes)]
-        size = maxX-minX, maxY-minY, maxZ-minZ
-        result = AABoundingBox(
-            center = (
-                (size[0])*.5+minX,
-                (size[1])*.5+minY,
-                (size[2])*.5+minZ,
-            ),
-            size = size,
-        )
-        return result
-    union = staticmethod(union)
+        return AABoundingBox.fromPoints( points )
     def debugRender( self ):
         """Render this bounding box for debugging mode
 
@@ -346,6 +335,21 @@ class AABoundingBox( BoundingBox ):
         glScale( *self.size )
         glutSolidCube( 1.0 )
         
+    @classmethod
+    def fromPoints( cls, points ):
+        """Calculate from an array of points"""
+        xes,yes,zes = points[:,0],points[:,1],points[:,2]
+        maxX,maxY,maxZ = xes[argmax(xes)],yes[argmax(yes)],zes[argmax(zes)]
+        minX,minY,minZ = xes[argmin(xes)],yes[argmin(yes)],zes[argmin(zes)]
+        size = maxX-minX, maxY-minY, maxZ-minZ
+        return cls(
+            center = (
+                (size[0])/2+minX,
+                (size[1])/2+minY,
+                (size[2])/2+minZ,
+            ),
+            size = size,
+        )
         
 
 def volumeFromCoordinate( node ):
@@ -387,18 +391,7 @@ def volumeFromCoordinate( node ):
     if (not node) or (not len(node.point)):
         volume = BoundingVolume()
     else:
-        xes,yes,zes = node.point[:,0],node.point[:,1],node.point[:,2]
-        maxX,maxY,maxZ = xes[argmax(xes)],yes[argmax(yes)],zes[argmax(zes)]
-        minX,minY,minZ = xes[argmin(xes)],yes[argmin(yes)],zes[argmin(zes)]
-        size = maxX-minX, maxY-minY, maxZ-minZ
-        volume = AABoundingBox(
-            center = (
-                (size[0])/2+minX,
-                (size[1])/2+minY,
-                (size[2])/2+minZ,
-            ),
-            size = size,
-        )
+        volume = AABoundingBox.fromPoints( node.point )
     if node:
         # note that even if not node.point, we
         # are dependent on that NULL node.point value
