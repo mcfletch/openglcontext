@@ -146,7 +146,6 @@ class FlatPass( SGObserver ):
         passCount -- not used, always set to 0 for code that expects
             a passCount to be available.
         transform -- ignored, legacy code only 
-
     """
     passCount = 0
     visible = True 
@@ -347,6 +346,12 @@ class FlatPass( SGObserver ):
         # movement manager that doesn't need select rendering...
         # e.g. for an examine manager there's no reason to do select 
         # render passes...
+        # TODO: do line-box intersection tests for bounding boxes to 
+        # only render the geometry which is under the cursor 
+        # TODO: render to an FBO instead of the back buffer 
+        # (when available)
+        # TODO: render at 1/2 size compared to context to create a 
+        # 2x2 selection square and reduce overhead.
         glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
         glDisable( GL_LIGHTING )
         glEnable( GL_COLOR_MATERIAL )
