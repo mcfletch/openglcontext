@@ -60,111 +60,110 @@ from OpenGLContext.scenegraph import shape, indexedfaceset, material, appearance
 
 
 try:
-	# anyone actually have 1.3???
-	GLU_VERSION_1_3
-	haveNurbsTessellator = 1
+    # anyone actually have 1.3???
+    GLU_VERSION_1_3
+    haveNurbsTessellator = 1
 except NameError:
-	from OpenGL.GLU.EXT import nurbs_tessellator
-	
+    from OpenGL.GLU.EXT import nurbs_tessellator
+    
 
 ##	for key in dir(nurbs_tessellator):
 ##		print key
-	haveNurbsTessellator = 0
-	#__gluInitNurbsTessellatorEXT()
+    haveNurbsTessellator = 0
+    #__gluInitNurbsTessellatorEXT()
 
 class TestContext( BaseContext ):
-	initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
-	def Render( self, mode = 0):
-		BaseContext.Render( self, mode )
+    initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
+    def Render( self, mode = 0):
+        BaseContext.Render( self, mode )
 
-		glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'));
-		glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'));
-		glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'));
+        glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'));
+        glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'));
+        glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'));
 
-		glEnable(GL_AUTO_NORMAL);
-		glEnable(GL_NORMALIZE);
+        glEnable(GL_AUTO_NORMAL);
+        glEnable(GL_NORMALIZE);
 
-		knots= array ([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], "f")
-		glPushMatrix();
-		try:
-			glRotatef(330.0, 1.,0.,0.);
-			glScalef (0.5, 0.5, 0.5);
+        knots= array ([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], "f")
+        glPushMatrix();
+        try:
+            glRotatef(330.0, 1.,0.,0.);
+            glScalef (0.5, 0.5, 0.5);
 
-			gluBeginSurface(self.theNurb);
-			print 'knots', knots
-			print "controlPoints", self.controlPoints
-			controlPoints = self.controlPoints
-			try:
-				gluNurbsSurface(
-					self.theNurb,
-					knots, knots,
-					controlPoints,
-					GL_MAP2_VERTEX_3
-				);
-			finally:
-				gluEndSurface(self.theNurb);
-		finally:
-			glPopMatrix();
+            gluBeginSurface(self.theNurb);
+            print 'knots', knots
+            print "controlPoints", self.controlPoints
+            controlPoints = self.controlPoints
+            try:
+                gluNurbsSurface(
+                    self.theNurb,
+                    knots, knots,
+                    controlPoints,
+                    GL_MAP2_VERTEX_3
+                );
+            finally:
+                gluEndSurface(self.theNurb);
+        finally:
+            glPopMatrix();
 
 
 
-	def OnInit( self ):
-		if not haveNurbsTessellator:
-			try:
-				result = nurbs_tessellator.gluInitNurbsTessellatorEXT()
-			except NameError, err:
-				pass 
-			else:
-				if not result:
-					print 'Could not initialise GLU.EXT.nurbs_tessellator, aborting'
-					sys.exit(1)
+    def OnInit( self ):
+        if not haveNurbsTessellator:
+            try:
+                result = nurbs_tessellator.gluInitNurbsTessellatorEXT()
+            except NameError, err:
+                pass 
+            else:
+                if not result:
+                    print 'Could not initialise GLU.EXT.nurbs_tessellator, aborting'
+                    sys.exit(1)
 
-		self.showPoints = 1
-		self.theNurb = gluNewNurbsRenderer();
-		self.controlPoints = self.buildControlPoints()
-		gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 25.0);
-		gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL);
-		gluNurbsProperty( self.theNurb, GLU_NURBS_MODE_EXT, GLU_NURBS_TESSELLATOR_EXT)
-		
-		gluNurbsCallback( self.theNurb, GLU_NURBS_BEGIN, self.OnBegin )
-		gluNurbsCallback( self.theNurb, GLU_NURBS_VERTEX, self.OnVertex )
-		gluNurbsCallback( self.theNurb, GLU_NURBS_NORMAL, self.OnNormal )
-		gluNurbsCallback( self.theNurb, GLU_NURBS_COLOR, self.OnColor )
-		gluNurbsCallback( self.theNurb, GLU_NURBS_TEXTURE_COORD, self.OnTexCoord )
-		gluNurbsCallback( self.theNurb, GLU_NURBS_END, self.OnEnd )
-	def buildControlPoints( self ):
-		ctlpoints = zeros( (4,4,3), 'f')
-		for u in range( 4 ):
-			for v in range( 4):
-				ctlpoints[u][v][0] = 2.0*(u - 1.5)
-				ctlpoints[u][v][1] = 2.0*(v - 1.5);
-				if (u == 1 or u ==2) and (v == 1 or v == 2):
-					ctlpoints[u][v][2] = 3.0;
-				else:
-					ctlpoints[u][v][2] = -3.0;
-		return ctlpoints
-	def OnVertex( self, vertex, data = None ):
-		print 'vertex', vertex, data
-		glVertex( vertex )
-	def OnBegin( self, type, data = None ):
-		print 'begin', type, data
-		glBegin( type )
-	def OnNormal( self, normal, data = None ):
-		print 'normal', normal, data
-		glNormal3fv( normal )
-	def OnColor( self, color, data = None ):
-		print 'color', color, data
-		glColor( color )
-	def OnTexCoord( self, texcoord, data = None ):
-		print 'texcoord', texcoord, data
-		glTexCoord( texcoord )
-	def OnEnd( self, data = None ):
-		print 'end', data
-		glEnd()
+        self.showPoints = 1
+        self.theNurb = gluNewNurbsRenderer();
+        self.controlPoints = self.buildControlPoints()
+        gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 25.0);
+        gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL);
+        gluNurbsProperty( self.theNurb, GLU_NURBS_MODE_EXT, GLU_NURBS_TESSELLATOR_EXT)
+        
+        gluNurbsCallback( self.theNurb, GLU_NURBS_BEGIN, self.OnBegin )
+        gluNurbsCallback( self.theNurb, GLU_NURBS_VERTEX, self.OnVertex )
+        gluNurbsCallback( self.theNurb, GLU_NURBS_NORMAL, self.OnNormal )
+        gluNurbsCallback( self.theNurb, GLU_NURBS_COLOR, self.OnColor )
+        gluNurbsCallback( self.theNurb, GLU_NURBS_TEXTURE_COORD, self.OnTexCoord )
+        gluNurbsCallback( self.theNurb, GLU_NURBS_END, self.OnEnd )
+    def buildControlPoints( self ):
+        ctlpoints = zeros( (4,4,3), 'f')
+        for u in range( 4 ):
+            for v in range( 4):
+                ctlpoints[u][v][0] = 2.0*(u - 1.5)
+                ctlpoints[u][v][1] = 2.0*(v - 1.5);
+                if (u == 1 or u ==2) and (v == 1 or v == 2):
+                    ctlpoints[u][v][2] = 3.0;
+                else:
+                    ctlpoints[u][v][2] = -3.0;
+        return ctlpoints
+    def OnVertex( self, vertex, data = None ):
+        print 'vertex', vertex, data
+        glVertex( vertex )
+    def OnBegin( self, type, data = None ):
+        print 'begin', type, data
+        glBegin( type )
+    def OnNormal( self, normal, data = None ):
+        print 'normal', normal, data
+        glNormal3fv( normal )
+    def OnColor( self, color, data = None ):
+        print 'color', color, data
+        glColor( color )
+    def OnTexCoord( self, texcoord, data = None ):
+        print 'texcoord', texcoord, data
+        glTexCoord( texcoord )
+    def OnEnd( self, data = None ):
+        print 'end', data
+        glEnd()
 
 
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
-
+    TestContext.ContextMainLoop()
 
 

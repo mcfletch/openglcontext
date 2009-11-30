@@ -8,10 +8,10 @@ sphere()
 ##scene._context.loadUrl( os.path.join(os.path.dirname(browser.__file__),'default_world.wrl') )
 
 for x in range(300,600):
-	scene.width = x
-	time.sleep( .01 )
+    scene.width = x
+    time.sleep( .01 )
 for y in range(300,600):
-	scene.height = y
-	time.sleep( .01 )
+    scene.height = y
+    time.sleep( .01 )
 
 scene.visible = 0

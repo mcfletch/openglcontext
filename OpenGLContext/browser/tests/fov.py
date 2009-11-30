@@ -8,8 +8,8 @@ sphere()
 
 
 for x in arange(0.01,3.14159, 0.01):
-	scene.fov = x
-	time.sleep( .001 )
+    scene.fov = x
+    time.sleep( .001 )
 
 scene.visible = 0
 print 'exit'

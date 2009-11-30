@@ -9,7 +9,7 @@ import _bitmap_font, _fontstyles
 from OpenGLContext.scenegraph.text import wglfont
 
 class TestContext( _bitmap_font.TestContext ):
-	
-	testingClass = wglfont.WGLBitmapFont
+    
+    testingClass = wglfont.WGLBitmapFont
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop()

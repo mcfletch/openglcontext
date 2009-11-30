@@ -17,13 +17,13 @@ print """Second widow created"""
 
 print """Doing animation in the second window"""
 for x in range(-100,100):
-	second.autocenter = 0
-	second.center = (x/20.0,0,0)
-	second.range = x/5.0
-	scene.autocenter = 0
-	scene.center = (0,x/20.0,0)
-	scene.range = x/5.0
-	time.sleep( .01 )
+    second.autocenter = 0
+    second.center = (x/20.0,0,0)
+    second.range = x/5.0
+    scene.autocenter = 0
+    scene.center = (0,x/20.0,0)
+    scene.range = x/5.0
+    time.sleep( .01 )
 
 scene.visible = 0
 second.visible = 0

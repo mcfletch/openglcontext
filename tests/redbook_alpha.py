@@ -54,58 +54,57 @@ import string
 
 
 class TestContext( BaseContext ):
-	"""Red Book alpha.c
-	Demonstrates the effects of alpha blending
-	Copyright (c) 1993-1999, Silicon Graphics, Inc. ALL RIGHTS RESERVED 
-	"""
-	initialPosition = (0,0,2)
-	def OnInit( self ):
-		self.leftFirst = 1
-		self.addEventHandler( 'keypress', name='f', function = self.OnSwitch )
-		print 'Press "f" to switch polygon order'
-	def OnSwitch( self, event ):
-		"""Switch order of triangles"""
-		self.leftFirst = not self.leftFirst
-		self.triggerRedraw(1)
-	def SetupDisplay( self, mode = None ):
-		"""Setup display for display for the given mode"""
-		### NOTE:
-		### required because the context enables by default!
-		glDisable(GL_DEPTH_TEST);
-	def Render( self, mode = 0):
-		BaseContext.Render( self, mode )
-		glEnable (GL_BLEND);
-		glDisable( GL_LIGHTING )
-		glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glShadeModel (GL_FLAT);
+    """Red Book alpha.c
+    Demonstrates the effects of alpha blending
+    Copyright (c) 1993-1999, Silicon Graphics, Inc. ALL RIGHTS RESERVED 
+    """
+    initialPosition = (0,0,2)
+    def OnInit( self ):
+        self.leftFirst = 1
+        self.addEventHandler( 'keypress', name='f', function = self.OnSwitch )
+        print 'Press "f" to switch polygon order'
+    def OnSwitch( self, event ):
+        """Switch order of triangles"""
+        self.leftFirst = not self.leftFirst
+        self.triggerRedraw(1)
+    def SetupDisplay( self, mode = None ):
+        """Setup display for display for the given mode"""
+        ### NOTE:
+        ### required because the context enables by default!
+        glDisable(GL_DEPTH_TEST);
+    def Render( self, mode = 0):
+        BaseContext.Render( self, mode )
+        glEnable (GL_BLEND);
+        glDisable( GL_LIGHTING )
+        glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glShadeModel (GL_FLAT);
 
-		if self.leftFirst:
-			self.left();
-			self.right();
-		else:
-			self.right();
-			self.left();
+        if self.leftFirst:
+            self.left();
+            self.right();
+        else:
+            self.right();
+            self.left();
 
 
-	def left( self ):
-		"""draw yellow triangle on LHS of screen"""
-		glBegin (GL_TRIANGLES);
-		glColor4f(1.0, 1.0, 0.0, 0.5);
-		glVertex3f(0.1, 0.9, 0.0);
-		glVertex3f(0.1, 0.1, 0.0);
-		glVertex3f(0.7, 0.5, 0.0);
-		glEnd();
-	def right( self ):
-		"""draw cyan triangle on RHS of screen"""
-		glBegin (GL_TRIANGLES);
-		glColor4f(0.0, 1.0, 1.0, 0.5);
-		glVertex3f(0.9, 0.9, 0.0); 
-		glVertex3f(0.3, 0.5, 0.0); 
-		glVertex3f(0.9, 0.1, 0.0); 
-		glEnd();
+    def left( self ):
+        """draw yellow triangle on LHS of screen"""
+        glBegin (GL_TRIANGLES);
+        glColor4f(1.0, 1.0, 0.0, 0.5);
+        glVertex3f(0.1, 0.9, 0.0);
+        glVertex3f(0.1, 0.1, 0.0);
+        glVertex3f(0.7, 0.5, 0.0);
+        glEnd();
+    def right( self ):
+        """draw cyan triangle on RHS of screen"""
+        glBegin (GL_TRIANGLES);
+        glColor4f(0.0, 1.0, 1.0, 0.5);
+        glVertex3f(0.9, 0.9, 0.0); 
+        glVertex3f(0.3, 0.5, 0.0); 
+        glVertex3f(0.9, 0.1, 0.0); 
+        glEnd();
 
 
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
-
+    TestContext.ContextMainLoop()
 

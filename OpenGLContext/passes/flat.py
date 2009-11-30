@@ -428,4 +428,3 @@ class FlatPass( SGObserver ):
     def getModelView( self ):
         """Retrieve the base model-view matrix for the rendering pass"""
         return self.modelView
-

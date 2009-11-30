@@ -14,92 +14,92 @@ import string, time, StringIO
 from OpenGLContext.scenegraph import basenodes
 
 def loadData( data ):
-	file = StringIO.StringIO( data )
-	points = []
-	indices = []
-	readingPoints = 1
-	while readingPoints:
-		line = file.readline().strip().split()
-		if len(line) > 1:
-			points.append( map( float, line ))
-		else:
-			readingPoints = 0
-	readingIndices = 1
-	while readingIndices:
-		line = file.readline().strip().split()
-		if len(line) > 1:
-			indices.extend( map( int, line ))
-		else:
-			readingIndices = 0
+    file = StringIO.StringIO( data )
+    points = []
+    indices = []
+    readingPoints = 1
+    while readingPoints:
+        line = file.readline().strip().split()
+        if len(line) > 1:
+            points.append( map( float, line ))
+        else:
+            readingPoints = 0
+    readingIndices = 1
+    while readingIndices:
+        line = file.readline().strip().split()
+        if len(line) > 1:
+            indices.extend( map( int, line ))
+        else:
+            readingIndices = 0
 ##	print 'got %s point and %s indices'% ( len(points), len(indices))
-	return points, indices
-	
+    return points, indices
+    
 
 class TestContext( BaseContext ):
-	initialPosition = (-5,0,5) # set initial camera position, tutorial does the re-positioning
-	def OnInit( self ):
-		"""Load the image on initial load of the application"""
-		print """Should see two geodesic spheres over black background
-		
-	Sphere to left should be lit with normal-per-face,
-	giving each face a hard-line edge with adjacent faces.
-	
-	Sphere to the right should be lit with normal-per-vertex
-	which should make the lines between faces fuzzier."""
-		points, indices = loadData( ICOSDATA )
+    initialPosition = (-5,0,5) # set initial camera position, tutorial does the re-positioning
+    def OnInit( self ):
+        """Load the image on initial load of the application"""
+        print """Should see two geodesic spheres over black background
+        
+    Sphere to left should be lit with normal-per-face,
+    giving each face a hard-line edge with adjacent faces.
+    
+    Sphere to the right should be lit with normal-per-vertex
+    which should make the lines between faces fuzzier."""
+        points, indices = loadData( ICOSDATA )
 ##		light = basenodes.PointLight(
 ##			location = (2,10,10)
 ##		)
-		self.sg = basenodes.sceneGraph(
+        self.sg = basenodes.sceneGraph(
 ##			lights = [
 ##				light
 ##			],
-			children = [
+            children = [
 ##				light,
-				basenodes.Transform(
-					translation = (-1.5,0,0),
-					children = [
-						basenodes.Shape(
-							appearance = basenodes.Appearance(
-								material = basenodes.Material(
-									diffuseColor =(1,0,0)
-								)
-							),
-							geometry = basenodes.IndexedFaceSet(
-								coord = basenodes.Coordinate (
-									point = points,
-								),
-								coordIndex = indices,
-							),
-						),
-					],
-				),
-				basenodes.Transform(
-					translation = (1.5,0,0),
-					children = [
-						basenodes.Shape(
-							appearance = basenodes.Appearance(
-								material = basenodes.Material(
-									diffuseColor =(1,0,0)
-								)
-							),
-							geometry = basenodes.IndexedFaceSet(
-								coord = basenodes.Coordinate (
-									point = points,
-								),
-								coordIndex = indices,
-								creaseAngle = 3.14,
-								normalPerVertex = 1,
-							),
-						),
-					],
-				),
-			]
-		)
+                basenodes.Transform(
+                    translation = (-1.5,0,0),
+                    children = [
+                        basenodes.Shape(
+                            appearance = basenodes.Appearance(
+                                material = basenodes.Material(
+                                    diffuseColor =(1,0,0)
+                                )
+                            ),
+                            geometry = basenodes.IndexedFaceSet(
+                                coord = basenodes.Coordinate (
+                                    point = points,
+                                ),
+                                coordIndex = indices,
+                            ),
+                        ),
+                    ],
+                ),
+                basenodes.Transform(
+                    translation = (1.5,0,0),
+                    children = [
+                        basenodes.Shape(
+                            appearance = basenodes.Appearance(
+                                material = basenodes.Material(
+                                    diffuseColor =(1,0,0)
+                                )
+                            ),
+                            geometry = basenodes.IndexedFaceSet(
+                                coord = basenodes.Coordinate (
+                                    point = points,
+                                ),
+                                coordIndex = indices,
+                                creaseAngle = 3.14,
+                                normalPerVertex = 1,
+                            ),
+                        ),
+                    ],
+                ),
+            ]
+        )
 ##	def Background( self, mode = 0):
 ##		glClearColor( 0,0,0,0)
 ##		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
-				
+                
 
 TESTDATA = """-1 0 0
 1 0 0
@@ -235,7 +235,6 @@ ICOSDATA = """-4.769095 1.349644 0.011604
 
 
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
-
+    TestContext.ContextMainLoop()
 
 

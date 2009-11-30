@@ -98,4 +98,3 @@ class TestContext( BaseContext ):
 if __name__ == "__main__":
     print 'Press "s" to save the buffer to the file test.jpg'
     TestContext.ContextMainLoop()
-

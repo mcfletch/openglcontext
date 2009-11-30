@@ -8,11 +8,11 @@ in the setup.py script (or in the setup.py script of another package).
 
 You can create a new Node-type by registering the class via setuptools
 
-	entry_points = {
-		'OpenGLContext.scenegraph.nodes': [
-			'NodeName = full.path.to.the.Class',
-		],
-	}
+    entry_points = {
+        'OpenGLContext.scenegraph.nodes': [
+            'NodeName = full.path.to.the.Class',
+        ],
+    }
 
 and installing the .egg.
 
@@ -24,21 +24,21 @@ __all__ = []
 PROTOTYPES = {}
 
 def _load( ):
-	"""Load the registered node-types from package resource declarations"""
-	from OpenGLContext import plugins
-	from OpenGLContext.debug import logs
-	entrypoints = plugins.Node.all()
-	for entrypoint in entrypoints:
-		name = entrypoint.name 
-		try:
-			classObject = entrypoint.load()
-		except (ImportError,AttributeError), err:
-			logs.context_log.warn( """Unable to load node implementation for %s: %s""", name, err )
-		else:
-			globals()[ name ] = classObject
-			PROTOTYPES[ name ] = classObject
-			__all__.append( name )
-			logs.context_log.debug( """Loaded node implementation for %s: %s""", name, classObject )
+    """Load the registered node-types from package resource declarations"""
+    from OpenGLContext import plugins
+    from OpenGLContext.debug import logs
+    entrypoints = plugins.Node.all()
+    for entrypoint in entrypoints:
+        name = entrypoint.name 
+        try:
+            classObject = entrypoint.load()
+        except (ImportError,AttributeError), err:
+            logs.context_log.warn( """Unable to load node implementation for %s: %s""", name, err )
+        else:
+            globals()[ name ] = classObject
+            PROTOTYPES[ name ] = classObject
+            __all__.append( name )
+            logs.context_log.debug( """Loaded node implementation for %s: %s""", name, classObject )
 
 _load()
 del _load

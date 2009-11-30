@@ -1,14 +1,14 @@
 """Attempt to determine the current user's "system" directories"""
 try:
 ##	raise ImportError
-	from win32com.shell import shell, shellcon
+    from win32com.shell import shell, shellcon
 except ImportError:
-	shell = None
+    shell = None
 try:
 ##	raise ImportError
-	import _winreg
+    import _winreg
 except ImportError:
-	_winreg = None
+    _winreg = None
 import os, sys
 
 
@@ -17,60 +17,60 @@ r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Fo
 r"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
 
 def _winreg_getShellFolder( name ):
-	"""Get a shell folder by string name from the registry"""
-	k = _winreg.OpenKey(
-		_winreg.HKEY_CURRENT_USER,
-		r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
-	)
-	try:
-		# should check that it's valid? How?
-		return _winreg.QueryValueEx( k, name )[0]
-	finally:
-		_winreg.CloseKey( k )
+    """Get a shell folder by string name from the registry"""
+    k = _winreg.OpenKey(
+        _winreg.HKEY_CURRENT_USER,
+        r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
+    )
+    try:
+        # should check that it's valid? How?
+        return _winreg.QueryValueEx( k, name )[0]
+    finally:
+        _winreg.CloseKey( k )
 def shell_getShellFolder( type ):
-	"""Get a shell folder by shell-constant from COM interface"""
-	return shell.SHGetFolderPath(
-		0,# null hwnd
-		type, # the (roaming) appdata path
-		0,# null access token (no impersonation)
-		0 # want current value, shellcon.SHGFP_TYPE_CURRENT isn't available, this seems to work
-	)
-	
-	
+    """Get a shell folder by shell-constant from COM interface"""
+    return shell.SHGetFolderPath(
+        0,# null hwnd
+        type, # the (roaming) appdata path
+        0,# null access token (no impersonation)
+        0 # want current value, shellcon.SHGFP_TYPE_CURRENT isn't available, this seems to work
+    )
+    
+    
 
 def appdatadirectory(  ):
-	"""Attempt to retrieve the current user's app-data directory
+    """Attempt to retrieve the current user's app-data directory
 
-	This is the location where application-specific
-	files should be stored.  On *nix systems, this will
-	be the HOME directory.  On Win32 systems, it will be
-	the "Application Data" directory.  Note that for
-	Win32 systems it is normal to create a sub-directory
-	for storing data in the Application Data directory.
+    This is the location where application-specific
+    files should be stored.  On *nix systems, this will
+    be the HOME directory.  On Win32 systems, it will be
+    the "Application Data" directory.  Note that for
+    Win32 systems it is normal to create a sub-directory
+    for storing data in the Application Data directory.
 
-	XXX should os.environ['home'] override Win32 queries or
-		vice-versa?
-	"""
-	if shell:
-		# on Win32 and have Win32all extensions, best-case
-		return shell_getShellFolder(shellcon.CSIDL_APPDATA)
-	if _winreg:
-		# on Win32, but no Win32 shell com available, this uses
-		# a direct registry access, likely to fail on Win98/Me
-		return _winreg_getShellFolder( 'AppData' )
-	# okay, what if for some reason _winreg is missing? would we want to allow ctypes?
-	## default case, look for name in environ...
-	for name in ['appdata', 'home']:
-		if name in os.environ:
-			return os.environ[name]
-	# well, someone's being naughty, see if we can get ~ to expand to a directory...
-	possible = os.path.abspath(os.path.expanduser( '~/' ))
-	if os.path.exists( possible ):
-		return possible
-	raise OSError( """Unable to determine user's application-data directory""" )
+    XXX should os.environ['home'] override Win32 queries or
+        vice-versa?
+    """
+    if shell:
+        # on Win32 and have Win32all extensions, best-case
+        return shell_getShellFolder(shellcon.CSIDL_APPDATA)
+    if _winreg:
+        # on Win32, but no Win32 shell com available, this uses
+        # a direct registry access, likely to fail on Win98/Me
+        return _winreg_getShellFolder( 'AppData' )
+    # okay, what if for some reason _winreg is missing? would we want to allow ctypes?
+    ## default case, look for name in environ...
+    for name in ['appdata', 'home']:
+        if name in os.environ:
+            return os.environ[name]
+    # well, someone's being naughty, see if we can get ~ to expand to a directory...
+    possible = os.path.abspath(os.path.expanduser( '~/' ))
+    if os.path.exists( possible ):
+        return possible
+    raise OSError( """Unable to determine user's application-data directory""" )
 
 
 
 if __name__ == "__main__":
-	print 'AppData', appdatadirectory()
-	
+    print 'AppData', appdatadirectory()
+    

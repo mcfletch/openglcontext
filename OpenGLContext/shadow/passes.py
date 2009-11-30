@@ -401,4 +401,3 @@ defaultRenderPasses = ShadowPassSet(
     ]
 
 )
-

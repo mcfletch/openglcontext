@@ -7,8 +7,8 @@ from OpenGLContext.scenegraph import interpolators
 import math
 
 class FPS( smooth.Smooth ):
-	"""FPS-style movement
-	
-		Mouse-captured orientations.
-		Jump
-	"""
+    """FPS-style movement
+    
+        Mouse-captured orientations.
+        Jump
+    """

@@ -14,11 +14,11 @@ from OpenGL.GL import *
 '''Now we sub-class the BaseContext class we got in stage one with our own "TestContext" class.  In this very simple example this stage is not actually necessary, as we have no customisations of the class that we want to do, but it is the "normal" approach to using OpenGLContext Contexts.'''
 
 class TestContext( BaseContext ):
-	"""A subclass of the (dynamically determined) BaseContext,
-	by overriding various methods, we could customize the
-	functionality of this context, but the tutorial doesn't
-	ask us to do this."""
+    """A subclass of the (dynamically determined) BaseContext,
+    by overriding various methods, we could customize the
+    functionality of this context, but the tutorial doesn't
+    ask us to do this."""
 '''And finally, we run our Context's utility "ContextMainLoop", which starts whatever GUI event loop is appropriate for the type of context we have.'''
 
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop()

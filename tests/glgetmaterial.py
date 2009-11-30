@@ -8,19 +8,18 @@ import string
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
-	def Render( self, mode = 0):
-		BaseContext.Render( self, mode )
-		for param, name in parameters:
-			print name, glGetMaterialfv(GL_FRONT, param )
+    def Render( self, mode = 0):
+        BaseContext.Render( self, mode )
+        for param, name in parameters:
+            print name, glGetMaterialfv(GL_FRONT, param )
 parameters = [
-	(GL_AMBIENT, "GL_AMBIENT"),
-	(GL_DIFFUSE, "GL_DIFFUSE"),
-	(GL_SPECULAR, "GL_SPECULAR"),
-	(GL_EMISSION, "GL_EMISSION"),
-	(GL_SHININESS, "GL_SHININESS"),
-	(GL_COLOR_INDEXES, "GL_COLOR_INDEXES"),
+    (GL_AMBIENT, "GL_AMBIENT"),
+    (GL_DIFFUSE, "GL_DIFFUSE"),
+    (GL_SPECULAR, "GL_SPECULAR"),
+    (GL_EMISSION, "GL_EMISSION"),
+    (GL_SHININESS, "GL_SHININESS"),
+    (GL_COLOR_INDEXES, "GL_COLOR_INDEXES"),
 ]
-		
+        
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
-
+    TestContext.ContextMainLoop()

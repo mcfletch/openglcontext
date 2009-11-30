@@ -11,6 +11,6 @@ visual.select( second )
 assert visual.scene is second, """select didn't set scene global in visual module"""
 assert len(visual.scenes) == 2, """Didn't get both scenes added to list of scenes %s"""%( visual.scenes,)
 for scene in visual.scenes[:]:
-	print 'trying to close', scene
-	scene.visible = 0
+    print 'trying to close', scene
+    scene.visible = 0
 print 'success'

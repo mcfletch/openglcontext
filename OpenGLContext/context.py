@@ -968,4 +968,3 @@ def getCurrentContext( ):
     mode/pass's context attribute instead.
     """
     return Context.currentContext
-

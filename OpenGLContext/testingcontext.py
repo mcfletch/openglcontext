@@ -34,4 +34,3 @@ def getInteractive( preference= None ):
     return context.Context.getContextType( 
         preference, plugins.InteractiveContext 
     )
-

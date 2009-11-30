@@ -14,59 +14,59 @@ import string, time, StringIO
 from OpenGLContext.scenegraph import basenodes
 
 def loadData( data ):
-	file = StringIO.StringIO( data )
-	points = []
-	indices = []
-	readingPoints = 1
-	while readingPoints:
-		line = file.readline().strip().split()
-		if len(line) > 1:
-			points.append( map( float, line ))
-		else:
-			readingPoints = 0
-	readingIndices = 1
-	while readingIndices:
-		line = file.readline().strip().split()
-		if len(line) > 1:
-			indices.extend( map( int, line ))
-		else:
-			readingIndices = 0
-	print 'got %s point and %s indices'% ( len(points), len(indices))
-	return points, indices
-			
+    file = StringIO.StringIO( data )
+    points = []
+    indices = []
+    readingPoints = 1
+    while readingPoints:
+        line = file.readline().strip().split()
+        if len(line) > 1:
+            points.append( map( float, line ))
+        else:
+            readingPoints = 0
+    readingIndices = 1
+    while readingIndices:
+        line = file.readline().strip().split()
+        if len(line) > 1:
+            indices.extend( map( int, line ))
+        else:
+            readingIndices = 0
+    print 'got %s point and %s indices'% ( len(points), len(indices))
+    return points, indices
+            
 
 class TestContext( BaseContext ):
-	initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
-	def OnInit( self ):
-		"""Load the image on initial load of the application"""
-		print """Should see 6-sided polygon with normal-per-vertex smoothing
-	This polygon is produced using the GLU tesselator
-	from a simple linear progression of indices across
-	the 6 points of the polygon."""
-		points, indices = loadData( TESTDATA )
-		self.sg = basenodes.sceneGraph(
-			children = [
-				basenodes.Transform(
-					children = [
-						basenodes.Shape(
-							appearance = basenodes.Appearance(
-								material = basenodes.Material(
-									diffuseColor =(1,0,0)
-								)
-							),
-							geometry = basenodes.IndexedFaceSet(
-								coord = basenodes.Coordinate (
-									point = points,
-								),
-								coordIndex = indices,
-								creaseAngle = 3.14,
-								normalPerVertex = 1,
-							),
-						),
-					],
-				),
-			]
-		)
+    initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
+    def OnInit( self ):
+        """Load the image on initial load of the application"""
+        print """Should see 6-sided polygon with normal-per-vertex smoothing
+    This polygon is produced using the GLU tesselator
+    from a simple linear progression of indices across
+    the 6 points of the polygon."""
+        points, indices = loadData( TESTDATA )
+        self.sg = basenodes.sceneGraph(
+            children = [
+                basenodes.Transform(
+                    children = [
+                        basenodes.Shape(
+                            appearance = basenodes.Appearance(
+                                material = basenodes.Material(
+                                    diffuseColor =(1,0,0)
+                                )
+                            ),
+                            geometry = basenodes.IndexedFaceSet(
+                                coord = basenodes.Coordinate (
+                                    point = points,
+                                ),
+                                coordIndex = indices,
+                                creaseAngle = 3.14,
+                                normalPerVertex = 1,
+                            ),
+                        ),
+                    ],
+                ),
+            ]
+        )
 
 
 TESTDATA = """-1 0 0
@@ -88,7 +88,6 @@ TESTDATA = """-1 0 0
 ##
 
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
-
+    TestContext.ContextMainLoop()
 
 

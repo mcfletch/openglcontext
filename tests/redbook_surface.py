@@ -55,62 +55,61 @@ import string, time, StringIO
 from OpenGLContext.scenegraph import shape, indexedfaceset, material, appearance, light, transform
 
 class TestContext( BaseContext ):
-	initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
-	def Render( self, mode = 0):
-		BaseContext.Render( self, mode )
+    initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
+    def Render( self, mode = 0):
+        BaseContext.Render( self, mode )
 
-		glClearColor (0.0, 0.0, 0.0, 0.0);
-		glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'));
-		glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'));
-		glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'));
+        glClearColor (0.0, 0.0, 0.0, 0.0);
+        glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'));
+        glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'));
+        glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'));
 
-		glEnable(GL_AUTO_NORMAL);
-		glEnable(GL_NORMALIZE);
+        glEnable(GL_AUTO_NORMAL);
+        glEnable(GL_NORMALIZE);
 
-		knots= array ([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], "f")
-		glPushMatrix();
-		try:
-			glRotatef(330.0, 1.,0.,0.);
-			glScalef (0.5, 0.5, 0.5);
+        knots= array ([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], "f")
+        glPushMatrix();
+        try:
+            glRotatef(330.0, 1.,0.,0.);
+            glScalef (0.5, 0.5, 0.5);
 
-			gluBeginSurface(self.theNurb);
-			controlPoints = self.controlPoints
-			try:
-				gluNurbsSurface(
-					self.theNurb,
-					knots, knots,
-					controlPoints,
-					GL_MAP2_VERTEX_3
-				);
-			finally:
-				gluEndSurface(self.theNurb);
-		finally:
-			glPopMatrix();
+            gluBeginSurface(self.theNurb);
+            controlPoints = self.controlPoints
+            try:
+                gluNurbsSurface(
+                    self.theNurb,
+                    knots, knots,
+                    controlPoints,
+                    GL_MAP2_VERTEX_3
+                );
+            finally:
+                gluEndSurface(self.theNurb);
+        finally:
+            glPopMatrix();
 
 
 
-	def OnInit( self ):
-		self.showPoints = 0
-		self.theNurb = gluNewNurbsRenderer();
-		self.controlPoints = self.buildControlPoints()
-		gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 25.0);
-		gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL);
-	def buildControlPoints( self ):
-		ctlpoints = zeros( (4,4,3), 'f')
-		for u in range( 4 ):
-			for v in range( 4):
-				ctlpoints[u][v][0] = 2.0*(u - 1.5)
-				ctlpoints[u][v][1] = 2.0*(v - 1.5);
-				if (u == 1 or u ==2) and (v == 1 or v == 2):
-					ctlpoints[u][v][2] = 3.0;
-				else:
-					ctlpoints[u][v][2] = -3.0;
-		return ctlpoints
+    def OnInit( self ):
+        self.showPoints = 0
+        self.theNurb = gluNewNurbsRenderer();
+        self.controlPoints = self.buildControlPoints()
+        gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 25.0);
+        gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL);
+    def buildControlPoints( self ):
+        ctlpoints = zeros( (4,4,3), 'f')
+        for u in range( 4 ):
+            for v in range( 4):
+                ctlpoints[u][v][0] = 2.0*(u - 1.5)
+                ctlpoints[u][v][1] = 2.0*(v - 1.5);
+                if (u == 1 or u ==2) and (v == 1 or v == 2):
+                    ctlpoints[u][v][2] = 3.0;
+                else:
+                    ctlpoints[u][v][2] = -3.0;
+        return ctlpoints
 
 
 
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
-
+    TestContext.ContextMainLoop()
 
 

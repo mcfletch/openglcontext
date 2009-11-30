@@ -240,4 +240,3 @@ def xytoa( x,y ):
         return atan( float(y)/x)
     else:
         return pi-(atan( float(y)/x))
-

@@ -12,27 +12,27 @@ import string, time, StringIO
 from OpenGLContext.scenegraph.basenodes import *
 
 def loadData( data ):
-	file = StringIO.StringIO( data )
-	points = []
-	indices = []
-	readingPoints = 1
-	while readingPoints:
-		line = file.readline().strip().split()
-		if len(line) > 1:
-			points.append( map( float, line ))
-		else:
-			readingPoints = 0
-	readingIndices = 1
-	while readingIndices:
-		line = file.readline().strip().split()
-		if len(line) > 1:
-			indices.extend( map( int, line ))
-		else:
-			readingIndices = 0
-	return points, indices
-			
+    file = StringIO.StringIO( data )
+    points = []
+    indices = []
+    readingPoints = 1
+    while readingPoints:
+        line = file.readline().strip().split()
+        if len(line) > 1:
+            points.append( map( float, line ))
+        else:
+            readingPoints = 0
+    readingIndices = 1
+    while readingIndices:
+        line = file.readline().strip().split()
+        if len(line) > 1:
+            indices.extend( map( int, line ))
+        else:
+            readingIndices = 0
+    return points, indices
+            
 class TestContext( BaseContext ):
-	initialPosition = (-5,0,5) # set initial camera position, tutorial does the re-positioning
+    initialPosition = (-5,0,5) # set initial camera position, tutorial does the re-positioning
 ##	USE_FRUSTUM_CULLING = 0
 #	def Render( self, mode = 0):
 #		BaseContext.Render( self, mode )
@@ -42,69 +42,69 @@ class TestContext( BaseContext ):
 #			glColor( .5,.5,.5, 1)
 #			drawcube.drawCube()
 #			glDisable(GL_TEXTURE_2D)
-		
-	def OnInit( self ):
-		"""Load the image on initial load of the application"""
-		points, indices = loadData( ICOSDATA )
-		self.shape = Shape(
-			appearance = Appearance(
-				material = Material(
-					diffuseColor =(.5,.5,.5),
-					transparency = .5,
-				)
-			),
-			geometry = IndexedFaceSet(
-				coord = Coordinate (
-					point = points
-				),
-				coordIndex = indices,
-				solid = 0,
-			),
-		)
-		self.sg = sceneGraph(
-			children = [
-				self.shape,
-				Transform( 
-					translation = (-5,0,-5), 
-					children=[
-						Shape( 
-							geometry=Teapot(),
-							appearance=Appearance( material=Material()),
-						),
-					],
-				),
-				Transform( 
-					translation = (-4,0,-4), 
-					children=[
-						Shape( 
-							geometry=Teapot(),
-							appearance=Appearance( 
-								material=Material(),
-								texture = ImageTexture(
-									url = 'pimbackground_LF.jpg',
-								),
-							),
-						),
-					],
-				),
-				Transform( 
-					translation = (-6.001,0,-4), 
-					children=[
-						Shape( 
-							geometry=Teapot(),
-							appearance=Appearance( 
-								material=Material(
-									transparency = .5,
-								),
-								texture = ImageTexture(
-									url = 'pimbackground_LF.jpg',
-								),
-							),
-						),
-					],
-				),
-			],
-		)
+        
+    def OnInit( self ):
+        """Load the image on initial load of the application"""
+        points, indices = loadData( ICOSDATA )
+        self.shape = Shape(
+            appearance = Appearance(
+                material = Material(
+                    diffuseColor =(.5,.5,.5),
+                    transparency = .5,
+                )
+            ),
+            geometry = IndexedFaceSet(
+                coord = Coordinate (
+                    point = points
+                ),
+                coordIndex = indices,
+                solid = 0,
+            ),
+        )
+        self.sg = sceneGraph(
+            children = [
+                self.shape,
+                Transform( 
+                    translation = (-5,0,-5), 
+                    children=[
+                        Shape( 
+                            geometry=Teapot(),
+                            appearance=Appearance( material=Material()),
+                        ),
+                    ],
+                ),
+                Transform( 
+                    translation = (-4,0,-4), 
+                    children=[
+                        Shape( 
+                            geometry=Teapot(),
+                            appearance=Appearance( 
+                                material=Material(),
+                                texture = ImageTexture(
+                                    url = 'pimbackground_LF.jpg',
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
+                Transform( 
+                    translation = (-6.001,0,-4), 
+                    children=[
+                        Shape( 
+                            geometry=Teapot(),
+                            appearance=Appearance( 
+                                material=Material(
+                                    transparency = .5,
+                                ),
+                                texture = ImageTexture(
+                                    url = 'pimbackground_LF.jpg',
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
+            ],
+        )
 
 TESTDATA = """-1 0 0
 1 0 0
@@ -240,7 +240,6 @@ ICOSDATA = """-4.769095 1.349644 0.011604
 
 
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
-
+    TestContext.ContextMainLoop()
 
 

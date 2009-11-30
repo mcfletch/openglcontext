@@ -7,7 +7,7 @@ from OpenGLContext import vrmlcontext
 import os, glob
 
 class VRMLContext(
-	vrmlcontext.VRMLContext,
-	wxinteractivecontext.wxInteractiveContext
+    vrmlcontext.VRMLContext,
+    wxinteractivecontext.wxInteractiveContext
 ):
-	"""GLUT-specific VRML97-aware Testing Context"""
+    """GLUT-specific VRML97-aware Testing Context"""

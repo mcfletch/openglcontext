@@ -14,6 +14,6 @@ classes merely have the node-specific customisations needed to
 support their individualised operation.
 
 References:
-	VRML 97 International Standard
-	http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/
+    VRML 97 International Standard
+    http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/
 '''
