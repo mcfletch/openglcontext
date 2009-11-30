@@ -622,6 +622,8 @@ class Context(object):
             glViewport( 0,0, int(width), int(height) )
         finally:
             self.unsetCurrent()
+        if self.contextDefinition:
+            self.contextDefinition.size = width,height
     def getViewPort( self ):
         """Method to retrieve the current dimensions of the context
         
