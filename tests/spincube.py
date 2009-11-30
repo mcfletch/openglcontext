@@ -4,6 +4,8 @@
 Well, okay, inspired is a bit much for such a tiny piece of
 code :) .
 """
+#import OpenGL 
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
