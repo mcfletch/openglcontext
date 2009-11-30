@@ -67,6 +67,7 @@ class TestContext( BaseContext ):
                                 size = 3,
                                 dataType = 'FLOAT',
                                 buffer = buffer,
+                                isCoord=True,
                             ),
                             ShaderAttribute(
                                 name = 'Color',
