@@ -18,10 +18,9 @@ Notes regarding general implementation:
     The first attempt to do that filtering will recursively
     generate and cache the bounding volumes.
 
-    Setting the module-global value DEBUG_RENDER_VOLUMES while
-    not running in Python's -O (optimised) mode will draw all
-    Axis-aligned bounding boxes (the normal/default volumes)
-    as red line-sets.
+    Setting your contextDefinition's debugBBox flag to True 
+    will cause rendering of the bounding boxes when using 
+    the Flat renderer.
 """
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
@@ -46,8 +45,6 @@ try:
     from vrml.arrays import frustcullaccel
 except ImportError:
     frustcullaccel = None
-
-DEBUG_RENDER_VOLUMES = 0
 
 class UnboundedObject( exceptions.ValueError ):
     """Error raised when an object does not support bounding volumes"""
@@ -113,9 +110,6 @@ class BoundingBox( BoundingVolume ):
                 matrix = frustum.viewingMatrix( )
             points = self.getPoints()
             points = dot( points, matrix )
-            if __debug__:
-                if DEBUG_RENDER_VOLUMES:
-                    self.debugRender()
             culled, planeIndex = frustcullaccel.planeCull( frust.planes, points )
             return not culled
     else:
@@ -138,9 +132,6 @@ class BoundingBox( BoundingVolume ):
             points = self.getPoints()
             points = dot( points, matrix )
             points[:,-1] = 1.0
-            if __debug__:
-                if DEBUG_RENDER_VOLUMES:
-                    self.debugRender()
             if frust:
                 for plane in frust.planes:
                     foundInFront = 0
@@ -306,8 +297,6 @@ class AABoundingBox( BoundingBox ):
             # This code is not OpenGL 3.1 compatible
             glDepthMask(GL_FALSE)
             try:
-                if not DEBUG_RENDER_VOLUMES:
-                    glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE)
                 try:
                     glDisable(GL_LIGHTING)
                     try:

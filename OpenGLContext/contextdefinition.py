@@ -28,6 +28,9 @@ class ContextDefinition( node.Node ):
     multisampleSamples = field.newField( "multisampleSamples", "SFInt32", 1, -1)
     stereo = field.newField( "stereo", "SFInt32", 1, -1)
     
+    debugBBox = field.newField( "debugBBox", "SFBool", 1, False )
+    debugSelection = field.newField( "debugSelection", "SFBool", 1, False )
+    
     @classmethod
     def fromConfig( cls, cfg, section='contextdefinition' ):
         """Generate a ContextDefinition from a ConfigParser instance"""

@@ -153,9 +153,6 @@ class Context(object):
     frameCounter = None
     contextDefinition = None
     
-    DEBUG_SELECTION = False
-    DEBUG_FRUSTUM = True
-
     ### State flags/values
     # Set to false to trigger a redraw on the next available iteration
     alreadyDrawn = None
@@ -176,7 +173,11 @@ class Context(object):
         establishes pickEvents
         and then calls OnInit
         """
-        self.contextDefinition = definition or self.contextDefinition
+        definition = definition or self.contextDefinition
+        if not definition:
+            from OpenGLContext import contextdefinition
+            definition = contextdefinition.ContextDefinition()
+        self.contextDefinition = definition
         self.setupThreading()
         self.setupExtensionManager( )
         self.initializeEventManagers( )

@@ -241,14 +241,15 @@ class FlatPass( SGObserver ):
         toRender = self.renderSet( matrix )
         
         events = context.getPickEvents()
-        if events or mode.context.DEBUG_SELECTION:
+        debugSelection = mode.context.contextDefinition.debugSelection
+        if events or debugSelection:
             self.selectRender( mode, toRender, events )
             events.clear()
         glMatrixMode( GL_PROJECTION )
         glLoadMatrixd( self.getProjection() )
         glMatrixMode( GL_MODELVIEW )
         matrix = self.getModelView()
-        if not mode.context.DEBUG_SELECTION:
+        if not debugSelection:
             glLoadIdentity()
             self.matrix = matrix
             self.visible = True
@@ -271,8 +272,8 @@ class FlatPass( SGObserver ):
             self.renderOpaque( toRender )
             self.renderTransparent( toRender )
             
-        if context.frameCounter.display:
-            context.frameCounter.Render( context )
+            if context.frameCounter.display:
+                context.frameCounter.Render( context )
         context.SwapBuffers()
         self.matrix = matrix
     
@@ -316,13 +317,14 @@ class FlatPass( SGObserver ):
     def renderOpaque( self, toRender ):
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
+        debugFrustum = self.context.contextDefinition.debugBBox
         for key,mvmatrix,tmatrix,bvolume,path in toRender:
             if not key[0]:
                 self.matrix = mvmatrix
                 glLoadMatrixd( mvmatrix )
                 try:
                     path[-1].Render( mode = self )
-                    if self.context.DEBUG_FRUSTUM:
+                    if debugFrustum:
                         bvolume.debugRender( )
                 except Exception, err:
                     log.error(
@@ -334,6 +336,7 @@ class FlatPass( SGObserver ):
         """Render the transparent geometry from toRender (in forward order)"""
         self.transparent = True 
         setup = False 
+        debugFrustum = self.context.contextDefinition.debugBBox
         try:
             for key,mvmatrix,tmatrix,bvolume,path in toRender:
                 if key[0]:
@@ -348,7 +351,7 @@ class FlatPass( SGObserver ):
                     glLoadMatrixd( mvmatrix )
                     try:
                         path[-1].RenderTransparent( mode = self )
-                        if self.context.DEBUG_FRUSTUM:
+                        if debugFrustum:
                             bvolume.debugRender( )
                     except Exception, err:
                         log.error(
@@ -394,39 +397,53 @@ class FlatPass( SGObserver ):
         map = {}
         
         pickPoints = {}
+        # TODO: this could be faster, and we could do further filtering
+        # using a frustum a-la select render mode approach...
+        min_x,min_y = self.getViewport()[2:]
+        max_x,max_y = 0,0
         for event in events.values():
-            key = tuple(event.getPickPoint())
+            x,y = key = tuple(event.getPickPoint())
             pickPoints.setdefault( key, []).append( event )
-        
-        idHolder = array( [0,0,0,0], 'b' )
-        idSetter = idHolder.view( '<I' )
-        for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
-            id += 50
-            idSetter[0] = id
-            glColor4bv( idHolder )
-            self.matrix = mvmatrix
-            glLoadMatrixd( mvmatrix )
-            path[-1].Render( mode=self )
-            map[id] = path 
-        for point,eventSet in pickPoints.items():
-            # get the pixel colour (id) under the cursor.
-            pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
-            pixel = long( pixel.view( '<I' )[0][0][0] )
-            paths = map.get( pixel, [] )
-            event.setObjectPaths( [paths] )
-            # get the depth value under the cursor...
-            pixel = glReadPixels( 
-                point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT 
-            )
-            event.viewCoordinate = point[0],point[1],pixel[0][0]
-            event.modelViewMatrix = matrix
-            event.projectionMatrix = self.projection
-            event.viewport = self.viewport
-            if hasattr( mode.context, 'ProcessEvent'):
-                mode.context.ProcessEvent( event )
-        glColor4f( 1.0,1.0,1.0, 1.0)
-        glDisable( GL_COLOR_MATERIAL )
-#		glEnable( GL_LIGHTING )
+            min_x = min((x-1,min_x))
+            max_x = max((x+1,max_x))
+            min_y = min((y-1,min_y))
+            max_y = max((y+1,max_y))
+        min_x = max((0,min_x))
+        min_y = max((0,min_y))
+        glScissor( int(min_x),int(min_y),int(max_x),int(max_y))
+        glEnable( GL_SCISSOR_TEST )
+        try:
+            idHolder = array( [0,0,0,0], 'b' )
+            idSetter = idHolder.view( '<I' )
+            for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
+                id += 50
+                idSetter[0] = id
+                glColor4bv( idHolder )
+                self.matrix = mvmatrix
+                glLoadMatrixd( mvmatrix )
+                path[-1].Render( mode=self )
+                map[id] = path 
+            for point,eventSet in pickPoints.items():
+                # get the pixel colour (id) under the cursor.
+                pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
+                pixel = long( pixel.view( '<I' )[0][0][0] )
+                paths = map.get( pixel, [] )
+                event.setObjectPaths( [paths] )
+                # get the depth value under the cursor...
+                pixel = glReadPixels( 
+                    point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT 
+                )
+                event.viewCoordinate = point[0],point[1],pixel[0][0]
+                event.modelViewMatrix = matrix
+                event.projectionMatrix = self.projection
+                event.viewport = self.viewport
+                if hasattr( mode.context, 'ProcessEvent'):
+                    mode.context.ProcessEvent( event )
+        finally:
+            glColor4f( 1.0,1.0,1.0, 1.0)
+            glDisable( GL_COLOR_MATERIAL )
+            glEnable( GL_LIGHTING )
+            glDisable( GL_SCISSOR_TEST )
         
     MAX_LIGHTS = -1
     def __call__( self, context ):
