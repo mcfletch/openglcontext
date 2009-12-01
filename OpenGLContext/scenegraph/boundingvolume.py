@@ -312,8 +312,6 @@ class AABoundingBox( BoundingBox ):
             finally:
                 glDepthMask(GL_TRUE)
             result = glGetBooleanv(occlusion_test.GL_OCCLUSION_TEST_RESULT_HP)
-    ##		if not result:
-    ##			print "occlusion culling eliminated item", self.center, self.size
             return result
     def occlusionRender( self ):
         """Render this box to screen"""
@@ -415,40 +413,3 @@ def cacheVolume( node, volume, nodeFieldPairs=()):
 def getCachedVolume( node ):
     """Get currently-cached bounding volume for the node or None"""
     return cache.CACHE.getData(node, key="boundingVolume")
-
-
-class BoundingSphere( BoundingVolume):
-    """Representation of a geometry bounding-sphere (unfinished)
-
-    XXX Note: this implementation is not used, and will
-        either need to be removed or finished. That shouldn't
-        be a particularly difficult project, as the
-        frustcullaccel module was written to support bounding
-        sphere calculations, it's just that the benefits
-        don't really promise to be worth the effort.
-    """
-    center = field.newField( 'center', 'SFVec3f', 0, (0,0,0))
-    radius = field.newField( 'radius','SFFloat',0,0.0)
-    def visible( self, frust, matrix=None, occlusion=0, mode=None ):
-        """Determine whether this bounding-sphere is visible in frustum"""
-        if matrix is None:
-            matrix = frustum.viewingMatrix( )
-        (x,y,z) = self.center
-        (x,y,z,w) = dot(matrix, (x,y,z,0))
-        radius = self.radius
-        for (px,py,pz,pw) in frust.planes:
-            foundInFront = 0
-            distance = (px*x + py*y + pz*z + pw)
-            if distance >= -radius:
-                # this plane can't eliminate the object
-                foundInFront = 1
-                break
-            if not foundInFront:
-                # got all the way through, this plane eliminated us!
-                return 0
-        return 1
-    def union( boxes, matrix = None ):
-        """Create BoundingBox union for the given bounding boxes
-        """
-        raise NotImplemented ("""BoundingSphere objects do not yet have a union method""")
-    union = staticmethod (union)
