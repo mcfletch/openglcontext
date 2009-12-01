@@ -237,10 +237,6 @@ class FlatPass( SGObserver ):
                     result.append( record )
             else:
                 result.append( record )
-#        if maxDepth is not None:
-#            vp = self.context.getViewPlatform()
-#            self.projection = vp.viewMatrix( trimDepth = maxDepth )
-#            print 'trimming projection matrix to', maxDepth
         return result
     
     def Render( self, context, mode ):
