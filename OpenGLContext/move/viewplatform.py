@@ -145,9 +145,11 @@ class ViewPlatform(object):
         glRotate( r*RADTODEG, x,y,z )
         glTranslate( *negative (self.position)[:3])
 
-    def viewMatrix( self ):
+    def viewMatrix( self, trimDepth=None ):
         """Calculate our matrix"""
         fovy, aspect, zNear, zFar = self.frustum
+        if trimDepth is not None:
+            zFar = trimDepth
         return transformmatrix.perspectiveMatrix( 
             radians(fovy),
             aspect,

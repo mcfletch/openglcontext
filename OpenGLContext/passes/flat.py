@@ -1,5 +1,5 @@
 """Flat rendering mechanism using structural scenegraph observation"""
-from OpenGLContext.scenegraph import nodepath,switch
+from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
 from OpenGL.GLU import gluUnProject
 from OpenGLContext.arrays import array, dot
@@ -187,9 +187,6 @@ class FlatPass( SGObserver ):
     def renderSet( self, matrix ):
         """Calculate ordered rendering set to display"""
         # ordered set of things to work with...
-        
-        # TODO: use child.visible here with occlusion queries
-        # to filter toRender down...
         toRender = []
         for path in self.paths.get( nodetypes.Rendering, ()):
             tmatrix = path.transformMatrix()
@@ -200,10 +197,24 @@ class FlatPass( SGObserver ):
             else:
                 bvolume = None
             toRender.append( (sortKey, mvmatrix,tmatrix,bvolume, path ) )
-        # TODO: allow 
         toRender = self.frustumVisibilityFilter( toRender )
         toRender.sort( key = lambda x: x[0])
         return toRender
+
+    def greatestDepth( self, toRender ):
+        # experimental: adjust our frustum to smaller depth based on 
+        # the projected z-depth of bbox points...
+        maxDepth = 0
+        for (key,mv,tm,bv,path) in toRender:
+            try:
+                points = bv.getPoints()
+            except (AttributeError,boundingvolume.UnboundedObject), err:
+                return 0 
+            else:
+                translated = dot( points, mv )
+                maxDepth = min((maxDepth, min( translated[:,2] )))
+        return -maxDepth
+
     def frustumVisibilityFilter( self, records ):
         """Filter records for visibility using frustum planes
         
@@ -217,28 +228,38 @@ class FlatPass( SGObserver ):
         for record in records:
             (key,mv,tm,bv,path) = record 
             if bv is not None:
-                if bv.visible( 
+                visible = bv.visible( 
                     frustum, tm,
                     occlusion=False,
                     mode=self
-                ):
+                )
+                if visible:
                     result.append( record )
             else:
                 result.append( record )
+#        if maxDepth is not None:
+#            vp = self.context.getViewPlatform()
+#            self.projection = vp.viewMatrix( trimDepth = maxDepth )
+#            print 'trimming projection matrix to', maxDepth
         return result
     
     def Render( self, context, mode ):
         """Render the geometry attached to this flat-renderer's scenegraph"""
         vp = context.getViewPlatform()
         # clear the projection matrix set up by legacy sg
-        glMatrixMode( GL_PROJECTION )
-        glLoadMatrixd( self.getProjection() )
         glMatrixMode( GL_MODELVIEW )
         matrix = self.getModelView()
         self.matrix = matrix
         glLoadIdentity()
 
         toRender = self.renderSet( matrix )
+        maxDepth = self.greatestDepth( toRender )
+        if maxDepth:
+            previous = self.projection
+            self.projection = vp.viewMatrix(maxDepth)
+        
+        glMatrixMode( GL_PROJECTION )
+        glLoadMatrixd( self.getProjection() )
         
         events = context.getPickEvents()
         debugSelection = mode.context.contextDefinition.debugSelection
@@ -450,6 +471,7 @@ class FlatPass( SGObserver ):
         """Overall rendering pass interface for the context client"""
         mode = self 
         vp = context.getViewPlatform()
+        self.viewPlatform = vp
         # These values are temporarily stored locally, we are 
         # in the context lock, so we're not causing conflicts
         if self.MAX_LIGHTS == -1:
