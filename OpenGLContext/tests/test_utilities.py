@@ -54,6 +54,17 @@ class TestUtilities( unittest.TestCase ):
             [0,0,1],
         ],'f')
         self._allclose( cps, expected )
+    def test_crossProduct4( self ):
+        data = array([
+            [0,1,0,1],[1,0,0,1],[0,0,1,1],
+            [1,1,0,1],
+        ],'f')
+        cps = crossProduct4( data, [-1,0,0,1] )
+        expected = array([
+            [0,0,1,1],[0,0,0,1],[0,-1,0,1],
+            [0,0,1,1],
+        ],'f')
+        self._allclose( cps, expected )
     def _allclose( self, target, expected ):
         for a,b in zip( target, expected ):
             assert allclose( a,b),(a,b)

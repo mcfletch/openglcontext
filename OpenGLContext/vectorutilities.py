@@ -2,6 +2,9 @@
 from OpenGLContext.arrays import *
 import math
 
+def _aformat( a ):
+    return getattr( a, 'dtype', 'f')
+
 def crossProduct( set1, set2):
     """Compute element-wise cross-product of two arrays of vectors.
     
@@ -14,45 +17,25 @@ def crossProduct( set1, set2):
     where x is the number of 3-element vectors
     in the longer set
     """
-    set1 = asarray( set1, 'f')
+    set1 = asarray( set1, _aformat(set1))
     set1 = reshape( set1, (-1, 3))
-    set2 = asarray( set2, 'f')
+    set2 = asarray( set2, _aformat(set2))
     set2 = reshape( set2, (-1, 3))
-    ux = set1[:,0]
-    uy = set1[:,1]
-    uz = set1[:,2]
-    vx = set2[:,0]
-    vy = set2[:,1]
-    vz = set2[:,2]
-    result = zeros( (len(set1),3), typeCode(set1))
-    result[:,0] = (uy*vz)-(uz*vy)
-    result[:,1] = (uz*vx)-(ux*vz)
-    result[:,2] = (ux*vy)-(uy*vx)
-    return result
+    return cross( set1, set2 )
 
 def crossProduct4( set1, set2 ):
     """Cross-product of 3D vectors stored in 4D arrays
 
     Identical to crossProduct otherwise.
     """
-    set1 = asarray( set1, 'f',)
+    set1 = asarray( set1, _aformat(set1))
     set1 = reshape( set1, (-1, 4))
-    set2 = asarray( set2, 'f',)
+    set2 = asarray( set2, _aformat(set1))
     set2 = reshape( set2, (-1, 4))
-    ux = set1[:,0]
-    uy = set1[:,1]
-    uz = set1[:,2]
-    uw = set1[:,3]
-    vx = set2[:,0]
-    vy = set2[:,1]
-    vz = set2[:,2]
-    vw = set1[:,3]
-    result = zeros( (len(set1),4), typeCode(set1))
-    result[:,0] = (uy*vz)-(uz*vy)
-    result[:,1] = (uz*vx)-(ux*vz)
-    result[:,2] = (ux*vy)-(uy*vx)
+    result = zeros( (len(set1),4), _aformat(set1))
+    result[:,:3] = cross( set1[:,:3],set2[:,:3])
+    result[:,3] = 1.0
     return result
-    
 
 def magnitude( vectors ):
     """Calculate the magnitudes of the given vectors
@@ -60,17 +43,13 @@ def magnitude( vectors ):
     vectors -- sequence object with 1 or more
         3-item vector values.
     
-    returns a double array with x elements,
+    returns a float array with x elements,
     where x is the number of 3-element vectors
     """
-    vectors = asarray( vectors,'f')
+    vectors = asarray( vectors, _aformat(vectors))
     if not (len(shape(vectors))==2 and shape(vectors)[1] in (3,4)):
         vectors = reshape( vectors, (-1,3))
-    vectors = vectors*vectors
-    # should just use sum?
-    result = vectors[:,0]
-    add( result, vectors[:,1], result )
-    add( result, vectors[:,2], result )
+    result = sum(vectors*vectors,1 ) # index 1
     sqrt( result, result )
     return result
 def normalise( vectors ):
@@ -79,13 +58,13 @@ def normalise( vectors ):
     vectors -- sequence object with 1 or more
         3-item vector values.
     
-    returns a double array with x 3-element vectors,
+    returns a float array with x 3-element vectors,
     where x is the number of 3-element vectors in "vectors"
 
     Will raise ZeroDivisionError if there are 0-magnitude
     vectors in the set.
     """
-    vectors = asarray( vectors, 'f')
+    vectors = asarray( vectors, _aformat(vectors))
     vectors = reshape( vectors, (-1,3)) # Numpy 23.7 and 64-bit machines fail here, upgrade to 23.8
     mags = reshape( magnitude( vectors ), (-1, 1))
     mags = where( mags, mags, 1.0)
@@ -112,7 +91,11 @@ def colinear( points ):
 
 def orientToXYZR( a, b ):
     """Calculate axis/angle rotation transforming vec a -> vec b"""
+    if allclose(a,b):
+        return (0,1,0,0)
     an,bn = normalise( (a,b) )
     angle = arccos(dot(an,bn))
     x,y,z = crossProduct( a, b )[0]
+    if allclose( (x,y,z), 0.0):
+        y = 1.0
     return (x,y,z,angle)
