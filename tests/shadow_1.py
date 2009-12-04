@@ -92,7 +92,13 @@ class TestContext( BaseContext ):
         self.time.register (self)
         self.time.start ()
         '''Here are the lights we're going to use to cast shadows.'''
-        self.lights = [
+        self.lights = self.createLights()
+        self.addEventHandler( "keypress", name="s", function = self.OnToggleTimer)
+    def createLights( self ):
+        """Create the light's we're going to use to cast shadows"""
+        '''Our first tutorial can only handle "spotlights", so we'll limit 
+        ourselves to those.'''
+        return [
             SpotLight(
                 location = [0,5,10],
                 color = [1,.95,.95],
@@ -107,9 +113,7 @@ class TestContext( BaseContext ):
                 ambientIntensity = .05,
                 direction = [-3,-3,-3],
             ),
-        ]
-        self.addEventHandler( "keypress", name="s", function = self.OnToggleTimer)
-    
+        ]        
     def createGeometry( self ):
         """Create a simple VRML scenegraph to be rendered with shadows"""
         '''This simple scene is a Teapot and a tall thin box on a flat 
