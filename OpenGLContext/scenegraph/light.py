@@ -84,9 +84,13 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
             near,
             far
         )
-    def modelMatrix( self ):
+    def modelMatrix( self, direction=None ):
         """Calculate our model-side matrix"""
-        rot = vectorutilities.orientToXYZR( (0,0,-1), self.direction )
+#        import pdb 
+#        pdb.set_trace()
+        if direction is None:
+            direction = self.direction
+        rot = vectorutilities.orientToXYZR( (0,0,-1), direction )
         # inverse of rotation matrix, hmm...
         rotate = transformmatrix.rotMatrix( rot )[1]
         # inverse of translation matrix...
