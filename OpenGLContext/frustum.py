@@ -68,6 +68,7 @@ class Frustum (node.Node):
         is to define 6 clipping planes from the OpenGL
         model-view matrices.
     """
+    ARRAY_TYPE = 'd'
     planes = fieldtypes.MFVec4f( 'planes', 1, [])
     normalized = fieldtypes.SFBool( 'normalized', 0, 1)
     def fromViewingMatrix(cls, matrix= None, normalize=1):
@@ -87,7 +88,7 @@ class Frustum (node.Node):
         if matrix is None:
             matrix = viewingMatrix( )
         clip = ravel(matrix)
-        frustum = zeros( (6, 4), 'd' )
+        frustum = zeros( (6, 4), cls.ARRAY_TYPE )
         # right
         frustum[0][0] = clip[ 3] - clip[ 0]
         frustum[0][1] = clip[ 7] - clip[ 4]
@@ -98,7 +99,7 @@ class Frustum (node.Node):
         frustum[1][1] = clip[ 7] + clip[ 4]
         frustum[1][2] = clip[11] + clip[ 8]
         frustum[1][3] = clip[15] + clip[12]
-        # bottoming
+        # bottom
         frustum[2][0] = clip[ 3] + clip[ 1]
         frustum[2][1] = clip[ 7] + clip[ 5]
         frustum[2][2] = clip[11] + clip[ 9]
@@ -117,18 +118,22 @@ class Frustum (node.Node):
         frustum[5][0] = clip[ 3] + clip[ 2]
         frustum[5][1] = clip[ 7] + clip[ 6]
         frustum[5][2] = clip[11] + clip[10]
-        frustum[5][3] = (clip[15] + clip[14])
+        frustum[5][3] = clip[15] + clip[14]
         if normalize:
             frustum = cls.normalize( frustum )
         return cls( planes = frustum, normalized = normalize )
     fromViewingMatrix = classmethod(fromViewingMatrix)
     def normalize(cls, frustum):
         """Normalize clipping plane equations"""
-        magnitude = sqrt( frustum[:,0] * frustum[:,0] + frustum[:,1] * frustum[:,1] + frustum[:,2] * frustum[:,2] )
+        magnitude = sqrt( 
+            frustum[:,0] * frustum[:,0] + 
+            frustum[:,1] * frustum[:,1] + 
+            frustum[:,2] * frustum[:,2] 
+        )
         # eliminate any planes which have 0-length vectors,
         # those planes can't be used for excluding anything anyway...
         frustum = compress( magnitude,frustum,0 )
         magnitude = compress( magnitude, magnitude,0 )
-        magnitude=reshape(magnitude.astype('d'), (len(frustum),1))
+        magnitude=reshape(magnitude.astype(cls.ARRAY_TYPE), (len(frustum),1))
         return frustum/magnitude
     normalize = classmethod(normalize)
