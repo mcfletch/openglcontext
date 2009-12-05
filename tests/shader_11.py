@@ -20,23 +20,25 @@ import time
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    LIGHT_COUNT = 5
-    LIGHT_SIZE = 7
+    shader_constants = dict(
+        LIGHT_COUNT = 5,
+        LIGHT_SIZE = 7,
+        
+        AMBIENT = 0,
+        DIFFUSE = 1,
+        SPECULAR = 2,
+        POSITION = 3,
+        ATTENUATION = 4,
+        # SPOT_PARAMS [ cos_spot_cutoff, spot_exponent, ignored, is_spot ]
+        SPOT_PARAMS = 5,
+        SPOT_DIR = 6,
+    )
     def OnInit( self ):
         """Initialize the context"""
-        lightConst = """
-        const int LIGHT_COUNT = %s;
-        const int LIGHT_SIZE = %s;
-        
-        const int AMBIENT = 0;
-        const int DIFFUSE = 1;
-        const int SPECULAR = 2;
-        const int POSITION = 3;
-        const int ATTENUATION = 4;
-        //SPOT_PARAMS [ cos_spot_cutoff, spot_exponent, ignored, is_spot ]
-        const int SPOT_PARAMS = 5;
-        const int SPOT_DIR = 6;
-        
+        lightConst = "\n".join([
+            "const int %s = %s;"%( k,v )
+            for k,v in self.shader_constants.items()
+        ]) + """
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
         
         varying vec3 EC_Light_half[LIGHT_COUNT];
@@ -44,9 +46,9 @@ class TestContext( BaseContext ):
         varying float Light_distance[LIGHT_COUNT]; 
         
         varying vec3 baseNormal;
-        """%( self.LIGHT_COUNT, self.LIGHT_SIZE )
+        """
         dLight = """
-        vec3 dLight( 
+        vec3 lightPhong( 
             in vec3 light_pos, // light position/direction
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
@@ -106,7 +108,7 @@ class TestContext( BaseContext ):
         """
         light_preCalc = """
         // Vertex-shader pre-calculation for lighting...
-        void light_preCalc( vec3 vertex_position ) {
+        void light_preCalc( in vec3 vertex_position ) {
             vec3 light_direction;
             for (int i = 0; i< LIGHT_COUNT; i++ ) {
                 int j = i * LIGHT_SIZE;
@@ -166,7 +168,7 @@ class TestContext( BaseContext ):
             int i,j;
             for (i=0;i<LIGHT_COUNT;i++) {
                 j = i * LIGHT_SIZE;
-                vec3 weights = dLight(
+                vec3 weights = lightPhong(
                     normalize(EC_Light_location[i]),
                     normalize(EC_Light_half[i]),
                     normalize(baseNormal),
@@ -253,7 +255,7 @@ class TestContext( BaseContext ):
             try:
                 glUniform4fv( 
                     self.uniform_locations['lights'],
-                    self.LIGHT_COUNT * self.LIGHT_SIZE,
+                    len(self.LIGHTS),
                     self.LIGHTS
                 )
                 for uniform,value in self.UNIFORM_VALUES:
@@ -286,6 +288,10 @@ class TestContext( BaseContext ):
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
         finally:
             glUseProgram( 0 )
+    
+    def lightsAsArray( self, lights ):
+        """Given a set of VRML97 lights, produce light values array"""
+        
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
