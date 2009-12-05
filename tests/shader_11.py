@@ -14,7 +14,7 @@ from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL.shaders import *
-from OpenGLContext.scenegraph.basenodes import Sphere
+from OpenGLContext.scenegraph.basenodes import *
 import time
 
 class TestContext( BaseContext ):
@@ -35,6 +35,35 @@ class TestContext( BaseContext ):
     )
     def OnInit( self ):
         """Initialize the context"""
+        
+        self.lights = [
+            SpotLight(
+                location = (2.5,3.5,2.5),
+                color = (.1,1,.1),
+                intensity = 1.0,
+                ambientIntensity = 0.1,
+                direction = (-8,-20,-8),
+            ),
+            SpotLight(
+                location = (-2.5,2.5,2.5),
+                color = (1,.05,.05),
+                ambientIntensity = .1,
+                direction = (2.5,-5.5,-2.5),
+            ),
+            SpotLight(
+                location = (0,-3.06,3.06),
+                color = (.05,.05,1),
+                ambientIntensity = .1,
+                direction = (0,3.06,-3.06),
+            ),
+        ]
+        self.LIGHTS = reshape( array([
+            self.lightAsArray(l)
+            for l in self.lights 
+        ],'f'), (-1,4))
+        self.shader_constants['LIGHT_COUNT'] = len(self.lights)
+        print 'light count', len(self.lights)
+        
         lightConst = "\n".join([
             "const int %s = %s;"%( k,v )
             for k,v in self.shader_constants.items()
@@ -215,33 +244,6 @@ class TestContext( BaseContext ):
         ('material.specular',(.8,.8,.8,1.0)),
         ('material.shininess',(.5,)),
     ]
-    LIGHTS = array([
-        x[1] for x in [
-            ('lights[0].ambient',(.05,.05,.05,1.0)),
-            ('lights[0].diffuse',(.1,1.0,.1,1.0)),
-            ('lights[0].specular',(0.0,.25,0.0,1.0)),
-            ('lights[0].position',(2.5,3.5,2.5,1.0)),
-            ('lights[0].attenuation',(0.0,.125,0.0,1.0)),
-            ('lights[0].spot_params',(cos(.2),1.5,0.0,1.0)),
-            ('lights[0].spot_dir',(-8,-20,-8.0,1.0)),
-            
-            ('lights[1].ambient',(.05,.05,.05,1.0)),
-            ('lights[1].diffuse',(.8,.1,.1,1.0)),
-            ('lights[1].specular',(1.0,0.0,0.0,1.0)),
-            ('lights[1].position',(-2.5,2.5,2.5,1.0)),
-            ('lights[1].attenuation',(0.0,0.0,.125,1.0)),
-            ('lights[1].spot_params',(cos(.25),2.0,0.0,1.0)),
-            ('lights[1].spot_dir',(2.5,-5.5,-2.5,1.0)),
-            
-            ('lights[2].ambient',(.05,.05,.05,1.0)),
-            ('lights[2].diffuse',(.1,.1,1.0,1.0)),
-            ('lights[2].specular',(0.0,1.0,1.0,1.0)),
-            ('lights[2].position',(0.0,-3.06,3.06,1.0)),
-            ('lights[2].attenuation',(2.0,0.0,0.0,1.0)),
-            ('lights[2].spot_params',(cos(.15),.75,0.0,1.0)),
-            ('lights[2].spot_dir',(0.0,3.06,-3.06,1.0)),
-        ]
-    ], 'f')
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
@@ -289,9 +291,39 @@ class TestContext( BaseContext ):
         finally:
             glUseProgram( 0 )
     
-    def lightsAsArray( self, lights ):
-        """Given a set of VRML97 lights, produce light values array"""
-        
+    def lightAsArray( self, light ):
+        """Given a single VRML97 light-node, produce light value array"""
+        def sk(k):
+            return self.shader_constants[k]
+        result = zeros( (sk('LIGHT_SIZE'),4), 'f' )
+        if light.on:
+            color = light.color
+            D,A,S,P,AT = sk('DIFFUSE'),sk('AMBIENT'),sk('SPECULAR'),sk('POSITION'),sk('ATTENUATION')
+            result[ D ][:3] = color * light.intensity
+            result[ D ][3] = 1.0
+            result[ A ][:3] = color * light.ambientIntensity
+            result[ A ][3] = 1.0
+            result[ S ][:3] = color * .2
+            result[ S ][3] = 1.0
+            
+            if not isinstance( light, DirectionalLight ):
+                result[P][:3] = light.location
+                result[P][3] = 1.0
+                result[AT][:3] = light.attenuation
+                result[AT][3] = 1.0
+                if isinstance( light, SpotLight ):
+                    result[sk('SPOT_DIR')][:3] = light.direction 
+                    result[sk('SPOT_DIR')][3] = 1.0
+                    result[sk('SPOT_PARAMS')] = [
+                        cos( light.beamWidth/4.0 ),
+                        light.cutOffAngle/light.beamWidth,
+                        0,
+                        1.0,
+                    ]
+            else:
+                result[P][:3] = light.direction
+                result[P][3] = 0.0
+        return result 
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
