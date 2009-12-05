@@ -5,15 +5,9 @@
 
 This tutorial:
 
-    * adds a control vector to track light "enabling"
     * cleans up and makes our shader code reusable
-    * alters shaders to use "legacy" attributes where 
-        possible in order to be compatible with legacy 
-        geometry renderers
-    
+
 '''
-from __future__ import with_statement 
-import contextlib
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
@@ -30,31 +24,6 @@ class TestContext( BaseContext ):
     LIGHT_SIZE = 7
     def OnInit( self ):
         """Initialize the context"""
-        '''As you can see, we've created a new 4-element vector 
-        called SPOT_PARAMS which holds 3 "meaningful" float values.
-        The first element cos_spot_cutoff represents the cosign of 
-        the angle beyond which the light is cut off. This angle is 
-        measured from the light's spot_direction compared with the 
-        light_location vector.  In effect, it is a check to see if 
-        the fragment is within the cone of the light.  The use of the 
-        *cosine* of the angle is to allow for very fast checks against 
-        the dot-product of the normalized vectors.
-        
-        The second element, spot_exponent, is used to calculate the 
-        amount of "spotiness" of the spotlight, that is, the amount 
-        to which the spotlight focusses light on the center of the 
-        beam versus the outside of the beam.  A higher spot_exponent
-        will cause the spotlight to "focus" more, a lower exponent 
-        will cause the spotlight to act more like a "shielded" 
-        point-light (such as a lamp with blockers rather than reflectors).
-        
-        The last component of the SPOT_PARAMS is being used as a simple 
-        flag to tell us whether to apply the spot calculation.  We could 
-        have shaved a whole vec4 by packing the spot_exponent into the 
-        ATTENUATION vector's unused .w component, and then packing the 
-        spot_cutoff into the spot_direction's unused .w, but that becomes 
-        a bit awkward looking.
-        '''
         lightConst = """
         const int LIGHT_COUNT = %s;
         const int LIGHT_SIZE = %s;
@@ -68,34 +37,14 @@ class TestContext( BaseContext ):
         const int SPOT_PARAMS = 5;
         const int SPOT_DIR = 6;
         
-        uniform int lights_enabled[ LIGHT_COUNT ];
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
+        
         varying vec3 EC_Light_half[LIGHT_COUNT];
         varying vec3 EC_Light_location[LIGHT_COUNT]; 
         varying float Light_distance[LIGHT_COUNT]; 
         
         varying vec3 baseNormal;
         """%( self.LIGHT_COUNT, self.LIGHT_SIZE )
-        '''Our dLight function receives its final tweaks here.  We 
-        provide the two vec4 spot elements for the current light.
-        The spotlight operation modifies the point-light code such that 
-        the "attenuation" numerator is either 1.0 (for non-directional 
-        point-lights) or a calculated value for spot-lights.
-        
-        To calculate this value, we take the (cos of the) angle between 
-        the light direction (spot_direction) and the vector between 
-        the fragment and the light location (-light_pos).  If this value 
-        is lower than our spot_cutoff, then we do not want to provide 
-        any lighting whatsoever from this light, so we short-circuit and 
-        return a null vector of weights. 
-        
-        If the value is higher than the cutoff, we calculate the
-        "spotiness" multiplier.  Here we are *not* using the OpenGL 
-        standard method, instead we calculate the fraction of total 
-        cosine-space which is displayed and raise it to the power of our 
-        spot_exponent value.
-        
-        '''
         dLight = """
         vec3 dLight( 
             in vec3 light_pos, // light position/direction
@@ -153,11 +102,42 @@ class TestContext( BaseContext ):
                 }
             }
             return vec3( attenuation, n_dot_pos, n_dot_half);
-        }		
+        }
         """
-        '''Nothing needs to change in our vertex shader.'''
+        light_preCalc = """
+        // Vertex-shader pre-calculation for lighting...
+        void light_preCalc( vec3 vertex_position ) {
+            vec3 light_direction;
+            for (int i = 0; i< LIGHT_COUNT; i++ ) {
+                int j = i * LIGHT_SIZE;
+                if (lights[j+POSITION].w == 0.0) {
+                    // directional rather than positional light...
+                    EC_Light_location[i] = normalize(
+                        gl_NormalMatrix *
+                        lights[j+POSITION].xyz
+                    );
+                    Light_distance[i] = 0.0;
+                } else {
+                    // positional light, we calculate distance in 
+                    // model-view space here, so we take a partial 
+                    // solution...
+                    vec3 ms_vec = (
+                        lights[j+POSITION].xyz -
+                        vertex_position
+                    );
+                    light_direction = gl_NormalMatrix * ms_vec;
+                    EC_Light_location[i] = normalize( light_direction );
+                    Light_distance[i] = abs(length( ms_vec ));
+                }
+                
+                // half-vector calculation 
+                EC_Light_half[i] = normalize(
+                    EC_Light_location[i] - vec3( 0,0,-1 )
+                );
+            }
+        }"""
         vertex = compileShader( 
-            lightConst + 
+            lightConst + light_preCalc +
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
@@ -167,38 +147,8 @@ class TestContext( BaseContext ):
                 Vertex_position, 1.0
             );
             baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
-            vec3 light_direction;
-            for (int i = 0; i< LIGHT_COUNT; i++ ) {
-                if (lights_enabled[i]!=0) {
-                    if (lights[(i*LIGHT_SIZE)+POSITION].w == 0.0) {
-                        // directional rather than positional light...
-                        EC_Light_location[i] = normalize(
-                            gl_NormalMatrix *
-                            lights[(i*LIGHT_SIZE)+POSITION].xyz
-                        );
-                        Light_distance[i] = 0.0;
-                    } else {
-                        // positional light, we calculate distance in 
-                        // model-view space here, so we take a partial 
-                        // solution...
-                        vec3 ms_vec = (
-                            lights[(i*LIGHT_SIZE)+POSITION].xyz -
-                            Vertex_position
-                        );
-                        light_direction = gl_NormalMatrix * ms_vec;
-                        EC_Light_location[i] = normalize( light_direction );
-                        Light_distance[i] = abs(length( ms_vec ));
-                    }
-                
-                    // half-vector calculation 
-                    EC_Light_half[i] = normalize(
-                        EC_Light_location[i] - vec3( 0,0,-1 )
-                    );
-                }
-            }
+            light_preCalc(Vertex_position);
         }""", GL_VERTEX_SHADER)
-        '''Our only change for the fragment shader is to pass in the 
-        spot components of the current light when calling dLight.'''
         fragment = compileShader( 
             lightConst + dLight + """
         struct Material {
@@ -215,30 +165,27 @@ class TestContext( BaseContext ):
             
             int i,j;
             for (i=0;i<LIGHT_COUNT;i++) {
-                if (lights_enabled[i]!=0) {
-                    j = i* LIGHT_SIZE;
-                    vec3 weights = dLight(
-                        normalize(EC_Light_location[i]),
-                        normalize(EC_Light_half[i]),
-                        normalize(baseNormal),
-                        material.shininess,
-                        Light_distance[i],
-                        lights[j+ATTENUATION],
-                        lights[j+SPOT_PARAMS],
-                        lights[j+SPOT_DIR]
-                    );
-                    fragColor = (
-                        fragColor 
-                        + (lights[j+AMBIENT] * material.ambient * weights.x)
-                        + (lights[j+DIFFUSE] * material.diffuse * weights.y)
-                        + (lights[j+SPECULAR] * material.specular * weights.z)
-                    );
-                }
+                j = i * LIGHT_SIZE;
+                vec3 weights = dLight(
+                    normalize(EC_Light_location[i]),
+                    normalize(EC_Light_half[i]),
+                    normalize(baseNormal),
+                    material.shininess,
+                    Light_distance[i],
+                    lights[j+ATTENUATION],
+                    lights[j+SPOT_PARAMS],
+                    lights[j+SPOT_DIR]
+                );
+                fragColor = (
+                    fragColor 
+                    + (lights[j+AMBIENT] * material.ambient * weights.x)
+                    + (lights[j+DIFFUSE] * material.diffuse * weights.y)
+                    + (lights[j+SPECULAR] * material.specular * weights.z)
+                );
             }
             gl_FragColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
-        '''Our uniform/geometry handling code is unchanged.'''
         self.shader = compileProgram(vertex,fragment)
         self.coords,self.indices,self.count = Sphere( 
             radius = 1 
@@ -252,9 +199,6 @@ class TestContext( BaseContext ):
         self.uniform_locations['lights'] = glGetUniformLocation( 
             self.shader, 'lights' 
         )
-        self.uniform_locations['lights_enabled'] = glGetUniformLocation( 
-            self.shader, 'lights_enabled' 
-        )
         for attribute in (
             'Vertex_position','Vertex_normal',
         ):
@@ -262,24 +206,13 @@ class TestContext( BaseContext ):
             if location in (None,-1):
                 print 'Warning, no attribute: %s'%( uniform )
             setattr( self, attribute+ '_loc', location )
-    '''We'll dial down the shininess on our material a little so that 
-    it's easier to see the spotlight cones on the sphere.'''
     UNIFORM_VALUES = [
         ('Global_ambient',(.05,.05,.05,1.0)),
         ('material.ambient',(.2,.2,.2,1.0)),
         ('material.diffuse',(.8,.8,.8,1.0)),
         ('material.specular',(.8,.8,.8,1.0)),
-        ('material.shininess',(.8,)),
+        ('material.shininess',(.5,)),
     ]
-    '''Our lights array now has more fields per light.  The spotlight 
-    vectors always have to be present, even if we are not using them 
-    for a particular light.  We're going to define 3 lights here with 
-    fairly high "spotiness" values so that we can see the focussed 
-    beam effect on the sphere.  The spot exponents in this case tend to 
-    cause an area in the center of the beam to saturate completely.
-    '''
-    LIGHTS_ENABLED = zeros( (LIGHT_COUNT,),'i')
-    LIGHTS_ENABLED[:3] = 1
     LIGHTS = array([
         x[1] for x in [
             ('lights[0].ambient',(.05,.05,.05,1.0)),
@@ -307,18 +240,17 @@ class TestContext( BaseContext ):
             ('lights[2].spot_dir',(0.0,3.06,-3.06,1.0)),
         ]
     ], 'f')
-    '''Nothing else needs to change from the previous tutorial.'''
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
-        with contextlib.nested(self.coords,self.indices,self.shader):
+        
+        BaseContext.Render( self, mode )
+        glUseProgram(self.shader)
+        try:
+            self.coords.bind()
+            self.indices.bind()
             stride = self.coords.data[0].nbytes
             try:
-                glUniform1iv( 
-                    self.uniform_locations['lights_enabled'],
-                    self.LIGHT_COUNT,
-                    self.LIGHTS_ENABLED
-                )
                 glUniform4fv( 
                     self.uniform_locations['lights'],
                     self.LIGHT_COUNT * self.LIGHT_SIZE,
@@ -348,18 +280,12 @@ class TestContext( BaseContext ):
                     GL_UNSIGNED_SHORT, self.indices
                 )
             finally:
+                self.coords.unbind()
+                self.indices.unbind()
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
+        finally:
+            glUseProgram( 0 )
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
-'''We've now built a fairly complete per-pixel Phong renderer.  As an 
-exercise, you may wish to modify the spotlight equations above to match 
-the legacy OpenGL mechanism.
-
-Further reading:
-
-    The [http://www.lighthouse3d.com/opengl/glsl/index.php?lights Lighthouse GLSL Lighting Tutorial] uses legacy entry points for 
-    geometry and tries to precisely reproduce the legacy pipeline.
-    The OpenGL Shading Language (Orange Book) Chapter 9 -- Emulating OpenGL Fixed Functionality
-'''
