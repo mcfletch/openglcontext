@@ -37,8 +37,7 @@ class TestContext( BaseContext ):
         """Initialize the context"""
         
         self.lights = [
-            SpotLight(
-                location = (2.5,3.5,2.5),
+            DirectionalLight(
                 color = (.1,1,.1),
                 intensity = 1.0,
                 ambientIntensity = 0.1,
@@ -50,11 +49,10 @@ class TestContext( BaseContext ):
                 ambientIntensity = .1,
                 direction = (2.5,-5.5,-2.5),
             ),
-            SpotLight(
+            PointLight(
                 location = (0,-3.06,3.06),
                 color = (.05,.05,1),
                 ambientIntensity = .1,
-                direction = (0,3.06,-3.06),
             ),
         ]
         self.LIGHTS = reshape( array([
@@ -241,7 +239,7 @@ class TestContext( BaseContext ):
         ('Global_ambient',(.05,.05,.05,1.0)),
         ('material.ambient',(.2,.2,.2,1.0)),
         ('material.diffuse',(.8,.8,.8,1.0)),
-        ('material.specular',(.8,.8,.8,1.0)),
+        ('material.specular',(.3,.3,.3,1.0)),
         ('material.shininess',(.5,)),
     ]
     def Render( self, mode = None):
@@ -298,12 +296,18 @@ class TestContext( BaseContext ):
         result = zeros( (sk('LIGHT_SIZE'),4), 'f' )
         if light.on:
             color = light.color
-            D,A,S,P,AT = sk('DIFFUSE'),sk('AMBIENT'),sk('SPECULAR'),sk('POSITION'),sk('ATTENUATION')
+            D,A,S,P,AT = (
+                sk('DIFFUSE'),
+                sk('AMBIENT'),
+                sk('SPECULAR'),
+                sk('POSITION'),
+                sk('ATTENUATION')
+            )
             result[ D ][:3] = color * light.intensity
             result[ D ][3] = 1.0
             result[ A ][:3] = color * light.ambientIntensity
             result[ A ][3] = 1.0
-            result[ S ][:3] = color * .2
+            result[ S ][:3] = color
             result[ S ][3] = 1.0
             
             if not isinstance( light, DirectionalLight ):
@@ -321,7 +325,7 @@ class TestContext( BaseContext ):
                         1.0,
                     ]
             else:
-                result[P][:3] = light.direction
+                result[P][:3] = -light.direction
                 result[P][3] = 0.0
         return result 
 

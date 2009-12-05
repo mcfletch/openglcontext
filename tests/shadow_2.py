@@ -53,12 +53,13 @@ class TestContext( BaseContext ):
     '''Should you wish to experiment with different filtering functions,
     we'll parameterize the filtering operation here.'''
     FILTER_TYPE = GL_NEAREST 
-    def setupShadowContext( self,light=None, mode=None ):
+    def setupShadowContext( self,light=None, mode=None, textureKey="" ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
         '''As with the previous tutorial, we want to cache our texture (and FBO),
         so we check to see if the values have already been set up.'''
-        token = mode.cache.getData(light,key=self.textureCacheKey)
+        key = self.textureCacheKey+textureKey
+        token = mode.cache.getData(light,key=key)
         if not token:
             '''A cache miss, so we need to do the setup.'''
             fbo = glGenFramebuffers(1)
@@ -87,7 +88,9 @@ class TestContext( BaseContext ):
                 texture, 
                 0 #mip-map level...
             )
-            holder = mode.cache.holder( light,(fbo,texture),key=self.textureCacheKey)
+            holder = mode.cache.holder( 
+                light,(fbo,texture),key=key
+            )
         else:
             '''We've already got the FBO with its colour buffer, just bind to 
             render into it.'''
@@ -126,7 +129,7 @@ class TestContext( BaseContext ):
         '''
         glClear(GL_DEPTH_BUFFER_BIT)
         return texture
-    def closeShadowContext( self, texture ):
+    def closeShadowContext( self, texture, textureKey="" ):
         """Close our shadow-rendering context/texture"""
         '''This is a very simple function now, we just disable the FBO,
         and restore the draw buffer to the regular "back" buffer.'''
