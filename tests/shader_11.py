@@ -5,8 +5,15 @@
 
 This tutorial:
 
-    * cleans up and makes our shader code reusable
+    * clean up and makes our shader code reusable
+    * configure our light array from VRML97 scenegraph objects
+    * add basic texturing support
 
+The purpose of this tutorial is to consolidate our work so far 
+so that we can reuse it in further tutorials without needing to 
+repeat code all the time.  We'll rewrite our shader code into a 
+reusable phong_preCalc and phong_weightCalc(...) set of functions 
+and a set of type-declarations for their use.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -14,12 +21,17 @@ from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL.shaders import *
+'''We're going to use VRML97 nodes to configure our shaders,
+so we'll import the whole set of VRML97 base nodes (and the 
+OpenGLContext extended nodes as well, though we aren't going 
+to use them here).'''
 from OpenGLContext.scenegraph.basenodes import *
-import time
 
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
+    '''Rather than declaring our constants as context attributes, we'll 
+    make an explicit namespace in which the constants are stored.'''
     shader_constants = dict(
         LIGHT_COUNT = 5,
         LIGHT_SIZE = 7,
@@ -35,7 +47,11 @@ class TestContext( BaseContext ):
     )
     def OnInit( self ):
         """Initialize the context"""
-        
+        '''Our first step in making the shader-based code more flexible is 
+        to make the number and type of lights depend on a declared set of 
+        light "nodes" rather than explicitly creating arrays of lighting 
+        parameters.  The flexibility this provides means that we can easily 
+        all 3 types of supported lights here.'''
         self.lights = [
             DirectionalLight(
                 color = (.1,1,.1),
@@ -55,12 +71,15 @@ class TestContext( BaseContext ):
                 ambientIntensity = .1,
             ),
         ]
+        '''Now we take the set of lights and turn them into an array of 
+        lighting parameters to be passed into the shader.'''
         self.LIGHTS = reshape( array([
             self.lightAsArray(l)
             for l in self.lights 
         ],'f'), (-1,4))
+        '''Instead of the hard-coded lighting count, we update the light 
+        count before compiling the shader.'''
         self.shader_constants['LIGHT_COUNT'] = len(self.lights)
-        print 'light count', len(self.lights)
         
         lightConst = "\n".join([
             "const int %s = %s;"%( k,v )
@@ -74,8 +93,8 @@ class TestContext( BaseContext ):
         
         varying vec3 baseNormal;
         """
-        dLight = """
-        vec3 lightPhong( 
+        phong_weightCalc = """
+        vec3 phong_weightCalc( 
             in vec3 light_pos, // light position/direction
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
@@ -133,9 +152,9 @@ class TestContext( BaseContext ):
             return vec3( attenuation, n_dot_pos, n_dot_half);
         }
         """
-        light_preCalc = """
+        phong_preCalc = """
         // Vertex-shader pre-calculation for lighting...
-        void light_preCalc( in vec3 vertex_position ) {
+        void phong_preCalc( in vec3 vertex_position ) {
             vec3 light_direction;
             for (int i = 0; i< LIGHT_COUNT; i++ ) {
                 int j = i * LIGHT_SIZE;
@@ -166,7 +185,7 @@ class TestContext( BaseContext ):
             }
         }"""
         vertex = compileShader( 
-            lightConst + light_preCalc +
+            lightConst + phong_preCalc +
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
@@ -176,10 +195,10 @@ class TestContext( BaseContext ):
                 Vertex_position, 1.0
             );
             baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
-            light_preCalc(Vertex_position);
+            phong_preCalc(Vertex_position);
         }""", GL_VERTEX_SHADER)
         fragment = compileShader( 
-            lightConst + dLight + """
+            lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
             vec4 diffuse;
@@ -195,7 +214,7 @@ class TestContext( BaseContext ):
             int i,j;
             for (i=0;i<LIGHT_COUNT;i++) {
                 j = i * LIGHT_SIZE;
-                vec3 weights = lightPhong(
+                vec3 weights = phong_weightCalc(
                     normalize(EC_Light_location[i]),
                     normalize(EC_Light_half[i]),
                     normalize(baseNormal),
@@ -219,15 +238,20 @@ class TestContext( BaseContext ):
         self.coords,self.indices,self.count = Sphere( 
             radius = 1 
         ).compile()
+        
+        self.appearance = Appearance( material = Material(
+            diffuseColor = (1,1,1),
+            ambientIntensity = .1,
+            shininess = .5,
+        ))
+        
         self.uniform_locations = {}
         for uniform,value in self.UNIFORM_VALUES:
-            location = glGetUniformLocation( self.shader, uniform )
-            if location in (None,-1):
-                print 'Warning, no uniform: %s'%( uniform )
-            self.uniform_locations[uniform] = location
-        self.uniform_locations['lights'] = glGetUniformLocation( 
-            self.shader, 'lights' 
-        )
+            self.findUniform( self.shader, uniform )
+        self.findUniform( self.shader, 'lights' )
+        for uniform in self.MATERIAL_UNIFORMS:
+            self.findUniform( self.shader, uniform )
+        
         for attribute in (
             'Vertex_position','Vertex_normal',
         ):
@@ -237,11 +261,14 @@ class TestContext( BaseContext ):
             setattr( self, attribute+ '_loc', location )
     UNIFORM_VALUES = [
         ('Global_ambient',(.05,.05,.05,1.0)),
-        ('material.ambient',(.2,.2,.2,1.0)),
-        ('material.diffuse',(.8,.8,.8,1.0)),
-        ('material.specular',(.3,.3,.3,1.0)),
-        ('material.shininess',(.5,)),
     ]
+    def findUniform( self, shader, uniform ):
+        location = glGetUniformLocation( shader, uniform )
+        if location in (None,-1):
+            print 'Warning, no uniform: %s'%( uniform )
+        self.uniform_locations[uniform] = location
+        return location
+        
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
@@ -258,6 +285,7 @@ class TestContext( BaseContext ):
                     len(self.LIGHTS),
                     self.LIGHTS
                 )
+                self.materialFromAppearance( self.appearance )
                 for uniform,value in self.UNIFORM_VALUES:
                     location = self.uniform_locations.get( uniform )
                     if location not in (None,-1):
@@ -328,6 +356,28 @@ class TestContext( BaseContext ):
                 result[P][:3] = -light.direction
                 result[P][3] = 0.0
         return result 
+    MATERIAL_UNIFORMS = [
+        'material.shininess',
+        'material.ambient',
+        'material.diffuse',
+        'material.specular',
+    ]
+    def materialFromAppearance( self, appearance ):
+        """Convert VRML97 appearance node to series of uniform calls"""
+        material = appearance.material 
+        if material:
+            color = material.diffuseColor 
+            ambient = material.ambientIntensity * color 
+            shininess = material.shininess
+            specular = material.specularColor
+            ul = self.uniform_locations.get 
+            def as4( v ):
+                x,y,z = v 
+                return (x,y,z,1.0)
+            glUniform1f( ul('material.shininess'), shininess )
+            glUniform4f( ul('material.ambient'), *as4(ambient) )
+            glUniform4f( ul('material.diffuse'), *as4(color) )
+            glUniform4f( ul('material.specular'),*as4(specular) )
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
