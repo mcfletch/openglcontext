@@ -73,10 +73,10 @@ class TestContext( BaseContext ):
         ]
         '''Now we take the set of lights and turn them into an array of 
         lighting parameters to be passed into the shader.'''
-        self.LIGHTS = reshape( array([
+        self.LIGHTS = array([
             self.lightAsArray(l)
             for l in self.lights 
-        ],'f'), (-1,4))
+        ],'f')
         '''Instead of the hard-coded lighting count, we update the light 
         count before compiling the shader.'''
         self.shader_constants['LIGHT_COUNT'] = len(self.lights)
@@ -272,17 +272,19 @@ class TestContext( BaseContext ):
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
-        
-        BaseContext.Render( self, mode )
+        for i,light in enumerate( self.lights ):
+            # update in case there's a change...
+            self.LIGHTS[i] = self.lightAsArray( light )
         glUseProgram(self.shader)
         try:
             self.coords.bind()
             self.indices.bind()
             stride = self.coords.data[0].nbytes
             try:
+                count = self.shader_constants['LIGHT_COUNT'] * self.shader_constants['LIGHT_SIZE']
                 glUniform4fv( 
                     self.uniform_locations['lights'],
-                    len(self.LIGHTS),
+                    count,
                     self.LIGHTS
                 )
                 self.materialFromAppearance( self.appearance )
@@ -321,40 +323,58 @@ class TestContext( BaseContext ):
         """Given a single VRML97 light-node, produce light value array"""
         def sk(k):
             return self.shader_constants[k]
-        result = zeros( (sk('LIGHT_SIZE'),4), 'f' )
-        if light.on:
-            color = light.color
-            D,A,S,P,AT = (
-                sk('DIFFUSE'),
-                sk('AMBIENT'),
-                sk('SPECULAR'),
-                sk('POSITION'),
-                sk('ATTENUATION')
+        key = 'uniform-array'
+        result = self.cache.getData(light, key= key )
+        if result is None:
+            result = zeros( (sk('LIGHT_SIZE'),4), 'f' )
+            depends_on = ['on']
+            if light.on:
+                color = light.color
+                depends_on.append( 'color' )
+                D,A,S,P,AT = (
+                    sk('DIFFUSE'),
+                    sk('AMBIENT'),
+                    sk('SPECULAR'),
+                    sk('POSITION'),
+                    sk('ATTENUATION')
+                )
+                result[ D ][:3] = color * light.intensity
+                result[ D ][3] = 1.0
+                result[ A ][:3] = color * light.ambientIntensity
+                result[ A ][3] = 1.0
+                result[ S ][:3] = color
+                result[ S ][3] = 1.0
+                depends_on.append( 'intensity' )
+                depends_on.append( 'ambientIntensity' )
+                
+                if not isinstance( light, DirectionalLight ):
+                    result[P][:3] = light.location
+                    result[P][3] = 1.0
+                    result[AT][:3] = light.attenuation
+                    result[AT][3] = 1.0
+                    depends_on.append( 'location' )
+                    depends_on.append( 'attenuation' )
+                    if isinstance( light, SpotLight ):
+                        result[sk('SPOT_DIR')][:3] = light.direction 
+                        result[sk('SPOT_DIR')][3] = 1.0
+                        result[sk('SPOT_PARAMS')] = [
+                            cos( light.beamWidth/4.0 ),
+                            light.cutOffAngle/light.beamWidth,
+                            0,
+                            1.0,
+                        ]
+                        depends_on.append( 'direction' )
+                        depends_on.append( 'cutOffAngle' )
+                        depends_on.append( 'beamWidth' )
+                else:
+                    result[P][:3] = -light.direction
+                    result[P][3] = 0.0
+                    depends_on.append( 'direction' )
+            holder = self.cache.holder( 
+                light,result,key=key
             )
-            result[ D ][:3] = color * light.intensity
-            result[ D ][3] = 1.0
-            result[ A ][:3] = color * light.ambientIntensity
-            result[ A ][3] = 1.0
-            result[ S ][:3] = color
-            result[ S ][3] = 1.0
-            
-            if not isinstance( light, DirectionalLight ):
-                result[P][:3] = light.location
-                result[P][3] = 1.0
-                result[AT][:3] = light.attenuation
-                result[AT][3] = 1.0
-                if isinstance( light, SpotLight ):
-                    result[sk('SPOT_DIR')][:3] = light.direction 
-                    result[sk('SPOT_DIR')][3] = 1.0
-                    result[sk('SPOT_PARAMS')] = [
-                        cos( light.beamWidth/4.0 ),
-                        light.cutOffAngle/light.beamWidth,
-                        0,
-                        1.0,
-                    ]
-            else:
-                result[P][:3] = -light.direction
-                result[P][3] = 0.0
+            for field in depends_on:
+                holder.depend( light, field )
         return result 
     MATERIAL_UNIFORMS = [
         'material.shininess',
