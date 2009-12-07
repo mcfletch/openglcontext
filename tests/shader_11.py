@@ -365,19 +365,27 @@ class TestContext( BaseContext ):
     def materialFromAppearance( self, appearance ):
         """Convert VRML97 appearance node to series of uniform calls"""
         material = appearance.material 
-        if material:
+        key = 'uniform-array'
+        data = self.cache.getData(material, key= key )
+        if data is None:
             color = material.diffuseColor 
             ambient = material.ambientIntensity * color 
             shininess = material.shininess
             specular = material.specularColor
-            ul = self.uniform_locations.get 
+            alpha = 1.0 - material.transparency
             def as4( v ):
                 x,y,z = v 
-                return (x,y,z,1.0)
-            glUniform1f( ul('material.shininess'), shininess )
-            glUniform4f( ul('material.ambient'), *as4(ambient) )
-            glUniform4f( ul('material.diffuse'), *as4(color) )
-            glUniform4f( ul('material.specular'),*as4(specular) )
+                return (x,y,z,alpha)
+            data = (shininess,as4(ambient),as4(color),as4(specular))
+            holder = self.cache.holder( 
+                material,data,key=key
+            )
+        shininess,ambient,color,specular = data
+        ul = self.uniform_locations.get 
+        glUniform1f( ul('material.shininess'), shininess )
+        glUniform4fv( ul('material.ambient'), 1,ambient )
+        glUniform4fv( ul('material.diffuse'), 1,color )
+        glUniform4fv( ul('material.specular'),1,specular )
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
