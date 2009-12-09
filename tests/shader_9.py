@@ -88,8 +88,8 @@ class TestContext( BaseContext ):
         coefficients that smaller values mean the light goes farther,
         so a coefficient of .5 is "brighter" than a coefficient of 1.0.
         '''
-        dLight = """
-        vec3 dLight( 
+        phong_weightCalc = """
+        vec3 phong_weightCalc( 
             in vec3 light_pos, // light position/direction
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
@@ -147,47 +147,96 @@ class TestContext( BaseContext ):
         We are doing our vector calculations for the light location
         and distance in model-space.  You could do them in view-space 
         as well.
+        
+        Our vertex calculations are getting complex enough that we're 
+        going to split them into a separate function for readability and 
+        (eventual) reusability.  We'll create a function which encodes the 
+        algorithmic operation (phong_preCalc) and another which takes our 
+        particular attributes/uniforms and accumulates the results from 
+        that function.
+        
+        We're defining phong_preCalc inline here, but we'll also store it 
+        in a file named phongprecalc.vert that we can reuse in later 
+        tutorials.
         '''
+        phong_preCalc = """
+        // Vertex-shader pre-calculation for lighting...
+        void phong_preCalc( 
+            in vec3 vertex_position,
+            in vec4 light_position,
+            out float light_distance,
+            out vec3 ec_light_location,
+            out vec3 ec_light_half
+        ) {
+            // This is the core setup for a phong lighting pass 
+            // as a reusable fragment of code.
+            
+            // vertex_position -- un-transformed vertex position (world-space)
+            // light_position -- un-transformed light location (direction)
+            // light_distance -- output giving world-space distance-to-light 
+            // ec_light_location -- output giving location of light in eye coords 
+            // ec_light_half -- output giving the half-vector optimization
+            
+            if (light_position.w == 0.0) {
+                // directional rather than positional light...
+                ec_light_location = normalize(
+                    gl_NormalMatrix *
+                    light_position.xyz
+                );
+                light_distance = 0.0;
+            } else {
+                // positional light, we calculate distance in 
+                // model-view space here, so we take a partial 
+                // solution...
+                vec3 ms_vec = (
+                    light_position.xyz -
+                    vertex_position
+                );
+                vec3 light_direction = gl_NormalMatrix * ms_vec;
+                ec_light_location = normalize( light_direction );
+                light_distance = abs(length( ms_vec ));
+            }
+            // half-vector calculation 
+            ec_light_half = normalize(
+                ec_light_location - vec3( 0,0,-1 )
+            );
+        }"""
+        '''This function is not as generally reusable, so we'll store it 
+        to a separate file named '_shader_tut_lightprecalc.vert'.'''
+        light_preCalc = """
+        void light_preCalc( in vec3 vertex_position ) {
+            // This function is dependent on the uniforms and 
+            // varying values we've been using, it basically 
+            // just iterates over the phong_lightCalc passing in 
+            // the appropriate pointers...
+            vec3 light_direction;
+            for (int i = 0; i< LIGHT_COUNT; i++ ) {
+                int j = i * LIGHT_SIZE;
+                phong_preCalc(
+                    vertex_position,
+                    lights[j+POSITION],
+                    // following are the values to fill in...
+                    Light_distance[i],
+                    EC_Light_location[i],
+                    EC_Light_half[i]
+                );
+            }
+        }
+        """
         vertex = compileShader( 
-            lightConst + 
+            lightConst + phong_preCalc + light_preCalc +
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
-        
         void main() {
             gl_Position = gl_ModelViewProjectionMatrix * vec4( 
                 Vertex_position, 1.0
             );
             baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
-            vec3 light_direction;
-            for (int i = 0; i< LIGHT_COUNT; i++ ) {
-                if (lights[(i*LIGHT_SIZE)+POSITION].w == 0.0) {
-                    // directional rather than positional light...
-                    EC_Light_location[i] = normalize(
-                        gl_NormalMatrix *
-                        lights[(i*LIGHT_SIZE)+POSITION].xyz
-                    );
-                    Light_distance[i] = 0.0;
-                } else {
-                    // positional light, we calculate distance in 
-                    // model-view space here, so we take a partial 
-                    // solution...
-                    vec3 ms_vec = (
-                        lights[(i*LIGHT_SIZE)+POSITION].xyz -
-                        Vertex_position
-                    );
-                    light_direction = gl_NormalMatrix * ms_vec;
-                    EC_Light_location[i] = normalize( light_direction );
-                    Light_distance[i] = abs(length( ms_vec ));
-                }
-                // half-vector calculation 
-                EC_Light_half[i] = normalize(
-                    EC_Light_location[i] - vec3( 0,0,-1 )
-                );
-            }
+            light_preCalc(Vertex_position);
         }""", GL_VERTEX_SHADER)
         '''Our fragment shader is only slightly modified to use our 
-        new dLight function.  We need a larger "weights" variable and 
+        new phong_weightCalc function.  We need a larger "weights" variable and 
         need to pass in more information.  We also need to multiply 
         the per-light ambient value by the new weight we've added.
         
@@ -197,7 +246,7 @@ class TestContext( BaseContext ):
         begins the current light.
         '''
         fragment = compileShader( 
-            lightConst + dLight + """
+            lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
             vec4 diffuse;
@@ -213,7 +262,7 @@ class TestContext( BaseContext ):
             int i,j;
             for (i=0;i<LIGHT_COUNT;i++) {
                 j = i* LIGHT_SIZE;
-                vec3 weights = dLight(
+                vec3 weights = phong_weightCalc(
                     normalize(EC_Light_location[i]),
                     normalize(EC_Light_half[i]),
                     normalize(baseNormal),

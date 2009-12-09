@@ -75,7 +75,7 @@ class TestContext( BaseContext ):
         
         varying vec3 baseNormal;
         """%( self.LIGHT_COUNT, self.LIGHT_SIZE )
-        '''Our dLight function receives its final tweaks here.  We 
+        '''Our phong_weightCalc function receives its final tweaks here.  We 
         provide the two vec4 spot elements for the current light.
         The spotlight operation modifies the point-light code such that 
         the "attenuation" numerator is either 1.0 (for non-directional 
@@ -94,9 +94,12 @@ class TestContext( BaseContext ):
         cosine-space which is displayed and raise it to the power of our 
         spot_exponent value.
         
+        This is our last tweak to the blinn-phone lighting model, so we'll 
+        save this version of the function to the file 'phongweights.frag'
+        so we can reuse it in future tutorials.
         '''
-        dLight = """
-        vec3 dLight( 
+        phong_weightCalc = """
+        vec3 phong_weightCalc( 
             in vec3 light_pos, // light position/direction
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
@@ -154,49 +157,28 @@ class TestContext( BaseContext ):
             return vec3( attenuation, n_dot_pos, n_dot_half);
         }		
         """
-        '''Nothing needs to change in our vertex shader.'''
+        '''Nothing needs to change in our vertex shader, save that we're 
+        using the functions we stored to external files in the previous 
+        tutorial.'''
+        phong_preCalc = open( 'phongprecalc.vert' ).read()
+        light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
         vertex = compileShader( 
-            lightConst + 
+            lightConst + phong_preCalc + light_preCalc + 
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
-        
         void main() {
             gl_Position = gl_ModelViewProjectionMatrix * vec4( 
                 Vertex_position, 1.0
             );
             baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
-            vec3 light_direction;
-            for (int i = 0; i< LIGHT_COUNT; i++ ) {
-                if (lights[(i*LIGHT_SIZE)+POSITION].w == 0.0) {
-                    // directional rather than positional light...
-                    EC_Light_location[i] = normalize(
-                        gl_NormalMatrix *
-                        lights[(i*LIGHT_SIZE)+POSITION].xyz
-                    );
-                    Light_distance[i] = 0.0;
-                } else {
-                    // positional light, we calculate distance in 
-                    // model-view space here, so we take a partial 
-                    // solution...
-                    vec3 ms_vec = (
-                        lights[(i*LIGHT_SIZE)+POSITION].xyz -
-                        Vertex_position
-                    );
-                    light_direction = gl_NormalMatrix * ms_vec;
-                    EC_Light_location[i] = normalize( light_direction );
-                    Light_distance[i] = abs(length( ms_vec ));
-                }
-                // half-vector calculation 
-                EC_Light_half[i] = normalize(
-                    EC_Light_location[i] - vec3( 0,0,-1 )
-                );
-            }
+            light_preCalc( Vertex_position );
         }""", GL_VERTEX_SHADER)
+        
         '''Our only change for the fragment shader is to pass in the 
-        spot components of the current light when calling dLight.'''
+        spot components of the current light when calling phong_weightCalc.'''
         fragment = compileShader( 
-            lightConst + dLight + """
+            lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
             vec4 diffuse;
@@ -212,7 +194,7 @@ class TestContext( BaseContext ):
             int i,j;
             for (i=0;i<LIGHT_COUNT;i++) {
                 j = i* LIGHT_SIZE;
-                vec3 weights = dLight(
+                vec3 weights = phong_weightCalc(
                     normalize(EC_Light_location[i]),
                     normalize(EC_Light_half[i]),
                     normalize(baseNormal),

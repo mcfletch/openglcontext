@@ -67,8 +67,8 @@ class TestContext( BaseContext ):
         tutorial.  It is still a Blinn-Phong calculation based on the 
         half-vector of light and view vector.
         '''
-        dLight = """
-        vec2 dLight( 
+        phong_weightCalc = """
+        vec2 phong_weightCalc( 
             in vec3 light_pos, // light position
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
@@ -135,7 +135,7 @@ class TestContext( BaseContext ):
         contribution of each light added to the result.
         '''
         fragment = compileShader( 
-            dLight + materialStruct + """
+            phong_weightCalc + materialStruct + """
         uniform Material material;
         uniform vec4 Global_ambient;
         uniform vec4 lights[ 12 ]; // 3 possible lights 4 vec4's each 
@@ -159,7 +159,7 @@ class TestContext( BaseContext ):
                 vec3 Light_half = normalize(
                     EC_Light_location - vec3( 0,0,-1 )
                 );
-                vec2 weights = dLight(
+                vec2 weights = phong_weightCalc(
                     EC_Light_location,
                     Light_half,
                     baseNormal,

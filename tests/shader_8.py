@@ -69,10 +69,10 @@ class TestContext( BaseContext ):
         The other declarations are the same as before, they are just 
         being shared between the shaders.
         
-        Our dLight calculation hasn't changed.
+        Our phong_weightCalc calculation hasn't changed.
         '''
-        dLight = """
-        vec2 dLight( 
+        phong_weightCalc = """
+        vec2 phong_weightCalc( 
             in vec3 light_pos, // light position
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
@@ -124,7 +124,7 @@ class TestContext( BaseContext ):
         using, to make it clearer which value is being accessed.
         '''
         fragment = compileShader( 
-            lightConst + dLight + """
+            lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
             vec4 diffuse;
@@ -140,7 +140,7 @@ class TestContext( BaseContext ):
             int i,j;
             for (i=0;i<LIGHT_COUNT;i++) {
                 j = i* LIGHT_SIZE;
-                vec2 weights = dLight(
+                vec2 weights = phong_weightCalc(
                     EC_Light_location[i],
                     EC_Light_half[i],
                     baseNormal,

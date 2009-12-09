@@ -96,8 +96,8 @@ class TestContext( BaseContext ):
         create extremely hard-edged cut-offs for specular color.  Here 
         we "fudge" the result by 0.05
         '''
-        dLight = """
-        vec2 dLight( 
+        phong_weightCalc = """
+        vec2 phong_weightCalc( 
             in vec3 light_pos, // light position
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
@@ -135,7 +135,7 @@ class TestContext( BaseContext ):
         '''Our fragment shader looks much like our previous tutorial's 
         vertex shader.  As before, we have lots of uniform values,
         but now we also calculate the light's half-vector (in eye-space 
-        coordinates).  The dLight function does the core Blinn 
+        coordinates).  The phong_weightCalc function does the core Blinn 
         calculation, and we simply use the resulting factor to add to 
         the colour value for the fragment.
         
@@ -145,7 +145,7 @@ class TestContext( BaseContext ):
         and the eye-space eye-coordinate is always (0,0,0), so the 
         eye-to-vertex vector is always the eye-space vector position.
         '''
-        fragment = compileShader( dLight + """
+        fragment = compileShader( phong_weightCalc + """
         uniform vec4 Global_ambient;
         
         uniform vec4 Light_ambient;
@@ -168,7 +168,7 @@ class TestContext( BaseContext ):
             vec3 Light_half = normalize(
                 EC_Light_location - vec3( 0,0,-1 )
             );
-            vec2 weights = dLight(
+            vec2 weights = phong_weightCalc(
                 EC_Light_location,
                 Light_half,
                 baseNormal,

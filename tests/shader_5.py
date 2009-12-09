@@ -139,13 +139,13 @@ class TestContext( BaseContext ):
         (the Normal and the Light Location vector), which is calculated 
         by taking the dot product of the two (normalized) vectors.
         
-        Our GLSL function dLight (below) will calculate the factor 
+        Our GLSL function phong_weightCalc (below) will calculate the factor 
         which controls the diffuse light contribution of a single light.
         Both of the values passed in must be *normalized* vectors.
         '''
         
-        dLight = """
-        float dLight( 
+        phong_weightCalc = """
+        float phong_weightCalc( 
             in vec3 light_pos, // light position
             in vec3 frag_normal // geometry normal
         ) {
@@ -162,7 +162,7 @@ class TestContext( BaseContext ):
         per-vertex attributes to store the position and normal
         assigned by the user.
         '''
-        vertex = compileShader( dLight + 
+        vertex = compileShader( phong_weightCalc + 
         """
         uniform vec4 Global_ambient;
         
@@ -183,7 +183,7 @@ class TestContext( BaseContext ):
             );
             
             vec3 EC_Light_location = gl_NormalMatrix * Light_location;
-            float diffuse_weight = dLight(
+            float diffuse_weight = phong_weightCalc(
                 normalize(EC_Light_location),
                 normalize(gl_NormalMatrix * Vertex_normal)
             );
@@ -213,7 +213,7 @@ class TestContext( BaseContext ):
         Reflectance we could as easily have left the coordinates in 
         "model space" to do the calculations:'''
         """			
-        vec2 weights = dLight(
+        vec2 weights = phong_weightCalc(
             normalize(Light_location),
             normalize(Vertex_normal)
         );"""

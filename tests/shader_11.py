@@ -5,15 +5,12 @@
 
 This tutorial:
 
-    * clean up and makes our shader code reusable
     * configure our light array from VRML97 scenegraph objects
-    * add basic texturing 
+    * configure our material structure from VRML97 scenegraph objects
 
 The purpose of this tutorial is to consolidate our work so far 
 so that we can reuse it in further tutorials without needing to 
-repeat code all the time.  We'll rewrite our shader code into a 
-reusable phong_preCalc and phong_weightCalc(...) set of functions 
-and a set of type-declarations for their use.
+repeat code all the time.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -85,48 +82,10 @@ class TestContext( BaseContext ):
         '''
         self.shader_constants['LIGHT_COUNT'] = len(self.lights)
         
-        phong_preCalc = """
-        // Vertex-shader pre-calculation for lighting...
-        void phong_preCalc( 
-            in vec3 vertex_position,
-            in vec4 light_position,
-            out float light_distance,
-            out vec3 ec_light_location,
-            out vec3 ec_light_half
-        ) {
-            // This is the core setup for a phong lighting pass 
-            // as a reusable fragment of code.
-            
-            // vertex_position -- un-transformed vertex position (world-space)
-            // light_position -- un-transformed light location (direction)
-            // light_distance -- output giving world-space distance-to-light 
-            // ec_light_location -- output giving location of light in eye coords 
-            // ec_light_half -- output giving the half-vector optimization
-            
-            if (light_position.w == 0.0) {
-                // directional rather than positional light...
-                ec_light_location = normalize(
-                    gl_NormalMatrix *
-                    light_position.xyz
-                );
-                light_distance = 0.0;
-            } else {
-                // positional light, we calculate distance in 
-                // model-view space here, so we take a partial 
-                // solution...
-                vec3 ms_vec = (
-                    light_position.xyz -
-                    vertex_position
-                );
-                vec3 light_direction = gl_NormalMatrix * ms_vec;
-                ec_light_location = normalize( light_direction );
-                light_distance = abs(length( ms_vec ));
-            }
-            // half-vector calculation 
-            ec_light_half = normalize(
-                ec_light_location - vec3( 0,0,-1 )
-            );
-        }"""
+        '''Load our shader functions that we've stored in external files.'''
+        phong_preCalc = open( 'phongprecalc.vert' ).read()
+        light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
+        phong_weightCalc = open( 'phongweights.frag' ).read()
         
         lightConst = "\n".join([
             "const int %s = %s;"%( k,v )
@@ -143,29 +102,11 @@ class TestContext( BaseContext ):
         """
         
         vertex = compileShader( 
-            lightConst + phong_preCalc +
+            lightConst + phong_preCalc + light_preCalc +
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
         attribute vec2 Vertex_texture_coordinate;
-        void light_preCalc( in vec3 vertex_position ) {
-            // This function is dependent on the uniforms and 
-            // varying values we've been using, it basically 
-            // just iterates over the phong_lightCalc passing in 
-            // the appropriate values
-            vec3 light_direction;
-            for (int i = 0; i< LIGHT_COUNT; i++ ) {
-                int j = i * LIGHT_SIZE;
-                phong_preCalc(
-                    vertex_position,
-                    lights[j+POSITION],
-                    // following are the values to fill in...
-                    Light_distance[i],
-                    EC_Light_location[i],
-                    EC_Light_half[i]
-                );
-            }
-        }
         void main() {
             gl_Position = gl_ModelViewProjectionMatrix * vec4( 
                 Vertex_position, 1.0
@@ -174,74 +115,6 @@ class TestContext( BaseContext ):
             light_preCalc(Vertex_position);
             Vertex_texture_coordinate_var = Vertex_texture_coordinate;
         }""", GL_VERTEX_SHADER)
-        
-        phong_weightCalc = """
-        vec3 phong_weightCalc( 
-            in vec3 light_pos, // light position/direction
-            in vec3 half_light, // half-way vector between light and view
-            in vec3 frag_normal, // geometry normal
-            in float shininess, // shininess exponent
-            in float distance, // distance for attenuation calculation...
-            in vec4 attenuations, // attenuation parameters...
-            in vec4 spot_params, // spot control parameters...
-            in vec4 spot_direction // model-space direction
-        ) {
-            // Together with phong_preCalc this is the core blinn/phong 
-            // lighting algorithm.  The light_pos, half_light, and distance 
-            // parameters were calculated by phong_preCalc, frag_normal
-            // is normally calculated by the vertex shader (we pass it as 
-            // baseNormal).  shininess normally comes from the material, 
-            // while attenuations, spot_params and spot_direction come 
-            // from the lighting setup.
-            
-            // returns vec3( ambientMult, diffuseMult, specularMult )
-            
-            float n_dot_pos = max( 0.0, dot( 
-                frag_normal, light_pos
-            ));
-            float n_dot_half = 0.0;
-            float attenuation = 1.0;
-            if (n_dot_pos > -.05) {
-                float spot_effect = 1.0;
-                if (spot_params.w != 0.0) {
-                    // is a spot...
-                    float spot_cos = dot(
-                        gl_NormalMatrix * normalize(spot_direction.xyz),
-                        normalize(-light_pos)
-                    );
-                    if (spot_cos <= spot_params.x) {
-                        // is a spot, and is outside the cone-of-light...
-                        return vec3( 0.0, 0.0, 0.0 );
-                    } else {
-                        if (spot_cos == 1.0) {
-                            spot_effect = 1.0;
-                        } else {
-                            spot_effect = pow( 
-                                (1.0-spot_params.x)/(1.0-spot_cos), 
-                                spot_params.y 
-                            );
-                        }
-                    }
-                }
-                n_dot_half = pow(
-                    max(0.0,dot( 
-                        half_light, frag_normal
-                    )), 
-                    shininess
-                );
-                if (distance != 0.0) {
-                    attenuation = spot_effect / (
-                            attenuations.x + 
-                            (attenuations.y * distance) +
-                            (attenuations.z * distance * distance)
-                        );
-                    n_dot_pos *= attenuation;
-                    n_dot_half *= attenuation;
-                }
-            }
-            return vec3( attenuation, n_dot_pos, n_dot_half);
-        }
-        """
         
         fragment = compileShader( 
             lightConst + phong_weightCalc + """
