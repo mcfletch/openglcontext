@@ -254,6 +254,9 @@ class ShaderURLField( fieldtypes.MFString ):
         result = [ x for x in overall if x is not None ]
         if len(result) == len(overall):
             client.source = '\n'.join( result )
+            # TODO: make this an observation that causes the 
+            # contexts to redraw, *not* something the node does 
+            # explicitly...
             for context in contexts:
                 c = context()
                 if c:
@@ -279,6 +282,10 @@ class ShaderURLField( fieldtypes.MFString ):
         # failure to the user.
         log.warn( """Unable to load any shader from the url %s for the node %s""", urlFragment, str(client))
 
+class GLSLImport( shaders.GLSLImport ):
+    """GLSL-based importable code library"""
+    url = ShaderURLField( 'url', 'MFString', list)
+
 class GLSLShader( shaders.GLSLShader ):
     """GLSL-based shader node"""
     url = ShaderURLField( 'url', 'MFString', list)
@@ -289,15 +296,22 @@ class GLSLShader( shaders.GLSLShader ):
     def compile(self):
         if not self.source:
             return False
+        source = []
+        for import_lib in self.imports:
+            if not import_lib.source:
+                return False 
+            source.extend( import_lib.source )
+        source.extend( self.source )
+        #source = "\n".join( source )
         try:
             if self.type == 'VERTEX':
                 shader = compileShader(
-                    self.source, 
+                    source, 
                     GL_VERTEX_SHADER
                 )
             elif self.type == 'FRAGMENT':
                 shader = compileShader(
-                    self.source, GL_FRAGMENT_SHADER
+                    source, GL_FRAGMENT_SHADER
                 )
             else:
                 log.error(
@@ -312,7 +326,6 @@ class GLSLShader( shaders.GLSLShader ):
         return shader
     def visible( self, *args, **named ):
         return True 
-        
 
 class _GLSLObjectCache( object ):
     shader = None 
@@ -422,7 +435,6 @@ class GLSLObject( shaders.GLSLObject ):
         try:
             return locationMap[ name ]
         except KeyError, err:
-            #name = name + ('\000'*(9-len(name)))
             program = self.program(mode)
             glUseProgram( program )
             if uniform:
