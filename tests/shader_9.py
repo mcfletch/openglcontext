@@ -156,8 +156,9 @@ class TestContext( BaseContext ):
         that function.
         
         We're defining phong_preCalc inline here, but we'll also store it 
-        in a file named phongprecalc.vert that we can reuse in later 
-        tutorials.
+        as a resource we can use from anywhere:
+        
+            from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         '''
         phong_preCalc = """
         // Vertex-shader pre-calculation for lighting...

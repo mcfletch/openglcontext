@@ -94,9 +94,10 @@ class TestContext( BaseContext ):
         cosine-space which is displayed and raise it to the power of our 
         spot_exponent value.
         
-        This is our last tweak to the blinn-phone lighting model, so we'll 
-        save this version of the function to the file 'phongweights.frag'
-        so we can reuse it in future tutorials.
+        This is our last tweak to the blinn-phong lighting model so we'll make 
+        this version of the function available like so:
+        
+        from OpenGLContext.resources.phongweights_frag import data as phong_weightCalc
         '''
         phong_weightCalc = """
         vec3 phong_weightCalc( 
@@ -160,8 +161,9 @@ class TestContext( BaseContext ):
         '''Nothing needs to change in our vertex shader, save that we're 
         using the functions we stored to external files in the previous 
         tutorial.'''
-        phong_preCalc = open( 'phongprecalc.vert' ).read()
+        from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
+        
         vertex = compileShader( 
             lightConst + phong_preCalc + light_preCalc + 
         """

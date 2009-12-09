@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Refactoring/Cleanup=
+'''=Use Declarative Structures=
 
 [shader_11.py-screen-0001.png Screenshot]
 
@@ -42,14 +42,8 @@ class TestContext( BaseContext ):
         SPOT_PARAMS = 5,
         SPOT_DIR = 6,
     )
-    def OnInit( self ):
-        """Initialize the context"""
-        '''Our first step in making the shader-based code more flexible is 
-        to make the number and type of lights depend on a declared set of 
-        light "nodes" rather than explicitly creating arrays of lighting 
-        parameters.  The flexibility this provides means that we can easily 
-        demo all 3 types of supported lights here.'''
-        self.lights = [
+    def createLights( self ):
+        return [
             DirectionalLight(
                 color = (.1,1,.1),
                 intensity = 1.0,
@@ -68,6 +62,15 @@ class TestContext( BaseContext ):
                 ambientIntensity = .1,
             ),
         ]
+    
+    def OnInit( self ):
+        """Initialize the context"""
+        '''Our first step in making the shader-based code more flexible is 
+        to make the number and type of lights depend on a declared set of 
+        light "nodes" rather than explicitly creating arrays of lighting 
+        parameters.  The flexibility this provides means that we can easily 
+        demo all 3 types of supported lights here.'''
+        self.lights = self.createLights()
         '''Now we take the set of lights and turn them into an array of 
         lighting parameters to be passed into the shader.'''
         self.LIGHTS = array([
@@ -82,10 +85,10 @@ class TestContext( BaseContext ):
         '''
         self.shader_constants['LIGHT_COUNT'] = len(self.lights)
         
-        '''Load our shader functions that we've stored in external files.'''
-        phong_preCalc = open( 'phongprecalc.vert' ).read()
+        '''Load our shader functions that we've stored in resources and files.'''
+        from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
+        from OpenGLContext.resources.phongweights_frag import data as phong_weightCalc
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
-        phong_weightCalc = open( 'phongweights.frag' ).read()
         
         lightConst = "\n".join([
             "const int %s = %s;"%( k,v )
@@ -354,7 +357,7 @@ class TestContext( BaseContext ):
                 appearance.texture.render( mode.visible, mode.lighting, mode )
             finally:
                 pass
-                #glActiveTexture( GL_TEXTURE0 )
+                glActiveTexture( GL_TEXTURE0 )
             glUniform1i( ul('diffuse_texture' ), 1 )
 
 if __name__ == "__main__":
