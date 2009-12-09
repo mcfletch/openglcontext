@@ -14,6 +14,7 @@ images = [
     "nehe_glass.bmp",
     "pimbackground_FR.jpg",
     "nehe_wall.bmp",
+    "marbleface.jpeg",
 ]
 
 sizes = [

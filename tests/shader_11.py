@@ -7,7 +7,7 @@ This tutorial:
 
     * clean up and makes our shader code reusable
     * configure our light array from VRML97 scenegraph objects
-    * add basic texturing support
+    * add basic texturing 
 
 The purpose of this tutorial is to consolidate our work so far 
 so that we can reuse it in further tutorials without needing to 
@@ -139,6 +139,7 @@ class TestContext( BaseContext ):
         varying float Light_distance[LIGHT_COUNT]; 
         
         varying vec3 baseNormal;
+        varying vec2 Vertex_texture_coordinate_var;
         """
         
         vertex = compileShader( 
@@ -146,6 +147,7 @@ class TestContext( BaseContext ):
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
+        attribute vec2 Vertex_texture_coordinate;
         void light_preCalc( in vec3 vertex_position ) {
             // This function is dependent on the uniforms and 
             // varying values we've been using, it basically 
@@ -170,6 +172,7 @@ class TestContext( BaseContext ):
             );
             baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
             light_preCalc(Vertex_position);
+            Vertex_texture_coordinate_var = Vertex_texture_coordinate;
         }""", GL_VERTEX_SHADER)
         
         phong_weightCalc = """
@@ -250,9 +253,15 @@ class TestContext( BaseContext ):
         };
         uniform Material material;
         uniform vec4 Global_ambient;
+        uniform sampler2D diffuse_texture;
         
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
+            
+            vec4 texDiffuse = texture2D( 
+                diffuse_texture, Vertex_texture_coordinate_var 
+            );
+            //texDiffuse += material.diffuse;
             
             // Again, we've moved the "hairy" code into the reusable 
             // function, our loop simply calls the phong calculation 
@@ -273,7 +282,7 @@ class TestContext( BaseContext ):
                 fragColor = (
                     fragColor 
                     + (lights[j+AMBIENT] * material.ambient * weights.x)
-                    + (lights[j+DIFFUSE] * material.diffuse * weights.y)
+                    + (lights[j+DIFFUSE] * texDiffuse * weights.y)
                     + (lights[j+SPECULAR] * material.specular * weights.z)
                 );
             }
@@ -285,11 +294,16 @@ class TestContext( BaseContext ):
             radius = 1 
         ).compile()
         
-        self.appearance = Appearance( material = Material(
-            diffuseColor = (1,1,1),
-            ambientIntensity = .1,
-            shininess = .5,
-        ))
+        self.appearance = Appearance( 
+            material = Material(
+                diffuseColor = (1,1,1),
+                ambientIntensity = .1,
+                shininess = .5,
+            ),
+            texture = ImageTexture(
+                url = ['marbleface.jpeg'],
+            ),
+        )
         
         self.uniform_locations = {}
         for uniform,value in self.UNIFORM_VALUES:
@@ -299,7 +313,7 @@ class TestContext( BaseContext ):
             self.findUniform( self.shader, uniform )
         
         for attribute in (
-            'Vertex_position','Vertex_normal',
+            'Vertex_position','Vertex_normal','Vertex_texture_coordinate',
         ):
             location = glGetAttribLocation( self.shader, attribute )
             if location in (None,-1):
@@ -333,7 +347,7 @@ class TestContext( BaseContext ):
                     count,
                     self.LIGHTS
                 )
-                self.materialFromAppearance( self.appearance )
+                self.materialFromAppearance( self.appearance, mode )
                 for uniform,value in self.UNIFORM_VALUES:
                     location = self.uniform_locations.get( uniform )
                     if location not in (None,-1):
@@ -345,9 +359,14 @@ class TestContext( BaseContext ):
                             glUniform1f( location, *value )
                 glEnableVertexAttribArray( self.Vertex_position_loc )
                 glEnableVertexAttribArray( self.Vertex_normal_loc )
+                glEnableVertexAttribArray( self.Vertex_texture_coordinate_loc )
                 glVertexAttribPointer( 
                     self.Vertex_position_loc, 
                     3, GL_FLOAT,False, stride, self.coords
+                )
+                glVertexAttribPointer( 
+                    self.Vertex_texture_coordinate_loc, 
+                    2, GL_FLOAT,False, stride, self.coords+(3*4)
                 )
                 glVertexAttribPointer( 
                     self.Vertex_normal_loc, 
@@ -362,6 +381,7 @@ class TestContext( BaseContext ):
                 self.indices.unbind()
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
+                glDisableVertexAttribArray( self.Vertex_texture_coordinate_loc )
         finally:
             glUseProgram( 0 )
     
@@ -427,8 +447,9 @@ class TestContext( BaseContext ):
         'material.ambient',
         'material.diffuse',
         'material.specular',
+        'diffuse_texture',
     ]
-    def materialFromAppearance( self, appearance ):
+    def materialFromAppearance( self, appearance, mode ):
         """Convert VRML97 appearance node to series of uniform calls"""
         material = appearance.material 
         key = 'uniform-array'
@@ -454,6 +475,14 @@ class TestContext( BaseContext ):
         glUniform4fv( ul('material.ambient'), 1,ambient )
         glUniform4fv( ul('material.diffuse'), 1,color )
         glUniform4fv( ul('material.specular'),1,specular )
+        if appearance.texture:
+            glActiveTexture( GL_TEXTURE0 + 1 )
+            try:
+                appearance.texture.render( mode.visible, mode.lighting, mode )
+            finally:
+                pass
+                #glActiveTexture( GL_TEXTURE0 )
+            glUniform1i( ul('diffuse_texture' ), 1 )
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

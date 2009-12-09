@@ -26,7 +26,7 @@ class _Texture( nodetypes.Texture, node.Node ):
         tex = self.createTexture( self.image, mode=mode )
         # cache this for later use...
         holder = mode.cache.holder(self, tex)
-        holder.depend( self, protofunctions.getField(self, 'image') )
+        holder.depend( self, 'image' )
         if tex is not None:
             self.components = tex.components
         else:
@@ -178,9 +178,9 @@ else:
     class ImageURLField( fieldtypes.MFString ):
         """Field for managing interactions with an Image's URL value"""
         fieldType = "MFString"
-        def fset( self, client, value, notify=1 ):
+        def __set__( self, client, value, notify=True ):
             """Set the client's URL, then try to load the image"""
-            value = super(ImageURLField, self).fset( client, value, notify )
+            value = super(ImageURLField, self).fset( client, value, notify=True )
             import threading
             threading.Thread(
                 name = "Background load of %s"%(value),
@@ -188,12 +188,13 @@ else:
                 args = ( value, context.Context.allContexts,),
             ).start()
             return value
+        fset = __set__
         def fdel( self, client, notify=1 ):
             """Delete the client's URL, which should delete the image as well"""
             value = super( ImageURLField, self).fdel( client, notify )
             del client.image
             return value
-            
+        __del__ = fdel
 
     class ImageTexture( _Texture, basenodes.ImageTexture ):
         """A texture loaded from an image file
@@ -256,7 +257,7 @@ else:
             try:
                 image = Image.open( fh )
             except IOError, err:
-                pass
+                texture_log.info( 'IOError %s opening image', err )
             else:
                 if image:
                     self.image = image
@@ -264,6 +265,8 @@ else:
                     self.image.info['file'] = 'memory'
                     self.components = -1
                     return self.image
+                else:
+                    texture_log.warn( 'Null image' )
             return None
         
     class MMImageTexture( ImageTexture ):
@@ -302,13 +305,19 @@ class PixelTexture( _Texture, basenodes.PixelTexture ):
             return None
         width, height, componentCount = map(int,image[:3])
         if not componentCount:
-            print 'bad component count in pixeltexture', self
+            texture_log.warn( 'bad component count in pixeltexture %s', self )
             return None
         if (not width) or (not height):
-            print '0-size dimension in pixeltexture', self
+            texture_log.warn( '0-size dimension in pixeltexture %s', self )
             return None
         if len(image) != width*height+3:
-            print 'PixelTexture has incorrect image size, expected %s items (%s*%s)+3, got %s'%(width*height+3,width,height, len(image))
+            texture_log.warn(  
+                'PixelTexture has incorrect image size, expected %s items (%s*%s)+3, got %s', 
+                width*height+3,
+                width,
+                height, 
+                len(image),
+            )
             return None
         import struct
         imageBody = image[3:]
