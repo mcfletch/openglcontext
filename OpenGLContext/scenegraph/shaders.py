@@ -64,7 +64,7 @@ class ShaderIndexBuffer( _Buffer ):
     
 class ShaderAttribute( shaders.ShaderAttribute ):
     """VBO-based buffer implementation for generic geomtry indices"""
-    def render( self, shader, shader_id, mode ):
+    def render( self, shader, mode ):
         """Set this uniform value for the given shader
         
         This is called at render-time to update the value...
@@ -149,7 +149,7 @@ class _Uniform( object ):
 
 class FloatUniform( _Uniform, shaders.FloatUniform ):
     """Uniform (variable) binding for a shader"""
-    def render( self, shader, shader_id, mode ):
+    def render( self, shader, mode ):
         """Set this uniform value for the given shader
         
         This is called at render-time to update the value...
@@ -173,7 +173,7 @@ class IntUniform( _Uniform, shaders.IntUniform ):
 class TextureUniform( _Uniform, shaders.TextureUniform ):
     """Uniform (variable) binding for a texture sampler"""
     baseFunction = staticmethod( glUniform1i )
-    def render( self, shader, shader_id, mode, index ):
+    def render( self, shader, mode, index ):
         """Bind the actual uniform value"""
         location = shader.getLocation( mode, self.name, uniform=True )
         if location is not None and location != -1:
@@ -355,11 +355,11 @@ class GLSLObject( shaders.GLSLObject ):
                 raise
             else:
                 for uniform in self.uniforms:
-                    uniform.render( self, renderer, mode )
+                    uniform.render( self, mode )
                 # TODO: retrieve maximum texture count and restrict to that...
                 i = 0
                 for texture in self.textures:
-                    if texture.render( self, renderer, mode, i ):
+                    if texture.render( self, mode, i ):
                         i += 1
         return True,True,True,renderer 
     def holderDepend( self, holder ):
@@ -496,7 +496,7 @@ class ShaderGeometry( shaders.ShaderGeometry ):
                     return False
                 tokens = []
                 for attribute in self.attributes:
-                    sub_token = attribute.render( current, token, mode )
+                    sub_token = attribute.render( current, mode )
                     tokens.append( (attribute,sub_token) )
                 try:
                     if self.uniforms:
@@ -506,7 +506,7 @@ class ShaderGeometry( shaders.ShaderGeometry ):
                         # now iterate over our slices...
                         for slice in self.slices:
                             for uniform in slice.uniforms:
-                                uniform.render( current, token, mode )
+                                uniform.render( current, mode )
                             glDrawArrays( 
                                 GL_TRIANGLES, slice.offset, slice.count 
                             )
