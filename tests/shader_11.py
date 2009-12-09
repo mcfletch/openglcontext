@@ -261,7 +261,7 @@ class TestContext( BaseContext ):
             vec4 texDiffuse = texture2D( 
                 diffuse_texture, Vertex_texture_coordinate_var 
             );
-            //texDiffuse += material.diffuse;
+            texDiffuse = mix( material.diffuse, texDiffuse, .5 );
             
             // Again, we've moved the "hairy" code into the reusable 
             // function, our loop simply calls the phong calculation 
