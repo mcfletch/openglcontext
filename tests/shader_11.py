@@ -51,7 +51,7 @@ class TestContext( BaseContext ):
         to make the number and type of lights depend on a declared set of 
         light "nodes" rather than explicitly creating arrays of lighting 
         parameters.  The flexibility this provides means that we can easily 
-        all 3 types of supported lights here.'''
+        demo all 3 types of supported lights here.'''
         self.lights = [
             DirectionalLight(
                 color = (.1,1,.1),
@@ -78,8 +78,55 @@ class TestContext( BaseContext ):
             for l in self.lights 
         ],'f')
         '''Instead of the hard-coded lighting count, we update the light 
-        count before compiling the shader.'''
+        count before compiling the shader.  In the real world we'd want to 
+        make the number of lights a parameter per-object so that we could 
+        generate a light-count-specific shader shared among all objects 
+        with the same light-count.
+        '''
         self.shader_constants['LIGHT_COUNT'] = len(self.lights)
+        
+        phong_preCalc = """
+        // Vertex-shader pre-calculation for lighting...
+        void phong_preCalc( 
+            in vec3 vertex_position,
+            in vec4 light_position,
+            out float light_distance,
+            out vec3 ec_light_location,
+            out vec3 ec_light_half
+        ) {
+            // This is the core setup for a phong lighting pass 
+            // as a reusable fragment of code.
+            
+            // vertex_position -- un-transformed vertex position (world-space)
+            // light_position -- un-transformed light location (direction)
+            // light_distance -- output giving world-space distance-to-light 
+            // ec_light_location -- output giving location of light in eye coords 
+            // ec_light_half -- output giving the half-vector optimization
+            
+            if (light_position.w == 0.0) {
+                // directional rather than positional light...
+                ec_light_location = normalize(
+                    gl_NormalMatrix *
+                    light_position.xyz
+                );
+                light_distance = 0.0;
+            } else {
+                // positional light, we calculate distance in 
+                // model-view space here, so we take a partial 
+                // solution...
+                vec3 ms_vec = (
+                    light_position.xyz -
+                    vertex_position
+                );
+                vec3 light_direction = gl_NormalMatrix * ms_vec;
+                ec_light_location = normalize( light_direction );
+                light_distance = abs(length( ms_vec ));
+            }
+            // half-vector calculation 
+            ec_light_half = normalize(
+                ec_light_location - vec3( 0,0,-1 )
+            );
+        }"""
         
         lightConst = "\n".join([
             "const int %s = %s;"%( k,v )
@@ -93,6 +140,38 @@ class TestContext( BaseContext ):
         
         varying vec3 baseNormal;
         """
+        
+        vertex = compileShader( 
+            lightConst + phong_preCalc +
+        """
+        attribute vec3 Vertex_position;
+        attribute vec3 Vertex_normal;
+        void light_preCalc( in vec3 vertex_position ) {
+            // This function is dependent on the uniforms and 
+            // varying values we've been using, it basically 
+            // just iterates over the phong_lightCalc passing in 
+            // the appropriate values
+            vec3 light_direction;
+            for (int i = 0; i< LIGHT_COUNT; i++ ) {
+                int j = i * LIGHT_SIZE;
+                phong_preCalc(
+                    vertex_position,
+                    lights[j+POSITION],
+                    // following are the values to fill in...
+                    Light_distance[i],
+                    EC_Light_location[i],
+                    EC_Light_half[i]
+                );
+            }
+        }
+        void main() {
+            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+                Vertex_position, 1.0
+            );
+            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            light_preCalc(Vertex_position);
+        }""", GL_VERTEX_SHADER)
+        
         phong_weightCalc = """
         vec3 phong_weightCalc( 
             in vec3 light_pos, // light position/direction
@@ -104,6 +183,14 @@ class TestContext( BaseContext ):
             in vec4 spot_params, // spot control parameters...
             in vec4 spot_direction // model-space direction
         ) {
+            // Together with phong_preCalc this is the core blinn/phong 
+            // lighting algorithm.  The light_pos, half_light, and distance 
+            // parameters were calculated by phong_preCalc, frag_normal
+            // is normally calculated by the vertex shader (we pass it as 
+            // baseNormal).  shininess normally comes from the material, 
+            // while attenuations, spot_params and spot_direction come 
+            // from the lighting setup.
+            
             // returns vec3( ambientMult, diffuseMult, specularMult )
             
             float n_dot_pos = max( 0.0, dot( 
@@ -152,51 +239,7 @@ class TestContext( BaseContext ):
             return vec3( attenuation, n_dot_pos, n_dot_half);
         }
         """
-        phong_preCalc = """
-        // Vertex-shader pre-calculation for lighting...
-        void phong_preCalc( in vec3 vertex_position ) {
-            vec3 light_direction;
-            for (int i = 0; i< LIGHT_COUNT; i++ ) {
-                int j = i * LIGHT_SIZE;
-                if (lights[j+POSITION].w == 0.0) {
-                    // directional rather than positional light...
-                    EC_Light_location[i] = normalize(
-                        gl_NormalMatrix *
-                        lights[j+POSITION].xyz
-                    );
-                    Light_distance[i] = 0.0;
-                } else {
-                    // positional light, we calculate distance in 
-                    // model-view space here, so we take a partial 
-                    // solution...
-                    vec3 ms_vec = (
-                        lights[j+POSITION].xyz -
-                        vertex_position
-                    );
-                    light_direction = gl_NormalMatrix * ms_vec;
-                    EC_Light_location[i] = normalize( light_direction );
-                    Light_distance[i] = abs(length( ms_vec ));
-                }
-                
-                // half-vector calculation 
-                EC_Light_half[i] = normalize(
-                    EC_Light_location[i] - vec3( 0,0,-1 )
-                );
-            }
-        }"""
-        vertex = compileShader( 
-            lightConst + phong_preCalc +
-        """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
         
-        void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
-                Vertex_position, 1.0
-            );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
-            phong_preCalc(Vertex_position);
-        }""", GL_VERTEX_SHADER)
         fragment = compileShader( 
             lightConst + phong_weightCalc + """
         struct Material {
@@ -211,6 +254,9 @@ class TestContext( BaseContext ):
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
             
+            // Again, we've moved the "hairy" code into the reusable 
+            // function, our loop simply calls the phong calculation 
+            // with the values from our uniforms and attributes...
             int i,j;
             for (i=0;i<LIGHT_COUNT;i++) {
                 j = i * LIGHT_SIZE;
@@ -400,6 +446,8 @@ class TestContext( BaseContext ):
             holder = self.cache.holder( 
                 material,data,key=key
             )
+            for field in ['diffuseColor','ambientIntensity','shininess','specularColor','transparency']:
+                holder.depend( material, field )
         shininess,ambient,color,specular = data
         ul = self.uniform_locations.get 
         glUniform1f( ul('material.shininess'), shininess )
