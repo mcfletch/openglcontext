@@ -161,50 +161,6 @@ class TestContext( BaseContext ):
                         self.shapes[2]
                     ],
                 ),
-#				Transform(
-##					translation = (0,5,0),
-#					children = [
-#					ShaderGeometry(
-#						# test of shader geometry "shape" type...
-#						DEF = 'ShaderGeom',
-#						uniforms = [
-#						],
-#						attributes = [
-#							ShaderAttribute(
-#								name = 'pos',
-#								offset = 0,
-#								stride = 12,
-#								size = 3,
-#								dataType = 'FLOAT',
-#								buffer = ShaderBuffer(
-#									buffer = [ 0,0,0, 1,0,0, .5,.5,0 ],
-#								),
-#							),
-#						],
-#						appearance = 	Shader(
-#							objects = [GLSLObject(
-#								DEF = 'ShaderGeom_shader',
-#								shaders = [
-#									GLSLShader( 
-#										source = [
-#											"""attribute vec3 position; 
-#											void main() { 
-#												gl_Position = vec4(position,1.0); 
-#											}""",
-#										],
-#										type = "VERTEX",
-#									),
-#									GLSLShader(
-#										source = ["""void main() { 
-#		gl_FragColor = vec4( 0,1,0,1);
-#		}"""],
-#										type = "FRAGMENT",
-#									),
-#								],
-#							),]
-#						),
-#					),],
-#				),
                 PointLight( location = (10,10,10) ),
             ],
         )
