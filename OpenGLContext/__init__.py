@@ -19,7 +19,7 @@ modules should operate under any of the fully functional
 GUI contexts (note that there are unfinished contexts).
 '''
 
-__version__ = "2.1.0a9"
+__version__ = "2.1.0a10"
 __author__ = "Michael Colin Fletcher"
 __license__ = "BSD-Style, see license.txt for details and exceptions"
 
@@ -119,8 +119,16 @@ for suffix in ('1f','2f','3f','4f','m2','m3','m4','m2x3','m3x2','m2x4','m4x2','m
     Node( 'FloatUniform'+suffix,'OpenGLContext.scenegraph.shaders.FloatUniform'+suffix )
 for suffix in ('1i','2i','3i','4i'):
     Node( 'IntUniform'+suffix,'OpenGLContext.scenegraph.shaders.IntUniform'+suffix )
+Node( 'TextureUniform','OpenGLContext.scenegraph.shaders.TextureUniform' )
 Node( 'GLSLShader','OpenGLContext.scenegraph.shaders.GLSLShader' )
 Node( 'GLSLObject','OpenGLContext.scenegraph.shaders.GLSLObject' )
+Node( 'GLSLImport','OpenGLContext.scenegraph.shaders.GLSLImport' )
+
+Node( 'ShaderAttribute','OpenGLContext.scenegraph.shaders.ShaderAttribute' )
+Node( 'ShaderBuffer','OpenGLContext.scenegraph.shaders.ShaderBuffer' )
+Node( 'ShaderIndexBuffer','OpenGLContext.scenegraph.shaders.ShaderIndexBuffer' )
+Node( 'ShaderSlice','OpenGLContext.scenegraph.shaders.ShaderSlice' )
+
 Node( 'Shader','OpenGLContext.scenegraph.shaders.Shader' )
 Node( 'ROUTE','vrml.route.ROUTE' )
 Node( 'IS','vrml.route.IS' )
