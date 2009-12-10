@@ -16,7 +16,6 @@ from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL.shaders import *
-from OpenGLContext.scenegraph.shaders import *
 from OpenGLContext.scenegraph.basenodes import *
 
 class TestContext( BaseContext ):
