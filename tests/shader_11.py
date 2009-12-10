@@ -7,6 +7,7 @@ This tutorial:
 
     * configure our light array from VRML97 scenegraph objects
     * configure our material structure from VRML97 scenegraph objects
+    * add simple texturing
 
 The purpose of this tutorial is to consolidate our work so far 
 so that we can reuse it in further tutorials without needing to 
@@ -211,7 +212,15 @@ class TestContext( BaseContext ):
         for i,light in enumerate( self.lights ):
             # update in case there's a change...
             self.LIGHTS[i] = self.lightAsArray( light )
+        glActiveTexture( GL_TEXTURE0 + 1 )
+        try:
+            self.appearance.texture.render( mode.visible, mode.lighting, mode )
+        finally:
+            pass
+            glActiveTexture( GL_TEXTURE0 )
+        
         glUseProgram(self.shader)
+        glUniform1i( self.uniform_locations['diffuse_texture'], 1 )
         try:
             self.coords.bind()
             self.indices.bind()
@@ -223,7 +232,14 @@ class TestContext( BaseContext ):
                     count,
                     self.LIGHTS
                 )
-                self.materialFromAppearance( self.appearance, mode )
+                for key,value in self.materialFromAppearance( 
+                    self.appearance, mode 
+                ).items():
+                    loc = self.uniform_locations.get( key )
+                    if isinstance( value, float ):
+                        glUniform1f( loc, value )
+                    else:
+                        glUniform4fv( loc, 1, value )
                 for uniform,value in self.UNIFORM_VALUES:
                     location = self.uniform_locations.get( uniform )
                     if location not in (None,-1):
@@ -343,22 +359,18 @@ class TestContext( BaseContext ):
             holder = self.cache.holder( 
                 material,data,key=key
             )
-            for field in ['diffuseColor','ambientIntensity','shininess','specularColor','transparency']:
+            for field in [
+                'diffuseColor','ambientIntensity',
+                'shininess','specularColor','transparency'
+            ]:
                 holder.depend( material, field )
         shininess,ambient,color,specular = data
-        ul = self.uniform_locations.get 
-        glUniform1f( ul('material.shininess'), shininess )
-        glUniform4fv( ul('material.ambient'), 1,ambient )
-        glUniform4fv( ul('material.diffuse'), 1,color )
-        glUniform4fv( ul('material.specular'),1,specular )
-        if appearance.texture:
-            glActiveTexture( GL_TEXTURE0 + 1 )
-            try:
-                appearance.texture.render( mode.visible, mode.lighting, mode )
-            finally:
-                pass
-                glActiveTexture( GL_TEXTURE0 )
-            glUniform1i( ul('diffuse_texture' ), 1 )
+        return {
+            'material.shininess': shininess,
+            'material.ambient': ambient,
+            'material.diffuse': color,
+            'material.specular': specular,
+        }
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
