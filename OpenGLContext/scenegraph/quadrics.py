@@ -70,24 +70,34 @@ class Quadric( nodetypes.Geometry, node.Node ):
     def compile( self, mode=None ):
         """Compile this sphere for use on mode"""
         raise NotImplementedError( """Haven't implemented %s compilation yet"""%(self.__class__.__name__,))
-        
 
 class Sphere( basenodes.Sphere, Quadric ):
     """Sphere geometry rendered with GLU quadratic calls"""
     _unitSphere = None
     def compile( self, mode=None ):
-        """Compile this sphere for use on mode"""
+        """Compile this sphere for use on mode
+        
+        returns coordvbo,indexvbo,count
+        """
+        coords, indices = self.compileArrays( )
+        vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
+        if hasattr(mode,'cache'):
+            holder = mode.cache.holder( self, vbos )
+            holder.depend( self, 'radius' )
+        return vbos
+    
+    def compileArrays( self ):
+        """Compile to arrays...
+        
+        returns coordarray, indexarray
+        """
         if self._unitSphere is None:
             # create a unitsphere instance for all instances
             Sphere._unitSphere = self.sphere( pi/32 )
         coords,indices = self._unitSphere
         coords = copy( coords )
         coords[:,0:3] *= self.radius
-        vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
-        if hasattr(mode,'cache'):
-            holder = mode.cache.holder( self, vbos )
-            holder.depend( self, 'radius' )
-        return vbos
+        return coords, indices
     
     @classmethod
     def sphere( cls, phi=pi/8.0, latAngle=pi, longAngle=(pi*2) ):
@@ -96,6 +106,8 @@ class Sphere( basenodes.Sphere, Quadric ):
         phi -- angle between points on the sphere (stacks/slices)
         
         Note: creates 'H' type indices...
+        
+        returns coordarray, indexarray
         """
         latsteps = arange( 0,latAngle+0.000003, phi )
         longsteps = arange( 0,longAngle+0.000003, phi )
@@ -103,7 +115,10 @@ class Sphere( basenodes.Sphere, Quadric ):
 
     @classmethod
     def _partialSphere( cls, latsteps, longsteps ):
-        """Create a partial-sphere data-set for latsteps and longsteps"""
+        """Create a partial-sphere data-set for latsteps and longsteps
+        
+        returns (coordarray, indexarray)
+        """
         ystep = len(longsteps)
         zstep = len(latsteps)
         xstep = 1

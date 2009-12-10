@@ -8,6 +8,7 @@ from OpenGL.arrays import vbo
 from OpenGLContext.arrays import array,reshape
 from OpenGLContext import context
 from vrml.vrml97 import shaders
+import operator
 from vrml import field,node,fieldtypes,protofunctions
 from OpenGLContext.scenegraph import polygonsort,boundingvolume
 from OpenGLContext.arrays import array
@@ -15,10 +16,11 @@ LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
 import time, sys,logging
 log = logging.getLogger( 'OpenGLContext.scenegraph.shaders' )
+log.setLevel( logging.DEBUG )
 from OpenGL.extensions import alternate
 
 
-class _Buffer( shaders.ShaderBuffer ):
+class _Buffer( object ):
     """VBO based buffer implementation for generic geometry"""
     GL_USAGE_MAPPING = {
         'STREAM_DRAW': GL_STREAM_DRAW,
@@ -56,10 +58,15 @@ class _Buffer( shaders.ShaderBuffer ):
         vbo = self.vbo(mode)
         vbo.bind()
         return vbo
+    def unbind( self, mode ):
+        """Unbind the vbo"""
+        vbo = self.vbo(mode)
+        vbo.unbind()
+        return vbo
     
-class ShaderBuffer( _Buffer ):
+class ShaderBuffer( _Buffer, shaders.ShaderBuffer ):
     """Regular vertex-buffer mechanism"""
-class ShaderIndexBuffer( _Buffer ):
+class ShaderIndexBuffer( _Buffer, shaders.ShaderIndexBuffer ):
     """Index array buffer mechanism"""
     
 class ShaderAttribute( shaders.ShaderAttribute ):
@@ -302,7 +309,6 @@ class GLSLShader( shaders.GLSLShader ):
                 return False 
             source.extend( import_lib.source )
         source.extend( self.source )
-        #source = "\n".join( source )
         try:
             if self.type == 'VERTEX':
                 shader = compileShader(
@@ -404,6 +410,8 @@ class GLSLObject( shaders.GLSLObject ):
                 glDeleteShader( subShader )
             holder.data = program
             return program
+        else:
+            log.debug( 'Not done loading shader source yet' )
         holder.data = 0
         return None
     def program( self, mode ):
