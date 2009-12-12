@@ -509,7 +509,7 @@ class ShaderGeometry( shaders.ShaderGeometry ):
                 try:
                     if self.uniforms:
                         for uniform in self.uniforms:
-                            uniform.render( current, token, mode )
+                            uniform.render( current, mode )
                     if self.slices:
                         # now iterate over our slices...
                         for slice in self.slices:
