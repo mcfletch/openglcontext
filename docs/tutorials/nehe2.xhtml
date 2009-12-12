@@ -43,67 +43,67 @@ here.
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 class TestContext( BaseContext ):
-	"""Rendering Context with custom viewpoint and render
-	Note: will have slightly different results as OpenGLContext
-	automatically enables lighting.
-	"""
+    """Rendering Context with custom viewpoint and render
+    Note: will have slightly different results as OpenGLContext
+    automatically enables lighting.
+    """
 </div>
 	<div class="commentary">
 	<div class="paragraph">The first customization is the initialPosition attribute.  By
-	default, the OpenGLContext contexts position your
-	eye/camera at (0,0,10), which makes it easy to see most
-	meter-sized geometry located at the origin.  Since the
-	NeHe tutorial manually repositions the geometry to be in a
-	good viewing position under the assumption that the eye
-	is at (0,0,0), we need to make that assumption valid.
+    default, the OpenGLContext contexts position your
+    eye/camera at (0,0,10), which makes it easy to see most
+    meter-sized geometry located at the origin.  Since the
+    NeHe tutorial manually repositions the geometry to be in a
+    good viewing position under the assumption that the eye
+    is at (0,0,0), we need to make that assumption valid.
 </div>
 </div>
-	<div class="code-sample">	initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
+	<div class="code-sample">    initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
 </div>
 	<div class="commentary">
 	<div class="paragraph">The second customization is the Render method.  This method is
-	called if there is no SceneGraph present in the Context.
-	(Such as in our tutorial).
+    called if there is no SceneGraph present in the Context.
+    (Such as in our tutorial).
 </div>
 </div>
-	<div class="code-sample">	def Render( self, mode):
-		"""Render the geometry for the scene."""
+	<div class="code-sample">    def Render( self, mode):
+        """Render the geometry for the scene."""
 </div>
 	<div class="commentary">
 	<div class="paragraph">Prevents OpenGL from removing faces which face backward</div>
 </div>
-	<div class="code-sample">		glDisable( GL_CULL_FACE )
+	<div class="code-sample">        glDisable( GL_CULL_FACE )
 </div>
 	<div class="commentary">
 	<div class="paragraph">Moves the drawing origin 6 units into the screen and 1.5 units to the left</div>
 </div>
-	<div class="code-sample">		glTranslatef(-1.5,0.0,-6.0);
+	<div class="code-sample">        glTranslatef(-1.5,0.0,-6.0);
 </div>
 	<div class="commentary">
 	<div class="paragraph">Starts the (legacy) geometry generation mode</div>
 </div>
-	<div class="code-sample">		glBegin(GL_TRIANGLES)
-		glVertex3f( 0.0,  1.0, 0.0)
-		glVertex3f(-1.0, -1.0, 0.0)
-		glVertex3f( 1.0, -1.0, 0.0)
-		glEnd()
+	<div class="code-sample">        glBegin(GL_TRIANGLES)
+        glVertex3f( 0.0,  1.0, 0.0)
+        glVertex3f(-1.0, -1.0, 0.0)
+        glVertex3f( 1.0, -1.0, 0.0)
+        glEnd()
 </div>
 	<div class="commentary">
 	<div class="paragraph">Moves the drawing origin again, cumulative change is now (1.5,0.0,6.0)</div>
 </div>
-	<div class="code-sample">		glTranslatef(3.0,0.0,0.0);
+	<div class="code-sample">        glTranslatef(3.0,0.0,0.0);
 </div>
 	<div class="commentary">
 	<div class="paragraph">Starts a different geometry generation mode</div>
 </div>
-	<div class="code-sample">		glBegin(GL_QUADS)
-		glVertex3f(-1.0,-1.0, 0.0)
-		glVertex3f( 1.0,-1.0, 0.0)
-		glVertex3f( 1.0, 1.0, 0.0)
-		glVertex3f(-1.0, 1.0, 0.0)
-		glEnd();
+	<div class="code-sample">        glBegin(GL_QUADS)
+        glVertex3f(-1.0,-1.0, 0.0)
+        glVertex3f( 1.0,-1.0, 0.0)
+        glVertex3f( 1.0, 1.0, 0.0)
+        glVertex3f(-1.0, 1.0, 0.0)
+        glEnd();
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">

@@ -39,49 +39,49 @@ here.
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 class TestContext( BaseContext ):
-	"""Colorises the NeHe2 geometry"""
-	initialPosition = (0,0,0)
-	def Render( self, mode = 0):
-		"""Renders the geometry for the scene."""
+    """Colorises the NeHe2 geometry"""
+    initialPosition = (0,0,0)
+    def Render( self, mode = 0):
+        """Renders the geometry for the scene."""
 </div>
 	<div class="commentary">
 	<div class="paragraph">Unlike the nehe tutorial, we need to explicitly disable
-		lighting, as the context automatically enables lighting
-		to avoid a common class of new user errors where unlit
-		geometry does not appear due to lack of light.</div>
+        lighting, as the context automatically enables lighting
+        to avoid a common class of new user errors where unlit
+        geometry does not appear due to lack of light.</div>
 </div>
-	<div class="code-sample">		BaseContext.Render( self, mode )
-		glDisable( GL_CULL_FACE)
-		glDisable( GL_LIGHTING)
+	<div class="code-sample">        BaseContext.Render( self, mode )
+        glDisable( GL_CULL_FACE)
+        glDisable( GL_LIGHTING)
 </div>
 	<div class="commentary">
 	<div class="paragraph">Now we return to the tutorial, in this geometry we are 
-		specifying a colour for each vertex.</div>
+        specifying a colour for each vertex.</div>
 </div>
-	<div class="code-sample">		glTranslatef(-1.5,0.0,-6.0);
-		glBegin(GL_TRIANGLES)
-		glColor3f(1,0,0)
-		glVertex3f( 0.0,  1.0, 0.0)
-		glColor3f(0,1,0)
-		glVertex3f(-1.0, -1.0, 0.0)
-		glColor3f(0,0,1)
-		glVertex3f( 1.0, -1.0, 0.0)
-		glEnd()
-		glTranslatef(3.0,0.0,0.0);
+	<div class="code-sample">        glTranslatef(-1.5,0.0,-6.0);
+        glBegin(GL_TRIANGLES)
+        glColor3f(1,0,0)
+        glVertex3f( 0.0,  1.0, 0.0)
+        glColor3f(0,1,0)
+        glVertex3f(-1.0, -1.0, 0.0)
+        glColor3f(0,0,1)
+        glVertex3f( 1.0, -1.0, 0.0)
+        glEnd()
+        glTranslatef(3.0,0.0,0.0);
 </div>
 	<div class="commentary">
 	<div class="paragraph">Here we specify the colour once for the entire piece of 
-		geometry.</div>
+        geometry.</div>
 </div>
-	<div class="code-sample">		glColor3f(0.5,0.5,1.0)
-		glBegin(GL_QUADS)
-		glVertex3f(-1.0,-1.0, 0.0)
-		glVertex3f( 1.0,-1.0, 0.0)
-		glVertex3f( 1.0, 1.0, 0.0)
-		glVertex3f(-1.0, 1.0, 0.0)
-		glEnd()
+	<div class="code-sample">        glColor3f(0.5,0.5,1.0)
+        glBegin(GL_QUADS)
+        glVertex3f(-1.0,-1.0, 0.0)
+        glVertex3f( 1.0,-1.0, 0.0)
+        glVertex3f( 1.0, 1.0, 0.0)
+        glVertex3f(-1.0, 1.0, 0.0)
+        glEnd()
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">

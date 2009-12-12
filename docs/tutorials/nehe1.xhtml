@@ -44,18 +44,17 @@ BaseContext = testingcontext.getInteractive()
 </div>
 	<div class="code-sample">
 class TestContext( BaseContext ):
-	"""A subclass of the (dynamically determined) BaseContext,
-	by overriding various methods, we could customize the
-	functionality of this context, but the tutorial doesn't
-	ask us to do this."""
+    """A subclass of the (dynamically determined) BaseContext,
+    by overriding various methods, we could customize the
+    functionality of this context, but the tutorial doesn't
+    ask us to do this."""
 </div>
 	<div class="commentary">
 	<div class="paragraph">And finally, we run our Context's utility "ContextMainLoop", which starts whatever GUI event loop is appropriate for the type of context we have.</div>
 </div>
 	<div class="code-sample">
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
-</div>
+    TestContext.ContextMainLoop()</div>
 <div class="source-reference">This code-walkthrough tutorial is generated from the nehe1.py script in the 
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>

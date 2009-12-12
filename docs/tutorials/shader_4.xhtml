@@ -62,14 +62,14 @@ values that can be used for animations.</div>
 </div>
 	<div class="code-sample">from OpenGLContext.events.timer import Timer
 class TestContext( BaseContext ):
-	"""Demonstrates use of attribute types in GLSL
-	"""
-	def OnInit( self ):
-		"""Initialize the context"""
+    """Demonstrates use of attribute types in GLSL
+    """
+    def OnInit( self ):
+        """Initialize the context"""
 </div>
 	<div class="commentary">
 	<div class="paragraph">We've defined a uniform "tween" which represents the current 
-		fractional mix between the two positions.</div>
+        fractional mix between the two positions.</div>
 	<div class="paragraph">When we were using the glVertexPointer/glColorPointer
 entry points, there were implicitly defined attribute values
 (gl_Vertex, gl_Color) that recieved our data-records.  With 
@@ -78,160 +78,160 @@ which will be used.  They look very similar to the declarations
 for uniform values, save for the varying keyword.
 </div>
 </div>
-	<div class="code-sample">		vertex = compileShader("""
-			uniform float tween;
-			attribute vec3 position;
-			attribute vec3 tweened;
-			attribute vec3 color;
-			varying vec4 baseColor;
-			void main() {
-				gl_Position = gl_ModelViewProjectionMatrix * mix(
-					vec4( position,1.0),
-					vec4( tweened,1.0),
-					tween
-				);
-				baseColor = vec4(color,1.0);
-			}""",GL_VERTEX_SHADER)
-		fragment = compileShader("""
-			varying vec4 baseColor;
-			void main() {
-				gl_FragColor = baseColor;
-			}""",GL_FRAGMENT_SHADER)
-		self.shader = compileProgram(vertex,fragment)
+	<div class="code-sample">        vertex = compileShader("""
+            uniform float tween;
+            attribute vec3 position;
+            attribute vec3 tweened;
+            attribute vec3 color;
+            varying vec4 baseColor;
+            void main() {
+                gl_Position = gl_ModelViewProjectionMatrix * mix(
+                    vec4( position,1.0),
+                    vec4( tweened,1.0),
+                    tween
+                );
+                baseColor = vec4(color,1.0);
+            }""",GL_VERTEX_SHADER)
+        fragment = compileShader("""
+            varying vec4 baseColor;
+            void main() {
+                gl_FragColor = baseColor;
+            }""",GL_FRAGMENT_SHADER)
+        self.shader = compileProgram(vertex,fragment)
 </div>
 	<div class="commentary">
 	<div class="paragraph">Since our VBO now has two position records and one colour 
-		record, we have an extra 3 floats for each vertex record.</div>
+        record, we have an extra 3 floats for each vertex record.</div>
 </div>
-	<div class="code-sample">		self.vbo = vbo.VBO(
-			array( [
-				[  0, 1, 0, 1,3,0,  0,1,0 ],
-				[ -1,-1, 0, -1,-1,0,  1,1,0 ],
-				[  1,-1, 0, 1,-1,0, 0,1,1 ],
-				[  2,-1, 0, 2,-1,0, 1,0,0 ],
-				[  4,-1, 0, 4,-1,0, 0,1,0 ],
-				[  4, 1, 0, 4,9,0, 0,0,1 ],
-				[  2,-1, 0, 2,-1,0, 1,0,0 ],
-				[  4, 1, 0, 1,3,0, 0,0,1 ],
-				[  2, 1, 0, 1,-1,0, 0,1,1 ],
-			],'f')
-		)
+	<div class="code-sample">        self.vbo = vbo.VBO(
+            array( [
+                [  0, 1, 0, 1,3,0,  0,1,0 ],
+                [ -1,-1, 0, -1,-1,0,  1,1,0 ],
+                [  1,-1, 0, 1,-1,0, 0,1,1 ],
+                [  2,-1, 0, 2,-1,0, 1,0,0 ],
+                [  4,-1, 0, 4,-1,0, 0,1,0 ],
+                [  4, 1, 0, 4,9,0, 0,0,1 ],
+                [  2,-1, 0, 2,-1,0, 1,0,0 ],
+                [  4, 1, 0, 1,3,0, 0,0,1 ],
+                [  2, 1, 0, 1,-1,0, 0,1,1 ],
+            ],'f')
+        )
 </div>
 	<div class="commentary">
 	<div class="paragraph">As with uniforms, we must use opaque "location" values 
-		to refer to our attributes when calling into the GL.</div>
+        to refer to our attributes when calling into the GL.</div>
 </div>
-	<div class="code-sample">		self.position_location = glGetAttribLocation( 
-			self.shader, 'position' 
-		)
-		self.tweened_location = glGetAttribLocation(
-			self.shader, 'tweened',
-		)
-		self.color_location = glGetAttribLocation( 
-			self.shader, 'color' 
-		)
-		self.tween_location = glGetUniformLocation(
-			self.shader, 'tween',
-		)
+	<div class="code-sample">        self.position_location = glGetAttribLocation( 
+            self.shader, 'position' 
+        )
+        self.tweened_location = glGetAttribLocation(
+            self.shader, 'tweened',
+        )
+        self.color_location = glGetAttribLocation( 
+            self.shader, 'color' 
+        )
+        self.tween_location = glGetUniformLocation(
+            self.shader, 'tween',
+        )
 </div>
 	<div class="commentary">
 	<div class="paragraph">The OpenGLContext timer class is setup here to provide 
-		a 0.0 -> 1.0 animation event and pass it to the given function.</div>
+        a 0.0 -> 1.0 animation event and pass it to the given function.</div>
 </div>
-	<div class="code-sample">		self.time = Timer( duration = 2.0, repeating = 1 )
-		self.time.addEventHandler( "fraction", self.OnTimerFraction )
-		self.time.register (self)
-		self.time.start ()
-	def Render( self, mode = 0):
-		"""Render the geometry for the scene."""
-		BaseContext.Render( self, mode )
-		glUseProgram(self.shader)
+	<div class="code-sample">        self.time = Timer( duration = 2.0, repeating = 1 )
+        self.time.addEventHandler( "fraction", self.OnTimerFraction )
+        self.time.register (self)
+        self.time.start ()
+    def Render( self, mode = 0):
+        """Render the geometry for the scene."""
+        BaseContext.Render( self, mode )
+        glUseProgram(self.shader)
 </div>
 	<div class="commentary">
 	<div class="paragraph">We pass in the current (for this frame) value of our 
-		animation fraction.  The timer will generate events to update
-		this value during idle time.</div>
+        animation fraction.  The timer will generate events to update
+        this value during idle time.</div>
 </div>
-	<div class="code-sample">		glUniform1f( self.tween_location, self.tween_fraction )
-		try:
+	<div class="code-sample">        glUniform1f( self.tween_location, self.tween_fraction )
+        try:
 </div>
 	<div class="commentary">
 	<div class="paragraph">Each attribute array, just as with the legacy pointer
-			functions, will bind to the current (Vertex) VBO.  
-			Because we are only using one VBO, we can bind once.  
-			If our position arrays were stored in different VBOs, 
-			we would need to bind and unbind the VBO for the
-			corresponding glVertexAttribPointer calls.
+            functions, will bind to the current (Vertex) VBO.  
+            Because we are only using one VBO, we can bind once.  
+            If our position arrays were stored in different VBOs, 
+            we would need to bind and unbind the VBO for the
+            corresponding glVertexAttribPointer calls.
 </div>
 </div>
-	<div class="code-sample">			self.vbo.bind()
-			try:
+	<div class="code-sample">            self.vbo.bind()
+            try:
 </div>
 	<div class="commentary">
 	<div class="paragraph">As with the legacy pointers, we have to explicitly 
-				enable the retrieval of values, without this, the GL 
-				would attempt to read a value for every attribute that 
-				is defined.  Non-enabled attributes get default values 
-				for each vertex.  It is also possible to specify a single 
-				value for an attribute to be used for each vertex 
-				(as though the attribute were a uniform).
+                enable the retrieval of values, without this, the GL 
+                would attempt to read a value for every attribute that 
+                is defined.  Non-enabled attributes get default values 
+                for each vertex.  It is also possible to specify a single 
+                value for an attribute to be used for each vertex 
+                (as though the attribute were a uniform).
 </div>
 </div>
-	<div class="code-sample">				glEnableVertexAttribArray( self.position_location )
-				glEnableVertexAttribArray( self.tweened_location )
-				glEnableVertexAttribArray( self.color_location )
+	<div class="code-sample">                glEnableVertexAttribArray( self.position_location )
+                glEnableVertexAttribArray( self.tweened_location )
+                glEnableVertexAttribArray( self.color_location )
 </div>
 	<div class="commentary">
 	<div class="paragraph">Our vertex array is now 36 bytes/record.  The 
-				glVertexAttribPointer calls are very similar to the legacy 
-				calls, save that they provide the attribute location 
-				into which the data-array will feed.
+                glVertexAttribPointer calls are very similar to the legacy 
+                calls, save that they provide the attribute location 
+                into which the data-array will feed.
 </div>
 </div>
-	<div class="code-sample">				stride = 9*4
-				glVertexAttribPointer( 
-					self.position_location, 
-					3, GL_FLOAT,False, stride, self.vbo 
-				)
-				glVertexAttribPointer( 
-					self.tweened_location, 
-					3, GL_FLOAT,False, stride, self.vbo+12
-				)
-				glVertexAttribPointer( 
-					self.color_location, 
-					3, GL_FLOAT,False, stride, self.vbo+24
-				)
-				glDrawArrays(GL_TRIANGLES, 0, 9)
-			finally:
-				self.vbo.unbind()
+	<div class="code-sample">                stride = 9*4
+                glVertexAttribPointer( 
+                    self.position_location, 
+                    3, GL_FLOAT,False, stride, self.vbo 
+                )
+                glVertexAttribPointer( 
+                    self.tweened_location, 
+                    3, GL_FLOAT,False, stride, self.vbo+12
+                )
+                glVertexAttribPointer( 
+                    self.color_location, 
+                    3, GL_FLOAT,False, stride, self.vbo+24
+                )
+                glDrawArrays(GL_TRIANGLES, 0, 9)
+            finally:
+                self.vbo.unbind()
 </div>
 	<div class="commentary">
 	<div class="paragraph">As with the legacy pointer operations, we want to 
-				clean up our array enabling so that any later calls 
-				will not cause seg-faults when they try to read records
-				from these arrays (potentially beyond the end of the
-				arrays).</div>
+                clean up our array enabling so that any later calls 
+                will not cause seg-faults when they try to read records
+                from these arrays (potentially beyond the end of the
+                arrays).</div>
 </div>
-	<div class="code-sample">				glDisableVertexAttribArray( self.position_location )
-				glDisableVertexAttribArray( self.tweened_location )
-				glDisableVertexAttribArray( self.color_location )
-		finally:
-			glUseProgram( 0 )
+	<div class="code-sample">                glDisableVertexAttribArray( self.position_location )
+                glDisableVertexAttribArray( self.tweened_location )
+                glDisableVertexAttribArray( self.color_location )
+        finally:
+            glUseProgram( 0 )
 </div>
 	<div class="commentary">
 	<div class="paragraph">Our trivial event-handler function simply stores the event's 
-	fraction as our tween_fraction value.</div>
+    fraction as our tween_fraction value.</div>
 </div>
-	<div class="code-sample">	tween_fraction = 0.0
-	def OnTimerFraction( self, event ):
-		frac = event.fraction()
-		if frac > .5:
-			frac = 1.0-frac 
-		frac *= 2
-		self.tween_fraction =frac
-		self.triggerRedraw()
+	<div class="code-sample">    tween_fraction = 0.0
+    def OnTimerFraction( self, event ):
+        frac = event.fraction()
+        if frac > .5:
+            frac = 1.0-frac 
+        frac *= 2
+        self.tween_fraction =frac
+        self.triggerRedraw()
 if __name__ == "__main__":
-	TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
 	<div class="paragraph">On-GPU tweening would be likely to use an extremely large array 

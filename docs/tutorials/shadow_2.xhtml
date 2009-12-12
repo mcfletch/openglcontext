@@ -92,7 +92,7 @@ class TestContext( BaseContext ):
     we'll parameterize the filtering operation here.</div>
 </div>
 	<div class="code-sample">    FILTER_TYPE = GL_NEAREST 
-    def setupShadowContext( self,light=None, mode=None ):
+    def setupShadowContext( self,light=None, mode=None, textureKey="" ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
 </div>
@@ -100,7 +100,8 @@ class TestContext( BaseContext ):
 	<div class="paragraph">As with the previous tutorial, we want to cache our texture (and FBO),
         so we check to see if the values have already been set up.</div>
 </div>
-	<div class="code-sample">        token = mode.cache.getData(light,key=self.textureCacheKey)
+	<div class="code-sample">        key = self.textureCacheKey+textureKey
+        token = mode.cache.getData(light,key=key)
         if not token:
 </div>
 	<div class="commentary">
@@ -140,7 +141,9 @@ which currently always must be 0.
                 texture, 
                 0 #mip-map level...
             )
-            holder = mode.cache.holder( light,(fbo,texture),key=self.textureCacheKey)
+            holder = mode.cache.holder( 
+                light,(fbo,texture),key=key
+            )
         else:
 </div>
 	<div class="commentary">
@@ -202,7 +205,7 @@ which currently always must be 0.
 </div>
 	<div class="code-sample">        glClear(GL_DEPTH_BUFFER_BIT)
         return texture
-    def closeShadowContext( self, texture ):
+    def closeShadowContext( self, texture, textureKey="" ):
         """Close our shadow-rendering context/texture"""
 </div>
 	<div class="commentary">

@@ -124,7 +124,16 @@ check for extensions which *only* define new constants.
 	<div class="commentary">
 	<div class="paragraph">Here are the lights we're going to use to cast shadows.</div>
 </div>
-	<div class="code-sample">        self.lights = [
+	<div class="code-sample">        self.lights = self.createLights()
+        self.addEventHandler( "keypress", name="s", function = self.OnToggleTimer)
+    def createLights( self ):
+        """Create the light's we're going to use to cast shadows"""
+</div>
+	<div class="commentary">
+	<div class="paragraph">Our first tutorial can only handle "spotlights", so we'll limit 
+        ourselves to those.</div>
+</div>
+	<div class="code-sample">        return [
             SpotLight(
                 location = [0,5,10],
                 color = [1,.95,.95],
@@ -139,8 +148,7 @@ check for extensions which *only* define new constants.
                 ambientIntensity = .05,
                 direction = [-3,-3,-3],
             ),
-        ]
-        self.addEventHandler( "keypress", name="s", function = self.OnToggleTimer)
+        ]        
     def createGeometry( self ):
         """Create a simple VRML scenegraph to be rendered with shadows"""
 </div>
@@ -777,8 +785,7 @@ if __name__ == "__main__":
 	<div class="code-sample">
     TestContext.ContextMainLoop(
         size = (512,512),
-    )
-</div>
+    )</div>
 <div class="source-reference">This code-walkthrough tutorial is generated from the shadow_1.py script in the 
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
