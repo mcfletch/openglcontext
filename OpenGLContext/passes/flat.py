@@ -13,26 +13,26 @@ from pydispatch.dispatcher import connect
 log = logging.getLogger( 'OpenGLContext.passes.flat' )
 
 if sys.maxint > 2L<<32:
-    BIGINTS = True 
+    BIGINTS = True
 else:
     BIGINTS = False
-    
+
 class SGObserver( object ):
-    """Observer of a scenegraph that creates a flat set of paths 
-    
+    """Observer of a scenegraph that creates a flat set of paths
+
     Uses dispatcher watches to observe any changes to the (rendering)
-    structure of a scenegraph and uses it to update an internal set 
+    structure of a scenegraph and uses it to update an internal set
     of paths for all renderable objects in the scenegraph.
     """
     INTERESTING_TYPES = []
     def __init__( self, scene, contexts ):
-        """Initialize the FlatPass for this scene and set of contexts 
-        
+        """Initialize the FlatPass for this scene and set of contexts
+
         scene -- the scenegraph to manage as a flattened hierarchy
-        contexts -- set of (weakrefs to) contexts to be serviced, 
+        contexts -- set of (weakrefs to) contexts to be serviced,
             normally is a reference to Context.allContexts
         """
-        self.scene = scene 
+        self.scene = scene
         self.contexts = contexts
         self.paths = {
         }
@@ -58,7 +58,7 @@ class SGObserver( object ):
         todo = [ (node,parentPath) ]
         while todo:
             next,parents = todo.pop(0)
-            path = parents + next 
+            path = parents + next
             np = self.npFor( next )
             np.append( path )
             if hasattr( next, 'bind' ):
@@ -123,44 +123,44 @@ class SGObserver( object ):
             self.paths[key][:] = filtered
 
 class FlatPass( SGObserver ):
-    """Flat rendering pass with a single function to render scenegraph 
-    
+    """Flat rendering pass with a single function to render scenegraph
+
     Uses structural scenegraph observations to allow the actual
-    rendering pass be a simple iteration over the paths known 
+    rendering pass be a simple iteration over the paths known
     to be active in the scenegraph.
-    
+
     Rendering Attributes:
-    
+
         visible -- whether we are currently rendering a visible pass
         transparent -- whether we are currently doing a transparent pass
         lighting -- whether we currently are rendering a lit pass
-        context -- context for which we are rendering 
-        cache -- cache of the context for which we are rendering 
+        context -- context for which we are rendering
+        cache -- cache of the context for which we are rendering
         projection -- projection matrix of current view platform
-        modelView -- model-view matrix of current view platform 
-        viewport -- 4-component viewport definition for current context 
+        modelView -- model-view matrix of current view platform
+        viewport -- 4-component viewport definition for current context
         frustum -- viewing-frustum definition for current view platform
         MAX_LIGHTS -- queried maximum number of lights
-        
+
 
         passCount -- not used, always set to 0 for code that expects
             a passCount to be available.
-        transform -- ignored, legacy code only 
+        transform -- ignored, legacy code only
     """
     passCount = 0
-    visible = True 
-    transparent = False 
+    visible = True
+    transparent = False
     transform = True
     lighting = True
     lightingAmbient = True
     lightingDiffuse = True
-    
+
     # this are now obsolete...
     selectNames = False
     selectForced = False
 
     cache = None
-    
+
     INTERESTING_TYPES = [
         nodetypes.Rendering,
         nodetypes.Bindable,
@@ -181,9 +181,9 @@ class FlatPass( SGObserver ):
         if paths:
             current = paths[0]
             current[-1].bound = 1
-            return current 
+            return current
         return None
-    
+
     def renderSet( self, matrix ):
         """Calculate ordered rendering set to display"""
         # ordered set of things to work with...
@@ -202,33 +202,33 @@ class FlatPass( SGObserver ):
         return toRender
 
     def greatestDepth( self, toRender ):
-        # experimental: adjust our frustum to smaller depth based on 
+        # experimental: adjust our frustum to smaller depth based on
         # the projected z-depth of bbox points...
         maxDepth = 0
         for (key,mv,tm,bv,path) in toRender:
             try:
                 points = bv.getPoints()
             except (AttributeError,boundingvolume.UnboundedObject), err:
-                return 0 
+                return 0
             else:
                 translated = dot( points, mv )
                 maxDepth = min((maxDepth, min( translated[:,2] )))
-        return -maxDepth
+        return -(maxDepth*1.01)
 
     def frustumVisibilityFilter( self, records ):
         """Filter records for visibility using frustum planes
-        
+
         This does per-object culling based on frustum lookups
-        rather than object query values.  It should be fast 
-        *if* the frustcullaccel module is available, if not 
+        rather than object query values.  It should be fast
+        *if* the frustcullaccel module is available, if not
         it will be dog-slow.
         """
         result = []
         frustum = self.frustum
         for record in records:
-            (key,mv,tm,bv,path) = record 
+            (key,mv,tm,bv,path) = record
             if bv is not None:
-                visible = bv.visible( 
+                visible = bv.visible(
                     frustum, tm,
                     occlusion=False,
                     mode=self
@@ -238,7 +238,7 @@ class FlatPass( SGObserver ):
             else:
                 result.append( record )
         return result
-    
+
     def Render( self, context, mode ):
         """Render the geometry attached to this flat-renderer's scenegraph"""
         vp = context.getViewPlatform()
@@ -253,10 +253,10 @@ class FlatPass( SGObserver ):
         if maxDepth:
             previous = self.projection
             self.projection = vp.viewMatrix(maxDepth)
-        
+
         glMatrixMode( GL_PROJECTION )
         glLoadMatrixd( self.getProjection() )
-        
+
         events = context.getPickEvents()
         debugSelection = mode.context.contextDefinition.debugSelection
         if events or debugSelection:
@@ -270,10 +270,10 @@ class FlatPass( SGObserver ):
             glLoadIdentity()
             self.matrix = matrix
             self.visible = True
-            self.transparent = False 
+            self.transparent = False
             self.lighting = True
-            self.textured = True 
-            
+            self.textured = True
+
             self.legacyBackgroundRender( vp,matrix )
             # Set up generic "geometric" rendering parameters
             glFrontFace( GL_CCW )
@@ -283,17 +283,17 @@ class FlatPass( SGObserver ):
             glDepthFunc(GL_LESS)
             glEnable(GL_CULL_FACE)
             glCullFace(GL_BACK)
-            
+
             self.legacyLightRender( matrix )
-            
+
             self.renderOpaque( toRender )
             self.renderTransparent( toRender )
-            
+
             if context.frameCounter.display:
                 context.frameCounter.Render( context )
         context.SwapBuffers()
         self.matrix = matrix
-    
+
     def legacyBackgroundRender( self, vp,matrix ):
         """Do legacy background rendering"""
         bPath = self.currentBackground( )
@@ -305,7 +305,7 @@ class FlatPass( SGObserver ):
             ### default VRML background is black
             glClearColor(0.0,0.0,0.0,1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
-    
+
     def legacyLightRender( self, matrix ):
         """Do legacy light-rendering operation"""
         # okay, now visible presentations
@@ -314,11 +314,11 @@ class FlatPass( SGObserver ):
         id = 0
         for path in self.paths.get( nodetypes.Light, ()):
             tmatrix = path.transformMatrix()
-            
+
             localMatrix = dot(tmatrix,matrix)
             self.matrix = localMatrix
             glLoadMatrixd( localMatrix )
-            
+
             path[-1].Light( GL_LIGHT0+id, mode=self )
             id += 1
             if id >= (self.MAX_LIGHTS-1):
@@ -351,19 +351,19 @@ class FlatPass( SGObserver ):
                     )
     def renderTransparent( self, toRender ):
         """Render the transparent geometry from toRender (in forward order)"""
-        self.transparent = True 
-        setup = False 
+        self.transparent = True
+        setup = False
         debugFrustum = self.context.contextDefinition.debugBBox
         try:
             for key,mvmatrix,tmatrix,bvolume,path in toRender:
                 if key[0]:
                     if not setup:
-                        setup = True 
+                        setup = True
                         glEnable(GL_BLEND)
                         glBlendFunc(GL_ONE_MINUS_SRC_ALPHA,GL_SRC_ALPHA, )
                         glDepthMask( 0 )
                         glDepthFunc( GL_LEQUAL )
-                        
+
                     self.matrix = mvmatrix
                     glLoadMatrixd( mvmatrix )
                     try:
@@ -377,42 +377,42 @@ class FlatPass( SGObserver ):
                             getTraceback( err ),
                         )
         finally:
-            self.transparent = False 
+            self.transparent = False
             if setup:
                 glDisable( GL_BLEND )
                 glDepthMask( 1 )
                 glDepthFunc( GL_LEQUAL )
                 glEnable( GL_DEPTH_TEST )
-    
+
     def selectRender( self, mode, toRender, events ):
         """Render each path to color buffer
-        
-        We render all geometry as non-transparent geometry with 
-        unique colour values for each object.  We should be able 
+
+        We render all geometry as non-transparent geometry with
+        unique colour values for each object.  We should be able
         to handle up to 2**24 objects before that starts failing.
         """
-        # TODO: allow context to signal that it is "captured" by a 
+        # TODO: allow context to signal that it is "captured" by a
         # movement manager that doesn't need select rendering...
-        # e.g. for an examine manager there's no reason to do select 
+        # e.g. for an examine manager there's no reason to do select
         # render passes...
-        # TODO: do line-box intersection tests for bounding boxes to 
-        # only render the geometry which is under the cursor 
-        # TODO: render to an FBO instead of the back buffer 
+        # TODO: do line-box intersection tests for bounding boxes to
+        # only render the geometry which is under the cursor
+        # TODO: render to an FBO instead of the back buffer
         # (when available)
-        # TODO: render at 1/2 size compared to context to create a 
+        # TODO: render at 1/2 size compared to context to create a
         # 2x2 selection square and reduce overhead.
         glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
         glDisable( GL_LIGHTING )
         glEnable( GL_COLOR_MATERIAL )
-        
+
         self.visible = False
-        self.transparent = False 
+        self.transparent = False
         self.lighting = False
-        self.textured = False 
-        
+        self.textured = False
+
         matrix = self.matrix
         map = {}
-        
+
         pickPoints = {}
         # TODO: this could be faster, and we could do further filtering
         # using a frustum a-la select render mode approach...
@@ -439,7 +439,7 @@ class FlatPass( SGObserver ):
                 self.matrix = mvmatrix
                 glLoadMatrixd( mvmatrix )
                 path[-1].Render( mode=self )
-                map[id] = path 
+                map[id] = path
             for point,eventSet in pickPoints.items():
                 # get the pixel colour (id) under the cursor.
                 pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
@@ -447,8 +447,8 @@ class FlatPass( SGObserver ):
                 paths = map.get( pixel, [] )
                 event.setObjectPaths( [paths] )
                 # get the depth value under the cursor...
-                pixel = glReadPixels( 
-                    point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT 
+                pixel = glReadPixels(
+                    point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT
                 )
                 event.viewCoordinate = point[0],point[1],pixel[0][0]
                 event.modelViewMatrix = matrix
@@ -461,14 +461,14 @@ class FlatPass( SGObserver ):
             glDisable( GL_COLOR_MATERIAL )
             glEnable( GL_LIGHTING )
             glDisable( GL_SCISSOR_TEST )
-        
+
     MAX_LIGHTS = -1
     def __call__( self, context ):
         """Overall rendering pass interface for the context client"""
-        mode = self 
+        mode = self
         vp = context.getViewPlatform()
         self.viewPlatform = vp
-        # These values are temporarily stored locally, we are 
+        # These values are temporarily stored locally, we are
         # in the context lock, so we're not causing conflicts
         if self.MAX_LIGHTS == -1:
             self.MAX_LIGHTS = glGetIntegerv( GL_MAX_LIGHTS )
@@ -482,8 +482,8 @@ class FlatPass( SGObserver ):
             dot(self.modelView,self.projection),
             normalize = 1
         )
-        
-        # We're here setting up legacy OpenGL settings 
+
+        # We're here setting up legacy OpenGL settings
         # eventually these will be uniform setups...
         self.Render( context, self )
         return True # flip yes, for now we always flip...
