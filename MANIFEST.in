@@ -2,13 +2,16 @@ include MANIFEST.in
 include license.txt
 include readme.txt
 
-recursive-include tests *.jpg *.bmp *.png *.wrl
+recursive-include tests *.jpg *.bmp *.png *.wrl *.jpeg
 exclude tests/axis.wrl
 exclude tests/flower.wrl
 exclude tests/test.jpg
 exclude tests/wrls/logo_installer.bmp
 exclude tests/wrls/pyopenglchapel.wrl
 include tests/*.py
+include tests/*.vert
+include tests/*.frag
+include tests/resources/*.txt
 
 recursive-include docs *.css *.png *.gif
 include docs/*.html
