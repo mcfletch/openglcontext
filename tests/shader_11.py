@@ -9,8 +9,8 @@ This tutorial:
     * configure our material structure from VRML97 scenegraph objects
     * add simple texturing
 
-The purpose of this tutorial is to consolidate our work so far 
-so that we can reuse it in further tutorials without needing to 
+The purpose of this tutorial is to consolidate our work so far
+so that we can reuse it in further tutorials without needing to
 repeat code all the time.
 '''
 from OpenGLContext import testingcontext
@@ -20,20 +20,20 @@ from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL.shaders import *
 '''We're going to use VRML97 nodes to configure our shaders,
-so we'll import the whole set of VRML97 base nodes (and the 
-OpenGLContext extended nodes as well, though we aren't going 
+so we'll import the whole set of VRML97 base nodes (and the
+OpenGLContext extended nodes as well, though we aren't going
 to use them here).'''
 from OpenGLContext.scenegraph.basenodes import *
 
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    '''Rather than declaring our constants as context attributes, we'll 
+    '''Rather than declaring our constants as context attributes, we'll
     make an explicit namespace in which the constants are stored.'''
     shader_constants = dict(
         LIGHT_COUNT = 5,
         LIGHT_SIZE = 7,
-        
+
         AMBIENT = 0,
         DIFFUSE = 1,
         SPECULAR = 2,
@@ -63,64 +63,81 @@ class TestContext( BaseContext ):
                 ambientIntensity = .1,
             ),
         ]
-    
+
     def OnInit( self ):
         """Initialize the context"""
-        '''Our first step in making the shader-based code more flexible is 
-        to make the number and type of lights depend on a declared set of 
-        light "nodes" rather than explicitly creating arrays of lighting 
-        parameters.  The flexibility this provides means that we can easily 
+        '''Our first step in making the shader-based code more flexible is
+        to make the number and type of lights depend on a declared set of
+        light "nodes" rather than explicitly creating arrays of lighting
+        parameters.  The flexibility this provides means that we can easily
         demo all 3 types of supported lights here.'''
         self.lights = self.createLights()
-        '''Now we take the set of lights and turn them into an array of 
+        '''Now we take the set of lights and turn them into an array of
         lighting parameters to be passed into the shader.'''
         self.LIGHTS = array([
             self.lightAsArray(l)
-            for l in self.lights 
+            for l in self.lights
         ],'f')
-        '''Instead of the hard-coded lighting count, we update the light 
-        count before compiling the shader.  In the real world we'd want to 
-        make the number of lights a parameter per-object so that we could 
-        generate a light-count-specific shader shared among all objects 
+        '''Instead of the hard-coded lighting count, we update the light
+        count before compiling the shader.  In the real world we'd want to
+        make the number of lights a parameter per-object so that we could
+        generate a light-count-specific shader shared among all objects
         with the same light-count.
         '''
         self.shader_constants['LIGHT_COUNT'] = len(self.lights)
-        
-        '''Load our shader functions that we've stored in resources and files.'''
+        '''We load our shader functions that we've stored in resources and files
+        as simple string values.'''
         from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         from OpenGLContext.resources.phongweights_frag import data as phong_weightCalc
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
-        
+        '''Our light constants are now generated from the dictionary declared at
+        the class level, with the count we just updated substituted into the
+        code.  The only change to the content here is the addition of the
+        Vertex_texture_coordinate_var value which interpolates our texture
+        coordinates.'''
         lightConst = "\n".join([
             "const int %s = %s;"%( k,v )
             for k,v in self.shader_constants.items()
         ]) + """
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-        
+
         varying vec3 EC_Light_half[LIGHT_COUNT];
-        varying vec3 EC_Light_location[LIGHT_COUNT]; 
-        varying float Light_distance[LIGHT_COUNT]; 
-        
+        varying vec3 EC_Light_location[LIGHT_COUNT];
+        varying float Light_distance[LIGHT_COUNT];
+
         varying vec3 baseNormal;
         varying vec2 Vertex_texture_coordinate_var;
         """
-        
-        vertex = compileShader( 
+        '''Our vertex shader using the refactored pieces has become quite small.
+        The only change here is the addition of the texture-coordinate values.
+        The texture coordinates are simply assigned to the varying value so that
+        they will show up interpolated across the fragments in the fragment
+        shader.
+        '''
+        vertex = compileShader(
             lightConst + phong_preCalc + light_preCalc +
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
         attribute vec2 Vertex_texture_coordinate;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+            gl_Position = gl_ModelViewProjectionMatrix * vec4(
                 Vertex_position, 1.0
             );
             baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
             light_preCalc(Vertex_position);
             Vertex_texture_coordinate_var = Vertex_texture_coordinate;
         }""", GL_VERTEX_SHADER)
-        
-        fragment = compileShader( 
+        '''The fragment shader is still "under development", so we haven't
+        refactored it into separate files to the same extent.  The only noticeable
+        change here is the texture calculation.
+
+        We use the sampler2D type to define a variable which can to texture
+        lookups into a configured texture-unit on the video card.  The varying
+        texture-coordinate variable will provide us with interpolated s,t
+        coordinates which we can use to do a texture2D call on the sampler2D.
+        '''
+        fragment = compileShader(
             lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
@@ -131,17 +148,17 @@ class TestContext( BaseContext ):
         uniform Material material;
         uniform vec4 Global_ambient;
         uniform sampler2D diffuse_texture;
-        
+
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
-            
-            vec4 texDiffuse = texture2D( 
-                diffuse_texture, Vertex_texture_coordinate_var 
+
+            vec4 texDiffuse = texture2D(
+                diffuse_texture, Vertex_texture_coordinate_var
             );
             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
-            
-            // Again, we've moved the "hairy" code into the reusable 
-            // function, our loop simply calls the phong calculation 
+
+            // Again, we've moved the "hairy" code into the reusable
+            // function, our loop simply calls the phong calculation
             // with the values from our uniforms and attributes...
             int i,j;
             for (i=0;i<LIGHT_COUNT;i++) {
@@ -157,7 +174,7 @@ class TestContext( BaseContext ):
                     lights[j+SPOT_DIR]
                 );
                 fragColor = (
-                    fragColor 
+                    fragColor
                     + (lights[j+AMBIENT] * material.ambient * weights.x)
                     + (lights[j+DIFFUSE] * texDiffuse * weights.y)
                     + (lights[j+SPECULAR] * material.specular * weights.z)
@@ -166,12 +183,16 @@ class TestContext( BaseContext ):
             gl_FragColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
+        '''Compilation is the same.'''
         self.shader = compileProgram(vertex,fragment)
-        self.coords,self.indices,self.count = Sphere( 
-            radius = 1 
+        '''As is our sphere geometry setup.'''
+        self.coords,self.indices,self.count = Sphere(
+            radius = 1
         ).compile()
-        
-        self.appearance = Appearance( 
+        '''Here we define an appearance node that we'll use to configure our
+        shader uniforms with the method materialFromAppearance (below).  The
+        texture will be loaded from the provided URL using PIL.'''
+        self.appearance = Appearance(
             material = Material(
                 diffuseColor = (1,1,1),
                 ambientIntensity = .1,
@@ -181,14 +202,17 @@ class TestContext( BaseContext ):
                 url = ['marbleface.jpeg'],
             ),
         )
-        
+        '''Uniform setup looks much the same, though we've moved the material
+        uniforms into a separate list and have refactored the uniform resolution
+        into a method.'''
         self.uniform_locations = {}
         for uniform,value in self.UNIFORM_VALUES:
             self.findUniform( self.shader, uniform )
         self.findUniform( self.shader, 'lights' )
         for uniform in self.MATERIAL_UNIFORMS:
             self.findUniform( self.shader, uniform )
-        
+        '''We add a texture-coordinate attribute which we'll use to index into
+        the texture we're setting up.'''
         for attribute in (
             'Vertex_position','Vertex_normal','Vertex_texture_coordinate',
         ):
@@ -196,30 +220,35 @@ class TestContext( BaseContext ):
             if location in (None,-1):
                 print 'Warning, no attribute: %s'%( uniform )
             setattr( self, attribute+ '_loc', location )
+    '''As noted above, we're down to a single "global" uniform.  The material
+    is specially set up now.'''
     UNIFORM_VALUES = [
         ('Global_ambient',(.05,.05,.05,1.0)),
     ]
+    '''Our refactored code to find a uniform, takes a uniform name and resolves
+    to a location.'''
     def findUniform( self, shader, uniform ):
         location = glGetUniformLocation( shader, uniform )
         if location in (None,-1):
             print 'Warning, no uniform: %s'%( uniform )
         self.uniform_locations[uniform] = location
         return location
-        
+
     def Render( self, mode = None):
         """Render the geometry for the scene."""
-        BaseContext.Render( self, mode )
-        for i,light in enumerate( self.lights ):
-            # update in case there's a change...
-            self.LIGHTS[i] = self.lightAsArray( light )
+        '''We set up our texture on texture-unit 1 (the second unit).'''
         glActiveTexture( GL_TEXTURE0 + 1 )
         try:
+            '''The texture will not render anything when we are in a non-visible
+            or non-lit pass.'''
             self.appearance.texture.render( mode.visible, mode.lighting, mode )
         finally:
-            pass
             glActiveTexture( GL_TEXTURE0 )
-        
+
+        '''Enable the shader.'''
         glUseProgram(self.shader)
+        '''Now we can configure our texture sampler uniform to point to
+        texture-unit 1 (where we configured our texture).'''
         glUniform1i( self.uniform_locations['diffuse_texture'], 1 )
         try:
             self.coords.bind()
@@ -227,13 +256,13 @@ class TestContext( BaseContext ):
             stride = self.coords.data[0].nbytes
             try:
                 count = self.shader_constants['LIGHT_COUNT'] * self.shader_constants['LIGHT_SIZE']
-                glUniform4fv( 
+                glUniform4fv(
                     self.uniform_locations['lights'],
                     count,
                     self.LIGHTS
                 )
-                for key,value in self.materialFromAppearance( 
-                    self.appearance, mode 
+                for key,value in self.materialFromAppearance(
+                    self.appearance, mode
                 ).items():
                     loc = self.uniform_locations.get( key )
                     if isinstance( value, float ):
@@ -252,16 +281,16 @@ class TestContext( BaseContext ):
                 glEnableVertexAttribArray( self.Vertex_position_loc )
                 glEnableVertexAttribArray( self.Vertex_normal_loc )
                 glEnableVertexAttribArray( self.Vertex_texture_coordinate_loc )
-                glVertexAttribPointer( 
-                    self.Vertex_position_loc, 
+                glVertexAttribPointer(
+                    self.Vertex_position_loc,
                     3, GL_FLOAT,False, stride, self.coords
                 )
-                glVertexAttribPointer( 
-                    self.Vertex_texture_coordinate_loc, 
+                glVertexAttribPointer(
+                    self.Vertex_texture_coordinate_loc,
                     2, GL_FLOAT,False, stride, self.coords+(3*4)
                 )
-                glVertexAttribPointer( 
-                    self.Vertex_normal_loc, 
+                glVertexAttribPointer(
+                    self.Vertex_normal_loc,
                     3, GL_FLOAT,False, stride, self.coords+(5*4)
                 )
                 glDrawElements(
@@ -276,7 +305,7 @@ class TestContext( BaseContext ):
                 glDisableVertexAttribArray( self.Vertex_texture_coordinate_loc )
         finally:
             glUseProgram( 0 )
-    
+
     def lightAsArray( self, light ):
         """Given a single VRML97 light-node, produce light value array"""
         def sk(k):
@@ -304,7 +333,7 @@ class TestContext( BaseContext ):
                 result[ S ][3] = 1.0
                 depends_on.append( 'intensity' )
                 depends_on.append( 'ambientIntensity' )
-                
+
                 if not isinstance( light, DirectionalLight ):
                     result[P][:3] = light.location
                     result[P][3] = 1.0
@@ -313,7 +342,7 @@ class TestContext( BaseContext ):
                     depends_on.append( 'location' )
                     depends_on.append( 'attenuation' )
                     if isinstance( light, SpotLight ):
-                        result[sk('SPOT_DIR')][:3] = light.direction 
+                        result[sk('SPOT_DIR')][:3] = light.direction
                         result[sk('SPOT_DIR')][3] = 1.0
                         result[sk('SPOT_PARAMS')] = [
                             cos( light.beamWidth/4.0 ),
@@ -328,12 +357,12 @@ class TestContext( BaseContext ):
                     result[P][:3] = -light.direction
                     result[P][3] = 0.0
                     depends_on.append( 'direction' )
-            holder = self.cache.holder( 
+            holder = self.cache.holder(
                 light,result,key=key
             )
             for field in depends_on:
                 holder.depend( light, field )
-        return result 
+        return result
     MATERIAL_UNIFORMS = [
         'material.shininess',
         'material.ambient',
@@ -343,20 +372,20 @@ class TestContext( BaseContext ):
     ]
     def materialFromAppearance( self, appearance, mode ):
         """Convert VRML97 appearance node to series of uniform calls"""
-        material = appearance.material 
+        material = appearance.material
         key = 'uniform-array'
         data = self.cache.getData(material, key= key )
         if data is None:
-            color = material.diffuseColor 
-            ambient = material.ambientIntensity * color 
+            color = material.diffuseColor
+            ambient = material.ambientIntensity * color
             shininess = material.shininess
             specular = material.specularColor
             alpha = 1.0 - material.transparency
             def as4( v ):
-                x,y,z = v 
+                x,y,z = v
                 return (x,y,z,alpha)
             data = (shininess,as4(ambient),as4(color),as4(specular))
-            holder = self.cache.holder( 
+            holder = self.cache.holder(
                 material,data,key=key
             )
             for field in [
