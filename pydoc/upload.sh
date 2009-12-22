@@ -1,3 +1,3 @@
 #! /bin/bash
 
-rsync -avP -e ssh *.html mcfletch,pyopengl@web.sourceforge.net:htdocs/pydoc/
+rsync -avP -e ssh *.html mcfletch,pyopengl@web.sourceforge.net:htdocs/documentation/pydoc/
