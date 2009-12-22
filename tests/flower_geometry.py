@@ -28,8 +28,7 @@ points = asarray([
 ], 'd')
 indices =  asarray([
     22, 1, 2, 22, 3, 4, 22, 5, 6, 22, 7, 8, 22, 9, 10, 22, 11, 12,
-    22, 13, 14, 22, 15, 16, 22, 17, 18, 22, 19, 20, 22, 21, 0], 'I')
-
+    22, 13, 14, 22, 15, 16, 22, 17, 18, 22, 19, 20, 22, 21, 0], 'i')
 points_expanded = contiguous( take( points, indices, 0 ))
 
 normals = asarray([
