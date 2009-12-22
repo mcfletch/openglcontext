@@ -74,7 +74,7 @@ class PygameContext(
             tuple([int(i) for i in definition.size]),
             OPENGL | self.pygameFlagsFromDefinition( definition ),
         )
-        return self.screen 
+        return self.screen
     def CallVirtual(self, name, *args, **namedarguments):
         "Call a potentially undefined method"
         func = getattr(self, name, lambda *x, **y:1)
@@ -124,10 +124,19 @@ class PygameContext(
         self.pygameDisplayMode()
         self.triggerRedraw(1)
         return 1
-        
+
     def ContextMainLoop( cls, *args, **named ):
         """Initialise the context and start the mainloop"""
         instance = cls( *args, **named )
+        if instance.contextDefinition.profileFile:
+            # profiling run...
+            import cProfile
+            return cProfile.runctx(
+                "instance.MainLoop()",
+                globals(),
+                locals(),
+                instance.contextDefinition.profileFile
+            )
         return instance.MainLoop()
     ContextMainLoop = classmethod( ContextMainLoop )
 
