@@ -425,7 +425,7 @@ class TestContext( BaseContext ):
             glShadeModel( GL_SMOOTH )
             glColorMask( 1,1,1,1 )
             '''Now restore the viewport.'''
-            glPopAttrib(GL_VIEWPORT_BIT)
+            glPopAttrib()
     '''The setup of the bias matrix was discussed at some length in the original 
     tutorial.  In sum, the depth-buffer is going to return values in the -1 to 1
     range, while the texture has values in range 0-1.  The bias matrix simply maps 
