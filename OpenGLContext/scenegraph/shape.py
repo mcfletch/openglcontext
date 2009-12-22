@@ -57,7 +57,7 @@ class Shape( basenodes.Shape ):
                 if textured:
                     self.appearance.renderPost(textureToken, mode=mode)
             finally:
-                glPopAttrib( GL_LIGHTING_BIT )
+                glPopAttrib( )
         else:
             # by default, just render using the mode's settings
             # (this is only called if visible false, BTW)
@@ -92,7 +92,7 @@ class Shape( basenodes.Shape ):
             if self.appearance:
                 self.appearance.renderPost( textureToken, mode=mode )
         finally:
-            glPopAttrib( GL_LIGHTING_BIT )
+            glPopAttrib( )
         
     def sortKey( self, mode, matrix ):
         """Produce the sorting key for this shape's appearance/shaders/etc"""
