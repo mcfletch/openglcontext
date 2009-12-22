@@ -10,7 +10,8 @@ This tutorial:
 We've been manually coding all of our shader, VBO and similar calls,
 while this is useful as a learning exercise, real-world code isn't
 likely to want to use raw calls everywhere.  In this tutorial we'll
-translate our previous code to use the OpenGLContext.scenegraph.shaders
+translate our previous code to use the
+[http://pyopengl.sourceforge.net/pydoc/OpenGLContext.scenegraph.shaders.html OpenGLContext.scenegraph.shaders]
 nodes.  These provide a set of declarative structures which can be
 used to create shader-based geometry with explicit support for
 libraries of reusable code.
@@ -60,7 +61,7 @@ class TestContext( BaseContext ):
         phong_weightCalc = GLSLImport( url="res://phongweights_frag" )
         '''The GLSLImport can also handle directly specifying the source-code,
         rather than loading from a URL.  Here we create a resuable import node
-        which declares our lighting constants.'''
+        which declares our light array and varying values.'''
         lightConst = GLSLImport( source = "\n".join([
                 "const int %s = %s;"%( k,v )
                 for k,v in self.shader_constants.items()
