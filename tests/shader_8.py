@@ -18,6 +18,9 @@ calculations for every fragment.  We'll split out the calculations
 so that the vertex shader provides interpolated values to the 
 fragment shader.
 '''
+import OpenGL
+#OpenGL.FULL_LOGGING = True
+#OpenGL.USE_ACCELERATE = False
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
@@ -204,10 +207,11 @@ class TestContext( BaseContext ):
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
+        if not mode.visible:
+            return 
         glUseProgram(self.shader)
         try:
             self.coords.bind()
-            self.indices.bind()
             stride = self.coords.data[0].nbytes
             try:
                 '''Note the use of the parameterized values to specify 
@@ -236,6 +240,7 @@ class TestContext( BaseContext ):
                     self.Vertex_normal_loc, 
                     3, GL_FLOAT,False, stride, self.coords+(5*4)
                 )
+                self.indices.bind()
                 glDrawElements(
                     GL_TRIANGLES, self.count,
                     GL_UNSIGNED_SHORT, self.indices
