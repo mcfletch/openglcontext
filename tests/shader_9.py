@@ -125,7 +125,7 @@ class TestContext( BaseContext ):
                 }
             }
             return vec3( attenuation, n_dot_pos, n_dot_half);
-        }		
+        }
         """
         '''==Calculating Distance and Direction==
         
@@ -199,7 +199,7 @@ class TestContext( BaseContext ):
             }
             // half-vector calculation 
             ec_light_half = normalize(
-                ec_light_location - vec3( 0,0,-1 )
+                ec_light_location + vec3( 0,0,1 )
             );
         }"""
         '''This function is not as generally reusable, so we'll store it 
@@ -259,16 +259,17 @@ class TestContext( BaseContext ):
         
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
-            
             int i,j;
             for (i=0;i<LIGHT_COUNT;i++) {
                 j = i* LIGHT_SIZE;
                 vec3 weights = phong_weightCalc(
                     normalize(EC_Light_location[i]),
                     normalize(EC_Light_half[i]),
-                    normalize(baseNormal),
+                    baseNormal,
                     material.shininess,
-                    Light_distance[i],
+                    // some implementations will produce negative values interpolating positive float-arrays!
+                    // so we have to do an extra abs call for distance
+                    abs(Light_distance[i]),
                     lights[j+ATTENUATION]
                 );
                 fragColor = (
@@ -278,6 +279,7 @@ class TestContext( BaseContext ):
                     + (lights[j+SPECULAR] * material.specular * weights.z)
                 );
             }
+            //fragColor = vec4(Light_distance[0],Light_distance[1],Light_distance[2],1.0);
             gl_FragColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
@@ -319,24 +321,26 @@ class TestContext( BaseContext ):
             ('lights[0].diffuse',(.1,.8,.1,1.0)),
             ('lights[0].specular',(0.0,1.0,0.0,1.0)),
             ('lights[0].position',(2.5,2.5,2.5,1.0)),
-            ('lights[0].attenuation',(0.0,.125,0.0,1.0)),
+            ('lights[0].attenuation',(0.0,.15,0.0,1.0)),
             
             ('lights[1].ambient',(.05,.05,.05,1.0)),
             ('lights[1].diffuse',(.8,.1,.1,1.0)),
             ('lights[1].specular',(1.0,0.0,0.0,1.0)),
             ('lights[1].position',(-2.5,2.5,2.5,1.0)),
-            ('lights[1].attenuation',(0.0,0.0,.125,1.0)),
+            ('lights[1].attenuation',(0.0,0.0,.15,1.0)),
             
             ('lights[2].ambient',(.05,.05,.05,1.0)),
             ('lights[2].diffuse',(.1,.1,.8,1.0)),
             ('lights[2].specular',(0.0,0.0,1.0,1.0)),
             ('lights[2].position',(0.0,-3.06,3.06,1.0)),
-            ('lights[2].attenuation',(2.0,0.0,0.0,1.0)),
+            ('lights[2].attenuation',(.15,0.0,0.0,1.0)),
         ]
     ], 'f')
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
+        if not mode.visible:
+            return
         glUseProgram(self.shader)
         try:
             self.coords.bind()
