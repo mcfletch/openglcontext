@@ -1,6 +1,6 @@
 # -*- coding: ISO-8859-1 -*-
 """Resource phongweights_frag (from file phongweights.frag)"""
-# written by resourcepackage: (1, 0, 1)
+# written by resourcepackage: (1, 0, 0)
 source = 'phongweights.frag'
 package = 'OpenGLContext.resources'
 data = "vec3 phong_weightCalc( \012    in vec3 light_pos, // light posi\
@@ -40,7 +40,8 @@ shininess\012        );\012        if (distance != 0.0) {\012        \
     attenuation = spot_effect / (\012                    attenu\
 ations.x + \012                    (attenuations.y * distance) \
 +\012                    (attenuations.z * distance * distance)\
-\012                );\012            n_dot_pos *= attenuation;\012  \
-          n_dot_half *= attenuation;\012        }\012    }\012    ret\
-urn vec3( attenuation, n_dot_pos, n_dot_half);\012}\012"
+\012                );\015\012            attenuation = clamp( attenu\
+ation, 0.0, 1.0 );\012            n_dot_pos *= attenuation;\012   \
+         n_dot_half *= attenuation;\015\012        }\012    }\015\012    re\
+turn vec3( attenuation, n_dot_pos, n_dot_half);\012}\012"
 ### end

@@ -57,6 +57,7 @@ vec3 phong_weightCalc(
                     (attenuations.y * distance) +
                     (attenuations.z * distance * distance)
                 );
+            attenuation = clamp( attenuation, 0.0, 1.0 );
             n_dot_pos *= attenuation;
             n_dot_half *= attenuation;
         }
