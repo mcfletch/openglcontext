@@ -181,7 +181,7 @@ class TestContext( BaseContext ):
                                     normalize(EC_Light_half[i]),
                                     normalize(baseNormal),
                                     material.shininess,
-                                    Light_distance[i],
+                                    abs(Light_distance[i]), // see note tutorial 9
                                     lights[j+ATTENUATION],
                                     lights[j+SPOT_PARAMS],
                                     lights[j+SPOT_DIR]
@@ -263,6 +263,8 @@ class TestContext( BaseContext ):
 
     def Render( self, mode = None):
         """Render the geometry for the scene."""
+        if not mode.visible:
+            return
         '''We are going to update the lights array on every frame, normally we'd
         cache the whole array and only update if there was a change.  This is
         exactly what we did in our previous tutorial.'''

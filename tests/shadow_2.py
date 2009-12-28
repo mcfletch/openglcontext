@@ -14,6 +14,7 @@ the only change is to add off-screen rendering of the depth-texture
 rather than rendering on the back-buffer of the screen.
 '''
 import OpenGL,sys,os,traceback
+#OpenGL.FULL_LOGGING = True
 '''Import the previous tutorial as BaseContext'''
 from shadow_1 import TestContext as BaseContext
 from OpenGLContext import testingcontext
@@ -89,6 +90,17 @@ class TestContext( BaseContext ):
                 texture,
                 0 #mip-map level...
             )
+            if sys.platform == 'win32':
+                color = glGenRenderbuffers(1)
+                glBindRenderbuffer( GL_RENDERBUFFER, color )
+                glRenderbufferStorage(
+                    GL_RENDERBUFFER,
+                    GL_RGBA,
+                    shadowMapSize,
+                    shadowMapSize,
+                )
+                glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, color )
+                glBindRenderbuffer( GL_RENDERBUFFER, 0 )
             holder = mode.cache.holder(
                 light,(fbo,texture),key=key
             )

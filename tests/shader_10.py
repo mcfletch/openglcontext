@@ -133,9 +133,9 @@ class TestContext( BaseContext ):
                             spot_effect = 1.0;
                         } else {
                             spot_effect = pow( 
-                                (1.0-spot_params.x)/(1.0-spot_cos), 
-                                spot_params.y 
-                            );
+                                    (1.0-spot_params.x)/(1.0-spot_cos), 
+                                    spot_params.y 
+                                );
                         }
                     }
                 }
@@ -146,11 +146,12 @@ class TestContext( BaseContext ):
                     shininess
                 );
                 if (distance != 0.0) {
-                    attenuation = spot_effect / (
-                            attenuations.x + 
-                            (attenuations.y * distance) +
-                            (attenuations.z * distance * distance)
-                        );
+                    float attenuation = 1.0/(
+                        attenuations.x + 
+                        (attenuations.y * distance) +
+                        (attenuations.z * distance * distance)
+                    );
+                    n_dot_half *= spot_effect;
                     n_dot_pos *= attenuation;
                     n_dot_half *= attenuation;
                 }
@@ -201,7 +202,7 @@ class TestContext( BaseContext ):
                     normalize(EC_Light_half[i]),
                     normalize(baseNormal),
                     material.shininess,
-                    Light_distance[i],
+                    abs(Light_distance[i]), // see note tutorial 9
                     lights[j+ATTENUATION],
                     lights[j+SPOT_PARAMS],
                     lights[j+SPOT_DIR]
@@ -241,7 +242,7 @@ class TestContext( BaseContext ):
     it's easier to see the spotlight cones on the sphere.'''
     UNIFORM_VALUES = [
         ('Global_ambient',(.05,.05,.05,1.0)),
-        ('material.ambient',(.2,.2,.2,1.0)),
+        ('material.ambient',(.8,.8,.8,1.0)),
         ('material.diffuse',(.8,.8,.8,1.0)),
         ('material.specular',(.8,.8,.8,1.0)),
         ('material.shininess',(.8,)),
@@ -257,24 +258,24 @@ class TestContext( BaseContext ):
     
         x[1] for x in [
             ('lights[0].ambient',(.05,.05,.05,1.0)),
-            ('lights[0].diffuse',(.1,1.0,.1,1.0)),
-            ('lights[0].specular',(0.0,.25,0.0,1.0)),
+            ('lights[0].diffuse',(.1,.8,.1,1.0)),
+            ('lights[0].specular',(0.0,.05,0.0,1.0)),
             ('lights[0].position',(2.5,3.5,2.5,1.0)),
-            ('lights[0].attenuation',(0.0,.125,0.0,1.0)),
-            ('lights[0].spot_params',(cos(.2),1.5,0.0,1.0)),
+            ('lights[0].attenuation',(0.0,1.0,1.0,1.0)),
+            ('lights[0].spot_params',(cos(.25),1.0,0.0,1.0)),
             ('lights[0].spot_dir',(-8,-20,-8.0,1.0)),
             
             ('lights[1].ambient',(.05,.05,.05,1.0)),
             ('lights[1].diffuse',(.8,.1,.1,1.0)),
-            ('lights[1].specular',(1.0,0.0,0.0,1.0)),
+            ('lights[1].specular',(.25,0.0,0.0,1.0)),
             ('lights[1].position',(-2.5,2.5,2.5,1.0)),
             ('lights[1].attenuation',(0.0,0.0,.125,1.0)),
-            ('lights[1].spot_params',(cos(.25),2.0,0.0,1.0)),
+            ('lights[1].spot_params',(cos(.25),1.25,0.0,1.0)),
             ('lights[1].spot_dir',(2.5,-5.5,-2.5,1.0)),
             
             ('lights[2].ambient',(.05,.05,.05,1.0)),
             ('lights[2].diffuse',(.1,.1,1.0,1.0)),
-            ('lights[2].specular',(0.0,1.0,1.0,1.0)),
+            ('lights[2].specular',(0.0,.25,.25,1.0)),
             ('lights[2].position',(0.0,-3.06,3.06,1.0)),
             ('lights[2].attenuation',(2.0,0.0,0.0,1.0)),
             ('lights[2].spot_params',(cos(.15),.75,0.0,1.0)),
@@ -285,6 +286,8 @@ class TestContext( BaseContext ):
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
+        if not mode.visible:
+            return
         glUseProgram(self.shader)
         try:
             self.coords.bind()

@@ -46,20 +46,25 @@ class TestContext( BaseContext ):
     def createLights( self ):
         return [
             DirectionalLight(
-                color = (.1,1,.1),
+                color = (0,1,.1),
                 intensity = 1.0,
                 ambientIntensity = 0.1,
-                direction = (-8,-20,-8),
+                direction = (-.4,-1,-.4),
             ),
             SpotLight(
                 location = (-2.5,2.5,2.5),
-                color = (1,.05,.05),
+                color = (1,0,.3),
                 ambientIntensity = .1,
+                attenuation = (0,0,1),
+                beamWidth = pi/2,
+                cutOffAngle = pi*.9,
                 direction = (2.5,-5.5,-2.5),
+                intensity = .5,
             ),
             PointLight(
                 location = (0,-3.06,3.06),
                 color = (.05,.05,1),
+                intensity = .5,
                 ambientIntensity = .1,
             ),
         ]
@@ -139,8 +144,7 @@ class TestContext( BaseContext ):
         '''
         fragment = compileShader(
             lightConst + phong_weightCalc + """
-        struct Material {
-            vec4 ambient;
+        struct Material {            vec4 ambient;
             vec4 diffuse;
             vec4 specular;
             float shininess;
@@ -156,29 +160,32 @@ class TestContext( BaseContext ):
                 diffuse_texture, Vertex_texture_coordinate_var
             );
             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
+            //texDiffuse = material.diffuse * texDiffuse;
 
             // Again, we've moved the "hairy" code into the reusable
             // function, our loop simply calls the phong calculation
             // with the values from our uniforms and attributes...
             int i,j;
+            vec3 weights;
+            vec4 mixColor;
             for (i=0;i<LIGHT_COUNT;i++) {
                 j = i * LIGHT_SIZE;
-                vec3 weights = phong_weightCalc(
+                weights = phong_weightCalc(
                     normalize(EC_Light_location[i]),
                     normalize(EC_Light_half[i]),
                     normalize(baseNormal),
                     material.shininess,
-                    Light_distance[i],
+                    abs(Light_distance[i]), // see note tutorial 9
                     lights[j+ATTENUATION],
                     lights[j+SPOT_PARAMS],
                     lights[j+SPOT_DIR]
                 );
-                fragColor = (
-                    fragColor
-                    + (lights[j+AMBIENT] * material.ambient * weights.x)
-                    + (lights[j+DIFFUSE] * texDiffuse * weights.y)
-                    + (lights[j+SPECULAR] * material.specular * weights.z)
-                );
+                mixColor = (lights[j+AMBIENT] * material.ambient * weights.x) + 
+                    (lights[j+DIFFUSE] * texDiffuse * weights.y) + 
+                    (lights[j+SPECULAR] * material.specular * weights.z);
+                fragColor += mixColor;
+                //fragColor = vec4( weights.y,weights.y,weights.y, 1.0 );
+                //fragColor = mixColor;
             }
             gl_FragColor = fragColor;
         }
@@ -195,8 +202,9 @@ class TestContext( BaseContext ):
         self.appearance = Appearance(
             material = Material(
                 diffuseColor = (1,1,1),
+                specularColor = (.25,.25,0),
                 ambientIntensity = .1,
-                shininess = .5,
+                shininess = .2,
             ),
             texture = ImageTexture(
                 url = ['marbleface.jpeg'],
@@ -237,6 +245,8 @@ class TestContext( BaseContext ):
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         '''We set up our texture on texture-unit 1 (the second unit).'''
+        if not mode.visible:
+            return
         glActiveTexture( GL_TEXTURE0 + 1 )
         try:
             '''The texture will not render anything when we are in a non-visible
@@ -329,7 +339,7 @@ class TestContext( BaseContext ):
                 result[ D ][3] = 1.0
                 result[ A ][:3] = color * light.ambientIntensity
                 result[ A ][3] = 1.0
-                result[ S ][:3] = color
+                result[ S ][:3] = color * light.intensity
                 result[ S ][3] = 1.0
                 depends_on.append( 'intensity' )
                 depends_on.append( 'ambientIntensity' )
