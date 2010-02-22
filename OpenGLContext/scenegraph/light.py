@@ -14,17 +14,17 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
         pointSource -- whether or not we are a point
             light source, stored as a float value, if
             false, the light is a directional light
-            
+
         location -- the object-space location of point-source
             lights (i.e. non-directional)
 
             or
-            
+
         direction -- direction a directional or spotlight
             is shining
-        
+
         color -- light diffuse color
-        
+
         ambientIntensity -- ambient light fraction of color
     """
     pointSource = 1.0
@@ -46,7 +46,7 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
             glEnable( GL_LIGHTING )
             glEnable( lightID )
             ### The following code allows for ambient-only lighting
-            ### and/or diffuse-only 
+            ### and/or diffuse-only
             if mode.lightingAmbient:
                 x,y,z = self.color * self.ambientIntensity
             else:
@@ -58,8 +58,8 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
             else:
                 x,y,z = 0.0, 0.0, 0.0
             glLightfv(
-                lightID, 
-                GL_DIFFUSE, 
+                lightID,
+                GL_DIFFUSE,
                 array((x,y,z,1.0),'f')*self.intensity
             )
             if hasattr( self, 'location' ):
@@ -70,15 +70,15 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
             return 1
         else:
             return 0
-    
+
     def viewMatrix( self, cutOffAngle=pi/3, aspect=1.0, near=0.1, far=10000 ):
         """Calculate viewing matrix for our light
-        
-        Calculate our projection matrix, note that this assumes that 
-        we are a spot-like light with a narrow field-of-view 
+
+        Calculate our projection matrix, note that this assumes that
+        we are a spot-like light with a narrow field-of-view
         (cutOffAngle).
         """
-        return transformmatrix.perspectiveMatrix( 
+        return transformmatrix.perspectiveMatrix(
             cutOffAngle,
             aspect,
             near,
@@ -86,16 +86,18 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
         )
     def modelMatrix( self, direction=None ):
         """Calculate our model-side matrix"""
-#        import pdb 
-#        pdb.set_trace()
         if direction is None:
-            direction = self.direction
-        rot = vectorutilities.orientToXYZR( (0,0,-1), direction )
-        # inverse of rotation matrix, hmm...
-        rotate = transformmatrix.rotMatrix( rot )[1]
-        # inverse of translation matrix...
-        translate = transformmatrix.transMatrix(self.location)[1]
-        return dot( translate,rotate )
+            direction = getattr( self,'direction',None)
+        if direction:
+            rot = vectorutilities.orientToXYZR( (0,0,-1), direction )
+            # inverse of rotation matrix, hmm...
+            rotate = transformmatrix.rotMatrix( rot )[1]
+            # inverse of translation matrix...
+            translate = transformmatrix.transMatrix(self.location)[1]
+            return dot( translate,rotate )
+        else:
+            # inverse of translation matrix...
+            return transformmatrix.transMatrix(self.location)[1]
 
 class PointLight(basenodes.PointLight, Light):
     """PointLight node
@@ -115,7 +117,17 @@ class PointLight(basenodes.PointLight, Light):
             return 1
         else:
             return 0
-        
+    def modelMatrix( self, direction=None ):
+        """Calculate our model-side matrix"""
+        if direction is None:
+            direction = self.direction
+        rot = vectorutilities.orientToXYZR( (0,0,-1), direction )
+        # inverse of rotation matrix, hmm...
+        rotate = transformmatrix.rotMatrix( rot )[1]
+        # inverse of translation matrix...
+        translate = transformmatrix.transMatrix(self.location)[1]
+        return dot( translate,rotate )
+
 class SpotLight(basenodes.SpotLight, PointLight):
     """SpotLight node
 
@@ -135,13 +147,13 @@ class SpotLight(basenodes.SpotLight, PointLight):
             return 1
         else:
             return 0
-    
+
 
 class DirectionalLight (basenodes.DirectionalLight, Light):
     '''A Directional Light node
     Note: this is not scoped according to vrml standard,
     instead it affects the entire scene
-    
+
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#DirectionalLight
     '''
     pointSource = 0.0
