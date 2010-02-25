@@ -40,7 +40,7 @@ try:
 except ImportError, err:
     pass
 
-Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml'] )
+Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml','.wrl.gz'] )
 Loader( 'obj', 'OpenGLContext.loaders.obj.defaultHandler', ['.obj'] )
 
 Node( 'Anchor', 'vrml.vrml97.basenodes.Anchor' )

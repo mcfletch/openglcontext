@@ -25,7 +25,7 @@ class TestFrame( wx.Frame ):
         self.CreateControls( style )
         icons = self.context.getDefaultIcons()
         if icons:
-            self.SetIcons( )
+            self.SetIcons( icons )
 
     def CreateShellEnvironment( self ):
         """Create the working shell environment"""
@@ -112,8 +112,8 @@ class TestFrame( wx.Frame ):
             self.context.scene = scenegraph
     def OnAddCommand( self, event ):
         """Add VRML97 nodes from a file"""
-        
-        
+
+
     def CreateContext( self, parent ):
         """Create the VRML browser context"""
         from OpenGLContext.browser import browsercontext
@@ -141,8 +141,8 @@ class UpdatingShell( shell.Shell ):
             self.context.triggerRedraw()
         except AttributeError:
             pass
-        
-        
+
+
 
 if __name__ == "__main__":
     class TestApplication (wx.PySimpleApp):
@@ -153,8 +153,8 @@ if __name__ == "__main__":
             frame.Show (1)
             self.SetTopWindow(frame)
             return 1
-    
+
     app = TestApplication ()
     app.MainLoop()
 
-    
+
