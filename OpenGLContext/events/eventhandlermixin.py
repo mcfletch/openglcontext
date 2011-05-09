@@ -2,7 +2,7 @@
 import Queue
 from OpenGLContext.debug.logs import event_log
 
-class EventHandlerMixin:
+class EventHandlerMixin(object):
     """This class provides mix in functionality for contexts
     needing event support.
 
