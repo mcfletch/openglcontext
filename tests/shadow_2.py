@@ -42,7 +42,7 @@ class TestContext( BaseContext ):
         self.shadowMapSize = min(
             (
                 glGetIntegerv( GL_MAX_TEXTURE_SIZE ),
-                2048,
+                self.shadowMapSize,
             )
         )
         if self.shadowMapSize < 256:
@@ -51,10 +51,12 @@ class TestContext( BaseContext ):
             self.shadowMapSize,self.shadowMapSize
         )
     '''We override this default in the init function.'''
-    shadowMapSize = 2048
+    shadowMapSize = 512
     '''Should you wish to experiment with different filtering functions,
     we'll parameterize the filtering operation here.'''
+    offset = 1.0
     FILTER_TYPE = GL_NEAREST
+    #FILTER_TYPE = GL_LINEAR
     def setupShadowContext( self,light=None, mode=None, textureKey="" ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
@@ -71,7 +73,7 @@ class TestContext( BaseContext ):
             texture = glGenTextures( 1 )
             glBindTexture( GL_TEXTURE_2D, texture )
             glTexImage2D(
-                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24,
                 shadowMapSize, shadowMapSize, 0,
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
@@ -91,6 +93,7 @@ class TestContext( BaseContext ):
                 0 #mip-map level...
             )
             if sys.platform == 'win32':
+                """Win32 requires that a colour buffer be bound..."""
                 color = glGenRenderbuffers(1)
                 glBindRenderbuffer( GL_RENDERBUFFER, color )
                 glRenderbufferStorage(
@@ -111,19 +114,21 @@ class TestContext( BaseContext ):
             glBindFramebuffer(GL_FRAMEBUFFER, fbo )
             '''Make the texture current to configure parameters.'''
             glBindTexture( GL_TEXTURE_2D, texture )
-        '''Unlike in the previous tutorial, we now *know* this is a
-        valid size for the viewport in the off-screen context.'''
-        glViewport(0,0,shadowMapSize,shadowMapSize)
         '''We use the same "nearest" filtering as before'''
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.FILTER_TYPE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+        '''Unlike in the previous tutorial, we now *know* this is a
+        valid size for the viewport in the off-screen context.'''
+        glViewport(0,0,shadowMapSize,shadowMapSize)
 
         '''Disable drawing to the colour buffers entirely.  Without this our
         framebuffer would be incomplete, as it would not have any colour buffer
-        into which to render.'''
+        into which to render.  Note that on Win32 we would *still* be considered 
+        incomplete if we didn't define a color buffer.'''
         glDrawBuffer( GL_NONE )
+        glReadBuffer( GL_NONE )
         '''This function in the OpenGL.GL.framebufferobjects wrapper will
         raise an OpenGL.error.GLError if the FBO is not properly configured.'''
         try:
@@ -148,6 +153,7 @@ class TestContext( BaseContext ):
         and restore the draw buffer to the regular "back" buffer.'''
         glBindFramebuffer(GL_FRAMEBUFFER, 0 )
         glDrawBuffer( GL_BACK )
+        glReadBuffer( GL_BACK )
         return texture
 
 if __name__ == "__main__":
@@ -166,3 +172,4 @@ if __name__ == "__main__":
     * use shaders to do "Percentage Closer Filtering" on the shadow-map values
       in order to antialias the shadow edges.
 '''
+

@@ -102,7 +102,7 @@ class TestContext( BaseContext ):
             SpotLight(
                 location = [0,5,10],
                 color = [1,.95,.95],
-                intensity = .5,
+                intensity = 1,
                 ambientIntensity = 0.10,
                 direction = [0,-5,-10],
             ),
@@ -280,6 +280,7 @@ class TestContext( BaseContext ):
     we'll render the depth texture into the Context's regular
     "back" buffer and then copy it into the texture.
     '''
+    offset = 1.0
     def renderLightTexture( self, light, mode ):
         """Render ourselves into a texture for the given light"""
         '''We're going to render our scene into the depth buffer,
@@ -325,7 +326,7 @@ class TestContext( BaseContext ):
             particularly suit an introductory tutorial.
         '''
         lightView = light.viewMatrix(
-            pi/3, near=.1, far=30.0
+            pi/3, near=.3, far=30.0
         )
         lightModel = light.modelMatrix( )
         '''The texture matrix translates from camera eye-space into
@@ -409,8 +410,8 @@ class TestContext( BaseContext ):
             from the previous step, making the depth buffer record values
             1.0 units less than the geometry's natural value.
             '''
-            glPolygonOffset(1.0, 1.0)
             glEnable(GL_POLYGON_OFFSET_FILL)
+            glPolygonOffset(1.0, self.offset)
             '''And now we draw our scene into the depth-buffer.'''
             self.drawScene( mode )
             '''Our closeShadowContext will copy the current depth buffer
