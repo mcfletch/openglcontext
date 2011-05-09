@@ -13,7 +13,7 @@ else:
 if __name__ == "__main__":
     setup (
         name = "OpenGLContext-full",
-        version = '2.1.0a8',
+        version = '2.1.0a9',
         description = "Installs all of OpenGLContext with optional dependencies",
         author = "Mike C. Fletcher",
         author_email = "mcfletch@users.sourceforge.net",
@@ -39,7 +39,8 @@ if __name__ == "__main__":
         ],
         dependency_links = [
             # fonttools doesn't work off SF...
-            'http://downloads.sourceforge.net/project/fonttools/Source%20code/2.3/fonttools-2.3.tar.gz?use_mirror=cdnetworks-us-2',
+            # 'http://downloads.sourceforge.net/project/fonttools/Source%20code/2.3/fonttools-2.3.tar.gz?use_mirror=cdnetworks-us-2',
+            'http://cdnetworks-us-1.dl.sourceforge.net/project/fonttools/2.3/fonttools-2.3.tar.gz',
             # Imaging is registered as PIL, but named Imaging...
             'http://effbot.org/downloads/',
             simpleparse_link,
