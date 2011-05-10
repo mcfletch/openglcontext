@@ -51,7 +51,7 @@ class TestContext( BaseContext ):
             self.shadowMapSize,self.shadowMapSize
         )
     '''We override this default in the init function.'''
-    shadowMapSize = 512
+    shadowMapSize = 2048
     '''Should you wish to experiment with different filtering functions,
     we'll parameterize the filtering operation here.'''
     offset = 1.0
@@ -64,6 +64,7 @@ class TestContext( BaseContext ):
         so we check to see if the values have already been set up.'''
         key = self.textureCacheKey+textureKey
         token = mode.cache.getData(light,key=key)
+        glDisable( GL_TEXTURE_2D )
         if not token:
             '''A cache miss, so we need to do the setup.'''
             fbo = glGenFramebuffers(1)
@@ -73,7 +74,7 @@ class TestContext( BaseContext ):
             texture = glGenTextures( 1 )
             glBindTexture( GL_TEXTURE_2D, texture )
             glTexImage2D(
-                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24,
+                GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
                 shadowMapSize, shadowMapSize, 0,
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )

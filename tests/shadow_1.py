@@ -412,6 +412,10 @@ class TestContext( BaseContext ):
             '''
             glEnable(GL_POLYGON_OFFSET_FILL)
             glPolygonOffset(1.0, self.offset)
+            '''Don't render front-faces, so that we avoid moire effects in 
+            the rendering of shadows'''
+            glCullFace(GL_FRONT)
+            glEnable( GL_CULL_FACE )
             '''And now we draw our scene into the depth-buffer.'''
             self.drawScene( mode )
             '''Our closeShadowContext will copy the current depth buffer
@@ -424,6 +428,8 @@ class TestContext( BaseContext ):
             '''Restore "regular" rendering...'''
             glDisable(GL_POLYGON_OFFSET_FILL)
             glShadeModel( GL_SMOOTH )
+            glCullFace(GL_BACK)
+            glDisable( GL_CULL_FACE )
             glColorMask( 1,1,1,1 )
             '''Now restore the viewport.'''
             glPopAttrib()
@@ -503,6 +509,7 @@ class TestContext( BaseContext ):
         next tutorial.
         '''
         glViewport( 0,0, shadowMapSize, shadowMapSize )
+        
         return texture
     def closeShadowContext( self, texture ):
         """Close our shadow-rendering context/texture"""
@@ -634,6 +641,10 @@ class TestContext( BaseContext ):
             glDisable(GL_LIGHT0+id)
             glDisable(GL_ALPHA_TEST)
             mode.lightingAmbient = True
+            glTexParameteri(
+                GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE,
+                GL_NONE
+            )
 
 if __name__ == "__main__":
     '''We specify a large size for the context because we need at least
