@@ -53,10 +53,9 @@ class TestContext( BaseContext ):
     '''We override this default in the init function.'''
     shadowMapSize = 2048
     '''Should you wish to experiment with different filtering functions,
-    we'll parameterize the filtering operation here.'''
+    we will parameterize the filtering operation here.'''    
     offset = 1.0
     FILTER_TYPE = GL_NEAREST
-    #FILTER_TYPE = GL_LINEAR
     def setupShadowContext( self,light=None, mode=None, textureKey="" ):
         """Create a shadow-rendering context/texture"""
         shadowMapSize = self.shadowMapSize
@@ -70,9 +69,9 @@ class TestContext( BaseContext ):
             fbo = glGenFramebuffers(1)
             '''It has to be bound to configure it.'''
             glBindFramebuffer(GL_FRAMEBUFFER, fbo )
-            '''The texture itself is the same as the last tutorial.'''
+            '''The texture itself is the same as the last tutorial.  We make the 
+            texture current to configure parameters.'''
             texture = glGenTextures( 1 )
-            '''Make the texture current to configure parameters.'''
             glBindTexture( GL_TEXTURE_2D, texture )
             glTexImage2D(
                 GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
