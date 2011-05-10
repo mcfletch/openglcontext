@@ -52,7 +52,7 @@ class TestContext( BaseContext ):
                 print '.',
         print
         print 'Fragments affected:', glGetQueryObjectuiv(query, GL_QUERY_RESULT )
-        glDeleteQueries( [query] )
+        glDeleteQueries( query )
 
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glDepthMask(GL_TRUE);
