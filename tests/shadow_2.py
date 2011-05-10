@@ -80,12 +80,6 @@ class TestContext( BaseContext ):
                 shadowMapSize, shadowMapSize, 0,
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
-            '''We use the same "nearest" filtering as before'''
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.FILTER_TYPE)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
-            
             '''We attach the texture to the FBO's depth attachment point.  There
             is also a combined depth-stencil attachment point when certain
             extensions are available.  We don't actually need a stencil buffer
@@ -113,6 +107,7 @@ class TestContext( BaseContext ):
                 )
                 glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, color )
                 glBindRenderbuffer( GL_RENDERBUFFER, 0 )
+            glBindFramebuffer(GL_FRAMEBUFFER, 0 )
             holder = mode.cache.holder(
                 light,(fbo,texture),key=key
             )
@@ -120,6 +115,23 @@ class TestContext( BaseContext ):
             '''We've already got the FBO with its colour buffer, just bind to
             render into it.'''
             fbo,texture = token
+
+        '''Make the texture current to configure parameters.'''
+        glBindTexture( GL_TEXTURE_2D, texture )
+        '''We use the same "nearest" filtering as before.  Note, we could use an alternate 
+        texture unit and leave the parameters set, this just forces the setting back on 
+        each rendering pass in case some clever geometry renders using our texture.'''
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.FILTER_TYPE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+
+        '''BUG NOTE: on AMD hardware, binding the FBO before you have unbound the 
+        texture will cause heavy moire-style rendering artefacts due to undefined 
+        behaviour where the FBO and the current texture are bound to the same 
+        texture.  You *must* unbind the texture before you bind the FBO.'''
+        glBindTexture( GL_TEXTURE_2D, 0 )
+        
         glBindFramebuffer(GL_FRAMEBUFFER, fbo )
         
         '''Unlike in the previous tutorial, we now *know* this is a
