@@ -62,6 +62,7 @@ class TestContext( BaseContext ):
         shadowMapSize = self.shadowMapSize
         '''As with the previous tutorial, we want to cache our texture (and FBO),
         so we check to see if the values have already been set up.'''
+        glActiveTexture(GL_TEXTURE2)
         key = self.textureCacheKey+textureKey
         token = mode.cache.getData(light,key=key)
         glDisable( GL_TEXTURE_2D )
@@ -72,12 +73,19 @@ class TestContext( BaseContext ):
             glBindFramebuffer(GL_FRAMEBUFFER, fbo )
             '''The texture itself is the same as the last tutorial.'''
             texture = glGenTextures( 1 )
+            '''Make the texture current to configure parameters.'''
             glBindTexture( GL_TEXTURE_2D, texture )
             glTexImage2D(
                 GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
                 shadowMapSize, shadowMapSize, 0,
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
+            '''We use the same "nearest" filtering as before'''
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.FILTER_TYPE)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+            
             '''We attach the texture to the FBO's depth attachment point.  There
             is also a combined depth-stencil attachment point when certain
             extensions are available.  We don't actually need a stencil buffer
@@ -112,14 +120,8 @@ class TestContext( BaseContext ):
             '''We've already got the FBO with its colour buffer, just bind to
             render into it.'''
             fbo,texture = token
-            glBindFramebuffer(GL_FRAMEBUFFER, fbo )
-            '''Make the texture current to configure parameters.'''
-            glBindTexture( GL_TEXTURE_2D, texture )
-        '''We use the same "nearest" filtering as before'''
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.FILTER_TYPE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo )
+        
         '''Unlike in the previous tutorial, we now *know* this is a
         valid size for the viewport in the off-screen context.'''
         glViewport(0,0,shadowMapSize,shadowMapSize)
@@ -129,7 +131,6 @@ class TestContext( BaseContext ):
         into which to render.  Note that on Win32 we would *still* be considered 
         incomplete if we didn't define a color buffer.'''
         glDrawBuffer( GL_NONE )
-        glReadBuffer( GL_NONE )
         '''This function in the OpenGL.GL.framebufferobjects wrapper will
         raise an OpenGL.error.GLError if the FBO is not properly configured.'''
         try:
@@ -138,15 +139,13 @@ class TestContext( BaseContext ):
             traceback.print_exc()
             import os
             os._exit(1)
-        '''Un-bind the texture so that regular rendering isn't trying to
-        lookup a texture in our depth-buffer-bound texture.'''
-        glBindTexture( GL_TEXTURE_2D, 0 )
         '''Clear the depth buffer (texture) on each pass.  Our previous
         tutorial didn't need to do this here because the back-buffer was
         shared with the regular rendering pass and the OpenGLContext renderer
         had already called glClear() during it's regular context setup.
         '''
         glClear(GL_DEPTH_BUFFER_BIT)
+        glActiveTexture(GL_TEXTURE0)
         return texture
     def closeShadowContext( self, texture, textureKey="" ):
         """Close our shadow-rendering context/texture"""
@@ -154,7 +153,6 @@ class TestContext( BaseContext ):
         and restore the draw buffer to the regular "back" buffer.'''
         glBindFramebuffer(GL_FRAMEBUFFER, 0 )
         glDrawBuffer( GL_BACK )
-        glReadBuffer( GL_BACK )
         return texture
 
 if __name__ == "__main__":

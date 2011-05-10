@@ -524,7 +524,6 @@ class TestContext( BaseContext ):
         glCopyTexSubImage2D(
             GL_TEXTURE_2D, 0, 0, 0, 0, 0, shadowMapSize, shadowMapSize
         )
-        glDisable( GL_TEXTURE_2D )
         return texture
     '''=Render Ambient-lit Geometry=
 
