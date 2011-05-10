@@ -39,7 +39,10 @@ so that the vertex shader provides interpolated values to the
 fragment shader.
 </div>
 </div>
-	<div class="code-sample">from OpenGLContext import testingcontext
+	<div class="code-sample">import OpenGL
+#OpenGL.FULL_LOGGING = True
+#OpenGL.USE_ACCELERATE = False
+from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
@@ -228,10 +231,11 @@ we can use them in both Python and GLSL code.
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
+        if not mode.visible:
+            return 
         glUseProgram(self.shader)
         try:
             self.coords.bind()
-            self.indices.bind()
             stride = self.coords.data[0].nbytes
             try:
 </div>
@@ -263,6 +267,7 @@ we can use them in both Python and GLSL code.
                     self.Vertex_normal_loc, 
                     3, GL_FLOAT,False, stride, self.coords+(5*4)
                 )
+                self.indices.bind()
                 glDrawElements(
                     GL_TRIANGLES, self.count,
                     GL_UNSIGNED_SHORT, self.indices
