@@ -62,7 +62,6 @@ class TestContext( BaseContext ):
         shadowMapSize = self.shadowMapSize
         '''As with the previous tutorial, we want to cache our texture (and FBO),
         so we check to see if the values have already been set up.'''
-        glActiveTexture(GL_TEXTURE2)
         key = self.textureCacheKey+textureKey
         token = mode.cache.getData(light,key=key)
         glDisable( GL_TEXTURE_2D )
@@ -131,7 +130,6 @@ class TestContext( BaseContext ):
         behaviour where the FBO and the current texture are bound to the same 
         texture.  You *must* unbind the texture before you bind the FBO.'''
         glBindTexture( GL_TEXTURE_2D, 0 )
-        
         glBindFramebuffer(GL_FRAMEBUFFER, fbo )
         
         '''Unlike in the previous tutorial, we now *know* this is a
@@ -157,7 +155,6 @@ class TestContext( BaseContext ):
         had already called glClear() during it's regular context setup.
         '''
         glClear(GL_DEPTH_BUFFER_BIT)
-        glActiveTexture(GL_TEXTURE0)
         return texture
     def closeShadowContext( self, texture, textureKey="" ):
         """Close our shadow-rendering context/texture"""
