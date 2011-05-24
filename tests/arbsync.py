@@ -47,6 +47,9 @@ class TestContext( BaseContext ):
         
         glDeleteSync( fence )
         
+        range,precision = glGetShaderPrecisionFormat( GL_VERTEX_SHADER, GL_HIGH_FLOAT )
+        print 'Precision formats', range, precision
+        
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
