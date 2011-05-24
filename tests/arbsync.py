@@ -40,6 +40,11 @@ class TestContext( BaseContext ):
         result = GLint()
         glGetSynciv( fence, GL_SYNC_STATUS, 1, GLsizei(), result )
         print 'Get result', EXPECTED.get(result.value,result.value)
+        
+        # wrapped style...
+        result = glGetSync( fence, GL_SYNC_STATUS )[0]
+        print 'Wrapped get', EXPECTED.get(result,result)
+        
         glDeleteSync( fence )
         
 
