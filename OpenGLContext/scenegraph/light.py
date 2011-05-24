@@ -4,7 +4,7 @@ from math import pi
 from vrml.vrml97 import basenodes, nodetypes
 from vrml.vrml97 import transformmatrix
 from vrml import node
-from OpenGLContext.arrays import array, dot
+from OpenGLContext.arrays import array, dot, identity
 from OpenGLContext import vectorutilities
 
 class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
@@ -71,13 +71,18 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
         else:
             return 0
 
-    def viewMatrix( self, cutOffAngle=pi/3, aspect=1.0, near=0.1, far=10000 ):
+    def viewMatrix( self, cutOffAngle=None, aspect=1.0, near=0.1, far=10000 ):
         """Calculate viewing matrix for our light
 
         Calculate our projection matrix, note that this assumes that
         we are a spot-like light with a narrow field-of-view
         (cutOffAngle).
         """
+        if cutOffAngle is None:
+            if hasattr( self, 'cutOffAngle' ):
+                cutOffAngle = self.cutOffAngle /2 # note, in radians already...
+            else:
+                cutOffAngle = pi/3 # just a reasonable default
         return transformmatrix.perspectiveMatrix(
             cutOffAngle,
             aspect,
@@ -119,14 +124,21 @@ class PointLight(basenodes.PointLight, Light):
             return 0
     def modelMatrix( self, direction=None ):
         """Calculate our model-side matrix"""
-        if direction is None:
+        if direction is None and hasattr( self, 'direction' ):
             direction = self.direction
         rot = vectorutilities.orientToXYZR( (0,0,-1), direction )
         # inverse of rotation matrix, hmm...
         rotate = transformmatrix.rotMatrix( rot )[1]
         # inverse of translation matrix...
         translate = transformmatrix.transMatrix(self.location)[1]
-        return dot( translate,rotate )
+        if rotate is not None and translate is not None:
+            return dot( translate,rotate )
+        elif rotate is not None:
+            return rotate 
+        elif translate is not None:
+            return translate 
+        else:
+            return identity((4,4),type='f')
 
 class SpotLight(basenodes.SpotLight, PointLight):
     """SpotLight node

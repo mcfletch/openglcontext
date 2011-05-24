@@ -281,7 +281,7 @@ class TestContext( BaseContext ):
     "back" buffer and then copy it into the texture.
     '''
     offset = 1.0
-    def renderLightTexture( self, light, mode ):
+    def renderLightTexture( self, light, mode,direction=None, fov = None, textureKey = None ):
         """Render ourselves into a texture for the given light"""
         '''We're going to render our scene into the depth buffer,
         so we'll explicitly specify the depth operation.  The use
@@ -325,10 +325,14 @@ class TestContext( BaseContext ):
             The complexity of supporting these features doesn't
             particularly suit an introductory tutorial.
         '''
+        if fov:
+            cutoff = fov /2.0
+        else:
+            cutoff = None
         lightView = light.viewMatrix(
-            pi/3, near=.3, far=30.0
+            cutoff, near=.3, far=30.0
         )
-        lightModel = light.modelMatrix( )
+        lightModel = light.modelMatrix( direction=direction )
         '''The texture matrix translates from camera eye-space into
         light eye-space.  See the original tutorial for an explanation
         of how the mapping is done, and how it interacts with the
