@@ -18,10 +18,10 @@ import random
 
 
 offsets = [
-    (random.randint(-5,5),random.randint(-5,5),random.randint(-20,0))
-    for i in range( 200 )
+    (random.randint(-40,40),random.randint(-40,40),random.randint(-40,0))
+    for i in range( 300 )
 ]
-print 'offsets', offsets
+#print 'offsets', offsets
 
 class TestContext( BaseContext ):
     """Shows conversion of tutorial code to use shader nodes."""
@@ -158,6 +158,7 @@ class TestContext( BaseContext ):
         self.coords = ShaderBuffer( buffer = coords )
         self.indices = ShaderIndexBuffer( buffer = indices )
         self.count = len(indices)
+        print 'Each sphere has %s triangles, total of %s triangles'%( self.count//3, self.count//3 * len(offsets) )
         stride = coords[0].nbytes
         self.attributes = [
             ShaderAttribute(
@@ -226,8 +227,4 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
-'''Note: OpenGLContext's shader nodes are intended to provide a way to play with
-shaders directly using declarative forms that are scenegraph-compatible.  The
-module is still in active development, so expect that this tutorial may be updated
-as new functionality is introduced.'''
 
