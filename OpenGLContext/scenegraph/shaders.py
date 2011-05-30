@@ -36,6 +36,9 @@ class _Buffer( object ):
     GL_TYPE_MAPPING = {
         'ARRAY': GL_ARRAY_BUFFER,
         'ELEMENT': GL_ELEMENT_ARRAY_BUFFER,
+        'UNIFORM': GL_UNIFORM_BUFFER,
+        'TEXTURE': GL_TEXTURE_BUFFER,
+        'TRANSFORM_FEEDBACK': GL_TRANSFORM_FEEDBACK_BUFFER,
     }
     def gl_usage( self ):
         return self.GL_USAGE_MAPPING[ self.usage ]
@@ -176,8 +179,17 @@ class FloatUniform( _Uniform, shaders.FloatUniform ):
 class IntUniform( _Uniform, shaders.IntUniform ):
     """Uniform (variable) binding for a shader (integer form)
     """
+
+class _TextureUniform( _Uniform ):
+    def bind( self, shader, mode, index ):
+        location = shader.getLocation( mode, self.name, uniform=True )
+        if location is not None and location != -1:
+            if self.value:
+                self.baseFunction( location, index )
+                return True 
+        return False
     
-class TextureUniform( _Uniform, shaders.TextureUniform ):
+class TextureUniform( _TextureUniform, shaders.TextureUniform ):
     """Uniform (variable) binding for a texture sampler"""
     baseFunction = staticmethod( glUniform1i )
     def render( self, shader, mode, index ):
@@ -185,11 +197,41 @@ class TextureUniform( _Uniform, shaders.TextureUniform ):
         location = shader.getLocation( mode, self.name, uniform=True )
         if location is not None and location != -1:
             if self.value:
+                self.baseFunction( location, index )
                 glActiveTexture( GL_TEXTURE0 + index )
                 self.value.render( mode.visible, mode.lighting, mode )
-                self.baseFunction( location, index )
                 return True 
         return False
+class TextureBufferUniform( _TextureUniform, shaders.TextureBufferUniform ):
+    """Uniform (variable) finding for a VBO-based texture sampler"""
+    baseFunction = staticmethod( glUniform1i )
+    def get_format( self ):
+        return globals().get( 'GL_%s'%( self.format ) )
+    def texture( self, mode ):
+        """Render this buffer on the mode"""
+        texture = mode.cache.getData( self, 'texture' )
+        if texture is None:
+            texture = glGenTextures( 1 )
+            holder = mode.cache.holder( self, texture, 'texture' )
+        return texture
+    def render( self, shader, mode, index ):
+        """Bind the actual uniform value"""
+        location = shader.getLocation( mode, self.name, uniform=True )
+        if location is not None and location != -1:
+            if self.value:
+                self.baseFunction( location, index )
+                glActiveTexture( GL_TEXTURE0 + index )
+                vbo = self.value.vbo(mode)
+                vbo.bind()
+                try:
+                    glBindTexture( GL_TEXTURE_BUFFER, self.texture( mode ) )
+                    glTexBuffer( GL_TEXTURE_BUFFER, self.get_format(), int(vbo) )
+                finally:
+                    glBindTexture( GL_TEXTURE_BUFFER, 0 )
+                    vbo.unbind()
+                return True 
+        return False
+    
 
 def _uniformCls( suffix ):
     def buildCls( name, suffix, size, function, base ):
@@ -379,6 +421,7 @@ class GLSLObject( shaders.GLSLObject ):
         """Compile into GLSL linked object"""
         holder = self.holderDepend( mode.cache.holder(self,None) )
         program = glCreateProgram()
+        holder.data = program
         subShaders = []
         for shader in self.shaders:
             # TODO: cache links...
@@ -390,6 +433,13 @@ class GLSLObject( shaders.GLSLObject ):
                 log.info( 'Failure compiling: %s %s', shader.compileLog, shader.url or shader.source )
         if len(subShaders) == len(self.shaders):
             glLinkProgram(program)
+            glUseProgram( program )
+            # TODO: retrieve maximum texture count and restrict to that...
+            i = 0
+            for texture in self.textures:
+                if texture.bind( self, mode, i ):
+                    i += 1
+            
             glValidateProgram( program )
             validation = glGetProgramiv( program, GL_VALIDATE_STATUS )
             if validation == GL_FALSE:
@@ -444,7 +494,6 @@ class GLSLObject( shaders.GLSLObject ):
             return locationMap[ name ]
         except KeyError, err:
             program = self.program(mode)
-            glUseProgram( program )
             if uniform:
                 location = glGetUniformLocation( program, name )
             else:

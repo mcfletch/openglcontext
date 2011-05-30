@@ -120,6 +120,7 @@ for suffix in ('1f','2f','3f','4f','m2','m3','m4','m2x3','m3x2','m2x4','m4x2','m
 for suffix in ('1i','2i','3i','4i'):
     Node( 'IntUniform'+suffix,'OpenGLContext.scenegraph.shaders.IntUniform'+suffix )
 Node( 'TextureUniform','OpenGLContext.scenegraph.shaders.TextureUniform' )
+Node( 'TextureBufferUniform','OpenGLContext.scenegraph.shaders.TextureBufferUniform' )
 Node( 'GLSLShader','OpenGLContext.scenegraph.shaders.GLSLShader' )
 Node( 'GLSLObject','OpenGLContext.scenegraph.shaders.GLSLObject' )
 Node( 'GLSLImport','OpenGLContext.scenegraph.shaders.GLSLImport' )

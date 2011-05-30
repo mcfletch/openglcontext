@@ -33,7 +33,10 @@ the size of uniform objects in OpenGL tends to be limited, and you will often
 see malloc failures if you attempt to create extremely large arrays this way.
 '''
 from numpy import random
-offsets = (random.random( size=(200,3 ) ) * [40,40,40] + [-20,-20,-40]).astype('f')
+offsets = (
+    # we require RGBA to be compatible with < OpenGL 4.x
+    random.random( size=(200,4 ) ) * [40,40,40,0] + [-20,-20,-40,1]
+).astype('f')
 
 class TestContext( BaseContext ):
     def OnInit( self ):
@@ -67,11 +70,7 @@ class TestContext( BaseContext ):
         we will use an array of offsets which are applied to the geometry.  We will use 
         len(offset) values here.
         
-        TODO: we should check for maximum uniform length!
         '''
-        OFFSET_UNIFORM = 'uniform vec3[%(length)s] offsets;'%{
-            'length':len(offsets),
-        }
         '''Now our Vertex Shader, which is only a tiny change from our previous shader,
         basically it just addes offsets[gl_InstanceIDARB] to the Vertex_position to get 
         the new position for the vertex being generated.'''
@@ -79,9 +78,10 @@ class TestContext( BaseContext ):
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
         attribute vec2 Vertex_texture_coordinate;
-        """ + OFFSET_UNIFORM + """
+        uniform usamplerBuffer offsets_table;
         void main() {
-            vec3 final_position = Vertex_position+offsets[gl_InstanceIDARB];
+            vec3 final_position = Vertex_position + texelFetch( offsets_table, gl_InstanceIDARB ).xyz;
+            final_position.x += float(gl_InstanceIDARB);
             gl_Position = gl_ModelViewProjectionMatrix * vec4(
                 final_position, 1.0
             );
@@ -99,15 +99,20 @@ class TestContext( BaseContext ):
                 FloatUniform4f(name="material.specular", value=(.4,.4,.4,1.0) ),
                 FloatUniform4f(name="Global_ambient", value=(.1,.1,.1,1.0) ),
                 FloatUniform4f(name="lights" ),
-                FloatUniform3f(
-                    name="offsets",
-                    value = offsets,
-                ),
             ],
             textures = [
                 TextureUniform(name="diffuse_texture", value=ImageTexture(
                     url="marbleface.jpeg",
                 )),
+                TextureBufferUniform(
+                    name='offsets_table',
+                    format='RGBA32F',
+                    value = ShaderBuffer(
+                        usage = 'STATIC_DRAW',
+                        type = 'TEXTURE',
+                        buffer = offsets,
+                    ),
+                )
             ],
             shaders = [
                 GLSLShader(
@@ -221,6 +226,7 @@ class TestContext( BaseContext ):
                 shininess = .5,
             ),
         )
+    
     '''The only change to our render method is in the glDrawElements call, which 
     is replaced by a call to glDrawElementsInstancedARB'''
     def Render( self, mode = None):
