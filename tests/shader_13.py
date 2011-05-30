@@ -1,9 +1,19 @@
 #! /usr/bin/env python
-'''=Instanced Geometry Extensions=
+'''=Instanced Geometry Extension=
 
 This tutorial:
 
     * uses an instanced geometry rendering extension to draw lots of geometry
+
+ARB_draw_instanced is an extremely common extension available on most modern 
+discrete OpenGL cards.  It defines a mechanism whereby you can generate a large 
+number of "customized" instances of a given piece of geometry using a single call 
+to the GL.  It requires the use of shaders, as the only difference between the 
+calls is a shader variable:
+
+    gl_InstanceIDARB
+
+which is incremented by one for each instance.
 '''
 from shader_11 import TestContext as BaseContext
 from OpenGL.GL import *
@@ -13,20 +23,22 @@ from OpenGL.GL.shaders import *
 '''OpenGLContext registers the shader nodes as "core" VRML97 nodes, so
 we can just import the base node-set.'''
 from OpenGLContext.scenegraph.basenodes import *
+'''The ARB_draw_instanced extension is part of core OpenGL 3.3, so the entry 
+points are available from the OpenGL.GL namespace by default (for all versions 
+of PyOpenGL >= 3.0.2), thus you could omit this line with a newer PyOpenGL.'''
 from OpenGL.GL.ARB.draw_instanced import *
-import random
-
-offsets = [
-    (random.randint(-40,40),random.randint(-40,40),random.randint(-40,0))
-    for i in range( 300 )
-]
-#print 'offsets', offsets
+'''For our sample code, we'll create an array of N spheres to render.  We'll 
+use the standard Python module "random" to generate a few offsets.  Note that 
+the size of uniform objects in OpenGL tends to be limited, and you will often 
+see malloc failures if you attempt to create extremely large arrays this way.
+'''
+from numpy import random
+offsets = (random.random( size=(200,3 ) ) * [40,40,40] + [-20,-20,-40]).astype('f')
 
 class TestContext( BaseContext ):
-    """Shows conversion of tutorial code to use shader nodes."""
-
     def OnInit( self ):
         """Initialize the context"""
+        '''Our basic setup is the same as our previous tutorial...'''
         self.lights = self.createLights()
         self.LIGHTS = array([
             self.lightAsArray(l)
@@ -50,6 +62,35 @@ class TestContext( BaseContext ):
             varying vec2 Vertex_texture_coordinate_var;
             """
         )
+        '''To make the instanced geometry do something, we have to pass in a data-array 
+        which will be indexed by the gl_InstanceIDARB variable.  For this simple tutorial 
+        we will use an array of offsets which are applied to the geometry.  We will use 
+        len(offset) values here.
+        
+        TODO: we should check for maximum uniform length!
+        '''
+        OFFSET_UNIFORM = 'uniform vec3[%(length)s] offsets;'%{
+            'length':len(offsets),
+        }
+        '''Now our Vertex Shader, which is only a tiny change from our previous shader,
+        basically it just addes offsets[gl_InstanceIDARB] to the Vertex_position to get 
+        the new position for the vertex being generated.'''
+        VERTEX_SHADER = """
+        attribute vec3 Vertex_position;
+        attribute vec3 Vertex_normal;
+        attribute vec2 Vertex_texture_coordinate;
+        """ + OFFSET_UNIFORM + """
+        void main() {
+            vec3 final_position = Vertex_position+offsets[gl_InstanceIDARB];
+            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+                final_position, 1.0
+            );
+            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            light_preCalc(final_position);
+            Vertex_texture_coordinate_var = Vertex_texture_coordinate;
+        }"""
+        '''We set up our GLSLObjects as before, using VERTEX_SHADER as the source 
+        for our GLSLShader vertex object.'''
         self.glslObject = GLSLObject(
             uniforms = [
                 FloatUniform1f(name="material.shininess", value=.5 ),
@@ -76,22 +117,7 @@ class TestContext( BaseContext ):
                         light_preCalc,
                     ],
                     source = [
-                        """
-                        attribute vec3 Vertex_position;
-                        attribute vec3 Vertex_normal;
-                        attribute vec2 Vertex_texture_coordinate;
-                        uniform vec3[%(length)s] offsets;
-                        void main() {
-                            vec3 final_position = Vertex_position+offsets[gl_InstanceIDARB];
-                            gl_Position = gl_ModelViewProjectionMatrix * vec4(
-                                final_position, 1.0
-                            );
-                            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
-                            light_preCalc(final_position);
-                            Vertex_texture_coordinate_var = Vertex_texture_coordinate;
-                        }"""%{
-                            'length': len(offsets),
-                        }
+                        VERTEX_SHADER
                     ],
                     type='VERTEX'
                 ),
@@ -151,14 +177,18 @@ class TestContext( BaseContext ):
                 ),
             ],
         )
+        '''We tell our sphere to generate fewer "slices" in its tessellation by reducing it's "phi" 
+        parameter.'''
         coords,indices = Sphere(
             radius = 1,
             phi = pi/8.0
         ).compileArrays()
         self.coords = ShaderBuffer( buffer = coords )
         self.indices = ShaderIndexBuffer( buffer = indices )
+        '''For interest sake, we print out the number of objects/triangles being rendered'''
         self.count = len(indices)
         print 'Each sphere has %s triangles, total of %s triangles'%( self.count//3, self.count//3 * len(offsets) )
+        '''Our attribute setup is unchanged.'''
         stride = coords[0].nbytes
         self.attributes = [
             ShaderAttribute(
@@ -191,7 +221,8 @@ class TestContext( BaseContext ):
                 shininess = .5,
             ),
         )
-
+    '''The only change to our render method is in the glDrawElements call, which 
+    is replaced by a call to glDrawElementsInstancedARB'''
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         if not mode.visible:
@@ -211,18 +242,18 @@ class TestContext( BaseContext ):
                 token = attribute.render( self.glslObject, mode )
                 if token:
                     tokens.append( (attribute, token) )
+            '''The final parameter to glDrawElementsInstancedARB simply tells the 
+            GL how many instances to generate.  gl_InstanceIDARB values will be 
+            generated for range( instance_count ) instances.'''
             glDrawElementsInstancedARB(
                 GL_TRIANGLES, self.count,
                 GL_UNSIGNED_INT, vbo,
                 len(offsets), # number of instances to draw...
             )
         finally:
-            '''We ask each thing which returned a rendering token to disable
-            itself after the rendering pass.'''
             for attribute,token in tokens:
                 attribute.renderPost( self.glslObject, mode, token )
             self.glslObject.renderPost( token, mode )
-            '''The index-array VBO also needs to be unbound.'''
             vbo.unbind()
 
 if __name__ == "__main__":
