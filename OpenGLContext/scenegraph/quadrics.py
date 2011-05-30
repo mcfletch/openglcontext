@@ -74,6 +74,7 @@ class Quadric( nodetypes.Geometry, node.Node ):
 class Sphere( basenodes.Sphere, Quadric ):
     """Sphere geometry rendered with GLU quadratic calls"""
     _unitSphere = None
+    phi = field.newField( 'phi', 'SFFloat', 1, pi/6.0)
     def compile( self, mode=None ):
         """Compile this sphere for use on mode
         
@@ -93,7 +94,7 @@ class Sphere( basenodes.Sphere, Quadric ):
         """
         if self._unitSphere is None:
             # create a unitsphere instance for all instances
-            Sphere._unitSphere = self.sphere( pi/32 )
+            Sphere._unitSphere = self.sphere( self.phi )
         coords,indices = self._unitSphere
         coords = copy( coords )
         coords[:,0:3] *= self.radius

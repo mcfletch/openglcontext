@@ -16,7 +16,6 @@ from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL.ARB.draw_instanced import *
 import random
 
-
 offsets = [
     (random.randint(-40,40),random.randint(-40,40),random.randint(-40,0))
     for i in range( 300 )
@@ -153,7 +152,8 @@ class TestContext( BaseContext ):
             ],
         )
         coords,indices = Sphere(
-            radius = 1
+            radius = 1,
+            phi = pi/8.0
         ).compileArrays()
         self.coords = ShaderBuffer( buffer = coords )
         self.indices = ShaderIndexBuffer( buffer = indices )
