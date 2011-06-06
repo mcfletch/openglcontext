@@ -4,6 +4,8 @@
 This tutorial:
 
     * uses an instanced geometry rendering extension to draw lots of geometry
+    * introduces the use of texture buffer objects and the texelFetch GLSL 
+      function
 
 ARB_draw_instanced is an extremely common extension available on most modern 
 discrete OpenGL cards.  It defines a mechanism whereby you can generate a large 
@@ -33,9 +35,13 @@ the size of uniform objects in OpenGL tends to be limited, and you will often
 see malloc failures if you attempt to create extremely large arrays this way.
 '''
 from numpy import random
+
+scale = [40,40,40,0]
+offset = [-20,-20,-40,1]
+count = 200
 offsets = (
     # we require RGBA to be compatible with < OpenGL 4.x
-    random.random( size=(200,4 ) ) * [40,40,40,0] + [-20,-20,-40,1]
+    random.random( size=(count,4 ) ) * scale + offset
 ).astype('f')
 
 class TestContext( BaseContext ):
@@ -72,16 +78,16 @@ class TestContext( BaseContext ):
         
         '''
         '''Now our Vertex Shader, which is only a tiny change from our previous shader,
-        basically it just addes offsets[gl_InstanceIDARB] to the Vertex_position to get 
+        basically it just adds offsets[gl_InstanceIDARB] to the Vertex_position to get 
         the new position for the vertex being generated.'''
         VERTEX_SHADER = """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
         attribute vec2 Vertex_texture_coordinate;
-        uniform usamplerBuffer offsets_table;
+        uniform samplerBuffer offsets_table;
         void main() {
-            vec3 final_position = Vertex_position + texelFetch( offsets_table, gl_InstanceIDARB ).xyz;
-            final_position.x += float(gl_InstanceIDARB);
+            vec3 offset = texelFetch( offsets_table, gl_InstanceIDARB ).xyz;
+            vec3 final_position = Vertex_position + offset;
             gl_Position = gl_ModelViewProjectionMatrix * vec4(
                 final_position, 1.0
             );
@@ -185,7 +191,7 @@ class TestContext( BaseContext ):
         '''We tell our sphere to generate fewer "slices" in its tessellation by reducing it's "phi" 
         parameter.'''
         coords,indices = Sphere(
-            radius = 1,
+            radius = .25,
             phi = pi/8.0
         ).compileArrays()
         self.coords = ShaderBuffer( buffer = coords )

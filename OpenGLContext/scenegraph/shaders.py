@@ -221,13 +221,12 @@ class TextureBufferUniform( _TextureUniform, shaders.TextureBufferUniform ):
             if self.value:
                 self.baseFunction( location, index )
                 glActiveTexture( GL_TEXTURE0 + index )
+                glBindTexture( GL_TEXTURE_BUFFER, self.texture( mode ) )
                 vbo = self.value.vbo(mode)
                 vbo.bind()
                 try:
-                    glBindTexture( GL_TEXTURE_BUFFER, self.texture( mode ) )
                     glTexBuffer( GL_TEXTURE_BUFFER, self.get_format(), int(vbo) )
                 finally:
-                    glBindTexture( GL_TEXTURE_BUFFER, 0 )
                     vbo.unbind()
                 return True 
         return False
@@ -640,3 +639,4 @@ class ShaderGeometry( shaders.ShaderGeometry ):
 class ShaderSlice( shaders.ShaderSlice ):
     """Slice of a shader to render"""
     
+
