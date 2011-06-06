@@ -343,7 +343,7 @@ we'll render the depth texture into the Context's regular
 </div>
 </div>
 	<div class="code-sample">    offset = 1.0
-    def renderLightTexture( self, light, mode ):
+    def renderLightTexture( self, light, mode,direction=None, fov = None, textureKey = None ):
         """Render ourselves into a texture for the given light"""
 </div>
 	<div class="commentary">
@@ -394,10 +394,14 @@ dot those matrices with the matrices we retrieve here.</div>
 particularly suit an introductory tutorial.
 </div>
 </div>
-	<div class="code-sample">        lightView = light.viewMatrix(
-            pi/3, near=.3, far=30.0
+	<div class="code-sample">        if fov:
+            cutoff = fov /2.0
+        else:
+            cutoff = None
+        lightView = light.viewMatrix(
+            cutoff, near=.3, far=30.0
         )
-        lightModel = light.modelMatrix( )
+        lightModel = light.modelMatrix( direction=direction )
 </div>
 	<div class="commentary">
 	<div class="paragraph">The texture matrix translates from camera eye-space into

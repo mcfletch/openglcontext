@@ -1,5 +1,7 @@
 #! /usr/bin/env python
-'''=Instanced Geometry Extension=
+'''=Instanced Geometry and Texture Buffer Extensions=
+
+[shader_instanced.py-screen-0001.png Screenshot]
 
 This tutorial:
 
@@ -40,14 +42,6 @@ from OpenGL.GL.ARB.texture_buffer_object import *
 use the numpy module "random" to generate a few offsets.
 '''
 from numpy import random
-'''Here we create our random data-array to serve as the positions for the 
-individual instances.  Note that there are (hardware) restrictions on the 
-formats allowed in texture_buffer_object VBOs.  The most notable of those is 
-that you *must* use 1,2 or 4 components per texel.  For three components, 
-as we need, you must either use a single-value texture with 3x the values,
-or pad the data with an extra byte.  OpenGL 4.x allows for 3-component 
-values, but we'll avoid the extra dependency for now.
-'''
 
 class TestContext( BaseContext ):
     def OnInit( self ):
@@ -79,23 +73,57 @@ class TestContext( BaseContext ):
         '''To make the instanced geometry do something, we have to pass in a data-array 
         which will be indexed by the gl_InstanceIDARB variable.  For this simple tutorial 
         we will use an array of offsets which are applied to the geometry.  We will use 
-        len(offset) values here.
+        len(offset) values here.  We'll limit the value to less than the allowed number of 
+        bytes in the texture buffer object (we divide by 16 as that's the length of a single 
+        texel in float format).
         '''
         hardlimit = glGetIntegerv( GL_MAX_TEXTURE_BUFFER_SIZE_ARB )
         count = min((15000,hardlimit//16))
         print 'Limiting to %s instances'%( count, )
-        
+        '''This is just some calculations to make the 0-1 range of random.random() map into 
+        values that put the bulk of the spheres in front of the camera.'''
         scale = [40,40,40,0]
         offset = [-20,-20,-40,1]
+        '''We create our random data-array to serve as the positions for the 
+        individual instances.  Note that there are (hardware) restrictions on the 
+        formats allowed in texture_buffer_object VBOs.  The most notable of those is 
+        that you *must* use 1,2 or 4 components per texel.  For three components, 
+        as we need, you must either use a single-value texture with 3x the values,
+        or pad the data with an extra byte.  OpenGL 4.x allows for 3-component 
+        values, but we'll avoid the extra dependency for now.
+        '''
         self.offset_array = (
             # we require RGBA to be compatible with < OpenGL 4.x
             random.random( size=(count,4 ) ) * scale + offset
         ).astype('f')
+        '''The texture buffer extension works via a GL texture, so we bind it using 
+        a TextureBufferUniform node which is analogous to a TextureUniform, save that 
+        it uses a ShaderBuffer instead of an ImageTexture as its "value" member.  We 
+        will create a new uniform sampler in our shader to bind this texture (unit).
         
+        At render-time the TextureBufferUniform will:
         
+         * lookup the uniform name "offsets_table"
+         * bind the uniform to a texture unit 
+         * create and bind a texture object 
+         * configure the texture to use a VBO as its data source  with a given format
+        '''
+        TEXTURE_BUFFER_UNIFORM = TextureBufferUniform(
+            name='offsets_table',
+            format='RGBA32F',
+            value = ShaderBuffer(
+                usage = 'STATIC_DRAW',
+                type = 'TEXTURE',
+                buffer = self.offset_array,
+            ),
+        )
         '''Now our Vertex Shader, which is only a tiny change from our previous shader,
-        basically it just adds offsets[gl_InstanceIDARB] to the Vertex_position to get 
-        the new position for the vertex being generated.'''
+        basically it just adds offset_table[gl_InstanceIDARB] to the Vertex_position to get 
+        the new position for the vertex being generated.  However, the offset_table is actually 
+        a texture, so we have to go through the special sampler type samplerBuffer and 
+        the direct texel retrieval function texelFetch to accomplish the lookup.
+        Note the .xyz on the result of the lookup, see above for a discussion of the limitations
+        on the data-formats for Texture Buffer objects.'''
         VERTEX_SHADER = """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
@@ -112,7 +140,8 @@ class TestContext( BaseContext ):
             Vertex_texture_coordinate_var = Vertex_texture_coordinate;
         }"""
         '''We set up our GLSLObjects as before, using VERTEX_SHADER as the source 
-        for our GLSLShader vertex object.'''
+        for our GLSLShader vertex object, and using the TextureBufferUniform above .
+        '''
         self.glslObject = GLSLObject(
             uniforms = [
                 FloatUniform1f(name="material.shininess", value=.5 ),
@@ -126,15 +155,7 @@ class TestContext( BaseContext ):
                 TextureUniform(name="diffuse_texture", value=ImageTexture(
                     url="marbleface.jpeg",
                 )),
-                TextureBufferUniform(
-                    name='offsets_table',
-                    format='RGBA32F',
-                    value = ShaderBuffer(
-                        usage = 'STATIC_DRAW',
-                        type = 'TEXTURE',
-                        buffer = self.offset_array,
-                    ),
-                )
+                TEXTURE_BUFFER_UNIFORM,
             ],
             shaders = [
                 GLSLShader(
@@ -212,7 +233,8 @@ class TestContext( BaseContext ):
         ).compileArrays()
         self.coords = ShaderBuffer( buffer = coords )
         self.indices = ShaderIndexBuffer( buffer = indices )
-        '''For interest sake, we print out the number of objects/triangles being rendered'''
+        '''For interest sake, we print out the number of objects/triangles being rendered.  Reasonably 
+        capable hardware should be able to handle extremely large numbers of instances (thousands).'''
         self.count = len(indices)
         print 'Each sphere has %s triangles, total of %s triangles'%( self.count//3, self.count//3 * len(self.offset_array) )
         '''Our attribute setup is unchanged.'''
