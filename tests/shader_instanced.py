@@ -6,8 +6,14 @@ This tutorial:
     * uses an instanced geometry rendering extension to draw lots of geometry
     * introduces the use of texture buffer objects and the texelFetch GLSL 
       function
-
-ARB_draw_instanced is an extremely common extension available on most modern 
+'''
+from shader_11 import TestContext as BaseContext
+from OpenGL.GL import *
+from OpenGL.arrays import vbo
+from OpenGLContext.arrays import *
+from OpenGL.GL.shaders import *
+from OpenGLContext.scenegraph.basenodes import *
+'''ARB_draw_instanced is an extremely common extension available on most modern 
 discrete OpenGL cards.  It defines a mechanism whereby you can generate a large 
 number of "customized" instances of a given piece of geometry using a single call 
 to the GL.  It requires the use of shaders, as the only difference between the 
@@ -16,33 +22,32 @@ calls is a shader variable:
     gl_InstanceIDARB
 
 which is incremented by one for each instance.
-'''
-from shader_11 import TestContext as BaseContext
-from OpenGL.GL import *
-from OpenGL.arrays import vbo
-from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
-'''OpenGLContext registers the shader nodes as "core" VRML97 nodes, so
-we can just import the base node-set.'''
-from OpenGLContext.scenegraph.basenodes import *
-'''The ARB_draw_instanced extension is part of core OpenGL 3.3, so the entry 
+
+The ARB_draw_instanced extension is part of core OpenGL 3.3, so the entry 
 points are available from the OpenGL.GL namespace by default (for all versions 
 of PyOpenGL >= 3.0.2), thus you could omit this line with a newer PyOpenGL.'''
 from OpenGL.GL.ARB.draw_instanced import *
+'''ARB_texture_buffer_object is also extremely common, and core as of OpenGL 3.0.
+It defines a mechanism that allows you to pass large "reference" arrays into a 
+shader efficiently (using a Vertex Buffer Object).  Combined with draw_instanced,
+we will set up a reference array which defines the positions of each of our 
+instanced objects.
+
+Again, the import here is just for use with older PyOpenGL releases.
+'''
+from OpenGL.GL.ARB.texture_buffer_object import *
 '''For our sample code, we'll create an array of N spheres to render.  We'll 
-use the standard Python module "random" to generate a few offsets.  Note that 
-the size of uniform objects in OpenGL tends to be limited, and you will often 
-see malloc failures if you attempt to create extremely large arrays this way.
+use the numpy module "random" to generate a few offsets.
 '''
 from numpy import random
-
-scale = [40,40,40,0]
-offset = [-20,-20,-40,1]
-count = 200
-offsets = (
-    # we require RGBA to be compatible with < OpenGL 4.x
-    random.random( size=(count,4 ) ) * scale + offset
-).astype('f')
+'''Here we create our random data-array to serve as the positions for the 
+individual instances.  Note that there are (hardware) restrictions on the 
+formats allowed in texture_buffer_object VBOs.  The most notable of those is 
+that you *must* use 1,2 or 4 components per texel.  For three components, 
+as we need, you must either use a single-value texture with 3x the values,
+or pad the data with an extra byte.  OpenGL 4.x allows for 3-component 
+values, but we'll avoid the extra dependency for now.
+'''
 
 class TestContext( BaseContext ):
     def OnInit( self ):
@@ -75,8 +80,19 @@ class TestContext( BaseContext ):
         which will be indexed by the gl_InstanceIDARB variable.  For this simple tutorial 
         we will use an array of offsets which are applied to the geometry.  We will use 
         len(offset) values here.
-        
         '''
+        hardlimit = glGetIntegerv( GL_MAX_TEXTURE_BUFFER_SIZE_ARB )
+        count = min((15000,hardlimit//16))
+        print 'Limiting to %s instances'%( count, )
+        
+        scale = [40,40,40,0]
+        offset = [-20,-20,-40,1]
+        self.offset_array = (
+            # we require RGBA to be compatible with < OpenGL 4.x
+            random.random( size=(count,4 ) ) * scale + offset
+        ).astype('f')
+        
+        
         '''Now our Vertex Shader, which is only a tiny change from our previous shader,
         basically it just adds offsets[gl_InstanceIDARB] to the Vertex_position to get 
         the new position for the vertex being generated.'''
@@ -116,7 +132,7 @@ class TestContext( BaseContext ):
                     value = ShaderBuffer(
                         usage = 'STATIC_DRAW',
                         type = 'TEXTURE',
-                        buffer = offsets,
+                        buffer = self.offset_array,
                     ),
                 )
             ],
@@ -198,7 +214,7 @@ class TestContext( BaseContext ):
         self.indices = ShaderIndexBuffer( buffer = indices )
         '''For interest sake, we print out the number of objects/triangles being rendered'''
         self.count = len(indices)
-        print 'Each sphere has %s triangles, total of %s triangles'%( self.count//3, self.count//3 * len(offsets) )
+        print 'Each sphere has %s triangles, total of %s triangles'%( self.count//3, self.count//3 * len(self.offset_array) )
         '''Our attribute setup is unchanged.'''
         stride = coords[0].nbytes
         self.attributes = [
@@ -260,7 +276,7 @@ class TestContext( BaseContext ):
             glDrawElementsInstancedARB(
                 GL_TRIANGLES, self.count,
                 GL_UNSIGNED_INT, vbo,
-                len(offsets), # number of instances to draw...
+                len(self.offset_array), # number of instances to draw...
             )
         finally:
             for attribute,token in tokens:
