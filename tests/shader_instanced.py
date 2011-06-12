@@ -272,7 +272,7 @@ class TestContext( BaseContext ):
         )
     
     '''The only change to our render method is in the glDrawElements call, which 
-    is replaced by a call to glDrawElementsInstancedARB'''
+    is replaced by a call to glDrawElementsInstanced'''
     def Render( self, mode = None):
         """Render the geometry for the scene."""
         if not mode.visible:
@@ -292,10 +292,10 @@ class TestContext( BaseContext ):
                 token = attribute.render( self.glslObject, mode )
                 if token:
                     tokens.append( (attribute, token) )
-            '''The final parameter to glDrawElementsInstancedARB simply tells the 
+            '''The final parameter to glDrawElementsInstanced simply tells the 
             GL how many instances to generate.  gl_InstanceIDARB values will be 
             generated for range( instance_count ) instances.'''
-            glDrawElementsInstancedARB(
+            glDrawElementsInstanced(
                 GL_TRIANGLES, self.count,
                 GL_UNSIGNED_INT, vbo,
                 len(self.offset_array), # number of instances to draw...
