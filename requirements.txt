@@ -1,0 +1,10 @@
+PyOpenGL
+PyOpenGL-accelerate
+PyVRML97
+PyVRML97-accelerate
+pydispatcher
+simpleparse
+numpy
+PIL
+TTFQuery
+FontTools
