@@ -39,7 +39,7 @@ the newer Numpy module.'''
 from OpenGLContext.arrays import *
 '''OpenGL.GL.shaders is a convenience library for accessing the 
 shader functionality.'''
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 
 '''OpenGLContext contexts are all sub-classes of Context, with 
 various mix-ins providing support for different windowing classes,
@@ -107,7 +107,7 @@ class TestContext( BaseContext ):
         compiles the shader and checks for any compilation errors.
         (Using glCreateShader, glShaderSource, and glCompileShader).
         '''
-        VERTEX_SHADER = compileShader("""
+        VERTEX_SHADER = shaders.compileShader("""
         void main() {
             gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
         }""", GL_VERTEX_SHADER)
@@ -145,7 +145,7 @@ class TestContext( BaseContext ):
         is a pure green opaque (the last 1) value.  We assign the value 
         to the (global, built-in) gl_FragColor value and we are finished.
         '''
-        FRAGMENT_SHADER = compileShader("""
+        FRAGMENT_SHADER = shaders.compileShader("""
         void main() {
             gl_FragColor = vec4( 0, 1, 0, 1 );
         }""", GL_FRAGMENT_SHADER)
@@ -165,7 +165,7 @@ class TestContext( BaseContext ):
         created an OpenGL shader, now we just need to give it something 
         to render.
         '''
-        self.shader = compileProgram(VERTEX_SHADER,FRAGMENT_SHADER)
+        self.shader = shaders.compileProgram(VERTEX_SHADER,FRAGMENT_SHADER)
         '''=Vertex Buffer Data Objects (VBOs)=
         
         Modern OpenGL wants you to load your data onto your video 
@@ -231,7 +231,7 @@ class TestContext( BaseContext ):
         for OpenGL.  Until we Use the shader, the GL is using the 
         fixed-function (legacy) rendering pipeline.
         '''
-        glUseProgram(self.shader)
+        shaders.glUseProgram(self.shader)
         '''Now we tell OpenGL that we want to enable our VBO as the 
         source for geometric data.  There are two VBO types that can 
         be active at any given time, a geometric data buffer and an 
@@ -275,7 +275,7 @@ class TestContext( BaseContext ):
                 self.vbo.unbind()
                 glDisableClientState(GL_VERTEX_ARRAY);
         finally:
-            glUseProgram( 0 )
+            shaders.glUseProgram( 0 )
 '''We need to actually run the code when operating as a top-level 
 script.  The TestingContext import above also gave us an appropriate
 mainloop function to call.'''
