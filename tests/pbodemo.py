@@ -3,7 +3,7 @@
 '''
 import OpenGL 
 #OpenGL.USE_ACCELERATE = False
-OpenGL.FULL_LOGGING = True
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
@@ -12,35 +12,6 @@ from OpenGLContext.arrays import array, frombuffer
 from OpenGL.arrays import vbo
 import string, time
 import ctypes,weakref
-
-_cleaners = {}
-
-def _cleaner( vbo ):
-    def clean( ref ):
-        try:
-            _cleaners.pop( vbo )
-        except Exception, err:
-            pass
-        else:
-            glUnmapBuffer( vbo.target )
-    return clean
-
-def map_buffer( vbo, access=GL_READ_WRITE ):
-    """Map the given buffer into a numpy array...
-    
-    Method taken from:
-     http://www.mail-archive.com/numpy-discussion@lists.sourceforge.net/msg01161.html
-    """
-    func = ctypes.pythonapi.PyBuffer_FromMemory
-    func.restype = ctypes.py_object
-    vp = glMapBuffer( vbo.target, access )
-    buffer = func( 
-        ctypes.c_void_p(vp), vbo.size 
-    )
-    array = frombuffer( buffer, 'B' )
-    _cleaners[vbo] = weakref.ref( array, _cleaner( vbo ))
-    return array
-
 
 class TestContext( BaseContext ):
     currentImage = 0
@@ -59,7 +30,7 @@ class TestContext( BaseContext ):
         )
         # map_buffer returns an Byte view, we want an 
         # UInt view of that same data...
-        data = map_buffer( self.vbo ).view( 'I' )
+        data = vbo.mapVBO( self.vbo ).view( 'I' )
         print data
         del data
         self.vbo.unbind()
