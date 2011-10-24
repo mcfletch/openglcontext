@@ -13,7 +13,7 @@ from shader_11 import TestContext as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import *
 '''ARB_draw_instanced is an extremely common extension available on most modern 
 discrete OpenGL cards.  It defines a mechanism whereby you can generate a large 

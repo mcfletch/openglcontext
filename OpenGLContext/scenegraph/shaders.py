@@ -1,6 +1,6 @@
 """Shader node implementation"""
 from OpenGL.GL import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders as GL_shaders
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGL import error
@@ -352,12 +352,12 @@ class GLSLShader( shaders.GLSLShader ):
         source.extend( self.source )
         try:
             if self.type == 'VERTEX':
-                shader = compileShader(
+                shader = GL_shaders.compileShader(
                     source, 
                     GL_VERTEX_SHADER
                 )
             elif self.type == 'FRAGMENT':
-                shader = compileShader(
+                shader = GL_shaders.compileShader(
                     source, GL_FRAGMENT_SHADER
                 )
             else:
@@ -393,7 +393,7 @@ class GLSLObject( shaders.GLSLObject ):
                 )
         if renderer not in (None,False):
             try:
-                glUseProgram( renderer )
+                GL_shaders.glUseProgram( renderer )
             except error.GLError, err:
                 log.error( '''Failure compiling: %s''', '\n'.join([
                     '%s: %s'%(shader.url or shader.source,shader.compileLog)

@@ -22,7 +22,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import Sphere
 
 class TestContext( BaseContext ):
@@ -224,7 +224,7 @@ class TestContext( BaseContext ):
             }
         }
         """
-        vertex = compileShader( 
+        vertex = shaders.compileShader( 
             lightConst + phong_preCalc + light_preCalc +
         """
         attribute vec3 Vertex_position;
@@ -246,7 +246,7 @@ class TestContext( BaseContext ):
         variable that tracks the offset into the light array which 
         begins the current light.
         '''
-        fragment = compileShader( 
+        fragment = shaders.compileShader( 
             lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
@@ -284,7 +284,7 @@ class TestContext( BaseContext ):
         }
         """, GL_FRAGMENT_SHADER)
         '''Our general uniform setup should look familiar by now.'''
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         self.coords,self.indices,self.count = Sphere( 
             radius = 1 
         ).compile()

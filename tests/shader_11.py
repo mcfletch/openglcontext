@@ -18,7 +18,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 '''We're going to use VRML97 nodes to configure our shaders,
 so we'll import the whole set of VRML97 base nodes (and the
 OpenGLContext extended nodes as well, though we aren't going
@@ -119,7 +119,7 @@ class TestContext( BaseContext ):
         they will show up interpolated across the fragments in the fragment
         shader.
         '''
-        vertex = compileShader(
+        vertex = shaders.compileShader(
             lightConst + phong_preCalc + light_preCalc +
         """
         attribute vec3 Vertex_position;
@@ -142,7 +142,7 @@ class TestContext( BaseContext ):
         texture-coordinate variable will provide us with interpolated s,t
         coordinates which we can use to do a texture2D call on the sampler2D.
         '''
-        fragment = compileShader(
+        fragment = shaders.compileShader(
             lightConst + phong_weightCalc + """
         struct Material {            vec4 ambient;
             vec4 diffuse;
@@ -191,7 +191,7 @@ class TestContext( BaseContext ):
         }
         """, GL_FRAGMENT_SHADER)
         '''Compilation is the same.'''
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         '''As is our sphere geometry setup.'''
         self.coords,self.indices,self.count = Sphere(
             radius = 1

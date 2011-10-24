@@ -4,6 +4,7 @@
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
+from OpenGL.GL import shaders
 from OpenGL.GL.ARB.shader_objects import *
 from OpenGL.GL.ARB.fragment_shader import *
 from OpenGL.GL.ARB.vertex_shader import *
@@ -13,8 +14,6 @@ from OpenGLContext.arrays import array
 from OpenGLContext.events.timer import Timer
 import time, sys,logging,math
 log = logging.getLogger( 'shaderobjects' )
-
-from OpenGLContext.scenegraph.shaders import compileProgram, glUseProgram, glUniform3fv, compileShader
 
 class TestContext( BaseContext ):
     rotation = 0.00
@@ -37,8 +36,8 @@ class TestContext( BaseContext ):
             glFrontFace(GL_CCW)
     def OnInit( self ):
         """Scene set up and initial processing"""
-        self.program = compileProgram(
-            compileShader(
+        self.program = shaders.compileProgram(
+            shaders.compileShader(
                 '''
                 varying vec3 normal;
                 void main() {
@@ -48,7 +47,7 @@ class TestContext( BaseContext ):
                 ''',
                 GL_VERTEX_SHADER,
             ),
-            compileShader(
+            shaders.compileShader(
                 '''
                 uniform vec3 light_location;
                 varying vec3 normal;

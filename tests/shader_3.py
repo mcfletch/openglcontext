@@ -24,7 +24,7 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.arrays import *
 
 class TestContext( BaseContext ):
@@ -67,7 +67,7 @@ class TestContext( BaseContext ):
         control a "mix" of the uniform fog_color and the current vertex'
         gl_Color value.
         '''
-        vertex = compileShader("""
+        vertex = shaders.compileShader("""
             uniform float end_fog;
             uniform vec4 fog_color;
             void main() {
@@ -99,13 +99,13 @@ class TestContext( BaseContext ):
         means it is normally a good idea of do as much of your calculation 
         as possible in the vertex shader.
         '''
-        fragment = compileShader("""void main() {
+        fragment = shaders.compileShader("""void main() {
                 gl_FragColor = gl_Color;
             }""",GL_FRAGMENT_SHADER)
         
         '''We set up our shader and VBO using the same code as in 
         the previous tutorial.'''
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         self.vbo = vbo.VBO(
             array( [
                 [  0, 1, 0,  0,1,0 ],

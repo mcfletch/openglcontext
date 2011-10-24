@@ -23,7 +23,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 '''This is our only new import.  The Sphere geometry node 
 generates a "compiled" piece of sphere geometry 
 as a pair of two VBOs and a count that tells us how many vertices 
@@ -120,7 +120,7 @@ class TestContext( BaseContext ):
         As a result, our vertex shader becomes very simple, just arranging
         for the Normals to be varied across the surface.
         '''
-        vertex = compileShader( 
+        vertex = shaders.compileShader( 
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
@@ -145,7 +145,7 @@ class TestContext( BaseContext ):
         and the eye-space eye-coordinate is always (0,0,0), so the 
         eye-to-vertex vector is always the eye-space vector position.
         '''
-        fragment = compileShader( phong_weightCalc + """
+        fragment = shaders.compileShader( phong_weightCalc + """
         uniform vec4 Global_ambient;
         
         uniform vec4 Light_ambient;
@@ -186,7 +186,7 @@ class TestContext( BaseContext ):
         }
         """, GL_FRAGMENT_SHADER)
         
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         '''Here's the call that creates the two VBOs and the 
         count of records to render from them. If you're curious 
         you can read through the source code of the 

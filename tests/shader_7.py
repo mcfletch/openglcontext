@@ -23,7 +23,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import Sphere
 
 class TestContext( BaseContext ):
@@ -91,7 +91,7 @@ class TestContext( BaseContext ):
         of the operations currently done in our fragment shader here
         to reduce the processing load for our shader.
         '''
-        vertex = compileShader(
+        vertex = shaders.compileShader(
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
@@ -134,7 +134,7 @@ class TestContext( BaseContext ):
         global component is used to initialize the variable, with the
         contribution of each light added to the result.
         '''
-        fragment = compileShader(
+        fragment = shaders.compileShader(
             phong_weightCalc + materialStruct + """
         uniform Material material;
         uniform vec4 Global_ambient;
@@ -211,7 +211,7 @@ class TestContext( BaseContext ):
         for packing Uniform data into VBO storage, but it's not yet clear
         whether they will support array-of-structure specification.
         '''
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         self.coords,self.indices,self.count = Sphere(
             radius = 1
         ).compile()

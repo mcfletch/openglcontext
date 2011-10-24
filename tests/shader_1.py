@@ -105,7 +105,7 @@ class TestContext( BaseContext ):
         
         The OpenGL.GL.shaders.compileShader function 
         compiles the shader and checks for any compilation errors.
-        (Using glCreateShader, glShaderSource, and glCompileShader).
+        (Using glCreateShader, glShaderSource, and glshaders.compileShader).
         '''
         VERTEX_SHADER = shaders.compileShader("""
         void main() {
@@ -151,7 +151,7 @@ class TestContext( BaseContext ):
         }""", GL_FRAGMENT_SHADER)
         '''Now that we have defined our shaders, we need to compile them 
         into a program on our video card which can be applied to geometry.
-        The compileProgram convenience function does these operations:
+        The shaders.compileProgram convenience function does these operations:
         
             * creates a shader "program" (glCreateProgram)
             * for each of the shaders provided

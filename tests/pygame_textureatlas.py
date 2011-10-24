@@ -3,7 +3,7 @@
 import OpenGL 
 OpenGL.FULL_LOGGING = True
 from OpenGL.GL import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGL.arrays import vbo
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -36,7 +36,7 @@ class TestContext( BaseContext ):
             appearance = Appearance(
             ),
         )
-        vertex = compileShader( '''
+        vertex = shaders.compileShader( '''
             attribute vec2 coord;
             attribute vec2 tex;
             varying vec2 texcoord;
@@ -47,7 +47,7 @@ class TestContext( BaseContext ):
                 texcoord = tex;
             }
         ''', GL_VERTEX_SHADER)
-        fragment = compileShader('''
+        fragment = shaders.compileShader('''
             // render transparency map as texture of given colour
             uniform sampler2D atlas;
             uniform vec3 color;
@@ -65,7 +65,7 @@ class TestContext( BaseContext ):
                 );
             }
         ''', GL_FRAGMENT_SHADER)
-        self.shader = compileProgram( vertex, fragment )
+        self.shader = shaders.compileProgram( vertex, fragment )
         self.coord__loc = glGetAttribLocation( self.shader, 'coord' )
         self.tex__loc = glGetAttribLocation( self.shader, 'tex' )
         self.atlas_loc = glGetUniformLocation( self.shader, 'atlas' )

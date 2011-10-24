@@ -26,7 +26,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import Sphere
 
 class TestContext( BaseContext ):
@@ -99,7 +99,7 @@ class TestContext( BaseContext ):
         and eye-space location.  It stores the results of these in our
         new, varying array values.
         '''
-        vertex = compileShader( 
+        vertex = shaders.compileShader( 
             lightConst + 
         """
         attribute vec3 Vertex_position;
@@ -126,7 +126,7 @@ class TestContext( BaseContext ):
         which light we are processing and what array-offset we are 
         using, to make it clearer which value is being accessed.
         '''
-        fragment = compileShader( 
+        fragment = shaders.compileShader( 
             lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
@@ -161,7 +161,7 @@ class TestContext( BaseContext ):
         """, GL_FRAGMENT_SHADER)
         
         '''The rest of our code is very familiar.'''
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         self.coords,self.indices,self.count = Sphere( 
             radius = 1 
         ).compile()

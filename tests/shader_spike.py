@@ -8,9 +8,10 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
+from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.shaders import (
-    compileProgram, glUseProgram, glGetAttribLocation, 
-    glVertexAttribPointer,ShaderBuffer,compileShader,
+    glUseProgram, glGetAttribLocation, 
+    glVertexAttribPointer,ShaderBuffer,
 )
 
 class TestContext( BaseContext ):
@@ -29,8 +30,8 @@ class TestContext( BaseContext ):
     """
     
     def OnInit( self ):
-        self.shader = compileProgram(
-            compileShader(
+        self.shader = shaders.compileProgram(
+            shaders.compileShader(
                 '''
                 attribute vec3 position;
                 attribute vec3 color;
@@ -41,7 +42,7 @@ class TestContext( BaseContext ):
                 }''',
                 GL_VERTEX_SHADER,
             ),
-            compileShader(
+            shaders.compileShader(
                 '''varying vec4 baseColor;
                 void main() { 
                     gl_FragColor = baseColor;

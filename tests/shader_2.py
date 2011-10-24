@@ -22,7 +22,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 
 class TestContext( BaseContext ):
     """This shader just passes gl_Color from an input array to 
@@ -43,7 +43,7 @@ class TestContext( BaseContext ):
         sufficient to help you track down the problem (with the appropriate
         references, of course).'''
         try:
-            compileShader( """ void main() { """, GL_VERTEX_SHADER )
+            shaders.compileShader( """ void main() { """, GL_VERTEX_SHADER )
         except RuntimeError, err:
             print 'Example of shader compile error', err 
         else:
@@ -76,7 +76,7 @@ class TestContext( BaseContext ):
         However, the varying value is is being processed by intermediate
         clipping and interpolation processes.
         '''
-        vertex = compileShader(
+        vertex = shaders.compileShader(
             """
             varying vec4 vertex_color;
             void main() {
@@ -87,12 +87,12 @@ class TestContext( BaseContext ):
         varying value.  Since we would like the final fragment 
         colour to be the interpolated colour between our vertices,
         we can simply assign vertex_color to gl_FragColor.'''
-        fragment = compileShader("""
+        fragment = shaders.compileShader("""
             varying vec4 vertex_color;
             void main() {
                 gl_FragColor = vertex_color;
             }""",GL_FRAGMENT_SHADER)
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         '''Our geometry now has two components for every vertex,
         the first is the vertex position, which is the same set of 
         values as we saw in our previous tutorial.  The first three 

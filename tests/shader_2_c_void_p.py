@@ -7,9 +7,9 @@
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
+from OpenGL.GL import shaders
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGLContext.scenegraph.shaders import compileProgram, glUseProgram, compileShader
 import ctypes
 
 class TestContext( BaseContext ):
@@ -19,15 +19,15 @@ class TestContext( BaseContext ):
     """
     
     def OnInit( self ):
-        self.shader = compileProgram(
-            compileShader(
+        self.shader = shaders.compileProgram(
+            shaders.compileShader(
                 '''void main() {
                     gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
                     gl_FrontColor = gl_Color;
                 }''',
                 GL_VERTEX_SHADER,
             ),
-            compileShader(
+            shaders.compileShader(
                 '''void main() {
                     gl_FragColor = gl_Color;
                 }''',
@@ -52,7 +52,7 @@ class TestContext( BaseContext ):
     def Render( self, mode = 0):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
-        glUseProgram(self.shader)
+        shaders.glUseProgram(self.shader)
         try:
             self.vbo.bind()
             try:
@@ -65,7 +65,7 @@ class TestContext( BaseContext ):
             finally:
                 self.vbo.unbind()
         finally:
-            glUseProgram( 0 )
+            shaders.glUseProgram( 0 )
         
 
 if __name__ == "__main__":

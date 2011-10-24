@@ -17,7 +17,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import Sphere
 
 class TestContext( BaseContext ):
@@ -165,7 +165,7 @@ class TestContext( BaseContext ):
         from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
         
-        vertex = compileShader( 
+        vertex = shaders.compileShader( 
             lightConst + phong_preCalc + light_preCalc + 
         """
         attribute vec3 Vertex_position;
@@ -180,7 +180,7 @@ class TestContext( BaseContext ):
         
         '''Our only change for the fragment shader is to pass in the 
         spot components of the current light when calling phong_weightCalc.'''
-        fragment = compileShader( 
+        fragment = shaders.compileShader( 
             lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
@@ -218,7 +218,7 @@ class TestContext( BaseContext ):
         }
         """, GL_FRAGMENT_SHADER)
         '''Our uniform/geometry handling code is unchanged.'''
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         self.coords,self.indices,self.count = Sphere( 
             radius = 1 
         ).compile()

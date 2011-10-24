@@ -33,7 +33,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 '''This is our only new import, it's a utility Timer object 
 from OpenGLContext which will generate events with "fraction()"
 values that can be used for animations.'''
@@ -54,7 +54,7 @@ class TestContext( BaseContext ):
         which will be used.  They look very similar to the declarations
         for uniform values, save for the varying keyword.
         '''
-        vertex = compileShader("""
+        vertex = shaders.compileShader("""
             uniform float tween;
             attribute vec3 position;
             attribute vec3 tweened;
@@ -68,12 +68,12 @@ class TestContext( BaseContext ):
                 );
                 baseColor = vec4(color,1.0);
             }""",GL_VERTEX_SHADER)
-        fragment = compileShader("""
+        fragment = shaders.compileShader("""
             varying vec4 baseColor;
             void main() {
                 gl_FragColor = baseColor;
             }""",GL_FRAGMENT_SHADER)
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         '''Since our VBO now has two position records and one colour 
         record, we have an extra 3 floats for each vertex record.'''
         self.vbo = vbo.VBO(

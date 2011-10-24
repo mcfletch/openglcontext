@@ -23,7 +23,7 @@ from shader_11 import TestContext as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 '''OpenGLContext registers the shader nodes as "core" VRML97 nodes, so
 we can just import the base node-set.'''
 from OpenGLContext.scenegraph.basenodes import *

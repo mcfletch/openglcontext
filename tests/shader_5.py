@@ -73,7 +73,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.events.timer import Timer
 
 class TestContext( BaseContext ):
@@ -162,7 +162,7 @@ class TestContext( BaseContext ):
         per-vertex attributes to store the position and normal
         assigned by the user.
         '''
-        vertex = compileShader( phong_weightCalc + 
+        vertex = shaders.compileShader( phong_weightCalc + 
         """
         uniform vec4 Global_ambient;
         
@@ -225,14 +225,14 @@ class TestContext( BaseContext ):
         actually do per-fragment lighting calculations, but it wouldn't
         particularly improve our rendering with simple diffuse shading.
         '''
-        fragment = compileShader("""
+        fragment = shaders.compileShader("""
         varying vec4 baseColor;
         void main() {
             gl_FragColor = baseColor;
         }
         """, GL_FRAGMENT_SHADER)
         
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
         '''We're going to create slightly less "flat" geometry for this 
         lesson, we'll create a set of 6 faces in a "bow window" 
         arrangement that makes it easy to see the effect of the direct 
