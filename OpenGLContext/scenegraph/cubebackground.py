@@ -70,7 +70,7 @@ class _CubeBackground( object ):
                 matrix = glGetDoublev( GL_MODELVIEW_MATRIX )
                 if matrix is None:
                     # glGetDoublev can return None if uninitialised...
-                    matrix = identity( 4, 'd')
+                    matrix = identity( 4, 'f')
                 forward = dot(matrix, [0,0,-1,0])
                 self.VBO.bind()
                 glInterleavedArrays( GL_T2F_V3F, 0, self.VBO )

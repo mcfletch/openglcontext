@@ -50,7 +50,7 @@ class Smooth( direct.Direct ):
         """Process fractional update of our position"""
         fraction = (event.fraction() / 2.0) + .5
         x,y,z = self.posInterpolator.on_set_fraction( fraction )
-        self.platform.position = arrays.array([x,y,z,0.0], 'd' )
+        self.platform.position = arrays.array([x,y,z,0.0], 'f' )
     def onOrientFraction( self, event ):
         """Process fractional update of our position"""
         fraction = (event.fraction() / 2.0) + .5

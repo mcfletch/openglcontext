@@ -255,7 +255,7 @@ class FlatPass( SGObserver ):
             self.projection = vp.viewMatrix(maxDepth)
 
         glMatrixMode( GL_PROJECTION )
-        glLoadMatrixd( self.getProjection() )
+        glLoadMatrixf( self.getProjection() )
 
         events = context.getPickEvents()
         debugSelection = mode.context.contextDefinition.debugSelection
@@ -263,7 +263,7 @@ class FlatPass( SGObserver ):
             self.selectRender( mode, toRender, events )
             events.clear()
         glMatrixMode( GL_PROJECTION )
-        glLoadMatrixd( self.getProjection() )
+        glLoadMatrixf( self.getProjection() )
         glMatrixMode( GL_MODELVIEW )
         matrix = self.getModelView()
         if not debugSelection:
@@ -317,7 +317,7 @@ class FlatPass( SGObserver ):
 
             localMatrix = dot(tmatrix,matrix)
             self.matrix = localMatrix
-            glLoadMatrixd( localMatrix )
+            glLoadMatrixf( localMatrix )
 
             path[-1].Light( GL_LIGHT0+id, mode=self )
             id += 1
@@ -327,7 +327,7 @@ class FlatPass( SGObserver ):
             # default VRML lighting...
             from OpenGLContext.scenegraph import light
             l = light.DirectionalLight( direction = (0,0,-1.0))
-            glLoadMatrixd( matrix )
+            glLoadMatrixf( matrix )
             l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
 
@@ -338,7 +338,7 @@ class FlatPass( SGObserver ):
         for key,mvmatrix,tmatrix,bvolume,path in toRender:
             if not key[0]:
                 self.matrix = mvmatrix
-                glLoadMatrixd( mvmatrix )
+                glLoadMatrixf( mvmatrix )
                 try:
                     path[-1].Render( mode = self )
                     if debugFrustum:
@@ -365,7 +365,7 @@ class FlatPass( SGObserver ):
                         glDepthFunc( GL_LEQUAL )
 
                     self.matrix = mvmatrix
-                    glLoadMatrixd( mvmatrix )
+                    glLoadMatrixf( mvmatrix )
                     try:
                         path[-1].RenderTransparent( mode = self )
                         if debugFrustum:
@@ -437,7 +437,7 @@ class FlatPass( SGObserver ):
                 idSetter[0] = id
                 glColor4bv( idHolder )
                 self.matrix = mvmatrix
-                glLoadMatrixd( mvmatrix )
+                glLoadMatrixf( mvmatrix )
                 path[-1].Render( mode=self )
                 map[id] = path
             for point,eventSet in pickPoints.items():
