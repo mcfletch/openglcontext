@@ -29,9 +29,9 @@ def viewingMatrix(projection = None,model = None):
         matrix, the function will raise a RuntimeError
     """
     if projection is None:
-        projection = glGetDoublev( GL_PROJECTION_MATRIX)
+        projection = glGetFloatv( GL_PROJECTION_MATRIX)
     if model is None:
-        model = glGetDoublev( GL_MODELVIEW_MATRIX )
+        model = glGetFloatv( GL_MODELVIEW_MATRIX )
     # hmm, this will likely fail on 64-bit platforms :(
     if projection is None or model is None:
         context_log.warn( 
@@ -44,18 +44,6 @@ def viewingMatrix(projection = None,model = None):
             return model
         else:
             return identity( 4, 'd')
-    if allclose(projection,-1.79769313e+308):
-        context_log.warn( 
-            """Attempt to retrieve projection matrix when uninitialised %s, model=%s""",
-            projection, model,
-        )
-        return model
-    if allclose(model,-1.79769313e+308):
-        context_log.warn( 
-            """Attempt to retrieve model-view matrix when uninitialised %s, projection=%s""",
-            model, projection,
-        )
-        return projection
     return dot( model, projection )
 
 
@@ -68,7 +56,7 @@ class Frustum (node.Node):
         is to define 6 clipping planes from the OpenGL
         model-view matrices.
     """
-    ARRAY_TYPE = 'd'
+    ARRAY_TYPE = 'f'
     planes = fieldtypes.MFVec4f( 'planes', 1, [])
     normalized = fieldtypes.SFBool( 'normalized', 0, 1)
     def fromViewingMatrix(cls, matrix= None, normalize=1):

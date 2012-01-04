@@ -229,7 +229,7 @@ class FlatPass( SGObserver ):
             (key,mv,tm,bv,path) = record
             if bv is not None:
                 visible = bv.visible(
-                    frustum, tm,
+                    frustum, tm.astype('f'),
                     occlusion=False,
                     mode=self
                 )
@@ -471,12 +471,12 @@ class FlatPass( SGObserver ):
         # These values are temporarily stored locally, we are
         # in the context lock, so we're not causing conflicts
         if self.MAX_LIGHTS == -1:
-            self.MAX_LIGHTS = glGetIntegerv( GL_MAX_LIGHTS )
+            self.MAX_LIGHTS = 8 #glGetIntegerv( GL_MAX_LIGHTS )
         self.context = context
         self.cache = context.cache
-        self.projection = vp.viewMatrix()
+        self.projection = vp.viewMatrix().astype('f')
         self.viewport = (0,0) + context.getViewPort()
-        self.modelView = vp.modelMatrix()
+        self.modelView = vp.modelMatrix().astype('f')
         # TODO: calculate from view platform instead
         self.frustum = frustum.Frustum.fromViewingMatrix(
             dot(self.modelView,self.projection),
