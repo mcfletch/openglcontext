@@ -107,7 +107,7 @@ class TestContext( BaseContext ):
         compiles the shader and checks for any compilation errors.
         (Using glCreateShader, glShaderSource, and glshaders.compileShader).
         '''
-        VERTEX_SHADER = shaders.compileShader("""
+        VERTEX_SHADER = shaders.compileShader("""#version 330
         void main() {
             gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
         }""", GL_VERTEX_SHADER)
@@ -145,7 +145,7 @@ class TestContext( BaseContext ):
         is a pure green opaque (the last 1) value.  We assign the value 
         to the (global, built-in) gl_FragColor value and we are finished.
         '''
-        FRAGMENT_SHADER = shaders.compileShader("""
+        FRAGMENT_SHADER = shaders.compileShader("""#version 330
         void main() {
             gl_FragColor = vec4( 0, 1, 0, 1 );
         }""", GL_FRAGMENT_SHADER)
