@@ -27,6 +27,11 @@ class GLUTContext(
                 setattr( definition, key, value )
         self.contextDefinition = definition
         #glutInitDisplayMode( self.glutFlagsFromDefinition( definition ) )
+        glutInit([])
+#        glutInitContextVersion(3, 2)
+#        glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
+#        glutInitContextProfile(GLUT_CORE_PROFILE)
+        
         glutInitDisplayMode( self.DISPLAYMODE )
         # set up window size for newly created windows
         apply ( glutInitWindowSize, [int(i) for i in definition.size] )
