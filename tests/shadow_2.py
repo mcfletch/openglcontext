@@ -92,8 +92,8 @@ class TestContext( BaseContext ):
                 texture,
                 0 #mip-map level...
             )
-            if sys.platform == 'win32':
-                """Win32 requires that a colour buffer be bound..."""
+            if sys.platform in ('win32','darwin'):
+                """Win32 and OS-x require that a colour buffer be bound..."""
                 color = glGenRenderbuffers(1)
                 glBindRenderbuffer( GL_RENDERBUFFER, color )
                 glRenderbufferStorage(
