@@ -109,8 +109,8 @@ class MouseEvent( event.Event ):
             viewport = array(viewport,'i')
         worldCoordinate = gluUnProject(
             x,y,z,
-            self.modelViewMatrix,
-            self.projectionMatrix,
+            self.modelViewMatrix.astype('d'),
+            self.projectionMatrix.astype('d'),
             viewport,
         )
         if viewCoordinate is None:
