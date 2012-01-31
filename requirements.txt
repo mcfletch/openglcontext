@@ -4,11 +4,7 @@ PyVRML97
 PyVRML97-accelerate
 pydispatcher
 simpleparse
-
-# FontTools
-http://downloads.sourceforge.net/project/fonttools/2.3/fonttools-2.3.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Ffonttools%2Ffiles%2F2.3%2F&ts=1315336427&use_mirror=cdnetworks-us-2
-
+FontTools
 TTFQuery
+numpy 
 
-# doesn't build on my machine
-# numpy 

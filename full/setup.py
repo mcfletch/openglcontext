@@ -13,7 +13,7 @@ else:
 if __name__ == "__main__":
     setup (
         name = "OpenGLContext-full",
-        version = '2.1.0a9',
+        version = '2.2.0a1',
         description = "Installs all of OpenGLContext with optional dependencies",
         author = "Mike C. Fletcher",
         author_email = "mcfletch@users.sourceforge.net",
