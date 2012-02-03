@@ -420,22 +420,29 @@ class FlatPass( SGObserver ):
         # using a frustum a-la select render mode approach...
         min_x,min_y = self.getViewport()[2:]
         max_x,max_y = 0,0
+        pickSize = 2
+        offset = pickSize//2
         for event in events.values():
             x,y = key = tuple(event.getPickPoint())
             pickPoints.setdefault( key, []).append( event )
-            min_x = min((x-1,min_x))
-            max_x = max((x+1,max_x))
-            min_y = min((y-1,min_y))
-            max_y = max((y+1,max_y))
-        min_x = max((0,min_x))
-        min_y = max((0,min_y))
-        glScissor( int(min_x),int(min_y),int(max_x),int(max_y))
-        glEnable( GL_SCISSOR_TEST )
+            min_x = min((x-offset,min_x))
+            max_x = max((x+offset,max_x))
+            min_y = min((y-offset,min_y))
+            max_y = max((y+offset,max_y))
+        min_x = int(max((0,min_x)))
+        min_y = int(max((0,min_y)))
+        if max_x < min_x or max_y < min_y:
+            # no pick points were found 
+            return
+        if not self.context.contextDefinition.debugSelection:
+            glScissor( min_x,min_y,int(max_x)-min_x,int(max_y)-min_y)
+            glEnable( GL_SCISSOR_TEST )
+        glMatrixMode( GL_MODELVIEW )
         try:
             idHolder = array( [0,0,0,0], 'B' )
             idSetter = idHolder.view( '<I' )
             for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
-                id += 50
+                id = (id+1) << 12
                 idSetter[0] = id
                 glColor4bv( idHolder )
                 self.matrix = mvmatrix
@@ -446,9 +453,6 @@ class FlatPass( SGObserver ):
                 # get the pixel colour (id) under the cursor.
                 pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
                 pixel = long( pixel.view( '<I' )[0][0][0] )
-                if pixel != 0:
-                    print 'pixel', pixel
-                    print 'map', map.keys()
                 paths = map.get( pixel, [] )
                 event.setObjectPaths( [paths] )
                 # get the depth value under the cursor...
