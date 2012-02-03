@@ -14,10 +14,10 @@ from OpenGLContext.scenegraph import polygonsort,boundingvolume
 from OpenGLContext.arrays import array
 LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
-import time, sys,logging
-log = logging.getLogger( 'OpenGLContext.scenegraph.shaders' )
-log.setLevel( logging.DEBUG )
+import time, sys
 from OpenGL.extensions import alternate
+import logging
+log = logging.getLogger( __name__ )
 
 
 class _Buffer( object ):
@@ -311,7 +311,7 @@ class ShaderURLField( fieldtypes.MFString ):
                     c.triggerRedraw(1)
             return
     def subLoad( self, client, urlFragment, i, overall ):
-        from OpenGLContext.loaders.loader import Loader, loader_log
+        from OpenGLContext.loaders.loader import Loader
         try:
             baseNode = protofunctions.root(client)
             if baseNode:

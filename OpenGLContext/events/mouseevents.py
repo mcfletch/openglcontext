@@ -1,10 +1,8 @@
 """Events relating to the mouse"""
 from OpenGLContext.events import event, eventmanager
-from OpenGLContext.debug.logs import event_log, DEBUG
 from OpenGL.GLU import *
 from OpenGLContext.scenegraph import nodepath
 from OpenGLContext.arrays import array
-##event_log.setLevel( DEBUG )
 
 class MouseEvent( event.Event ):
     """Base class for all mouse-based events.

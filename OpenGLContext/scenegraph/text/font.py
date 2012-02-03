@@ -2,8 +2,9 @@
 import weakref
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
-from OpenGLContext.debug.logs import text_log
 from OpenGLContext import doinchildmatrix
+import logging
+log = logging.getLogger( __name__ )
 
 class Font(object):
     """Abstract base-class for all font implementations"""
@@ -40,7 +41,7 @@ class Font(object):
         if they are passed.
         """
         if __debug__:
-            text_log.info( """normalise %r for %s""", repr(value), self, )
+            log.info( """normalise %r for %s""", repr(value), self, )
         if isinstance( value, str ):
             value = value.decode( 'utf-8' )
         return value
@@ -57,24 +58,24 @@ class Font(object):
         lines = value.split('\n')
         lines = [ Line(line.expandtabs(4), self, mode=mode) for line in lines ]
         if __debug__:
-            text_log.info( """lines %r""", repr(lines),)
+            log.info( """lines %r""", repr(lines),)
         return lines
     def getChar( self, char, mode=None ):
         """Get (and/or create) a single-character display-list (with metrics)"""
         if __debug__:
-            text_log.debug( """  char, %s""", repr(char))
+            log.debug( """  char, %s""", repr(char))
         current = self._displayLists.get( char )
         if current:
             if __debug__:
-                text_log.debug( """  found current, %s""", current)
+                log.debug( """  found current, %s""", current)
         else:
             ### Need to generate a new display-list
             if __debug__:
-                text_log.debug( """  generating displaylist, %s""", repr(char))
+                log.debug( """  generating displaylist, %s""", repr(char))
             current = self.createChar(char, mode=mode)
             self._displayLists[char] = current
             if __debug__:
-                text_log.debug( """  success, %s, %s""", *current)
+                log.debug( """  success, %s, %s""", *current)
         return current
     def getSpacing( self, fontStyle, mode=None ):
         """Get the vertical spacing multiplier"""
@@ -172,7 +173,7 @@ class Font(object):
     def __del__( self ):
         """Clean up our display lists on deletion"""
         if __debug__:
-            text_log.debug( """Deleting font %s""", self)
+            log.debug( """Deleting font %s""", self)
         for key,(dl,metrics) in self._displayLists.items():
             try:
                 glDeleteLists( dl, 1 )
@@ -434,7 +435,7 @@ class Line( object ):
         width = 0
         for char in self.base:
             list, metrics = self.font.getChar( char, mode=mode )
-            text_log.debug( 'Metrics for %s: %s', char, metrics )
+            log.debug( 'Metrics for %s: %s', char, metrics )
             width += metrics.width
         return width
 

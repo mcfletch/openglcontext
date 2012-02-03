@@ -1,11 +1,12 @@
 """PyGame bitmap and texmap fonts"""
 from OpenGLContext.scenegraph.text import fontprovider, font
 from OpenGL.GL import *
-from OpenGLContext.debug.logs import text_log
 from pygame import font as pygame_font
 from pygame import image, surfarray, transform
 import pygame, traceback, os
 from OpenGLContext.arrays import transpose, shape, zeros, contiguous
+import logging
+log = logging.getLogger( __name__ )
 
 pygame_font.init()
 pygame.init()
@@ -29,7 +30,7 @@ class PyGameBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font
         self.filename = filename
         self.size = size
         if __debug__:
-            text_log.info( """Created font %s""", self)
+            log.info( """Created font %s""", self)
 
     def createChar( self, char, mode=None ):
         """Create the single-character display list
@@ -121,7 +122,7 @@ class PyGameBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font
         thread and within the rendering pass!
         """
         if __debug__:
-            text_log.info( """lists %s(%s)""", self, repr(value))
+            log.info( """lists %s(%s)""", self, repr(value))
         lists = []
         font = self.font
         for char in value:
@@ -129,7 +130,7 @@ class PyGameBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font
             if list is not None:
                 lists.append( list )
         if __debug__:
-            text_log.info( """lists %s(%s)->%s""", self, repr(value), lists)
+            log.info( """lists %s(%s)->%s""", self, repr(value), lists)
         return lists
     def lineHeight(self, mode=None ):
         """Retrieve normal line-height for this font

@@ -61,8 +61,14 @@ class GLUTXEvent(object):
             GLUT_RIGHT_BUTTON: 1,
             GLUT_MIDDLE_BUTTON: 2,
         }.get( button )
-        self.CURRENTBUTTONSTATES[index] = state
-        return index, state
+        if index is None:
+            if button not in (3,4):
+                # is a mouse-wheel button 
+                log.warn( "Unrecognized button ID: %s", button, )
+            return -1,state
+        else:
+            self.CURRENTBUTTONSTATES[index] = state
+            return index, state
         
 
 class GLUTMouseButtonEvent( GLUTXEvent, mouseevents.MouseButtonEvent ):

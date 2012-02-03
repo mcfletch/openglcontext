@@ -30,9 +30,10 @@ from OpenGL.GLUT import glutSolidCube
 from vrml.vrml97 import nodetypes
 from vrml import node, field, protofunctions, cache
 from OpenGLContext import frustum, utilities, doinchildmatrix
-from OpenGLContext.debug.logs import bounding_log as log
 from OpenGL.extensions import alternate
 import exceptions
+import logging
+log = logging.getLogger( __name__ )
 
 glBeginQuery = alternate( glBeginQuery, glBeginQueryARB )
 glDeleteQueries = alternate( glDeleteQueries, glDeleteQueriesARB )

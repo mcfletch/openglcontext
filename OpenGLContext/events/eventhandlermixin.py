@@ -1,6 +1,7 @@
 """Mix in functionality for Context classes needing event support"""
 import Queue
-from OpenGLContext.debug.logs import event_log
+import logging 
+log = logging.getLogger( __name__ )
 
 class EventHandlerMixin(object):
     """This class provides mix in functionality for contexts
@@ -107,7 +108,7 @@ class EventHandlerMixin(object):
                 return manager.ProcessEvent( event )
         else:
             if __debug__:
-                event_log.warn( """Unrecognised event type %s received by context event: %r""", event.type, event)
+                log.warn( """Unrecognised event type %s received by context event: %r""", event.type, event)
         return None
     
     ### Internal API

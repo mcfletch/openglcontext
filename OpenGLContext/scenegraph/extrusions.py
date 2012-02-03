@@ -5,7 +5,8 @@ from vrml import cache
 from OpenGLContext import displaylist
 from OpenGL.GLE import *
 from math import pi
-from OpenGLContext.debug.logs import geometry_log
+import logging
+log = logging.getLogger( __name__ )
 
 RAD_TO_DEG = 360/pi
 
@@ -94,7 +95,7 @@ class GLEGeom( nodetypes.Geometry, node.Node ):
                         table = curTable
                         found = 1
                 if not found:
-                    geometry_log.warn( """Texturemode %s wasn't recognisable for node %s, expected one of %s, didn't find any""", self.textureMode, self, [x[0] for x in table])
+                    log.warn( """Texturemode %s wasn't recognisable for node %s, expected one of %s, didn't find any""", self.textureMode, self, [x[0] for x in table])
                     break
             if not isinstance(table,tuple):
                 gleTextureMode( mode | table )

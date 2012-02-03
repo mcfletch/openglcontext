@@ -2,9 +2,10 @@
 from OpenGL.GL import *
 from vrml.vrml97 import basenodes
 from OpenGLContext.scenegraph import boundingvolume, polygonsort
-from OpenGLContext.debug.logs import visitor_log
 from OpenGLContext.arrays import array
 import traceback, cStringIO
+import logging
+log = logging.getLogger( __name__ )
 LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
 class Shape( basenodes.Shape ):
@@ -151,7 +152,7 @@ class Shape( basenodes.Shape ):
             )
         except Exception, err:
             tb = traceback.format_exc( )
-            visitor_log.warn(
+            log.warn(
                 """Failure during Shape.visible check for %r:\n%s""",
                 self,
                 tb

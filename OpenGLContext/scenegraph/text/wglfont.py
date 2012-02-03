@@ -4,8 +4,9 @@ from OpenGL.WGL import *
 from OpenGL.GL import *
 import win32ui, win32con
 import sys
-from OpenGLContext.debug.logs import text_log
 from OpenGL.WGL import *
+import logging
+log = logging.getLogger( __name__ )
 
 FAMILYMAPPING = {
     # really-dumb family:font mappings
@@ -52,7 +53,7 @@ class WGLFont( font.Font ):
         self.extrusion = extrusion
         self.fontStyle = fontStyle or None
         if __debug__:
-            text_log.info( """Created font %s""", self)
+            log.info( """Created font %s""", self)
 
     def lists( self, value, mode=None ):
         """Get a sequence of display-list integers for value
@@ -80,11 +81,11 @@ class WGLFont( font.Font ):
         """
         ### Need to generate a new display-list
         if __debug__:
-            text_log.debug( """  generating displaylists, %s""", repr(source))
+            log.debug( """  generating displaylists, %s""", repr(source))
         wgldc = wglGetCurrentDC() # the DC that's doing the work
         if wgldc == None:
             if __debug__:
-                text_log.warn( """Unable to build the WGL DC for generating text""")
+                log.warn( """Unable to build the WGL DC for generating text""")
             return 
         elif wgldc > sys.maxint:
             import struct
@@ -137,7 +138,7 @@ class WGLFont( font.Font ):
                 underline = None
             specification["underline"] = underline
         if __debug__:
-            text_log.debug( """font specification %s""", specification)
+            log.debug( """font specification %s""", specification)
         return win32ui.CreateFont(
             specification,
         )
@@ -190,7 +191,7 @@ class WGLFont( font.Font ):
 ##		import pdb
 ##		pdb.set_trace()
         if __debug__:
-            text_log.warn( """Use of wglfont.createChar, normally should use lists directly""")
+            log.warn( """Use of wglfont.createChar, normally should use lists directly""")
         self.fastCreate( char, mode=mode )
         return self.getChar( char, mode=mode )
         

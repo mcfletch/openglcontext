@@ -7,7 +7,6 @@ unlikely that nontrivial code will be completely stable across
 all interactive context classes."""
 
 import traceback, string, os, sys, optparse
-from OpenGLContext.debug.logs import context_log as log
 from OpenGLContext import plugins, context, contextdefinition
 
 # Test-runner can specify the base-class explicitly...

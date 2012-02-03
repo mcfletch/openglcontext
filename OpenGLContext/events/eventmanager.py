@@ -1,8 +1,7 @@
 """Abstract base class for all event managers."""
 from pydispatch import dispatcher
-from OpenGLContext.debug.logs import event_log, DEBUG, WARN
-
-##event_log.setLevel( DEBUG )
+import logging 
+log = logging.getLogger( __name__ )
 
 class EventManager(object):
     """Abstract base class for all event managers.
@@ -39,21 +38,21 @@ class EventManager(object):
         should be available in ambiguous circumstances).
         """
         if __debug__:
-            event_log.debug( 'ProcessEvent %r', event )
+            log.debug( 'ProcessEvent %r', event )
         processed = 0
         # anonymous mouse function only...
         metaKey = (self.type,0,event.getKey())
         results = dispatcher.sendExact( metaKey, None, event )
         for handler, result in results:
             if __debug__:
-                event_log.debug( '   handler %s -> %r', handler, result )
+                log.debug( '   handler %s -> %r', handler, result )
             processed = processed or result
         if not processed:
             metaKey = (self.type,0,None)
             results = dispatcher.sendExact( metaKey, None, event )
             for handler, result in results:
                 if __debug__:
-                    event_log.debug( '   handler %s -> %r', handler, result )
+                    log.debug( '   handler %s -> %r', handler, result )
                 processed = processed or result
         return processed
     def registerCallback(
@@ -83,7 +82,7 @@ class EventManager(object):
         if function is not None:
             metaKey = (cls.type,capture,key)
             if __debug__:
-                event_log.info( """Register(%(capture)s): %(metaKey)r for node %(node)r -> %(function)r"""%locals())
+                log.info( """Register(%(capture)s): %(metaKey)r for node %(node)r -> %(function)r"""%locals())
             dispatcher.connect( function, sender=node, signal=metaKey )
             assert len(dispatcher.getReceivers(
                 sender=node,
@@ -115,7 +114,7 @@ class EventManager(object):
         receiver = None
         for receiver in receivers:
             if __debug__:
-                event_log.info( """Disconnecting receiver for key %(metaKey)r for node %(node)r -> %(receiver)s"""%locals())
+                log.info( """Disconnecting receiver for key %(metaKey)r for node %(node)r -> %(receiver)s"""%locals())
             dispatcher.disconnect(
                 receiver,
                 signal = metaKey,
@@ -165,19 +164,19 @@ class BubblingEventManager( EventManager ):
     def ProcessEvent( self, event ):
         """Modified version of ProcessEvent that dispatches to nodes"""
 ##		if self.type == "mousebutton":
-##			event_log.setLevel( DEBUG )
+##			log.setLevel( DEBUG )
 ##		else:
-##			event_log.setLevel( WARN )
+##			log.setLevel( WARN )
         
         if __debug__:
-            event_log.debug( 'ProcessEvent %r %s', event, len(event.getObjectPaths()) )
+            log.debug( 'ProcessEvent %r %s', event, len(event.getObjectPaths()) )
         processed = 0
         # capturing anonymous (globally-overriding) mouse function
         metaKey = (self.type,1,event.getKey())
         results = dispatcher.sendExact( metaKey, None, event )
         for handler, result in results:
             if __debug__:
-                event_log.debug( '   handler %s -> %r', handler, result )
+                log.debug( '   handler %s -> %r', handler, result )
             processed = processed or result
         if not event.stopPropagation:
             # general scenegraph capture/bubble operation...
@@ -185,18 +184,18 @@ class BubblingEventManager( EventManager ):
                 event.currentPath = path
                 # if no paths, then nothing here used, of course...
                 if __debug__:
-                    event_log.debug( ' path starting %s', path )
+                    log.debug( ' path starting %s', path )
                 # do the capture pass...
                 for node in path[:-1]:
                     event.currentNode = node
                     if __debug__:
-                        event_log.debug( '   node capture pass %s', node )
+                        log.debug( '   node capture pass %s', node )
                     capture = 1
                     metaKey = (self.type,capture,event.getKey())
                     results = dispatcher.sendExact( metaKey, node, event )
                     for handler, result in results:
                         if __debug__:
-                            event_log.debug( '   handler %s -> %r', handler, result )
+                            log.debug( '   handler %s -> %r', handler, result )
                         processed = processed or result
                     if event.stopPropagation:
                         break
@@ -214,18 +213,18 @@ class BubblingEventManager( EventManager ):
                         node = path[index]
                         event.currentNode = node
                         if __debug__:
-                            event_log.debug( '   node bubble pass %s: %s,%s', node, metaKey,event )
+                            log.debug( '   node bubble pass %s: %s,%s', node, metaKey,event )
                         results = dispatcher.sendExact( metaKey, node, event )
                         for handler, result in results:
                             if __debug__:
-                                event_log.debug( '   handler %s -> %r', handler, result )
+                                log.debug( '   handler %s -> %r', handler, result )
                             processed = processed or result
                         if event.stopPropagation:
                             break
                         event.atTarget = 0
                 if processed: # something has already dealt with this event
                     if __debug__:
-                        event_log.debug( ' processed, ProcessEvent returning')
+                        log.debug( ' processed, ProcessEvent returning')
                 if not event.processMorePaths:
                     # only process up to current path...
                     break 
@@ -233,11 +232,11 @@ class BubblingEventManager( EventManager ):
             if not event.stopPropagation:
                 metaKey = (self.type,0,event.getKey())
                 if __debug__:
-                    event_log.debug( '  searching for default handler %s', metaKey )
+                    log.debug( '  searching for default handler %s', metaKey )
                 results = dispatcher.sendExact( metaKey, None, event )
                 for handler, result in results:
                     if __debug__:
-                        event_log.debug( '   handler %s -> %r', handler, result )
+                        log.debug( '   handler %s -> %r', handler, result )
                     processed = processed or result
         return processed
     def _traversalPaths( self, event ):

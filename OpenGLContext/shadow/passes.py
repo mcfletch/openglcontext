@@ -58,6 +58,8 @@ except ImportError:
 from OpenGLContext.arrays import *
 from math import pi
 import sys
+import logging
+log = logging.getLogger( __name__ )
 
 class OverallShadowPass (renderpass.OverallPass):
     """Pass w/ ambient, light-specific, and selection sub-passes
@@ -338,7 +340,7 @@ class LightOpaque(SpecificLight, renderpass.OpaqueRenderPass):
         if not self.frustum:
             self.frustum = frustum.Frustum.fromViewingMatrix(normalize = 1)
         else:
-            visitor_log.warn( """SceneGraphCamera called twice for the same rendering pass %s""", self)
+            log.warn( """SceneGraphCamera called twice for the same rendering pass %s""", self)
         
 class LightTransparent(SpecificLight, renderpass.TransparentRenderPass):
     lighting = 1

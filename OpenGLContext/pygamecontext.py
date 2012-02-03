@@ -17,7 +17,8 @@ if pygame.ver < '1.1':
 from OpenGL.GL import *
 from OpenGLContext.context import Context
 from OpenGLContext.events import pygameevents
-from OpenGLContext.debug.logs import context_log as log
+import logging 
+log = logging.getLogger( __name__ )
 from OpenGLContext import contextdefinition
 
 class PygameContext(

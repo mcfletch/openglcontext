@@ -10,7 +10,8 @@ from vrml import olist
 from vrml.vrml97.transformmatrix import RADTODEG
 import weakref,random, sys, ctypes, logging
 from pydispatch.dispatcher import connect
-log = logging.getLogger( 'OpenGLContext.passes.flat' )
+import logging 
+log = logging.getLogger( __name__ )
 
 if sys.maxint > 2L<<32:
     BIGINTS = True

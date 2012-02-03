@@ -61,7 +61,8 @@ Note:
         http://people.scs.fsu.edu/~burkardt/txt/obj_format.txt
     
 """
-from OpenGLContext.debug.logs import loader_log, DEBUG
+import logging 
+log = logging.getLogger( __name__ )
 from OpenGLContext.loaders import base, loader
 from OpenGLContext.scenegraph import basenodes
 import urllib
@@ -126,7 +127,7 @@ class OBJHandler( base.BaseHandler ):
             elif values[0] in ('usemtl', 'usemat'):
                 material = materials.get(values[1], None)
                 if material is None:
-                    loader_log.warn('Unknown material: %s', values[1])
+                    log.warn('Unknown material: %s', values[1])
                     material = self.defaultMaterial()
                 if mesh is not None:
                     if group and current_vertex_indices:
@@ -185,7 +186,7 @@ class OBJHandler( base.BaseHandler ):
                 current_texcoord_indices.append( -1 )
                 current_normal_indices.append( -1 )
             else:
-                loader_log.warn( """Unrecognized operation: %r""", values )
+                log.warn( """Unrecognized operation: %r""", values )
         if group and current_vertex_indices:
             group.geometry.coordIndex = current_vertex_indices
             group.geometry.texCoordIndex = current_texcoord_indices
@@ -239,7 +240,7 @@ class OBJHandler( base.BaseHandler ):
                         possible, baseURL 
                     )
                 except IOError, err:
-                    loader_log.warn(
+                    log.warn(
                         """Unable to load material library: %s""",
                         url,
                     )
@@ -257,7 +258,7 @@ class OBJHandler( base.BaseHandler ):
                 material = self.defaultMaterial()
                 materials[values[1]] = material
             elif material is None:
-                loader_log.warn('Expected "newmtl" in %s', url)
+                log.warn('Expected "newmtl" in %s', url)
                 continue
 
             try:
@@ -285,7 +286,7 @@ class OBJHandler( base.BaseHandler ):
                     texture = basenodes.ImageTexture(url=img_url)
                     material.texture = texture
             except:
-                loader_log.warn('Parse error in %s.', url)
+                log.warn('Parse error in %s.', url)
 
 def defaultHandler( ):
     """Default handler instance used for loading standard obj files"""

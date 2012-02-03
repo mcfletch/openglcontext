@@ -65,9 +65,10 @@ from vrml import cache
 from OpenGLContext import triangleutilities, displaylist
 from OpenGLContext.scenegraph import arraygeometry, coordinatebounded
 from OpenGLContext.scenegraph import polygon, vertex, polygontessellator, indexedpolygons
-from OpenGLContext.debug.logs import geometry_log
 from vrml.vrml97 import basenodes
 from vrml import protofunctions
+import logging
+log = logging.getLogger( __name__ )
 
 class DummyRender( object ):
     def render( self, *args, **named ):
@@ -213,9 +214,9 @@ class IFSCompiler( object ):
         try:
             compiler =  self.compile( *args, **named )
         except Exception, err:
-            geometry_log.error(
+            log.error(
                 """Failure during compilation of IndexedFaceSet: %s""",
-                geometry_log.getTraceback(err),
+                log.getTraceback(err),
             )
             compiler = DUMMY_RENDER
         holder.data = compiler
@@ -326,7 +327,7 @@ class IFSCompiler( object ):
             point = coordIndices[ metaIndex ]
             if point >= 0:
                 if point >= len(coordIndices):
-                    geometry_log.info( """Coordindex of node %s declares index %s at meta-index %s, beyond end of coordinate set (len %s), ignoring""", self.target, point, metaIndex, len(coordIndices))
+                    log.info( """Coordindex of node %s declares index %s at meta-index %s, beyond end of coordinate set (len %s), ignoring""", self.target, point, metaIndex, len(coordIndices))
                     continue
                 set = dict([
                     (s.vertexAttribute, s( metaIndex, polygonIndex )[0])
@@ -415,14 +416,14 @@ class ArrayGeometryCompiler( IFSCompiler ):
                     colorArray = array([vertex.color for vertex in vertices],'f')
                 except TypeError:
                     colorArray = None
-                    geometry_log.warn("""%s tessellation appears to have created invalid color for tesselated vertex""",self.target)
+                    log.warn("""%s tessellation appears to have created invalid color for tesselated vertex""",self.target)
             else:
                 colorArray = None
             if self.target.texCoord and len(self.target.texCoord.point):
                 textureCoordinateArray = array([vertex.textureCoordinate for vertex in vertices],'f')
             else:
                 textureCoordinateArray = None
-            geometry_log.debug(
+            log.debug(
                 'Arrays: \nvertex -- %s\nnormal -- %s',
                 vertexArray, normalArray,
             )
@@ -730,7 +731,7 @@ class IndexedValueSource(object):
         name -- name to be reported in debugging logs
         """
         if (not len(indices)) and len(values):
-            geometry_log.debug ("""%s array using vertex indices""", name)
+            log.debug ("""%s array using vertex indices""", name)
             indices = vertexIndices
         self.indices = indices
         self.values = values
@@ -752,7 +753,7 @@ class IndexedValueSource(object):
                 except IndexError, err:
                     return None, -1
                 if finalIndex < 0:
-                    geometry_log.warn(
+                    log.warn(
                         """%s array has a different polygon-length than vertex array, metaIndex=%s, faceIndex=%s""",
                         self.name, metaIndex,faceIndex
                     )
@@ -764,7 +765,7 @@ class IndexedValueSource(object):
                         return None, -1
                 return self.values[ finalIndex],  finalIndex
             else:
-                geometry_log.warn(
+                log.warn(
                     """No indices for %s array""",
                     self.name,
                 )

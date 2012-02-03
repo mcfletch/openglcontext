@@ -8,18 +8,18 @@ module which implements the shadow-casting rendering
 algorithm.
 """
 from __future__ import generators
-import time, weakref, traceback, sys, logging
+import time, weakref, traceback, sys
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
 
 from OpenGLContext import visitor, displaylist, frustum, utilities
 from OpenGLContext.passes import rendervisitor
-from OpenGLContext.debug.logs import visitor_log, INFO, DEBUG
 from OpenGLContext.scenegraph import nodepath
 from vrml.vrml97 import nodetypes
 from vrml import node
-log = logging.getLogger( 'context.passes' )
+import logging 
+log = logging.getLogger( __name__ )
 
 class RenderPass(object):
     """A particular pass of a particular rendering mode

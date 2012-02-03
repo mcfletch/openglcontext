@@ -1,6 +1,5 @@
 """rendering of TTF outlines (as provided by _fonttools)
 """
-from OpenGLContext.debug.logs import text_log, INFO
 from OpenGLContext.arrays import *
 import weakref, sys, os
 from OpenGL.GL import *
@@ -9,6 +8,8 @@ from OpenGL.GLE import *
 from OpenGLContext.scenegraph import polygontessellator, vertex
 from OpenGLContext.scenegraph.text import _toolsfont, font, fontprovider
 from ttfquery import glyphquery
+import logging
+log = logging.getLogger( __name__ )
 
 ### Now the OpenGL-specific stuff...
 class OutlineGlyph( _toolsfont.Glyph ):
@@ -246,14 +247,14 @@ class ToolsFontMixIn( object ):
         thread and within the rendering pass!
         """
         if __debug__:
-            text_log.info( """lists %s(%s)""", self, repr(value))
+            log.info( """lists %s(%s)""", self, repr(value))
         lists = []
         for char in value:
             list, metrics = self.getChar( char, mode=mode )
             if list is not None:
                 lists.append( list )
         if __debug__:
-            text_log.info( """lists %s(%s)->%s""", self, repr(value), lists)
+            log.info( """lists %s(%s)->%s""", self, repr(value), lists)
         return lists
     def lineHeight(self, mode=None ):
         """Retrieve normal line-height for this font

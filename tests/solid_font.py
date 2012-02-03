@@ -5,7 +5,6 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 import _fontstyles#, _ttf_fonts
-from OpenGLContext.debug.logs import text_log
 import sys, os, traceback
 
 ## The following makes the toolsfont provider available, toolsfont is dependent

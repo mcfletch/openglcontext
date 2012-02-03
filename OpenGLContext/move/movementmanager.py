@@ -1,7 +1,8 @@
 """Interactions for navigating the context"""
 from gettext import gettext as _
 from OpenGLContext import quaternion
-from OpenGLContext.debug.logs import movement_log
+import logging 
+log = logging.getLogger( __name__ )
 
 class MovementManager( object ):
     """Base class for movement interaction controllers"""
@@ -19,21 +20,21 @@ class MovementManager( object ):
     def bind( self, context ):
         """Bind this navigation mechanism to the context"""
         self.context = context
-        movement_log.info( "Binding %r movement manager", self )
+        log.info( "Binding %r movement manager", self )
         for (title,key,function) in self.commands:
             binding = self.commandBindings.get( key )
             if binding is not None:
                 func = getattr( self, function, None )
                 if func is not None:
-                    movement_log.info( 'Movement binding: %s, %s', func, binding )
+                    log.info( 'Movement binding: %s, %s', func, binding )
                     context.addEventHandler(function=func,**binding)
                 else:
-                    movement_log.warn( 'No method %s registered as handler for %s on %s', 
+                    log.warn( 'No method %s registered as handler for %s on %s', 
                         function, key, self.__class__.__name__,
                     )
     def unbind( self, context ):
         """Unbind this navigation mechanism from the context"""
-        movement_log.info( "Unbinding %r movement manager", self )
+        log.info( "Unbinding %r movement manager", self )
         for (title,key,function) in self.commands:
             binding = self.commandBindings.get( key )
             if binding is not None:

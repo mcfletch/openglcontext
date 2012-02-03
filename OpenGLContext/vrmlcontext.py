@@ -9,8 +9,9 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 import os, sys, time, traceback
 from OpenGLContext import framecounter
-
 from OpenGLContext.loaders.loader import Loader
+import logging
+log = logging.getLogger( __name__ )
 
 class VRMLContext(object):
     """VRML97-loading Context testing class
@@ -31,13 +32,12 @@ class VRMLContext(object):
         See the OpenGLContext.scenegraph.text package for the
         available font providers.
         """
-        from OpenGLContext.debug.logs import text_log
         from OpenGLContext.scenegraph.text import fontprovider
         try:
             from OpenGLContext.scenegraph.text import toolsfont
             registry = self.getTTFFiles()
         except ImportError, err:
-            text_log.warn( """Unable to import TTFQuery/FontTools-based TTF-file registry, no TTF font support!""" )
+            log.warn( """Unable to import TTFQuery/FontTools-based TTF-file registry, no TTF font support!""" )
         else:
             fontprovider.setTTFRegistry(
                 registry,
@@ -45,11 +45,11 @@ class VRMLContext(object):
         try:
             from OpenGLContext.scenegraph.text import pygamefont
         except (ImportError,NotImplementedError):
-            text_log.warn( """Unable to import PyGame TTF-font renderer, no PyGame anti-aliased font support!""" )
+            log.warn( """Unable to import PyGame TTF-font renderer, no PyGame anti-aliased font support!""" )
         try:
             from OpenGLContext.scenegraph.text import glutfont
         except ImportError:
-            text_log.error( """Unable to import GLUT-based font renderer, no GLUT bitmap font support (this is unexpected)!""" )
+            log.error( """Unable to import GLUT-based font renderer, no GLUT bitmap font support (this is unexpected)!""" )
         
     def OnInit( self ):
         """Initialise the VRMLContext keyboard shortcuts"""

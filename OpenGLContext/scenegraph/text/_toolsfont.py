@@ -6,10 +6,11 @@ system fonts, generating registries of available fonts,
 querying metadata regarding a particular font/glyph etc.
 """
 from fontTools import ttLib
-from OpenGLContext.debug.logs import text_log, INFO
 from OpenGLContext.arrays import *
 import weakref, sys
 from ttfquery import describe, glyphquery
+import logging
+log = logging.getLogger( __name__ )
 
 # don't have any specialisations as of yet, so just include it
 from ttfquery.glyph import Glyph
@@ -74,7 +75,7 @@ class Font(object):
         XXX Currently this is not reentrant :( 
         """
         if __debug__:
-            text_log.info( """Opening TrueType font %r with fonttools""", self.filename)
+            log.info( """Opening TrueType font %r with fonttools""", self.filename)
         self.font = describe.openFont( self.filename )
         try:
             return callable( *arguments, **named )
@@ -95,7 +96,7 @@ class Font(object):
             self.lineHeight = glyphquery.lineHeight( self.font )
             self.charHeight = glyphquery.charHeight( self.font )
         except Exception:
-            text_log.error( """Unable to load TrueType font from %r""", self.filename)
+            log.error( """Unable to load TrueType font from %r""", self.filename)
             raise
     def countGlyphs( self, string ):
         """Count the number of glyphs from string present in file"""
@@ -136,7 +137,7 @@ class Font(object):
     def _createGlyph( self, character, quality ):
         """Load glyph outlines from font-file (called via withFont)"""
         if __debug__:
-            text_log.info( """Retrieving glyph for character %r""", character)
+            log.info( """Retrieving glyph for character %r""", character)
         glyphName = glyphquery.glyphName( self.font, character, self.encoding )
         if glyphName in self.glyphNames:
             # whadda-ya-know, it's the same glyph as another character

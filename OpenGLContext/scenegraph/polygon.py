@@ -1,8 +1,9 @@
 """Holder for metadata regarding a polygon"""
 from OpenGLContext.scenegraph import polygontessellator
-from OpenGLContext.debug.logs import geometry_log
 from OpenGLContext import vectorutilities, utilities
 from OpenGLContext.arrays import *
+import logging
+log = logging.getLogger( __name__ )
 
 def mag( x, y, z ):
     """Get the 3D magnitude of a 3-coordinate vector"""
@@ -68,7 +69,7 @@ class Polygon( list ):
             a,b,c,d = self
             self[:] = [a,b,c,a,c,d]
         elif len(self) < 3:
-            geometry_log.info( repr(
+            log.info( repr(
                 DegeneratePolygon(
                     self,
                     self.node,
@@ -105,7 +106,7 @@ class Polygon( list ):
                     #that's it, I think, no other sanity checks?
                     result.extend( currentVertices )
                 else:
-                    geometry_log.info( repr(
+                    log.info( repr(
                         DegeneratePolygon(
                             currentVertices,
                             self.node,
@@ -113,7 +114,7 @@ class Polygon( list ):
                         )
                     ))
             else:
-                geometry_log.info( repr(
+                log.info( repr(
                     DegeneratePolygon(
                         currentVertices,
                         self.node,

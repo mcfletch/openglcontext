@@ -6,6 +6,8 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 import string, time, sys, os
+import logging
+log = logging.getLogger( __name__ )
 
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.text import fontprovider
@@ -22,13 +24,12 @@ class TestContext( BaseContext ):
         See the OpenGLContext.scenegraph.text package for the
         available font providers.
         """
-        from OpenGLContext.debug.logs import text_log
         from OpenGLContext.scenegraph.text import fontprovider
         try:
             from OpenGLContext.scenegraph.text import toolsfont
             registry = self.getTTFFiles()
         except ImportError, err:
-            text_log.warn( """Unable to import fonttools-based TTF-file registry, no TTF font support!""" )
+            log.warn( """Unable to import fonttools-based TTF-file registry, no TTF font support!""" )
         else:
             fontprovider.setTTFRegistry(
                 registry,
@@ -39,11 +40,11 @@ class TestContext( BaseContext ):
         try:
             from OpenGLContext.scenegraph.text import pygamefont
         except ImportError:
-            text_log.warn( """Unable to import PyGame TTF-font renderer, no PyGame anti-aliased font support!""" )
+            log.warn( """Unable to import PyGame TTF-font renderer, no PyGame anti-aliased font support!""" )
         try:
             from OpenGLContext.scenegraph.text import glutfont
         except ImportError:
-            text_log.warn( """Unable to import GLUT-based TTF-file registry, no GLUT bitmap font support!""" )
+            log.warn( """Unable to import GLUT-based TTF-file registry, no GLUT bitmap font support!""" )
     def OnInit( self ):
         print """You should see a 3D-rendered text message"""
         print '  <p> previous fontstyle'

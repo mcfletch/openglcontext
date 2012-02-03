@@ -7,7 +7,8 @@ from OpenGLContext import texture, context
 from vrml import cache
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import node, field, protofunctions, fieldtypes
-from OpenGLContext.debug.logs import context_log, texture_log
+import logging 
+log = logging.getLogger( __name__ )
 
 class _Texture( nodetypes.Texture, node.Node ):
     """Mix-in for rendering static image textures
@@ -104,7 +105,7 @@ class _Texture( nodetypes.Texture, node.Node ):
                 glMatrixMode( GL_MODELVIEW )
         except GLerror:
             if glGetBoolean( GL_TEXTURE_2D ):
-                texture_log.error( """Unable to disable GL_TEXTURE_2D for node %s""", self )
+                log.error( """Unable to disable GL_TEXTURE_2D for node %s""", self )
                 
     def cached( self, mode=None ):
         """Retrieve cached texture for this mode"""
@@ -143,9 +144,9 @@ try:
         # old style?
         import Image
     from ImageFile import Parser
-    context_log.info( """Loaded Python Image Library (PIL)""" )
+    log.info( """Loaded Python Image Library (PIL)""" )
 except ImportError:
-    context_log.warn( """Python Image Library (PIL) not installed, no Image support available
+    log.warn( """Python Image Library (PIL) not installed, no Image support available
 http://www.pythonware.com/products/pil/index.htm""" )
     class ImageTexture(basenodes.ImageTexture):
         """Dummy/stand-in when no PIL available (does nothing)
@@ -219,7 +220,7 @@ else:
                 if contexts, iterate through the list calling
                 context.triggerRedraw(1)
             """
-            from OpenGLContext.loaders.loader import Loader, loader_log
+            from OpenGLContext.loaders.loader import Loader
             try:
                 baseNode = protofunctions.root(self)
                 if baseNode:
@@ -247,7 +248,7 @@ else:
             
             # should set client.image to something here to indicate
             # failure to the user.
-            texture_log.warn( """Unable to load any image from the url %s for the node %s""", url, str(self))
+            log.warn( """Unable to load any image from the url %s for the node %s""", url, str(self))
         def loadFromData( self, data, url=None ):
             """Load (synchronously) from given data"""
             import StringIO
@@ -257,7 +258,7 @@ else:
             try:
                 image = Image.open( fh )
             except IOError, err:
-                texture_log.info( 'IOError %s opening image', err )
+                log.info( 'IOError %s opening image', err )
             else:
                 if image:
                     self.image = image
@@ -266,7 +267,7 @@ else:
                     self.components = -1
                     return self.image
                 else:
-                    texture_log.warn( 'Null image' )
+                    log.warn( 'Null image' )
             return None
         
     class MMImageTexture( ImageTexture ):
@@ -305,13 +306,13 @@ class PixelTexture( _Texture, basenodes.PixelTexture ):
             return None
         width, height, componentCount = map(int,image[:3])
         if not componentCount:
-            texture_log.warn( 'bad component count in pixeltexture %s', self )
+            log.warn( 'bad component count in pixeltexture %s', self )
             return None
         if (not width) or (not height):
-            texture_log.warn( '0-size dimension in pixeltexture %s', self )
+            log.warn( '0-size dimension in pixeltexture %s', self )
             return None
         if len(image) != width*height+3:
-            texture_log.warn(  
+            log.warn(  
                 'PixelTexture has incorrect image size, expected %s items (%s*%s)+3, got %s', 
                 width*height+3,
                 width,

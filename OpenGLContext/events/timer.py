@@ -1,7 +1,8 @@
 """EventManager providing vcr-like control of an InternalTime object"""
 import eventmanager, systemtime, internaltime
 from pydispatch import dispatcher
-from OpenGLContext.debug.logs import event_log, DEBUG
+import logging 
+log = logging.getLogger( __name__ )
 
 class Timer( eventmanager.EventManager ):
     """Event manager providing VCR-like control of an InternalTime
@@ -103,7 +104,7 @@ class Timer( eventmanager.EventManager ):
         results = dispatcher.sendExact( metaKey, self, event )
         for handler, result in results:
             if __debug__:
-                event_log.debug( '   handler %s -> %r', handler, result )
+                log.debug( '   handler %s -> %r', handler, result )
             processed = processed or result
         return processed
 

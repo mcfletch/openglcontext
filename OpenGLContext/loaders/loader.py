@@ -1,15 +1,11 @@
 """Load-manager for downloading multi-value URLs
 
 The Singleton "Loader" should be used for most interactions.
-
-Note that there is a long associated with the loader
-    OpenGLContext.debug.logs.loader_log
 """
-from OpenGLContext.debug.logs import loader_log, DEBUG
 import urllib, os
 from cStringIO import StringIO
-
-##loader_log.setLevel( DEBUG )
+import logging 
+log = logging.getLogger( __name__ )
 
 class _Loader( object ):
     """(Singleton) Manager for downloading resources
@@ -40,7 +36,7 @@ class _Loader( object ):
 
         headers will be None for local files
         """
-        loader_log.info( "Loading: %s, %s", url, baseURL )
+        log.info( "Loading: %s, %s", url, baseURL )
         if isinstance( url, (str, unicode) ):
             url = [url]
         file = None
@@ -65,13 +61,13 @@ class _Loader( object ):
         headers = None
         if url in self.cache:
             filename = self.cache.get( url )
-            loader_log.debug( "cached: %s %s", url, filename )
+            log.debug( "cached: %s %s", url, filename )
             try:
                 file = open( filename, 'rb')
             except (IOError,TypeError,ValueError):
                 pass
         try:
-            loader_log.debug( "load: %s", url )
+            log.debug( "load: %s", url )
             file = open( url, 'rb' )
             filename = url
             baseURL = urllib.pathname2url( filename )
@@ -91,9 +87,9 @@ class _Loader( object ):
             else:
                 # try to download
                 try:
-                    loader_log.debug( "download: %s", url )
+                    log.debug( "download: %s", url )
                     filename, headers = self.download( url )
-                    loader_log.debug( "downloaded to: %s", filename )
+                    log.debug( "downloaded to: %s", filename )
                     file = open( filename, 'rb')
                     baseURL = url
                 except (IOError, TypeError, ValueError), err:
@@ -111,7 +107,6 @@ class _Loader( object ):
     loadedHandlers = {}
     def loadHandlers( self ):
         """Load all registered handlers"""
-        from OpenGLContext.debug import logs
         from OpenGLContext import plugins
         entrypoints = plugins.Loader.all()
         for entrypoint in entrypoints:
@@ -119,16 +114,16 @@ class _Loader( object ):
             try:
                 creator = entrypoint.load()
             except ImportError, err:
-                logs.context_log.warn( """Unable to load loader implementation for %s: %s""", name, err )
+                log.warn( """Unable to load loader implementation for %s: %s""", name, err )
             else:
                 try:
                     loader = creator()
                 except Exception, err:
-                    logs.context_log.warn( """Unable to initialize loader implementation for %s: %s""", name, err )
+                    log.warn( """Unable to initialize loader implementation for %s: %s""", name, err )
                 else:
                     for extension in entrypoint.check:
                         self.loadedHandlers[ extension ] = loader 
-                    logs.context_log.info( """Loaded loader implementation for %s: %s""", name, loader )
+                    log.info( """Loaded loader implementation for %s: %s""", name, loader )
         
     def findHandler( self, url ):
         """Find registered handler for the url's apparent suffix

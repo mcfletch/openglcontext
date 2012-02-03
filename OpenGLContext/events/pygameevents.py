@@ -2,7 +2,8 @@
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 import pygame, string
 from pygame.locals import *
-from OpenGLContext.debug.logs import event_log as log
+import logging 
+log = logging.getLogger( __name__ )
 
 class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
     """Pygame-specific EventHandlerMixin

@@ -1,15 +1,15 @@
 """Traversal objects for Contexts and scenegraphs
 """
 from OpenGLContext.scenegraph import nodepath
-from OpenGLContext.debug.logs import visitor_log, INFO, DEBUG
 import sys, traceback, types
 from vrml.vrml97 import nodetypes
 from vrml import node
+import logging
+log = logging.getLogger( __name__ )
 
-##visitor_log.setLevel(INFO)
 DEBUG_VISIT_METHOD = 0
 if DEBUG_VISIT_METHOD:
-    visitor_log.setLevel( DEBUG )
+    log.setLevel( DEBUG )
 
 TRAVERSAL_TYPES = (nodetypes.Traversable, nodetypes.Children, node.PrototypedNode, nodetypes.Rendering)
 
@@ -170,7 +170,7 @@ class Visitor( object ):
                     o we restore the previous self.currentStack
             """
             if __debug__:
-                visitor_log.info(
+                log.info(
                     'start visit( %s ) id=%s depth=%s',
                     node,
                     id(node),
@@ -183,7 +183,7 @@ class Visitor( object ):
                 for method in self.vmethods(node):
                     try:
                         if __debug__:
-                            visitor_log.info(
+                            log.info(
                                 'run method %s for node %s',
                                 repr(method),
                                 node,
@@ -196,7 +196,7 @@ class Visitor( object ):
                                 tokens.append( token )
                     except:
                         traceback.print_exc( )
-                        visitor_log.error(
+                        log.error(
                             """method %s for node %s""",
                             method,
                             node,
@@ -205,7 +205,7 @@ class Visitor( object ):
                     children = self.children( node )
                 except:
                     traceback.print_exc( )
-                    visitor_log.error(
+                    log.error(
                         """exception in children method for node %s""",
                         node,
                     )
@@ -217,7 +217,7 @@ class Visitor( object ):
                     if tokens:
                         for token in tokens:
                             if __debug__:
-                                visitor_log.info(
+                                log.info(
                                     'run post-processing token %s for node %s',
                                     repr(token),
                                     node,
@@ -226,7 +226,7 @@ class Visitor( object ):
                 finally:
                     self.currentStack = previousStack
                     if __debug__:
-                        visitor_log.info(
+                        log.info(
                             'end visit( %s ) depth=%s',
                             node,
                             len(previousStack),
@@ -278,7 +278,7 @@ class Visitor( object ):
                                 tokens.append( token )
                     except:
                         traceback.print_exc( )
-                        visitor_log.error(
+                        log.error(
                             """method %s for node %s""",
                             method,
                             node,
@@ -287,7 +287,7 @@ class Visitor( object ):
                     children = self.children( node )
                 except:
                     traceback.print_exc( )
-                    visitor_log.error(
+                    log.error(
                         """exception in children method for node %s""",
                         node,
                     )
@@ -297,7 +297,7 @@ class Visitor( object ):
                             self.visit( child )
                         except Exception:
                             traceback.print_exc()
-                            visitor_log.error(
+                            log.error(
                                 """exception visiting child %s""",
                                 child,
                             )
@@ -350,7 +350,7 @@ class _Finder( Visitor ):
                 children = self.children( node, types=childrenTypes )
             except:
                 traceback.print_exc( )
-                visitor_log.error(
+                log.error(
                     """exception in children method for node %s""",
                     node,
                 )

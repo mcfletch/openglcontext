@@ -5,7 +5,7 @@ from OpenGLContext.arrays import zeros, array, dot, ArrayType
 from OpenGLContext import texture
 from vrml.vrml97 import transformmatrix
 
-log = logging.getLogger( 'OpenGLContext.atlas' )
+log = logging.getLogger( __name__ )
 
 class _Strip( object ):
     """Strip within the atlas which takes particular set of images"""

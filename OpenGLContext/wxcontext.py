@@ -5,7 +5,8 @@ from wx import glcanvas
 from OpenGL.GL import *
 from OpenGLContext import context, contextdefinition
 from OpenGLContext.events import wxevents
-from OpenGLContext.debug.logs import context_log
+import logging 
+log = logging.getLogger( __name__ )
 
 class wxContext(
     glcanvas.GLCanvas, # wxPython OpenGL context
@@ -195,7 +196,7 @@ class wxContext(
         if size.width == 0 or size.height == 0:
             return
         if not self.calledDoInit:
-            context_log.info( """wxOnPaint before initialisation started""" )
+            log.info( """wxOnPaint before initialisation started""" )
             self._OnInitCallback( )
         self.setCurrent()
         self.ViewPort( size.width, size.height )

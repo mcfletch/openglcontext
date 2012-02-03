@@ -12,7 +12,8 @@ Based on code from:
 from vrml import fieldtypes, node, protofunctions
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
-from OpenGLContext.debug.logs import context_log, INFO
+import logging 
+log = logging.getLogger( __name__ )
 
 def viewingMatrix(projection = None,model = None):
     """Calculate the total viewing matrix from given data
@@ -34,7 +35,7 @@ def viewingMatrix(projection = None,model = None):
         model = glGetFloatv( GL_MODELVIEW_MATRIX )
     # hmm, this will likely fail on 64-bit platforms :(
     if projection is None or model is None:
-        context_log.warn( 
+        log.warn( 
             """A NULL matrix was returned from glGetDoublev: proj=%s modelView=%s""",
             projection, model,
         )

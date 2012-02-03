@@ -14,20 +14,15 @@ union of:
 
 with prototypes from the second replacing those in the
 first.
-
-Note that there is a log associated with the loader
-which is used by the VRML97 loader module:
-    OpenGLContext.debug.logs.loader_log
 """
 from vrml.vrml97 import basenamespaces, parser, linearise, nodetypes
 from vrml import node, protofunctions
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.loaders import base
-from OpenGLContext.debug.logs import loader_log, DEBUG
 from vrml.vrml97 import parseprocessor
 import urllib,threading
-
-##loader_log.setLevel( DEBUG )
+import logging 
+log = logging.getLogger( __name__ )
 
 STANDARD_PROTOTYPES = basenamespaces.basePrototypes.copy()
 
@@ -45,7 +40,7 @@ def standardPrototype( prototype, key ):
     name = protofunctions.name( prototype )
     STANDARD_PROTOTYPES[name] = prototype
     if name != key:
-        loader_log.warn( "Standard prototype %r is known by the key %r instead of it's prototype name", name, key )
+        log.warn( "Standard prototype %r is known by the key %r instead of it's prototype name", name, key )
     return name
 
 ### Update from the basenodes dictionary of OpenGLContext

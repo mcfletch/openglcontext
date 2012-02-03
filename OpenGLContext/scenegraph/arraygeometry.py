@@ -3,8 +3,9 @@ from OpenGL.GL import *
 from OpenGLContext.arrays import *
 import polygonsort
 from OpenGLContext import triangleutilities
-from OpenGLContext.debug.logs import geometry_log
 from OpenGL.arrays import vbo
+import logging
+log = logging.getLogger( __name__ )
 
 try:
     contiguous
@@ -81,7 +82,7 @@ class ArrayGeometry(object):
         solid = 1 -- whether backspace culling should be enabled
             see glEnable( GL_CULL_FACE )
         """
-        geometry_log.debug( 'New array geometry node' )
+        log.debug( 'New array geometry node' )
         if FORCE_CONTIGUOUS:
             if vertexArray is not None and len(vertexArray):
                 vertexArray = contiguous( vertexArray )
@@ -92,7 +93,7 @@ class ArrayGeometry(object):
             if textureCoordinateArray is not None and len(textureCoordinateArray):
                 textureCoordinateArray = contiguous( textureCoordinateArray )
         if vbo.get_implementation():
-            geometry_log.debug( "VBO implementation available" )
+            log.debug( "VBO implementation available" )
             if vertexArray is not None and len(vertexArray):
                 vertexArray = vbo.VBO( vertexArray )
             if colorArray is not None and len(colorArray):
@@ -108,7 +109,7 @@ class ArrayGeometry(object):
         self.normals = normalArray
         self.textures = textureCoordinateArray
         self.arguments = (objectType, startIndex,count)
-        geometry_log.debug( '  array geometry: %s, %s', self.arguments, len(self.vertices) )
+        log.debug( '  array geometry: %s, %s', self.arguments, len(self.vertices) )
         if ccw:
             self.ccw = GL_CCW
         else:
@@ -185,9 +186,9 @@ class ArrayGeometry(object):
 
         At the moment, is a simple call to glDrawArrays
         """
-#		geometry_log.debug( 'Drawing array geometry: %s, %s', self.arguments, len(self.vertices) )
+#		log.debug( 'Drawing array geometry: %s, %s', self.arguments, len(self.vertices) )
         glDrawArrays( *self.arguments )
-#		geometry_log.debug( 'Finished array geometry' )
+#		log.debug( 'Finished array geometry' )
     def drawTransparent( self, mode ):
         """Same as draw, but called when a transparent render is required
 

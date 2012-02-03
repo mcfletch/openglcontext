@@ -14,9 +14,10 @@ from OpenGL.GL import *
 from vrml import node
 from vrml.vrml97 import nodetypes
 from OpenGLContext.scenegraph import nodepath
-from OpenGLContext.debug.logs import visitor_log, DEBUG
 from OpenGLContext import visitor, frustum, doinchildmatrix
 from OpenGLContext.arrays import array
+import logging 
+log = logging.getLogger( __name__ )
 
 RADTODEG = 180/math.pi
 class RenderVisitor( visitor.Visitor ):
@@ -100,7 +101,7 @@ class RenderVisitor( visitor.Visitor ):
                             break
                 if view is None:
                     view = self.viewpointPaths[0][-1]
-                    visitor_log.info( "Binding to first viewpoint: %s", view )
+                    log.info( "Binding to first viewpoint: %s", view )
                 view.isBound = True
             if node.boundViewpoint is not view:
                 view.moveTo( path, self.context )
@@ -109,7 +110,7 @@ class RenderVisitor( visitor.Visitor ):
         if not self.frustum:
             self.frustum = frustum.Frustum.fromViewingMatrix(normalize = 1)
         else:
-            visitor_log.warn(
+            log.warn(
                 """Calculated frustum twice for the same rendering pass %s""",
                 self
             )
@@ -150,7 +151,7 @@ class RenderVisitor( visitor.Visitor ):
                     if used:
                         enabledLights.append( IDs.pop(0) )
                 if lightPaths and not IDs:
-                    visitor_log.warn( """Unable to render all lights in scene, more than 8 active lights, %s skipped"""%(len(lightPaths)))
+                    log.warn( """Unable to render all lights in scene, more than 8 active lights, %s skipped"""%(len(lightPaths)))
             else:
                 # create a default light
                 self.SceneGraphDefaultlight( IDs[0] )
@@ -367,7 +368,7 @@ class RenderVisitor( visitor.Visitor ):
             if not self.frustum:
                 self.frustum = frustum.Frustum.fromViewingMatrix(normalize = 1)
             else:
-                visitor_log.warn( """ContextSetupBindables called twice for the same rendering pass %s""", self)
+                log.warn( """ContextSetupBindables called twice for the same rendering pass %s""", self)
 
 ### Finalisation tokens
 class GroupPopToken( object ):

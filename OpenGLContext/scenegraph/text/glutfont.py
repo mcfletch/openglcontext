@@ -3,7 +3,8 @@ from OpenGL import GLUT
 from OpenGL.GL import *
 from OpenGLContext.scenegraph.text import fontprovider, font
 from OpenGLContext.arrays import *
-from OpenGLContext.debug.logs import text_log
+import logging
+log = logging.getLogger( __name__ )
 
 class GLUTBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
     """A GLUT-provided Bitmap Font
@@ -55,14 +56,14 @@ class GLUTBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font )
         thread and within the rendering pass!
         """
         if __debug__:
-            text_log.info( """lists %s(%s)""", self, repr(value))
+            log.info( """lists %s(%s)""", self, repr(value))
         lists = []
         for char in value:
             list, metrics = self.getChar( char, mode=mode )
             if list is not None:
                 lists.append( list )
         if __debug__:
-            text_log.info( """lists %s(%s)->%s""", self, repr(value), lists)
+            log.info( """lists %s(%s)->%s""", self, repr(value), lists)
         return lists
     def lineHeight(self, mode=None ):
         """Retrieve normal line-height for this font
@@ -139,7 +140,7 @@ class _GLUTFontProvider (fontprovider.FontProvider):
                 diff, family,size = min([ (abs(target-size),family,size) for (family,size) in current ])
                 if __debug__:
                     if diff:
-                        text_log.info(
+                        log.info(
                             """Using size %s for GLUT bitmap font, not equal to target %s""",
                             size,
                             target,

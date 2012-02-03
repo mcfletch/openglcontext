@@ -1,9 +1,8 @@
 """Base loader module for OpenGLContext
 """
-from OpenGLContext.debug.logs import loader_log, DEBUG
+import logging 
+log = logging.getLogger( __name__ )
 import urllib
-
-##loader_log.setLevel( DEBUG )
 
 class BaseHandler( object ):
     """Base handler class providing common loading operations
@@ -21,13 +20,13 @@ class BaseHandler( object ):
         data = self.getData( baseURL, filename, file )
         success, sg = self.parse( data, baseURL, filename, file, *args, **named )
         if success and sg:
-            loader_log.debug( "parse complete")
+            log.debug( "parse complete")
             return sg
         elif not success:
-            loader_log.warn( "parse of %s failed", baseURL)
+            log.warn( "parse of %s failed", baseURL)
             raise ValueError( """Parse failure for url %s""", baseURL)
         else:
-            loader_log.warn( "parse of %s returned NULL document")
+            log.warn( "parse of %s returned NULL document")
             raise ValueError( """NULL results for url %s""", baseURL)
     def parse( self, data, baseURL, filename, file, *args, **named ):
         """Parse the loaded data (with the provided meta-information)"""
@@ -38,20 +37,20 @@ class BaseHandler( object ):
         Will handle gunzipping data which has .gz extension
         """
         # handle potential for a gzipped file...
-        loader_log.debug( "File handler file: %s", filename)
+        log.debug( "File handler file: %s", filename)
         # Okay, file is an open file
         # check the type to see if we need to gunzip
         if self.isGzip( file ):
-            loader_log.debug( "gunzip: %s", filename )
+            log.debug( "gunzip: %s", filename )
             file = self.gunzip( file )
         # Should check the file type,
         # just in case it's not really VRML, but that's
         # not really critical at the moment.
         
         # Get the data as in-memory string
-        loader_log.debug( "read: start")
+        log.debug( "read: start")
         data = file.read()
-        loader_log.debug( "read: %s bytes", len(data))
+        log.debug( "read: %s bytes", len(data))
         return data
     def isGzip( cls, file ):
         """Determine whether the data is a gzip stream"""

@@ -2,11 +2,12 @@
 from OpenGLContext.scenegraph.text import fontprovider, font
 from OpenGL.GL import *
 import wx
-from OpenGLContext.debug.logs import text_log, DEBUG
 import traceback, os
 from OpenGLContext.arrays import *
+import logging
+log = logging.getLogger( __name__ )
 
-##text_log.setLevel( DEBUG )
+##log.setLevel( DEBUG )
 class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
     """A wxPython-provided Bitmap Font
 
@@ -50,7 +51,7 @@ class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
         self.fontStyle = fontStyle or None
         if not font:
             if __debug__:
-                text_log.info( """wx.BitmapFont passed a null wxPython font, doing lookup for fontStyle %r""", fontStyle)
+                log.info( """wx.BitmapFont passed a null wxPython font, doing lookup for fontStyle %r""", fontStyle)
             family, face, font = wxFontProvider.match( fontStyle )
             if not font:
                 raise ValueError("""Could not generate wx.BitmapFont for fontStyle %s"""% (fontStyle,))
@@ -66,7 +67,7 @@ class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
             ## XXX list should be stored in a context-specific cache...
             return list, metrics
         else:
-            text_log.warn( """wx.BitmapFont couldn't get display list for character %r""", char)
+            log.warn( """wx.BitmapFont couldn't get display list for character %r""", char)
         return None, metrics
         
     def textureToList( self, array, metrics, mode=None ):
@@ -102,7 +103,7 @@ class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
                 glBitmap( 0,0,0,0, metrics.width,0, None )
             except Exception:
                 if __debug__:
-                    text_log.warn( """Failure creating display-list for %r""", metrics.char )
+                    log.warn( """Failure creating display-list for %r""", metrics.char )
                 glDeleteLists( list, 1 )
                 raise
         finally:
@@ -117,7 +118,7 @@ class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
         character and return it as (data, width, height).
         """
         if __debug__:
-            text_log.info( """Creating texture for %r""", char )
+            log.info( """Creating texture for %r""", char )
         dc = wx.MemoryDC()
         bm = wx.EmptyBitmap( 1,1 )
         dc.SelectObject(bm)
@@ -162,14 +163,14 @@ class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
         thread and within the rendering pass!
         """
         if __debug__:
-            text_log.info( """lists %s(%s)""", self, repr(value))
+            log.info( """lists %s(%s)""", self, repr(value))
         lists = []
         for char in value:
             list, metrics = self.getChar( char, mode=mode )
             if list is not None:
                 lists.append( list )
         if __debug__:
-            text_log.info( """lists %s(%s)->%s""", self, repr(value), lists)
+            log.info( """lists %s(%s)->%s""", self, repr(value), lists)
         return lists
     def lineHeight(self, mode=None ):
         """Retrieve normal line-height for this font
@@ -177,7 +178,7 @@ class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
         for (list, metrics) in self._displayLists.itervalues():
             return metrics.height
         if __debug__:
-            text_log.warn( """lineHeight requested when no characters rasterised, 0-height line may result""")
+            log.warn( """lineHeight requested when no characters rasterised, 0-height line may result""")
         return 0
 
 class _wxFontProvider (fontprovider.FontProvider):
@@ -255,7 +256,7 @@ class _wxFontProvider (fontprovider.FontProvider):
             if height >= targetSize:
                 if __debug__:
                     if height != targetSize:
-                        text_log.warn(
+                        log.warn(
                             """wxBitmapFont Using point size %s for pixel size %s, actual pixel size %s""",
                             testSize,
                             targetSize,

@@ -34,7 +34,7 @@ from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node,cache
 import weakref, os, time, sys, logging 
-log = logging.getLogger( 'OpenGLContext.context' )
+log = logging.getLogger( __name__ )
 
 class LockingError( Exception ):
     pass
@@ -785,23 +785,22 @@ class Context(object):
         if self.ttfFileRegistry:
             return self.ttfFileRegistry
         from ttfquery import ttffiles
-        from OpenGLContext.debug.logs import text_log
         registryFile = os.path.join(self.getUserAppDataDirectory(), 'font_metadata.cache')
         from OpenGLContext.scenegraph.text import ttfregistry
         registry = ttfregistry.TTFRegistry()
         if os.path.isfile( registryFile ):
-            text_log.info( "Loading font metadata from cache %r", registryFile )
+            log.info( "Loading font metadata from cache %r", registryFile )
             registry.load( registryFile )
             if not registry.fonts:
-                text_log.warn( "Re-scanning fonts, no fonts found in cache" )
+                log.warn( "Re-scanning fonts, no fonts found in cache" )
                 registry.scan()
                 registry.save()
-                text_log.info( "Font metadata stored in cache %r", registryFile )
+                log.info( "Font metadata stored in cache %r", registryFile )
         else:
-            text_log.warn( "Scanning font metadata into cache %r, please wait", registryFile )
+            log.warn( "Scanning font metadata into cache %r, please wait", registryFile )
             registry.scan()
             registry.save( registryFile )
-            text_log.info( "Font metadata stored in cache %r", registryFile )
+            log.info( "Font metadata stored in cache %r", registryFile )
         # make this a globally-available object
         Context.ttfFileRegistry = registry
         return registry

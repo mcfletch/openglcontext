@@ -12,7 +12,8 @@ from vrml import node, field, fieldtypes
 from OpenGL.GLU import *
 from OpenGL.GL import *
 from OpenGL.GLU.EXT.object_space_tess import *
-from OpenGLContext.debug.logs import geometry_log, context_log
+import logging 
+log = logging.getLogger( __name__ )
 from OpenGLContext import arrays
 
 object_space_tess = None
@@ -135,7 +136,7 @@ class _SurfaceRenderer( object ):
         elif self.geometryType == 'polygon':
             mode = GLU_FILL
         else:
-            geometry_log.warn( """%s declares geometryType of %s -> ignoring""", self, repr( self.geometryType ))
+            log.warn( """%s declares geometryType of %s -> ignoring""", self, repr( self.geometryType ))
             self.geometryType = 'polygon'
             mode = GLU_FILL
         gluNurbsProperty( nurbObject, GLU_DISPLAY_MODE, mode )
@@ -357,7 +358,7 @@ class NurbsToleranceSample( NurbsSampling ):
         if self.method == 'object':
             if not initialise():
                 # do regular (non-extension) screen sampling...
-                geometry_log.warn( """%s declares 'object' sampling method, extension: object_space_tess not available -> ignoring""", self)
+                log.warn( """%s declares 'object' sampling method, extension: object_space_tess not available -> ignoring""", self)
                 self.method = 'screen'
             else:
                 methods = (
@@ -365,7 +366,7 @@ class NurbsToleranceSample( NurbsSampling ):
                     GLU_OBJECT_PARAMETRIC_ERROR_EXT
                 )
         elif self.method != 'screen':
-            geometry_log.warn( """%s declares %s sampling method, unknown type -> ignoring""", self, repr( self.method))
+            log.warn( """%s declares %s sampling method, unknown type -> ignoring""", self, repr( self.method))
         method = methods[ self.parametric ]
 
         gluNurbsProperty( nurbObject, GLU_SAMPLING_METHOD, method )

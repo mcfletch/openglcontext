@@ -1,12 +1,13 @@
 """Geometry type for "point-arrays" w/ colour support"""
 from OpenGL.GL import *
 from vrml.vrml97 import basenodes
-from OpenGLContext.debug.logs import geometry_log
 from OpenGLContext.scenegraph import coordinatebounded
 from OpenGLContext.arrays import array
 from OpenGL.extensions import alternate
 from OpenGL.GL.ARB.point_parameters import *
 from OpenGL.GL.EXT.point_parameters import *
+import logging
+log = logging.getLogger( __name__ )
 
 glPointParameterf = alternate( 
     glPointParameterf, glPointParameterfARB,glPointParameterfEXT 
@@ -53,7 +54,7 @@ class PointSet(
             if len(colors) != len(points):
                 # egads, a content error
                 if __debug__:
-                    geometry_log.warn(
+                    log.warn(
                         """PointSet %s has different number of point (%s) and color (%s) values""",
                         str(self), 
                         len(points), 

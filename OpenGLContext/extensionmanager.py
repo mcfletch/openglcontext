@@ -2,7 +2,8 @@
 from OpenGL.GL import glGetString, GL_EXTENSIONS
 from OpenGL.GLU import gluGetString, GLU_EXTENSIONS
 import string, traceback
-from OpenGLContext.debug.logs import extension_log as log
+import logging 
+log = logging.getLogger( __name__ )
 
 class ExtensionManager( object ):
     """Object managing OpenGL extension loading and initialisation

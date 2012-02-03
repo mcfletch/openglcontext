@@ -1,9 +1,10 @@
 """Resource-manager for textures (with PIL conversions)"""
 from OpenGL.GL import *
 from OpenGL.GLU import *
-from OpenGLContext.debug.logs import texture_log
 from OpenGLContext.arrays import ArrayType
 import traceback,weakref 
+import logging
+log = logging.getLogger( __name__ )
 
 def _textureDeleter( textureID ):
     """Create function to clean up the texture on deletion"""
@@ -149,7 +150,7 @@ class Texture( object ):
             returns the same image object.
         """
         if image.mode == 'P':
-            texture_log.info( "Paletted image found, converting: %s", image.info )
+            log.info( "Paletted image found, converting: %s", image.info )
             image = image.convert( 'RGB' )
         return image
     def ensurePow2( self, image ):
@@ -171,7 +172,7 @@ class Texture( object ):
         # should check whether it needs it first!
         newSize = bestSize(image.size[0]),bestSize(image.size[1])
         if newSize != image.size:
-            texture_log.warn( 
+            log.warn( 
                 "Non-power-of-2 image %s found resizing: %s", 
                 image.size, image.info,
             )

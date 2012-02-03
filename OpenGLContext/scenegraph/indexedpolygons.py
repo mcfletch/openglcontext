@@ -8,7 +8,8 @@ from OpenGL.arrays import vbo
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
-from OpenGLContext.debug.logs import geometry_log
+import logging
+log = logging.getLogger( __name__ )
 from math import pi
 
 class Holder( object ):
@@ -40,7 +41,7 @@ class Holder( object ):
             return 1
         else:
             glDisable( GL_LIGHTING )
-            geometry_log.warn(
+            log.warn(
                 """%s does not define normals, but is being rendered as lit geometry! This is likely an error in your content""",
                 node,
             )
@@ -97,7 +98,7 @@ class VBOHolder( Holder ):
             return 1
         else:
             glDisable( GL_LIGHTING )
-            geometry_log.warn(
+            log.warn(
                 """%s does not define normals, but is being rendered as lit geometry! This is likely an error in your content""",
                 node,
             )

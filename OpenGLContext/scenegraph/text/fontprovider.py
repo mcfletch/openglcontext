@@ -1,6 +1,7 @@
 """Base functionality for font-providers (objects creating fonts)"""
-from OpenGLContext.debug.logs import text_log
 import traceback, weakref
+import logging
+log = logging.getLogger( __name__ )
 
 class FontProvider( object ):
     """Abstract base class for font-providers
@@ -63,13 +64,13 @@ class FontProvider( object ):
                     except Exception, err:
                         if __debug__:
                             traceback.print_exc()
-                        text_log.warn(
+                        log.warn(
                             """FontProvider %r couldn't find font for %r: %s""",
                             provider,
                             fontStyle,
                             err
                         )
-        text_log.warn(
+        log.warn(
             """Couldn't find a provider for fontStyle %r""",
             fontStyle,
         )
