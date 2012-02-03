@@ -1,5 +1,5 @@
 # -*- coding: latin-1 -*-
-"""Simple GLU Tess-object test w/out combine callback"""
+"""Simple GLU Tess-object test with combine callbacks"""
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
@@ -46,6 +46,7 @@ class TestContext( BaseContext ):
         BaseContext.Render( self, mode )
         # we get the tess'd geometry backward for some reason :(
         glDisable( GL_CULL_FACE )
+        glEnable( GL_COLOR_MATERIAL )
         self.renderCap( self.scale )
 
     def renderCap( self, scale = 400.0):
@@ -54,7 +55,7 @@ class TestContext( BaseContext ):
         gluTessCallback(self.tess, GLU_TESS_BEGIN, glBegin)
         def test( t, polyData=None ):
             glNormal( 0,0, -1 )
-            glColor3f( t[0],t[1],t[2] )
+            glColor3f( t[0]/2.0,t[1]/2.0,t[2]/2.0 )
             return glVertex3f( t[0],t[1],t[2])
         gluTessCallback(self.tess, GLU_TESS_VERTEX_DATA, test)
         gluTessCallback(self.tess, GLU_TESS_END, glEnd);
