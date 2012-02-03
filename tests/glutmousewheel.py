@@ -18,7 +18,7 @@ class TestContext( BaseContext ):
         return result
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print 'Tests FreeGLUT extensions to the GLUT API'
+        print 'Tests FreeGLUT extension to the GLUT API to support Mouse Scroll (Win32 only) and Post-Mainloop code'
         glutMouseWheelFunc( self.OnMouseWheel )
         glutWMCloseFunc( self.OnGLUTCloseWM )
         glutCloseFunc( self.OnGLUTClose )
@@ -36,5 +36,5 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
-    print 'Code after the mainloop exits'
+    print 'Code executed after the mainloop exits'
     
