@@ -402,6 +402,7 @@ class FlatPass( SGObserver ):
         # (when available)
         # TODO: render at 1/2 size compared to context to create a
         # 2x2 selection square and reduce overhead.
+        glClearColor( 0,0,0, 0 )
         glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
         glDisable( GL_LIGHTING )
         glEnable( GL_COLOR_MATERIAL )
@@ -431,7 +432,7 @@ class FlatPass( SGObserver ):
         glScissor( int(min_x),int(min_y),int(max_x),int(max_y))
         glEnable( GL_SCISSOR_TEST )
         try:
-            idHolder = array( [0,0,0,0], 'b' )
+            idHolder = array( [0,0,0,0], 'B' )
             idSetter = idHolder.view( '<I' )
             for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
                 id += 50
@@ -445,6 +446,9 @@ class FlatPass( SGObserver ):
                 # get the pixel colour (id) under the cursor.
                 pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
                 pixel = long( pixel.view( '<I' )[0][0][0] )
+                if pixel != 0:
+                    print 'pixel', pixel
+                    print 'map', map.keys()
                 paths = map.get( pixel, [] )
                 event.setObjectPaths( [paths] )
                 # get the depth value under the cursor...
