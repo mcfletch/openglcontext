@@ -5,7 +5,10 @@ Run:
     python setup.py install
 to install the package from the source archive.
 """
-from distutils.core import setup
+try:
+	from setuptools import setup
+except ImportError, err:
+    from distutils.core import setup
 import sys, os
 sys.path.insert(0, '.' )
 
