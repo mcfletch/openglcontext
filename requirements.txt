@@ -1,10 +1,15 @@
+numpy
+#PIL
+
+#FontTools-TTX
+http://sourceforge.net/projects/fonttools/files/2.3/fonttools-2.3.tar.gz/download
+TTFQuery
+
 PyOpenGL
 PyOpenGL-accelerate
+
+pydispatcher
 PyVRML97
 PyVRML97-accelerate
-pydispatcher
-simpleparse
-FontTools
-TTFQuery
-numpy 
 
+simpleparse
