@@ -638,5 +638,3 @@ class ShaderGeometry( shaders.ShaderGeometry ):
 
 class ShaderSlice( shaders.ShaderSlice ):
     """Slice of a shader to render"""
-    
-

@@ -212,6 +212,8 @@ class IndexedPolygons (
                 constant = GL_TRIANGLES
             elif self.polygonSides == 4:
                 constant = GL_QUADS
+            elif self.polygonSides == GL_QUAD_STRIP:
+                constant = GL_QUAD_STRIP
             else:
                 raise ValueError ("""%s node has unsupported polygonSides value %s (3 or 4 expected)"""% (str(self), self.polygonSides))
             if self.ccw:
