@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>NeHe Translations: OpenGLContext Timers (NeHe 6 Based)</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>NeHe Translations: OpenGLContext Timers (NeHe 6 Based)</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,14 +21,14 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">OpenGLContext Timers (NeHe 6 Based)</h1>
-	<div class="paragraph">
-	<img src="nehe6_timer.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">OpenGLContext Timers (NeHe 6 Based)</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="nehe6_timer.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">This customization of the original rotating cube demo
+	<div class="paragraph indent-level-0">This customization of the original rotating cube demo
 uses the Timer class to provide a flexible timing
 mechanism for the animation.</div>
-	<div class="paragraph">In particular, the demo allows you to modify the
+	<div class="paragraph indent-level-0">In particular, the demo allows you to modify the
 "multiplier" value of the internal time frame of
 reference compared to real world time.  This allows
 for speeding, slowing and reversing the state of
@@ -53,12 +54,12 @@ class TestContext( BaseContext ):
 The animation is provided by a timer, rather than the
 crude time-module based animation we use for the other
 NeHe tutorials."""
-        print '  &lt;r> reverse the time-sequence'
-        print '  &lt;s> make time pass more slowly'
-        print '  &lt;f> make time pass faster'
+        print '  &lt;r&gt; reverse the time-sequence'
+        print '  &lt;s&gt; make time pass more slowly'
+        print '  &lt;f&gt; make time pass faster'
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here we will register key-press handlers for the various 
+	<div class="paragraph indent-level-0">Here we will register key-press handlers for the various
         operations the user can perform.</div>
 </div>
 	<div class="code-sample">        self.addEventHandler( "keypress", name="r", function = self.OnReverse)
@@ -66,44 +67,44 @@ NeHe tutorials."""
         self.addEventHandler( "keypress", name="f", function = self.OnFaster)
 </div>
 	<div class="commentary">
-	<div class="paragraph">We'll create a Timer object.  The duration is the total 
-        cycle length for the timer, the repeating flag tells the 
+	<div class="paragraph indent-level-0">We'll create a Timer object.  The duration is the total
+        cycle length for the timer, the repeating flag tells the
         timer to continue running.</div>
 </div>
 	<div class="code-sample">        self.time = Timer( duration = 8.0, repeating = 1 )
 </div>
 	<div class="commentary">
-	<div class="paragraph">The timer generates events for "fractions" as well as for 
-        cycles.  We use the fraction value to generate a smooth 
+	<div class="paragraph indent-level-0">The timer generates events for "fractions" as well as for
+        cycles.  We use the fraction value to generate a smooth
         animation.</div>
 </div>
 	<div class="code-sample">        self.time.addEventHandler( "fraction", self.OnTimerFraction )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Registering and starting the timer are only necessary because
+	<div class="paragraph indent-level-0">Registering and starting the timer are only necessary because
         the node is not part of a scenegraph.</div>
 </div>
 	<div class="code-sample">        self.time.register (self)
         self.time.start ()
 </div>
 	<div class="commentary">
-	<div class="paragraph">As with the time.time() mechanism, we need to track our 
-        current rotation so that the rendering pass can perform the 
+	<div class="paragraph indent-level-0">As with the time.time() mechanism, we need to track our
+        current rotation so that the rendering pass can perform the
         rotation calculated by the timer callback.</div>
 </div>
 	<div class="code-sample">        self.rotation =  0
 </div>
 	<div class="commentary">
-	<div class="paragraph">Timer callback</div>
+	<div class="paragraph indent-level-0">Timer callback</div>
 </div>
 	<div class="code-sample">    def OnTimerFraction( self, event ):
         self.rotation = event.fraction()* -360
 </div>
 	<div class="commentary">
-	<div class="paragraph">Keyboard callbacks.  Each of these simply modifies the timer's 
+	<div class="paragraph indent-level-0">Keyboard callbacks.  Each of these simply modifies the timer's
     internal-timer multiplier.  Each Timer node has an internal timer
     which provides the low-level events that the timer interprets.  By
-    changing the multiplier on this internal timer we change the 
+    changing the multiplier on this internal timer we change the
     perceived passage of time for the user.</div>
 </div>
 	<div class="code-sample">    def OnReverse( self, event ):
@@ -172,20 +173,20 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph">
-Author: 
-	<a href="http://nehe.gamedev.net" class="">Jeff Molofee (aka NeHe)</a>
+	<div class="paragraph indent-level-0">
+Author:
+	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
-	<div class="paragraph">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
-	<div class="paragraph">If you plan to put this program on your web page or a cdrom of
+	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
+	<div class="paragraph indent-level-0">If you plan to put this program on your web page or a cdrom of
 any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
-	<div class="paragraph">If you use the code for your own projects please give me
-credit, or mention my web site somewhere in your program 
+	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program
 or it's docs.
 </div>
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the nehe6_timer.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the nehe6_timer.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -198,12 +199,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

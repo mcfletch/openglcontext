@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>NeHe Translations: Multi-texturing (NeHe 6 Based)</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>NeHe Translations: Multi-texturing (NeHe 6 Based)</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,12 +21,12 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Multi-texturing (NeHe 6 Based)</h1>
-	<div class="paragraph">
-	<img src="nehe6_multi.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Multi-texturing (NeHe 6 Based)</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="nehe6_multi.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">This customization of the Timer customization of the 
-rotating cube demo adds multiple-texture support with 
+	<div class="paragraph indent-level-0">This customization of the Timer customization of the
+rotating cube demo adds multiple-texture support with
 a "light map" modulating the base texture.
 </div>
 </div>
@@ -40,12 +41,12 @@ from OpenGLContext.events.timer import Timer
 from OpenGL.extensions import alternate
 </div>
 	<div class="commentary">
-	<div class="paragraph">We set up alternate objects that will use whichever function 
+	<div class="paragraph indent-level-0">We set up alternate objects that will use whichever function
 is available at run-time.</div>
 </div>
 	<div class="code-sample">glMultiTexCoord2f = alternate(
     glMultiTexCoord2f,
-    glMultiTexCoord2fARB 
+    glMultiTexCoord2fARB
 )
 glActiveTexture = alternate(
     glActiveTexture,
@@ -71,7 +72,7 @@ class TestContext( BaseContext ):
         self.time.start ()
 </div>
 	<div class="commentary">
-	<div class="paragraph">Load both of our textures.</div>
+	<div class="paragraph indent-level-0">Load both of our textures.</div>
 </div>
 	<div class="code-sample">        self.Load()
     ### Timer callback
@@ -79,7 +80,7 @@ class TestContext( BaseContext ):
         self.rotation = event.fraction()* -360
 </div>
 	<div class="commentary">
-	<div class="paragraph">Keyboard callbacks, to allow for manipulating timer</div>
+	<div class="paragraph indent-level-0">Keyboard callbacks, to allow for manipulating timer</div>
 </div>
 	<div class="code-sample">    def OnReverse( self, event ):
         self.time.internal.multiplier = -self.time.internal.multiplier
@@ -104,12 +105,12 @@ class TestContext( BaseContext ):
             glRotated( self.rotation, 0,0,1)
 </div>
 	<div class="commentary">
-	<div class="paragraph">We set up each texture in turn, the only difference 
+	<div class="paragraph indent-level-0">We set up each texture in turn, the only difference
             between them being their application model.  We want texture
-            0 applied as a simple decal, while we want the light-map 
+            0 applied as a simple decal, while we want the light-map
             to modulate the colour in the base texture.</div>
 </div>
-	<div class="code-sample">            glActiveTexture(GL_TEXTURE0); 
+	<div class="code-sample">            glActiveTexture(GL_TEXTURE0);
             glTexParameterf(
                 GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST
             )
@@ -119,7 +120,7 @@ class TestContext( BaseContext ):
             glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Enable the image (with the current texture unit)</div>
+	<div class="paragraph indent-level-0">Enable the image (with the current texture unit)</div>
 </div>
 	<div class="code-sample">            self.image()
             glActiveTexture(GL_TEXTURE1);
@@ -132,7 +133,7 @@ class TestContext( BaseContext ):
             glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Enable the image (with the current texture unit)</div>
+	<div class="paragraph indent-level-0">Enable the image (with the current texture unit)</div>
 </div>
 	<div class="code-sample">            self.lightmap()
             self.drawCube()
@@ -151,7 +152,7 @@ class TestContext( BaseContext ):
             from PIL.Image import open
         except ImportError, err:
             from Image import open
-        glActiveTextureARB(GL_TEXTURE1); 
+        glActiveTextureARB(GL_TEXTURE1);
         return texture.Texture( open(imageName) )
     def drawCube( self ):
         """Draw a cube with texture coordinates"""
@@ -187,30 +188,30 @@ class TestContext( BaseContext ):
         return 1
 </div>
 	<div class="commentary">
-	<div class="paragraph">This is a trivial indirection point setting both texture 
+	<div class="paragraph indent-level-0">This is a trivial indirection point setting both texture
 coordinates to the same value.</div>
 </div>
 	<div class="code-sample">def mTexture( a,b ):
     glMultiTexCoord2f(GL_TEXTURE0, a,b)
-    glMultiTexCoord2f(GL_TEXTURE1, a,b) 
+    glMultiTexCoord2f(GL_TEXTURE1, a,b)
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph">
-Author: 
-	<a href="http://nehe.gamedev.net" class="">Jeff Molofee (aka NeHe)</a>
+	<div class="paragraph indent-level-0">
+Author:
+	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
-	<div class="paragraph">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
-	<div class="paragraph">If you plan to put this program on your web page or a cdrom of
+	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
+	<div class="paragraph indent-level-0">If you plan to put this program on your web page or a cdrom of
 any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
-	<div class="paragraph">If you use the code for your own projects please give me
-credit, or mention my web site somewhere in your program 
+	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program
 or it's docs.
 </div>
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the nehe6_multi.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the nehe6_multi.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -223,12 +224,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Introduction to Shaders: Use Declarative Structures</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>Introduction to Shaders: Use Declarative Structures</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,17 +21,17 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Use Declarative Structures</h1>
-	<div class="paragraph">
-	<img src="shader_11.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Use Declarative Structures</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="shader_11.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">This tutorial:</div>
-	<ul class="">
+	<div class="paragraph indent-level-0">This tutorial:</div>
+	<ul class=" indent-level-4">
 	<li class="">configure our light array from VRML97 scenegraph objects</li>
 	<li class="">configure our material structure from VRML97 scenegraph objects</li>
 	<li class="">add simple texturing</li>
 </ul>
-	<div class="paragraph">The purpose of this tutorial is to consolidate our work so far
+	<div class="paragraph indent-level-0">The purpose of this tutorial is to consolidate our work so far
 so that we can reuse it in further tutorials without needing to
 repeat code all the time.
 </div>
@@ -40,10 +41,10 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 </div>
 	<div class="commentary">
-	<div class="paragraph">We're going to use VRML97 nodes to configure our shaders,
+	<div class="paragraph indent-level-0">We're going to use VRML97 nodes to configure our shaders,
 so we'll import the whole set of VRML97 base nodes (and the
 OpenGLContext extended nodes as well, though we aren't going
 to use them here).</div>
@@ -54,7 +55,7 @@ class TestContext( BaseContext ):
     """
 </div>
 	<div class="commentary">
-	<div class="paragraph">Rather than declaring our constants as context attributes, we'll
+	<div class="paragraph indent-level-0">Rather than declaring our constants as context attributes, we'll
     make an explicit namespace in which the constants are stored.</div>
 </div>
 	<div class="code-sample">    shader_constants = dict(
@@ -98,7 +99,7 @@ class TestContext( BaseContext ):
         """Initialize the context"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our first step in making the shader-based code more flexible is
+	<div class="paragraph indent-level-0">Our first step in making the shader-based code more flexible is
         to make the number and type of lights depend on a declared set of
         light "nodes" rather than explicitly creating arrays of lighting
         parameters.  The flexibility this provides means that we can easily
@@ -107,7 +108,7 @@ class TestContext( BaseContext ):
 	<div class="code-sample">        self.lights = self.createLights()
 </div>
 	<div class="commentary">
-	<div class="paragraph">Now we take the set of lights and turn them into an array of
+	<div class="paragraph indent-level-0">Now we take the set of lights and turn them into an array of
         lighting parameters to be passed into the shader.</div>
 </div>
 	<div class="code-sample">        self.LIGHTS = array([
@@ -116,7 +117,7 @@ class TestContext( BaseContext ):
         ],'f')
 </div>
 	<div class="commentary">
-	<div class="paragraph">Instead of the hard-coded lighting count, we update the light
+	<div class="paragraph indent-level-0">Instead of the hard-coded lighting count, we update the light
         count before compiling the shader.  In the real world we'd want to
         make the number of lights a parameter per-object so that we could
         generate a light-count-specific shader shared among all objects
@@ -126,7 +127,7 @@ class TestContext( BaseContext ):
 	<div class="code-sample">        self.shader_constants['LIGHT_COUNT'] = len(self.lights)
 </div>
 	<div class="commentary">
-	<div class="paragraph">We load our shader functions that we've stored in resources and files
+	<div class="paragraph indent-level-0">We load our shader functions that we've stored in resources and files
         as simple string values.</div>
 </div>
 	<div class="code-sample">        from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
@@ -134,7 +135,7 @@ class TestContext( BaseContext ):
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our light constants are now generated from the dictionary declared at
+	<div class="paragraph indent-level-0">Our light constants are now generated from the dictionary declared at
         the class level, with the count we just updated substituted into the
         code.  The only change to the content here is the addition of the
         Vertex_texture_coordinate_var value which interpolates our texture
@@ -153,14 +154,14 @@ class TestContext( BaseContext ):
         """
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our vertex shader using the refactored pieces has become quite small.
+	<div class="paragraph indent-level-0">Our vertex shader using the refactored pieces has become quite small.
         The only change here is the addition of the texture-coordinate values.
         The texture coordinates are simply assigned to the varying value so that
         they will show up interpolated across the fragments in the fragment
         shader.
 </div>
 </div>
-	<div class="code-sample">        vertex = compileShader(
+	<div class="code-sample">        vertex = shaders.compileShader(
             lightConst + phong_preCalc + light_preCalc +
         """
         attribute vec3 Vertex_position;
@@ -176,16 +177,16 @@ class TestContext( BaseContext ):
         }""", GL_VERTEX_SHADER)
 </div>
 	<div class="commentary">
-	<div class="paragraph">The fragment shader is still "under development", so we haven't
+	<div class="paragraph indent-level-0">The fragment shader is still "under development", so we haven't
         refactored it into separate files to the same extent.  The only noticeable
         change here is the texture calculation.</div>
-	<div class="paragraph">We use the sampler2D type to define a variable which can to texture
+	<div class="paragraph indent-level-8">We use the sampler2D type to define a variable which can to texture
 lookups into a configured texture-unit on the video card.  The varying
 texture-coordinate variable will provide us with interpolated s,t
 coordinates which we can use to do a texture2D call on the sampler2D.
 </div>
 </div>
-	<div class="code-sample">        fragment = compileShader(
+	<div class="code-sample">        fragment = shaders.compileShader(
             lightConst + phong_weightCalc + """
         struct Material {            vec4 ambient;
             vec4 diffuse;
@@ -220,8 +221,8 @@ coordinates which we can use to do a texture2D call on the sampler2D.
                     lights[j+SPOT_PARAMS],
                     lights[j+SPOT_DIR]
                 );
-                mixColor = (lights[j+AMBIENT] * material.ambient * weights.x) + 
-                    (lights[j+DIFFUSE] * texDiffuse * weights.y) + 
+                mixColor = (lights[j+AMBIENT] * material.ambient * weights.x) +
+                    (lights[j+DIFFUSE] * texDiffuse * weights.y) +
                     (lights[j+SPECULAR] * material.specular * weights.z);
                 fragColor += mixColor;
                 //fragColor = vec4( weights.y,weights.y,weights.y, 1.0 );
@@ -232,19 +233,19 @@ coordinates which we can use to do a texture2D call on the sampler2D.
         """, GL_FRAGMENT_SHADER)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Compilation is the same.</div>
+	<div class="paragraph indent-level-0">Compilation is the same.</div>
 </div>
-	<div class="code-sample">        self.shader = compileProgram(vertex,fragment)
+	<div class="code-sample">        self.shader = shaders.compileProgram(vertex,fragment)
 </div>
 	<div class="commentary">
-	<div class="paragraph">As is our sphere geometry setup.</div>
+	<div class="paragraph indent-level-0">As is our sphere geometry setup.</div>
 </div>
 	<div class="code-sample">        self.coords,self.indices,self.count = Sphere(
             radius = 1
         ).compile()
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here we define an appearance node that we'll use to configure our
+	<div class="paragraph indent-level-0">Here we define an appearance node that we'll use to configure our
         shader uniforms with the method materialFromAppearance (below).  The
         texture will be loaded from the provided URL using PIL.</div>
 </div>
@@ -261,7 +262,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Uniform setup looks much the same, though we've moved the material
+	<div class="paragraph indent-level-0">Uniform setup looks much the same, though we've moved the material
         uniforms into a separate list and have refactored the uniform resolution
         into a method.</div>
 </div>
@@ -273,7 +274,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.
             self.findUniform( self.shader, uniform )
 </div>
 	<div class="commentary">
-	<div class="paragraph">We add a texture-coordinate attribute which we'll use to index into
+	<div class="paragraph indent-level-0">We add a texture-coordinate attribute which we'll use to index into
         the texture we're setting up.</div>
 </div>
 	<div class="code-sample">        for attribute in (
@@ -285,7 +286,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.
             setattr( self, attribute+ '_loc', location )
 </div>
 	<div class="commentary">
-	<div class="paragraph">As noted above, we're down to a single "global" uniform.  The material
+	<div class="paragraph indent-level-0">As noted above, we're down to a single "global" uniform.  The material
     is specially set up now.</div>
 </div>
 	<div class="code-sample">    UNIFORM_VALUES = [
@@ -293,7 +294,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.
     ]
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our refactored code to find a uniform, takes a uniform name and resolves
+	<div class="paragraph indent-level-0">Our refactored code to find a uniform, takes a uniform name and resolves
     to a location.</div>
 </div>
 	<div class="code-sample">    def findUniform( self, shader, uniform ):
@@ -306,7 +307,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.
         """Render the geometry for the scene."""
 </div>
 	<div class="commentary">
-	<div class="paragraph">We set up our texture on texture-unit 1 (the second unit).</div>
+	<div class="paragraph indent-level-0">We set up our texture on texture-unit 1 (the second unit).</div>
 </div>
 	<div class="code-sample">        if not mode.visible:
             return
@@ -314,7 +315,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.
         try:
 </div>
 	<div class="commentary">
-	<div class="paragraph">The texture will not render anything when we are in a non-visible
+	<div class="paragraph indent-level-0">The texture will not render anything when we are in a non-visible
             or non-lit pass.</div>
 </div>
 	<div class="code-sample">            self.appearance.texture.render( mode.visible, mode.lighting, mode )
@@ -322,12 +323,12 @@ coordinates which we can use to do a texture2D call on the sampler2D.
             glActiveTexture( GL_TEXTURE0 )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Enable the shader.</div>
+	<div class="paragraph indent-level-0">Enable the shader.</div>
 </div>
 	<div class="code-sample">        glUseProgram(self.shader)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Now we can configure our texture sampler uniform to point to
+	<div class="paragraph indent-level-0">Now we can configure our texture sampler uniform to point to
         texture-unit 1 (where we configured our texture).</div>
 </div>
 	<div class="code-sample">
@@ -483,7 +484,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the shader_11.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the shader_11.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -496,12 +497,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

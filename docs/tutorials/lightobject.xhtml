@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Scenegraph Nodes: Light Nodes, ROUTEs</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>Scenegraph Nodes: Light Nodes, ROUTEs</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,19 +21,19 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Light Nodes, ROUTEs</h1>
-	<div class="paragraph">
-	<img src="lightobject.py-screen-0001.png" alt="Screenshot" class=" wiki" />
-	<img src="lightobject.py-screen-0002.png" alt="Screenshot" class=" wiki" />
-	<img src="lightobject.py-screen-0003.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Light Nodes, ROUTEs</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="lightobject.py-screen-0001.png" alt="Screenshot" />
+	<img class=" wiki" src="lightobject.py-screen-0002.png" alt="Screenshot" />
+	<img class=" wiki" src="lightobject.py-screen-0003.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">
-This tutorial creates a simple scenegraph that includes a number 
-of light nodes that demonstrate some of the VRML97 light properties 
-that OpenGLContext makes available.  It also demonstrates basic 
-use of ROUTEs to create simple animations of properties within the 
+	<div class="paragraph indent-level-0">
+This tutorial creates a simple scenegraph that includes a number
+of light nodes that demonstrate some of the VRML97 light properties
+that OpenGLContext makes available.  It also demonstrates basic
+use of ROUTEs to create simple animations of properties within the
 scenegraph.</div>
-	<div class="paragraph">Note that the legacy OpenGL lighting model described here can be 
+	<div class="paragraph indent-level-0">Note that the legacy OpenGL lighting model described here can be
 replaced when using shader-based geometry.
 </div>
 </div>
@@ -40,7 +41,7 @@ replaced when using shader-based geometry.
 BaseContext = testingcontext.getInteractive()
 </div>
 	<div class="commentary">
-	<div class="paragraph">We'll load the whole set of VRML97 base nodes and get the value 
+	<div class="paragraph indent-level-0">We'll load the whole set of VRML97 base nodes and get the value
 of pi to some reasonable accuracy (from numpy).</div>
 </div>
 	<div class="code-sample">from OpenGLContext.scenegraph.basenodes import *
@@ -48,8 +49,8 @@ from OpenGLContext.arrays import pi
 import random
 </div>
 	<div class="commentary">
-	<div class="paragraph">You'll note that we haven't imported any OpenGL modules here,
-the whole tutorial is accomplished with scenegraph nodes, rather than 
+	<div class="paragraph indent-level-0">You'll note that we haven't imported any OpenGL modules here,
+the whole tutorial is accomplished with scenegraph nodes, rather than
 raw OpenGL rendering.</div>
 </div>
 	<div class="code-sample">
@@ -61,16 +62,16 @@ class TestContext( BaseContext ):
 with rotating lighting in three colours."""
 </div>
 	<div class="commentary">
-	<div class="paragraph">Each of the light types defined in VRML97 is going to be 
-        defined for this tutorial.  Each of these lights includes 
+	<div class="paragraph indent-level-0">Each of the light types defined in VRML97 is going to be
+        defined for this tutorial.  Each of these lights includes
         color, intensity, ambientIntensity and attenuation fields.
-        These are pretty much passed directly into the underlying 
-        (default) OpenGL lighting model.  The lights also have an 
+        These are pretty much passed directly into the underlying
+        (default) OpenGL lighting model.  The lights also have an
         "on" field for turning them on/off.</div>
-	<div class="paragraph">The DirectionalLight class represents the simplest type of 
-Light.  It is an "infinitely far off" light which sends 
-rays in parallel throughout the entire scene along its 
-"direction" vector.  It resembles the light cast by the 
+	<div class="paragraph indent-level-8">The DirectionalLight class represents the simplest type of
+Light.  It is an "infinitely far off" light which sends
+rays in parallel throughout the entire scene along its
+"direction" vector.  It resembles the light cast by the
 sun as seen on the surface of the Earth.
 </div>
 </div>
@@ -80,10 +81,10 @@ sun as seen on the surface of the Earth.
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">The PointLight is a slightly more complex light.  It is 
-        a "point emitter", similar to an unshielded lightbulb or 
-        candle, which sends rays out in all directions.  As such it 
-        does not have a "direction" vector, but does have a location 
+	<div class="paragraph indent-level-0">The PointLight is a slightly more complex light.  It is
+        a "point emitter", similar to an unshielded lightbulb or
+        candle, which sends rays out in all directions.  As such it
+        does not have a "direction" vector, but does have a location
         vector.</div>
 </div>
 	<div class="code-sample">        pl = PointLight(
@@ -93,9 +94,9 @@ sun as seen on the surface of the Earth.
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">The SpotLight is the most complex light.  It resembles a 
-        stage spotlight with a shield that restricts the light emitted 
-        to a cone which is rooted at the light's location with "beamWidth" 
+	<div class="paragraph indent-level-0">The SpotLight is the most complex light.  It resembles a
+        stage spotlight with a shield that restricts the light emitted
+        to a cone which is rooted at the light's location with "beamWidth"
         angle.</div>
 </div>
 	<div class="code-sample">        sl = SpotLight(
@@ -105,15 +106,15 @@ sun as seen on the surface of the Earth.
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">We keep a reference to the light objects for later mutations</div>
+	<div class="paragraph indent-level-0">We keep a reference to the light objects for later mutations</div>
 </div>
 	<div class="code-sample">        self.lights = [
             dl,pl,sl,
         ]
 </div>
 	<div class="commentary">
-	<div class="paragraph">We are going to make our lights animate by rotating around the 
-        center of this Transform node.  We give it a DEF name so that it 
+	<div class="paragraph indent-level-0">We are going to make our lights animate by rotating around the
+        center of this Transform node.  We give it a DEF name so that it
         is easy to reference in later ROUTEs.</div>
 </div>
 	<div class="code-sample">        self.lightTransform = Transform(
@@ -122,15 +123,15 @@ sun as seen on the surface of the Earth.
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here's where we define the key-frames for our animations.  
+	<div class="paragraph indent-level-0">Here's where we define the key-frames for our animations.
         The first animation defines a simple Orientation (rotation)
-        around the Y-axis.  The second defines a "bounce" from 
-        .25 to 1.0 to .25.  Note that we again define DEF values so 
+        around the Y-axis.  The second defines a "bounce" from
+        .25 to 1.0 to .25.  Note that we again define DEF values so
         that we can reference the node easily in the future.</div>
-	<div class="paragraph">The Timer node is what will generate the events we'll be using 
+	<div class="paragraph indent-level-8">The Timer node is what will generate the events we'll be using
 to perform the animation.  Here we say that it will take 3.0s
-to complete a single cycle and that it will loop indefinitely 
-(a value of 1 means loop indefinitely, larger integers will loop 
+to complete a single cycle and that it will loop indefinitely
+(a value of 1 means loop indefinitely, larger integers will loop
 a specified number of times, 0 means do not loop).
 </div>
 </div>
@@ -139,10 +140,10 @@ a specified number of times, 0 means do not loop).
                 DEF = 'Light-Orient',
                 key = [0,.25,.5,.75,1.0],
                 keyValue = [
-                    0,1,0,0, 
-                    0,1,0,pi/2,  
-                    0,1,0,pi, 
-                    0,1,0,3*pi/2,  
+                    0,1,0,0,
+                    0,1,0,pi/2,
+                    0,1,0,pi,
+                    0,1,0,3*pi/2,
                     0,1,0,0
                 ],
             ),
@@ -159,10 +160,10 @@ a specified number of times, 0 means do not loop).
         ]
 </div>
 	<div class="commentary">
-	<div class="paragraph">Lights are only "visible" if there is geometry which is 
-        going to be affected by them.  We define a very simplistic 
-        scene with a Sphere, Teapot and transparent Cylinder.  The 
-        Teapot and Cylinder are made very shiny so that the lighting 
+	<div class="paragraph indent-level-0">Lights are only "visible" if there is geometry which is
+        going to be affected by them.  We define a very simplistic
+        scene with a Sphere, Teapot and transparent Cylinder.  The
+        Teapot and Cylinder are made very shiny so that the lighting
         effects are more pronounced.
 </div>
 </div>
@@ -178,7 +179,7 @@ a specified number of times, 0 means do not loop).
                 translation = (-3,-.25,1.5),
                 rotation = (0,1,0,.75),
                 children = [
-                    Shape( 
+                    Shape(
                         geometry = Teapot( size=1.5 ),
                         appearance = Appearance(
                             material = Material(
@@ -210,7 +211,7 @@ a specified number of times, 0 means do not loop).
         ]
 </div>
 	<div class="commentary">
-	<div class="paragraph">And here we actually put it all together into a scenegraph 
+	<div class="paragraph indent-level-0">And here we actually put it all together into a scenegraph
         that the Context will render.</div>
 </div>
 	<div class="code-sample">        self.sg = sceneGraph(
@@ -220,71 +221,71 @@ a specified number of times, 0 means do not loop).
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our light-location animation is trivial to set up,
-        we simply route the "fraction_changed" event of the Timer into 
-        the "set_fraction" event of the Interpolator and then route the 
+	<div class="paragraph indent-level-0">Our light-location animation is trivial to set up,
+        we simply route the "fraction_changed" event of the Timer into
+        the "set_fraction" event of the Interpolator and then route the
         "value_changed" event of the interpolator to the "set_rotation"
         event of the Transform which holds our lights.</div>
 </div>
-	<div class="code-sample">        self.sg.addRoute( 
+	<div class="code-sample">        self.sg.addRoute(
             'Timer','fraction_changed',
-            'Light-Orient','set_fraction' 
+            'Light-Orient','set_fraction'
         )
-        self.sg.addRoute( 
+        self.sg.addRoute(
             'Light-Orient','value_changed',
-            'Light-Transform','set_rotation' 
+            'Light-Transform','set_rotation'
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our light-intensity animation is similar to the Orientation
-        interpolation we performed above, but instead of routing the 
-        "value_changed" value to a Node, we route it to a method which 
-        can do as it likes with the value.  In this case our method 
-        just applies the value to each Node.  We could also have 
-        routed the value_changed event to each light's set_intensity 
+	<div class="paragraph indent-level-0">Our light-intensity animation is similar to the Orientation
+        interpolation we performed above, but instead of routing the
+        "value_changed" value to a Node, we route it to a method which
+        can do as it likes with the value.  In this case our method
+        just applies the value to each Node.  We could also have
+        routed the value_changed event to each light's set_intensity
         event with the same effect.
 </div>
 </div>
-	<div class="code-sample">        self.sg.addRoute( 
+	<div class="code-sample">        self.sg.addRoute(
             'Timer','fraction_changed',
-            'Intensity-Interp','set_fraction' 
+            'Intensity-Interp','set_fraction'
         )
-        self.sg.addRoute( 
+        self.sg.addRoute(
             'Intensity-Interp','value_changed',
             self.onIntensity
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here again we are going to take an event and route it to 
-        a function.  However, here we take an event directly from 
+	<div class="paragraph indent-level-0">Here again we are going to take an event and route it to
+        a function.  However, here we take an event directly from
         the Timer node and route it to our method.  The "cycleTime"
-        event is sent each time the Timer completes a cycle, so here 
-        it will be called every 3s to decide randomly to turn off/on 
+        event is sent each time the Timer completes a cycle, so here
+        it will be called every 3s to decide randomly to turn off/on
         the lights in the scene.
 </div>
 </div>
 	<div class="code-sample">        self.sg.addRoute(
-            'Timer','cycleTime', 
+            'Timer','cycleTime',
             self.onCycle,
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our event handlers, as discussed above.</div>
+	<div class="paragraph indent-level-0">Our event handlers, as discussed above.</div>
 </div>
 	<div class="code-sample">
     def onCycle( self, **named ):
         for light in self.lights:
-            if random.random() > .6:
-                light.on = False 
+            if random.random() &gt; .6:
+                light.on = False
             else:
                 light.on = True
     def onIntensity( self, value ):
         for light in self.lights:
-            light.intensity = value 
+            light.intensity = value
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the lightobject.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the lightobject.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -297,12 +298,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

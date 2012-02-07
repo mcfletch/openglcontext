@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Depth-map Shadows: Shadows in a Frame Buffer Object</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>Depth-map Shadows: Shadows in a Frame Buffer Object</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,17 +21,17 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Shadows in a Frame Buffer Object</h1>
-	<div class="paragraph">
-	<img src="shadow_2.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Shadows in a Frame Buffer Object</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="shadow_2.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">In this tutorial, we will:</div>
-	<ul class="">
+	<div class="paragraph indent-level-0">In this tutorial, we will:</div>
+	<ul class=" indent-level-4">
 	<li class="">subclass our previous shadow tutorial code</li>
 	<li class="">use Frame Buffer Objects (FBO) to render the depth-texture</li>
 	<li class="">render to a texture larger than the screen-size</li>
 </ul>
-	<div class="paragraph">This tutorial is a minor revision of our previous shadow tutorial,
+	<div class="paragraph indent-level-0">This tutorial is a minor revision of our previous shadow tutorial,
 the only change is to add off-screen rendering of the depth-texture
 rather than rendering on the back-buffer of the screen.
 </div>
@@ -39,7 +40,7 @@ rather than rendering on the back-buffer of the screen.
 #OpenGL.FULL_LOGGING = True
 </div>
 	<div class="commentary">
-	<div class="paragraph">Import the previous tutorial as BaseContext</div>
+	<div class="paragraph indent-level-0">Import the previous tutorial as BaseContext</div>
 </div>
 	<div class="code-sample">from shadow_1 import TestContext as BaseContext
 from OpenGLContext import testingcontext
@@ -49,7 +50,7 @@ from OpenGL.GL.ARB.depth_texture import *
 from OpenGL.GL.ARB.shadow import *
 </div>
 	<div class="commentary">
-	<div class="paragraph">Import the PyOpenGL convenience wrappers for the FrameBufferObject
+	<div class="paragraph indent-level-0">Import the PyOpenGL convenience wrappers for the FrameBufferObject
 extension(s) we're going to use.  (Requires PyOpenGL 3.0.1b2 or above).</div>
 </div>
 	<div class="code-sample">from OpenGL.GL.framebufferobjects import *
@@ -60,7 +61,7 @@ class TestContext( BaseContext ):
         super( TestContext, self ).OnInit()
 </div>
 	<div class="commentary">
-	<div class="paragraph">We'll use the slightly more idiomatic "check if the entry
+	<div class="paragraph indent-level-0">We'll use the slightly more idiomatic "check if the entry
         point is true" way of checking for the extension.  The alternates
         in the convenience wrapper will report true if there is any
         implementation of the function.</div>
@@ -70,7 +71,7 @@ class TestContext( BaseContext ):
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Decide how big our depth-texture should be...</div>
+	<div class="paragraph indent-level-0">Decide how big our depth-texture should be...</div>
 </div>
 	<div class="code-sample">        self.shadowMapSize = min(
             (
@@ -85,12 +86,12 @@ class TestContext( BaseContext ):
         )
 </div>
 	<div class="commentary">
-	<div class="paragraph">We override this default in the init function.</div>
+	<div class="paragraph indent-level-0">We override this default in the init function.</div>
 </div>
 	<div class="code-sample">    shadowMapSize = 512
 </div>
 	<div class="commentary">
-	<div class="paragraph">Should you wish to experiment with different filtering functions,
+	<div class="paragraph indent-level-0">Should you wish to experiment with different filtering functions,
     we will parameterize the filtering operation here.</div>
 </div>
 	<div class="code-sample">    offset = 1.0
@@ -100,7 +101,7 @@ class TestContext( BaseContext ):
         shadowMapSize = self.shadowMapSize
 </div>
 	<div class="commentary">
-	<div class="paragraph">As with the previous tutorial, we want to cache our texture (and FBO),
+	<div class="paragraph indent-level-0">As with the previous tutorial, we want to cache our texture (and FBO),
         so we check to see if the values have already been set up.</div>
 </div>
 	<div class="code-sample">        key = self.textureCacheKey+textureKey
@@ -108,17 +109,17 @@ class TestContext( BaseContext ):
         if not token:
 </div>
 	<div class="commentary">
-	<div class="paragraph">A cache miss, so we need to do the setup.</div>
+	<div class="paragraph indent-level-0">A cache miss, so we need to do the setup.</div>
 </div>
 	<div class="code-sample">            fbo = glGenFramebuffers(1)
 </div>
 	<div class="commentary">
-	<div class="paragraph">It has to be bound to configure it.</div>
+	<div class="paragraph indent-level-0">It has to be bound to configure it.</div>
 </div>
 	<div class="code-sample">            glBindFramebuffer(GL_FRAMEBUFFER, fbo )
 </div>
 	<div class="commentary">
-	<div class="paragraph">The texture itself is the same as the last tutorial.  We make the 
+	<div class="paragraph indent-level-0">The texture itself is the same as the last tutorial.  We make the
             texture current to configure parameters.</div>
 </div>
 	<div class="code-sample">            texture = glGenTextures( 1 )
@@ -130,11 +131,11 @@ class TestContext( BaseContext ):
             )
 </div>
 	<div class="commentary">
-	<div class="paragraph">We attach the texture to the FBO's depth attachment point.  There
+	<div class="paragraph indent-level-0">We attach the texture to the FBO's depth attachment point.  There
             is also a combined depth-stencil attachment point when certain
             extensions are available.  We don't actually need a stencil buffer
             just now, so we can ignore that.</div>
-	<div class="paragraph">The final argument is the "mip-map-level" of the texture,
+	<div class="paragraph indent-level-12">The final argument is the "mip-map-level" of the texture,
 which currently always must be 0.
 </div>
 </div>
@@ -145,8 +146,8 @@ which currently always must be 0.
                 texture,
                 0 #mip-map level...
             )
-            if sys.platform == 'win32':
-                """Win32 requires that a colour buffer be bound..."""
+            if sys.platform in ('win32','darwin'):
+                """Win32 and OS-x require that a colour buffer be bound..."""
                 color = glGenRenderbuffers(1)
                 glBindRenderbuffer( GL_RENDERBUFFER, color )
                 glRenderbufferStorage(
@@ -164,19 +165,19 @@ which currently always must be 0.
         else:
 </div>
 	<div class="commentary">
-	<div class="paragraph">We've already got the FBO with its colour buffer, just bind to
+	<div class="paragraph indent-level-0">We've already got the FBO with its colour buffer, just bind to
             render into it.</div>
 </div>
 	<div class="code-sample">            fbo,texture = token
 </div>
 	<div class="commentary">
-	<div class="paragraph">Make the texture current to configure parameters.</div>
+	<div class="paragraph indent-level-0">Make the texture current to configure parameters.</div>
 </div>
 	<div class="code-sample">        glBindTexture( GL_TEXTURE_2D, texture )
 </div>
 	<div class="commentary">
-	<div class="paragraph">We use the same "nearest" filtering as before.  Note, we could use an alternate 
-        texture unit and leave the parameters set, this just forces the setting back on 
+	<div class="paragraph indent-level-0">We use the same "nearest" filtering as before.  Note, we could use an alternate
+        texture unit and leave the parameters set, this just forces the setting back on
         each rendering pass in case some clever geometry renders using our texture.</div>
 </div>
 	<div class="code-sample">        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
@@ -185,30 +186,30 @@ which currently always must be 0.
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
 </div>
 	<div class="commentary">
-	<div class="paragraph">BUG NOTE: on AMD hardware, binding the FBO before you have unbound the 
-        texture will cause heavy moire-style rendering artefacts due to undefined 
-        behaviour where the FBO and the current texture are bound to the same 
+	<div class="paragraph indent-level-0">BUG NOTE: on AMD hardware, binding the FBO before you have unbound the
+        texture will cause heavy moire-style rendering artefacts due to undefined
+        behaviour where the FBO and the current texture are bound to the same
         texture.  You *must* unbind the texture before you bind the FBO.</div>
 </div>
 	<div class="code-sample">        glBindTexture( GL_TEXTURE_2D, 0 )
         glBindFramebuffer(GL_FRAMEBUFFER, fbo )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Unlike in the previous tutorial, we now *know* this is a
+	<div class="paragraph indent-level-0">Unlike in the previous tutorial, we now *know* this is a
         valid size for the viewport in the off-screen context.</div>
 </div>
 	<div class="code-sample">        glViewport(0,0,shadowMapSize,shadowMapSize)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Disable drawing to the colour buffers entirely.  Without this our
+	<div class="paragraph indent-level-0">Disable drawing to the colour buffers entirely.  Without this our
         framebuffer would be incomplete, as it would not have any colour buffer
-        into which to render.  Note that on Win32 we would *still* be considered 
+        into which to render.  Note that on Win32 we would *still* be considered
         incomplete if we didn't define a color buffer.</div>
 </div>
 	<div class="code-sample">        glDrawBuffer( GL_NONE )
 </div>
 	<div class="commentary">
-	<div class="paragraph">This function in the OpenGL.GL.framebufferobjects wrapper will
+	<div class="paragraph indent-level-0">This function in the OpenGL.GL.framebufferobjects wrapper will
         raise an OpenGL.error.GLError if the FBO is not properly configured.</div>
 </div>
 	<div class="code-sample">        try:
@@ -219,7 +220,7 @@ which currently always must be 0.
             os._exit(1)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Clear the depth buffer (texture) on each pass.  Our previous
+	<div class="paragraph indent-level-0">Clear the depth buffer (texture) on each pass.  Our previous
         tutorial didn't need to do this here because the back-buffer was
         shared with the regular rendering pass and the OpenGLContext renderer
         had already called glClear() during it's regular context setup.
@@ -231,7 +232,7 @@ which currently always must be 0.
         """Close our shadow-rendering context/texture"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">This is a very simple function now, we just disable the FBO,
+	<div class="paragraph indent-level-0">This is a very simple function now, we just disable the FBO,
         and restore the draw buffer to the regular "back" buffer.</div>
 </div>
 	<div class="code-sample">        glBindFramebuffer(GL_FRAMEBUFFER, 0 )
@@ -240,7 +241,7 @@ which currently always must be 0.
 if __name__ == "__main__":
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our display size is now irrelevant to our rendering algorithm, so we
+	<div class="paragraph indent-level-0">Our display size is now irrelevant to our rendering algorithm, so we
     won't bother specifying a size.</div>
 </div>
 	<div class="code-sample">    TestContext.ContextMainLoop(
@@ -248,15 +249,15 @@ if __name__ == "__main__":
     )
 </div>
 	<div class="commentary">
-	<div class="paragraph">There are a number of possible next steps to take:</div>
-	<ul class="">
+	<div class="paragraph indent-level-0">There are a number of possible next steps to take:</div>
+	<ul class=" indent-level-4">
 	<li class="">create cube-maps for point light sources</li>
 	<li class="">create multiple depth maps which cover successively farther "tranches"  of the camera view frustum to produce higher-resolution shadows</li>
 	<li class="">use shaders to combine the opaque and diffuse/specular passes into a  single rendering pass</li>
 	<li class="">use shaders to do "Percentage Closer Filtering" on the shadow-map values  in order to antialias the shadow edges.</li>
 </ul>
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the shadow_2.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the shadow_2.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -269,12 +270,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

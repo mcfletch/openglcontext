@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Introduction to Shaders: Specular Highlights, Indexed Geometry, Directional Lighting</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>Introduction to Shaders: Specular Highlights, Indexed Geometry, Directional Lighting</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,23 +21,23 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Specular Highlights, Indexed Geometry, Directional Lighting</h1>
-	<div class="paragraph">
-	<img src="shader_6.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Specular Highlights, Indexed Geometry, Directional Lighting</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="shader_6.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">This tutorial builds on earlier tutorials by adding:</div>
-	<ul class="">
+	<div class="paragraph indent-level-0">This tutorial builds on earlier tutorials by adding:</div>
+	<ul class=" indent-level-4">
 	<li class="">specular lighting (Phong Lighting)</li>
 	<li class="">specular lighting (Blinn-Phong Lighting)</li>
 	<li class="">per-fragment lighting</li>
 	<li class="">Sphere geometry object (indexed rendering)</li>
 </ul>
-	<div class="paragraph">This tutorial completes the 
-	<a href="http://en.wikipedia.org/wiki/Phong_shading" class="">Phong Shading</a>
-rendering code that we started in the last tutorial by adding 
-"specular" highlights to the material.  Specular highlights are 
-basically "shininess", that is, the tendancy of a material to 
-re-emit light *in a particular direction* based on the angle of 
+	<div class="paragraph indent-level-0">This tutorial completes the
+	<a class="" href="http://en.wikipedia.org/wiki/Phong_shading">Phong Shading</a>
+rendering code that we started in the last tutorial by adding
+"specular" highlights to the material.  Specular highlights are
+basically "shininess", that is, the tendancy of a material to
+re-emit light *in a particular direction* based on the angle of
 incidence of the light ray.
 </div>
 </div>
@@ -45,17 +46,17 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 </div>
 	<div class="commentary">
-	<div class="paragraph">This is our only new import.  The Sphere geometry node 
-generates a "compiled" piece of sphere geometry 
-as a pair of two VBOs and a count that tells us how many vertices 
-need to be rendered from the VBOs to render the geometry.  The first 
-VBO contains the per-vertex data which is to be rendered, while the 
-second contains indices into that first VBO which allows triangles 
-to be generated which share the vertex records.  In "smooth" geometry 
-vertices tend to be shared, so this rendering method tends to be 
+	<div class="paragraph indent-level-0">This is our only new import.  The Sphere geometry node
+generates a "compiled" piece of sphere geometry
+as a pair of two VBOs and a count that tells us how many vertices
+need to be rendered from the VBOs to render the geometry.  The first
+VBO contains the per-vertex data which is to be rendered, while the
+second contains indices into that first VBO which allows triangles
+to be generated which share the vertex records.  In "smooth" geometry
+vertices tend to be shared, so this rendering method tends to be
 more efficient than using expanded arrays of vertices.
 </div>
 </div>
@@ -67,22 +68,22 @@ class TestContext( BaseContext ):
         """Initialize the context"""
 </div>
 	<div class="commentary">
-	<h1 class="title">Phong and Blinn Reflectance</h1>
-	<div class="paragraph">A shiny surface will tend to have a "bright spot" at the point 
+	<h1 class="title indent-level-0">Phong and Blinn Reflectance</h1>
+	<div class="paragraph indent-level-8">A shiny surface will tend to have a "bright spot" at the point
 on the surface where the angle of incidence for the reflected
-light ray and the viewer's ray are (close to) equal.  
-A perfect mirror would have the brights spot solely when the 
+light ray and the viewer's ray are (close to) equal.
+A perfect mirror would have the brights spot solely when the
 two vectors are exactly equal, while a perfect Lambertian
 surface would have the "bright spot" spread across the entire
 surface.</div>
-	<div class="paragraph">The Phong rendering process models this as a setting, traditionally
-called material "shininess" in Legacy OpenGL.  This setting acts 
-as a power which raises the cosine (dot product) of the 
-angle between the reflected ray and the eye.  The calculation of 
-the cosine (dot product) of the two angles requires that we do 
-a dot product of the two angles once for each vertex/fragment 
-for which we wish to calculate the specular reflectance, we also 
-have to find the angle of reflectance before we can do the 
+	<div class="paragraph indent-level-8">The Phong rendering process models this as a setting, traditionally
+called material "shininess" in Legacy OpenGL.  This setting acts
+as a power which raises the cosine (dot product) of the
+angle between the reflected ray and the eye.  The calculation of
+the cosine (dot product) of the two angles requires that we do
+a dot product of the two angles once for each vertex/fragment
+for which we wish to calculate the specular reflectance, we also
+have to find the angle of reflectance before we can do the
 calculation:</div>
 </div>
 	<div class="code-sample">        """
@@ -93,18 +94,18 @@ calculation:</div>
         """
 </div>
 	<div class="commentary">
-	<div class="paragraph">which, as we can see, involves the vertex position in a number 
-        of stages of the operation, so requires recalculation all through 
+	<div class="paragraph indent-level-0">which, as we can see, involves the vertex position in a number
+        of stages of the operation, so requires recalculation all through
         the rendering operation.</div>
-	<div class="paragraph">There is, however, a simplified version of Phong Lighting called 
-	<a href="http://en.wikipedia.org/wiki/Blinn%E2%80%93Phong_shading_model" class="">Blinn-Phong</a>
-which notes that if we were to do all of our calculations in 
-"eye space", and were to assume that (as is normal), the eye 
+	<div class="paragraph indent-level-8">There is, however, a simplified version of Phong Lighting called
+	<a class="" href="http://en.wikipedia.org/wiki/Blinn%E2%80%93Phong_shading_model">Blinn-Phong</a>
+which notes that if we were to do all of our calculations in
+"eye space", and were to assume that (as is normal), the eye
 and light coordinates will not change for a rendering pass,
-(note: this limits us to directional lights!) we 
+(note: this limits us to directional lights!) we
 can use a pre-calculated value which is the bisecting angle
-between the light-vector and the view-vector, called the 
-"half vector" to 
+between the light-vector and the view-vector, called the
+"half vector" to
 perform approximately the same calculation.  With this value:
 </div>
 </div>
@@ -115,71 +116,71 @@ perform approximately the same calculation.  With this value:
         """
 </div>
 	<div class="commentary">
-	<div class="paragraph">Note: however, that the resulting Spec_factor is not *precisely*
+	<div class="paragraph indent-level-0">Note: however, that the resulting Spec_factor is not *precisely*
         the same value as the original calculation, so the "shininess"
         exponent must be slightly lower to approximate the value that
         Phong rendering would achieve.  The value is, however, considered
-        close to "real world" materials, so the Blinn method is generally 
+        close to "real world" materials, so the Blinn method is generally
         preferred to Phong.</div>
-	<div class="paragraph">Traditionally, n_dot_pos would be cut off at 0.0, but that would 
-create extremely hard-edged cut-offs for specular color.  Here 
+	<div class="paragraph indent-level-8">Traditionally, n_dot_pos would be cut off at 0.0, but that would
+create extremely hard-edged cut-offs for specular color.  Here
 we "fudge" the result by 0.05
 </div>
 </div>
 	<div class="code-sample">        phong_weightCalc = """
-        vec2 phong_weightCalc( 
+        vec2 phong_weightCalc(
             in vec3 light_pos, // light position
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
             in float shininess
         ) {
             // returns vec2( ambientMult, diffuseMult )
-            float n_dot_pos = max( 0.0, dot( 
+            float n_dot_pos = max( 0.0, dot(
                 frag_normal, light_pos
             ));
             float n_dot_half = 0.0;
-            if (n_dot_pos > -.05) {
-                n_dot_half = pow(max(0.0,dot( 
+            if (n_dot_pos &gt; -.05) {
+                n_dot_half = pow(max(0.0,dot(
                     half_light, frag_normal
                 )), shininess);
             }
             return vec2( n_dot_pos, n_dot_half);
-        }		
+        }
         """
 </div>
 	<div class="commentary">
-	<div class="paragraph">We are going to use per-fragment rendering.
+	<div class="paragraph indent-level-0">We are going to use per-fragment rendering.
         As a result, our vertex shader becomes very simple, just arranging
         for the Normals to be varied across the surface.
 </div>
 </div>
-	<div class="code-sample">        vertex = compileShader( 
+	<div class="code-sample">        vertex = shaders.compileShader(
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
         varying vec3 baseNormal;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+            gl_Position = gl_ModelViewProjectionMatrix * vec4(
                 Vertex_position, 1.0
             );
             baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
         }""", GL_VERTEX_SHADER)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our fragment shader looks much like our previous tutorial's 
+	<div class="paragraph indent-level-0">Our fragment shader looks much like our previous tutorial's
         vertex shader.  As before, we have lots of uniform values,
-        but now we also calculate the light's half-vector (in eye-space 
-        coordinates).  The phong_weightCalc function does the core Blinn 
-        calculation, and we simply use the resulting factor to add to 
+        but now we also calculate the light's half-vector (in eye-space
+        coordinates).  The phong_weightCalc function does the core Blinn
+        calculation, and we simply use the resulting factor to add to
         the colour value for the fragment.</div>
-	<div class="paragraph">Note the use of the eye-coordinate-space to simplify the 
-half-vector calculation, the eye-space eye-vector is always 
-the same value (pointing down the negative Z axis), 
-and the eye-space eye-coordinate is always (0,0,0), so the 
+	<div class="paragraph indent-level-8">Note the use of the eye-coordinate-space to simplify the
+half-vector calculation, the eye-space eye-vector is always
+the same value (pointing down the negative Z axis),
+and the eye-space eye-coordinate is always (0,0,0), so the
 eye-to-vertex vector is always the eye-space vector position.
 </div>
 </div>
-	<div class="code-sample">        fragment = compileShader( phong_weightCalc + """
+	<div class="code-sample">        fragment = shaders.compileShader( phong_weightCalc + """
         uniform vec4 Global_ambient;
         uniform vec4 Light_ambient;
         uniform vec4 Light_diffuse;
@@ -195,7 +196,7 @@ eye-to-vertex vector is always the eye-space vector position.
             vec3 EC_Light_location = normalize(
                 gl_NormalMatrix * Light_location
             );
-            // half-vector calculation 
+            // half-vector calculation
             vec3 Light_half = normalize(
                 EC_Light_location - vec3( 0,0,-1 )
             );
@@ -205,7 +206,7 @@ eye-to-vertex vector is always the eye-space vector position.
                 baseNormal,
                 Material_shininess
             );
-            gl_FragColor = clamp( 
+            gl_FragColor = clamp(
             (
                 (Global_ambient * Material_ambient)
                 + (Light_ambient * Material_ambient)
@@ -215,33 +216,33 @@ eye-to-vertex vector is always the eye-space vector position.
             ), 0.0, 1.0);
         }
         """, GL_FRAGMENT_SHADER)
-        self.shader = compileProgram(vertex,fragment)
+        self.shader = shaders.compileProgram(vertex,fragment)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here's the call that creates the two VBOs and the 
-        count of records to render from them. If you're curious 
-        you can read through the source code of the 
-        OpenGLContext.scenegraph.quadrics module to read the 
+	<div class="paragraph indent-level-0">Here's the call that creates the two VBOs and the
+        count of records to render from them. If you're curious
+        you can read through the source code of the
+        OpenGLContext.scenegraph.quadrics module to read the
         mechanism that generates the values.</div>
-	<div class="paragraph">The sphere is a simple rendering mechanism, as for a 
-unit-sphere at the origin, the sphere's normals are the 
-same as the sphere's vertex coordinate.  The complexity 
-comes primarily in generating the triangle indices that 
+	<div class="paragraph indent-level-8">The sphere is a simple rendering mechanism, as for a
+unit-sphere at the origin, the sphere's normals are the
+same as the sphere's vertex coordinate.  The complexity
+comes primarily in generating the triangle indices that
 link the points generated.
 </div>
 </div>
-	<div class="code-sample">        self.coords,self.indices,self.count = Sphere( 
-            radius = 1 
+	<div class="code-sample">        self.coords,self.indices,self.count = Sphere(
+            radius = 1
         ).compile()
 </div>
 	<div class="commentary">
-	<div class="paragraph">We have a few more uniforms to control the specular 
-        components.  Real-world coding would also calculate the 
-        light's half-vector and provide it as a uniform (so that 
-        it would only need to be calculated once), but we are going 
-        to do the half-vector calculation in the shader to make 
-        it obvious what is going on.  The legacy OpenGL pipeline 
-        provides the value pre-calculated as part of the light structure 
+	<div class="paragraph indent-level-0">We have a few more uniforms to control the specular
+        components.  Real-world coding would also calculate the
+        light's half-vector and provide it as a uniform (so that
+        it would only need to be calculated once), but we are going
+        to do the half-vector calculation in the shader to make
+        it obvious what is going on.  The legacy OpenGL pipeline
+        provides the value pre-calculated as part of the light structure
         in GLSL.
 </div>
 </div>
@@ -270,19 +271,19 @@ link the points generated.
         try:
 </div>
 	<div class="commentary">
-	<h1 class="title">Indexed VBO Rendering</h1>
-	<div class="paragraph">You'll notice here that we are binding two different VBO 
-objects.  As we mentioned above, the Sphere renderer 
-generated both VBOs, but doesn't the second binding replace 
-the first binding?  That is, why doesn't OpenGL try to read 
+	<h1 class="title indent-level-0">Indexed VBO Rendering</h1>
+	<div class="paragraph indent-level-12">You'll notice here that we are binding two different VBO
+objects.  As we mentioned above, the Sphere renderer
+generated both VBOs, but doesn't the second binding replace
+the first binding?  That is, why doesn't OpenGL try to read
 the Vertex data out of the indices VBO?</div>
-	<div class="paragraph">OpenGL defines multiple binding "targets" for VBOs, the 
+	<div class="paragraph indent-level-12">OpenGL defines multiple binding "targets" for VBOs, the
 first VBO (vertices) was bound to the GL_ARRAY_BUFFER
-target (the default for the class), which is used for reading 
+target (the default for the class), which is used for reading
 per-vertex data arrays, while the indices buffer was defined
 as targetting the GL_ELEMENT_ARRAY_BUFFER, which is used
 solely for reading indices.</div>
-	<div class="paragraph">Each target can be bound to a different VBO, and thus we can
+	<div class="paragraph indent-level-12">Each target can be bound to a different VBO, and thus we can
 bind both VBOs at the same time without confusion.
 </div>
 </div>
@@ -290,14 +291,14 @@ bind both VBOs at the same time without confusion.
             self.indices.bind()
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here, being lazy, we use the numpy array's nbytes value 
-            to specify the stride between records.  The VBO object has 
-            a "data" value which is the data-set which was initially 
-            passed to the VBO constructor.  The first element in this 
-            array is a single vertex record.  This array happens to have 
-            8 floating-point values (24 bytes), the first three being 
-            the vertex position, the next two being the texture coordinate 
-            and the last three being the vertex normal.  We'll ignore 
+	<div class="paragraph indent-level-0">Here, being lazy, we use the numpy array's nbytes value
+            to specify the stride between records.  The VBO object has
+            a "data" value which is the data-set which was initially
+            passed to the VBO constructor.  The first element in this
+            array is a single vertex record.  This array happens to have
+            8 floating-point values (24 bytes), the first three being
+            the vertex position, the next two being the texture coordinate
+            and the last three being the vertex normal.  We'll ignore
             the texture coordinate for now.
 </div>
 </div>
@@ -308,7 +309,7 @@ bind both VBOs at the same time without confusion.
                 glUniform4f( self.Light_diffuse_loc, .25,.25,.25,1 )
 </div>
 	<div class="commentary">
-	<div class="paragraph">We set up a yellow-ish specular component in the 
+	<div class="paragraph indent-level-0">We set up a yellow-ish specular component in the
                 light and move it to rest "just over our right shoulder"
                 in relation to the initial camera.</div>
 </div>
@@ -318,33 +319,33 @@ bind both VBOs at the same time without confusion.
                 glUniform4f( self.Material_diffuse_loc, .15,.15,.15, 1 )
 </div>
 	<div class="commentary">
-	<div class="paragraph">We make the material have a bright specular white 
-                colour and an extremely "shiny" surface.  The shininess 
+	<div class="paragraph indent-level-0">We make the material have a bright specular white
+                colour and an extremely "shiny" surface.  The shininess
                 value has the effect of reducing the area of the
-                highlight, as the cos of the angle is raised 
+                highlight, as the cos of the angle is raised
                 to the power of the (fractional) shininess.</div>
 </div>
 	<div class="code-sample">                glUniform4f( self.Material_specular_loc, 1.0,1.0,1.0, 1.0 )
                 glUniform1f( self.Material_shininess_loc, .95)
                 glEnableVertexAttribArray( self.Vertex_position_loc )
                 glEnableVertexAttribArray( self.Vertex_normal_loc )
-                glVertexAttribPointer( 
-                    self.Vertex_position_loc, 
+                glVertexAttribPointer(
+                    self.Vertex_position_loc,
                     3, GL_FLOAT,False, stride, self.coords
                 )
-                glVertexAttribPointer( 
-                    self.Vertex_normal_loc, 
+                glVertexAttribPointer(
+                    self.Vertex_normal_loc,
                     3, GL_FLOAT,False, stride, self.coords+(5*4)
                 )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here we introduce the OpenGL call which renders via 
-                an index-array rather than just rendering vertices in 
-                definition order.  The last two arguments tell OpenGL 
-                what data-type we've used for the indices (the Sphere 
-                renderer uses shorts).  The indices VBO is actually 
+	<div class="paragraph indent-level-0">Here we introduce the OpenGL call which renders via
+                an index-array rather than just rendering vertices in
+                definition order.  The last two arguments tell OpenGL
+                what data-type we've used for the indices (the Sphere
+                renderer uses shorts).  The indices VBO is actually
                 just passing the value c_void_p( 0 ) (i.e. a null pointer),
-                which causes OpenGL to use the currently bound VBO for 
+                which causes OpenGL to use the currently bound VBO for
                 the GL_ELEMENT_ARRAY_BUFFER target.
 </div>
 </div>
@@ -355,8 +356,8 @@ bind both VBOs at the same time without confusion.
             finally:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Note the need to unbind *both* VBOs, we have to free 
-                *both* VBO targets to avoid any other rendering operation 
+	<div class="paragraph indent-level-0">Note the need to unbind *both* VBOs, we have to free
+                *both* VBO targets to avoid any other rendering operation
                 from trying to access the VBOs.</div>
 </div>
 	<div class="code-sample">                self.coords.unbind()
@@ -369,12 +370,12 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our per-fragment Blinn-Phong rendering engine is a very simplistic 
+	<div class="paragraph indent-level-0">Our per-fragment Blinn-Phong rendering engine is a very simplistic
 model of real-world lighting, and is currently limited to a single
-directional light.  Our next tutorial will begin to 
+directional light.  Our next tutorial will begin to
 reduce these "simplifying assumptions".</div>
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the shader_6.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the shader_6.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -387,12 +388,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

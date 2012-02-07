@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Scenegraph Nodes: Molehill NURBS Introduction</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>Scenegraph Nodes: Molehill NURBS Introduction</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,12 +21,12 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Molehill NURBS Introduction</h1>
-	<div class="paragraph">
-	<img src="molehill.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Molehill NURBS Introduction</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="molehill.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">This version of the demo shows how to create the same 
-visual effect as the original MoleHill Demo using the 
+	<div class="paragraph indent-level-0">This version of the demo shows how to create the same
+visual effect as the original MoleHill Demo using the
 OpenGLContext Nurbs extension (patterned after the Blaxxun
 Nurbs extension).
 </div>
@@ -42,9 +43,9 @@ class TestContext( BaseContext ):
         """Build control points for NURBS mole hills"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">Normally you would use a 3D modeller to create nurbs 
-        geometry, but we'll generate it by paper-and-pencil method 
-        (actually, Mark Kilgard did in 1995, we're just copying the 
+	<div class="paragraph indent-level-0">Normally you would use a 3D modeller to create nurbs
+        geometry, but we'll generate it by paper-and-pencil method
+        (actually, Mark Kilgard did in 1995, we're just copying the
         setup here).
 </div>
 </div>
@@ -60,78 +61,78 @@ class TestContext( BaseContext ):
             for v in range(4):
 </div>
 	<div class="commentary">
-	<div class="paragraph">Red surface</div>
+	<div class="paragraph indent-level-0">Red surface</div>
 </div>
 	<div class="code-sample">                pts1[u].append([2.0*u, 2.0*v, 0.0])
                 if (u == 1 or u == 2) and (v == 1 or v == 2):
                     pts1[u][v][2] = 6.0
 </div>
 	<div class="commentary">
-	<div class="paragraph">Green surface</div>
+	<div class="paragraph indent-level-0">Green surface</div>
 </div>
 	<div class="code-sample">                pts2[u].append([2.0*u - 6.0, 2.0*v - 6.0, 0.0])
                 if (u == 1 or u == 2) and (v == 1 or v == 2):
-                    if u == 1 and v == 1: 
+                    if u == 1 and v == 1:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Pull hard on single middle square.</div>
+	<div class="paragraph indent-level-0">Pull hard on single middle square.</div>
 </div>
 	<div class="code-sample">                        pts2[u][v][2] = 15.0
                     else:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Push down on other middle squares.</div>
+	<div class="paragraph indent-level-0">Push down on other middle squares.</div>
 </div>
 	<div class="code-sample">                        pts2[u][v][2] = -2.0
 </div>
 	<div class="commentary">
-	<div class="paragraph">Blue surface</div>
+	<div class="paragraph indent-level-0">Blue surface</div>
 </div>
 	<div class="code-sample">                pts3[u].append([2.0*u - 6.0, 2.0*v, 0.0])
                 if (u == 1 or u == 2) and (v == 1 or v == 2):
-                    if u == 1 and v == 2: 
+                    if u == 1 and v == 2:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Pull up on single middle square.</div>
+	<div class="paragraph indent-level-0">Pull up on single middle square.</div>
 </div>
 	<div class="code-sample">                        pts3[u][v][2] = 11.0
                     else:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Pull up slightly on other middle squares.</div>
+	<div class="paragraph indent-level-0">Pull up slightly on other middle squares.</div>
 </div>
 	<div class="code-sample">                        pts3[u][v][2] = 2.0
 </div>
 	<div class="commentary">
-	<div class="paragraph">Yellow surface</div>
+	<div class="paragraph indent-level-0">Yellow surface</div>
 </div>
 	<div class="code-sample">                pts4[u].append([2.0*u, 2.0*v - 6.0, 0.0])
                 if u != 0 and (v == 1 or v == 2):
-                    if v == 1: 
+                    if v == 1:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Push down front middle and right squares.</div>
+	<div class="paragraph indent-level-0">Push down front middle and right squares.</div>
 </div>
 	<div class="code-sample">                        pts4[u][v][2] = -2.0
                     else:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Pull up back middle and right squares.</div>
+	<div class="paragraph indent-level-0">Pull up back middle and right squares.</div>
 </div>
 	<div class="code-sample">                        pts4[u][v][2] = 5.0
 </div>
 	<div class="commentary">
-	<div class="paragraph">Stretch up red's far right corner.</div>
+	<div class="paragraph indent-level-0">Stretch up red's far right corner.</div>
 </div>
 	<div class="code-sample">        pts1[3][3][2] = 6.0
 </div>
 	<div class="commentary">
-	<div class="paragraph">Pull down green's near left corner a little.</div>
+	<div class="paragraph indent-level-0">Pull down green's near left corner a little.</div>
 </div>
 	<div class="code-sample">        pts2[0][0][2] = -2.0
 </div>
 	<div class="commentary">
-	<div class="paragraph">Turn up meeting of four corners.</div>
+	<div class="paragraph indent-level-0">Turn up meeting of four corners.</div>
 </div>
 	<div class="code-sample">        pts1[0][0][2] = 1.0
         pts2[3][3][2] = 1.0
@@ -146,8 +147,8 @@ class TestContext( BaseContext ):
         colors = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],]
 </div>
 	<div class="commentary">
-	<div class="paragraph">All of the shapes have the same structure (number of knots 
-        in both u and v dimensions). They only vary in the control 
+	<div class="paragraph indent-level-0">All of the shapes have the same structure (number of knots
+        in both u and v dimensions). They only vary in the control
         points and colours with which we will render them.</div>
 </div>
 	<div class="code-sample">        self.shapes = []
@@ -159,7 +160,7 @@ class TestContext( BaseContext ):
             )
 </div>
 	<div class="commentary">
-	<div class="paragraph">The actual NURBS surfaces are simple NurbsSurface 
+	<div class="paragraph indent-level-0">The actual NURBS surfaces are simple NurbsSurface
             instances, with no trimming or other complex operations.</div>
 </div>
 	<div class="code-sample">            self.shapes.append(
@@ -176,13 +177,13 @@ class TestContext( BaseContext ):
             )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here we render the control points so you can see them in 
+	<div class="paragraph indent-level-0">Here we render the control points so you can see them in
             relation to the surface.</div>
 </div>
 	<div class="code-sample">            self.shapes.append(
                 Shape(
                     geometry = PointSet(
-                        coord = Coordinate( 
+                        coord = Coordinate(
                             point = pts,
                         ),
                     ),
@@ -190,11 +191,11 @@ class TestContext( BaseContext ):
             )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Scenegraph is transformed so that the initial view looks
+	<div class="paragraph indent-level-0">Scenegraph is transformed so that the initial view looks
         approximately like the original code</div>
 </div>
 	<div class="code-sample">        self.sg = sceneGraph(
-            children = [ 
+            children = [
                 Transform(
                     scale = [.5,.5,.5],
                     rotation = [1,0,0,-.5],
@@ -206,16 +207,16 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph">
+	<div class="paragraph indent-level-0">
 Original Demo:</div>
-	<div class="paragraph">Copyright (c) Mark J. Kilgard, 1995</div>
-	<div class="paragraph">This program is freely distributable without licensing fees 
-and is provided without guarantee or warrantee expressed or 
+	<div class="paragraph indent-level-4">Copyright (c) Mark J. Kilgard, 1995</div>
+	<div class="paragraph indent-level-4">This program is freely distributable without licensing fees
+and is provided without guarantee or warrantee expressed or
 implied. This program is -not- in the public domain.</div>
-	<div class="paragraph">molehill uses the GLU NURBS routines to draw some nice surfaces.
+	<div class="paragraph indent-level-4">molehill uses the GLU NURBS routines to draw some nice surfaces.
 </div>
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the molehill.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the molehill.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -228,12 +229,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

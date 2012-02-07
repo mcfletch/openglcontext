@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>NeHe Translations: Flat and Smooth Colors (NeHe 3)</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>NeHe Translations: Flat and Smooth Colors (NeHe 3)</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,18 +21,18 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Flat and Smooth Colors (NeHe 3)</h1>
-	<div class="paragraph">
-	<img src="nehe3.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Flat and Smooth Colors (NeHe 3)</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="nehe3.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">Introduces:</div>
-	<ul class="">
+	<div class="paragraph indent-level-0">Introduces:</div>
+	<ul class=" indent-level-4">
 	<li class="">glColor</li>
 </ul>
-	<div class="paragraph">This tutorial is based on the 
-	<a href="http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=03" class="">NeHe3 tutorial</a>
-	 by Jeff Molofee and assumes that you are reading along 
-with the tutorial, so that only changes from the tutorial are noted 
+	<div class="paragraph indent-level-0">This tutorial is based on the
+	<a class="" href="http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=03">NeHe3 tutorial</a>
+	 by Jeff Molofee and assumes that you are reading along
+with the tutorial, so that only changes from the tutorial are noted
 here.
 </div>
 </div>
@@ -45,7 +46,7 @@ class TestContext( BaseContext ):
         """Renders the geometry for the scene."""
 </div>
 	<div class="commentary">
-	<div class="paragraph">Unlike the nehe tutorial, we need to explicitly disable
+	<div class="paragraph indent-level-0">Unlike the nehe tutorial, we need to explicitly disable
         lighting, as the context automatically enables lighting
         to avoid a common class of new user errors where unlit
         geometry does not appear due to lack of light.</div>
@@ -55,7 +56,7 @@ class TestContext( BaseContext ):
         glDisable( GL_LIGHTING)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Now we return to the tutorial, in this geometry we are 
+	<div class="paragraph indent-level-0">Now we return to the tutorial, in this geometry we are
         specifying a colour for each vertex.</div>
 </div>
 	<div class="code-sample">        glTranslatef(-1.5,0.0,-6.0);
@@ -70,7 +71,7 @@ class TestContext( BaseContext ):
         glTranslatef(3.0,0.0,0.0);
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here we specify the colour once for the entire piece of 
+	<div class="paragraph indent-level-0">Here we specify the colour once for the entire piece of
         geometry.</div>
 </div>
 	<div class="code-sample">        glColor3f(0.5,0.5,1.0)
@@ -84,20 +85,20 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph">
-Author: 
-	<a href="http://nehe.gamedev.net" class="">Jeff Molofee (aka NeHe)</a>
+	<div class="paragraph indent-level-0">
+Author:
+	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
-	<div class="paragraph">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
-	<div class="paragraph">If you plan to put this program on your web page or a cdrom of
+	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
+	<div class="paragraph indent-level-0">If you plan to put this program on your web page or a cdrom of
 any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
-	<div class="paragraph">If you use the code for your own projects please give me
-credit, or mention my web site somewhere in your program 
+	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program
 or it's docs.
 </div>
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the nehe3.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the nehe3.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -110,12 +111,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Introduction to Shaders: Multiple Lights, GLSL Arrays and Structures</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>Introduction to Shaders: Multiple Lights, GLSL Arrays and Structures</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,21 +21,21 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Multiple Lights, GLSL Arrays and Structures</h1>
-	<div class="paragraph">
-	<img src="shader_7.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Multiple Lights, GLSL Arrays and Structures</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="shader_7.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">This tutorial builds on earlier tutorials by adding:</div>
-	<ul class="">
+	<div class="paragraph indent-level-0">This tutorial builds on earlier tutorials by adding:</div>
+	<ul class=" indent-level-4">
 	<li class="">Multiple Lights</li>
 	<li class="">GLSL Structures (for defining a Material)</li>
 	<li class="">GLSL Arrays/Looping (for processing multiple lights)</li>
 </ul>
-	<div class="paragraph">Until now, our tutorials have had a single light.  This tutorial
+	<div class="paragraph indent-level-0">Until now, our tutorials have had a single light.  This tutorial
 is going to demonstrate how to use simple looping in GLSL to
 iterate over a set of lights applying our existing rendering
 algorithm to each defined light.</div>
-	<div class="paragraph">We're also going to quickly demonstrate the use of GLSL structures
+	<div class="paragraph indent-level-0">We're also going to quickly demonstrate the use of GLSL structures
 to bind together similar information into namespaces for easier
 reference.
 </div>
@@ -44,7 +45,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
@@ -53,15 +54,15 @@ class TestContext( BaseContext ):
         """Initialize the context"""
 </div>
 	<div class="commentary">
-	<h1 class="title">GLSL Structures</h1>
-	<div class="paragraph">We have previously been using values named Material_ambient,
+	<h1 class="title indent-level-0">GLSL Structures</h1>
+	<div class="paragraph indent-level-8">We have previously been using values named Material_ambient,
 Material_diffuse, etceteras to specify our Material's properties.
 GLSL allows us to bind these kinds of values together into a
 structure.  The structure doesn't provide many benefits other
 than keeping the namespaces of your code clean and allowing for
 declaring multiple uniforms of the same type, such as a "front"
 and "back" material.</div>
-	<div class="paragraph">We are going to define a very simple Material struct which is
+	<div class="paragraph indent-level-8">We are going to define a very simple Material struct which is
 a subset of the built-in gl_MaterialParameters structure
 (which also has an "emission" parameter).  GLSL defines two
 built-in Material uniforms gl_FrontMaterial and gl_BackMaterial.
@@ -80,12 +81,12 @@ calls.
         """
 </div>
 	<div class="commentary">
-	<div class="paragraph">Note that each sub-element must be terminated with a semi-colon
+	<div class="paragraph indent-level-0">Note that each sub-element must be terminated with a semi-colon
         ';' character, and that qualifiers (in, out, uniform, etceteras)
         are not allowed within the structure definition.  This statement
         has to occur *before* any use of the structure to declare a
         variable as being of this type.</div>
-	<div class="paragraph">Our light-weighting code has not changed from the previous
+	<div class="paragraph indent-level-8">Our light-weighting code has not changed from the previous
 tutorial.  It is still a Blinn-Phong calculation based on the
 half-vector of light and view vector.
 </div>
@@ -102,7 +103,7 @@ half-vector of light and view vector.
                 frag_normal, light_pos
             ));
             float n_dot_half = 0.0;
-            if (n_dot_pos > -.05) {
+            if (n_dot_pos &gt; -.05) {
                 n_dot_half = pow(max(0.0,dot(
                     half_light, frag_normal
                 )), shininess);
@@ -112,12 +113,12 @@ half-vector of light and view vector.
         """
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our vertex shader is also unchanged.  We could move many
+	<div class="paragraph indent-level-0">Our vertex shader is also unchanged.  We could move many
         of the operations currently done in our fragment shader here
         to reduce the processing load for our shader.
 </div>
 </div>
-	<div class="code-sample">        vertex = compileShader(
+	<div class="code-sample">        vertex = shaders.compileShader(
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
@@ -130,7 +131,7 @@ half-vector of light and view vector.
         }""", GL_VERTEX_SHADER)
 </div>
 	<div class="commentary">
-	<div class="paragraph">To create a uniform with a structure type, we simply use
+	<div class="paragraph indent-level-0">To create a uniform with a structure type, we simply use
         the structure as the data-type declaration for the uniform.
         As opposed to using e.g. vec4 or vec3, we use Material (our
         structure name defined above) and give the uniform a name.
@@ -139,13 +140,13 @@ half-vector of light and view vector.
 	<div class="code-sample">        """uniform Material material;"""
 </div>
 	<div class="commentary">
-	<h1 class="title">GLSL Arrays</h1>
-	<div class="paragraph">Each light we have defined (so far) is composed to 4 4-component
+	<h1 class="title indent-level-0">GLSL Arrays</h1>
+	<div class="paragraph indent-level-8">Each light we have defined (so far) is composed to 4 4-component
 vectors, ambient, diffuse and specular colour, along with the
 "position" (direction) vector.  If we wanted to provide, for
 instance, 3 lights of this type, we *could* create 12 different
 uniform values, and set each of these uniforms individually.</div>
-	<div class="paragraph">GLSL, however, provides for array data-types.  The array types
+	<div class="paragraph indent-level-8">GLSL, however, provides for array data-types.  The array types
 must be "sized" (have a specific, final size) in order to be
 usable, so no "pointer" types are available, but we don't need
 them for this type of operation.  We can define a "lights"
@@ -154,21 +155,21 @@ uniform which is declared as a sized array of 12 vec4 elements:</div>
 	<div class="code-sample">        """uniform vec4 lights[ 12 ];"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">And we can loop over "lights" using 0-indexed [i] indices,
+	<div class="paragraph indent-level-0">And we can loop over "lights" using 0-indexed [i] indices,
         where i must be an integer.  The for loop will be familiar to
         those who have used C looping:</div>
 </div>
 	<div class="code-sample">        """for (i=0;i&lt;12;i=i+4) { blah; }"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">Note that you must declare the iterator variable ("i" here)</div>
-	<div class="paragraph">We iterate over each light in our array of lights accumulating
+	<div class="paragraph indent-level-0">Note that you must declare the iterator variable ("i" here)</div>
+	<div class="paragraph indent-level-8">We iterate over each light in our array of lights accumulating
 the results into the fragColor variable we've defined.  The
 global component is used to initialize the variable, with the
 contribution of each light added to the result.
 </div>
 </div>
-	<div class="code-sample">        fragment = compileShader(
+	<div class="code-sample">        fragment = shaders.compileShader(
             phong_weightCalc + materialStruct + """
         uniform Material material;
         uniform vec4 Global_ambient;
@@ -208,8 +209,8 @@ contribution of each light added to the result.
         """, GL_FRAGMENT_SHADER)
 </div>
 	<div class="commentary">
-	<h1 class="title">Why not an Array of Structures?</h1>
-	<div class="paragraph">Originally this tutorial was going to use an array of LightSource
+	<h1 class="title indent-level-0">Why not an Array of Structures?</h1>
+	<div class="paragraph indent-level-8">Originally this tutorial was going to use an array of LightSource
 structures as a Uniform, with the components of the structures
 specified with separate calls to glUniform4f.  Problem is, that
 doesn't actually *work*.  While glUniform *should* be able to
@@ -218,7 +219,7 @@ this type of operation in the real world. The built-in
 gl_LightSourceParameters are an array-of-structures, but
 apparently the GL implementations consider this a special case,
 rather than a generic type of functionality to be supported.</div>
-	<div class="paragraph">An array-of-structures value looks like this when declared in GLSL:
+	<div class="paragraph indent-level-8">An array-of-structures value looks like this when declared in GLSL:
 </div>
 </div>
 	<div class="code-sample">        lightStruct = """
@@ -234,16 +235,16 @@ rather than a generic type of functionality to be supported.</div>
         """
 </div>
 	<div class="commentary">
-	<div class="paragraph">When you attempt to retrieve the location for the Uniform
+	<div class="paragraph indent-level-0">When you attempt to retrieve the location for the Uniform
         via:</div>
-	<div class="paragraph">glGetUniformLocation( shader, 'lights[0].ambient' )</div>
-	<div class="paragraph">you will always get a -1 (invalid) location.</div>
-	<div class="paragraph">OpenGL 3.1 introduced the concept of Uniform Buffers, which allow
+	<div class="paragraph indent-level-12">glGetUniformLocation( shader, 'lights[0].ambient' )</div>
+	<div class="paragraph indent-level-8">you will always get a -1 (invalid) location.</div>
+	<div class="paragraph indent-level-8">OpenGL 3.1 introduced the concept of Uniform Buffers, which allow
 for packing Uniform data into VBO storage, but it's not yet clear
 whether they will support array-of-structure specification.
 </div>
 </div>
-	<div class="code-sample">        self.shader = compileProgram(vertex,fragment)
+	<div class="code-sample">        self.shader = shaders.compileProgram(vertex,fragment)
         self.coords,self.indices,self.count = Sphere(
             radius = 1
         ).compile()
@@ -255,7 +256,7 @@ whether they will support array-of-structure specification.
             self.uniform_locations[uniform] = location
 </div>
 	<div class="commentary">
-	<div class="paragraph">There's no real reason to treat the "lights" uniform specially,
+	<div class="paragraph indent-level-0">There's no real reason to treat the "lights" uniform specially,
         other than that we want to call attention to it.  We get the
         uniform as normal.  Note that we *could* also retrieve a
         sub-element of the array by specifying 'lights[3]' or the like.
@@ -273,7 +274,7 @@ whether they will support array-of-structure specification.
             setattr( self, attribute+ '_loc', location )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our individually-specified uniform values</div>
+	<div class="paragraph indent-level-0">Our individually-specified uniform values</div>
 </div>
 	<div class="code-sample">    UNIFORM_VALUES = [
         ('Global_ambient',(.05,.05,.05,1.0)),
@@ -284,13 +285,13 @@ whether they will support array-of-structure specification.
     ]
 </div>
 	<div class="commentary">
-	<div class="paragraph">The parameters we use to specify our lights, note that
+	<div class="paragraph indent-level-0">The parameters we use to specify our lights, note that
     the first item in the tuples is dropped, it is the value
     that *should* work in glGetUniformLocation, but does not.
     What actually gets passed in is a single float array with
     12 4-float values representing all of the data-values for
     all of the enabled lights.</div>
-	<div class="paragraph">You'll notice that we're using 0.0 as the 'w' coordinate
+	<div class="paragraph indent-level-4">You'll notice that we're using 0.0 as the 'w' coordinate
 for the light positions.  We're using this to flag that the
 position is actually a *direction*.  This will become useful
 in later tutorials where we have multiple light-types.
@@ -323,13 +324,13 @@ in later tutorials where we have multiple light-types.
             try:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Here's our only change to the rendering process,
+	<div class="paragraph indent-level-0">Here's our only change to the rendering process,
                 we pass in the entire array of light-related data with
                 a single call to glUniform4fv.  The 'v' forms of
                 glUniform all allow for passing arrays of values,
                 and all require that you specify the number of elements
                 being passed (here 12).</div>
-	<div class="paragraph">Aside: Incidentally, Uniforms are actually stored with
+	<div class="paragraph indent-level-16">Aside: Incidentally, Uniforms are actually stored with
 the shader until the shader is re-linked, so specifying
 the uniforms on each rendering pass (as we do here) is
 not necessary.  The shader merely needs to be "in use"
@@ -380,10 +381,10 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our next tutorial will optimize the directional light code here
+	<div class="paragraph indent-level-0">Our next tutorial will optimize the directional light code here
 so that it is less wasteful of GPU resources.</div>
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the shader_7.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the shader_7.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -396,12 +397,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

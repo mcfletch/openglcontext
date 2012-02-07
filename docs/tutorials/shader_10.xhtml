@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Introduction to Shaders: Spot-Lights</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>Introduction to Shaders: Spot-Lights</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,17 +21,17 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Spot-Lights</h1>
-	<div class="paragraph">
-	<img src="shader_10.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Spot-Lights</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="shader_10.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">This tutorial builds on earlier tutorials by adding:</div>
-	<ul class="">
+	<div class="paragraph indent-level-0">This tutorial builds on earlier tutorials by adding:</div>
+	<ul class=" indent-level-4">
 	<li class="">Directional shielded Point Lights (Spot Lights)</li>
 </ul>
-	<div class="paragraph">Spot Lights are a commonly seen pattern. They are basically 
-Point Light sources which have shields/reflectors which block 
-light in most directions, while focussing the light (to some 
+	<div class="paragraph indent-level-0">Spot Lights are a commonly seen pattern. They are basically
+Point Light sources which have shields/reflectors which block
+light in most directions, while focussing the light (to some
 degree) in a particular direction.
 </div>
 </div>
@@ -39,7 +40,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
@@ -47,8 +48,8 @@ class TestContext( BaseContext ):
     LIGHT_COUNT = 3
 </div>
 	<div class="commentary">
-	<div class="paragraph">Note that we're going to add 2 new vec4 fields to our light,
-    the legacy GL has 2 floats and a direction vector, but we're 
+	<div class="paragraph indent-level-0">Note that we're going to add 2 new vec4 fields to our light,
+    the legacy GL has 2 floats and a direction vector, but we're
     combining all the values into a uniform vector set.</div>
 </div>
 	<div class="code-sample">    LIGHT_SIZE = 7
@@ -56,27 +57,27 @@ class TestContext( BaseContext ):
         """Initialize the context"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">As you can see, we've created a new 4-element vector 
+	<div class="paragraph indent-level-0">As you can see, we've created a new 4-element vector
         called SPOT_PARAMS which holds 3 "meaningful" float values.
-        The first element cos_spot_cutoff represents the cosign of 
-        the angle beyond which the light is cut off. This angle is 
-        measured from the light's spot_direction compared with the 
-        light_location vector.  In effect, it is a check to see if 
-        the fragment is within the cone of the light.  The use of the 
-        *cosine* of the angle is to allow for very fast checks against 
+        The first element cos_spot_cutoff represents the cosign of
+        the angle beyond which the light is cut off. This angle is
+        measured from the light's spot_direction compared with the
+        light_location vector.  In effect, it is a check to see if
+        the fragment is within the cone of the light.  The use of the
+        *cosine* of the angle is to allow for very fast checks against
         the dot-product of the normalized vectors.</div>
-	<div class="paragraph">The second element, spot_exponent, is used to calculate the 
-amount of "spotiness" of the spotlight, that is, the amount 
-to which the spotlight focusses light on the center of the 
+	<div class="paragraph indent-level-8">The second element, spot_exponent, is used to calculate the
+amount of "spotiness" of the spotlight, that is, the amount
+to which the spotlight focusses light on the center of the
 beam versus the outside of the beam.  A higher spot_exponent
-will cause the spotlight to "focus" more, a lower exponent 
-will cause the spotlight to act more like a "shielded" 
+will cause the spotlight to "focus" more, a lower exponent
+will cause the spotlight to act more like a "shielded"
 point-light (such as a lamp with blockers rather than reflectors).</div>
-	<div class="paragraph">The last component of the SPOT_PARAMS is being used as a simple 
-flag to tell us whether to apply the spot calculation.  We could 
-have shaved a whole vec4 by packing the spot_exponent into the 
-ATTENUATION vector's unused .w component, and then packing the 
-spot_cutoff into the spot_direction's unused .w, but that becomes 
+	<div class="paragraph indent-level-8">The last component of the SPOT_PARAMS is being used as a simple
+flag to tell us whether to apply the spot calculation.  We could
+have shaved a whole vec4 by packing the spot_exponent into the
+ATTENUATION vector's unused .w component, and then packing the
+spot_cutoff into the spot_direction's unused .w, but that becomes
 a bit awkward looking.
 </div>
 </div>
@@ -93,35 +94,35 @@ a bit awkward looking.
         const int SPOT_DIR = 6;
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
         varying vec3 EC_Light_half[LIGHT_COUNT];
-        varying vec3 EC_Light_location[LIGHT_COUNT]; 
-        varying float Light_distance[LIGHT_COUNT]; 
+        varying vec3 EC_Light_location[LIGHT_COUNT];
+        varying float Light_distance[LIGHT_COUNT];
         varying vec3 baseNormal;
         """%( self.LIGHT_COUNT, self.LIGHT_SIZE )
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our phong_weightCalc function receives its final tweaks here.  We 
+	<div class="paragraph indent-level-0">Our phong_weightCalc function receives its final tweaks here.  We
         provide the two vec4 spot elements for the current light.
-        The spotlight operation modifies the point-light code such that 
-        the "attenuation" numerator is either 1.0 (for non-directional 
+        The spotlight operation modifies the point-light code such that
+        the "attenuation" numerator is either 1.0 (for non-directional
         point-lights) or a calculated value for spot-lights.</div>
-	<div class="paragraph">To calculate this value, we take the (cos of the) angle between 
-the light direction (spot_direction) and the vector between 
-the fragment and the light location (-light_pos).  If this value 
-is lower than our spot_cutoff, then we do not want to provide 
-any lighting whatsoever from this light, so we short-circuit and 
+	<div class="paragraph indent-level-8">To calculate this value, we take the (cos of the) angle between
+the light direction (spot_direction) and the vector between
+the fragment and the light location (-light_pos).  If this value
+is lower than our spot_cutoff, then we do not want to provide
+any lighting whatsoever from this light, so we short-circuit and
 return a null vector of weights. </div>
-	<div class="paragraph">If the value is higher than the cutoff, we calculate the
-"spotiness" multiplier.  Here we are *not* using the OpenGL 
-standard method, instead we calculate the fraction of total 
-cosine-space which is displayed and raise it to the power of our 
+	<div class="paragraph indent-level-8">If the value is higher than the cutoff, we calculate the
+"spotiness" multiplier.  Here we are *not* using the OpenGL
+standard method, instead we calculate the fraction of total
+cosine-space which is displayed and raise it to the power of our
 spot_exponent value.</div>
-	<div class="paragraph">This is our last tweak to the blinn-phong lighting model so we'll make 
+	<div class="paragraph indent-level-8">This is our last tweak to the blinn-phong lighting model so we'll make
 this version of the function available like so:</div>
-	<div class="paragraph">from OpenGLContext.resources.phongweights_frag import data as phong_weightCalc
+	<div class="paragraph indent-level-8">from OpenGLContext.resources.phongweights_frag import data as phong_weightCalc
 </div>
 </div>
 	<div class="code-sample">        phong_weightCalc = """
-        vec3 phong_weightCalc( 
+        vec3 phong_weightCalc(
             in vec3 light_pos, // light position/direction
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
@@ -132,12 +133,12 @@ this version of the function available like so:</div>
             in vec4 spot_direction // model-space direction
         ) {
             // returns vec3( ambientMult, diffuseMult, specularMult )
-            float n_dot_pos = max( 0.0, dot( 
+            float n_dot_pos = max( 0.0, dot(
                 frag_normal, light_pos
             ));
             float n_dot_half = 0.0;
             float attenuation = 1.0;
-            if (n_dot_pos > -.05) {
+            if (n_dot_pos &gt; -.05) {
                 float spot_effect = 1.0;
                 if (spot_params.w != 0.0) {
                     // is a spot...
@@ -152,22 +153,22 @@ this version of the function available like so:</div>
                         if (spot_cos == 1.0) {
                             spot_effect = 1.0;
                         } else {
-                            spot_effect = pow( 
-                                    (1.0-spot_params.x)/(1.0-spot_cos), 
-                                    spot_params.y 
+                            spot_effect = pow(
+                                    (1.0-spot_params.x)/(1.0-spot_cos),
+                                    spot_params.y
                                 );
                         }
                     }
                 }
                 n_dot_half = pow(
-                    max(0.0,dot( 
+                    max(0.0,dot(
                         half_light, frag_normal
-                    )), 
+                    )),
                     shininess
                 );
                 if (distance != 0.0) {
                     float attenuation = 1.0/(
-                        attenuations.x + 
+                        attenuations.x +
                         (attenuations.y * distance) +
                         (attenuations.z * distance * distance)
                     );
@@ -177,23 +178,23 @@ this version of the function available like so:</div>
                 }
             }
             return vec3( attenuation, n_dot_pos, n_dot_half);
-        }		
+        }
         """
 </div>
 	<div class="commentary">
-	<div class="paragraph">Nothing needs to change in our vertex shader, save that we're 
-        using the functions we stored to external files in the previous 
+	<div class="paragraph indent-level-0">Nothing needs to change in our vertex shader, save that we're
+        using the functions we stored to external files in the previous
         tutorial.</div>
 </div>
 	<div class="code-sample">        from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
-        vertex = compileShader( 
-            lightConst + phong_preCalc + light_preCalc + 
+        vertex = shaders.compileShader(
+            lightConst + phong_preCalc + light_preCalc +
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+            gl_Position = gl_ModelViewProjectionMatrix * vec4(
                 Vertex_position, 1.0
             );
             baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
@@ -201,10 +202,10 @@ this version of the function available like so:</div>
         }""", GL_VERTEX_SHADER)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our only change for the fragment shader is to pass in the 
+	<div class="paragraph indent-level-0">Our only change for the fragment shader is to pass in the
         spot components of the current light when calling phong_weightCalc.</div>
 </div>
-	<div class="code-sample">        fragment = compileShader( 
+	<div class="code-sample">        fragment = shaders.compileShader(
             lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
@@ -230,7 +231,7 @@ this version of the function available like so:</div>
                     lights[j+SPOT_DIR]
                 );
                 fragColor = (
-                    fragColor 
+                    fragColor
                     + (lights[j+AMBIENT] * material.ambient * weights.x)
                     + (lights[j+DIFFUSE] * material.diffuse * weights.y)
                     + (lights[j+SPECULAR] * material.specular * weights.z)
@@ -241,11 +242,11 @@ this version of the function available like so:</div>
         """, GL_FRAGMENT_SHADER)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our uniform/geometry handling code is unchanged.</div>
+	<div class="paragraph indent-level-0">Our uniform/geometry handling code is unchanged.</div>
 </div>
-	<div class="code-sample">        self.shader = compileProgram(vertex,fragment)
-        self.coords,self.indices,self.count = Sphere( 
-            radius = 1 
+	<div class="code-sample">        self.shader = shaders.compileProgram(vertex,fragment)
+        self.coords,self.indices,self.count = Sphere(
+            radius = 1
         ).compile()
         self.uniform_locations = {}
         for uniform,value in self.UNIFORM_VALUES:
@@ -253,8 +254,8 @@ this version of the function available like so:</div>
             if location in (None,-1):
                 print 'Warning, no uniform: %s'%( uniform )
             self.uniform_locations[uniform] = location
-        self.uniform_locations['lights'] = glGetUniformLocation( 
-            self.shader, 'lights' 
+        self.uniform_locations['lights'] = glGetUniformLocation(
+            self.shader, 'lights'
         )
         for attribute in (
             'Vertex_position','Vertex_normal',
@@ -265,7 +266,7 @@ this version of the function available like so:</div>
             setattr( self, attribute+ '_loc', location )
 </div>
 	<div class="commentary">
-	<div class="paragraph">We'll dial down the shininess on our material a little so that 
+	<div class="paragraph indent-level-0">We'll dial down the shininess on our material a little so that
     it's easier to see the spotlight cones on the sphere.</div>
 </div>
 	<div class="code-sample">    UNIFORM_VALUES = [
@@ -277,11 +278,11 @@ this version of the function available like so:</div>
     ]
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our lights array now has more fields per light.  The spotlight 
-    vectors always have to be present, even if we are not using them 
-    for a particular light.  We're going to define 3 lights here with 
-    fairly high "spotiness" values so that we can see the focussed 
-    beam effect on the sphere.  The spot exponents in this case tend to 
+	<div class="paragraph indent-level-0">Our lights array now has more fields per light.  The spotlight
+    vectors always have to be present, even if we are not using them
+    for a particular light.  We're going to define 3 lights here with
+    fairly high "spotiness" values so that we can see the focussed
+    beam effect on the sphere.  The spot exponents in this case tend to
     cause an area in the center of the beam to saturate completely.
 </div>
 </div>
@@ -312,7 +313,7 @@ this version of the function available like so:</div>
     ], 'f')
 </div>
 	<div class="commentary">
-	<div class="paragraph">Nothing else needs to change from the previous tutorial.</div>
+	<div class="paragraph indent-level-0">Nothing else needs to change from the previous tutorial.</div>
 </div>
 	<div class="code-sample">    def Render( self, mode = None):
         """Render the geometry for the scene."""
@@ -325,7 +326,7 @@ this version of the function available like so:</div>
             self.indices.bind()
             stride = self.coords.data[0].nbytes
             try:
-                glUniform4fv( 
+                glUniform4fv(
                     self.uniform_locations['lights'],
                     self.LIGHT_COUNT * self.LIGHT_SIZE,
                     self.LIGHTS
@@ -341,12 +342,12 @@ this version of the function available like so:</div>
                             glUniform1f( location, *value )
                 glEnableVertexAttribArray( self.Vertex_position_loc )
                 glEnableVertexAttribArray( self.Vertex_normal_loc )
-                glVertexAttribPointer( 
-                    self.Vertex_position_loc, 
+                glVertexAttribPointer(
+                    self.Vertex_position_loc,
                     3, GL_FLOAT,False, stride, self.coords
                 )
-                glVertexAttribPointer( 
-                    self.Vertex_normal_loc, 
+                glVertexAttribPointer(
+                    self.Vertex_normal_loc,
                     3, GL_FLOAT,False, stride, self.coords+(5*4)
                 )
                 glDrawElements(
@@ -364,18 +365,18 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph">We've now built a fairly complete per-pixel Phong renderer.  As an 
-exercise, you may wish to modify the spotlight equations above to match 
+	<div class="paragraph indent-level-0">We've now built a fairly complete per-pixel Phong renderer.  As an
+exercise, you may wish to modify the spotlight equations above to match
 the legacy OpenGL mechanism.</div>
-	<div class="paragraph">Further reading:</div>
-	<div class="paragraph">The 
-	<a href="http://www.lighthouse3d.com/opengl/glsl/index.php?lights" class="">Lighthouse GLSL Lighting Tutorial</a>
-	 uses legacy entry points for 
+	<div class="paragraph indent-level-0">Further reading:</div>
+	<div class="paragraph indent-level-4">The
+	<a class="" href="http://www.lighthouse3d.com/opengl/glsl/index.php?lights">Lighthouse GLSL Lighting Tutorial</a>
+	 uses legacy entry points for
 geometry and tries to precisely reproduce the legacy pipeline.
 The OpenGL Shading Language (Orange Book) Chapter 9 -- Emulating OpenGL Fixed Functionality
 </div>
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the shader_10.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the shader_10.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -388,12 +389,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>

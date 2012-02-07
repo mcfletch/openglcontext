@@ -1,12 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
+
+<!-- dumbmarkup support -->
+
 <head>
-    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
-<title>Introduction to Shaders: Point Lights</title>
-    <link href="./tutorial.css" type="text/css" rel="stylesheet" />
+    <link rel="stylesheet" type="text/css" media="screen" href="manpage.css" />
+    <title>Introduction to Shaders: Point Lights</title><link rel="stylesheet" href="./tutorial.css" type="text/css" />
 </head>
 <body>
+  <div id="content">
 <table width="100%" class="navtable"><thead>
 	<tr>
 		<td width="8em;"></td><th align="center"><a href="index.xhtml">OpenGLContext Python tutorials</a></th><td width="8em;"></td>
@@ -20,22 +21,22 @@
 	<div class="code-sample">#! /usr/bin/env python
 </div>
 	<div class="commentary">
-	<h1 class="title">Point Lights</h1>
-	<div class="paragraph">
-	<img src="shader_9.py-screen-0001.png" alt="Screenshot" class=" wiki" />
+	<h1 class="title indent-level-0">Point Lights</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="shader_9.py-screen-0001.png" alt="Screenshot" />
 </div>
-	<div class="paragraph">This tutorial builds on earlier tutorials by adding:</div>
-	<ul class="">
+	<div class="paragraph indent-level-0">This tutorial builds on earlier tutorials by adding:</div>
+	<ul class=" indent-level-4">
 	<li class="">Point Light Sources (PointLights)</li>
 	<li class="">Per-vertex angle/direction calculations</li>
 	<li class="">Per-vertex attenuation (light fall-off) calculations</li>
 </ul>
-	<div class="paragraph">This tutorial includes rather a lot of changes to our shaders.
+	<div class="paragraph indent-level-0">This tutorial includes rather a lot of changes to our shaders.
 We are going to make the shaders capable of rendering either a
-directional light source (as we've been doing) or a point light 
-source (such as an unshielded lightbulb).  The Point Light 
-source is also going to support "attenuation", which is the 
-natural effect where the intensity of a light falls off over 
+directional light source (as we've been doing) or a point light
+source (such as an unshielded lightbulb).  The Point Light
+source is also going to support "attenuation", which is the
+natural effect where the intensity of a light falls off over
 distance due to the spreading of the light rays.
 </div>
 </div>
@@ -44,7 +45,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
-from OpenGL.GL.shaders import *
+from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
@@ -55,13 +56,13 @@ class TestContext( BaseContext ):
         """Initialize the context"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our common light-model declarations are getting slightly 
-        more involved.  We're adding a single field to the light 
-        "structure", the attenuation field.  This is a 4-item vector 
-        where the first item is a constant attenuation factor, the 
-        second is a linear attenuation factor, and the third a quadratic 
-        attenuation factor.  The fourth item is ignored, but we are 
-        using an array of vec4s for the light parameters, so it is 
+	<div class="paragraph indent-level-0">Our common light-model declarations are getting slightly
+        more involved.  We're adding a single field to the light
+        "structure", the attenuation field.  This is a 4-item vector
+        where the first item is a constant attenuation factor, the
+        second is a linear attenuation factor, and the third a quadratic
+        attenuation factor.  The fourth item is ignored, but we are
+        using an array of vec4s for the light parameters, so it is
         easiest to just ignore the w value.
 </div>
 </div>
@@ -75,46 +76,46 @@ class TestContext( BaseContext ):
         const int ATTENUATION = 4;
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
         varying vec3 EC_Light_half[LIGHT_COUNT];
-        varying vec3 EC_Light_location[LIGHT_COUNT]; 
-        varying float Light_distance[LIGHT_COUNT]; 
+        varying vec3 EC_Light_location[LIGHT_COUNT];
+        varying float Light_distance[LIGHT_COUNT];
         varying vec3 baseNormal;
         """%( self.LIGHT_COUNT, self.LIGHT_SIZE )
 </div>
 	<div class="commentary">
-	<h1 class="title">Lighting Attenuation</h1>
-	<div class="paragraph">For the first time in many tutorials we're altering out 
+	<h1 class="title indent-level-0">Lighting Attenuation</h1>
+	<div class="paragraph indent-level-8">For the first time in many tutorials we're altering out
 lighting calculation.  We're adding 2 inputs to the function,
 the first is the distance from the fragment to the light,
 the second is the attenuation vector for the in-process light.
-We are also going to return one extra value, the ambient-light 
-multiplier for this light.  For our directional lights this 
-was always 1.0, but now our light's ambient contribution can 
+We are also going to return one extra value, the ambient-light
+multiplier for this light.  For our directional lights this
+was always 1.0, but now our light's ambient contribution can
 be controlled by attenuation.</div>
-	<div class="paragraph">The core calculation for attenuation looks like this:
+	<div class="paragraph indent-level-8">The core calculation for attenuation looks like this:
 </div>
 </div>
 	<div class="code-sample">        """attenuation = clamp(
             0.0,
             1.0,
             1.0 / (
-                attenuations.x + 
+                attenuations.x +
                 (attenuations.y * distance) +
                 (attenuations.z * distance * distance)
             )
         );"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">The default attenuation for legacy OpenGL was
+	<div class="paragraph indent-level-0">The default attenuation for legacy OpenGL was
         (1.0, 0.0, 0.0), which is to say, no attenuation at all.
         The attenuation values are not particularly "human friendly",
-        but they give you some control over the distance at which 
+        but they give you some control over the distance at which
         lights cause effects.  Keep in mind when using attenuation
         coefficients that smaller values mean the light goes farther,
         so a coefficient of .5 is "brighter" than a coefficient of 1.0.
 </div>
 </div>
 	<div class="code-sample">        phong_weightCalc = """
-        vec3 phong_weightCalc( 
+        vec3 phong_weightCalc(
             in vec3 light_pos, // light position/direction
             in vec3 half_light, // half-way vector between light and view
             in vec3 frag_normal, // geometry normal
@@ -123,16 +124,16 @@ be controlled by attenuation.</div>
             in vec4 attenuations // attenuation parameters...
         ) {
             // returns vec3( ambientMult, diffuseMult, specularMult )
-            float n_dot_pos = max( 0.0, dot( 
+            float n_dot_pos = max( 0.0, dot(
                 frag_normal, light_pos
             ));
             float n_dot_half = 0.0;
             float attenuation = 1.0;
-            if (n_dot_pos > -.05) {
+            if (n_dot_pos &gt; -.05) {
                 n_dot_half = pow(
-                    max(0.0,dot( 
+                    max(0.0,dot(
                         half_light, frag_normal
-                    )), 
+                    )),
                     shininess
                 );
                 if (distance != 0.0) {
@@ -140,7 +141,7 @@ be controlled by attenuation.</div>
                         0.0,
                         1.0,
                         1.0 / (
-                            attenuations.x + 
+                            attenuations.x +
                             (attenuations.y * distance) +
                             (attenuations.z * distance * distance)
                         )
@@ -154,49 +155,49 @@ be controlled by attenuation.</div>
         """
 </div>
 	<div class="commentary">
-	<h1 class="title">Calculating Distance and Direction</h1>
-	<div class="paragraph">Our new lights are "point sources", that is, they have a 
+	<h1 class="title indent-level-0">Calculating Distance and Direction</h1>
+	<div class="paragraph indent-level-8">Our new lights are "point sources", that is, they have a
 model-space location which is not at "infinite distance".
-Because of this, unlike "directional lights", we have to 
-recalculate the light position/location/direction vector 
-for each fragment.  We also need to know the distance of 
+Because of this, unlike "directional lights", we have to
+recalculate the light position/location/direction vector
+for each fragment.  We also need to know the distance of
 the light from each fragment.</div>
-	<div class="paragraph">While we could perform those calculations in the fragment 
-shader, the vectors and distances we need vary smoothly 
-across the triangles involved, so we'll calculate them at 
+	<div class="paragraph indent-level-8">While we could perform those calculations in the fragment
+shader, the vectors and distances we need vary smoothly
+across the triangles involved, so we'll calculate them at
 each vertex and allow the hardware to interpolate them.
-We'll have to normalize the interpolated values, but this 
-is less processor intensive than doing the calculations 
+We'll have to normalize the interpolated values, but this
+is less processor intensive than doing the calculations
 for each fragment.</div>
-	<div class="paragraph">We are doing our vector calculations for the light location
-and distance in model-space.  You could do them in view-space 
+	<div class="paragraph indent-level-8">We are doing our vector calculations for the light location
+and distance in model-space.  You could do them in view-space
 as well.</div>
-	<div class="paragraph">Our vertex calculations are getting complex enough that we're 
-going to split them into a separate function for readability and 
-(eventual) reusability.  We'll create a function which encodes the 
-algorithmic operation (phong_preCalc) and another which takes our 
-particular attributes/uniforms and accumulates the results from 
+	<div class="paragraph indent-level-8">Our vertex calculations are getting complex enough that we're
+going to split them into a separate function for readability and
+(eventual) reusability.  We'll create a function which encodes the
+algorithmic operation (phong_preCalc) and another which takes our
+particular attributes/uniforms and accumulates the results from
 that function.</div>
-	<div class="paragraph">We're defining phong_preCalc inline here, but we'll also store it 
+	<div class="paragraph indent-level-8">We're defining phong_preCalc inline here, but we'll also store it
 as a resource we can use from anywhere:</div>
-	<div class="paragraph">from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
+	<div class="paragraph indent-level-12">from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
 </div>
 </div>
 	<div class="code-sample">        phong_preCalc = """
         // Vertex-shader pre-calculation for lighting...
-        void phong_preCalc( 
+        void phong_preCalc(
             in vec3 vertex_position,
             in vec4 light_position,
             out float light_distance,
             out vec3 ec_light_location,
             out vec3 ec_light_half
         ) {
-            // This is the core setup for a phong lighting pass 
+            // This is the core setup for a phong lighting pass
             // as a reusable fragment of code.
             // vertex_position -- un-transformed vertex position (world-space)
             // light_position -- un-transformed light location (direction)
-            // light_distance -- output giving world-space distance-to-light 
-            // ec_light_location -- output giving location of light in eye coords 
+            // light_distance -- output giving world-space distance-to-light
+            // ec_light_location -- output giving location of light in eye coords
             // ec_light_half -- output giving the half-vector optimization
             if (light_position.w == 0.0) {
                 // directional rather than positional light...
@@ -206,8 +207,8 @@ as a resource we can use from anywhere:</div>
                 );
                 light_distance = 0.0;
             } else {
-                // positional light, we calculate distance in 
-                // model-view space here, so we take a partial 
+                // positional light, we calculate distance in
+                // model-view space here, so we take a partial
                 // solution...
                 vec3 ms_vec = (
                     light_position.xyz -
@@ -217,21 +218,21 @@ as a resource we can use from anywhere:</div>
                 ec_light_location = normalize( light_direction );
                 light_distance = abs(length( ms_vec ));
             }
-            // half-vector calculation 
+            // half-vector calculation
             ec_light_half = normalize(
                 ec_light_location + vec3( 0,0,1 )
             );
         }"""
 </div>
 	<div class="commentary">
-	<div class="paragraph">This function is not as generally reusable, so we'll store it 
+	<div class="paragraph indent-level-0">This function is not as generally reusable, so we'll store it
         to a separate file named '_shader_tut_lightprecalc.vert'.</div>
 </div>
 	<div class="code-sample">        light_preCalc = """
         void light_preCalc( in vec3 vertex_position ) {
-            // This function is dependent on the uniforms and 
-            // varying values we've been using, it basically 
-            // just iterates over the phong_lightCalc passing in 
+            // This function is dependent on the uniforms and
+            // varying values we've been using, it basically
+            // just iterates over the phong_lightCalc passing in
             // the appropriate pointers...
             vec3 light_direction;
             for (int i = 0; i&lt; LIGHT_COUNT; i++ ) {
@@ -247,13 +248,13 @@ as a resource we can use from anywhere:</div>
             }
         }
         """
-        vertex = compileShader( 
+        vertex = shaders.compileShader(
             lightConst + phong_preCalc + light_preCalc +
         """
         attribute vec3 Vertex_position;
         attribute vec3 Vertex_normal;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+            gl_Position = gl_ModelViewProjectionMatrix * vec4(
                 Vertex_position, 1.0
             );
             baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
@@ -261,17 +262,17 @@ as a resource we can use from anywhere:</div>
         }""", GL_VERTEX_SHADER)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our fragment shader is only slightly modified to use our 
-        new phong_weightCalc function.  We need a larger "weights" variable and 
-        need to pass in more information.  We also need to multiply 
+	<div class="paragraph indent-level-0">Our fragment shader is only slightly modified to use our
+        new phong_weightCalc function.  We need a larger "weights" variable and
+        need to pass in more information.  We also need to multiply
         the per-light ambient value by the new weight we've added.</div>
-	<div class="paragraph">You will also notice that since we are using the 'i' variable 
-to directly index the varying arrays, we've introduced a 'j' 
-variable that tracks the offset into the light array which 
+	<div class="paragraph indent-level-8">You will also notice that since we are using the 'i' variable
+to directly index the varying arrays, we've introduced a 'j'
+variable that tracks the offset into the light array which
 begins the current light.
 </div>
 </div>
-	<div class="code-sample">        fragment = compileShader( 
+	<div class="code-sample">        fragment = shaders.compileShader(
             lightConst + phong_weightCalc + """
         struct Material {
             vec4 ambient;
@@ -297,7 +298,7 @@ begins the current light.
                     lights[j+ATTENUATION]
                 );
                 fragColor = (
-                    fragColor 
+                    fragColor
                     + (lights[j+AMBIENT] * material.ambient * weights.x)
                     + (lights[j+DIFFUSE] * material.diffuse * weights.y)
                     + (lights[j+SPECULAR] * material.specular * weights.z)
@@ -309,11 +310,11 @@ begins the current light.
         """, GL_FRAGMENT_SHADER)
 </div>
 	<div class="commentary">
-	<div class="paragraph">Our general uniform setup should look familiar by now.</div>
+	<div class="paragraph indent-level-0">Our general uniform setup should look familiar by now.</div>
 </div>
-	<div class="code-sample">        self.shader = compileProgram(vertex,fragment)
-        self.coords,self.indices,self.count = Sphere( 
-            radius = 1 
+	<div class="code-sample">        self.shader = shaders.compileProgram(vertex,fragment)
+        self.coords,self.indices,self.count = Sphere(
+            radius = 1
         ).compile()
         self.uniform_locations = {}
         for uniform,value in self.UNIFORM_VALUES:
@@ -321,8 +322,8 @@ begins the current light.
             if location in (None,-1):
                 print 'Warning, no uniform: %s'%( uniform )
             self.uniform_locations[uniform] = location
-        self.uniform_locations['lights'] = glGetUniformLocation( 
-            self.shader, 'lights' 
+        self.uniform_locations['lights'] = glGetUniformLocation(
+            self.shader, 'lights'
         )
         for attribute in (
             'Vertex_position','Vertex_normal',
@@ -340,7 +341,7 @@ begins the current light.
     ]
 </div>
 	<div class="commentary">
-	<div class="paragraph">We've created 3 equal-distance lights here, in red, green and 
+	<div class="paragraph indent-level-0">We've created 3 equal-distance lights here, in red, green and
     blue.  The green light uses linear attenuation, the red quadratic
     and the blue constant.
 </div>
@@ -377,10 +378,10 @@ begins the current light.
             try:
 </div>
 	<div class="commentary">
-	<div class="paragraph">Again, we're using the parameterized light size/count 
+	<div class="paragraph indent-level-0">Again, we're using the parameterized light size/count
                 to pass in the array.</div>
 </div>
-	<div class="code-sample">                glUniform4fv( 
+	<div class="code-sample">                glUniform4fv(
                     self.uniform_locations['lights'],
                     self.LIGHT_COUNT * self.LIGHT_SIZE,
                     self.LIGHTS
@@ -396,12 +397,12 @@ begins the current light.
                             glUniform1f( location, *value )
                 glEnableVertexAttribArray( self.Vertex_position_loc )
                 glEnableVertexAttribArray( self.Vertex_normal_loc )
-                glVertexAttribPointer( 
-                    self.Vertex_position_loc, 
+                glVertexAttribPointer(
+                    self.Vertex_position_loc,
                     3, GL_FLOAT,False, stride, self.coords
                 )
-                glVertexAttribPointer( 
-                    self.Vertex_normal_loc, 
+                glVertexAttribPointer(
+                    self.Vertex_normal_loc,
                     3, GL_FLOAT,False, stride, self.coords+(5*4)
                 )
                 glDrawElements(
@@ -419,10 +420,10 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph">There is only one light-type missing from the legacy OpenGL 
+	<div class="paragraph indent-level-0">There is only one light-type missing from the legacy OpenGL
 lighting model, that's the topic of our next tutorial.</div>
 </div>
-<div class="source-reference">This code-walkthrough tutorial is generated from the shader_9.py script in the 
+<div class="source-reference">This code-walkthrough tutorial is generated from the shader_9.py script in the
 OpenGLContext source distribution.</div>
 <table width="100%" class="navtable"><thead>
 	<tr>
@@ -435,12 +436,14 @@ OpenGLContext source distribution.</div>
 	</tr>
 	<tr class="meta-links">
 		<td colspan="3">
-		<a href="../documentation.html"><img src="../images/doc_icon.gif" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a> 
-		<a href="http://pyopengl.sourceforge.net/"><img src="../images/pyopengl_icon.jpg" alt="PyOpenGL" style="border: 0px solid ; width: 32px; height: 32px;" title="" /></a>
+		<a href="../documentation.html"><img src="../images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/context/"><img src="../images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
+		<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="../images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" /></a>
 		<a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" /></a>
 		</td>
 	</tr>
 </thead></table>
+    <!-- End of content -->
+  </div>
 </body>
 </html>
