@@ -35,10 +35,19 @@ Linux platforms with a recent build, so you may wish to use the
 platform build.
 
 To set up the packages on a Linux Machine using virtualenv:'''
-"""virtualenv tutorial 
-cd tutorial
-source bin/activate 
-easy_install  OpenGLContext-full"""
+"""apt-get install python-virtualenv python-numpy python-imaging
+# for virtualenv >= 1.7 the --system-site-packages is required to 
+# include the system-level packages...
+virtualenv --sytem-site-packages tutorial 
+virtualenv tutorial # older virtualenvs
+source tutorial/bin/activate 
+# The -I flag ensures we are installed in this virtualenv
+pip install -I http://sourceforge.net/projects/fonttools/files/2.3/fonttools-2.3.tar.gz/download
+pip install -I TTFQuery PyOpenGL PyOpenGL-accelerate 
+pip install -I pydispatcher PyVRML97 PyVRML97-accelerate
+pip install -I simpleparse
+pip install -I OpenGLContext
+"""
 '''You'll need to have GLUT, GLE and the like installed via your 
 system's package manager.  See the OpenGLContext installation notes 
 for details.
