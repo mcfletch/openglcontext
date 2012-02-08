@@ -5,7 +5,7 @@
 #OpenGL.FULL_LOGGING = True 
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, box, scenegraph,light
+from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 import string, time
@@ -46,21 +46,22 @@ class TestContext( BaseContext ):
         self.addEventHandler(
             'keypress', name = 's', function = self.OnSizeSwitch
         )
-        self.shape = shape.Shape(
-            geometry = box.Box( size=sizes[0] ),
-            appearance = appearance.Appearance(
-                material =material.Material(
+        self.shape = Shape(
+            geometry = Box( size=sizes[0] ),
+            appearance = Appearance(
+                material = Material(
                     diffuseColor =(1,1,1)
                 ),
-                texture = imagetexture.ImageTexture(
+                texture = ImageTexture(
                     url = [images[0]]
                 ),
             ),
         )
-        self.sg = scenegraph.SceneGraph(
+        self.sg = sceneGraph(
             children = [ 
                 self.shape, 
-#				light.PointLight( location=(4,4,8)), 
+                PointLight( location=(4,4,8)), 
+                SimpleBackground( color = (.3,.3,.5) ),
             ],
         )
     def OnImageSwitch( self, event=None ):

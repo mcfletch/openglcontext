@@ -14,8 +14,11 @@ class TestContext( BaseContext ):
         self.sg = sceneGraph(
             children = [
                 Shape(
-                    geometry = Box (),
-                    appearance = Appearance( material=Material()),
+                    geometry = Teapot(),
+                    appearance = Appearance( material=Material(
+                        diffuseColor=(1,0,0),
+                        specularColor=(0,1,0),
+                    )),
                 ),
                 CubeBackground(
                     backUrl = "pimbackground_BK.jpg",

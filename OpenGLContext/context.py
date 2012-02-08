@@ -956,6 +956,8 @@ class _ContextRenderNode( nodetypes.Rendering, nodetypes.Children, node.Node ):
     def Render( self, mode ):
         """Delegate rendering to the mode.context.Render method"""
         return mode.context.Render( mode )
+    def sortKey( self, passes, matrix ):
+        return (0,None)
 ContextRenderNode = _ContextRenderNode()
 
 def getCurrentContext( ):

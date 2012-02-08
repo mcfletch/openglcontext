@@ -161,10 +161,22 @@ class ViewPlatform(object):
         rotate = self.quaternion.matrix()
         # inverse of translation matrix...
         translate = transformmatrix.transMatrix(self.position)[1]
-        return dot( translate,rotate )
+        if rotate is not None and translate is not None:
+            return dot( translate,rotate )
+        elif rotate is None:
+            return translate
+        else:
+            return rotate
     def matrix( self ):
         """Calculate total model-view matrix for this view platform"""
-        return dot( self.modelMatrix(), self.viewMatrix())
+        model = self.modelMatrix()
+        view = self.viewMatrix()
+        if model is not None and view is not None:
+            return dot( model, view )
+        elif model is None:
+            return view 
+        else:
+            return model
 
     def getNearFar( self ):
         """Return the near and far frustum depths

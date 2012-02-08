@@ -44,8 +44,7 @@ source tutorial/bin/activate
 # The -I flag ensures we are installed in this virtualenv
 pip install -I http://sourceforge.net/projects/fonttools/files/2.3/fonttools-2.3.tar.gz/download
 pip install -I TTFQuery PyOpenGL PyOpenGL-accelerate 
-pip install -I pydispatcher PyVRML97 PyVRML97-accelerate
-pip install -I simpleparse
+pip install -I pydispatcher PyVRML97 PyVRML97-accelerate simpleparse
 pip install -I OpenGLContext
 """
 '''You'll need to have GLUT, GLE and the like installed via your 
@@ -54,7 +53,7 @@ for details.
 
 == System Requirements ==
 
-This tutorial requires a very modern OpenGL implementation.  Your 
+This tutorial requires a modern OpenGL implementation.  Your 
 card/driver should likely support OpenGL 2.x natively, though 
 OpenGL 1.5+ extensions may work.
 

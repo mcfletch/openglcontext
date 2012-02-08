@@ -41,9 +41,11 @@ class TestContext( BaseContext ):
     scale = 400.0
     def OnInit( self ):
         self.tess = polygontessellator.PolygonTessellator()
+        glEnable( GL_COLOR_MATERIAL )
         
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
+        glDisable( GL_LIGHTING )
         self.renderCap( self.scale )
 
     def renderCap( self, scale = 400.0):
@@ -54,12 +56,8 @@ class TestContext( BaseContext ):
         ]
         vertices.reverse()
         for type, vertices in self.tess.tessellate( vertices, forceTriangles=0 ):
-#			print ' geometry type %s, %s vertices (GL_TRIANGLES=%s GL_TRIANGLE_FAN=%s GL_TRIANGLE_STRIP=%s)'%(
-#				type,
-#				len(vertices),
-#				GL_TRIANGLES, GL_TRIANGLE_FAN, GL_TRIANGLE_STRIP
-#			)
             glNormal( 0,0,-1 )
+            glColor3f( 1,0,0 )
             glBegin( type )
             for v in vertices:
                 glVertex2dv( v.point[:2] )

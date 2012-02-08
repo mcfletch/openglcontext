@@ -856,10 +856,11 @@ class _defaultRenderPasses( object ):
             if USE_FLAT:
                 from OpenGLContext.passes.flat import FlatPass
                 sg = context.getSceneGraph()
-                if sg is not None:
-                    FLAT = FlatPass( context.getSceneGraph(), context.allContexts )
-                else:
-                    return visitingDefaultRenderPasses( context )
+                FLAT = FlatPass( context.getSceneGraph(), context.allContexts )
+                if sg is None:
+                    FLAT.integrate( context.renderedChildren()[0] )
+#                else:
+#                    return visitingDefaultRenderPasses( context )
             else:
                 return visitingDefaultRenderPasses( context )
             log.warn( 'Using Flat/Legacy-reduced renderer' )

@@ -67,9 +67,10 @@ class TestContext( BaseContext ):
         glLightfv( GL_LIGHT1, GL_AMBIENT, GLfloat_4(0.2, .2, .2, 1.0) );
         glLightfv(GL_LIGHT1, GL_DIFFUSE, GLfloat_3(.8,.8,.8));
         glLightfv(GL_LIGHT1, GL_POSITION, GLfloat_4(-2,0,3,1) );
-        
-    def Lights (self, mode = 0):
-        '''Setup the global lights for your scene'''
+
+    def Render( self, mode):
+        BaseContext.Render( self, mode )
+        '''As previously, we want to override the default lighting behaviour.'''
         if self.lightsOn:
             glEnable( GL_LIGHTING )
             glEnable(GL_LIGHT1);
@@ -78,21 +79,6 @@ class TestContext( BaseContext ):
             glDisable( GL_LIGHTING )
             glDisable(GL_LIGHT1);
             glDisable(GL_LIGHT0);
-    '''New customization point: Background
-
-    Background, like Lights is called by the default
-    RenderMode.SetupBindables method. It is used here
-    because the blending mode used by the tutorial
-    will not work unless the background is black.
-    '''
-    def Background( self, mode):
-        """Demo's use of GL_ONE assumes that background is black"""
-        if mode.passCount == 0:
-            glClearColor(0,0,0,0)
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
-
-    def Render( self, mode):
-        BaseContext.Render( self, mode )
         glTranslatef(1.5,0.0,self.currentZOffset);
         '''We don't want to filter out back-facing faces'''
         glDisable( GL_CULL_FACE )

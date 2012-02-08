@@ -26,9 +26,6 @@ sizes = [
 class TestContext( BaseContext ):
     currentImage = 0
     currentSize = 0
-    def Render( self, mode = 0):
-        BaseContext.Render( self, mode )
-        self.shape.Render( mode )
     def OnInit( self ):
         """Scene set up and initial processing"""
         print """You should see an elongated box over a white background
@@ -43,7 +40,7 @@ class TestContext( BaseContext ):
         self.addEventHandler(
             'keypress', name = 's', function = self.OnSizeSwitch
         )
-        self.shape = Shape(
+        self.sg = self.shape = Shape(
             geometry = Cylinder( ),
             appearance = Appearance(
                 material = Material(

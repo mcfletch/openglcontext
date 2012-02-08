@@ -54,6 +54,8 @@ from OpenGLContext.arrays import (
 )
 from OpenGLContext.events.timer import Timer
 
+from OpenGLContext.passes import flat
+
 class TestContext( BaseContext ):
     """Shadow rendering tutorial code"""
     '''We're going to get up nice and close to our geometry in the
@@ -82,6 +84,9 @@ class TestContext( BaseContext ):
         later tutorials to subclass and provide more interesting scenes.
         '''
         self.geometry = self.createGeometry()
+        '''We'll use OpenGLContext's rendering passes to render the geometry 
+        each time we need to do so...'''
+        self.geometryPasses = flat.FlatPass(self.geometry,self)
         '''To make the demo a little more interesting, we're going to
         animate the first light's position and direction.  Here we're setting
         up a raw Timer object.  OpenGLContext scenegraph timers can't be used
@@ -262,16 +267,16 @@ class TestContext( BaseContext ):
         else:
             '''If we are *not* doing the shadowed opaque rendering pass,
             just visit the "scenegraph" with our mode.'''
-            self.drawScene( mode )
+            self.drawScene( mode, mode.getModelView() )
     '''Let's get the simple part out of the way first; drawing the geometry.
     OpenGLContext has two different rendering engines.  One is an
     optimized "Flat" renderer, and the other is a hierarchic "traversing"
     renderer which uses a visitor pattern to traverse the scenegraph for
     each pass.  For our purposes, this slower traversing renderer is
     sufficient, and is easily invoked.'''
-    def drawScene( self, mode ):
+    def drawScene( self, mode, matrix ):
         """Draw our scene at current animation point"""
-        mode.visit( self.geometry )
+        self.geometryPasses.renderGeometry( matrix )
 
     '''=Rendering Light Depth Texture=
 
@@ -372,6 +377,12 @@ class TestContext( BaseContext ):
         glLoadMatrixf( lightView )
         glMatrixMode( GL_MODELVIEW )
         glLoadMatrixf( lightModel )
+        self.geometryPasses.modelView = lightModel 
+        self.geometryPasses.projection = lightView
+        self.geometryPasses.viewport = mode.viewport
+        self.geometryPasses.frustum = mode.frustum
+        self.geometryPasses.context = self
+        self.geometryPasses.cache = mode.cache
         try:
             '''Because we *only* care about the depth buffer, we can mask
             out the color buffer entirely. We can use frustum-culling
@@ -389,9 +400,9 @@ class TestContext( BaseContext ):
             '''We reconfigure the mode to tell the geometry to optimize its
             rendering process, for instance by disabling normal
             generation, and excluding color and texture information.'''
-            mode.lighting = False
-            mode.textured = False
-            mode.visible = False
+            self.geometryPasses.lighting = False
+            self.geometryPasses.textured = False
+            self.geometryPasses.visible = False
             '''==Offset Polygons to avoid Artefacts==
 
             We want to avoid depth-buffer artefacts where the front-face
@@ -421,7 +432,7 @@ class TestContext( BaseContext ):
             glCullFace(GL_FRONT)
             glEnable( GL_CULL_FACE )
             '''And now we draw our scene into the depth-buffer.'''
-            self.drawScene( mode )
+            self.drawScene( mode, lightModel )
             '''Our closeShadowContext will copy the current depth buffer
             into our depth texture and deactivate the texture.'''
             self.closeShadowContext( texture )
@@ -545,11 +556,12 @@ class TestContext( BaseContext ):
         mode.lightingAmbient = True
         mode.lightingDiffuse = False
         mode.textured = True
+        mode.matrix = mode.getModelView()
         '''As with the geometry, the light will respect the mode's
         parameters for lighting.'''
         for i,light in enumerate( self.lights ):
             light.Light( GL_LIGHT0+i, mode=mode )
-        self.drawScene( mode )
+        self.drawScene( mode, mode.matrix )
     '''=Render Diffuse/Specular Lighting Filtered by Shadow Map=
 
     This rendering pass is where the magic of the shadow-texture algorithm
@@ -633,7 +645,7 @@ class TestContext( BaseContext ):
         glAlphaFunc(GL_GEQUAL, .99)
         glEnable(GL_ALPHA_TEST)
         try:
-            return self.drawScene( mode )
+            return self.drawScene( mode, mode.getModelView() )
         finally:
             '''Okay, so now we need to do cleanup and get back to a regular
             rendering mode...'''

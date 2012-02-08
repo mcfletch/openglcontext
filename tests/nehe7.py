@@ -122,13 +122,11 @@ class TestContext( BaseContext ):
         )
         print 'finished mip-mapped'
         return IDs
-    '''Context.Lights is called by the default rendering passes
-    iff there is no scenegraph present.  You can use it to set up 
-    your entire lighting setup, or as here, simply enable the 
-    appropriate pre-configured lights.
-    '''
-    def Lights (self, mode = 0):
-        """Setup the global (legacy) lights"""
+    def Render( self, mode = 0):
+        BaseContext.Render( self, mode )
+        '''The Flat rendering pass (default in this version of OpenGLContext)
+        will have enabled lighting, we want to control this before we do 
+        our rendering.'''
         if self.lightsOn:
             glEnable( GL_LIGHTING )
             glEnable(GL_LIGHT1);
@@ -137,8 +135,6 @@ class TestContext( BaseContext ):
             glDisable( GL_LIGHTING )
             glDisable(GL_LIGHT1);
             glDisable(GL_LIGHT0);
-    def Render( self, mode = 0):
-        BaseContext.Render( self, mode )
         glTranslatef(1.5,0.0,self.currentZOffset);
         glEnable(GL_TEXTURE_2D)
         # re-select our texture, could use other generated textures

@@ -12,8 +12,7 @@ from math import pi
 class TestContext( BaseContext ):
     def OnInit( self ):
         """Scene set up and initial processing"""
-        print """Should see two interlocked gears
-"""
+        print """Should see two interlocked gears"""
 
         g2 = Transform( 
             DEF = 'g2',
@@ -204,6 +203,7 @@ class TestContext( BaseContext ):
             t1 = self.sg.getDEF( name )
             timer = t1.getTimer(self)
             timer.internal.multiplier = self.multiplier
+        self.triggerRedraw(1)
     
 
 if __name__ == "__main__":

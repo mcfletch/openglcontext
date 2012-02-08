@@ -331,6 +331,17 @@ class FlatPass( SGObserver ):
             glLoadMatrixf( matrix )
             l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
+    
+    def renderGeometry( self, mvmatrix ):
+        """Render geometry present in the given mvmatrix
+        
+        Intended for use in e.g. setting up a light texture, this 
+        operation *just* does a query to find the visible objects 
+        and then passes them (all) to renderOpaque
+        """
+        self.matrix = mvmatrix
+        toRender = self.renderSet( mvmatrix )
+        self.renderOpaque( toRender )
 
     def renderOpaque( self, toRender ):
         """Render the opaque geometry from toRender (in reverse order)"""
@@ -346,10 +357,11 @@ class FlatPass( SGObserver ):
                         bvolume.debugRender( )
                 except Exception, err:
                     log.error(
-                        """Failure in %s: %s""",
-                        path[-1].Render,
+                        """Failure in opaque render: %s""",
                         getTraceback( err ),
                     )
+                    import os 
+                    os._exit(1)
     def renderTransparent( self, toRender ):
         """Render the transparent geometry from toRender (in forward order)"""
         self.transparent = True

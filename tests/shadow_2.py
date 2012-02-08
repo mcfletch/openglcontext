@@ -14,7 +14,6 @@ the only change is to add off-screen rendering of the depth-texture
 rather than rendering on the back-buffer of the screen.
 '''
 import OpenGL,sys,os,traceback
-#OpenGL.FULL_LOGGING = True
 '''Import the previous tutorial as BaseContext'''
 from shadow_1 import TestContext as BaseContext
 from OpenGLContext import testingcontext

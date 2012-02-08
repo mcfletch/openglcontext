@@ -67,15 +67,8 @@ class TestContext( BaseContext ):
         print 'Loading scene from embedded VRML97 file'
         self.sg = Loader.loads( scene, 'test.wrl' )
         self.tr = self.sg.getDEF( 'TR' )
-#		self.time = Timer( duration = 128.0, repeating = 1 )
-#		self.time.addEventHandler( "fraction", self.OnTimerFraction )
-#		self.time.register (self)
-#		self.time.start ()
         print 'press <b> to switch backgrounds'
         self.addEventHandler( "keypress", name="b", function = self.OnSwitch)
-#	def OnTimerFraction( self, event ):
-#		"""Update rotation of the background"""
-#		self.tr.rotation = (1,0,0, 2 * pi * event.fraction() )
     def OnSwitch( self, event ):
         switch= self.getSceneGraph().getDEF( 'S' )
         if switch.whichChoice:
