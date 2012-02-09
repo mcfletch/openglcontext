@@ -42,6 +42,7 @@ with alterations to work with OpenGLContext and a few different
 choices with regard to attempts to minimize artefacts in the shadows.
 '''
 import OpenGL
+#OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
@@ -61,9 +62,8 @@ class TestContext( BaseContext ):
     '''We're going to get up nice and close to our geometry in the
     initial view'''
     initialPosition = (.5,1,3)
-    '''If we set lightViewDebug we will display the light's view, rather than 
-    the view from the "camera" of OpenGLContext.'''
-    lightViewDebug = True
+    '''If we set lightViewDebug we will keep the light's view in the context
+    rather than clearing the background before drawing the scene.'''
     lightViewDebug = False
 
     '''=Scene Set Up=
@@ -97,7 +97,7 @@ class TestContext( BaseContext ):
         up a raw Timer object.  OpenGLContext scenegraph timers can't be used
         as we're not using the scenegraph mechanisms.
         '''
-        self.time = Timer( duration = 60.0, repeating = 1 )
+        self.time = Timer( duration = 8.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
         self.time.register (self)
         self.time.start ()
@@ -235,10 +235,8 @@ class TestContext( BaseContext ):
             where we are going to do our shadow-rendering multi-pass.'''
             shadowTokens = [
                 (light,self.renderLightTexture( light, mode ))
-                for light in self.lights
+                for light in self.lights[:self.lightViewDebug or len(self.lights)]
             ]
-            if self.lightViewDebug:
-                return
             '''Since our depth buffer currently has the light's view rendered
             into it, we need to clear it before we render our geometry from the
             camera's viewpoint.'''
@@ -283,8 +281,13 @@ class TestContext( BaseContext ):
     sufficient, and is easily invoked.'''
     def drawScene( self, mode, matrix ):
         """Draw our scene at current animation point"""
-        self.geometryPasses.renderGeometry( matrix )
-        #return self.geometryPasses.visit( self.geometry )
+        glMatrixMode( GL_MODELVIEW )
+        glLoadMatrixf( matrix )
+        glPushMatrix()
+        try:
+            self.geometryPasses.renderGeometry( matrix )
+        finally:
+            glPopMatrix()
 
     '''=Rendering Light Depth Texture=
 
@@ -583,7 +586,7 @@ class TestContext( BaseContext ):
         '''As with the geometry, the light will respect the mode's
         parameters for lighting.'''
         for i,light in enumerate( self.lights ):
-            light.Light( GL_LIGHT0+i, mode=mode )
+            light.Light( GL_LIGHT0+i, mode=self.geometryPasses )
         self.drawScene( mode, mode.getModelView() )
     '''=Render Diffuse/Specular Lighting Filtered by Shadow Map=
 
@@ -620,7 +623,7 @@ class TestContext( BaseContext ):
         
         '''Again, the light looks at the mode parameters to determine how
         to configure itself.'''
-        light.Light( GL_LIGHT0 + id, mode=mode )
+        light.Light( GL_LIGHT0 + id, mode=self.geometryPasses )
         texGenData = [
             (GL_S,GL_TEXTURE_GEN_S,textureMatrix[0]),
             (GL_T,GL_TEXTURE_GEN_T,textureMatrix[1]),

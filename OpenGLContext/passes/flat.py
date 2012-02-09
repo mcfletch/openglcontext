@@ -340,8 +340,8 @@ class FlatPass( SGObserver ):
         and then passes them (all) to renderOpaque
         """
         toRender = self.renderSet( mvmatrix )
-        # TODO: this will not currently render transparent elements...
         self.renderOpaque( toRender )
+        self.renderTransparent( toRender )
 
     def renderOpaque( self, toRender ):
         """Render the opaque geometry from toRender (in reverse order)"""
@@ -350,6 +350,7 @@ class FlatPass( SGObserver ):
         for key,mvmatrix,tmatrix,bvolume,path in toRender:
             if not key[0]:
                 self.matrix = mvmatrix
+                glMatrixMode(GL_MODELVIEW)
                 glLoadMatrixf( mvmatrix )
                 try:
                     path[-1].Render( mode = self )

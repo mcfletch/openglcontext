@@ -236,6 +236,7 @@ class RenderVisitor( visitor.Visitor ):
         At the moment, this just calls node.Render( self )
         """
         assert hasattr( node, "Render"), """Rendering node %s does not have a Render method"""%( self.__class__ )
+        #print 'MV for %s, %s' %( node, glGetFloatv( GL_MODELVIEW_MATRIX ))
         return node.Render( self )
 
     def Transform( self, node ):
