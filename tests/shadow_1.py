@@ -54,13 +54,17 @@ from OpenGLContext.arrays import (
 )
 from OpenGLContext.events.timer import Timer
 
-from OpenGLContext.passes import flat
+from OpenGLContext.passes import flat, renderpass
 
 class TestContext( BaseContext ):
     """Shadow rendering tutorial code"""
     '''We're going to get up nice and close to our geometry in the
     initial view'''
     initialPosition = (.5,1,3)
+    '''If we set lightViewDebug we will display the light's view, rather than 
+    the view from the "camera" of OpenGLContext.'''
+    lightViewDebug = True
+    lightViewDebug = False
 
     '''=Scene Set Up=
 
@@ -87,12 +91,13 @@ class TestContext( BaseContext ):
         '''We'll use OpenGLContext's rendering passes to render the geometry 
         each time we need to do so...'''
         self.geometryPasses = flat.FlatPass(self.geometry,self)
+        #self.geometryPasses = renderpass.defaultRenderPasses
         '''To make the demo a little more interesting, we're going to
         animate the first light's position and direction.  Here we're setting
         up a raw Timer object.  OpenGLContext scenegraph timers can't be used
         as we're not using the scenegraph mechanisms.
         '''
-        self.time = Timer( duration = 8.0, repeating = 1 )
+        self.time = Timer( duration = 60.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
         self.time.register (self)
         self.time.start ()
@@ -232,6 +237,8 @@ class TestContext( BaseContext ):
                 (light,self.renderLightTexture( light, mode ))
                 for light in self.lights
             ]
+            if self.lightViewDebug:
+                return
             '''Since our depth buffer currently has the light's view rendered
             into it, we need to clear it before we render our geometry from the
             camera's viewpoint.'''
@@ -277,6 +284,7 @@ class TestContext( BaseContext ):
     def drawScene( self, mode, matrix ):
         """Draw our scene at current animation point"""
         self.geometryPasses.renderGeometry( matrix )
+        #return self.geometryPasses.visit( self.geometry )
 
     '''=Rendering Light Depth Texture=
 
@@ -361,9 +369,10 @@ class TestContext( BaseContext ):
             A number of fixes to matrix multiply order came from
             comparing results with [http://www.geometrian.com/Programs.php Ian Mallett's OpenGL Library v1.4].
         '''
+        lightMatrix = dot( lightModel, lightView )
         textureMatrix = transpose(
             dot(
-                dot( lightModel, lightView ),
+                lightMatrix,
                 self.BIAS_MATRIX
             )
         )
@@ -377,12 +386,18 @@ class TestContext( BaseContext ):
         glLoadMatrixf( lightView )
         glMatrixMode( GL_MODELVIEW )
         glLoadMatrixf( lightModel )
-        self.geometryPasses.modelView = lightModel 
+        
+        '''Our geometryPasses object needs to have the same setup as the
+        mode (another FlatPass instance) which we are processing.'''
+        self.geometryPasses.matrix = lightModel
+        self.geometryPasses.modelView = lightModel
         self.geometryPasses.projection = lightView
         self.geometryPasses.viewport = mode.viewport
-        self.geometryPasses.frustum = mode.frustum
+        self.geometryPasses.calculateFrustum()
+        
         self.geometryPasses.context = self
         self.geometryPasses.cache = mode.cache
+        
         try:
             '''Because we *only* care about the depth buffer, we can mask
             out the color buffer entirely. We can use frustum-culling
@@ -396,7 +411,8 @@ class TestContext( BaseContext ):
                 regular drawing operations.  A call to glClear() for
                 instance, could still clear the colour buffer.
             '''
-            glColorMask( 0,0,0,0 )
+            if not self.lightViewDebug:
+                glColorMask( 0,0,0,0 )
             '''We reconfigure the mode to tell the geometry to optimize its
             rendering process, for instance by disabling normal
             generation, and excluding color and texture information.'''
@@ -551,17 +567,24 @@ class TestContext( BaseContext ):
         '''Again, we configure the mode to tell the geometry how to
         render itself.  Here we want to have almost everything save
         the diffuse lighting calculations performed.'''
-        mode.visible = True
-        mode.lighting = True
-        mode.lightingAmbient = True
-        mode.lightingDiffuse = False
-        mode.textured = True
-        mode.matrix = mode.getModelView()
+        self.geometryPasses.modelView = self.geometryPasses.matrix = mode.getModelView()
+        self.geometryPasses.projection = mode.getProjection()
+        self.geometryPasses.viewport = mode.viewport
+        self.geometryPasses.frustum = mode.frustum
+        self.geometryPasses.context = self
+        self.geometryPasses.cache = mode.cache
+        
+        self.geometryPasses.visible = True
+        self.geometryPasses.lighting = True
+        self.geometryPasses.lightingAmbient = True
+        self.geometryPasses.lightingDiffuse = False
+        self.geometryPasses.textured = True
+        
         '''As with the geometry, the light will respect the mode's
         parameters for lighting.'''
         for i,light in enumerate( self.lights ):
             light.Light( GL_LIGHT0+i, mode=mode )
-        self.drawScene( mode, mode.matrix )
+        self.drawScene( mode, mode.getModelView() )
     '''=Render Diffuse/Specular Lighting Filtered by Shadow Map=
 
     This rendering pass is where the magic of the shadow-texture algorithm
@@ -570,7 +593,7 @@ class TestContext( BaseContext ):
         * configure the GL to synthesize texture coordinates in
           eye-linear space (the camera's eye coordinate space)
         * load our texture matrix into the "eye planes" of the texture
-          coordinate pipeline, there they server to transform the
+          coordinate pipeline, there they serve to transform the
           texture coordinates into the clip-space coordinates of the
           depth texture
         * configure the GL to generate an "alpha" value by comparing
@@ -592,8 +615,9 @@ class TestContext( BaseContext ):
         but simply re-calculating ambient lighting in this pass is about
         as simple.
         '''
-        mode.lightingAmbient = False
-        mode.lightingDiffuse = True
+        self.geometryPasses.lightingAmbient = False
+        self.geometryPasses.lightingDiffuse = True
+        
         '''Again, the light looks at the mode parameters to determine how
         to configure itself.'''
         light.Light( GL_LIGHT0 + id, mode=mode )

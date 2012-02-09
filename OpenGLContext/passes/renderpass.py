@@ -848,6 +848,7 @@ visitingDefaultRenderPasses = PassSet(
     ],
 )
 USE_FLAT = True
+#USE_FLAT = False
 FLAT = None
 class _defaultRenderPasses( object ):
     def __call__( self,context ):
@@ -859,8 +860,6 @@ class _defaultRenderPasses( object ):
                 FLAT = FlatPass( context.getSceneGraph(), context.allContexts )
                 if sg is None:
                     FLAT.integrate( context.renderedChildren()[0] )
-#                else:
-#                    return visitingDefaultRenderPasses( context )
             else:
                 return visitingDefaultRenderPasses( context )
             log.warn( 'Using Flat/Legacy-reduced renderer' )

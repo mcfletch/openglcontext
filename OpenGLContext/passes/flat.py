@@ -339,8 +339,8 @@ class FlatPass( SGObserver ):
         operation *just* does a query to find the visible objects 
         and then passes them (all) to renderOpaque
         """
-        self.matrix = mvmatrix
         toRender = self.renderSet( mvmatrix )
+        # TODO: this will not currently render transparent elements...
         self.renderOpaque( toRender )
 
     def renderOpaque( self, toRender ):
@@ -498,17 +498,22 @@ class FlatPass( SGObserver ):
         self.projection = vp.viewMatrix().astype('f')
         self.viewport = (0,0) + context.getViewPort()
         self.modelView = vp.modelMatrix().astype('f')
-        # TODO: calculate from view platform instead
-        self.frustum = frustum.Frustum.fromViewingMatrix(
-            dot(self.modelView,self.projection),
-            normalize = 1
-        )
+        self.calculateFrustum()
 
         # We're here setting up legacy OpenGL settings
         # eventually these will be uniform setups...
         self.Render( context, self )
         return True # flip yes, for now we always flip...
 
+    def calculateFrustum( self ):
+        """Construct our Frustum instance (currently by extracting from mv matrix)"""
+        # TODO: calculate from view platform instead
+        self.frustum = frustum.Frustum.fromViewingMatrix(
+            dot(self.modelView,self.projection),
+            normalize = 1
+        )
+        return self.frustum
+    
     def getProjection (self):
         """Retrieve the projection matrix for the rendering pass"""
         return self.projection
