@@ -61,6 +61,11 @@ if __name__ == '__main__':
     class TestContext( BaseContext ):
         currentImage = 0
         currentSize = 0
+        def OnInit( self ):
+            print '''Runs various tests on the frustum-extraction mechanism.
+Will print out the (near,far) values where the extracted frustum far-plane
+(that pulled from glProjectionMatrix) is > 1% different than the value 
+we passed into glFrustum.'''
         def Render( self, mode = None ):
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
@@ -85,7 +90,7 @@ if __name__ == '__main__':
                         assert deltaNear < abs(near/100), "Near was %s, should have been ~ %s, delta was %s"%(nearCurrent,near,deltaNear)
                     except AssertionError, err:
                         log.warn(
-                            "Accuraccy < than 1%% of far with (near,far) = (%s,%s)",
+                            "Accuracy < than 1%% of far with (near,far) = (%s,%s)",
                             near,far,
                         )
                         break
@@ -93,5 +98,6 @@ if __name__ == '__main__':
                         traceback.print_exc()
                         self.OnQuit( )
             glMatrixMode(GL_MODELVIEW);
+            self.OnQuit()
     TestContext.ContextMainLoop()
     
