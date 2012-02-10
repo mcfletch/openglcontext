@@ -69,6 +69,10 @@ class TestContext( BaseContext ):
             geometry = Gear(),
             appearance = self.appearance,
         )
+        self.teapot = Shape(
+            geometry = Teapot(),
+            appearance = self.appearance,
+        )
         self.sg = Transform(
             children = [
                 Transform(
@@ -87,6 +91,11 @@ class TestContext( BaseContext ):
                     translation = (0,4,0),
                     children = [self.gear],
                     scale = (3,3,3),
+                ),
+                Transform(
+                    translation = (0,-4,0),
+                    children = [self.teapot],
+                    scale = (.5,.5,.5),
                 ),
                 SimpleBackground(
                     color = (1,1,1),
@@ -112,7 +121,7 @@ class TestContext( BaseContext ):
         self.cylinder.geometry.height = newSize
         self.cylinder.geometry.radius = newSize * .25
         self.gear.geometry.outer_radius = newSize * .25
-        
+        self.teapot.geometry.size = newSize
         print "new size ->", newSize
         self.triggerRedraw(True)
         
