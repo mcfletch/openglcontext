@@ -34,7 +34,7 @@ class TestContext( BaseContext ):
 #		self.shape.Render( mode )
     def OnInit( self ):
         """Scene set up and initial processing"""
-        print """You should see an elongated box over a white background
+        print """You should see an elongated box over a black background
     The box should have a mapped texture (a stained-glass window)
     and should be centered on the window.
 """
