@@ -7,7 +7,8 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
-from OpenGLContext.arrays import array
+from OpenGLContext.events.timer import Timer
+from OpenGLContext.arrays import array, pi
 import string, time
 
 images = [
@@ -15,6 +16,8 @@ images = [
     "pimbackground_FR.jpg",
     "nehe_wall.bmp",
     "marbleface.jpeg",
+    "wrls/irradiation.jpg",
+    "wrls/yingyang.png",
     "http://www.vrplumber.com/maps/thesis_icon.jpg",
 ]
 
@@ -47,7 +50,7 @@ class TestContext( BaseContext ):
         self.appearance = Appearance(
             material = Material(
                 diffuseColor =(1,0,0),
-                specularColor = (1,1,1),
+                specularColor = (.5,.5,.5),
             ),
             texture = ImageTexture(
                 url = [images[0]]
@@ -71,6 +74,10 @@ class TestContext( BaseContext ):
         )
         self.teapot = Shape(
             geometry = Teapot(),
+            appearance = self.appearance,
+        )
+        self.sphere = Shape(
+            geometry = Sphere(),
             appearance = self.appearance,
         )
         self.sg = Transform(
@@ -97,12 +104,24 @@ class TestContext( BaseContext ):
                     children = [self.teapot],
                     scale = (.5,.5,.5),
                 ),
+                Transform(
+                    translation = (4,-4,0),
+                    children = [self.sphere],
+                ),
                 SimpleBackground(
-                    color = (1,1,1),
+                    color = (.5,.5,.5),
                 ),
             ],
-            scale = (.5,.5,.5),
+            scale = (.75,.75,.75),
         )
+        self.time = Timer( duration = 15.0, repeating = 1 )
+        self.time.addEventHandler( "fraction", self.OnTimerFraction )
+        self.time.register (self)
+        self.time.start ()
+    def OnTimerFraction( self, event ):
+        self.sg.rotation = array([0,1,0,event.fraction()*pi*2],'f')
+        self.appearance.material.diffuseColor = [event.fraction()]*3
+        self.triggerRedraw( False )
     def OnImageSwitch( self, event=None ):
         """Choose a new mapped texture"""
         self.currentImage = currentImage = self.currentImage+1
@@ -122,6 +141,7 @@ class TestContext( BaseContext ):
         self.cylinder.geometry.radius = newSize * .25
         self.gear.geometry.outer_radius = newSize * .25
         self.teapot.geometry.size = newSize
+        self.sphere.geometry.radius = newSize
         print "new size ->", newSize
         self.triggerRedraw(True)
         
