@@ -1,6 +1,7 @@
 """Resource-manager for textures (with PIL conversions)"""
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from OpenGL.GL.ARB import texture_non_power_of_two
 from OpenGLContext.arrays import ArrayType
 import traceback,weakref 
 import logging
@@ -153,6 +154,7 @@ class Texture( object ):
             log.info( "Paletted image found, converting: %s", image.info )
             image = image.convert( 'RGB' )
         return image
+    NPOT_SUPPORT = None
     def ensurePow2( self, image ):
         """Ensure that the PIL image is pow2 x pow2 dimensions
 
@@ -162,21 +164,27 @@ class Texture( object ):
             filtering (from PIL) to do the resizing). Otherwise
             just returns the same image object.
         """
-        try:
-            from PIL import Image
-        except ImportError, err:
-            # old style?
-            import Image
-        BICUBIC = Image.BICUBIC
-        ### Now resize non-power-of-two images...
-        # should check whether it needs it first!
-        newSize = bestSize(image.size[0]),bestSize(image.size[1])
-        if newSize != image.size:
-            log.warn( 
-                "Non-power-of-2 image %s found resizing: %s", 
-                image.size, image.info,
-            )
-            image = image.resize( newSize, BICUBIC )
+        
+        if self.NPOT_SUPPORT is None:
+            self.__class__.NPOT_SUPPORT = texture_non_power_of_two.glInitTextureNonPowerOfTwoARB()
+            if not self.NPOT_SUPPORT:
+                log.warn( "Implementation requires Power-of-Two textures (very old device?)" )
+        if not self.NPOT_SUPPORT:
+            try:
+                from PIL import Image
+            except ImportError, err:
+                # old style?
+                import Image
+            BICUBIC = Image.BICUBIC
+            ### Now resize non-power-of-two images...
+            # should check whether it needs it first!
+            newSize = bestSize(image.size[0]),bestSize(image.size[1])
+            if newSize != image.size:
+                log.warn( 
+                    "Non-power-of-2 image %s found resizing: %s", 
+                    image.size, image.info,
+                )
+                image = image.resize( newSize, BICUBIC )
         return image
     
 class MMTexture( Texture ):
