@@ -50,7 +50,7 @@ class Quadric( nodetypes.Geometry, node.Node ):
             if visible:
                 if textured:
                     glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-                    glTexCoordPointer( 3, GL_FLOAT,32,coords+12)
+                    glTexCoordPointer( 2, GL_FLOAT,32,coords+12)
                 if lit:
                     glEnableClientState(GL_NORMAL_ARRAY)
                     glNormalPointer( GL_FLOAT,32,coords+20 )
@@ -65,8 +65,8 @@ class Quadric( nodetypes.Geometry, node.Node ):
         finally:
             glPopAttrib()
             glPopClientAttrib()
-            coords.unbind()
             indices.unbind()
+            coords.unbind()
     def compile( self, mode=None ):
         """Compile this sphere for use on mode"""
         raise NotImplementedError( """Haven't implemented %s compilation yet"""%(self.__class__.__name__,))
