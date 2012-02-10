@@ -54,8 +54,13 @@ from OpenGLContext.arrays import (
     array, sin, cos, pi, dot, transpose,
 )
 from OpenGLContext.events.timer import Timer
-
-from OpenGLContext.passes import flat, renderpass
+'''OpenGLContext's "flat" render pass can be used to produce a rendering
+of just the geometry of the scene.  We'll use that feature to render our 
+geometry multiple times.  The overall rendering pass which calls our 
+Context's Render method is *also* a flat render pass, but it doesn't do 
+much in this case save providing our frame-rate counter and allowing us 
+to walk around in the world.'''
+from OpenGLContext.passes import flat
 
 class TestContext( BaseContext ):
     """Shadow rendering tutorial code"""
@@ -65,7 +70,6 @@ class TestContext( BaseContext ):
     '''If we set lightViewDebug we will keep the light's view in the context
     rather than clearing the background before drawing the scene.'''
     lightViewDebug = False
-
     '''=Scene Set Up=
 
     Our tutorial requires a number of OpenGL extensions.  We're going
@@ -91,7 +95,6 @@ class TestContext( BaseContext ):
         '''We'll use OpenGLContext's rendering passes to render the geometry 
         each time we need to do so...'''
         self.geometryPasses = flat.FlatPass(self.geometry,self)
-        #self.geometryPasses = renderpass.defaultRenderPasses
         '''To make the demo a little more interesting, we're going to
         animate the first light's position and direction.  Here we're setting
         up a raw Timer object.  OpenGLContext scenegraph timers can't be used
