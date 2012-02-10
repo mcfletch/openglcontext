@@ -493,6 +493,7 @@ class Context(object):
                 return 1
             return 0
         finally:
+            glFlush()
             self.drawing = None
             self.unsetCurrent()
 
@@ -587,6 +588,7 @@ class Context(object):
             self.redrawRequest.set()
         else:
             raise RuntimeError( """Unreasonable threading state!""" )
+    
     def shouldRedraw( self ):
         """Return whether or not the context contents need to be redrawn"""
         return not self.alreadyDrawn
