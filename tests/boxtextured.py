@@ -11,8 +11,6 @@ class TestContext( BaseContext ):
         self.sg = sceneGraph(
             children = [
                 Transform(
-#					translation = (3,0,0),
-# 					rotation = (0,1,0,.8),
                     children = [
                         Shape(
                             geometry = Box( size=(4,4,2) ),
