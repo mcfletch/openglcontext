@@ -28,8 +28,8 @@ class TestContext( BaseContext ):
     currentSize = 0
     def OnInit( self ):
         """Scene set up and initial processing"""
-        print """You should see an elongated box over a white background
-    The box should have a mapped texture (a stained-glass window)
+        print """You should see a teapot over a black background
+    The teapot should have a mapped texture (a stained-glass window)
     and should be centered on the window.
 """
         print 'press i to choose another texture for the box'

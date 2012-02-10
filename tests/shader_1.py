@@ -284,7 +284,7 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 '''
 When run from the command-line, we should see a triangle and a 
-rectangle in solid green floating over a white background, as seen
+rectangle in solid green floating over a black background, as seen
 in our screenshot above.
 
 Terms:
