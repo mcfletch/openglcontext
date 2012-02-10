@@ -80,6 +80,21 @@ class TestContext( BaseContext ):
             geometry = Sphere(),
             appearance = self.appearance,
         )
+        self.ifs = Shape(
+            geometry = IndexedFaceSet(
+                coord = Coordinate(
+                    point = [[-1,0,0],[1,0,0],[1,1,0],[-1,1,0]],
+                ),
+                coordIndex = [ 0,1,2,-1,0,2,3],
+                color = Color(
+                    color = [[0,0,1],[1,0,0]],
+                ),
+                colorIndex = [ 0,1,0,-1,0,0,1],
+                solid = False,
+                normalPerVertex=True,
+            ),
+            appearance = self.appearance,
+        )
         self.sg = Transform(
             children = [
                 Transform(
@@ -107,6 +122,10 @@ class TestContext( BaseContext ):
                 Transform(
                     translation = (4,-4,0),
                     children = [self.sphere],
+                ),
+                Transform(
+                    translation = (-4,-4,0),
+                    children = [self.ifs],
                 ),
                 SimpleBackground(
                     color = (.5,.5,.5),
