@@ -115,11 +115,6 @@ class TestContext( wxInteractiveContext ):
         if self.timer is None:
             self.timer = timer(self)
             self.timer.Start(25)
-        
-    def Background(self, mode = 0):
-        """Clear to Blue"""
-        glClearColor(0.0,0.0,1.0,1.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
 if __name__ == "__main__":
     import wx

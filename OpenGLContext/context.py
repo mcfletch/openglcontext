@@ -665,42 +665,6 @@ class Context(object):
         # calculate a 3D perspective view
         glFrustum(-0.5, 0.5, -0.5, 0.5, .5, 5.0);
 
-    def Background(self, mode = None):
-        """Customization point for clearing/drawing the background.
-
-        The default implementation clears the color and depth
-        buffers, using solid white for the clear color.
-
-        Note: This method is only called if there is no scene graph,
-        and if there is no self.SetupBindables( mode ) method
-        available on the Context.
-        """
-        if mode.passCount == 0: # first pass...
-            glClearColor(1.0,1.0,1.0,1.0)
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
-
-    def Lights (self, mode = None):
-        """Customization point for setting up global illumination parameters
-        Depending on the mode, should either enable or disable
-        lighting for all of those lights in the scene.
-
-        The default implementation enables lighting and light 0
-        if render mode is not select, disables them otherwise.
-
-        Note: This method is only called if there is no scene graph,
-        and if there is no self.SetupBindables( mode ) method
-        available on the Context.
-        """
-        # This code is not OpenGL 3.1 compatible
-        if mode.visible and mode.lighting:
-            # Enable lighting calculations
-            glEnable(GL_LIGHTING);
-            # Enable the default light zero (shining forward on the z axis)
-            glEnable(GL_LIGHT0);
-        else:
-            glDisable(GL_LIGHTING);
-            glDisable(GL_LIGHT0);
-            
     def addPickEvent( self, event ):
         """Add event to list of events to be processed by selection-render-mode
 

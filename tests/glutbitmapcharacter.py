@@ -47,11 +47,6 @@ class TestContext( BaseContext ):
         BaseContext.Render( self, mode )
         glColor3f( 0,0,1 )
         drawText( 'hello world', 10,20, self.viewportDimensions[0],self.viewportDimensions[1])
-    def Background(self, mode = 0):
-        ''' Clear the background for a particular rendering mode,
-        potentially render a "cool" background node'''
-        glClearColor(0,0,0,1.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
     
 
 if __name__ == "__main__":

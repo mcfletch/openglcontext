@@ -97,16 +97,6 @@ class TestContext( BaseContext ):
         self.addEventHandler( "keypress", name = 'a', function = self.OnAnimate )
         print 'Press "a" to stop animation\nNote: r key has no effect'
 
-    def Lights( self, mode = None ):
-        """Setup global illumination"""
-        
-        glLightfv(GL_LIGHT0, GL_POSITION, array( (0.5, 0.5, 1.0, 0.0),'f') );
-        glEnable(GL_LIGHTING);
-        glEnable(GL_LIGHT0);
-    def Background( self, mode = 0):
-        """Demo's use of GL_ONE assumes that background is black"""
-        glClearColor(0,0,0,1.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
     def OnAnimate( self, event):
         self.animating = not self.animating
         
@@ -122,6 +112,14 @@ class TestContext( BaseContext ):
             
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
+        
+        glClearColor(0,0,0,1.0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+        
+        glLightfv(GL_LIGHT0, GL_POSITION, array( (0.5, 0.5, 1.0, 0.0),'f') );
+        glEnable(GL_LIGHTING);
+        glEnable(GL_LIGHT0);
+
         self.updatePositions()
 
         glPushMatrix ();

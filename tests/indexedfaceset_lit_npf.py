@@ -96,10 +96,6 @@ class TestContext( BaseContext ):
                 ),
             ]
         )
-##	def Background( self, mode = 0):
-##		glClearColor( 0,0,0,0)
-##		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
-                
 
 TESTDATA = """-1 0 0
 1 0 0

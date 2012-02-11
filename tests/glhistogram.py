@@ -85,11 +85,6 @@ class TestContext( BaseContext ):
             glLoadMatrixd( matrix ) # should have un-decorated alias for this...
             
             glMatrixMode(GL_MODELVIEW);
-
-    def Background(self, mode = 0):
-        '''Clear the background for a particular rendering mode'''
-        glClearColor(0.0,0.0,1.0,1.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
         
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
