@@ -1,14 +1,12 @@
 """Flat rendering mechanism using structural scenegraph observation"""
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
-from OpenGL.GLU import gluUnProject
 from OpenGLContext.arrays import array, dot
 from OpenGLContext import frustum
 from OpenGLContext.debug.logs import getTraceback
 from vrml.vrml97 import nodetypes
 from vrml import olist
-from vrml.vrml97.transformmatrix import RADTODEG
-import weakref,random, sys, ctypes, logging
+import sys
 from pydispatch.dispatcher import connect
 import logging 
 log = logging.getLogger( __name__ )
@@ -67,7 +65,7 @@ class SGObserver( object ):
                     context = context()
                     if context is not None:
                         next.bind( context )
-            after = self.npFor(next)
+            _ = self.npFor(next)
             for typ in self.INTERESTING_TYPES:
                 if isinstance( next, typ ):
                     self.paths.setdefault( typ, []).append( path )
@@ -225,12 +223,11 @@ class FlatPass( SGObserver ):
         it will be dog-slow.
         """
         result = []
-        frustum = self.frustum
         for record in records:
             (key,mv,tm,bv,path) = record
             if bv is not None:
                 visible = bv.visible(
-                    frustum, tm.astype('f'),
+                    self.frustum, tm.astype('f'),
                     occlusion=False,
                     mode=self
                 )
@@ -239,32 +236,34 @@ class FlatPass( SGObserver ):
             else:
                 result.append( record )
         return result
-
+    
     def Render( self, context, mode ):
         """Render the geometry attached to this flat-renderer's scenegraph"""
-        vp = context.getViewPlatform()
         # clear the projection matrix set up by legacy sg
-        glMatrixMode( GL_MODELVIEW )
         matrix = self.getModelView()
         self.matrix = matrix
-        glLoadIdentity()
 
         toRender = self.renderSet( matrix )
         maxDepth = self.greatestDepth( toRender )
+        vp = context.getViewPlatform()
         if maxDepth:
-            previous = self.projection
             self.projection = vp.viewMatrix(maxDepth)
-
+        
+        # Load our projection matrix for all legacy rendering operations...
         glMatrixMode( GL_PROJECTION )
         glLoadMatrixf( self.getProjection() )
-
+        
+        # do we need to do a selection-render pass?
         events = context.getPickEvents()
         debugSelection = mode.context.contextDefinition.debugSelection
+        
         if events or debugSelection:
             self.selectRender( mode, toRender, events )
             events.clear()
-        glMatrixMode( GL_PROJECTION )
-        glLoadMatrixf( self.getProjection() )
+            glMatrixMode( GL_PROJECTION )
+            glLoadMatrixf( self.getProjection() )
+        
+        # Load the root 
         glMatrixMode( GL_MODELVIEW )
         matrix = self.getModelView()
         if not debugSelection:
@@ -450,6 +449,7 @@ class FlatPass( SGObserver ):
         if not self.context.contextDefinition.debugSelection:
             glScissor( min_x,min_y,int(max_x)-min_x,int(max_y)-min_y)
             glEnable( GL_SCISSOR_TEST )
+
         glMatrixMode( GL_MODELVIEW )
         try:
             idHolder = array( [0,0,0,0], 'B' )
@@ -487,7 +487,6 @@ class FlatPass( SGObserver ):
     MAX_LIGHTS = -1
     def __call__( self, context ):
         """Overall rendering pass interface for the context client"""
-        mode = self
         vp = context.getViewPlatform()
         self.viewPlatform = vp
         # These values are temporarily stored locally, we are
@@ -499,6 +498,7 @@ class FlatPass( SGObserver ):
         self.projection = vp.viewMatrix().astype('f')
         self.viewport = (0,0) + context.getViewPort()
         self.modelView = vp.modelMatrix().astype('f')
+        
         self.calculateFrustum()
 
         # We're here setting up legacy OpenGL settings
