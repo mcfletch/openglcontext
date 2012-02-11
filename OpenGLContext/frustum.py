@@ -60,6 +60,7 @@ class Frustum (node.Node):
     ARRAY_TYPE = 'f'
     planes = fieldtypes.MFVec4f( 'planes', 1, [])
     normalized = fieldtypes.SFBool( 'normalized', 0, 1)
+    @classmethod
     def fromViewingMatrix(cls, matrix= None, normalize=1):
         """Extract and calculate frustum clipping planes from OpenGL
 
@@ -111,7 +112,7 @@ class Frustum (node.Node):
         if normalize:
             frustum = cls.normalize( frustum )
         return cls( planes = frustum, normalized = normalize )
-    fromViewingMatrix = classmethod(fromViewingMatrix)
+    @classmethod
     def normalize(cls, frustum):
         """Normalize clipping plane equations"""
         magnitude = sqrt( 
@@ -125,4 +126,3 @@ class Frustum (node.Node):
         magnitude = compress( magnitude, magnitude,0 )
         magnitude=reshape(magnitude.astype(cls.ARRAY_TYPE), (len(frustum),1))
         return frustum/magnitude
-    normalize = classmethod(normalize)
