@@ -60,20 +60,31 @@ class VisualContext(browsercontext.BrowserContext):
     platform = field.newField( 'platform', 'SFNode', 1, None )
     renderPasses = passes.defaultRenderPasses
     scene = None
-    def Viewpoint( self, mode = None):
-        """Customization point: Sets up the projection matrix
+    
+    ViewPort = context.Context.ViewPort
 
-        This implementation potentially instantiates the
-        view platform object, and then calls the object's
-        render method with the mode as argument.
+    def getViewPlatform( self ):
+        """Customization Point: Instantiate ViewPlatform for this context
+
+        The default implementation is to instantiate a
+        viewplatform.ViewPlatform with position equal to
+        self.initialPosition and orientation equal to
+        self.initialOrientation.
+
+        See:
+            OpenGLContext.shadow.shadowcontext for
+            example where this method is overridden
         """
         if not self.platform:
-            self.platform = VisualViewPlatform(context=self)
-        self.platform.render(
-            mode = mode,
-        )
-    ViewPort = context.Context.ViewPort
-        
+            width,height = self.getViewPort()
+            if width==0 or height==0:
+                aspect = 1.0
+            else:
+                aspect = float(width)/float(height)
+            self.platform = VisualViewPlatform( context=self )
+        return self.platform
+
+    
     def getBoundingBox(self):
         """Get the last-known scenegraph bounding-box"""
         from OpenGLContext.scenegraph import boundingvolume

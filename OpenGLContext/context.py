@@ -636,35 +636,6 @@ class Context(object):
         """
         return self.viewportDimensions
 
-    def Viewpoint (self, mode = None):
-        """Customization point for setting up the projection matrix
-
-        The default implementation calls glFrustrum with fairly
-        generic values to establish a camera similar to a 35mm.
-
-        Note: Most real-world contexts use a ViewPlatformMixin
-        sub-class of Context, which uses a ViewPlatform object to
-        manage the viewpoint set up, so the default implementation
-        is seldom used.
-        
-        Note: This method is currently called by just about every
-        rendering pass set regardless of whether there is a scene
-        graph (the scene graph rendering code doesn't yet have
-        camera support, so it simply calls this method).  However,
-        if you define a SetupBindables( mode ) method on your
-        Context this customization point will not be called.
-        
-        Eventually the scene graph may grow its own camera handling
-        code, at which point it will probably stop calling this
-        customization point.
-        """
-        # This code is not OpenGL 3.1 compatible
-        glMatrixMode(GL_PROJECTION);
-        # load the identity matrix (reset the view)
-        glLoadIdentity()
-        # calculate a 3D perspective view
-        glFrustum(-0.5, 0.5, -0.5, 0.5, .5, 5.0);
-
     def addPickEvent( self, event ):
         """Add event to list of events to be processed by selection-render-mode
 

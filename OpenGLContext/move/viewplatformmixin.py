@@ -74,18 +74,6 @@ class ViewPlatformMixin(object):
                 aspect = aspect,
             )
         return self.platform
-    def Viewpoint( self, mode = None):
-        """Customization point: Sets up the projection matrix
-
-        This implementation potentially instantiates the
-        view platform object, and then calls the object's
-        render method with the mode as argument.
-        """
-        if not self.platform:
-            self.platform = self.getViewPlatform()
-        self.platform.render(
-            mode = mode,
-        )
     def setupDefaultEventCallbacks( self, ):
         """Customization point: Setup application default callbacks
 
