@@ -13,7 +13,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
 
-from OpenGLContext import visitor, displaylist, frustum, utilities
+from OpenGLContext import visitor, frustum, utilities
 from OpenGLContext.passes import rendervisitor
 from OpenGLContext.scenegraph import nodepath
 from vrml.vrml97 import nodetypes
