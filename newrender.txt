@@ -1,0 +1,147 @@
+Features
+
+    Hierarchy of Nodes (scene graph)
+        Calculation of Matrices
+        Lights
+        Cameras
+        Backgrounds
+            SimpleBackground
+            SphereBackground?
+            Cube Background?
+            Sky-map?
+            Generated Clouds with pano-cylinder?
+        Mirrors
+        Timers
+        Network Sources
+        Touch-sensitive (Triggers)
+        Avatars
+            Geometry 
+            Camera 
+            Light?
+            Animations
+    Shadows
+        Texture Mapped
+    Textures 
+        2D: PNG, JPEG, BMP, RAW
+        3D?
+        Terrain (height map)
+        Bump-map/Displacement
+        Lightmaps (Quake III style)
+    Loading
+        Native Format (binary)
+        VRML -> Native converter (basic only)
+        Obj -> Native converter 
+        MD3, BSP
+    Scripting
+        Non-safe scripts, you must trust the game maker
+        Modify uniforms, node-path properties
+            Sends message with updates
+        Update node arrays (limited?)
+            Sends message with update
+    Animation
+        Tweened animation support for characters
+        Boned animation support?
+        IK?
+        Small script support ("play animation X until Y time?")
+    Collision Detection
+        Static Set vs. Moving Objects
+    Movement
+        Vector of direction, tween along the vector (automatically)
+        Collision detection on user "model"
+    Special Effects?
+        Fire
+        Fog
+        Mirrors
+    Static Scene Optimisations?
+        e.g. BSP, Octree, Portal Extraction
+        ROAM or similar terrain system?
+    Scene Parameters
+        Scaling?
+        Movement speeds?
+        Time scales?
+
+Transactional Renderer:
+
+    Passes
+        Geometry Only Passes:
+            Animations (tween/IK)
+            Should we optimize for static/non-static?
+                (Render all static into the buffer, then render dynamic into a copy)
+            Can/should we parallelize (render N passes simultaneously)
+        Visible Passes Shaders:
+            Sorted in Transparency Order
+            Animations
+            When Transparents Begin:
+                TransparentSetup
+            When Transparents End:
+                TransparentTeardown
+        
+        Feedback/OcclusionQuery?
+            (Generates *outgoing* queue messages)
+    
+    Pass Types:
+        Select (id/colour only, geometry only)
+            (Generates *outgoing* queue messages)
+        Light Pre-renders (geometry only, diff vp)  
+            Can we do N light renders simultaneously?
+        Mirror/Radiosity Pre-renders (full visual, diff vp, requires Lights)
+        Visible Final
+            Needs Light pre-renders, Mirror Pre-renders etc 
+                (Inter-stage data-pass-through)
+
+    Render Graph:
+        Pervasive Uniforms (e.g. MV Matrix, Light Texture Maps, Light Definitions)
+        Shaders
+        Pass Storage
+            Light Textures/Buffers, Matrices
+            Mirror Textures/Buffers, Matrices
+
+    Transactional Updtate:
+        Texture data must already be loaded/in-memory
+        VBO data must already be loaded/in-memory
+        Pull all records from Queue, update/create VBOs, textures, shaders, etc.
+        Create records (but don't use them yet)
+            Pre-load geometry sections and the like...
+        Drop old records
+            Automatic?
+            Manual
+
+    Requirements:
+        Require FBO
+        Require VBO
+        Require Vertex/Fragment Shaders
+        Require Shader Level X?
+        Require Geometry Shaders?
+        Require ability to run on FC contexts
+        
+    Render:
+        Query Graph for Objects
+            Frustum Extracted from Combined MV
+            Filter Objects by BBox/BVolume
+        Pre-renders
+            Lights, Mirrors, Environment Maps
+                Produces its own query-set
+                Geometry-only render *or* Visible
+            Distance-based Pre-calculate 
+                Lights only contribute if < max-distance away
+            If-visible-pre-calculate Operations
+                Mirrors, Cube-maps for reflective curved surfaces
+            Always pre-calculate Operations 
+        Visible Renders
+            Background Renders 
+                Sky-box?
+            Light setup from Previous Stage
+                Transformation Matrix + Texture
+            # OcclusionQuery setup for next pass...
+            Opaque Sort-by-Transitions
+                Shader 
+                Texture Usage
+                Uniform Values?
+            Transparent Sort-by-Transitions (pre-setup step required, need to disable after)
+        Select 
+            As for current flat
+    Each Renderable:
+        Geometry-only Shader (depth-render, select renders)
+        Visible Shader (opaque, transparent, mirrors)
+        Shader May Contain 
+    
