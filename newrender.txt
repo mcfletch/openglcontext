@@ -23,15 +23,20 @@ Features
         Texture Mapped
     Textures 
         2D: PNG, JPEG, BMP, RAW
-        3D?
+        3D: Stacked Image Files
         Terrain (height map)
         Bump-map/Displacement
         Lightmaps (Quake III style)
+        Gloss-maps 
+        Cutout-maps (discard fragments < X alpha)
+        Movies
+            (Use LibWebMP from Phil with a wrapper?)
     Loading
         Native Format (binary)
         VRML -> Native converter (basic only)
         Obj -> Native converter 
-        MD3, BSP
+        MD3, BSP?
+        EGG files from Panda?
     Scripting
         Non-safe scripts, you must trust the game maker
         Modify uniforms, node-path properties
