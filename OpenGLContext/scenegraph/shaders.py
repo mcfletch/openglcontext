@@ -547,6 +547,8 @@ class Shader( shaders.Shader ):
         else:
             return (False,[],None)
 
+        
+            
 class ShaderGeometry( shaders.ShaderGeometry ):
     """Renderable geometry type using shaders"""
     def Render (self, mode = None):
@@ -649,3 +651,4 @@ class ShaderGeometry( shaders.ShaderGeometry ):
 
 class ShaderSlice( shaders.ShaderSlice ):
     """Slice of a shader to render"""
+

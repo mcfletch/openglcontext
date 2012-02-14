@@ -1,0 +1,102 @@
+// Base Shaders for OpenGLContext 2.x
+// Sketch of a basic, configurable N-texture rendering 
+// engine that will provide phong shading with most of the 
+// "common" features wanted in a basic scenegraph...
+
+// If this is present, the shader can do instance geometry...
+// But need to parse the shader or *explicitly* require specifying it...
+// For now we're going to punt and render each instance separately
+// gl_InstanceID/gl_InstanceIDARB
+
+// Attributes
+// For each sub-element in the VBO(s) look for these bindings
+vtx_base_XXX (position, normal, texCoord, etc)
+vtx_tween_weight_1
+vtx_tween1_XXX (position, normal, texCoord, etc)
+vtx_tween_weight_2
+vtx_tween2_XXX (position, normal, texCoord, etc)
+
+// View/coordinate-space setup, would be per-instance if we had 
+// instancing support...
+mat_modelview
+mat_projection
+mat_normal
+mat_XXX (node-path calculation of matrices, a-la Panda)
+
+// Material properties
+attr_material (struct)
+
+texture_displacement_count
+
+// Special textures 
+diffuse_map_0
+diffuse_map_1
+
+ambient_map
+gloss_map
+glow_map
+normal_map
+displacement_map/height_map
+
+// Light properties (vectors)
+// All lights 
+lights_ambient (struct), color, position, falloff
+lights_point  (struct), color, position, falloff
+lights_directional (struct), color, direction, position, falloff
+lights_spot (struct), color, direction, position, angle, falloff
+// Shadowed Lights (directional, spot)
+texture (unit)
+matrix (bias matrix to the light)
+
+vec_main() {
+    // if tweening, for attribute in to_tween, mix each tweened item into total...
+    vec4 position = mix( vtx_tween2_position, mix( vtx_base_position, vtx_tween1_pos, vtx_tween1_weight ), vtx_tween2_weight);
+    position = mat_modelview * position;
+    vec3 normal = mix( vtx_base_normal, vtx_tween1_normal, vtx_tween_weight );
+    normal = mat_normal * normal;
+    
+    // else:
+    vec4 position = vtx_base_position;
+    vec3 normal = vtx_base_normal;
+    
+    vec2/3/4 texcoord_diffuse = vtx_texcoord_diffuse;
+    vec2/3/4 texcoord_gloss = vtx_texcoord_gloss;
+    vec2/3/4 texcoord_displacement = vtx_texcoord_displacement;
+    
+    // if there is a *displacement* map, then we need to alter position
+    position += texture2D( displacement_map, texcoord_displacement );
+    
+    // if lighting...
+    baseNormal = mat_normal * normalize(vtx_normal);
+    light_preCalc(position);
+    
+    // For each vertex parameter...
+    gl_Position = position; // special...
+    normal_var = normal; // regular varying
+    // if texturing, for each texture coordinate...
+    vtx_texcoord_1_var = vtx_texcoord_1;
+    vtx_texcoord_2_var = vtx_texcoord_2;
+}
+frag_main() {
+    // if a normal map is active, need way to specify what to use to lookup the normal...
+    normal_var = texture[23]D( normal_map, normal_map_lookup_var );
+    
+    // if we have a "base" diffuse texture, then we don't use material.X, we use texture lookup...
+    // gloss and glow maps are just texture lookups that replace material.X, but for different parameters...
+    vec4 matr_ambient = attr_material.ambient;
+    vec4 matr_diffuse = attr_material.diffuse;
+    // or 
+    vec4 matr_ambient = texture2D( ambient_map, ambient_map_lookup_var );
+    // generate static operations for each texture enabled/working...
+    vec4 matr_diffuse = texture2D( diffuse_map_0, diffuse_map_lookup_var ) + texture2D( diffuse_map_1, diffuse_map_1_lookup_var );
+    
+    // now calculate available lighting...
+    for (light in lights) {
+        if (distance_test( light ) && shadow_test( light )) {
+            light_ambient_contrib += ...
+            light_diffuse_contrib += ...
+            light_specular_contrib += ...
+        }
+    }
+    gl_FragColor = matr_ambient * light_ambient_contrib + matr_diffuse * light_diffuse_contrib + matr_specular * light_specular_contrib;
+}
