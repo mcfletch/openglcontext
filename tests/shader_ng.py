@@ -27,6 +27,15 @@ class VertexDefinition( list ):
         return self._dtype
     
     def attributes( self, buffer, prefix='vtx' ):
+        """Generate ShaderAttribute instances for the given buffer 
+        
+        buffer -- must be a ShaderBuffer instance pointing to an array of 
+            dtype == self.dtype which can be obtained by calling 
+            .view( self.dtype) on an array of the appropriate shape/size 
+            (i.e. with the right number of floats in each row).
+        prefix -- added to name as the attribute name to be used in the 
+            shader object
+        """
         dtype = self.dtype 
         result = []
         offset = 0
@@ -200,28 +209,7 @@ class TestContext( BaseContext ):
             self.appearance
         ).items():
             self.glslObject.getVariable( key ).value = value
-#
-#    def Render( self, mode = None):
-#        """Render the geometry for the scene."""
-#        if not mode.visible:
-#            return
-#        token = self.glslObject.render( mode )
-#        tokens = [  ]
-#        try:
-#            vbo = self.indices.bind(mode)
-#            for attribute in self.attributes:
-#                token = attribute.render( self.glslObject, mode )
-#                if token:
-#                    tokens.append( (attribute, token) )
-#            glDrawElements(
-#                GL_TRIANGLES, self.count,
-#                GL_UNSIGNED_INT, vbo
-#            )
-#        finally:
-#            for attribute,token in tokens:
-#                attribute.renderPost( self.glslObject, mode, token )
-#            self.glslObject.renderPost( token, mode )
-#            vbo.unbind()
+    
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

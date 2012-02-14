@@ -386,11 +386,11 @@ class GLSLObject( shaders.GLSLObject ):
     IMPLEMENTATION = 'GLSL'
     compileLog = field.newField( ' compileLog', 'SFString', '' )
     # we've manually chosen this implementation...
-    def render( self, mode ):
+    def render( self, mode, shader ):
         """Render this shader in the current mode"""
         renderer = mode.cache.getData(self)
         if renderer is None:
-            renderer = self.compile( mode )
+            renderer = self.compile( mode, shader )
             if renderer is False:
                 log.warn("""%s""",
                     self.compileLog,
@@ -422,9 +422,12 @@ class GLSLObject( shaders.GLSLObject ):
             shader.holderDepend( holder )
         holder.depend( self,  'shaders' )
         return holder
-    def compile(self, mode):
+    def compile(self, mode, shader):
         """Compile into GLSL linked object"""
         holder = self.holderDepend( mode.cache.holder(self,None) )
+        # TODO: depend on shader.material as well...
+        # TODO: the compiled shader needs to depend on *everything* 
+        # down the set of objects...
         program = glCreateProgram()
         holder.data = program
         subShaders = []
@@ -521,7 +524,7 @@ class Shader( shaders.Shader ):
         """Render the shader"""
         current = self.currentImplementation()
         if current:
-            return current.render( mode )
+            return current.render( mode, self )
         else:
             return True,True,True,None
     def currentImplementation( self ):
