@@ -129,6 +129,7 @@ Node( 'ShaderAttribute','OpenGLContext.scenegraph.shaders.ShaderAttribute' )
 Node( 'ShaderBuffer','OpenGLContext.scenegraph.shaders.ShaderBuffer' )
 Node( 'ShaderIndexBuffer','OpenGLContext.scenegraph.shaders.ShaderIndexBuffer' )
 Node( 'ShaderSlice','OpenGLContext.scenegraph.shaders.ShaderSlice' )
+Node( 'ShaderGeometry','OpenGLContext.scenegraph.shaders.ShaderGeometry' )
 
 Node( 'Shader','OpenGLContext.scenegraph.shaders.Shader' )
 Node( 'ROUTE','vrml.route.ROUTE' )

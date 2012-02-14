@@ -380,7 +380,7 @@ class TestContext( BaseContext ):
         'material.specular',
         'diffuse_texture',
     ]
-    def materialFromAppearance( self, appearance, mode ):
+    def materialFromAppearance( self, appearance, mode=None ):
         """Convert VRML97 appearance node to series of uniform calls"""
         material = appearance.material
         key = 'uniform-array'

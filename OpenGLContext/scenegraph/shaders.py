@@ -104,6 +104,10 @@ class ShaderAttribute( shaders.ShaderAttribute ):
         # TODO: watch for cases where the buffer is something 
         # other than the native-size?  Shouldn't be possible given 
         # the typed nature of the buffer property.
+        if self.bufferKey:
+            # pull out just the first items (this property) from the 
+            # buffer, will *likely* want to collapse with .view() as well...
+            return buffer[self.bufferKey][:,0].view( '%sf'%( self.size,))
         shape = buffer.shape
         offset = self.offset//buffer.itemsize
         stride = self.stride//buffer.itemsize
@@ -142,7 +146,6 @@ class ShaderAttribute( shaders.ShaderAttribute ):
             bv = boundingvolume.BoundingVolume()
         else:
             bv = boundingvolume.AABoundingBox.fromPoints( buffer )
-            print 'buffer points', buffer
         return boundingvolume.cacheVolume( 
             self, bv, (
                 (self,None),
@@ -382,6 +385,7 @@ class GLSLObject( shaders.GLSLObject ):
     """GLSL-based shader object (compiled set of shaders)"""
     IMPLEMENTATION = 'GLSL'
     compileLog = field.newField( ' compileLog', 'SFString', '' )
+    # we've manually chosen this implementation...
     def render( self, mode ):
         """Render this shader in the current mode"""
         renderer = mode.cache.getData(self)
@@ -408,6 +412,8 @@ class GLSLObject( shaders.GLSLObject ):
                 for texture in self.textures:
                     if texture.render( self, mode, i ):
                         i += 1
+        else:
+            log.warn( 'Renderer for %s was null', self )
         return True,True,True,renderer 
     def holderDepend( self, holder ):
         """Make this holder depend on our compilation vars"""
@@ -569,7 +575,9 @@ class ShaderGeometry( shaders.ShaderGeometry ):
                     else:
                         # TODO: don't currently have a good way to get 
                         # the proper dimension for the arrays...
-                        pass 
+                        glDrawArrays( 
+                            GL_TRIANGLES, 0, len( self.indices )
+                        )
                 finally:
                     for attribute,token in tokens:
                         attribute.renderPost( mode,token )

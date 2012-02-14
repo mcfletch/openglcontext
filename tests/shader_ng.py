@@ -8,6 +8,8 @@ from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph import box
 
 class VertexDefinition( list ):
+    """Small utility class to make it easy to define/load shader vertex arrays
+    """
     POSITION = NORMAL = ('x','y','z','w')
     COLOR = ('r','g','b','a')
     TEXCOORD = ('u','v','r','z')
@@ -36,6 +38,7 @@ class VertexDefinition( list ):
                 buffer = buffer,
                 size = len(set[1]), # TODO: assumes 1f sizes, that's *not* necessarily true!
                 isCoord = set[0] == 'position',
+                bufferKey = set[0],
             )
             offset += dtype[i].itemsize
             result.append( attribute )
@@ -169,13 +172,8 @@ class TestContext( BaseContext ):
         coords = array(list(
             box.yieldVertices((2,.5,2))
         ),'8f').view( vertex_def.dtype )
-        indices = arange( 36, dtype='I' )
-        
         self.coords = ShaderBuffer( buffer = coords )
-        self.indices = ShaderIndexBuffer( buffer = indices )
-        self.count = len(indices)
-        stride = coords[0].nbytes
-        self.attributes = vertex_def.attributes( self.coords, 'Vertex' )
+        
         self.appearance = Appearance(
             material = Material(
                 diffuseColor = (1,1,1),
@@ -183,35 +181,47 @@ class TestContext( BaseContext ):
                 shininess = .5,
             ),
         )
-
-    def Render( self, mode = None):
-        """Render the geometry for the scene."""
-        if not mode.visible:
-            return
+        self.sg = Transform(
+            children = [
+                ShaderGeometry(
+                    appearance = Shader( 
+                        objects = [self.glslObject]
+                    ),
+                    indices = arange( 36, dtype='I' ),
+                    attributes = vertex_def.attributes( self.coords, 'Vertex' ),
+                ),
+            ],
+        )
+        # set uniform values...
         for i,light in enumerate( self.lights ):
             self.LIGHTS[i] = self.lightAsArray( light )
         self.glslObject.getVariable( 'lights' ).value = self.LIGHTS
         for key,value in self.materialFromAppearance(
-            self.appearance, mode
+            self.appearance
         ).items():
             self.glslObject.getVariable( key ).value = value
-        token = self.glslObject.render( mode )
-        tokens = [  ]
-        try:
-            vbo = self.indices.bind(mode)
-            for attribute in self.attributes:
-                token = attribute.render( self.glslObject, mode )
-                if token:
-                    tokens.append( (attribute, token) )
-            glDrawElements(
-                GL_TRIANGLES, self.count,
-                GL_UNSIGNED_INT, vbo
-            )
-        finally:
-            for attribute,token in tokens:
-                attribute.renderPost( self.glslObject, mode, token )
-            self.glslObject.renderPost( token, mode )
-            vbo.unbind()
+#
+#    def Render( self, mode = None):
+#        """Render the geometry for the scene."""
+#        if not mode.visible:
+#            return
+#        token = self.glslObject.render( mode )
+#        tokens = [  ]
+#        try:
+#            vbo = self.indices.bind(mode)
+#            for attribute in self.attributes:
+#                token = attribute.render( self.glslObject, mode )
+#                if token:
+#                    tokens.append( (attribute, token) )
+#            glDrawElements(
+#                GL_TRIANGLES, self.count,
+#                GL_UNSIGNED_INT, vbo
+#            )
+#        finally:
+#            for attribute,token in tokens:
+#                attribute.renderPost( self.glslObject, mode, token )
+#            self.glslObject.renderPost( token, mode )
+#            vbo.unbind()
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
