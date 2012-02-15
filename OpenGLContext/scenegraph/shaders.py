@@ -162,6 +162,7 @@ class _Uniform( object ):
 
 class FloatUniform( _Uniform, shaders.FloatUniform ):
     """Uniform (variable) binding for a shader"""
+    NEED_TRANSPOSE = False
     def render( self, shader, mode ):
         """Set this uniform value for the given shader
         
@@ -172,12 +173,17 @@ class FloatUniform( _Uniform, shaders.FloatUniform ):
             value = self.value
             shape = value.shape 
             shape_length = len(self.shape)
-            assert shape[-shape_length:] == self.shape,(shape,self.shape, value)
+            if shape[-shape_length:] != self.shape:
+                # uninitialized at the Python level, do not set...
+                return None
             if shape[:-shape_length]:
                 size = reduce( operator.mul, shape[:-shape_length] )
             else:
                 size = 1
-            return self.baseFunction( location, size, value )
+            if self.NEED_TRANSPOSE:
+                return self.baseFunction( location, size, False, value )
+            else:
+                return self.baseFunction( location, size, value )
         return None
 class IntUniform( _Uniform, shaders.IntUniform ):
     """Uniform (variable) binding for a shader (integer form)
@@ -242,6 +248,7 @@ def _uniformCls( suffix ):
             'PROTO': name,
             'baseFunction': function,
             'shape': size,
+            'NEED_TRANSPOSE': 'm' in suffix,
         } )
         globals()[name] = cls 
     
@@ -406,6 +413,10 @@ class GLSLObject( shaders.GLSLObject ):
                 raise
             else:
                 for uniform in self.uniforms:
+                    if uniform.name == 'mat_modelview':
+                        uniform.value = mode.matrix.astype('f')
+                    elif uniform.name == 'mat_projection':
+                        uniform.value = mode.projection.astype('f')
                     uniform.render( self, mode )
                 # TODO: retrieve maximum texture count and restrict to that...
                 i = 0

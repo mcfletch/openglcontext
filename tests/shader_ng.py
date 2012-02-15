@@ -86,6 +86,8 @@ class TestContext( BaseContext ):
                 FloatUniform4f(name="material.specular", value=(.4,.4,.4,1.0) ),
                 FloatUniform4f(name="Global_ambient", value=(.1,.1,.1,1.0) ),
                 FloatUniform4f(name="lights" ),
+                FloatUniformm4(name="mat_modelview" ),
+                FloatUniformm4(name="mat_projection" ),
             ],
             textures = [
                 TextureUniform(name="diffuse_texture", value=ImageTexture(
@@ -104,8 +106,10 @@ class TestContext( BaseContext ):
                         attribute vec3 vtx_position;
                         attribute vec3 vtx_normal;
                         attribute vec2 vtx_texcoord_0;
+                        uniform mat4 mat_modelview;
+                        uniform mat4 mat_projection;
                         void main() {
-                            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+                            gl_Position = (mat_projection * mat_modelview ) * vec4(
                                 vtx_position, 1.0
                             );
                             baseNormal = gl_NormalMatrix * normalize(vtx_normal);
