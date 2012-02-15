@@ -75,7 +75,7 @@ class TestContext( BaseContext ):
             varying float Light_distance[LIGHT_COUNT];
 
             varying vec3 baseNormal;
-            varying vec2 Vertex_texture_coordinate_var;
+            varying vec2 vtx_texcoord_0_var;
             """
         )
         self.glslObject = GLSLObject(
@@ -101,16 +101,16 @@ class TestContext( BaseContext ):
                     ],
                     source = [
                         """
-                        attribute vec3 Vertex_position;
-                        attribute vec3 Vertex_normal;
-                        attribute vec2 Vertex_texture_coordinate;
+                        attribute vec3 vtx_position;
+                        attribute vec3 vtx_normal;
+                        attribute vec2 vtx_texcoord_0;
                         void main() {
                             gl_Position = gl_ModelViewProjectionMatrix * vec4(
-                                Vertex_position, 1.0
+                                vtx_position, 1.0
                             );
-                            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
-                            light_preCalc(Vertex_position);
-                            Vertex_texture_coordinate_var = Vertex_texture_coordinate;
+                            baseNormal = gl_NormalMatrix * normalize(vtx_normal);
+                            light_preCalc(vtx_position);
+                            vtx_texcoord_0_var = vtx_texcoord_0;
                         }"""
                     ],
                     type='VERTEX'
@@ -136,7 +136,7 @@ class TestContext( BaseContext ):
                             vec4 fragColor = Global_ambient * material.ambient;
 
                             vec4 texDiffuse = texture2D(
-                                diffuse_texture, Vertex_texture_coordinate_var
+                                diffuse_texture, vtx_texcoord_0_var
                             );
                             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
 
@@ -173,7 +173,7 @@ class TestContext( BaseContext ):
         )
         
         vertex_def = VertexDefinition()
-        vertex_def.add_vec( 'texture_coordinate',2,vertex_def.TEXCOORD)
+        vertex_def.add_vec( 'texcoord_0',2,vertex_def.TEXCOORD)
         vertex_def.add_vec( 'normal' )
         vertex_def.add_vec( 'position' )
         
@@ -197,7 +197,7 @@ class TestContext( BaseContext ):
                         objects = [self.glslObject]
                     ),
                     indices = arange( 36, dtype='I' ),
-                    attributes = vertex_def.attributes( self.coords, 'Vertex' ),
+                    attributes = vertex_def.attributes( self.coords, 'vtx' ),
                 ),
             ],
         )
