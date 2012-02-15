@@ -109,12 +109,14 @@ class TestContext( BaseContext ):
                         uniform mat4 mat_modelview;
                         uniform mat4 mat_projection;
                         void main() {
-                            gl_Position = (mat_projection * mat_modelview ) * vec4(
+                            mat4 combined = (mat_projection * mat_modelview );
+                            vec4 position = combined * vec4(
                                 vtx_position, 1.0
                             );
                             baseNormal = gl_NormalMatrix * normalize(vtx_normal);
                             light_preCalc(vtx_position);
                             vtx_texcoord_0_var = vtx_texcoord_0;
+                            gl_Position = position;
                         }"""
                     ],
                     type='VERTEX'
