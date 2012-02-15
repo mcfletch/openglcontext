@@ -91,14 +91,26 @@ class Quaternion(object):
         if not scale:
             return (0,1,0,0)
         return (x / scale, y / scale, z / scale, 2 * aw )
-    def matrix( self, dtype='f' ):
+    def inverse( self ):
+        """Construct the inverse of this (unit) quaternion 
+        
+        Quaternion conjugate is (w,-x,-y,-z), inverse of a quaternion
+        is conjugate / length**2 (unit quaternion means length == 1)
+        """
+        w,x,y,z = self.internal 
+        return self.__class__( array((w,-x,-y,-z),'d'))
+    def matrix( self, dtype='f',inverse=False ):
         """Get a rotation matrix representing this rotation
         
         dtype -- specifies the result-type of the matrix, defaults 
             to 'f' in order to match real-world precision of matrix 
             operations in video cards
+        inverse -- if True, calculate the inverse matrix for the 
+            quaternion
         """
         w,x,y,z = self.internal
+        if inverse:
+            x,y,z = -x,-y,-z
         return array([
             [ 1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y, 0],
             [ 2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x, 0],
@@ -174,6 +186,13 @@ def test ():
     second = fromXYZR( 0,1,0,pi )
     for fraction in arange( 0.0, 1.0, .01 ):
         print first.slerp( second, fraction )
+    first = fromXYZR( 0,1,0,0 )
+    second = first.inverse()
+    assert allclose( first.internal,second.internal ), (first, second)
+    first = fromXYZR( 0,1,0,pi/2 )
+    second = first.inverse()
+    expected = fromXYZR( 0,1,0,-pi/2)
+    assert allclose( second.internal, expected.internal ), (second,expected )
 
 if __name__== "__main__":
     test ()
