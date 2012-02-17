@@ -11,7 +11,7 @@ from vrml.vrml97 import shaders
 import operator
 from vrml import field,node,fieldtypes,protofunctions
 from OpenGLContext.scenegraph import polygonsort,boundingvolume
-from OpenGLContext.arrays import array
+from OpenGLContext.arrays import array, transpose
 LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
 import time, sys
@@ -159,16 +159,20 @@ class ShaderAttribute( shaders.ShaderAttribute ):
 class _Uniform( object ):
     """Uniform common operations"""
     warned = False
+    def location( self, shader, mode ):
+        """Get our location (-1 if not defined/used)"""
+        return shader.getLocation( mode, self.name, uniform=True )
 
 class FloatUniform( _Uniform, shaders.FloatUniform ):
     """Uniform (variable) binding for a shader"""
     NEED_TRANSPOSE = False
-    def render( self, shader, mode ):
+    def render( self, shader, mode, location=None ):
         """Set this uniform value for the given shader
         
         This is called at render-time to update the value...
         """
-        location = shader.getLocation( mode, self.name, uniform=True )
+        if location is None:
+            location = self.location( shader, mode )
         if location is not None and location != -1:
             value = self.value
             shape = value.shape 
@@ -180,8 +184,8 @@ class FloatUniform( _Uniform, shaders.FloatUniform ):
                 size = reduce( operator.mul, shape[:-shape_length] )
             else:
                 size = 1
-            if self.NEED_TRANSPOSE:
-                return self.baseFunction( location, size, False, value )
+            if self.NEED_TRANSPOSE is not None:
+                return self.baseFunction( location, size, self.NEED_TRANSPOSE, value )
             else:
                 return self.baseFunction( location, size, value )
         return None
@@ -417,6 +421,11 @@ class GLSLObject( shaders.GLSLObject ):
                         uniform.value = mode.matrix.astype('f')
                     elif uniform.name == 'mat_projection':
                         uniform.value = mode.projection.astype('f')
+                    elif uniform.name == 'mat_normal':
+                        uniform.value = transpose( 
+                            # TODO: do the transpose in the uniform call itself..
+                            mode.renderPath.transformMatrix( inverse=True ).astype('f')
+                        )[:3,:3]
                     uniform.render( self, mode )
                 # TODO: retrieve maximum texture count and restrict to that...
                 i = 0
@@ -424,7 +433,7 @@ class GLSLObject( shaders.GLSLObject ):
                     if texture.render( self, mode, i ):
                         i += 1
         else:
-            log.warn( 'Renderer for %s was null', self )
+            log.warn( 'Renderer for %s was null: %s', self, self.compileLog )
         return True,True,True,renderer 
     def holderDepend( self, holder ):
         """Make this holder depend on our compilation vars"""
@@ -449,7 +458,7 @@ class GLSLObject( shaders.GLSLObject ):
                 glAttachShader(program, subShader )
                 subShaders.append( subShader )
             elif shader.source:
-                log.info( 'Failure compiling: %s %s', shader.compileLog, shader.url or shader.source )
+                log.warn( 'Failure compiling: %s %s', shader.compileLog, shader.url or shader.source )
         if len(subShaders) == len(self.shaders):
             glLinkProgram(program)
             glUseProgram( program )
