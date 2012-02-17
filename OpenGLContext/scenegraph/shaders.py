@@ -162,6 +162,14 @@ class _Uniform( object ):
     def location( self, shader, mode ):
         """Get our location (-1 if not defined/used)"""
         return shader.getLocation( mode, self.name, uniform=True )
+    
+    def currentValue( self, shader, mode ):
+        """Retrieve the current value for this item
+        
+        Is a customization point for uniforms that should be calculated on 
+        demand...
+        """
+        return self.value
 
 class FloatUniform( _Uniform, shaders.FloatUniform ):
     """Uniform (variable) binding for a shader"""
@@ -174,7 +182,7 @@ class FloatUniform( _Uniform, shaders.FloatUniform ):
         if location is None:
             location = self.location( shader, mode )
         if location is not None and location != -1:
-            value = self.value
+            value = self.currentValue( shader, mode )
             shape = value.shape 
             shape_length = len(self.shape)
             if shape[-shape_length:] != self.shape:
@@ -197,7 +205,8 @@ class _TextureUniform( _Uniform ):
     def bind( self, shader, mode, index ):
         location = shader.getLocation( mode, self.name, uniform=True )
         if location is not None and location != -1:
-            if self.value:
+            value = self.currentValue( shader, mode )
+            if value:
                 self.baseFunction( location, index )
                 return True 
         return False
@@ -209,10 +218,11 @@ class TextureUniform( _TextureUniform, shaders.TextureUniform ):
         """Bind the actual uniform value"""
         location = shader.getLocation( mode, self.name, uniform=True )
         if location is not None and location != -1:
-            if self.value:
+            value = self.currentValue( shader, mode )
+            if value:
                 self.baseFunction( location, index )
                 glActiveTexture( GL_TEXTURE0 + index )
-                self.value.render( mode.visible, mode.lighting, mode )
+                value.render( mode.visible, mode.lighting, mode )
                 return True 
         return False
 class TextureBufferUniform( _TextureUniform, shaders.TextureBufferUniform ):
@@ -231,11 +241,12 @@ class TextureBufferUniform( _TextureUniform, shaders.TextureBufferUniform ):
         """Bind the actual uniform value"""
         location = shader.getLocation( mode, self.name, uniform=True )
         if location is not None and location != -1:
-            if self.value:
+            value = self.currentValue( shader, mode )
+            if value:
                 self.baseFunction( location, index )
                 glActiveTexture( GL_TEXTURE0 + index )
                 glBindTexture( GL_TEXTURE_BUFFER, self.texture( mode ) )
-                vbo = self.value.vbo(mode)
+                vbo = value.vbo(mode)
                 vbo.bind()
                 try:
                     glTexBuffer( GL_TEXTURE_BUFFER, self.get_format(), int(vbo) )
@@ -247,12 +258,16 @@ class TextureBufferUniform( _TextureUniform, shaders.TextureBufferUniform ):
 
 def _uniformCls( suffix ):
     def buildCls( name, suffix, size, function, base ):
+        if 'm' in suffix:
+            NEED_TRANSPOSE = False 
+        else:
+            NEED_TRANSPOSE = None
         cls = type( name, (base,), {
             'suffix': suffix,
             'PROTO': name,
             'baseFunction': function,
             'shape': size,
-            'NEED_TRANSPOSE': 'm' in suffix,
+            'NEED_TRANSPOSE': NEED_TRANSPOSE,
         } )
         globals()[name] = cls 
     
@@ -416,16 +431,9 @@ class GLSLObject( shaders.GLSLObject ):
                 ]))
                 raise
             else:
+                for uniform in mode.uniforms:
+                    uniform.render( self, mode )
                 for uniform in self.uniforms:
-                    if uniform.name == 'mat_modelview':
-                        uniform.value = mode.matrix.astype('f')
-                    elif uniform.name == 'mat_projection':
-                        uniform.value = mode.projection.astype('f')
-                    elif uniform.name == 'mat_normal':
-                        uniform.value = transpose( 
-                            # TODO: do the transpose in the uniform call itself..
-                            mode.renderPath.transformMatrix( inverse=True ).astype('f')
-                        )[:3,:3]
                     uniform.render( self, mode )
                 # TODO: retrieve maximum texture count and restrict to that...
                 i = 0
@@ -528,7 +536,7 @@ class GLSLObject( shaders.GLSLObject ):
                 location = glGetAttribLocation( program, name )
             locationMap[ name ] = location 
             if location == -1:
-                log.warn( 'Unable to resolve uniform name %s', name )
+                log.info( 'Unable to resolve uniform name %s', name )
             return location 
     def sortKey( self, mode, matrix ):
         """Produce the sorting key for this shape's appearance/shaders/etc"""

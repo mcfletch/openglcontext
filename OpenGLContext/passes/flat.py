@@ -1,11 +1,12 @@
 """Flat rendering mechanism using structural scenegraph observation"""
-from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,shaders
+from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot
 from OpenGLContext import frustum
 from OpenGLContext.debug.logs import getTraceback
 from vrml.vrml97 import nodetypes
 from vrml import olist
+from OpenGLContext.scenegraph import shaders
 import sys
 from pydispatch.dispatcher import connect
 import logging 
@@ -139,6 +140,22 @@ class SGObserver( object ):
                             pass
             self.paths[key][:] = filtered
 
+def get_modelview( shader, mode ):
+    return mode.matrix 
+def get_projection( shader, mode ):
+    return mode.projection 
+def get_modelproj( shader, mode ):
+    return dot( mode.projection, mode.matrix )
+
+def get_inv_modelview( shader, mode ):
+    return dot( mode.modelView, mode.renderPath.transformMatrix( inverse=True ) )
+def get_inv_projection( shader, mode ):
+    return mode.viewPlatform.viewMatrix( mode.maxDepth, inverse=True )
+def get_inv_modelproj( shader, mode ):
+    mv = get_inv_modelview( shader, mode )
+    proj = get_inv_projection( shader, mode )
+    return dot( mv, proj )
+            
 class FlatPass( SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
@@ -189,7 +206,7 @@ class FlatPass( SGObserver ):
             self._uniforms = []
             for name in self._UNIFORM_NAMES:
                 attr = 'uniform_%s'%(name,)
-                uniform = FloatUniformm4( name=name )
+                uniform = shaders.FloatUniformm4( name=name )
                 self._uniforms.append( uniform )
                 setattr( self, attr, uniform )
                 if name.startswith( 'tps_' ) or name.startswith( 'itp_' ):
@@ -200,70 +217,27 @@ class FlatPass( SGObserver ):
                     uniform.NEED_INVERSE = True 
                 else:
                     uniform.NEED_INVERSE = False 
+            # now set up the lazy calculation operations 
+            self.uniform_mat_modelview.currentValue = get_modelview
+            self.uniform_mat_projection.currentValue = get_projection
+            self.uniform_mat_modelproj.currentValue = get_modelproj
+            self.uniform_tps_modelview.currentValue = get_modelview
+            self.uniform_tps_projection.currentValue = get_projection
+            self.uniform_tps_modelproj.currentValue = get_modelproj
+            
+            self.uniform_inv_modelview.currentValue = get_inv_modelview
+            self.uniform_inv_projection.currentValue = get_inv_projection
+            self.uniform_inv_modelproj.currentValue = get_inv_modelproj
+            self.uniform_itp_modelview.currentValue = get_inv_modelview
+            self.uniform_itp_projection.currentValue = get_inv_projection
+            self.uniform_itp_modelproj.currentValue = get_inv_modelproj
+            
         return self._uniforms
     
     def applyUniforms( self, shader ):
         """Apply our uniforms to the shader as appropriate"""
-        path = self.renderPath
-        mv = self.matrix 
-        proj = self.projection
-        modelproj = dot( proj, mv )
-        # NOTE: is the *reverse* order for the dot
-        inv_mv = dot( self.modelView, path.transformMatrix( inverse=True ) )
-        inv_proj = self.viewPlatform.viewMatrix( self.maxDepth, inverse=True )
-        inv_modelproj = dot( inv_mv, inv_proj )
-        
-        
-        self.uniform_mat_projection = proj
-        self.uniform_tps_projection = proj
-        self.uniform_inv_projection = inv_proj
-        self.uniform_itp_projection = inv_proj
-
-        self.uniform_mat_modelproj = modelproj
-        self.uniform_tps_modelproj = modelproj
-        self.uniform_inv_modelproj = inv_modelproj
-        self.uniform_itp_modelproj = inv_modelproj
-    
-    def setRenderPath( self, path, mv=None, projection=None ):
-        """Set this render-path to be our current configured model-view matrix"""
-        self.renderPath = path 
-        if mv is None:
-            mv = path.transformMatrix()
-        self.matrix = mv
-        if projection is None:
-            projection = self.uniform_mat_projection.value
-            inv_proj = self.uniform_inv_projection.value
-            assert projection, "Need a projection before we can do model-view calculations"
-            assert inv_proj, "Need an inverse projection before we can do inverse mv calculations"
-        
-        modelproj = dot( proj, mv )
-        
-        inv_mv = dot( self.modelView, path.transformMatrix( inverse=True ) )
-        inv_modelproj = dot( inv_mv, inv_proj )
-
-        self._setModelView( mv, inv_mv )
-        self._setModelProj( modelproj, inv_modelproj )
-    
-    def _setModelProj( self, modelproj,inv_modelproj ):
-        """Set up the combined modelproj and inv_modelproj uniforms"""
-        self.uniform_mat_modelproj = modelproj
-        self.uniform_tps_modelproj = modelproj
-        self.uniform_inv_modelproj = inv_modelproj
-        self.uniform_itp_modelproj = inv_modelproj
-    def _setModelView( self, mv, inv_mv ):
-        """Set up the stand-alone modelview/inverse model view uniforms"""
-        self.uniform_mat_modelview = mv 
-        self.uniform_tps_modelview = mv 
-        self.uniform_inv_modelview = inv_mv
-        self.uniform_itp_modelview = inv_mv
-    
-    def _setProjection( self, proj, inv_proj ):
-        """Set up the stand-alone projection/inv_projection uniforms"""
-        self.uniform_mat_projection = proj
-        self.uniform_tps_projection = proj
-        self.uniform_inv_projection = inv_proj
-        self.uniform_itp_projection = inv_proj
-        
+        for uniform in self.uniforms:
+            uniform.render( shader, self )
     
     INTERESTING_TYPES = [
         nodetypes.Rendering,
@@ -597,21 +571,17 @@ class FlatPass( SGObserver ):
     def __call__( self, context ):
         """Overall rendering pass interface for the context client"""
         vp = context.getViewPlatform()
-        self.viewPlatform = vp
+        self.setViewPlatform( vp )
         # These values are temporarily stored locally, we are
         # in the context lock, so we're not causing conflicts
         if self.MAX_LIGHTS == -1:
             self.MAX_LIGHTS = 8 #glGetIntegerv( GL_MAX_LIGHTS )
         self.context = context
         self.cache = context.cache
-        self.projection = vp.viewMatrix().astype('f')
         self.viewport = (0,0) + context.getViewPort()
-        self.modelView = vp.modelMatrix().astype('f')
         
         self.calculateFrustum()
 
-        # We're here setting up legacy OpenGL settings
-        # eventually these will be uniform setups...
         self.Render( context, self )
         return True # flip yes, for now we always flip...
 
@@ -619,7 +589,7 @@ class FlatPass( SGObserver ):
         """Construct our Frustum instance (currently by extracting from mv matrix)"""
         # TODO: calculate from view platform instead
         self.frustum = frustum.Frustum.fromViewingMatrix(
-            dot(self.modelView,self.projection),
+            self.modelproj,
             normalize = 1
         )
         return self.frustum
@@ -633,3 +603,11 @@ class FlatPass( SGObserver ):
     def getModelView( self ):
         """Retrieve the base model-view matrix for the rendering pass"""
         return self.modelView
+    
+    def setViewPlatform( self, vp ):
+        """Set our view platform"""
+        self.viewPlatform = vp 
+        self.projection = vp.viewMatrix().astype('f')
+        self.modelView = vp.modelMatrix().astype('f')
+        self.modelproj = dot( self.modelView, self.projection )
+        self.matrix = None 
