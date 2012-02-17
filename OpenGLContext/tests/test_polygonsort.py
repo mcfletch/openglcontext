@@ -9,8 +9,8 @@ class TestPolygonSort( unittest.TestCase ):
     def setUp( self ):
         self.vp = viewplatform.ViewPlatform()
         self.vp.setPosition( (0,0,10) )
-        self.pMatrix = self.vp.viewMatrix()
-        self.mvMatrix = self.vp.modelMatrix()
+        self.pMatrix = self.vp.viewMatrix().astype('d')
+        self.mvMatrix = self.vp.modelMatrix().astype('d')
         self.viewPort = array([0,0,300,300],'f')
     def test_distances( self ):
         """Test distance calculation function
