@@ -1,5 +1,5 @@
 """Flat rendering mechanism using structural scenegraph observation"""
-from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
+from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,shaders
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot
 from OpenGLContext import frustum
@@ -15,6 +15,24 @@ if sys.maxint > 2L<<32:
     BIGINTS = True
 else:
     BIGINTS = False
+#try:
+#    from collections import namedtuple
+#    RenderRecord = namedtuple( 'RenderRecord',[
+#        'sortKey',
+#        'mvmatrix',
+#        'tmatrix',
+#        'bvolume',
+#        'path',
+#    ])
+#except ImportError, err:
+#    class RenderRecord( object ):
+#        def __init__( self, sortKey, mvmatrix, tmatrix,bvolume,path ):
+#            self.sortKey = sortKey 
+#            self.mvmatrix = mvmatrix
+#            self.tmatrix = tmatrix 
+#            self.bvolume = bvolume 
+#            self.path = path
+
 
 class SGObserver( object ):
     """Observer of a scenegraph that creates a flat set of paths
@@ -159,7 +177,94 @@ class FlatPass( SGObserver ):
     selectForced = False
 
     cache = None
+    
+    _UNIFORM_NAMES = '''mat_modelview inv_modelview tps_modelview itp_modelview 
+        mat_projection inv_projection tps_projection itp_projection
+        mat_modelproj inv_modelproj tps_modelproj itp_modelproj'''.split()
 
+    _uniforms = None
+    @property 
+    def uniforms( self ):
+        if self._uniforms is None:
+            self._uniforms = []
+            for name in self._UNIFORM_NAMES:
+                attr = 'uniform_%s'%(name,)
+                uniform = FloatUniformm4( name=name )
+                self._uniforms.append( uniform )
+                setattr( self, attr, uniform )
+                if name.startswith( 'tps_' ) or name.startswith( 'itp_' ):
+                    uniform.NEED_TRANSPOSE = True 
+                else:
+                    uniform.NEED_TRANSPOSE = False
+                if name.startswith( 'inv_' ) or name.startswith( 'itp_' ):
+                    uniform.NEED_INVERSE = True 
+                else:
+                    uniform.NEED_INVERSE = False 
+        return self._uniforms
+    
+    def applyUniforms( self, shader ):
+        """Apply our uniforms to the shader as appropriate"""
+        path = self.renderPath
+        mv = self.matrix 
+        proj = self.projection
+        modelproj = dot( proj, mv )
+        # NOTE: is the *reverse* order for the dot
+        inv_mv = dot( self.modelView, path.transformMatrix( inverse=True ) )
+        inv_proj = self.viewPlatform.viewMatrix( self.maxDepth, inverse=True )
+        inv_modelproj = dot( inv_mv, inv_proj )
+        
+        
+        self.uniform_mat_projection = proj
+        self.uniform_tps_projection = proj
+        self.uniform_inv_projection = inv_proj
+        self.uniform_itp_projection = inv_proj
+
+        self.uniform_mat_modelproj = modelproj
+        self.uniform_tps_modelproj = modelproj
+        self.uniform_inv_modelproj = inv_modelproj
+        self.uniform_itp_modelproj = inv_modelproj
+    
+    def setRenderPath( self, path, mv=None, projection=None ):
+        """Set this render-path to be our current configured model-view matrix"""
+        self.renderPath = path 
+        if mv is None:
+            mv = path.transformMatrix()
+        self.matrix = mv
+        if projection is None:
+            projection = self.uniform_mat_projection.value
+            inv_proj = self.uniform_inv_projection.value
+            assert projection, "Need a projection before we can do model-view calculations"
+            assert inv_proj, "Need an inverse projection before we can do inverse mv calculations"
+        
+        modelproj = dot( proj, mv )
+        
+        inv_mv = dot( self.modelView, path.transformMatrix( inverse=True ) )
+        inv_modelproj = dot( inv_mv, inv_proj )
+
+        self._setModelView( mv, inv_mv )
+        self._setModelProj( modelproj, inv_modelproj )
+    
+    def _setModelProj( self, modelproj,inv_modelproj ):
+        """Set up the combined modelproj and inv_modelproj uniforms"""
+        self.uniform_mat_modelproj = modelproj
+        self.uniform_tps_modelproj = modelproj
+        self.uniform_inv_modelproj = inv_modelproj
+        self.uniform_itp_modelproj = inv_modelproj
+    def _setModelView( self, mv, inv_mv ):
+        """Set up the stand-alone modelview/inverse model view uniforms"""
+        self.uniform_mat_modelview = mv 
+        self.uniform_tps_modelview = mv 
+        self.uniform_inv_modelview = inv_mv
+        self.uniform_itp_modelview = inv_mv
+    
+    def _setProjection( self, proj, inv_proj ):
+        """Set up the stand-alone projection/inv_projection uniforms"""
+        self.uniform_mat_projection = proj
+        self.uniform_tps_projection = proj
+        self.uniform_inv_projection = inv_proj
+        self.uniform_itp_projection = inv_proj
+        
+    
     INTERESTING_TYPES = [
         nodetypes.Rendering,
         nodetypes.Bindable,
@@ -244,7 +349,7 @@ class FlatPass( SGObserver ):
         self.matrix = matrix
 
         toRender = self.renderSet( matrix )
-        maxDepth = self.greatestDepth( toRender )
+        maxDepth = self.maxDepth = self.greatestDepth( toRender )
         vp = context.getViewPlatform()
         if maxDepth:
             self.projection = vp.viewMatrix(maxDepth)
@@ -317,6 +422,7 @@ class FlatPass( SGObserver ):
 
             localMatrix = dot(tmatrix,matrix)
             self.matrix = localMatrix
+            self.renderPath = path
             glLoadMatrixf( localMatrix )
 
             path[-1].Light( GL_LIGHT0+id, mode=self )
@@ -349,6 +455,7 @@ class FlatPass( SGObserver ):
         for key,mvmatrix,tmatrix,bvolume,path in toRender:
             if not key[0]:
                 self.matrix = mvmatrix
+                self.renderPath = path
                 glMatrixMode(GL_MODELVIEW)
                 glLoadMatrixf( mvmatrix )
                 try:
@@ -378,6 +485,7 @@ class FlatPass( SGObserver ):
                         glDepthFunc( GL_LEQUAL )
 
                     self.matrix = mvmatrix
+                    self.renderPath = path
                     glLoadMatrixf( mvmatrix )
                     try:
                         path[-1].RenderTransparent( mode = self )
@@ -459,6 +567,7 @@ class FlatPass( SGObserver ):
                 idSetter[0] = id
                 glColor4bv( idHolder )
                 self.matrix = mvmatrix
+                self.renderPath = path
                 glLoadMatrixf( mvmatrix )
                 path[-1].Render( mode=self )
                 map[id] = path

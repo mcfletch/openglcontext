@@ -86,8 +86,6 @@ class TestContext( BaseContext ):
                 FloatUniform4f(name="material.specular", value=(.4,.4,.4,1.0) ),
                 FloatUniform4f(name="Global_ambient", value=(.1,.1,.1,1.0) ),
                 FloatUniform4f(name="lights" ),
-                FloatUniformm4(name="mat_modelview" ),
-                FloatUniformm4(name="mat_projection" ),
             ],
             textures = [
                 TextureUniform(name="diffuse_texture", value=ImageTexture(
@@ -106,14 +104,32 @@ class TestContext( BaseContext ):
                         attribute vec3 vtx_position;
                         attribute vec3 vtx_normal;
                         attribute vec2 vtx_texcoord_0;
-                        uniform mat4 mat_modelview;
+                        
+                        // modelview matrix and inverse...
+                        uniform mat4 mat_modelview; 
+                        uniform mat4 inv_modelview;
+                        uniform mat4 tps_modelview;
+                        uniform mat4 itp_modelview;
+                        
+                        // projection matrix and inverse...
                         uniform mat4 mat_projection;
+                        uniform mat4 inv_projection;
+                        uniform mat4 tps_projection;
+                        uniform mat4 itp_projection;
+                        
+                        // combined matrices and inverse
+                        uniform mat4 mat_modelproj;
+                        uniform mat4 inv_modelproj;
+                        uniform mat4 tps_modelproj;
+                        uniform mat4 itp_modelproj; // a.k.a. gl_NormalMatrix
+                        
                         void main() {
                             mat4 combined = (mat_projection * mat_modelview );
                             vec4 position = combined * vec4(
                                 vtx_position, 1.0
                             );
-                            baseNormal = gl_NormalMatrix * normalize(vtx_normal);
+                            baseNormal = normalize( gl_NormalMatrix * vtx_normal);
+                            //baseNormal = normalize( mat_normal * vec4(vtx_normal,0.0)).xyz;
                             light_preCalc(vtx_position);
                             vtx_texcoord_0_var = vtx_texcoord_0;
                             gl_Position = position;
@@ -197,6 +213,8 @@ class TestContext( BaseContext ):
             ),
         )
         self.sg = Transform(
+            rotation = (0,1,0,1.0),# radians
+            scale = (1,2,1),
             children = [
                 ShaderGeometry(
                     appearance = Shader( 

@@ -71,7 +71,7 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
         else:
             return 0
 
-    def viewMatrix( self, cutOffAngle=None, aspect=1.0, near=0.1, far=10000 ):
+    def viewMatrix( self, cutOffAngle=None, aspect=1.0, near=0.1, far=10000, inverse=False ):
         """Calculate viewing matrix for our light
 
         Calculate our projection matrix, note that this assumes that
@@ -87,22 +87,26 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
             cutOffAngle,
             aspect,
             near,
-            far
+            far,
+            inverse=inverse,
         )
-    def modelMatrix( self, direction=None ):
+    def modelMatrix( self, direction=None, inverse=False ):
         """Calculate our model-side matrix"""
         if direction is None:
             direction = getattr( self,'direction',None)
         if direction:
             rot = vectorutilities.orientToXYZR( (0,0,-1), direction )
             # inverse of rotation matrix, hmm...
-            rotate = transformmatrix.rotMatrix( rot )[1]
+            rotate = transformmatrix.rotMatrix( rot )[bool(not inverse)]
             # inverse of translation matrix...
-            translate = transformmatrix.transMatrix(self.location)[1]
-            return dot( translate,rotate )
+            translate = transformmatrix.transMatrix(self.location)[bool(not inverse)]
+            if inverse:
+                return dot( rotate,translate )
+            else:
+                return dot( translate,rotate )
         else:
-            # inverse of translation matrix...
-            return transformmatrix.transMatrix(self.location)[1]
+            # *inverse* of translation matrix is forward
+            return transformmatrix.transMatrix(self.location)[bool(not inverse)]
 
 class PointLight(basenodes.PointLight, Light):
     """PointLight node
