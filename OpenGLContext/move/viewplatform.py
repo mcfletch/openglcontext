@@ -145,7 +145,7 @@ class ViewPlatform(object):
         glRotate( r*RADTODEG, x,y,z )
         glTranslate( *negative (self.position)[:3])
 
-    def viewMatrix( self, trimDepth=None ):
+    def viewMatrix( self, trimDepth=None, inverse=False ):
         """Calculate our matrix"""
         fovy, aspect, zNear, zFar = self.frustum
         if trimDepth is not None:
@@ -154,25 +154,32 @@ class ViewPlatform(object):
             radians(fovy),
             aspect,
             zNear,
-            zFar
+            zFar,
+            inverse=inverse,
         )
-    def modelMatrix( self ):
+    def modelMatrix( self, inverse=False ):
         """Calculate our model-side matrix"""
-        rotate = self.quaternion.matrix()
-        # inverse of translation matrix...
-        translate = transformmatrix.transMatrix(self.position)[1]
+        rotate = self.quaternion.matrix( inverse=inverse )
+        # inverse of translation matrix, if inverse, need the forward...
+        translate = transformmatrix.transMatrix(self.position)[(not inverse)]
         if rotate is not None and translate is not None:
-            return dot( translate,rotate )
+            if inverse:
+                return dot( rotate, translate )
+            else:
+                return dot( translate,rotate )
         elif rotate is None:
             return translate
         else:
             return rotate
-    def matrix( self ):
+    def matrix( self, inverse = False ):
         """Calculate total model-view matrix for this view platform"""
-        model = self.modelMatrix()
-        view = self.viewMatrix()
+        model = self.modelMatrix( inverse=inverse )
+        view = self.viewMatrix( inverse=inverse )
         if model is not None and view is not None:
-            return dot( model, view )
+            if inverse:
+                return dot( view, model )
+            else:
+                return dot( model, view )
         elif model is None:
             return view 
         else:
