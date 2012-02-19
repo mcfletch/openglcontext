@@ -36,7 +36,7 @@ def viewingMatrix(projection = None,model = None):
     # hmm, this will likely fail on 64-bit platforms :(
     if projection is None or model is None:
         log.warn( 
-            """A NULL matrix was returned from glGetDoublev: proj=%s modelView=%s""",
+            """A NULL matrix was returned from glGetFloatv: proj=%s modelView=%s""",
             projection, model,
         )
         if projection:

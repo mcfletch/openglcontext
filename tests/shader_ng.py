@@ -124,12 +124,15 @@ class TestContext( BaseContext ):
                         uniform mat4 itp_modelproj; // a.k.a. gl_NormalMatrix
                         
                         void main() {
-                            mat4 combined = (mat_projection * mat_modelview );
+                            mat4 combined = mat_modelproj;
+                            //mat4 mat_normal = transpose(inverse(mat_modelview));
+                            //mat4 mat_normal = transpose(inv_modelview);
+                            mat4 mat_normal = transpose(inv_modelview);
                             vec4 position = combined * vec4(
                                 vtx_position, 1.0
                             );
-                            baseNormal = normalize( gl_NormalMatrix * vtx_normal);
-                            //baseNormal = normalize( mat_normal * vec4(vtx_normal,0.0)).xyz;
+                            //baseNormal = normalize( gl_NormalMatrix * vtx_normal);
+                            baseNormal = normalize( mat_normal * vec4(vtx_normal,0.0)).xyz;
                             light_preCalc(vtx_position);
                             vtx_texcoord_0_var = vtx_texcoord_0;
                             gl_Position = position;

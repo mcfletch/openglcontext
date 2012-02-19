@@ -1,7 +1,7 @@
 """Flat rendering mechanism using structural scenegraph observation"""
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
-from OpenGLContext.arrays import array, dot
+from OpenGLContext.arrays import array, dot, allclose
 from OpenGLContext import frustum
 from OpenGLContext.debug.logs import getTraceback
 from vrml.vrml97 import nodetypes
@@ -145,17 +145,17 @@ def get_modelview( shader, mode ):
 def get_projection( shader, mode ):
     return mode.projection 
 def get_modelproj( shader, mode ):
-    return dot( mode.projection, mode.matrix )
+    return dot( mode.matrix, mode.projection )
 
 def get_inv_modelview( shader, mode ):
-    return dot( mode.modelView, mode.renderPath.transformMatrix( inverse=True ) )
+    return dot( mode.viewPlatform.modelMatrix(inverse=True), mode.renderPath.transformMatrix( inverse=True ) )
 def get_inv_projection( shader, mode ):
     return mode.viewPlatform.viewMatrix( mode.maxDepth, inverse=True )
 def get_inv_modelproj( shader, mode ):
     mv = get_inv_modelview( shader, mode )
     proj = get_inv_projection( shader, mode )
-    return dot( mv, proj )
-            
+    return dot( proj, mv )
+
 class FlatPass( SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
