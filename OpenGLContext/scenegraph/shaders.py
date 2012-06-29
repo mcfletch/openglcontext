@@ -412,7 +412,7 @@ class GLSLObject( shaders.GLSLObject ):
     IMPLEMENTATION = 'GLSL'
     compileLog = field.newField( ' compileLog', 'SFString', '' )
     # we've manually chosen this implementation...
-    def render( self, mode, shader ):
+    def render( self, mode, shader=None ):
         """Render this shader in the current mode"""
         renderer = mode.cache.getData(self)
         if renderer is None:
