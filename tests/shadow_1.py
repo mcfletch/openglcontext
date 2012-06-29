@@ -232,6 +232,7 @@ class TestContext( BaseContext ):
     def Render( self, mode):
         assert mode
         BaseContext.Render( self, mode )
+        self.geometryPasses.setViewPlatform( mode.viewPlatform )
         if mode.visible and mode.lighting and not mode.transparent:
             '''These settings tell us we are being asked to do a
             regular opaque rendering pass (with lighting).  This is
@@ -573,10 +574,6 @@ class TestContext( BaseContext ):
         '''Again, we configure the mode to tell the geometry how to
         render itself.  Here we want to have almost everything save
         the diffuse lighting calculations performed.'''
-        self.geometryPasses.modelView = self.geometryPasses.matrix = mode.getModelView()
-        self.geometryPasses.projection = mode.getProjection()
-        self.geometryPasses.viewport = mode.viewport
-        self.geometryPasses.frustum = mode.frustum
         self.geometryPasses.context = self
         self.geometryPasses.cache = mode.cache
         
