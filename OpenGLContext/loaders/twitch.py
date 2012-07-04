@@ -8,6 +8,8 @@ Basically just uses numpy record declarations to parse the bsp files
 into structured data-arrays...
 """
 import numpy, sys, logging 
+from OpenGL.arrays import vbo
+
 log = logging.getLogger( __name__ )
 filename = 'maps/focal_p132.bsp'
 i4 = '<i4'
@@ -168,7 +170,75 @@ def parse_bsp( array ):
 class Twitch( object ):
     def __init__( self, model ):
         self.__dict__.update( model )
+        self.vertex_vbo = vbo.VBO( self.vertices )
     
+    simple_indices_vbo = None
+    @property
+    def simple_faces( self ):
+        """Create an index VBO for the indices to render faces of type 1 and 3"""
+        if self.simple_indices_vbo is None:
+            faces = self.faces
+            # for type 1 and 3 we can simply create indices...
+            simple_types = numpy.logical_or( self.faces['type'] == 1, self.faces['type'] == 3)
+            simple_faces = numpy.compress( simple_types, self.faces )
+            simple_index_count = numpy.sum( simple_faces['n_meshverts'] )
+            indices = numpy.zeros( (simple_index_count,), 'I4' )
+            # ick, should be a fast way to do this...
+            starts = simple_faces['meshvert']
+            stops = simple_faces['meshvert'] + simple_faces['n_meshverts']
+            start_indices = simple_faces['vertex']
+            current = 0
+            for start,stop,index in zip(starts,stops,start_indices):
+                end = current + (stop-start)
+                indices[current:end] = self.meshverts[start:stop] + index
+                current = end
+            self.simple_indices_vbo= vbo.VBO( indices, target = 'GL_ELEMENT_ARRAY_BUFFER' )
+            # for type 2, we need to convert a control surface to a set of indices...
+        return self.simple_indices_vbo
+    patch_indices_vbo = None
+    @property
+    def patch_faces( self ):
+        """Create another pair of VBOs for our patch faces
+        
+        TODO: do the bezier position adjustment (currently just renders 
+        the control points)
+        
+        a, -> [a,b,c],[d,e,f]
+            a blend
+                b = 1-a
+                    x = u**2 * cp[0].x + 2*a*b * cp[1].x + b**2 * cp[2].x
+                    y = ...
+                    z = ...
+            For the second blend, blend the control points...
+        """
+        if self.patch_indices_vbo is None:
+            patch_faces = numpy.compress( self.faces['type'] == 2, self.faces )
+            starts = patch_faces['vertex']
+            sizes = patch_faces['size']
+            patch_count = sum((patch_faces['size'][:,0]//3) * (patch_faces['size'][:,1]//3))
+            
+            current = 0
+            index_pattern = numpy.array( [0,3,1,1,3,4,1,4,5,1,5,2,3,6,7,3,7,4,4,7,8,4,8,5], 'I' )
+            indices = numpy.zeros( (patch_count,len(index_pattern)), 'I' )
+            #indices[:] = index_pattern
+            current = 0
+            for (start,size) in zip( starts, sizes):
+                patch_indices = numpy.arange( 0,size[0]*size[1], dtype='I' )
+                patch_indices += start
+                patch_indices = patch_indices.reshape( size )
+                
+                for i in range( 0, size[0]-1,2 ):
+                    column = patch_indices[i:i+3]
+                    for j in range( 0, size[1]-1,2):
+                        block = column[:,j:j+3]
+                        assert block.shape == (3,3), block
+                        block = numpy.ravel( block )
+                        assert len(block) == 9, block
+                        block_expanded = numpy.take( block, index_pattern )
+                        indices[current:current+len(block_expanded)] = block_expanded
+                        current += len(block_expanded)
+            self.patch_indices_vbo = vbo.VBO( patch_indices, target="GL_ELEMENT_ARRAY_BUFFER")
+        return self.patch_indices_vbo
 
 def load( filename ):
     array = numpy.memmap( filename, dtype='c', mode='c' )
