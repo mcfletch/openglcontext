@@ -1,11 +1,9 @@
 """Renderer for a Twitch node (Quake III style BSP map)"""
-import logging,numpy
+import logging,numpy, sys
 from OpenGLContext import testingcontext
 from OpenGLContext.loaders import twitch
 from OpenGL.GL import *
 BaseContext = testingcontext.getInteractive()
-
-
 
 class TwitchContext( BaseContext ):
 #    initialPosition = (-432.,-336., -736.)
@@ -13,7 +11,7 @@ class TwitchContext( BaseContext ):
 #    initialPosition = -120., -576., -480.
     
     def OnInit( self ):
-        self.twitch = twitch.load( '/home/mcfletch/OpenGL-dev/twitch/maps/focal_p132.bsp' )
+        self.twitch = twitch.load( sys.argv[1] )
         # okay, load up the various vbo
         self.twitch.patch_faces
         

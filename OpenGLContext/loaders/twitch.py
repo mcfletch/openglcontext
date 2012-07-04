@@ -173,6 +173,7 @@ class Twitch( object ):
         self.vertex_vbo = vbo.VBO( self.vertices )
     
     simple_indices_vbo = None
+    texture_set = None
     @property
     def simple_faces( self ):
         """Create an index VBO for the indices to render faces of type 1 and 3"""
@@ -181,19 +182,32 @@ class Twitch( object ):
             # for type 1 and 3 we can simply create indices...
             simple_types = numpy.logical_or( self.faces['type'] == 1, self.faces['type'] == 3)
             simple_faces = numpy.compress( simple_types, self.faces )
+            # texture counts...
+            sortorder = numpy.lexsort( (simple_faces['texture'],) )
+            simple_faces = numpy.take( simple_faces, sortorder )
+            
+            self.texture_set = texture_set = []
+            
             simple_index_count = numpy.sum( simple_faces['n_meshverts'] )
             indices = numpy.zeros( (simple_index_count,), 'I4' )
             # ick, should be a fast way to do this...
             starts = simple_faces['meshvert']
+            textures = simple_faces['texture']
             stops = simple_faces['meshvert'] + simple_faces['n_meshverts']
             start_indices = simple_faces['vertex']
             current = 0
-            for start,stop,index in zip(starts,stops,start_indices):
+            texture = None
+            for tex,start,stop,index in zip(textures,starts,stops,start_indices):
+                if texture != tex:
+                    if texture:
+                        texture_set.append( (texture,stop))
+                    texture = tex
                 end = current + (stop-start)
                 indices[current:end] = self.meshverts[start:stop] + index
                 current = end
             self.simple_indices_vbo= vbo.VBO( indices, target = 'GL_ELEMENT_ARRAY_BUFFER' )
             # for type 2, we need to convert a control surface to a set of indices...
+            log.debug( '%s textures used by simple geometry', len(self.texture_set, ))
         return self.simple_indices_vbo
     patch_indices_vbo = None
     @property
