@@ -7,6 +7,7 @@ from OpenGL.GL import *
 from OpenGLContext.arrays import *
 import string, time
 
+from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph import nurbs
 
@@ -65,8 +66,12 @@ def grid_indices( expanded ):
     """Create indices array to render expanded vertex array"""
     M,N = expanded.shape[:2]
     quads = (M-1) * (N-1)
-    quadbases = arange( 0, quads, dtype='i')
-    quadbases = quadbases.repeat( 6 )
+    indices = arange( 0, M*N ).reshape( (M,N ))
+    indices = indices[:-1,:-1]
+    quadbases = ravel( indices ).repeat( 6 )
+    
+    #quadbases = arange( 0, quads, dtype='i').repeat( 6 )
+    
     offsets = tile( array( [0,1,N,N,1,1+N], 'i' ), quads )
     return offsets + quadbases
 
@@ -80,7 +85,7 @@ class TestContext( BaseContext ):
             [(0,0,2), (1,0,2), (2,0,2), (3,-1,2),(4,0,2)],
         ], 'f')
         points3 = expand( points )
-        indices = grid_indices( points3 )
+        self.indices = grid_indices( points3 )
         
         self.sg = sceneGraph( children = [
             Shape( geometry = PointSet(
@@ -89,14 +94,13 @@ class TestContext( BaseContext ):
             Shape( 
                 geometry = IndexedPolygons(
                     coord = Coordinate( point = points3 ),
-                    index = indices,
-                    color = Color(
-                        color = [(1,0,0)]*len(indices),
-                    ),
+                    index = self.indices,
+                    solid = False,
                 ),
             ),
             
         ] )
+        
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
