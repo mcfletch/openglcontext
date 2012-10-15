@@ -71,9 +71,9 @@ def expand( points, divisions= 10 ):
     assert len(ws) == divisions, ws
     
     for m in range( 0, M-1, 2 ):
-        m_final = m * divisions 
+        m_final = (m//2) * divisions 
         for n in range( 0, N-1, 2 ):
-            n_final = n * divisions
+            n_final = (n//2) * divisions
             curves = dot( ws, points[m:m+3,n:n+3] )
             # now get final points...
             verts = dot( ws, curves )
@@ -86,16 +86,16 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Create the scenegraph for rendering"""
         points = array([
-            [(0,0,0), (1,0,0), (2,0,0)],
-            [(-5,0,1), (1,5,1), (2,0,1)],
-            [(0,0,2), (1,0,2), (2,0,2)],
+            [(0,0,0), (1,0,0), (2,0,0), (3,-1,0),(4,0,0)],
+            [(-5,0,1), (1,5,1), (2,0,1), (3,-2,0),(4,0,1),],
+            [(0,0,2), (1,0,2), (2,0,2), (3,-1,2),(4,0,2)],
         ], 'f')
-        points3 = patch( points )
-        expanded = expand( points )
-        assert points3.shape == expanded.shape, (points3.shape, expanded.shape)
-        assert allclose( expanded[::9,::9], points[::2,::2])
-        ws = weight_array( 10 )
-        points = expanded
+#        points3 = patch( points )
+        points3 = expand( points )
+#        assert points3.shape == expanded.shape, (points3.shape, expanded.shape)
+#        assert allclose( expanded[::9,::9], points[::2,::2])
+#        ws = weight_array( 10 )
+#        points = expanded
         
         self.sg = sceneGraph( children = [
             Shape( geometry = PointSet(
