@@ -13,33 +13,6 @@ from OpenGLContext.scenegraph import nurbs
 def weights( a ):
     b = 1.0 - a
     return array([a**2, 2*a*b, b**2],dtype='f')
-def epoint( a, cps ):
-    """Evaluate a single position on control point float(a) between cps"""
-    w = weights( a )
-    return dot( w, cps )
-def evaluate( cps, divisions = 10 ):
-    step = 1.0/(divisions-1)
-    for s in arange( 0.0, 1.0 + (.5 * step), step ):
-        yield epoint( s, cps )
-def control_curves( points, divisions = 10 ):
-    """Calculate control curves from control points"""
-    return array( [
-        list(evaluate(plane)) 
-        for plane in points
-    ], dtype='f' )
-    
-def patch( points, divisions = 10 ):
-    """Convert the control points into a bezier patch with given sub-divisions"""
-    # Convert the control points into control curves
-    # For each step along the control curves, calculate the resulting curve
-    return array( [
-        list(evaluate(plane, divisions)) 
-        for plane in transpose(
-            control_curves(points,divisions),
-            (1,0,2)
-        )
-    ], 'f')
-
 def weight_array( divisions ):
     assert divisions > 1, """Need at least 1 division"""
     step = 1.0/(divisions-1)
@@ -47,7 +20,7 @@ def weight_array( divisions ):
         weights(1.0-a)
         for a in arange( 0.0, 1.0 + (.5 * step ), step, dtype='f' )
     ], dtype='f' )
-    
+
 def expand( points, divisions= 10 ):
     """Expand points into the final data-set for positions...
     
@@ -78,8 +51,8 @@ def expand( points, divisions= 10 ):
             # now get final points...
             verts = dot( ws, curves )
             expanded[ m_final:m_final+divisions, n_final:n_final+divisions,:] = verts
-    
     return expanded
+
 
 class TestContext( BaseContext ):
     
@@ -90,12 +63,7 @@ class TestContext( BaseContext ):
             [(-5,0,1), (1,5,1), (2,0,1), (3,-2,0),(4,0,1),],
             [(0,0,2), (1,0,2), (2,0,2), (3,-1,2),(4,0,2)],
         ], 'f')
-#        points3 = patch( points )
         points3 = expand( points )
-#        assert points3.shape == expanded.shape, (points3.shape, expanded.shape)
-#        assert allclose( expanded[::9,::9], points[::2,::2])
-#        ws = weight_array( 10 )
-#        points = expanded
         
         self.sg = sceneGraph( children = [
             Shape( geometry = PointSet(
