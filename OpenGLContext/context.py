@@ -166,12 +166,23 @@ class Context(object):
     
     def __init__ (self, definition=None):
         """Establish the Context working environment
+        
+        definition -- an OpenGLContext.contextdefinition.ContextDefinition 
+            instance which controls the context features (size, bit-depth, etc).
+            If null, then use self.contextDefinition if it exists, otherwise 
+            create a default ContextDefinition instance.
 
-        setupThreading, initializeEventManagers,
-        setupCallbacks, setupDefaultEventCallbacks,
-        adds a weakref to self to allContexts
-        establishes pickEvents
-        and then calls OnInit
+        Calls the following:
+        
+            setupThreading, 
+            setupExtensionManager,
+            initializeEventManagers,
+            setupCallbacks, 
+            setupDefaultEventCallbacks,
+            setupCache,
+            setupFontProviders,
+            setupFrameRateCounter,
+            DoInit
         """
         definition = definition or self.contextDefinition
         if not definition:
