@@ -70,4 +70,9 @@ class TestContext( BaseContext ):
     
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    from OpenGLContext import contextdefinition
+    TestContext.ContextMainLoop(
+        definition = contextdefinition.ContextDefinition(
+            size = (800,500 ),
+        )
+    )
