@@ -4,7 +4,8 @@ from OpenGLContext.arrays import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
 
-from OpenGLContext import quaternion, dragwatcher
+from OpenGLContext import quaternion
+from OpenGLContext.move import dragwatcher
 
 class Trackball:
     '''Trackball mechanism for interactive rotation

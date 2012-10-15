@@ -58,7 +58,7 @@ class ExamineManager ( eventmanager.EventManager):
         """Build the trackball object
         Customisation point for those wanting to use a different
         trackball implementation."""
-        from OpenGLContext import trackball
+        from OpenGLContext.move import trackball
         self.trackball = trackball.Trackball (
             platform.position, platform.quaternion,
             center,
