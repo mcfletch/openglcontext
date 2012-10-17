@@ -1,4 +1,4 @@
-"""Produce Quake3-style Cubic Bezier Splines"""
+"""Produce Quake3-style Quadratic Bezier Splines"""
 from OpenGLContext.arrays import *
 
 def weights( a ):
@@ -24,7 +24,63 @@ def weight_array( divisions ):
         for a in steps
     ], dtype='f' )
 
-def expand( points, divisions= 10 ):
+def _final_count( M,divisions=10 ):
+    """Calculate final number of vertices where M control points are defined"""
+    return ((M - 1)//2 * divisions-1) + 1
+
+def grid_size( points, divisions=10 ):
+    """Calculate grid dimensions for given set of points
+    
+    returns (M,N) size of the final grid
+    """
+    M,N = points.shape[:2]
+    return _final_count( M, divisions ), _final_count( N, divisions )
+
+def expand_color( points, division=10 ):
+    """Expand color control-points array 
+    
+    Texture coordinates are blended from control[0] to control[2] for each 
+    sub-patch in the points grid
+    """
+def expand_blend( points, divisions=10 ):
+    """Blend control points for each sub-patch in points
+    
+    Texture coordinates are blended from control[0] to control[2] for each 
+    sub-patch in the points grid
+    """
+    M,N,d = points.shape
+    expanded = zeros( (_final_count(M,divisions),_final_count(N,divisions),d), dtype=points.dtype )
+    
+#    blend_set = zeros( (divisions,divisions,4), dtype='f')
+#    
+#    curves = arange( divisions )/float( divisions-1 )
+#    blend_set[:,0,0] = curves[::-1]
+#    blend_set[:,0,1] = curves
+#    blend_set[:,-1,2] = curves 
+#    blend_set[:,-1,3] = curves[::-1]
+    
+    
+    # Index in the control points array
+    for m in range( 0, M-1, 2 ):
+        # index in the expanded array
+        m_final = (m//2) * divisions 
+        # Index in the control points array
+        for n in range( 0, N-1, 2 ):
+            # index in the expanded array
+            n_final = (n//2) * divisions
+            
+            
+            
+            point_set = points[m:m+2,n:n+2]
+            xes = point_set[0,:,0] + ((point_set[2,:,0] - point_set[0,:,0])/float(divisions))
+            yes = point_set[:,0,1] + ((point_set[:,2,1] - point_set[:,0,1])/float(divisions))
+            
+            expanded[ m_final:m_final+divisions, n_final:n_final+divisions,0] = xes
+            expanded[ m_final:m_final+divisions, n_final:n_final+divisions,1] = yes
+    
+    return expanded
+
+def expand( points, divisions= 10, final_size=None ):
     """Expand bezier control points into the final data-set
     
     points -- array of 2N+1 x 2M+1 x 3 control points
@@ -32,15 +88,16 @@ def expand( points, divisions= 10 ):
     
     return the array 
     """
-    def final_count( M ):
-        return ((M - 1)//2 * divisions-1) + 1
     M,N,D = points.shape
     
-    if D < 3:
+    if final_size is not None:
+        d = final_size
+    else:
+        d = D
+    if d < 3:
         raise RuntimeError( "Need at least x,y,z coordinates for points" )
-    d = D
-        
-    expanded = zeros( (final_count(M),final_count(N),d), dtype=points.dtype )
+    
+    expanded = zeros( (_final_count(M,divisions),_final_count(N,divisions),d), dtype=points.dtype )
     
     # expand control curves in one direction...
     # creates a new points array to be used for other direction...
@@ -70,7 +127,7 @@ def expand( points, divisions= 10 ):
 
     return expanded
 
-def grid_indices( expanded ):
+def grid_indices( expanded, offset=0 ):
     """Create indices array to render expanded vertex array
     
     expanded -- MxNx? array of points for which to generate indices
@@ -83,7 +140,7 @@ def grid_indices( expanded ):
     """
     M,N = expanded.shape[:2]
     quads = (M-1) * (N-1)
-    indices = arange( 0, M*N ).reshape( (M,N ))
+    indices = arange( offset, offset+(M*N) ).reshape( (M,N ))
     indices = indices[:-1,:-1] # last row and column should not be start of quads...
     quadbases = ravel( indices ).repeat( 6 )
     

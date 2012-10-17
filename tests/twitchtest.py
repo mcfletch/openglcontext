@@ -12,8 +12,6 @@ class TwitchContext( BaseContext ):
     
     def OnInit( self ):
         self.twitch = twitch.load( sys.argv[1] )
-        # okay, load up the various vbo
-        self.twitch.patch_faces
         
     def Render( self, mode = None):
         """Render the geometry for the scene."""
@@ -45,18 +43,41 @@ class TwitchContext( BaseContext ):
                 )
             finally:
                 self.twitch.simple_faces.unbind()
-            self.twitch.patch_faces.bind()
+        finally:
+            self.twitch.vertex_vbo.unbind()
+            glDisableClientState( GL_COLOR_ARRAY )
+        verts,indices = self.twitch.patch_faces
+        if indices:
             try:
+                verts.bind()
+                glEnableClientState( GL_VERTEX_ARRAY )
+                glEnableClientState( GL_NORMAL_ARRAY )
+                glEnableClientState( GL_TEXTURE_COORD_ARRAY )
+                glVertexPointer(
+                    3,GL_FLOAT,
+                    verts.itemsize,
+                    verts,
+                )
+                glNormalPointer(
+                    GL_FLOAT,
+                    verts.itemsize,
+                    verts + (3*4),
+                )
+                glTexCoordPointer(
+                    3,GL_FLOAT,
+                    verts.itemsize,
+                    verts + (6*4),
+                )
+                indices.bind()
                 glDrawElements( 
                     GL_TRIANGLES, 
-                    len(self.twitch.patch_faces), 
+                    len(indices), 
                     GL_UNSIGNED_INT, 
-                    self.twitch.patch_faces 
+                    indices, 
                 )
             finally:
-                self.twitch.patch_faces.unbind()
-        finally:
-                self.twitch.vertex_vbo.unbind()
+                verts.unbind()
+                indices.unbind()
 
 if __name__ == "__main__":
     logging.basicConfig( level = logging.WARN )

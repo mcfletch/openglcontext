@@ -9,6 +9,7 @@ into structured data-arrays...
 """
 import numpy, sys, logging 
 from OpenGL.arrays import vbo
+from OpenGLContext.scenegraph import bezier
 
 log = logging.getLogger( __name__ )
 filename = 'maps/focal_p132.bsp'
@@ -209,6 +210,7 @@ class Twitch( object ):
             # for type 2, we need to convert a control surface to a set of indices...
             log.debug( '%s textures used by simple geometry', len(self.texture_set, ))
         return self.simple_indices_vbo
+    patch_vbo = None
     patch_indices_vbo = None
     @property
     def patch_faces( self ):
@@ -227,32 +229,48 @@ class Twitch( object ):
         """
         if self.patch_indices_vbo is None:
             patch_faces = numpy.compress( self.faces['type'] == 2, self.faces )
+            if not len(patch_faces):
+                self.patch_indices_vbo = False
+                return
+            
             starts = patch_faces['vertex']
             sizes = patch_faces['size']
-            patch_count = sum((patch_faces['size'][:,0]//3) * (patch_faces['size'][:,1]//3))
             
-            current = 0
-            index_pattern = numpy.array( [0,3,1,1,3,4,1,4,5,1,5,2,3,6,7,3,7,4,4,7,8,4,8,5], 'I' )
-            indices = numpy.zeros( (patch_count,len(index_pattern)), 'I' )
-            #indices[:] = index_pattern
-            current = 0
-            for (start,size) in zip( starts, sizes):
-                patch_indices = numpy.arange( 0,size[0]*size[1], dtype='I' )
-                patch_indices += start
-                patch_indices = patch_indices.reshape( size )
+            expanded_patches = []
+            expanded_indices = []
+            current_offset = 0
+            index_count = 0
+            for start,(x,y) in zip( starts, sizes ):
+                control_points = self.vertices[start: start+(x*y)]['position']
+                control_points = control_points.reshape( (x,y,3) )
                 
-                for i in range( 0, size[0]-1,2 ):
-                    column = patch_indices[i:i+3]
-                    for j in range( 0, size[1]-1,2):
-                        block = column[:,j:j+3]
-                        assert block.shape == (3,3), block
-                        block = numpy.ravel( block )
-                        assert len(block) == 9, block
-                        block_expanded = numpy.take( block, index_pattern )
-                        indices[current:current+len(block_expanded)] = block_expanded
-                        current += len(block_expanded)
-            self.patch_indices_vbo = vbo.VBO( patch_indices, target="GL_ELEMENT_ARRAY_BUFFER")
-        return self.patch_indices_vbo
+                expanded = bezier.expand( control_points, final_size=8 )
+                expanded[:,:,3:6] = bezier.grid_normals( expanded[:,:,:3] )
+                expanded[:,:,6:8] = bezier.grid_texcoords( expanded[:,:,:3] )
+                
+                indices = bezier.grid_indices( expanded, current_offset )
+                
+                indices = indices.ravel()
+                expanded_indices.append( indices )
+                index_count += len(indices)
+                
+                expanded = expanded.reshape( (-1,expanded.shape[-1]) )
+                expanded_patches.append( expanded )
+                current_offset += expanded.shape[0] 
+            
+            final_indices = numpy.zeros( (index_count,), 'I' )
+            index_count = 0
+            for index in expanded_indices:
+                final_indices[index_count:(index_count+len(index))] = index 
+                index_count += len(index)
+            vertex_count = 0
+            final_vertices = numpy.zeros( (current_offset,8), 'f' )
+            for patch in expanded_patches:
+                final_vertices[vertex_count:(vertex_count+len(patch))] = patch 
+                vertex_count += len(patch)
+            self.patch_vbo = vbo.VBO( final_vertices )
+            self.patch_indices_vbo = vbo.VBO( final_indices, target="GL_ELEMENT_ARRAY_BUFFER")
+        return self.patch_vbo,self.patch_indices_vbo
 
 def load( filename ):
     array = numpy.memmap( filename, dtype='c', mode='c' )
