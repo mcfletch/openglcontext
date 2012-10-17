@@ -74,12 +74,12 @@ class VBOHolder( Holder ):
             # make the color field alter the diffuse color
             glColorMaterial( GL_FRONT_AND_BACK, GL_DIFFUSE)
             glEnable( GL_COLOR_MATERIAL )
+            glEnableClientState( GL_COLOR_ARRAY )
             color.bind()
             try:
                 glColorPointer( 3,GL_FLOAT,0,color )
             finally:
                 color.unbind()
-            glEnableClientState( GL_COLOR_ARRAY )
             return 1
         else:
             return 0
@@ -309,6 +309,7 @@ class IndexedPolygons (
                         # and recreated whenever *anything* changes!
                         holder.depend( node, attr )
                         holder.depend( self, field )
+                holder.depend( self, 'index' )
         else:
             vbos = Holder()
             for field,attr in self.NODE_FIELDS:
