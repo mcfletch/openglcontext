@@ -24,12 +24,11 @@ def weight_array( divisions ):
         for a in steps
     ], dtype='f' )
 
-def expand( points, divisions= 10, normals=False, texCoords=False, globalTexCoord=True ):
+def expand( points, divisions= 10 ):
     """Expand bezier control points into the final data-set
     
     points -- array of 2N+1 x 2M+1 x 3 control points
     divisions -- number of divisions for each 3x3 control-point area
-    normals -- if True, auto-generate normals for the array...
     
     return the array 
     """
@@ -40,68 +39,36 @@ def expand( points, divisions= 10, normals=False, texCoords=False, globalTexCoor
     if D < 3:
         raise RuntimeError( "Need at least x,y,z coordinates for points" )
     d = D
-#    if normals:
-#        normals = d
-#        d += 3
-#    if texCoords:
-#        texCoords = d
-#        d += 2
         
     expanded = zeros( (final_count(M),final_count(N),d), dtype=points.dtype )
-    #expanded[::divisions-1,::divisions-1] = points[::2,::2] 
     
     # expand control curves in one direction...
     # creates a new points array to be used for other direction...
+    # TODO: note: this means that the centre control point is "damped" by the 
+    # equations twice, that is, the result of the control point being applied is 
+    # the applied as a control point... it seems fine visually, but it may not 
+    # be what the modeller intended...
     ws = weight_array( divisions )
     assert len(ws) == divisions, ws
     
+    # Index in the control points array
     for m in range( 0, M-1, 2 ):
+        # index in the expanded array
         m_final = (m//2) * divisions 
+        # Index in the control points array
         for n in range( 0, N-1, 2 ):
+            # index in the expanded array
             n_final = (n//2) * divisions
+            
+            # Now the actual calculations
+            # Get the 3 control curves from the control points
             curves = dot( ws, points[m:m+3,n:n+3] )
-            # now get final points...
+            # now get final points from the 3 control curves
             verts = dot( ws, curves )
+            # And push them into the result array...
             expanded[ m_final:m_final+divisions, n_final:n_final+divisions,:3] = verts
-    
-#    if normals:
-#        normal_array = expanded[:,:,normals:normals+3]
-#        # Now, we want the normal, take the cross-product of x-1 -> x+1, y-1 -> y+1
-#        m_vecs = expanded[1:,:,:3] - expanded[:-1,:,:3]
-#        y_vecs = expanded[:,1:,:3] - expanded[:,:-1,:3]
-#        cross( m_vecs, y_vecs )
-#        N[x,y] = normalized( cross( V[x-1,y] -> V[x+1,y], V[x,y-1],V[x,y+1] ) )
-        
-    
+
     return expanded
-
-def fill_normals( expanded, start=3 ):
-    for x in range( expanded.shape[0] ):
-        for y in range( expanded.shape[1] ):
-            expanded[x,y,start:start+3] = normal( expanded, x, y )
-
-def normal( expanded, x,y ):
-    x_start = x-1
-    if x_start < 0:
-        x_start = x
-    x_end = x+1
-    if x_end >= expanded.shape[0]:
-        x_end = x
-
-    y_start = y-1
-    if y_start < 0:
-        y_start = y
-    y_end = y+1
-    if y_end >= expanded.shape[1]:
-        y_end = y
-    
-    raw = cross( 
-        expanded[x_end,y,:3] - expanded[x_start,y,:3], 
-        expanded[x,y_end,:3] - expanded[x,y_start,:3],
-    )
-    # TODO guard against 0's
-    raw /= magnitude( raw )
-    return raw
 
 def grid_indices( expanded ):
     """Create indices array to render expanded vertex array
@@ -124,18 +91,20 @@ def grid_indices( expanded ):
     return offsets + quadbases
 
 def _clampz(a):
+    """Prevent a from going < 0"""
     if a < 0:
         return 0
     return a
-    
 def _clampl( a, length ):
+    """Prevent a from going >= length"""
     if a >= length:
         a = length-1 
     return a
-
 def _mag( v ):
+    """Calculate magnitude of the vector"""
     return sqrt( sum(v**2) )
 def _norm( v ):
+    """Normalize the vector"""
     mag = _mag( v )
     if mag != 0:
         return v/_mag(v)
@@ -155,3 +124,17 @@ def grid_normals( expanded ):
             y_vec = expanded[x,_clampl(y+1,N)] - expanded[ x,_clampz(y-1)]
             normals[x,y] = _norm(cross( x_vec, y_vec ))
     return normals
+
+def grid_texcoords( expanded ):
+    """Generate texture coordinates from 0-1.0
+    
+    expanded -- the MxN array for which to generate
+    """
+    M,N = expanded.shape[:2]
+    tex_coords = zeros( (M,N,2), 'f')
+    values = arange( N )/ float(N-1)
+    tex_coords[:,:,0] = values 
+    values = (arange( M )/ float(M-1)).reshape((-1,1))
+    tex_coords[:,:,1] = values 
+    return tex_coords
+    

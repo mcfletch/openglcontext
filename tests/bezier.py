@@ -20,9 +20,11 @@ class TestContext( BaseContext ):
             [(-5,0,1), (1,5,1), (2,0,1), (3,-2,0),(4,0,1),],
             [(0,0,2), (1,0,2), (2,0,2), (3,-1,2),(4,0,2)],
         ], 'f')
-        points3 = bezier.expand( points,normals=True)
+        points3 = bezier.expand( points)
         self.indices = bezier.grid_indices( points3 )
         self.normals = bezier.grid_normals( points3 )
+        self.texCoords = bezier.grid_texcoords( points3 )
+        
         self.sg = sceneGraph( children = [
             Shape( geometry = PointSet(
                 coord = Coordinate( point = points ),
@@ -31,12 +33,16 @@ class TestContext( BaseContext ):
                 geometry = IndexedPolygons(
                     coord = Coordinate( point = points3 ),
                     normal = Normal( vector = self.normals ),
+                    texCoord = TextureCoordinate( point = self.texCoords ),
                     index = self.indices,
                     solid = True,
                     ccw = False
                 ),
                 appearance = Appearance(
                     material = Material(),
+                    texture = ImageTexture(
+                        url = [ 'wrls/irradiation.jpg' ],
+                    ),
                 ),
             ),
             
