@@ -47,26 +47,30 @@ class TwitchContext( BaseContext ):
             self.twitch.vertex_vbo.unbind()
             glDisableClientState( GL_COLOR_ARRAY )
         verts,indices = self.twitch.patch_faces
+        glEnable( GL_LIGHTING )
+        glEnable( GL_CULL_FACE )
         if indices:
             try:
                 verts.bind()
+                glEnable( GL_LIGHTING )
                 glEnableClientState( GL_VERTEX_ARRAY )
                 glEnableClientState( GL_NORMAL_ARRAY )
                 glEnableClientState( GL_TEXTURE_COORD_ARRAY )
+                stride = verts.itemsize * verts.shape[-1]
                 glVertexPointer(
                     3,GL_FLOAT,
-                    verts.itemsize,
+                    stride,
                     verts,
                 )
                 glNormalPointer(
                     GL_FLOAT,
-                    verts.itemsize,
-                    verts + (3*4),
+                    stride,
+                    verts + (3*verts.itemsize),
                 )
                 glTexCoordPointer(
                     3,GL_FLOAT,
-                    verts.itemsize,
-                    verts + (6*4),
+                    stride,
+                    verts + (6*verts.itemsize),
                 )
                 indices.bind()
                 glDrawElements( 

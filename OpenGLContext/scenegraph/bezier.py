@@ -42,6 +42,33 @@ def expand_color( points, division=10 ):
     Texture coordinates are blended from control[0] to control[2] for each 
     sub-patch in the points grid
     """
+
+def four_way_blend( divisions = 10 ):
+    """Create a matrix doing 4-way blend for a patch
+    
+    Assumes vertices are in CCW order around the patch...
+    """
+    divisions = _final_count( 3, divisions )
+    
+    ramp = arange( divisions )/float( divisions-1 )
+    
+    curves = zeros( (2,divisions,4), dtype='f' )
+    curves[0,:,0] = ramp[::-1]
+    curves[0,:,1] = ramp
+    curves[-1,:,2] = ramp
+    curves[-1,:,3] = ramp[::-1]
+    # now, the matrix is just the ramps between curves...
+    blend_ramp1 = zeros( (divisions,divisions,4), dtype='f')
+    blend_ramp2 = zeros( (divisions,divisions,4), dtype='f')
+
+    blend_ramp1[:] = curves[0]
+    blend_ramp2[:] = curves[1]
+    
+    blend_ramp1 *= ramp.reshape((divisions,1))
+    blend_ramp2 *= ramp[::-1].reshape((divisions,1))
+    
+    return blend_ramp1 + blend_ramp2
+    
 def expand_blend( points, divisions=10 ):
     """Blend control points for each sub-patch in points
     
@@ -51,14 +78,7 @@ def expand_blend( points, divisions=10 ):
     M,N,d = points.shape
     expanded = zeros( (_final_count(M,divisions),_final_count(N,divisions),d), dtype=points.dtype )
     
-#    blend_set = zeros( (divisions,divisions,4), dtype='f')
-#    
-#    curves = arange( divisions )/float( divisions-1 )
-#    blend_set[:,0,0] = curves[::-1]
-#    blend_set[:,0,1] = curves
-#    blend_set[:,-1,2] = curves 
-#    blend_set[:,-1,3] = curves[::-1]
-    
+    blend_ramp = four_way_blend( divisions )
     
     # Index in the control points array
     for m in range( 0, M-1, 2 ):
@@ -68,15 +88,9 @@ def expand_blend( points, divisions=10 ):
         for n in range( 0, N-1, 2 ):
             # index in the expanded array
             n_final = (n//2) * divisions
-            
-            
-            
-            point_set = points[m:m+2,n:n+2]
-            xes = point_set[0,:,0] + ((point_set[2,:,0] - point_set[0,:,0])/float(divisions))
-            yes = point_set[:,0,1] + ((point_set[:,2,1] - point_set[:,0,1])/float(divisions))
-            
-            expanded[ m_final:m_final+divisions, n_final:n_final+divisions,0] = xes
-            expanded[ m_final:m_final+divisions, n_final:n_final+divisions,1] = yes
+            cps = array( [points[m,n],points[m+2,n],points[m+2,n+2],points[m,n+2]])
+            blended = dot( blend_ramp, cps )
+            expanded[ m_final:m_final+divisions, n_final:n_final+divisions] = blended
     
     return expanded
 

@@ -245,8 +245,12 @@ class Twitch( object ):
                 control_points = control_points.reshape( (x,y,3) )
                 
                 expanded = bezier.expand( control_points, final_size=8 )
-                expanded[:,:,3:6] = bezier.grid_normals( expanded[:,:,:3] )
-                expanded[:,:,6:8] = bezier.grid_texcoords( expanded[:,:,:3] )
+                expanded[:,:,3:6] = bezier.expand_blend( 
+                    self.vertices[start: start+(x*y)]['normal'].reshape(x,y,3) 
+                )
+                expanded[:,:,6:8] = bezier.expand_blend( 
+                    self.vertices[start: start+(x*y)]['texcoord_surface'].reshape(x,y,2) 
+                )
                 
                 indices = bezier.grid_indices( expanded, current_offset )
                 
