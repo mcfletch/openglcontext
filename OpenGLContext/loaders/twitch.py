@@ -5,10 +5,10 @@ Written directly from the following:
     http://www.mralligator.com/q3/
 
 Basically just uses numpy record declarations to parse the bsp files
-into structured data-arrays...
+into structured data-arrays.  Uses the bezier module to tessellate 
+patches into simple triangles (note: not triangle strips).
 """
 import numpy, sys, logging 
-from OpenGL.arrays import vbo
 from OpenGLContext.scenegraph import bezier
 
 log = logging.getLogger( __name__ )
@@ -171,14 +171,13 @@ def parse_bsp( array ):
 class Twitch( object ):
     def __init__( self, model ):
         self.__dict__.update( model )
-        self.vertex_vbo = vbo.VBO( self.vertices )
     
-    simple_indices_vbo = None
+    simple_indices = None
     texture_set = None
     @property
     def simple_faces( self ):
-        """Create an index VBO for the indices to render faces of type 1 and 3"""
-        if self.simple_indices_vbo is None:
+        """Create an index array for the indices to render faces of type 1 and 3"""
+        if self.simple_indices is None:
             faces = self.faces
             # for type 1 and 3 we can simply create indices...
             simple_types = numpy.logical_or( self.faces['type'] == 1, self.faces['type'] == 3)
@@ -206,32 +205,21 @@ class Twitch( object ):
                 end = current + (stop-start)
                 indices[current:end] = self.meshverts[start:stop] + index
                 current = end
-            self.simple_indices_vbo= vbo.VBO( indices, target = 'GL_ELEMENT_ARRAY_BUFFER' )
+            self.simple_indices = indices
             # for type 2, we need to convert a control surface to a set of indices...
             log.debug( '%s textures used by simple geometry', len(self.texture_set, ))
-        return self.simple_indices_vbo
-    patch_vbo = None
-    patch_indices_vbo = None
+        return self.simple_indices
+    patch_vertices = None
+    patch_indices = None
     @property
     def patch_faces( self ):
-        """Create another pair of VBOs for our patch faces
-        
-        TODO: do the bezier position adjustment (currently just renders 
-        the control points)
-        
-        a, -> [a,b,c],[d,e,f]
-            a blend
-                b = 1-a
-                    x = a**2 * cp[0].x + 2*a*b * cp[1].x + b**2 * cp[2].x
-                    y = ...
-                    z = ...
-            For the second blend, blend the control points...
+        """Create another pair of arrays for our patch faces
         """
-        if self.patch_indices_vbo is None:
+        if self.patch_indices is None:
             patch_faces = numpy.compress( self.faces['type'] == 2, self.faces )
             if not len(patch_faces):
-                self.patch_indices_vbo = False
-                return
+                self.patch_indices = None
+                return None,None
             
             starts = patch_faces['vertex']
             sizes = patch_faces['size']
@@ -272,9 +260,9 @@ class Twitch( object ):
             for patch in expanded_patches:
                 final_vertices[vertex_count:(vertex_count+len(patch))] = patch 
                 vertex_count += len(patch)
-            self.patch_vbo = vbo.VBO( final_vertices )
-            self.patch_indices_vbo = vbo.VBO( final_indices, target="GL_ELEMENT_ARRAY_BUFFER")
-        return self.patch_vbo,self.patch_indices_vbo
+            self.patch_vertices = final_vertices
+            self.patch_indices = final_indices
+        return self.patch_vertices,self.patch_indices
 
 def load( filename ):
     array = numpy.memmap( filename, dtype='c', mode='c' )
