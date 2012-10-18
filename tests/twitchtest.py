@@ -7,10 +7,6 @@ from OpenGL.arrays import vbo
 BaseContext = testingcontext.getInteractive()
 
 class TwitchContext( BaseContext ):
-#    initialPosition = (-432.,-336., -736.)
-#    initialPosition = (304.,  568., -696)
-#    initialPosition = -120., -576., -480.
-    
     def OnInit( self ):
         self.twitch = twitch.load( sys.argv[1] )
         self.simple_vertices = vbo.VBO( self.twitch.vertices )

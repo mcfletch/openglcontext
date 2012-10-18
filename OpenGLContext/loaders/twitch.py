@@ -8,7 +8,7 @@ Basically just uses numpy record declarations to parse the bsp files
 into structured data-arrays.  Uses the bezier module to tessellate 
 patches into simple triangles (note: not triangle strips).
 """
-import numpy, sys, logging 
+import numpy, sys, logging, os, zipfile
 from OpenGLContext.scenegraph import bezier
 
 log = logging.getLogger( __name__ )
@@ -267,6 +267,35 @@ class Twitch( object ):
 def load( filename ):
     array = numpy.memmap( filename, dtype='c', mode='c' )
     return Twitch( parse_bsp( array ) )
+
+def _escape_path( fn ):
+    throwaway_directory = '/tmp/junk/though/'
+    test_fn = os.path.normpath( 
+        os.path.join( throwaway_directory, fn )
+    )
+    return os.path.relpath( test_fn, throwaway_directory ).startswith( '../' )
+
+def scan_for_escape_paths( zipfile ):
+    """Scan zipfile's ZipInfo for paths that would escape the unpack directory
+    """
+    for info in zipfile.infolist():
+        if _escape_path( info.filename ):
+            raise RuntimeError( "Potentially malicious zip entry found (references file outside directory), aborting")
+
+def unpack( pk3, key=None ):
+    """Unpack a .pk3 file into temporary directory for loading"""
+    if key:
+        path = os.path.join( os.path.expanduser( '~/.config/twitch/maps' ), key )
+        if not os.path.exists( path ):
+            try:
+                os.makedirs( path )
+            except (IOError, OSError) as err:
+                pass 
+    else:
+        path = tempfile.mkdtemp( prefix='twitch', suffix='pk3' )
+    zip = zipfile.ZipFile( pk3, mode='r' )
+    scan_for_escape_paths( zip )
+    zip.extractall( path )
     
 def main():
     logging.basicConfig( level=logging.DEBUG )
