@@ -21,6 +21,7 @@ class TestContext( BaseContext ):
             [(0,0,2), (1,0,2), (2,0,2), (3,-1,2),(4,0,2)],
         ], 'f')
         points3 = bezier.expand( points)
+        
         self.indices = bezier.grid_indices( points3 )
         self.normals = bezier.grid_normals( points3 )
         self.texCoords = bezier.grid_texcoords( points3 )
@@ -28,14 +29,15 @@ class TestContext( BaseContext ):
         self.sg = sceneGraph( children = [
             Shape( geometry = PointSet(
                 coord = Coordinate( point = points ),
-            )),
+            ), appearance=Appearance( material=Material( emissiveColor=(1,0,0)))),
+            
             Shape( 
                 geometry = IndexedPolygons(
                     coord = Coordinate( point = points3 ),
                     normal = Normal( vector = self.normals ),
                     texCoord = TextureCoordinate( point = self.texCoords ),
                     index = self.indices,
-                    solid = True,
+                    solid = False,
                     ccw = False
                 ),
                 appearance = Appearance(
