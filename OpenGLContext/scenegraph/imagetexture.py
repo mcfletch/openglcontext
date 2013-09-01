@@ -232,23 +232,31 @@ else:
                 pass
             else:
                 if result:
+                    
                     baseURL, filename, file, headers = result
                     image = Image.open( file )
                     image.info[ 'url' ] = baseURL
                     image.info[ 'filename' ] = filename
                         
                     if image:
-                        self.image = image
-                        self.components = -1
-                        for context in contexts:
-                            c = context()
-                            if c:
-                                c.triggerRedraw(1)
-                        return
+                        return self.setImage( image, contexts )
             
             # should set client.image to something here to indicate
             # failure to the user.
             log.warn( """Unable to load any image from the url %s for the node %s""", url, str(self))
+        def setImage( self, image, contexts=() ):
+            """Set PIL image as our new image
+            
+            image -- open( ) PIL file with info['url'] and info['filename'] defined
+            """
+            self.image = image
+            self.components = -1
+            for context in contexts:
+                c = context()
+                if c:
+                    c.triggerRedraw(1)
+            return
+            
         def loadFromData( self, data, url=None ):
             """Load (synchronously) from given data"""
             import StringIO
