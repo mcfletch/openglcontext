@@ -534,7 +534,7 @@ class FlatPass( SGObserver ):
 
         glMatrixMode( GL_MODELVIEW )
         try:
-            idHolder = array( [0,0,0,0], 'B' )
+            idHolder = array( [0,0,0,0], 'b' )
             idSetter = idHolder.view( '<I' )
             for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
                 id = (id+1) << 12
