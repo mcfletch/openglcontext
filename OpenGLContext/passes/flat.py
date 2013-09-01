@@ -528,27 +528,30 @@ class FlatPass( SGObserver ):
         if max_x < min_x or max_y < min_y:
             # no pick points were found 
             return
-        if not self.context.contextDefinition.debugSelection:
+        debugSelection = mode.context.contextDefinition.debugSelection
+            
+        if not debugSelection:
             glScissor( min_x,min_y,int(max_x)-min_x,int(max_y)-min_y)
             glEnable( GL_SCISSOR_TEST )
 
         glMatrixMode( GL_MODELVIEW )
         try:
-            idHolder = array( [0,0,0,0], 'b' )
+            idHolder = array( [0,0,0,0], 'B' )
             idSetter = idHolder.view( '<I' )
             for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
                 id = (id+1) << 12
                 idSetter[0] = id
-                glColor4bv( idHolder )
+                glColor4ubv( idHolder )
                 self.matrix = mvmatrix
                 self.renderPath = path
                 glLoadMatrixf( mvmatrix )
                 path[-1].Render( mode=self )
                 map[id] = path
+            pixel = array([0,0,0,0],'B')
             for point,eventSet in pickPoints.items():
                 # get the pixel colour (id) under the cursor.
-                pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_BYTE )
-                pixel = long( pixel.view( '<I' )[0][0][0] )
+                pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_UNSIGNED_BYTE, pixel )
+                pixel = long( pixel.view( '<I' )[0] )
                 paths = map.get( pixel, [] )
                 event.setObjectPaths( [paths] )
                 # get the depth value under the cursor...
