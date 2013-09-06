@@ -548,17 +548,18 @@ class FlatPass( SGObserver ):
                 path[-1].Render( mode=self )
                 map[id] = path
             pixel = array([0,0,0,0],'B')
+            depth_pixel = array([[0]],'f')
             for point,eventSet in pickPoints.items():
                 # get the pixel colour (id) under the cursor.
-                pixel = glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_UNSIGNED_BYTE, pixel )
-                pixel = long( pixel.view( '<I' )[0] )
-                paths = map.get( pixel, [] )
+                glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_UNSIGNED_BYTE, pixel )
+                lpixel = long( pixel.view( '<I' )[0] )
+                paths = map.get( lpixel, [] )
                 event.setObjectPaths( [paths] )
                 # get the depth value under the cursor...
-                pixel = glReadPixels(
-                    point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT
+                glReadPixels(
+                    point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT,depth_pixel
                 )
-                event.viewCoordinate = point[0],point[1],pixel[0][0]
+                event.viewCoordinate = point[0],point[1],depth_pixel[0][0]
                 event.modelViewMatrix = matrix
                 event.projectionMatrix = self.projection
                 event.viewport = self.viewport
