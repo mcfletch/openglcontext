@@ -186,6 +186,87 @@ class Texture( object ):
                 )
                 image = image.resize( newSize, BICUBIC )
         return image
+
+class CubeTexture( Texture ):
+    """Texture class for use with Cube samplers"""
+    CUBE_NAME_MAP = {
+        '-x':GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+        '+x':GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+        '-y':GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+        '+y':GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+        '-z':GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+        '+z':GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+    }
+    def __init__( self, images=None, format=None ):
+        """Initialise the texture, if image is not None, store it
+
+        images -- optional name:image mapping with keys from 
+            -x,+y,-y,+y,-z,+z
+        """
+        super( CubeTexture, self ).__init__( format=format )
+        if images:
+            self.fromPIL( images )
+    def fromPIL( self, images ):
+        """Construct the texture from PIL/Numpy arrays"""
+        our_images = [
+            (k,v) for k,v in images.items() 
+            if (k in self.CUBE_NAME_MAP and v is not None)
+        ]
+        if not len(our_images) == 6:
+            raise ValueError( "Need six non-null images" )
+        components = format = x = y = None 
+        final_images = []
+        for key,image in our_images:
+            if isinstance( image, ArrayType ):
+                image = NumpyAdapter( image )
+            else:
+                image = self.ensureRGB( image )
+                image = self.ensurePow2( image )
+            # TODO: raise errors if you don't pass in the same 
+            # component,format,x,y image sizes...
+            components, format = getLengthFormat( image )
+            x, y, = image.size[0], image.size[1]
+            final_images.append( (key,self.pilAsString( image )) )
+        self.store( components, format, x, y, final_images )
+        return components
+    def store(
+        self,
+        components, format,
+        x,y,
+        images,
+    ):
+        """Store our images in the appropriate format"""
+        self.components = components
+        self.format = format
+        
+        glBindTexture( GL_TEXTURE_CUBE_MAP, self.texture )
+        glPixelStorei(GL_UNPACK_ALIGNMENT,1)
+        glPixelStorei(GL_PACK_ALIGNMENT, 1)
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        
+        if isinstance( images, dict ):
+            images = images.items()
+        for key,image in images:
+            glTexImage2D(
+                self.CUBE_NAME_MAP[key], 0, 
+                components, x, y, 0, format, GL_UNSIGNED_BYTE, 
+                image
+            )
+    def __call__( self ):
+        """Enable and select the texture...
+        See:
+            glBindTexture, glEnable(GL_TEXTURE_2D)
+        """
+        glBindTexture(GL_TEXTURE_CUBE_MAP, self.texture)
+        glEnable(GL_TEXTURE_CUBE_MAP)
+    __enter__ = __call__
+    def __exit__( self, typ, val, tb ):
+        """Disable for context-manager behaviour"""
+        glDisable( GL_TEXTURE_CUBE_MAP )
     
 class MMTexture( Texture ):
     """Mip-mapped texture object
