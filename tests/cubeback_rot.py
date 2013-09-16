@@ -30,8 +30,8 @@ DEF TR Transform {
                 DEF BG CubeBackground {
                     backUrl "pimbackground_BK.jpg"
                     frontUrl "pimbackground_FR.jpg"
-                    leftUrl "pimbackground_RT.jpg"
-                    rightUrl "pimbackground_LF.jpg"
+                    leftUrl "pimbackground_LF.jpg"
+                    rightUrl "pimbackground_RT.jpg"
                     topUrl "pimbackground_UP.jpg"
                     bottomUrl "pimbackground_DN.jpg"
                 }

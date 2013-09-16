@@ -291,6 +291,8 @@ class FlatPass( SGObserver ):
             else:
                 translated = dot( points, mv )
                 maxDepth = min((maxDepth, min( translated[:,2] )))
+        # 101 is to allow the 100 unit background to show... sigh
+        maxDepth = max((maxDepth,101))
         return -(maxDepth*1.01)
 
     def frustumVisibilityFilter( self, records ):
@@ -373,12 +375,15 @@ class FlatPass( SGObserver ):
         context.SwapBuffers()
         self.matrix = matrix
 
-    def legacyBackgroundRender( self, vp,matrix ):
+    def legacyBackgroundRender( self, vp, matrix ):
         """Do legacy background rendering"""
         bPath = self.currentBackground( )
         if bPath is not None:
-            glMultMatrixf( vp.quaternion.matrix( dtype='f') )
-            bPath.transform(self, translate=0,scale=0, rotate=1 )
+            # legacy...
+            self.matrix = dot(
+                vp.quaternion.matrix( dtype='f'),
+                bPath.transformMatrix(translate=0,scale=0, rotate=1 )
+            )
             bPath[-1].Render( mode=self, clear=True )
         else:
             ### default VRML background is black

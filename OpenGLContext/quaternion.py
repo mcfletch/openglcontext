@@ -51,7 +51,6 @@ class Quaternion(object):
         elements = asarray( elements, 'd')
         length = sqrt( sum( elements * elements))
         if length != 1:
-##			print 'fixing quaternion length', repr(length)
             elements = elements/length
         self.internal = elements
     def __mul__( self, other ):

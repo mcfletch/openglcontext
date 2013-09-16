@@ -70,11 +70,11 @@ class Background(
             if self.bound:
                 spherebackground._SphereBackground.Render( self, mode, clear=1)
                 if (
-                    self.right.components or
-                    self.left.components or
-                    self.front.components or
-                    self.back.components or
-                    self.top.components or
+                    self.right.components and
+                    self.left.components and
+                    self.front.components and
+                    self.back.components and
+                    self.top.components and
                     self.bottom.components
                 ):
                     cubebackground._CubeBackground.Render( self, mode, clear=0)

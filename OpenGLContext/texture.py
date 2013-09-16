@@ -3,6 +3,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.ARB import texture_non_power_of_two
 from OpenGLContext.arrays import ArrayType
+from PIL import ImageOps
 import traceback,weakref 
 import logging
 log = logging.getLogger( __name__ )
@@ -141,6 +142,7 @@ class Texture( object ):
     @staticmethod
     def pilAsString( image ):
         """Convert PIL image to string pointer"""
+        image = ImageOps.flip( image )
         return image.tostring("raw", image.mode, 0, -1)
     def ensureRGB( self, image ):
         """Ensure that the PIL image is in RGB mode
@@ -208,8 +210,10 @@ class CubeTexture( Texture ):
             self.fromPIL( images )
     def fromPIL( self, images ):
         """Construct the texture from PIL/Numpy arrays"""
+        if isinstance( images, dict ):
+            images = images.items()
         our_images = [
-            (k,v) for k,v in images.items() 
+            (k,v) for k,v in images 
             if (k in self.CUBE_NAME_MAP and v is not None)
         ]
         if not len(our_images) == 6:

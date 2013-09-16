@@ -32,6 +32,7 @@ class _SphereBackground( object ):
         colorSet = self.colorSet()
         if len(colorSet):
             vertices, colors = self.buildSphere( colorSet )
+            glMultMatrixf( mode.matrix )
             first = displaylist.DisplayList()
             first.start()
             try:
@@ -50,7 +51,6 @@ class _SphereBackground( object ):
                 glDisable( GL_LIGHTING )
                 glEnable( GL_COLOR_MATERIAL )
                 glDisable( GL_CULL_FACE )
-##				glFrontFace( GL_CW )
                 
                 for index in range( int(SEGMENTS) ):
                     first()
