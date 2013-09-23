@@ -145,7 +145,13 @@ class Context(object):
             support
             
         contextDefinition -- node describing the options used to
-            create this context (set by sub-classes during init)
+            create this context, passed in as "definition" argument 
+            on init, see OpenGLContext.contextdefinition.ContextDefinition
+            for details.
+            
+        coreProfile -- set if the contextDefinition specifies that this 
+            is a core-profile-only context, that is, it does not support 
+            compatibility (legacy) entry points.
     """
     currentContext = None
     allContexts = []
@@ -159,6 +165,7 @@ class Context(object):
     drawing = None
     viewportDimensions = (0,0)
     drawPollTimeout = 0.01
+    coreProfile = False
 
     ### Node-like attributes
     PROTO = "Context"
@@ -171,6 +178,8 @@ class Context(object):
             instance which controls the context features (size, bit-depth, etc).
             If null, then use self.contextDefinition if it exists, otherwise 
             create a default ContextDefinition instance.
+            Alternately, can be a dictionary of key:value pairs to set on the 
+            default ContextDefinition to specify required parameters.
 
         Calls the following:
         
@@ -184,11 +193,7 @@ class Context(object):
             setupFrameRateCounter,
             DoInit
         """
-        definition = definition or self.contextDefinition
-        if not definition:
-            from OpenGLContext import contextdefinition
-            definition = contextdefinition.ContextDefinition()
-        self.contextDefinition = definition
+        definition = self.setDefinition( definition )
         self.setupThreading()
         self.setupExtensionManager( )
         self.initializeEventManagers( )
@@ -201,6 +206,16 @@ class Context(object):
         self.setupFontProviders()
         self.setupFrameRateCounter()
         self.DoInit()
+    def setDefinition( self, definition ):
+        from OpenGLContext import contextdefinition
+        definition = definition or self.contextDefinition
+        if not definition:
+            definition = contextdefinition.ContextDefinition()
+        elif not isinstance( definition, contextdefinition.ContextDefinition ):
+            definition = contextdefinition.ContextDefinition( **definition )
+        self.contextDefinition = definition
+        self.coreProfile = definition.profile == 'core'
+        return self.contextDefinition
     def DoInit( self ):
         """Call the OnInit method at a time when the context is valid
 
@@ -544,8 +559,6 @@ class Context(object):
         shadow/passes.py for definitions of the properties of the
         mode.
         """
-        if not glGetInteger( GL_MATRIX_MODE ) == GL_MODELVIEW:
-            glMatrixMode(GL_MODELVIEW)
         ### Put your rendering code here
 
     def DoEventCascade( self ):
