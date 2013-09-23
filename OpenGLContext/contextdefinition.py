@@ -31,6 +31,9 @@ class ContextDefinition( node.Node ):
 
     debugBBox = field.newField( "debugBBox", "SFBool", 1, False )
     debugSelection = field.newField( "debugSelection", "SFBool", 1, False )
+    
+    # Currently profile is *only* supported by Pyside/PyQt
+    profile = field.newField( "profile", "SFString", 1, "compatibility" )
 
     @classmethod
     def fromConfig( cls, cfg, section='contextdefinition' ):
