@@ -25,6 +25,7 @@ class URLField( fieldtypes.MFString ):
         value = super( URLField, self).fdel( client, notify )
         imageObject = getattr(client, self.name[:-3])
         delattr( imageObject, 'url')
+        delattr( imageObject, 'components' )
         return value
 
 class _CubeBackground( object ):
@@ -132,6 +133,7 @@ class _CubeBackground( object ):
         
         vert_vbo = vbo.VBO( self.CUBE_VERTICES )
         index_vbo = vbo.VBO( self.CUBE_INDICES, target=GL_ELEMENT_ARRAY_BUFFER )
+        # this shader is from 
         shader = shaders.compileProgram(
             shaders.compileShader(
                 '''#version 330
@@ -159,7 +161,7 @@ class _CubeBackground( object ):
         if hasattr(mode,'cache'):
             holder = mode.cache.holder( self, render_data )
             for key in ('right','left','top','bottom','front','back'):
-                holder.depend( self, key )
+                holder.depend( self, key+'Url' )
         return render_data
 
 class CubeBackground( _CubeBackground, nodetypes.Background, nodetypes.Children, node.Node  ):
