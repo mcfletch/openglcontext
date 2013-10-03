@@ -1,4 +1,7 @@
-"""Flat rendering mechanism using structural scenegraph observation"""
+"""Flat rendering mechanism using structural scenegraph observation
+
+Rewritten version that should be core-profile compatible...
+"""
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot, allclose
@@ -16,24 +19,6 @@ if sys.maxint > 2L<<32:
     BIGINTS = True
 else:
     BIGINTS = False
-#try:
-#    from collections import namedtuple
-#    RenderRecord = namedtuple( 'RenderRecord',[
-#        'sortKey',
-#        'mvmatrix',
-#        'tmatrix',
-#        'bvolume',
-#        'path',
-#    ])
-#except ImportError, err:
-#    class RenderRecord( object ):
-#        def __init__( self, sortKey, mvmatrix, tmatrix,bvolume,path ):
-#            self.sortKey = sortKey 
-#            self.mvmatrix = mvmatrix
-#            self.tmatrix = tmatrix 
-#            self.bvolume = bvolume 
-#            self.path = path
-
 
 class SGObserver( object ):
     """Observer of a scenegraph that creates a flat set of paths
@@ -331,8 +316,6 @@ class FlatPass( SGObserver ):
             self.projection = vp.viewMatrix(maxDepth)
         
         # Load our projection matrix for all legacy rendering operations...
-        glMatrixMode( GL_PROJECTION )
-        glLoadMatrixf( self.getProjection() )
         
         # do we need to do a selection-render pass?
         events = context.getPickEvents()
@@ -341,14 +324,9 @@ class FlatPass( SGObserver ):
         if events or debugSelection:
             self.selectRender( mode, toRender, events )
             events.clear()
-            glMatrixMode( GL_PROJECTION )
-            glLoadMatrixf( self.getProjection() )
         
         # Load the root 
-        glMatrixMode( GL_MODELVIEW )
-        matrix = self.getModelView()
         if not debugSelection:
-            glLoadIdentity()
             self.matrix = matrix
             self.visible = True
             self.transparent = False
@@ -360,7 +338,6 @@ class FlatPass( SGObserver ):
             glFrontFace( GL_CCW )
             glEnable(GL_DEPTH_TEST)
             glDepthFunc( GL_LESS )
-            glEnable(GL_LIGHTING)
             glDepthFunc(GL_LESS)
             glEnable(GL_CULL_FACE)
             glCullFace(GL_BACK)
@@ -370,7 +347,7 @@ class FlatPass( SGObserver ):
             self.renderOpaque( toRender )
             self.renderTransparent( toRender )
 
-            if context.frameCounter.display:
+            if context.frameCounter and context.frameCounter.display:
                 context.frameCounter.Render( context )
         context.SwapBuffers()
         self.matrix = matrix
@@ -392,9 +369,6 @@ class FlatPass( SGObserver ):
 
     def legacyLightRender( self, matrix ):
         """Do legacy light-rendering operation"""
-        # okay, now visible presentations
-        for remaining in range(0,self.MAX_LIGHTS-1):
-            glDisable( GL_LIGHT0 + remaining )
         id = 0
         for path in self.paths.get( nodetypes.Light, ()):
             tmatrix = path.transformMatrix()
@@ -402,9 +376,9 @@ class FlatPass( SGObserver ):
             localMatrix = dot(tmatrix,matrix)
             self.matrix = localMatrix
             self.renderPath = path
-            glLoadMatrixf( localMatrix )
+            #glLoadMatrixf( localMatrix )
 
-            path[-1].Light( GL_LIGHT0+id, mode=self )
+            #path[-1].Light( GL_LIGHT0+id, mode=self )
             id += 1
             if id >= (self.MAX_LIGHTS-1):
                 break
@@ -412,8 +386,8 @@ class FlatPass( SGObserver ):
             # default VRML lighting...
             from OpenGLContext.scenegraph import light
             l = light.DirectionalLight( direction = (0,0,-1.0))
-            glLoadMatrixf( matrix )
-            l.Light( GL_LIGHT0, mode = self )
+#            glLoadMatrixf( matrix )
+#            l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
     
     def renderGeometry( self, mvmatrix ):
@@ -435,8 +409,8 @@ class FlatPass( SGObserver ):
             if not key[0]:
                 self.matrix = mvmatrix
                 self.renderPath = path
-                glMatrixMode(GL_MODELVIEW)
-                glLoadMatrixf( mvmatrix )
+#                glMatrixMode(GL_MODELVIEW)
+#                glLoadMatrixf( mvmatrix )
                 try:
                     path[-1].Render( mode = self )
                     if debugFrustum:
@@ -503,8 +477,6 @@ class FlatPass( SGObserver ):
         # 2x2 selection square and reduce overhead.
         glClearColor( 0,0,0, 0 )
         glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
-        glDisable( GL_LIGHTING )
-        glEnable( GL_COLOR_MATERIAL )
 
         self.visible = False
         self.transparent = False
