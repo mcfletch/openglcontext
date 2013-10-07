@@ -34,6 +34,7 @@ class ContextDefinition( node.Node ):
     
     # Currently profile is *only* supported by Pyside/PyQt
     profile = field.newField( "profile", "SFString", 1, "compatibility" )
+    version = field.newField( "version", "SFVec2f", 1, (0,0))
 
     @classmethod
     def fromConfig( cls, cfg, section='contextdefinition' ):

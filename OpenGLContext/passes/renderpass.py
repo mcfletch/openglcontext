@@ -848,20 +848,20 @@ visitingDefaultRenderPasses = PassSet(
     ],
 )
 USE_FLAT = True
-#USE_FLAT = False
 FLAT = None
 class _defaultRenderPasses( object ):
     def __call__( self,context ):
         global FLAT
         if FLAT is None:
-            if USE_FLAT:
-                from OpenGLContext.passes.flat import FlatPass
-                sg = context.getSceneGraph()
-                FLAT = FlatPass( context.getSceneGraph(), context.allContexts )
-                if sg is None:
-                    FLAT.integrate( context.renderedChildren()[0] )
+            sg = context.getSceneGraph()
+            if context.contextDefinition.profile == 'core':
+                log.info( 'Using core profile' )
+                from OpenGLContext.passes.flatcore import FlatPass
             else:
-                return visitingDefaultRenderPasses( context )
-            log.warn( 'Using Flat/Legacy-reduced renderer' )
+                log.info( 'Using compatibility profile' )
+                from OpenGLContext.passes.flatcompat import FlatPass
+            FLAT = FlatPass( sg, context.allContexts )
+            if sg is None:
+                FLAT.integrate( context.renderedChildren()[0] )
         return FLAT( context )
 defaultRenderPasses = _defaultRenderPasses()

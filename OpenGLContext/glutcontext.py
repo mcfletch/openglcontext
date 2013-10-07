@@ -13,8 +13,8 @@ class GLUTContext(
     """Implementation of Context API under GLUT
 
     The DISPLAYMODE attribute of the class determines the
-    context format through a call to glutInitDisplayMode.
-    See glutInitDisplayMode documentation for allowed values.
+    context format iff there is no contextDefinition override
+    (parameter definition in init).
     """
     DISPLAYMODE = GLUT_DOUBLE | GLUT_DEPTH 
     currentModifiers = 0
@@ -26,11 +26,12 @@ class GLUTContext(
             for key,value in named.items():
                 setattr( definition, key, value )
         self.contextDefinition = definition
-        #glutInitDisplayMode( self.glutFlagsFromDefinition( definition ) )
+        glutInitDisplayMode( self.glutFlagsFromDefinition( definition ) )
         glutInit([])
-#        glutInitContextVersion(3, 2)
-#        glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
-#        glutInitContextProfile(GLUT_CORE_PROFILE)
+        if glutInitContextVersion and definition.version[0]:
+            glutInitContextVersion(*definition.version)
+        if glutInitContextProfile and definition.profile == 'core':
+            glutInitContextProfile(GLUT_CORE_PROFILE)
         
         glutInitDisplayMode( self.DISPLAYMODE )
         # set up window size for newly created windows
