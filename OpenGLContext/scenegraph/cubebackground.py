@@ -139,7 +139,7 @@ class _CubeBackground( object ):
         # this shader is from 
         shader = shaders.compileProgram(
             shaders.compileShader(
-                '''#version 330
+                '''#version 130
     in vec3 vertex;
     out vec3 texCoord;
     uniform mat4 mvp_matrix;
@@ -149,7 +149,7 @@ class _CubeBackground( object ):
         texCoord = normalize(vertex);
     }''', GL_VERTEX_SHADER ),
             shaders.compileShader(
-                '''#version 330
+                '''#version 130
     in vec3 texCoord;
     out vec4 fragColor;
     uniform samplerCube cube_map;
