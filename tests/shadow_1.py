@@ -60,7 +60,7 @@ geometry multiple times.  The overall rendering pass which calls our
 Context's Render method is *also* a flat render pass, but it doesn't do 
 much in this case save providing our frame-rate counter and allowing us 
 to walk around in the world.'''
-from OpenGLContext.passes import flat
+from OpenGLContext.passes import flatcompat as flat
 
 class TestContext( BaseContext ):
     """Shadow rendering tutorial code"""
