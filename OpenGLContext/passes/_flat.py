@@ -460,6 +460,8 @@ class FlatPass( SGObserver ):
                 glDepthMask( 1 )
                 glDepthFunc( GL_LEQUAL )
                 glEnable( GL_DEPTH_TEST )
+    def addTransparent( self, other ):
+        pass
 
     def selectRender( self, mode, toRender, events ):
         """Render each path to color buffer
