@@ -1,6 +1,7 @@
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL import WGL
+from OpenGL.WGL.ARB import pixel_format
 
 names = [
     'WGL_ACCELERATION_ARB',
@@ -58,40 +59,46 @@ chooseNames = [
 
 class TestContext( BaseContext ):
     def OnInit( self ):
-        module = self.extensions.initExtension( "WGL.ARB.pixel_format" )
-        if module:
-            self.TestMethod( module.wglGetPixelFormatAttribivARB )
-            self.TestMethod( module.wglGetPixelFormatAttribfvARB )
+        self.TestMethod( pixel_format.wglGetPixelFormatAttribivARB )
+        self.TestMethod( pixel_format.wglGetPixelFormatAttribfvARB )
     def TestMethod( self, method ):
         print 'Starting method', method
-        module = self.extensions.initExtension( "WGL.ARB.pixel_format" )
+        module = pixel_format
         hdc = WGL.wglGetCurrentDC()
         items = [(name,getattr( module, name)) for name in names ]
         failures = []
+        if method == pixel_format.wglGetPixelFormatAttribivARB:
+            result = WGL.INT32( )
+        else:
+            result = WGL.FLOAT( )
         for item in items:
             try:
-                result = method(
+                pf = WGL.GetPixelFormat(hdc)
+                method(
                     hdc,
-                    WGL.GetPixelFormat(hdc),
+                    pf,
                     0,
-                    [item[1],],
+                    1,
+                    WGL.INT32(item[1]),
+                    result,
                 )
             except WindowsError, err:
                 failures.append((item,err))
             else:
-                print '%20s\t%r'%( item[0], result)
+                print '%20s\t%r'%( item[0], result.value)
         if failures:
             print 'FAILURES'
             for ((name,value),err) in failures:
                 print name, value, '->', err
-
         items = [ getattr(module,name) for name in names ]
         try:
-            result = method(
+            method(
                 hdc,
                 WGL.GetPixelFormat(hdc),
                 0,
-                items,
+                1,
+                WGL.INT32(item[1]),
+                result
             )
         except WindowsError, err:
             print method, 'failed on getting full set'
