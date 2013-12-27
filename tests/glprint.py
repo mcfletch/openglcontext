@@ -39,8 +39,8 @@ class font:
         ## pitch and family value
         f = win32ui.CreateFont(
             {
-                'italic': None, #use of None is required, 0 doesn't work
-                'underline': None, #use of None is required, 0 doesn't work
+                'italic': 0, #use of None is required, 0 doesn't work
+                'underline': 0, #use of None is required, 0 doesn't work
                 'name': 'Times New Roman',
                 'weight': 700,
                 'height': 20,
@@ -91,9 +91,7 @@ class TestContext( wxInteractiveContext ):
     cnt1 = 0
     cnt2 = 0
 
-    def __init__(self, parent):
-        wxInteractiveContext.__init__(self, parent)
-        # TODO: this font *shouldn't* be needed...
+    def OnInit( self ):
         f = wx.Font(
             20,
             wx.DECORATIVE,
@@ -105,7 +103,6 @@ class TestContext( wxInteractiveContext ):
         self.SetFont( f )
         self.my_font = font( self )
         self.timer = None
-
 
     def Render( self, mode):
         wxInteractiveContext.Render( self, mode )
