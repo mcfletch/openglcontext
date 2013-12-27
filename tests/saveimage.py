@@ -101,9 +101,9 @@ class TestContext( BaseContext ):
         width, height = self.getViewPort()
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         if self.typedFunction:
-            data = glReadPixelsub(0, 0, width, height, GL_RGB)
+            data = glReadPixelsub(0, 0, width, height, GL_RGB, outputType=None)
         else:
-            data = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
+            data = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, outputType=None)
         if hasattr( data, 'shape' ):
             assert data.shape == (width,height,3), """Got back array of shape %r, expected %r"""%(
                 data.shape,
@@ -149,9 +149,9 @@ class TestContext( BaseContext ):
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         #data = glReadPixels(0,0,width,height, GL_DEPTH_COMPONENT, GL_FLOAT)
         if self.typedFunction:
-            data = glReadPixelsub(0,0,width,height, component)
+            data = glReadPixelsub(0,0,width,height, component, outputType=None)
         else:
-            data = glReadPixels(0,0,width,height, component, GL_UNSIGNED_BYTE)
+            data = glReadPixels(0,0,width,height, component, GL_UNSIGNED_BYTE, outputType=None)
 #		data = ravel( data )
 #		dMin = amin(data)
 #		print 'Minimum data point: %s'%(dMin )

@@ -20,9 +20,9 @@ class TestContext( BaseContext ):
         glRotated( time.time()%(8.0)/8 * -360, 1,0,0)
         drawcube.drawCube()
         width, height = self.getViewPort()
-        red = glReadPixelsub(0,0, width, height,GL_RED)
+        red = glReadPixelsub(0,0, width, height,GL_RED, outputType=None)
         print 'refcount for array', sys.getrefcount( red )
-        red = glReadPixels(0,0, width, height,GL_RED, GL_UNSIGNED_BYTE)
+        red = glReadPixels(0,0, width, height,GL_RED, GL_UNSIGNED_BYTE, outputType=None)
         print 'refcount for string', sys.getrefcount( red )
 
         
@@ -31,7 +31,7 @@ class TestContext( BaseContext ):
 ##		drawcube.drawCube()
 ##
 ##		# draw different scene
-##		pixels = glReadPixelsub(0,0, width, height,GL_RGB)
+##		pixels = glReadPixelsub(0,0, width, height,GL_RGB, outputType=None)
 ##		pixels[:,:, 0] = red
 ##		glDrawPixelsub(GL_RGB, pixels)
         
@@ -54,7 +54,7 @@ class TestContext( BaseContext ):
             import Image
         width, height = self.getViewPort()
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
-        data = glReadPixelsub(0, 0, width, height, GL_RGB)
+        data = glReadPixelsub(0, 0, width, height, GL_RGB, outputType=None)
         assert data.shape == (width,height,3), """Got back array of shape %r, expected %r"""%(
             data.shape,
             (width,height,3),
@@ -72,7 +72,7 @@ class TestContext( BaseContext ):
             import Image
         width, height = self.getViewPort()
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
-        data = glReadPixelsub(0, 0, width, height, GL_RGB)
+        data = glReadPixelsub(0, 0, width, height, GL_RGB, outputType=None)
         assert data.shape == (width,height,3), """Got back array of shape %r, expected %r"""%(
             data.shape,
             (width,height,3),
