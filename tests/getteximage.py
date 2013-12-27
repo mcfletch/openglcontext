@@ -21,7 +21,7 @@ class TestContext( BaseContext ):
                 glRasterPos2f( 1, 0 )
             for level in range( 4 ):
                 if self.useArrays:
-                    displayImage = glGetTexImageub( GL_TEXTURE_2D, level, GL_RGBA )
+                    displayImage = glGetTexImageub( GL_TEXTURE_2D, level, GL_RGBA, outputType=None )
                     glDrawPixelsub( GL_RGBA, displayImage )
                     width,height = displayImage.shape[:2]
                 else:
