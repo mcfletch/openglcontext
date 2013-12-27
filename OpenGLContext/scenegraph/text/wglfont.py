@@ -83,13 +83,6 @@ class WGLFont( font.Font ):
         if __debug__:
             log.debug( """  generating displaylists, %s""", repr(source))
         wgldc = wglGetCurrentDC() # the DC that's doing the work
-        if wgldc == None:
-            if __debug__:
-                log.warn( """Unable to build the WGL DC for generating text""")
-            return 
-        elif wgldc > sys.maxint:
-            import struct
-            wgldc = struct.unpack( '>i', struct.pack( '>I', wgldc ))[0]
         dc = win32ui.CreateDCFromHandle( wgldc )
         font = self._uiFont()
         dc.SelectObject(
@@ -120,7 +113,7 @@ class WGLFont( font.Font ):
                 name = "SANS"
             specification["name"] = FAMILYMAPPING.get( name, name )
             # size seems a little non-specific
-            specification["size"] = int(self.fontStyle.size * 12)
+            specification["height"] = int(self.fontStyle.size * 12)
             # need weight seperated
             weight = win32con.FW_NORMAL
             for wname, weight in WEIGHTNAMES:
@@ -130,15 +123,14 @@ class WGLFont( font.Font ):
             if self.fontStyle.style.find( 'ITALIC' ) >= 0:
                 italic = 1
             else:
-                italic = None
+                italic = 0
             specification["italic"] = italic
             if self.fontStyle.style.find( 'UNDERLINE' ) >= 0:
                 underline = 1
             else:
-                underline = None
+                underline = 0
             specification["underline"] = underline
-        if __debug__:
-            log.debug( """font specification %s""", specification)
+        log.warn( """font specification %s""", specification)
         return win32ui.CreateFont(
             specification,
         )
