@@ -129,7 +129,10 @@ class _CubeBackground( object ):
         if not all_same( 'components' ):
             return None 
         tex = texture.CubeTexture( )
-        tex.fromPIL( [(k,i.image) for k,i in images.items()] )
+        try:
+            tex.fromPIL( [(k,i.image) for k,i in images.items()] )
+        except ValueError as err:
+            return None
         
         vert_vbo = vbo.VBO( self.CUBE_VERTICES )
         index_vbo = vbo.VBO( self.CUBE_INDICES, target=GL_ELEMENT_ARRAY_BUFFER )
