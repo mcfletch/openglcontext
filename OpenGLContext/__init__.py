@@ -19,7 +19,7 @@ modules should operate under any of the fully functional
 GUI contexts (note that there are unfinished contexts).
 '''
 
-__version__ = "2.2.0a3"
+__version__ = "2.2.0a4"
 __author__ = "Michael Colin Fletcher"
 __license__ = "BSD-Style, see license.txt for details and exceptions"
 
