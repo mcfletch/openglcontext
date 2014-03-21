@@ -61,7 +61,7 @@ used to maintain and extend PyOpenGL.
         version = version,
         description = "Demonstration and testing contexts for PyOpenGL/OpenGL-ctypes",
         author = "Mike C. Fletcher",
-        author_email = "mcfletch@users.sourceforge.net",
+        author_email = "mcfletch@vrplumber.com",
         url = "http://pyopengl.sourceforge.net/context/",
         license = "BSD-style, see license.txt for details",
 
