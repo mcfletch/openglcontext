@@ -1,33 +1,29 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-<head>
-
-  
-  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
-
-  
-  
-  <title>Text with OpenGLContext</title>
-  <link rel="stylesheet" type="text/css" href="style/tutorial.css">
-
-  
-  <meta name="author" content="Mike C. Fletcher">
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Text Nodes in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
 </head>
-
-
 <body>
-
-<h1>Text Nodes in OpenGLContext</h1>
-
+<header>
+      <nav>
+      <ul class="menu">
+        <li><a href="/index.html">PyOpenGL</a></li>
+        <li><a href="/context/index.html">OpenGLContext</a></li>
+        <li><a href="/context/documentation.html">Docs</a></li>
+        <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
+            <li><a href="https://launchpad.net/openglcontext">Project</a></li>
+      </ul>
+      </nav>
+    <h1>Text Nodes in OpenGLContext</h1>
+</header>
+<section>
 <p class="introduction">This document discusses rendering Text nodes in
 OpenGLContext.&nbsp; The most common font providers available are the
 GLUT bitmap provider (always available) and the FontTools-based
 polygonal text provider.&nbsp; Both of these are cross platform, as are
 the PyGame and wxPython-based bitmap providers.<br>
-
 </p>
-
-
 <p>Creating text with OpenGL is a rather involved process.&nbsp;
 Generally speaking, it is necessary either to rely on a third party
 library for rendering the text, or to manually generate the text from
@@ -35,7 +31,8 @@ some data source.&nbsp; OpenGLContext provides a framework in which
 both approaches can be (and are) used.&nbsp; <br>
 
 </p>
-
+</section>
+<section>
 
 <p>The <a href="../pydoc/OpenGLContext.scenegraph.text.fontprovider.html">FontProvider</a>
 class provides registration point for objects (font providers) which
@@ -169,10 +166,9 @@ for rendering characters in the given font, determining the display
 metrics for the characters, and performing text layout.<br>
 
 </p>
-
-<p>Further Reading:<br>
-
-</p>
+</section>
+<section>
+<h2>Further Reading:</h2>
 
 <ul>
 
@@ -193,8 +189,13 @@ nodes</li>
 
 </ul>
 
-<p class="footer"><a href="documentation.html"><img src="images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/context/"><img src="images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> A
-SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" align="middle"></a></p>
+</section>
+    <footer>
+    <p class="footer">
+      A SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
+          style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge"
+          title="" align="middle"></a></p>
+    </footer>
 
 </body>
 </html>

@@ -1,34 +1,30 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-<head>
-
-  
-  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
-
-  
-  
-  <title>OpenGLContext Event Model</title>
-  <link rel="stylesheet" type="text/css" href="style/tutorial.css">
-
-  
-  <meta name="author" content="Mike C. Fletcher">
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>OpenGLContext Event Model</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
 </head>
-
-
 <body>
+<header>
+      <nav>
+      <ul class="menu">
+        <li><a href="/index.html">PyOpenGL</a></li>
+        <li><a href="/context/index.html">OpenGLContext</a></li>
+        <li><a href="/context/documentation.html">Docs</a></li>
+        <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
+            <li><a href="https://launchpad.net/openglcontext">Project</a></li>
+      </ul>
+      </nav>
+    <h1>OpenGLContext Event Model</h1>
+</header>
 
-<h1>OpenGLContext Event Model<br>
-
-</h1>
-
+<section>
 <p class="introduction">This document describes the mechanisms within
 OpenGLContext which allow for providing interactivity, both at the
 context and the scenegraph levels.&nbsp; This includes keyboard and
-mouse events, as well as timers and routes.<br>
-
-</p>
-
-
+mouse events, as well as timers and routes.</p>
+</section>
+<section>
 <h2>Features of the Event Model</h2>
 
 <p>There are a number of user-level features which are implemented by
@@ -66,7 +62,8 @@ registration, allowing composable interactive objects to be created<br>
 <p>each of these features will be discussed below.<br>
 
 </p>
-
+</section>
+<section>
 <h2>Dispatcher</h2>
 
 <p>The PyDispatcher package is the primary mechanism
@@ -80,6 +77,8 @@ those events when the event is actually received.<br>
 
 </p>
 
+</section>
+<section>
 <h2>Field Watching<br>
 
 </h2>
@@ -94,6 +93,8 @@ the rest of the interaction is built upon.<br>
 
 </p>
 
+</section>
+<section>
 <h2>Cache Invalidation<br>
 
 </h2>
@@ -105,6 +106,8 @@ cache data during the next rendering pass.<br>
 
 </p>
 
+</section>
+<section>
 <h2>Routing Tables<br>
 
 </h2>
@@ -131,6 +134,8 @@ prototype's corresponding field.<br>
 
 </p>
 
+</section>
+<section>
 <h2>Event Handlers</h2>
 
 <p>Most contexts derive from the EventHandlerMixIn class, which
@@ -150,10 +155,14 @@ tables for the handler callbacks.<br>
 significant extra machinery).<br>
 
 </p>
+</section>
 
-
-<p class="footer"><a href="documentation.html"><img src="images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/context/"><img src="images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> <a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a> A
-SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" align="middle"></a></p>
+    <footer>
+    <p class="footer">
+      A SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
+          style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge"
+          title="" align="middle"></a></p>
+    </footer>
 
 </body>
 </html>

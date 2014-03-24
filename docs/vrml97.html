@@ -1,21 +1,23 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html lang="en-ca"><head>
-
-
-
-  
-  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1"><title>Using VRML97 with OpenGLContext</title>
-
-  
-  
-  
-  <link rel="stylesheet" type="text/css" href="style/tutorial.css">
-
-  
-  <meta name="author" content="Mike C. Fletcher"></head><body style="direction: ltr;">
-
-<h1>Using VRML97 with OpenGLContext</h1>
-
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Using VRML97 with OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+      <ul class="menu">
+        <li><a href="/index.html">PyOpenGL</a></li>
+        <li><a href="/context/index.html">OpenGLContext</a></li>
+        <li><a href="/context/documentation.html">Docs</a></li>
+        <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
+            <li><a href="https://launchpad.net/openglcontext">Project</a></li>
+      </ul>
+      </nav>
+    <h1>Using VRML97 with OpenGLContext</h1>
+</header>
+<section>
 <p class="introduction">This document describes the (partial) VRML97
 implementation provided by the OpenGLContext and vrml packages.
 &nbsp;The VRML97 ISO standard is a large and complex specification, and
@@ -24,8 +26,8 @@ functionality, hopefully a useful subset. &nbsp;You can load, render
 and
 re-save scenegraph's from VRML97 files, as well as render a number of
 the more common nodes.</p>
-
-
+</section>
+<section>
 <h2>What is Implemented?</h2>
 
 
@@ -141,9 +143,9 @@ lists above.<br>
 
 </p>
 
-<h2>Loading VRML97 Files<br>
-
-</h2>
+</section>
+<section>
+<h2>Loading VRML97 Files</h2>
 
 
 <p>Basic operation of the VRML97 <a href="../pydoc/OpenGLContext.loaders.loaders.html">loader</a> is as
@@ -187,7 +189,8 @@ during loading. &nbsp;Note that you can replace any built-in prototype
 with this mechanism as well.<br>
 
 </p>
-
+</section>
+<section>
 <h2>Manipulating Nodes Programmatically</h2>
 
 <p>Basic operations with a scenegraph...<br>
@@ -368,8 +371,8 @@ array<br>
   
   </tbody>
 </table>
-
-
+</section>
+<section>
 <h2>The Scenegraph Cache<br>
 
 </h2>
@@ -391,6 +394,8 @@ number of different fields of two different nodes.<br>
 
 </p>
 
+</section>
+<section>
 <h2>Creating New Prototypes</h2>
 
 <p>If you would like to create a new node-type (prototype), you can
@@ -423,9 +428,11 @@ them.<br>
 
 </p>
 
+</section>
+<section>
 <h2>Event Model</h2>
 
-<p>OpenGLContext has a more limited event model than that specified in
+<p>OpenGLContext has a more limited <a href="eventmodel.html">event model</a> than that specified in
 VRML97.&nbsp; It allows for routing, and provides basic event
 setting/getting with the ability to define handlers for the events, but
 it does not attempt to implement the non-deterministic VRML behaviour.<br>
@@ -468,10 +475,12 @@ field.&nbsp; The ROUTE machinery watches for the
 
 </p>
 
-<p class="footer"><a href="documentation.html"><img src="images/doc_icon.gif" title="" alt="Documentation" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a>
-<a href="http://pyopengl.sourceforge.net/context/"><img src="images/context_logo_icon.png" title="" alt="OpenGLContext" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a>
-<a href="http://pyopengl.sourceforge.net/"><img title="" alt="PyOpenGL" src="images/pyopengl_icon.jpg" style="border: 0px solid ; width: 32px; height: 32px;" align="middle"></a>
-A
-SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge" title="" align="middle"></a></p>
+</section>
+    <footer>
+    <p class="footer">
+      A SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
+          style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge"
+          title="" align="middle"></a></p>
+    </footer>
 
 </body></html>

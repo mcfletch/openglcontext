@@ -1,46 +1,24 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-<head>
-  <title>Using Numeric Python with OpenGLContext</title>
-  <link rel="stylesheet" type="text/css" href="style/sitestyle.css">
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Using Numpy with OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
 </head>
-<body style="background-color: rgb(255, 255, 255); color: rgb(0, 0, 0);"
- topmargin="0" leftmargin="0">
-<div align="center">
-<div align="left">
-<table border="0" cellpadding="4" width="100%">
-  <tbody>
-    <tr>
-      <th valign="middle" rowspan="1">
-      <p> <a href="documentation.html"> </a></p>
-      <div><map name="FPMap0">
-      <area href="http://pyopengl.sourceforge.net/" shape="rect"
- coords="0, 0, 29, 32">
-      <area href="./documentation.html"
- shape="rect" coords="1, 31, 30, 66">
-      <area href="https://sourceforge.net/projects/pyopengl/"
- shape="rect" coords="0, 66, 29, 102">
-      <area href="http://pyopengl.sourceforge.net/context/"
- shape="default">
-      <area href="http://pyopengl.sourceforge.net/context/"
- coords="0, 0, 10000, 10000" shape="rect">
-      </map>
-      <img src="./images/context_logo.gif"
- title="" alt="OpenGLContext 2.0"
- style="border: 0px solid ; height: 128px; width: 128px;"
- usemap="#FPMap0" width="128" height="128"></div>
-      </th>
-      <th valign="middle">
-      <h1>Working with Numeric Python</h1>
-      <p>Using NumPy with PyOpenGL and OpenGLContext</p>
-      </th>
-    </tr>
-    <tr>
-      <th width="24%" valign="top">
-      <p>Introduction</p>
-      </th>
-      <td>
-      <p class="typewriter"> In this document you will learn to: </p>
+<body>
+<header>
+      <nav>
+      <ul class="menu">
+        <li><a href="/index.html">PyOpenGL</a></li>
+        <li><a href="/context/index.html">OpenGLContext</a></li>
+        <li><a href="/context/documentation.html">Docs</a></li>
+        <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
+            <li><a href="https://launchpad.net/openglcontext">Project</a></li>
+      </ul>
+      </nav>
+    <h1>Using Numpy with OpenGLContext</h1>
+</header>
+<section>
+      <p class="introduction">In this document you will learn to</p>
       <ul>
         <li> create Numeric Python arrays </li>
         <li> perform common manipulations of Numeric Python arrays </li>
@@ -52,21 +30,16 @@ code.&nbsp; This document focuses primarily on Numeric Python
 itself, rather than on PyOpenGL.&nbsp; Mastering the features shown
 here will be useful when doing non-trivial programming in PyOpenGL,
 but it's not necessary to know this material before you start
-playing with OpenGLContext.<br>
-      </p>
+playing with OpenGLContext.</p>
       <p>Numeric Python makes it easy to work with (potentially large)
 homogenous arrays of a given data type.&nbsp; It provides extended
 slicing         semantics for dealing with multidimensional arrays,
 utility functions         for processing all elements of an array, and
 mechanisms for storing and         converting to/from arrays and native
 Python data structures. </p>
-      </td>
-    </tr>
-    <tr>
-      <th width="24%" valign="top">
-      <p>Creating Numeric Python Arrays</p>
-      </th>
-      <td>
+</section>
+<section>
+    <h2>Creating Numeric Python Arrays</h2>
       <p>Before it can be used, Numeric Python needs to be imported
 into your module.&nbsp; Depending on how many of the functions in the   
 module you'll be wanting to use, you may use either <code>from Numeric
@@ -170,13 +143,8 @@ and <code>ravel</code> functions to get a copy of an array with
 different dimensions. Note: most Numeric functions allow for in-place
 copying through an optional extra argument specifying the destination
 for the operation.&nbsp; See the Numeric Python manual for details.&nbsp;</p>
-      </td>
-    </tr>
-    <tr>
-      <th width="24%" valign="top">
-      <p>Basic Manipulations</p>
-      </th>
-      <td>
+</section>
+<section>
       <h3>Basic Mathematics</h3>
       <p>Mathematical operators tend to work element-wise for arrays,
 and allow for a           fairly wide variety of second arguments.</p>
@@ -187,6 +155,8 @@ similar approaches for addition, subtraction, and division.</p>
 by the corresponding element in another array, you would write <code>result
 = firstarray *           secondarray</code> again, with the same
 approach working for most basic math           operations.</p>
+</section>
+<section>
       <h3>Slicing</h3>
       <p>Numeric Python uses an extended slicing notation, which allows
 for flexible and powerful manipulation of multidimensional arrays
@@ -215,6 +185,8 @@ through examples. Consider this interactive session:</p>
       <pre># x-coordinate of an i*3 array<br>xes = points[:,0]<br>yes = points[:,1]</pre>
       <pre># first points of i*3 set of points describing triangles<br>firstPoints = trianglePoints[::3]<br>secondPoints = trianglePoints[1::3]</pre>
       <pre># r-values of an x*y*3 r,g,b image<br>reds = image[:,:,0]<br>greens = image[:,:,1]</pre>
+</section>
+<section>
       <h3> Multiplication</h3>
       <p>There are three different types of multiplication commonly
 used in           OpenGLContext. Element-wise multiplication was covered
@@ -244,6 +216,8 @@ the array processing         functions do the bulk of the calculations
 in most algorithms.&nbsp;         Because of the number of functions,
 you should use the Numeric Python         Handbook for descriptions of
 the functions.</p>
+</section>
+<section>
       <h3>Universal (Math) Functions</h3>
       <p>These function-like objects provide for extremely flexible
 application of common mathematical operations on arguments of varying
@@ -255,6 +229,8 @@ greater, greater_equal,         hypot,  invert, left_shift,  less,
 less_equal, log,  log10, logical_and,         logical_not, logical_or,
 logical_xor, maximum,  minimum,  multiply,  negative, not_equal,
 power,  remainder, right_shift,  sin, sinh, sqrt, subtract,  tan,  tanh</code></p>
+</section>
+<section>
       <h3>Index(ed)-Array Functions</h3>
       <p>These functions deal with index arrays or indexed arrays, that
 is, arrays which refer to other arrays, either by having equivalent     
@@ -266,17 +242,23 @@ indices required for rendering sorted transparent geometry without
 needing to copying/rearranging the point array.</p>
       <p><code>argmax, argmin, argsort, choose, take, where, put,
 putmask, compress</code></p>
+</section>
+<section>
       <h3>Binary Operator Functions</h3>
       <p>These functions deal with two "data arrays", combining
 their values in some way to create a new array.&nbsp; The most commonly 
 used function of this group is dot.</p>
       <p><code>convolve, cross_correlate, dot, outerproduct,
 innerproduct, sum</code></p>
+</section>
+<section>
       <h3> Array Value</h3>
       <p>These functions produce single value outputs from an entire
 array, checking, for instance, that the entire array is true, or
 calculating         the sum of the entire array.</p>
       <p><code>alltrue, cumproduct, cumsum, product, sometrue, trace</code></p>
+</section>
+<section>
       <h3>Altered Array Values</h3>
       <p>These functions produce a copy of an array with each value
 modified by the given function, or the array's ordering/contents
@@ -332,6 +314,8 @@ With Python code, however, it is generally impractical to use
 individual         data transfer calls, as the overhead for the API
 call is enormous         compared to the actual work being done with
 such low level functions.</p>
+</section>
+<section>
       <h3>Approach</h3>
       <p>The basic approach of the array-based geometry is to specify a
  pointer for a number of different array types: vertex, color, normal
@@ -356,14 +340,11 @@ as for glBegin), and potentially a subset of the arrays which is
 to be drawn (for instance, a start position, a count of  items to draw,
 or a list of indices into the arrays which are to be drawn).</p>
       <pre>glDrawArrays( GL_TRIANGLES, 0, 32 )<br>glDrawElementsui( GL_TRIANGLES, indices )</pre>
-      </td>
-    </tr>
-    <tr>
-      <th width="24%" valign="top">
-      <p>Further Reading</p>
-      </th>
-      <td> For information on using Numeric for image manipulation, see <a
- href="images_and_textures.html">Images         and Textures</a>
+</section>
+<section>
+      <h2>Further Reading</h2>
+      <p>For information on using Numeric for image manipulation, see <a
+ href="images_and_textures.html">Images         and Textures</a></p>
       <p>For further information on Numeric, see the <a
  href="http://www.pfdubois.com/numpy/html2/numpy.html">Numeric
 Python Handbook</a> and/or the <a href="http://www.pfdubois.com/numpy/">Numeric
@@ -376,19 +357,14 @@ for examples of array manipulation.</p>
 geometry functionality (and therefore include example drawing code):
 gldrawarrays,         gldrawarrays_string, gldrawelements,
 glarrayelement, glinterleavedarrays. </p>
-      </td>
-    </tr>
-    <tr>
-      <th width="24%" valign="top" colspan="2">A SourceForge
-Open-Source Project:<br>
-      <a href="http://sourceforge.net"><img
- src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" border="0"><br>
-      </a> <a href="http://pyopengl.sourceforge.net/"><img border="0"
- src="icon2.jpg" width="32" height="32"></a> </th>
-    </tr>
-  </tbody>
-</table>
-</div>
-</div>
+</section>
+
+    <footer>
+    <p class="footer">
+      A SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
+          style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge"
+          title="" align="middle"></a></p>
+    </footer>
+
 </body>
 </html>
