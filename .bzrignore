@@ -15,3 +15,4 @@ pydoc/*.html
 test-results
 tests/test.jpg
 *.egg-info
+build
