@@ -131,6 +131,18 @@ class GLUTContext(
         ''' Acquire the GL "focus" '''
         Context.setCurrent( self )
         glutSetWindow( self.windowID )
+    def OnQuit( self, event=None ):
+        """Quit the application (forcibly)"""
+        
+        glutDisplayFunc(null_display)
+        
+        glutIdleFunc( None )
+        if self.windowID:
+            glutDestroyWindow( self.windowID )
+#        if (glutLeaveMainLoop):
+#            glutLeaveMainLoop()
+        return super( GLUTContext, self ).OnQuit( event )
+    
     def OnRedisplay (self ):
         ''' windowing library has asked us to redisplay '''
         self.triggerRedraw(1)
@@ -162,6 +174,9 @@ class GLUTContext(
             render.createMenus()
         return glutMainLoop()
     ContextMainLoop = classmethod( ContextMainLoop )
+
+def null_display():
+    return
 
 if __name__ == "__main__":
     from drawcube import drawCube
