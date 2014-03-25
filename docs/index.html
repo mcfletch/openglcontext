@@ -1,158 +1,146 @@
 <!DOCTYPE html>
-<html><head><title>OpenGLContext 2.0</title>
-  <link rel="stylesheet" type="text/css" href="style/modern.css"></head>
+<html>
+  <head>
+    <meta content="text/html; charset=windows-1252" http-equiv="content-type">
+    <title>OpenGLContext 2.0</title>
+    <link rel="stylesheet" type="text/css" href="style/modern.css">
+  </head>
   <body>
     <header>
       <nav>
-      <ul class="menu">
-        <li><a href="/index.html">PyOpenGL</a></li>
-        <li><a href="/context/index.html">OpenGLContext</a></li>
-        <li><a href="/context/documentation.html">Docs</a></li>
-        <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
-            <li><a href="https://launchpad.net/openglcontext">Project</a></li>
-      </ul>
-      </nav>
-      <h1>OpenGLContext <span class="subheading">A Learning Environment for PyOpenGL</span></h1>
-    </header>
-    
-    <section>
-        <h2>Introduction</h2>
-      <p class="introduction">OpenGLContext is a testing and learning environment for
-      <a href="http://pyopengl.sourceforge.net/">PyOpenGL</a>. It
-provides sample code for:</p>
-      <ul>
-        <li>Modern OpenGL Features (in a series of <a href="tutorials/index.xhtml">tutorials</a> and example scripts)
-</li>
-        <ul>
-          <li>Shaders</li>
-          <li>Vertex Buffer Objects</li>
-          <li>Pixel Buffer Objects</li>
+        <ul class="menu">
+          <li><a href="/index.html">PyOpenGL</a></li>
+          <li><a href="/context/index.html">OpenGLContext</a></li>
+          <li><a href="/context/documentation.html">Docs</a></li>
+          <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
+          <li><a href="https://launchpad.net/openglcontext">Project</a></li>
         </ul>
-        <li>PyOpenGL Usage with Common GUI Libraries</li>
+      </nav>
+      <h1>OpenGLContext <span class="subheading">A Learning Environment for
+          PyOpenGL</span></h1>
+    </header>
+    <section>
+      <h2>Introduction</h2>
+      <p class="introduction">OpenGLContext is a testing and learning
+        environment for <a href="http://pyopengl.sourceforge.net/">PyOpenGL</a>.
+        It provides a generic scenegraph engine (based on VRML97's node mode) as
+        well as basic context creation and interaction support in multiple GUI
+        environments.</p>
+      <div class="screenshot"></div>
+      <div class="screenshot-preload"></div>
+    </section>
+    <section>
+      <h2>Quick Links</h2>
+      <ul>
+        <li><a href="documentation.html">Documentation</a></li>
+        <li><a href="../installation.html#context">Installation</a></li>
+         <li>Projects</li>
+        <ul>
+          <li><a href="https://launchpad.net/openglcontext">OpenGLContext</a></li>
+          <li><a href="https://launchpad.net/openglcontext-qt">OpenGLContext_qt</a></li>
+          <li><a href="https://launchpad.net/pyvrml97">PyVRML97</a></li>
+          <li><a href="https://launchpad.net/ttfquery">TTFQuery</a></li>
+          <li><a href="https://launchpad.net/twitch">Twitch BSP File
+              Loader</a></li>
+        </ul>
+      </ul>
+      <h2>Features</h2>
+      <ul>
+        <li>Works on Multiple GUI Environments with Keyboard, Mouse and GUI
+          events</li>
         <ul>
           <li>Pygame</li>
-          <li>wxPython</li>
           <li>GLUT</li>
-          <li>Qt (in the OpenGLContext_qt project, due to license restrictions)</li>
+          <li>wxPython</li>
+          <li>Qt (using the <a href="../pydoc/OpenGLContext_qt.html">OpenGLContext_qt</a>
+            project)</li>
         </ul>
-        <li>Rendering common scenegraph objects</li>
-
-
-        
+        <li>Provides Basic Interactivity</li>
         <ul>
-
-          <li>geometry</li>
-          <ul>
-            <li>point-sets</li>
-            <li>line-sets</li>
-            <li>face-sets</li>
-            <li>polygonal text</li>
-            <li>trimmed NURBs</li>
-            <li>basic particle systems</li>
-            <li>extruded shapes (via GLE)
-            </li>
-          </ul>
-
-
-          <li>materials and textures</li>
-          <ul>
-            <li>mip-mapping</li>
-            <li>multi-texturing</li>
-            <li>loading from disk with PIL</li>
-          </ul>
-
-
-          <li>transforms</li>
-          <ul>
-            <li>incl. support for manually calculating
-forward and reverse transformation matrices
-
-          </li>
-          </ul>
-
-
-          <li>backgrounds</li>
-          <ul>
-            <li>solid-colour</li>
-            <li>spherical</li>
-            <li>image-cube</li>
-          </ul>
-
-
-          <li>lights</li>
-
-        
+          <li>3D Flying Mode</li>
+          <li>Selection rendering based on unique-color buffers</li>
+          <li>Timer mechanisms and simple event handling</li>
         </ul>
-
-        
+        <li>Geometry Types</li>
         <ul>
-          <li>glBlend-based (sorted) transparent-geometry rendering</li>
+          <li>Points (and Point-sprites)</li>
+          <li>Lines</li>
+          <li>Polygons</li>
+          <li>Trimmed NURBs</li>
+          <li>Extruded Shapes (with GLE)</li>
+          <li>Spheres, Cylinders, Cones</li>
         </ul>
-
-
-        <li>Color-id-rendered mouse selection and interaction</li>
-
-        <li>Frustum culling</li>
-
-        
+        <li>Textures (with PIL/Pillow), Materials</li>
+        <li>Shader Scenegraph Nodes</li>
+        <li>Optimizations</li>
         <ul>
-
-          <li>hierarchic axis-aligned bounding boxes</li>
-
-          <li>frustum extraction from the combined model-view matrix</li>
-
-        
+          <li>Caching Infrastructure</li>
+          <li>Frustum culling</li>
         </ul>
-
-        <li>glStencilBuffer-based shadow rendering (defunct)</li>
-
-        <li>Tessellating polygons</li>
-
-      
+        <li>Node-path Calculations</li>
+        <ul>
+          <li>CPU-based calculations for forward/backward transformation
+            matrices</li>
+        </ul>
+        <li>OBJ Loader</li>
+        <li>VRML97 Loader (with SimpleParse installed)</li>
+        <li>BSP (Quake(TM) 3 File Loader/Viewer, with the Twitch project
+          installed)</li>
       </ul>
-
-      
-      <p>It also provides a number of generally useful features for the
-beginning OpenGL programmer:
-
-      </p>
-
-      
-      <ul>
-
-        <li>Simple 3D navigation (camera manipulation, fly and examine
-modes)</li>
-        <li>.obj loader (converts obj format files to VRML97 nodes)
-        </li>
-
-
-        <li>Optional VRML97 loader (the scenegraph engine is based
-loosely on VRML97)</li>
-
-        <li>Timer mechanisms and simple event
-handling</li>
-
-        <li>Interchangable context classes for
-multiple GUI libraries</li>
-
-        
-      </ul>
-
-      
-      
-      <p>OpenGLContext is the primary mechanism used to test the PyOpenGL distribution (all
-non-trivial tests for PyOpenGL are defined and run as OpenGLContext
-scripts). The source distribution's <code>tests/</code> directory contains a script <code>runalltests.py</code> which executes the tests, captures their results and formats them into a results page.
-</p>
-      <p>See the <a href="documentation.html">documentation</a> page
-for more details, or <a href="https://sourceforge.net/project/showfiles.php?group_id=5988">download</a>
-and play with the code in the tests directory.</p>
-    </section>
+      See the <a href="documentation.html">documentation</a> page for more
+      details. </section>
     <footer>
-    <p class="footer">
-      A SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
-          style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge"
-          title="" align="middle"></a></p>
+      <p class="footer"> A SourceForge Open-Source project: <a href="http://sourceforge.net"><img
+            src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;"
+            alt="SourceForge" title="" align="middle"></a></p>
     </footer>
-
-</body></html>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+    <script type="text/javascript">
+var screenshots = function(url_list) {
+  var screenshot_div = $( '.screenshot' );
+  var background_div = $( '.screenshot-preload' );
+  var index=-1;
+  var next_index = function() {
+    var new_index = index + 1
+    if (new_index>=url_list.length) {
+      new_index = 0;
+    }
+    return new_index;
+  }
+  var next_image = function() {
+    index = next_index();
+    screenshot_div.css( {
+      'background-image': 'url("'+url_list[index]+'")',
+      'width': '100%',
+      'height': '750px'
+    });
+    background_div.css( {
+      'background-image': url_list[next_index()]
+    });
+  }
+  window.setInterval( next_image, 5000 );
+  next_image();
+}
+$(document).ready(function(){
+  screenshots( [
+   'http://pyopengl.sourceforge.net/screenshots/context/h_cyber.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_baths.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_secondplatform.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/smooth_shading.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_showroom.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_egypt_interior.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/lorentz_dots.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_wallworld.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_boardroom.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_egypt_exterior.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/truetype3d.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_egypt_exterior_wide.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/glelathe.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_office.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/alternateatlas.jpg',
+   'http://pyopengl.sourceforge.net/screenshots/context/h_baths_frigid.jpg'
+ ]);
+});
+    </script>
+  </body>
+</html>
