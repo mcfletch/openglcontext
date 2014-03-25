@@ -293,6 +293,7 @@ class Context(object):
         
     def OnQuit( self, event=None ):
         """Quit the application (forcibly)"""
+        self.suppressRedraw()
         import sys
         sys.exit( 0 )
     def OnFrameRate( self, event=None ):
