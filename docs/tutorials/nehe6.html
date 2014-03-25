@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+
+<!-- dumbmarkup support -->
+<head>
+    <title>NeHe Translations: Texture Mapping (NeHe 6)</title><link rel="stylesheet" href="../style/modern.css" type="text/css"><link rel="stylesheet" href="../style/tutorial.css" type="text/css">
+</head>
+<body class="openglcontext-tutorial">
+  <div id="content">
+    <header>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="nehe5.html">Previous</a></li>
+    <li><a href="nehe7.html">Next</a></li>
+</ul>
+    <h1>NeHe Translations: Texture Mapping (NeHe 6)</h1>
+    </header>
+    <section>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title indent-level-0">Texture Mapping (NeHe 6)</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="nehe6.py-screen-0001.png" alt="Screenshot">
+</div>
+	<div class="paragraph indent-level-0">
+This tutorial is based on the
+	<a class="" href="http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=06">NeHe6 tutorial</a>
+	 by Jeff Molofee and assumes that you are reading along
+with the tutorial, so that only changes from the tutorial are noted
+here.
+</div>
+</div>
+	<div class="code-sample">from OpenGLContext import testingcontext
+BaseContext = testingcontext.getInteractive()
+from OpenGL.GL import *
+import time
+try:
+    from PIL.Image import open
+except ImportError, err:
+    from Image import open
+class TestContext( BaseContext ):
+    """NeHe 6 Demo"""
+    initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">OnInit is called by the Context class after initialization
+    of the context has completed, and before any rendering is
+    attempted.  Within this method, you'll generally perform
+    your global setup tasks.</div>
+</div>
+	<div class="code-sample">    def OnInit( self ):
+        """Load the image on initial load of the application"""
+        self.imageID = self.loadImage ()
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-8">	We are going to use the Python Imaging Library (PIL) for
+    loading images, something which is obviously not seen
+    in the original tutorial.</div>
+	<div class="paragraph indent-level-4">This method combines all of the functionality required to
+load the image with PIL, convert it to a format compatible
+with PyOpenGL, generate the texture ID, and store the image
+data under that texture ID.
+</div>
+</div>
+	<div class="code-sample">    def loadImage( self, imageName = "nehe_wall.bmp" ):
+        """Load an image file as a 2D texture using PIL"""
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">PIL defines an "open" method which is Image specific!</div>
+</div>
+	<div class="code-sample">        im = open(imageName)
+        try:
+            ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBA", 0, -1)
+        except SystemError:
+            ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBX", 0, -1)
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Generate a texture ID</div>
+</div>
+	<div class="code-sample">        ID = glGenTextures(1)
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Make our new texture ID the current 2D texture</div>
+</div>
+	<div class="code-sample">        glBindTexture(GL_TEXTURE_2D, ID)
+        glPixelStorei(GL_UNPACK_ALIGNMENT,1)
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Copy the texture data into the current texture ID</div>
+</div>
+	<div class="code-sample">        glTexImage2D(
+            GL_TEXTURE_2D, 0, 3, ix, iy, 0,
+            GL_RGBA, GL_UNSIGNED_BYTE, image
+        )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Note that only the ID is returned, no reference to the image
+        object or the string data is stored in user space, the data is
+        only present within the GL after this call exits.</div>
+</div>
+	<div class="code-sample">        return ID
+    def Render( self, mode):
+        """Render scene geometry"""
+        BaseContext.Render( self, mode )
+        glDisable( GL_LIGHTING) # context lights by default
+        glTranslatef(1.5,0.0,-6.0);
+        glRotated( time.time()%(8.0)/8 * -360, 1,0,0)
+        self.setupTexture()
+        self.drawCube()
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">This method encapsulates the functions required to set up
+    for textured rendering.  The original tutorial made these
+    calls once for the entire program.  This organization makes
+    more sense if you are likely to have multiple textures.
+</div>
+</div>
+	<div class="code-sample">    def setupTexture( self ):
+        """Render-time texture environment setup"""
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Configure the texture rendering parameters</div>
+</div>
+	<div class="code-sample">        glEnable(GL_TEXTURE_2D)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Re-select our texture, could use other generated textures
+        if we had generated them earlier...</div>
+</div>
+	<div class="code-sample">        glBindTexture(GL_TEXTURE_2D, self.imageID)
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Drawing the cube has changed slightly, because we now need
+    to specify the texture coordinates for each vertex. This is all
+    just taken from the original tutorial.</div>
+</div>
+	<div class="code-sample">    def drawCube( self ):
+        """Draw a cube with texture coordinates"""
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
+        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
+        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
+        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
+        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0,  1.0);
+        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0,  1.0);
+        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
+        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0, -1.0, -1.0);
+        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0, -1.0, -1.0);
+        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
+        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
+        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
+        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
+        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
+        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
+        glEnd()
+    def OnIdle( self, ):
+        """Request refresh of the context whenever idle"""
+        self.triggerRedraw(1)
+        return 1
+if __name__ == "__main__":
+    TestContext.ContextMainLoop()
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">
+Author:
+	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
+</div>
+	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
+	<div class="paragraph indent-level-0">If you plan to put this program on your web page or a cdrom of
+any sort, let me know via email, I'm curious to see where
+it ends up :)</div>
+	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program
+or it's docs.
+</div>
+</div>
+    </section>
+<footer>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="nehe5.html">Previous</a></li>
+    <li><a href="nehe7.html">Next</a></li>
+</ul>
+<div class="source-reference">This code-walkthrough tutorial is generated from the nehe6.py script in the
+OpenGLContext source distribution.</div>
+      <div class="clear-both"><br></div>
+</footer>
+    <!-- End of content -->
+  </div>
+</body>
+</html>

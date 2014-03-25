@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+
+<!-- dumbmarkup support -->
+<head>
+    <title>NeHe Translations: Solid Models (NeHe 5)</title><link rel="stylesheet" href="../style/modern.css" type="text/css"><link rel="stylesheet" href="../style/tutorial.css" type="text/css">
+</head>
+<body class="openglcontext-tutorial">
+  <div id="content">
+    <header>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="nehe4.html">Previous</a></li>
+    <li><a href="nehe6.html">Next</a></li>
+</ul>
+    <h1>NeHe Translations: Solid Models (NeHe 5)</h1>
+    </header>
+    <section>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title indent-level-0">Solid Models (NeHe 5)</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="nehe5.py-screen-0001.png" alt="Screenshot">
+</div>
+	<div class="paragraph indent-level-0">Renders slightly more complex geometry.</div>
+	<div class="paragraph indent-level-0">This tutorial is based on the
+	<a class="" href="http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=05">NeHe5 tutorial</a>
+	 by Jeff Molofee and assumes that you are reading along
+with the tutorial, so that only changes from the tutorial are noted
+here.
+</div>
+</div>
+	<div class="code-sample">from OpenGLContext import testingcontext
+BaseContext = testingcontext.getInteractive()
+from OpenGL.GL import *
+import time
+class TestContext( BaseContext ):
+    """NeHe 5 tutorial"""
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">There are no new customization points used here.</div>
+</div>
+	<div class="code-sample">    initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
+    def Render( self, mode):
+        """Draw scene geometry"""
+        BaseContext.Render( self, mode )
+        glDisable( GL_LIGHTING) # context lights by default
+        glTranslatef(-1.5,0.0,-6.0);
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Animating using crude time.time() operation</div>
+</div>
+	<div class="code-sample">        glRotated( time.time()%(3.0)/3 * 360, 0,1,0)
+        self.drawPyramid()
+        glLoadIdentity()
+        glTranslatef(1.5,0.0,-6.0);
+        glRotated( time.time()%(1.0)/1 * -360, 1,0,0)
+        self.drawCube()
+    def OnIdle( self, ):
+        """Request refresh of the context whenever idle"""
+        self.triggerRedraw(1)
+        return 1
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">We refactor the tutorial code to create a method for drawing
+    the pyramid object and cube objects, instead of including the code
+    in the main Render method (just for neatness sake).  The rest of
+    the Render function is all stuff we've seen before.</div>
+</div>
+	<div class="code-sample">    def drawPyramid( self ):
+        """Draw a multicolored pyramid"""
+        glBegin(GL_TRIANGLES);
+        glColor3f(1.0,0.0,0.0)
+        glVertex3f( 0.0, 1.0, 0.0)
+        glColor3f(0.0,1.0,0.0)
+        glVertex3f(-1.0,-1.0, 1.0)
+        glColor3f(0.0,0.0,1.0)
+        glVertex3f( 1.0,-1.0, 1.0)
+        glColor3f(1.0,0.0,0.0)
+        glVertex3f( 0.0, 1.0, 0.0)
+        glColor3f(0.0,0.0,1.0)
+        glVertex3f( 1.0,-1.0, 1.0);
+        glColor3f(0.0,1.0,0.0);
+        glVertex3f( 1.0,-1.0, -1.0);
+        glColor3f(1.0,0.0,0.0);
+        glVertex3f( 0.0, 1.0, 0.0);
+        glColor3f(0.0,1.0,0.0);
+        glVertex3f( 1.0,-1.0, -1.0);
+        glColor3f(0.0,0.0,1.0);
+        glVertex3f(-1.0,-1.0, -1.0);
+        glColor3f(1.0,0.0,0.0);
+        glVertex3f( 0.0, 1.0, 0.0);
+        glColor3f(0.0,0.0,1.0);
+        glVertex3f(-1.0,-1.0,-1.0);
+        glColor3f(0.0,1.0,0.0);
+        glVertex3f(-1.0,-1.0, 1.0);
+        glEnd()
+    def drawCube( self ):
+        """Draw a multicolored cube"""
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Draw a cube as quads, note that Quads are deprecated in
+        later OpenGL releases, with Triangles being preferred.
+</div>
+</div>
+	<div class="code-sample">        glBegin(GL_QUADS);
+        glColor3f(0.0,1.0,0.0)
+        glVertex3f( 1.0, 1.0,-1.0)
+        glVertex3f(-1.0, 1.0,-1.0)
+        glVertex3f(-1.0, 1.0, 1.0)
+        glVertex3f( 1.0, 1.0, 1.0)
+        glColor3f(1.0,0.5,0.0)
+        glVertex3f( 1.0,-1.0, 1.0)
+        glVertex3f(-1.0,-1.0, 1.0)
+        glVertex3f(-1.0,-1.0,-1.0)
+        glVertex3f( 1.0,-1.0,-1.0)
+        glColor3f(1.0,0.0,0.0)
+        glVertex3f( 1.0, 1.0, 1.0)
+        glVertex3f(-1.0, 1.0, 1.0)
+        glVertex3f(-1.0,-1.0, 1.0)
+        glVertex3f( 1.0,-1.0, 1.0)
+        glColor3f(1.0,1.0,0.0)
+        glVertex3f( 1.0,-1.0,-1.0)
+        glVertex3f(-1.0,-1.0,-1.0)
+        glVertex3f(-1.0, 1.0,-1.0)
+        glVertex3f( 1.0, 1.0,-1.0)
+        glColor3f(0.0,0.0,1.0)
+        glVertex3f(-1.0, 1.0, 1.0)
+        glVertex3f(-1.0, 1.0,-1.0)
+        glVertex3f(-1.0,-1.0,-1.0)
+        glVertex3f(-1.0,-1.0, 1.0)
+        glColor3f(1.0,0.0,1.0)
+        glVertex3f( 1.0, 1.0,-1.0)
+        glVertex3f( 1.0, 1.0, 1.0)
+        glVertex3f( 1.0,-1.0, 1.0)
+        glVertex3f( 1.0,-1.0,-1.0)
+        glEnd()
+if __name__ == "__main__":
+    TestContext.ContextMainLoop()
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">
+Author:
+	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
+</div>
+	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
+	<div class="paragraph indent-level-0">If you plan to put this program on your web page or a cdrom of
+any sort, let me know via email, I'm curious to see where
+it ends up :)</div>
+	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program
+or it's docs.
+</div>
+</div>
+    </section>
+<footer>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="nehe4.html">Previous</a></li>
+    <li><a href="nehe6.html">Next</a></li>
+</ul>
+<div class="source-reference">This code-walkthrough tutorial is generated from the nehe5.py script in the
+OpenGLContext source distribution.</div>
+      <div class="clear-both"><br></div>
+</footer>
+    <!-- End of content -->
+  </div>
+</body>
+</html>

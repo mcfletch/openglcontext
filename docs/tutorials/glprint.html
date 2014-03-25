@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+
+<!-- dumbmarkup support -->
+<head>
+    <title>NeHe Translations: Win32 Bitmap Text (NeHe 13)</title><link rel="stylesheet" href="../style/modern.css" type="text/css"><link rel="stylesheet" href="../style/tutorial.css" type="text/css">
+</head>
+<body class="openglcontext-tutorial">
+  <div id="content">
+    <header>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="nehe6_multi.html">Previous</a></li>
+    <li><a href="index.html">Index</a></li>
+</ul>
+    <h1>NeHe Translations: Win32 Bitmap Text (NeHe 13)</h1>
+    </header>
+    <section>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title indent-level-0">Win32 Bitmap Text (NeHe 13)</h1>
+	<div class="paragraph indent-level-0">This tutorial draws text to screen using WGL bitmap functionality
+WGL is only available on Win32 platforms!</div>
+	<div class="paragraph indent-level-0">This tutorial is based on the
+	<a class="" href="http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=13">NeHe13 tutorial</a>
+	 by Jeff Molofee and assumes that you are reading along
+with the tutorial, so that only changes from the tutorial are noted
+here.
+</div>
+	<div class="paragraph indent-level-0">We're going to have to use the wxPython context explicitly, so that
+we have a single API for getting a window handle.
+</div>
+</div>
+	<div class="code-sample">from OpenGLContext.wxinteractivecontext import wxInteractiveContext
+from OpenGLContext import testingcontext
+from OpenGL.GL import *
+from math import cos, sin
+import sys
+try:
+    from OpenGL.WGL import *
+    import win32ui, win32con
+except ImportError, err:
+    print """Unable to import Win32 text modules: %s"""%(err,)
+    sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Our "font" class takes care of creating the display-lists
+which perform the actual rendering of characters.  The Win32ui
+calls are loosely the same as those seen in the tutorial.</div>
+</div>
+	<div class="code-sample">class font:
+    def __init__(self, context):
+        self.base = glGenLists(96)								# Storage For 96 Characters
+        wgldc = wglGetCurrentDC()
+        if wgldc &gt; sys.maxint:
+            import struct
+            print 'too-large wgldc', wgldc
+            wgldc = struct.unpack( '&gt;i', struct.pack( '&gt;I', wgldc ))[0]
+            print 'Converted wgldc to', wgldc
+        dc = win32ui.CreateDCFromHandle( wgldc )
+        ## pitch and family value
+        f = win32ui.CreateFont(
+            {
+                'italic': 0, #use of None is required, 0 doesn't work
+                'underline': 0, #use of None is required, 0 doesn't work
+                'name': 'Times New Roman',
+                'weight': 700,
+                'height': 20,
+            }
+        )
+        dc.SelectObject(
+            f
+        )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Build 96 bitmaps as display lists starting from character
+        32.</div>
+</div>
+	<div class="code-sample">        wglUseFontBitmaps(wgldc, 32, 96, self.base)
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">f is deleted here, if it is deleted before the display-lists
+        are created they will just use the default font!</div>
+</div>
+	<div class="code-sample">    def __del__(self):
+        glDeleteLists(self.base, 96)	# Delete All 96 Characters
+    def draw(self, text):
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">glCallLists is pretty much tailor-made for these kinds of
+        calls, a single GL call can render an entire string of text.
+        Note, however, that glCallLists is now deprecated.</div>
+</div>
+	<div class="code-sample">        glCallLists(
+            map(
+                lambda x, y: ord(x) - 32 + y,
+                text,
+                [self.base]*len(text)
+            )
+        )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">The timer class here is a trivial wrapping of the wxPython timer
+class.  Real-world OpenGLContext code would likely use the Timer
+class instance.</div>
+</div>
+	<div class="code-sample">import wx
+class timer(wx.Timer):
+    def __init__(self, parent):
+        wx.Timer.__init__(self)
+        self.parent = parent
+    def Notify(self):
+        if self.parent:
+            self.parent.cnt1+=0.051
+            self.parent.cnt2+=0.005
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Trigger a redraw using wxPython operation</div>
+</div>
+	<div class="code-sample">            self.parent.Refresh()
+        else:
+            self.Stop()
+class TestContext( wxInteractiveContext ):
+##	rot = 0
+    cnt1 = 0
+    cnt2 = 0
+    def OnInit( self ):
+        f = wx.Font(
+            20,
+            wx.DECORATIVE,
+            wx.NORMAL,
+            wx.NORMAL,
+            0,
+            "Script",
+        )
+        self.SetFont( f )
+        self.my_font = font( self )
+        self.timer = None
+    def Render( self, mode):
+        wxInteractiveContext.Render( self, mode )
+        glDisable(GL_LIGHTING)
+        glRasterPos2f(5*cos(self.cnt1), 5*sin(self.cnt2))
+        self.my_font.draw("NeHe - %3.2f" % self.cnt1)
+        if self.timer is None:
+            self.timer = timer(self)
+            self.timer.Start(25)
+if __name__ == "__main__":
+    import wx
+    class MyApp(wx.App):
+        def OnInit(self):
+            frame = wx.Frame(
+                None, -1, "NeHe GL Text Demo",
+                wx.DefaultPosition, wx.Size(600,300),
+            )
+            self.SetTopWindow(frame)
+            frame.Show( True )
+            win = TestContext(frame)
+            return True
+    app = MyApp(0)
+    app.MainLoop()
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">
+Author:
+	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
+</div>
+	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
+	<div class="paragraph indent-level-0">If you plan to put this program on your web page or a cdrom of
+any sort, let me know via email, I'm curious to see where
+it ends up :)</div>
+	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
+credit, or mention my web site somewhere in your program
+or it's docs.
+</div>
+</div>
+    </section>
+<footer>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="nehe6_multi.html">Previous</a></li>
+    <li><a href="index.html">Index</a></li>
+</ul>
+<div class="source-reference">This code-walkthrough tutorial is generated from the glprint.py script in the
+OpenGLContext source distribution.</div>
+      <div class="clear-both"><br></div>
+</footer>
+    <!-- End of content -->
+  </div>
+</body>
+</html>

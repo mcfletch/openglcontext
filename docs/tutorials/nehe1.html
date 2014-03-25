@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+
+<!-- dumbmarkup support -->
+<head>
+    <title>NeHe Translations: Context Setup (NeHe 1)</title><link rel="stylesheet" href="../style/modern.css" type="text/css"><link rel="stylesheet" href="../style/tutorial.css" type="text/css">
+</head>
+<body class="openglcontext-tutorial">
+  <div id="content">
+    <header>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="index.html">Index</a></li>
+    <li><a href="nehe2.html">Next</a></li>
+</ul>
+    <h1>NeHe Translations: Context Setup (NeHe 1)</h1>
+    </header>
+    <section>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title indent-level-0">Context Setup (NeHe 1)</h1>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="nehe1.py-screen-0001.png" alt="Screenshot">
+</div>
+	<div class="paragraph indent-level-0">This tutorial is based loosely on the
+	<a class="" href="http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=01">NeHe1 tutorial</a>
+	 by Jeff Molofee, though the code is entirely unique to OpenGLContext.  It demonstrates the creation of a basic rendering Context. Note: OpenGLContext takes care of most of the setup seen in the NeHe code (though doing so also means that there's less direct control of the setup process), leaving a very simple core script.
+</div>
+	<div class="paragraph indent-level-0">The first thing we do is get a Context class.  OpenGLContext provides a "testingcontext" module which allows you to use whatever context-type the user has specified as "prefered".  The testingcontext module provides a function "getInteractive" which takes an optional type of context-name to retrieve, and returns an appropriate Context sub-class.
+</div>
+</div>
+	<div class="code-sample">from OpenGLContext import testingcontext
+BaseContext = testingcontext.getInteractive()
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">We make the standard OpenGL commands available to our code using an import * statement.</div>
+</div>
+	<div class="code-sample">from OpenGL.GL import *
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Now we sub-class the BaseContext class we got in stage one with our own "TestContext" class.  In this very simple example this stage is not actually necessary, as we have no customisations of the class that we want to do, but it is the "normal" approach to using OpenGLContext Contexts.</div>
+</div>
+	<div class="code-sample">
+class TestContext( BaseContext ):
+    """A subclass of the (dynamically determined) BaseContext,
+    by overriding various methods, we could customize the
+    functionality of this context, but the tutorial doesn't
+    ask us to do this."""
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">And finally, we run our Context's utility "ContextMainLoop", which starts whatever GUI event loop is appropriate for the type of context we have.</div>
+</div>
+	<div class="code-sample">
+if __name__ == "__main__":
+    TestContext.ContextMainLoop()</div>
+    </section>
+<footer>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="index.html">Index</a></li>
+    <li><a href="nehe2.html">Next</a></li>
+</ul>
+<div class="source-reference">This code-walkthrough tutorial is generated from the nehe1.py script in the
+OpenGLContext source distribution.</div>
+      <div class="clear-both"><br></div>
+</footer>
+    <!-- End of content -->
+  </div>
+</body>
+</html>
