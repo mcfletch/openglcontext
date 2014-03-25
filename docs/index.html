@@ -4,6 +4,14 @@
     <meta content="text/html; charset=windows-1252" http-equiv="content-type">
     <title>OpenGLContext 2.0</title>
     <link rel="stylesheet" type="text/css" href="style/modern.css">
+    <style type="text/css">
+        .screenshot {
+            float: right;
+            width: 50%;
+            height: 400px;
+            text-align: right;
+        }
+    </style>
   </head>
   <body>
     <header>
@@ -20,16 +28,14 @@
           PyOpenGL</span></h1>
     </header>
     <section>
+      <div class="screenshot"></div>
+      <div class="screenshot-preload"></div>
       <h2>Introduction</h2>
       <p class="introduction">OpenGLContext is a testing and learning
         environment for <a href="http://pyopengl.sourceforge.net/">PyOpenGL</a>.
         It provides a generic scenegraph engine (based on VRML97's node mode) as
         well as basic context creation and interaction support in multiple GUI
         environments.</p>
-      <div class="screenshot"></div>
-      <div class="screenshot-preload"></div>
-    </section>
-    <section>
       <h2>Quick Links</h2>
       <ul>
         <li><a href="documentation.html">Documentation</a></li>
@@ -44,6 +50,9 @@
               Loader</a></li>
         </ul>
       </ul>
+      <div class="clear-both"><br /></div>
+    </section>
+    <section>
       <h2>Features</h2>
       <ul>
         <li>Works on Multiple GUI Environments with Keyboard, Mouse and GUI
@@ -98,7 +107,12 @@
     <script type="text/javascript">
 var screenshots = function(url_list) {
   var screenshot_div = $( '.screenshot' );
+  var target_width = screenshot_div.width();
+  var target_height = screenshot_div.height();
+  var target_ratio = target_height/target_width;
+  
   var background_div = $( '.screenshot-preload' );
+  background_div.hide();
   var index=-1;
   var next_index = function() {
     var new_index = index + 1
@@ -109,13 +123,33 @@ var screenshots = function(url_list) {
   }
   var next_image = function() {
     index = next_index();
-    screenshot_div.css( {
-      'background-image': 'url("'+url_list[index]+'")',
-      'width': '100%',
-      'height': '750px'
-    });
-    background_div.css( {
-      'background-image': url_list[next_index()]
+    screenshot_div.hide( 250, function() {
+        var loaded = background_div.find( 'img' );
+        if (loaded.length) {
+            var width, height, ratio;
+            width = loaded[0].naturalWidth;
+            height = loaded[0].naturalHeight;
+            ratio = height/width;
+            if (ratio > target_ratio) {
+                // Image is narrower than target...
+                loaded.css( {
+                    'height': target_height,
+                    'width': target_height / ratio
+                });
+            } else {
+                loaded.css( {
+                    'height': target_width * ratio,
+                    'width': target_width
+                });
+            }
+            screenshot_div.empty();
+            screenshot_div.append( loaded );
+        }
+        var img = $('<img alt="Screenshot" />');
+        img.attr( 'src', url_list[next_index()] );
+        background_div.empty();
+        background_div.append( img );
+        screenshot_div.show( 250 );
     });
   }
   window.setInterval( next_image, 5000 );
