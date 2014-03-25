@@ -16,6 +16,7 @@ $.screenshots = function(url_list,screenshot_div,background_div) {
     background_div.empty();
     background_div.append( img );
   };
+  load_next();
   
   var show_loaded = function() {
     var loaded = background_div.find( 'img' );
@@ -48,8 +49,10 @@ $.screenshots = function(url_list,screenshot_div,background_div) {
         screenshot_div.append( loaded );
     }
     load_next();
-    loaded.show( 250 );
-    loaded.click( next_image );
+    if (loaded.length) {
+        loaded.show( 250 );
+        loaded.click( next_image );
+    }
   };
   
   var next_image = function() {
