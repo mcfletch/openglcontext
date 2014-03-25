@@ -1,59 +1,51 @@
-h1,h2,h3 {
-	color: #111144;
-	background-image: url(../images/greypinstripe.png);
-	border-top-style: solid; 
-	border-top-width: 1 
+.commentary {
+	background-color: #f7f7f7;
+	margin: 2em;
+	padding: 1em;
+	border: thin blue solid;
 }
-.footer {
-	color: #111144;
-	background-image: url(../images/greypinstripe.png);
-	text-align: center;
-	border-bottom-style: solid; 
-	border-bottom-width: 1 
+.commentary div {
+	margin-top: .5em;
+	margin-bottom: .5em;
 }
-th {
-	color: #111144;
-	background-image: url(../images/greypinstripe.png);
-	text-align: center;
-}
-.introduction {
-	margin-left: 60;
-	margin-right: 60;
-	color: #555555;
-}
-.technical {
-	margin-left: 60;
-	margin-right: 60;
-	color: #557755;
-}
-p {
-	margin-left: 10;
-	margin-right: 10;
-}
-ul {
-	margin-left: 30;
-}
-pre {
+
+.code-sample {
 	background-color: #ffffcc; 
-	margin-left: 60;
+	color: black;
+	white-space: pre;
+	margin-left: 3em;
+	margin-right: 3em;
+	margin-top: .5em;
+	margin-bottom: .5em;
 }
-blockquote {
-	margin-left: 90;
+
+.metadata {
+	margin-top: 2em;
+	font-size: 50%;
 }
-body {
-	background-color: #FFFFFF; 
-	color: #000000;
-	font-family: Arial, Helvetica;
+
+img.wiki {
+	float: right;
+	border: thin solid black;
 }
-a:link {
-	color: #3333e0;
-	text-decoration: none;
+
+div.path {
+	padding-bottom: 2em;
 }
-a:visited {
-	color: #1111aa;
-	text-decoration: none;
+
+.source-reference {
+	margin-left: 3em;
+	margin-right: 3em;
+	text-align: center;
+	font-size: 80%;
+	color: grey;
 }
-a:active {
-	color: #111133;
-	text-decoration: none;
+
+.introduction {
+	margin: 1em;
+	color: darkgrey;
+}
+.path-body {
+	margin-left: .5em;
+	margin-right: .5em;
 }
