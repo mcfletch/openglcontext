@@ -5,11 +5,18 @@
     <title>OpenGLContext 2.0</title>
     <link rel="stylesheet" type="text/css" href="style/modern.css">
     <style type="text/css">
-        .screenshot {
-            float: right;
-            width: 50%;
-            height: 400px;
-            text-align: right;
+        #introduction {
+            position: relative;
+            padding-right: 50%;
+        }
+        
+        #introduction .screenshot {
+            position: absolute;
+            text-align: center;
+            right: 1em;
+            top: 1em;
+            bottom: 1em;
+            left: 50%;
         }
     </style>
   </head>
@@ -27,7 +34,7 @@
       <h1>OpenGLContext <span class="subheading">A Learning Environment for
           PyOpenGL</span></h1>
     </header>
-    <section>
+    <section id="introduction">
       <div class="screenshot"></div>
       <div class="screenshot-preload"></div>
       <h2>Introduction</h2>
@@ -104,59 +111,10 @@
             alt="SourceForge" title="" align="middle"></a></p>
     </footer>
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+    <script src="screenshots.js"></script>
     <script type="text/javascript">
-var screenshots = function(url_list) {
-  var screenshot_div = $( '.screenshot' );
-  var target_width = screenshot_div.width();
-  var target_height = screenshot_div.height();
-  var target_ratio = target_height/target_width;
-  
-  var background_div = $( '.screenshot-preload' );
-  background_div.hide();
-  var index=-1;
-  var next_index = function() {
-    var new_index = index + 1
-    if (new_index>=url_list.length) {
-      new_index = 0;
-    }
-    return new_index;
-  }
-  var next_image = function() {
-    index = next_index();
-    screenshot_div.hide( 250, function() {
-        var loaded = background_div.find( 'img' );
-        if (loaded.length) {
-            var width, height, ratio;
-            width = loaded[0].naturalWidth;
-            height = loaded[0].naturalHeight;
-            ratio = height/width;
-            if (ratio > target_ratio) {
-                // Image is narrower than target...
-                loaded.css( {
-                    'height': target_height,
-                    'width': target_height / ratio
-                });
-            } else {
-                loaded.css( {
-                    'height': target_width * ratio,
-                    'width': target_width
-                });
-            }
-            screenshot_div.empty();
-            screenshot_div.append( loaded );
-        }
-        var img = $('<img alt="Screenshot" />');
-        img.attr( 'src', url_list[next_index()] );
-        background_div.empty();
-        background_div.append( img );
-        screenshot_div.show( 250 );
-    });
-  }
-  window.setInterval( next_image, 5000 );
-  next_image();
-}
 $(document).ready(function(){
-  screenshots( [
+  $.screenshots( [
    'http://pyopengl.sourceforge.net/screenshots/context/h_cyber.jpg',
    'http://pyopengl.sourceforge.net/screenshots/context/h_baths.jpg',
    'http://pyopengl.sourceforge.net/screenshots/context/h_secondplatform.jpg',
@@ -173,7 +131,10 @@ $(document).ready(function(){
    'http://pyopengl.sourceforge.net/screenshots/context/h_office.jpg',
    'http://pyopengl.sourceforge.net/screenshots/context/alternateatlas.jpg',
    'http://pyopengl.sourceforge.net/screenshots/context/h_baths_frigid.jpg'
- ]);
+ ],
+    $( '.screenshot' ),
+    $( '.screenshot-preload' )
+ );
 });
     </script>
   </body>
