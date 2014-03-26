@@ -23,10 +23,15 @@ from vrml.vrml97 import transformmatrix
 
 class TestContext( BaseContext ):
     """Creates a simple vertex shader..."""
+    @property
+    def perspective( self ):
+        return self.perspective_matrices[self.perspective_index]
+    
     def OnInit( self ):
         self.glslObject = GLSLObject(
             uniforms = [
                 FloatUniformm4(name="transform" ),
+                FloatUniformm4(name="color" ),
             ],
             textures = [
             ],
@@ -35,17 +40,21 @@ class TestContext( BaseContext ):
                     source = [ '''#version 120
                     uniform mat4 transform;
                     attribute vec3 Vertex_position;
+                    varying vec4 baseColor;
                     void main() {
                         gl_Position = transform * vec4(
                             Vertex_position, 1.0
                         );
+                        baseColor = gl_Position;
                     }''' ],
                     type = 'VERTEX',
                 ),
                 GLSLShader(
                     source = [ '''#version 120
+                    uniform vec4 color;
+                    varying vec4 baseColor;
                     void main() {
-                        gl_FragColor = vec4( 1,0,0,1 );
+                        gl_FragColor = vec4((baseColor.xyz+vec3(1,1,1))/2,1);
                     }
                     '''],
                     type = 'FRAGMENT',
@@ -53,12 +62,18 @@ class TestContext( BaseContext ):
             ]
         )
         self.coords = ShaderBuffer( buffer = array([
+            (1,1,-1),
+            (-1,1,-1),
+            (0,-1,-1),
+            
             (0,1,0),
             (-1,-1,0),
             (1,-1,0),
+
+
         ], dtype='f'))
         self.coord_mult = array([(x,y,z,0) for (x,y,z) in self.coords.buffer],dtype='f')
-        self.indices = ShaderIndexBuffer( buffer = array([0,1,2],dtype='I') )
+        self.indices = ShaderIndexBuffer( buffer = array([0,1,2,3,4,5],dtype='I') )
         self.attributes = [
             ShaderAttribute(
                 name = 'Vertex_position',
@@ -68,17 +83,65 @@ class TestContext( BaseContext ):
                 isCoord = True,
             ),
         ]
-        self.matrix = identity(4,dtype='f')
-        self.perspective = identity( 4, dtype='f')
-        self.showing_perspective = False
         self.addEventHandler( "keypress", name="p", function = self.OnPerspective)
+        
+        self.matrix = identity(4,dtype='f')
+        
+        self.perspective_index = 0
+        aspect = self.getViewPort()
+        if aspect[1]:
+            aspect = aspect[0]/aspect[1]
+        else:
+            aspect = 1
+        self.perspective_matrices = [
+            self.matrix, # identity 
+            array([
+                [.5,0,0,0],
+                [0,1,0,0],
+                [0,0,1,0],
+                [0,0,0,1],
+            ],'f'),
+            array([
+                [1,0,0,0],
+                [0,.5,0,0],
+                [0,0,1,0],
+                [0,0,0,1],
+            ],'f'),
+            array([
+                [1,0,0,0],
+                [0,1,0,0],
+                [0,0,1,0],
+                [1,0,0,1],
+            ],'f'),
+            array([
+                [1,0,0,0],
+                [0,1,0,0],
+                [0,0,1,0],
+                [0,1,0,1],
+            ],'f'),
+        ] + [
+            dot(array([
+                [1,0,0,0],
+                [0,1,0,0],
+                [0,0,1,0],
+                [0,0,-1,1],
+            ],'f'),transformmatrix.perspectiveMatrix( 
+                fov*3.14159,
+                aspect,
+                .01,
+                2.01,
+                inverse=False,
+            ))
+            for fov in [.5,.6,.7,.8,.9,.95] # we don't go to 1 because then far would clip the geometry
+        ]
+        
     def Render( self, mode):
         """Render the geometry for the scene."""
         if not mode.visible:
             return
-        final_matrix = dot( self.perspective, self.matrix )
+        final_matrix = dot( self.matrix, self.perspective )
         print('final_matrix:\n%s'%(final_matrix))
-        print('transformed:\n%s'%( dot( self.coord_mult, final_matrix )))
+        print('transformed vertices:\n%s'%( dot( self.coord_mult, final_matrix )))
         self.glslObject.getVariable( 'transform' ).value = final_matrix
         token = self.glslObject.render( mode )
         tokens = []
@@ -89,9 +152,10 @@ class TestContext( BaseContext ):
                 if token:
                     tokens.append( (attribute, token) )
             glDrawElements(
-                GL_TRIANGLES, 3,
+                GL_TRIANGLES, 6,
                 GL_UNSIGNED_INT, vbo
             )
+            
         finally:
             for attribute,token in tokens:
                 attribute.renderPost( self.glslObject, mode, token )
@@ -100,20 +164,9 @@ class TestContext( BaseContext ):
             vbo.unbind()
     def OnPerspective( self, event ):
         """Request to toggle matrix perspective"""
-        if self.showing_perspective:
-            self.perspective = identity(4,dtype='f')
-        else:
-            self.perspective = transformmatrix.orthoMatrix(
-                left=-2,
-                right=2,
-                bottom=-2,
-                top=-2,
-                zNear=-2,
-                zFar=2
-            )
-        self.showing_perspective = not(self.showing_perspective)
+        self.perspective_index += 1
+        self.perspective_index = self.perspective_index%len(self.perspective_matrices)
         self.triggerRedraw()
-        
         
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
