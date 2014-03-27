@@ -60,6 +60,29 @@ from OpenGLContext.scenegraph.basenodes import *
 '''These utilities provide transformation-matrix calculation on the CPU'''
 from vrml.vrml97 import transformmatrix
 
+cyan_triangle = [
+    (0,2,-1.05,   0,1,1,.5),
+    (0,-2,-1.05, 0,1,1,.5),
+    (2,-2,-1.05,  0,1,1,.5),
+]
+blue_triangle = [
+    (1,1,-.5,  1,0,0,.5),
+    (-1,1,-.5, 1,0,0,.5),
+    (0,-1,-.5, 1,0,0,.5),
+]
+green_triangle = [
+    (0,1,0,   0,1,0,.5),
+    (-1,-1,0, 0,1,0,.5),
+    (1,-1,0,  0,1,0,.5),
+]
+red_triangle = [
+    (0,1,.5,   0,0,1,.5),
+    (0,-1,.5, 0,0,1,.5),
+    (1,-1,.5,  0,0,1,.5),
+]
+
+
+
 class TestContext( BaseContext ):
     """Creates a simple vertex shader..."""
     @property
@@ -68,11 +91,7 @@ class TestContext( BaseContext ):
     
     def OnInit( self ):
         self.glslObject = GLSLObject(
-            uniforms = [
-                FloatUniformm4(name="transform" ),
-            ],
-            textures = [
-            ],
+            uniforms = [ FloatUniformm4(name="transform" ) ],
             shaders = [
                 GLSLShader(
                     source = [ '''#version 120
@@ -100,28 +119,20 @@ class TestContext( BaseContext ):
                 ),
             ]
         )
-        self.coords = ShaderBuffer( buffer = array([
-            (0,2,-1.05,   0,1,1,.5),
-            (0,-2,-1.05, 0,1,1,.5),
-            (2,-2,-1.05,  0,1,1,.5),
-            
-            (1,1,-.5,  1,0,0,.5),
-            (-1,1,-.5, 1,0,0,.5),
-            (0,-1,-.5, 1,0,0,.5),
-            
-            (0,1,0,   0,1,0,.5),
-            (-1,-1,0, 0,1,0,.5),
-            (1,-1,0,  0,1,0,.5),
-            
-            (0,1,.5,   0,0,1,.5),
-            (0,-1,.5, 0,0,1,.5),
-            (1,-1,.5,  0,0,1,.5),
-        ], dtype='f'))
+        self.coords = ShaderBuffer( 
+            buffer = array( 
+                cyan_triangle + blue_triangle + green_triangle + red_triangle,
+                dtype='f'
+            )
+        )
+        # An array of *just* coordinates we'll use to display the transformed 
+        # coordinates (we don't use these for rendering)
         self.coord_mult = array([
             (x,y,z,0) 
             for (x,y,z) in self.coords.buffer[:,:3]
         ],dtype='f')
         self.indices = ShaderIndexBuffer( buffer = array(range(len(self.coords.buffer)),dtype='I') )
+        
         self.attributes = [
             ShaderAttribute(
                 name = 'Vertex_position',
@@ -139,6 +150,8 @@ class TestContext( BaseContext ):
             ),
         ]
         self.addEventHandler( "keypress", name="p", function = self.OnPerspective)
+        
+        
         
         self.matrix = identity(4,dtype='f')
         
@@ -200,7 +213,7 @@ class TestContext( BaseContext ):
         """Render the geometry for the scene."""
         if not mode.visible:
             return
-        final_matrix = dot( self.matrix, self.perspective )
+        final_matrix = self.perspective
         print('final_matrix:\n%s'%(final_matrix))
         print('transformed vertices:\n%s'%( dot( self.coord_mult, final_matrix )))
         self.glslObject.getVariable( 'transform' ).value = final_matrix
