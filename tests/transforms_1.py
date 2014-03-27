@@ -31,7 +31,6 @@ class TestContext( BaseContext ):
         self.glslObject = GLSLObject(
             uniforms = [
                 FloatUniformm4(name="transform" ),
-                FloatUniformm4(name="color" ),
             ],
             textures = [
             ],
@@ -40,12 +39,13 @@ class TestContext( BaseContext ):
                     source = [ '''#version 120
                     uniform mat4 transform;
                     attribute vec3 Vertex_position;
+                    attribute vec4 Vertex_color;
                     varying vec4 baseColor;
                     void main() {
+                        baseColor = Vertex_color;
                         gl_Position = transform * vec4(
                             Vertex_position, 1.0
                         );
-                        baseColor = gl_Position;
                     }''' ],
                     type = 'VERTEX',
                 ),
@@ -54,7 +54,7 @@ class TestContext( BaseContext ):
                     uniform vec4 color;
                     varying vec4 baseColor;
                     void main() {
-                        gl_FragColor = vec4((baseColor.xyz+vec3(1,1,1))/2,1);
+                        gl_FragColor = baseColor;
                     }
                     '''],
                     type = 'FRAGMENT',
@@ -62,25 +62,38 @@ class TestContext( BaseContext ):
             ]
         )
         self.coords = ShaderBuffer( buffer = array([
-            (1,1,-1),
-            (-1,1,-1),
-            (0,-1,-1),
+            (1,1,-.5,  1,0,0,.5),
+            (-1,1,-.5, 1,0,0,.5),
+            (0,-1,-.5, 1,0,0,.5),
             
-            (0,1,0),
-            (-1,-1,0),
-            (1,-1,0),
-
+            (0,1,0,   0,1,0,.5),
+            (-1,-1,0, 0,1,0,.5),
+            (1,-1,0,  0,1,0,.5),
+            
+            (0,1,.5,   0,0,1,.5),
+            (0,-1,.5, 0,0,1,.5),
+            (1,-1,.5,  0,0,1,.5),
 
         ], dtype='f'))
-        self.coord_mult = array([(x,y,z,0) for (x,y,z) in self.coords.buffer],dtype='f')
-        self.indices = ShaderIndexBuffer( buffer = array([0,1,2,3,4,5],dtype='I') )
+        self.coord_mult = array([
+            (x,y,z,0) 
+            for (x,y,z) in self.coords.buffer[:,:3]
+        ],dtype='f')
+        self.indices = ShaderIndexBuffer( buffer = array(range(len(self.coords.buffer)),dtype='I') )
         self.attributes = [
             ShaderAttribute(
                 name = 'Vertex_position',
                 offset = 0,
-                stride = 4*3,
+                stride = 4*len(self.coords.buffer[0]),
                 buffer = self.coords,
                 isCoord = True,
+            ),
+            ShaderAttribute(
+                name = 'Vertex_color',
+                offset = 3*4,
+                stride = 4*len(self.coords.buffer[0]),
+                buffer = self.coords,
+                isCoord = False,
             ),
         ]
         self.addEventHandler( "keypress", name="p", function = self.OnPerspective)
@@ -117,13 +130,13 @@ class TestContext( BaseContext ):
                 [1,0,0,0],
                 [0,1,0,0],
                 [0,0,-.99999,0],
-                [1,0,0,1],
+                [.5,0,0,1],
             ],'f'),
             array([
                 [1,0,0,0],
                 [0,1,0,0],
                 [0,0,-.99999,0],
-                [0,1,0,1],
+                [0,.5,0,1],
             ],'f'),
         ] + [
             dot(array([
@@ -158,7 +171,7 @@ class TestContext( BaseContext ):
                 if token:
                     tokens.append( (attribute, token) )
             glDrawElements(
-                GL_TRIANGLES, 6,
+                GL_TRIANGLES, len(self.coords.buffer),
                 GL_UNSIGNED_INT, vbo
             )
             
