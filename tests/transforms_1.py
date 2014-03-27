@@ -8,8 +8,47 @@ In this tutorial we'll learn:
     * How OpenGL transforms work
     * How we manipulate transforms
 
-We assume you've completed the shader tutorials so that 
-you will be able to figure out how the code works...
+OpenGL hardware renders a 2x2x2 cube where z starts 
+at -1 at the near clipping plane and goes to 1 at the 
+far clipping plane. If you use an identity matrix for 
+your model-view matrix then you are drawing into that 
+coordinate space directly.
+
+We are going to draw 4 triangles in our identity coordinate 
+space (and all of our coordinate spaces). The cyan triangle 
+is drawn at a z coordinate of -1.05, so will not show up 
+as it is outside of the clipping -1 clipping plane.
+
+The red triangle is at -.5, the green at 0 and the blue at .5,
+so when rendered with the identity transform, we see the red 
+triangle in front of the green and the blue is totally obscured
+by the green.
+
+Since OpenGL is traditionally a right-hand-rule API, our first 
+transformation will be to scale the coordinate system by (1,1,-1)
+so that our geometry is interpreted as though it were in an RHR
+system.
+
+Let's apply a few more scales to the matrix to get a feel for 
+how they work. The diagonal values in the matrix map to individual
+components, so it is pretty easy to calculate scale matrices.
+
+Now let's apply a few translations (moves), we add the values 
+to the bottom row of the matrix to get the values added to the 
+coordinates.
+
+Now let's see what happens to the matrix when we apply a perspective 
+transformation.  A perspective transformation basically takes a 
+truncated pyramid and maps it into the 2x2x2 cube. The front clipping 
+plane (the small surface where the pyramid is truncated) maps to the 
+2x2x2 cube's front-face, and the back clipping plane (the much larger 
+base) maps to the 2x2x2 cube's back-face.  Coordinates closer to the 
+back clipping plane are thus compressed (seem smaller), while those at 
+the front clipping plane are close to uncompressed.
+
+The perspective matrix calculation here is doing the calculations 
+required to give you a particular field of view, near and far clipping 
+plane. It also includes the z-axis reflection.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -62,6 +101,10 @@ class TestContext( BaseContext ):
             ]
         )
         self.coords = ShaderBuffer( buffer = array([
+            (0,2,-1.05,   0,1,1,.5),
+            (0,-2,-1.05, 0,1,1,.5),
+            (2,-2,-1.05,  0,1,1,.5),
+            
             (1,1,-.5,  1,0,0,.5),
             (-1,1,-.5, 1,0,0,.5),
             (0,-1,-.5, 1,0,0,.5),
@@ -73,7 +116,6 @@ class TestContext( BaseContext ):
             (0,1,.5,   0,0,1,.5),
             (0,-1,.5, 0,0,1,.5),
             (1,-1,.5,  0,0,1,.5),
-
         ], dtype='f'))
         self.coord_mult = array([
             (x,y,z,0) 
@@ -111,31 +153,31 @@ class TestContext( BaseContext ):
             array([ # identity with z-positive out the screen
                 [1,0,0,0],
                 [0,1,0,0],
-                [0,0,-.99999,0],
+                [0,0,-1,0],
                 [0,0,0,1],
             ],'f'),
             array([
                 [.5,0,0,0],
                 [0,1,0,0],
-                [0,0,-.99999,0],
+                [0,0,-1,0],
                 [0,0,0,1],
             ],'f'),
             array([
                 [1,0,0,0],
                 [0,.5,0,0],
-                [0,0,-.99999,0],
+                [0,0,-1,0],
                 [0,0,0,1],
             ],'f'),
             array([
                 [1,0,0,0],
                 [0,1,0,0],
-                [0,0,-.99999,0],
+                [0,0,-1,0],
                 [.5,0,0,1],
             ],'f'),
             array([
                 [1,0,0,0],
                 [0,1,0,0],
-                [0,0,-.99999,0],
+                [0,0,-1,0],
                 [0,.5,0,1],
             ],'f'),
         ] + [
