@@ -1,33 +1,126 @@
 #! /usr/bin/env python
 '''=Understanding Transforms=
 
-[transforms_1.py-screen-0001.png Screenshot]
-
 In this tutorial we'll learn:
 
     * How OpenGL transforms work
     * How we manipulate transforms
 
-OpenGL hardware renders a 2x2x2 cube where z starts 
-at -1 at the near clipping plane and goes to 1 at the 
-far clipping plane. If you use an identity matrix for 
-your model-view matrix then you are drawing into that 
-coordinate space directly.
+We'll get started by doing some basic imports to get the 
+OpenGLContext context, numpy, and all the other tools 
+we're going to use.
+'''
+from OpenGLContext import testingcontext
+BaseContext = testingcontext.getInteractive()
+from OpenGL.GL import *
+from OpenGL.arrays import vbo
+from OpenGLContext.arrays import *
+from OpenGL.GL import shaders
+from OpenGLContext.scenegraph.basenodes import *
+'''This utility provides transformation-matrix calculation on the CPU'''
+from vrml.vrml97 import transformmatrix
+'''
 
-We are going to draw 4 triangles in our identity coordinate 
-space (and all of our coordinate spaces). The cyan triangle 
-is drawn at a z coordinate of -1.05, so will not show up 
-as it is outside of the clipping -1 clipping plane.
+_The Theory_
 
-The red triangle is at -.5, the green at 0 and the blue at .5,
-so when rendered with the identity transform, we see the red 
-triangle in front of the green and the blue is totally obscured
-by the green.
+OpenGL hardware renders a 2x2x2 cube:
 
-Since OpenGL is traditionally a right-hand-rule API, our first 
-transformation will be to scale the coordinate system by (1,1,-1)
-so that our geometry is interpreted as though it were in an RHR
-system.
+ * Z goes from -1 at the far clipping plane to 1 at the near clipping plane
+ * X goes from -1 at the left to 1 at the right
+ * Y goes from -1 at the bottom to 1 at the top.
+
+The OpenGL hardware will clip out geometry which does not fall within 
+the 2x2x2 cube.  If you draw outside the cube, the geometry just won't
+show up at all.  The hardware always draws the same cube, and nothing 
+you do is going to alter that cube, all you can do is map 
+your geometry into the cube properly.
+
+_How We're Drawing_
+
+We are going to start off with an identity matrix for our transformation.
+When an identity matrix is multiplied by a coordinate the coordinate is 
+unchanged. Thus we are going to be drawing in raw "device" or "display"
+coordinates.
+
+Note: OpenGL perspective/orthographic routines generally include a 
+scale of -1 in the Z coordinate.
+'''
+identity_matrix = array([
+    [1,0,0,0],
+    [0,1,0,0],
+    [0,0,1,0],
+    [0,0,0,1],
+], dtype='f')
+'''
+Our shader in this scene takes a single matrix uniform (our identity matrix 
+to start) and multiplies it by the coordinates in our triangles. It sets the 
+color of each vertex to the colours in the triangles as well. It does *not*
+take into account the OpenGLContext built-in navigation, perspective matrix, 
+and the like. As a result, the scene will be entirely static when displayed.
+'''
+SHADERS = [
+    GLSLShader(
+        source = [ """#version 120
+        uniform mat4 transform;
+        attribute vec3 Vertex_position;
+        attribute vec4 Vertex_color;
+        varying vec4 baseColor;
+        void main() {
+            baseColor = Vertex_color;
+            gl_Position = transform * vec4(
+                Vertex_position, 1.0
+            );
+        }""" ],
+        type = 'VERTEX',
+    ),
+    GLSLShader(
+        source = [ """#version 120
+        uniform vec4 color;
+        varying vec4 baseColor;
+        void main() {
+            gl_FragColor = baseColor;
+        }
+        """],
+        type = 'FRAGMENT',
+    ),
+]
+
+'''
+[transforms_1.py-screen-0002.png Screenshot]
+
+_What We're Drawing_
+
+We will draw four triangles.  The first is a cyan triangle which will 
+*not* appear in the rendering. It is being drawn at Z == -1.05, so it 
+is behind the clipping region.
+'''
+cyan_triangle = [
+    (0,2,-1.05,   0,1,1,.5),
+    (0,-2,-1.05, 0,1,1,.5),
+    (2,-2,-1.05,  0,1,1,.5),
+]
+'''
+The small blue triangle will be drawn at Z == -.5
+'''
+blue_triangle = [
+    (1,1,.5,  1,0,0,.5),
+    (-1,1,.5, 1,0,0,.5),
+    (0,-1,.5, 1,0,0,.5),
+]
+'''The green triangle will be drawn at Z == 0.'''
+green_triangle = [
+    (0,1,0,   0,1,0,.5),
+    (-1,-1,0, 0,1,0,.5),
+    (1,-1,0,  0,1,0,.5),
+]
+'''The red triangle will be drawn at Z == .5'''
+red_triangle = [
+    (0,1,-.5,   0,0,1,.5),
+    (0,-1,-.5, 0,0,1,.5),
+    (1,-1,-.5,  0,0,1,.5),
+]
+'''
+_Scaling the Scene_
 
 Let's apply a few more scales to the matrix to get a feel for 
 how they work. The diagonal values in the matrix map to individual
@@ -50,36 +143,7 @@ The perspective matrix calculation here is doing the calculations
 required to give you a particular field of view, near and far clipping 
 plane. It also includes the z-axis reflection.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-from OpenGL.GL import *
-from OpenGL.arrays import vbo
-from OpenGLContext.arrays import *
-from OpenGL.GL import shaders
-from OpenGLContext.scenegraph.basenodes import *
-'''These utilities provide transformation-matrix calculation on the CPU'''
-from vrml.vrml97 import transformmatrix
 
-cyan_triangle = [
-    (0,2,-1.05,   0,1,1,.5),
-    (0,-2,-1.05, 0,1,1,.5),
-    (2,-2,-1.05,  0,1,1,.5),
-]
-blue_triangle = [
-    (1,1,-.5,  1,0,0,.5),
-    (-1,1,-.5, 1,0,0,.5),
-    (0,-1,-.5, 1,0,0,.5),
-]
-green_triangle = [
-    (0,1,0,   0,1,0,.5),
-    (-1,-1,0, 0,1,0,.5),
-    (1,-1,0,  0,1,0,.5),
-]
-red_triangle = [
-    (0,1,.5,   0,0,1,.5),
-    (0,-1,.5, 0,0,1,.5),
-    (1,-1,.5,  0,0,1,.5),
-]
 
 
 
@@ -92,43 +156,18 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         self.glslObject = GLSLObject(
             uniforms = [ FloatUniformm4(name="transform" ) ],
-            shaders = [
-                GLSLShader(
-                    source = [ '''#version 120
-                    uniform mat4 transform;
-                    attribute vec3 Vertex_position;
-                    attribute vec4 Vertex_color;
-                    varying vec4 baseColor;
-                    void main() {
-                        baseColor = Vertex_color;
-                        gl_Position = transform * vec4(
-                            Vertex_position, 1.0
-                        );
-                    }''' ],
-                    type = 'VERTEX',
-                ),
-                GLSLShader(
-                    source = [ '''#version 120
-                    uniform vec4 color;
-                    varying vec4 baseColor;
-                    void main() {
-                        gl_FragColor = baseColor;
-                    }
-                    '''],
-                    type = 'FRAGMENT',
-                ),
-            ]
+            shaders = SHADERS,
         )
         self.coords = ShaderBuffer( 
             buffer = array( 
-                cyan_triangle + blue_triangle + green_triangle + red_triangle,
+                blue_triangle + green_triangle + red_triangle + cyan_triangle,
                 dtype='f'
             )
         )
         # An array of *just* coordinates we'll use to display the transformed 
         # coordinates (we don't use these for rendering)
         self.coord_mult = array([
-            (x,y,z,0) 
+            (x,y,z,1) 
             for (x,y,z) in self.coords.buffer[:,:3]
         ],dtype='f')
         self.indices = ShaderIndexBuffer( buffer = array(range(len(self.coords.buffer)),dtype='I') )
@@ -152,9 +191,6 @@ class TestContext( BaseContext ):
         self.addEventHandler( "keypress", name="p", function = self.OnPerspective)
         
         
-        
-        self.matrix = identity(4,dtype='f')
-        
         self.perspective_index = 0
         aspect = self.getViewPort()
         if aspect[1]:
@@ -162,42 +198,36 @@ class TestContext( BaseContext ):
         else:
             aspect = 1
         self.perspective_matrices = [
-            self.matrix, # identity 
-            array([ # identity with z-positive out the screen
-                [1,0,0,0],
-                [0,1,0,0],
-                [0,0,-1,0],
-                [0,0,0,1],
-            ],'f'),
+            identity_matrix,
             array([
                 [.5,0,0,0],
                 [0,1,0,0],
-                [0,0,-1,0],
+                [0,0,1,0],
                 [0,0,0,1],
             ],'f'),
             array([
                 [1,0,0,0],
                 [0,.5,0,0],
-                [0,0,-1,0],
+                [0,0,1,0],
                 [0,0,0,1],
             ],'f'),
             array([
                 [1,0,0,0],
                 [0,1,0,0],
-                [0,0,-1,0],
+                [0,0,1,0],
                 [.5,0,0,1],
             ],'f'),
             array([
                 [1,0,0,0],
                 [0,1,0,0],
-                [0,0,-1,0],
+                [0,0,1,0],
                 [0,.5,0,1],
             ],'f'),
         ] + [
             dot(array([
                 [1,0,0,0],
                 [0,1,0,0],
-                [0,0,1,0],
+                [0,0,-1,0],
                 [0,0,-1,1],
             ],'f'),transformmatrix.perspectiveMatrix( 
                 fov*3.14159,
