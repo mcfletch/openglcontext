@@ -193,6 +193,7 @@ class Context(object):
             setupFrameRateCounter,
             DoInit
         """
+        self.setupLogging()
         definition = self.setDefinition( definition )
         self.setupThreading()
         self.setupExtensionManager( )
@@ -206,6 +207,9 @@ class Context(object):
         self.setupFontProviders()
         self.setupFrameRateCounter()
         self.DoInit()
+    def setupLogging( self ):
+        import logging
+        logging.basicConfig( level=logging.WARNING )
     def setDefinition( self, definition ):
         from OpenGLContext import contextdefinition
         definition = definition or self.contextDefinition
