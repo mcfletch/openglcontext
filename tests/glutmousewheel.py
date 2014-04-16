@@ -10,6 +10,8 @@ class TestContext( BaseContext ):
     initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
     def Render( self, mode ):
         """Do basic rendering"""
+        if not mode.visible:
+            return
         result = BaseContext.Render( self, mode )
         glClearColor( 0,0,0, 0)
         glClear(GL_COLOR_BUFFER_BIT)
