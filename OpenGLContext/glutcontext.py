@@ -133,7 +133,6 @@ class GLUTContext(
         glutSetWindow( self.windowID )
     def OnQuit( self, event=None ):
         """Quit the application (forcibly)"""
-        
         glutDisplayFunc(null_display)
         
         glutIdleFunc( None )
@@ -141,6 +140,11 @@ class GLUTContext(
             glutDestroyWindow( self.windowID )
 #        if (glutLeaveMainLoop):
 #            glutLeaveMainLoop()
+        try:
+            fgDeinitialize(False)
+        except NameError as err:
+            # older PyOpenGL without the FreeGLUT deinitialize function 
+            pass 
         return super( GLUTContext, self ).OnQuit( event )
     
     def OnRedisplay (self ):
