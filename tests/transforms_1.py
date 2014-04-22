@@ -246,6 +246,7 @@ class TestContext( BaseContext ):
         final_matrix = self.perspective
         print('final_matrix:\n%s'%(final_matrix))
         print('transformed vertices:\n%s'%( dot( self.coord_mult, final_matrix )))
+        print('press <p> for the next matrix...')
         self.glslObject.getVariable( 'transform' ).value = final_matrix
         token = self.glslObject.render( mode )
         tokens = []
