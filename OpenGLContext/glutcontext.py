@@ -138,8 +138,6 @@ class GLUTContext(
         glutIdleFunc( None )
         if self.windowID:
             glutDestroyWindow( self.windowID )
-#        if (glutLeaveMainLoop):
-#            glutLeaveMainLoop()
         try:
             fgDeinitialize(False)
         except NameError as err:
