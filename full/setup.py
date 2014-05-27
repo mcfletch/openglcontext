@@ -6,7 +6,7 @@ import sys
 if __name__ == "__main__":
     setup (
         name = "OpenGLContext-full",
-        version = '3.1.0b1',
+        version = '3.1.0b3',
         description = "Installs all of OpenGLContext with optional dependencies",
         author = "Mike C. Fletcher",
         author_email = "mcfletch@vrplumber.com",
@@ -14,8 +14,8 @@ if __name__ == "__main__":
         license = "BSD",
 
         install_requires = [
-            'PyOpenGL >= 3.1.0b1',
-            'PyOpenGL-accelerate >= 3.1.0b1',
+            'PyOpenGL >= 3.1.0b3',
+            'PyOpenGL-accelerate >= 3.1.0b3',
             'OpenGLContext >= 2.3.0b1',
             'PyVRML97 >= 2.3.0b1',
             'PyVRML97-accelerate >= 2.3.0b1',
