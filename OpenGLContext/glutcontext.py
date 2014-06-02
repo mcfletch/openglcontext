@@ -53,6 +53,7 @@ class GLUTContext(
         ("multisampleBuffer", GLUT_MULTISAMPLE, 0, 0),
         ("multisampleSamples", GLUT_MULTISAMPLE, 0, 0),
         ("stereo", GLUT_STEREO, 0, 0 ),
+        ("debug", GLUT_DEBUG,0,0),
     )
     def glutFlagsFromDefinition( cls, definition ):
         """Create our initialisation flags from a definition"""
@@ -134,10 +135,11 @@ class GLUTContext(
     def OnQuit( self, event=None ):
         """Quit the application (forcibly)"""
         glutDisplayFunc(null_display)
-        
         glutIdleFunc( None )
         if self.windowID:
             glutDestroyWindow( self.windowID )
+        if glutLeaveMainLoop:
+            glutLeaveMainLoop()
         try:
             fgDeinitialize(False)
         except NameError as err:

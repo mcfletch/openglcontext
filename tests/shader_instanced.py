@@ -307,5 +307,5 @@ class TestContext( BaseContext ):
             vbo.unbind()
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(debug=True)
 

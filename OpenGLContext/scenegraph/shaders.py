@@ -466,7 +466,7 @@ class GLSLObject( shaders.GLSLObject ):
                 glAttachShader(program, subShader )
                 subShaders.append( subShader )
             elif shader.source:
-                log.warn( 'Failure compiling: %s %s', shader.compileLog, shader.url or shader.source )
+                log.warn( 'Failure compiling: %s %s', shader.compileLog, shader.url or "".join(shader.source) )
         if len(subShaders) == len(self.shaders):
             glLinkProgram(program)
             glUseProgram( program )
@@ -530,14 +530,27 @@ class GLSLObject( shaders.GLSLObject ):
             return locationMap[ name ]
         except KeyError, err:
             program = self.program(mode)
-            if uniform:
-                location = glGetUniformLocation( program, name )
+            if program:
+                try:
+                    if uniform:
+                        location = glGetUniformLocation( program, name )
+                    else:
+                        location = glGetAttribLocation( program, name )
+                except error.GLError as err:
+                    if err.err == GL_INVALID_VALUE:
+                        self.compileLog += """Attribute access failure (%s): %s"""%(
+                            name,
+                            glGetProgramInfoLog( program ),
+                        )
+                        program = False 
+                        raise RuntimeError( self.compileLog )
+                    raise
+                locationMap[ name ] = location 
+                if location == -1:
+                    log.info( 'Unable to resolve uniform name %s', name )
+                return location 
             else:
-                location = glGetAttribLocation( program, name )
-            locationMap[ name ] = location 
-            if location == -1:
-                log.info( 'Unable to resolve uniform name %s', name )
-            return location 
+                raise RuntimeError( 'Attempting to get attribute/uniform from failed compile' )
     def sortKey( self, mode, matrix ):
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         # TODO: figure out how to handle 
