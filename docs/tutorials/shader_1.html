@@ -49,8 +49,7 @@ BaseContext = testingcontext.getInteractive()
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Now we import the PyOpenGL functionality we'll be using.</div>
 	<div class="paragraph indent-level-0">OpenGL.GL contains the standard OpenGL functions that you can
-read about in the PyOpenGL man pages.
-</div>
+read about in the PyOpenGL man pages.</div>
 </div>
 	<div class="code-sample">from OpenGL.GL import *
 </div>
@@ -91,8 +90,7 @@ is the TestingContext we imported above.</div>
     OpenGL rendering Context.  You must be very careful not
     to call (most) OpenGL entry points until the OpenGL context
     has been created (failure to observe this will often cause
-    segfaults or other extreme behaviour).
-</div>
+    segfaults or other extreme behaviour).</div>
 </div>
 	<div class="code-sample">    def OnInit( self ):
 </div>
@@ -140,8 +138,7 @@ variables used here is a (built-in) global, so we don't have
 to declare their data-types.</div>
 	<div class="paragraph indent-level-8">The OpenGL.GL.shaders.compileShader function
 compiles the shader and checks for any compilation errors.
-(Using glCreateShader, glShaderSource, and glshaders.compileShader).
-</div>
+(Using glCreateShader, glShaderSource, and glshaders.compileShader).</div>
 </div>
 	<div class="code-sample">        VERTEX_SHADER = shaders.compileShader("""#version 120
         void main() {
@@ -176,8 +173,7 @@ the position of the fragment, but its primary job is simply
 to determine the colour of the pixel (a vec4() value).</div>
 	<div class="paragraph indent-level-8">In our code here, we create a new colour for each pixel, which
 is a pure green opaque (the last 1) value.  We assign the value
-to the (global, built-in) gl_FragColor value and we are finished.
-</div>
+to the (global, built-in) gl_FragColor value and we are finished.</div>
 </div>
 	<div class="code-sample">        FRAGMENT_SHADER = shaders.compileShader("""#version 120
         void main() {
@@ -198,8 +194,7 @@ to the (global, built-in) gl_FragColor value and we are finished.
 	<div class="paragraph indent-level-8">The shader program is an opaque GLuint that is used to refer
 to the shader when speaking to the GL.  With this, we have
 created an OpenGL shader, now we just need to give it something
-to render.
-</div>
+to render.</div>
 </div>
 	<div class="code-sample">        self.shader = shaders.compileProgram(VERTEX_SHADER,FRAGMENT_SHADER)
 </div>
@@ -229,8 +224,7 @@ square to the viewer (two triangles with two shared vertices).</div>
 	<div class="paragraph indent-level-8">The vbo.VBO class simply takes an array-compatible format and
 stores the value to be pushed to the card later.  It also takes
 various flags to control the more advanced features, but we'll
-look at those later.
-</div>
+look at those later.</div>
 </div>
 	<div class="code-sample">        self.vbo = vbo.VBO(
             array( [
@@ -255,8 +249,7 @@ look at those later.
         should be rendered in model-space.  OpenGLContext has created
         a default Model-View matrix for a perspective scene where the
         camera is sitting 10 units from the origin.  It has cleared the
-        screen to white and is ready to accept rendering commands.
-</div>
+        screen to white and is ready to accept rendering commands.</div>
 </div>
 	<div class="code-sample">    def Render( self, mode):
         """Render the geometry for the scene."""
@@ -266,8 +259,7 @@ look at those later.
 	<div class="paragraph indent-level-8">We tell OpenGL to use our compiled shader, this is
 a simple GLuint that is an opaque token that describes the shader
 for OpenGL.  Until we Use the shader, the GL is using the
-fixed-function (legacy) rendering pipeline.
-</div>
+fixed-function (legacy) rendering pipeline.</div>
 </div>
 	<div class="code-sample">        shaders.glUseProgram(self.shader)
 </div>
@@ -275,8 +267,7 @@ fixed-function (legacy) rendering pipeline.
 	<div class="paragraph indent-level-0">Now we tell OpenGL that we want to enable our VBO as the
         source for geometric data.  There are two VBO types that can
         be active at any given time, a geometric data buffer and an
-        index buffer, the default here is the geometric buffer.
-</div>
+        index buffer, the default here is the geometric buffer.</div>
 </div>
 	<div class="code-sample">        try:
             self.vbo.bind()
@@ -295,8 +286,7 @@ while this is a convenient form for this particular
 tutorial, most VBO-based rendering will use the standard
 form which includes specifying offsets, data-types,
 strides, and the like for interpreting the array.  We
-will see the more involved form in the next tutorial.
-</div>
+will see the more involved form in the next tutorial.</div>
 </div>
 	<div class="code-sample">                glEnableClientState(GL_VERTEX_ARRAY);
                 glVertexPointerf( self.vbo )
@@ -307,8 +297,7 @@ will see the more involved form in the next tutorial.
                 starting with the offset 0 and continuing for 9 vertices
                 (that is, three triangles).  glDrawArrays always draws
                 "in sequence" from the vertex array.  We'll look at using
-                indexed drawing functions later.
-</div>
+                indexed drawing functions later.</div>
 </div>
 	<div class="code-sample">                glDrawArrays(GL_TRIANGLES, 0, 9)
 </div>
@@ -317,8 +306,7 @@ will see the more involved form in the next tutorial.
                 the OpenGL environment.  We unbind our vbo, so that any
                 traditional non-VBO-using code can operate, and unbind
                 our shader so that geometry that uses the fixed-function
-                (legacy) rendering behaviour will work properly.
-</div>
+                (legacy) rendering behaviour will work properly.</div>
 </div>
 	<div class="code-sample">            finally:
                 self.vbo.unbind()
@@ -336,8 +324,7 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">
-When run from the command-line, we should see a triangle and a
+	<div class="paragraph indent-level-0">When run from the command-line, we should see a triangle and a
 rectangle in solid green floating over a black background, as seen
 in our screenshot above.</div>
 	<div class="paragraph indent-level-0">Terms:</div>

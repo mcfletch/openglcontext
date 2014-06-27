@@ -33,8 +33,7 @@
 </ul>
 	<div class="paragraph indent-level-0">The purpose of this tutorial is to consolidate our work so far
 so that we can reuse it in further tutorials without needing to
-repeat code all the time.
-</div>
+repeat code all the time.</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -121,8 +120,7 @@ class TestContext( BaseContext ):
         count before compiling the shader.  In the real world we'd want to
         make the number of lights a parameter per-object so that we could
         generate a light-count-specific shader shared among all objects
-        with the same light-count.
-</div>
+        with the same light-count.</div>
 </div>
 	<div class="code-sample">        self.shader_constants['LIGHT_COUNT'] = len(self.lights)
 </div>
@@ -158,8 +156,7 @@ class TestContext( BaseContext ):
         The only change here is the addition of the texture-coordinate values.
         The texture coordinates are simply assigned to the varying value so that
         they will show up interpolated across the fragments in the fragment
-        shader.
-</div>
+        shader.</div>
 </div>
 	<div class="code-sample">        vertex = shaders.compileShader(
             lightConst + phong_preCalc + light_preCalc +
@@ -183,8 +180,7 @@ class TestContext( BaseContext ):
 	<div class="paragraph indent-level-8">We use the sampler2D type to define a variable which can to texture
 lookups into a configured texture-unit on the video card.  The varying
 texture-coordinate variable will provide us with interpolated s,t
-coordinates which we can use to do a texture2D call on the sampler2D.
-</div>
+coordinates which we can use to do a texture2D call on the sampler2D.</div>
 </div>
 	<div class="code-sample">        fragment = shaders.compileShader(
             lightConst + phong_weightCalc + """

@@ -58,15 +58,13 @@ It defines a mechanism that allows you to pass large "reference" arrays into a
 shader efficiently (using a Vertex Buffer Object).  Combined with draw_instanced,
 we will set up a reference array which defines the positions of each of our
 instanced objects.</div>
-	<div class="paragraph indent-level-0">Again, the import here is just for use with older PyOpenGL releases.
-</div>
+	<div class="paragraph indent-level-0">Again, the import here is just for use with older PyOpenGL releases.</div>
 </div>
 	<div class="code-sample">from OpenGL.GL.ARB.texture_buffer_object import *
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">For our sample code, we'll create an array of N spheres to render.  We'll
-use the numpy module "random" to generate a few offsets.
-</div>
+use the numpy module "random" to generate a few offsets.</div>
 </div>
 	<div class="code-sample">from numpy import random
 class TestContext( BaseContext ):
@@ -104,8 +102,7 @@ class TestContext( BaseContext ):
         we will use an array of offsets which are applied to the geometry.  We will use
         len(offset) values here.  We'll limit the value to less than the allowed number of
         bytes in the texture buffer object (we divide by 16 as that's the length of a single
-        texel in float format).
-</div>
+        texel in float format).</div>
 </div>
 	<div class="code-sample">        hardlimit = glGetIntegerv( GL_MAX_TEXTURE_BUFFER_SIZE_ARB )
         count = min((15000,hardlimit//16))
@@ -125,8 +122,7 @@ class TestContext( BaseContext ):
         that you *must* use 1,2 or 4 components per texel.  For three components,
         as we need, you must either use a single-value texture with 3x the values,
         or pad the data with an extra byte.  OpenGL 4.x allows for 3-component
-        values, but we'll avoid the extra dependency for now.
-</div>
+        values, but we'll avoid the extra dependency for now.</div>
 </div>
 	<div class="code-sample">        self.offset_array = (
             # we require RGBA to be compatible with &lt; OpenGL 4.x
@@ -183,8 +179,7 @@ class TestContext( BaseContext ):
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">We set up our GLSLObjects as before, using VERTEX_SHADER as the source
-        for our GLSLShader vertex object, and using the TextureBufferUniform above .
-</div>
+        for our GLSLShader vertex object, and using the TextureBufferUniform above .</div>
 </div>
 	<div class="code-sample">        self.glslObject = GLSLObject(
             uniforms = [

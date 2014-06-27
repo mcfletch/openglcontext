@@ -56,14 +56,13 @@ class TestContext( BaseContext ):
         self.imageID = self.loadImage ()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-8">	We are going to use the Python Imaging Library (PIL) for
+	<div class="paragraph indent-level-0">We are going to use the Python Imaging Library (PIL) for
     loading images, something which is obviously not seen
     in the original tutorial.</div>
 	<div class="paragraph indent-level-4">This method combines all of the functionality required to
 load the image with PIL, convert it to a format compatible
 with PyOpenGL, generate the texture ID, and store the image
-data under that texture ID.
-</div>
+data under that texture ID.</div>
 </div>
 	<div class="code-sample">    def loadImage( self, imageName = "nehe_wall.bmp" ):
         """Load an image file as a 2D texture using PIL"""
@@ -115,8 +114,7 @@ data under that texture ID.
 	<div class="paragraph indent-level-0">This method encapsulates the functions required to set up
     for textured rendering.  The original tutorial made these
     calls once for the entire program.  This organization makes
-    more sense if you are likely to have multiple textures.
-</div>
+    more sense if you are likely to have multiple textures.</div>
 </div>
 	<div class="code-sample">    def setupTexture( self ):
         """Render-time texture environment setup"""
@@ -176,8 +174,7 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">
-Author:
+	<div class="paragraph indent-level-0">Author:
 	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
 	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
@@ -186,8 +183,7 @@ any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
 	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
 credit, or mention my web site somewhere in your program
-or it's docs.
-</div>
+or it's docs.</div>
 </div>
     </section>
 <footer>

@@ -104,8 +104,7 @@ to test for these extensions using the glInit* functions.  These are
 PyOpenGL-2.x style queries which will return True if the extension is
 available.  PyOpenGL 3.x also allows you to do bool( entryPoint ) to
 check if an entry point is available, but that does not allow you to
-check for extensions which *only* define new constants.
-</div>
+check for extensions which *only* define new constants.</div>
 </div>
 	<div class="code-sample">    def OnInit( self ):
         """Initialize the context with GL active"""
@@ -122,8 +121,7 @@ check for extensions which *only* define new constants.
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">We create the geometry for our scene in a method to allow
-        later tutorials to subclass and provide more interesting scenes.
-</div>
+        later tutorials to subclass and provide more interesting scenes.</div>
 </div>
 	<div class="code-sample">        self.geometry = self.createGeometry()
 </div>
@@ -137,8 +135,7 @@ check for extensions which *only* define new constants.
 	<div class="paragraph indent-level-0">To make the demo a little more interesting, we're going to
         animate the first light's position and direction.  Here we're setting
         up a raw Timer object.  OpenGLContext scenegraph timers can't be used
-        as we're not using the scenegraph mechanisms.
-</div>
+        as we're not using the scenegraph mechanisms.</div>
 </div>
 	<div class="code-sample">        self.time = Timer( duration = 8.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
@@ -278,8 +275,7 @@ rendering engine.</div>
 	<div class="paragraph indent-level-4">We only want to apply this process for the "normal diffuse" rendering
 mode, not, for instance, for the mouse-selection passes or the
 transparent rendering pass (transparent shadows will have to wait for
-another tutorial).
-</div>
+another tutorial).</div>
 </div>
 	<div class="code-sample">    def Render( self, mode):
         assert mode
@@ -314,8 +310,7 @@ using regular OpenGL legacy calls (the "Flat" renderer calculates
 and loads these values directly).  We just call this method to
 have the platform restore its state.  The "identity" parameter
 tells the platform to do a glLoadIdentity() call for each matrix
-first.
-</div>
+first.</div>
 </div>
 	<div class="code-sample">            platform = self.getViewPlatform()
             platform.render( identity = True )
@@ -329,8 +324,7 @@ first.
 	<div class="paragraph indent-level-0">Then we do the diffuse/specular lighting for our lights.
             We want to make our "extra light" blend into the current light
             reflected from the surfaces at 1:1 ratio, so we enable blending
-            before doing the diffuse/specular pass.
-</div>
+            before doing the diffuse/specular pass.</div>
 </div>
 	<div class="code-sample">            glEnable(GL_BLEND)
             glBlendFunc(GL_ONE,GL_ONE)
@@ -370,8 +364,7 @@ first.
 	<div class="paragraph indent-level-4">The depth texture is created by rendering the scene from the
 point-of-view of the light.  In this version of the tutorial,
 we'll render the depth texture into the Context's regular
-"back" buffer and then copy it into the texture.
-</div>
+"back" buffer and then copy it into the texture.</div>
 </div>
 	<div class="code-sample">    offset = 1.0
     def renderLightTexture( self, light, mode,direction=None, fov = None, textureKey = None ):
@@ -382,8 +375,7 @@ we'll render the depth texture into the Context's regular
         so we'll explicitly specify the depth operation.  The use
         of GL_LEQUAL means that we can rewrite the same geometry
         to the depth buffer multiple times and (save for floating-point
-        artefacts), should see the geometry render each time.
-</div>
+        artefacts), should see the geometry render each time.</div>
 </div>
 	<div class="code-sample">        glDepthFunc(GL_LEQUAL)
         glEnable(GL_DEPTH_TEST)
@@ -422,8 +414,7 @@ leads to a light, not just for each light. The node-paths
 have methods to retrieve their matrices, so we would simply
 dot those matrices with the matrices we retrieve here.</div>
 	<div class="paragraph indent-level-12">The complexity of supporting these features doesn't
-particularly suit an introductory tutorial.
-</div>
+particularly suit an introductory tutorial.</div>
 </div>
 	<div class="code-sample">        if fov:
             cutoff = fov /2.0
@@ -469,8 +460,7 @@ comparing results with
         projection and model-view matrices for our view-platform into
         the GL.  Real-world implementations would normally do the
         light-rendering pass before doing their world-view setup.
-        We'll restore the platform values later on.
-</div>
+        We'll restore the platform values later on.</div>
 </div>
 	<div class="code-sample">        glMatrixMode( GL_PROJECTION )
         glLoadMatrixf( lightView )
@@ -500,8 +490,7 @@ comparing results with
     The glColorMask call does not prevent OpenGL from ever
     attempting to write to the color buffer, it just masks
     regular drawing operations.  A call to glClear() for
-    instance, could still clear the colour buffer.
-</div>
+    instance, could still clear the colour buffer.</div>
 </div>
 	<div class="code-sample">            if not self.lightViewDebug:
                 glColorMask( 0,0,0,0 )
@@ -533,8 +522,7 @@ The first 1.0 gives us the raw fragment depth-value, the
 second 1.0, the parameter "units" says to take 1.0
 depth-buffer units and add it to the depth-value
 from the previous step, making the depth buffer record values
-1.0 units less than the geometry's natural value.
-</div>
+1.0 units less than the geometry's natural value.</div>
 </div>
 	<div class="code-sample">            glEnable(GL_POLYGON_OFFSET_FILL)
             glPolygonOffset(1.0, self.offset)
@@ -599,8 +587,7 @@ of the shadows produced.  If your texture only has a couple of dozen
 pixels covering a particular piece of geometry then the shadows on that
 piece of geometry are going to be extremely pixelated.  This is
 particularly so if your light has a wide-angle cutoff.  As more of the
-scene is rendered into the texture, each object covers fewer pixels.
-</div>
+scene is rendered into the texture, each object covers fewer pixels.</div>
 </div>
 	<div class="code-sample">    shadowMapSize = 512
     textureCacheKey = 'shadowTexture'
@@ -622,8 +609,7 @@ scene is rendered into the texture, each object covers fewer pixels.
 	<div class="commentary">
 	<div class="paragraph indent-level-0">We didn't find the texture in the cache, so we need to generate it.</div>
 	<div class="paragraph indent-level-12">We create a single texture and tell OpenGL to make it the current
-2D texture.
-</div>
+2D texture.</div>
 </div>
 	<div class="code-sample">            texture = glGenTextures( 1 )
             glBindTexture( GL_TEXTURE_2D, texture )
@@ -635,8 +621,7 @@ scene is rendered into the texture, each object covers fewer pixels.
             for the texture.  So if our context has a 16-bit depth channel,
             we will use that.  If it uses 24-bit depth, we'll use that.</div>
 	<div class="paragraph indent-level-12">The None at the end of the argument list tells OpenGL not to
-initialize the data, i.e. not to read it from anywhere.
-</div>
+initialize the data, i.e. not to read it from anywhere.</div>
 </div>
 	<div class="code-sample">            glTexImage2D(
                 GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
@@ -669,8 +654,7 @@ initialize the data, i.e. not to read it from anywhere.
         appropriately sized texture, regardless of screen size, falling
         back to this implementation *only* if there was no FBO support
         on the machine.  We will develop the FBO-based rendering in the
-        next tutorial.
-</div>
+        next tutorial.</div>
 </div>
 	<div class="code-sample">        glViewport( 0,0, shadowMapSize, shadowMapSize )
         return texture
@@ -682,8 +666,7 @@ initialize the data, i.e. not to read it from anywhere.
         the depth-texture we've created.  The operation is a standard OpenGL
         glCopyTexSubImage2D, which is performed entirely "on card", so
         is reasonably fast, though not as fast as having rendered into an
-        FBO in the first place.  We'll look at that in the next tutorial.
-</div>
+        FBO in the first place.  We'll look at that in the next tutorial.</div>
 </div>
 	<div class="code-sample">        shadowMapSize = self.shadowMapSize
         glBindTexture(GL_TEXTURE_2D, texture)
@@ -696,8 +679,7 @@ initialize the data, i.e. not to read it from anywhere.
 	<h1 class="title indent-level-0">Render Ambient-lit Geometry</h1>
 	<div class="paragraph indent-level-4">Our second rendering pass draws the ambient light to the scene.  It
 also fills in the depth buffer which will filter out geometry which
-is behind shadowed geometry which would otherwise "bleed through".
-</div>
+is behind shadowed geometry which would otherwise "bleed through".</div>
 </div>
 	<div class="code-sample">    def renderAmbient( self, mode ):
         """Render ambient-only lighting for geometry"""
@@ -745,8 +727,7 @@ happens.  Our process looks like this:</div>
         a problem, but a problem for our Teapot object.  We could solve
         this with a blend operation which only blended brighter pixels,
         but simply re-calculating ambient lighting in this pass is about
-        as simple.
-</div>
+        as simple.</div>
 </div>
 	<div class="code-sample">        self.geometryPasses.lightingAmbient = False
         self.geometryPasses.lightingDiffuse = True
@@ -798,8 +779,7 @@ happens.  Our process looks like this:</div>
         if R &lt;= value stored in the texture.  That is, if the
         eye-space Z coordinate multiplied by our transformation
         matrix is at a lower depth (closer) than the depth value
-        stored in the texture, then that coordinate is "in the light".
-</div>
+        stored in the texture, then that coordinate is "in the light".</div>
 </div>
 	<div class="code-sample">        glTexParameteri(
             GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL

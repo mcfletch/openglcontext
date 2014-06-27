@@ -36,8 +36,7 @@
 	<a class="" href="http://www.3dshaders.com/">OpenGL Shading Language (Orange Book)</a>
 Chapter 9.
 </div>
-	<div class="paragraph indent-level-0">Our imports are by now quite familiar...
-</div>
+	<div class="paragraph indent-level-0">Our imports are by now quite familiar...</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -79,8 +78,7 @@ vertex.  </div>
 on the distance value, including one which uses our end_fog
 distance.  We then use the resulting floating-point value to
 control a "mix" of the uniform fog_color and the current vertex'
-gl_Color value.
-</div>
+gl_Color value.</div>
 </div>
 	<div class="code-sample">        vertex = shaders.compileShader("""
             uniform float end_fog;
@@ -112,8 +110,7 @@ in the fragment shader, potentially using, for instance, a texture
 lookup to provide more realistic "wisps" of fog, but the fragment
 shader is called far more than the vertex shader (normally), which
 means it is normally a good idea of do as much of your calculation
-as possible in the vertex shader.
-</div>
+as possible in the vertex shader.</div>
 </div>
 	<div class="code-sample">        fragment = shaders.compileShader("""void main() {
                 gl_FragColor = gl_Color;
@@ -145,8 +142,7 @@ as possible in the vertex shader.
         from Python.  GLSL provides these references via "locations",
         which can be queried from a compiled shader.  We will later
         use these opaque references to assign values to the uniform
-        values.
-</div>
+        values.</div>
 </div>
 	<div class="code-sample">        self.UNIFORM_LOCATIONS = {
             'end_fog': glGetUniformLocation( self.shader, 'end_fog' ),
@@ -171,8 +167,7 @@ geometry will fade into the white background.  Our shaders will
 *not* be called for any fragments where there was no geometry
 present, so if we were to choose black here, our geometry would
 appear as largely-black objects on a white plane, instead of
-appearing to fade into a fog.
-</div>
+appearing to fade into a fog.</div>
 </div>
 	<div class="code-sample">        glUniform1f( self.UNIFORM_LOCATIONS['end_fog'],15)
         glUniform4f(self.UNIFORM_LOCATIONS['fog_color'],1,1,1,1)

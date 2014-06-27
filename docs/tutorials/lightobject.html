@@ -34,8 +34,7 @@ that OpenGLContext makes available.  It also demonstrates basic
 use of ROUTEs to create simple animations of properties within the
 scenegraph.</div>
 	<div class="paragraph indent-level-0">Note that the legacy OpenGL lighting model described here can be
-replaced when using shader-based geometry.
-</div>
+replaced when using shader-based geometry.</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -72,8 +71,7 @@ with rotating lighting in three colours."""
 Light.  It is an "infinitely far off" light which sends
 rays in parallel throughout the entire scene along its
 "direction" vector.  It resembles the light cast by the
-sun as seen on the surface of the Earth.
-</div>
+sun as seen on the surface of the Earth.</div>
 </div>
 	<div class="code-sample">        dl = DirectionalLight(
             direction = (-10,-10,0),
@@ -132,8 +130,7 @@ sun as seen on the surface of the Earth.
 to perform the animation.  Here we say that it will take 3.0s
 to complete a single cycle and that it will loop indefinitely
 (a value of 1 means loop indefinitely, larger integers will loop
-a specified number of times, 0 means do not loop).
-</div>
+a specified number of times, 0 means do not loop).</div>
 </div>
 	<div class="code-sample">        interpolators = [
             OrientationInterpolator(
@@ -164,8 +161,7 @@ a specified number of times, 0 means do not loop).
         going to be affected by them.  We define a very simplistic
         scene with a Sphere, Teapot and transparent Cylinder.  The
         Teapot and Cylinder are made very shiny so that the lighting
-        effects are more pronounced.
-</div>
+        effects are more pronounced.</div>
 </div>
 	<div class="code-sample">        geometry = [
             Shape(
@@ -243,8 +239,7 @@ a specified number of times, 0 means do not loop).
         can do as it likes with the value.  In this case our method
         just applies the value to each Node.  We could also have
         routed the value_changed event to each light's set_intensity
-        event with the same effect.
-</div>
+        event with the same effect.</div>
 </div>
 	<div class="code-sample">        self.sg.addRoute(
             'Timer','fraction_changed',
@@ -261,8 +256,7 @@ a specified number of times, 0 means do not loop).
         the Timer node and route it to our method.  The "cycleTime"
         event is sent each time the Timer completes a cycle, so here
         it will be called every 3s to decide randomly to turn off/on
-        the lights in the scene.
-</div>
+        the lights in the scene.</div>
 </div>
 	<div class="code-sample">        self.sg.addRoute(
             'Timer','cycleTime',

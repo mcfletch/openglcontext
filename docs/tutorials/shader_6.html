@@ -57,8 +57,7 @@ VBO contains the per-vertex data which is to be rendered, while the
 second contains indices into that first VBO which allows triangles
 to be generated which share the vertex records.  In "smooth" geometry
 vertices tend to be shared, so this rendering method tends to be
-more efficient than using expanded arrays of vertices.
-</div>
+more efficient than using expanded arrays of vertices.</div>
 </div>
 	<div class="code-sample">from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
@@ -124,8 +123,7 @@ perform approximately the same calculation.  With this value:
         preferred to Phong.</div>
 	<div class="paragraph indent-level-8">Traditionally, n_dot_pos would be cut off at 0.0, but that would
 create extremely hard-edged cut-offs for specular color.  Here
-we "fudge" the result by 0.05
-</div>
+we "fudge" the result by 0.05</div>
 </div>
 	<div class="code-sample">        phong_weightCalc = """
         vec2 phong_weightCalc(
@@ -151,8 +149,7 @@ we "fudge" the result by 0.05
 	<div class="commentary">
 	<div class="paragraph indent-level-0">We are going to use per-fragment rendering.
         As a result, our vertex shader becomes very simple, just arranging
-        for the Normals to be varied across the surface.
-</div>
+        for the Normals to be varied across the surface.</div>
 </div>
 	<div class="code-sample">        vertex = shaders.compileShader(
         """
@@ -177,8 +174,7 @@ we "fudge" the result by 0.05
 half-vector calculation, the eye-space eye-vector is always
 the same value (pointing down the negative Z axis),
 and the eye-space eye-coordinate is always (0,0,0), so the
-eye-to-vertex vector is always the eye-space vector position.
-</div>
+eye-to-vertex vector is always the eye-space vector position.</div>
 </div>
 	<div class="code-sample">        fragment = shaders.compileShader( phong_weightCalc + """
         uniform vec4 Global_ambient;
@@ -228,8 +224,7 @@ eye-to-vertex vector is always the eye-space vector position.
 unit-sphere at the origin, the sphere's normals are the
 same as the sphere's vertex coordinate.  The complexity
 comes primarily in generating the triangle indices that
-link the points generated.
-</div>
+link the points generated.</div>
 </div>
 	<div class="code-sample">        self.coords,self.indices,self.count = Sphere(
             radius = 1
@@ -243,8 +238,7 @@ link the points generated.
         to do the half-vector calculation in the shader to make
         it obvious what is going on.  The legacy OpenGL pipeline
         provides the value pre-calculated as part of the light structure
-        in GLSL.
-</div>
+        in GLSL.</div>
 </div>
 	<div class="code-sample">        for uniform in (
             'Global_ambient',
@@ -284,8 +278,7 @@ per-vertex data arrays, while the indices buffer was defined
 as targetting the GL_ELEMENT_ARRAY_BUFFER, which is used
 solely for reading indices.</div>
 	<div class="paragraph indent-level-12">Each target can be bound to a different VBO, and thus we can
-bind both VBOs at the same time without confusion.
-</div>
+bind both VBOs at the same time without confusion.</div>
 </div>
 	<div class="code-sample">            self.coords.bind()
             self.indices.bind()
@@ -299,8 +292,7 @@ bind both VBOs at the same time without confusion.
             8 floating-point values (24 bytes), the first three being
             the vertex position, the next two being the texture coordinate
             and the last three being the vertex normal.  We'll ignore
-            the texture coordinate for now.
-</div>
+            the texture coordinate for now.</div>
 </div>
 	<div class="code-sample">            stride = self.coords.data[0].nbytes
             try:
@@ -346,8 +338,7 @@ bind both VBOs at the same time without confusion.
                 renderer uses shorts).  The indices VBO is actually
                 just passing the value c_void_p( 0 ) (i.e. a null pointer),
                 which causes OpenGL to use the currently bound VBO for
-                the GL_ELEMENT_ARRAY_BUFFER target.
-</div>
+                the GL_ELEMENT_ARRAY_BUFFER target.</div>
 </div>
 	<div class="code-sample">                glDrawElements(
                     GL_TRIANGLES, self.count,

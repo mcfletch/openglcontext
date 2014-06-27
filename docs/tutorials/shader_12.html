@@ -39,8 +39,7 @@ used to create shader-based geometry with explicit support for
 libraries of reusable code.
 </div>
 	<div class="paragraph indent-level-0">We're going to use our previous tutorial as the base for this new
-code-base...
-</div>
+code-base...</div>
 </div>
 	<div class="code-sample">from shader_11 import TestContext as BaseContext
 from OpenGL.GL import *
@@ -139,8 +138,7 @@ the source inline.  The GLSLShader declares a set of GLSLImport objects
 whose source is concatenated with the GLSLShader's source during
 compilation.  Note that the GLSLShader will not be compiled until/unless
 *all* of the GLSLImport and the GLSLShader itself have defined source
-values.
-</div>
+values.</div>
 </div>
 	<div class="code-sample">        self.glslObject = GLSLObject(
             uniforms = [
@@ -269,8 +267,7 @@ values.
         will automatically lookup their locations.  The buffer attribute is
         the ShaderBuffer which holds the vertex values.  The isCoord attribute
         tells OpenGLContext to use this attribute for calculating bounding boxes
-        for the geometry for use in frustum culling.
-</div>
+        for the geometry for use in frustum culling.</div>
 </div>
 	<div class="code-sample">        self.attributes = [
             ShaderAttribute(
@@ -347,8 +344,7 @@ values.
         the changes made.  The GLSLObject produces one of these when rendered.
         The rendering will compile the shaders (reporting errors if they occur),
         bind the object, and iterate through the textures and uniforms
-        configuring them for use with the shader.
-</div>
+        configuring them for use with the shader.</div>
 </div>
 	<div class="code-sample">        token = self.glslObject.render( mode )
         tokens = [  ]

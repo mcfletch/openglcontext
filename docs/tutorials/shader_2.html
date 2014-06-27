@@ -36,8 +36,7 @@
 	<div class="paragraph indent-level-0">Our imports for this tutorial look pretty much the same as
 for the last tutorial, so we can ignore them.  If you don't
 recognize something, go back to the previous tutorial's
-introduction.
-</div>
+introduction.</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -95,8 +94,7 @@ black to white (via grey).</div>
 function.  The varying value can be loosely thought of as being
 declared a "global" so that it can be seen in both shaders.
 However, the varying value is is being processed by intermediate
-clipping and interpolation processes.
-</div>
+clipping and interpolation processes.</div>
 </div>
 	<div class="code-sample">        vertex = shaders.compileShader(
             """
@@ -129,8 +127,7 @@ clipping and interpolation processes.
         red to yellow to cyan.</div>
 	<div class="paragraph indent-level-8">As noted in the previous tutorial, this "packed" format
 tends to be more efficient on modern hardware than having
-separate data-arrays for each type of data.
-</div>
+separate data-arrays for each type of data.</div>
 </div>
 	<div class="code-sample">        self.vbo = vbo.VBO(
             array( [
@@ -169,8 +166,7 @@ separate data-arrays for each type of data.
 render, we would like to read one record from the
 enabled arrays.  If we were to do this without specifying
 the arrays, OpenGL would likely seg-fault our program
-as it tried to access NULL memory locations.
-</div>
+as it tried to access NULL memory locations.</div>
 </div>
 	<div class="code-sample">                glEnableClientState(GL_VERTEX_ARRAY);
                 glEnableClientState(GL_COLOR_ARRAY);
@@ -189,8 +185,7 @@ as it tried to access NULL memory locations.
 	<div class="paragraph indent-level-16">The vertex pointer is passed a reference to our VBO,
 which tells OpenGL to read from the currently-bound VBO.
 Under the covers, the VBO wrapper is simply passing a
-NULL pointer to the GL.
-</div>
+NULL pointer to the GL.</div>
 </div>
 	<div class="code-sample">                glVertexPointer(3, GL_FLOAT, 24, self.vbo )
 </div>
@@ -205,8 +200,7 @@ between elements, we ask OpenGL to begin calculating the
 addresses from which to read the colour information at
 the beginning of the current VBO + 12 bytes.  Under the
 covers, the VBO wrapper is simply passing a void pointer
-to the address 12 to the GL.
-</div>
+to the address 12 to the GL.</div>
 </div>
 	<div class="code-sample">                glColorPointer(3, GL_FLOAT, 24, self.vbo+12 )
 </div>
@@ -225,10 +219,9 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">
-Terms:</div>
+	<div class="paragraph indent-level-0">Terms:</div>
 	<ul class=" indent-level-4">
-	<li class="">interpolate -- create new data-values by blending other values </li>
+	<li class="">interpolate -- create new data-values by blending other values</li>
 </ul>
 </div>
     </section>

@@ -46,8 +46,7 @@ glVertexPointer/glColorPointer mechanism.</div>
 for each vertex.  The final vertex position will be determined
 by "mixing" the two positions according to a fractional uniform
 value we will pass into our shader.  This kind of "tweening"
-can be used to animate continuous mesh models smoothly.
-</div>
+can be used to animate continuous mesh models smoothly.</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -76,8 +75,7 @@ entry points, there were implicitly defined attribute values
 (gl_Vertex, gl_Color) that recieved our data-records.  With
 legacy-free operation, we explicitly define the attribute values
 which will be used.  They look very similar to the declarations
-for uniform values, save for the varying keyword.
-</div>
+for uniform values, save for the varying keyword.</div>
 </div>
 	<div class="code-sample">        vertex = shaders.compileShader("""
             uniform float tween;
@@ -162,8 +160,7 @@ for uniform values, save for the varying keyword.
             Because we are only using one VBO, we can bind once.
             If our position arrays were stored in different VBOs,
             we would need to bind and unbind the VBO for the
-            corresponding glVertexAttribPointer calls.
-</div>
+            corresponding glVertexAttribPointer calls.</div>
 </div>
 	<div class="code-sample">            self.vbo.bind()
             try:
@@ -175,8 +172,7 @@ for uniform values, save for the varying keyword.
                 is defined.  Non-enabled attributes get default values
                 for each vertex.  It is also possible to specify a single
                 value for an attribute to be used for each vertex
-                (as though the attribute were a uniform).
-</div>
+                (as though the attribute were a uniform).</div>
 </div>
 	<div class="code-sample">                glEnableVertexAttribArray( self.position_location )
                 glEnableVertexAttribArray( self.tweened_location )
@@ -186,8 +182,7 @@ for uniform values, save for the varying keyword.
 	<div class="paragraph indent-level-0">Our vertex array is now 36 bytes/record.  The
                 glVertexAttribPointer calls are very similar to the legacy
                 calls, save that they provide the attribute location
-                into which the data-array will feed.
-</div>
+                into which the data-array will feed.</div>
 </div>
 	<div class="code-sample">                stride = 9*4
                 glVertexAttribPointer(

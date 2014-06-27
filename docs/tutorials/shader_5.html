@@ -81,8 +81,7 @@ the ambient light does the material re-emit" (as opposed to absorbing).
 Note, that all of the ambient values here are 4-component colours, so
 the material's ambient value may actually change the colour of the
 ambient reflected light.  Similarly, a strongly coloured ambient light
-will tend to give all materials a strong "undercast" of that colour.
-</div>
+will tend to give all materials a strong "undercast" of that colour.</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -151,8 +150,7 @@ vertex.  Lambert's law looks for the cosine of the two vectors
 by taking the dot product of the two (normalized) vectors.</div>
 	<div class="paragraph indent-level-8">Our GLSL function phong_weightCalc (below) will calculate the factor
 which controls the diffuse light contribution of a single light.
-Both of the values passed in must be *normalized* vectors.
-</div>
+Both of the values passed in must be *normalized* vectors.</div>
 </div>
 	<div class="code-sample">
         phong_weightCalc = """
@@ -173,8 +171,7 @@ Both of the values passed in must be *normalized* vectors.
         it defines a large number of uniform values that store the
         various light and material parameters.  We also define two
         per-vertex attributes to store the position and normal
-        assigned by the user.
-</div>
+        assigned by the user.</div>
 </div>
 	<div class="code-sample">        vertex = shaders.compileShader( phong_weightCalc +
         """
@@ -233,8 +230,7 @@ Reflectance we could as easily have left the coordinates in
         the calculations for more involved lighting.</div>
 	<div class="paragraph indent-level-8">Our fragment shader here is extremely simple.  We could
 actually do per-fragment lighting calculations, but it wouldn't
-particularly improve our rendering with simple diffuse shading.
-</div>
+particularly improve our rendering with simple diffuse shading.</div>
 </div>
 	<div class="code-sample">        fragment = shaders.compileShader("""
         varying vec4 baseColor;

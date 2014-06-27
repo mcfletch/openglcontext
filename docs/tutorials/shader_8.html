@@ -37,8 +37,7 @@ they tend to be called far more often than vertex shaders.</div>
 	<div class="paragraph indent-level-0">Our current code is very wasteful in that it does all of the light
 calculations for every fragment.  We'll split out the calculations
 so that the vertex shader provides interpolated values to the
-fragment shader.
-</div>
+fragment shader.</div>
 </div>
 	<div class="code-sample">import OpenGL
 #OpenGL.FULL_LOGGING = True
@@ -69,8 +68,7 @@ makes the code far easier to read than using the bare numbers.</div>
 calculation, so we have included it in our common lighting
 declarations.</div>
 	<div class="paragraph indent-level-8">We've also parameterized the LIGHT count and size, so that
-we can use them in both Python and GLSL code.
-</div>
+we can use them in both Python and GLSL code.</div>
 </div>
 	<div class="code-sample">        lightConst = """
         const int LIGHT_COUNT = %s;
@@ -91,8 +89,7 @@ we can use them in both Python and GLSL code.
         going to hold the normalized partial calculations for the lights.
         The other declarations are the same as before, they are just
         being shared between the shaders.</div>
-	<div class="paragraph indent-level-8">Our phong_weightCalc calculation hasn't changed.
-</div>
+	<div class="paragraph indent-level-8">Our phong_weightCalc calculation hasn't changed.</div>
 </div>
 	<div class="code-sample">        phong_weightCalc = """
         vec2 phong_weightCalc(
@@ -119,8 +116,7 @@ we can use them in both Python and GLSL code.
 	<div class="paragraph indent-level-0">Our new vertex shader has a loop in it.  It iterates over the
         set of lights doing the partial calculations for half-vector
         and eye-space location.  It stores the results of these in our
-        new, varying array values.
-</div>
+        new, varying array values.</div>
 </div>
 	<div class="code-sample">        vertex = shaders.compileShader(
             lightConst +
@@ -148,8 +144,7 @@ we can use them in both Python and GLSL code.
         have now moved the complex half-vector and eye-space location
         calculations out.  We've also separated out the concept of
         which light we are processing and what array-offset we are
-        using, to make it clearer which value is being accessed.
-</div>
+        using, to make it clearer which value is being accessed.</div>
 </div>
 	<div class="code-sample">        fragment = shaders.compileShader(
             lightConst + phong_weightCalc + """

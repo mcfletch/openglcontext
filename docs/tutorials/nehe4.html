@@ -34,7 +34,6 @@ about an axis.</div>
 with the tutorial, so that only changes from the tutorial are noted
 here.
 </div>
-	<div class="paragraph indent-level-0"></div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -49,14 +48,12 @@ class TestContext( BaseContext ):
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">
-The OnIdle method (if present) is called whenever the GUI library
-has completed all pending event processing and signals an "idle"
-state.  By calling:</div>
+	<div class="paragraph indent-level-0">The OnIdle method (if present) is called whenever the GUI library
+    has completed all pending event processing and signals an "idle"
+    state.  By calling:</div>
 	<div class="paragraph indent-level-8">self.triggerRedraw( force = 1 )</div>
 	<div class="paragraph indent-level-4">We force a redraw of the context to show the next "frame" of the
-animation.
-</div>
+animation.</div>
 </div>
 	<div class="code-sample">    def OnIdle( self, ):
         """Request refresh of the context whenever idle"""
@@ -74,8 +71,7 @@ animation.
         converted to a fraction of three seconds then multiplied
         by 360 (degrees) to get the current appropriate rotation
         for an object spinning at 1/3 rps.</div>
-	<div class="paragraph indent-level-8">Note that OpenGL uses *degrees*, not radians!
-</div>
+	<div class="paragraph indent-level-8">Note that OpenGL uses *degrees*, not radians!</div>
 </div>
 	<div class="code-sample">        glRotated( time.time()%(3.0)/3 * 360, 0,1,0)
         glBegin(GL_TRIANGLES)
@@ -89,8 +85,7 @@ animation.
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Note the need to re-load the identity matrix, as the
-        glRotated/glTranslatef functions modify the current matrix.
-</div>
+        glRotated/glTranslatef functions modify the current matrix.</div>
 </div>
 	<div class="code-sample">        glLoadIdentity()
         glTranslatef(1.5,0.0,-6.0);
@@ -110,8 +105,7 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">
-Author:
+	<div class="paragraph indent-level-0">Author:
 	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
 	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
@@ -120,8 +114,7 @@ any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
 	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
 credit, or mention my web site somewhere in your program
-or it's docs.
-</div>
+or it's docs.</div>
 </div>
     </section>
 <footer>

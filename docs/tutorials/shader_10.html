@@ -32,8 +32,7 @@
 	<div class="paragraph indent-level-0">Spot Lights are a commonly seen pattern. They are basically
 Point Light sources which have shields/reflectors which block
 light in most directions, while focussing the light (to some
-degree) in a particular direction.
-</div>
+degree) in a particular direction.</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -78,8 +77,7 @@ flag to tell us whether to apply the spot calculation.  We could
 have shaved a whole vec4 by packing the spot_exponent into the
 ATTENUATION vector's unused .w component, and then packing the
 spot_cutoff into the spot_direction's unused .w, but that becomes
-a bit awkward looking.
-</div>
+a bit awkward looking.</div>
 </div>
 	<div class="code-sample">        lightConst = """
         const int LIGHT_COUNT = %s;
@@ -118,8 +116,7 @@ cosine-space which is displayed and raise it to the power of our
 spot_exponent value.</div>
 	<div class="paragraph indent-level-8">This is our last tweak to the blinn-phong lighting model so we'll make
 this version of the function available like so:</div>
-	<div class="paragraph indent-level-8">from OpenGLContext.resources.phongweights_frag import data as phong_weightCalc
-</div>
+	<div class="paragraph indent-level-8">from OpenGLContext.resources.phongweights_frag import data as phong_weightCalc</div>
 </div>
 	<div class="code-sample">        phong_weightCalc = """
         vec3 phong_weightCalc(
@@ -283,8 +280,7 @@ this version of the function available like so:</div>
     for a particular light.  We're going to define 3 lights here with
     fairly high "spotiness" values so that we can see the focussed
     beam effect on the sphere.  The spot exponents in this case tend to
-    cause an area in the center of the beam to saturate completely.
-</div>
+    cause an area in the center of the beam to saturate completely.</div>
 </div>
 	<div class="code-sample">    LIGHTS = array([
         x[1] for x in [
