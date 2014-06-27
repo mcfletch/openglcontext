@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+
+<!-- dumbmarkup support -->
+<head>
+    <title>Transformations in OpenGL: Understanding Transforms</title><link rel="stylesheet" href="../style/modern.css" type="text/css"><link rel="stylesheet" href="../style/tutorial.css" type="text/css">
+</head>
+<body class="openglcontext-tutorial">
+  <div id="content">
+    <header>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="index.html">Index</a></li>
+    <li><a href="index.html">Index</a></li>
+</ul>
+    <h1>Transformations in OpenGL: Understanding Transforms</h1>
+    </header>
+    <section>
+	<div class="code-sample">#! /usr/bin/env python
+</div>
+	<div class="commentary">
+	<h1 class="title indent-level-0">Understanding Transforms</h1>
+	<div class="paragraph indent-level-0">In this tutorial we'll learn:</div>
+	<ul class=" indent-level-4">
+	<li class="">How OpenGL transforms work</li>
+	<li class="">How we manipulate transforms</li>
+</ul>
+	<div class="paragraph indent-level-0">We'll get started by doing some basic imports to get the
+OpenGLContext context, numpy, and all the other tools
+we're going to use.</div>
+</div>
+	<div class="code-sample">from OpenGLContext import testingcontext
+BaseContext = testingcontext.getInteractive()
+from OpenGL.GL import *
+from OpenGL.arrays import vbo
+from OpenGLContext.arrays import *
+from OpenGL.GL import shaders
+from OpenGLContext.scenegraph.basenodes import *
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">This utility provides transformation-matrix calculation on the CPU</div>
+</div>
+	<div class="code-sample">from vrml.vrml97 import transformmatrix
+</div>
+	<div class="commentary">
+	<h2 class="heading indent-level-0">The Theory</h2>
+	<div class="paragraph indent-level-0">OpenGL hardware renders a 2x2x2 cube:</div>
+	<ul class=" indent-level-1">
+	<li class="">Z goes from -1 at the far clipping plane to 1 at the near clipping plane</li>
+	<li class="">X goes from -1 at the left to 1 at the right</li>
+	<li class="">Y goes from -1 at the bottom to 1 at the top.</li>
+</ul>
+	<div class="paragraph indent-level-0">The OpenGL hardware will clip out geometry which does not fall within
+the 2x2x2 cube.  If you draw outside the cube, the geometry just won't
+show up at all.  The hardware always draws the same cube, and nothing
+you do is going to alter that cube, all you can do is map
+your geometry into the cube properly.</div>
+	<h2 class="heading indent-level-0">How We're Drawing</h2>
+	<div class="paragraph indent-level-0">We are going to start off with an identity matrix for our transformation.
+When an identity matrix is multiplied by a coordinate the coordinate is
+unchanged. Thus we are going to be drawing in raw "device" or "display"
+coordinates.</div>
+	<div class="paragraph indent-level-0">Note: OpenGL perspective/orthographic routines generally include a
+scale of -1 in the Z coordinate.</div>
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="transforms_1.py-screen-0001.png" alt="Identity Matrix Effect">
+</div>
+</div>
+	<div class="code-sample">identity_matrix = array([
+    [1,0,0,0],
+    [0,1,0,0],
+    [0,0,1,0],
+    [0,0,0,1],
+], dtype='f')
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Our shader in this scene takes a single matrix uniform (our identity matrix
+to start) and multiplies it by the coordinates in our triangles. It sets the
+color of each vertex to the colours in the triangles as well. It does *not*
+take into account the OpenGLContext built-in navigation, perspective matrix,
+and the like. As a result, the scene will be entirely static when displayed.</div>
+</div>
+	<div class="code-sample">SHADERS = [
+    GLSLShader(
+        source = [ """#version 120
+        uniform mat4 transform;
+        attribute vec3 Vertex_position;
+        attribute vec4 Vertex_color;
+        varying vec4 baseColor;
+        void main() {
+            baseColor = Vertex_color;
+            gl_Position = transform * vec4(
+                Vertex_position, 1.0
+            );
+        }""" ],
+        type = 'VERTEX',
+    ),
+    GLSLShader(
+        source = [ """#version 120
+        uniform vec4 color;
+        varying vec4 baseColor;
+        void main() {
+            gl_FragColor = baseColor;
+        }
+        """],
+        type = 'FRAGMENT',
+    ),
+]
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="transforms_1.py-screen-0009.png" alt="Screenshot">
+</div>
+	<h2 class="heading indent-level-0">What We're Drawing</h2>
+	<div class="paragraph indent-level-0">We will draw four triangles.  The first is a cyan triangle which will
+*not* appear in the rendering. It is being drawn at Z == -1.05, so it
+is behind the clipping region.</div>
+</div>
+	<div class="code-sample">cyan_triangle = [
+    (0,2,-1.05,   0,1,1,.5),
+    (0,-2,-1.05, 0,1,1,.5),
+    (2,-2,-1.05,  0,1,1,.5),
+]
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">The small blue triangle will be drawn at Z == -.5</div>
+</div>
+	<div class="code-sample">blue_triangle = [
+    (1,1,.5,  1,0,0,.5),
+    (-1,1,.5, 1,0,0,.5),
+    (0,-1,.5, 1,0,0,.5),
+]
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">The green triangle will be drawn at Z == 0.</div>
+</div>
+	<div class="code-sample">green_triangle = [
+    (0,1,0,   0,1,0,.5),
+    (-1,-1,0, 0,1,0,.5),
+    (1,-1,0,  0,1,0,.5),
+]
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">The red triangle will be drawn at Z == .5</div>
+</div>
+	<div class="code-sample">red_triangle = [
+    (0,1,-.5,   0,0,1,.5),
+    (0,-1,-.5, 0,0,1,.5),
+    (1,-1,-.5,  0,0,1,.5),
+]
+class TestContext( BaseContext ):
+    """Creates a simple vertex shader..."""
+    @property
+    def perspective( self ):
+        return self.perspective_matrices[self.perspective_index]
+    def OnInit( self ):
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">We will be using OpenGLContext's automatically compiled/activated
+        shader objects to make the book-keeping easier for this demo. We are
+        going to create a single GLSLObject with our m4 Uniform and the Shader
+        text we defined above.</div>
+</div>
+	<div class="code-sample">        self.glslObject = GLSLObject(
+            uniforms = [ FloatUniformm4(name="transform" ) ],
+            shaders = SHADERS,
+        )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Our vertex buffer is just the concatenation of the various triangles.</div>
+</div>
+	<div class="code-sample">        self.coords = ShaderBuffer(
+            buffer = array(
+                blue_triangle + green_triangle + red_triangle + cyan_triangle,
+                dtype='f'
+            )
+        )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">To make it easier to understand what's going on, we are going to
+        print out the dot-product of our projection matrix and the coordinate
+        set (calculated on the CPU). This array is *just* the vertex positions
+        from the coordinate array.</div>
+</div>
+	<div class="code-sample">        self.coord_mult = array([
+            (x,y,z,1)
+            for (x,y,z) in self.coords.buffer[:,:3]
+        ],dtype='f')
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Our indices are currently just an arange, there's no reason to use
+        the indexed drawing methods here, other than that real code likely will
+        use those methods.</div>
+</div>
+	<div class="code-sample">        self.indices = ShaderIndexBuffer(
+            buffer = array(range(len(self.coords.buffer)),dtype='I')
+        )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">We have two vertex attributes, position and colour</div>
+</div>
+	<div class="code-sample">        self.attributes = [
+            ShaderAttribute(
+                name = 'Vertex_position',
+                offset = 0,
+                stride = 4*len(self.coords.buffer[0]),
+                buffer = self.coords,
+                isCoord = True,
+            ),
+            ShaderAttribute(
+                name = 'Vertex_color',
+                offset = 3*4,
+                stride = 4*len(self.coords.buffer[0]),
+                buffer = self.coords,
+                isCoord = False,
+            ),
+        ]
+</div>
+	<div class="commentary">
+	<h2 class="heading indent-level-0">Scaling the Scene</h2>
+	<div class="paragraph indent-level-8">Let's apply a few scales to the matrix to get a feel for
+how they work. The diagonal values in the matrix map to individual
+components, so it is pretty easy to calculate scale matrices.</div>
+	<div class="paragraph indent-level-8">
+	<img class=" wiki" src="transforms_1.py-screen-0003.png" alt="Y Scale">
+	<img class=" wiki" src="transforms_1.py-screen-0002.png" alt="X Scale">
+Our second matrix does a scale of .5 in the x direction.
+Our third does a scale of .5 in the Y direction.
+</div>
+</div>
+	<div class="code-sample">        self.perspective_matrices = [
+            # we defined this identity matrix above
+            identity_matrix,
+            array([
+                [.5,0,0,0], # X scale
+                [0,1,0,0],
+                [0,0,1,0],
+                [0,0,0,1],
+            ],'f'),
+            array([
+                [1,0,0,0],
+                [0,.5,0,0], # Y scale
+                [0,0,1,0],
+                [0,0,0,1],
+            ],'f'),
+        ]
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="transforms_1.py-screen-0005.png" alt="Translate right">
+	<img class=" wiki" src="transforms_1.py-screen-0004.png" alt="Translate up">
+        _Transforming The Scene_
+</div>
+	<div class="paragraph indent-level-8">Now let's apply a few translations (moves), we add the values
+to the bottom row of the matrix to get the values added to the
+coordinates.</div>
+</div>
+	<div class="code-sample">        self.perspective_matrices.extend([
+            array([
+                [1,0,0,0],
+                [0,1,0,0],
+                [0,0,1,0],
+                [.5,0,0,1], # Move right by .5
+            ],'f'),
+            array([
+                [1,0,0,0],
+                [0,1,0,0],
+                [0,0,1,0],
+                [0,.5,0,1], # Move up by .5
+            ],'f'),
+        ])
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">
+	<img class=" wiki" src="transforms_1.py-screen-0007.png" alt="Perspective">
+	<img class=" wiki" src="transforms_1.py-screen-0006.png" alt="Perspective">
+	<img class="clear-right wiki" src="transforms_1.py-screen-0009.png" alt="Perspective">
+	<img class=" wiki" src="transforms_1.py-screen-0008.png" alt="Perspective">
+	<img class="clear-right wiki" src="transforms_1.py-screen-0011.png" alt="Perspective">
+	<img class=" wiki" src="transforms_1.py-screen-0010.png" alt="Perspective">
+</div>
+	<h2 class="heading indent-level-8">Perspective Transformations</h2>
+	<div class="paragraph indent-level-8">Now let's see what happens to the matrix when we apply a perspective
+transformation.  A perspective transformation basically takes a
+truncated pyramid and maps it into the 2x2x2 cube. The front clipping
+plane (the small surface where the pyramid is truncated) maps to the
+2x2x2 cube's front-face, and the back clipping plane (the much larger
+base) maps to the 2x2x2 cube's back-face.  Coordinates closer to the
+back clipping plane are thus compressed (seem smaller), while those at
+the front clipping plane are close to uncompressed.</div>
+	<div class="paragraph indent-level-8">The perspective matrix calculation here is doing the calculations
+required to give you a particular field of view, near and far clipping
+plane. It also includes the z-axis reflection.</div>
+</div>
+	<div class="code-sample">        aspect = self.getViewPort()
+        if aspect[1]:
+            aspect = aspect[0]/aspect[1]
+        else:
+            aspect = 1
+        self.perspective_matrices.extend( [
+            dot(array([
+                [1,0,0,0],
+                [0,1,0,0],
+                [0,0,-1,0],
+                [0,0,-1,1],
+            ],'f'),transformmatrix.perspectiveMatrix(
+                fov*3.14159,
+                aspect,
+                .01,
+                2.01,
+                inverse=False,
+            ))
+            for fov in [.5,.6,.7,.8,.9,.95] # we don't go to 1 because then far would clip the geometry
+        ] )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">We set up an event handler to call the function to perform the switch.
+        The handler will increment our index into self.perspective_matrices.</div>
+</div>
+	<div class="code-sample">        self.perspective_index = 0
+        self.addEventHandler( "keypress", name="p", function = self.OnPerspective)
+    def Render( self, mode):
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Our code to render the geometry first ignores any non-visible passes</div>
+</div>
+	<div class="code-sample">        if not mode.visible:
+            return
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Now we calculate our perspective matrix. Since this is pre-calculated
+        we're just pulling in the value. Normal code would calculate the matrix
+        from "camera" position and parameters and then pass it into the Uniform.</div>
+</div>
+	<div class="code-sample">        final_matrix = self.perspective
+        print('final_matrix:\n%s'%(final_matrix))
+        print('transformed vertices:\n%s'%( dot( self.coord_mult, final_matrix )))
+        print('press &lt;p&gt; for the next matrix...')
+        self.glslObject.getVariable( 'transform' ).value = final_matrix
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">We begin the actual rendering code, which just binds each component
+        and then calls the glDraw function.</div>
+</div>
+	<div class="code-sample">        token = self.glslObject.render( mode )
+        tokens = []
+        vbo = self.indices.bind(mode)
+        try:
+            for attribute in self.attributes:
+                token = attribute.render( self.glslObject, mode )
+                if token:
+                    tokens.append( (attribute, token) )
+            glDrawElements(
+                GL_TRIANGLES, len(self.coords.buffer),
+                GL_UNSIGNED_INT, vbo
+            )
+        finally:
+            for attribute,token in tokens:
+                attribute.renderPost( self.glslObject, mode, token )
+            self.glslObject.renderPost( token, mode )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">The index-array VBO also needs to be unbound.</div>
+</div>
+	<div class="code-sample">            vbo.unbind()
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Our event handler to choose the next perspective matrix</div>
+</div>
+	<div class="code-sample">
+    def OnPerspective( self, event ):
+        self.perspective_index += 1
+        self.perspective_index = self.perspective_index%len(self.perspective_matrices)
+        self.triggerRedraw()
+if __name__ == "__main__":
+    TestContext.ContextMainLoop()
+</div>
+    </section>
+<footer>
+    <ul class="menu">
+    <li><a href="/context/index.html">OpenGLContext</a></li>
+    <li><a href="/context/documentation/index.html">Docs</a></li>
+    <li><a href="/context/documentation/tutorial/index.html">Tutorials</a></li>
+    <li><a href="index.html">Index</a></li>
+    <li><a href="index.html">Index</a></li>
+</ul>
+<div class="source-reference">This code-walkthrough tutorial is generated from the transforms_1.py script in the
+OpenGLContext source distribution.</div>
+      <div class="clear-both"><br></div>
+</footer>
+    <!-- End of content -->
+  </div>
+</body>
+</html>
