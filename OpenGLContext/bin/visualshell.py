@@ -48,11 +48,9 @@ class TestFrame( wx.Frame ):
             'plane2PointNormal':utilities.plane2PointNormal,
             'rotMatrix':utilities.rotMatrix,
             'dispatcher':dispatcher,
+            'nodes': basenodes,
+            'extrusions': extrusions,
         }
-        for module in basenodes, extrusions, arrays:
-            for name in dir(module):
-                if name not in environment:
-                    environment[name] = getattr( module, name )
         return environment
     def CreateControls( self, style=None ):
         """Create the controls for the frame"""
@@ -109,7 +107,7 @@ class TestFrame( wx.Frame ):
             path = dialog.GetPath()
             from OpenGLContext.loaders import loader
             scenegraph = loader.Loader.load( path )
-            self.context.scene = scenegraph
+            self.context.sg = scenegraph
     def OnAddCommand( self, event ):
         """Add VRML97 nodes from a file"""
 
