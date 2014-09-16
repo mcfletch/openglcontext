@@ -1,4 +1,5 @@
 from vrml import field
+from vrml.arrays import array
 class Proxy( object ):
     """Wrapper for a field"""
     def __init__(
@@ -15,7 +16,14 @@ class Proxy( object ):
         return result
     def __set__( self, client, value, *arguments, **named ):
         """Set value, and call setter(value, *arguments, **named)"""
-        result = self.base.__set__( client, value, *arguments, **named )
+        try:
+            result = self.base.__set__( client, value, *arguments, **named )
+        except ValueError as err:
+            base = self.base.__get__( client, *arguments, **named )
+            base = array( base, copy=True )
+            base[:] = value
+            value = base
+            result = self.base.__set__( client, base, *arguments, **named )
         name = 'set_'+self.base.name
         if hasattr( client, name):
             getattr( client, name)( value, self.base, *arguments,**named)
