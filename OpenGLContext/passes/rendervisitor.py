@@ -76,11 +76,6 @@ class RenderVisitor( visitor.Visitor ):
         self.SceneGraphBackground( node )
     def SceneGraphCamera( self, node ):
         """Setup the camera/viewpoint from the scenegraph
-
-        XXX
-            At the moment, there is no Viewpoint support in
-            OpenGLContext, so this method merely calls the
-            Context's Viewpoint method.
         """
         if self.viewpointPaths:
             node.viewpointPaths = self.viewpointPaths[:]
