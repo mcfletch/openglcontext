@@ -39,7 +39,7 @@ class VisualViewPlatform( node.Node ):
         """
         self.frustum(mode, mode.context.getViewPort())
         if self.autocenter:
-            center = self.context.getBoundingBox().center
+            center = self.context().getBoundingBox().center
         else:
             center = self.center
         # should sanity-check the up vector, range, and forward
@@ -63,6 +63,9 @@ class VisualContext(browsercontext.BrowserContext):
     
     ViewPort = context.Context.ViewPort
 
+    def Viewpoint( self, mode=None ):
+        self.platform.render(mode)
+    
     def getViewPlatform( self ):
         """Customization Point: Instantiate ViewPlatform for this context
 
