@@ -23,7 +23,6 @@ class TestContext( BaseContext ):
         self.imageID = self.loadImage ()
     def loadImage( self, imageName = "nehe_wall.bmp" ):
         """Load an image file as a 2D texture using PIL"""
-        '''PIL defines an "open" method which is Image specific!'''
         im = open(imageName)
         try:
             ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBA", 0, -1)
