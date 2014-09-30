@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-'''=Compressed Texture Mapping (NeHe 6)=
+'''=Compressed Texture Mapping (From NeHe 6)=
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -16,6 +16,10 @@ class TestContext( BaseContext ):
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     def OnInit( self ):
         """Load the image on initial load of the application"""
+        from OpenGL import extensions                              
+        if not extensions.hasGLExtension("GL_EXT_texture_compression_s3tc"):
+            print "Extension GL_EXT_texture_compression_s3tc required for compressed texture mapping test!"
+            raise SystemExit(1)
         self.imageID = self.loadImage ()
     def loadImage( self, imageName = "nehe_wall.bmp" ):
         """Load an image file as a 2D texture using PIL"""
