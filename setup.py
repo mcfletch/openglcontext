@@ -7,7 +7,7 @@ to install the package from the source archive.
 """
 try:
     from setuptools import setup
-except ImportError, err:
+except ImportError as err:
     from distutils.core import setup
 import sys, os
 sys.path.insert(0, '.' )
