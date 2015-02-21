@@ -19,7 +19,7 @@ import sys
 try:
     from OpenGL.WGL import *
     import win32ui, win32con
-except ImportError, err:
+except ImportError as err:
     print """Unable to import Win32 text modules: %s"""%(err,)
     sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
 

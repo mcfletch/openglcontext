@@ -27,7 +27,7 @@ from OpenGL.GL import *
 import time, os,sys
 try:
     from PIL.Image import open
-except ImportError, err:
+except ImportError as err:
     from Image import open
 from OpenGL.GL.ARB.imaging import *
 from OpenGLContext import arrays

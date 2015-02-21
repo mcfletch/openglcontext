@@ -82,7 +82,7 @@ class TestContext( BaseContext ):
                     WGL.INT32(item[1]),
                     result,
                 )
-            except WindowsError, err:
+            except WindowsError as err:
                 failures.append((item,err))
             else:
                 print '%20s\t%r'%( item[0], result.value)
@@ -100,7 +100,7 @@ class TestContext( BaseContext ):
                 WGL.INT32(item[1]),
                 result
             )
-        except WindowsError, err:
+        except WindowsError as err:
             print method, 'failed on getting full set'
         else:
             print method, result

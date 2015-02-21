@@ -9,7 +9,7 @@ from OpenGLContext.scenegraph.basenodes import *
 import string
 try:
     from PIL import Image
-except ImportError, err:
+except ImportError as err:
     import Image
 import flower_geometry
 from vrml import arrays

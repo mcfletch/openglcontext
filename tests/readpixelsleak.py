@@ -49,7 +49,7 @@ class TestContext( BaseContext ):
     def SaveTo( self, filename, format="JPEG" ):
         try:
             from PIL import Image # get PIL's functionality...
-        except ImportError, err:
+        except ImportError as err:
             # old style?
             import Image
         width, height = self.getViewPort()
@@ -67,7 +67,7 @@ class TestContext( BaseContext ):
     def SaveToUB( self ):
         try:
             from PIL import Image # get PIL's functionality...
-        except ImportError, err:
+        except ImportError as err:
             # old style?
             import Image
         width, height = self.getViewPort()

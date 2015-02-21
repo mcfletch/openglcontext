@@ -94,7 +94,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError as err:
             from Image import open
         im = open(imageName)
         try:

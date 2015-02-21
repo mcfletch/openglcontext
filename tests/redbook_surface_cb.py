@@ -112,7 +112,7 @@ class TestContext( BaseContext ):
         if not haveNurbsTessellator:
             try:
                 result = nurbs_tessellator.gluInitNurbsTessellatorEXT()
-            except NameError, err:
+            except NameError as err:
                 pass 
             else:
                 if not result:

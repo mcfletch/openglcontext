@@ -88,13 +88,13 @@ we passed into glFrustum.'''
                         
                         assert deltaFar < abs(far/100), "Far was %s, should have been ~ %s, delta was %s (%.3f%%)"%(farCurrent,far, deltaFar, 100*deltaFar/far)
                         assert deltaNear < abs(near/100), "Near was %s, should have been ~ %s, delta was %s"%(nearCurrent,near,deltaNear)
-                    except AssertionError, err:
+                    except AssertionError as err:
                         log.warn(
                             "Accuracy < than 1%% of far with (near,far) = (%s,%s)",
                             near,far,
                         )
                         break
-                    except Exception, err:
+                    except Exception as err:
                         traceback.print_exc()
                         self.OnQuit( )
             glMatrixMode(GL_MODELVIEW);

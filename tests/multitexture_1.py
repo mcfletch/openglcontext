@@ -29,7 +29,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError as err:
             from Image import open
         multitexture.glActiveTextureARB(multitexture.GL_TEXTURE0_ARB);
         return texture.Texture( open(imageName) )
@@ -38,7 +38,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError as err:
             from Image import open
         multitexture.glActiveTextureARB(multitexture.GL_TEXTURE1_ARB); 
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)

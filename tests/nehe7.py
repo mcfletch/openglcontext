@@ -17,7 +17,7 @@ from OpenGL.GL import *
 import time
 try:
     from PIL.Image import open
-except ImportError, err:
+except ImportError as err:
     from Image import open
 '''The tutorial uses the GLU function gluBuild2DMipmaps, so we make the
 GLU functions available and continue with our normal setup routines.'''

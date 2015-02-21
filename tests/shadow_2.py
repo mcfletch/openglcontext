@@ -142,7 +142,7 @@ class TestContext( BaseContext ):
         raise an OpenGL.error.GLError if the FBO is not properly configured.'''
         try:
             checkFramebufferStatus( )
-        except Exception, err:
+        except Exception as err:
             traceback.print_exc()
             import os
             os._exit(1)

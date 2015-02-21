@@ -15,7 +15,7 @@ class TestContext( BaseContext ):
         glBegin( GL_TRIANGLES )
         try:
             glVertex2fv( None )
-        except (TypeError,ValueError), err:
+        except (TypeError,ValueError) as err:
             print 'Got expected TypeError on attempting to pass None to glVertex2fv'
         glEnd()
 

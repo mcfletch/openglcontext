@@ -20,7 +20,7 @@ import random
 from OpenGLContext.scenegraph.basenodes import *
 try:
     import RandomArray
-except ImportError, err:
+except ImportError as err:
     RandomArray = None
 try:
     from OpenGLContext.scenegraph.text import glutfont

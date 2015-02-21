@@ -90,7 +90,7 @@ NeHe tutorials."""
         """
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError as err:
             from Image import open
         im = texture.Texture( open(imageName) )
         return im

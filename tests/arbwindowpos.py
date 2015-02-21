@@ -31,7 +31,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError as err:
             from Image import open
         im = open(imageName)
         try:
@@ -60,16 +60,16 @@ class TestContext( BaseContext ):
         
         try:
             window_pos.glWindowPos2dvARB(())
-        except (error.CopyError,GLerror,ValueError), err:
+        except (error.CopyError,GLerror,ValueError) as err:
             print 'Correct handling of incorrect parameters', err
-        except Exception, err:
+        except Exception as err:
             traceback.print_exc()
             print 'Incorrect handling of incorrect parameters'
         try:
             window_pos.glWindowPos3dvARB(())
-        except (error.CopyError,GLerror, ValueError), err:
+        except (error.CopyError,GLerror, ValueError) as err:
             print 'Correct handling of incorrect parameters', err
-        except Exception, err:
+        except Exception as err:
             traceback.print_exc()
             print 'Incorrect handling of incorrect parameters'
         

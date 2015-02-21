@@ -14,7 +14,7 @@ from OpenGL.GL import *
 import time
 try:
     from PIL.Image import open
-except ImportError, err:
+except ImportError as err:
     from Image import open
 
 class TestContext( BaseContext ):

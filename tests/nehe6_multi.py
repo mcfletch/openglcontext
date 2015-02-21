@@ -108,7 +108,7 @@ class TestContext( BaseContext ):
         """Load an image from a file using PIL."""
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError as err:
             from Image import open
         glActiveTexture(GL_TEXTURE0_ARB);
         return texture.Texture( open(imageName) )
@@ -117,7 +117,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError as err:
             from Image import open
         glActiveTextureARB(GL_TEXTURE1); 
         return texture.Texture( open(imageName) )

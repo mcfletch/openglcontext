@@ -8,7 +8,7 @@ from OpenGL.GL.EXT.texture_compression_s3tc import *
 import time
 try:
     from PIL.Image import open
-except ImportError, err:
+except ImportError as err:
     from Image import open
 
 class TestContext( BaseContext ):

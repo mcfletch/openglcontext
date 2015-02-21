@@ -18,7 +18,7 @@ from OpenGL.constants import GLfloat_3,GLfloat_4
 import time
 try:
     from PIL.Image import open
-except ImportError, err:
+except ImportError as err:
     from Image import open
 
 class TestContext( BaseContext ):
