@@ -61,7 +61,7 @@ class TestContext( BaseContext ):
         self.triggerRedraw(1)
         
     def OnInit( self ):
-        print 'press b to choose another background'
+        print('press b to choose another background')
         self.addEventHandler(
             'keypress', name = 'b', function = self.OnBGSwitch
         )

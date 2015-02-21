@@ -226,7 +226,7 @@ class TestContext( BaseContext ):
         ):
             location = glGetAttribLocation( self.shader, attribute )
             if location in (None,-1):
-                print 'Warning, no attribute: %s'%( uniform )
+                print('Warning, no attribute: %s'%( uniform ))
             setattr( self, attribute+ '_loc', location )
     '''As noted above, we're down to a single "global" uniform.  The material
     is specially set up now.'''
@@ -238,7 +238,7 @@ class TestContext( BaseContext ):
     def findUniform( self, shader, uniform ):
         location = glGetUniformLocation( shader, uniform )
         if location in (None,-1):
-            print 'Warning, no uniform: %s'%( uniform )
+            print('Warning, no uniform: %s'%( uniform ))
         self.uniform_locations[uniform] = location
         return location
 

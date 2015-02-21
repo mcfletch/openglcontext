@@ -16,14 +16,14 @@ class TestContext( BaseContext ):
     colors = [(1,0,0),(0,0,.75)]
     def OnInit( self ):
         """Initialisation"""
-        print """Should see a 2x2 box in red on white"""
+        print("""Should see a 2x2 box in red on white""")
         self.addEventHandler( "keypress", name="a", function = self.OnUseArrays)
-        print """  Press "a" to switch to using arrays"""
+        print("""  Press "a" to switch to using arrays""")
     def OnUseArrays( self, event=None ):
         """Toggle the use of Numeric arrays"""
         self.useArrays = not self.useArrays
         self.color = self.useArrays
-        print "Using arrays?", ['No, box should be red.','Yes, box should be blue.'][self.useArrays]
+        print("Using arrays?", ['No, box should be red.','Yes, box should be blue.'][self.useArrays])
         self.triggerRedraw()
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )

@@ -36,14 +36,14 @@ class TestContext( BaseContext ):
         return ix,iy, image
     def OnInit( self, ):
         """Initialisation"""
-        print """Should see black bitmap/square in lower left quadrant over blue background
+        print("""Should see black bitmap/square in lower left quadrant over blue background
 Should see scrawled "regular image stuff" at top of black square.
 Should see typed "Hello From Alpha-ville" in the middle of the
 black square.
 
     Note: bitmap is drawn in screen coordinates, so does not
     respond to moving around or rescaling the window as would
-    a piece of geometry."""
+    a piece of geometry.""")
         self.width, self.height, self.data = self.loadImage()
         
     def Render( self, mode = 0):

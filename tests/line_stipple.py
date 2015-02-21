@@ -19,7 +19,7 @@ def bit_pattern( *args ):
 class TestContext( BaseContext):
     def OnInit( self ):
         """Initialisation"""
-        print """Should see flower pattern in gray over white background"""
+        print("""Should see flower pattern in gray over white background""")
         glLineStipple( 3, bit_pattern(
             0,0,1,1,
             0,1,0,1,

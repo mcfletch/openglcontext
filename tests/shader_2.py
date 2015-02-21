@@ -45,7 +45,7 @@ class TestContext( BaseContext ):
         try:
             shaders.compileShader( """ void main() { """, GL_VERTEX_SHADER )
         except (GLError, RuntimeError) as err:
-            print 'Example of shader compile error', err 
+            print('Example of shader compile error', err) 
         else:
             raise RuntimeError( """Didn't catch compilation error!""" )
         '''==Varying Values==

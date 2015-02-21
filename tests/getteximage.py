@@ -29,19 +29,19 @@ class TestContext( BaseContext ):
                     width = glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_WIDTH )
                     height = glGetTexLevelParameteriv(GL_TEXTURE_2D, level, GL_TEXTURE_HEIGHT )
                     glDrawPixels( int(width), int(height), GL_RGBA, GL_UNSIGNED_BYTE, displayImage )
-                print 'Level %s --> %s * %s'%( level, width, height )
+                print('Level %s --> %s * %s'%( level, width, height ))
                 glBitmap(0,0,0,0,0,height*2,None)
         else:
-            print '''Haven't loaded the texture yet!'''
+            print('''Haven't loaded the texture yet!''')
     def OnInit( self ):
         """Initialise the context, loading texture"""
-        print '''You should see 4 scaled versions of red text "testing"
+        print('''You should see 4 scaled versions of red text "testing"
 
     s -- toggle use of Numeric arrays for storing the image data
         when arrays are being used, images are shifted to left,
         when arrays are not being used, images are shifted to right
         (in order to make the change visible).
-'''
+''')
         self.mmtexture = imagetexture.MMImageTexture(
             url = os.path.join(
                 os.path.dirname( __file__ ),
@@ -54,7 +54,7 @@ class TestContext( BaseContext ):
         )
     def OnUseStrings( self, event ):
         self.useArrays = not self.useArrays
-        print 'Use arrays?', bool( self.useArrays )
+        print('Use arrays?', bool( self.useArrays ))
         self.triggerRedraw(1)
         
 

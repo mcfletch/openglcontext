@@ -59,7 +59,7 @@ class TestContext( BaseContext ):
         return displayList
     def OnInit( self ):
         """Initialise"""
-        print """Should see curvy surface with no texture"""
+        print("""Should see curvy surface with no texture""")
         self.surfaceID = self.buildDisplayList()
         self.light = SpotLight(
             direction = (-10,0,-10),

@@ -27,7 +27,7 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Load the image on initial load of the application"""
         self.texture = imagetexture.ImageTexture(url = [ "nehe_wall.bmp"] )
-        print 'Press <f> to switch to full-screen mode'
+        print('Press <f> to switch to full-screen mode')
         self.addEventHandler( 'keypress', name = 'f', function = self.OnFullScreenToggle)
         self.addEventHandler( 'keyboard', name = '<escape>', function = self.OnFullScreenToggle)
         self.returnValues = None

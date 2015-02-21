@@ -27,10 +27,10 @@ normals = array([
 class TestContext( BaseContext ):
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print """You should see a round "washer" formed by sweeping a square
+        print("""You should see a round "washer" formed by sweeping a square
 through a circle.  A drill-like screw should penetrate the
 center of the washer.  Around the washer should be a cone-
-shaped "spring", which should extend some distance downward."""
+shaped "spring", which should extend some distance downward.""")
         appearance = Appearance(
             material=Material(
                 shininess = 1.0,

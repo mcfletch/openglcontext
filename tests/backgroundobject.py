@@ -11,7 +11,7 @@ class TestContext( BaseContext ):
     """
     def OnInit( self ):
         """Scene set up and initial processing"""
-        print 'You should see a white/gray triangle over a blue background'
+        print('You should see a white/gray triangle over a blue background')
         self.sg = sceneGraph(
             children = [
                 SimpleBackground( color = (0,0,1) ),

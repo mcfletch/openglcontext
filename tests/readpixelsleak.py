@@ -21,9 +21,9 @@ class TestContext( BaseContext ):
         drawcube.drawCube()
         width, height = self.getViewPort()
         red = glReadPixelsub(0,0, width, height,GL_RED, outputType=None)
-        print 'refcount for array', sys.getrefcount( red )
+        print('refcount for array', sys.getrefcount( red ))
         red = glReadPixels(0,0, width, height,GL_RED, GL_UNSIGNED_BYTE, outputType=None)
-        print 'refcount for string', sys.getrefcount( red )
+        print('refcount for string', sys.getrefcount( red ))
 
         
 
@@ -62,7 +62,7 @@ class TestContext( BaseContext ):
         image = Image.fromstring( "RGB", (width, height), data.tostring() )
         image = image.transpose( Image.FLIP_TOP_BOTTOM)
         image.save( filename, format )
-        print 'Saved image to %s'% (os.path.abspath( filename))
+        print('Saved image to %s'% (os.path.abspath( filename)))
         return image
     def SaveToUB( self ):
         try:
@@ -78,10 +78,10 @@ class TestContext( BaseContext ):
             (width,height,3),
         )
         string = data.tostring()
-        print 'array returned was', data.shape
+        print('array returned was', data.shape)
         if self.reverseShape:
             data.shape = (height,width,3)
-            print 'reversed shape', data.shape
+            print('reversed shape', data.shape)
         assert data.tostring() == string, """Data stored differs in format"""
         self.capturedImage = data
         self.capturedSize = (width,height,3)
@@ -96,5 +96,5 @@ class TestContext( BaseContext ):
         self.reverseShape = not self.reverseShape
 
 if __name__ == "__main__":
-    print 'Press "s" to save the buffer to the file test.jpg'
+    print('Press "s" to save the buffer to the file test.jpg')
     TestContext.ContextMainLoop()

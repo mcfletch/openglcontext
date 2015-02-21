@@ -15,21 +15,21 @@ class TestContext( BaseContext ):
             try:
                 result = glRenderMode( GL_RENDER )
             except GLerror as err:
-                print 'Got expected overflow error', err
+                print('Got expected overflow error', err)
             else:
-                print "Didn't get overflow error, got %r"%( result, )
+                print("Didn't get overflow error, got %r"%( result, ))
             # test 0-length
             glFeedbackBuffer( 3, GL_2D )
             glRenderMode( GL_FEEDBACK )
             try:
                 result = glRenderMode( GL_RENDER )
             except GLerror as err:
-                print "Failed retriving 0-length result-set", err
+                print("Failed retriving 0-length result-set", err)
             else:
                 if len(result) > 0:
-                    print "Got unexpectedly long result-set", list(result)
+                    print("Got unexpectedly long result-set", list(result))
                 else:
-                    print "Got expected 0-length result-set", list(result)
+                    print("Got expected 0-length result-set", list(result))
             # test values passed through
             glFeedbackBuffer( 6, GL_2D )
             glRenderMode( GL_FEEDBACK )
@@ -38,7 +38,7 @@ class TestContext( BaseContext ):
             try:
                 result = glRenderMode( GL_RENDER )
             except GLerror as err:
-                print "Failed retriving 0-length result-set", err
+                print("Failed retriving 0-length result-set", err)
             else:
                 result = list(result)
                 if result != [
@@ -46,9 +46,9 @@ class TestContext( BaseContext ):
                     (GL_PASS_THROUGH_TOKEN,1.0),
                     (GL_PASS_THROUGH_TOKEN,2.0),
                 ]:
-                    print "Got wrong results for pass-throughs", result
+                    print("Got wrong results for pass-throughs", result)
                 else:
-                    print "Got expected results for pass-through", result
+                    print("Got expected results for pass-through", result)
 ##			import pdb
 ##			pdb.set_trace()
                 

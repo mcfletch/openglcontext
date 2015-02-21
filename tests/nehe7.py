@@ -68,7 +68,7 @@ class TestContext( BaseContext ):
             'keyboard', name = '<pagedown>', function = self.OnSlowDown,
             state=0,
         )
-        print self.usage
+        print(self.usage)
         '''Here we are setting the lighting parameters during init,
         as they do not change for the entire run of the application,
         normally code would set these values every time they change,
@@ -115,12 +115,12 @@ class TestContext( BaseContext ):
         glPixelStorei(GL_UNPACK_ALIGNMENT,1)
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_NEAREST)
-        print 'doing mip-maps, fails on RedHat Linux'
+        print('doing mip-maps, fails on RedHat Linux')
         gluBuild2DMipmaps(
             GL_TEXTURE_2D, 
             GL_RGBA, ix, iy, GL_RGBA, GL_UNSIGNED_BYTE, image
         )
-        print 'finished mip-mapped'
+        print('finished mip-mapped')
         return IDs
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
@@ -157,13 +157,13 @@ class TestContext( BaseContext ):
     def OnFilter( self, event):
         """Handles the key event telling us to change the filter"""
         self.currentFilter = (self.currentFilter + 1 ) % 3
-        print 'Drawing filter now %s'% (
+        print('Drawing filter now %s'% (
             ["Nearest","Linear","Linear Mip-Mapped"][ self.currentFilter]
-        )
+        ))
     def OnLightToggle( self, event ):
         """Handles the key event telling us to toggle the lighting"""
         self.lightsOn = not self.lightsOn
-        print "Lights now %s"% (["off", "on"][self.lightsOn])
+        print("Lights now %s"% (["off", "on"][self.lightsOn]))
     def OnSpeedUp( self, event):
         """Handles key event to speed up"""
         self.rotationCycle = self.rotationCycle /2.0

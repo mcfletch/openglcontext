@@ -21,7 +21,7 @@ class TestContext( BaseContext ):
             "mousebutton", button = 0, state = 1,
             function = self.OnClick1
         )
-        print """Click on the spheres and watch here for feedback..."""
+        print("""Click on the spheres and watch here for feedback...""")
         self.objects = basenodes.sceneGraph()
         self.buildGeometry()
         table = {}
@@ -44,15 +44,15 @@ class TestContext( BaseContext ):
         of the clicked geometry (if a named object was clicked).
         """
         x,y  = event.getPickPoint()
-        print 'Click', (x,y)
+        print('Click', (x,y))
         if event.getObjectPaths():
-            print '  3DPoint: %s'%(event.unproject(),)
-        print '  %s objects:'%( len(event.getObjectPaths()))
+            print('  3DPoint: %s'%(event.unproject(),))
+        print('  %s objects:'%( len(event.getObjectPaths())))
         for path in event.getObjectPaths():
-            print ' ', path
+            print(' ', path)
     def OnClick2( self, event ):
         """Handle mouse click for a given name/id"""
-        print "You clicked on the magic sphere!"
+        print("You clicked on the magic sphere!")
 ##		self.OnClick1( event )
         event.stopPropagation = 1
     COUNT = 100

@@ -270,14 +270,14 @@ class TestContext( BaseContext ):
         ):
             location = glGetUniformLocation( self.shader, uniform )
             if location in (None,-1):
-                print 'Warning, no uniform: %s'%( uniform )
+                print('Warning, no uniform: %s'%( uniform ))
             setattr( self, uniform+ '_loc', location )
         for attribute in (
             'Vertex_position','Vertex_normal',
         ):
             location = glGetAttribLocation( self.shader, attribute )
             if location in (None,-1):
-                print 'Warning, no attribute: %s'%( uniform )
+                print('Warning, no attribute: %s'%( uniform ))
             setattr( self, attribute+ '_loc', location )
         
     

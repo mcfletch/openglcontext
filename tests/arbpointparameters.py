@@ -19,10 +19,10 @@ class TestContext( BaseContext ):
         """Load the image on initial load of the application"""
         haveExtension = self.extensions.initExtension( "GL.ARB.point_parameters")
         if not haveExtension:
-            print 'GL_ARB_point_parameters not supported!'
+            print('GL_ARB_point_parameters not supported!')
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
-        print """Should see a sine wave overhead"""
-        print 'press x toggle use of the extension'
+        print("""Should see a sine wave overhead""")
+        print('press x toggle use of the extension')
         self.addEventHandler(
             'keypress', name = 'x', function = self.OnDisableExtension
         )
@@ -74,11 +74,11 @@ class TestContext( BaseContext ):
         if self.usingExtension:
             self.geometry.attenuation = (1,0,0)
             self.usingExtension = False
-            print 'attenuation:', self.geometry.attenuation
+            print('attenuation:', self.geometry.attenuation)
         else:
             self.geometry.attenuation = (0,0,1)
             self.usingExtension = True
-            print 'attenuation:', self.geometry.attenuation
+            print('attenuation:', self.geometry.attenuation)
         
 
 if __name__ == "__main__":

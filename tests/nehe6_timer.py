@@ -29,14 +29,14 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Load the image on initial load of the application"""
         self.image = self.loadImage ()
-        print """You should see a slowly rotating textured cube
+        print("""You should see a slowly rotating textured cube
 
 The animation is provided by a timer, rather than the
 crude time-module based animation we use for the other
-NeHe tutorials."""
-        print '  <r> reverse the time-sequence'
-        print '  <s> make time pass more slowly'
-        print '  <f> make time pass faster'
+NeHe tutorials.""")
+        print('  <r> reverse the time-sequence')
+        print('  <s> make time pass more slowly')
+        print('  <f> make time pass faster')
         '''Here we will register key-press handlers for the various 
         operations the user can perform.'''
         self.addEventHandler( "keypress", name="r", function = self.OnReverse)
@@ -68,13 +68,13 @@ NeHe tutorials."""
     perceived passage of time for the user.'''
     def OnReverse( self, event ):
         self.time.internal.multiplier = -self.time.internal.multiplier
-        print "reverse",self.time.internal.multiplier
+        print("reverse",self.time.internal.multiplier)
     def OnSlower( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier /2.0
-        print "slower",self.time.internal.multiplier
+        print("slower",self.time.internal.multiplier)
     def OnFaster( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier * 2.0
-        print "faster",self.time.internal.multiplier
+        print("faster",self.time.internal.multiplier)
     def Render( self, mode):
         """Render scene geometry"""
         BaseContext.Render( self, mode )

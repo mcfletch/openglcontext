@@ -21,18 +21,18 @@ import string
 class TestContext( BaseContext ):
     def OnInit( self, ):
         """Initialisation"""
-        print """Demonstrates drawing a synthetically-generated image 
+        print("""Demonstrates drawing a synthetically-generated image 
 
     Note: bitmap is drawn in screen coordinates, so does not
     respond to moving around or rescaling the window as would
-    a piece of geometry."""
+    a piece of geometry.""")
         width,height = 200,50
         self.width, self.height, self.data = width,height,numpy.arange(
             0, .5, .5/(width*height*3),
             dtype='f',
         )
         if not glInitImagingARB():
-            print 'No ARB imaging extension supported'
+            print('No ARB imaging extension supported')
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
         
     def Render( self, mode = 0):

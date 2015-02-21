@@ -14,8 +14,8 @@ class TestContext( BaseContext ):
         
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print """Should see multicolor circular ILS over white background"""
-        print 'press c to toggle colorPerVertex (forces recompilation of display list)'
+        print("""Should see multicolor circular ILS over white background""")
+        print('press c to toggle colorPerVertex (forces recompilation of display list)')
         self.addEventHandler( 'keypress', name = 'c', function = self.cpv )
         a = arange(0.0,2*math.pi,.02)
         xes = sin(a)

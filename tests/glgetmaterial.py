@@ -11,7 +11,7 @@ class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         for param, name in parameters:
-            print name, glGetMaterialfv(GL_FRONT, param )
+            print(name, glGetMaterialfv(GL_FRONT, param ))
 parameters = [
     (GL_AMBIENT, "GL_AMBIENT"),
     (GL_DIFFUSE, "GL_DIFFUSE"),

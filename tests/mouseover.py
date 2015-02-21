@@ -10,7 +10,7 @@ from OpenGLContext.scenegraph.basenodes import *
 class TestContext( BaseContext ):
     def OnInit( self ):
         """Setup callbacks and build geometry for rendering"""
-        print """Mouse-over the spheres to see them change colour"""
+        print("""Mouse-over the spheres to see them change colour""")
 #        self.contextDefinition.debugSelection = True
         self.sg = sceneGraph(
             children = [

@@ -13,7 +13,7 @@ class TestContext( BaseContext ):
     initialPosition = (0,0,3) # set initial camera position, tutorial does the re-positioning
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print """Should see a sine wave fading from green to red"""
+        print("""Should see a sine wave fading from green to red""")
         line = arange(0.0,1.0,.01)
         line2 = line[::-1]
         self.coordinate = Coordinate(

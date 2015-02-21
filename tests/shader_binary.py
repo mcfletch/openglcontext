@@ -149,12 +149,12 @@ class TestContext( BaseContext ):
         """, GL_FRAGMENT_SHADER)
         self.shader = compileProgram(vertex,fragment, retrievable=True)
         format,data = self.shader.retrieve()
-        print 'Retrieved compiled shader:', format, data 
+        print('Retrieved compiled shader:', format, data) 
         if len(data):
             self.shader.load( format, data )
-            print 'loaded shader from binary'
+            print('loaded shader from binary')
         else:
-            print 'Retrieved shader was NULL'
+            print('Retrieved shader was NULL')
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

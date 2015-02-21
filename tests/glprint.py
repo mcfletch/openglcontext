@@ -20,7 +20,7 @@ try:
     from OpenGL.WGL import *
     import win32ui, win32con
 except ImportError as err:
-    print """Unable to import Win32 text modules: %s"""%(err,)
+    print("""Unable to import Win32 text modules: %s"""%(err,))
     sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
 
 '''Our "font" class takes care of creating the display-lists 
@@ -32,9 +32,9 @@ class font:
         wgldc = wglGetCurrentDC()
         if wgldc > sys.maxint:
             import struct
-            print 'too-large wgldc', wgldc
+            print('too-large wgldc', wgldc)
             wgldc = struct.unpack( '>i', struct.pack( '>I', wgldc ))[0]
-            print 'Converted wgldc to', wgldc
+            print('Converted wgldc to', wgldc)
         dc = win32ui.CreateDCFromHandle( wgldc )
         ## pitch and family value
         f = win32ui.CreateFont(

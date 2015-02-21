@@ -11,9 +11,9 @@ from OpenGL.GL import *
 class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
-        print 'glGetPolygonStipple',  glGetPolygonStippleub()
-        print 'as string...'
-        print  repr(glGetPolygonStipple())
+        print('glGetPolygonStipple',  glGetPolygonStippleub())
+        print('as string...')
+        print(repr(glGetPolygonStipple()))
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

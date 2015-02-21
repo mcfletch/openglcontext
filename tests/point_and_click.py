@@ -53,15 +53,15 @@ def buildGeometry():
 
 class TestContext( BaseContext ):
     def OnInit( self ):
-        print 'Clicking on geometry (or off geometry) will report status here'
+        print('Clicking on geometry (or off geometry) will report status here')
         self.addEventHandler( "mousebutton", button = 0, state = 1, function = self.OnClick1 )
         self.sg = buildGeometry()
     def OnClick1( self, event ):
         x,y  = event.getPickPoint()
-        print 'click'
+        print('click')
         for near, far, names in event.getNameStack():
-            print 'Hit', list(names)
-            print '  unproject ->', event.unproject()
+            print('Hit', list(names))
+            print('  unproject ->', event.unproject())
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

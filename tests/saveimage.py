@@ -66,11 +66,11 @@ class TestContext( BaseContext ):
         t -- use the "string" version of the glDrawPixels function 
         u -- use the "ub" variant of the base glReadPixels function
         """
-        print usage
+        print(usage)
         self.getViewPlatform().setFrustum( near = 3, far = 10 )
-        print self.getViewPlatform().frustum
-        print 'Current depth scale', glGetDouble( GL_DEPTH_SCALE )
-        print 'Current depth bias', glGetDouble( GL_DEPTH_BIAS )
+        print(self.getViewPlatform().frustum)
+        print('Current depth scale', glGetDouble( GL_DEPTH_SCALE ))
+        print('Current depth bias', glGetDouble( GL_DEPTH_BIAS ))
     def OnSave( self, event=None):
         self.SaveTo( 'test.jpg' )
     def SaveTo( self, filename, format="JPEG" ):
@@ -90,7 +90,7 @@ class TestContext( BaseContext ):
         image = Image.fromstring( pixelFormat, (int(width),int(height)), data.tostring() )
         image = image.transpose( Image.FLIP_TOP_BOTTOM)
         image.save( filename, format )
-        print 'Saved image to %s'% (os.path.abspath( filename))
+        print('Saved image to %s'% (os.path.abspath( filename)))
         return image
     def OnCaptureColour( self , event=None):
         try:
@@ -126,14 +126,14 @@ class TestContext( BaseContext ):
     def OnUseStringDraw( self, event ):
         """Trigger use of string drawing for display of captured"""
         self.useStringDraw = not self.useStringDraw
-        print 'Use string drawing:', self.useStringDraw
+        print('Use string drawing:', self.useStringDraw)
     def OnTypedFunction( self, event ):
         """Use typed function for capture"""
         self.typedFunction = not self.typedFunction
-        print 'Use typed function:', self.typedFunction
+        print('Use typed function:', self.typedFunction)
     def OnReverseShape( self, event ):
         self.reverseShape = not self.reverseShape
-        print 'Reverse image shape:', self.reverseShape
+        print('Reverse image shape:', self.reverseShape)
     
     def OnCapture1Colour( self, event ):
         if event.name == 'r':

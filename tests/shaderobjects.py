@@ -168,11 +168,11 @@ class TestContext( BaseContext ):
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
         self.time.register (self)
         self.time.start ()
-        print 'press "n" for next shader'
+        print('press "n" for next shader')
         self.addEventHandler( "keypress", name="n", function = self.OnNext)
         
         # MANDELBROT explorer...
-        print 'Explore Orange-book mandelbrot with:\n   asdw (center) zx (zoom) and rf (iterations)'
+        print('Explore Orange-book mandelbrot with:\n   asdw (center) zx (zoom) and rf (iterations)')
         self.addEventHandler( "keypress", name="a", function = self.OnMand)
         self.addEventHandler( "keypress", name="d", function = self.OnMand)
         self.addEventHandler( "keypress", name="s", function = self.OnMand)
@@ -202,31 +202,31 @@ class TestContext( BaseContext ):
         iterations = shader.objects[0].getVariable( 'MaxIterations' )
         if event.name == 'z':
             zoom.value = zoom.value * .85
-            print 'zoom value', zoom.value
+            print('zoom value', zoom.value)
         elif event.name == 'x':
             zoom.value = zoom.value * 1.15
-            print 'zoom value', zoom.value
+            print('zoom value', zoom.value)
         elif event.name == 'r':
             if iterations is not None:
                 iterations.value += 5
                 if iterations.value[0] > 105:
                     # limit of floating-point precision...
                     iterations.value = 105
-                print 'max iterations', iterations.value[0]
+                print('max iterations', iterations.value[0])
             else:
-                print 'shader objects 0', shader.objects[0].toString()
+                print('shader objects 0', shader.objects[0].toString())
         elif event.name == 'f':
             if iterations is not None:
                 iterations.value -= 5
                 if iterations.value[0] <= 0:
                     iterations.value = 1
-                print 'max iterations', iterations.value[0]
+                print('max iterations', iterations.value[0])
         directions = { 'a':(-1,0),'d':(1,0),'w':(0,1),'s':(0,-1) }
         if event.name in directions:
             step = zoom.value / 10.0
             vec = array(directions[event.name],'f') * step 
             center.value = center.value + vec
-            print 'new center', center.value
+            print('new center', center.value)
     def OnLeak( self, event ):
         from OpenGLContext.debug import leaks
         if leaks.whole_set:

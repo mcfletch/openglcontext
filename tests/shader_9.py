@@ -292,7 +292,7 @@ class TestContext( BaseContext ):
         for uniform,value in self.UNIFORM_VALUES:
             location = glGetUniformLocation( self.shader, uniform )
             if location in (None,-1):
-                print 'Warning, no uniform: %s'%( uniform )
+                print('Warning, no uniform: %s'%( uniform ))
             self.uniform_locations[uniform] = location
         self.uniform_locations['lights'] = glGetUniformLocation( 
             self.shader, 'lights' 
@@ -302,7 +302,7 @@ class TestContext( BaseContext ):
         ):
             location = glGetAttribLocation( self.shader, attribute )
             if location in (None,-1):
-                print 'Warning, no attribute: %s'%( uniform )
+                print('Warning, no attribute: %s'%( uniform ))
             setattr( self, attribute+ '_loc', location )
     UNIFORM_VALUES = [
         ('Global_ambient',(.05,.05,.05,1.0)),

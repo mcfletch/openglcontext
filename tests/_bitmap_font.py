@@ -20,7 +20,7 @@ class TestContext( BaseContext ):
 
         """
         if not self.testingClass:
-            print """No testingClass defined, nothing to test"""
+            print("""No testingClass defined, nothing to test""")
             sys.exit( 1 )
         self.font = self.testingClass(
         )

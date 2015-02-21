@@ -37,13 +37,13 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Do all of our setup functions..."""
         if not glMultiTexCoord2f:
-            print 'Multitexture not supported!'
+            print('Multitexture not supported!')
             sys.exit(1)
 
         self.addEventHandler( "keypress", name="r", function = self.OnReverse)
         self.addEventHandler( "keypress", name="s", function = self.OnSlower)
         self.addEventHandler( "keypress", name="f", function = self.OnFaster)
-        print 'r -- reverse time\ns -- slow time\nf -- speed time'
+        print('r -- reverse time\ns -- slow time\nf -- speed time')
         self.time = Timer( duration = 8.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
         self.time.register (self)
@@ -57,13 +57,13 @@ class TestContext( BaseContext ):
     '''Keyboard callbacks, to allow for manipulating timer'''
     def OnReverse( self, event ):
         self.time.internal.multiplier = -self.time.internal.multiplier
-        print "reverse",self.time.internal.multiplier
+        print("reverse",self.time.internal.multiplier)
     def OnSlower( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier /2.0
-        print "slower",self.time.internal.multiplier
+        print("slower",self.time.internal.multiplier)
     def OnFaster( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier * 2.0
-        print "faster",self.time.internal.multiplier
+        print("faster",self.time.internal.multiplier)
     def Load( self ):
         self.image = self.loadImage ("nehe_wall.bmp")
         self.lightmap = self.loadLightMap( "lightmap1.jpg" )

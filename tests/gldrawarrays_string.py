@@ -8,7 +8,7 @@ import flower_geometry
 class TestContext( BaseContext ):
     def OnInit( self ):
         """Initialisation"""
-        print """Should see flower pattern in gray over white background"""
+        print("""Should see flower pattern in gray over white background""")
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         glVertexPointer(3, GL_DOUBLE, 0, flower_geometry.points_expanded.tostring() );

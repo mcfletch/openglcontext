@@ -13,7 +13,7 @@ from OpenGLContext.events.timer import Timer
 class TestContext( BaseContext ):
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print """Should see a rotating star-field"""
+        print("""Should see a rotating star-field""")
         starfield = random.rand( 9110, 3 )
         self.coordinate = Coordinate(
             point = starfield,

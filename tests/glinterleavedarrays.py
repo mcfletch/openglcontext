@@ -40,10 +40,10 @@ class TestContext( BaseContext ):
         glDrawElementsui(GL_QUADS, indices)
     def OnInit( self ):
         """Print welcome message"""
-        print """You should see two squares one on top of the other 
+        print("""You should see two squares one on top of the other 
 
 The first is drawn with the GL_V3F variant, the second with the 
-GL_N3F_V3F variant."""
+GL_N3F_V3F variant.""")
 
 
 

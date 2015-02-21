@@ -24,16 +24,16 @@ def test( projection, modelview, multiplied, planes ):
             fail_10e4 += 1
             if not allclose( temp.planes, planes, 1.0e-3):
                 fail_10e3 += 1
-                print '\nFAIL:', projection, modelview, planes
+                print('\nFAIL:', projection, modelview, planes)
             else:
-                print '/',
+                print('/', end=' ')
         else:
-            print ',',
+            print(',', end=' ')
     else:
-        print '.',
+        print('.', end=' ')
 
 def printstats():
-    print 'Failures:'
-    print fail_10e5, fail_10e4, fail_10e3
-    print 'Total:'
-    print total
+    print('Failures:')
+    print(fail_10e5, fail_10e4, fail_10e3)
+    print('Total:')
+    print(total)

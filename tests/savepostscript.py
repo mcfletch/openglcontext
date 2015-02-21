@@ -12,7 +12,7 @@ try:
     from OpenGL import gl2ps
 except ImportError:
     gl2ps = None
-    print """Warning: no gl2ps module loaded, this demo won't work"""
+    print("""Warning: no gl2ps module loaded, this demo won't work""")
 
 class TestContext( BaseContext ):
     def OnInit( self ):
@@ -55,18 +55,18 @@ class TestContext( BaseContext ):
                     state = gl2ps.gl2psEndPage()
             if state != gl2ps.GL2PS_SUCCESS:
                 if state == gl2ps.GL2PS_WARNING:
-                    print """There were warnings generated during export"""
+                    print("""There were warnings generated during export""")
                 elif state == gl2ps.GL2PS_ERROR:
-                    print """There were errors during export"""
+                    print("""There were errors during export""")
                 elif state == gl2ps.GL2PS_NO_FEEDBACK:
-                    print """There was nothing drawn, though export succeeded"""
+                    print("""There was nothing drawn, though export succeeded""")
                 else:
-                    print """Unknown final state""", state
+                    print("""Unknown final state""", state)
         finally:
             self.drawing = None
             self.unsetCurrent()
     
 
 if __name__ == "__main__":
-    print 'Press "s" to save the buffer to the file test.eps'
+    print('Press "s" to save the buffer to the file test.eps')
     TestContext.ContextMainLoop()

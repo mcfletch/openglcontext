@@ -53,9 +53,9 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Do all of our setup functions..."""
         BaseContext.OnInit( self )
-        print """You should see something that looks vaguely like
+        print("""You should see something that looks vaguely like
 a water-fountain, with individual droplets starting
-blue and turning white."""
+blue and turning white.""")
         '''The PointSet node will do the actual work of rendering 
         our points into the GL.  We start it off with all points 
         at the emitter location and with initial colour.'''
@@ -100,12 +100,12 @@ blue and turning white."""
         ] )
         self.velocities = array([ (0,0,0)]*count, 'd')
         self.colorVelocities = array( colorVelocities, 'd')
-        print '  <s> make time pass more slowly'
-        print '  <f> make time pass faster'
-        print '  <h> higher'
-        print '  <l> (L) lower'
-        print '  <[> smaller drops'
-        print '  <]> larger drops'
+        print('  <s> make time pass more slowly')
+        print('  <f> make time pass faster')
+        print('  <h> higher')
+        print('  <l> (L) lower')
+        print('  <[> smaller drops')
+        print('  <]> larger drops')
         self.addEventHandler( "keypress", name="s", function = self.OnSlower)
         self.addEventHandler( "keypress", name="f", function = self.OnFaster)
         self.addEventHandler( "keypress", name="h", function = self.OnHigher)
@@ -206,13 +206,13 @@ blue and turning white."""
         if glutfont:
             self.text.string = [ "Current multiplier: %s"%( self.time.internal.multiplier,)]
         else:
-            print "slower",self.time.internal.multiplier
+            print("slower",self.time.internal.multiplier)
     def OnFaster( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier * 2.0
         if glutfont:
             self.text.string = [ "Current multiplier: %s"%( self.time.internal.multiplier,)]
         else:
-            print "faster",self.time.internal.multiplier
+            print("faster",self.time.internal.multiplier)
     def OnHigher( self, event ):
         global initialVelocityVector
         initialVelocityVector *= [1,1.25,1]

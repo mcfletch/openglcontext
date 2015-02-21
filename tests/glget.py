@@ -7,24 +7,24 @@ import string
 class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
-        print 'Integers/Booleans:'
+        print('Integers/Booleans:')
         for name, argument, description in booleanarguments:
             # really should make "glGet" an alias so this doesn't look so weird...
             result = glGetIntegerv( argument )
-            print '%s -> %s' % (name, result )
-        print 'Doubles/Floats:'
+            print('%s -> %s' % (name, result ))
+        print('Doubles/Floats:')
         for name, argument, description in doublearguments:
             result1,result2 = glGetDoublev( argument ), glGetFloatv( argument )
-            print '%s -> %s' % (name, result1 )
+            print('%s -> %s' % (name, result1 ))
         
-        print 'Strings:'
+        print('Strings:')
         for name, argument, description in stringarguments:
             # really should make "glGet" an alias so this doesn't look so weird...
             result = glGetString( argument )
-            print '%s -> %s' % (name, result )
-        print 'Extensions:'
+            print('%s -> %s' % (name, result ))
+        print('Extensions:')
         for extension in glGetString( GL_EXTENSIONS).split():
-            print '\t%s'%( extension )
+            print('\t%s'%( extension ))
 
 from OpenGL.GL import *
 

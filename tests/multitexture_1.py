@@ -14,7 +14,7 @@ class TestContext( BaseContext ):
         global multitexture
         multitexture = self.extensions.initExtension( "GL.ARB.multitexture")
         if not multitexture:
-            print 'GL_ARB_multitexture not supported!'
+            print('GL_ARB_multitexture not supported!')
             sys.exit(1)
         self.image = self.loadImage ("nehe_wall.bmp")
         self.lightmap = self.loadLightMap( "lightmap1.jpg" )

@@ -219,7 +219,7 @@ class TestContext( BaseContext ):
         for uniform,value in self.UNIFORM_VALUES:
             location = glGetUniformLocation( self.shader, uniform )
             if location in (None,-1):
-                print 'Warning, no uniform: %s'%( uniform )
+                print('Warning, no uniform: %s'%( uniform ))
             self.uniform_locations[uniform] = location
         '''There's no real reason to treat the "lights" uniform specially,
         other than that we want to call attention to it.  We get the
@@ -234,7 +234,7 @@ class TestContext( BaseContext ):
         ):
             location = glGetAttribLocation( self.shader, attribute )
             if location in (None,-1):
-                print 'Warning, no attribute: %s'%( uniform )
+                print('Warning, no attribute: %s'%( uniform ))
             setattr( self, attribute+ '_loc', location )
     '''Our individually-specified uniform values'''
     UNIFORM_VALUES = [
@@ -303,7 +303,7 @@ class TestContext( BaseContext ):
                 )
                 test_lights = (GLfloat * 12)()
                 glGetUniformfv( self.shader, self.uniform_locations['lights'], test_lights )
-                print 'Lights', list(test_lights)
+                print('Lights', list(test_lights))
                 for uniform,value in self.UNIFORM_VALUES:
                     location = self.uniform_locations.get( uniform )
                     if location not in (None,-1):

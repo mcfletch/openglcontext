@@ -11,7 +11,7 @@ class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         for param, name in parameters:
-            print name, glGetPixelMapfv(param )
+            print(name, glGetPixelMapfv(param ))
 parameters = [
     (GL_PIXEL_MAP_I_TO_I, "GL_PIXEL_MAP_I_TO_I"),
     (GL_PIXEL_MAP_S_TO_S, "GL_PIXEL_MAP_S_TO_S"),

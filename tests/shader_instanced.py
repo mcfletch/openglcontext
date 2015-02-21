@@ -79,7 +79,7 @@ class TestContext( BaseContext ):
         '''
         hardlimit = glGetIntegerv( GL_MAX_TEXTURE_BUFFER_SIZE_ARB )
         count = min((15000,hardlimit//16))
-        print 'Limiting to %s instances'%( count, )
+        print('Limiting to %s instances'%( count, ))
         '''This is just some calculations to make the 0-1 range of random.random() map into 
         values that put the bulk of the spheres in front of the camera.'''
         scale = [40,40,40,0]
@@ -236,7 +236,7 @@ class TestContext( BaseContext ):
         '''For interest sake, we print out the number of objects/triangles being rendered.  Reasonably 
         capable hardware should be able to handle extremely large numbers of instances (thousands).'''
         self.count = len(indices)
-        print 'Each sphere has %s triangles, total of %s triangles'%( self.count//3, self.count//3 * len(self.offset_array) )
+        print('Each sphere has %s triangles, total of %s triangles'%( self.count//3, self.count//3 * len(self.offset_array) ))
         '''Our attribute setup is unchanged.'''
         stride = coords[0].nbytes
         self.attributes = [

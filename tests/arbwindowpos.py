@@ -41,15 +41,15 @@ class TestContext( BaseContext ):
         return ix,iy, image
     def OnInit( self, ):
         """Initialisation"""
-        print """You should see two bitmap images traversing the screen
+        print("""You should see two bitmap images traversing the screen
     diagonally.  If the GL.ARB.window_pos extension is not available
     then you will exit immediately.
-    """
+    """)
         self.width, self.height, self.data = self.loadImage()
         global window_pos
         window_pos = self.extensions.initExtension( "GL.ARB.window_pos")
         if not window_pos:
-            print 'GL_ARB_window_pos not supported!'
+            print('GL_ARB_window_pos not supported!')
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
         self.time = Timer( duration = 8.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
@@ -61,17 +61,17 @@ class TestContext( BaseContext ):
         try:
             window_pos.glWindowPos2dvARB(())
         except (error.CopyError,GLerror,ValueError) as err:
-            print 'Correct handling of incorrect parameters', err
+            print('Correct handling of incorrect parameters', err)
         except Exception as err:
             traceback.print_exc()
-            print 'Incorrect handling of incorrect parameters'
+            print('Incorrect handling of incorrect parameters')
         try:
             window_pos.glWindowPos3dvARB(())
         except (error.CopyError,GLerror, ValueError) as err:
-            print 'Correct handling of incorrect parameters', err
+            print('Correct handling of incorrect parameters', err)
         except Exception as err:
             traceback.print_exc()
-            print 'Incorrect handling of incorrect parameters'
+            print('Incorrect handling of incorrect parameters')
         
     def OnTimerFraction( self, event ):
         """Set new position..."""

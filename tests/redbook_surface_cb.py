@@ -91,8 +91,8 @@ class TestContext( BaseContext ):
             glScalef (0.5, 0.5, 0.5);
 
             gluBeginSurface(self.theNurb);
-            print 'knots', knots
-            print "controlPoints", self.controlPoints
+            print('knots', knots)
+            print("controlPoints", self.controlPoints)
             controlPoints = self.controlPoints
             try:
                 gluNurbsSurface(
@@ -116,7 +116,7 @@ class TestContext( BaseContext ):
                 pass 
             else:
                 if not result:
-                    print 'Could not initialise GLU.EXT.nurbs_tessellator, aborting'
+                    print('Could not initialise GLU.EXT.nurbs_tessellator, aborting')
                     sys.exit(1)
 
         self.showPoints = 1
@@ -144,22 +144,22 @@ class TestContext( BaseContext ):
                     ctlpoints[u][v][2] = -3.0;
         return ctlpoints
     def OnVertex( self, vertex, data = None ):
-        print 'vertex', vertex, data
+        print('vertex', vertex, data)
         glVertex( vertex )
     def OnBegin( self, type, data = None ):
-        print 'begin', type, data
+        print('begin', type, data)
         glBegin( type )
     def OnNormal( self, normal, data = None ):
-        print 'normal', normal, data
+        print('normal', normal, data)
         glNormal3fv( normal )
     def OnColor( self, color, data = None ):
-        print 'color', color, data
+        print('color', color, data)
         glColor( color )
     def OnTexCoord( self, texcoord, data = None ):
-        print 'texcoord', texcoord, data
+        print('texcoord', texcoord, data)
         glTexCoord( texcoord )
     def OnEnd( self, data = None ):
-        print 'end', data
+        print('end', data)
         glEnd()
 
 

@@ -62,17 +62,17 @@ if __name__ == '__main__':
         currentImage = 0
         currentSize = 0
         def OnInit( self ):
-            print '''Runs various tests on the frustum-extraction mechanism.
+            print('''Runs various tests on the frustum-extraction mechanism.
 Will print out the (near,far) values where the extracted frustum far-plane
 (that pulled from glProjectionMatrix) is > 1% different than the value 
-we passed into glFrustum.'''
+we passed into glFrustum.''')
         def Render( self, mode = None ):
             glMatrixMode(GL_MODELVIEW)
             glLoadIdentity()
             glMatrixMode(GL_PROJECTION);
             # load the identity matrix (reset the view)
             # calculate a 3D perspective view
-            print '___________________________'
+            print('___________________________')
             from OpenGL.GL import glFrustum
             for near in (.2,1.,3.,4.,5.,19.):
                 for far in arange(20.0,2**31,1000):

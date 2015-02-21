@@ -45,13 +45,13 @@ class TestContext( BaseContext ):
         self.shape.Render( mode )
         glEndQuery(GL_SAMPLES_PASSED);
         ready = False 
-        print 'Waiting for completion of query (normal situation is 8 or 9 wait loop iterations)',
+        print('Waiting for completion of query (normal situation is 8 or 9 wait loop iterations)', end=' ')
         while not ready:
             ready = glGetQueryObjectiv(query,GL_QUERY_RESULT_AVAILABLE)
             if not ready:
-                print '.',
-        print
-        print 'Fragments affected:', glGetQueryObjectuiv(query, GL_QUERY_RESULT )
+                print('.', end=' ')
+        print()
+        print('Fragments affected:', glGetQueryObjectuiv(query, GL_QUERY_RESULT ))
         glDeleteQueries( query )
 
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -62,16 +62,16 @@ class TestContext( BaseContext ):
         """Scene set up and initial processing"""
         haveExtension = bool(glGenQueries)
         if not haveExtension:
-            print 'OpenGL 1.5/GL_ARB_occlusion_query not supported!'
+            print('OpenGL 1.5/GL_ARB_occlusion_query not supported!')
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
         
-        print """When the box is offscreen number of pixels should drop to 0
-"""
-        print 'press i to choose another texture for the box'
+        print("""When the box is offscreen number of pixels should drop to 0
+""")
+        print('press i to choose another texture for the box')
         self.addEventHandler(
             'keypress', name = 'i', function = self.OnImageSwitch
         )
-        print 'press s to choose another size for the box'
+        print('press s to choose another size for the box')
         self.addEventHandler(
             'keypress', name = 's', function = self.OnSizeSwitch
         )
@@ -91,13 +91,13 @@ class TestContext( BaseContext ):
         self.currentImage = currentImage = self.currentImage+1
         newImage = images[currentImage%len(images)]
         self.shape.appearance.texture.url = [ newImage ]
-        print "new image (loading) ->", newImage
+        print("new image (loading) ->", newImage)
     def OnSizeSwitch( self, event=None ):
         """Choose a new size"""
         self.currentSize = currentSize = self.currentSize+1
         newSize = sizes[currentSize%len(sizes)]
         self.shape.geometry.size = newSize
-        print "new size ->", newSize
+        print("new size ->", newSize)
         self.triggerRedraw(1)
     
 

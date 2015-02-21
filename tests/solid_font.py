@@ -31,8 +31,8 @@ class TestContext( BaseContext ):
         )
     def OnInit(self):
         """Get a set of fonts providers for later use"""
-        print """You should see a 3D-rendered text message"""
-        print '  <n> next fontstyle'
+        print("""You should see a 3D-rendered text message""")
+        print('  <n> next fontstyle')
         self.addEventHandler( "keypress", name="n", function = self.OnNextStyle)
         providers = fontprovider.getProviders( 'solid' )
         if not providers:
@@ -64,7 +64,7 @@ class TestContext( BaseContext ):
         """Advance to the next font font style"""
         self.currentStyle += 1
         self.setStyle( self.currentStyle )
-        print "New font style: %r"%( self.styles[self.currentStyle],)
+        print("New font style: %r"%( self.styles[self.currentStyle],))
         self.triggerRedraw( 1 )
     def Render( self, mode=None ):
         BaseContext.Render( self, mode )

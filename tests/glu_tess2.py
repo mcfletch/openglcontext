@@ -40,7 +40,7 @@ class TestContext( BaseContext ):
     scale = 400.0
     def OnInit( self ):
         self.tess = gluNewTess()
-        print 'Python-callback-using version of tessellation test'
+        print('Python-callback-using version of tessellation test')
         
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )

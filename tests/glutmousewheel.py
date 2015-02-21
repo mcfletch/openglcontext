@@ -20,7 +20,7 @@ class TestContext( BaseContext ):
         return result
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print 'Tests FreeGLUT extension to the GLUT API to support Mouse Scroll (Win32 only) and Post-Mainloop code'
+        print('Tests FreeGLUT extension to the GLUT API to support Mouse Scroll (Win32 only) and Post-Mainloop code')
         glutMouseWheelFunc( self.OnMouseWheel )
         glutWMCloseFunc( self.OnGLUTCloseWM )
         glutCloseFunc( self.OnGLUTClose )
@@ -28,15 +28,15 @@ class TestContext( BaseContext ):
         glutSetOption( GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS )
     def OnMouseWheel( self, button,state,x,y):
         """Just capture and report scrolling"""
-        print 'Mouse Wheel button=%s state=%s (x,y)=(%s,%s)'%(button, state, x,y)
+        print('Mouse Wheel button=%s state=%s (x,y)=(%s,%s)'%(button, state, x,y))
     def OnGLUTClose( self, ):
         """Just capture and report"""
-        print 'Close'
+        print('Close')
     def OnGLUTCloseWM( self, ):
         """Just capture and report"""
-        print 'CloseWM'
+        print('CloseWM')
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
-    print 'Code executed after the mainloop exits'
+    print('Code executed after the mainloop exits')
     

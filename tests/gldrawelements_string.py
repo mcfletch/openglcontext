@@ -13,11 +13,11 @@ indices = array( range(len(points)), 'I')
 class TestContext( BaseContext ):
     def OnInit( self ):
         """Initialisation"""
-        print """Should see a grey square over white background.
+        print("""Should see a grey square over white background.
     This is drawn using the "base" or "string" version of
     glDrawElements, the version which mimics the underlying
     OpenGL call using a simple string as the data-source.
-    """
+    """)
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         glVertexPointer( 3, GL_FLOAT, 0, points.tostring())

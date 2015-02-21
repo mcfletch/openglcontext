@@ -61,7 +61,7 @@ class TestContext( BaseContext ):
         self.addEventHandler(
             'keypress', name = 'b', function = self.OnBlendToggle
         )
-        print self.usage
+        print(self.usage)
         '''The Lights setup and the Lights method are identical to 
         the code from the NeHe7 translation'''
         glLightfv( GL_LIGHT1, GL_AMBIENT, GLfloat_4(0.2, .2, .2, 1.0) );
@@ -158,27 +158,27 @@ class TestContext( BaseContext ):
         return 1
     def OnBlendToggle( self, event ):
         self.blendOn = (self.blendOn + 1)%len( self.BLENDSTYLES )
-        print 'Blend now %s, %s'% [
+        print('Blend now %s, %s'% [
             ("None", "None"),
             ("GL_SRC_ALPHA", "GL_ONE"),
             ("GL_SRC_ALPHA", "GL_ONE_MINUS_SRC_ALPHA"),
             ("GL_SRC_ALPHA", "GL_DST_ALPHA"),
-        ][ self.blendOn ]
+        ][ self.blendOn ])
     def OnFilter( self, event):
         """Handles the key event telling us to change the filter"""
         self.currentFilter = (self.currentFilter + 1 ) % 3
-        print 'Drawing filter now %s'% ( ["Nearest","Linear","Linear Mip-Mapped"][ self.currentFilter])
+        print('Drawing filter now %s'% ( ["Nearest","Linear","Linear Mip-Mapped"][ self.currentFilter]))
     def OnLightToggle( self, event ):
         """Handles the key event telling us to toggle the lighting"""
         self.lightsOn = not self.lightsOn
-        print "Lights now %s"% (["off", "on"][self.lightsOn])
+        print("Lights now %s"% (["off", "on"][self.lightsOn]))
     def OnSpeedUp( self, event):
         """Handles key event to speed up"""
-        print 'speed up'
+        print('speed up')
         self.rotationCycle = self.rotationCycle /2.0
     def OnSlowDown( self, event ):
         """Handles key event to slowdown"""
-        print 'slow down'
+        print('slow down')
         self.rotationCycle = self.rotationCycle * 2.0
     def drawCube( self ):
         "Draw a cube with both normals and texture coordinates"

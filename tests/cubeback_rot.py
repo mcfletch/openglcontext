@@ -64,10 +64,10 @@ class TestContext( BaseContext ):
     """
     def OnInit( self ):
         """Scene set up and initial processing"""
-        print 'Loading scene from embedded VRML97 file'
+        print('Loading scene from embedded VRML97 file')
         self.sg = Loader.loads( scene, 'test.wrl' )
         self.tr = self.sg.getDEF( 'TR' )
-        print 'press <b> to switch backgrounds'
+        print('press <b> to switch backgrounds')
         self.addEventHandler( "keypress", name="b", function = self.OnSwitch)
     def OnSwitch( self, event ):
         switch= self.getSceneGraph().getDEF( 'S' )

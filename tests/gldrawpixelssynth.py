@@ -18,11 +18,11 @@ import string
 class TestContext( BaseContext ):
     def OnInit( self, ):
         """Initialisation"""
-        print """Demonstrates drawing a synthetically-generated image 
+        print("""Demonstrates drawing a synthetically-generated image 
 
     Note: bitmap is drawn in screen coordinates, so does not
     respond to moving around or rescaling the window as would
-    a piece of geometry."""
+    a piece of geometry.""")
         import numpy
         width,height = 200,50
         self.width, self.height, self.data = width,height,numpy.arange(

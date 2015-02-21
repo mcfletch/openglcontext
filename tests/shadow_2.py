@@ -35,7 +35,7 @@ class TestContext( BaseContext ):
         in the convenience wrapper will report true if there is any
         implementation of the function.'''
         if not glBindFramebuffer:
-            print 'Missing required extensions!'
+            print('Missing required extensions!')
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
         '''Decide how big our depth-texture should be...'''
         self.shadowMapSize = min(
@@ -45,10 +45,10 @@ class TestContext( BaseContext ):
             )
         )
         if self.shadowMapSize < 256:
-            print 'Warning: your hardware only supports extremely small textures!'
-        print 'Using shadow map of %sx%s pixels'%(
+            print('Warning: your hardware only supports extremely small textures!')
+        print('Using shadow map of %sx%s pixels'%(
             self.shadowMapSize,self.shadowMapSize
-        )
+        ))
     '''We override this default in the init function.'''
     shadowMapSize = 512
     '''Should you wish to experiment with different filtering functions,

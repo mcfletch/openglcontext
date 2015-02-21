@@ -30,8 +30,8 @@ class TestContext( BaseContext ):
     angle = 0
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print """You should see an opaque sphere and a translucent cylinder
-with rotating lighting in three colours."""
+        print("""You should see an opaque sphere and a translucent cylinder
+with rotating lighting in three colours.""")
         '''Each of the light types defined in VRML97 is going to be 
         defined for this tutorial.  Each of these lights includes 
         color, intensity, ambientIntensity and attenuation fields.

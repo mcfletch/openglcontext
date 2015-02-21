@@ -42,7 +42,7 @@ class TestContext( BaseContext ):
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     def OnInit( self ):
         BaseContext.OnInit( self )
-        print """Should see "hello world" in white in the lower-left corner of black screen"""
+        print("""Should see "hello world" in white in the lower-left corner of black screen""")
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         glColor3f( 0,0,1 )

@@ -11,7 +11,7 @@ class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         for param, name in parameters:
-            print name, glGetLightfv(GL_LIGHT0, param ) # now requires fully-specified name...
+            print(name, glGetLightfv(GL_LIGHT0, param )) # now requires fully-specified name...
 parameters = [
     (GL_AMBIENT, "GL_AMBIENT"),
     (GL_DIFFUSE, "GL_DIFFUSE"),

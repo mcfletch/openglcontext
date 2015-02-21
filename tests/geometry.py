@@ -35,15 +35,15 @@ class TestContext( BaseContext ):
     currentSize = 0
     def OnInit( self ):
         """Scene set up and initial processing"""
-        print """You should see a cone over a black background
+        print("""You should see a cone over a black background
     The cone should have a mapped texture (a stained-glass window)
     and should be centered on the window.
-"""
-        print 'press i to choose another texture for the box'
+""")
+        print('press i to choose another texture for the box')
         self.addEventHandler(
             'keypress', name = 'i', function = self.OnImageSwitch
         )
-        print 'press s to choose another size for the box'
+        print('press s to choose another size for the box')
         self.addEventHandler(
             'keypress', name = 's', function = self.OnSizeSwitch
         )
@@ -146,7 +146,7 @@ class TestContext( BaseContext ):
         self.currentImage = currentImage = self.currentImage+1
         newImage = images[currentImage%len(images)]
         self.appearance.texture.url = [ newImage ]
-        print "new image (loading) ->", newImage
+        print("new image (loading) ->", newImage)
     def OnSizeSwitch( self, event=None ):
         """Choose a new size"""
         self.currentSize = currentSize = self.currentSize+1
@@ -161,7 +161,7 @@ class TestContext( BaseContext ):
         self.gear.geometry.outer_radius = newSize * .25
         self.teapot.geometry.size = newSize
         self.sphere.geometry.radius = newSize
-        print "new size ->", newSize
+        print("new size ->", newSize)
         self.triggerRedraw(True)
         
 

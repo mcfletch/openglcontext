@@ -54,12 +54,12 @@ class TestContext( BaseContext ):
     
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print """Uses glConvolutionFilter2D to process the NeHe6 based image
+        print("""Uses glConvolutionFilter2D to process the NeHe6 based image
         
     This convolution filter should produce a "blurring" effect on the image.
     The effect is applied on image upload (i.e. glTexImage2D call), so 
     different images can have different convolutions applied.
-    """
+    """)
         if not glInitImagingARB():
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
         self.imageIDs = [
@@ -67,15 +67,15 @@ class TestContext( BaseContext ):
             self.loadImage ( convolve = False ),
         ]
         self.imageIndex = 0
-        print '''Press 'c' to toggle between convolved and non-convolved image'''
+        print('''Press 'c' to toggle between convolved and non-convolved image''')
         self.addEventHandler( "keypress", name="c", function = self.OnConvolve)
     def OnConvolve( self, event ):
         """Convolve (choose the other image) or disable convolution"""
         self.imageIndex += 1
         if self.imageIndex %2:
-            print 'Un-convolved image'
+            print('Un-convolved image')
         else:
-            print 'Convolved image'
+            print('Convolved image')
 
         
     def loadImage( self, imageName = 'nehe_wall.bmp', convolve=True ):

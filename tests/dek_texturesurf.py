@@ -74,7 +74,7 @@ class TestContext( BaseContext ):
         return displayList
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print """Should see curvy surface with brick-like texture over white background"""
+        print("""Should see curvy surface with brick-like texture over white background""")
         self.surfaceID = self.buildDisplayList()
         self.imageID = self.loadImage ()
         self.light = SpotLight(

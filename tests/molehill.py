@@ -85,7 +85,7 @@ class TestContext( BaseContext ):
         
     def OnInit( self ):
         """Create the scenegraph for rendering"""
-        print """You should see a 4-colour "molehill" composed of four different NurbsSurface nodes."""
+        print("""You should see a 4-colour "molehill" composed of four different NurbsSurface nodes.""")
         
         knots = array( (0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0),'f' )
 

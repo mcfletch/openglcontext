@@ -82,7 +82,7 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Initialize the context with GL active"""
         if not glInitShadowARB() or not glInitDepthTextureARB():
-            print 'Missing required extensions!'
+            print('Missing required extensions!')
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
         '''Configure some parameters to make for nice shadows
         at the expense of some extra calculations'''

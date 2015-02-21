@@ -31,7 +31,7 @@ class TestContext( BaseContext ):
         # map_buffer returns an Byte view, we want an 
         # UInt view of that same data...
         data = vbo.mapVBO( self.vbo ).view( 'I' )
-        print data
+        print(data)
         del data
         self.vbo.unbind()
         

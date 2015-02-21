@@ -62,7 +62,7 @@ class TestContext( BaseContext ):
         self.TestMethod( pixel_format.wglGetPixelFormatAttribivARB )
         self.TestMethod( pixel_format.wglGetPixelFormatAttribfvARB )
     def TestMethod( self, method ):
-        print 'Starting method', method
+        print('Starting method', method)
         module = pixel_format
         hdc = WGL.wglGetCurrentDC()
         items = [(name,getattr( module, name)) for name in names ]
@@ -85,11 +85,11 @@ class TestContext( BaseContext ):
             except WindowsError as err:
                 failures.append((item,err))
             else:
-                print '%20s\t%r'%( item[0], result.value)
+                print('%20s\t%r'%( item[0], result.value))
         if failures:
-            print 'FAILURES'
+            print('FAILURES')
             for ((name,value),err) in failures:
-                print name, value, '->', err
+                print(name, value, '->', err)
         items = [ getattr(module,name) for name in names ]
         try:
             method(
@@ -101,9 +101,9 @@ class TestContext( BaseContext ):
                 result
             )
         except WindowsError as err:
-            print method, 'failed on getting full set'
+            print(method, 'failed on getting full set')
         else:
-            print method, result
+            print(method, result)
         
 
 

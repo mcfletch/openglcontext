@@ -31,7 +31,7 @@ def loadData( data ):
             indices.extend( map( int, line ))
         else:
             readingIndices = 0
-    print 'got %s point and %s indices'% ( len(points), len(indices))
+    print('got %s point and %s indices'% ( len(points), len(indices)))
     return points, indices
             
 
@@ -39,10 +39,10 @@ class TestContext( BaseContext ):
     initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print """Should see 6-sided polygon with normal-per-vertex smoothing
+        print("""Should see 6-sided polygon with normal-per-vertex smoothing
     This polygon is produced using the GLU tesselator
     from a simple linear progression of indices across
-    the 6 points of the polygon."""
+    the 6 points of the polygon.""")
         points, indices = loadData( TESTDATA )
         self.sg = basenodes.sceneGraph(
             children = [

@@ -39,13 +39,13 @@ class TestContext( BaseContext ):
     initialPosition = (-5,0,5) # set initial camera position, tutorial does the re-positioning
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print """Should see two geodesic spheres over black background
+        print("""Should see two geodesic spheres over black background
         
     Sphere to left should be lit with normal-per-face,
     giving each face a hard-line edge with adjacent faces.
     
     Sphere to the right should be lit with normal-per-vertex
-    which should make the lines between faces fuzzier."""
+    which should make the lines between faces fuzzier.""")
         points, indices = loadData( ICOSDATA )
 ##		light = basenodes.PointLight(
 ##			location = (2,10,10)

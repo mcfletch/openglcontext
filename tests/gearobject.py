@@ -12,7 +12,7 @@ from math import pi
 class TestContext( BaseContext ):
     def OnInit( self ):
         """Scene set up and initial processing"""
-        print """Should see two interlocked gears"""
+        print("""Should see two interlocked gears""")
 
         g2 = Transform( 
             DEF = 'g2',

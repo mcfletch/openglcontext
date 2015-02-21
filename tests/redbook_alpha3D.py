@@ -95,7 +95,7 @@ class TestContext( BaseContext ):
         self.startTime = time.time()
 
         self.addEventHandler( "keypress", name = 'a', function = self.OnAnimate )
-        print 'Press "a" to stop animation\nNote: r key has no effect'
+        print('Press "a" to stop animation\nNote: r key has no effect')
 
     def OnAnimate( self, event):
         self.animating = not self.animating

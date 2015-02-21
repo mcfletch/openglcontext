@@ -62,7 +62,7 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         self.leftFirst = 1
         self.addEventHandler( 'keypress', name='f', function = self.OnSwitch )
-        print 'Press "f" to switch polygon order'
+        print('Press "f" to switch polygon order')
     def OnSwitch( self, event ):
         """Switch order of triangles"""
         self.leftFirst = not self.leftFirst

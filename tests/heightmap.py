@@ -17,9 +17,9 @@ from vrml import arrays
 class TestContext( BaseContext ):
     def OnInit( self ):
         """Initialisation"""
-        print """Should see a simplistic terrain when you look down (<ctrl+down-arrow>)"""
+        print("""Should see a simplistic terrain when you look down (<ctrl+down-arrow>)""")
         points = Image.open( "heightmap.png" ).convert('L')
-        print points.format
+        print(points.format)
         ix,iy,data = points.size[0],points.size[1],points.tostring()
         data = arrays.frombuffer( data, 'B' ).astype( 'f' )
         self.data = arrays.zeros( (ix,iy,3), 'f' )

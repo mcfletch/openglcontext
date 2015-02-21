@@ -18,7 +18,7 @@ class TestContext( BaseContext ):
         """Load the image on initial load of the application"""
         from OpenGL import extensions                              
         if not extensions.hasGLExtension("GL_EXT_texture_compression_s3tc"):
-            print "Extension GL_EXT_texture_compression_s3tc required for compressed texture mapping test!"
+            print("Extension GL_EXT_texture_compression_s3tc required for compressed texture mapping test!")
             raise SystemExit(1)
         self.imageID = self.loadImage ()
     def loadImage( self, imageName = "nehe_wall.bmp" ):

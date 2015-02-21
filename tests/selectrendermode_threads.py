@@ -20,7 +20,7 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Setup callbacks and build geometry for rendering"""
         self.addEventHandler( "mousebutton", button = 0, state = 1, function = self.OnClick1 )
-        print """Click on the spheres and watch here for feedback..."""
+        print("""Click on the spheres and watch here for feedback...""")
         self.objects = basenodes.sceneGraph()
         self.buildGeometry()
         self.addEventHandler(
@@ -40,13 +40,13 @@ class TestContext( BaseContext ):
         of the clicked geometry (if a named object was clicked).
         """
         x,y  = event.getPickPoint()
-        print 'Click', (x,y)
+        print('Click', (x,y))
         for near, far, names in event.getNameStack():
             if names:
-                print '  clicked on #%s'%(names[-1]), event.unproject()
+                print('  clicked on #%s'%(names[-1]), event.unproject())
     def OnClick2( self, event ):
         """Handle mouse click for a given name/id"""
-        print "You clicked on the magic sphere!"
+        print("You clicked on the magic sphere!")
         self.OnClick1( event )
     COUNT = 100
     def buildGeometry( self ):

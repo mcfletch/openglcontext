@@ -38,9 +38,9 @@ class TestContext( BaseContext ):
         return ctlpoints
     def OnInit( self ):
         """Create the scenegraph"""
-        print """You should see a multi-coloured Nurbs surface
+        print("""You should see a multi-coloured Nurbs surface
 with an ice-cream-cone-shaped trimming curve
-(a hole cut out of it)."""
+(a hole cut out of it).""")
         
         '''GLU Nurbs trims via contours which are applied in the 
         same way as tessellation, i.e. your outermost contour will 

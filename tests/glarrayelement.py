@@ -10,7 +10,7 @@ import flower_geometry
 class TestContext( BaseContext ):
     def OnInit( self ):
         """Initialisation"""
-        print """Should see flower pattern in gray over white background"""
+        print("""Should see flower pattern in gray over white background""")
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         glTranslatef( 0,0,-1)
