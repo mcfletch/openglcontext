@@ -28,7 +28,7 @@ class TestContext( BaseContext ):
         try:
             from OpenGLContext.scenegraph.text import toolsfont
             registry = self.getTTFFiles()
-        except ImportError, err:
+        except ImportError as err:
             log.warn( """Unable to import fonttools-based TTF-file registry, no TTF font support!""" )
         else:
             fontprovider.setTTFRegistry(

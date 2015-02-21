@@ -37,7 +37,7 @@ VRMLContext( 'glut', 'OpenGLContext.glutvrmlcontext.VRMLContext' )
 
 try:
     import OpenGLContext_qt
-except ImportError, err:
+except ImportError as err:
     pass
 
 Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml','.wrl.gz'] )

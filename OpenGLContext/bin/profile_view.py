@@ -33,7 +33,7 @@ def main():
     try:
         raise ImportError( "Don't want to use KCacheGrind any more" )
         from lsprofcalltree import KCacheGrind
-    except ImportError, err:
+    except ImportError as err:
         return cProfile.run( 
             "TestContext.ContextMainLoop()", 'OpenGLContext.profile' 
         )

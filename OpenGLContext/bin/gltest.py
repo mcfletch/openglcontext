@@ -82,7 +82,7 @@ def main():
     # now, execute the script...
     try:
         os.makedirs( options.output )
-    except (IOError,OSError), err:
+    except (IOError,OSError) as err:
         pass
     sys.path.insert(0, os.path.dirname(script))
     g = {}

@@ -64,7 +64,7 @@ class IndexedLineSet(
                         color = colorIndices[index]
                         try:
                             color = int(color)
-                        except (TypeError,ValueError), err:
+                        except (TypeError,ValueError) as err:
                             glBegin( GL_LINE_STRIP )
                             try:
                                 for i,c in map(None, polyline, color):
@@ -156,7 +156,7 @@ class IndexedLineSet(
                     color = colorIndices[index]
                     try:
                         color = int(color)
-                    except (TypeError,ValueError), err:
+                    except (TypeError,ValueError) as err:
                         for i,c in map(None, polyline, color):
                             if c is not None:
                                 # numpy treats None as retrieve all??? why?

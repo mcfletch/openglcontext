@@ -45,7 +45,7 @@ class TextureTransform(basenodes.TextureTransform):
         try:
             try:
                 glPushMatrix()
-            except GLerror, error:
+            except GLerror as error:
                 matrix = glGetDouble( GL_TEXTURE_MATRIX )
                 self.transform()
                 return matrix

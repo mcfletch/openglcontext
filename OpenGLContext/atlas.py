@@ -54,7 +54,7 @@ class _Strip( object ):
             if referenced is None:
                 try:
                     self.maps.remove( mapRef )
-                except ValueError, err:
+                except ValueError as err:
                     pass 
                 update = True 
 
@@ -283,7 +283,7 @@ class AtlasManager( object ):
         for atlas in atlases:
             try:
                 return atlas.add( image )
-            except AtlasError, err:
+            except AtlasError as err:
                 pass 
         atlas = Atlas( d, max_size=self.max_size or self.calculate_max_size() )
         atlases.append( atlas )

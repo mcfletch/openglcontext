@@ -82,7 +82,7 @@ class TTFRegistry( ttffiles.Registry ):
                     set.append( (count,name) )
                     if count == len(testString):
                         break
-                except Exception, err:
+                except Exception as err:
                     traceback.print_exc()
             set.sort()
             if not set:

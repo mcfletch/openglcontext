@@ -52,7 +52,7 @@ class DisplayList( object ):
             if self.list is not None:
                 glDeleteLists( self.list, 1 )
             self.list = None
-        except AttributeError, err:
+        except AttributeError as err:
             pass
 
     

@@ -259,7 +259,7 @@ class wxContext(
         """
         try:
             from OpenGLContext.resources import context_icon_png, context_icon_small_png
-        except ImportError, err:
+        except ImportError as err:
             return None
         else:
             bundle = wx.IconBundle( )

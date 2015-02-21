@@ -252,7 +252,7 @@ class RenderVisitor( visitor.Visitor ):
             glMatrixMode(GL_MODELVIEW)
             try:
                 glPushMatrix() # should do checks here to make sure we're not going over limit
-            except GLerror, error:
+            except GLerror as error:
                 matrix = glGetDouble( GL_MODELVIEW_MATRIX )
                 node.transform()
                 return TransformOverflowToken( matrix)

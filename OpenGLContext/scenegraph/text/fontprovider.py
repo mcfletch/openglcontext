@@ -61,7 +61,7 @@ class FontProvider( object ):
                 for provider in providers:
                     try:
                         return provider, provider.get( fontStyle, mode )
-                    except Exception, err:
+                    except Exception as err:
                         if __debug__:
                             traceback.print_exc()
                         log.warn(

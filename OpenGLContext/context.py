@@ -237,7 +237,7 @@ class Context(object):
             try:
                 from OpenGL import GLUT
                 GLUT.glutInit([])
-            except Exception, err:
+            except Exception as err:
                 pass
             self.OnInit()
         finally:
@@ -325,10 +325,10 @@ class Context(object):
         try:
             try:
                 from PIL import Image # get PIL's functionality...
-            except ImportError, err:
+            except ImportError as err:
                 # old style?
                 import Image
-        except ImportError, err:
+        except ImportError as err:
             log.error( "Unable to import PIL" )
             saved = False
             return (0,0)
@@ -779,7 +779,7 @@ class Context(object):
         name = None
         try:
             name = open(filename).readline().strip()
-        except IOError, err:
+        except IOError as err:
             pass
         if not name:
             name = None
@@ -793,14 +793,14 @@ class Context(object):
         if not name:
             try:
                 os.remove( filename )
-            except Exception, err:
+            except Exception as err:
                 return False
             else:
                 return True
         else:
             try:
                 open(filename,'w').write( name )
-            except IOError, err:
+            except IOError as err:
                 return False
             return True
     setDefaultTTFFont = classmethod( setDefaultTTFFont )
@@ -834,7 +834,7 @@ class Context(object):
             return None
         try:
             classObject = entrypoint.load()
-        except ImportError, err:
+        except ImportError as err:
             return None
         else:
             return classObject
@@ -847,7 +847,7 @@ class Context(object):
         name = None
         try:
             name = open(filename).readline().strip()
-        except IOError, err:
+        except IOError as err:
             pass
         if not name:
             name = None
@@ -861,14 +861,14 @@ class Context(object):
         if not name:
             try:
                 os.remove( filename )
-            except Exception, err:
+            except Exception as err:
                 return False
             else:
                 return True
         else:
             try:
                 open(filename,'w').write( name )
-            except IOError, err:
+            except IOError as err:
                 return False
             return True
     setDefaultContextType = classmethod( setDefaultContextType )

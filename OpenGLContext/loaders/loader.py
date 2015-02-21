@@ -71,7 +71,7 @@ class _Loader( object ):
             file = open( url, 'rb' )
             filename = url
             baseURL = urllib.pathname2url( filename )
-        except (IOError,TypeError,ValueError), err:
+        except (IOError,TypeError,ValueError) as err:
             if url.startswith( 'res://' ):
                 # virtual URL in our resources directories...
                 module = url[6:]
@@ -92,7 +92,7 @@ class _Loader( object ):
                     log.debug( "downloaded to: %s", filename )
                     file = open( filename, 'rb')
                     baseURL = url
-                except (IOError, TypeError, ValueError), err:
+                except (IOError, TypeError, ValueError) as err:
                     return (None, None,None,None)
         self.cache[ url ] = filename
         self.cache[ baseURL ] = filename
@@ -113,12 +113,12 @@ class _Loader( object ):
             name = entrypoint.name 
             try:
                 creator = entrypoint.load()
-            except ImportError, err:
+            except ImportError as err:
                 log.warn( """Unable to load loader implementation for %s: %s""", name, err )
             else:
                 try:
                     loader = creator()
-                except Exception, err:
+                except Exception as err:
                     log.warn( """Unable to initialize loader implementation for %s: %s""", name, err )
                 else:
                     for extension in entrypoint.check:

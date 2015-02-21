@@ -175,14 +175,14 @@ if __name__ == "__main__":
                 font = Font(
                     file,
                 )
-            except Exception, err:
+            except Exception as err:
                 traceback.print_exc()
                 error[1].append( (file, "Couldn't load"))
             else:
                 for character in testText:
                     try:
                         font.getGlyph(character)
-                    except Exception, err:
+                    except Exception as err:
                         traceback.print_exc()
                         error[1].append( (file, "Character %r failed, aborting font %r"%(character,file)))
                         break

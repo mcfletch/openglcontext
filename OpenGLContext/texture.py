@@ -174,7 +174,7 @@ class Texture( object ):
         if not self.NPOT_SUPPORT:
             try:
                 from PIL import Image
-            except ImportError, err:
+            except ImportError as err:
                 # old style?
                 import Image
             BICUBIC = Image.BICUBIC

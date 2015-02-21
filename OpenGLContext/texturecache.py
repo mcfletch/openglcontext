@@ -30,7 +30,7 @@ class TextureCache( object ):
         else:
             try:
                 current =  self.atlases.add( pil )
-            except atlas.AtlasError, err:
+            except atlas.AtlasError as err:
                 current = textureClass(pil)
         if ID is not None and current is not None:
             self.textures[(ID,repeating)] = current

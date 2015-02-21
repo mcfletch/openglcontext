@@ -213,7 +213,7 @@ class IFSCompiler( object ):
         holder = self.buildCacheHolder(mode=named['mode'])
         try:
             compiler =  self.compile( *args, **named )
-        except Exception, err:
+        except Exception as err:
             log.error(
                 """Failure during compilation of IndexedFaceSet: %s""",
                 log.getTraceback(err),
@@ -655,7 +655,7 @@ def build_normalPerVertex( vertices, creaseAngle, vertexArray=None ):
     for index in range( len( vertices)):
         try:
             items.setdefault( vertices[index].coordIndex, []).append( index )
-        except TypeError, err:
+        except TypeError as err:
             print vertices[index]
             print type(vertices[index].coordIndex),vertices[index].coordIndex
             raise
@@ -675,7 +675,7 @@ def build_normalPerVertex( vertices, creaseAngle, vertexArray=None ):
                 # cos(creaseAngle) instead of using arccos each time
                 try:
                     angle = arccos(dot( primaryNormal, secondaryNormal))
-                except ValueError, err: # arccos of equal vectors goes kablooie
+                except ValueError as err: # arccos of equal vectors goes kablooie
                     angle = 0
                 if angle < creaseAngle:
                     #add to each other's cummulative total (in place)
@@ -750,7 +750,7 @@ class IndexedValueSource(object):
                 # have both indices and values...
                 try:
                     finalIndex = self.indices [index]
-                except IndexError, err:
+                except IndexError as err:
                     return None, -1
                 if finalIndex < 0:
                     log.warn(
@@ -788,7 +788,7 @@ class IndexedValueSource(object):
             index = metaIndex
         try:
             return self.indices[index]
-        except IndexError, err:
+        except IndexError as err:
             if index >= len(self.indices):
                 return self.lastNonNullIndex()
             return None

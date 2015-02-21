@@ -675,7 +675,7 @@ class OverallPass (object):
             try:
                 changed += passObject()
                 self.visibleChange = changed
-            except Exception, error:
+            except Exception as error:
                 traceback.print_exc( limit=6 )
                 sys.stderr.write( """Exception in rendering object %s"""%(passObject))
         if self.visibleChange:
@@ -702,7 +702,7 @@ class OverallPass (object):
         try:
             if not self.projection:
                 self.projection = glGetDoublev( GL_PROJECTION_MATRIX )
-        except ValueError, err:
+        except ValueError as err:
             # numpy arrays don't allow truth testing...
             # since we have it, we have a non-None value
             pass
@@ -712,7 +712,7 @@ class OverallPass (object):
         try:
             if not self.viewport:
                 self.viewport = glGetIntegerv( GL_VIEWPORT )
-        except ValueError, err:
+        except ValueError as err:
             # numpy arrays don't allow truth testing...
             # since we have it, we have a non-None value
             pass
@@ -722,7 +722,7 @@ class OverallPass (object):
         try:
             if not self.modelView:
                 self.modelView = glGetDoublev( GL_MODELVIEW_MATRIX )
-        except ValueError, err:
+        except ValueError as err:
             # numpy arrays don't allow truth testing...
             # since we have it, we have a non-None value
             pass

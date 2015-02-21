@@ -41,7 +41,7 @@ class BrowserContext(BaseContext):
         try:
             sg = loader.Loader.load( url )
             callback( self, url, sg )
-        except Exception, err:
+        except Exception as err:
             if errorBack:
                 errorBack( self, url, err )
             else:

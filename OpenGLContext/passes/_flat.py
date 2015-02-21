@@ -124,7 +124,7 @@ class SGObserver( object ):
                     if not np:
                         try:
                             del self.nodePaths[id(v)]
-                        except KeyError, err:
+                        except KeyError as err:
                             pass
             self.paths[key][:] = filtered
 
@@ -274,7 +274,7 @@ class FlatPass( SGObserver ):
         for (key,mv,tm,bv,path) in toRender:
             try:
                 points = bv.getPoints()
-            except (AttributeError,boundingvolume.UnboundedObject), err:
+            except (AttributeError,boundingvolume.UnboundedObject) as err:
                 return 0
             else:
                 translated = dot( points, mv )
@@ -418,7 +418,7 @@ class FlatPass( SGObserver ):
                     path[-1].Render( mode = self )
                     if debugFrustum:
                         bvolume.debugRender( )
-                except Exception, err:
+                except Exception as err:
                     log.error(
                         """Failure in opaque render: %s""",
                         getTraceback( err ),
@@ -447,7 +447,7 @@ class FlatPass( SGObserver ):
                         path[-1].RenderTransparent( mode = self )
                         if debugFrustum:
                             bvolume.debugRender( )
-                    except Exception, err:
+                    except Exception as err:
                         log.error(
                             """Failure in %s: %s""",
                             path[-1].Render,

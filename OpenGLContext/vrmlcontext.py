@@ -36,7 +36,7 @@ class VRMLContext(object):
         try:
             from OpenGLContext.scenegraph.text import toolsfont
             registry = self.getTTFFiles()
-        except ImportError, err:
+        except ImportError as err:
             log.warn( """Unable to import TTFQuery/FontTools-based TTF-file registry, no TTF font support!""" )
         else:
             fontprovider.setTTFRegistry(

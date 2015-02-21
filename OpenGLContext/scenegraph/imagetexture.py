@@ -112,7 +112,7 @@ class _Texture( nodetypes.Texture, node.Node ):
         try:
             if not self.image:
                 return None 
-        except ValueError, err:
+        except ValueError as err:
             if not len(self.image):
                 return None
         tex = mode.cache.getData(self)
@@ -140,7 +140,7 @@ class _Texture( nodetypes.Texture, node.Node ):
 try:
     try:
         from PIL import Image
-    except ImportError, err:
+    except ImportError as err:
         # old style?
         import Image
     from ImageFile import Parser
@@ -265,7 +265,7 @@ else:
                 url = 'memory:%s'%(hash( data ),)
             try:
                 image = Image.open( fh )
-            except IOError, err:
+            except IOError as err:
                 log.info( 'IOError %s opening image', err )
             else:
                 if image:

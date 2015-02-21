@@ -19,7 +19,7 @@ def doInChildMatrix( function, *args, **named ):
     glMatrixMode( GL_MODELVIEW )
     try:
         glPushMatrix()
-    except GLerror, error:
+    except GLerror as error:
         matrix = glGetDouble( GL_MODELVIEW_MATRIX )
         try:
             return function( *args, **named )

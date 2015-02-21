@@ -161,7 +161,7 @@ class _GLUTFontProvider (fontprovider.FontProvider):
         """
         try:
             hash( (family,size))
-        except TypeError, err:
+        except TypeError as err:
             return (family.value,size)
         else:
             return (family,size)
