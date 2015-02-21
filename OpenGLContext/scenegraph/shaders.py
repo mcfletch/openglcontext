@@ -19,6 +19,11 @@ from OpenGL.extensions import alternate
 import logging
 log = logging.getLogger( __name__ )
 
+def glsl_version():
+    """Parse GL_SHADING_LANGUAGE_VERSION into [int(major),int(minor)]"""
+    version = glGetString( GL_SHADING_LANGUAGE_VERSION )
+    version = [int(x) for x in version.split('.')[:2]]
+    return version 
 
 class _Buffer( object ):
     """VBO based buffer implementation for generic geometry"""
@@ -466,7 +471,7 @@ class GLSLObject( shaders.GLSLObject ):
                 glAttachShader(program, subShader )
                 subShaders.append( subShader )
             elif shader.source:
-                log.warn( 'Failure compiling: %s %s', shader.compileLog, shader.url or "".join(shader.source) )
+                log.warn( 'Failure compiling: %s\n%s', shader.compileLog, shader.url or "".join(shader.source) )
         if len(subShaders) == len(self.shaders):
             glLinkProgram(program)
             glUseProgram( program )
