@@ -35,7 +35,7 @@ class GLUTContext(
         
         glutInitDisplayMode( self.DISPLAYMODE )
         # set up window size for newly created windows
-        apply ( glutInitWindowSize, [int(i) for i in definition.size] )
+        glutInitWindowSize(* [int(i) for i in definition.size] )
         # create a new rendering window
         self.windowID = glutCreateWindow( 
             definition.title or 
@@ -187,9 +187,9 @@ if __name__ == "__main__":
     class TestRenderer(GLUTContext):
         center = 2,0,-4
         def Render( self, mode = None):
-            print 'rendering'
+            print('rendering')
             GLUTContext.Render (self, mode)
-            print 'done render'
+            print('done render')
 ##			glTranslated ( *self.center )
 ##			drawCube()
     TestRenderer.ContextMainLoop( )

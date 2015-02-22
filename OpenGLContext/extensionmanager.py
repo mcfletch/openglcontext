@@ -136,13 +136,13 @@ if __name__ == "__main__":
     class TestContext( BaseContext ):
         def OnInit( self ):
             e = self.extensions
-            print e.listGL()
-            print e.listGLU()
-            print e.listWGL()
+            print(e.listGL())
+            print(e.listGLU())
+            print(e.listWGL())
             module = self.extensions.initExtension( "WGL.ARB.pixel_format" )
-            print module
+            print(module)
             d = dir(module)
             d.sort()
             for name in d:
-                print '%r,'%(name)
+                print('%r,'%(name))
     TestContext.ContextMainLoop()

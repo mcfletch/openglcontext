@@ -80,8 +80,8 @@ class Trackball:
         # note that OpenGL coordinates make y reversed from "normal" rotation
         yRotation,xRotation = x * self.dragAngle, -y * self.dragAngle
         # calculate the results, keeping in mind that translation in one axis is rotation around the other
-        xRot = apply(quaternion.fromXYZR, self.xAxis + (xRotation,))
-        yRot = apply(quaternion.fromXYZR, self.yAxis + (yRotation,))
+        xRot = quaternion.fromXYZR(*( self.xAxis + (xRotation,)))
+        yRot = quaternion.fromXYZR(*(self.yAxis + (yRotation,)))
 
         # the vector is already rotated by originalQuaternion
         # and positioned at the origin, so just needs

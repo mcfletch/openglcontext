@@ -1,5 +1,5 @@
 """Object which manages the registration and deregistration of timed event generators"""
-import systemtime
+from . import systemtime
 
 class TimeEventGeneratorManager(object):
     """TimeEventGenerator EventManager object

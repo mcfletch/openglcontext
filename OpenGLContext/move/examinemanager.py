@@ -38,7 +38,7 @@ class ExamineManager ( eventmanager.EventManager):
         This updates the internal position, then triggers a
         redraw of the context.
         '''
-        position, orientation = apply ( self.trackball.update, event.getPickPoint() )
+        position, orientation = self.trackball.update(* event.getPickPoint() )
         self.platform.position = position
         self.platform.quaternion = orientation
         self.client.triggerRedraw(1)

@@ -72,5 +72,5 @@ def appdatadirectory(  ):
 
 
 if __name__ == "__main__":
-    print 'AppData', appdatadirectory()
+    print('AppData', appdatadirectory())
     

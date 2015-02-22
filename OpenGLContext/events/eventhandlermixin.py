@@ -1,5 +1,8 @@
 """Mix in functionality for Context classes needing event support"""
-import Queue
+try:
+    import Queue
+except ImportError:
+    import queue as Queue
 import logging 
 log = logging.getLogger( __name__ )
 
