@@ -165,26 +165,26 @@ class Quaternion(object):
         try:
             return self.__class__( (sourceScale * self.internal)+(targetScale * target) )
         except ValueError as  err:
-            print sourceScale
-            print self.internal 
-            print targetScale
-            print target 
+            print(sourceScale)
+            print(self.internal) 
+            print(targetScale)
+            print(target) 
             raise
 
 
 def test ():
-    print 'fromEuler'
-    print fromEuler( pi/2 ).XYZR()
-    print fromEuler( y = pi/2 ).XYZR()
-    print fromEuler( z = pi/2 ).XYZR()
-    print fromEuler( y = pi/2, z = pi/2 ).matrix()
+    print('fromEuler')
+    print(fromEuler( pi/2 ).XYZR())
+    print(fromEuler( y = pi/2 ).XYZR())
+    print(fromEuler( z = pi/2 ).XYZR())
+    print(fromEuler( y = pi/2, z = pi/2 ).matrix())
     rot = fromEuler( y = pi/2, z = pi/2 ).XYZR()
-    print apply( fromXYZR, rot).matrix()
-    print fromEuler( y = pi/2, z = pi/2 )
+    print(apply( fromXYZR, rot).matrix())
+    print(fromEuler( y = pi/2, z = pi/2 ))
     first = fromXYZR( 0,1,0,0 )
     second = fromXYZR( 0,1,0,pi )
     for fraction in arange( 0.0, 1.0, .01 ):
-        print first.slerp( second, fraction )
+        print(first.slerp( second, fraction ))
     first = fromXYZR( 0,1,0,0 )
     second = first.inverse()
     assert allclose( first.internal,second.internal ), (first, second)

@@ -3,7 +3,7 @@ from math import *
 from OpenGLContext.arrays import *
 from OpenGLContext import vectorutilities
 
-def rotMatrix( (x,y,z,a) ):
+def rotMatrix( rota ):
     """Given rotation as x,y,z,a (a in radians), return rotation matrix
 
     Returns a 4x4 rotation matrix for the given rotation,
@@ -11,6 +11,7 @@ def rotMatrix( (x,y,z,a) ):
     
     x,y,z should be a unit vector.
     """
+    (x,y,z,a) = rota
     c = cos( a )
     s = sin( a )
     t = 1-c
@@ -42,8 +43,9 @@ def pointNormal2Plane( point, normal ):
     result[3] = - dot(normal, point)
     return result
 
-def plane2PointNormal( (a,b,c,d) ):
+def plane2PointNormal( plane ):
     """Get a point and normal from a plane equation"""
+    (a,b,c,d) = plane
     return asarray((-d*a,-d*b,-d*c),'f'), asarray((a,b,c),'f')
 
 def combineNormals( normals, weights=None ):
