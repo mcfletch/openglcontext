@@ -656,8 +656,8 @@ def build_normalPerVertex( vertices, creaseAngle, vertexArray=None ):
         try:
             items.setdefault( vertices[index].coordIndex, []).append( index )
         except TypeError as err:
-            print vertices[index]
-            print type(vertices[index].coordIndex),vertices[index].coordIndex
+            print(vertices[index])
+            print(type(vertices[index].coordIndex),vertices[index].coordIndex)
             raise
     #   verticies. We use ones instead of zeros because each face
     #   contributes to its own corner.  Note: will be promoted to float

@@ -101,9 +101,9 @@ def indices( zFloats ):
 if __name__ == "__main__":
     def test2( v ):
         c = centers( v )
-        print 'centers', c
+        print('centers', c)
         value2 = indices( c[:,2] )
-        print 'indices', value2
+        print('indices', value2)
         return value2
     test2(
         array( [

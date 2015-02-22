@@ -1,5 +1,5 @@
 """EventManager providing vcr-like control of an InternalTime object"""
-import eventmanager, systemtime, internaltime
+from . import eventmanager, systemtime, internaltime
 from pydispatch import dispatcher
 import logging 
 log = logging.getLogger( __name__ )
@@ -154,9 +154,9 @@ if __name__ == "__main__":
             Timer (duration = 2, repeating = 1, discreteOnly=1),
         ]
         for case in cases:
-            print case
+            print(case)
             def printer (event):
-                print event
+                print(event)
             case.addEventHandler ("fraction",printer)
             case.addEventHandler ("start",printer)
             case.addEventHandler ("stop",printer)

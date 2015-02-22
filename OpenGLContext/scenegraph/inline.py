@@ -68,7 +68,7 @@ class Inline(basenodes.Inline):
                 except IOError:
                     pass
                 else:
-                    print 'loaded', u
+                    print('loaded', u)
                     self.scenegraph = result
                     for context in contexts:
                         c = context()

@@ -267,7 +267,7 @@ def setSort( set ):
     return take(set, argsort( set[:,0] ), 0)
                 
 if __name__ == "__main__":
-    print SphereBackground(
+    print(SphereBackground(
         skyAngle = [],
         skyColor = [],
         groundAngle=[.23],
@@ -275,5 +275,5 @@ if __name__ == "__main__":
             [1,0,0],
             [.5,0,0],
         ]
-    ).compile()
+    ).compile())
     

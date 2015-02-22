@@ -170,7 +170,7 @@ if __name__ == "__main__":
         errors = []
         for file in files:
             error = (file, [])
-            print '\nFile', file
+            print('\nFile', file)
             try:
                 font = Font(
                     file,
@@ -191,9 +191,9 @@ if __name__ == "__main__":
         return errors
 
     errors = scan()
-    print '__________________________'
+    print('__________________________')
     for file,msgs in errors:
-        print 'File', file
-        print "\n".join(msgs)
+        print('File', file)
+        print("\n".join(msgs))
 
     

@@ -1,5 +1,5 @@
 """Track a (potentially scaled) time with respect to an external time"""
-from timeevents import *
+from .timeevents import *
 
 class InternalTime(object):
     """Track an internal time.

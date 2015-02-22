@@ -169,7 +169,7 @@ class WGLFont( font.Font ):
                 metrics,# metrics float structure to be filled
             )
         except:
-            print """couldn't get outline for character""", repr(char)
+            print("""couldn't get outline for character""", repr(char))
         realMetrics = font.CharacterMetrics(
             char,
             metrics.gmfCellIncX,

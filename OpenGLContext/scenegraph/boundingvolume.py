@@ -31,7 +31,6 @@ from vrml.vrml97 import nodetypes
 from vrml import node, field, protofunctions, cache
 from OpenGLContext import frustum, utilities, doinchildmatrix
 from OpenGL.extensions import alternate
-import exceptions
 import logging
 log = logging.getLogger( __name__ )
 
@@ -47,7 +46,7 @@ try:
 except ImportError:
     frustcullaccel = None
 
-class UnboundedObject( exceptions.ValueError ):
+class UnboundedObject( ValueError ):
     """Error raised when an object does not support bounding volumes"""
 
 class BoundingVolume( node.Node ):

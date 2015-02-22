@@ -40,24 +40,12 @@ class LockingError( Exception ):
     pass
 
 try:
-    import threading, Queue
-    contextLock = threading.RLock()
-    contextThread = None
+    import Queue 
 except ImportError:
-    threading = 0
-    class DummyLock:
-        """Dummy locking mechanism when threading is not available
-
-        I do not know of any situations where it shouldn't
-        be available on a supported platform, but it's
-        possible I suppose.
-        """
-        def acquire( self, *arguments, **named ):
-            return
-        def release( self, *arguments, **named ):
-            return
-    contextLock = DummyLock()
-    contextThread = None
+    import queue as Queue
+import threading
+contextLock = threading.RLock()
+contextThread = None
 
 def inContextThread():
     """Return true if the current thread is the context thread"""

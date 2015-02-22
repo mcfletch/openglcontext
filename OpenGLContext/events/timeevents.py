@@ -1,5 +1,5 @@
 """Events relating to time and timers"""
-import event
+from . import event
 
 class TimeEvent( event.Event ):
     """Base class for all time-related events
