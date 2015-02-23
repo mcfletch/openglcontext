@@ -5,13 +5,13 @@ def addEventHandler( type, name, modifiers, function, state=1 ):
         stateLine = """state = %(state)r,"""%locals()
     else:
         stateLine = ""
-    print """%(typeCap)sEventBinding(
+    print("""%(typeCap)sEventBinding(
     name = %(name)r,
     %(stateLine)s
     modifiers = %(modifiers)s,
     method = %(function)r,
     targetKey = 'context',
-)"""%locals()
+)"""%locals())
 
 addEventHandler( 'keyboard', name='<up>', state=1, modifiers=(0,0,1), function="up" )
 addEventHandler( 'keyboard', name='<up>', state=1, modifiers=(0,1,0), function="turnup")

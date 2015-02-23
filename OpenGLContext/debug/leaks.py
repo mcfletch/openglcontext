@@ -9,5 +9,5 @@ def init():
 def delta():
     for object in gc.get_objects():
         if not whole_set.get( id(object)):
-            print 'new', type( object ), object
+            print('new', type( object ), object)
         whole_set[id(object)] = True 

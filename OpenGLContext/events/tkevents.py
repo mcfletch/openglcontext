@@ -111,7 +111,7 @@ class tkKeyboardEvent( tkXEvent, keyboardevents.KeyboardEvent ):
         elif tkEventObject.char:
             self.name = tkEventObject.char
         else:
-            print 'Unknown keypress event: keysym = %s keysym_num = %s'%( tkEventObject.keysym, tkEventObject.keysym_num )
+            print('Unknown keypress event: keysym = %s keysym_num = %s'%( tkEventObject.keysym, tkEventObject.keysym_num ))
             self.name = ''
         self.state = state
         

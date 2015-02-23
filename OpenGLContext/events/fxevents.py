@@ -8,22 +8,22 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
     ### KEYBOARD interactions
     def fxOnKeyDown( self, event ):
         '''Convert a key-press to a context-style event'''
-        print 'key down', event
+        print('key down', event)
         return
         self.ProcessEvent( fxKeyboardEvent( self, event, 1))
     def fxOnKeyUp( self, event ):
         '''Convert a key-press to a context-style event'''
-        print 'key up', event
+        print('key up', event)
         return
         self.ProcessEvent( fxKeyboardEvent( self, event, 0))
     def fxOnCharacter( self, event ):
         """Convert character (non-control) press to context event"""
-        print 'character', event
+        print('character', event)
         return
         self.ProcessEvent( fxKeypressEvent( self, event))
     ### MOUSE Interaction
     def fxOnMouseButton(self, canvas, ID, event):
-        print 'mouse button', event
+        print('mouse button', event)
         return
         self.addPickEvent( fxMouseButtonEvent( self, event))
         self.triggerPick()
@@ -68,7 +68,7 @@ class fxMouseMoveEvent( fxXEvent, mouseevents.MouseMoveEvent ):
 ##				buttons.append( local )
         self.buttons = tuple( buttons )
         self.pickPoint = fxEventObject.win_x, context.getViewPort()[1] - fxEventObject.win_y
-        print 'pickPoint', self.pickPoint, context.getViewPort()
+        print('pickPoint', self.pickPoint, context.getViewPort())
 
 class fxKeyboardEvent( fxXEvent, keyboardevents.KeyboardEvent ):
     def __init__( self, context, fxEventObject, state=0 ):

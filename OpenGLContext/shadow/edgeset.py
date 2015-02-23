@@ -131,7 +131,7 @@ class EdgeSet( object ):
                 singleVectors.append( planeEquations[first] )
                 singleIndices.append( first )
             else:
-                print """Un-shadow-able edge encountered in edge-set"""
+                print("""Un-shadow-able edge encountered in edge-set""")
         self.singleVectors = array(singleVectors, 'd')
         self.singleEdges = singleEdges
         self.singleIndices = singleIndices
@@ -231,10 +231,10 @@ def test3():
     ag = node.arrayGeometry()
     set = EdgeSet( ag.vertices )
     vol = set.volume(PointLight(location=(0,10,0)))
-    print 'volume', vol.edges
+    print('volume', vol.edges)
 ##	import pdb
 ##	pdb.set_trace()
     
     
 if __name__ == "__main__":
-    print test3()
+    print(test3())
