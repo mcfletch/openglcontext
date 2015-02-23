@@ -11,10 +11,8 @@ from vrml.vrml97 import shaders
 import operator
 from vrml import field,node,fieldtypes,protofunctions
 from OpenGLContext.scenegraph import polygonsort,boundingvolume
-from OpenGLContext.arrays import array, transpose
 LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
-import time, sys
 from OpenGL.extensions import alternate
 import logging
 log = logging.getLogger( __name__ )
