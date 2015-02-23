@@ -279,7 +279,7 @@ def _uniformCls( suffix ):
         size = suffix[1:]
         function_name = 'glUniformMatrix%sfv'%( size, )
         function = globals()[function_name] 
-        size = map( int, size.split('x' ))
+        size = [int(x) for x in size.split('x' )]
         if len(size) == 1:
             size = [size[0],size[0]]
         size = tuple(size)
