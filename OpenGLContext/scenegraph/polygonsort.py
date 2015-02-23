@@ -26,9 +26,6 @@ glDrawElements(
     indices
 )
 """
-
-
-import arraygeometry
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
