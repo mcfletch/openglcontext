@@ -56,8 +56,8 @@ class TestContext( BaseContext ):
         # register key 's' to switch rendering types...
         self.addEventHandler( "keypress", name="s", function = self.OnSwitch)
         
-        print 'Should display a Lorentz Attractor'
-        print '  s -- switch between IndexedLineset and Pointset presentation'
+        print('Should display a Lorentz Attractor')
+        print('  s -- switch between IndexedLineset and Pointset presentation')
         timer = ts.getTimer( self )
         timer.addEventHandler( "fraction", function = self.OnTime )
     def OnTime( self, event ):

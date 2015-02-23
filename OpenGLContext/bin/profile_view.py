@@ -28,7 +28,7 @@ def main():
     """
     import sys, os, cProfile
     if not sys.argv[1:2]:
-        print usage
+        print(usage)
         sys.exit(1)
     try:
         raise ImportError( "Don't want to use KCacheGrind any more" )

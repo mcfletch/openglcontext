@@ -19,6 +19,6 @@ if __name__ == "__main__":
     """
     import sys
     if not sys.argv[1:2]:
-        print usage
+        print(usage)
         sys.exit(1)
     TestContext.ContextMainLoop()

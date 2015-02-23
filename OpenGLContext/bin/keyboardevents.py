@@ -15,7 +15,7 @@ class TestContext( vrmlcontext.VRMLContext, BaseContext ):
         self.addEventHandler(
             'keyboard', name=None, function = self.OnKeyBoard
         )
-        print 'strike keys to see generated events'
+        print('strike keys to see generated events')
         self.keypressText = Text(
             string=["Keypress events"],
             fontStyle = FontStyle(

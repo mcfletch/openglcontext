@@ -29,7 +29,7 @@ class ChoiceContext( BaseContext ):
     def OnInit( self ):
         """Setup callbacks and build geometry for rendering"""
         self.choices = self.loadChoices()
-        print 'Available Contexts', self.choices
+        print('Available Contexts', self.choices)
         current = self.getDefaultContextType()
         for i,name in self.choices:
             if name == current:

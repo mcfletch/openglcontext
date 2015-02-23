@@ -46,11 +46,11 @@ class TestContext( BaseContext ):
         except ImportError:
             log.warn( """Unable to import GLUT-based TTF-file registry, no GLUT bitmap font support!""" )
     def OnInit( self ):
-        print """You should see a 3D-rendered text message"""
-        print '  <p> previous fontstyle'
-        print '  <n> next fontstyle'
-        print '  <f> next font-family'
-        print '  <d> set current font as default font for family'
+        print("""You should see a 3D-rendered text message""")
+        print('  <p> previous fontstyle')
+        print('  <n> next fontstyle')
+        print('  <f> next font-family')
+        print('  <d> set current font as default font for family')
         self.addEventHandler( "keypress", name="n", function = self.OnNextStyle)
         self.addEventHandler( "keypress", name="p", function = self.OnPreviousStyle)
         self.addEventHandler( "keypress", name="d", function = self.OnSetDefault)
