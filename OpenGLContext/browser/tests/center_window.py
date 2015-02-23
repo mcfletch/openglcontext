@@ -12,4 +12,4 @@ for x in range(-100,100):
     time.sleep( .001 )
 
 scene.visible = 0
-print 'exit'
+print('exit')

@@ -12,4 +12,4 @@ for x in arange(0.01,3.14159, 0.01):
     time.sleep( .001 )
 
 scene.visible = 0
-print 'exit'
+print('exit')

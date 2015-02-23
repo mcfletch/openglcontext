@@ -6,4 +6,4 @@ assert hasattr(visual, "scene"), """No display context named "scene" created on 
 visual.scene.visible = 1
 assert visual.scene.visible, """Visible field not available, or didn't take true value"""
 visual.scene.visible = 0
-print 'Finished, no errors, should exit now.'
+print('Finished, no errors, should exit now.')
