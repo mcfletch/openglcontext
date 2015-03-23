@@ -3,7 +3,17 @@
 The Singleton "Loader" should be used for most interactions.
 """
 import urllib, os
-from cStringIO import StringIO
+try:
+    from cStringIO import StringIO
+except ImportError:
+    from io import BytesIO as StringIO
+from OpenGL._bytes import bytes, unicode
+
+def as_unicode(u):
+    if isinstance(u, bytes):
+        return unicode(u, 'utf-8')
+    return u
+
 import logging 
 log = logging.getLogger( __name__ )
 
@@ -37,8 +47,11 @@ class _Loader( object ):
         headers will be None for local files
         """
         log.info( "Loading: %s, %s", url, baseURL )
-        if isinstance( url, (str, unicode) ):
+        url = as_unicode(url)
+        if isinstance( url, unicode ):
             url = [url]
+        else:
+            url = [as_unicode(u) for u in url]
         file = None
         for u in url:
             # get the "absolute" url
