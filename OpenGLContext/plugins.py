@@ -1,5 +1,6 @@
 """OpenGLContext plugin classes"""
 from OpenGL import plugins
+from OpenGL._bytes import bytes, unicode
 
 class Context( plugins.Plugin ):
     """Data-type storage-format handler"""
@@ -11,7 +12,7 @@ class Context( plugins.Plugin ):
         
         key -- name of GUI system for which to load
         """
-        if isinstance( key, (str,unicode)):
+        if isinstance( key, (bytes,unicode)):
             key = [key]
         for plugin in cls.registry:
             if plugin.name in key:
@@ -37,7 +38,7 @@ class Loader( plugins.Plugin ):
         
         key -- file-extension or mime-type to load from
         """
-        if isinstance( key, (str,unicode)):
+        if isinstance( key, (bytes,unicode)):
             key = [key]
         for plugin in cls.registry:
             if plugin.name in key:
