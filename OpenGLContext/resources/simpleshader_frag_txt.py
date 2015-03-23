@@ -5,5 +5,5 @@ source = 'simpleshader.frag.txt'
 package = 'OpenGLContext.resources'
 
 import zlib
-data = zlib.decompress("xз+коLQхMллспT╗ФБLо┴w+JLwнои/R╟U(KM6яP0пQ0т\001⌠\012 ж\\╣\\\000╖К\016\032")
+data = zlib.decompress(b'x\xda+\xcb\xcfLQ\xc8M\xcc\xcc\xd3\xd0T\xa8\xe6\xe2L\xcf\x89w+JLw\xce\xcf\xc9/R\xb0U(KM6\xd1P0\xd0Q0\xd4\x01\x93\n\x9a\xd6\\\xb5\\\x00\xa7\xeb\x0e\x1a')
 ### end
