@@ -35,6 +35,7 @@ from vrml.vrml97 import nodetypes
 from vrml import node,cache
 import weakref, os, time, sys, logging 
 log = logging.getLogger( __name__ )
+from OpenGL._bytes import bytes, unicode
 
 class LockingError( Exception ):
     pass
@@ -815,7 +816,7 @@ class Context(object):
         """
         if entrypoint is None:
             entrypoint = cls.getDefaultContextType() or 'glut'
-        if isinstance( entrypoint, (str,unicode)):
+        if isinstance( entrypoint, (bytes,unicode)):
             for ep in cls.getContextTypes( type ):
                 if entrypoint == ep.name:
                     return cls.getContextType( ep, type=type )
