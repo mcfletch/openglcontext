@@ -347,7 +347,7 @@ class ShaderURLField( fieldtypes.MFString ):
         try:
             baseNode = protofunctions.root(client)
             if baseNode:
-                baseURI = baseNode.baseURI
+                baseURI = getattr(baseNode, 'baseURI', None)
             else:
                 baseURI = None
             result = Loader( urlFragment, baseURL = baseURI )
