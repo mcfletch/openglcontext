@@ -5,6 +5,7 @@ from OpenGL.GL import *
 from OpenGLContext import doinchildmatrix
 import logging
 log = logging.getLogger( __name__ )
+from OpenGL._bytes import bytes, unicode
 
 class Font(object):
     """Abstract base-class for all font implementations"""
@@ -22,7 +23,7 @@ class Font(object):
             self.toLines( lines, mode=mode )
         mode -- active rendering mode
         """
-        if isinstance( lines, (str,unicode)):
+        if isinstance( lines, (bytes,unicode)):
             lines = self.toLines( lines, mode=mode )
         if fontStyle is None:
             fontStyle = self.fontStyle
@@ -42,7 +43,7 @@ class Font(object):
         """
         if __debug__:
             log.info( """normalise %r for %s""", repr(value), self, )
-        if isinstance( value, str ):
+        if isinstance( value, bytes ):
             value = value.decode( 'utf-8' )
         return value
     def toLines( self, value, mode=None ):
