@@ -11,6 +11,7 @@ import weakref, sys
 from ttfquery import describe, glyphquery
 import logging
 log = logging.getLogger( __name__ )
+from OpenGL._bytes import unicode
 
 # don't have any specialisations as of yet, so just include it
 from ttfquery.glyph import Glyph
