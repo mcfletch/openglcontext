@@ -156,10 +156,9 @@ class FlatPass( _flat.FlatPass ):
                     path[-1].Render( mode = self )
                     if debugFrustum:
                         bvolume.debugRender( )
-                except Exception as err:
-                    log.error(
-                        """Failure in opaque render: %s""",
-                        getTraceback( err ),
+                except Exception:
+                    log.exception(
+                        """Failure in opaque render""",
                     )
                     import os 
                     os._exit(1)
