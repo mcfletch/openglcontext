@@ -2,9 +2,8 @@
 """
 from OpenGL.GL import *
 from OpenGL.GLU import *
-import traceback
 from OpenGLContext import texture, context
-from vrml import cache
+#from vrml import cache
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import node, field, protofunctions, fieldtypes
 import logging 
@@ -112,7 +111,7 @@ class _Texture( nodetypes.Texture, node.Node ):
         try:
             if not self.image:
                 return None 
-        except ValueError as err:
+        except ValueError:
             if not len(self.image):
                 return None
         tex = mode.cache.getData(self)
@@ -134,7 +133,7 @@ class _Texture( nodetypes.Texture, node.Node ):
                 (1,1), '#ff00ff'
             )
         )
-        holder = mode.cache.holder(instance, tex)
+        mode.cache.holder(instance, tex)
         return instance
 
 try:
@@ -143,7 +142,6 @@ try:
     except ImportError as err:
         # old style?
         import Image
-    from ImageFile import Parser
     log.info( """Loaded Python Image Library (PIL)""" )
 except ImportError:
     log.warn( """Python Image Library (PIL) not installed, no Image support available
@@ -166,7 +164,7 @@ http://www.pythonware.com/products/pil/index.htm""" )
             return 1
         def renderPost(self, mode=None ):
             """Pretend to shut down after rendering"""
-
+    MMImageTexture = ImageTexture
 else:
     class PILImage( field.Field ):
         """Simple field-type for holding PIL image objects"""
@@ -251,8 +249,8 @@ else:
             """
             self.image = image
             self.components = -1
-            for context in contexts:
-                c = context()
+            for c_reference in contexts:
+                c = c_reference()
                 if c:
                     c.triggerRedraw(1)
             return
@@ -278,25 +276,25 @@ else:
                     log.warn( 'Null image' )
             return None
         
-    class MMImageTexture( ImageTexture ):
-        """Mip-mapped version of ImageTexture
+class MMImageTexture( ImageTexture ):
+    """Mip-mapped version of ImageTexture
 
-        Only significant differences are the use of
-        the MMTexture class instead of Texture and the
-        default for minFilter being GL_LINEAR_MIPMAP_NEAREST
-        (which allows you to actually see the effects of
-        mip-mapping).
-        """
-        PROTO = "MMImageTexture"
-        minFilter = field.newField(
-            'minFilter', 'SFInt32', 0, GL_LINEAR_MIPMAP_NEAREST,
-        )
-        def createTexture( self, image, mode=None ):
-            """Create a new texture-holding object"""
-            if image:
-                return mode.context.textureCache.getTexture( image, texture.MMTexture )
-            else:
-                return None
+    Only significant differences are the use of
+    the MMTexture class instead of Texture and the
+    default for minFilter being GL_LINEAR_MIPMAP_NEAREST
+    (which allows you to actually see the effects of
+    mip-mapping).
+    """
+    PROTO = "MMImageTexture"
+    minFilter = field.newField(
+        'minFilter', 'SFInt32', 0, GL_LINEAR_MIPMAP_NEAREST,
+    )
+    def createTexture( self, image, mode=None ):
+        """Create a new texture-holding object"""
+        if image:
+            return mode.context.textureCache.getTexture( image, texture.MMTexture )
+        else:
+            return None
 
 class PixelTexture( _Texture, basenodes.PixelTexture ):
     """PixelTexture, in-file node for small textures
