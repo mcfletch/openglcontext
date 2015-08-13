@@ -4,10 +4,14 @@ The Singleton "Loader" should be used for most interactions.
 """
 import urllib, os
 try:
+    from urllib.request import pathname2url
+except ImportError:
+    from urllib import pathname2url
+try:
     from cStringIO import StringIO
 except ImportError:
     from io import BytesIO as StringIO
-from OpenGL._bytes import bytes, unicode
+from OpenGL._bytes import bytes, unicode, as_8_bit
 
 def as_unicode(u):
     if isinstance(u, bytes):
@@ -81,10 +85,13 @@ class _Loader( object ):
                 pass
         try:
             log.debug( "load: %s", url )
-            file = open( url, 'rb' )
             filename = url
-            baseURL = urllib.pathname2url( filename )
-        except (IOError,TypeError,ValueError) as err:
+            baseURL = pathname2url( filename )
+            if os.path.exists(url):
+                file = open( url, 'rb' )
+            else:
+                raise ValueError(filename)
+        except (IOError,TypeError,ValueError):
             if url.startswith( 'res://' ):
                 # virtual URL in our resources directories...
                 module = url[6:]
@@ -93,7 +100,7 @@ class _Loader( object ):
                     name = 'OpenGLContext.resources.%s'%(module,)
                     module = __import__(name, {}, {}, name.split('.'))
                     filename = module.source
-                    file = StringIO( module.data )
+                    file = StringIO( as_8_bit(module.data) )
                     baseURL = url 
                 else:
                     raise ValueError( 'Invalid character in resource url: %s'%(url,))
@@ -105,7 +112,7 @@ class _Loader( object ):
                     log.debug( "downloaded to: %s", filename )
                     file = open( filename, 'rb')
                     baseURL = url
-                except (IOError, TypeError, ValueError) as err:
+                except (IOError, TypeError, ValueError):
                     return (None, None,None,None)
         self.cache[ url ] = filename
         self.cache[ baseURL ] = filename
@@ -170,7 +177,8 @@ class _Loader( object ):
     def loads( self, data, baseURL='resource.wrl' ):
         """Load given raw data as a scenegraph
         
-        baseURL -- base URL from which to determine
+        data -- bytes to parse
+        baseURL -- raw data from which to determine
             relative URL values
         """
         handler = self.findHandler( baseURL )

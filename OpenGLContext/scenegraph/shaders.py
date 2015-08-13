@@ -3,6 +3,7 @@ from OpenGL.GL import *
 from OpenGL.GL import shaders as GL_shaders
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
+from OpenGL._bytes import as_str, as_8_bit
 from OpenGL import error
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import array,reshape
@@ -10,6 +11,10 @@ from OpenGLContext import context
 from vrml.vrml97 import shaders
 import operator
 from vrml import field,node,fieldtypes,protofunctions
+try:
+    from functools import reduce 
+except ImportError:
+    pass
 from OpenGLContext.scenegraph import polygonsort,boundingvolume
 LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
@@ -43,9 +48,9 @@ class _Buffer( object ):
         'TRANSFORM_FEEDBACK': GL_TRANSFORM_FEEDBACK_BUFFER,
     }
     def gl_usage( self ):
-        return self.GL_USAGE_MAPPING[ self.usage ]
+        return self.GL_USAGE_MAPPING[ as_str(self.usage) ]
     def gl_target( self ):
-        return self.GL_TYPE_MAPPING[ self.type ]
+        return self.GL_TYPE_MAPPING[ as_str(self.type) ]
     def vbo( self, mode ):
         """Render this buffer on the mode"""
         uploaded = mode.cache.getData( self, 'buffer' )
@@ -332,7 +337,7 @@ class ShaderURLField( fieldtypes.MFString ):
             t.join()
         result = [ x for x in overall if x is not None ]
         if len(result) == len(overall):
-            client.source = '\n'.join( result )
+            client.source = '\n'.join( [as_str(r) for r in result] )
             # TODO: make this an observation that causes the 
             # contexts to redraw, *not* something the node does 
             # explicitly...
@@ -378,7 +383,7 @@ class GLSLShader( shaders.GLSLShader ):
             return False
         source = []
         if self.version:
-            source.append( '#version %s\n'%self.version )
+            source.append( b'#version %s\n'%self.version )
         for import_lib in self.imports:
             if not import_lib.source:
                 return False 
@@ -418,7 +423,7 @@ class GLSLObject( shaders.GLSLObject ):
     compileLog = field.newField( ' compileLog', 'SFString', '' )
     # we've manually chosen this implementation...
     def render( self, mode, shader=None ):
-        """Render this shader in the current mode"""
+        """Render our shaders in the current mode"""
         renderer = mode.cache.getData(self)
         if renderer is None:
             renderer = self.compile( mode, shader )
@@ -431,7 +436,7 @@ class GLSLObject( shaders.GLSLObject ):
                 GL_shaders.glUseProgram( renderer )
             except error.GLError:
                 log.error( '''Failure compiling: %s''', '\n'.join([
-                    '%s: %s'%(sh.url or sh.source,sh.compileLog)
+                    '%s: %s'%(as_str(sh.url or sh.source),as_str(sh.compileLog))
                     for sh in self.shaders
                 ]))
                 raise
@@ -446,7 +451,8 @@ class GLSLObject( shaders.GLSLObject ):
                     if texture.render( self, mode, i ):
                         i += 1
         else:
-            log.warn( 'Renderer for %s was null: %s', self, self.compileLog )
+            log.info( 'Renderer for %s was null (likely loading): %s', self, self.compileLog )
+            return True,True,True,None
         return True,True,True,renderer 
     def holderDepend( self, holder ):
         """Make this holder depend on our compilation vars"""
@@ -455,7 +461,7 @@ class GLSLObject( shaders.GLSLObject ):
             shader.holderDepend( holder )
         holder.depend( self,  'shaders' )
         return holder
-    def compile(self, mode, shader):
+    def compile(self, mode, shader=None):
         """Compile into GLSL linked object"""
         holder = self.holderDepend( mode.cache.holder(self,None) )
         # TODO: depend on shader.material as well...
@@ -471,7 +477,12 @@ class GLSLObject( shaders.GLSLObject ):
                 glAttachShader(program, subShader )
                 subShaders.append( subShader )
             elif shader.source:
-                log.warn( 'Failure compiling: %s\n%s', shader.compileLog, shader.url or "".join(shader.source) )
+                log.warning( 
+                    'Failure compiling: %s\n%s', 
+                    as_str(shader.compileLog), 
+                    shader.url or "".join([as_str(s) for s in shader.source]) 
+                )
+                return None
         if len(subShaders) == len(self.shaders):
             glLinkProgram(program)
             glUseProgram( program )
@@ -518,12 +529,14 @@ class GLSLObject( shaders.GLSLObject ):
             # TODO: unbind our attributes...
     def getVariable( self, name ):
         """Retrieve uniform/attribute by name"""
+        name = as_str(name)
         for uniform in self.uniforms:
             if uniform.name == name:
                 return uniform 
         return None
     def getLocation( self, mode, name, uniform=True ):
         """Retrieve attribute/uniform location"""
+        name = as_str(name)
         locationMap = mode.cache.getData( self, 'locationMap' )
         if locationMap is None:
             locationMap = {}
@@ -538,9 +551,9 @@ class GLSLObject( shaders.GLSLObject ):
             if program:
                 try:
                     if uniform:
-                        location = glGetUniformLocation( program, name )
+                        location = glGetUniformLocation( program, as_8_bit(name) )
                     else:
-                        location = glGetAttribLocation( program, name )
+                        location = glGetAttribLocation( program, as_8_bit(name) )
                 except error.GLError as err:
                     if err.err == GL_INVALID_VALUE:
                         self.compileLog += """Attribute access failure (%s): %s"""%(
@@ -552,7 +565,7 @@ class GLSLObject( shaders.GLSLObject ):
                     raise
                 locationMap[ name ] = location 
                 if location == -1:
-                    log.info( 'Unable to resolve uniform name %s', name )
+                    log.info( 'Unable to resolve uniform name %s', as_str(name) )
                 return location 
             else:
                 raise RuntimeError( 'Attempting to get attribute/uniform from failed compile' )
