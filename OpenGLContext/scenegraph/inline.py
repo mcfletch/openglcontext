@@ -1,4 +1,5 @@
 """VRML97 Inline node"""
+from __future__ import print_function
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import field, protofunctions, fieldtypes
 from OpenGLContext import context

@@ -1,4 +1,5 @@
 """WGL font classes"""
+from __future__ import print_function
 from OpenGLContext.scenegraph.text import fontprovider, font
 from OpenGL.WGL import *
 from OpenGL.GL import *

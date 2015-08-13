@@ -28,8 +28,9 @@ enabled equivalents from shadow.passes), and it is
 these classes which define the rendering callbacks
 which are available from the Context class.
 """
+from __future__ import print_function
 from OpenGL.GL import *
-from OpenGLContext import visitor, texturecache,plugins
+from OpenGLContext import texturecache,plugins
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node,cache

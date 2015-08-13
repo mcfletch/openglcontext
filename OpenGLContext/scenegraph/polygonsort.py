@@ -26,6 +26,7 @@ glDrawElements(
     indices
 )
 """
+from __future__ import print_function
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
 from OpenGL.GLU import *

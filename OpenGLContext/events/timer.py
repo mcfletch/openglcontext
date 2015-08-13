@@ -1,4 +1,5 @@
 """EventManager providing vcr-like control of an InternalTime object"""
+from __future__ import print_function
 from . import eventmanager, systemtime, internaltime
 from pydispatch import dispatcher
 import logging 

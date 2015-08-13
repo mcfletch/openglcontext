@@ -5,6 +5,7 @@ into the ttfquery package, which provides for finding
 system fonts, generating registries of available fonts,
 querying metadata regarding a particular font/glyph etc.
 """
+from __future__ import print_function
 from fontTools import ttLib
 from OpenGLContext.arrays import *
 import weakref, sys

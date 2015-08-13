@@ -6,6 +6,7 @@ Note: this is an entirely separate implementation from the PyOpenGL
     will be available, and provides only those methods and helpers
     commonly needed for manipulating rotations.
 """
+from __future__ import print_function
 from math import *
 from OpenGLContext.arrays import *
 from OpenGLContext import utilities

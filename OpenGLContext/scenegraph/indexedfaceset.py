@@ -56,7 +56,7 @@ XXX This node needs some serious optimization.  Possible approaches:
                 if the data array has changed, then is
                 the length of the data-array
 """
-from __future__ import generators
+from __future__ import print_function, generators
 from math import pi, sqrt
 from OpenGL.GL import *
 from OpenGL.GLU import *
