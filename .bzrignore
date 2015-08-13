@@ -1,6 +1,7 @@
 MANIFEST
 *.e?p
 *.profile
+__pycache__
 callgrind.out*
 OpenGLContext.e4p
 OpenGLContext.e4p
