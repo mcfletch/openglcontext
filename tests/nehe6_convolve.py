@@ -21,10 +21,11 @@ Based on:
             If you use the code for your own projects please give me credit,
             or mention my web site somewhere in your program or it's docs.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
-import time, os,sys
+import time, sys
 try:
     from PIL.Image import open
 except ImportError as err:

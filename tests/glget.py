@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 """Retrieve OpenGL state values and print to console"""
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-import string
 
 class TestContext( BaseContext ):
     def Render( self, mode = 0):

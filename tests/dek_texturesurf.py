@@ -1,12 +1,12 @@
 #! /usr/bin/env python
 '''DEK's Texturesurf demo, tests glEvalMesh2'''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 from OpenGLContext.scenegraph.basenodes import *
-import string, time
 
 ## Control points for the bezier surface
 ctrlpoints = array([
@@ -94,7 +94,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError as err:
+        except ImportError:
             from Image import open
         im = open(imageName)
         try:

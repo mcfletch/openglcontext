@@ -13,7 +13,8 @@ This tutorial is a minor revision of our previous shadow tutorial,
 the only change is to add off-screen rendering of the depth-texture
 rather than rendering on the back-buffer of the screen.
 '''
-import OpenGL,sys,os,traceback
+from __future__ import print_function
+import sys,traceback
 '''Import the previous tutorial as BaseContext'''
 from shadow_1 import TestContext as BaseContext
 from OpenGLContext import testingcontext
@@ -104,7 +105,7 @@ class TestContext( BaseContext ):
                 glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, color )
                 glBindRenderbuffer( GL_RENDERBUFFER, 0 )
             glBindFramebuffer(GL_FRAMEBUFFER, 0 )
-            holder = mode.cache.holder(
+            mode.cache.holder(
                 light,(fbo,texture),key=key
             )
         else:
@@ -142,7 +143,7 @@ class TestContext( BaseContext ):
         raise an OpenGL.error.GLError if the FBO is not properly configured.'''
         try:
             checkFramebufferStatus( )
-        except Exception as err:
+        except Exception:
             traceback.print_exc()
             import os
             os._exit(1)

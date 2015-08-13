@@ -1,10 +1,10 @@
 #! /usr/bin/env python
 '''Demonstration of profiling a vrml_view context.  Requires PyGame
 '''
+from __future__ import print_function
 from OpenGLContext.testingcontext import getVRML
 BaseContext = getVRML()
 from OpenGLContext import vrmlcontext
-import sys
 USE_HOTSHOT = 1
 
 class TestContext( 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     Profiles the display/running of a VRML scene
     """
-    import sys
+    import sys, os
     if not sys.argv[1:2]:
         print(usage)
         sys.exit(1)

@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 """Retrieve OpenGL pixel-map state values and print to console"""
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-import string
 
 ##from arraystuff import *
 from OpenGL.GL import *

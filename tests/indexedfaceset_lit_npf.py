@@ -5,12 +5,13 @@ Lit
 Material
 Normal-per-face generation
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
-import string, time, StringIO
+import StringIO
 from OpenGLContext.scenegraph import basenodes
 
 def loadData( data ):

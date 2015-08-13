@@ -7,12 +7,12 @@ This customization of the Timer customization of the
 rotating cube demo adds multiple-texture support with 
 a "light map" modulating the base texture.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext import texture
 from OpenGL.GL import *
 from OpenGL.GL.ARB.multitexture import *
-from OpenGLContext.arrays import array
 import sys
 from OpenGLContext.events.timer import Timer
 from OpenGL.extensions import alternate
@@ -108,7 +108,7 @@ class TestContext( BaseContext ):
         """Load an image from a file using PIL."""
         try:
             from PIL.Image import open
-        except ImportError as err:
+        except ImportError:
             from Image import open
         glActiveTexture(GL_TEXTURE0_ARB);
         return texture.Texture( open(imageName) )
@@ -117,7 +117,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError as err:
+        except ImportError:
             from Image import open
         glActiveTextureARB(GL_TEXTURE1); 
         return texture.Texture( open(imageName) )

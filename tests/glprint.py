@@ -11,6 +11,7 @@ here.
 We're going to have to use the wxPython context explicitly, so that 
 we have a single API for getting a window handle.
 '''
+from __future__ import print_function
 from OpenGLContext.wxinteractivecontext import wxInteractiveContext
 from OpenGLContext import testingcontext
 from OpenGL.GL import *

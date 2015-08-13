@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 '''Tests rendering using the ARB shader objects extension...
 '''
+from __future__ import print_function
 #import OpenGL 
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
@@ -11,7 +12,7 @@ from OpenGL.GLUT import *
 from OpenGLContext.arrays import array
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph.basenodes import *
-import time, sys,logging,math
+import logging,math
 log = logging.getLogger( 'shaderobjects' )
 log.warn( 'Context %s',  BaseContext )
 

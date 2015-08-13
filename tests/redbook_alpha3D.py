@@ -47,14 +47,14 @@
  *  the 'r' key to reset the scene.
  */
 """
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import context
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGLContext.arrays import array
-import string, time
+import time
 
 class Timer:
     def __init__( self, cycle = 8.0):

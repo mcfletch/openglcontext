@@ -1,11 +1,10 @@
 #! /usr/bin/env python
 '''Test of the glDrawElements function (draws square from string)'''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
-import string
-import flower_geometry
 
 points = array([[0,0,0],[1,0,0],[1,1,0],[0,1,0]], 'f')
 indices = array( range(len(points)), 'I')

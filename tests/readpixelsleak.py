@@ -1,12 +1,12 @@
 #! /usr/bin/env python
 '''Test leak on glReadPixelsub
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube
 from OpenGL.GL import *
-from OpenGLContext.arrays import array, reshape
-import string, time, os, sys
+import time, os, sys
 
 class TestContext( BaseContext ):
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning

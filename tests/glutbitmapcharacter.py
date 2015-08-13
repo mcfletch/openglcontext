@@ -1,12 +1,10 @@
 #! /usr/bin/env python
 '''Draw text with GLUT bitmap fonts'''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GLUT import *
-from OpenGLContext.arrays import array
-import string, time
-
 
 def drawText( value, x,y,  windowHeight, windowWidth, step = 18 ):
     """Draw the given text at given 2D position in window

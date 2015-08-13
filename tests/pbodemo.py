@@ -1,17 +1,15 @@
 #! /usr/bin/env python
 '''Tests/demos pixel-buffer-object operations in OpenGL
 '''
-import OpenGL 
+from __future__ import print_function
+#import OpenGL 
 #OpenGL.USE_ACCELERATE = False
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
-from OpenGLContext.arrays import array, frombuffer
 from OpenGL.arrays import vbo
-import string, time
-import ctypes,weakref
 
 class TestContext( BaseContext ):
     currentImage = 0

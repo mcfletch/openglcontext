@@ -1,9 +1,9 @@
 #! /usr/bin/env python
 '''SphereBackground object testing code
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import context
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 

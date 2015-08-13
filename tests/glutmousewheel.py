@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 '''Test FreeGLUT glutMouseWheelFunc extension to GLUT
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive( 'glut' )
 from OpenGL.GL import *

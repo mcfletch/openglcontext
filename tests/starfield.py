@@ -1,10 +1,10 @@
 #! /usr/bin/env python
 '''PointSet object test (draw line of coloured dots)
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.arrays import *
-from math import pi
 from numpy import random
 
 from OpenGLContext.scenegraph.basenodes import *

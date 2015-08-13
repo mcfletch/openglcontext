@@ -1,17 +1,15 @@
 #! /usr/bin/env python
 '''Test/demo of heightmap rendering (array-based)'''
-
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 from OpenGLContext.scenegraph.basenodes import *
-import string
 try:
     from PIL import Image
 except ImportError as err:
     import Image
-import flower_geometry
 from vrml import arrays
 
 class TestContext( BaseContext ):

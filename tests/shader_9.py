@@ -17,6 +17,7 @@ source is also going to support "attenuation", which is the
 natural effect where the intensity of a light falls off over 
 distance due to the spreading of the light rays.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

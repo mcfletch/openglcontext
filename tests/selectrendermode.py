@@ -5,13 +5,13 @@ Demonstrates use of "named transforms", objects which
 use push/pop of the name-stack to report selection during
 the rendermode.SelectRenderMode pass.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import drawcube, context, interactivecontext
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
-import string, time, random
+import random
 from OpenGLContext.scenegraph import basenodes
 
 class TestContext( BaseContext ):

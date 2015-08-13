@@ -9,9 +9,9 @@ This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?l
 with the tutorial, so that only changes from the tutorial are noted 
 here.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import interactivecontext, drawcube
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.constants import GLfloat_3,GLfloat_4

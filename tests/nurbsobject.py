@@ -7,14 +7,14 @@ This tutorial demonstrates more involve usage of the OpenGLContext
 scenegraph NURBs nodes.  It implements the RedBook trimmed-nurbs 
 demo using the scenegraph API.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
-import string, time
 
 from OpenGLContext.scenegraph.basenodes import *
-from OpenGLContext.scenegraph import nurbs
+#from OpenGLContext.scenegraph import nurbs
 
 class TestContext( BaseContext ):
     """RedBook Trimmed Nurbs Demo"""

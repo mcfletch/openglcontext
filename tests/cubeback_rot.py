@@ -1,13 +1,12 @@
 #! /usr/bin/env python
 '''CubeBackground object test (image cube background)'''
+from __future__ import print_function
 import OpenGL 
 OpenGL.ERROR_ON_COPY = True
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.loaders.loader import Loader
-from math import pi
-from OpenGLContext.events.timer import Timer
 
 scene = """#VRML V2.0 utf8
 

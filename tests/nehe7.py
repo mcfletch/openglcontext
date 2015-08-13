@@ -11,6 +11,7 @@ here.
 Note that key-bindings are different from the tutorial:
 arrows move, pageup/pagedown control speed of rotation
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

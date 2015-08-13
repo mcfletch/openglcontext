@@ -1,13 +1,11 @@
 #! /usr/bin/env python
 '''Demo of saving vector images from PyOpenGL using gl2ps
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import drawcube
 from OpenGLContext.passes import gl2psrenderpass
 from OpenGL.GL import *
-from OpenGLContext.arrays import array, reshape
-import string, time, os
 try:
     from OpenGL import gl2ps
 except ImportError:
@@ -50,7 +48,7 @@ class TestContext( BaseContext ):
                     "MyTitle",
                 )
                 try:
-                    visibleChange = gl2psrenderpass.defaultRenderPasses( self )
+                    gl2psrenderpass.defaultRenderPasses( self )
                 finally:
                     state = gl2ps.gl2psEndPage()
             if state != gl2ps.GL2PS_SUCCESS:

@@ -17,6 +17,7 @@ for the last tutorial, so we can ignore them.  If you don't
 recognize something, go back to the previous tutorial's 
 introduction.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

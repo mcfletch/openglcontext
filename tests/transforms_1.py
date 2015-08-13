@@ -10,10 +10,10 @@ We'll get started by doing some basic imports to get the
 OpenGLContext context, numpy, and all the other tools 
 we're going to use.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
-from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import *

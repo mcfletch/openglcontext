@@ -48,7 +48,7 @@ surface itself.
  *
  * OpenGL(R) is a registered trademark of Silicon Graphics, Inc.
 """
-
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 

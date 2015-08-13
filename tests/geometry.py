@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 '''Tests rendering of the Box geometry object
 '''
-import OpenGL
+from __future__ import print_function
+#import OpenGL
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -9,7 +10,6 @@ from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.arrays import array, pi
-import string, time
 
 images = [
     "nehe_glass.bmp",

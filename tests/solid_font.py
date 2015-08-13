@@ -1,11 +1,11 @@
 #! /usr/bin/env python
 '''Low-level tests of solid fonts'''
+from __future__ import print_function
 from OpenGL.GL import *
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
-import _fontstyles#, _ttf_fonts
-import sys, os, traceback
+#import _fontstyles#, _ttf_fonts
 
 ## The following makes the toolsfont provider available, toolsfont is dependent
 ## on the Python fonttools module, which is a cross-platform TTF-file module.

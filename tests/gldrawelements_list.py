@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 '''Test of the glDrawElements function taken from a list'''
+from __future__ import print_function
 import sys
 if sys.argv[1:]:
     import OpenGL 
@@ -8,8 +9,6 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
-import string
-import flower_geometry
 
 class TestContext( BaseContext ):
     useArrays = 0

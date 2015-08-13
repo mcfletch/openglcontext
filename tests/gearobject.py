@@ -1,12 +1,12 @@
 #! /usr/bin/env python
 '''Tests rendering of the Box geometry object
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
-import string, time
 from math import pi
 
 class TestContext( BaseContext ):

@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 '''Tests operation of the OpenGL1.5/ARB Occlusion Query extension
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, box

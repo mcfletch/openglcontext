@@ -12,12 +12,13 @@ This module uses the glWindowPos2dARB and glWindowPos2dvARB
 functions, as well as testing for proper operation under
 malformed parameters to the glWindowPos2dvARB function.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.constants import *
 from OpenGL import error
-import math, random, traceback, sys
+import traceback, sys
 from OpenGLContext.events.timer import Timer
 
 class TestContext( BaseContext ):
@@ -31,7 +32,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError as err:
+        except ImportError:
             from Image import open
         im = open(imageName)
         try:

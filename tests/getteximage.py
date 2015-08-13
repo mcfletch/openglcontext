@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 """Demonstrate/test usage of glGetTexImage"""
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph import imagetexture

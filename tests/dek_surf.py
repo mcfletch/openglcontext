@@ -1,12 +1,12 @@
 #! /usr/bin/env python
 '''DEK's Texturesurf demo without the texture, tests glEvalMesh2'''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 from OpenGLContext.scenegraph.basenodes import *
-import string, time
 
 ## Control points for the bezier surface
 ctrlpoints = array([

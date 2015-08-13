@@ -18,6 +18,7 @@ We're also going to quickly demonstrate the use of GLSL structures
 to bind together similar information into namespaces for easier
 reference.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

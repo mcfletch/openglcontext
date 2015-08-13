@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 '''Demo of saving images from PyOpenGL using PIL
 '''
+from __future__ import print_function
 import OpenGL
 OpenGL.UNSIGNED_BYTE_IMAGES_AS_STRING = False
 from OpenGLContext import testingcontext
@@ -8,8 +9,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube
 from OpenGLContext.scenegraph import imagetexture
 from OpenGL.GL import *
-from OpenGLContext.arrays import array, reshape, nonzero, ravel, amin,amax
-import string, time, os
+import time, os
 
 class TestContext( BaseContext ):
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
@@ -76,7 +76,7 @@ class TestContext( BaseContext ):
     def SaveTo( self, filename, format="JPEG" ):
         try:
             from PIL import Image # get PIL's functionality...
-        except ImportError as err:
+        except ImportError:
             # old style?
             import Image
         if not len(self.capturedImage):
@@ -93,11 +93,6 @@ class TestContext( BaseContext ):
         print('Saved image to %s'% (os.path.abspath( filename)))
         return image
     def OnCaptureColour( self , event=None):
-        try:
-            from PIL import Image # get PIL's functionality...
-        except ImportError as err:
-            # old style?
-            import Image
         width, height = self.getViewPort()
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         if self.typedFunction:

@@ -13,6 +13,7 @@ The purpose of this tutorial is to consolidate our work so far
 so that we can reuse it in further tutorials without needing to
 repeat code all the time.
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

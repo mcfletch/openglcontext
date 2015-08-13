@@ -41,7 +41,8 @@ This tutorial follows roughly after [http://www.paulsprojects.net/tutorials/smt/
 with alterations to work with OpenGLContext and a few different
 choices with regard to attempts to minimize artefacts in the shadows.
 '''
-import OpenGL
+from __future__ import print_function
+#import OpenGL
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()

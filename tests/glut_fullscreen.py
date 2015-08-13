@@ -3,14 +3,14 @@
 
 Based on nehe6
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive( 'glut' )
 from OpenGLContext.scenegraph import imagetexture
 from OpenGLContext import drawcube
 from OpenGL.GL import *
 from OpenGL.GLUT import *
-from OpenGLContext.arrays import array
-import string, time
+import time
 
 class TestContext( BaseContext ):
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning

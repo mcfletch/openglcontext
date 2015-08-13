@@ -45,13 +45,10 @@
  *  Use the 't' key to toggle the order of drawing polygons.
  */
 """
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import context
 from OpenGL.GL import *
-from OpenGLContext.arrays import array
-import string
-
 
 class TestContext( BaseContext ):
     """Red Book alpha.c

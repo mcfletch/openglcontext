@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 '''Test of gleLathe and related functions
 '''
+from __future__ import print_function
 #import OpenGL 
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext

@@ -1,10 +1,10 @@
 #! /usr/bin/env python
 '''Test point parameter rendering code
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.arrays import *
-from math import pi
 import sys
 
 from OpenGLContext.scenegraph.basenodes import *

@@ -8,14 +8,14 @@ visual effect as the original MoleHill Demo using the
 OpenGLContext Nurbs extension (patterned after the Blaxxun
 Nurbs extension).
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
-import string, time
 
 from OpenGLContext.scenegraph.basenodes import *
-from OpenGLContext.scenegraph import nurbs
+#from OpenGLContext.scenegraph import nurbs
 
 class TestContext( BaseContext ):
     def buildControlPoints( self ):

@@ -1,9 +1,9 @@
 #! /usr/bin/env python
 '''Test of the glVertex function (draws flower)'''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
-from OpenGLContext.arrays import array
 import flower_geometry
 
 class TestContext( BaseContext ):

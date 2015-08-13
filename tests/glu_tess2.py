@@ -1,5 +1,6 @@
 # -*- coding: latin-1 -*-
 """Simple GLU Tess-object test with combine callbacks"""
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

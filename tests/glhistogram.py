@@ -9,14 +9,12 @@ with the words "Hello From Alpha-ville!" in blue (the background showing
 through) and a scrawled "regular image stuff" in red (just part of the
 RGB image).
 '''
-
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 import numpy,sys
 from OpenGL.GL import *
 from OpenGL.GL.ARB.imaging import *
-
-import string
 
 class TestContext( BaseContext ):
     def OnInit( self, ):

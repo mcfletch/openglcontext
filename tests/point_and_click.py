@@ -1,14 +1,12 @@
 #! /usr/bin/env python
 '''Primitive mouse event handler test/demo
 '''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import drawcube, context, interactivecontext
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
-import string, time
-
 
 def buildGeometry():
     from OpenGLContext.scenegraph import basenodes

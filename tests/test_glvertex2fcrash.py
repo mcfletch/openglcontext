@@ -1,10 +1,9 @@
 #! /usr/bin/env python
 '''Test of the glVertex function (draws flower)'''
+from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
-from OpenGLContext.arrays import array
-import flower_geometry
 
 class TestContext( BaseContext ):
     def OnInit( self ):
@@ -15,7 +14,7 @@ class TestContext( BaseContext ):
         glBegin( GL_TRIANGLES )
         try:
             glVertex2fv( None )
-        except (TypeError,ValueError) as err:
+        except (TypeError,ValueError):
             print('Got expected TypeError on attempting to pass None to glVertex2fv')
         glEnd()
 
