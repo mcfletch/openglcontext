@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 """Interactive context using the PyGame API (provides navigation support)"""
-
-import string
-
 from OpenGLContext.pygamecontext import *
 from OpenGLContext import interactivecontext
 from OpenGLContext.move import viewplatformmixin

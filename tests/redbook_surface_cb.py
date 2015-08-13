@@ -55,9 +55,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
-import string, time, StringIO, sys
-from OpenGLContext.scenegraph import shape, indexedfaceset, material, appearance, light, transform
-
+import sys
 
 try:
     # anyone actually have 1.3???
@@ -112,7 +110,7 @@ class TestContext( BaseContext ):
         if not haveNurbsTessellator:
             try:
                 result = nurbs_tessellator.gluInitNurbsTessellatorEXT()
-            except NameError as err:
+            except NameError:
                 pass 
             else:
                 if not result:

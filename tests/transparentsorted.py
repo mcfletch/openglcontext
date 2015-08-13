@@ -6,9 +6,8 @@ BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
-from OpenGLContext import drawcube, context
 from OpenGLContext.arrays import *
-import string, time, StringIO
+import StringIO
 from OpenGLContext.scenegraph.basenodes import *
 
 def loadData( data ):

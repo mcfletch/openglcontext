@@ -2,7 +2,7 @@
 """Retrieve OpenGL state values and print to console"""
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-import string
+from OpenGLContext.arrays import allclose
 
 from OpenGLContext.scenegraph import basenodes
 
@@ -31,6 +31,7 @@ class TestContext( BaseContext ):
         self.strings.append( 'Doubles/Floats:' )
         for name, argument, description in doublearguments:
             result1,result2 = glGetDoublev( argument ), glGetFloatv( argument )
+            assert allclose(result1, result2),(result1,result2)
             self.strings.append( '  %s -> %s' % (name, result1 ) )
         
         self.strings.append( 'Strings:' )

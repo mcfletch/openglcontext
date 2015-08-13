@@ -5,7 +5,6 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
-import string, time, sys, os
 import logging
 log = logging.getLogger( __name__ )
 
@@ -27,8 +26,9 @@ class TestContext( BaseContext ):
         from OpenGLContext.scenegraph.text import fontprovider
         try:
             from OpenGLContext.scenegraph.text import toolsfont
+            assert toolsfont
             registry = self.getTTFFiles()
-        except ImportError as err:
+        except ImportError:
             log.warn( """Unable to import fonttools-based TTF-file registry, no TTF font support!""" )
         else:
             fontprovider.setTTFRegistry(
@@ -39,10 +39,12 @@ class TestContext( BaseContext ):
             self.family = self.families[0]
         try:
             from OpenGLContext.scenegraph.text import pygamefont
+            assert pygamefont
         except ImportError:
             log.warn( """Unable to import PyGame TTF-font renderer, no PyGame anti-aliased font support!""" )
         try:
             from OpenGLContext.scenegraph.text import glutfont
+            assert glutfont
         except ImportError:
             log.warn( """Unable to import GLUT-based TTF-file registry, no GLUT bitmap font support!""" )
     def OnInit( self ):

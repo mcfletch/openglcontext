@@ -51,8 +51,6 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
-import string, time, StringIO
-from OpenGLContext.scenegraph import shape, indexedfaceset, material, appearance, light, transform
 
 class TestContext( BaseContext ):
     initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning

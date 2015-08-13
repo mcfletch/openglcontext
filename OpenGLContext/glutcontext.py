@@ -142,7 +142,7 @@ class GLUTContext(
             glutLeaveMainLoop()
         try:
             fgDeinitialize(False)
-        except NameError as err:
+        except NameError:
             # older PyOpenGL without the FreeGLUT deinitialize function 
             pass 
         return super( GLUTContext, self ).OnQuit( event )
@@ -170,7 +170,6 @@ class GLUTContext(
         try:
             glutInit( sys.argv)
         except TypeError:
-            import string
             glutInit( ' '.join(sys.argv))
         
         render = cls( *args, **named)
@@ -183,7 +182,6 @@ def null_display():
     return
 
 if __name__ == "__main__":
-    from drawcube import drawCube
     class TestRenderer(GLUTContext):
         center = 2,0,-4
         def Render( self, mode = None):

@@ -3,7 +3,6 @@
 from OpenGL.GLUT import *
 from OpenGLContext import glutinteractivecontext
 from OpenGLContext import vrmlcontext
-import os, glob
 
 class VRMLContext(
     vrmlcontext.VRMLContext,
@@ -17,7 +16,6 @@ class VRMLContext(
         try:
             glutInit( sys.argv)
         except TypeError:
-            import string
             glutInit( ' '.join(sys.argv))
         
         render = cls()

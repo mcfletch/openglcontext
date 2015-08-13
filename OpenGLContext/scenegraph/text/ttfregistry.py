@@ -3,6 +3,11 @@ from ttfquery import ttffiles, describe
 import re
 
 ITALICS_FINDER = re.compile( '(italic[s]?)$', re.IGNORECASE )
+try:
+    import string 
+    ascii_letters = string.letters 
+except ImportError:
+    ascii_letters = str.ascii_letters
 
 class TTFRegistry( ttffiles.Registry ):
     """Minor specialisation to provide VRML97 fontstyle matching"""
@@ -68,8 +73,7 @@ class TTFRegistry( ttffiles.Registry ):
             # potentially multiple fonts match this description...
             # construct temporary fonts and see which has best match for common chars
             from OpenGLContext.scenegraph.text import _toolsfont
-            import string, locale, traceback
-            testString = string.letters.decode( locale.getpreferredencoding())
+            import traceback
             set = []
             for name in names:
                 try:
@@ -78,11 +82,11 @@ class TTFRegistry( ttffiles.Registry ):
                             self.fontMembers( name )[0]
                         )
                     )
-                    count = testFont.countGlyphs( testString )
+                    count = testFont.countGlyphs( ascii_letters )
                     set.append( (count,name) )
-                    if count == len(testString):
+                    if count == len(ascii_letters):
                         break
-                except Exception as err:
+                except Exception:
                     traceback.print_exc()
             set.sort()
             if not set:
