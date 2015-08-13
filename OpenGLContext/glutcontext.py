@@ -1,5 +1,6 @@
 '''Context functionality using the GLUT windowing API
 '''
+from __future__ import print_function
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGLContext.context import Context
@@ -26,14 +27,13 @@ class GLUTContext(
             for key,value in named.items():
                 setattr( definition, key, value )
         self.contextDefinition = definition
-        glutInitDisplayMode( self.glutFlagsFromDefinition( definition ) )
-        glutInit([])
         if glutInitContextVersion and definition.version[0]:
             glutInitContextVersion(*definition.version)
         if glutInitContextProfile and definition.profile == 'core':
+            glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
             glutInitContextProfile(GLUT_CORE_PROFILE)
-        
-        glutInitDisplayMode( self.DISPLAYMODE )
+        glutInitDisplayMode( self.glutFlagsFromDefinition( definition ) )
+        glutInit([])
         # set up window size for newly created windows
         glutInitWindowSize(* [int(i) for i in definition.size] )
         # create a new rendering window
