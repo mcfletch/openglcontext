@@ -3,28 +3,28 @@
 # written by resourcepackage: (1, 0, 1)
 source = 'phongprecalc.vert'
 package = 'OpenGLContext.resources'
-data = "// Vertex-shader pre-calculation for blinn-phong lighting\012vo\
-id phong_preCalc( \012    in vec3 vertex_position,\012    in vec4 \
-light_position,\012    out float light_distance,\012    out vec3 e\
-c_light_location,\012    out vec3 ec_light_half\012) {\012    // This\
- is the core setup for a phong lighting pass as a reusable f\
-ragment of code.\012    \012    // vertex_position -- un-transform\
-ed vertex position (world-space)\012    // light_position -- un\
--transformed light location (direction)\012    // light_distanc\
-e -- output giving world-space distance-to-light \012    // ec_\
-light_location -- output giving location of light in eye coo\
-rds \012    // ec_light_half -- output giving the half-vector o\
-ptimization\012    \012    if (light_position.w == 0.0) {\012        \
-// directional rather than positional light...\012        ec_li\
-ght_location = normalize(\012            gl_NormalMatrix *\012    \
-        light_position.xyz\012        );\012        light_distance\
- = 0.0;\012    } else {\012        // positional light, we calcula\
-te distance in \012        // model-view space here, so we take\
- a partial \012        // solution...\012        vec3 ms_vec = (\012 \
-           light_position.xyz -\012            vertex_position\012\
-        );\012        vec3 light_direction = gl_NormalMatrix * \
-ms_vec;\012        ec_light_location = normalize( light_directi\
-on );\012        light_distance = abs(length( ms_vec ));\012    }\012\
-    // half-vector calculation \012    ec_light_half = normaliz\
-e(\012        ec_light_location - vec3( 0,0,-1 )\012    );\012}\012"
+data = (b'// Vertex-shader pre-calculation for blinn-phong lighting\nvo'
++b'id phong_preCalc( \n    in vec3 vertex_position,\n    in vec4 '
++b'light_position,\n    out float light_distance,\n    out vec3 e'
++b'c_light_location,\n    out vec3 ec_light_half\n) {\n    // This'
++b' is the core setup for a phong lighting pass as a reusable f'
++b'ragment of code.\n    \n    // vertex_position -- un-transform'
++b'ed vertex position (world-space)\n    // light_position -- un'
++b'-transformed light location (direction)\n    // light_distanc'
++b'e -- output giving world-space distance-to-light \n    // ec_'
++b'light_location -- output giving location of light in eye coo'
++b'rds \n    // ec_light_half -- output giving the half-vector o'
++b'ptimization\n    \n    if (light_position.w == 0.0) {\n        '
++b'// directional rather than positional light...\n        ec_li'
++b'ght_location = normalize(\n            gl_NormalMatrix *\n    '
++b'        light_position.xyz\n        );\n        light_distance'
++b' = 0.0;\n    } else {\n        // positional light, we calcula'
++b'te distance in \n        // model-view space here, so we take'
++b' a partial \n        // solution...\n        vec3 ms_vec = (\n '
++b'           light_position.xyz -\n            vertex_position\n'
++b'        );\n        vec3 light_direction = gl_NormalMatrix * '
++b'ms_vec;\n        ec_light_location = normalize( light_directi'
++b'on );\n        light_distance = abs(length( ms_vec ));\n    }\n'
++b'    // half-vector calculation \n    ec_light_half = normaliz'
++b'e(\n        ec_light_location - vec3( 0,0,-1 )\n    );\n}\n')
 ### end
