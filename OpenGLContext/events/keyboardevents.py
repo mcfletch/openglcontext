@@ -1,5 +1,6 @@
 """Event classes and manager relating to the keyboard"""
 from OpenGLContext.events import event, eventmanager
+from OpenGL._bytes import as_str
     
 class KeyboardEvent (event.Event):
     """Raw keyboard events, includes <ctrl> and the like.
@@ -16,10 +17,18 @@ class KeyboardEvent (event.Event):
         state -- Boolean 0 = up/released, 1 = down/pressed
     """
     type = "keyboard"
-    name = ""
     state = 0 # 0 = up/released, 1 = down/pressed
     
     side = 0 # 1 = left, 2 = right, 3= keypad may not be available everywhere
+    _name = ""
+    @property 
+    def name(self):
+        return self._name 
+    @name.setter
+    def name(self,value):
+        value = as_str(value)
+        self._name = value 
+        return self._name
     def getKey (self):
         """Get the event key used to lookup a handler for this event"""
         return self.name, self.state, self.getModifiers()
@@ -39,7 +48,15 @@ class KeypressEvent( event.Event ):
             for discussion of possible values.
     """
     type = "keypress"
-    name = ""
+    _name = ""
+    @property 
+    def name(self):
+        return self._name 
+    @name.setter
+    def name(self,value):
+        value = as_str(value)
+        self._name = value 
+        return self._name
     side = 0 # 1 = left, 2 = right, 3= keypad may not be available everywhere
     repeating = 0 # if true, this is a virtual event generated as a typematic repeat
     def getKey (self):
@@ -89,7 +106,7 @@ class KeyboardEventManager (eventmanager.EventManager):
         returns the previous handler or None
         """
         if name is not None:
-            key = name, state, modifiers
+            key = as_str(name), state, modifiers
         else:
             key = None
         return super( KeyboardEventManager, self).registerCallback( key, function )
@@ -130,7 +147,7 @@ class KeypressEventManager (eventmanager.EventManager):
         returns the previous handler or None
         """
         if name is not None:
-            key = name, modifiers
+            key = as_str(name), modifiers
         else:
             key = None
         return super( KeypressEventManager, self).registerCallback( key, function )
