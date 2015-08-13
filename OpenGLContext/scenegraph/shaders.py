@@ -13,7 +13,6 @@ from vrml import field,node,fieldtypes,protofunctions
 from OpenGLContext.scenegraph import polygonsort,boundingvolume
 LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
 
-from OpenGL.extensions import alternate
 import logging
 log = logging.getLogger( __name__ )
 
@@ -145,7 +144,7 @@ class ShaderAttribute( shaders.ShaderAttribute ):
             return current 
         try:
             buffer = self.bufferView()
-        except AttributeError as err:
+        except AttributeError:
             bv = boundingvolume.BoundingVolume()
         else:
             bv = boundingvolume.AABoundingBox.fromPoints( buffer )
@@ -238,7 +237,7 @@ class TextureBufferUniform( _TextureUniform, shaders.TextureBufferUniform ):
         texture = mode.cache.getData( self, 'texture' )
         if texture is None:
             texture = glGenTextures( 1 )
-            holder = mode.cache.holder( self, texture, 'texture' )
+            mode.cache.holder( self, texture, 'texture' )
         return texture
     def render( self, shader, mode, index ):
         """Bind the actual uniform value"""
@@ -337,8 +336,8 @@ class ShaderURLField( fieldtypes.MFString ):
             # TODO: make this an observation that causes the 
             # contexts to redraw, *not* something the node does 
             # explicitly...
-            for context in contexts:
-                c = context()
+            for c_holder in contexts:
+                c = c_holder()
                 if c:
                     c.triggerRedraw(1)
             return
@@ -369,6 +368,7 @@ class GLSLImport( shaders.GLSLImport ):
 class GLSLShader( shaders.GLSLShader ):
     """GLSL-based shader node"""
     url = ShaderURLField( 'url', 'MFString', list)
+    version = field.newField( 'version','SFString','')
     compileLog = field.newField( ' compileLog', 'SFString', '' )
     def holderDepend( self, holder ):
         holder.depend( self,  'source')
@@ -377,6 +377,8 @@ class GLSLShader( shaders.GLSLShader ):
         if not self.source:
             return False
         source = []
+        if self.version:
+            source.append( '#version %s\n'%self.version )
         for import_lib in self.imports:
             if not import_lib.source:
                 return False 
@@ -427,10 +429,10 @@ class GLSLObject( shaders.GLSLObject ):
         if renderer not in (None,False):
             try:
                 GL_shaders.glUseProgram( renderer )
-            except error.GLError as err:
+            except error.GLError:
                 log.error( '''Failure compiling: %s''', '\n'.join([
-                    '%s: %s'%(shader.url or shader.source,shader.compileLog)
-                    for shader in self.shaders
+                    '%s: %s'%(sh.url or sh.source,sh.compileLog)
+                    for sh in self.shaders
                 ]))
                 raise
             else:
@@ -525,8 +527,8 @@ class GLSLObject( shaders.GLSLObject ):
         locationMap = mode.cache.getData( self, 'locationMap' )
         if locationMap is None:
             locationMap = {}
-            holder = mode.cache.holder( self, locationMap, 'locationMap' )
-            holder = self.holderDepend( 
+            mode.cache.holder( self, locationMap, 'locationMap' )
+            self.holderDepend( 
                 mode.cache.holder(self,locationMap,'locationMap') 
             )
         try:
@@ -685,7 +687,7 @@ class ShaderGeometry( shaders.ShaderGeometry ):
             return self.boundingVolume(mode).visible( 
                 frustum, matrix, occlusion=occlusion, mode=mode 
             )
-        except Exception as err:
+        except Exception:
             tb = traceback.format_exc( )
             log.warn(
                 """Failure during Shape.visible check for %r:\n%s""",
