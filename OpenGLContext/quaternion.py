@@ -163,14 +163,7 @@ class Quaternion(object):
         else:
             sourceScale = 1.0-fraction
             targetScale = fraction
-        try:
-            return self.__class__( (sourceScale * self.internal)+(targetScale * target) )
-        except ValueError as  err:
-            print(sourceScale)
-            print(self.internal) 
-            print(targetScale)
-            print(target) 
-            raise
+        return self.__class__( (sourceScale * self.internal)+(targetScale * target) )
 
 
 def test ():
