@@ -5,6 +5,7 @@ except ImportError:
     import queue as Queue
 import logging 
 log = logging.getLogger( __name__ )
+from OpenGL._bytes import as_str
 
 class EventHandlerMixin(object):
     """This class provides mix in functionality for contexts
@@ -59,7 +60,7 @@ class EventHandlerMixin(object):
 
         See: mouseevents, keyboardevents
         """
-        manager = self.getEventManager( eventType )
+        manager = self.getEventManager( as_str(eventType) )
         if manager:
             manager.registerCallback( *arguments, **namedarguments )
         else:
@@ -86,6 +87,7 @@ class EventHandlerMixin(object):
         to define a single handler to deal with both event types,
         and pass that handler twice, once for each event type.
         """
+        eventType = as_str(eventType)
         if manager:
             previous = self.addEventManager( eventType, manager )
             self.__uncaptureDict[ eventType ] = previous
