@@ -73,7 +73,7 @@ class EdgeSet( object ):
         
         for triangleIndex in range(0, int(len(points)/3)):
             pointIndex = triangleIndex*3
-            a,b,c = map(tuple,points[pointIndex:pointIndex+3])
+            a,b,c = [tuple(x) for x in points[pointIndex:pointIndex+3]]
             # this compresses the code in the gamasutra article
             # considerably because we know that
             # index of a < index of b < index of c
@@ -87,7 +87,7 @@ class EdgeSet( object ):
                 
         for triangleIndex in range(0, int(len(points)/3)):
             pointIndex = triangleIndex*3
-            a,b,c = map(tuple,points[pointIndex:pointIndex+3])
+            a,b,c = [tuple(x) for x in points[pointIndex:pointIndex+3]]
             for key in [ (a,c),(c,b),(b,a)]: # only case where an edge can be in reverse order
                 if pointSet.get( key ):
                     pointSet.get(key)[1].append( triangleIndex )

@@ -105,7 +105,7 @@ class SolidGlyph( OutlineGlyph ):
                     if self.DEBUG_RENDER_EXTRUSION_NORMALS:
                         glBegin( GL_LINES )
                         try:
-                            for ((x,y), (dx,dy)) in map( None, points, normals ):
+                            for ((x,y), (dx,dy)) in zip( points, normals ):
                                 glColor( 0,1,0)
                                 glVertex2d( x,y )
                                 glColor( 1,0,0)

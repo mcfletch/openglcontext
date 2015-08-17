@@ -49,6 +49,6 @@ class Vertex(object):
         """Get a debugging-friendly representation of the vertex"""
         return """%s((%s),index=%s)"""% (
             self.__class__.__name__,
-            ",".join(map(str,tuple(self.point))),
+            ",".join([str(x) for x in tuple(self.point)]),
             self.metaIndex,
         )
