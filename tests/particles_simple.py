@@ -24,6 +24,10 @@ try:
 except ImportError as err:
     RandomArray = None
 try:
+    xrange 
+except NameError:
+    xrange = range
+try:
     from OpenGLContext.scenegraph.text import glutfont
 except ImportError:
     glutfont = None
