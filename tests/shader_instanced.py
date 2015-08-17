@@ -310,5 +310,5 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
     #TestContext.ContextMainLoop(debug=False,profile='core',version=(3,3))
-    TestContext.ContextMainLoop(debug=True)
+    TestContext.ContextMainLoop()
 
