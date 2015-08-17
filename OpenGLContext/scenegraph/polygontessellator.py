@@ -156,7 +156,7 @@ class PolygonTessellator(object):
                         [item[0] for item in combined],
                         [item[1] for item in combined],
                     )
-        newVertex = apply( Vertex, (), attributes)
+        newVertex = Vertex(**attributes)
         return newVertex
     def end( self, *args, **namedargs ):
         """Record the end of a tessellated shape (GLU Tess callback)

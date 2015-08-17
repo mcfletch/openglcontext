@@ -173,7 +173,7 @@ def test ():
     print(fromEuler( z = pi/2 ).XYZR())
     print(fromEuler( y = pi/2, z = pi/2 ).matrix())
     rot = fromEuler( y = pi/2, z = pi/2 ).XYZR()
-    print(apply( fromXYZR, rot).matrix())
+    print(fromXYZR(*rot).matrix())
     print(fromEuler( y = pi/2, z = pi/2 ))
     first = fromXYZR( 0,1,0,0 )
     second = fromXYZR( 0,1,0,pi )

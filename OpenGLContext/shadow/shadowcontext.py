@@ -23,7 +23,7 @@ class InfViewPlatform( viewplatform.ViewPlatform ):
         glMatrixMode(GL_MODELVIEW)
         x,y,z,r = self.quaternion.XYZR()
         glRotate( r*RADTODEG, x,y,z )
-        apply( glTranslate, ( negative (self.position))[:3])
+        glTranslate( *( negative (self.position))[:3])
 
 class ShadowContext:
     """Mix-in for contexts wanting stencil-shadow support
