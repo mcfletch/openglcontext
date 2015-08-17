@@ -11,25 +11,28 @@ BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
-import StringIO
+from io import StringIO
 from OpenGLContext.scenegraph import basenodes
+assert basenodes.IndexedFaceSet
+assert basenodes.Coordinate
+assert basenodes.Appearance
 
 def loadData( data ):
-    file = StringIO.StringIO( data )
+    file = StringIO( data )
     points = []
     indices = []
     readingPoints = 1
     while readingPoints:
         line = file.readline().strip().split()
         if len(line) > 1:
-            points.append( map( float, line ))
+            points.append([ float(x) for x in line] )
         else:
             readingPoints = 0
     readingIndices = 1
     while readingIndices:
         line = file.readline().strip().split()
         if len(line) > 1:
-            indices.extend( map( int, line ))
+            indices.extend( [int(x) for x in line ])
         else:
             readingIndices = 0
     print('got %s point and %s indices'% ( len(points), len(indices)))
@@ -70,7 +73,7 @@ class TestContext( BaseContext ):
         )
 
 
-TESTDATA = """-1 0 0
+TESTDATA = u"""-1 0 0
 0 -.5 -1
 2 0 0
 1 1 0
@@ -79,7 +82,7 @@ TESTDATA = """-1 0 0
 
 0 1 2 3 4 5
 """
-##TESTDATA = """-1 0 0
+##TESTDATA = u"""-1 0 0
 ##1 0 0
 ##1 1 0
 ##-1 1 0
