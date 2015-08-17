@@ -2,8 +2,13 @@
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.arrays import arange
+try:
+    xrange 
+except NameError:
+    xrange = range
 
 from OpenGLContext.scenegraph.basenodes import *
+assert Shape
 
 class TestContext( BaseContext ):
     initialPosition = (0,0,100)
@@ -18,8 +23,7 @@ class TestContext( BaseContext ):
             point = points,
         )
         color = Color(
-            color = map(
-                None,
+            color = zip(
                 line,
                 line2,
                 [0]*len(line)
@@ -29,17 +33,22 @@ class TestContext( BaseContext ):
             coord = coord,
             color = color,
         )
-        self.ils = IndexedLineSet( coordIndex=range(len(points)), coord=coord, color=color )
-        self.switch = Switch(
-            whichChoice = 1,
-            choice = [
+        self.ils = IndexedLineSet( 
+            coordIndex=range(len(points)), 
+            coord=coord, 
+            color=color,
+        )
+        s = [
                 Shape(
                     geometry = self.ps
                 ),
                 Shape(
                     geometry = self.ils,
                 ),
-            ],
+            ]
+        self.switch = Switch(
+            whichChoice = 1,
+            choice = s,
         )
         ts = TimeSensor( cycleInterval=300, loop=True )
         self.sg = sceneGraph(
@@ -67,8 +76,7 @@ class TestContext( BaseContext ):
         line = arange(0.0,1.0,1.0/float(count+1))[:count]
         line2 = line[::-1]
         self.ps.coord.point = points
-        self.ps.color.color = map(
-            None,
+        self.ps.color.color = zip(
             line,
             line2,
             [0]*len(line)
