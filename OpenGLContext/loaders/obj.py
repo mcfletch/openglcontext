@@ -117,11 +117,11 @@ class OBJHandler( base.BaseHandler ):
                 continue
 
             if values[0] == 'v':
-                vertices.append(map(float, values[1:4]))
+                vertices.append([float(x) for x in values[1:4]])
             elif values[0] == 'vn':
-                normals.append(map(float, values[1:4]))
+                normals.append([float(x) for x in values[1:4]])
             elif values[0] == 'vt':
-                tex_coords.append(map(float, values[1:3]))
+                tex_coords.append([float(x) for x in values[1:3]])
             elif values[0] == 'mtllib':
                 self.load_material_library(values[1], materials, baseURL)
             elif values[0] in ('usemtl', 'usemat'):
@@ -224,22 +224,22 @@ class OBJHandler( base.BaseHandler ):
         
         ci/ti/ni where ti and ni can be null
         """
-        return (
-            map(int, [j or 0 for j in v.split('/')]) + [0, 0]
-        )[:3]
+        return ([
+            int(x) for x in [j or 0 for j in v.split('/')]
+        ] + [0, 0])[:3]
     def load_material_library( self, url, materials, baseURL=None ):
         """Load the materials in resource into the materials set"""
         #( resolvedURL, os.path.abspath(filename), file, headers )
         try:
             finalURL, filename, file, headers = loader.Loader( url, baseURL )
-        except IOError as err:
+        except IOError:
             if '/' in url:
                 possible = url.split( '/' )[-1]
                 try:
                     finalURL, filename, file, headers = loader.Loader( 
                         possible, baseURL 
                     )
-                except IOError as err:
+                except IOError:
                     log.warn(
                         """Unable to load material library: %s""",
                         url,
@@ -263,13 +263,13 @@ class OBJHandler( base.BaseHandler ):
 
             try:
                 if values[0] == 'Kd':
-                    material.material.diffuseColor = map(float, values[1:])
+                    material.material.diffuseColor = [float(x) for x in values[1:]]
                 elif values[0] == 'Ka':
-                    material.material.ambientColor = map(float, values[1:])
+                    material.material.ambientColor = [float(x) for x in values[1:]]
                 elif values[0] == 'Ks':
-                    material.material.specularColor = map(float, values[1:])
+                    material.material.specularColor = [float(x) for x in values[1:]]
                 elif values[0] == 'Ke':
-                    material.material.emissiveColor = map(float, values[1:])
+                    material.material.emissiveColor = [float(x) for x in values[1:]]
                 elif values[0] == 'Ns':
                     material.material.shininess = float(values[1])
                 elif values[0] == 'd':
