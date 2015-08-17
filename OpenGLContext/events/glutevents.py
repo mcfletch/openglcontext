@@ -136,12 +136,12 @@ keyboardMapping = {
     GLUT_KEY_HOME: '<home>',
     GLUT_KEY_END: '<end>',
     GLUT_KEY_INSERT: '<insert>',
-    '\015': '<return>',
-    '\011': '<tab>',
+    b'\015': '<return>',
+    b'\011': '<tab>',
     # note the ASCII encodings
-    '\033': '<escape>',
-    '\177': '<delete>',
-    '\010': '<backspace>',
+    b'\033': '<escape>',
+    b'\177': '<delete>',
+    b'\010': '<backspace>',
 }
 buttonMapping = {
     GLUT_LEFT_BUTTON: 0,
