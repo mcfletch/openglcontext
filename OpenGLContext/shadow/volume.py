@@ -318,7 +318,7 @@ class Volume( object ):
         Bs = self.edges[0::step]
         As = self.edges[1::step]
         glBegin( GL_LINES )
-        for A,B in map(None, As, Bs):
+        for A,B in zip(As, Bs):
             glColor3f( 0,0,1.0)
             glVertex4dv( A )
             glColor3f( 0,1.0,.5)
