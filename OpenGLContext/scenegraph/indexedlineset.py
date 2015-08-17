@@ -1,12 +1,14 @@
 """IndexedLineSet VRML97 node implemented using display-lists"""
 from OpenGL.GL import *
 from OpenGLContext import displaylist
-from vrml import cache
 from OpenGLContext.scenegraph import coordinatebounded
-from OpenGLContext.scenegraph import vertex 
 from vrml.vrml97 import basenodes
 import warnings
 from vrml import protofunctions
+try:
+    from itertools import izip_longest as zip_longest
+except ImportError:
+    from itertools import zip_longest
 
 class IndexedLineSet(
     coordinatebounded.CoordinateBounded,
@@ -64,10 +66,10 @@ class IndexedLineSet(
                         color = colorIndices[index]
                         try:
                             color = int(color)
-                        except (TypeError,ValueError) as err:
+                        except (TypeError,ValueError):
                             glBegin( GL_LINE_STRIP )
                             try:
-                                for i,c in map(None, polyline, color):
+                                for i,c in zip_longest(polyline, color):
                                     if c is not None:
                                         # numpy treats None as retrieve all??? why?
                                         currentColor = colors[c]
@@ -156,8 +158,8 @@ class IndexedLineSet(
                     color = colorIndices[index]
                     try:
                         color = int(color)
-                    except (TypeError,ValueError) as err:
-                        for i,c in map(None, polyline, color):
+                    except (TypeError,ValueError):
+                        for i,c in zip_longest(polyline, color):
                             if c is not None:
                                 # numpy treats None as retrieve all??? why?
                                 currentColor = colors[c]
