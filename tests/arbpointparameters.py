@@ -30,10 +30,10 @@ class TestContext( BaseContext ):
         line = arange(0.0,1.0,.01)
         line2 = line[::-1]
         self.coordinate = Coordinate(
-            point = map(None, line,[0]*len(line), [0]*len(line) ),
+            point = zip(line,[0]*len(line), [0]*len(line) ),
         )
         self.color = Color(
-            color = map(None,line, [0]*len(line), line2 ),
+            color = zip(line, [0]*len(line), line2 ),
         )
         self.geometry = PointSet(
             coord = self.coordinate,
@@ -66,8 +66,8 @@ class TestContext( BaseContext ):
         xes = arange( 0.0, 1.0, 0.01 )
         range = (xes - event.fraction())*math.pi*2
         yes = sin( range )
-        points = map(None,xes,yes,[0.0]*len(xes))
-        colors = map(None,xes,xes[::-1],[0.0]*len(xes))
+        points = zip(xes,yes,[0.0]*len(xes))
+        colors = zip(xes,xes[::-1],[0.0]*len(xes))
         self.coordinate.point = points
         self.color.color = colors
     def OnDisableExtension( self, event ):
