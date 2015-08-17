@@ -6,8 +6,8 @@ ITALICS_FINDER = re.compile( '(italic[s]?)$', re.IGNORECASE )
 try:
     import string 
     ascii_letters = string.letters 
-except ImportError:
-    ascii_letters = str.ascii_letters
+except AttributeError:
+    ascii_letters = string.ascii_letters
 
 class TTFRegistry( ttffiles.Registry ):
     """Minor specialisation to provide VRML97 fontstyle matching"""
