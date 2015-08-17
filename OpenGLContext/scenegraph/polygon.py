@@ -92,7 +92,6 @@ class Polygon( list ):
         """
         result = []
         localVertices = self[:]
-        set = {}
         while localVertices:
             # first check, are there any triangles with two points equal?
             currentVertices = localVertices[:3]
@@ -127,7 +126,7 @@ class Polygon( list ):
         """Produce code-like representation of the polygon"""
         return """%s([\n\t%s],\n\t%s)"""%(
             self.__class__.__name__,
-            "\n\t".join(map(repr,self)),
+            "\n\t".join([repr(child) for child in self]),
             self.node,
         )
 
@@ -161,7 +160,7 @@ class DegeneratePolygon(object):
     def __repr__(self,):
         return """%s([\n\t%s],\n\t%s,\n\t%r)"""%(
             self.__class__.__name__,
-            "\n\t".join(map(repr,self.vertices)),
+            "\n\t".join([repr(child) for child in self.vertices]),
             self.node,
             self.reason,
         )
