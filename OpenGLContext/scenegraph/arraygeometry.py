@@ -1,8 +1,8 @@
 """Vertex-array-based geometry node for faces, lines and points"""
 from OpenGL.GL import *
-from OpenGLContext.arrays import *
-import polygonsort
-from OpenGLContext import triangleutilities
+from ..arrays import *
+from . import polygonsort
+from .. import triangleutilities
 from OpenGL.arrays import vbo
 import logging
 log = logging.getLogger( __name__ )
