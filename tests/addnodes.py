@@ -4,7 +4,6 @@ BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 import random
 from OpenGLContext.events.timer import Timer
-from pydispatch import dispatcher
 
 scene = sceneGraph(
     children = [
