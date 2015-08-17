@@ -38,7 +38,8 @@ class OutlineGlyph( _toolsfont.Glyph ):
         glTranslate( self.width/scale, 0,0 )
     def renderContours(self, scale = 400.0):
         """Render the contour "hulls" which control the outline"""
-        def contourPoint( ((x,y),f) ):
+        def contourPoint( record ):
+            ((x,y),f) = record
             if f:
                 glColor3f( .3,.5,0)
             else:
@@ -118,8 +119,11 @@ class SolidGlyph( OutlineGlyph ):
         return data
     def _calculateExtrusionData( self, scale = 400.0 ):
         """Calculate extrusion points + normals for the glyph"""
-        def calculateNormal((x1,y1),(x2,y2),(x3,y3)):
+        def calculateNormal(first,second,third):
             """Calculate an approximate 2D normal for a 3-point set"""
+            (x1,y1) = first
+            (x2,y2) = second
+            (x3,y3) = third
             x,y = -(y3-y1),(x3-x1)
             l = sqrt(x*x+y*y)
             if l == 0:
