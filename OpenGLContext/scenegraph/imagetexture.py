@@ -310,7 +310,7 @@ class PixelTexture( _Texture, basenodes.PixelTexture ):
         if len( image ) < 4:
             # don't have any components...
             return None
-        width, height, componentCount = map(int,image[:3])
+        width, height, componentCount = [int(x) for x in image[:3]]
         if not componentCount:
             log.warn( 'bad component count in pixeltexture %s', self )
             return None
