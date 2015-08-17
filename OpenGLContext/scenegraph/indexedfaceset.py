@@ -57,11 +57,14 @@ XXX This node needs some serious optimization.  Possible approaches:
                 the length of the data-array
 """
 from __future__ import print_function, generators
-from math import pi, sqrt
+try:
+    xrange 
+except NameError:
+    xrange = range
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
-from vrml import cache
+#from vrml import cache
 from OpenGLContext import triangleutilities, displaylist
 from OpenGLContext.scenegraph import arraygeometry, coordinatebounded
 from OpenGLContext.scenegraph import polygon, vertex, polygontessellator, indexedpolygons
@@ -265,9 +268,9 @@ class IFSCompiler( object ):
         vertices = []
         if polygons is None:
             polygons = self.polygons( sources=sources )
-        for polygon in polygons:
-            polygon.normalise( tessellate )
-            vertices.extend( polygon )
+        for poly in polygons:
+            poly.normalise( tessellate )
+            vertices.extend( poly )
         return vertices
     def buildIndexedSources( self ):
         """Build the set of IndexedValueSource objects for this node
@@ -503,17 +506,17 @@ class IndexedPolygonsCompiler( IFSCompiler ):
         
         seenVertices = {}
         sourceArrays = list(enumerate(sources))
-        for vertex in vertices:
-            if not vertex.indexKey in seenVertices:
+        for vert in vertices:
+            if not vert.indexKey in seenVertices:
                 i = len(arrays[0])
-                seenVertices[ vertex.indexKey ] = i
+                seenVertices[ vert.indexKey ] = i
                 indices.append( i )
                 for arrayI,source in sourceArrays:
-                    value = getattr( vertex, source.vertexAttribute, None )
+                    value = getattr( vert, source.vertexAttribute, None )
                     if value is not None:
                         arrays[arrayI].append( value )
             else:
-                indices.append( seenVertices[vertex.indexKey ] )
+                indices.append( seenVertices[vert.indexKey ] )
         ip = indexedpolygons.IndexedPolygons(
             polygonSides = 3,
             index = indices,
