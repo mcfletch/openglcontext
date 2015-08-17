@@ -8,7 +8,7 @@ except ImportError:
 try:
     from cStringIO import StringIO
 except ImportError:
-    from StringIO import StringIO
+    from io import BytesIO as StringIO
 
 filename_extensions = ['.pkl', '.pkl.gz']
 
