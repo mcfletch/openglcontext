@@ -7,6 +7,11 @@ from OpenGLContext import context, contextdefinition
 from OpenGLContext.events import wxevents
 import logging 
 log = logging.getLogger( __name__ )
+try:
+    from cStringIO import StringIO
+except ImportError:
+    from io import BytesIO as StringIO
+
 
 class wxContext(
     glcanvas.GLCanvas, # wxPython OpenGL context
@@ -295,8 +300,7 @@ class wxContext(
 
 def getIcon( data ):
     """Return the data from the resource as a wxIcon"""
-    import cStringIO
-    stream = cStringIO.StringIO(data)
+    stream = StringIO(data)
     image = wx.ImageFromStream(stream)
     icon = wx.EmptyIcon()
     icon.CopyFromBitmap(wx.BitmapFromImage(image))
