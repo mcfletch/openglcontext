@@ -9,6 +9,7 @@ except NameError:
 
 from OpenGLContext.scenegraph.basenodes import *
 assert Shape
+assert IndexedLineSet
 
 class TestContext( BaseContext ):
     initialPosition = (0,0,100)
@@ -34,10 +35,11 @@ class TestContext( BaseContext ):
             color = color,
         )
         self.ils = IndexedLineSet( 
-            coordIndex=range(len(points)), 
+            coordIndex=list(range(len(points))), 
             coord=coord, 
             color=color,
         )
+        #print(self.ils.toString())
         s = [
                 Shape(
                     geometry = self.ps
