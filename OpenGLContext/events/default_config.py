@@ -1,5 +1,5 @@
 def addEventHandler( type, name, modifiers, function, state=1 ):
-    modifiers = [i[0] for i in map( None, ('shift','ctrl','alt'), modifiers ) if i[1]]
+    modifiers = [i[0] for i in zip(('shift','ctrl','alt'), modifiers) if i[1]]
     typeCap = type.capitalize()
     if type == 'keyboard':
         stateLine = """state = %(state)r,"""%locals()
