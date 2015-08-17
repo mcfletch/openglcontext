@@ -3,7 +3,7 @@ from OpenGL.GL import *
 from vrml.vrml97 import basenodes
 from OpenGLContext.scenegraph import boundingvolume, polygonsort
 from OpenGLContext.arrays import array
-import traceback, cStringIO
+import traceback
 import logging
 log = logging.getLogger( __name__ )
 LOCAL_ORIGIN = array( [[0,0,0,1.0]], 'f')
