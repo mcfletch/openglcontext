@@ -6,6 +6,7 @@ from OpenGLContext import texture, context
 #from vrml import cache
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import node, field, protofunctions, fieldtypes
+from io import BytesIO
 import logging 
 log = logging.getLogger( __name__ )
 
@@ -257,8 +258,7 @@ else:
             
         def loadFromData( self, data, url=None ):
             """Load (synchronously) from given data"""
-            import StringIO
-            fh = StringIO.StringIO( data )
+            fh = BytesIO( data )
             if url is None:
                 url = 'memory:%s'%(hash( data ),)
             try:
