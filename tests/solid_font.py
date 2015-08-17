@@ -13,8 +13,7 @@ from OpenGLContext.scenegraph.text import toolsfont, fontstyle3d
 ## The fontprovider.FontProvider class provides the hook for getting a particular
 ## font-provider implementation
 from OpenGLContext.scenegraph.text import fontprovider
-from OpenGL._bytes import unicode
-MESSAGE = unicode("The quick brown fox jumped over the lazy dog", 'latin-1')
+MESSAGE = u"The quick brown fox jumped over the lazy dog"
 
 class TestContext( BaseContext ):
     testingClass = None
