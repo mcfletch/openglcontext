@@ -3,9 +3,7 @@ from OpenGL.GL import *
 from vrml.vrml97 import basenodes
 from vrml import protofunctions
 from OpenGLContext.arrays import zeros
-from vrml import cache
 from OpenGLContext import displaylist
-import ctypes
 
 class Material(basenodes.Material):
     """Node specifying rendering properties affecting the lighting model
@@ -86,7 +84,8 @@ class Material(basenodes.Material):
             renderingData[1,:3] = self.emissiveColor.astype( 'f' )
             renderingData[2,:3] = self.specularColor.astype( 'f' )
             renderingData[3,:3] = (diffuseColor*self.ambientIntensity).astype('f')
-            map ( glMaterialfv, self.faces, self.datamap, renderingData )
+            for (face,data,rendering) in zip(self.faces,self.datamap,renderingData):
+                glMaterialfv(face,data,rendering)
             glMaterialf( self.faces[0], GL_SHININESS, self.shininess*128 )
         finally:
             dl.end()
