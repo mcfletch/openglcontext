@@ -194,7 +194,7 @@ else:
             value = super( ImageURLField, self).fdel( client, notify )
             del client.image
             return value
-        __del__ = fdel
+        __delete__ = fdel
 
     class ImageTexture( _Texture, basenodes.ImageTexture ):
         """A texture loaded from an image file
