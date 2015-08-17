@@ -70,6 +70,10 @@ from OpenGLContext.scenegraph import arraygeometry, coordinatebounded
 from OpenGLContext.scenegraph import polygon, vertex, polygontessellator, indexedpolygons
 from vrml.vrml97 import basenodes
 from vrml import protofunctions
+try:
+    from itertools import izip_longest as zip_longest
+except ImportError:
+    from itertools import zip_longest
 import logging
 log = logging.getLogger( __name__ )
 
@@ -523,7 +527,7 @@ class IndexedPolygonsCompiler( IFSCompiler ):
             solid = self.target.solid,
             ccw = self.target.ccw,
         )
-        for (source,array,nodetype) in zip( sources, arrays, self.indexedSourceNodes()):
+        for (source,array,nodetype) in zip_longest( sources, arrays, self.indexedSourceNodes()):
             if array:
                 node = nodetype()
                 setattr(node, source.attribute, array )
