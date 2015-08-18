@@ -174,7 +174,7 @@ class _Loader( object ):
         handler = self.findHandler( url )
         if not handler:
             raise ValueError( """We do not have a registered handler for url %r, registered handlers: %r"""%(
-                url, Loader.loadedHandlers.keys(),
+                url, list(Loader.loadedHandlers.keys()),
             ))
         result = self( url, baseURL=baseURL )
         if not result:
