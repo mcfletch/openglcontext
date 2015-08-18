@@ -12,6 +12,10 @@ try:
 except ImportError:
     from urllib.parse import urljoin as basejoin
 try:
+    from urllib import urlretrieve
+except ImportError as err:
+    from urllib.request import urlretrieve
+try:
     from cStringIO import StringIO
 except ImportError:
     from io import BytesIO as StringIO
@@ -123,7 +127,7 @@ class _Loader( object ):
         return baseURL, file, filename, headers
     def download( self, url ):
         """Download the given url to local disk, return local filename"""
-        filename, headers = urllib.urlretrieve(
+        filename, headers = urlretrieve(
             url,
         )
         return filename, headers
