@@ -15,12 +15,13 @@ union of:
 with prototypes from the second replacing those in the
 first.
 """
-from vrml.vrml97 import basenamespaces, parser, linearise, nodetypes
-from vrml import node, protofunctions
+from vrml.vrml97 import basenamespaces, parser, linearise
+from vrml import protofunctions
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.loaders import base
 from vrml.vrml97 import parseprocessor
-import urllib,threading
+from OpenGL._bytes import as_str
+import threading
 import logging 
 log = logging.getLogger( __name__ )
 
@@ -79,7 +80,7 @@ class VRML97Handler( base.BaseHandler ):
         self.LOCK.acquire()
         try:
             success, results, next = _parser.parse(
-                data,
+                as_str(data),
                 processor = parseprocessor.ParseProcessor(
                     basePrototypes = self.prototypes,
                     baseURI = baseURL,
