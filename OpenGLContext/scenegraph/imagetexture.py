@@ -328,8 +328,8 @@ class PixelTexture( _Texture, basenodes.PixelTexture ):
             return None
         import struct
         imageBody = image[3:]
-        data = "".join([
-            struct.pack( '>L', item )[-componentCount:]
+        data = b"".join([
+            struct.pack( b'>L', item )[-componentCount:]
             for item in imageBody
         ])
         tex = texture.Texture( )

@@ -8,6 +8,10 @@ try:
 except ImportError:
     from urllib import pathname2url
 try:
+    from urlparse import urljoin as basejoin
+except ImportError:
+    from urllib.parse import urljoin as basejoin
+try:
     from cStringIO import StringIO
 except ImportError:
     from io import BytesIO as StringIO
@@ -60,7 +64,7 @@ class _Loader( object ):
         for u in url:
             # get the "absolute" url
             if baseURL:
-                u = urllib.basejoin(baseURL, u )
+                u = basejoin(baseURL, u )
             resolvedURL, file, filename, headers = self.get( u )
             if file is not None and filename is not None:
                 break
