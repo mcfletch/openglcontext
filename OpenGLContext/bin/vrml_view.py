@@ -19,6 +19,7 @@ class TestContext(
         filename = sys.argv[1]
         self.load( filename )
         vrmlcontext.VRMLContext.OnInit( self )
+        #print(self.sg.toString())
         BaseContext.OnInit( self )
 
 def main():
