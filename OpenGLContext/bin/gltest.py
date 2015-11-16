@@ -31,6 +31,14 @@ def main():
         dest = "output",
         default = "test-results",
     )
+    parser.add_option(
+        '-f',
+        '--frame-count',
+        action="store",
+        type="int",
+        dest='frame_count',
+        default=3,
+    )
     options, args = parser.parse_args( sys.argv[1:] )
     if not options.script:
         if args:
@@ -61,12 +69,15 @@ def main():
     if cls is None:
         cls = context.Context.getContextType( None, plugins.VRMLContext )
     class SaveAndExit( cls ):
-        """Context which exits after the first rendering pass"""
+        """Context which exits after the Nth rendering pass"""
+        target_frame_count = options.frame_count
         frame_count = 0
+        def setupFrameRateCounter( self ):
+            """Don't want the frame-rate counter to mess up the diffs"""
         def OnDraw( self, *args, **named ):
             super( SaveAndExit, self ).OnDraw( *args, **named )
             self.frame_count += 1
-            if self.frame_count > 2:
+            if self.frame_count > self.target_frame_count:
                 self.setCurrent()
                 width,height = self.OnSaveImage(
                     template = output_name,
@@ -78,6 +89,7 @@ def main():
                     log.warn( 'Did not write retrying' )
                 sys.exit( 0 )
                 os._exit( 0 )
+            self.triggerRedraw()
     testingcontext.CONFIGURED_BASE = SaveAndExit
     # now, execute the script...
     try:
