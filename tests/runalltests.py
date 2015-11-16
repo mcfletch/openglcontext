@@ -1,10 +1,11 @@
 #! /usr/bin/env python
 """Script to run the "standard" set of OpenGLContext scripts (in this directory)"""
-import OpenGLContext,os,sys,subprocess,datetime, webbrowser
+import OpenGLContext,os,sys,subprocess,datetime, webbrowser, glob
 from OpenGLContext import testingcontext
 PYTHON = sys.executable
 TEST_RUNNER = os.path.join( os.path.dirname( OpenGLContext.__file__ ), 'bin','gltest.py' )
 SUCCESS_RETURN_CODE = 0
+HERE = os.path.dirname(__file__)
 
 def runTest( name ):
     """Execute a single test using gltest.py"""
@@ -15,6 +16,22 @@ def runTest( name ):
         cwd = os.path.dirname( full_name ),
     )
     return returnCode
+
+STOP_SET = set([
+    'frust_test_module.py',
+    'numpyfields.py',
+])
+
+def get_scripts():
+    scripts = [
+        x for x in glob.glob( os.path.join( HERE, '*.py' ))
+        if (
+            not os.path.basename(x).startswith( '_' )
+            and 
+            not os.path.basename(x) in STOP_SET
+        )
+    ]
+    return scripts
 
 scripts = """addnodes.py
 arbocclusionquery.py
