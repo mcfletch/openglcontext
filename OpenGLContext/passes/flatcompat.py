@@ -96,7 +96,7 @@ class FlatPass( _flat.FlatPass ):
             self.renderOpaque( toRender )
             self.renderTransparent( toRender )
 
-            if context.frameCounter.display:
+            if context.frameCounter and context.frameCounter.display:
                 context.frameCounter.Render( context )
         context.SwapBuffers()
         self.matrix = matrix
