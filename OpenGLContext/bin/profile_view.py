@@ -26,33 +26,13 @@ def main():
     A very limited VRML97 viewer which saves profile results
     to OpenGLContext.profile using the cProfile module.
     """
-    import sys, os, cProfile
+    import sys, cProfile
     if not sys.argv[1:2]:
         print(usage)
         sys.exit(1)
-    try:
-        raise ImportError( "Don't want to use KCacheGrind any more" )
-        from lsprofcalltree import KCacheGrind
-    except ImportError as err:
-        return cProfile.run( 
-            "TestContext.ContextMainLoop()", 'OpenGLContext.profile' 
-        )
-    else:
-        PROFILER = cProfile.Profile()
-        def top( ):
-            return TestContext.ContextMainLoop()
-        PROFILER.runcall( top )
-        def newfile( base ):
-            new = base 
-            count = 0
-            while os.path.isfile( new ):
-                new = '%s-%s'%( base, count )
-                count += 1
-            return new
-        KCacheGrind( PROFILER ).output( open(
-            newfile( 'callgrind.out' ), 'wb'
-        ))
-
+    return cProfile.run( 
+        "TestContext.ContextMainLoop()", 'OpenGLContext.profile' 
+    )
 
 if __name__ == "__main__":
     main()
