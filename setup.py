@@ -72,6 +72,15 @@ used to maintain and extend PyOpenGL.
                 'formats':['gztar','zip'],
             }
         },
+        entry_points = {
+            'console_scripts':[
+                'oglc-test=OpenGLContext.bin.gltest:main',
+                'oglc-lorentz=OpenGLContext.bin.lorentz:main',
+                'oglc-vrml=OpenGLContext.bin.vrml_view:main',
+                'oglc-profile=OpenGLContext.bin.profile_view:main',
+                'oglc-visual=OpenGLContext.bin.visualshell:main',
+            ],
+        },
         # non python files of examples      
         **extraArguments
     )
