@@ -48,6 +48,7 @@ class TestFrame( wx.Frame ):
             'plane2PointNormal':utilities.plane2PointNormal,
             'rotMatrix':utilities.rotMatrix,
             'dispatcher':dispatcher,
+            'np': arrays,
             'nodes': basenodes,
             'extrusions': extrusions,
         }
@@ -140,19 +141,15 @@ class UpdatingShell( shell.Shell ):
         except AttributeError:
             pass
 
+class TestApplication (wx.PySimpleApp):
+    def OnInit(self):
+        wx.InitAllImageHandlers()
+        frame = TestFrame(None, -1, "OpenGLContext wxPython tests")
+        ##frame.LoadContext(  )
+        frame.Show (1)
+        self.SetTopWindow(frame)
+        return 1
 
-
-if __name__ == "__main__":
-    class TestApplication (wx.PySimpleApp):
-        def OnInit(self):
-            wx.InitAllImageHandlers()
-            frame = TestFrame(None, -1, "OpenGLContext wxPython tests")
-            ##frame.LoadContext(  )
-            frame.Show (1)
-            self.SetTopWindow(frame)
-            return 1
-
-    app = TestApplication ()
+def main():
+    app = TestApplication()
     app.MainLoop()
-
-
