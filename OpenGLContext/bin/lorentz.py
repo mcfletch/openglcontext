@@ -11,7 +11,7 @@ from OpenGLContext.scenegraph.basenodes import *
 assert Shape
 assert IndexedLineSet
 
-class TestContext( BaseContext ):
+class LorentzContext( BaseContext ):
     initialPosition = (0,0,100)
     viewportDimensions = (1024,768)
     def OnInit( self ):
@@ -112,7 +112,7 @@ def lorentz( iterations = 100000, start=(0,-2,-1) ):
         points.append( (x0,y0,z0) )
     return points
 
+def main():
+    logging.basicConfig(level=logging.INFO)
+    LorentzContext.ContextMainLoop()
 
-if __name__ == "__main__":
-    import sys, cProfile
-    cProfile.run( "TestContext.ContextMainLoop()", 'OpenGLContext.profile' )
