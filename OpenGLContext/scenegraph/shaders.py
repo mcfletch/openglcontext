@@ -244,7 +244,8 @@ class TextureBufferUniform( _TextureUniform, shaders.TextureBufferUniform ):
             texture = glGenTextures( 1 )
             mode.cache.holder( self, texture, 'texture' )
         return texture
-    def render( self, shader, mode, index ):
+    
+    def render( self, shader, mode, index=0 ):
         """Bind the actual uniform value"""
         location = shader.getLocation( mode, self.name, uniform=True )
         if location is not None and location != -1:
@@ -444,7 +445,11 @@ class GLSLObject( shaders.GLSLObject ):
                 for uniform in mode.uniforms:
                     uniform.render( self, mode )
                 for uniform in self.uniforms:
-                    uniform.render( self, mode )
+                    try:
+                        uniform.render( self, mode )
+                    except Exception as err:
+                        err.args += (uniform,self)
+                        raise
                 # TODO: retrieve maximum texture count and restrict to that...
                 i = 0
                 for texture in self.textures:
