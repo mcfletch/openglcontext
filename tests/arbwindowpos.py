@@ -36,9 +36,9 @@ class TestContext( BaseContext ):
             from Image import open
         im = open(imageName)
         try:
-            ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBA", 0, -1)
+            ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBA", 0, -1)
         except SystemError:
-            ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBX", 0, -1)
+            ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBX", 0, -1)
         return ix,iy, image
     def OnInit( self, ):
         """Initialisation"""
