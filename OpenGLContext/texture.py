@@ -31,6 +31,7 @@ class NumpyAdapter( object ):
         self.array = array 
     def tostring( self,*args,**named ):
         return self.array 
+    tobytes = tostring
     def resize( self, *args, **named ):
         raise RuntimeError( """Don't support numpy image resizing""" )
 
@@ -143,7 +144,7 @@ class Texture( object ):
     def pilAsString( image ):
         """Convert PIL image to string pointer"""
         image = ImageOps.flip( image )
-        return image.tostring("raw", image.mode, 0, -1)
+        return image.tobytes("raw", image.mode, 0, -1)
     def ensureRGB( self, image ):
         """Ensure that the PIL image is in RGB mode
 
