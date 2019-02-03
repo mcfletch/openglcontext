@@ -19,7 +19,7 @@ class TestContext( BaseContext ):
     """)
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
-        glVertexPointer( 3, GL_FLOAT, 0, points.tostring())
+        glVertexPointer( 3, GL_FLOAT, 0, points.tobytes())
         glEnableClientState(GL_VERTEX_ARRAY);
         glDrawElementsui(
             GL_QUADS,

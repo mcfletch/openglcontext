@@ -195,7 +195,7 @@ class TestContext( BaseContext ):
         shader = self.shaders[ self.current_shader % len(self.shaders) ]
         for shape in self.shapes:
             shape.appearance = shader 
-            #print shader.toString()
+            #print shader.tobytes()
     def OnMand( self, event ):
         shader = self.shaders[2]
         zoom = shader.objects[0].getVariable( 'Zoom' )
@@ -215,7 +215,7 @@ class TestContext( BaseContext ):
                     iterations.value = 105
                 print('max iterations', iterations.value[0])
             else:
-                print('shader objects 0', shader.objects[0].toString())
+                print('shader objects 0', shader.objects[0].tobytes())
         elif event.name == 'f':
             if iterations is not None:
                 iterations.value -= 5

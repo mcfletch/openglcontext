@@ -329,10 +329,10 @@ class Context(object):
             glPixelStorei(GL_PACK_ALIGNMENT, 1)
             data = glReadPixelsub(0, 0, width, height, GL_RGB, outputType=None)
             if hasattr( data, 'tostring' ):
-                string = data.tostring()
+                string = data.tobytes()
             else:
                 string = data
-            image = Image.fromstring( 
+            image = Image.frombytes( 
                 'RGB', 
                 (int(width),int(height)), 
                 string 

@@ -39,7 +39,7 @@ class LorentzContext( BaseContext ):
             coord=coord, 
             color=color,
         )
-        #print(self.ils.toString())
+        #print(self.ils.tobytes())
         s = [
                 Shape(
                     geometry = self.ps

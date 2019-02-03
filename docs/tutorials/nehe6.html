@@ -72,9 +72,9 @@ data under that texture ID.</div>
 </div>
 	<div class="code-sample">        im = open(imageName)
         try:
-            ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBA", 0, -1)
+            ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBA", 0, -1)
         except SystemError:
-            ix, iy, image = im.size[0], im.size[1], im.tostring("raw", "RGBX", 0, -1)
+            ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBX", 0, -1)
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Generate a texture ID</div>

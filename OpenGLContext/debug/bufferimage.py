@@ -39,7 +39,7 @@ def depth(
         diff = max(data) - min(data)
         data = (data - min(data)) * (255.0/(diff or 1.0))
     data = data.astype( 'b' )
-    image = Image.fromstring( "L", (width, height), data )
+    image = Image.frombytes( "L", (width, height), data )
     if flip:
         image = image.transpose( Image.FLIP_TOP_BOTTOM)
     return image
@@ -73,7 +73,7 @@ def stencil(
         diff = float(max(data)) - float(min(data))
         data = (data - min(data)) * (255.0/(diff or 1.0))
     data = data.astype( 'b' )
-    image = Image.fromstring( "L", (width, height), data )
+    image = Image.frombytes( "L", (width, height), data )
     if flip:
         image = image.transpose( Image.FLIP_TOP_BOTTOM)
     return image

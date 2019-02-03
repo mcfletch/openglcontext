@@ -21,7 +21,7 @@ class TestContext( BaseContext ):
         glInterleavedArrays(
             GL_V3F, # 3 vertex floats/item
             0, # tight packing
-            vertices.tostring(),
+            vertices.tobytes(),
         )
         glDrawElementsui(GL_QUADS,indices)
 
@@ -36,7 +36,7 @@ class TestContext( BaseContext ):
         glInterleavedArrays(
             GL_N3F_V3F, # 3 vertex floats/item, 3 normals/item
             0, # tight packing
-            vertices.tostring(),
+            vertices.tobytes(),
         )
         glDrawElementsui(GL_QUADS, indices)
     def OnInit( self ):

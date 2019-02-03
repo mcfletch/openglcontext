@@ -18,7 +18,7 @@ class TestContext( BaseContext ):
         print("""Should see a simplistic terrain when you look down (<ctrl+down-arrow>)""")
         points = Image.open( "heightmap.png" ).convert('L')
         print(points.format)
-        ix,iy,data = points.size[0],points.size[1],points.tostring()
+        ix,iy,data = points.size[0],points.size[1],points.tobytes()
         data = arrays.frombuffer( data, 'B' ).astype( 'f' )
         self.data = arrays.zeros( (ix,iy,3), 'f' )
         markers = arrays.swapaxes( arrays.indices( (ix,iy), 'f'), 0,2 )

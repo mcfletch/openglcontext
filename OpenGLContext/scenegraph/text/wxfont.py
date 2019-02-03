@@ -143,7 +143,7 @@ class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
         data = reshape(data, (height,width,3))
         data = data[::-1,:,:2]
         assert shape(data) == (height, width,2), """Data array has changed shape is %s should be %s"""%(shape(data),(height, width,3))
-        data = data.tostring()
+        data = data.tobytes()
         #~ print 'data', repr(data)
         return data, font.CharacterMetrics(
             char,

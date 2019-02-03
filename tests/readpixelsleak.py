@@ -59,7 +59,7 @@ class TestContext( BaseContext ):
             data.shape,
             (width,height,3),
         )
-        image = Image.fromstring( "RGB", (width, height), data.tostring() )
+        image = Image.frombytes( "RGB", (width, height), data.tobytes() )
         image = image.transpose( Image.FLIP_TOP_BOTTOM)
         image.save( filename, format )
         print('Saved image to %s'% (os.path.abspath( filename)))
@@ -77,12 +77,12 @@ class TestContext( BaseContext ):
             data.shape,
             (width,height,3),
         )
-        string = data.tostring()
+        string = data.tobytes()
         print('array returned was', data.shape)
         if self.reverseShape:
             data.shape = (height,width,3)
             print('reversed shape', data.shape)
-        assert data.tostring() == string, """Data stored differs in format"""
+        assert data.tobytes() == string, """Data stored differs in format"""
         self.capturedImage = data
         self.capturedSize = (width,height,3)
     def OnViewUB( self, event ):
