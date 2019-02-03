@@ -75,7 +75,7 @@ class _CubeBackground( object ):
                         glEnableVertexAttribArray(vertex_loc)
                         with vert_vbo:
                             glVertexAttribPointer(vertex_loc, 3, GL_FLOAT, GL_FALSE, 0, vert_vbo)
-                            matrix = dot(mode.matrix,mode.projection)
+                            matrix = dot(mode.matrix,mode.projection).astype('f')
                             glUniformMatrix4fv(mvp_matrix_loc,1,GL_FALSE,matrix)
                             with index_vbo:
                                 # 6 faces, 4 indices each 
