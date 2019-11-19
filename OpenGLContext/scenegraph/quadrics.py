@@ -8,7 +8,9 @@ from vrml import field, protofunctions, node
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import cache
 from OpenGLContext.scenegraph import boundingvolume
-from OpenGLContext.arrays import *
+from OpenGLContext.arrays import (
+    zeros, arange, sin, cos, pi, concatenate, allclose, copy,
+)
 from OpenGLContext import vectorutilities
 from OpenGL.arrays import vbo
 
@@ -214,8 +216,8 @@ class Cone( basenodes.Cone, Quadric ):
             # x and z are 0 at center
             area[degenerate,:,0] = 0.0 
             area[degenerate,:,2] = 0.0
-            area[other,:,3] = sin( longsteps ) / 2.0 + .5
-            area[other,:,4] = cos( longsteps ) / 2.0 + .5
+            area[other,:,3] = (sin( longsteps ) / 2.0 + .5)[:area.shape[2]]
+            area[other,:,4] = (cos( longsteps ) / 2.0 + .5)[:area.shape[2]]
             area[degenerate,:,3:5] = .5
             # normal for the disk is all the same...
             area[:,:,5:8] = normal
