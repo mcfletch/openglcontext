@@ -2,6 +2,8 @@ MANIFEST
 *.e?p
 *.profile
 __pycache__
+*.pyc
+*.pyo
 callgrind.out*
 OpenGLContext.e4p
 OpenGLContext.e4p
