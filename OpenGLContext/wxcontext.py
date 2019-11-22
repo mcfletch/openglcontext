@@ -12,6 +12,10 @@ try:
 except ImportError:
     from io import BytesIO as StringIO
 
+if wx.VERSION >= (4,):
+    USE_CONTEXT = True 
+else:
+    USE_CONTEXT = False
 
 class wxContext(
     glcanvas.GLCanvas, # wxPython OpenGL context
@@ -58,13 +62,29 @@ class wxContext(
         else:
             for key,value in named.items():
                 setattr( definition, key, value )
-        glcanvas.GLCanvas.__init__(
-            self, parent, id=id, pos=pos, 
-            size = tuple(definition.size), style=style, name=name, 
-            attribList = self.wxFlagsFromDefinition(definition)
-        )
+        if USE_CONTEXT:
+            # wxPython Pheonix (4+) has a separate context object...
+            glcanvas.GLCanvas.__init__(
+                self, parent, id=id, pos=pos, 
+                size = tuple(definition.size), style=style, name=name, 
+                attribList = self.wxFlagsFromDefinition(definition),
+            )
+            # flags = glcanvas.GLContextAttrs()
+            # flags.CompatibilityProfile().PlatformDefaults().Robust().EndList()
+            self._wx_context = glcanvas.GLContext(
+                self,
+                None,
+                # flags,
+            )
+        else:
+            glcanvas.GLCanvas.__init__(
+                self, parent, id=id, pos=pos, 
+                size = tuple(definition.size), style=style, name=name, 
+                attribList = self.wxFlagsFromDefinition(definition)
+            )
         self.Show( )
         context.Context.__init__ (self, definition)
+    @classmethod
     def wxFlagsFromDefinition( cls, definition ):
         """Determine the flags to pass to he initialiser (attribList)"""
         attributes = []
@@ -94,7 +114,6 @@ class wxContext(
                 attributes.append( flag )
                 attributes.append( definition.accumulationBuffer )
         return attributes
-    wxFlagsFromDefinition = classmethod( wxFlagsFromDefinition )
 
     def DoInit( self ):
         """Call the OnInit method at a time when the context is valid
@@ -244,15 +263,26 @@ class wxContext(
         pass # Do nothing, to avoid flashing.
 
 
-    def setCurrent (self):
-        """Acquire the OpenGL "focus"
+    if USE_CONTEXT:
+        def setCurrent (self):
+            """Acquire the OpenGL "focus" (wx Pheonix version)
 
-        Basically this just calls the GUI library SetCurrent
-        method after dispatching to the superclass's
-        implementation.
-        """
-        context.Context.setCurrent( self )
-        glcanvas.GLCanvas.SetCurrent(self)
+            Basically this just calls the GUI library SetCurrent
+            method after dispatching to the superclass's
+            implementation.
+            """
+            context.Context.setCurrent( self )
+            self._wx_context.SetCurrent(self)
+    else:
+        def setCurrent (self):
+            """Acquire the OpenGL "focus" (wxPython 3.x version)
+
+            Basically this just calls the GUI library SetCurrent
+            method after dispatching to the superclass's
+            implementation.
+            """
+            context.Context.setCurrent( self )
+            glcanvas.GLCanvas.SetCurrent(self)
     def SwapBuffers (self): # happens to match the wx method
         """Swap the GL buffers (force flush as we do)"""
         glcanvas.GLCanvas.SwapBuffers(self)

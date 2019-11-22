@@ -2,6 +2,7 @@
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 import wx
 import time
+# import ipdb;ipdb.set_trace()
 
 class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
     """wxPython-specific event handler mix-in
@@ -100,6 +101,8 @@ class wxKeypressEvent( wxXEvent, keyboardevents.KeypressEvent ):
         self.modifiers = self._getModifiers(wxEventObject)
         self.name = keyboardMapping.get( wxEventObject.GetKeyCode())	
 
+PAGE_UP = wx.WXK_PRIOR if hasattr(wx,'WXK_PRIOR') else wx.WXK_PAGEUP
+PAGE_DOWN = wx.WXK_NEXT if hasattr(wx,'WXK_PRIOR') else wx.WXK_PAGEDOWN
 keyboardMapping = {
     wx.WXK_BACK:'<back>',
     wx.WXK_TAB:'<tab>',
@@ -118,8 +121,8 @@ keyboardMapping = {
     wx.WXK_MENU:'<alt>',
     wx.WXK_PAUSE:'<pause>',
 ##	wx.WXK_CAPITAL:
-    wx.WXK_PRIOR:'<pageup>',
-    wx.WXK_NEXT:'<pagedown>',
+    PAGE_UP:'<pageup>',
+    PAGE_DOWN:'<pagedown>',
     wx.WXK_END:'<end>',
     wx.WXK_HOME:'<home>',
     wx.WXK_LEFT:'<left>',

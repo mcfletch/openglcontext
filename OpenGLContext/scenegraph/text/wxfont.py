@@ -139,7 +139,7 @@ class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
         #~ directory = os.path.expanduser( directory )
         #~ image.SaveFile( '%s/char%s.png'%(directory,ord(char)), wx.BITMAP_TYPE_PNG)
         data = image.GetData()
-        data = fromstring( data, 'b')
+        data = frombuffer( data, 'b')
         data = reshape(data, (height,width,3))
         data = data[::-1,:,:2]
         assert shape(data) == (height, width,2), """Data array has changed shape is %s should be %s"""%(shape(data),(height, width,3))
@@ -175,7 +175,7 @@ class wxBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font ):
     def lineHeight(self, mode=None ):
         """Retrieve normal line-height for this font
         """
-        for (list, metrics) in self._displayLists.itervalues():
+        for (list, metrics) in self._displayLists.values():
             return metrics.height
         if __debug__:
             log.warn( """lineHeight requested when no characters rasterised, 0-height line may result""")
