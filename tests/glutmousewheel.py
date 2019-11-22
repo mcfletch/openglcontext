@@ -17,7 +17,7 @@ class TestContext( BaseContext ):
         glClearColor( 0,0,0, 0)
         glClear(GL_COLOR_BUFFER_BIT)
         glRasterPos( 0,0,0)
-        glutBitmapString( GLUT_BITMAP_8_BY_13, "The quick brown\nfox jumped over the\nlazy dog." )
+        glutBitmapString( GLUT_BITMAP_8_BY_13, b"The quick brown\nfox jumped over the\nlazy dog." )
         return result
     def OnInit( self ):
         """Load the image on initial load of the application"""

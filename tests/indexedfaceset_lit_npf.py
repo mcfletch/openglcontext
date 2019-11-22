@@ -8,28 +8,27 @@ Normal-per-face generation
 from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-
+from six.moves import StringIO
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
-import StringIO
 from OpenGLContext.scenegraph import basenodes
 
 def loadData( data ):
-    file = StringIO.StringIO( data )
+    file = StringIO( data )
     points = []
     indices = []
     readingPoints = 1
     while readingPoints:
         line = file.readline().strip().split()
         if len(line) > 1:
-            points.append( map( float, line ))
+            points.append( list(map( float, line )))
         else:
             readingPoints = 0
     readingIndices = 1
     while readingIndices:
         line = file.readline().strip().split()
         if len(line) > 1:
-            indices.extend( map( int, line ))
+            indices.extend( list(map( int, line )))
         else:
             readingIndices = 0
 ##	print 'got %s point and %s indices'% ( len(points), len(indices))

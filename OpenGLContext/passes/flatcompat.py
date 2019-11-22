@@ -256,10 +256,12 @@ class FlatPass( _flat.FlatPass ):
         glMatrixMode( GL_MODELVIEW )
         try:
             idHolder = array( [0,0,0,0], 'B' )
-            idSetter = idHolder.view( '<I' )
+            idSetter = idHolder.view( '>I' )
             for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
-                id = (id+1) << 12
-                idSetter[0] = id
+                id = id + 1
+                idHolder[0] = id & 0xf00
+                idHolder[1] = id & 0xf0
+                idHolder[2] = id & 0xf
                 glColor4ubv( idHolder )
                 self.matrix = mvmatrix
                 self.renderPath = path
@@ -271,7 +273,7 @@ class FlatPass( _flat.FlatPass ):
             for point,eventSet in pickPoints.items():
                 # get the pixel colour (id) under the cursor.
                 glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_UNSIGNED_BYTE, pixel )
-                lpixel = long( pixel.view( '<I' )[0] )
+                lpixel = long( pixel.view( '>I' )[0] ) >> 8
                 paths = map.get( lpixel, [] )
                 event.setObjectPaths( [paths] )
                 # get the depth value under the cursor...
