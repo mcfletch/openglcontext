@@ -20,3 +20,4 @@ test-results
 tests/test.jpg
 *.egg-info
 build
+tests/callcontext.txt
