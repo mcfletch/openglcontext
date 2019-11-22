@@ -89,7 +89,7 @@ class TestContext( BaseContext ):
             ## Note the conversion to RGB the crate bitmap is paletted!
             im = im.convert( 'RGB')
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBA", 0, -1)
-        except SystemError:
+        except (ValueError,SystemError):
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBX", 0, -1)
         assert ix*iy*4 == len(image), """Image size != expected array size"""
         IDs = []
