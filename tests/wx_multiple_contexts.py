@@ -67,8 +67,9 @@ if __name__ == "__main__":
             )
             box.Add(context, 1, wx.EXPAND )
             ID = wx.NewId()
-            box.Add(wx.Button(self, ID, "Stop Rotation"), 0)
-            wx.EVT_BUTTON(self, ID, context.OnButtonPause)
+            stop_button = wx.Button(self, ID, "Stop Rotation")
+            box.Add(stop_button, 0)
+            stop_button.Bind(wx.EVT_BUTTON, context.OnButtonPause)
             return outerbox
         def OnCloseWindow(self, event):
             self.Destroy()

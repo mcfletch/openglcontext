@@ -133,7 +133,7 @@ class wxContext(
             before calling Context.__init__.
         """
 ##		if wx.Platform == '__WXGTK__':
-        wx.EVT_WINDOW_CREATE(self, self._OnInitCallback)
+        self.Bind(wx.EVT_WINDOW_CREATE, self._OnInitCallback)
 ##		else:
 ##			self._OnInitCallback()
     def _OnInitCallback( self, event=None ):
@@ -162,25 +162,25 @@ class wxContext(
             self.init = 1
             # Bind the wxPython background erase event
             # Without this binding, the canvas will tend to flicker
-            wx.EVT_ERASE_BACKGROUND(self, self.wxOnEraseBackground)
+            self.Bind(wx.EVT_ERASE_BACKGROUND, self.wxOnEraseBackground)
             # Handle resizing of the window
-            wx.EVT_SIZE(self, self.wxOnSize)
+            self.Bind(wx.EVT_SIZE, self.wxOnSize)
             # Handle requests to display this canvas
-            wx.EVT_PAINT(self, self.wxOnPaint)
+            self.Bind(wx.EVT_PAINT, self.wxOnPaint)
             # Handle keyboard events...
-            wx.EVT_KEY_DOWN( self, self.wxOnKeyDown )
-            wx.EVT_KEY_UP( self, self.wxOnKeyUp )
-            wx.EVT_CHAR( self, self.wxOnCharacter )
+            self.Bind(wx.EVT_KEY_DOWN, self.wxOnKeyDown )
+            self.Bind(wx.EVT_KEY_UP, self.wxOnKeyUp )
+            self.Bind(wx.EVT_CHAR, self.wxOnCharacter )
             # Handle mouse events...
-            wx.EVT_LEFT_DOWN( self, self.wxOnMouseButton )
-            wx.EVT_RIGHT_DOWN( self, self.wxOnMouseButton )
-            wx.EVT_MIDDLE_DOWN( self, self.wxOnMouseButton )
-            wx.EVT_LEFT_UP( self, self.wxOnMouseButton )
-            wx.EVT_RIGHT_UP( self, self.wxOnMouseButton )
-            wx.EVT_MIDDLE_UP( self, self.wxOnMouseButton )
-            wx.EVT_MOTION( self, self.wxOnMouseMove )
+            self.Bind(wx.EVT_LEFT_DOWN, self.wxOnMouseButton )
+            self.Bind(wx.EVT_RIGHT_DOWN, self.wxOnMouseButton )
+            self.Bind(wx.EVT_MIDDLE_DOWN, self.wxOnMouseButton )
+            self.Bind(wx.EVT_LEFT_UP, self.wxOnMouseButton )
+            self.Bind(wx.EVT_RIGHT_UP, self.wxOnMouseButton )
+            self.Bind(wx.EVT_MIDDLE_UP, self.wxOnMouseButton )
+            self.Bind(wx.EVT_MOTION, self.wxOnMouseMove )
             if hasattr( self, 'OnIdle' ):
-                wx.EVT_IDLE( self, self.wxOnIdle )
+                self.Bind(wx.EVT_IDLE, self.wxOnIdle )
 
     def ProcessEvent( self, event ):
         """Dispatch events to appropriate engine based on event type
