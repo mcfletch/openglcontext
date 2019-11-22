@@ -14,6 +14,7 @@ import time
 
 class TestContext( BaseContext ):
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
+    fullscreen = False
     def Render( self, mode = None):
         BaseContext.Render( self, mode )
         glDisable( GL_LIGHTING) # context lights by default
@@ -29,8 +30,13 @@ class TestContext( BaseContext ):
         self.texture = imagetexture.ImageTexture(url = [ "nehe_wall.bmp"] )
         print('Press <f> to switch to full-screen mode')
         self.addEventHandler( 'keypress', name = 'f', function = self.OnFullScreenToggle)
-        self.addEventHandler( 'keyboard', name = '<escape>', function = self.OnFullScreenToggle)
+        self.addEventHandler( 'keyboard', name = '<escape>', function = self.OnEscape)
         self.returnValues = None
+    def OnEscape(self, event):
+        if not self.fullscreen:
+            self.OnQuit(event)
+        else:
+            self.OnFullScreenToggle(event)
     def OnFullScreenToggle( self, event ):
         """Toggle between full and regular windows"""
         if self.returnValues:
@@ -39,6 +45,7 @@ class TestContext( BaseContext ):
             glutReshapeWindow( sizex, sizey)
             glutPositionWindow( posx, posy )
             self.returnValues = None
+            self.fullscreen = False
         else:
             self.returnValues = (
                 glutGet( GLUT_WINDOW_X ),
@@ -46,6 +53,7 @@ class TestContext( BaseContext ):
                 glutGet( GLUT_WINDOW_WIDTH  ),
                 glutGet( GLUT_WINDOW_HEIGHT ),
             )
+            self.fullscreen = True
             glutFullScreen( )
     def OnIdle( self, ):
         self.triggerRedraw(1)
