@@ -384,12 +384,12 @@ class GLSLShader( shaders.GLSLShader ):
             return False
         source = []
         if self.version:
-            source.append( b'#version %s\n'%self.version )
+            source.append( b'#version %s\n'%as_8_bit(self.version) )
         for import_lib in self.imports:
             if not import_lib.source:
                 return False 
-            source.extend( import_lib.source )
-        source.extend( self.source )
+            source.extend( [as_8_bit(x) for x in  import_lib.source] )
+        source.extend( as_8_bit(self.source) )
         try:
             if self.type == 'VERTEX':
                 shader = GL_shaders.compileShader(
