@@ -95,6 +95,8 @@ class TestContext( BaseContext ):
         """
         from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
+        if bytes is not str:
+            phong_preCalc = phong_preCalc.decode('ascii')
         
         vertex = compileShader( 
             lightConst + phong_preCalc + light_preCalc + 

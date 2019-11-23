@@ -95,6 +95,10 @@ class TestContext( BaseContext ):
         as simple string values.'''
         from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         from OpenGLContext.resources.phongweights_frag import data as phong_weightCalc
+        if bytes is not str:
+            phong_preCalc = phong_preCalc.decode('ascii')
+            phong_weightCalc = phong_weightCalc.decode('ascii')
+
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
         '''Our light constants are now generated from the dictionary declared at
         the class level, with the count we just updated substituted into the

@@ -164,6 +164,8 @@ class TestContext( BaseContext ):
         using the functions we stored to external files in the previous 
         tutorial.'''
         from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
+        if bytes is not str:
+            phong_preCalc = phong_preCalc.decode('ascii')
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
         
         vertex = shaders.compileShader( 
