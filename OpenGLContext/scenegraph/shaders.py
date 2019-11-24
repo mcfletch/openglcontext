@@ -389,7 +389,10 @@ class GLSLShader( shaders.GLSLShader ):
             if not import_lib.source:
                 return False 
             source.extend( [as_8_bit(x) for x in  import_lib.source] )
-        source.extend( as_8_bit(self.source) )
+        if isinstance(self.source,(bytes,unicode)):
+            source.append( as_8_bit(self.source) )
+        else:
+            source.extend([as_8_bit(x) for x in self.source])
         try:
             if self.type == 'VERTEX':
                 shader = GL_shaders.compileShader(
@@ -408,6 +411,7 @@ class GLSLShader( shaders.GLSLShader ):
                 )
                 return None
         except RuntimeError as err:
+            # log.warning("Error compiling: %s", (b'\n'.join(source)).decode('ascii'))
             self.compileLog = err.args[0]
             return None
         return shader
@@ -436,7 +440,7 @@ class GLSLObject( shaders.GLSLObject ):
             try:
                 GL_shaders.glUseProgram( renderer )
             except error.GLError:
-                log.error( '''Failure compiling: %s''', '\n'.join([
+                log.error( '''Failure compiling/linking: %s''', '\n'.join([
                     '%s: %s'%(as_str(sh.url or sh.source),as_str(sh.compileLog))
                     for sh in self.shaders
                 ]))
