@@ -3,7 +3,7 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.ARB import texture_non_power_of_two
 from OpenGLContext.arrays import ArrayType
-from PIL import ImageOps
+from PIL import ImageOps, Image
 import traceback,weakref 
 import logging
 log = logging.getLogger( __name__ )
@@ -34,6 +34,10 @@ class NumpyAdapter( object ):
     tobytes = tostring
     def resize( self, *args, **named ):
         raise RuntimeError( """Don't support numpy image resizing""" )
+    def transpose(self, mode=None):
+        """Null-operation for transpose to allow processing with PIL expecting code"""
+        return self
+
 
 class Texture( object ):
     """Holder for an OpenGL compiled texture
