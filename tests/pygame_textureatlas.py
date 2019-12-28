@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 '''Test of texture atlas behaviour...'''
 import OpenGL 
-OpenGL.FULL_LOGGING = True
+# OpenGL.FULL_LOGGING = True
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from OpenGL.arrays import vbo
@@ -75,6 +75,7 @@ class TestContext( BaseContext ):
     def Render( self, mode=None ):
         if mode.visible and not self._rendered:
             self._rendered = True
+            atlas = None
             for char in self.testText:
                 if not char in self.maps:
                     dataArray, metrics = self.font.createCharTexture(
@@ -84,7 +85,9 @@ class TestContext( BaseContext ):
                     dataArray.shape = dataArray.shape + (1,)
                     map = self.tc.getTexture( dataArray, texture.Texture )
                     self.maps[char] = (map,metrics)
-            atlas = self.atlas = self.maps.values()[0][0].atlas
+                    if atlas is None:
+                        atlas = map.atlas
+            self.atlas = atlas
             atlas.render()
             self.img = ImageTexture.forTexture( 
                 atlas.texture, mode=mode 
