@@ -9,9 +9,9 @@ try:
     import pygame.key
     import pygame.display
 except ImportError:
-    raise ImportError, "The pygame package is required for the Pygame GL Context"
+    raise ImportError("The pygame package is required for the Pygame GL Context")
 if pygame.ver < '1.1':
-    raise ImportError, "Pygame v1.1 or greater is required for the Pygame GL Context"
+    raise ImportError("Pygame v1.1 or greater is required for the Pygame GL Context")
 
 #import opengl stuff
 from OpenGL.GL import *
