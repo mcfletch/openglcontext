@@ -61,9 +61,9 @@ def appdatadirectory(  ):
         return _winreg_getShellFolder( 'AppData' )
     # okay, what if for some reason _winreg is missing? would we want to allow ctypes?
     ## default case, look for name in environ...
-    for name in ['appdata', 'home']:
+    for name in ['APPDATA', 'HOME']:
         if name in os.environ:
-            return os.environ[name]
+            return os.environ[name] if name == 'APPDATA' else os.path.join(os.environ[name],'.config')
     # well, someone's being naughty, see if we can get ~ to expand to a directory...
     possible = os.path.abspath(os.path.expanduser( '~/' ))
     if os.path.exists( possible ):
