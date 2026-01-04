@@ -27,6 +27,7 @@ class TestContext( BaseContext ):
         glutCloseFunc( self.OnGLUTClose )
         glutSetOption( GLUT_WINDOW_CURSOR, GLUT_CURSOR_SPRAY )
         glutSetOption( GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS )
+        self.addEventHandler( 'keyboard', name='<escape>', function=self.OnQuit )
     def OnMouseWheel( self, button,state,x,y):
         """Just capture and report scrolling"""
         print('Mouse Wheel button=%s state=%s (x,y)=(%s,%s)'%(button, state, x,y))

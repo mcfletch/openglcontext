@@ -42,6 +42,7 @@ XXX Obviously that should change.
 After the lighting passes are finished, the standard selection
 rendering passes can occur.
 """
+
 from OpenGL.GL import *
 from OpenGLContext import visitor, doinchildmatrix, frustum
 from OpenGLContext.passes import renderpass, rendervisitor
@@ -50,6 +51,7 @@ from OpenGLContext.scenegraph import basenodes, indexedfaceset
 from OpenGLContext.shadow import edgeset
 from OpenGLContext.debug import state
 from vrml import protofunctions
+
 try:
     from OpenGLContext.debug import bufferimage
 except ImportError:
@@ -59,9 +61,11 @@ from OpenGLContext.arrays import *
 from math import pi
 import sys
 import logging
-log = logging.getLogger( __name__ )
 
-class OverallShadowPass (renderpass.OverallPass):
+log = logging.getLogger(__name__)
+
+
+class OverallShadowPass(renderpass.OverallPass):
     """Pass w/ ambient, light-specific, and selection sub-passes
 
     If we are doing no visible passes, then we are
@@ -87,6 +91,7 @@ class OverallShadowPass (renderpass.OverallPass):
     Finally:
         kill off the stencil buffer set up
     """
+
     passDebug = 1
     debugShadowSilouhette = 1
     debugShadowVolume = 1
@@ -96,14 +101,14 @@ class OverallShadowPass (renderpass.OverallPass):
     debugShadowNoCaps = 0
     debugShadowNoBoots = 0
     debugShadowNoEdges = 0
-    
-    def __init__ (
-        self, 
+
+    def __init__(
+        self,
         context=None,
-        subPasses = (),
-        startTime = None,
-        perLightPasses = (),
-        postPasses = (),
+        subPasses=(),
+        startTime=None,
+        perLightPasses=(),
+        postPasses=(),
     ):
         """Initialise OverallShadowPass
 
@@ -112,36 +117,36 @@ class OverallShadowPass (renderpass.OverallPass):
         postPasses -- list of passes applied after all of the
             light-specific passes are applied
         """
-        super( OverallShadowPass, self).__init__(context, subPasses, startTime)
+        super(OverallShadowPass, self).__init__(context, subPasses, startTime)
         self.perLightPasses = perLightPasses
         self.postPasses = postPasses
 
-    def __call__( self ):
+    def __call__(self):
         """Render the pass and all sub-passes"""
         if __debug__:
             if self.passDebug:
-                sys.stderr.write( """START NEW PASS\n""" )
+                sys.stderr.write("""START NEW PASS\n""")
         changed = 0
         passCount = -1
         # XXX not the right place for this.
-        glStencilFunc(GL_ALWAYS, 0, ~0);
-        glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP);
-        glDepthFunc(GL_LESS);
-        glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
-        glColor( 1.0, 1.0, 1.0, 1.0 )
-        
-        glDisable(GL_BLEND);
-        glDisable(GL_STENCIL_TEST);
+        glStencilFunc(GL_ALWAYS, 0, ~0)
+        glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP)
+        glDepthFunc(GL_LESS)
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE)
+        glColor(1.0, 1.0, 1.0, 1.0)
+
+        glDisable(GL_BLEND)
+        glDisable(GL_STENCIL_TEST)
         glDepthMask(1)
-        
-        glBlendFunc(GL_ONE,GL_ZERO);
+
+        glBlendFunc(GL_ONE, GL_ZERO)
         glStencilMask(~0)
 
         # run through the regular pass-types
         for passObject in self.subPasses:
             if __debug__:
                 if self.passDebug:
-                    sys.stderr.write( 'SUB-PASS %s\n'%( passObject))
+                    sys.stderr.write("SUB-PASS %s\n" % (passObject))
             changed += passObject()
             passCount = passObject.passCount
             self.visibleChange = changed
@@ -153,36 +158,38 @@ class OverallShadowPass (renderpass.OverallPass):
             for light in self.lightPaths:
                 self.currentLight = light
                 for passClass in self.perLightPasses:
-                    passObject = passClass( self, passCount )
+                    passObject = passClass(self, passCount)
                     if __debug__:
                         if self.passDebug:
-                            sys.stderr.write( 'SUB-PASS %s\n'%( passObject))
+                            sys.stderr.write("SUB-PASS %s\n" % (passObject))
                     passCount += 1
                     changed += passObject()
                     self.visibleChange = changed
         finally:
             # do some cleanup to make sure next pass is visible
-            glDisable(GL_BLEND);
-            glDisable(GL_STENCIL_TEST);
-            glDepthMask(1);
+            glDisable(GL_BLEND)
+            glDisable(GL_STENCIL_TEST)
+            glDepthMask(1)
         for passClass in self.postPasses:
-            passObject = passClass( self, passCount )
+            passObject = passClass(self, passCount)
             if __debug__:
                 if self.passDebug:
-                    sys.stderr.write( 'SUB-PASS %s\n'%( passObject))
+                    sys.stderr.write("SUB-PASS %s\n" % (passObject))
             passCount += 1
             changed += passObject()
             self.visibleChange = changed
         return changed
 
 
-class AmbientOnly( object ):
-    """Render with only ambient lights
-    """
+class AmbientOnly(object):
+    """Render with only ambient lights"""
+
     lighting = 1
-    lightingAmbient = 1 # whether ambient lighting should be used
-    lightingDiffuse = 0 # whether diffuse lighting should be used (non-ambient)
-class AmbientOpaque( AmbientOnly, renderpass.OpaqueRenderPass ):
+    lightingAmbient = 1  # whether ambient lighting should be used
+    lightingDiffuse = 0  # whether diffuse lighting should be used (non-ambient)
+
+
+class AmbientOpaque(AmbientOnly, renderpass.OpaqueRenderPass):
     """Opaque rendering pass with only ambient lights
 
     This will be the only pass which actually writes
@@ -190,192 +197,217 @@ class AmbientOpaque( AmbientOnly, renderpass.OpaqueRenderPass ):
     for registering each light, and edge-set with the
     appropriate matrices.
     """
-class AmbientTransparent( AmbientOnly, renderpass.TransparentRenderPass ):
+
+
+class AmbientTransparent(AmbientOnly, renderpass.TransparentRenderPass):
     """Transparent rendering pass with only ambient lights"""
 
 
-class SpecificLight( object ):
+class SpecificLight(object):
     """Mix-in to run lighting for a specific light
 
     The overall pass keeps track of currentLight for us
     """
+
     lightID = GL_LIGHT0
-    frustumCulling = 0 # the shadows shouldn't be culled if the objects are off-screen
-    def SceneGraph( self, node ):
+    frustumCulling = 0  # the shadows shouldn't be culled if the objects are off-screen
+
+    def SceneGraph(self, node):
         """Render lights for a scenegraph"""
-        def tryLight( lightPath, ID, visitor):
+
+        def tryLight(lightPath, ID, visitor):
             """Try to enable a light, returns either
             None or the ID used during enabling."""
             lightPath.transform()
-            return lightPath[-1].Light( ID, visitor )
+            return lightPath[-1].Light(ID, visitor)
+
         if self.lighting:
-            doinchildmatrix.doInChildMatrix( tryLight, self.currentLight, self.lightID, self )
-    def shouldDraw( self ):
+            doinchildmatrix.doInChildMatrix(
+                tryLight, self.currentLight, self.lightID, self
+            )
+
+    def shouldDraw(self):
         """Whether we should draw"""
-        return self.visibleChange or super( SpecificLight,self).shouldDraw()
+        return self.visibleChange or super(SpecificLight, self).shouldDraw()
 
 
-
-class LightStencil (SpecificLight, renderpass.OpaqueRenderPass):
+class LightStencil(SpecificLight, renderpass.OpaqueRenderPass):
     """Sets up the stencil buffer for the current light"""
+
     lighting = 0
-    lightingAmbient = 0 # whether ambient lighting should be used
-    lightingDiffuse = 0 # whether diffuse lighting should be used (non-ambient)
+    lightingAmbient = 0  # whether ambient lighting should be used
+    lightingDiffuse = 0  # whether diffuse lighting should be used (non-ambient)
     stencil = 1
-    cacheKey = 'edgeSet'
-    def Context( self, node):
+    cacheKey = "edgeSet"
+
+    def Context(self, node):
         """Setup stencil buffer where we render shadow volumes"""
         # disable depth buffer writing
-        glDepthMask(GL_FALSE);
+        glDepthMask(GL_FALSE)
         # force depth-testing on
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc( GL_LESS );
-
+        glEnable(GL_DEPTH_TEST)
+        glDepthFunc(GL_LESS)
         # enable blending
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_ONE,GL_ONE);
-
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_ONE, GL_ONE)
         # clear the stencil buffer
-        glClear(GL_STENCIL_BUFFER_BIT);
-
+        glClear(GL_STENCIL_BUFFER_BIT)
         # disable color-buffer writing
-        glColorMask(0,0,0,0);
-        
+        glColorMask(0, 0, 0, 0)
         # enable use of the stencil buffer for determining whether to write
-        glEnable(GL_STENCIL_TEST);
-        glStencilFunc(GL_ALWAYS,0,~0);
-        glStencilMask(~0);
+        glEnable(GL_STENCIL_TEST)
+        glStencilFunc(GL_ALWAYS, 0, ~0)
+        glStencilMask(~0)
+        glEnable(GL_CULL_FACE)
 
-        glEnable( GL_CULL_FACE )
+    ##		try:
+    ##			self.DebugSaveDepthBuffer()
+    ##		except:
+    ##			print 'failed to save depth buffer'
 
-##		try:
-##			self.DebugSaveDepthBuffer()
-##		except:
-##			print 'failed to save depth buffer'
-
-    def Rendering( self, node ):
+    def Rendering(self, node):
         """Regular rendering isn't desirable..."""
         ### should have a way to specify non-occluding geometry...
         node = node.geometry
-        if not isinstance( node, basenodes.IndexedFaceSet ):
+        if not isinstance(node, basenodes.IndexedFaceSet):
             return
-        cc = indexedfaceset.ArrayGeometryCompiler( node )
+        cc = indexedfaceset.ArrayGeometryCompiler(node)
         ag = cc.compile(
-            visible=False,lit=False,textured=False,transparent=False,
-            mode = self, 
+            visible=False,
+            lit=False,
+            textured=False,
+            transparent=False,
+            mode=self,
         )
         if ag is indexedfaceset.DUMMY_RENDER:
             return None
         # okay, we have an array-geometry object
-        edgeSet = self.cache.getData(node,self.cacheKey)
+        edgeSet = self.cache.getData(node, self.cacheKey)
         if not edgeSet:
             if ag.vertices:
                 edgeSet = edgeset.EdgeSet(
-                    points = ag.vertices.data,
-                    ccw = ag.ccw == GL_CCW,
+                    points=ag.vertices.data,
+                    ccw=ag.ccw == GL_CCW,
                 )
                 holder = self.cache.holder(
-                    client = node,
-                    key = self.cacheKey,
-                    data = edgeSet,
+                    client=node,
+                    key=self.cacheKey,
+                    data=edgeSet,
                 )
-                for (n, attr) in [
-                    (node, 'coordIndex'),
-                    (node, 'ccw'),
-                    (node.coord, 'point'),
+                for n, attr in [
+                    (node, "coordIndex"),
+                    (node, "ccw"),
+                    (node.coord, "point"),
                 ]:
                     if n:
-                        holder.depend( n, protofunctions.getField(n,attr) )
+                        holder.depend(n, protofunctions.getField(n, attr))
             else:
                 edgeSet = None
         if not edgeSet:
             return
         # okay, we have an edge-set object...
-        volume = edgeSet.volume( self.currentLight, self.currentStack )
+        volume = edgeSet.volume(self.currentLight, self.currentStack)
         if not volume:
             return
         # now we have a shadow-volume for this light and edge-set
-        volume.render( self )
+        volume.render(self)
 
-    def DebugSaveDepthBuffer( self, file = "depth_buffer.jpg" ):
+    def DebugSaveDepthBuffer(self, file="depth_buffer.jpg"):
         if not bufferimage:
             return
         width, height = self.context.getViewPort()
-        image = bufferimage.depth(0,0, width, height )
-        image.save( file, "JPEG" )
-        
+        image = bufferimage.depth(0, 0, width, height)
+        image.save(file, "JPEG")
+
+
 class LightOpaque(SpecificLight, renderpass.OpaqueRenderPass):
     """Opaque rendering pass for a specific light"""
+
     lighting = 1
-    lightingAmbient = 0 # whether ambient lighting should be used
-    lightingDiffuse = 1 # whether diffuse lighting should be used (non-ambient)
-    def Context( self, node):
-        glCullFace(GL_BACK);
-        glStencilFunc(GL_EQUAL, 0, ~0);
+    lightingAmbient = 0  # whether ambient lighting should be used
+    lightingDiffuse = 1  # whether diffuse lighting should be used (non-ambient)
+
+    def Context(self, node):
+        glCullFace(GL_BACK)
+        glStencilFunc(GL_EQUAL, 0, ~0)
         # this should be INCR according to the article...
-        glStencilOp(GL_KEEP,GL_KEEP,GL_INCR);
-        glDepthFunc(GL_EQUAL);
-        glDepthMask(~1);
-        glColorMask(1,1,1,1);
-        glColor( 1.,1.,1.)
+        glStencilOp(GL_KEEP, GL_KEEP, GL_INCR)
+        glDepthFunc(GL_EQUAL)
+        glDepthMask(~1)
+        glColorMask(1, 1, 1, 1)
+        glColor(1.0, 1.0, 1.0)
         # enable blending
-        glEnable(GL_BLEND);
-        glEnable(GL_LIGHTING);
-        glBlendFunc(GL_ONE,GL_ONE);
-    def SaveStencilDebug( self ):
+        glEnable(GL_BLEND)
+        glEnable(GL_LIGHTING)
+        glBlendFunc(GL_ONE, GL_ONE)
+
+    def SaveStencilDebug(self):
         if not bufferimage:
             return
         width, height = self.context.getViewPort()
-        image = bufferimage.stencil(0,0, width, height )
-        image.save( "buffer.jpg", "JPEG" )
-    def SceneGraph( self, node ):
+        image = bufferimage.stencil(0, 0, width, height)
+        image.save("buffer.jpg", "JPEG")
+
+    def SceneGraph(self, node):
         """Render lights for a scenegraph"""
-        def tryLight( lightPath, ID, visitor):
+
+        def tryLight(lightPath, ID, visitor):
             """Try to enable a light, returns either
             None or the ID used during enabling."""
             lightPath.transform()
-            return lightPath[-1].Light( ID, visitor )
+            return lightPath[-1].Light(ID, visitor)
+
         if self.lighting:
-            doinchildmatrix.doInChildMatrix( tryLight, self.currentLight, self.lightID, self )
+            doinchildmatrix.doInChildMatrix(
+                tryLight, self.currentLight, self.lightID, self
+            )
         if not self.frustum:
-            self.frustum = frustum.Frustum.fromViewingMatrix(normalize = 1)
+            self.frustum = frustum.Frustum.fromViewingMatrix(normalize=1)
         else:
-            log.warn( """SceneGraphCamera called twice for the same rendering pass %s""", self)
-        
+            log.warning(
+                """SceneGraphCamera called twice for the same rendering pass %s""", self
+            )
+
+
 class LightTransparent(SpecificLight, renderpass.TransparentRenderPass):
     lighting = 1
-    lightingAmbient = 0 # whether ambient lighting should be used
-    lightingDiffuse = 1 # whether diffuse lighting should be used (non-ambient)
-    def ContextSetupDisplay( self, node):
-        super( LightTransparent, self).ContextSetupDisplay( node )
-        glStencilFunc(GL_EQUAL, 0, ~0);
-        glStencilOp(GL_KEEP,GL_KEEP,GL_INCR);
-        glDepthFunc(GL_EQUAL);
-        glColorMask(1,1,1,1);
+    lightingAmbient = 0  # whether ambient lighting should be used
+    lightingDiffuse = 1  # whether diffuse lighting should be used (non-ambient)
+
+    def ContextSetupDisplay(self, node):
+        super(LightTransparent, self).ContextSetupDisplay(node)
+        glStencilFunc(GL_EQUAL, 0, ~0)
+        glStencilOp(GL_KEEP, GL_KEEP, GL_INCR)
+        glDepthFunc(GL_EQUAL)
+        glColorMask(1, 1, 1, 1)
+
 
 ### Finalisation tokens
-class ShadowPassSet( object ):
+class ShadowPassSet(object):
     """Callable list of sub-passes"""
-    def __init__ (
+
+    def __init__(
         self,
-        overallClass, 
-        subPasses = (),
-        perLightPasses = (),
-        postPasses = (),
+        overallClass,
+        subPasses=(),
+        perLightPasses=(),
+        postPasses=(),
     ):
         self.overallClass = overallClass
         self.subPasses = subPasses
         self.perLightPasses = perLightPasses
         self.postPasses = postPasses
-    def __call__( self, context):
+
+    def __call__(self, context):
         """initialise and run a render pass with our elements"""
         overall = self.overallClass(
-            context = context,
-            subPasses = self.subPasses,
-            perLightPasses = self.perLightPasses,
-            postPasses = self.postPasses,
+            context=context,
+            subPasses=self.subPasses,
+            perLightPasses=self.perLightPasses,
+            postPasses=self.postPasses,
         )
         return overall()
+
 
 ### following object only used for testing
 ambientRenderPass = renderpass.PassSet(
@@ -389,17 +421,16 @@ ambientRenderPass = renderpass.PassSet(
 ### The normal pass-set
 defaultRenderPasses = ShadowPassSet(
     OverallShadowPass,
-    subPasses = [
+    subPasses=[
         AmbientOpaque,
         AmbientTransparent,
     ],
-    perLightPasses = [
-        LightStencil ,
+    perLightPasses=[
+        LightStencil,
         LightOpaque,
         LightTransparent,
     ],
-    postPasses = [
+    postPasses=[
         renderpass.SelectRenderPass,
-    ]
-
+    ],
 )

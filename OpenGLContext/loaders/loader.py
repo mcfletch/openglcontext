@@ -2,7 +2,9 @@
 
 The Singleton "Loader" should be used for most interactions.
 """
+
 import urllib, os
+
 try:
     from urllib.request import pathname2url
 except ImportError:
@@ -21,15 +23,19 @@ except ImportError:
     from io import BytesIO as StringIO
 from OpenGL._bytes import bytes, unicode, as_8_bit
 
+
 def as_unicode(u):
     if isinstance(u, bytes):
-        return unicode(u, 'utf-8')
+        return unicode(u, "utf-8")
     return u
 
-import logging 
-log = logging.getLogger( __name__ )
 
-class _Loader( object ):
+import logging
+
+log = logging.getLogger(__name__)
+
+
+class _Loader(object):
     """(Singleton) Manager for downloading resources
 
     Is a generic class which provides download services
@@ -39,13 +45,14 @@ class _Loader( object ):
     The loader will attempt to use a local cache of files
     to prevent multiple downloading.
     """
+
     def __init__(
         self,
     ):
         """Initialize the Loader"""
         self.cache = {}
 
-    def __call__( self, url, baseURL=None ):
+    def __call__(self, url, baseURL=None):
         """Load the given multi-value url and call callbacks
 
         url -- vrml97-style url (multi-value string)
@@ -58,9 +65,9 @@ class _Loader( object ):
 
         headers will be None for local files
         """
-        log.info( "Loading: %s, %s", url, baseURL )
+        log.info("Loading: %s, %s", url, baseURL)
         url = as_unicode(url)
-        if isinstance( url, unicode ):
+        if isinstance(url, unicode):
             url = [url]
         else:
             url = [as_unicode(u) for u in url]
@@ -68,14 +75,15 @@ class _Loader( object ):
         for u in url:
             # get the "absolute" url
             if baseURL:
-                u = basejoin(baseURL, u )
-            resolvedURL, file, filename, headers = self.get( u )
+                u = basejoin(baseURL, u)
+            resolvedURL, file, filename, headers = self.get(u)
             if file is not None and filename is not None:
                 break
         if not file or not filename:
-            raise IOError( """Unable to download url %s"""%url)
-        return ( resolvedURL, os.path.abspath(filename), file, headers )
-    def get( self, url ):
+            raise IOError("""Unable to download url %s""" % url)
+        return (resolvedURL, os.path.abspath(filename), file, headers)
+
+    def get(self, url):
         """Retrieve the given single-value URL
 
         url -- single-value URL, which may be a local filename
@@ -85,115 +93,136 @@ class _Loader( object ):
         """
         headers = None
         if url in self.cache:
-            filename = self.cache.get( url )
-            log.debug( "cached: %s %s", url, filename )
+            filename = self.cache.get(url)
+            log.debug("cached: %s %s", url, filename)
             try:
-                file = open( filename, 'rb')
-            except (IOError,TypeError,ValueError):
+                file = open(filename, "rb")
+            except (IOError, TypeError, ValueError):
                 pass
         try:
-            log.debug( "load: %s", url )
+            log.debug("load: %s", url)
             filename = url
-            baseURL = pathname2url( filename )
+            baseURL = pathname2url(filename)
             if os.path.exists(url):
-                file = open( url, 'rb' )
+                file = open(url, "rb")
             else:
                 raise ValueError(filename)
-        except (IOError,TypeError,ValueError):
-            if url.startswith( 'res://' ):
+        except (IOError, TypeError, ValueError):
+            if url.startswith("res://"):
                 # virtual URL in our resources directories...
                 module = url[6:]
-                if '.' not in module:
+                if "." not in module:
                     # TODO: check for other bad values?
-                    name = 'OpenGLContext.resources.%s'%(module,)
-                    module = __import__(name, {}, {}, name.split('.'))
+                    name = "OpenGLContext.resources.%s" % (module,)
+                    module = __import__(name, {}, {}, name.split("."))
                     filename = module.source
-                    file = StringIO( as_8_bit(module.data) )
-                    baseURL = url 
+                    file = StringIO(as_8_bit(module.data))
+                    baseURL = url
                 else:
-                    raise ValueError( 'Invalid character in resource url: %s'%(url,))
+                    raise ValueError("Invalid character in resource url: %s" % (url,))
             else:
                 # try to download
                 try:
-                    log.debug( "download: %s", url )
-                    filename, headers = self.download( url )
-                    log.debug( "downloaded to: %s", filename )
-                    file = open( filename, 'rb')
+                    log.debug("download: %s", url)
+                    filename, headers = self.download(url)
+                    log.debug("downloaded to: %s", filename)
+                    file = open(filename, "rb")
                     baseURL = url
                 except (IOError, TypeError, ValueError):
-                    return (None, None,None,None)
-        self.cache[ url ] = filename
-        self.cache[ baseURL ] = filename
+                    return (None, None, None, None)
+        self.cache[url] = filename
+        self.cache[baseURL] = filename
         return baseURL, file, filename, headers
-    def download( self, url ):
+
+    def download(self, url):
         """Download the given url to local disk, return local filename"""
         filename, headers = urlretrieve(
             url,
         )
         return filename, headers
-    
+
     loadedHandlers = {}
-    def loadHandlers( self ):
+
+    def loadHandlers(self):
         """Load all registered handlers"""
         from OpenGLContext import plugins
+
         entrypoints = plugins.Loader.all()
         for entrypoint in entrypoints:
-            name = entrypoint.name 
+            name = entrypoint.name
             try:
                 creator = entrypoint.load()
             except ImportError as err:
-                log.warn( """Unable to load loader implementation for %s: %s""", name, err )
+                log.warning(
+                    """Unable to load loader implementation for %s: %s""", name, err
+                )
             else:
                 try:
                     loader = creator()
                 except Exception as err:
-                    log.warn( """Unable to initialize loader implementation for %s: %s""", name, err )
+                    log.warning(
+                        """Unable to initialize loader implementation for %s: %s""",
+                        name,
+                        err,
+                    )
                 else:
                     for extension in entrypoint.check:
-                        self.loadedHandlers[ extension ] = loader 
-                    log.info( """Loaded loader implementation for %s: %s""", name, loader )
-        
-    def findHandler( self, url ):
+                        self.loadedHandlers[extension] = loader
+                    log.info(
+                        """Loaded loader implementation for %s: %s""", name, loader
+                    )
+
+    def findHandler(self, url):
         """Find registered handler for the url's apparent suffix
-        
+
         TODO: allow for content-type operations after downloading the URL
         """
         if not self.loadedHandlers:
             self.loadHandlers()
         for extension in self.loadedHandlers.keys():
-            if url.endswith( extension ):
-                return self.loadedHandlers[ extension ]
+            if url.endswith(extension):
+                return self.loadedHandlers[extension]
         return None
-    def load( self, url, baseURL = None ):
+
+    def load(self, url, baseURL=None):
         """Load the given URL as a scenegraph
 
         url -- the URL (or list of URLs) from which to load
         baseURL -- optional base URL from which to determine
             relative URL values
         """
-        handler = self.findHandler( url )
+        handler = self.findHandler(url)
         if not handler:
-            raise ValueError( """We do not have a registered handler for url %r, registered handlers: %r"""%(
-                url, list(Loader.loadedHandlers.keys()),
-            ))
-        result = self( url, baseURL=baseURL )
+            raise ValueError(
+                """We do not have a registered handler for url %r, registered handlers: %r"""
+                % (
+                    url,
+                    list(Loader.loadedHandlers.keys()),
+                )
+            )
+        result = self(url, baseURL=baseURL)
         if not result:
             return result
         # now parse/convert to scenegraph...
-        return handler( *result )
+        return handler(*result)
 
-    def loads( self, data, baseURL='resource.wrl' ):
+    def loads(self, data, baseURL="resource.wrl"):
         """Load given raw data as a scenegraph
-        
+
         data -- bytes to parse
         baseURL -- raw data from which to determine
             relative URL values
         """
-        handler = self.findHandler( baseURL )
+        handler = self.findHandler(baseURL)
         if not handler:
-            raise ValueError( """We do not have a registered handler for url %r, registered handlers: %r"""%(
-                baseURL, Loader.loadedHandlers.keys(),
-            ))
-        return handler.parse( data, baseURL, filename='', file=None )[1]
+            raise ValueError(
+                """We do not have a registered handler for url %r, registered handlers: %r"""
+                % (
+                    baseURL,
+                    Loader.loadedHandlers.keys(),
+                )
+            )
+        return handler.parse(data, baseURL, filename="", file=None)[1]
+
 
 Loader = _Loader()

@@ -85,7 +85,7 @@ def coplanar( points ):
         rest,
         vec1,
     )
-    vecsNonZero = sometrue(vecs,1)
+    vecsNonZero = vecs.any(axis=1)
     vecs = compress(vecsNonZero, vecs,0)
     if not len(vecs):
         return True

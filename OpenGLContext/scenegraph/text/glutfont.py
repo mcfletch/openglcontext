@@ -137,7 +137,10 @@ class _GLUTFontProvider (fontprovider.FontProvider):
             if current:
                 # find closest size in the set of available sizes...
                 target = fontStyle.size * self.scale
-                diff, family,size = min([ (abs(target-size),family,size) for (family,size) in current ])
+                diffs = [abs(target - size) for (family, size) in current]
+                best_idx = argmin(diffs)
+                diff = diffs[best_idx]
+                family, size = current[best_idx]
                 if __debug__:
                     if diff:
                         log.info(

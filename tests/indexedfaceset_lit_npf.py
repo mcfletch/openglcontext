@@ -1,43 +1,54 @@
 #! /usr/bin/env python
-'''IndexedFaceSet object test NPF versus NPV operation
+"""IndexedFaceSet object test NPF versus NPV operation
 
 Lit
 Material
 Normal-per-face generation
-'''
+"""
+
 from __future__ import print_function
 from OpenGLContext import testingcontext
+
 BaseContext = testingcontext.getInteractive()
-from six.moves import StringIO
+try:
+    from cStringIO import StringIO
+except ImportError:
+    from io import StringIO
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from OpenGLContext.scenegraph import basenodes
 
-def loadData( data ):
-    file = StringIO( data )
+
+def loadData(data):
+    file = StringIO(data)
     points = []
     indices = []
     readingPoints = 1
     while readingPoints:
         line = file.readline().strip().split()
         if len(line) > 1:
-            points.append( list(map( float, line )))
+            points.append(list(map(float, line)))
         else:
             readingPoints = 0
     readingIndices = 1
     while readingIndices:
         line = file.readline().strip().split()
         if len(line) > 1:
-            indices.extend( list(map( int, line )))
+            indices.extend(list(map(int, line)))
         else:
             readingIndices = 0
-##	print 'got %s point and %s indices'% ( len(points), len(indices))
+    ##	print 'got %s point and %s indices'% ( len(points), len(indices))
     return points, indices
-    
 
-class TestContext( BaseContext ):
-    initialPosition = (-5,0,5) # set initial camera position, tutorial does the re-positioning
-    def OnInit( self ):
+
+class TestContext(BaseContext):
+    initialPosition = (
+        -5,
+        0,
+        5,
+    )  # set initial camera position, tutorial does the re-positioning
+
+    def OnInit(self):
         """Load the image on initial load of the application"""
         print("""Should see two geodesic spheres over black background
         
@@ -46,56 +57,53 @@ class TestContext( BaseContext ):
     
     Sphere to the right should be lit with normal-per-vertex
     which should make the lines between faces fuzzier.""")
-        points, indices = loadData( ICOSDATA )
-##		light = basenodes.PointLight(
-##			location = (2,10,10)
-##		)
+        points, indices = loadData(ICOSDATA)
+        ##		light = basenodes.PointLight(
+        ##			location = (2,10,10)
+        ##		)
         self.sg = basenodes.sceneGraph(
-##			lights = [
-##				light
-##			],
-            children = [
-##				light,
+            ##			lights = [
+            ##				light
+            ##			],
+            children=[
+                ##				light,
                 basenodes.Transform(
-                    translation = (-1.5,0,0),
-                    children = [
+                    translation=(-1.5, 0, 0),
+                    children=[
                         basenodes.Shape(
-                            appearance = basenodes.Appearance(
-                                material = basenodes.Material(
-                                    diffuseColor =(1,0,0)
-                                )
+                            appearance=basenodes.Appearance(
+                                material=basenodes.Material(diffuseColor=(1, 0, 0))
                             ),
-                            geometry = basenodes.IndexedFaceSet(
-                                coord = basenodes.Coordinate (
-                                    point = points,
+                            geometry=basenodes.IndexedFaceSet(
+                                coord=basenodes.Coordinate(
+                                    point=points,
                                 ),
-                                coordIndex = indices,
+                                coordIndex=indices,
                             ),
                         ),
                     ],
                 ),
                 basenodes.Transform(
-                    translation = (1.5,0,0),
-                    children = [
+                    translation=(1.5, 0, 0),
+                    children=[
                         basenodes.Shape(
-                            appearance = basenodes.Appearance(
-                                material = basenodes.Material(
-                                    diffuseColor =(1,0,0)
-                                )
+                            appearance=basenodes.Appearance(
+                                material=basenodes.Material(diffuseColor=(1, 0, 0))
                             ),
-                            geometry = basenodes.IndexedFaceSet(
-                                coord = basenodes.Coordinate (
-                                    point = points,
+                            geometry=basenodes.IndexedFaceSet(
+                                coord=basenodes.Coordinate(
+                                    point=points,
                                 ),
-                                coordIndex = indices,
-                                creaseAngle = 3.14,
-                                normalPerVertex = 1,
+                                coordIndex=indices,
+                                creaseAngle=3.14,
+                                normalPerVertex=1,
                             ),
                         ),
                     ],
                 ),
             ]
         )
+
 
 TESTDATA = """-1 0 0
 1 0 0
@@ -232,5 +240,3 @@ ICOSDATA = """-4.769095 1.349644 0.011604
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
-
-

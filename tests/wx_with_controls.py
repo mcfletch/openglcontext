@@ -54,13 +54,13 @@ if __name__ == "__main__":
             outerbox = wx.BoxSizer(wx.HORIZONTAL)
             box = wx.BoxSizer(wx.VERTICAL)
             outerbox.Add( box, 5, wx.EXPAND )
-            tID = wx.NewId()
             self.context = TestContext(
                 self,
             )
             box.Add(self.context, 1, wx.EXPAND )
-            box.Add(wx.Button(self, 1003, "Stop Rotation"), 0)
-            wx.EVT_BUTTON(self, 1003, self.context.OnButtonPause)
+            stop_button = wx.Button(self, wx.ID_ANY, "Stop Rotation")
+            box.Add(stop_button, 0)
+            self.Bind(wx.EVT_BUTTON, self.context.OnButtonPause, stop_button)
             self.SetAutoLayout(True)
             self.SetSizer( outerbox )
         def OnCloseWindow(self, event):

@@ -65,8 +65,8 @@ class wxContext(
         if USE_CONTEXT:
             # wxPython Pheonix (4+) has a separate context object...
             glcanvas.GLCanvas.__init__(
-                self, parent, id=id, pos=pos, 
-                size = tuple(definition.size), style=style, name=name, 
+                self, parent, id=id, pos=pos,
+                size = tuple(int(x) for x in definition.size), style=style, name=name,
                 attribList = self.wxFlagsFromDefinition(definition),
             )
             # flags = glcanvas.GLContextAttrs()
@@ -78,8 +78,8 @@ class wxContext(
             )
         else:
             glcanvas.GLCanvas.__init__(
-                self, parent, id=id, pos=pos, 
-                size = tuple(definition.size), style=style, name=name, 
+                self, parent, id=id, pos=pos,
+                size = tuple(int(x) for x in definition.size), style=style, name=name,
                 attribList = self.wxFlagsFromDefinition(definition)
             )
         self.Show( )
@@ -331,9 +331,9 @@ class wxContext(
 def getIcon( data ):
     """Return the data from the resource as a wxIcon"""
     stream = StringIO(data)
-    image = wx.ImageFromStream(stream)
-    icon = wx.EmptyIcon()
-    icon.CopyFromBitmap(wx.BitmapFromImage(image))
+    image = wx.Image(stream)
+    icon = wx.Icon()
+    icon.CopyFromBitmap(wx.Bitmap(image))
     return icon
 
 

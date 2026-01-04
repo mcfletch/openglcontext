@@ -28,6 +28,7 @@ enabled equivalents from shadow.passes), and it is
 these classes which define the rendering callbacks
 which are available from the Context class.
 """
+
 from __future__ import print_function
 from OpenGL.GL import *
 from OpenGLContext import texturecache, plugins
@@ -313,7 +314,8 @@ class Context(object):
         self.suppressRedraw()
         import sys
 
-        sys.exit(0)
+        os._exit(0)
+        # sys.exit(0)
 
     def OnFrameRate(self, event=None):
         """Print the current frame-rate values"""
@@ -376,7 +378,7 @@ class Context(object):
                 count += 1
                 test = template % locals()
                 if overwrite or (not os.path.exists(test)):
-                    log.warn("Saving to file: %s", test)
+                    log.warning("Saving to file: %s", test)
                     image.save(test, "PNG")
                     saved = True
                     return (width, height)
@@ -452,10 +454,9 @@ class Context(object):
 
     def setCurrent(self, blocking=1):
         """Set the OpenGL focus to this context"""
-        assert (
-            inContextThread()
-        ), """setCurrent called from outside of the context/GUI thread! %s""" % (
-            threading.currentThread()
+        assert inContextThread(), (
+            """setCurrent called from outside of the context/GUI thread! %s"""
+            % (threading.currentThread())
         )
         if not contextLock.acquire(blocking):
             raise LockingError("""Cannot acquire without blocking""")
@@ -464,10 +465,9 @@ class Context(object):
 
     def unsetCurrent(self):
         """Give up the OpenGL focus from this context"""
-        assert (
-            inContextThread()
-        ), """unsetCurrent called from outside of the context/GUI thread! %s""" % (
-            threading.currentThread()
+        assert inContextThread(), (
+            """unsetCurrent called from outside of the context/GUI thread! %s"""
+            % (threading.currentThread())
         )
         self.unlockScenegraph()
         Context.currentContext = None
@@ -526,10 +526,9 @@ class Context(object):
                 from the render-pass-set), calls self.SwapBuffers()
             * calls self.unsetCurrent()
         """
-        assert (
-            inContextThread()
-        ), """OnDraw called from outside of the context/GUI thread! %s""" % (
-            threading.currentThread()
+        assert inContextThread(), (
+            """OnDraw called from outside of the context/GUI thread! %s"""
+            % (threading.currentThread())
         )
         # could use if self.frameCounter, but that introduces a
         # potential race condition, so eat the extra call...
@@ -546,12 +545,15 @@ class Context(object):
         if threading:
             self.redrawRequest.clear()
         try:
-            visibleChange = self.renderPasses(self)
-            if visibleChange:
-                if self.frameCounter is not None:
-                    self.frameCounter.addFrame(perf() - t)
-                return 1
-            return 0
+            try:
+                visibleChange = self.renderPasses(self)
+                if visibleChange:
+                    if self.frameCounter is not None:
+                        self.frameCounter.addFrame(perf() - t)
+                    return 1
+                return 0
+            except KeyboardInterrupt as err:
+                self.OnQuit()
         finally:
             glFlush()
             self.drawing = None
@@ -675,10 +677,9 @@ class Context(object):
         underlying window (i.e. that it starts at 0,0 and that width, height
         will represent the entire size of the window).
         """
-        assert (
-            inContextThread()
-        ), """ViewPort called from outside of the context/GUI thread! %s""" % (
-            threading.currentThread()
+        assert inContextThread(), (
+            """ViewPort called from outside of the context/GUI thread! %s"""
+            % (threading.currentThread())
         )
         self.setCurrent()
         try:
@@ -804,12 +805,14 @@ class Context(object):
             log.info("Loading font metadata from cache %r", registryFile)
             registry.load(registryFile)
             if not registry.fonts:
-                log.warn("Re-scanning fonts, no fonts found in cache")
+                log.warning("Re-scanning fonts, no fonts found in cache")
                 registry.scan()
                 registry.save()
                 log.info("Font metadata stored in cache %r", registryFile)
         else:
-            log.warn("Scanning font metadata into cache %r, please wait", registryFile)
+            log.warning(
+                "Scanning font metadata into cache %r, please wait", registryFile
+            )
             registry.scan()
             registry.save(registryFile)
             log.info("Font metadata stored in cache %r", registryFile)

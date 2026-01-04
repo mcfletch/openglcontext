@@ -38,7 +38,7 @@ class TestContext( BaseContext ):
     currentSize = 0
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
-        query = glGenQueries(1)
+        query = glGenQueries(1)[0]
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
         glDepthMask(GL_FALSE);
         glBeginQuery(GL_SAMPLES_PASSED, query);

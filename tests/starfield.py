@@ -1,36 +1,39 @@
 #! /usr/bin/env python
-'''PointSet object test (draw line of coloured dots)
-'''
+"""PointSet object test (draw line of coloured dots)"""
+
 from __future__ import print_function
 from OpenGLContext import testingcontext
+
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.arrays import *
 from numpy import random
+import math
 
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.events.timer import Timer
 
-class TestContext( BaseContext ):
-    def OnInit( self ):
+
+class TestContext(BaseContext):
+    def OnInit(self):
         """Load the image on initial load of the application"""
         print("""Should see a rotating star-field""")
-        starfield = random.rand( 9110, 3 )
+        starfield = random.rand(9110, 3)
         self.coordinate = Coordinate(
-            point = starfield,
+            point=starfield,
         )
         self.color = Color(
-            color = starfield,
+            color=starfield,
         )
         self.transform = Transform(
-            scale = (200,200,200),
-            children = [
+            scale=(200, 200, 200),
+            children=[
                 Transform(
-                    translation=(-.5,-.5,-.5),
+                    translation=(-0.5, -0.5, -0.5),
                     children=[
                         Shape(
-                            geometry = PointSet(
-                                coord = self.coordinate,
-                                color = self.color,
+                            geometry=PointSet(
+                                coord=self.coordinate,
+                                color=self.color,
                             ),
                         ),
                     ],
@@ -38,18 +41,19 @@ class TestContext( BaseContext ):
             ],
         )
         self.sg = sceneGraph(
-            children = [
+            children=[
                 self.transform,
             ],
         )
-        self.time = Timer( duration = 90.0, repeating = 1 )
-        self.time.addEventHandler( "fraction", self.OnTimerFraction )
-        self.time.register (self)
-        self.time.start ()
-    def OnTimerFraction( self, event ):
+        self.time = Timer(duration=90.0, repeating=1)
+        self.time.addEventHandler("fraction", self.OnTimerFraction)
+        self.time.register(self)
+        self.time.start()
+
+    def OnTimerFraction(self, event):
         """On event from the timer, generate new geometry"""
-        self.transform.rotation = (0,1,0,2*math.pi * event.fraction() )
-        
+        self.transform.rotation = (0, 1, 0, 2 * math.pi * event.fraction())
+
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

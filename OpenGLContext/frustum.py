@@ -9,13 +9,16 @@ OpenGLContext.scenegraph.boundingvolume module.
 Based on code from:
     http://www.markmorley.com/opengl/frustumculling.html
 """
+
 from vrml import fieldtypes, node, protofunctions
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
-import logging 
-log = logging.getLogger( __name__ )
+import logging
 
-def viewingMatrix(projection = None,model = None):
+log = logging.getLogger(__name__)
+
+
+def viewingMatrix(projection=None, model=None):
     """Calculate the total viewing matrix from given data
 
     projection -- the projection matrix, if not provided
@@ -30,25 +33,26 @@ def viewingMatrix(projection = None,model = None):
         matrix, the function will raise a RuntimeError
     """
     if projection is None:
-        projection = glGetFloatv( GL_PROJECTION_MATRIX)
+        projection = glGetFloatv(GL_PROJECTION_MATRIX)
     if model is None:
-        model = glGetFloatv( GL_MODELVIEW_MATRIX )
+        model = glGetFloatv(GL_MODELVIEW_MATRIX)
     # hmm, this will likely fail on 64-bit platforms :(
     if projection is None or model is None:
-        log.warn( 
+        log.warning(
             """A NULL matrix was returned from glGetFloatv: proj=%s modelView=%s""",
-            projection, model,
+            projection,
+            model,
         )
         if projection:
             return projection
         if model:
             return model
         else:
-            return identity( 4, 'd')
-    return dot( model, projection )
+            return identity(4, "d")
+    return dot(model, projection)
 
 
-class Frustum (node.Node):
+class Frustum(node.Node):
     """Holder for frustum specification for intersection tests
 
     Note:
@@ -57,11 +61,13 @@ class Frustum (node.Node):
         is to define 6 clipping planes from the OpenGL
         model-view matrices.
     """
-    ARRAY_TYPE = 'f'
-    planes = fieldtypes.MFVec4f( 'planes', 1, [])
-    normalized = fieldtypes.SFBool( 'normalized', 0, 1)
+
+    ARRAY_TYPE = "f"
+    planes = fieldtypes.MFVec4f("planes", 1, [])
+    normalized = fieldtypes.SFBool("normalized", 0, 1)
+
     @classmethod
-    def fromViewingMatrix(cls, matrix= None, normalize=1):
+    def fromViewingMatrix(cls, matrix=None, normalize=1):
         """Extract and calculate frustum clipping planes from OpenGL
 
         The default initializer allows you to create
@@ -76,53 +82,54 @@ class Frustum (node.Node):
             distance equations for LOD-style operations.
         """
         if matrix is None:
-            matrix = viewingMatrix( )
+            matrix = viewingMatrix()
         clip = ravel(matrix)
-        frustum = zeros( (6, 4), cls.ARRAY_TYPE )
+        frustum = zeros((6, 4), cls.ARRAY_TYPE)
         # right
-        frustum[0][0] = clip[ 3] - clip[ 0]
-        frustum[0][1] = clip[ 7] - clip[ 4]
-        frustum[0][2] = clip[11] - clip[ 8]
+        frustum[0][0] = clip[3] - clip[0]
+        frustum[0][1] = clip[7] - clip[4]
+        frustum[0][2] = clip[11] - clip[8]
         frustum[0][3] = clip[15] - clip[12]
         # left
-        frustum[1][0] = clip[ 3] + clip[ 0]
-        frustum[1][1] = clip[ 7] + clip[ 4]
-        frustum[1][2] = clip[11] + clip[ 8]
+        frustum[1][0] = clip[3] + clip[0]
+        frustum[1][1] = clip[7] + clip[4]
+        frustum[1][2] = clip[11] + clip[8]
         frustum[1][3] = clip[15] + clip[12]
         # bottom
-        frustum[2][0] = clip[ 3] + clip[ 1]
-        frustum[2][1] = clip[ 7] + clip[ 5]
-        frustum[2][2] = clip[11] + clip[ 9]
+        frustum[2][0] = clip[3] + clip[1]
+        frustum[2][1] = clip[7] + clip[5]
+        frustum[2][2] = clip[11] + clip[9]
         frustum[2][3] = clip[15] + clip[13]
         # top
-        frustum[3][0] = clip[ 3] - clip[ 1]
-        frustum[3][1] = clip[ 7] - clip[ 5]
-        frustum[3][2] = clip[11] - clip[ 9]
+        frustum[3][0] = clip[3] - clip[1]
+        frustum[3][1] = clip[7] - clip[5]
+        frustum[3][2] = clip[11] - clip[9]
         frustum[3][3] = clip[15] - clip[13]
         # far
-        frustum[4][0] = clip[ 3] - clip[ 2]
-        frustum[4][1] = clip[ 7] - clip[ 6]
+        frustum[4][0] = clip[3] - clip[2]
+        frustum[4][1] = clip[7] - clip[6]
         frustum[4][2] = clip[11] - clip[10]
         frustum[4][3] = clip[15] - clip[14]
         # near
-        frustum[5][0] = clip[ 3] + clip[ 2]
-        frustum[5][1] = clip[ 7] + clip[ 6]
+        frustum[5][0] = clip[3] + clip[2]
+        frustum[5][1] = clip[7] + clip[6]
         frustum[5][2] = clip[11] + clip[10]
         frustum[5][3] = clip[15] + clip[14]
         if normalize:
-            frustum = cls.normalize( frustum )
-        return cls( planes = frustum, normalized = normalize )
+            frustum = cls.normalize(frustum)
+        return cls(planes=frustum, normalized=normalize)
+
     @classmethod
     def normalize(cls, frustum):
         """Normalize clipping plane equations"""
-        magnitude = sqrt( 
-            frustum[:,0] * frustum[:,0] + 
-            frustum[:,1] * frustum[:,1] + 
-            frustum[:,2] * frustum[:,2] 
+        magnitude = sqrt(
+            frustum[:, 0] * frustum[:, 0]
+            + frustum[:, 1] * frustum[:, 1]
+            + frustum[:, 2] * frustum[:, 2]
         )
         # eliminate any planes which have 0-length vectors,
         # those planes can't be used for excluding anything anyway...
-        frustum = compress( magnitude,frustum,0 )
-        magnitude = compress( magnitude, magnitude,0 )
-        magnitude=reshape(magnitude.astype(cls.ARRAY_TYPE), (len(frustum),1))
-        return frustum/magnitude
+        frustum = compress(magnitude, frustum, 0)
+        magnitude = compress(magnitude, magnitude, 0)
+        magnitude = reshape(magnitude.astype(cls.ARRAY_TYPE), (len(frustum), 1))
+        return frustum / magnitude

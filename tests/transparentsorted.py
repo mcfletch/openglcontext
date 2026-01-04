@@ -1,102 +1,111 @@
 #! /usr/bin/env python
-'''Test of transparent, sorted IndexedFaceSet geometry
-'''
+"""Test of transparent, sorted IndexedFaceSet geometry"""
+
 from OpenGLContext import testingcontext
+
 BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
-import StringIO
+
+try:
+    from cStringIO import StringIO
+except ImportError:
+    from io import StringIO
 from OpenGLContext.scenegraph.basenodes import *
 
-def loadData( data ):
-    file = StringIO.StringIO( data )
+
+def loadData(data):
+    file = StringIO(data)
     points = []
     indices = []
     readingPoints = 1
     while readingPoints:
         line = file.readline().strip().split()
         if len(line) > 1:
-            points.append( map( float, line ))
+            points.append([float(x) for x in line])
         else:
             readingPoints = 0
     readingIndices = 1
     while readingIndices:
         line = file.readline().strip().split()
         if len(line) > 1:
-            indices.extend( map( int, line ))
+            indices.extend(map(int, line))
         else:
             readingIndices = 0
     return points, indices
-            
-class TestContext( BaseContext ):
-    initialPosition = (-5,0,5) # set initial camera position, tutorial does the re-positioning
-##	USE_FRUSTUM_CULLING = 0
-#	def Render( self, mode = 0):
-#		BaseContext.Render( self, mode )
-#		if mode.visible and not mode.transparent:
-#			self.shape.Render( mode )
-#			glTranslate( -3,0,-4 )
-#			glColor( .5,.5,.5, 1)
-#			drawcube.drawCube()
-#			glDisable(GL_TEXTURE_2D)
-        
-    def OnInit( self ):
+
+
+class TestContext(BaseContext):
+    initialPosition = (
+        -5,
+        0,
+        5,
+    )  # set initial camera position, tutorial does the re-positioning
+    ##	USE_FRUSTUM_CULLING = 0
+    # def Render( self, mode = 0):
+    # BaseContext.Render( self, mode )
+    # if mode.visible and not mode.transparent:
+    # self.shape.Render( mode )
+    # glTranslate( -3,0,-4 )
+    # glColor( .5,.5,.5, 1)
+    # drawcube.drawCube()
+    # glDisable(GL_TEXTURE_2D)
+
+    def OnInit(self):
         """Load the image on initial load of the application"""
-        points, indices = loadData( ICOSDATA )
+        points, indices = loadData(ICOSDATA)
         self.shape = Shape(
-            appearance = Appearance(
-                material = Material(
-                    diffuseColor =(.5,.5,.5),
-                    transparency = .5,
+            appearance=Appearance(
+                material=Material(
+                    diffuseColor=(0.5, 0.5, 0.5),
+                    transparency=0.5,
                 )
             ),
-            geometry = IndexedFaceSet(
-                coord = Coordinate (
-                    point = points
-                ),
-                coordIndex = indices,
-                solid = 0,
+            geometry=IndexedFaceSet(
+                coord=Coordinate(point=points),
+                coordIndex=indices,
+                solid=0,
             ),
         )
         self.sg = sceneGraph(
-            children = [
+            children=[
                 self.shape,
-                Transform( 
-                    translation = (-5,0,-5), 
+                Transform(
+                    translation=(-5, 0, -5),
                     children=[
-                        Shape( 
+                        Shape(
                             geometry=Teapot(),
-                            appearance=Appearance( material=Material()),
+                            appearance=Appearance(material=Material()),
                         ),
                     ],
                 ),
-                Transform( 
-                    translation = (-4,0,-4), 
+                Transform(
+                    translation=(-4, 0, -4),
                     children=[
-                        Shape( 
+                        Shape(
                             geometry=Teapot(),
-                            appearance=Appearance( 
+                            appearance=Appearance(
                                 material=Material(),
-                                texture = ImageTexture(
-                                    url = 'pimbackground_LF.jpg',
+                                texture=ImageTexture(
+                                    url="pimbackground_LF.jpg",
                                 ),
                             ),
                         ),
                     ],
                 ),
-                Transform( 
-                    translation = (-6.001,0,-4), 
+                Transform(
+                    translation=(-6.001, 0, -4),
                     children=[
-                        Shape( 
+                        Shape(
                             geometry=Teapot(),
-                            appearance=Appearance( 
+                            appearance=Appearance(
                                 material=Material(
-                                    transparency = .5,
+                                    transparency=0.5,
                                 ),
-                                texture = ImageTexture(
-                                    url = 'pimbackground_LF.jpg',
+                                texture=ImageTexture(
+                                    url="pimbackground_LF.jpg",
                                 ),
                             ),
                         ),
@@ -104,6 +113,7 @@ class TestContext( BaseContext ):
                 ),
             ],
         )
+
 
 TESTDATA = """-1 0 0
 1 0 0
@@ -240,5 +250,3 @@ ICOSDATA = """-4.769095 1.349644 0.011604
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
-
-

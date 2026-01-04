@@ -1,9 +1,12 @@
 """Base functionality for font-providers (objects creating fonts)"""
+
 import traceback, weakref
 import logging
-log = logging.getLogger( __name__ )
 
-class FontProvider( object ):
+log = logging.getLogger(__name__)
+
+
+class FontProvider(object):
     """Abstract base class for font-providers
 
     The font-provider allows you to get a system-specific
@@ -25,20 +28,27 @@ class FontProvider( object ):
             otherwise the default  search order is used.
         providers -- the set of registered font providers
     """
-    PROVIDER_SEARCH_ORDER = ['solid','texture','bitmap']
+
+    PROVIDER_SEARCH_ORDER = ["solid", "texture", "bitmap"]
     providers = {}
+
     def __init__(self):
         """Initialize the provider"""
         self.fonts = {}
-    def registerProvider( cls, obj ):
+
+    def registerProvider(cls, obj):
         """Register a class as an active font-provider (classmethod)"""
-        cls.providers.setdefault(obj.format, []).append( obj )
-    registerProvider = classmethod( registerProvider )
-    def getProviders( cls, format ):
+        cls.providers.setdefault(obj.format, []).append(obj)
+
+    registerProvider = classmethod(registerProvider)
+
+    def getProviders(cls, format):
         """Get providers for a particular format (classmethod)"""
-        return cls.providers.get( format, [] )
-    getProviders = classmethod( getProviders )
-    def getProviderFont( cls, fontStyle, mode=None ):
+        return cls.providers.get(format, [])
+
+    getProviders = classmethod(getProviders)
+
+    def getProviderFont(cls, fontStyle, mode=None):
         """Get a font provider & font for given style (classmethod)
 
         fontStyle -- a FontStyle for FontStyle3D node, or None,
@@ -50,34 +60,35 @@ class FontProvider( object ):
         format (if there is such a format).
         """
         order = cls.PROVIDER_SEARCH_ORDER[:]
-        if hasattr( fontStyle, 'format') and fontStyle.format:
+        if hasattr(fontStyle, "format") and fontStyle.format:
             format = fontStyle.format.lower()
             while format in order:
-                order.remove( format )
-            order.insert( 0, format )
+                order.remove(format)
+            order.insert(0, format)
         for format in order:
-            providers = cls.getProviders( format )
+            providers = cls.getProviders(format)
             if providers:
                 for provider in providers:
                     try:
-                        return provider, provider.get( fontStyle, mode )
+                        return provider, provider.get(fontStyle, mode)
                     except Exception as err:
                         if __debug__:
                             traceback.print_exc()
-                        log.warn(
+                        log.warning(
                             """FontProvider %r couldn't find font for %r: %s""",
                             provider,
                             fontStyle,
-                            err
+                            err,
                         )
-        log.warn(
+        log.warning(
             """Couldn't find a provider for fontStyle %r""",
             fontStyle,
         )
         return None, None
-    getProviderFont = classmethod( getProviderFont )
-            
-    def addFont( self, fontStyle, font, mode = None):
+
+    getProviderFont = classmethod(getProviderFont)
+
+    def addFont(self, fontStyle, font, mode=None):
         """Add a new font to the font provider
 
         fontStyle -- the font style defining the font, may
@@ -87,21 +98,23 @@ class FontProvider( object ):
             OpenGLContext.scenegraph.text.font.Font
         mode -- the active rendering mode
         """
-        key = self.key (fontStyle)
+        key = self.key(fontStyle)
         self.fonts[key] = font
         return font
-    def get( self, fontStyle= None, mode=None ):
+
+    def get(self, fontStyle=None, mode=None):
         """Get/create a new font for the given fontStyle & mode
 
         fontStyle -- the font style defining the font, may
             be None to retrieve the default font
         mode -- the active rendering mode
         """
-        key = self.key (fontStyle)
+        key = self.key(fontStyle)
         if key in self.fonts:
-            return self.fonts.get( key )
-        return self.create( fontStyle, mode )
-    def key( self, fontStyle= None ):
+            return self.fonts.get(key)
+        return self.create(fontStyle, mode)
+
+    def key(self, fontStyle=None):
         """Calculate our "font key" for the fontStyle
 
         If the font-key changes, we should be invalidating
@@ -117,7 +130,7 @@ class FontProvider( object ):
             fontStyle.style,
         )
 
-    def enumerate(self, mode = None):
+    def enumerate(self, mode=None):
         """Iterate through all available fonts (whether instantiated or not)
 
         These are the "low level" specifications for the fonts,
@@ -128,26 +141,32 @@ class FontProvider( object ):
         as well to allow for more flexibility in content
         authoring.
         """
-    def create( self, fontStyle, mode=None ):
+
+    def create(self, fontStyle, mode=None):
         """Create a new font for the given fontStyle and mode"""
 
-    def clear( self ):
+    def clear(self):
         """Force clear of the font cache for this provider"""
         self.fonts.clear()
 
 
-class TTFFontProvider( FontProvider ):
+class TTFFontProvider(FontProvider):
     """Direct TrueType-font-file-based provider"""
+
     TTFRegistry = None
-    def setTTFRegistry( cls, registry ):
+
+    def setTTFRegistry(cls, registry):
         """Set the TTF registry for the class (global if called on TTFFontProvider)"""
         cls.TTFRegistry = registry
-    setTTFRegistry = classmethod( setTTFRegistry )
-    def getTTFRegistry( cls ):
+
+    setTTFRegistry = classmethod(setTTFRegistry)
+
+    def getTTFRegistry(cls):
         """Set the TTF registry for the class (global if called on TTFFontProvider)"""
         return cls.TTFRegistry
-    getTTFRegistry = classmethod( getTTFRegistry )
-    
+
+    getTTFRegistry = classmethod(getTTFRegistry)
+
 
 getProviders = FontProvider.getProviders
 setTTFRegistry = TTFFontProvider.setTTFRegistry

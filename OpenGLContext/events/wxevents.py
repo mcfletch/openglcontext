@@ -62,7 +62,7 @@ class wxMouseButtonEvent( wxXEvent, mouseevents.MouseButtonEvent ):
                 self.state = wxEventObject.ButtonDown( wx )
                 break 
         if self.button is None:
-            for local,wx in self.self.BUTTON_MAPPING:
+            for local,wx in self.BUTTON_MAPPING:
                 if wxEventObject.Button( wx ):
                     self.button = local
                     self.state = wxEventObject.ButtonDown( wx )

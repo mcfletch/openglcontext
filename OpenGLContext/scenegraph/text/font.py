@@ -175,7 +175,10 @@ class Font(object):
         """Clean up our display lists on deletion"""
         if __debug__:
             log.debug( """Deleting font %s""", self)
-        for key,(dl,metrics) in self._displayLists.items():
+        displayLists = getattr(self, '_displayLists', None)
+        if displayLists is None:
+            return
+        for key,(dl,metrics) in displayLists.items():
             try:
                 glDeleteLists( dl, 1 )
             except:
