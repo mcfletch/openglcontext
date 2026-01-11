@@ -902,13 +902,20 @@ class Context(object):
     def getDefaultContextType(cls):
         """Get the current user's preference for a default context type
 
-        Note: on Linux this will normally resolve to:
+        Checks in order:
+            1. OPENGLCONTEXT_BACKEND environment variable
+            2. ~/.OpenGLContext/defaultcontext.txt file
 
-            ~/.OpenGLContext/defaultcontext.txt
-
+        Valid backend names: glut, pygame, wx, glfw
         """
         import os
 
+        # First check environment variable
+        name = os.environ.get('OPENGLCONTEXT_BACKEND')
+        if name:
+            return name.strip()
+
+        # Fall back to config file
         directory = cls.getUserAppDataDirectory()
         filename = os.path.join(directory, "defaultcontext.txt")
         name = None

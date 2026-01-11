@@ -28,12 +28,15 @@ from OpenGLContext.plugins import Context,InteractiveContext,VRMLContext,Loader,
 Context( 'pygame', 'OpenGLContext.pygamecontext.PyGameContext' )
 Context( 'wx', 'OpenGLContext.wxcontext.wxContext' )
 Context( 'glut', 'OpenGLContext.glutcontext.GLUTContext' )
+Context( 'glfw', 'OpenGLContext.glfwcontext.GLFWContext' )
 InteractiveContext( 'pygame', 'OpenGLContext.pygameinteractivecontext.PygameInteractiveContext' )
 InteractiveContext( 'wx', 'OpenGLContext.wxinteractivecontext.wxInteractiveContext' )
 InteractiveContext( 'glut', 'OpenGLContext.glutinteractivecontext.GLUTInteractiveContext' )
+InteractiveContext( 'glfw', 'OpenGLContext.glfwinteractivecontext.GLFWInteractiveContext' )
 VRMLContext( 'pygame', 'OpenGLContext.pygamevrmlcontext.VRMLContext' )
 VRMLContext( 'wx', 'OpenGLContext.wxvrmlcontext.VRMLContext' )
 VRMLContext( 'glut', 'OpenGLContext.glutvrmlcontext.VRMLContext' )
+VRMLContext( 'glfw', 'OpenGLContext.glfwvrmlcontext.VRMLContext' )
 
 try:
     import OpenGLContext_qt
