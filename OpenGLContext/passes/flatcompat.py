@@ -270,13 +270,14 @@ class FlatPass( _flat.FlatPass ):
             depth_pixel = array([[0]],'f')
             for point,eventSet in pickPoints.items():
                 # get the pixel colour (id) under the cursor.
-                glReadPixels( point[0],point[1],1,1,GL_RGB,GL_UNSIGNED_BYTE, pixel )
+                px, py = int(point[0]), int(point[1])
+                glReadPixels( px,py,1,1,GL_RGB,GL_UNSIGNED_BYTE, pixel )
                 lpixel = long( pixel.view( '<I' )[0] )
                 paths = map.get( lpixel, [] )
                 event.setObjectPaths( [paths] )
                 # get the depth value under the cursor...
                 glReadPixels(
-                    point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT,depth_pixel
+                    px,py,1,1,GL_DEPTH_COMPONENT,GL_FLOAT,depth_pixel
                 )
                 event.viewCoordinate = point[0],point[1],depth_pixel[0][0]
                 event.modelViewMatrix = matrix
