@@ -1,5 +1,13 @@
 """Flat rendering passes (base implementation)
+
+This module provides both legacy fixed-function and shader-based rendering.
+Set use_shaders=True on FlatPass instances to enable core-profile compatible
+shader-based rendering using the VRML97 lighting model.
 """
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot, allclose
@@ -10,8 +18,11 @@ from vrml import olist
 from OpenGLContext.scenegraph import shaders
 import sys
 from pydispatch.dispatcher import connect
-import logging 
+import logging
 log = logging.getLogger( __name__ )
+
+if TYPE_CHECKING:
+    from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
 __all__ = (
     'SGObserver',
@@ -164,6 +175,10 @@ class FlatPass( SGObserver ):
         frustum -- viewing-frustum definition for current view platform
         MAX_LIGHTS -- queried maximum number of lights
 
+        use_shaders -- whether to use shader-based rendering (core-profile compatible)
+        shader_mode -- indicates shader mode is active (for geometry nodes to check)
+        shader_program -- the VRML97ShaderProgram instance when use_shaders is True
+
 
         passCount -- not used, always set to 0 for code that expects
             a passCount to be available.
@@ -182,6 +197,12 @@ class FlatPass( SGObserver ):
     selectForced = False
 
     cache = None
+
+    # Shader-based rendering support
+    use_shaders: bool = False
+    shader_mode: bool = False  # Set True during shader render passes
+    shader_program: Optional['VRML97ShaderProgram'] = None
+    _shader_program_instance: Optional['VRML97ShaderProgram'] = None
     
     _UNIFORM_NAMES = '''mat_modelview inv_modelview tps_modelview itp_modelview 
         mat_projection inv_projection tps_projection itp_projection
@@ -226,7 +247,234 @@ class FlatPass( SGObserver ):
         """Apply our uniforms to the shader as appropriate"""
         for uniform in self.uniforms:
             uniform.render( shader, self )
-    
+
+    def getShaderProgram(self) -> 'VRML97ShaderProgram':
+        """Get or create the shader program for this render pass.
+
+        Returns:
+            VRML97ShaderProgram instance
+        """
+        if self._shader_program_instance is None:
+            from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
+            self._shader_program_instance = VRML97ShaderProgram()
+        return self._shader_program_instance
+
+    def setupShaderLights(self, matrix: Any) -> None:
+        """Set up lights for shader-based rendering.
+
+        Args:
+            matrix: Base modelview matrix
+        """
+        from OpenGLContext.passes.shaderpass import configure_light_from_node
+
+        shader = self.shader_program
+        light_count = 0
+
+        for path in self.paths.get(nodetypes.Light, ()):
+            if light_count >= shader.MAX_LIGHTS:
+                break
+            tmatrix = path.transformMatrix()
+            light_node = path[-1]
+            if hasattr(light_node, 'on') and light_node.on:
+                configure_light_from_node(shader, light_count, light_node)
+                light_count += 1
+
+        if light_count == 0:
+            # Set default VRML97 headlight
+            shader.set_default_light()
+        else:
+            shader.set_num_lights(light_count)
+
+    def shaderBackgroundRender(self, vp: Any, matrix: Any) -> None:
+        """Render background for shader mode.
+
+        For now, just clears with background color. Full background
+        node support would require shader-based sky/ground rendering.
+
+        Args:
+            vp: View platform
+            matrix: Base matrix
+        """
+        bPath = self.currentBackground()
+        if bPath is not None:
+            bg = bPath[-1]
+            # Try to get sky color for simple clear
+            if hasattr(bg, 'skyColor') and len(bg.skyColor):
+                r, g, b = bg.skyColor[0]
+                glClearColor(r, g, b, 1.0)
+            else:
+                glClearColor(0.0, 0.0, 0.0, 1.0)
+        else:
+            # Default VRML background is black
+            glClearColor(0.0, 0.0, 0.0, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+    def shaderRenderOpaque(self, toRender: List) -> None:
+        """Render opaque geometry using shaders.
+
+        Args:
+            toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path) tuples
+        """
+        self.transparent = False
+        debugFrustum = self.context.contextDefinition.debugBBox
+
+        shader = self.shader_program
+        shader.use(lit=True)
+
+        for key, mvmatrix, tmatrix, bvolume, path in toRender:
+            if not key[0]:  # Not transparent
+                self.matrix = mvmatrix
+                self.renderPath = path
+
+                # Set matrices for this object
+                shader.set_matrices(mvmatrix, self.projection)
+
+                try:
+                    path[-1].Render(mode=self)
+                    if debugFrustum and bvolume:
+                        bvolume.debugRender()
+                except Exception as err:
+                    log.error(
+                        "Failure in shader opaque render: %s",
+                        getTraceback(err),
+                    )
+
+        shader.unuse()
+
+    def shaderRenderTransparent(self, toRender: List) -> None:
+        """Render transparent geometry using shaders.
+
+        Args:
+            toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path) tuples
+        """
+        self.transparent = True
+        setup = False
+        debugFrustum = self.context.contextDefinition.debugBBox
+
+        shader = self.shader_program
+
+        try:
+            for key, mvmatrix, tmatrix, bvolume, path in toRender:
+                if key[0]:  # Transparent
+                    if not setup:
+                        setup = True
+                        shader.use(lit=True)
+                        glEnable(GL_BLEND)
+                        glBlendFunc(GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA)
+                        glDepthMask(0)
+                        glDepthFunc(GL_LEQUAL)
+
+                    self.matrix = mvmatrix
+                    self.renderPath = path
+
+                    # Set matrices for this object
+                    shader.set_matrices(mvmatrix, self.projection)
+
+                    try:
+                        path[-1].RenderTransparent(mode=self)
+                        if debugFrustum and bvolume:
+                            bvolume.debugRender()
+                    except Exception as err:
+                        log.error(
+                            "Failure in shader transparent render: %s",
+                            getTraceback(err),
+                        )
+        finally:
+            self.transparent = False
+            if setup:
+                shader.unuse()
+                glDisable(GL_BLEND)
+                glDepthMask(1)
+                glDepthFunc(GL_LEQUAL)
+                glEnable(GL_DEPTH_TEST)
+
+    def shaderSelectRender(self, mode: Any, toRender: List, events: Dict) -> None:
+        """Render for selection using unlit shader.
+
+        Args:
+            mode: Render mode
+            toRender: Render set
+            events: Pick events
+        """
+        glClearColor(0, 0, 0, 0)
+        glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT)
+
+        self.visible = False
+        self.transparent = False
+        self.lighting = False
+        self.textured = False
+
+        matrix = self.matrix
+        id_map = {}
+
+        pickPoints = {}
+        min_x, min_y = self.getViewport()[2:]
+        max_x, max_y = 0, 0
+        pickSize = 2
+        offset = pickSize // 2
+
+        for event in events.values():
+            x, y = key = tuple(event.getPickPoint())
+            pickPoints.setdefault(key, []).append(event)
+            min_x = min((x - offset, min_x))
+            max_x = max((x + offset, max_x))
+            min_y = min((y - offset, min_y))
+            max_y = max((y + offset, max_y))
+
+        min_x = int(max((0, min_x)))
+        min_y = int(max((0, min_y)))
+        if max_x < min_x or max_y < min_y:
+            return
+
+        debugSelection = mode.context.contextDefinition.debugSelection
+
+        if not debugSelection:
+            glScissor(min_x, min_y, int(max_x) - min_x, int(max_y) - min_y)
+            glEnable(GL_SCISSOR_TEST)
+
+        shader = self.shader_program
+        shader.use(lit=False)  # Use unlit shader
+
+        try:
+            for obj_id, (key, mvmatrix, tmatrix, bvolume, path) in enumerate(toRender):
+                obj_id = (obj_id + 1) << 12
+
+                # Convert ID to color (RGBA bytes)
+                r = (obj_id >> 0) & 0xFF
+                g = (obj_id >> 8) & 0xFF
+                b = (obj_id >> 16) & 0xFF
+                a = 255
+
+                shader.set_solid_color((r / 255.0, g / 255.0, b / 255.0, a / 255.0))
+                shader.set_matrices(mvmatrix, self.projection, program=shader.unlit_program)
+
+                self.matrix = mvmatrix
+                self.renderPath = path
+                path[-1].Render(mode=self)
+                id_map[obj_id] = path
+
+            shader.unuse()
+
+            pixel = array([0, 0, 0, 0], 'B')
+            depth_pixel = array([[0]], 'f')
+
+            for point, eventSet in pickPoints.items():
+                glReadPixels(point[0], point[1], 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel)
+                lpixel = int(pixel.view('<I')[0])
+                paths = id_map.get(lpixel, [])
+                event.setObjectPaths([paths])
+                glReadPixels(
+                    point[0], point[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, depth_pixel
+                )
+                event.viewCoordinate = point[0], point[1], depth_pixel[0][0]
+                event.modelViewMatrix = matrix
+                event.projectionMatrix = self.projection
+                event.viewport = self.viewport
+                if hasattr(mode.context, 'ProcessEvent'):
+                    mode.context.ProcessEvent(event)
+        finally:
+            glDisable(GL_SCISSOR_TEST)
+
     INTERESTING_TYPES = [
         nodetypes.Rendering,
         nodetypes.Bindable,
@@ -317,18 +565,28 @@ class FlatPass( SGObserver ):
         vp = context.getViewPlatform()
         if maxDepth:
             self.projection = vp.viewMatrix(maxDepth)
-        
-        # Load our projection matrix for all legacy rendering operations...
-        
+
+        # Set up shader mode if enabled
+        if self.use_shaders:
+            self.shader_program = self.getShaderProgram()
+            self.shader_program.compile()
+            self.shader_mode = True
+        else:
+            self.shader_mode = False
+            self.shader_program = None
+
         # do we need to do a selection-render pass?
         events = context.getPickEvents()
         debugSelection = mode.context.contextDefinition.debugSelection
-        
+
         if events or debugSelection:
-            self.selectRender( mode, toRender, events )
+            if self.use_shaders:
+                self.shaderSelectRender(mode, toRender, events)
+            else:
+                self.selectRender( mode, toRender, events )
             events.clear()
-        
-        # Load the root 
+
+        # Load the root
         if not debugSelection:
             self.matrix = matrix
             self.visible = True
@@ -336,24 +594,34 @@ class FlatPass( SGObserver ):
             self.lighting = True
             self.textured = True
 
-            self.legacyBackgroundRender( vp,matrix )
             # Set up generic "geometric" rendering parameters
             glFrontFace( GL_CCW )
             glEnable(GL_DEPTH_TEST)
             glDepthFunc( GL_LESS )
-            glDepthFunc(GL_LESS)
             glEnable(GL_CULL_FACE)
             glCullFace(GL_BACK)
 
-            self.legacyLightRender( matrix )
-
-            self.renderOpaque( toRender )
-            self.renderTransparent( toRender )
+            if self.use_shaders:
+                # Shader-based rendering path (core-profile compatible)
+                self.shaderBackgroundRender(vp, matrix)
+                self.setupShaderLights(matrix)
+                self.shader_program.set_default_material()
+                self.shader_program.set_scene_ambient((0.2, 0.2, 0.2))
+                self.shaderRenderOpaque(toRender)
+                self.shaderRenderTransparent(toRender)
+            else:
+                # Legacy fixed-function rendering path
+                self.legacyBackgroundRender( vp,matrix )
+                self.legacyLightRender( matrix )
+                self.renderOpaque( toRender )
+                self.renderTransparent( toRender )
 
             if context.frameCounter and context.frameCounter.display:
                 context.frameCounter.Render( context )
+
         context.SwapBuffers()
         self.matrix = matrix
+        self.shader_mode = False  # Reset after render
 
     def legacyBackgroundRender( self, vp, matrix ):
         """Do legacy background rendering"""

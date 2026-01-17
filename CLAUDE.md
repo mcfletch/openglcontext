@@ -24,12 +24,26 @@ When creating new plans:
 - Rendering passes are in `OpenGLContext/passes/`
 - Context implementations (GLUT, GLFW, etc.) are in `OpenGLContext/`
 
+## Environment
+
+Use the virtualenv at `../.env` for all Python operations:
+
+```bash
+source ../.env/bin/activate
+```
+
+Or run directly with:
+
+```bash
+../.env/bin/python <script.py>
+```
+
 ## Testing
 
 Run tests from the project root:
 
 ```bash
-python tests/<testname>.py
+../.env/bin/python tests/<testname>.py
 ```
 
 Many tests are interactive demos that display OpenGL content.

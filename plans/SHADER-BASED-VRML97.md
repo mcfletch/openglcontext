@@ -127,14 +127,45 @@ uniform mat3 textureTransform;
 
 ## Implementation Phases
 
-1. **Infrastructure**: Create shader loading, uniform management, VBO protocol
-2. **Basic lighting**: Single directional light with diffuse/specular
-3. **Multi-light**: All VRML97 light types, up to 8 lights
-4. **Materials**: Full material model including transparency
-5. **Textures**: Texture sampling, texture transforms, tex coord generation
-6. **Geometry nodes**: Update each geometry type to support shader protocol
-7. **Shape node**: Parallel shader-aware implementation
-8. **Integration**: Selectable render path, context configuration
+1. **Infrastructure**: Create shader loading, uniform management, VBO protocol ✅
+2. **Basic lighting**: Single directional light with diffuse/specular ✅
+3. **Multi-light**: All VRML97 light types, up to 8 lights ✅
+4. **Materials**: Full material model including transparency ✅
+5. **Textures**: Texture sampling, texture transforms ✅
+6. **Geometry nodes**: ShaderGeometryMixin and ShaderBox ✅
+7. **Shape node**: ShaderShape and ShaderShapeMixin ✅
+8. **Integration**: Selectable render path, comparison testing ✅
+
+## Implementation Status: Integrated into FlatPass
+
+The shader infrastructure is now integrated into the core rendering system:
+
+### Core Infrastructure
+
+- `OpenGLContext/passes/shaderpass.py` - VRML97ShaderProgram with full uniform management
+- `OpenGLContext/shaders/vrml97_lighting.vert/frag` - GLSL 330 shaders with VRML97 lighting
+- `OpenGLContext/shaders/vrml97_unlit.vert/frag` - Simple shaders for picking
+- `OpenGLContext/scenegraph/shadergeometry.py` - Geometry protocol and Box implementation
+- `OpenGLContext/scenegraph/shadershape.py` - Shader-aware Shape node
+- `OpenGLContext/testing/framebuffer_comparison.py` - Reusable comparison testing
+
+### FlatPass Integration ✅
+
+- `OpenGLContext/passes/_flat.py` - Updated with shader-based rendering path
+- `OpenGLContext/passes/flatcore.py` - Simplified to inherit from _flat.FlatPass
+- Set `use_shaders=True` on FlatPass instances to enable shader rendering
+
+### Command-line Support ✅
+
+- `OpenGLContext/bin/vrml_view.py` - Added `--shaders` flag for shader mode
+- Usage: `oglc-vrml --shaders myscene.wrl`
+
+### Remaining Work
+
+- Extend ShaderGeometry to support more geometry types (Sphere, Cone, Cylinder, IndexedFaceSet)
+- Add texture coordinate generation modes
+- Add more comprehensive visual comparison tests
+- Test with complex VRML97 scenes
 
 ## Files to Create
 

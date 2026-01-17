@@ -1,36 +1,94 @@
 #! /usr/bin/env python
-"""VRML97 load-and-view demonstration/test"""
-import OpenGL 
+"""VRML97 load-and-view demonstration/test
+
+Usage:
+    vrml_view.py [--shaders] myscene.wrl
+
+Options:
+    --shaders    Use shader-based rendering (core-profile compatible)
+                 instead of legacy fixed-function pipeline
+
+A very limited VRML97 viewer.
+"""
+import argparse
+import OpenGL
 #OpenGL.FULL_LOGGING = True
-OpenGL.ERROR_CHECKING = False 
+OpenGL.ERROR_CHECKING = False
 #OpenGL.ERROR_ON_COPY = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext import vrmlcontext
-import sys
 
-class TestContext( 
-    vrmlcontext.VRMLContext, 
-    BaseContext 
+# Global flag for shader mode
+USE_SHADERS = False
+
+
+class TestContext(
+    vrmlcontext.VRMLContext,
+    BaseContext
 ):
     """VRML97-loading Context testing class"""
-    def OnInit( self ):
+
+    _shader_mode_enabled = False
+
+    def OnInit(self):
         """Load the image on initial load of the application"""
-        filename = sys.argv[1]
-        self.load( filename )
-        vrmlcontext.VRMLContext.OnInit( self )
-        #print(self.sg.tobytes())
-        BaseContext.OnInit( self )
+        # Get filename from parsed args
+        filename = getattr(self, '_vrml_file', None)
+        if filename:
+            self.load(filename)
+        vrmlcontext.VRMLContext.OnInit(self)
+        BaseContext.OnInit(self)
+
+    def Redraw(self, *args, **kwargs):
+        """Override to enable shader mode on first render."""
+        # Enable shader mode on first redraw when FLAT exists
+        if USE_SHADERS and not TestContext._shader_mode_enabled:
+            self._enable_shader_mode()
+        return super().Redraw(*args, **kwargs)
+
+    def _enable_shader_mode(self):
+        """Enable shader-based rendering on the FlatPass."""
+        from OpenGLContext.passes import renderpass
+        if renderpass.FLAT is not None:
+            renderpass.FLAT.use_shaders = True
+            TestContext._shader_mode_enabled = True
+            print(f"Enabled shader mode on {renderpass.FLAT.__class__.__name__}")
+
 
 def main():
-    usage = """vrml_view.py myscene.wrl
+    parser = argparse.ArgumentParser(
+        description='VRML97 load-and-view demonstration/test',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    vrml_view.py scene.wrl           # Use legacy fixed-function rendering
+    vrml_view.py --shaders scene.wrl # Use shader-based rendering
+        """
+    )
+    parser.add_argument(
+        '--shaders',
+        action='store_true',
+        help='Use shader-based rendering (core-profile compatible)'
+    )
+    parser.add_argument(
+        'file',
+        help='VRML97 file to load (.wrl)'
+    )
 
-    A very limited VRML97 viewer.
-    """
-    import sys
-    if not sys.argv[1:2]:
-        print(usage)
-        sys.exit(1)
+    args = parser.parse_args()
+
+    global USE_SHADERS
+    USE_SHADERS = args.shaders
+
+    # Store filename for TestContext to access
+    TestContext._vrml_file = args.file
+
+    if USE_SHADERS:
+        print("Using shader-based rendering (GLSL 3.30)", flush=True)
+    else:
+        print("Using legacy fixed-function rendering", flush=True)
+
     return TestContext.ContextMainLoop()
 
 
