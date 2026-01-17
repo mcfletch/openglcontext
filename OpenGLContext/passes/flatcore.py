@@ -48,5 +48,5 @@ class FlatPass(_flat.FlatPass):
         MAX_LIGHTS -- maximum number of lights (8)
     """
     # Enable shader-based rendering by default for core profile compatibility
-    # Set to False to use legacy fixed-function rendering
-    use_shaders: bool = False 
+    # Set to False to use legacy fixed-function rendering (not recommended for core profile)
+    use_shaders: bool = True

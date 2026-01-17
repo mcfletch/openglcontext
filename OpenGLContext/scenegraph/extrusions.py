@@ -29,6 +29,10 @@ class GLEGeom(nodetypes.Geometry, node.Node):
             See:
                 http://pyopengl.sourceforge.net/documentation/manual/gleTextureMode.3GLE.xml
             for semantics of the various modes.
+
+    Note: GLE geometry uses the GLE library for extrusion generation
+    which doesn't support shader-based rendering directly. In shader
+    mode, this will use an emissive white color as a visible fallback.
     """
 
     sides = field.newField("sides", "SFInt32", 1, 32)
@@ -43,7 +47,23 @@ class GLEGeom(nodetypes.Geometry, node.Node):
         mode=None,  # the renderpass object
     ):
         """Render the geometry"""
-        # do we have a cached array-geometry?
+        # GLE extrusions don't support shader mode directly - they use
+        # legacy GLE library rendering. In shader mode, render with
+        # legacy OpenGL and rely on compatibility profile.
+        if getattr(mode, 'shader_mode', False):
+            # Temporarily disable shader mode for GLE rendering
+            # This requires compatibility profile OpenGL
+            mode.shader_program.unuse()
+            try:
+                dl = mode.cache.getData(self)
+                if not dl:
+                    dl = self.compile(mode=mode)
+                dl()
+            finally:
+                mode.shader_program.use(lit=True)
+            return 1
+
+        # Legacy rendering path
         dl = mode.cache.getData(self)
         if not dl:
             dl = self.compile(mode=mode)

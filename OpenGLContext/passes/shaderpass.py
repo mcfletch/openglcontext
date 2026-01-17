@@ -57,8 +57,8 @@ class VRML97ShaderProgram:
     def __init__(self) -> None:
         self.program: Optional[int] = None
         self.unlit_program: Optional[int] = None
-        self._uniform_locations: Dict[str, int] = {}
-        self._unlit_uniform_locations: Dict[str, int] = {}
+        # Cache uniform locations per program: {program_id: {uniform_name: location}}
+        self._location_cache: Dict[int, Dict[str, int]] = {}
         self._compiled: bool = False
 
     def compile(self) -> bool:
@@ -139,9 +139,14 @@ class VRML97ShaderProgram:
         """
         if program is None:
             program = self.program
-            cache = self._uniform_locations
-        else:
-            cache = self._unlit_uniform_locations
+
+        if program is None:
+            return -1
+
+        # Use per-program cache
+        if program not in self._location_cache:
+            self._location_cache[program] = {}
+        cache = self._location_cache[program]
 
         if name not in cache:
             cache[name] = glGetUniformLocation(program, name)
@@ -159,6 +164,9 @@ class VRML97ShaderProgram:
             modelview: 4x4 modelview matrix (numpy array)
             projection: 4x4 projection matrix (numpy array)
             program: Shader program (defaults to lit program)
+
+        Note: The appropriate shader must be bound before calling this method.
+              Use shader.use(lit=True/False) to bind the correct program.
         """
         if program is None:
             program = self.program
@@ -175,13 +183,10 @@ class VRML97ShaderProgram:
         if program == self.program:
             normal_loc = self._get_location('normalMatrix', program)
             if normal_loc != -1:
-                # Extract 3x3 and compute inverse transpose
-                mv3 = modelview[:3, :3]
-                try:
-                    normal_matrix = np.linalg.inv(mv3).T.astype('f')
-                except np.linalg.LinAlgError:
-                    normal_matrix = mv3.astype('f')
-                glUniformMatrix3fv(normal_loc, 1, GL_FALSE, normal_matrix)
+                # Extract the upper-left 3x3 of the modelview matrix
+                mv3 = modelview[:3, :3].astype('f')
+                # For orthonormal rotation matrices, inverse-transpose = original
+                glUniformMatrix3fv(normal_loc, 1, GL_FALSE, mv3)
 
     def set_material(
         self,
@@ -290,6 +295,47 @@ class VRML97ShaderProgram:
         loc = self._get_location('solidColor', self.unlit_program)
         if loc != -1:
             glUniform4fv(loc, 1, array(color, 'f'))
+
+    def set_text_mode(
+        self,
+        enabled: bool,
+        text_color: Color4 = (1.0, 1.0, 1.0, 1.0),
+        background_color: Color4 = (0.0, 0.0, 0.0, 1.0),
+        solid_background: bool = False
+    ) -> None:
+        """Configure text rendering mode for the unlit shader.
+
+        Args:
+            enabled: Enable text rendering mode
+            text_color: RGBA color for text (foreground)
+            background_color: RGBA color for background (when solid_background=True)
+            solid_background: If True, render solid background instead of transparent
+        """
+        # Set text mode flag
+        loc = self._get_location('textMode', self.unlit_program)
+        if loc != -1:
+            glUniform1i(loc, 1 if enabled else 0)
+
+        # Set text color
+        loc = self._get_location('textColor', self.unlit_program)
+        if loc != -1:
+            glUniform4fv(loc, 1, array(text_color, 'f'))
+
+        # Set background color
+        loc = self._get_location('backgroundColor', self.unlit_program)
+        if loc != -1:
+            glUniform4fv(loc, 1, array(background_color, 'f'))
+
+        # Set solid background flag
+        loc = self._get_location('textSolidBg', self.unlit_program)
+        if loc != -1:
+            glUniform1i(loc, 1 if solid_background else 0)
+
+        # Also set useTexture for text mode (text always uses texture)
+        if enabled:
+            loc = self._get_location('useTexture', self.unlit_program)
+            if loc != -1:
+                glUniform1i(loc, 1)
 
     def bind_texture(self, texture_obj: Optional[Texture], texture_unit: int = 0) -> None:
         """Bind a texture for shader use.
@@ -460,7 +506,9 @@ def configure_light_from_node(
         shader_program: VRML97ShaderProgram instance
         index: Light index (0 to MAX_LIGHTS-1)
         light_node: A VRML97 Light node (DirectionalLight, PointLight, SpotLight)
-        modelview_matrix: Optional modelview matrix to transform light position/direction
+        modelview_matrix: Modelview matrix to transform light position/direction to eye space.
+                         This is required to match fixed-function OpenGL behavior where
+                         glLightfv transforms the light by the current modelview matrix.
     """
     from OpenGLContext.scenegraph import light as light_module
 
@@ -472,10 +520,39 @@ def configure_light_from_node(
     color = tuple(light_node.color)
     intensity = float(light_node.intensity)
 
+    def transform_direction(direction: Vec3) -> Vec3:
+        """Transform direction vector by modelview matrix (ignoring translation)."""
+        if modelview_matrix is None:
+            return direction
+        # For directions, use only the upper 3x3 rotation/scale part
+        # Note: OpenGLContext matrices are row-major (row vectors), so use d @ M
+        d = np.array([direction[0], direction[1], direction[2]], dtype=np.float32)
+        mv3 = modelview_matrix[:3, :3]
+        transformed = d @ mv3
+        # Normalize the result
+        length = np.sqrt(np.sum(transformed * transformed))
+        if length > 0:
+            transformed = transformed / length
+        return tuple(transformed)
+
+    def transform_position(position: Vec3) -> Vec4:
+        """Transform position by modelview matrix."""
+        if modelview_matrix is None:
+            return tuple(position) + (1.0,)
+        # For positions, use full 4x4 transform
+        # Note: OpenGLContext matrices are row-major (row vectors), so use p @ M
+        p = np.array([position[0], position[1], position[2], 1.0], dtype=np.float32)
+        transformed = p @ modelview_matrix
+        # Return as (x, y, z, 1.0) - w=1 for positional light
+        return (float(transformed[0]), float(transformed[1]), float(transformed[2]), 1.0)
+
     # Determine light type and parameters
     if isinstance(light_node, light_module.DirectionalLight):
         # Directional light - direction is constant
-        direction = tuple(light_node.direction)
+        # VRML direction is where light points (e.g., (0,-1,0) means pointing down)
+        # Pass to shader as-is; shader will negate to get direction toward light
+        orig_direction = tuple(light_node.direction)
+        direction = transform_direction(orig_direction)
         shader_program.set_light(
             index,
             light_type='directional',
@@ -486,8 +563,8 @@ def configure_light_from_node(
 
     elif isinstance(light_node, light_module.SpotLight):
         # Spot light - has position, direction, and cone angles
-        position = tuple(light_node.location) + (1.0,)  # w=1 for positional
-        direction = tuple(light_node.direction)
+        position = transform_position(tuple(light_node.location))
+        direction = transform_direction(tuple(light_node.direction))
         attenuation = tuple(light_node.attenuation)
 
         # VRML97 uses cutOffAngle and beamWidth in radians
@@ -508,7 +585,7 @@ def configure_light_from_node(
 
     elif isinstance(light_node, light_module.PointLight):
         # Point light - has position and attenuation
-        position = tuple(light_node.location) + (1.0,)  # w=1 for positional
+        position = transform_position(tuple(light_node.location))
         attenuation = tuple(light_node.attenuation)
 
         shader_program.set_light(
@@ -523,11 +600,12 @@ def configure_light_from_node(
     else:
         # Unknown light type - treat as directional
         direction = getattr(light_node, 'direction', (0.0, 0.0, -1.0))
+        direction = transform_direction(tuple(direction))
         shader_program.set_light(
             index,
             light_type='directional',
             color=color,
-            direction=tuple(direction),
+            direction=direction,
             intensity=intensity,
         )
 
@@ -546,11 +624,20 @@ def configure_material_from_node(
         shader_program.set_default_material()
         return
 
+    diffuse = tuple(material_node.diffuseColor)
+    specular = tuple(material_node.specularColor)
+    emissive = tuple(material_node.emissiveColor)
+    ambient = float(material_node.ambientIntensity)
+    shininess = float(material_node.shininess)
+    transparency = float(material_node.transparency)
+
+    log.debug(f"Material: diffuse={diffuse}, specular={specular}, ambient={ambient}")
+
     shader_program.set_material(
-        diffuse=tuple(material_node.diffuseColor),
-        specular=tuple(material_node.specularColor),
-        emissive=tuple(material_node.emissiveColor),
-        ambient_intensity=float(material_node.ambientIntensity),
-        shininess=float(material_node.shininess),
-        transparency=float(material_node.transparency),
+        diffuse=diffuse,
+        specular=specular,
+        emissive=emissive,
+        ambient_intensity=ambient,
+        shininess=shininess,
+        transparency=transparency,
     )

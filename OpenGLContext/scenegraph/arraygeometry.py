@@ -139,6 +139,12 @@ class ArrayGeometry(object):
         """
         if not len(self.vertices):
             return 1 # we are already finished
+
+        # Check for shader mode
+        if getattr(mode, 'shader_mode', False):
+            return self._render_shader(mode)
+
+        # Legacy rendering path
         vboAvailable = bool(vbo.get_implementation())
         glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
         glPushAttrib(GL_ALL_ATTRIB_BITS)
@@ -160,7 +166,7 @@ class ArrayGeometry(object):
             else:
                 glDisable( GL_LIGHTING )
 #				glDisableClientState( GL_NORMAL_ARRAY )
-                
+
             if visible and textured and self.textures is not None:
                 glEnableClientState( GL_TEXTURE_COORD_ARRAY )
                 self.callBound( glTexCoordPointerf, self.textures )
@@ -181,6 +187,26 @@ class ArrayGeometry(object):
             glPopAttrib()
             glPopClientAttrib()
         return 1
+
+    def _render_shader(self, mode):
+        """Render using shader pipeline with separate attribute arrays."""
+        from OpenGLContext.scenegraph.shadergeometry import render_shader_arrays
+
+        objectType, startIndex, count = self.arguments
+        glFrontFace(self.ccw)
+        if self.solid:
+            glEnable(GL_CULL_FACE)
+        else:
+            glDisable(GL_CULL_FACE)
+
+        return render_shader_arrays(
+            mode,
+            self.vertices,
+            self.normals,
+            self.textures,
+            count,
+            draw_mode=objectType
+        )
     def draw( self ):
         """Does the actual rendering after the arrays are set up
 

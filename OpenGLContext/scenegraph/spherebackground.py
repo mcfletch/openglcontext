@@ -1,14 +1,20 @@
 """Gradient-sphere background node"""
 from __future__ import print_function
+import os
 from math import *
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
+from OpenGL.GL import shaders as GL_shaders
+from OpenGL.arrays import vbo
 
 from vrml import cache
 from vrml import field, protofunctions, node
 from vrml.vrml97 import nodetypes
 from OpenGLContext import displaylist
 import bisect
+
+# Shader directory path
+SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
 
 MINANGLE = pi*1.0/4
 MAXANGLE = pi*3.0/4
@@ -24,7 +30,7 @@ class _SphereBackground( object ):
 
     def compile(self, mode=None):
         """Build the cached display list for this background object
-        
+
         Note: we store 2 display lists in the cache, but only return
         one from the compile method.  The second list is the final
         rendering list, while the first is just the low-level rendering
@@ -233,7 +239,177 @@ class _SphereBackground( object ):
             colorSet[-1] = _linInterp( colorSet[startI-1],colorSet[startI], ((stop-start)/2)+start )
             colorSet = setSort( colorSet)
         return colorSet
-        
+
+    # Shader-based rendering support
+    _background_shader = None
+    _background_shader_locations = None
+
+    @classmethod
+    def _compile_background_shader(cls):
+        """Compile the background shader program (class-level singleton)."""
+        if cls._background_shader is not None:
+            return cls._background_shader, cls._background_shader_locations
+
+        vert_path = os.path.join(SHADER_DIR, 'vrml97_background.vert')
+        frag_path = os.path.join(SHADER_DIR, 'vrml97_background.frag')
+
+        with open(vert_path, 'r') as f:
+            vert_source = f.read()
+        with open(frag_path, 'r') as f:
+            frag_source = f.read()
+
+        vertex_shader = GL_shaders.compileShader(vert_source, GL_VERTEX_SHADER)
+        fragment_shader = GL_shaders.compileShader(frag_source, GL_FRAGMENT_SHADER)
+        program = GL_shaders.compileProgram(vertex_shader, fragment_shader)
+
+        locations = {
+            'aPosition': glGetAttribLocation(program, 'aPosition'),
+            'aColor': glGetAttribLocation(program, 'aColor'),
+            'modelViewMatrix': glGetUniformLocation(program, 'modelViewMatrix'),
+            'projectionMatrix': glGetUniformLocation(program, 'projectionMatrix'),
+        }
+        cls._background_shader = program
+        cls._background_shader_locations = locations
+        return program, locations
+
+    def compileShader(self, mode=None):
+        """Compile shader-based rendering data for this background.
+
+        Returns (vertices_vbo, colors_vbo, vertex_count, rotation_matrices)
+        or None if no colorSet.
+        """
+        colorSet = self.colorSet()
+        if not len(colorSet):
+            return None
+
+        vertices, colors = self.buildSphere(colorSet)
+
+        # Build the full rotated sphere geometry
+        # Instead of rendering N segments with rotation, we pre-compute all vertices
+        all_vertices = []
+        all_colors = []
+        rotation_angle = 2 * pi / SEGMENTS
+
+        for i in range(int(SEGMENTS)):
+            angle = i * rotation_angle
+            cos_a = cos(angle)
+            sin_a = sin(angle)
+            # Rotate vertices around Y axis
+            rotated = vertices.copy()
+            rotated[:, 0] = vertices[:, 0] * cos_a - vertices[:, 2] * sin_a
+            rotated[:, 2] = vertices[:, 0] * sin_a + vertices[:, 2] * cos_a
+            all_vertices.append(rotated)
+            all_colors.append(colors)
+
+        all_vertices = concatenate(all_vertices, axis=0)
+        all_colors = concatenate(all_colors, axis=0)
+
+        vertices_vbo = vbo.VBO(all_vertices.astype('f'))
+        colors_vbo = vbo.VBO(all_colors.astype('f'))
+
+        return (vertices_vbo, colors_vbo, len(all_vertices))
+
+    def RenderShader(self, mode, clear=True):
+        """Render the background using shaders.
+
+        Args:
+            mode: RenderingPass object with matrix and projection
+            clear: Whether to clear buffers before rendering
+        """
+        if mode.passCount != 0 or not self.bound:
+            return 0
+
+        # Get or compile shader data
+        shader_data = mode.cache.getData(self, 'shader_bg')
+        if shader_data is None:
+            shader_data = self.compileShader(mode=mode)
+            if shader_data is not None:
+                holder = mode.cache.holder(self, shader_data, 'shader_bg')
+                for fld in protofunctions.getFields(self):
+                    if fld.name != 'bound':
+                        holder.depend(self, fld)
+
+        if clear:
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+
+        if shader_data is None:
+            return 0
+
+        vertices_vbo, colors_vbo, vertex_count = shader_data
+
+        # Get shader program
+        program, locations = self._compile_background_shader()
+
+        # Save state we'll modify (core profile compatible)
+        depth_test_enabled = glIsEnabled(GL_DEPTH_TEST)
+        cull_face_enabled = glIsEnabled(GL_CULL_FACE)
+
+        # Create VAO for core profile compatibility
+        vao = glGenVertexArrays(1)
+        glBindVertexArray(vao)
+
+        try:
+            glDisable(GL_DEPTH_TEST)
+            glDisable(GL_CULL_FACE)
+
+            glUseProgram(program)
+
+            # Set matrices
+            if locations['modelViewMatrix'] != -1:
+                glUniformMatrix4fv(
+                    locations['modelViewMatrix'], 1, GL_FALSE,
+                    mode.matrix.astype('f')
+                )
+            if locations['projectionMatrix'] != -1:
+                glUniformMatrix4fv(
+                    locations['projectionMatrix'], 1, GL_FALSE,
+                    mode.projection.astype('f')
+                )
+
+            # Bind vertex data
+            vertices_vbo.bind()
+            if locations['aPosition'] != -1:
+                glEnableVertexAttribArray(locations['aPosition'])
+                glVertexAttribPointer(
+                    locations['aPosition'], 3, GL_FLOAT, GL_FALSE, 0, None
+                )
+            vertices_vbo.unbind()
+
+            colors_vbo.bind()
+            if locations['aColor'] != -1:
+                glEnableVertexAttribArray(locations['aColor'])
+                glVertexAttribPointer(
+                    locations['aColor'], 3, GL_FLOAT, GL_FALSE, 0, None
+                )
+            colors_vbo.unbind()
+
+            # Render as triangle strips - each segment's worth
+            segment_size = vertex_count // int(SEGMENTS)
+            for i in range(int(SEGMENTS)):
+                glDrawArrays(GL_TRIANGLE_STRIP, i * segment_size, segment_size)
+
+            # Cleanup
+            if locations['aPosition'] != -1:
+                glDisableVertexAttribArray(locations['aPosition'])
+            if locations['aColor'] != -1:
+                glDisableVertexAttribArray(locations['aColor'])
+
+            glUseProgram(0)
+
+            # Clear depth buffer so background appears behind everything
+            glClear(GL_DEPTH_BUFFER_BIT)
+
+        finally:
+            # Restore state
+            glBindVertexArray(0)
+            glDeleteVertexArrays(1, [vao])
+            if depth_test_enabled:
+                glEnable(GL_DEPTH_TEST)
+            if cull_face_enabled:
+                glEnable(GL_CULL_FACE)
+
+        return 1
+
 class SphereBackground( _SphereBackground, nodetypes.Background, nodetypes.Children, node.Node ):
     """Gradient-sphere Background Node
 

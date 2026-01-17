@@ -70,6 +70,9 @@ float calcSpotEffect(int lightIndex, vec3 lightDir) {
     }
 }
 
+// DEBUG: Simple function to visualize a value as grayscale
+// float debugValue = 0.0;
+
 // Calculate lighting contribution from a single light
 vec3 calcLight(int lightIndex, vec3 normal, vec3 viewDir, vec3 matDiffuse, vec3 matSpecular) {
     if (lightType[lightIndex] == LIGHT_OFF) {
@@ -80,7 +83,8 @@ vec3 calcLight(int lightIndex, vec3 normal, vec3 viewDir, vec3 matDiffuse, vec3 
     float attenuation = 1.0;
 
     if (lightType[lightIndex] == LIGHT_DIRECTIONAL) {
-        // Directional light - direction is constant
+        // Directional light - VRML direction is where light POINTS (toward surface)
+        // For N·L we need direction FROM surface TO light, so negate
         lightDir = normalize(-lightDirection[lightIndex]);
     } else {
         // Point or spot light - calculate direction from position
@@ -154,6 +158,16 @@ void main() {
 
     // Clamp to valid range
     finalColor = clamp(finalColor, 0.0, 1.0);
+
+    // DEBUG: Output normal as color to visualize
+    // fragColor = vec4(normal * 0.5 + 0.5, 1.0); return;
+
+    // DEBUG: Output light direction as color (should be same across all pixels)
+    // vec3 ld = normalize(lightDirection[0]);
+    // fragColor = vec4(ld * 0.5 + 0.5, 1.0); return;
+
+    // DEBUG: Output just diffuse color to check material
+    // fragColor = vec4(matDiffuse, 1.0); return;
 
     fragColor = vec4(finalColor, alpha);
 }

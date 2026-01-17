@@ -263,33 +263,43 @@ class FlatPass( SGObserver ):
         """Set up lights for shader-based rendering.
 
         Args:
-            matrix: Base modelview matrix
+            matrix: Base modelview matrix (camera view matrix)
         """
         from OpenGLContext.passes.shaderpass import configure_light_from_node
 
         shader = self.shader_program
+        shader.use(lit=True)  # Ensure shader is bound before setting uniforms
         light_count = 0
+        light_paths = self.paths.get(nodetypes.Light, ())
 
-        for path in self.paths.get(nodetypes.Light, ()):
+        for path in light_paths:
             if light_count >= shader.MAX_LIGHTS:
                 break
             tmatrix = path.transformMatrix()
             light_node = path[-1]
             if hasattr(light_node, 'on') and light_node.on:
-                configure_light_from_node(shader, light_count, light_node)
+                # Transform light to eye space (combine light's transform with view matrix)
+                # This matches how fixed-function glLightfv works - it transforms
+                # the light position/direction by the current modelview matrix
+                light_matrix = dot(tmatrix, matrix)
+                configure_light_from_node(shader, light_count, light_node, light_matrix)
                 light_count += 1
 
         if light_count == 0:
-            # Set default VRML97 headlight
+            # Set default VRML97 headlight (direction already in eye space)
             shader.set_default_light()
+            log.debug("Using default headlight")
         else:
             shader.set_num_lights(light_count)
+            log.debug("Set up %d lights", light_count)
 
     def shaderBackgroundRender(self, vp: Any, matrix: Any) -> None:
         """Render background for shader mode.
 
-        For now, just clears with background color. Full background
-        node support would require shader-based sky/ground rendering.
+        Uses the shader-based RenderShader method on background nodes
+        when available, falling back to legacy rendering for backgrounds
+        that don't support shader rendering (e.g. CubeBackground already
+        has its own shader implementation).
 
         Args:
             vp: View platform
@@ -297,17 +307,22 @@ class FlatPass( SGObserver ):
         """
         bPath = self.currentBackground()
         if bPath is not None:
-            bg = bPath[-1]
-            # Try to get sky color for simple clear
-            if hasattr(bg, 'skyColor') and len(bg.skyColor):
-                r, g, b = bg.skyColor[0]
-                glClearColor(r, g, b, 1.0)
+            # Set up matrix for background rendering
+            self.matrix = dot(
+                vp.quaternion.matrix(dtype='f'),
+                bPath.transformMatrix(translate=0, scale=0, rotate=1)
+            )
+            background = bPath[-1]
+            # Check if background has shader rendering capability
+            if hasattr(background, 'RenderShader'):
+                background.RenderShader(mode=self, clear=True)
             else:
-                glClearColor(0.0, 0.0, 0.0, 1.0)
+                # For CubeBackground or other backgrounds with their own shader
+                background.Render(mode=self, clear=True)
         else:
             # Default VRML background is black
             glClearColor(0.0, 0.0, 0.0, 1.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
     def shaderRenderOpaque(self, toRender: List) -> None:
         """Render opaque geometry using shaders.
@@ -388,6 +403,53 @@ class FlatPass( SGObserver ):
                 glDepthFunc(GL_LEQUAL)
                 glEnable(GL_DEPTH_TEST)
 
+    def shaderRenderFrameCounter(self, context) -> None:
+        """Render the frame counter using shader-based text rendering.
+
+        Uses the DejaVu Sans Mono texture atlas for core-profile compatible
+        text rendering. Displays green text on a dark semi-transparent background
+        for visibility on any scene.
+        """
+        if not context.frameCounter:
+            return
+
+        try:
+            from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
+
+            # Get viewport dimensions
+            tx, ty = context.getViewPort()
+            if not tx or not ty:
+                return
+
+            # Get frame counter data
+            count, avg, last = context.frameCounter.summary()
+            last *= 1000  # Convert to milliseconds
+
+            # Format the text
+            text = f'fps avg:{avg:.1f}\ncurr ms: {last:.0f}'
+
+            # Get a text renderer (use 14px font for frame counter)
+            text_renderer = get_text_renderer(14)
+
+            # Render at bottom-left corner with margin
+            margin = 10
+            y_pos = margin + text_renderer.char_height * 2  # Room for 2 lines
+
+            # Use green text on dark opaque background for visibility
+            text_renderer.render_text(
+                text,
+                x=margin,
+                y=y_pos,
+                shader_program=self.shader_program,
+                viewport_width=tx,
+                viewport_height=ty,
+                color=(0.0, 1.0, 0.0, 1.0),  # Bright green text
+                background_color=(0.1, 0.1, 0.1, 1.0),  # Dark opaque background
+                scale=1.0
+            )
+        except Exception as e:
+            log.debug("Failed to render frame counter: %s", e)
+
     def shaderSelectRender(self, mode: Any, toRender: List, events: Dict) -> None:
         """Render for selection using unlit shader.
 
@@ -459,14 +521,16 @@ class FlatPass( SGObserver ):
             depth_pixel = array([[0]], 'f')
 
             for point, eventSet in pickPoints.items():
-                glReadPixels(point[0], point[1], 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel)
+                # Convert coordinates to integers for glReadPixels
+                px, py = int(point[0]), int(point[1])
+                glReadPixels(px, py, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel)
                 lpixel = int(pixel.view('<I')[0])
                 paths = id_map.get(lpixel, [])
                 event.setObjectPaths([paths])
                 glReadPixels(
-                    point[0], point[1], 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, depth_pixel
+                    px, py, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, depth_pixel
                 )
-                event.viewCoordinate = point[0], point[1], depth_pixel[0][0]
+                event.viewCoordinate = px, py, depth_pixel[0][0]
                 event.modelViewMatrix = matrix
                 event.projectionMatrix = self.projection
                 event.viewport = self.viewport
@@ -554,8 +618,17 @@ class FlatPass( SGObserver ):
                 result.append( record )
         return result
     
+    _render_mode_logged = False
+
     def Render( self, context, mode ):
         """Render the geometry attached to this flat-renderer's scenegraph"""
+        # Log render mode once on first frame
+        if not self._render_mode_logged:
+            self._render_mode_logged = True
+            profile = getattr(context.contextDefinition, 'profile', 'unknown')
+            render_mode = 'SHADER' if self.use_shaders else 'LEGACY'
+            log.info(f"Render mode: {render_mode}, Profile: {profile}")
+
         # clear the projection matrix set up by legacy sg
         matrix = self.getModelView()
         self.matrix = matrix
@@ -616,8 +689,12 @@ class FlatPass( SGObserver ):
                 self.renderOpaque( toRender )
                 self.renderTransparent( toRender )
 
+            # Render frame counter if enabled
             if context.frameCounter and context.frameCounter.display:
-                context.frameCounter.Render( context )
+                if self.use_shaders:
+                    self.shaderRenderFrameCounter(context)
+                else:
+                    context.frameCounter.Render(context)
 
         context.SwapBuffers()
         self.matrix = matrix

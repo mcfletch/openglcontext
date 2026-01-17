@@ -30,13 +30,21 @@ class GLUTContext(
             for key, value in named.items():
                 setattr(definition, key, value)
         self.contextDefinition = definition
+
+        # Note: glutInit is called by ContextMainLoop before this __init__
+        # The order of operations for forward-compatible contexts is critical:
+        # 1. glutInit (already done in ContextMainLoop)
+        # 2. glutInitContextVersion
+        # 3. glutInitContextFlags + glutInitContextProfile
+        # 4. glutInitDisplayMode
+        # 5. glutCreateWindow
+
         if glutInitContextVersion and definition.version[0]:
-            glutInitContextVersion(*definition.version)
+            glutInitContextVersion(*[int(v) for v in definition.version])
         if glutInitContextProfile and definition.profile == 'core':
             glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
             glutInitContextProfile(GLUT_CORE_PROFILE)
         glutInitDisplayMode(self.glutFlagsFromDefinition(definition))
-        glutInit([])
         # set up window size for newly created windows
         glutInitWindowSize(*[int(i) for i in definition.size])
         # create a new rendering window

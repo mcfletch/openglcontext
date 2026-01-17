@@ -37,6 +37,11 @@ class Quadric( nodetypes.Geometry, node.Node ):
             mode = None, # the renderpass object for which we compile
         ):
         """Render the geometry"""
+        # Check for shader mode
+        if getattr(mode, 'shader_mode', False):
+            return self._render_shader(mode)
+
+        # Legacy rendering path
         vbos = mode.cache.getData(self)
         if not vbos:
             vbos = self.compile( mode = mode )
@@ -58,10 +63,10 @@ class Quadric( nodetypes.Geometry, node.Node ):
                     glNormalPointer( GL_FLOAT,32,coords+20 )
             # TODO: sort for transparent geometry...
             indices.bind()
-            # Can loop loading matrix and calling just this function 
+            # Can loop loading matrix and calling just this function
             # for each sphere you want to render...
             # include both scale and position in the matrix...
-            glDrawElements( 
+            glDrawElements(
                 GL_TRIANGLES, count, GL_UNSIGNED_SHORT, indices
             )
         finally:
@@ -69,6 +74,24 @@ class Quadric( nodetypes.Geometry, node.Node ):
             glPopClientAttrib()
             indices.unbind()
             coords.unbind()
+        return 1
+
+    def _render_shader(self, mode):
+        """Render the quadric using the shader pipeline."""
+        from OpenGLContext.scenegraph.shadergeometry import (
+            render_shader_interleaved, VertexFormat
+        )
+        vbos = mode.cache.getData(self)
+        if not vbos:
+            vbos = self.compile(mode=mode)
+        if vbos is None:
+            return 1
+        coords, indices, count = vbos
+        return render_shader_interleaved(
+            mode, coords, 0, VertexFormat.V3F_T2F_N3F,
+            index_vbo=indices, index_count=count
+        )
+
     def compile( self, mode=None ):
         """Compile this sphere for use on mode"""
         raise NotImplementedError( """Haven't implemented %s compilation yet"""%(self.__class__.__name__,))
@@ -210,14 +233,16 @@ class Cone( basenodes.Cone, Quadric ):
         coords[:,:,3] = longsteps/(2*pi)
         def fill_disk( area, ycoord, normal=(0,-1,0), degenerate=1 ):
             """fill in disk elements for given area"""
-            other = not degenerate
+            # Use integer index, not boolean (numpy boolean indexing differs!)
+            other = 1 - degenerate
             # disk texture coordinates
             area[:,:,1] = ycoord
             # x and z are 0 at center
-            area[degenerate,:,0] = 0.0 
+            area[degenerate,:,0] = 0.0
             area[degenerate,:,2] = 0.0
-            area[other,:,3] = (sin( longsteps ) / 2.0 + .5)[:area.shape[2]]
-            area[other,:,4] = (cos( longsteps ) / 2.0 + .5)[:area.shape[2]]
+            # Set texture coords for the outer ring (non-degenerate row)
+            area[other,:,3] = sin( longsteps ) / 2.0 + .5
+            area[other,:,4] = cos( longsteps ) / 2.0 + .5
             area[degenerate,:,3:5] = .5
             # normal for the disk is all the same...
             area[:,:,5:8] = normal

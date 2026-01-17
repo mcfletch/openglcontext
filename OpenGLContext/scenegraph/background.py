@@ -79,4 +79,30 @@ class Background(
                 ):
                     cubebackground._CubeBackground.Render( self, mode, clear=0)
 
+    def RenderShader( self, mode, clear = 1 ):
+        """Render the Background using shader pipeline
+
+        mode -- the RenderingPass object representing
+            the current rendering pass
+        clear -- whether or not to do a background
+            clear before rendering
+
+        This implementation renders the sphere gradient first using
+        shaders, then the cube background (which already uses its
+        own shader) on top if images are loaded.
+        """
+        if mode.passCount == 0:
+            if self.bound:
+                result = spherebackground._SphereBackground.RenderShader( self, mode, clear=True)
+                if (
+                    self.right.components and
+                    self.left.components and
+                    self.front.components and
+                    self.back.components and
+                    self.top.components and
+                    self.bottom.components
+                ):
+                    # CubeBackground already uses its own shader implementation
+                    cubebackground._CubeBackground.Render( self, mode, clear=0)
+
     

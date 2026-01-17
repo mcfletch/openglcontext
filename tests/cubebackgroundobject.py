@@ -11,6 +11,7 @@ class TestContext( BaseContext ):
     """
     def OnInit( self ):
         """Scene set up and initial processing"""
+        print('Press f to toggle shader/legacy mode')
         self.sg = sceneGraph(
             children = [
                 Shape(
@@ -30,6 +31,17 @@ class TestContext( BaseContext ):
                 ),
             ]
         )
+        self.addEventHandler(
+            'keypress', name='f', function=self.OnModeToggle
+        )
+
+    def OnModeToggle(self, event=None):
+        from OpenGLContext.passes import renderpass
+        if renderpass.FLAT is not None:
+            renderpass.FLAT.use_shaders = not renderpass.FLAT.use_shaders
+            mode = "SHADER" if renderpass.FLAT.use_shaders else "LEGACY"
+            print(f"Rendering mode: {mode}")
+        self.triggerRedraw(1)
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

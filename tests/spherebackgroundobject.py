@@ -59,11 +59,23 @@ class TestContext( BaseContext ):
         current = sg.children[0].whichChoice
         sg.children[0].whichChoice = (current+1) % len(sg.children[0].choice)
         self.triggerRedraw(1)
-        
+
+    def OnModeToggle( self, event=None):
+        from OpenGLContext.passes import renderpass
+        if renderpass.FLAT is not None:
+            renderpass.FLAT.use_shaders = not renderpass.FLAT.use_shaders
+            mode = "SHADER" if renderpass.FLAT.use_shaders else "LEGACY"
+            print(f"Rendering mode: {mode}")
+        self.triggerRedraw(1)
+
     def OnInit( self ):
         print('press b to choose another background')
+        print('press f to toggle shader/legacy mode')
         self.addEventHandler(
             'keypress', name = 'b', function = self.OnBGSwitch
+        )
+        self.addEventHandler(
+            'keypress', name = 'f', function = self.OnModeToggle
         )
     def getSceneGraph( self, mode = None):
         """Render the geometry for the scene."""

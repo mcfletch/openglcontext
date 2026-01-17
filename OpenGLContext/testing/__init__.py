@@ -10,14 +10,18 @@ from OpenGLContext.testing.framebuffer_comparison import (
     FramebufferCapture,
     ComparisonResult,
     compare_images,
-    compare_side_by_side,
-    RegressionTestMixin,
+    save_comparison_images,
+    AutomatedRegressionContext,
+    RegressionTestRunner,
+    RegressionTestMixin,  # Legacy alias for AutomatedRegressionContext
 )
 
 __all__ = [
     'FramebufferCapture',
     'ComparisonResult',
     'compare_images',
-    'compare_side_by_side',
+    'save_comparison_images',
+    'AutomatedRegressionContext',
+    'RegressionTestRunner',
     'RegressionTestMixin',
 ]

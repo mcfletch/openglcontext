@@ -160,12 +160,58 @@ The shader infrastructure is now integrated into the core rendering system:
 - `OpenGLContext/bin/vrml_view.py` - Added `--shaders` flag for shader mode
 - Usage: `oglc-vrml --shaders myscene.wrl`
 
+### Geometry Support ✅
+
+All geometry types now support shader-based rendering:
+
+- **Box** - Native VBO-based shader rendering
+- **Sphere, Cone, Cylinder (Quadrics)** - VBO with indexed drawing
+- **IndexedFaceSet** - Via ArrayGeometry with separate VBOs
+- **ArrayGeometry** - Generic triangle arrays with separate VBOs
+- **PointSet** - Points rendered with unlit shader
+- **IndexedLineSet** - Line strips with unlit shader
+- **Gear** - Generates triangle VBOs for shader rendering
+- **GLE Extrusions (Lathe, Screw, Spiral)** - Fallback to legacy mode (GLE library limitation)
+
+### Shape Node Integration ✅
+
+Shape node now automatically detects shader mode and:
+
+- Calls `configure_material_from_node` to set shader uniforms
+- Binds textures to shader sampler
+- Applies texture transforms
+- Delegates to geometry's `_render_shader` method
+
+### Test Suite ✅
+
+Comprehensive test suite added:
+
+- `tests/test_shader_comprehensive.py` - Multi-scene test with:
+  - Multi-light scenarios (directional, point, spot)
+  - Transparency rendering
+  - All geometry types (Box, Sphere, Cone, Cylinder, Gear, IndexedFaceSet)
+  - Points and lines (PointSet, IndexedLineSet)
+  - Specular highlight variations
+  - Emissive materials
+  - Background rendering
+- `tests/test_shader_textures.py` - Texture-specific tests:
+  - RGB textures
+  - RGBA textures with alpha
+  - Texture repetition
+  - Multiple textured objects
+- `tests/test_shader_all_geometry.py` - Geometry type showcase
+
 ### Remaining Work
 
-- Extend ShaderGeometry to support more geometry types (Sphere, Cone, Cylinder, IndexedFaceSet)
-- Add texture coordinate generation modes
-- Add more comprehensive visual comparison tests
-- Test with complex VRML97 scenes
+- Add texture coordinate generation modes (sphere mapping, etc.)
+- Visual regression testing with saved reference images
+
+### Future Enhancements
+
+- **GLTF Support**: Add support for loading geometry and scenes from GLTF/GLB files.
+  This would provide a modern, well-supported format for 3D content that works well
+  with shader-based rendering. GLTF's PBR material model could be mapped to
+  VRML97-compatible rendering or extended with a PBR shader path.
 
 ## Files to Create
 

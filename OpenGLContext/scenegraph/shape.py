@@ -38,6 +38,12 @@ class Shape(basenodes.Shape):
         """Do run-time rendering of the Shape for the given mode"""
         if not self.geometry:
             return
+
+        # Use shader-based rendering if mode is in shader mode
+        if getattr(mode, 'shader_mode', False):
+            return self._render_shader(mode)
+
+        # Legacy rendering path
         if mode.visible:  # anything else...
             glPushAttrib(GL_LIGHTING_BIT)
             try:
@@ -75,9 +81,59 @@ class Shape(basenodes.Shape):
                 mode=mode,
             )
 
+    def _render_shader(self, mode):
+        """Render using shader-based pipeline.
+
+        Sets up material and texture uniforms on the shader, then
+        calls geometry's render method (which will use shader path).
+        """
+        from OpenGLContext.passes.shaderpass import configure_material_from_node
+
+        shader_program = getattr(mode, 'shader_program', None)
+        if shader_program is None:
+            return
+
+        # Skip material/texture setup during selection rendering (mode.visible=False)
+        # Selection uses solid colors with unlit shader, not materials
+        textured = False
+        if getattr(mode, 'visible', True):
+            # Set up material properties
+            if self.appearance and self.appearance.material:
+                configure_material_from_node(shader_program, self.appearance.material)
+            else:
+                shader_program.set_default_material()
+
+            # Set up texture if present
+            if self.appearance and self.appearance.texture:
+                tex = self.appearance.texture.cached(mode)
+                if tex is not None:
+                    shader_program.bind_texture(tex)
+                    textured = True
+                    # Apply texture transform if present
+                    if self.appearance.textureTransform:
+                        shader_program.set_texture_transform(self.appearance.textureTransform)
+                    else:
+                        shader_program.set_default_texture_transform()
+
+            if not textured:
+                shader_program.set_texture_enabled(False)
+
+        # Render the geometry (it will detect shader_mode and use shader path)
+        self.geometry.render(mode=mode)
+
+        # Cleanup texture
+        if textured:
+            shader_program.unbind_texture()
+
     def RenderTransparent(self, mode):
         if not self.geometry:
             return False
+
+        # Use shader-based rendering if mode is in shader mode
+        if getattr(mode, 'shader_mode', False):
+            return self._render_shader(mode)
+
+        # Legacy rendering path
         glPushAttrib(GL_LIGHTING_BIT)
         try:
             textureToken = None

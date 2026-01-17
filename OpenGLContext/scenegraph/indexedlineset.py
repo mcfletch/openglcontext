@@ -120,6 +120,11 @@ class IndexedLineSet(
             textured -- ignored
             transparent -- ignored
         """
+        # Check for shader mode
+        if getattr(mode, 'shader_mode', False):
+            return self._render_shader(mode)
+
+        # Legacy rendering path
         if visible:
             dl = mode.cache.getData(self)
             if not dl:
@@ -128,6 +133,67 @@ class IndexedLineSet(
                 return 1
             # okay, is now a (cached) display list object
             dl()
+        return 1
+
+    def _render_shader(self, mode):
+        """Render using shader pipeline for lines."""
+        from OpenGL.GL import (
+            glGetAttribLocation, glEnableVertexAttribArray, glDisableVertexAttribArray,
+            glVertexAttribPointer, glDrawArrays, GL_FLOAT, GL_FALSE, GL_LINE_STRIP,
+            glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
+        )
+        from OpenGL.arrays import vbo
+        from OpenGLContext.arrays import array, concatenate
+
+        if not self.coord or not len(self.coord.point) or not len(self.coordIndex):
+            return 1
+
+        shader_program = getattr(mode, 'shader_program', None)
+        if shader_program is None:
+            return 1
+
+        # Use unlit shader for lines
+        shader_program.use(lit=False)
+        shader_program.set_solid_color((1.0, 1.0, 1.0, 1.0))
+        shader_program.set_matrices(mode.matrix, mode.projection, program=shader_program.unlit_program)
+
+        # Get or create line segments VBO
+        line_data = mode.cache.getData(self, 'shader_line_vbo')
+        if line_data is None:
+            points = self.coord.point
+            indices = expandIndices(self.coordIndex)
+            # Convert indexed line strips to separate line segments
+            # Each polyline becomes GL_LINE_STRIP draws
+            line_data = []
+            for polyline in indices:
+                if len(polyline) >= 2:
+                    line_points = array([points[i] for i in polyline], 'f')
+                    line_vbo = vbo.VBO(line_points)
+                    line_data.append((line_vbo, len(polyline)))
+            mode.cache.holder(self, line_data, 'shader_line_vbo')
+
+        # Create VAO for core profile compatibility
+        vao = glGenVertexArrays(1)
+        glBindVertexArray(vao)
+
+        try:
+            # Draw each line strip
+            pos_loc = glGetAttribLocation(shader_program.unlit_program, 'aPosition')
+            for line_vbo, count in line_data:
+                line_vbo.bind()
+                if pos_loc >= 0:
+                    glEnableVertexAttribArray(pos_loc)
+                    glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, 0, line_vbo)
+                glDrawArrays(GL_LINE_STRIP, 0, count)
+                if pos_loc >= 0:
+                    glDisableVertexAttribArray(pos_loc)
+                line_vbo.unbind()
+        finally:
+            glBindVertexArray(0)
+            glDeleteVertexArrays(1, [vao])
+
+        # Restore the lit shader that was active before we switched to unlit
+        shader_program.use(lit=True)
         return 1
 
     def yeildVertices( self ):

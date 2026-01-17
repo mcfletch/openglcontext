@@ -38,6 +38,36 @@ Or run directly with:
 ../.env/bin/python <script.py>
 ```
 
+## Environment Variables
+
+OpenGLContext behavior can be configured via environment variables:
+
+### OPENGLCONTEXT_PROFILE
+
+Controls the OpenGL profile used for rendering:
+
+- `compatibility` (default) - Use OpenGL compatibility profile with legacy fixed-function pipeline
+- `core` - Use OpenGL 3.3+ core profile with shader-based rendering
+
+```bash
+export OPENGLCONTEXT_PROFILE=core
+```
+
+### OPENGLCONTEXT_BACKEND
+
+Selects the windowing backend:
+
+- `glut` - Use GLUT/freeglut (default on many systems)
+- `glfw` - Use GLFW (recommended for core profile)
+- `pygame` - Use Pygame
+- `wx` - Use wxPython
+
+```bash
+export OPENGLCONTEXT_BACKEND=glfw
+```
+
+**Note:** When using `OPENGLCONTEXT_PROFILE=core`, the backend should typically be set to `glfw` as it properly supports core profile context creation.
+
 ## Testing
 
 Run tests from the project root:

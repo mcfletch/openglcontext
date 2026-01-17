@@ -58,6 +58,16 @@ class Box( basenodes.Box ):
         holder = mode.cache.holder(self, draw)
         holder.depend( self, protofunctions.getField(self, 'size') )
         return draw
+
+    def _get_shader_vbo(self, mode):
+        """Get or create VBO for shader rendering."""
+        vb = mode.cache.getData(self, 'shader_vbo')
+        if vb is None:
+            vb = vbo.VBO(array(list(yieldVertices(self.size)), 'f'))
+            holder = mode.cache.holder(self, vb, 'shader_vbo')
+            holder.depend(self, protofunctions.getField(self, 'size'))
+        return vb
+
     def render (
             self,
             visible = 1, # can skip normals and textures if not
@@ -67,13 +77,27 @@ class Box( basenodes.Box ):
             mode = None, # the renderpass object for which we compile
         ):
         """Render the Box (build and) call the display list"""
-        # do we have a cached array-geometry?
+        # Check for shader mode
+        if getattr(mode, 'shader_mode', False):
+            return self._render_shader(mode)
+
+        # Legacy rendering path
         vb = mode.cache.getData(self)
         if not vb:
             vb = self.compile( mode=mode )
         if vb:
             vb(textured=textured,lit=lit)
         return 1
+
+    def _render_shader(self, mode):
+        """Render the box using the shader pipeline."""
+        from OpenGLContext.scenegraph.shadergeometry import (
+            render_shader_interleaved, VertexFormat
+        )
+        vb = self._get_shader_vbo(mode)
+        return render_shader_interleaved(
+            mode, vb, 36, VertexFormat.T2F_N3F_V3F
+        )
     def boundingVolume( self, mode ):
         """Create a bounding-volume object for this node"""
         from OpenGLContext.scenegraph import boundingvolume

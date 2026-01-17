@@ -104,9 +104,24 @@ class Texture(object):
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
         # copy the texture into the current texture ID
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
+        # Use sized internal format for Core Profile compatibility
+        # Map format to sized internal format (Core Profile requires explicit sizes)
+        internal_format = {
+            GL_RGB: GL_RGB8,
+            GL_RGBA: GL_RGBA8,
+            GL_LUMINANCE: GL_R8,
+            GL_LUMINANCE_ALPHA: GL_RG8,
+        }.get(format, GL_RGBA8)
         glTexImage2D(
-            GL_TEXTURE_2D, 0, components, x, y, 0, format, GL_UNSIGNED_BYTE, image
+            GL_TEXTURE_2D, 0, internal_format, x, y, 0, format, GL_UNSIGNED_BYTE, image
         )
+        # Set texture parameters for Core Profile compatibility
+        # Without these, the default GL_TEXTURE_MIN_FILTER (GL_NEAREST_MIPMAP_LINEAR)
+        # requires mipmaps, which causes the texture to appear black if not generated
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
     def __call__(self):
         """Enable and select the texture...

@@ -47,6 +47,12 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         if not len(points):
             # can't render nothing
             return 1
+
+        # Check for shader mode
+        if getattr(mode, 'shader_mode', False):
+            return self._render_shader(mode, points)
+
+        # Legacy rendering path
         glVertexPointerf(points)
         glEnableClientState(GL_VERTEX_ARRAY)
 
@@ -88,6 +94,56 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
             glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, RESET_ATTENUATION)
         glPointSize(1.0)
         glDisableClientState(GL_COLOR_ARRAY)
+        return 1
+
+    def _render_shader(self, mode, points):
+        """Render using shader pipeline."""
+        from OpenGL.arrays import vbo
+
+        shader_program = getattr(mode, 'shader_program', None)
+        if shader_program is None:
+            return 1
+
+        # Use unlit shader for points
+        shader_program.use(lit=False)
+
+        # Set point color (default white for unlit)
+        shader_program.set_solid_color((1.0, 1.0, 1.0, 1.0))
+        shader_program.set_matrices(mode.matrix, mode.projection, program=shader_program.unlit_program)
+
+        # Create VBO for points
+        point_vbo = mode.cache.getData(self, 'shader_point_vbo')
+        if point_vbo is None:
+            point_vbo = vbo.VBO(array(points, 'f'))
+            mode.cache.holder(self, point_vbo, 'shader_point_vbo')
+
+        # Create VAO for core profile compatibility
+        vao = glGenVertexArrays(1)
+        glBindVertexArray(vao)
+
+        try:
+            # Bind and draw
+            point_vbo.bind()
+            pos_loc = glGetAttribLocation(shader_program.unlit_program, 'aPosition')
+            if pos_loc >= 0:
+                glEnableVertexAttribArray(pos_loc)
+                glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, 0, point_vbo)
+
+            glPointSize(self.size)
+            glEnable(GL_PROGRAM_POINT_SIZE)
+            glDrawArrays(GL_POINTS, 0, len(points))
+            glDisable(GL_PROGRAM_POINT_SIZE)
+            glPointSize(1.0)
+
+            if pos_loc >= 0:
+                glDisableVertexAttribArray(pos_loc)
+            point_vbo.unbind()
+        finally:
+            glBindVertexArray(0)
+            glDeleteVertexArrays(1, [vao])
+
+        # Restore the lit shader that was active before we switched to unlit
+        shader_program.use(lit=True)
         return 1
 
     def boundingVolume(self, mode=None):

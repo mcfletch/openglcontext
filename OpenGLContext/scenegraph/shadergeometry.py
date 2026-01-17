@@ -1,24 +1,30 @@
 """Shader-compatible geometry rendering support
 
-This module provides a mixin class and utilities for rendering geometry
-with the VRML97 shader pass. Geometry nodes can inherit from ShaderGeometryMixin
-to gain shader-compatible rendering capabilities.
+This module provides utilities for rendering geometry with the VRML97 shader pass.
+Geometry nodes can use these utilities to support shader-based rendering alongside
+legacy fixed-function rendering.
 
-The shader uses an interleaved vertex format matching T2F_N3F_V3F:
-- Texture coords: 2 floats (offset 0)
-- Normal: 3 floats (offset 8 bytes)
-- Position: 3 floats (offset 20 bytes)
-- Total stride: 32 bytes
+The shader expects vertex attributes at specific layout locations:
+- layout(location = 0): aTexCoord (vec2)
+- layout(location = 1): aNormal (vec3)
+- layout(location = 2): aPosition (vec3)
+
+Two common vertex formats are supported:
+1. T2F_N3F_V3F (Box): texcoord(2) + normal(3) + position(3) = 32 bytes
+2. V3F_T2F_N3F (Quadrics): position(3) + texcoord(2) + normal(3) = 32 bytes
+
+For separate arrays (ArrayGeometry), each array is bound individually.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from OpenGL.GL import (
-    GL_FLOAT, GL_FALSE, GL_TRIANGLES,
+    GL_FLOAT, GL_FALSE, GL_TRIANGLES, GL_UNSIGNED_SHORT,
     glGetAttribLocation, glEnableVertexAttribArray,
     glDisableVertexAttribArray, glVertexAttribPointer,
-    glDrawArrays,
+    glDrawArrays, glDrawElements,
+    glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
 )
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import array
@@ -26,188 +32,281 @@ from OpenGLContext.arrays import array
 if TYPE_CHECKING:
     from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
-# Vertex attribute locations matching shader layout
-ATTR_TEXCOORD: int = 0
-ATTR_NORMAL: int = 1
-ATTR_POSITION: int = 2
 
-# Stride for T2F_N3F_V3F format
-VBO_STRIDE: int = 32  # 8 floats * 4 bytes
+# Vertex format descriptors
+class VertexFormat:
+    """Describes vertex data layouts for shader binding."""
+
+    # T2F_N3F_V3F format (used by Box)
+    # Layout: texcoord(2f) + normal(3f) + position(3f) = 8 floats = 32 bytes
+    T2F_N3F_V3F: Dict[str, int] = {
+        'stride': 32,
+        'texcoord_offset': 0,
+        'texcoord_size': 2,
+        'normal_offset': 8,
+        'normal_size': 3,
+        'position_offset': 20,
+        'position_size': 3,
+    }
+
+    # V3F_T2F_N3F format (used by Quadrics: Sphere, Cone, Cylinder)
+    # Layout: position(3f) + texcoord(2f) + normal(3f) = 8 floats = 32 bytes
+    V3F_T2F_N3F: Dict[str, int] = {
+        'stride': 32,
+        'position_offset': 0,
+        'position_size': 3,
+        'texcoord_offset': 12,
+        'texcoord_size': 2,
+        'normal_offset': 20,
+        'normal_size': 3,
+    }
 
 
-def bind_vbo_for_shader(
+# Legacy constants for backward compatibility
+VBO_STRIDE: int = 32
+
+
+def bind_interleaved_vbo(
     vbo_obj: vbo.VBO,
-    shader_program: VRML97ShaderProgram
+    program: int,
+    vertex_format: Dict[str, int]
 ) -> Dict[str, int]:
-    """Bind VBO and set up vertex attributes for shader rendering.
+    """Bind an interleaved VBO and set up vertex attributes.
 
     Args:
-        vbo_obj: VBO containing interleaved T2F_N3F_V3F vertex data
-        shader_program: VRML97ShaderProgram instance
+        vbo_obj: VBO containing interleaved vertex data
+        program: Shader program ID
+        vertex_format: One of VertexFormat.T2F_N3F_V3F or VertexFormat.V3F_T2F_N3F
 
     Returns:
-        Dict mapping attribute names to their locations (for cleanup)
+        Dict of enabled attribute locations for cleanup
     """
     vbo_obj.bind()
 
-    program = shader_program.program
+    stride = vertex_format['stride']
     enabled: Dict[str, int] = {}
 
-    # Texture coords at offset 0
-    tex_loc = glGetAttribLocation(program, 'aTexCoord')
-    if tex_loc >= 0:
-        glEnableVertexAttribArray(tex_loc)
-        glVertexAttribPointer(tex_loc, 2, GL_FLOAT, GL_FALSE, VBO_STRIDE, vbo_obj)
-        enabled['aTexCoord'] = tex_loc
-
-    # Normals at offset 8 (2 floats * 4 bytes)
-    normal_loc = glGetAttribLocation(program, 'aNormal')
-    if normal_loc >= 0:
-        glEnableVertexAttribArray(normal_loc)
-        glVertexAttribPointer(normal_loc, 3, GL_FLOAT, GL_FALSE, VBO_STRIDE, vbo_obj + 8)
-        enabled['aNormal'] = normal_loc
-
-    # Positions at offset 20 (5 floats * 4 bytes)
+    # Position attribute
     pos_loc = glGetAttribLocation(program, 'aPosition')
     if pos_loc >= 0:
         glEnableVertexAttribArray(pos_loc)
-        glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, VBO_STRIDE, vbo_obj + 20)
+        glVertexAttribPointer(
+            pos_loc,
+            vertex_format['position_size'],
+            GL_FLOAT, GL_FALSE,
+            stride,
+            vbo_obj + vertex_format['position_offset']
+        )
         enabled['aPosition'] = pos_loc
+
+    # Normal attribute
+    normal_loc = glGetAttribLocation(program, 'aNormal')
+    if normal_loc >= 0:
+        glEnableVertexAttribArray(normal_loc)
+        glVertexAttribPointer(
+            normal_loc,
+            vertex_format['normal_size'],
+            GL_FLOAT, GL_FALSE,
+            stride,
+            vbo_obj + vertex_format['normal_offset']
+        )
+        enabled['aNormal'] = normal_loc
+
+    # Texture coordinate attribute
+    tex_loc = glGetAttribLocation(program, 'aTexCoord')
+    if tex_loc >= 0:
+        glEnableVertexAttribArray(tex_loc)
+        glVertexAttribPointer(
+            tex_loc,
+            vertex_format['texcoord_size'],
+            GL_FLOAT, GL_FALSE,
+            stride,
+            vbo_obj + vertex_format['texcoord_offset']
+        )
+        enabled['aTexCoord'] = tex_loc
 
     return enabled
 
 
-def unbind_vbo_for_shader(vbo_obj: vbo.VBO, enabled_attrs: Dict[str, int]) -> None:
-    """Unbind VBO and disable vertex attributes.
+def bind_separate_arrays(
+    program: int,
+    vertices: Optional[vbo.VBO] = None,
+    normals: Optional[vbo.VBO] = None,
+    texcoords: Optional[vbo.VBO] = None,
+) -> Tuple[Dict[str, int], List[vbo.VBO]]:
+    """Bind separate VBOs for each vertex attribute.
+
+    This is used by ArrayGeometry and IndexedFaceSet which store
+    vertex data in separate arrays rather than interleaved.
 
     Args:
-        vbo_obj: VBO to unbind
-        enabled_attrs: Dict of attribute names to locations from bind_vbo_for_shader
-    """
-    for loc in enabled_attrs.values():
-        glDisableVertexAttribArray(loc)
-    vbo_obj.unbind()
-
-
-class ShaderGeometryMixin:
-    """Mixin providing shader-compatible geometry rendering.
-
-    Geometry nodes can inherit from this mixin to support both legacy
-    and shader-based rendering paths. The mixin checks if shader mode
-    is active and delegates to the appropriate rendering method.
-
-    To use this mixin, geometry nodes should:
-    1. Inherit from ShaderGeometryMixin
-    2. Implement get_shader_vbo(mode) to return/create a VBO
-    3. Implement get_vertex_count() to return the number of vertices
-    4. Optionally override get_draw_mode() for non-triangle geometry
-    """
-
-    def render_shader(self, mode: Any) -> bool:
-        """Render geometry using the shader pipeline.
-
-        Args:
-            mode: Render mode with shader_program attribute
-
-        Returns:
-            True if rendering succeeded
-        """
-        shader_program: Optional[VRML97ShaderProgram] = getattr(mode, 'shader_program', None)
-        if shader_program is None:
-            return False
-
-        vbo_obj = self.get_shader_vbo(mode)
-        if vbo_obj is None:
-            return False
-
-        enabled = bind_vbo_for_shader(vbo_obj, shader_program)
-        try:
-            glDrawArrays(self.get_draw_mode(), 0, self.get_vertex_count())
-        finally:
-            unbind_vbo_for_shader(vbo_obj, enabled)
-
-        return True
-
-    def get_shader_vbo(self, mode: Any) -> Optional[vbo.VBO]:
-        """Get or create a VBO for shader rendering.
-
-        Subclasses should implement this to return a VBO containing
-        interleaved T2F_N3F_V3F vertex data.
-
-        Args:
-            mode: Render mode for caching
-
-        Returns:
-            VBO object, or None if not available
-        """
-        raise NotImplementedError("Subclasses must implement get_shader_vbo")
-
-    def get_vertex_count(self) -> int:
-        """Get the number of vertices to draw.
-
-        Subclasses must implement this.
-
-        Returns:
-            Number of vertices
-        """
-        raise NotImplementedError("Subclasses must implement get_vertex_count")
-
-    def get_draw_mode(self) -> int:
-        """Get the OpenGL draw mode.
-
-        Default is GL_TRIANGLES. Override for other geometry types.
-
-        Returns:
-            GL constant (e.g., GL_TRIANGLES, GL_TRIANGLE_STRIP)
-        """
-        return GL_TRIANGLES
-
-
-class ShaderBox(ShaderGeometryMixin):
-    """Shader-compatible Box geometry wrapper.
-
-    This class wraps a Box node and provides shader-compatible rendering.
-    """
-
-    def __init__(self, box_node: Any) -> None:
-        """Initialize with a Box node.
-
-        Args:
-            box_node: VRML97 Box node
-        """
-        self.box_node = box_node
-
-    def get_shader_vbo(self, mode: Any) -> Optional[vbo.VBO]:
-        """Get or create VBO for the box."""
-        from OpenGLContext.scenegraph import box as box_module
-
-        vbo_obj = mode.cache.getData(self.box_node, 'shader_vbo')
-        if vbo_obj is None:
-            vertices = array(list(box_module.yieldVertices(self.box_node.size)), 'f')
-            vbo_obj = vbo.VBO(vertices)
-            mode.cache.holder(self.box_node, vbo_obj, 'shader_vbo')
-        return vbo_obj
-
-    def get_vertex_count(self) -> int:
-        """Box always has 36 vertices (6 faces * 2 triangles * 3 vertices)."""
-        return 36
-
-
-def create_shader_geometry(geometry_node: Any, mode: Any) -> Optional[ShaderGeometryMixin]:
-    """Factory function to create shader-compatible geometry wrapper.
-
-    Args:
-        geometry_node: VRML97 geometry node (Box, Sphere, etc.)
-        mode: Render mode for determining capabilities
+        program: Shader program ID
+        vertices: VBO of vertex positions (vec3)
+        normals: VBO of normals (vec3)
+        texcoords: VBO of texture coordinates (vec2)
 
     Returns:
-        ShaderGeometryMixin subclass instance, or None if not supported
+        Tuple of (enabled attribute locations, list of bound VBOs)
     """
-    node_type = type(geometry_node).__name__
+    enabled: Dict[str, int] = {}
+    bound_vbos: List[vbo.VBO] = []
 
-    if node_type == 'Box':
-        return ShaderBox(geometry_node)
+    # Position attribute
+    if vertices is not None:
+        pos_loc = glGetAttribLocation(program, 'aPosition')
+        if pos_loc >= 0:
+            vertices.bind()
+            bound_vbos.append(vertices)
+            glEnableVertexAttribArray(pos_loc)
+            glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, 0, vertices)
+            enabled['aPosition'] = pos_loc
 
-    # Add support for other geometry types as needed
-    # For now, return None for unsupported types
-    return None
+    # Normal attribute
+    if normals is not None:
+        normal_loc = glGetAttribLocation(program, 'aNormal')
+        if normal_loc >= 0:
+            normals.bind()
+            bound_vbos.append(normals)
+            glEnableVertexAttribArray(normal_loc)
+            glVertexAttribPointer(normal_loc, 3, GL_FLOAT, GL_FALSE, 0, normals)
+            enabled['aNormal'] = normal_loc
+
+    # Texture coordinate attribute
+    if texcoords is not None:
+        tex_loc = glGetAttribLocation(program, 'aTexCoord')
+        if tex_loc >= 0:
+            texcoords.bind()
+            bound_vbos.append(texcoords)
+            glEnableVertexAttribArray(tex_loc)
+            glVertexAttribPointer(tex_loc, 2, GL_FLOAT, GL_FALSE, 0, texcoords)
+            enabled['aTexCoord'] = tex_loc
+
+    return enabled, bound_vbos
+
+
+def unbind_attributes(enabled_attrs: Dict[str, int], bound_vbos: Optional[List[vbo.VBO]] = None) -> None:
+    """Disable vertex attributes and unbind VBOs.
+
+    Args:
+        enabled_attrs: Dict of attribute names to locations from bind functions
+        bound_vbos: Optional list of VBOs to unbind
+    """
+    for loc in enabled_attrs.values():
+        if loc >= 0:
+            glDisableVertexAttribArray(loc)
+
+    if bound_vbos:
+        for vbo_obj in bound_vbos:
+            vbo_obj.unbind()
+
+
+def render_shader_interleaved(
+    mode: Any,
+    vbo_obj: vbo.VBO,
+    vertex_count: int,
+    vertex_format: Dict[str, int],
+    draw_mode: int = GL_TRIANGLES,
+    index_vbo: Optional[vbo.VBO] = None,
+    index_count: Optional[int] = None,
+) -> bool:
+    """Render geometry using an interleaved VBO with the shader.
+
+    Args:
+        mode: Render mode with shader_program attribute
+        vbo_obj: VBO containing interleaved vertex data
+        vertex_count: Number of vertices to draw (if no indices)
+        vertex_format: Vertex format descriptor (VertexFormat.T2F_N3F_V3F, etc.)
+        draw_mode: GL draw mode (GL_TRIANGLES, etc.)
+        index_vbo: Optional index buffer for indexed drawing
+        index_count: Number of indices (required if index_vbo provided)
+
+    Returns:
+        True if rendering succeeded
+    """
+    shader_program = getattr(mode, 'shader_program', None)
+    if shader_program is None or shader_program.program is None:
+        return False
+
+    # Create VAO for core profile compatibility
+    vao = glGenVertexArrays(1)
+    glBindVertexArray(vao)
+
+    try:
+        enabled = bind_interleaved_vbo(vbo_obj, shader_program.program, vertex_format)
+        try:
+            if index_vbo is not None and index_count is not None:
+                index_vbo.bind()
+                try:
+                    glDrawElements(draw_mode, index_count, GL_UNSIGNED_SHORT, index_vbo)
+                finally:
+                    index_vbo.unbind()
+            else:
+                glDrawArrays(draw_mode, 0, vertex_count)
+            return True
+        finally:
+            unbind_attributes(enabled)
+            vbo_obj.unbind()
+    finally:
+        glBindVertexArray(0)
+        glDeleteVertexArrays(1, [vao])
+
+
+def render_shader_arrays(
+    mode: Any,
+    vertices: vbo.VBO,
+    normals: Optional[vbo.VBO],
+    texcoords: Optional[vbo.VBO],
+    vertex_count: int,
+    draw_mode: int = GL_TRIANGLES,
+) -> bool:
+    """Render geometry using separate VBOs for each attribute.
+
+    Args:
+        mode: Render mode with shader_program attribute
+        vertices: VBO of vertex positions
+        normals: VBO of normals (optional)
+        texcoords: VBO of texture coordinates (optional)
+        vertex_count: Number of vertices to draw
+        draw_mode: GL draw mode (GL_TRIANGLES, etc.)
+
+    Returns:
+        True if rendering succeeded
+    """
+    shader_program = getattr(mode, 'shader_program', None)
+    if shader_program is None or shader_program.program is None:
+        return False
+
+    # Create VAO for core profile compatibility
+    vao = glGenVertexArrays(1)
+    glBindVertexArray(vao)
+
+    try:
+        enabled, bound_vbos = bind_separate_arrays(
+            shader_program.program, vertices, normals, texcoords
+        )
+        try:
+            glDrawArrays(draw_mode, 0, vertex_count)
+            return True
+        finally:
+            unbind_attributes(enabled, bound_vbos)
+    finally:
+        glBindVertexArray(0)
+        glDeleteVertexArrays(1, [vao])
+
+
+# Backward compatibility: old function names
+def bind_vbo_for_shader(vbo_obj: vbo.VBO, shader_program: Any) -> Dict[str, int]:
+    """Legacy function for T2F_N3F_V3F format (Box).
+
+    Deprecated: Use bind_interleaved_vbo with explicit vertex format instead.
+    """
+    return bind_interleaved_vbo(vbo_obj, shader_program.program, VertexFormat.T2F_N3F_V3F)
+
+
+def unbind_vbo_for_shader(vbo_obj: vbo.VBO, enabled_attrs: Dict[str, int]) -> None:
+    """Legacy function to unbind VBO.
+
+    Deprecated: Use unbind_attributes instead.
+    """
+    unbind_attributes(enabled_attrs)
+    vbo_obj.unbind()
