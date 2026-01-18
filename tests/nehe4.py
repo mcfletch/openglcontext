@@ -11,15 +11,22 @@ This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?l
 with the tutorial, so that only changes from the tutorial are noted 
 here.
 
+
+
+NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
+a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 '''The time module is used to provide crude animation support'''
 import time
 
 class TestContext( BaseContext ):
     """This context customizes 3 points in the BaseContext"""
+    # Force compatibility profile for legacy GL functions
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     '''
     The OnIdle method (if present) is called whenever the GUI library

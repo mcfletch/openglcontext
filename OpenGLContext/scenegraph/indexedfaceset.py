@@ -56,13 +56,6 @@ XXX This node needs some serious optimization.  Possible approaches:
                 if the data array has changed, then is
                 the length of the data-array
 """
-
-from __future__ import print_function, generators
-
-try:
-    xrange
-except NameError:
-    xrange = range
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *

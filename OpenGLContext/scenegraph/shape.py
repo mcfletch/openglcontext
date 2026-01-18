@@ -109,6 +109,8 @@ class Shape(basenodes.Shape):
                 if tex is not None:
                     shader_program.bind_texture(tex)
                     textured = True
+                    # Store texture ID in mode for geometry nodes that need direct access
+                    mode._bound_texture_id = tex.texture
                     # Apply texture transform if present
                     if self.appearance.textureTransform:
                         shader_program.set_texture_transform(self.appearance.textureTransform)
@@ -117,9 +119,10 @@ class Shape(basenodes.Shape):
 
             if not textured:
                 shader_program.set_texture_enabled(False)
+                mode._bound_texture_id = None
 
         # Render the geometry (it will detect shader_mode and use shader path)
-        self.geometry.render(mode=mode)
+        self.geometry.render(textured=textured, mode=mode)
 
         # Cleanup texture
         if textured:

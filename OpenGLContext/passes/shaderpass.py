@@ -17,8 +17,9 @@ from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 from OpenGL.GL import (
     GL_FALSE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER,
-    GL_TEXTURE0, GL_TEXTURE_2D,
-    glUseProgram, glGetUniformLocation, glUniform1i, glUniform1f,
+    GL_TEXTURE0, GL_TEXTURE_2D, GL_CURRENT_PROGRAM,
+    glUseProgram, glGetUniformLocation, glGetIntegerv,
+    glUniform1i, glUniform1f,
     glUniform3fv, glUniform4fv, glUniformMatrix3fv, glUniformMatrix4fv,
     glActiveTexture, glBindTexture,
 )
@@ -57,6 +58,8 @@ class VRML97ShaderProgram:
     def __init__(self) -> None:
         self.program: Optional[int] = None
         self.unlit_program: Optional[int] = None
+        self.vertex_color_program: Optional[int] = None  # For per-vertex color geometry
+        self.point_program: Optional[int] = None  # For PointSet with per-vertex colors
         # Cache uniform locations per program: {program_id: {uniform_name: location}}
         self._location_cache: Dict[int, Dict[str, int]] = {}
         self._compiled: bool = False
@@ -97,6 +100,32 @@ class VRML97ShaderProgram:
             unlit_fragment = GL_shaders.compileShader(unlit_frag_source, GL_FRAGMENT_SHADER)
             self.unlit_program = GL_shaders.compileProgram(unlit_vertex, unlit_fragment)
 
+            # Load and compile vertex color shader (for NURBS and other per-vertex color geometry)
+            vc_vert_path = os.path.join(SHADER_DIR, 'vrml97_vertex_color.vert')
+            vc_frag_path = os.path.join(SHADER_DIR, 'vrml97_vertex_color.frag')
+
+            with open(vc_vert_path, 'r') as f:
+                vc_vert_source = f.read()
+            with open(vc_frag_path, 'r') as f:
+                vc_frag_source = f.read()
+
+            vc_vertex = GL_shaders.compileShader(vc_vert_source, GL_VERTEX_SHADER)
+            vc_fragment = GL_shaders.compileShader(vc_frag_source, GL_FRAGMENT_SHADER)
+            self.vertex_color_program = GL_shaders.compileProgram(vc_vertex, vc_fragment)
+
+            # Load and compile point shader (for PointSet with per-vertex colors)
+            pt_vert_path = os.path.join(SHADER_DIR, 'vrml97_point.vert')
+            pt_frag_path = os.path.join(SHADER_DIR, 'vrml97_point.frag')
+
+            with open(pt_vert_path, 'r') as f:
+                pt_vert_source = f.read()
+            with open(pt_frag_path, 'r') as f:
+                pt_frag_source = f.read()
+
+            pt_vertex = GL_shaders.compileShader(pt_vert_source, GL_VERTEX_SHADER)
+            pt_fragment = GL_shaders.compileShader(pt_frag_source, GL_FRAGMENT_SHADER)
+            self.point_program = GL_shaders.compileProgram(pt_vertex, pt_fragment)
+
             self._compiled = True
             log.info("VRML97 shader programs compiled successfully")
             return True
@@ -106,11 +135,12 @@ class VRML97ShaderProgram:
             self._compiled = True  # Mark as attempted
             return False
 
-    def use(self, lit: bool = True) -> bool:
+    def use(self, lit: bool = True, vertex_colors: bool = False) -> bool:
         """Activate the shader program.
 
         Args:
             lit: If True, use the lighting shader. If False, use unlit shader.
+            vertex_colors: If True (and lit=True), use vertex color shader instead.
 
         Returns:
             True if shader was activated, False otherwise
@@ -118,10 +148,41 @@ class VRML97ShaderProgram:
         if not self._compiled:
             self.compile()
 
-        program = self.program if lit else self.unlit_program
+        if lit and vertex_colors:
+            program = self.vertex_color_program
+        elif lit:
+            program = self.program
+        else:
+            program = self.unlit_program
         if program:
             glUseProgram(program)
         return program is not None
+
+    def use_vertex_color(self) -> bool:
+        """Activate the vertex color shader program.
+
+        Use this for geometry with per-vertex colors (like NURBS with color arrays).
+
+        Returns:
+            True if shader was activated, False otherwise
+        """
+        return self.use(lit=True, vertex_colors=True)
+
+    def use_point(self) -> bool:
+        """Activate the point shader program.
+
+        Use this for PointSet geometry with per-vertex colors.
+        This is a simple unlit shader that passes through vertex colors.
+
+        Returns:
+            True if shader was activated, False otherwise
+        """
+        if not self._compiled:
+            self.compile()
+        if self.point_program:
+            glUseProgram(self.point_program)
+            return True
+        return False
 
     def unuse(self) -> None:
         """Deactivate the shader program."""
@@ -163,13 +224,18 @@ class VRML97ShaderProgram:
         Args:
             modelview: 4x4 modelview matrix (numpy array)
             projection: 4x4 projection matrix (numpy array)
-            program: Shader program (defaults to lit program)
+            program: Shader program (defaults to currently active program)
 
-        Note: The appropriate shader must be bound before calling this method.
-              Use shader.use(lit=True/False) to bind the correct program.
+        Note: If no program is specified, uses the currently bound program.
+              This allows geometry nodes to update matrices without knowing
+              which rendering mode (lit vs unlit) is active.
         """
         if program is None:
-            program = self.program
+            # Use the currently bound program
+            program = glGetIntegerv(GL_CURRENT_PROGRAM)
+            if program == 0:
+                # No program bound, default to lit program
+                program = self.program
 
         mv_loc = self._get_location('modelViewMatrix', program)
         proj_loc = self._get_location('projectionMatrix', program)
@@ -180,13 +246,20 @@ class VRML97ShaderProgram:
             glUniformMatrix4fv(proj_loc, 1, GL_FALSE, projection.astype('f'))
 
         # Calculate and set normal matrix (inverse transpose of upper-left 3x3)
-        if program == self.program:
+        # Do this for any lit shader that uses normals (main or vertex color)
+        if program == self.program or program == self.vertex_color_program:
             normal_loc = self._get_location('normalMatrix', program)
             if normal_loc != -1:
                 # Extract the upper-left 3x3 of the modelview matrix
                 mv3 = modelview[:3, :3].astype('f')
-                # For orthonormal rotation matrices, inverse-transpose = original
-                glUniformMatrix3fv(normal_loc, 1, GL_FALSE, mv3)
+                # Compute inverse-transpose for proper normal transformation
+                # This handles non-uniform scaling correctly
+                try:
+                    normal_matrix = np.linalg.inv(mv3).T
+                except np.linalg.LinAlgError:
+                    # Fallback if matrix is singular
+                    normal_matrix = mv3
+                glUniformMatrix3fv(normal_loc, 1, GL_FALSE, normal_matrix.astype('f'))
 
     def set_material(
         self,
@@ -229,9 +302,9 @@ class VRML97ShaderProgram:
         """Set scene ambient color."""
         self._set_uniform3f('sceneAmbient', ambient)
 
-    def set_num_lights(self, count: int) -> None:
+    def set_num_lights(self, count: int, program: Optional[int] = None) -> None:
         """Set the number of active lights."""
-        self._set_uniform1i('numLights', min(count, self.MAX_LIGHTS))
+        self._set_uniform1i('numLights', min(count, self.MAX_LIGHTS), program)
 
     def set_light(
         self,
@@ -243,7 +316,8 @@ class VRML97ShaderProgram:
         attenuation: Vec3 = (1.0, 0.0, 0.0),
         intensity: float = 1.0,
         beam_width: float = 1.57,
-        cutoff_angle: float = 0.785
+        cutoff_angle: float = 0.785,
+        program: Optional[int] = None
     ) -> None:
         """Set parameters for a single light.
 
@@ -257,6 +331,7 @@ class VRML97ShaderProgram:
             intensity: Light intensity multiplier
             beam_width: Spot inner cone angle (radians)
             cutoff_angle: Spot outer cone angle (radians)
+            program: Shader program to set uniforms on (defaults to main lit program)
         """
         if index >= self.MAX_LIGHTS:
             return
@@ -264,14 +339,14 @@ class VRML97ShaderProgram:
         type_map = {'off': 0, 'directional': 1, 'point': 2, 'spot': 3}
         type_val = type_map.get(light_type, 0)
 
-        self._set_uniform1i(f'lightType[{index}]', type_val)
-        self._set_uniform3f(f'lightColor[{index}]', color)
-        self._set_uniform4f(f'lightPosition[{index}]', position)
-        self._set_uniform3f(f'lightDirection[{index}]', direction)
-        self._set_uniform3f(f'lightAttenuation[{index}]', attenuation)
-        self._set_uniform1f(f'lightIntensity[{index}]', intensity)
-        self._set_uniform1f(f'lightBeamWidth[{index}]', beam_width)
-        self._set_uniform1f(f'lightCutOffAngle[{index}]', cutoff_angle)
+        self._set_uniform1i(f'lightType[{index}]', type_val, program)
+        self._set_uniform3f(f'lightColor[{index}]', color, program)
+        self._set_uniform4f(f'lightPosition[{index}]', position, program)
+        self._set_uniform3f(f'lightDirection[{index}]', direction, program)
+        self._set_uniform3f(f'lightAttenuation[{index}]', attenuation, program)
+        self._set_uniform1f(f'lightIntensity[{index}]', intensity, program)
+        self._set_uniform1f(f'lightBeamWidth[{index}]', beam_width, program)
+        self._set_uniform1f(f'lightCutOffAngle[{index}]', cutoff_angle, program)
 
     def set_default_light(self) -> None:
         """Set up default VRML97 headlight (directional from camera)."""
@@ -437,23 +512,23 @@ class VRML97ShaderProgram:
         """Set identity texture transform."""
         self.set_texture_transform(None)
 
-    def _set_uniform1i(self, name: str, value: int) -> None:
-        loc = self._get_location(name)
+    def _set_uniform1i(self, name: str, value: int, program: Optional[int] = None) -> None:
+        loc = self._get_location(name, program)
         if loc != -1:
             glUniform1i(loc, value)
 
-    def _set_uniform1f(self, name: str, value: float) -> None:
-        loc = self._get_location(name)
+    def _set_uniform1f(self, name: str, value: float, program: Optional[int] = None) -> None:
+        loc = self._get_location(name, program)
         if loc != -1:
             glUniform1f(loc, float(value))
 
-    def _set_uniform3f(self, name: str, value: Vec3) -> None:
-        loc = self._get_location(name)
+    def _set_uniform3f(self, name: str, value: Vec3, program: Optional[int] = None) -> None:
+        loc = self._get_location(name, program)
         if loc != -1:
             glUniform3fv(loc, 1, array(value, 'f'))
 
-    def _set_uniform4f(self, name: str, value: Vec4) -> None:
-        loc = self._get_location(name)
+    def _set_uniform4f(self, name: str, value: Vec4, program: Optional[int] = None) -> None:
+        loc = self._get_location(name, program)
         if loc != -1:
             glUniform4fv(loc, 1, array(value, 'f'))
 
@@ -498,7 +573,8 @@ def configure_light_from_node(
     shader_program: VRML97ShaderProgram,
     index: int,
     light_node: Any,
-    modelview_matrix: Optional[Matrix4] = None
+    modelview_matrix: Optional[Matrix4] = None,
+    program: Optional[int] = None
 ) -> None:
     """Configure shader light from a VRML97 Light node.
 
@@ -509,11 +585,12 @@ def configure_light_from_node(
         modelview_matrix: Modelview matrix to transform light position/direction to eye space.
                          This is required to match fixed-function OpenGL behavior where
                          glLightfv transforms the light by the current modelview matrix.
+        program: Shader program to set uniforms on (defaults to main lit program)
     """
     from OpenGLContext.scenegraph import light as light_module
 
     if not light_node.on:
-        shader_program.set_light(index, light_type='off')
+        shader_program.set_light(index, light_type='off', program=program)
         return
 
     # Get light color and intensity
@@ -559,6 +636,7 @@ def configure_light_from_node(
             color=color,
             direction=direction,
             intensity=intensity,
+            program=program,
         )
 
     elif isinstance(light_node, light_module.SpotLight):
@@ -581,6 +659,7 @@ def configure_light_from_node(
             intensity=intensity,
             beam_width=beam_width,
             cutoff_angle=cutoff_angle,
+            program=program,
         )
 
     elif isinstance(light_node, light_module.PointLight):
@@ -595,6 +674,7 @@ def configure_light_from_node(
             position=position,
             attenuation=attenuation,
             intensity=intensity,
+            program=program,
         )
 
     else:
@@ -607,6 +687,7 @@ def configure_light_from_node(
             color=color,
             direction=direction,
             intensity=intensity,
+            program=program,
         )
 
 

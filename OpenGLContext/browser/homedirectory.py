@@ -1,5 +1,4 @@
 """Attempt to determine the current user's "system" directories"""
-from __future__ import print_function
 try:
 ##	raise ImportError
     from win32com.shell import shell, shellcon

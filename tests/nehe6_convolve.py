@@ -20,10 +20,15 @@ Based on:
 
             If you use the code for your own projects please give me credit,
             or mention my web site somewhere in your program or it's docs.
+
+
+NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
+a compatibility profile context.
 '''
 from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 import time, sys
 try:
@@ -48,6 +53,11 @@ class TestContext( BaseContext ):
     Finally, this interpretation reorganizes the code to resemble
     more idiomatic python than the original code.
     """
+    '''We set the contextDefinition to request a compatibility profile,
+    which provides the legacy fixed-function pipeline functions like
+    glBegin/glEnd that this tutorial uses.
+    '''
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     FILTER_SIZE = 4
     convolutionKernel = arrays.zeros( (4,4,4),'f') + (1.0/(FILTER_SIZE*FILTER_SIZE))

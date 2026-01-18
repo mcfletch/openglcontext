@@ -1,7 +1,11 @@
 #! /usr/bin/env python
 """Automated test runner for OpenGLContext contexts"""
 
-import optparse, sys, os, logging, ConfigParser
+import optparse, sys, os, logging
+try:
+    import configparser as ConfigParser
+except ImportError:
+    import ConfigParser
 
 log = logging.getLogger("gltest")
 from OpenGLContext import testingcontext, context, plugins
@@ -108,7 +112,8 @@ def main():
     g = {}
     g["__name__"] = "__main__"
     g["__file__"] = script
-    execfile(script, g)
+    with open(script, 'rb') as f:
+        exec(compile(f.read(), script, 'exec'), g)
 
 
 if __name__ == "__main__":

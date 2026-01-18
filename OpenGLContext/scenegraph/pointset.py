@@ -50,7 +50,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
 
         # Check for shader mode
         if getattr(mode, 'shader_mode', False):
-            return self._render_shader(mode, points)
+            return self._render_shader(mode, points, textured=textured)
 
         # Legacy rendering path
         glVertexPointerf(points)
@@ -96,53 +96,123 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         glDisableClientState(GL_COLOR_ARRAY)
         return 1
 
-    def _render_shader(self, mode, points):
+    def _render_shader(self, mode, points, textured=False):
         """Render using shader pipeline."""
-        from OpenGL.arrays import vbo
-
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:
             return 1
 
-        # Use unlit shader for points
-        shader_program.use(lit=False)
+        # Use point shader for colored points, unlit for simple points
+        has_colors = self.color and len(self.color.color) == len(points)
 
-        # Set point color (default white for unlit)
-        shader_program.set_solid_color((1.0, 1.0, 1.0, 1.0))
-        shader_program.set_matrices(mode.matrix, mode.projection, program=shader_program.unlit_program)
+        if has_colors:
+            shader_program.use_point()
+            program = shader_program.point_program
+        else:
+            shader_program.use(lit=False)
+            program = shader_program.unlit_program
+            # Set default white color for unlit points
+            shader_program.set_solid_color((1.0, 1.0, 1.0, 1.0))
 
-        # Create VBO for points
-        point_vbo = mode.cache.getData(self, 'shader_point_vbo')
-        if point_vbo is None:
-            point_vbo = vbo.VBO(array(points, 'f'))
-            mode.cache.holder(self, point_vbo, 'shader_point_vbo')
+        shader_program.set_matrices(mode.matrix, mode.projection, program=program)
+
+        # Set point size uniform (for shader-controlled point sizes)
+        point_size = max(self.size, self.minSize)
+        point_size_loc = glGetUniformLocation(program, 'pointSize')
+        if point_size_loc != -1:
+            glUniform1f(point_size_loc, point_size)
+
+        # Check if a texture is bound (from Shape/Appearance) for point sprites
+        # The texture ID is stored in the mode by Shape._render_shader
+        bound_texture = getattr(mode, '_bound_texture_id', None)
+        has_texture_loc = glGetUniformLocation(program, 'hasTexture')
+        if has_texture_loc != -1:
+            if bound_texture and textured:
+                glUniform1i(has_texture_loc, 1)
+                # Bind the texture and set sampler uniform
+                glActiveTexture(GL_TEXTURE0)
+                glBindTexture(GL_TEXTURE_2D, bound_texture)
+                tex_loc = glGetUniformLocation(program, 'pointTexture')
+                if tex_loc != -1:
+                    glUniform1i(tex_loc, 0)
+            else:
+                glUniform1i(has_texture_loc, 0)
+                # Unbind any texture
+                glActiveTexture(GL_TEXTURE0)
+                glBindTexture(GL_TEXTURE_2D, 0)
 
         # Create VAO for core profile compatibility
         vao = glGenVertexArrays(1)
         glBindVertexArray(vao)
 
+        buffer = None
         try:
-            # Bind and draw
-            point_vbo.bind()
-            pos_loc = glGetAttribLocation(shader_program.unlit_program, 'aPosition')
-            if pos_loc >= 0:
-                glEnableVertexAttribArray(pos_loc)
-                glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, 0, point_vbo)
+            # Point shader uses fixed attribute locations:
+            # layout(location = 0) in vec3 aPosition;
+            # layout(location = 1) in vec3 aColor;
+            pos_loc = 0
+            color_loc = 1
 
-            glPointSize(self.size)
+            # Interleave position and color data into a single buffer
+            # Format: [x,y,z,r,g,b, x,y,z,r,g,b, ...]
+            import numpy as np
+            points_array = np.asarray(points, dtype='f')
+
+            if has_colors:
+                colors_array = np.asarray(self.color.color, dtype='f')
+                # Interleave: each vertex has 6 floats (3 pos + 3 color)
+                interleaved = np.empty((len(points), 6), dtype='f')
+                interleaved[:, 0:3] = points_array
+                interleaved[:, 3:6] = colors_array
+                # Ensure contiguous memory layout
+                interleaved = np.ascontiguousarray(interleaved)
+                stride = 6 * 4  # 6 floats * 4 bytes
+            else:
+                interleaved = np.ascontiguousarray(points_array)
+                stride = 0
+
+            buffer = glGenBuffers(1)
+            glBindBuffer(GL_ARRAY_BUFFER, buffer)
+            glBufferData(GL_ARRAY_BUFFER, interleaved.nbytes, interleaved, GL_DYNAMIC_DRAW)
+
+            # Set up position attribute
+            glEnableVertexAttribArray(pos_loc)
+            glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, stride, None)
+
+            # Set up color attribute if we have per-vertex colors
+            if has_colors:
+                import ctypes
+                glEnableVertexAttribArray(color_loc)
+                glVertexAttribPointer(color_loc, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
+            else:
+                color_loc = -1  # Mark as unused for cleanup
+
+            # Set point size (both fixed-function and shader-controlled)
+            glPointSize(point_size)
+            # Enable shader-controlled point sizes (gl_PointSize in vertex shader)
             glEnable(GL_PROGRAM_POINT_SIZE)
+
+            # Enable blending for particle effects
+            glEnable(GL_BLEND)
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
             glDrawArrays(GL_POINTS, 0, len(points))
+
+            glDisable(GL_BLEND)
             glDisable(GL_PROGRAM_POINT_SIZE)
             glPointSize(1.0)
 
-            if pos_loc >= 0:
-                glDisableVertexAttribArray(pos_loc)
-            point_vbo.unbind()
+            glDisableVertexAttribArray(pos_loc)
+            if color_loc >= 0:
+                glDisableVertexAttribArray(color_loc)
+
         finally:
             glBindVertexArray(0)
             glDeleteVertexArrays(1, [vao])
+            if buffer:
+                glDeleteBuffers(1, [buffer])
 
-        # Restore the lit shader that was active before we switched to unlit
+        # Restore the lit shader
         shader_program.use(lit=True)
         return 1
 

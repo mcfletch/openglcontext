@@ -112,8 +112,14 @@ class Texture(object):
             GL_LUMINANCE: GL_R8,
             GL_LUMINANCE_ALPHA: GL_RG8,
         }.get(format, GL_RGBA8)
+        # Map legacy source formats to core-compatible equivalents
+        # GL_LUMINANCE and GL_LUMINANCE_ALPHA are not valid source formats in core profile
+        source_format = {
+            GL_LUMINANCE: GL_RED,
+            GL_LUMINANCE_ALPHA: GL_RG,
+        }.get(format, format)
         glTexImage2D(
-            GL_TEXTURE_2D, 0, internal_format, x, y, 0, format, GL_UNSIGNED_BYTE, image
+            GL_TEXTURE_2D, 0, internal_format, x, y, 0, source_format, GL_UNSIGNED_BYTE, image
         )
         # Set texture parameters for Core Profile compatibility
         # Without these, the default GL_TEXTURE_MIN_FILTER (GL_NEAREST_MIPMAP_LINEAR)
@@ -309,13 +315,20 @@ class CubeTexture(Texture):
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
+        # Use sized internal format for Core Profile compatibility
+        internal_format = {
+            GL_RGB: GL_RGB8,
+            GL_RGBA: GL_RGBA8,
+            3: GL_RGB8,
+            4: GL_RGBA8,
+        }.get(format, GL_RGBA8)
         if isinstance(images, dict):
             images = images.items()
         for key, image in images:
             glTexImage2D(
                 self.CUBE_NAME_MAP[key],
                 0,
-                components,
+                internal_format,
                 x,
                 y,
                 0,
@@ -328,15 +341,19 @@ class CubeTexture(Texture):
         """Enable and select the texture...
         See:
             glBindTexture, glEnable(GL_TEXTURE_2D)
+
+        In core profile, glEnable(GL_TEXTURE_CUBE_MAP) is not needed
+        since textures are sampled via shaders, not fixed-function pipeline.
         """
         glBindTexture(GL_TEXTURE_CUBE_MAP, self.texture)
-        glEnable(GL_TEXTURE_CUBE_MAP)
+        # Don't call glEnable in core profile - it's done via samplers in shaders
 
     __enter__ = __call__
 
     def __exit__(self, typ, val, tb):
         """Disable for context-manager behaviour"""
-        glDisable(GL_TEXTURE_CUBE_MAP)
+        # Unbind the texture
+        glBindTexture(GL_TEXTURE_CUBE_MAP, 0)
 
 
 class MMTexture(Texture):

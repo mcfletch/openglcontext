@@ -7,9 +7,14 @@
 This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=06 NeHe6 tutorial] by Jeff Molofee and assumes that you are reading along 
 with the tutorial, so that only changes from the tutorial are noted 
 here.
+
+
+NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
+a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 import time
 try:
@@ -19,6 +24,8 @@ except ImportError as err:
 
 class TestContext( BaseContext ):
     """NeHe 6 Demo"""
+    # Force compatibility profile for legacy GL functions
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     '''OnInit is called by the Context class after initialization
     of the context has completed, and before any rendering is

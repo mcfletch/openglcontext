@@ -27,10 +27,21 @@ try:
     xrange 
 except NameError:
     xrange = range
+# Check if any font provider is available for text display
+# Font providers auto-register when imported (glutfont via GLUT, shaderfont via atlas)
+_font_available = False
 try:
-    from OpenGLContext.scenegraph.text import glutfont
+    import importlib.util
+    if importlib.util.find_spec('OpenGLContext.scenegraph.text.glutfont'):
+        _font_available = True
 except ImportError:
-    glutfont = None
+    pass
+if not _font_available:
+    try:
+        from OpenGLContext.scenegraph.text import shaderfont
+        _font_available = shaderfont.is_available()
+    except ImportError:
+        pass
 '''These are the parameters we're going to use to create our 
 simulation.  Particle systems would normally encapsulate these 
 in a node somewhere, but we want to see what we're doing.
@@ -208,13 +219,13 @@ blue and turning white.""")
     '''Set up keyboard callbacks'''
     def OnSlower( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier /2.0
-        if glutfont:
+        if _font_available:
             self.text.string = [ "Current multiplier: %s"%( self.time.internal.multiplier,)]
         else:
             print("slower",self.time.internal.multiplier)
     def OnFaster( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier * 2.0
-        if glutfont:
+        if _font_available:
             self.text.string = [ "Current multiplier: %s"%( self.time.internal.multiplier,)]
         else:
             print("faster",self.time.internal.multiplier)

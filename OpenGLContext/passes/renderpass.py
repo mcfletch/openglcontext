@@ -7,7 +7,6 @@ used as the base classes for the shadow/passes.py
 module which implements the shadow-casting rendering
 algorithm.
 """
-from __future__ import generators
 import time, weakref, traceback, sys
 from OpenGL.GL import *
 from OpenGL.GLU import *

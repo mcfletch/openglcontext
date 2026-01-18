@@ -28,8 +28,6 @@ enabled equivalents from shadow.passes), and it is
 these classes which define the rendering callbacks
 which are available from the Context class.
 """
-
-from __future__ import print_function
 from OpenGL.GL import *
 from OpenGLContext import texturecache, plugins
 from OpenGLContext.passes import renderpass
@@ -356,6 +354,8 @@ class Context(object):
             width, height = self.getViewPort()
             if not width or not height:
                 return (width, height)
+            # Ensure width/height are Python ints (not numpy scalars) for glReadPixels
+            width, height = int(width), int(height)
             glPixelStorei(GL_PACK_ALIGNMENT, 1)
             data = glReadPixelsub(0, 0, width, height, GL_RGB, outputType=None)
             if hasattr(data, "tostring"):

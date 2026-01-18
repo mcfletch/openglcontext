@@ -1,7 +1,20 @@
 """Simple node holding Frame-counting values"""
 from vrml import node, field
-from OpenGLContext.scenegraph.text import glutfont
 from OpenGL.GL import *
+
+# Try to get a working font - prefer glutfont, fall back to shaderfont
+_font_module = None
+try:
+    from OpenGLContext.scenegraph.text import glutfont
+    _font_module = glutfont
+except ImportError:
+    try:
+        from OpenGLContext.scenegraph.text import shaderfont
+        if shaderfont.is_available():
+            _font_module = shaderfont
+    except ImportError:
+        pass
+
 
 class FrameCounter( node.Node ):
     """Simple node holding Frame-counting values
@@ -15,13 +28,14 @@ class FrameCounter( node.Node ):
     lastTime = field.newField( 'lastTime', 'SFFloat', 1, 0.0)
     display = field.newField( 'display', 'SFBool', 1, True)
     _font = None
-    
+
     def font( self, context ):
-        if not self._font:
+        if not self._font and _font_module is not None:
             from OpenGLContext.scenegraph.basenodes import FontStyle
-            self._font = glutfont.GLUTBitmapFont(FontStyle( 
-                size = 1.0
-            ))
+            if hasattr(_font_module, 'GLUTBitmapFont'):
+                self._font = _font_module.GLUTBitmapFont(FontStyle(size=1.0))
+            elif hasattr(_font_module, 'ShaderBitmapFont'):
+                self._font = _font_module.ShaderBitmapFont(FontStyle(size=1.0), size=16)
         return self._font
 
     def addFrame( self, duration ):
@@ -51,6 +65,9 @@ class FrameCounter( node.Node ):
     
     def Render( self, context ):
         """Render the frame-counter to the screen"""
+        font = self.font(context)
+        if font is None:
+            return  # No font available
         margin = 30
         tx,ty = context.getViewPort()
         if tx and ty:
@@ -68,7 +85,7 @@ class FrameCounter( node.Node ):
                     glTranslated( 10,margin*2,0.0 )
                     count,avg,last = self.summary()
                     last *= 1000
-                    self.font(context).render( 
+                    font.render(
                         'fps avg:%0.1f\ncurr ms: %0.0f'%(avg,last)
                     )
                 finally:

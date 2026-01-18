@@ -47,6 +47,30 @@ algorithms common in OpenGL.&nbsp; Currently there are Timer, Opaque,
 Transparent, and Select modes available, and all default Contexts
 include all four.</p>
 
+<h3>OpenGL Core Profile Support</h3>
+
+<p>OpenGLContext supports both legacy (compatibility) and modern (core profile)
+OpenGL rendering. To enable core profile rendering, set the environment variable:</p>
+
+<pre>OPENGLCONTEXT_PROFILE=core python your_script.py</pre>
+
+<p>Core profile uses GLSL shaders instead of the deprecated fixed-function pipeline,
+making it compatible with modern OpenGL 3.3+ contexts and platforms like macOS that
+no longer support the compatibility profile.</p>
+
+<h4>wxPython GTK3 and EGL</h4>
+
+<p><strong>Important:</strong> wxPython on GTK3 uses EGL (not GLX) for OpenGL context
+creation. When using core profile rendering with wxPython, you must configure PyOpenGL
+to use EGL for proper context tracking:</p>
+
+<pre>PYOPENGL_PLATFORM=egl OPENGLCONTEXT_PROFILE=core python your_script.py</pre>
+
+<p>The wxcontext module attempts to set this automatically, but if OpenGL is imported
+before wxcontext, you may need to set it manually. Symptoms of missing EGL configuration
+include errors like "Attempt to retrieve context when no valid context" during shader
+rendering. Legacy (fixed-function) rendering typically works without this setting.</p>
+
 <p>On each visible rendering pass, the Opaque RenderMode creates a <a href="../pydoc/OpenGLContext.renderpass.html">
 RenderPass</a> object which stores pass-specific information such as the
 events needing selection processing and the "default" matrices for

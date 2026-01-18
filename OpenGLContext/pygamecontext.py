@@ -35,7 +35,12 @@ class PygameContext(
         #init pygame
         pygame.display.init()
         if definition is None:
-            definition = contextdefinition.ContextDefinition( **named )
+            # Check if the class has a contextDefinition attribute (e.g., from subclass)
+            class_definition = getattr(self.__class__, 'contextDefinition', None)
+            if class_definition is not None:
+                definition = class_definition
+            else:
+                definition = contextdefinition.ContextDefinition( **named )
         else:
             for key,value in named.items():
                 setattr( definition, key, value )
@@ -63,6 +68,20 @@ class PygameContext(
             set( GL_MULTISAMPLESAMPLES, definition.multisampleSamples )
         if definition.stereo > -1:
             set( GL_STEREO, definition.stereo )
+        # Set OpenGL profile (core vs compatibility) via SDL2
+        # SDL_GL_CONTEXT_PROFILE_MASK constants:
+        #   SDL_GL_CONTEXT_PROFILE_CORE = 1
+        #   SDL_GL_CONTEXT_PROFILE_COMPATIBILITY = 2
+        profile = getattr(definition, 'profile', 'compatibility')
+        if profile == 'core':
+            set( pygame.GL_CONTEXT_PROFILE_MASK, pygame.GL_CONTEXT_PROFILE_CORE )
+            # Set minimum version for core profile
+            version = getattr(definition, 'version', (3, 3))
+            if version is not None and len(version) >= 2 and version[0] >= 3:
+                set( pygame.GL_CONTEXT_MAJOR_VERSION, int(version[0]) )
+                set( pygame.GL_CONTEXT_MINOR_VERSION, int(version[1]) )
+        elif profile == 'compatibility':
+            set( pygame.GL_CONTEXT_PROFILE_MASK, pygame.GL_CONTEXT_PROFILE_COMPATIBILITY )
         if definition.doubleBuffer:
             return DOUBLEBUF|RESIZABLE
         else:

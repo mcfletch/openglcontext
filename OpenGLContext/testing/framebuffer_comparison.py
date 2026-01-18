@@ -23,7 +23,6 @@ Usage:
     runner = RegressionTestRunner('teapot_test', TeapotContext)
     success = runner.run_comparison()
 """
-from __future__ import print_function
 import argparse
 import os
 import sys

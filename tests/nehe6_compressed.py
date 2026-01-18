@@ -1,8 +1,12 @@
 #! /usr/bin/env python
 '''=Compressed Texture Mapping (From NeHe 6)=
+
+NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
+a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGL.GL.EXT.texture_compression_s3tc import *
 import time
@@ -13,6 +17,8 @@ except ImportError as err:
 
 class TestContext( BaseContext ):
     """NeHe 6 Demo"""
+    # Force compatibility profile for legacy GL functions
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     def OnInit( self ):
         """Load the image on initial load of the application"""

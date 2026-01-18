@@ -10,13 +10,20 @@ Introduces:
 This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=03 NeHe3 tutorial] by Jeff Molofee and assumes that you are reading along 
 with the tutorial, so that only changes from the tutorial are noted 
 here.
+
+
+NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
+a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
     """Colorises the NeHe2 geometry"""
+    # Force compatibility profile for legacy GL functions
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     initialPosition = (0,0,0)
     def Render( self, mode = 0):
         """Renders the geometry for the scene."""

@@ -6,8 +6,6 @@ GLFW provides modern OpenGL context creation with support for:
 - Debug contexts
 - Forward compatibility
 """
-from __future__ import print_function
-
 try:
     import glfw
 except ImportError:

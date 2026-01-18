@@ -5,11 +5,13 @@ import weakref, sys, os
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLE import *
+from OpenGL.arrays import vbo
 from OpenGLContext.scenegraph import polygontessellator, vertex
 from OpenGLContext.scenegraph.text import _toolsfont, font, fontprovider
 from ttfquery import glyphquery
 import logging
 log = logging.getLogger( __name__ )
+import numpy as np
 
 ### Now the OpenGL-specific stuff...
 class OutlineGlyph( _toolsfont.Glyph ):
@@ -186,6 +188,135 @@ class SolidGlyph( OutlineGlyph ):
             for t, vertices in contours
         ]
 
+    # Shader-compatible geometry building methods
+    _shader_geometry_cache = None
+
+    def buildShaderGeometry(self, scale=400.0, thickness=0.0,
+                            renderFront=True, renderBack=True, renderSides=True):
+        """Build VBO-compatible geometry for shader rendering.
+
+        Returns a dict with:
+            'vertices': VBO of interleaved normal(3) + position(3) data
+            'vertex_count': number of vertices
+            'advance': x advance for this glyph
+        """
+        if not self.outlines or not self.contours:
+            return {
+                'vertices': None,
+                'vertex_count': 0,
+                'advance': self.width / scale
+            }
+
+        all_vertices = []
+
+        # Build front cap
+        if renderFront:
+            front_verts = self._buildCapGeometry(scale, front=True, z_offset=0.0)
+            all_vertices.extend(front_verts)
+
+        # Build back cap
+        if renderBack and thickness > 0.0:
+            back_verts = self._buildCapGeometry(scale, front=False, z_offset=-thickness)
+            all_vertices.extend(back_verts)
+
+        # Build sides (extrusion)
+        if renderSides and thickness > 0.0:
+            side_verts = self._buildExtrusionGeometry(scale, thickness)
+            all_vertices.extend(side_verts)
+
+        if not all_vertices:
+            return {
+                'vertices': None,
+                'vertex_count': 0,
+                'advance': self.width / scale
+            }
+
+        # Convert to numpy array: each vertex is [nx, ny, nz, px, py, pz]
+        vertex_array = np.array(all_vertices, dtype='f')
+        vertex_vbo = vbo.VBO(vertex_array)
+
+        return {
+            'vertices': vertex_vbo,
+            'vertex_count': len(all_vertices),
+            'advance': self.width / scale
+        }
+
+    def _buildCapGeometry(self, scale, front=True, z_offset=0.0):
+        """Build triangle geometry for front or back cap.
+
+        Returns list of [nx, ny, nz, px, py, pz] vertex data.
+        """
+        vertices = [
+            [vertex.Vertex(point=(x/scale, y/scale, z_offset)) for (x, y) in outline]
+            for outline in self.outlines
+        ]
+        gluTessNormal(self.tess.controller, 0, 0, 1.0 if front else -1.0)
+        contours = self.tess.tessContours(vertices, forceTriangles=True)
+
+        normal = [0.0, 0.0, 1.0] if front else [0.0, 0.0, -1.0]
+        result = []
+
+        for v in contours:
+            px, py, pz = v.point
+            result.append([normal[0], normal[1], normal[2], px, py, pz])
+
+        return result
+
+    def _buildExtrusionGeometry(self, scale, thickness):
+        """Build triangle geometry for glyph sides (extrusion).
+
+        Creates quad strips along each contour from z=0 to z=-thickness,
+        converted to triangles.
+
+        Returns list of [nx, ny, nz, px, py, pz] vertex data.
+        """
+        result = []
+        extrusion_data = self._calculateExtrusionData(scale)
+
+        for points, normals in extrusion_data:
+            n_points = len(points)
+            if n_points < 2:
+                continue
+
+            # Create quad strip along the contour
+            for i in range(n_points):
+                next_i = (i + 1) % n_points
+
+                # Current and next positions
+                p0 = points[i]
+                p1 = points[next_i]
+
+                # Normals (2D, extend to 3D with z=0)
+                n0 = normals[i]
+                n1 = normals[next_i]
+
+                # Four corners of the quad:
+                # v0: p0 at z=0
+                # v1: p1 at z=0
+                # v2: p0 at z=-thickness
+                # v3: p1 at z=-thickness
+
+                v0 = [p0[0], p0[1], 0.0]
+                v1 = [p1[0], p1[1], 0.0]
+                v2 = [p0[0], p0[1], -thickness]
+                v3 = [p1[0], p1[1], -thickness]
+
+                n0_3d = [n0[0], n0[1], 0.0]
+                n1_3d = [n1[0], n1[1], 0.0]
+
+                # Triangle 1: v0, v2, v1 (CCW from outside)
+                result.append([n0_3d[0], n0_3d[1], n0_3d[2], v0[0], v0[1], v0[2]])
+                result.append([n0_3d[0], n0_3d[1], n0_3d[2], v2[0], v2[1], v2[2]])
+                result.append([n1_3d[0], n1_3d[1], n1_3d[2], v1[0], v1[1], v1[2]])
+
+                # Triangle 2: v1, v2, v3 (CCW from outside)
+                result.append([n1_3d[0], n1_3d[1], n1_3d[2], v1[0], v1[1], v1[2]])
+                result.append([n0_3d[0], n0_3d[1], n0_3d[2], v2[0], v2[1], v2[2]])
+                result.append([n1_3d[0], n1_3d[1], n1_3d[2], v3[0], v3[1], v3[2]])
+
+        return result
+
+
 class _SolidFont(_toolsfont.Font):
     """Solid-Glyph specialisation of a fonttools-based font"""
     defaultGlyphClass = SolidGlyph
@@ -297,6 +428,104 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
     """A FontTools-provided Solid (polygonal) Font"""
     format = "solid"
     fontClass = _SolidFont
+
+    def __init__(self, *args, **kwargs):
+        super(ToolsSolidFont, self).__init__(*args, **kwargs)
+        # Shader rendering cache: {char: {'start': int, 'count': int, 'advance': float}}
+        self._shader_glyph_index = {}
+        self._shader_vbo = None
+        self._shader_vbo_chars = set()  # Characters included in the VBO
+
+    def render(self, lines, fontStyle=None, mode=None):
+        """Render text, using shader path when in shader mode."""
+        # Check for shader mode
+        if mode is not None and getattr(mode, 'shader_mode', False):
+            # Convert lines to string if needed
+            if isinstance(lines, (bytes, str)):
+                text = lines if isinstance(lines, str) else lines.decode('utf-8')
+            else:
+                # Lines is a list of Line objects
+                text = '\n'.join(line.base for line in lines)
+
+            # Use shader rendering
+            return self._renderShaderJustified(text, fontStyle, mode)
+
+        # Fall back to legacy rendering
+        return super(ToolsSolidFont, self).render(lines, fontStyle, mode)
+
+    def _renderShaderJustified(self, text, fontStyle, mode):
+        """Render text with shader, handling justification."""
+        if fontStyle is None:
+            fontStyle = self.fontStyle
+
+        lines = text.split('\n')
+        spacing = self.getSpacing(fontStyle=fontStyle, mode=mode)
+
+        # Calculate line widths for justification
+        line_data = []
+        for line_text in lines:
+            width = 0.0
+            self.font.ensureGlyphs(line_text)
+            for char in line_text:
+                glyph = self.font.getGlyph(char)
+                if glyph:
+                    width += glyph.width / self.getScale()
+            line_data.append((line_text, width))
+
+        # Determine justification
+        justify = 'LEFT'
+        if fontStyle and fontStyle.justify:
+            justify = fontStyle.justify[0].upper()
+            if justify in ['CENTER', 'MIDDLE', 'CENTRE']:
+                justify = 'CENTER'
+            elif justify in ['END', 'RIGHT']:
+                justify = 'RIGHT'
+            else:
+                justify = 'LEFT'
+
+        # Calculate vertical adjust
+        # For now, simple top-down rendering
+        y_offset = 0.0
+        line_height = self.lineHeight(mode=mode)
+
+        base_matrix = mode.matrix.copy()
+
+        for line_text, width in line_data:
+            if not line_text:
+                y_offset -= line_height * spacing
+                continue
+
+            # Calculate x offset based on justification
+            if justify == 'CENTER':
+                x_start = -width / 2.0
+            elif justify == 'RIGHT':
+                x_start = -width
+            else:
+                x_start = 0.0
+
+            # Build transform for this line
+            line_matrix = base_matrix.copy()
+            # Apply y offset
+            line_matrix[3, 0] += y_offset * base_matrix[1, 0]
+            line_matrix[3, 1] += y_offset * base_matrix[1, 1]
+            line_matrix[3, 2] += y_offset * base_matrix[1, 2]
+            # Apply x start offset
+            line_matrix[3, 0] += x_start * base_matrix[0, 0]
+            line_matrix[3, 1] += x_start * base_matrix[0, 1]
+            line_matrix[3, 2] += x_start * base_matrix[0, 2]
+
+            # Temporarily set mode.matrix for renderShader
+            old_matrix = mode.matrix
+            mode.matrix = line_matrix
+            try:
+                self.renderShader(line_text, mode)
+            finally:
+                mode.matrix = old_matrix
+
+            y_offset -= line_height * spacing
+
+        return lines
+
     def renderGlyph( self, glyph, mode = None ):
         """Render a single glyph
 
@@ -320,7 +549,7 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
             renderSides = 0
         if self.fontStyle and hasattr( self.fontStyle, 'thickness'):
             thickness = self.fontStyle.thickness
-            
+
         if renderFront:
             if (not thickness) and renderBack:
                 glDisable( GL_CULL_FACE )
@@ -339,9 +568,178 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
             # Hmm :( there is something about
             # gleExtrusion that makes this call
             # create a memory fault if it's before
-            # the second cap rendering... :( 
+            # the second cap rendering... :(
             glyph.renderExtrusion( scale, distance = thickness )
         glyph.renderAdvance( scale )
+
+    def _getShaderParams(self):
+        """Get rendering parameters from fontStyle."""
+        scale = self.getScale()
+        renderFront, renderBack, renderSides, thickness = True, True, True, 0.0
+        if self.fontStyle:
+            if hasattr(self.fontStyle, 'renderFront') and not self.fontStyle.renderFront:
+                renderFront = False
+            if hasattr(self.fontStyle, 'renderBack') and not self.fontStyle.renderBack:
+                renderBack = False
+            if hasattr(self.fontStyle, 'renderSides') and not self.fontStyle.renderSides:
+                renderSides = False
+            if hasattr(self.fontStyle, 'thickness'):
+                thickness = self.fontStyle.thickness
+        return scale, renderFront, renderBack, renderSides, thickness
+
+    def _ensureShaderVBO(self, text):
+        """Ensure VBO contains geometry for all characters in text.
+
+        Rebuilds the VBO if new characters are needed.
+        """
+        unique_chars = set(text.replace('\n', '').replace('\t', ''))
+        new_chars = unique_chars - self._shader_vbo_chars
+
+        if not new_chars and self._shader_vbo is not None:
+            return  # VBO already has all needed characters
+
+        # Rebuild VBO with all characters (existing + new)
+        all_chars = self._shader_vbo_chars | unique_chars
+
+        scale, renderFront, renderBack, renderSides, thickness = self._getShaderParams()
+
+        all_vertices = []
+        glyph_index = {}
+
+        for char in sorted(all_chars):
+            glyph = self.font.getGlyph(char)
+            if glyph and glyph.outlines and glyph.contours:
+                geom = glyph.buildShaderGeometry(
+                    scale=scale,
+                    thickness=thickness,
+                    renderFront=renderFront,
+                    renderBack=renderBack,
+                    renderSides=renderSides
+                )
+
+                if geom['vertices'] is not None and geom['vertex_count'] > 0:
+                    start_index = len(all_vertices)
+                    # Extract raw array from VBO for combining
+                    all_vertices.extend(geom['vertices'].data.tolist())
+                    glyph_index[char] = {
+                        'start': start_index,
+                        'count': geom['vertex_count'],
+                        'advance': geom['advance']
+                    }
+                else:
+                    # Empty glyph (space, etc.)
+                    glyph_index[char] = {
+                        'start': 0,
+                        'count': 0,
+                        'advance': glyph.width / scale if glyph else 0.0
+                    }
+            elif glyph:
+                # Glyph exists but has no geometry (e.g., space)
+                glyph_index[char] = {
+                    'start': 0,
+                    'count': 0,
+                    'advance': glyph.width / scale
+                }
+
+        if all_vertices:
+            vertex_array = np.array(all_vertices, dtype='f')
+            self._shader_vbo = vbo.VBO(vertex_array)
+        else:
+            self._shader_vbo = None
+
+        self._shader_glyph_index = glyph_index
+        self._shader_vbo_chars = all_chars
+
+    def renderShader(self, text, mode):
+        """Render text using shader pipeline.
+
+        Args:
+            text: String to render
+            mode: Render mode with shader_program
+        """
+        if not text:
+            return
+
+        # Ensure glyphs are loaded
+        self.font.ensureGlyphs(text.replace('\n', '').replace('\t', ''))
+
+        # Build/update VBO
+        self._ensureShaderVBO(text)
+
+        if self._shader_vbo is None:
+            return
+
+        shader_program = getattr(mode, 'shader_program', None)
+        if shader_program is None or shader_program.program is None:
+            return
+
+        # Create VAO
+        vao_id = glGenVertexArrays(1)
+        glBindVertexArray(vao_id)
+
+        try:
+            self._shader_vbo.bind()
+            try:
+                # Set up vertex attributes
+                # Format: normal(3) + position(3) = 6 floats = 24 bytes
+                stride = 24
+                normal_offset = 0
+                position_offset = 12
+
+                from ctypes import c_void_p
+
+                # Position attribute (location 2)
+                glEnableVertexAttribArray(2)
+                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(position_offset))
+
+                # Normal attribute (location 1)
+                glEnableVertexAttribArray(1)
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(normal_offset))
+
+                # Render each character with its transform
+                x_offset = 0.0
+                base_matrix = mode.matrix.copy()
+
+                for char in text:
+                    if char == '\n' or char == '\t':
+                        continue
+
+                    glyph_info = self._shader_glyph_index.get(char)
+                    if glyph_info is None:
+                        continue
+
+                    if glyph_info['count'] > 0:
+                        # Apply x offset transform
+                        char_matrix = base_matrix.copy()
+                        # Translate in x for character position
+                        char_matrix[3, 0] += x_offset * base_matrix[0, 0]
+                        char_matrix[3, 1] += x_offset * base_matrix[0, 1]
+                        char_matrix[3, 2] += x_offset * base_matrix[0, 2]
+
+                        shader_program.set_matrices(
+                            char_matrix,
+                            mode.getProjection(),
+                            shader_program.program
+                        )
+
+                        glDrawArrays(GL_TRIANGLES, glyph_info['start'], glyph_info['count'])
+
+                    x_offset += glyph_info['advance']
+
+                # Restore original matrix
+                shader_program.set_matrices(
+                    base_matrix,
+                    mode.getProjection(),
+                    shader_program.program
+                )
+
+                glDisableVertexAttribArray(2)
+                glDisableVertexAttribArray(1)
+            finally:
+                self._shader_vbo.unbind()
+        finally:
+            glBindVertexArray(0)
+            glDeleteVertexArrays(1, [vao_id])
         
 class ToolsOutlineFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
     """A FontTools-provided Outline (line-set) Font

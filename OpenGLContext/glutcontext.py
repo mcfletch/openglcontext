@@ -1,6 +1,5 @@
 '''Context functionality using the GLUT windowing API
 '''
-from __future__ import print_function
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGLContext.context import Context

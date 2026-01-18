@@ -14,6 +14,11 @@ arrows move, pageup/pagedown control speed of rotation
 from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+'''Because this tutorial uses legacy/immediate-mode OpenGL functions
+(glBegin, glEnd, glVertex, glNormal, glTexCoord, glTranslate, glRotate,
+glLight), we need to explicitly request a compatibility profile OpenGL context.
+'''
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 import time
 try:
@@ -27,8 +32,12 @@ from OpenGL.constants import GLfloat_3,GLfloat_4
 
 class TestContext( BaseContext ):
     """Texture Filters, Lighting, Keyboard Control"""
+    '''We set the contextDefinition to request a compatibility profile,
+    which provides the legacy fixed-function pipeline functions like
+    glBegin/glEnd and glLight that this tutorial uses.
     '''
-    Uses the addEventHandler method for registering new event handlers
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    '''Uses the addEventHandler method for registering new event handlers
     for given keyboard and mouse events.
     '''
     usage ="""Demonstrates filter functions:

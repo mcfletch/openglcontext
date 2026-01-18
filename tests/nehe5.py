@@ -8,15 +8,22 @@ Renders slightly more complex geometry.
 This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=05 NeHe5 tutorial] by Jeff Molofee and assumes that you are reading along 
 with the tutorial, so that only changes from the tutorial are noted 
 here.
+
+
+NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
+a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 
 from OpenGL.GL import *
 import time
 
 class TestContext( BaseContext ):
     """NeHe 5 tutorial"""
+    # Force compatibility profile for legacy GL functions
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     '''There are no new customization points used here.'''
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     def Render( self, mode):

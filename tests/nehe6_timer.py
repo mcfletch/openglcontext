@@ -16,6 +16,11 @@ rotation.
 from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+'''Because this tutorial uses legacy/immediate-mode OpenGL functions
+(glBegin, glEnd, glVertex, glTranslate, glRotate, glTexCoord), we need to
+explicitly request a compatibility profile OpenGL context.
+'''
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGLContext.events.timer import Timer
 from OpenGLContext import texture
@@ -23,6 +28,11 @@ from OpenGLContext import texture
 class TestContext( BaseContext ):
     """Timer-based control of animation (OpenGLContext timers)
     """
+    '''We set the contextDefinition to request a compatibility profile,
+    which provides the legacy fixed-function pipeline functions like
+    glBegin/glEnd that this tutorial uses.
+    '''
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     initialPosition = (0,0,0)
     drawPollTimeout = 0.01
     def OnInit( self ):

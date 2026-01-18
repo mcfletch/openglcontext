@@ -50,6 +50,7 @@
 from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
@@ -67,8 +68,10 @@ class Timer:
 class TestContext( BaseContext ):
     """Red Book alpha.c
     Demonstrates the effects of alpha blending
-    Copyright (c) 1993-1999, Silicon Graphics, Inc. ALL RIGHTS RESERVED 
+    Copyright (c) 1993-1999, Silicon Graphics, Inc. ALL RIGHTS RESERVED
     """
+    # Requires compatibility profile for display lists, glMaterial, glLight
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     initialPosition = (0,0,10)
     def OnInit( self ):
         """Setup running params"""

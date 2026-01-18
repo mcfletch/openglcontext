@@ -58,6 +58,9 @@ class FontProvider(object):
         cls.PROVIDER_SEARCH_ORDER is used to determine the
         order of fallback formats for the explicitly specified
         format (if there is such a format).
+
+        When mode.shader_mode is True, shader-compatible providers
+        are preferred over legacy providers.
         """
         order = cls.PROVIDER_SEARCH_ORDER[:]
         if hasattr(fontStyle, "format") and fontStyle.format:
@@ -65,10 +68,24 @@ class FontProvider(object):
             while format in order:
                 order.remove(format)
             order.insert(0, format)
+
+        # Check if we're in shader mode (core profile)
+        shader_mode = getattr(mode, 'shader_mode', False) if mode else False
+
         for format in order:
             providers = cls.getProviders(format)
             if providers:
+                # In shader mode, prefer shader-compatible providers
+                if shader_mode:
+                    # Sort providers: shader-compatible first
+                    providers = sorted(
+                        providers,
+                        key=lambda p: 0 if getattr(p, 'shader_compatible', False) else 1
+                    )
                 for provider in providers:
+                    # In shader mode, skip non-shader-compatible providers
+                    if shader_mode and not getattr(provider, 'shader_compatible', False):
+                        continue
                     try:
                         return provider, provider.get(fontStyle, mode)
                     except Exception as err:

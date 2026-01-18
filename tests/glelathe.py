@@ -1,11 +1,15 @@
 #! /usr/bin/env python
 '''Test of gleLathe and related functions
+
+NOTE: This test uses the GLE library which uses legacy OpenGL and requires
+a compatibility profile context.
 '''
 from __future__ import print_function
-#import OpenGL 
+#import OpenGL
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from math import pi
@@ -26,6 +30,8 @@ normals = array([
     
 
 class TestContext( BaseContext ):
+    # Requires compatibility profile for GLE library
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     def OnInit( self ):
         """Load the image on initial load of the application"""
         print("""You should see a round "washer" formed by sweeping a square

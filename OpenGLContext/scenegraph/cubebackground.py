@@ -7,7 +7,8 @@ from vrml import field, protofunctions, fieldtypes, node
 from vrml.vrml97 import basenodes, nodetypes
 
 from OpenGL.GL import *
-from OpenGL.GL import shaders 
+from OpenGL.GL import shaders
+from OpenGL.GL import glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays
 from OpenGLContext import texture
 from OpenGLContext.arrays import *
 from math import pi
@@ -61,30 +62,36 @@ class _CubeBackground( object ):
                 render_data = self.compile(mode)
                 if not render_data:
                     return
-            texture, vert_vbo, index_vbo, shader, vertex_loc, mvp_matrix_loc = render_data
+            texture, vert_vbo, index_vbo, shader, vertex_loc, mvp_matrix_loc, vao = render_data
             if clear:
                 glClear(
                     GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT
                 )
-            glDisable( GL_LIGHTING )
-            glDisable( GL_COLOR_MATERIAL )
+            # Only disable legacy lighting in compat mode
+            shader_mode = getattr(mode, 'shader_mode', False)
+            if not shader_mode:
+                glDisable( GL_LIGHTING )
+                glDisable( GL_COLOR_MATERIAL )
             try:
                 with texture:
                     # we don't currently have it handy...
                     with shader:
+                        glBindVertexArray(vao)
                         glEnableVertexAttribArray(vertex_loc)
                         with vert_vbo:
                             glVertexAttribPointer(vertex_loc, 3, GL_FLOAT, GL_FALSE, 0, vert_vbo)
                             matrix = dot(mode.matrix,mode.projection).astype('f')
                             glUniformMatrix4fv(mvp_matrix_loc,1,GL_FALSE,matrix)
                             with index_vbo:
-                                # 6 faces, 4 indices each 
+                                # 6 faces, 4 indices each
                                 glDrawElements(GL_QUADS, 24, GL_UNSIGNED_SHORT, index_vbo)
                         glDisableVertexAttribArray(vertex_loc)
+                        glBindVertexArray(0)
             finally:
-                glDepthMask( GL_TRUE ) 
-                glEnable( GL_LIGHTING )
-                glEnable( GL_COLOR_MATERIAL )
+                glDepthMask( GL_TRUE )
+                if not shader_mode:
+                    glEnable( GL_LIGHTING )
+                    glEnable( GL_COLOR_MATERIAL )
     
     CUBE_VERTICES =  array([
         -100.0,  100.0,  100.0,
@@ -160,7 +167,9 @@ class _CubeBackground( object ):
         )
         vertex_loc = glGetAttribLocation( shader, 'vertex' )
         mvp_matrix_loc = glGetUniformLocation( shader, 'mvp_matrix' )
-        render_data = (tex, vert_vbo, index_vbo, shader, vertex_loc, mvp_matrix_loc)
+        # Create VAO for core profile compatibility
+        vao = glGenVertexArrays(1)
+        render_data = (tex, vert_vbo, index_vbo, shader, vertex_loc, mvp_matrix_loc, vao)
         if hasattr(mode,'cache'):
             holder = mode.cache.holder( self, render_data )
             for key in ('right','left','top','bottom','front','back'):

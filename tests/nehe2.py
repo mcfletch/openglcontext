@@ -4,27 +4,41 @@
 [nehe2.py-screen-0001.png Screenshot]
 
 Introduces:
-    
+
     * glBegin/glEnd
     * glVertex
     * glTranslate
 
-This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=02 NeHe2 tutorial] by Jeff Molofee and assumes that you are reading along 
-with the tutorial, so that only changes from the tutorial are noted 
+This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?lesson=02 NeHe2 tutorial] by Jeff Molofee and assumes that you are reading along
+with the tutorial, so that only changes from the tutorial are noted
 here.
 
 The previous tutorial discussed this setup procedure at length.
+
+NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
+a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+'''Because this tutorial uses legacy/immediate-mode OpenGL functions
+(glBegin, glEnd, glVertex, glTranslate), we need to explicitly request
+a compatibility profile OpenGL context. Modern OpenGL (3.2+ core profile)
+removes these functions in favor of shader-based rendering.
+'''
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
     """Rendering Context with custom viewpoint and render
-    
+
     Note: will have slightly different results as OpenGLContext
     automatically enables lighting.
     """
+    '''We set the contextDefinition to request a compatibility profile,
+    which provides the legacy fixed-function pipeline functions like
+    glBegin/glEnd that this tutorial uses.
+    '''
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     '''The first customization is the initialPosition attribute.  By
     default, the OpenGLContext contexts position your
     eye/camera at (0,0,10), which makes it easy to see most

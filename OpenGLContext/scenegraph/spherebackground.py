@@ -1,5 +1,4 @@
 """Gradient-sphere background node"""
-from __future__ import print_function
 import os
 from math import *
 from OpenGLContext.arrays import *

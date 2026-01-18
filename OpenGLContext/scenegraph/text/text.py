@@ -4,6 +4,13 @@ from OpenGLContext.scenegraph.text import fontprovider
 from vrml import cache
 from vrml import protofunctions
 
+# Import shaderfont to ensure it auto-registers as a provider
+# This is needed for core profile contexts where glutfont won't work
+try:
+    from OpenGLContext.scenegraph.text import shaderfont
+except ImportError:
+    pass  # Font atlas not available
+
 class Text( basenodes.Text ):
     """VRML97-like Text node for displaying text
 

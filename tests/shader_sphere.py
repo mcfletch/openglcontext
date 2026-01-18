@@ -1,11 +1,15 @@
 #! /usr/bin/env python
 '''Shader sample-code for OpenGLContext
+
+NOTE: This test uses legacy OpenGL (glEnableClientState, glVertexPointer, etc.)
+and requires a compatibility profile context.
 '''
-import OpenGL 
+import OpenGL
 #OpenGL.FULL_LOGGING = True
 OpenGL.ERROR_ON_COPY = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -66,19 +70,21 @@ def _partialSphere( latsteps, longsteps ):
 
 class TestContext( BaseContext ):
     """OpenGL 3.1 deprecates non-vertex-attribute drawing
-    
+
     This sample code shows how to draw geometry using VBOs
     and generic attribute objects, rather than using GL state
     to pass values.
-    
-    Each attribute within a compiled and linked program has 
-    a "location" bound to it (similar to a uniform), the 
+
+    Each attribute within a compiled and linked program has
+    a "location" bound to it (similar to a uniform), the
     location can be queried with a call go glGetAttribLocation
     and the location can be passed to the glVertexAttribPointer
-    function to bind a particular data source (normally a 
+    function to bind a particular data source (normally a
     VBO, and only a VBO under OpenGL 3.1) to that attribute.
     """
-    
+    # Requires compatibility profile for glEnableClientState, glVertexPointer, etc.
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+
     def OnInit( self ):
         coords,indices = sphere( pi/128, pi/2, pi*2 )
         coords = ascontiguousarray( coords )

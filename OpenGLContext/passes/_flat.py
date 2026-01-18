@@ -507,6 +507,8 @@ class FlatPass( SGObserver ):
                 b = (obj_id >> 16) & 0xFF
                 a = 255
 
+                # Ensure unlit shader is active (geometry may have switched shaders)
+                shader.use(lit=False)
                 shader.set_solid_color((r / 255.0, g / 255.0, b / 255.0, a / 255.0))
                 shader.set_matrices(mvmatrix, self.projection, program=shader.unlit_program)
 

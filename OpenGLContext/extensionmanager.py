@@ -1,6 +1,4 @@
 """Object managing OpenGL extension loading for a Context"""
-
-from __future__ import print_function
 from OpenGL.GL import glGetString, GL_EXTENSIONS
 from OpenGL.GLU import gluGetString, GLU_EXTENSIONS
 import traceback

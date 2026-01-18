@@ -1,11 +1,15 @@
 #! /usr/bin/env python
-'''CubeBackground object test (image cube background)'''
+'''CubeBackground object test (image cube background)
+
+NOTE: CubeBackground currently uses GL_QUADS which requires compatibility profile.
+'''
 from __future__ import print_function
-import OpenGL 
+import OpenGL
 OpenGL.ERROR_ON_COPY = True
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGLContext.loaders.loader import Loader
 
 scene = """#VRML V2.0 utf8
@@ -61,6 +65,8 @@ ROUTE Rot.value_changed TO TR.set_rotation
 class TestContext( BaseContext ):
     """Tests the CubeBackground object's rendering
     """
+    # Requires compatibility profile for GL_QUADS in CubeBackground
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     def OnInit( self ):
         """Scene set up and initial processing"""
         print('Loading scene from embedded VRML97 file')

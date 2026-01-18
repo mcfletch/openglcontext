@@ -1,7 +1,12 @@
 #! /usr/bin/env python
-"""Simple GLU Tess-object test w/out combine callback"""
+"""Simple GLU Tess-object test w/out combine callback
+
+NOTE: This test uses legacy OpenGL (glBegin/glEnd, glColor, glVertex) and requires
+a compatibility profile context.
+"""
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGLContext.scenegraph import polygontessellator, vertex
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -38,6 +43,8 @@ outline = array([
 ], 'd')
 
 class TestContext( BaseContext ):
+    # Requires compatibility profile for glBegin/glEnd, glColor, glVertex
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     scale = 400.0
     def OnInit( self ):
         self.tess = polygontessellator.PolygonTessellator()

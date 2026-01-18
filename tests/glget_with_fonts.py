@@ -1,12 +1,19 @@
 #! /usr/bin/env python
-"""Retrieve OpenGL state values and print to console"""
+"""Retrieve OpenGL state values and print to console
+
+NOTE: This test queries legacy OpenGL state variables and requires
+a compatibility profile context.
+"""
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGLContext.arrays import allclose
 
 from OpenGLContext.scenegraph import basenodes
 
 class TestContext( BaseContext ):
+    # Requires compatibility profile for legacy state queries (GL_EDGE_FLAG, etc.)
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     def OnInit( self ):
         self.text = basenodes.Text( )
         self.sg = basenodes.sceneGraph(

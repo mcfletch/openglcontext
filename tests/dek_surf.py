@@ -1,8 +1,13 @@
 #! /usr/bin/env python
-'''DEK's Texturesurf demo without the texture, tests glEvalMesh2'''
+'''DEK's Texturesurf demo without the texture, tests glEvalMesh2
+
+NOTE: This test uses legacy OpenGL (glMap2f, glEvalMesh2, display lists) and requires
+a compatibility profile context.
+'''
 from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
@@ -38,6 +43,8 @@ texpts = array([
 
 
 class TestContext( BaseContext ):
+    # Requires compatibility profile for glMap2f, glEvalMesh2, display lists
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     def Render( self, mode ):
         BaseContext.Render( self, mode )
         self.light.Light( GL_LIGHT0, mode )
@@ -70,9 +77,4 @@ class TestContext( BaseContext ):
     
 
 if __name__ == "__main__":
-    from OpenGLContext import contextdefinition
-    TestContext.ContextMainLoop(
-        definition = contextdefinition.ContextDefinition(
-            size = (800,500 ),
-        )
-    )
+    TestContext.ContextMainLoop()

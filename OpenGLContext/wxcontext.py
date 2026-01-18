@@ -1,11 +1,35 @@
-"""Context functionality under the wxPython GUI environment"""
+"""Context functionality under the wxPython GUI environment
+
+Note: wxPython GTK3 uses EGL for OpenGL context creation, not GLX.
+PyOpenGL must be configured to use EGL for proper context tracking,
+which is required for shader-based rendering (VAO/VBO operations).
+This module automatically sets PYOPENGL_PLATFORM=egl when GTK3 is detected.
+"""
+import os
+import sys
 import wx
+
+# wxPython GTK3 uses EGL for OpenGL contexts, but PyOpenGL defaults to GLX.
+# We need to set PYOPENGL_PLATFORM before importing OpenGL modules.
+# Check if we're on GTK3 and EGL hasn't been explicitly configured.
+if '__WXGTK__' in wx.PlatformInfo and 'gtk3' in wx.PlatformInfo:
+    if 'PYOPENGL_PLATFORM' not in os.environ:
+        os.environ['PYOPENGL_PLATFORM'] = 'egl'
+        # If OpenGL was already imported, warn the user
+        if 'OpenGL' in sys.modules:
+            import logging
+            logging.getLogger(__name__).warning(
+                "OpenGL was imported before wxcontext could set PYOPENGL_PLATFORM=egl. "
+                "This may cause issues with shader rendering. "
+                "Set PYOPENGL_PLATFORM=egl before importing OpenGL."
+            )
+
 from wx import glcanvas
 #from wx.glcanvas import *
 from OpenGL.GL import *
 from OpenGLContext import context, contextdefinition
 from OpenGLContext.events import wxevents
-import logging 
+import logging
 log = logging.getLogger( __name__ )
 try:
     from cStringIO import StringIO
@@ -13,7 +37,7 @@ except ImportError:
     from io import BytesIO as StringIO
 
 if wx.VERSION >= (4,):
-    USE_CONTEXT = True 
+    USE_CONTEXT = True
 else:
     USE_CONTEXT = False
 
@@ -63,19 +87,27 @@ class wxContext(
             for key,value in named.items():
                 setattr( definition, key, value )
         if USE_CONTEXT:
-            # wxPython Pheonix (4+) has a separate context object...
+            # wxPython Phoenix (4+) has a separate context object...
             glcanvas.GLCanvas.__init__(
                 self, parent, id=id, pos=pos,
                 size = tuple(int(x) for x in definition.size), style=style, name=name,
                 attribList = self.wxFlagsFromDefinition(definition),
             )
-            # flags = glcanvas.GLContextAttrs()
-            # flags.CompatibilityProfile().PlatformDefaults().Robust().EndList()
+            # Create context attributes for profile/version selection
+            ctx_attrs = self._wxContextAttrsFromDefinition(definition)
             self._wx_context = glcanvas.GLContext(
                 self,
                 None,
-                # flags,
+                ctx_attrs,
             )
+            if not self._wx_context.IsOK():
+                log.warning(
+                    "Failed to create OpenGL context with requested profile=%s, version=%s. "
+                    "Falling back to default context.",
+                    definition.profile, definition.version
+                )
+                # Fallback to default context without specific profile/version
+                self._wx_context = glcanvas.GLContext(self, None)
         else:
             glcanvas.GLCanvas.__init__(
                 self, parent, id=id, pos=pos,
@@ -114,6 +146,42 @@ class wxContext(
                 attributes.append( flag )
                 attributes.append( definition.accumulationBuffer )
         return attributes
+
+    @classmethod
+    def _wxContextAttrsFromDefinition(cls, definition):
+        """Create GLContextAttrs for profile/version selection (wxPython 4+).
+
+        Supports core profile via OPENGLCONTEXT_PROFILE=core environment variable.
+        When profile is "core", requests OpenGL 3.3+ core profile context.
+        """
+        attrs = glcanvas.GLContextAttrs()
+
+        # Set OpenGL version if specified
+        major = int(definition.version[0]) if definition.version[0] > 0 else 0
+        minor = int(definition.version[1]) if definition.version[0] > 0 else 0
+
+        if definition.profile == "core":
+            # Core profile - use OpenGL 3.3+ with core profile
+            if major == 0:
+                # Default to 3.3 for core profile
+                major, minor = 3, 3
+            attrs.CoreProfile().OGLVersion(major, minor)
+            log.info("Requesting OpenGL %d.%d core profile context", major, minor)
+        elif definition.profile == "compatibility":
+            # Compatibility profile
+            if major >= 3:
+                # Only set compatibility profile for GL 3.0+
+                attrs.CompatibilityProfile().OGLVersion(major, minor)
+                log.info("Requesting OpenGL %d.%d compatibility profile context", major, minor)
+            else:
+                # Let driver choose for older versions
+                attrs.PlatformDefaults()
+        else:
+            # Default - let driver choose
+            attrs.PlatformDefaults()
+
+        attrs.EndList()
+        return attrs
 
     def DoInit( self ):
         """Call the OnInit method at a time when the context is valid

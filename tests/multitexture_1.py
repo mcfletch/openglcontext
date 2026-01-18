@@ -1,8 +1,13 @@
 #! /usr/bin/env python
-"""Multi-texturing test/sample"""
+"""Multi-texturing test/sample
+
+NOTE: This test uses legacy OpenGL (glBegin/glEnd, glTexEnv) and requires
+a compatibility profile context.
+"""
 from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGLContext import texture
 import sys
@@ -10,6 +15,8 @@ import sys
 multitexture = None
 
 class TestContext( BaseContext ):
+    # Requires compatibility profile for glBegin/glEnd, glTexEnv
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     def OnInit( self ):
         """Load the image on initial load of the application"""
         global multitexture

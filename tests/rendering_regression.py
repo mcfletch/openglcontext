@@ -134,6 +134,7 @@ class TestResult:
     passed: bool = False
     baseline_passed: bool = True  # True if no baseline or matches
     error_message: str = ""
+    compat_only: bool = False  # True if test uses fixed-function features unavailable in core
 
 
 @dataclass
@@ -212,6 +213,25 @@ TEST_SCENES = [
         'name': 'complex_scene',
         'description': 'Complex scene with multiple objects, lights, and materials',
         'module': 'test_complex_scene',
+    },
+    {
+        'name': 'nurbs_surface',
+        'description': 'NURBS surface with trimming contours (GLU tessellation)',
+        'module': 'test_nurbs_surface',
+        # Now works in core profile via GLU tessellator callbacks + VBO rendering
+        # Higher threshold because GLU tessellation and shader lighting differ from fixed-function
+        'threshold': 2.0,
+    },
+    {
+        'name': 'text_3d',
+        'description': '3D extruded text geometry (GLE - compat only)',
+        'module': 'test_text_3d',
+        'compat_only': True,  # Uses GLE extrusion which requires fixed-function pipeline
+    },
+    {
+        'name': 'text_2d',
+        'description': '2D bitmap text overlay',
+        'module': 'test_text_2d',
     },
 ]
 
@@ -585,6 +605,170 @@ class SceneSetup(BaseContext):
             ]
         )
 ''',
+
+    'nurbs_surface': '''
+from OpenGLContext.arrays import zeros, array
+
+class SceneSetup(BaseContext):
+    initialPosition = (0, 0, 4)
+
+    def buildControlPoints(self, centerHeight=3.0, edgeHeight=-3.0):
+        """Build 4x4 control point grid for NURBS surface."""
+        ctlpoints = zeros((4, 4, 3), "d")
+        for u in range(4):
+            for v in range(4):
+                ctlpoints[u][v][0] = 2.0 * (u - 1.5)
+                ctlpoints[u][v][1] = 2.0 * (v - 1.5)
+                if (u == 1 or u == 2) and (v == 1 or v == 2):
+                    ctlpoints[u][v][2] = centerHeight
+                else:
+                    ctlpoints[u][v][2] = edgeHeight
+        return ctlpoints
+
+    def OnInit(self):
+        knots = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+        color = zeros((4, 4, 3), "d")
+        color[0, :, :] = (1.0, 0, 0)
+        color[1, :, :] = (0.66, 0.33, 0)
+        color[2, :, :] = (0.33, 0.66, 0)
+        color[3, :, :] = (0, 1.0, 0)
+
+        trimmingContour = [
+            basenodes.Contour2D(
+                children=[
+                    basenodes.Polyline2D(
+                        point=array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]], "d")
+                    ),
+                ],
+            ),
+            basenodes.Contour2D(
+                children=[
+                    basenodes.Polyline2D(
+                        point=array([[0.75, 0.5], [0.5, 0.25], [0.25, 0.5]], "d")
+                    ),
+                    basenodes.NurbsCurve2D(
+                        knot=array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], "d"),
+                        controlPoint=array([[0.25, 0.5], [0.25, 0.75], [0.75, 0.75], [0.75, 0.5]], "d"),
+                    ),
+                ]
+            ),
+        ]
+
+        self.sg = basenodes.sceneGraph(
+            children=[
+                basenodes.Transform(
+                    scale=[0.5, 0.5, 0.5],
+                    rotation=[1, 0, 0, -0.5],
+                    children=[
+                        basenodes.Shape(
+                            appearance=basenodes.Appearance(material=basenodes.Material()),
+                            geometry=basenodes.TrimmedSurface(
+                                surface=basenodes.NurbsSurface(
+                                    controlPoint=self.buildControlPoints(),
+                                    color=color,
+                                    vDimension=4,
+                                    uDimension=4,
+                                    uKnot=knots,
+                                    vKnot=knots,
+                                    sampling=basenodes.NurbsToleranceSample(tolerance=3.0),
+                                ),
+                                trimmingContour=trimmingContour,
+                            ),
+                        )
+                    ],
+                ),
+                basenodes.DirectionalLight(direction=(0.5, -1, -0.5), intensity=1.0),
+            ]
+        )
+''',
+
+    'text_3d': '''
+from OpenGL.GL import glPushMatrix, glPopMatrix, glTranslatef, glScalef, glColor3f, glLineWidth
+from OpenGL.GLUT import glutStrokeCharacter, GLUT_STROKE_ROMAN
+
+class SceneSetup(BaseContext):
+    initialPosition = (0, 0, 10)
+
+    def OnInit(self):
+        # Create a simple scene with geometry - text will be rendered in Render method
+        self.sg = basenodes.sceneGraph(
+            children=[
+                # Background sphere to show depth
+                basenodes.Transform(
+                    translation=(0, 0, -3),
+                    children=[basenodes.Shape(
+                        geometry=basenodes.Sphere(radius=1.5),
+                        appearance=basenodes.Appearance(
+                            material=basenodes.Material(diffuseColor=(0.3, 0.3, 0.5))
+                        )
+                    )]
+                ),
+                basenodes.DirectionalLight(direction=(0.5, -1, -0.5), intensity=1.0),
+            ]
+        )
+
+    def Render(self, mode=None):
+        """Render scene with 3D stroke text."""
+        result = super().Render(mode)
+
+        # Render 3D stroke text using GLUT
+        glPushMatrix()
+        try:
+            glTranslatef(-3.0, 1.0, 0.0)
+            glScalef(0.01, 0.01, 0.01)  # GLUT stroke fonts are large (about 100 units high)
+            glColor3f(1.0, 0.8, 0.2)
+            glLineWidth(2.0)
+            for char in "3D TEXT":
+                glutStrokeCharacter(GLUT_STROKE_ROMAN, ord(char))
+        finally:
+            glPopMatrix()
+
+        return result
+''',
+
+    'text_2d': '''
+from OpenGL.GL import glColor4f, glRasterPos3f, glPushAttrib, glPopAttrib, glDisable
+from OpenGL.GL import GL_LIGHTING, GL_DEPTH_TEST, GL_ALL_ATTRIB_BITS
+from OpenGLContext.scenegraph.text import glutfont
+
+class SceneSetup(BaseContext):
+    def OnInit(self):
+        # Create font for 2D text rendering
+        self.font = glutfont.GLUTFontProvider.get(basenodes.FontStyle(family=["SANS"]))
+
+        # Create a simple scene with geometry behind the text
+        self.sg = basenodes.sceneGraph(
+            children=[
+                basenodes.Shape(
+                    geometry=basenodes.Sphere(radius=1.0),
+                    appearance=basenodes.Appearance(
+                        material=basenodes.Material(diffuseColor=(0.3, 0.5, 0.7))
+                    )
+                ),
+                basenodes.DirectionalLight(direction=(0.5, -1, -0.5), intensity=1.0),
+            ]
+        )
+
+    def Render(self, mode=None):
+        """Render scene with 2D text overlay."""
+        # First render the 3D scene
+        result = super().Render(mode)
+
+        # Then render 2D text overlay
+        glPushAttrib(GL_ALL_ATTRIB_BITS)
+        try:
+            glDisable(GL_DEPTH_TEST)
+            glDisable(GL_LIGHTING)
+            glColor4f(1.0, 1.0, 0.0, 1.0)
+            glRasterPos3f(-2.5, 2.0, 0.0)
+            self.font.render("2D Text Overlay")
+            glRasterPos3f(-2.5, 1.5, 0.0)
+            self.font.render("Line 2: Testing")
+        finally:
+            glPopAttrib()
+
+        return result
+''',
 }
 
 
@@ -677,8 +861,11 @@ def run_test(test_config: dict, output_dir: Path, baseline_dir: Optional[Path],
     """Run a single rendering test."""
     name = test_config['name']
     description = test_config['description']
+    compat_only = test_config.get('compat_only', False)
+    # Use per-test threshold if specified, otherwise use global threshold
+    test_threshold = test_config.get('threshold', threshold)
 
-    result = TestResult(name=name, description=description)
+    result = TestResult(name=name, description=description, compat_only=compat_only)
 
     # Generate the test script
     if name not in SCENE_CODE:
@@ -760,8 +947,13 @@ def run_test(test_config: dict, output_dir: Path, baseline_dir: Optional[Path],
     else:
         core_content_ok = True  # Both mostly empty, that's OK
 
-    result.passed = (result.similarity_error <= threshold and
-                     content_ok and core_content_ok)
+    # For compat_only tests, we expect core to have no content (uses fixed-function features)
+    # These tests pass if compat renders correctly (has content)
+    if compat_only:
+        result.passed = diff_result.img1_content_pixels > 100  # Compat has meaningful content
+    else:
+        result.passed = (result.similarity_error <= test_threshold and
+                         content_ok and core_content_ok)
 
     # Check against baseline if available
     if baseline_dir:
@@ -781,9 +973,12 @@ def run_test(test_config: dict, output_dir: Path, baseline_dir: Optional[Path],
             result.baseline_passed = result.baseline_similarity_error <= 0.01
 
     status = "PASS" if result.passed else "FAIL"
-    detail = f"error: {result.similarity_error:.4f}%"
-    if not content_ok or not core_content_ok:
-        detail += f", content: {diff_result.img2_content_pixels}/{diff_result.img1_content_pixels}"
+    if compat_only:
+        detail = f"compat-only, content: {diff_result.img1_content_pixels} pixels"
+    else:
+        detail = f"error: {result.similarity_error:.4f}%"
+        if not content_ok or not core_content_ok:
+            detail += f", content: {diff_result.img2_content_pixels}/{diff_result.img1_content_pixels}"
     print(f"  Result: {status} ({detail})")
 
     return result
@@ -824,14 +1019,16 @@ def generate_report(suite: TestSuite, output_dir: Path) -> str:
     # Results table
     report.append("## Results Overview")
     report.append("")
-    report.append("| Test | Description | Error % | Status | Baseline |")
-    report.append("|------|-------------|---------|--------|----------|")
+    report.append("| Test | Description | Error % | Status | Mode | Baseline |")
+    report.append("|------|-------------|---------|--------|------|----------|")
     for r in suite.results:
         status = "PASS" if r.passed else "FAIL"
+        mode = "compat-only" if r.compat_only else "both"
         baseline = "OK" if r.baseline_passed else "REGR"
         if not r.baseline_image:
             baseline = "-"
-        report.append(f"| {r.name} | {r.description} | {r.similarity_error:.4f}% | {status} | {baseline} |")
+        error_pct = f"{r.similarity_error:.4f}%" if not r.compat_only else "N/A"
+        report.append(f"| {r.name} | {r.description} | {error_pct} | {status} | {mode} | {baseline} |")
     report.append("")
 
     # Detailed results
@@ -854,16 +1051,21 @@ def generate_report(suite: TestSuite, output_dir: Path) -> str:
         report.append("")
         report.append("| Metric | Value |")
         report.append("|--------|-------|")
-        pct_diff = 100 * r.pixels_different / r.total_pixels if r.total_pixels > 0 else 0
-        report.append(f"| Pixels Different | {r.pixels_different:,} / {r.total_pixels:,} ({pct_diff:.2f}%) |")
-        report.append(f"| Mean Difference | {r.mean_diff:.2f} |")
-        report.append(f"| Max Difference | {r.max_diff} |")
-        report.append(f"| **Similarity Error** | **{r.similarity_error:.4f}%** |")
-        report.append(f"| Compat Content | {r.compat_content_pixels:,} pixels |")
-        report.append(f"| Core Content | {r.core_content_pixels:,} pixels |")
-        content_pct = 100 * r.core_content_pixels / max(r.compat_content_pixels, 1)
-        report.append(f"| Content Ratio | {content_pct:.1f}% |")
-        report.append(f"| Status | {'PASS' if r.passed else 'FAIL'} |")
+        if r.compat_only:
+            report.append(f"| **Mode** | **Compat-only** (uses fixed-function features) |")
+            report.append(f"| Compat Content | {r.compat_content_pixels:,} pixels |")
+            report.append(f"| Status | {'PASS' if r.passed else 'FAIL'} |")
+        else:
+            pct_diff = 100 * r.pixels_different / r.total_pixels if r.total_pixels > 0 else 0
+            report.append(f"| Pixels Different | {r.pixels_different:,} / {r.total_pixels:,} ({pct_diff:.2f}%) |")
+            report.append(f"| Mean Difference | {r.mean_diff:.2f} |")
+            report.append(f"| Max Difference | {r.max_diff} |")
+            report.append(f"| **Similarity Error** | **{r.similarity_error:.4f}%** |")
+            report.append(f"| Compat Content | {r.compat_content_pixels:,} pixels |")
+            report.append(f"| Core Content | {r.core_content_pixels:,} pixels |")
+            content_pct = 100 * r.core_content_pixels / max(r.compat_content_pixels, 1)
+            report.append(f"| Content Ratio | {content_pct:.1f}% |")
+            report.append(f"| Status | {'PASS' if r.passed else 'FAIL'} |")
         report.append("")
 
         # Baseline comparison

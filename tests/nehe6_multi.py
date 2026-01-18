@@ -10,6 +10,11 @@ a "light map" modulating the base texture.
 from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
+'''Because this tutorial uses legacy/immediate-mode OpenGL functions
+(glBegin, glEnd, glVertex, glTranslate, glMultiTexCoord), we need to
+explicitly request a compatibility profile OpenGL context.
+'''
+from OpenGLContext import contextdefinition
 from OpenGLContext import texture
 from OpenGL.GL import *
 from OpenGL.GL.ARB.multitexture import *
@@ -31,6 +36,11 @@ glActiveTexture = alternate(
 class TestContext( BaseContext ):
     """Multi-texturing demo
     """
+    '''We set the contextDefinition to request a compatibility profile,
+    which provides the legacy fixed-function pipeline functions like
+    glBegin/glEnd that this tutorial uses.
+    '''
+    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     initialPosition = (0,0,0)
     rotation =  0
     
