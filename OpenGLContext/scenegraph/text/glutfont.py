@@ -55,15 +55,13 @@ class GLUTBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font )
         NOTE: Must be called from within the rendering
         thread and within the rendering pass!
         """
-        if __debug__:
-            log.info( """lists %s(%s)""", self, repr(value))
+        log.debug( """lists %s(%s)""", self, repr(value))
         lists = []
         for char in value:
             list, metrics = self.getChar( char, mode=mode )
             if list is not None:
                 lists.append( list )
-        if __debug__:
-            log.info( """lists %s(%s)->%s""", self, repr(value), lists)
+        log.debug( """lists %s(%s)->%s""", self, repr(value), lists)
         return lists
     def lineHeight(self, mode=None ):
         """Retrieve normal line-height for this font
@@ -141,13 +139,12 @@ class _GLUTFontProvider (fontprovider.FontProvider):
                 best_idx = argmin(diffs)
                 diff = diffs[best_idx]
                 family, size = current[best_idx]
-                if __debug__:
-                    if diff:
-                        log.info(
-                            """Using size %s for GLUT bitmap font, not equal to target %s""",
-                            size,
-                            target,
-                        )
+                if diff:
+                    log.debug(
+                        """Using size %s for GLUT bitmap font, not equal to target %s""",
+                        size,
+                        target,
+                    )
         return (family,size)
     def enumerate(self, mode = None):
         """Iterate through all available fonts (whether instantiated or not)

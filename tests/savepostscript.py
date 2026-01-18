@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 '''Demo of saving vector images from PyOpenGL using gl2ps
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.passes import gl2psrenderpass

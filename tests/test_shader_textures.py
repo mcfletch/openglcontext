@@ -11,7 +11,6 @@ Press 'f' to toggle between shader and legacy rendering modes.
 Press 'n' to cycle through test scenes.
 Press 'q' to quit.
 """
-from __future__ import print_function
 import os
 from OpenGLContext import testingcontext
 

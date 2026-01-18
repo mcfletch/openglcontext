@@ -13,7 +13,6 @@ This tutorial is a minor revision of our previous shadow tutorial,
 the only change is to add off-screen rendering of the depth-texture
 rather than rendering on the back-buffer of the screen.
 '''
-from __future__ import print_function
 import sys,traceback
 '''Import the previous tutorial as BaseContext'''
 from shadow_1 import TestContext as BaseContext

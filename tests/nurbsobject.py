@@ -11,7 +11,6 @@ This version includes an animation that morphs the NURBS surface
 through different shapes: original mound, flattened, expanded, and risen.
 """
 
-from __future__ import print_function
 from OpenGLContext import testingcontext
 
 BaseContext = testingcontext.getInteractive()

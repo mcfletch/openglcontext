@@ -6,7 +6,6 @@ Material
 Normal-per-face generation
 """
 
-from __future__ import print_function
 from OpenGLContext import testingcontext
 
 BaseContext = testingcontext.getInteractive()

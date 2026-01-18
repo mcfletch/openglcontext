@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 """Retrieve OpenGL polygon stipple state values and print to console"""
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 

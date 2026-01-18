@@ -56,6 +56,7 @@ XXX This node needs some serious optimization.  Possible approaches:
                 if the data array has changed, then is
                 the length of the data-array
 """
+
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
@@ -377,7 +378,7 @@ class IFSCompiler(object):
         polygonIndex = 0
         coordIndices = self.target.coordIndex
         points = getXNull(self.target.coord, "point")
-        for metaIndex in xrange(len(coordIndices)):
+        for metaIndex in range(len(coordIndices)):
             point = coordIndices[metaIndex]
             if point >= 0:
                 if point >= len(coordIndices):
@@ -390,14 +391,9 @@ class IFSCompiler(object):
                     )
                     continue
                 set = dict(
-                    [
-                        (s.vertexAttribute, s(metaIndex, polygonIndex)[0])
-                        for s in sources[1:]
-                    ]
+                    [(s.vertexAttribute, s(metaIndex, polygonIndex)[0]) for s in sources[1:]]
                 )
-                set["indexKey"] = tuple(
-                    [s.vertexIndex(metaIndex, polygonIndex) for s in sources]
-                )
+                set["indexKey"] = tuple([s.vertexIndex(metaIndex, polygonIndex) for s in sources])
                 current.append(
                     vertex.Vertex(
                         point=points[point],
@@ -416,9 +412,7 @@ class IFSCompiler(object):
                 polygonIndex += 1
                 current = []
         if current:
-            yield polygon.Polygon(
-                polygonIndex, self.target, current, ccw=self.target.ccw
-            )
+            yield polygon.Polygon(polygonIndex, self.target, current, ccw=self.target.ccw)
 
 
 class ArrayGeometryCompiler(IFSCompiler):
@@ -601,9 +595,7 @@ class IndexedPolygonsCompiler(IFSCompiler):
             solid=self.target.solid,
             ccw=self.target.ccw,
         )
-        for source, array, nodetype in zip_longest(
-            sources, arrays, self.indexedSourceNodes()
-        ):
+        for source, array, nodetype in zip_longest(sources, arrays, self.indexedSourceNodes()):
             if array:
                 node = nodetype()
                 setattr(node, source.attribute, array)
@@ -651,9 +643,7 @@ class DisplayListCompiler(IFSCompiler):
                 if not vertices:
                     return None
                 if self.target.normalPerVertex:
-                    normalArray = build_normalPerVertex(
-                        vertices, self.target.creaseAngle
-                    )
+                    normalArray = build_normalPerVertex(vertices, self.target.creaseAngle)
                     normalStep = 1
                 else:
                     normalArray = triangleutilities.normalPerFace(vertexArray)
@@ -664,7 +654,7 @@ class DisplayListCompiler(IFSCompiler):
                     normalValues = []
                 try:
                     normalIndex = -1
-                    for vIndex in xrange(len(vertices)):
+                    for vIndex in range(len(vertices)):
                         vertex = vertices[vIndex]
                         if vIndex % normalStep == 0:
                             normalIndex += 1

@@ -136,14 +136,17 @@ class IndexedLineSet(
         return 1
 
     def _render_shader(self, mode):
-        """Render using shader pipeline for lines."""
+        """Render using shader pipeline for lines with per-vertex color support."""
         from OpenGL.GL import (
-            glGetAttribLocation, glEnableVertexAttribArray, glDisableVertexAttribArray,
+            glEnableVertexAttribArray, glDisableVertexAttribArray,
             glVertexAttribPointer, glDrawArrays, GL_FLOAT, GL_FALSE, GL_LINE_STRIP,
             glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
+            glGenBuffers, glBindBuffer, glBufferData, glDeleteBuffers,
+            GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW,
+            glGetUniformLocation,
         )
-        from OpenGL.arrays import vbo
-        from OpenGLContext.arrays import array, concatenate
+        import numpy as np
+        import ctypes
 
         if not self.coord or not len(self.coord.point) or not len(self.coordIndex):
             return 1
@@ -152,47 +155,111 @@ class IndexedLineSet(
         if shader_program is None:
             return 1
 
-        # Use unlit shader for lines
-        shader_program.use(lit=False)
-        shader_program.set_solid_color((1.0, 1.0, 1.0, 1.0))
-        shader_program.set_matrices(mode.matrix, mode.projection, program=shader_program.unlit_program)
+        points = self.coord.point
+        indices = expandIndices(self.coordIndex)
 
-        # Get or create line segments VBO
-        line_data = mode.cache.getData(self, 'shader_line_vbo')
-        if line_data is None:
-            points = self.coord.point
-            indices = expandIndices(self.coordIndex)
-            # Convert indexed line strips to separate line segments
-            # Each polyline becomes GL_LINE_STRIP draws
-            line_data = []
-            for polyline in indices:
-                if len(polyline) >= 2:
-                    line_points = array([points[i] for i in polyline], 'f')
-                    line_vbo = vbo.VBO(line_points)
-                    line_data.append((line_vbo, len(polyline)))
-            mode.cache.holder(self, line_data, 'shader_line_vbo')
+        # Determine if we have per-vertex colors
+        has_colors = self.color and len(self.color.color) > 0
+
+        if has_colors:
+            # Use line shader with per-vertex colors
+            shader_program.use_line()
+            program = shader_program.line_program
+        else:
+            # Fall back to unlit shader with solid white color
+            shader_program.use(lit=False)
+            program = shader_program.unlit_program
+            shader_program.set_solid_color((1.0, 1.0, 1.0, 1.0))
+
+        shader_program.set_matrices(mode.matrix, mode.projection, program=program)
+
+        # Build color data if available
+        colors = None
+        if has_colors:
+            colors = np.asarray(self.color.color, dtype='f')
+            # Build color indices matching the coordinate indices
+            if self.colorPerVertex:
+                if len(self.colorIndex):
+                    color_indices = expandIndices(self.colorIndex)
+                else:
+                    color_indices = indices  # Same as coord indices
+            else:
+                # Color per polyline - expand to per-vertex
+                if len(self.colorIndex):
+                    color_indices = [[ci] * len(indices[i]) for i, ci in enumerate(self.colorIndex)]
+                else:
+                    color_indices = [[i] * len(poly) for i, poly in enumerate(indices)]
 
         # Create VAO for core profile compatibility
         vao = glGenVertexArrays(1)
         glBindVertexArray(vao)
 
+        buffer = None
         try:
-            # Draw each line strip
-            pos_loc = glGetAttribLocation(shader_program.unlit_program, 'aPosition')
-            for line_vbo, count in line_data:
-                line_vbo.bind()
-                if pos_loc >= 0:
-                    glEnableVertexAttribArray(pos_loc)
-                    glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, 0, line_vbo)
-                glDrawArrays(GL_LINE_STRIP, 0, count)
-                if pos_loc >= 0:
-                    glDisableVertexAttribArray(pos_loc)
-                line_vbo.unbind()
+            # Line shader uses fixed attribute locations:
+            # layout(location = 0) in vec3 aPosition;
+            # layout(location = 1) in vec3 aColor;
+            pos_loc = 0
+            color_loc = 1
+
+            # Draw each polyline
+            for poly_idx, polyline in enumerate(indices):
+                if len(polyline) < 2:
+                    continue
+
+                # Build vertex data for this polyline
+                poly_points = np.array([points[i] for i in polyline], dtype='f')
+
+                if has_colors:
+                    # Get colors for this polyline
+                    poly_color_indices = color_indices[poly_idx] if poly_idx < len(color_indices) else [0] * len(polyline)
+                    poly_colors = np.array([colors[min(ci, len(colors)-1)] for ci in poly_color_indices], dtype='f')
+
+                    # Ensure colors have 3 components
+                    if poly_colors.ndim == 1:
+                        poly_colors = poly_colors.reshape(-1, 3)
+                    elif poly_colors.shape[1] > 3:
+                        poly_colors = poly_colors[:, :3]
+
+                    # Interleave position and color: [x,y,z,r,g,b, ...]
+                    interleaved = np.empty((len(polyline), 6), dtype='f')
+                    interleaved[:, 0:3] = poly_points
+                    interleaved[:, 3:6] = poly_colors
+                    interleaved = np.ascontiguousarray(interleaved)
+                    stride = 6 * 4  # 6 floats * 4 bytes
+                else:
+                    interleaved = np.ascontiguousarray(poly_points)
+                    stride = 0
+
+                # Create buffer for this polyline
+                if buffer:
+                    glDeleteBuffers(1, [buffer])
+                buffer = glGenBuffers(1)
+                glBindBuffer(GL_ARRAY_BUFFER, buffer)
+                glBufferData(GL_ARRAY_BUFFER, interleaved.nbytes, interleaved, GL_DYNAMIC_DRAW)
+
+                # Set up position attribute
+                glEnableVertexAttribArray(pos_loc)
+                glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, stride, None)
+
+                # Set up color attribute if we have per-vertex colors
+                if has_colors:
+                    glEnableVertexAttribArray(color_loc)
+                    glVertexAttribPointer(color_loc, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
+
+                glDrawArrays(GL_LINE_STRIP, 0, len(polyline))
+
+                glDisableVertexAttribArray(pos_loc)
+                if has_colors:
+                    glDisableVertexAttribArray(color_loc)
+
         finally:
             glBindVertexArray(0)
             glDeleteVertexArrays(1, [vao])
+            if buffer:
+                glDeleteBuffers(1, [buffer])
 
-        # Restore the lit shader that was active before we switched to unlit
+        # Restore the lit shader
         shader_program.use(lit=True)
         return 1
 

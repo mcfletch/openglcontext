@@ -25,7 +25,6 @@ Based on:
 NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
 a compatibility profile context.
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext import contextdefinition

@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 '''Tests/demos pixel-buffer-object operations in OpenGL
 '''
-from __future__ import print_function
 #import OpenGL 
 #OpenGL.USE_ACCELERATE = False
 #OpenGL.FULL_LOGGING = True

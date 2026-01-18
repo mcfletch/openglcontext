@@ -22,7 +22,6 @@ Key differences from legacy GLSL:
     * Uses gl_InstanceID instead of gl_InstanceIDARB
 """
 
-from __future__ import print_function
 import builtins
 from OpenGLContext import testingcontext
 

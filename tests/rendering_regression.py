@@ -233,6 +233,21 @@ TEST_SCENES = [
         'description': '2D bitmap text overlay',
         'module': 'test_text_2d',
     },
+    {
+        'name': 'indexed_lineset',
+        'description': 'IndexedLineSet with per-vertex colors',
+        'module': 'test_indexed_lineset',
+    },
+    {
+        'name': 'indexed_lineset_large',
+        'description': 'IndexedLineSet with 10000 points (lorentz data)',
+        'module': 'test_indexed_lineset_large',
+    },
+    {
+        'name': 'pointset',
+        'description': 'PointSet with per-vertex colors',
+        'module': 'test_pointset',
+    },
 ]
 
 
@@ -768,6 +783,118 @@ class SceneSetup(BaseContext):
             glPopAttrib()
 
         return result
+''',
+
+    'indexed_lineset': '''
+import math
+from OpenGLContext.arrays import zeros, sin, cos, arange
+
+class SceneSetup(BaseContext):
+    initialPosition = (0, 0, 3)
+
+    def OnInit(self):
+        # Create a circular IndexedLineSet with per-vertex colors
+        a = arange(0.0, 2 * math.pi, 0.02)
+        xes = sin(a)
+        yes = cos(a)
+        coords = zeros((len(xes), 3), "d")
+        coords[:, 0] = xes
+        coords[:, 1] = yes
+
+        # Colors based on position (rainbow-ish)
+        colors = zeros((len(xes), 3), "d")
+        colors[:, 0] = (xes + 1) / 2  # Red varies with x
+        colors[:, 1] = (yes + 1) / 2  # Green varies with y
+        colors[:, 2] = 0.5  # Blue constant
+
+        self.sg = basenodes.sceneGraph(
+            children=[
+                basenodes.Shape(
+                    geometry=basenodes.IndexedLineSet(
+                        coord=basenodes.Coordinate(point=coords),
+                        coordIndex=list(range(len(coords))),
+                        color=basenodes.Color(color=colors),
+                        colorIndex=list(range(len(coords))),
+                    ),
+                ),
+            ]
+        )
+''',
+
+    'indexed_lineset_large': '''
+from OpenGLContext.arrays import arange
+
+class SceneSetup(BaseContext):
+    """Test with lorentz-like large data (10000 points)."""
+    initialPosition = (0, 0, 100)
+
+    def lorentz(self, iterations=10000, start=(0, -2, -1)):
+        """Calculate the lorentz equation."""
+        h = 0.01
+        a = 10.0
+        b = 28.0
+        c = 8.0 / 3.0
+        x0, y0, z0 = start
+        points = []
+        for n in range(iterations):
+            x1 = x0 + h * a * (y0 - x0)
+            y1 = y0 + h * (x0 * (b - z0) - y0)
+            z1 = z0 + h * (x0 * y0 - c * z0)
+            x0, y0, z0 = x1, y1, z1
+            points.append((x0, y0, z0))
+        return points
+
+    def OnInit(self):
+        count = 10000
+        points = self.lorentz(count)
+        line = arange(0.0, 1.0, 1.0 / float(count))
+        line2 = line[::-1]
+        colors = list(zip(line, line2, [0] * len(line)))
+
+        self.sg = basenodes.sceneGraph(
+            children=[
+                basenodes.Shape(
+                    geometry=basenodes.IndexedLineSet(
+                        coord=basenodes.Coordinate(point=points),
+                        coordIndex=list(range(len(points))),
+                        color=basenodes.Color(color=colors),
+                    ),
+                ),
+            ]
+        )
+''',
+
+    'pointset': '''
+import numpy as np
+
+class SceneSetup(BaseContext):
+    initialPosition = (0, 0, 5)
+
+    def OnInit(self):
+        # Create a grid of points with per-vertex colors
+        points = []
+        colors = []
+        for i in range(50):
+            x = (i % 10) * 0.2 - 1.0
+            y = (i // 10) * 0.2 - 0.5
+            z = np.sin(i * 0.3) * 0.3
+            points.append((x, y, z))
+            # Color gradient
+            r = i / 50.0
+            g = 1.0 - i / 50.0
+            b = 0.5
+            colors.append((r, g, b))
+
+        self.sg = basenodes.sceneGraph(
+            children=[
+                basenodes.Shape(
+                    geometry=basenodes.PointSet(
+                        coord=basenodes.Coordinate(point=points),
+                        color=basenodes.Color(color=colors),
+                    )
+                ),
+            ]
+        )
 ''',
 }
 

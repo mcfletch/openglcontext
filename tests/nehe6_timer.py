@@ -13,7 +13,6 @@ reference compared to real world time.  This allows
 for speeding, slowing and reversing the state of
 rotation.
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 '''Because this tutorial uses legacy/immediate-mode OpenGL functions

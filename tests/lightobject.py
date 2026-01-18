@@ -15,7 +15,6 @@ scenegraph.
 Note that the legacy OpenGL lighting model described here can be 
 replaced when using shader-based geometry.
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 '''We'll load the whole set of VRML97 base nodes and get the value 

@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 """Test of routing the modification of one node to another"""
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 import os

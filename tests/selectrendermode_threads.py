@@ -7,7 +7,6 @@ the rendermode.SelectRenderMode pass.
 
 Background thread perturbs the object positions.
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

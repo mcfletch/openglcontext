@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 '''Test OpenGL ARB Sync extension
 '''
-from __future__ import print_function
 import OpenGL 
 OpenGL.USE_ACCELERATE = False
 from OpenGLContext import testingcontext

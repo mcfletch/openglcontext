@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 """Test point parameter rendering code"""
 
-from __future__ import print_function
 from OpenGLContext import testingcontext
 
 BaseContext = testingcontext.getInteractive()

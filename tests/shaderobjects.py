@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 """Tests rendering using the ARB shader objects extension..."""
 
-from __future__ import print_function
 
 # import OpenGL
 # OpenGL.FULL_LOGGING = True

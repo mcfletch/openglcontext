@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 '''MouseInEvent/MouseOutEvent demonstration
 '''
-from __future__ import print_function
 #import OpenGL 
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext

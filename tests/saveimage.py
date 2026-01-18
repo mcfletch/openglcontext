@@ -4,7 +4,6 @@
 NOTE: This test uses legacy OpenGL (glTranslate, glRotate, drawCube, GL_DEPTH_SCALE)
 and requires a compatibility profile context.
 '''
-from __future__ import print_function
 import OpenGL
 OpenGL.UNSIGNED_BYTE_IMAGES_AS_STRING = False
 from OpenGLContext import testingcontext

@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 '''Primitive mouse event handler test/demo
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

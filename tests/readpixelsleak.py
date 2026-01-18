@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 '''Test leak on glReadPixelsub
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube

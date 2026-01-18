@@ -3,7 +3,6 @@
 
 Based on nehe6
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive( 'glut' )
 from OpenGLContext.scenegraph import imagetexture

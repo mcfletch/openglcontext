@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 '''Test of the glInterleavedArrays function (draws two quads)'''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

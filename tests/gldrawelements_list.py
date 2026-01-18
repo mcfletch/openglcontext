@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 '''Test of the glDrawElements function taken from a list'''
-from __future__ import print_function
 import sys
 if sys.argv[1:]:
     import OpenGL 

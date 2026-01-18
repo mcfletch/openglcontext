@@ -1,5 +1,4 @@
 '''Low-level tests of bitmap-based fonts'''
-from __future__ import print_function
 from OpenGL.GL import *
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()

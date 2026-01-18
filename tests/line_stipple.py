@@ -4,7 +4,6 @@
 NOTE: This test uses legacy OpenGL (glLineStipple) and requires
 a compatibility profile context.
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext import contextdefinition

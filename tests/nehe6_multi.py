@@ -7,7 +7,6 @@ This customization of the Timer customization of the
 rotating cube demo adds multiple-texture support with 
 a "light map" modulating the base texture.
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 '''Because this tutorial uses legacy/immediate-mode OpenGL functions

@@ -47,7 +47,6 @@
  *  the 'r' key to reset the scene.
  */
 """
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext import contextdefinition

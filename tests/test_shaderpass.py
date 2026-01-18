@@ -4,7 +4,6 @@
 These tests verify the shader pass infrastructure without requiring
 an OpenGL context. Tests that require OpenGL use the test context.
 """
-from __future__ import annotations
 
 import unittest
 import numpy as np

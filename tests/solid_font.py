@@ -4,7 +4,6 @@
 Tests solid 3D font rendering using the scenegraph with Transform nodes.
 This approach works in both core and compatibility OpenGL profiles.
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *

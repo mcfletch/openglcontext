@@ -18,7 +18,6 @@ calculations for every fragment.  We'll split out the calculations
 so that the vertex shader provides interpolated values to the 
 fragment shader.
 '''
-from __future__ import print_function
 #import OpenGL
 #OpenGL.FULL_LOGGING = True
 #OpenGL.USE_ACCELERATE = False

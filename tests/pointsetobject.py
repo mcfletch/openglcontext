@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 """PointSet object test (draw line of coloured dots)"""
 
-from __future__ import print_function
 from OpenGLContext import testingcontext
 import math
 

@@ -12,7 +12,6 @@ This module uses the glWindowPos2dARB and glWindowPos2dvARB
 functions, as well as testing for proper operation under
 malformed parameters to the glWindowPos2dvARB function.
 '''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

@@ -41,8 +41,7 @@ class Font(object):
         In our case, this means decoding utf-8 strings
         if they are passed.
         """
-        if __debug__:
-            log.info( """normalise %r for %s""", repr(value), self, )
+        log.debug( """normalise %r for %s""", value, self, )
         if isinstance( value, bytes ):
             value = value.decode( 'utf-8' )
         return value
@@ -58,8 +57,7 @@ class Font(object):
         # XXX should be caching all this!!!
         lines = value.split('\n')
         lines = [ Line(line.expandtabs(4), self, mode=mode) for line in lines ]
-        if __debug__:
-            log.info( """lines %r""", repr(lines),)
+        log.debug( """lines %r""", lines)
         return lines
     def getChar( self, char, mode=None ):
         """Get (and/or create) a single-character display-list (with metrics)"""

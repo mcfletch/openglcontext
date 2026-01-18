@@ -3,7 +3,6 @@
 
 NOTE: CubeBackground currently uses GL_QUADS which requires compatibility profile.
 '''
-from __future__ import print_function
 import OpenGL
 OpenGL.ERROR_ON_COPY = True
 #OpenGL.FULL_LOGGING = True

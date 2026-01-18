@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 '''Demonstration of profiling a vrml_view context.  Requires PyGame
 '''
-from __future__ import print_function
 from OpenGLContext.testingcontext import getVRML
 BaseContext = getVRML()
 from OpenGLContext import vrmlcontext

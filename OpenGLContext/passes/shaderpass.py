@@ -60,6 +60,7 @@ class VRML97ShaderProgram:
         self.unlit_program: Optional[int] = None
         self.vertex_color_program: Optional[int] = None  # For per-vertex color geometry
         self.point_program: Optional[int] = None  # For PointSet with per-vertex colors
+        self.line_program: Optional[int] = None  # For IndexedLineSet with per-vertex colors
         # Cache uniform locations per program: {program_id: {uniform_name: location}}
         self._location_cache: Dict[int, Dict[str, int]] = {}
         self._compiled: bool = False
@@ -126,6 +127,19 @@ class VRML97ShaderProgram:
             pt_fragment = GL_shaders.compileShader(pt_frag_source, GL_FRAGMENT_SHADER)
             self.point_program = GL_shaders.compileProgram(pt_vertex, pt_fragment)
 
+            # Load and compile line shader (for IndexedLineSet with per-vertex colors)
+            ln_vert_path = os.path.join(SHADER_DIR, 'vrml97_line.vert')
+            ln_frag_path = os.path.join(SHADER_DIR, 'vrml97_line.frag')
+
+            with open(ln_vert_path, 'r') as f:
+                ln_vert_source = f.read()
+            with open(ln_frag_path, 'r') as f:
+                ln_frag_source = f.read()
+
+            ln_vertex = GL_shaders.compileShader(ln_vert_source, GL_VERTEX_SHADER)
+            ln_fragment = GL_shaders.compileShader(ln_frag_source, GL_FRAGMENT_SHADER)
+            self.line_program = GL_shaders.compileProgram(ln_vertex, ln_fragment)
+
             self._compiled = True
             log.info("VRML97 shader programs compiled successfully")
             return True
@@ -181,6 +195,22 @@ class VRML97ShaderProgram:
             self.compile()
         if self.point_program:
             glUseProgram(self.point_program)
+            return True
+        return False
+
+    def use_line(self) -> bool:
+        """Activate the line shader program.
+
+        Use this for IndexedLineSet geometry with per-vertex colors.
+        This is a simple unlit shader that passes through vertex colors.
+
+        Returns:
+            True if shader was activated, False otherwise
+        """
+        if not self._compiled:
+            self.compile()
+        if self.line_program:
+            glUseProgram(self.line_program)
             return True
         return False
 

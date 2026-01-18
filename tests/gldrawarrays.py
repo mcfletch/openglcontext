@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 '''Test of the glDrawArrays function (draws flower)'''
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *

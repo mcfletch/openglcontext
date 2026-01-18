@@ -19,7 +19,6 @@ Press 'n' to cycle through test scenes.
 Press 's' to take screenshot comparison.
 Press 'q' to quit.
 """
-from __future__ import print_function
 import os
 import sys
 

@@ -17,7 +17,6 @@ gl_ModelViewProjectionMatrix, and gl_NormalMatrix which are not available
 in GLSL 1.40+. If your driver only supports modern GLSL, use
 shader_instanced_modern.py instead.
 '''
-from __future__ import print_function
 from shader_11 import TestContext as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import *

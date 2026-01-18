@@ -4,7 +4,6 @@
 NOTE: This test uses the GLE library which uses legacy OpenGL and requires
 a compatibility profile context.
 '''
-from __future__ import print_function
 #import OpenGL
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext

@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 """IndexedLineSet object test (draw circle in multiple or single colors)"""
 
-from __future__ import print_function
 from OpenGLContext import testingcontext
 
 BaseContext = testingcontext.getInteractive()

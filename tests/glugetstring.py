@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 """Retrieve OpenGL Light state values and print to console"""
-from __future__ import print_function
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 
