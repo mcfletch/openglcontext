@@ -164,6 +164,13 @@ class Context(object):
     drawPollTimeout = 0.01
     coreProfile = False
 
+    # Auto-exit support for automated testing
+    # Set OPENGLCONTEXT_AUTO_EXIT_FRAMES environment variable to exit after N frames
+    # Set OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR to capture screenshot before exit
+    _autoExitFrames = None
+    _autoExitFrameCount = 0
+    _autoExitCaptureDir = None
+
     ### Node-like attributes
     PROTO = "Context"
     DEF = "#Context"
@@ -203,7 +210,69 @@ class Context(object):
         self.setupCache()
         self.setupFontProviders()
         self.setupFrameRateCounter()
+        self.setupAutoExit()
         self.DoInit()
+
+    def setupAutoExit(self):
+        """Setup auto-exit for automated testing.
+
+        If OPENGLCONTEXT_AUTO_EXIT_FRAMES environment variable is set,
+        the context will automatically exit after rendering that many frames.
+        This enables automated testing of interactive scripts.
+
+        If OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR is also set, a screenshot
+        will be captured before exiting.
+        """
+        auto_exit = os.environ.get('OPENGLCONTEXT_AUTO_EXIT_FRAMES')
+        if auto_exit:
+            try:
+                self._autoExitFrames = int(auto_exit)
+                self._autoExitFrameCount = 0
+                log.info(f"Auto-exit enabled: will exit after {self._autoExitFrames} frames")
+            except ValueError:
+                log.warning(f"Invalid OPENGLCONTEXT_AUTO_EXIT_FRAMES value: {auto_exit}")
+
+        capture_dir = os.environ.get('OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR')
+        if capture_dir:
+            self._autoExitCaptureDir = capture_dir
+            log.info(f"Auto-exit capture enabled: screenshots will be saved to {capture_dir}")
+
+    def _autoExitCapture(self):
+        """Capture screenshot before auto-exit if capture directory is set."""
+        if not self._autoExitCaptureDir:
+            return
+
+        try:
+            from OpenGL.GL import glReadPixels, glGetIntegerv, GL_VIEWPORT, GL_RGB, GL_UNSIGNED_BYTE
+            import numpy as np
+            from PIL import Image
+
+            # Get viewport dimensions
+            viewport = glGetIntegerv(GL_VIEWPORT)
+            x, y, width, height = viewport
+
+            # Read pixels
+            pixels = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
+            image_array = np.frombuffer(pixels, dtype=np.uint8).reshape(height, width, 3)
+            image_array = np.flipud(image_array)  # OpenGL is bottom-up
+
+            # Save image
+            os.makedirs(self._autoExitCaptureDir, exist_ok=True)
+            # Use test name from environment, or fall back to class attribute or class name
+            test_name = os.environ.get(
+                'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME',
+                getattr(self, 'test_name', self.__class__.__name__)
+            )
+            filepath = os.path.join(self._autoExitCaptureDir, f"{test_name}.png")
+
+            img = Image.fromarray(image_array, mode='RGB')
+            img.save(filepath)
+            log.info(f"Auto-exit capture saved: {filepath}")
+
+        except ImportError as e:
+            log.warning(f"Auto-exit capture failed (missing dependency): {e}")
+        except Exception as e:
+            log.warning(f"Auto-exit capture failed: {e}")
 
     def setupLogging(self):
         import logging
@@ -405,6 +474,9 @@ class Context(object):
         Updates to the framecounter are performed by OnDraw
         iff there is a visible change processed.
 
+        If OPENGLCONTEXT_DISABLE_FPS_DISPLAY environment variable is set,
+        the FPS display will be hidden (useful for automated testing).
+
         Note:
             If you override this method, you need to either use
             an object which has the same API as a FrameCounter or
@@ -414,6 +486,9 @@ class Context(object):
         from OpenGLContext import framecounter
 
         self.frameCounter = framecounter.FrameCounter()
+        # Disable FPS display for automated testing if requested
+        if os.environ.get('OPENGLCONTEXT_DISABLE_FPS_DISPLAY'):
+            self.frameCounter.display = False
 
     def initializeEventManagers(self, managerClasses=()):
         """Customisation point for initialising event manager objects
@@ -533,6 +608,18 @@ class Context(object):
         # could use if self.frameCounter, but that introduces a
         # potential race condition, so eat the extra call...
         t = perf()
+
+        # Check for auto-exit on each OnDraw call, even if we return early
+        # This ensures we count total calls rather than just rendered frames
+        if self._autoExitFrames is not None:
+            self._autoExitFrameCount += 1
+            if self._autoExitFrameCount >= self._autoExitFrames:
+                log.info(f"Auto-exit: {self._autoExitFrameCount} OnDraw calls")
+                # Capture screenshot if output directory is specified
+                self._autoExitCapture()
+                self.OnQuit()
+                return 0
+
         self.lockScenegraph()
         try:
             changed = self.DoEventCascade()
@@ -715,6 +802,29 @@ class Context(object):
         """Get the currently active pick-events"""
         return self.pickEvents
 
+    def hasMouseMoveHandlers(self):
+        """Check if any mouse-move related handlers are registered.
+
+        Returns True if there are handlers for mousemove, mousein, or mouseout
+        events. Used to optimize selection by skipping mouse-move processing
+        when no handlers would receive the events.
+        """
+        from pydispatch import dispatcher
+
+        # Check for any registered handlers for mouse-move related event types
+        for event_type in ('mousemove', 'mousein', 'mouseout'):
+            manager = self.getEventManager(event_type)
+            if manager is not None:
+                # Check if any receivers are registered for this event type
+                # getAllReceivers returns a generator of ((signal, sender), receivers) tuples
+                for (signal, sender), receivers in dispatcher.getAllReceivers():
+                    if signal and isinstance(signal, tuple) and len(signal) >= 1:
+                        if signal[0] == event_type:
+                            live = list(dispatcher.liveReceivers(receivers))
+                            if live:
+                                return True
+        return False
+
     def getSceneGraph(self):
         """Get the scene graph for the context (or None)
 
@@ -791,34 +901,38 @@ class Context(object):
 
     def getTTFFiles(self):
         """Get TrueType font-file registry object"""
-        if self.ttfFileRegistry:
-            return self.ttfFileRegistry
-        from ttfquery import ttffiles
+        if not self.ttfFileRegistry:
+            from ttfquery import ttffiles
 
-        registryFile = os.path.join(
-            self.getUserAppDataDirectory(), "font_metadata.cache"
-        )
-        from OpenGLContext.scenegraph.text import ttfregistry
-
-        registry = ttfregistry.TTFRegistry()
-        if os.path.isfile(registryFile):
-            log.info("Loading font metadata from cache %r", registryFile)
-            registry.load(registryFile)
-            if not registry.fonts:
-                log.warning("Re-scanning fonts, no fonts found in cache")
-                registry.scan()
-                registry.save()
-                log.info("Font metadata stored in cache %r", registryFile)
-        else:
-            log.warning(
-                "Scanning font metadata into cache %r, please wait", registryFile
+            registryFile = os.path.join(
+                self.getUserAppDataDirectory(), "font_metadata.cache"
             )
-            registry.scan()
-            registry.save(registryFile)
-            log.info("Font metadata stored in cache %r", registryFile)
-        # make this a globally-available object
-        Context.ttfFileRegistry = registry
-        return registry
+            from OpenGLContext.scenegraph.text import ttfregistry
+
+            registry = ttfregistry.TTFRegistry()
+            if os.path.isfile(registryFile):
+                log.info("Loading font metadata from cache %r", registryFile)
+                registry.load(registryFile)
+                if not registry.fonts:
+                    log.warning("Re-scanning fonts, no fonts found in cache")
+                    registry.scan()
+                    registry.save()
+                    log.info("Font metadata stored in cache %r", registryFile)
+            else:
+                log.warning(
+                    "Scanning font metadata into cache %r, please wait", registryFile
+                )
+                registry.scan()
+                registry.save(registryFile)
+                log.info("Font metadata stored in cache %r", registryFile)
+            # make this a globally-available object
+            Context.ttfFileRegistry = registry
+        # Keep the font-provider class registry in sync so that font providers
+        # registered without a full setupFontProviders() call (e.g. plain
+        # InteractiveContext + a direct toolsfont import) can still resolve fonts.
+        from OpenGLContext.scenegraph.text import fontprovider
+        fontprovider.setTTFRegistry(self.ttfFileRegistry)
+        return self.ttfFileRegistry
 
     def getDefaultTTFFont(cls, type="sans"):
         """Get the current user's preference for a default font"""

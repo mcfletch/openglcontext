@@ -401,6 +401,24 @@ class VRML97ShaderProgram:
         if loc != -1:
             glUniform4fv(loc, 1, array(color, 'f'))
 
+    def set_object_id(self, object_id: int, program: Optional[int] = None) -> None:
+        """Set object ID for selection buffer (MRT).
+
+        Args:
+            object_id: Unique object ID (32-bit unsigned integer)
+            program: Shader program (defaults to currently active program)
+        """
+        from OpenGL.GL import glUniform1ui, GL_CURRENT_PROGRAM
+
+        if program is None:
+            program = glGetIntegerv(GL_CURRENT_PROGRAM)
+            if program == 0:
+                program = self.program
+
+        loc = self._get_location('objectId', program)
+        if loc != -1:
+            glUniform1ui(loc, object_id)
+
     def set_text_mode(
         self,
         enabled: bool,

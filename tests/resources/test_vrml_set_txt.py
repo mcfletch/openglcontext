@@ -1,13 +1,9 @@
-# -*- coding: ISO-8859-1 -*-
+# -*- coding: utf-8 -*-
 """Resource test_vrml_set_txt (from file test_vrml_set.txt)"""
 # written by resourcepackage: (1, 0, 1)
 source = 'test_vrml_set.txt'
 package = 'tests.resources'
 
 import zlib
-data = zlib.decompress("xÚµ“OK\0031\020Åïı\024›tÛb­7YE\012ŠÒB\017^–1™İ®$™0‰İÖO¯ı£XAØƒ{÷~3Ì¼é‹Õâá\
-~6\02517ÀFDÔ©&/Jb[pÁbì­S\012WJ5M#\033|\031\033I\\©íØ¨\030P×e­aï‰jÃÎªùò±˜ßæE6™\
-NGƒkkU\000N™:ÑnäH6lÿ™9î€9é€yÑ\001sÖ\0013\033\036 ½¾Xä9\030\021˜*\006'â¡.\002Tç±`­ÁHMNİ\
-µÈ;µÚ÷‰‰!\021ƒFş=ä\037\034côPäŸYléØ\000×ø-ÕOƒËQKijj_\004\013¾-û\031ªz0\031~¯nI\016¿\036Ì\
-‘A\033EÉä\004¥5²°t:‰”ò'<¡Å’¡ªğØ\"Ò[P\033ÇV½®5ø\035ùc0?\000\031¥Lq")
+data = zlib.decompress(b'x\xda\xb5\x93OK\\0031\\020\xc5\xef\xfd\\024\x81\x9e\x9bt\xdbb\xad7YE\\012\x8a\xd2B\\017^\x961\x99\xdd\xae$\x990\x89\xdd\xd6O\xaf\xfd\xa3XA\xd8\x83{\x9e\xf7~3\xcc\xbc\xe9\x8b\xd5\xe2\xe1\\\n~6\\0251\x817\xc0FD\xd4\xa9&/Jb\x81[p\xc1b\xec\xadS\\012WJ5M#\\033|\\031\\033I\\\\\xa9\xed\xd8\xa8\\030P\xd7e\xada\xef\x89j\xc3\xce\xaa\xf9\xf2\xb1\x98\xdf\xe6E6\x99\\\nNG\x83kkU\\000N\x99:\xd1n\xe4H6l\xff\x999\xee\x809\xe9\x80y\xd1\\001s\xd6\\0013\\033\\036\xa0\xbd\xbeX\xe49\\030\\021\x98*\\006\'\xe2\xa1.\\002T\xe7\xb1`\xad\xc1HMN\xdd\x81\\\n\xb5\xc8;\xb5\xda\xf7\x89\x89!\\021\x83F\xfe=\xe4\\037\x8e\\034c\xf4P\xe4\x9fYl\xe9\xd8\\000\xd7\xf8\x8e-\xd5O\x83\xcbQKijj_\\004\\013\xbe-\xfb\\031\xaaz0\\031~\xafnI\\016\xbf\\036\xcc\\\n\x91A\\033E\xc9\xe4\\004\xa55\xb2\xb0t:\x89\x94\xf2\'<\xa1\xc5\x92\xa1\xaa\xf0\xd8\\"\xd2[P\\033\xc7V\xbd\xae5\xf8\\035\xf9c0?\\000\\031\xa5Lq')
 ### end

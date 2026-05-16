@@ -209,6 +209,22 @@ export OPENGLCONTEXT_BACKEND=glfw
 
 ## Code Conventions
 
+### Writing Style
+
+Use simple, plain-spoken text. Omit needless adjectives and adverbs.
+
+**Comments:** Leave off "what I'm doing" comments in non-tutorial code. Comments should explain a hidden idea, an underlying motivation, or an intention that isn't clear from the code itself.
+
+```python
+# Bad: Set the color to red
+color = (1.0, 0.0, 0.0)
+
+# Good: Red indicates selection failure in legacy GL implementations
+color = (1.0, 0.0, 0.0)
+```
+
+### File Locations
+
 - Tests are in the `tests/` directory
 - Scenegraph nodes are in `OpenGLContext/scenegraph/`
 - Rendering passes are in `OpenGLContext/passes/`
@@ -258,6 +274,85 @@ Run tests from the project root:
 ```
 
 Many tests are interactive demos that display OpenGL content.
+
+### Automated Test Suite
+
+The automated test suite runs all test scripts in subprocesses with coverage collection:
+
+```bash
+# Run all tests with visual regression and HTML report
+pytest tests/test_all_scripts.py::TestVisualRegression -v
+
+# Run all tests (including non-visual functionality tests)
+pytest tests/test_all_scripts.py::TestAllScripts -v
+
+# View the HTML report after tests complete
+open tests/report.html
+```
+
+The test infrastructure provides:
+
+- **Auto-exit**: Scripts exit automatically after N frames via `OPENGLCONTEXT_AUTO_EXIT_FRAMES` env var
+- **Screenshot capture**: Auto-capture on exit via `OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR` and `OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME`
+- **FPS display toggle**: Disable FPS overlay via `OPENGLCONTEXT_DISABLE_FPS_DISPLAY` for clean screenshots
+- **Visual regression**: Compare result images against reference images in `tests/reference_images/`
+- **HTML reports**: Generated at `tests/report.html` with side-by-side image comparisons
+
+### Test Categories
+
+Scripts are categorized for appropriate testing:
+
+- **Visual scripts**: Produce graphical output, included in visual regression (`TestVisualRegression`)
+- **Non-visual scripts**: Functionality tests with stdout output (glget.py, boundingvolume.py, etc.) - run via `TestAllScripts`
+- **Platform-specific**: Windows-only (WGL), wxPython, pygame scripts with automatic skip logic
+- **Randomized**: Scripts with non-deterministic output marked with `expect_visual_diff`
+
+### Unit Test Requirements
+
+**All new functionality must have unit tests before a task is considered complete.**
+
+**Coverage goal:** 80-100% code coverage. Use coverage reports to identify uncovered lines and target new test cases accordingly:
+
+```bash
+../.env/bin/python -m pytest --cov=OpenGLContext --cov-report=term-missing tests/
+```
+
+**Test framework:** Use pytest. Run tests in subprocesses when they require OpenGL contexts or other isolated environments.
+
+**Test naming:** Name tests after the use case or condition being tested, not the implementation detail.
+
+Unit tests should:
+
+1. **Verify code execution** - Tests must actually exercise the new code paths. A common failure mode is tests that pass but don't call the code being tested (mocking too much, testing the wrong class, or import errors that silently skip tests).
+
+2. **Test with realistic inputs** - Use inputs that exercise the actual logic, not just edge cases that short-circuit.
+
+3. **Verify outputs** - Assert on actual behavior/output, not just that code didn't crash.
+
+4. **Run independently** - Tests should run without requiring a GUI or OpenGL context when possible. Use mock objects for context-dependent code.
+
+5. **Review for refactoring** - After tests pass, review for opportunities to create fixtures or helper functions to reduce duplicate code.
+
+Example:
+
+```python
+def test_mousemove_events_filtered_when_no_handlers():
+    """Mousemove events should be removed when no handlers are registered."""
+    fp = FlatPass.__new__(FlatPass)
+    fp._has_mousemove_handlers = None
+
+    events = {
+        ('mousemove', (100, 200)): MockEvent('mousemove', 100, 200),
+        ('mousebutton', (100, 200)): MockEvent('mousebutton', 100, 200),
+    }
+
+    result = fp._optimizePickEvents(MockContext(), events)
+
+    assert len(result) == 1
+    assert list(result.values())[0].type == 'mousebutton'
+```
+
+**Tutorial code:** Files with embedded triple-quoted strings describing the code at length are tutorials. Do not modify tutorial code as part of test suite changes.
 
 ### Testing Core Profile
 

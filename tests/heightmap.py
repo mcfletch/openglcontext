@@ -12,9 +12,13 @@ except ImportError as err:
 from vrml import arrays
 
 class TestContext( BaseContext ):
+    # Set initial viewpoint to look down at the terrain
+    initialPosition = (64, 50, 64)  # Above center of terrain
+    initialOrientation = (-1, 0, 0, 1.2)  # Looking down at ~70 degrees
+
     def OnInit( self ):
         """Initialisation"""
-        print("""Should see a simplistic terrain when you look down (<ctrl+down-arrow>)""")
+        print("""Should see a simplistic terrain (a height-mapped surface)""")
         points = Image.open( "heightmap.png" ).convert('L')
         print(points.format)
         ix,iy,data = points.size[0],points.size[1],points.tobytes()

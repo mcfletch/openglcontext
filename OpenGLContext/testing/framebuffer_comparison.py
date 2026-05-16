@@ -556,3 +556,322 @@ class RegressionTestRunner:
 
 # Legacy compatibility - keep old class names working
 RegressionTestMixin = AutomatedRegressionContext
+
+
+class VisualRegressionTest:
+    """Manages visual regression testing for a single test.
+
+    This class provides a higher-level interface for visual regression testing,
+    handling reference image management, comparison, and report data generation.
+
+    Example:
+        test = VisualRegressionTest('box_rendering', 'tests/reference_images')
+        test.record_reference('compatibility')
+        result = test.test_against_reference('core')
+        report = test.generate_report_data()
+    """
+
+    def __init__(
+        self,
+        test_name: str,
+        reference_dir: str,
+        max_diff_threshold: int = 255,
+        max_percent_different: float = 2.0,
+    ):
+        """Initialize the regression test.
+
+        Args:
+            test_name: Name for this test (used for image filenames)
+            reference_dir: Directory for storing/loading reference images
+            max_diff_threshold: Maximum allowed pixel difference (0-255)
+            max_percent_different: Maximum percent of pixels that can differ
+        """
+        self.test_name = test_name
+        self.reference_dir = reference_dir
+        self.max_diff_threshold = max_diff_threshold
+        self.max_percent_different = max_percent_different
+
+        self._reference_path = os.path.join(reference_dir, f'{test_name}.png')
+        self._result_path = os.path.join(reference_dir, f'{test_name}_result.png')
+        self._diff_path = os.path.join(reference_dir, f'{test_name}_diff.png')
+
+        self._reference_pixels = None
+        self._result_pixels = None
+        self._comparison_result = None
+        self._status = 'pending'
+        self._stdout = ''
+        self._stderr = ''
+        self._duration = 0.0
+
+    @property
+    def reference_path(self) -> str:
+        """Path to reference image."""
+        return self._reference_path
+
+    @property
+    def has_reference(self) -> bool:
+        """Check if reference image exists."""
+        return os.path.exists(self._reference_path)
+
+    def load_reference(self) -> bool:
+        """Load reference image from disk.
+
+        Returns:
+            True if loaded successfully, False otherwise
+        """
+        Image = ensure_pillow()
+        if Image is None:
+            return False
+
+        if not os.path.exists(self._reference_path):
+            return False
+
+        try:
+            img = Image.open(self._reference_path).convert('RGB')
+            self._reference_pixels = np.array(img, dtype=np.uint8)
+            return True
+        except Exception as e:
+            print(f"Failed to load reference: {e}")
+            return False
+
+    def save_reference(self, pixels: np.ndarray) -> bool:
+        """Save reference image to disk.
+
+        Args:
+            pixels: Image data as numpy array (H, W, 3) uint8
+
+        Returns:
+            True if saved successfully
+        """
+        Image = ensure_pillow()
+        if Image is None:
+            return False
+
+        os.makedirs(self.reference_dir, exist_ok=True)
+
+        try:
+            img = Image.fromarray(pixels, mode='RGB')
+            img.save(self._reference_path)
+            self._reference_pixels = pixels.copy()
+            return True
+        except Exception as e:
+            print(f"Failed to save reference: {e}")
+            return False
+
+    def compare(self, result_pixels: np.ndarray) -> ComparisonResult:
+        """Compare result against reference.
+
+        Args:
+            result_pixels: Image data to compare (H, W, 3) uint8
+
+        Returns:
+            ComparisonResult with comparison statistics
+        """
+        self._result_pixels = result_pixels
+
+        if self._reference_pixels is None:
+            if not self.load_reference():
+                self._status = 'skip'
+                return None
+
+        self._comparison_result = ComparisonResult(
+            self._reference_pixels,
+            result_pixels,
+            threshold=5,
+        )
+
+        # Save result and diff images
+        self._save_result_images()
+
+        # Determine pass/fail
+        if self._comparison_result.is_match(
+            max_diff_threshold=self.max_diff_threshold,
+            max_percent_different=self.max_percent_different,
+        ):
+            self._status = 'pass'
+        else:
+            self._status = 'fail'
+
+        return self._comparison_result
+
+    def _save_result_images(self) -> None:
+        """Save result and diff images."""
+        Image = ensure_pillow()
+        if Image is None:
+            return
+
+        os.makedirs(self.reference_dir, exist_ok=True)
+
+        if self._result_pixels is not None:
+            try:
+                img = Image.fromarray(self._result_pixels, mode='RGB')
+                img.save(self._result_path)
+            except Exception:
+                pass
+
+        if self._comparison_result and self._comparison_result.diff_image is not None:
+            try:
+                img = Image.fromarray(self._comparison_result.diff_image, mode='RGB')
+                img.save(self._diff_path)
+            except Exception:
+                pass
+
+    def generate_report_data(self) -> dict:
+        """Generate data for HTML report.
+
+        Returns:
+            Dict with test information for report generation
+        """
+        data = {
+            'test_name': self.test_name,
+            'status': self._status,
+            'reference_image': self._reference_path if self.has_reference else None,
+            'result_image': self._result_path if os.path.exists(self._result_path) else None,
+            'diff_image': self._diff_path if os.path.exists(self._diff_path) else None,
+            'stdout': self._stdout,
+            'stderr': self._stderr,
+            'duration': self._duration,
+        }
+
+        if self._comparison_result:
+            data['comparison_stats'] = {
+                'shapes_match': self._comparison_result.shapes_match,
+                'max_diff': self._comparison_result.max_diff,
+                'mean_diff': self._comparison_result.mean_diff,
+                'pixels_different': self._comparison_result.pixels_different,
+                'total_pixels': self._comparison_result.total_pixels,
+                'percent_different': self._comparison_result.percent_different,
+            }
+
+        return data
+
+    def set_output(self, stdout: str, stderr: str, duration: float = 0.0) -> None:
+        """Set captured output from subprocess execution.
+
+        Args:
+            stdout: Standard output from test
+            stderr: Standard error from test
+            duration: Test execution duration
+        """
+        self._stdout = stdout
+        self._stderr = stderr
+        self._duration = duration
+
+
+class ProfileComparisonTest:
+    """Compare rendering between two OpenGL profiles.
+
+    Runs the same test with two different profiles and compares the results.
+    Useful for verifying core profile rendering matches compatibility profile.
+    """
+
+    def __init__(
+        self,
+        test_name: str,
+        script_path: str,
+        reference_dir: str,
+        reference_profile: str = 'compatibility',
+        test_profile: str = 'core',
+    ):
+        """Initialize the profile comparison test.
+
+        Args:
+            test_name: Name for this test
+            script_path: Path to the test script
+            reference_dir: Directory for reference images
+            reference_profile: Profile for reference rendering
+            test_profile: Profile to test against reference
+        """
+        self.test_name = test_name
+        self.script_path = script_path
+        self.reference_dir = reference_dir
+        self.reference_profile = reference_profile
+        self.test_profile = test_profile
+
+        self._regression = VisualRegressionTest(
+            test_name=test_name,
+            reference_dir=reference_dir,
+        )
+
+    def run(self, timeout: float = 30.0) -> dict:
+        """Run the full comparison test.
+
+        Args:
+            timeout: Timeout for each subprocess
+
+        Returns:
+            Report data dict
+        """
+        import subprocess
+
+        # Record reference if needed
+        if not self._regression.has_reference:
+            record_result = self._run_subprocess(
+                profile=self.reference_profile,
+                mode='record',
+                timeout=timeout,
+            )
+            if record_result.returncode != 0:
+                self._regression._status = 'error'
+                self._regression._stderr = record_result.stderr
+                return self._regression.generate_report_data()
+
+        # Run test
+        test_result = self._run_subprocess(
+            profile=self.test_profile,
+            mode='test',
+            timeout=timeout,
+        )
+
+        self._regression.set_output(
+            stdout=test_result.stdout,
+            stderr=test_result.stderr,
+            duration=0.0,
+        )
+
+        if test_result.returncode == 0:
+            self._regression._status = 'pass'
+        elif test_result.returncode == 2:
+            self._regression._status = 'skip'
+        else:
+            self._regression._status = 'fail'
+
+        return self._regression.generate_report_data()
+
+    def _run_subprocess(
+        self,
+        profile: str,
+        mode: str,
+        timeout: float,
+    ) -> 'subprocess.CompletedProcess':
+        """Run the test script in a subprocess.
+
+        Args:
+            profile: OpenGL profile to use
+            mode: 'record' or 'test'
+            timeout: Subprocess timeout
+
+        Returns:
+            subprocess.CompletedProcess result
+        """
+        import subprocess
+
+        env = os.environ.copy()
+        env['OPENGLCONTEXT_PROFILE'] = profile
+        if profile == 'core':
+            env['OPENGLCONTEXT_BACKEND'] = 'glfw'
+
+        cmd = [
+            sys.executable, self.script_path,
+            f'--{mode}',
+            '--output-dir', self.reference_dir,
+            '--exit-after',
+        ]
+
+        return subprocess.run(
+            cmd,
+            env=env,
+            capture_output=True,
+            timeout=timeout,
+            text=True,
+        )

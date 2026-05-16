@@ -15,7 +15,10 @@ uniform bool textSolidBg;        // When true, render solid background instead o
 
 in vec2 vTexCoord;
 
-out vec4 fragColor;
+// Output color (attachment 0)
+layout(location = 0) out vec4 fragColor;
+// Output object ID (attachment 1) - always 0 for unlit (text, UI, etc.)
+layout(location = 1) out vec4 fragObjectId;
 
 void main() {
     if (textMode) {
@@ -38,4 +41,8 @@ void main() {
         // Pure solid color mode (for selection rendering)
         fragColor = solidColor;
     }
+
+    // Unlit objects (text, UI elements) are not selectable via MRT
+    // The legacy selection system uses solidColor for IDs instead
+    fragObjectId = vec4(0.0, 0.0, 0.0, 0.0);
 }

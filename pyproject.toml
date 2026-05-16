@@ -1,0 +1,113 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "OpenGLContext"
+dynamic = ["version"]
+description = "Demonstration and testing contexts for PyOpenGL/OpenGL-ctypes"
+readme = "license.txt"
+license = "BSD-3-Clause"
+requires-python = ">=3.9"
+authors = [
+    { name = "Mike C. Fletcher", email = "mcfletch@vrplumber.com" }
+]
+keywords = [
+    "PyOpenGL", "OpenGL", "Context", "OpenGLContext", "render", "3D",
+    "TrueType", "text", "VRML", "VRML97", "scenegraph"
+]
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Multimedia :: Graphics :: 3D Rendering",
+    "Intended Audience :: Developers",
+    "Environment :: X11 Applications",
+    "Environment :: Win32 (MS Windows)",
+]
+
+dependencies = [
+    "numpy>=2.0",
+    "PyOpenGL>=3.1.0",
+    "PyVRML97",
+    "pydispatcher",
+    "TTFQuery",
+    "simpleparse",
+]
+
+[project.optional-dependencies]
+wx = ["wxPython>=4.0"]
+pygame = ["pygame>=2.0"]
+glfw = ["glfw>=2.0"]
+accelerate = ["PyOpenGL-accelerate", "PyVRML97-accelerate"]
+dev = ["pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "pillow", "ruff", "mypy"]
+all = [
+    "wxPython>=4.0",
+    "pygame>=2.0",
+    "glfw>=2.0",
+    "PyOpenGL-accelerate",
+    "PyVRML97-accelerate",
+]
+
+[project.scripts]
+oglc-test = "OpenGLContext.bin.gltest:main"
+oglc-lorentz = "OpenGLContext.bin.lorentz:main"
+oglc-vrml = "OpenGLContext.bin.vrml_view:main"
+oglc-profile = "OpenGLContext.bin.profile_view:main"
+oglc-visual = "OpenGLContext.bin.visualshell:main"
+
+[project.urls]
+Homepage = "http://pyopengl.sourceforge.net/context/"
+Documentation = "http://pyopengl.sourceforge.net/context/documentation.html"
+Repository = "https://github.com/mcfletch/openglcontext"
+
+[tool.setuptools.dynamic]
+version = {attr = "OpenGLContext.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["OpenGLContext*"]
+
+[tool.setuptools.package-data]
+OpenGLContext = ["shaders/*.vert", "shaders/*.frag", "shaders/*.glsl"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "B",   # flake8-bugbear
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "E741",  # ambiguous variable name
+]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["OpenGLContext/tests", "tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "visual: marks tests as visual regression tests",
+    "interactive: marks tests that use event simulation",
+    "core_profile: marks tests that require core profile",
+    "compatibility_profile: marks tests for compatibility profile",
+]

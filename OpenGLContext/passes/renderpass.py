@@ -851,8 +851,12 @@ FLAT = None
 class _defaultRenderPasses( object ):
     def __call__( self,context ):
         global FLAT
-        if FLAT is None:
-            sg = context.getSceneGraph()
+        sg = context.getSceneGraph()
+        # Rebuild when the scenegraph reference itself changes — wholesale
+        # replacement (self.sg = new_sg) doesn't fire the per-child dispatcher
+        # signals SGObserver listens to, so the cached FlatPass would keep
+        # rendering the old tree.
+        if FLAT is None or FLAT.scene is not sg:
             if context.contextDefinition.profile == 'core':
                 log.info( 'Using core profile' )
                 from OpenGLContext.passes.flatcore import FlatPass
