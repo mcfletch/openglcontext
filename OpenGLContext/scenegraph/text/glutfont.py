@@ -89,6 +89,21 @@ class _GLUTFontProvider (fontprovider.FontProvider):
         ),
     }
     bitmapFonts['ROMAN'] = bitmapFonts['SERIF']
+    def get( self, fontStyle=None, mode=None ):
+        """Get/create a GLUT font, but only within a GLUT context
+
+        GLUT bitmap routines (glutBitmapWidth, glutBitmapCharacter) segfault
+        when called without a live GLUT context, so we refuse to serve fonts
+        in any other backend. getProviderFont catches this and falls back to
+        a shader/texture-atlas provider.
+        """
+        context = getattr( mode, 'context', None )
+        if not getattr( context, 'providesGLUT', False ):
+            raise RuntimeError(
+                """GLUT bitmap fonts require a GLUT context; """
+                """refusing to use them in a non-GLUT environment"""
+            )
+        return super( _GLUTFontProvider, self ).get( fontStyle, mode )
     def create( self, fontStyle, mode=None ):
         """Create a new font for the given fontStyle and mode"""
         family, size = self.match(fontStyle, mode)

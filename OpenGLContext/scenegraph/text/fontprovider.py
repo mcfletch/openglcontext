@@ -75,15 +75,16 @@ class FontProvider(object):
         for format in order:
             providers = cls.getProviders(format)
             if providers:
-                # In shader mode, prefer shader-compatible providers
-                if shader_mode:
-                    # Sort providers: shader-compatible first
-                    providers = sorted(
-                        providers,
-                        key=lambda p: 0 if getattr(p, 'shader_compatible', False) else 1
-                    )
+                # Prefer shader-compatible (texture-atlas) providers for
+                # on-screen displays: they render in both core and
+                # compatibility profiles without requiring a GLUT display,
+                # so legacy providers (e.g. GLUT) act only as a fallback.
+                providers = sorted(
+                    providers,
+                    key=lambda p: 0 if getattr(p, 'shader_compatible', False) else 1
+                )
                 for provider in providers:
-                    # In shader mode, skip non-shader-compatible providers
+                    # In shader mode legacy providers cannot run at all
                     if shader_mode and not getattr(provider, 'shader_compatible', False):
                         continue
                     try:

@@ -20,6 +20,7 @@ class GLUTContext(
 
     DISPLAYMODE = GLUT_DOUBLE | GLUT_DEPTH
     currentModifiers = 0
+    providesGLUT = True
 
     def __init__(self, definition=None, **named):
         # set up double buffering and rgb display mode

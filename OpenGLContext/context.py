@@ -163,6 +163,10 @@ class Context(object):
     viewportDimensions = (0, 0)
     drawPollTimeout = 0.01
     coreProfile = False
+    # True only for backends that have called glutInit and can safely use
+    # GLUT bitmap fonts. GLUT functions segfault if used without a GLUT
+    # context, so font providers must consult this before selecting them.
+    providesGLUT = False
 
     # Auto-exit support for automated testing
     # Set OPENGLCONTEXT_AUTO_EXIT_FRAMES environment variable to exit after N frames
@@ -300,17 +304,10 @@ class Context(object):
         method processed after their initialization has
         completed.  The default implementation here simply
         calls OnInit directly w/ appropriate setCurrent
-        and unsetCurrent calls and calls the glutInit()
-        function with an empty argument-list.
+        and unsetCurrent calls.
         """
         self.setCurrent()
         try:
-            try:
-                from OpenGL import GLUT
-
-                GLUT.glutInit([])
-            except Exception as err:
-                pass
             self.OnInit()
         finally:
             self.unsetCurrent()
@@ -997,7 +994,7 @@ class Context(object):
         for running the Context top-level loop.
         """
         if entrypoint is None:
-            entrypoint = cls.getDefaultContextType() or "glut"
+            entrypoint = cls.getDefaultContextType() or "glfw"
         log.warning("Default context type: %s", entrypoint)
         if isinstance(entrypoint, (bytes, unicode)):
             for ep in cls.getContextTypes(type):
