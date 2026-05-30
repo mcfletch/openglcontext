@@ -2,18 +2,20 @@
 from vrml import node, field
 from OpenGL.GL import *
 
-# Try to get a working font - prefer glutfont, fall back to shaderfont
-_font_module = None
+# Prefer the texture-atlas (shader) font for on-screen display: it renders in
+# both core and compatibility profiles and needs no GLUT display. The GLUT
+# bitmap font is only safe on a GLUT context (its routines segfault otherwise),
+# so it is used solely as a fallback and only when the context provides GLUT.
 try:
-    from OpenGLContext.scenegraph.text import glutfont
-    _font_module = glutfont
+    from OpenGLContext.scenegraph.text import shaderfont as _shaderfont
+    if not _shaderfont.is_available():
+        _shaderfont = None
 except ImportError:
-    try:
-        from OpenGLContext.scenegraph.text import shaderfont
-        if shaderfont.is_available():
-            _font_module = shaderfont
-    except ImportError:
-        pass
+    _shaderfont = None
+try:
+    from OpenGLContext.scenegraph.text import glutfont as _glutfont
+except ImportError:
+    _glutfont = None
 
 
 class FrameCounter( node.Node ):
@@ -30,12 +32,13 @@ class FrameCounter( node.Node ):
     _font = None
 
     def font( self, context ):
-        if not self._font and _font_module is not None:
+        if self._font is None:
             from OpenGLContext.scenegraph.basenodes import FontStyle
-            if hasattr(_font_module, 'GLUTBitmapFont'):
-                self._font = _font_module.GLUTBitmapFont(FontStyle(size=1.0))
-            elif hasattr(_font_module, 'ShaderBitmapFont'):
-                self._font = _font_module.ShaderBitmapFont(FontStyle(size=1.0), size=16)
+            style = FontStyle(size=1.0)
+            if _shaderfont is not None:
+                self._font = _shaderfont.ShaderBitmapFont(style, size=16)
+            elif _glutfont is not None and getattr(context, 'providesGLUT', False):
+                self._font = _glutfont.GLUTBitmapFont(style)
         return self._font
 
     def addFrame( self, duration ):
