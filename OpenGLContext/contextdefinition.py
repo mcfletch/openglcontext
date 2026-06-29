@@ -64,7 +64,7 @@ class ContextDefinition( node.Node ):
 
     # together these define the  colour format for the buffer
     rgb = field.newField( "rgb", "SFBool", 1, True)
-    alpha = field.newField( "alpha", "SFBool", 1, True)
+    alpha = field.newField( "alpha", "SFBool", 1, False)
 
     multisampleBuffer = field.newField( "multisampleBuffer", "SFInt32", 1, -1)
     multisampleSamples = field.newField( "multisampleSamples", "SFInt32", 1, -1)

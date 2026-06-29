@@ -160,6 +160,11 @@ class Context(object):
     # Set to false to trigger a redraw on the next available iteration
     alreadyDrawn = None
     drawing = None
+    # When true, triggerRedraw/triggerPick only flag a redraw request rather
+    # than rendering synchronously in-thread. Backends that drive their own
+    # render loop (e.g. GLFW) set this so a burst of input events coalesces
+    # into a single render per loop iteration instead of one render per event.
+    deferRedraw = False
     viewportDimensions = (0, 0)
     drawPollTimeout = 0.01
     coreProfile = False
@@ -706,7 +711,7 @@ class Context(object):
         """
         contextLock.acquire()
         try:
-            if (not self.drawing) and inContextThread():
+            if (not self.drawing) and (not self.deferRedraw) and inContextThread():
                 self.OnDraw()
             elif threading:
                 self.redrawRequest.set()
@@ -725,7 +730,7 @@ class Context(object):
             self.alreadyDrawn = 0
         finally:
             contextLock.release()
-        if force and (not self.drawing) and inContextThread():
+        if force and (not self.drawing) and (not self.deferRedraw) and inContextThread():
             self.OnDraw()
         elif threading:
             self.redrawRequest.set()

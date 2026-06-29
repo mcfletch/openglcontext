@@ -63,8 +63,12 @@ class GLFWContext(
         # Call base Context initialization
         Context.__init__(self, definition)
 
-        # Set initial viewport
-        self.ViewPort(*definition.size)
+        # Set initial viewport from the real framebuffer size, not the requested
+        # window size. Under HiDPI/fractional scaling (e.g. Wayland) the
+        # framebuffer is measured in pixels and differs from the window's screen
+        # coordinates; using definition.size would leave an undrawn border.
+        fbWidth, fbHeight = glfw.get_framebuffer_size(self.window)
+        self.ViewPort(fbWidth, fbHeight)
 
     def _setWindowHints(self, definition):
         """Apply ContextDefinition to GLFW window hints"""
@@ -94,6 +98,15 @@ class GLFWContext(
             glfw.window_hint(glfw.ACCUM_GREEN_BITS, bits)
             glfw.window_hint(glfw.ACCUM_BLUE_BITS, bits)
             glfw.window_hint(glfw.ACCUM_ALPHA_BITS, bits)
+
+        # Color buffer alpha. GLFW defaults to 8 alpha bits; compositors that
+        # honor destination alpha (Wayland/EGL, forwarded GL) then treat
+        # cleared pixels as transparent, bleeding through windows behind ours.
+        # Only request a window alpha channel when explicitly asked for.
+        if definition.alpha:
+            glfw.window_hint(glfw.ALPHA_BITS, 8)
+        else:
+            glfw.window_hint(glfw.ALPHA_BITS, 0)
 
         # Multisampling
         if definition.multisampleSamples > 0:
@@ -183,30 +196,45 @@ class GLFWContext(
             glfw.set_window_should_close(self.window, True)
         return super(GLFWContext, self).OnQuit(event)
 
+    def OnIdle(self, *arguments):
+        """Animation hook for the GLFW loop.
+
+        The default Context.OnIdle renders via drawPoll, which would double up
+        with MainLoop's own OnDraw. Demos that animate override this to call
+        triggerRedraw; the base behaviour here is to do nothing and let
+        MainLoop drive rendering.
+        """
+        return 0
+
     def MainLoop(self):
         """Run the main event loop"""
+        # We drive rendering ourselves, so suppress the synchronous in-callback
+        # renders triggerPick/triggerRedraw would otherwise do. A burst of input
+        # events (e.g. mouse-drag rotate) then coalesces into a single render per
+        # iteration instead of one full render per event, which kept the display
+        # lagging behind the cursor.
+        self.deferRedraw = True
         renderedFirst = False
 
         while self.window and not glfw.window_should_close(self.window):
-            # Process pending events first
+            # Dispatch queued GLFW callbacks; with deferRedraw set these only
+            # flag a redraw and coalesce pick events (keyed by buttons/modifiers)
+            # down to the latest position.
             glfw.poll_events()
 
-            # Call OnIdle if defined - this is how animations trigger redraws
-            # (e.g. nehe4.py calls triggerRedraw(1) in OnIdle)
-            if hasattr(self, 'OnIdle'):
-                self.OnIdle()
+            # Animation hook (overridden by animating demos to triggerRedraw).
+            self.OnIdle()
 
-            # Wait briefly for redraw requests (allows time events to accumulate)
-            timeout = self.drawPollTimeout
-            self.redrawRequest.wait(timeout)
+            # Wait briefly so input and time events accumulate before rendering.
+            self.redrawRequest.wait(self.drawPollTimeout)
 
-            # Always call OnDraw - force=0 allows DoEventCascade to process
-            # time events which may trigger redraws for animations
+            # One OnDraw per iteration. force=1 when a redraw is pending; force=0
+            # still runs DoEventCascade so time events (animations) are processed
+            # and only renders if they produced a visible change.
             if self.redrawRequest.isSet() or not renderedFirst:
                 renderedFirst = True
                 self.OnDraw(force=1)
             else:
-                # This processes time events and redraws if they generated changes
                 self.OnDraw(force=0)
 
         # Cleanup
