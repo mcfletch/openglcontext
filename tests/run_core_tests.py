@@ -30,7 +30,6 @@ SKIP_SET = {
     'savepostscript.py',  # removed functionality
     '__init__.py',
     # Different testing models that don't work with oglc-test
-    'rendering_regression.py',
     'run_teapot_regression.py',
     'test_shader_comparison.py',
     'test_shader_comprehensive.py',

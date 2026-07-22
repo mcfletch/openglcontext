@@ -1,15 +1,9 @@
-# -*- coding: ISO-8859-1 -*-
+# -*- coding: utf-8 -*-
 """Resource test_context_set_txt (from file test_context_set.txt)"""
 # written by resourcepackage: (1, 0, 1)
 source = 'test_context_set.txt'
 package = 'tests.resources'
 
 import zlib
-data = zlib.decompress("xÚ–ËNÄ0\014E÷|\005_0\022\014¯=HlfÃ>r\023·\015ÍKN2Óù{Ü¡\033¤AqÙ5í¹Nâ:×9$\014ï\037¯1\024œË\
-®`.y7¸ZTg‹‡¤zþrûÉ¯WäæpEÎ\003x”±§ùÏÐWù\016ô4P¬ÁÄî\013u{‚.ÎBR×\016—ðŠ¢\034Þ´\
-\026ƒ“Z†•0Wê›üà€\010ÎèÐ£ —ƒ3\004§‹$o‚U.dÃ Ô¬Ë‘N‘ìŒN\002£ƒ2¢\000´<$‡pD#Þlâ\015J\
-2XËO9ê\021\0104Ï#Ð\034‘xÜ\004m08£éAcÆ¢œ-*¤þ²ãF™°@W\021gxƒÈÙa”²\0368¥\026œ\024¯®ØõÄ¨\
-»&\036pD\031u/¢ö\"êAD=Š¨'\031¥.‰\021²ÅzA\031/ì³ˆziSÑ òÑØþÜf+uYX\016\011¨Xí\015ËúäÚ^‘\
-\"Ÿz\005Á(í¬žd¼¼ò\011M\027ã¤À¥\021¶Ñû71¿´\012>Åbž½Ü7áÌîi=\014í°™ý^\027B¶\006âº] ÊH\010¦\
-íÒ9HÛ»jN6,í¸\011.Â˜«çHi‚¹8—®\030¹\027˜ß÷˜oc'“d")
+data = zlib.decompress(b'x\xda\x9d\x96\xcbN\xc40\\014E\xf7|\\005_0\\022\\014\xaf=Hl\x90f\xc3>r\\023\xb7\\015\xcdKN2\xd3\xf9{\xdc\xa1\\033\xa4Aq\xd95\xed\xb9N\xe2:\xd79$\\014\xef\\037\xaf1\\024\x9c\xcb\\\n\xae`.y7\xb8ZTg\x8b\x87\xa4z\xfer\xfb\xc9\xafW\xe4\xe6pE\x90\xce\\003x\x94\xb1\xa7\xf9\xcf\xd0W\xf9\\016\xf44P\xac\xc1\xc4\xee\\013u{\x82.\xceBR\xd7\\016\x97\xf0\x8a\xa2\\034\xde\xb4\\\n\\026\x83\x93Z\x86\x950W\xea\x9b\xfc\xe0\x80\\010\xce\xe8\xd0\xa3 \x97\x833\\004\xa7\x8b$o\x82U.d\xc3 \xd4\xac\xcb\x91N\x91\xec\x8cN\\002\xa3\x832\xa2\\000\xb4<$\x87pD#\xdel\xe2\\015J\\\n2X\xcbO9\xea\\021\\0104\xcf#\xd0\\034\x91x\xdc\\004m08\xa3\xe9Ac\xc6\xa2\x9c-*\xa4\xfe\x7f\xb2\xe3F\x99\xb0@W\\021gx\x83\xc8\xd9a\x94\xb2\\0368\xa5\\026\x9c\\024\xaf\xae\xd8\xf5\xc4\xa8\\\n\xbb&\\036pD\\031u/\xa2\xf6\\"\xeaAD=\x8a\xa8\'\\031\xa5.\x89\\021\xb2\xc5zA\\031/\xec\xb3\x88ziS\xd1\xa0\xf2\xd1\xd8\xfe\xdcf+uYX\\016\\011\xa8X\xed\x90\\015\xcb\xfa\xe4\xda^\x91\\\n\\"\x9fz\\005\xc1(\xed\xac\x9ed\xbc\xbc\xf2\\011M\\027\xe3\xa4\xc0\xa5\\021\xb6\xd1\xfb71\xbf\xb4\\012>\xc5b\x9e\xbd\xdc7\xe1\xcc\xeei=\\014\xed\xb0\x99\xfd^\\027B\xb6\\006\xe2\x7f\xba]\xa0\xcaH\\010\xa6\\\n\xed\xd29\x8dH\xdb\xbbjN6,\xed\xb8\\011.\x8f\xc2\x98\xab\xe7Hi\x82\x90\xb98\x97\xae\\030\xb9\\027\x98\xdf\xf7\x98oc\'\x93d')
 ### end

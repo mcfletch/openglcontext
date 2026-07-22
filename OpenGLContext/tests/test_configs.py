@@ -1,5 +1,7 @@
 from OpenGLContext.contextdefinition import ContextDefinition
-import unittest, ConfigParser,os
+import unittest
+import configparser
+import os
 from OpenGLContext import arrays
 
 sample_ini = os.path.join(
@@ -9,7 +11,7 @@ sample_ini = os.path.join(
 
 class TestContextDefinition( unittest.TestCase ):
     def test_from_config( self ):
-        cfg = ConfigParser.ConfigParser()
+        cfg = configparser.ConfigParser()
         cfg.read( sample_ini )
         cd = ContextDefinition.fromConfig( cfg )
         assert arrays.allclose(cd.size, [600,600] ), cd.size 

@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 '''Draw text with GLUT bitmap fonts'''
 from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive( 'glut' )
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 

@@ -24,14 +24,15 @@ Usage:
     success = runner.run_comparison()
 """
 import argparse
+import logging
 import os
 import sys
 import time
 import numpy as np
-from OpenGL.GL import (
-    glReadPixels, glReadBuffer, glGetIntegerv,
-    GL_VIEWPORT, GL_BACK, GL_RGB, GL_UNSIGNED_BYTE, GL_FLOAT
-)
+from OpenGLContext.capture import ensure_pillow, read_back_buffer, save_png
+from OpenGLContext.testing.process_exit import flush_and_exit
+
+log = logging.getLogger(__name__)
 
 # Default directory for reference images
 DEFAULT_REFERENCE_DIR = os.path.join(
@@ -39,22 +40,15 @@ DEFAULT_REFERENCE_DIR = os.path.join(
     'tests', 'reference_images'
 )
 
-# Default capture delay in seconds (allow scene to stabilize)
-DEFAULT_CAPTURE_DELAY = 0.5
+# Default capture delay in seconds (allow scene to stabilize). Overridable via
+# the environment so a slow/headless CI runner can be more generous without
+# editing source; the capture also waits for a minimum frame
+# count, so this is a floor on wall-clock time, not the sole readiness signal.
+DEFAULT_CAPTURE_DELAY = float(os.environ.get('OPENGLCONTEXT_CAPTURE_DELAY', '0.5'))
 
 # Default region to exclude from bottom of frame (for any HUD elements)
 # Set to 0 since we disable the frame counter for regression tests
 DEFAULT_HUD_HEIGHT = 0
-
-
-def ensure_pillow():
-    """Ensure Pillow is available, return Image module or None."""
-    try:
-        from PIL import Image
-        return Image
-    except ImportError:
-        print("Warning: Pillow not available, image saving disabled")
-        return None
 
 
 class ComparisonResult:
@@ -148,32 +142,8 @@ class FramebufferCapture:
         Returns:
             numpy array of shape (height, width, 3) with uint8 values 0-255
         """
-        viewport = glGetIntegerv(GL_VIEWPORT)
-        vp_x, vp_y, vp_width, vp_height = viewport
-
-        # Determine capture region
-        x = 0
-        width = vp_width
-        height = vp_height
-
-        if exclude_hud and self.hud_height > 0:
-            # HUD/FPS counter is at the BOTTOM of the screen
-            # In OpenGL coords, Y=0 is at the bottom
-            # Start capture above the HUD area
-            y = self.hud_height
-            height = max(1, vp_height - self.hud_height)
-        else:
-            y = 0
-
-        glReadBuffer(GL_BACK)
-        pixels = glReadPixels(x, y, width, height, GL_RGB, GL_UNSIGNED_BYTE)
-
-        # Reshape to (height, width, 3) and flip vertically (OpenGL is bottom-up)
-        self.pixels = np.frombuffer(pixels, dtype=np.uint8).reshape(height, width, 3)
-        self.pixels = np.flipud(self.pixels).copy()
-        self.width = width
-        self.height = height
-
+        hud = self.hud_height if exclude_hud else 0
+        self.pixels, self.width, self.height = read_back_buffer(hud)
         return self.pixels
 
     def save_image(self, filepath):
@@ -186,17 +156,9 @@ class FramebufferCapture:
             True if saved successfully, False otherwise
         """
         if self.pixels is None:
-            print("No pixels captured - call capture() first")
+            log.error("No pixels captured - call capture() first")
             return False
-
-        Image = ensure_pillow()
-        if Image is None:
-            return False
-
-        os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)
-        img = Image.fromarray(self.pixels, mode='RGB')
-        img.save(filepath)
-        return True
+        return save_png(filepath, self.pixels)
 
     def load_reference(self, filepath):
         """Load a reference image.
@@ -416,10 +378,10 @@ class AutomatedRegressionContext:
         os.makedirs(args.output_dir, exist_ok=True)
         ref_path = os.path.join(args.output_dir, f"{self.test_name}.png")
         if self._regression_capture.save_image(ref_path):
-            print(f"RECORD: Saved reference image to {ref_path}")
+            log.info("RECORD: Saved reference image to %s", ref_path)
         else:
-            print(f"RECORD: Failed to save reference image")
-            os._exit(1)
+            log.error("RECORD: Failed to save reference image")
+            flush_and_exit(1)
 
     def _do_test(self):
         """Test current render against reference."""
@@ -432,15 +394,15 @@ class AutomatedRegressionContext:
             ref_path = os.path.join(args.output_dir, f"{self.test_name}.png")
 
         if not os.path.exists(ref_path):
-            print(f"TEST SKIP: Reference image not found: {ref_path}")
-            print("Run with --record first to create reference image")
-            os._exit(2)
+            log.warning("TEST SKIP: Reference image not found: %s", ref_path)
+            log.warning("Run with --record first to create reference image")
+            flush_and_exit(2)
 
         # Compare with reference
         result = self._regression_capture.compare_with_reference(ref_path)
         if result is None:
-            print(f"TEST FAIL: Could not load reference image: {ref_path}")
-            os._exit(1)
+            log.error("TEST FAIL: Could not load reference image: %s", ref_path)
+            flush_and_exit(1)
 
         # Save comparison images
         ref_pixels = self._regression_capture.load_reference(ref_path)
@@ -452,9 +414,9 @@ class AutomatedRegressionContext:
             self.test_name
         )
 
-        print(f"\nRegression Test: {self.test_name}")
-        print(f"  Reference: {ref_path}")
-        print(f"  {result}")
+        log.info("Regression Test: %s", self.test_name)
+        log.info("  Reference: %s", ref_path)
+        log.info("  %s", result)
 
         # Allow for hardware rendering variations:
         # - max_diff_threshold: Individual pixel differences (0-255 scale)
@@ -464,13 +426,13 @@ class AutomatedRegressionContext:
         max_diff = getattr(args, 'max_diff', 255)
         max_pct = getattr(args, 'max_percent_different', 2.0)
         if result.is_match(max_diff_threshold=max_diff, max_percent_different=max_pct):
-            print("  PASS - Output matches reference")
-            os._exit(0)
+            log.info("  PASS - Output matches reference")
+            flush_and_exit(0)
         else:
-            print("  FAIL - Output differs from reference")
+            log.error("  FAIL - Output differs from reference")
             diff_path = os.path.join(args.output_dir, f"{self.test_name}_diff.png")
-            print(f"  Diff image saved to: {diff_path}")
-            os._exit(1)
+            log.error("  Diff image saved to: %s", diff_path)
+            flush_and_exit(1)
 
 
 class RegressionTestRunner:
@@ -521,7 +483,7 @@ class RegressionTestRunner:
         module_file = sys.modules[self.context_class.__module__].__file__
 
         # Record reference with legacy profile
-        print(f"Recording reference with {legacy_profile} profile...")
+        log.info("Recording reference with %s profile...", legacy_profile)
         env = os.environ.copy()
         env['OPENGLCONTEXT_PROFILE'] = legacy_profile
 
@@ -534,11 +496,11 @@ class RegressionTestRunner:
 
         result = subprocess.run(record_cmd, env=env)
         if result.returncode != 0:
-            print(f"Failed to record reference image")
+            log.error("Failed to record reference image")
             return False
 
         # Test with core profile
-        print(f"\nTesting with {core_profile} profile...")
+        log.info("Testing with %s profile...", core_profile)
         env['OPENGLCONTEXT_PROFILE'] = core_profile
         if core_profile == 'core':
             env['OPENGLCONTEXT_BACKEND'] = 'glfw'
@@ -556,3 +518,322 @@ class RegressionTestRunner:
 
 # Legacy compatibility - keep old class names working
 RegressionTestMixin = AutomatedRegressionContext
+
+
+class VisualRegressionTest:
+    """Manages visual regression testing for a single test.
+
+    This class provides a higher-level interface for visual regression testing,
+    handling reference image management, comparison, and report data generation.
+
+    Example:
+        test = VisualRegressionTest('box_rendering', 'tests/reference_images')
+        test.record_reference('compatibility')
+        result = test.test_against_reference('core')
+        report = test.generate_report_data()
+    """
+
+    def __init__(
+        self,
+        test_name: str,
+        reference_dir: str,
+        max_diff_threshold: int = 255,
+        max_percent_different: float = 2.0,
+    ):
+        """Initialize the regression test.
+
+        Args:
+            test_name: Name for this test (used for image filenames)
+            reference_dir: Directory for storing/loading reference images
+            max_diff_threshold: Maximum allowed pixel difference (0-255)
+            max_percent_different: Maximum percent of pixels that can differ
+        """
+        self.test_name = test_name
+        self.reference_dir = reference_dir
+        self.max_diff_threshold = max_diff_threshold
+        self.max_percent_different = max_percent_different
+
+        self._reference_path = os.path.join(reference_dir, f'{test_name}.png')
+        self._result_path = os.path.join(reference_dir, f'{test_name}_result.png')
+        self._diff_path = os.path.join(reference_dir, f'{test_name}_diff.png')
+
+        self._reference_pixels = None
+        self._result_pixels = None
+        self._comparison_result = None
+        self._status = 'pending'
+        self._stdout = ''
+        self._stderr = ''
+        self._duration = 0.0
+
+    @property
+    def reference_path(self) -> str:
+        """Path to reference image."""
+        return self._reference_path
+
+    @property
+    def has_reference(self) -> bool:
+        """Check if reference image exists."""
+        return os.path.exists(self._reference_path)
+
+    def load_reference(self) -> bool:
+        """Load reference image from disk.
+
+        Returns:
+            True if loaded successfully, False otherwise
+        """
+        Image = ensure_pillow()
+        if Image is None:
+            return False
+
+        if not os.path.exists(self._reference_path):
+            return False
+
+        try:
+            img = Image.open(self._reference_path).convert('RGB')
+            self._reference_pixels = np.array(img, dtype=np.uint8)
+            return True
+        except Exception as e:
+            log.error("Failed to load reference: %s", e)
+            return False
+
+    def save_reference(self, pixels: np.ndarray) -> bool:
+        """Save reference image to disk.
+
+        Args:
+            pixels: Image data as numpy array (H, W, 3) uint8
+
+        Returns:
+            True if saved successfully
+        """
+        Image = ensure_pillow()
+        if Image is None:
+            return False
+
+        os.makedirs(self.reference_dir, exist_ok=True)
+
+        try:
+            img = Image.fromarray(pixels, mode='RGB')
+            img.save(self._reference_path)
+            self._reference_pixels = pixels.copy()
+            return True
+        except Exception as e:
+            log.error("Failed to save reference: %s", e)
+            return False
+
+    def compare(self, result_pixels: np.ndarray) -> ComparisonResult:
+        """Compare result against reference.
+
+        Args:
+            result_pixels: Image data to compare (H, W, 3) uint8
+
+        Returns:
+            ComparisonResult with comparison statistics
+        """
+        self._result_pixels = result_pixels
+
+        if self._reference_pixels is None:
+            if not self.load_reference():
+                self._status = 'skip'
+                return None
+
+        self._comparison_result = ComparisonResult(
+            self._reference_pixels,
+            result_pixels,
+            threshold=5,
+        )
+
+        # Save result and diff images
+        self._save_result_images()
+
+        # Determine pass/fail
+        if self._comparison_result.is_match(
+            max_diff_threshold=self.max_diff_threshold,
+            max_percent_different=self.max_percent_different,
+        ):
+            self._status = 'pass'
+        else:
+            self._status = 'fail'
+
+        return self._comparison_result
+
+    def _save_result_images(self) -> None:
+        """Save result and diff images."""
+        Image = ensure_pillow()
+        if Image is None:
+            return
+
+        os.makedirs(self.reference_dir, exist_ok=True)
+
+        if self._result_pixels is not None:
+            try:
+                img = Image.fromarray(self._result_pixels, mode='RGB')
+                img.save(self._result_path)
+            except Exception:
+                pass
+
+        if self._comparison_result and self._comparison_result.diff_image is not None:
+            try:
+                img = Image.fromarray(self._comparison_result.diff_image, mode='RGB')
+                img.save(self._diff_path)
+            except Exception:
+                pass
+
+    def generate_report_data(self) -> dict:
+        """Generate data for HTML report.
+
+        Returns:
+            Dict with test information for report generation
+        """
+        data = {
+            'test_name': self.test_name,
+            'status': self._status,
+            'reference_image': self._reference_path if self.has_reference else None,
+            'result_image': self._result_path if os.path.exists(self._result_path) else None,
+            'diff_image': self._diff_path if os.path.exists(self._diff_path) else None,
+            'stdout': self._stdout,
+            'stderr': self._stderr,
+            'duration': self._duration,
+        }
+
+        if self._comparison_result:
+            data['comparison_stats'] = {
+                'shapes_match': self._comparison_result.shapes_match,
+                'max_diff': self._comparison_result.max_diff,
+                'mean_diff': self._comparison_result.mean_diff,
+                'pixels_different': self._comparison_result.pixels_different,
+                'total_pixels': self._comparison_result.total_pixels,
+                'percent_different': self._comparison_result.percent_different,
+            }
+
+        return data
+
+    def set_output(self, stdout: str, stderr: str, duration: float = 0.0) -> None:
+        """Set captured output from subprocess execution.
+
+        Args:
+            stdout: Standard output from test
+            stderr: Standard error from test
+            duration: Test execution duration
+        """
+        self._stdout = stdout
+        self._stderr = stderr
+        self._duration = duration
+
+
+class ProfileComparisonTest:
+    """Compare rendering between two OpenGL profiles.
+
+    Runs the same test with two different profiles and compares the results.
+    Useful for verifying core profile rendering matches compatibility profile.
+    """
+
+    def __init__(
+        self,
+        test_name: str,
+        script_path: str,
+        reference_dir: str,
+        reference_profile: str = 'compatibility',
+        test_profile: str = 'core',
+    ):
+        """Initialize the profile comparison test.
+
+        Args:
+            test_name: Name for this test
+            script_path: Path to the test script
+            reference_dir: Directory for reference images
+            reference_profile: Profile for reference rendering
+            test_profile: Profile to test against reference
+        """
+        self.test_name = test_name
+        self.script_path = script_path
+        self.reference_dir = reference_dir
+        self.reference_profile = reference_profile
+        self.test_profile = test_profile
+
+        self._regression = VisualRegressionTest(
+            test_name=test_name,
+            reference_dir=reference_dir,
+        )
+
+    def run(self, timeout: float = 30.0) -> dict:
+        """Run the full comparison test.
+
+        Args:
+            timeout: Timeout for each subprocess
+
+        Returns:
+            Report data dict
+        """
+        import subprocess
+
+        # Record reference if needed
+        if not self._regression.has_reference:
+            record_result = self._run_subprocess(
+                profile=self.reference_profile,
+                mode='record',
+                timeout=timeout,
+            )
+            if record_result.returncode != 0:
+                self._regression._status = 'error'
+                self._regression._stderr = record_result.stderr
+                return self._regression.generate_report_data()
+
+        # Run test
+        test_result = self._run_subprocess(
+            profile=self.test_profile,
+            mode='test',
+            timeout=timeout,
+        )
+
+        self._regression.set_output(
+            stdout=test_result.stdout,
+            stderr=test_result.stderr,
+            duration=0.0,
+        )
+
+        if test_result.returncode == 0:
+            self._regression._status = 'pass'
+        elif test_result.returncode == 2:
+            self._regression._status = 'skip'
+        else:
+            self._regression._status = 'fail'
+
+        return self._regression.generate_report_data()
+
+    def _run_subprocess(
+        self,
+        profile: str,
+        mode: str,
+        timeout: float,
+    ) -> 'subprocess.CompletedProcess':
+        """Run the test script in a subprocess.
+
+        Args:
+            profile: OpenGL profile to use
+            mode: 'record' or 'test'
+            timeout: Subprocess timeout
+
+        Returns:
+            subprocess.CompletedProcess result
+        """
+        import subprocess
+
+        env = os.environ.copy()
+        env['OPENGLCONTEXT_PROFILE'] = profile
+        if profile == 'core':
+            env['OPENGLCONTEXT_BACKEND'] = 'glfw'
+
+        cmd = [
+            sys.executable, self.script_path,
+            f'--{mode}',
+            '--output-dir', self.reference_dir,
+            '--exit-after',
+        ]
+
+        return subprocess.run(
+            cmd,
+            env=env,
+            capture_output=True,
+            timeout=timeout,
+            text=True,
+        )
