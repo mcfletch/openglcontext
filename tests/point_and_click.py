@@ -55,10 +55,17 @@ class TestContext( BaseContext ):
         self.sg = buildGeometry()
     def OnClick1( self, event ):
         x,y  = event.getPickPoint()
-        print('click')
-        for near, far, names in event.getNameStack():
-            print('Hit', list(names))
+        # Live pick paths (shader MRT and legacy select-render) report hits via
+        # getObjectPaths(); getNameStack() is only filled by the obsolete
+        # GL_SELECT pass and is empty here.
+        paths = event.getObjectPaths()
+        if paths and paths[0]:
+            print('Hit %d object(s) at pick %s' % (len(paths), (x, y)))
+            for path in paths:
+                print('  ', path)
             print('  unproject ->', event.unproject())
+        else:
+            print('Clicked empty space at', (x, y))
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
