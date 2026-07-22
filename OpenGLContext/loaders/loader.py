@@ -1,27 +1,27 @@
 """Load-manager for downloading multi-value URLs
 
 The Singleton "Loader" should be used for most interactions.
+
+Resolution and fetching of untrusted sub-resources -- ImageTexture urls, OBJ
+``mtllib``/``map_Kd``, ``Inline`` scenes, shader fragments -- is delegated to
+:class:`OpenGLContext.loaders.resolver.Resolver`, so the same-origin /
+directory-containment policy for attacker-controlled references lives in one
+auditable place. References are resolved against the *currently-parsing file's*
+absolute URL (a local document's references are confined to its directory; a
+remote document's to its origin).
 """
 
-import urllib, os
-
-try:
-    from urllib.request import pathname2url
-except ImportError:
-    from urllib import pathname2url
-try:
-    from urlparse import urljoin as basejoin
-except ImportError:
-    from urllib.parse import urljoin as basejoin
-try:
-    from urllib import urlretrieve
-except ImportError as err:
-    from urllib.request import urlretrieve
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from io import BytesIO as StringIO
+import os
+import urllib.parse
+from urllib.request import url2pathname
+from io import BytesIO
 from OpenGL._bytes import bytes, unicode, as_8_bit
+from OpenGLContext.loaders.resolver import (
+    Resolver,
+    _fetch_url,
+    _ALLOWED_URL_SCHEMES,
+    DEFAULT_MAX_RESOURCE_BYTES,
+)
 
 
 def as_unicode(u):
@@ -35,22 +35,47 @@ import logging
 log = logging.getLogger(__name__)
 
 
+def _local_path(url):
+    """Filesystem path for a local (no-scheme or ``file://``) URL."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme == "file":
+        return url2pathname(parts.path)
+    # plain path (possibly percent-encoded); keep the raw string when there is no
+    # path component so relative paths survive unchanged.
+    return url2pathname(parts.path) if parts.path else url
+
+
+def _resolver_for(baseURL, max_bytes=DEFAULT_MAX_RESOURCE_BYTES):
+    """Build a :class:`Resolver` confining references to ``baseURL``'s scope.
+
+    A remote (http(s)) base yields a same-origin resolver; a local base yields a
+    resolver confined to the base file's directory. Raises ``IOError`` for a base
+    whose scheme we cannot resolve references against.
+    """
+    scheme = urllib.parse.urlsplit(baseURL).scheme.lower()
+    if scheme in _ALLOWED_URL_SCHEMES:
+        return Resolver(base_url=baseURL, max_resource_bytes=max_bytes)
+    if scheme in ("", "file"):
+        base_dir = os.path.dirname(_local_path(baseURL))
+        return Resolver(base_dir=base_dir, max_resource_bytes=max_bytes)
+    raise IOError("cannot resolve references against base url %r" % (baseURL,))
+
+
 class _Loader(object):
     """(Singleton) Manager for downloading resources
 
     Is a generic class which provides download services
     which follow VRML97 semantics (multiple-URL definitions,
     with chaining to the first successful URL).
-
-    The loader will attempt to use a local cache of files
-    to prevent multiple downloading.
     """
 
     def __init__(
         self,
     ):
         """Initialize the Loader"""
-        self.cache = {}
+        # One Resolver per base URL, so a document's repeated references (a marble
+        # texture used by many shapes) are fetched and memoised once.
+        self._resolvers = {}
 
     def __call__(self, url, baseURL=None):
         """Load the given multi-value url and call callbacks
@@ -61,9 +86,9 @@ class _Loader(object):
             give you the baseURL normally used for the given node.
 
         raises IOError on failure
-        returns (successfulURL, filename, open_file, headers) on success
+        returns (resolvedURL, filename, open_file, headers) on success
 
-        headers will be None for local files
+        headers is always None (kept for call-site compatibility).
         """
         log.info("Loading: %s, %s", url, baseURL)
         url = as_unicode(url)
@@ -71,75 +96,72 @@ class _Loader(object):
             url = [url]
         else:
             url = [as_unicode(u) for u in url]
-        file = None
         for u in url:
-            # get the "absolute" url
-            if baseURL:
-                u = basejoin(baseURL, u)
-            resolvedURL, file, filename, headers = self.get(u)
-            if file is not None and filename is not None:
-                break
-        if not file or not filename:
-            raise IOError("""Unable to download url %s""" % url)
-        return (resolvedURL, os.path.abspath(filename), file, headers)
+            try:
+                if baseURL:
+                    resolvedURL, file, filename, headers = self.get_reference(u, baseURL)
+                else:
+                    resolvedURL, file, filename, headers = self.get(u)
+            except IOError as err:
+                log.warning("Failing url %s (base %s): %s", u, baseURL, err)
+                continue
+            if file is not None:
+                return (resolvedURL, filename, file, headers)
+        raise IOError("""Unable to download url %s""" % (url,))
+
+    def _resolver(self, baseURL):
+        resolver = self._resolvers.get(baseURL)
+        if resolver is None:
+            resolver = _resolver_for(baseURL)
+            self._resolvers[baseURL] = resolver
+        return resolver
+
+    def get_reference(self, ref, baseURL):
+        """Resolve and fetch an untrusted reference under ``baseURL``'s policy.
+
+        ``ref`` is a raw (relative) reference from the document; the resolver
+        joins it against ``baseURL`` and enforces same-origin / directory
+        containment before any network or disk access. Returns
+        ``(resolvedURL, file, filename, None)`` where ``file`` is an in-memory
+        ``BytesIO`` of the fetched bytes. Raises ``IOError`` on a disallowed or
+        unreachable reference.
+        """
+        resolver = self._resolver(baseURL)
+        # `fetch` resolves `ref` internally too; `resolve` memoises its result, so
+        # this second resolution is a cache hit rather than repeated policy work.
+        target = resolver.resolve(ref)
+        data = resolver.fetch(ref)
+        return (target, BytesIO(data), target, None)
 
     def get(self, url):
-        """Retrieve the given single-value URL
+        """Retrieve the given top-level (user-chosen) single-value URL
+
+        Unlike a reference (see :meth:`get_reference`), the top-level document is
+        user-initiated and so is not confined to a base directory. Local files,
+        ``res://`` virtual resources, and http(s) downloads are supported.
 
         url -- single-value URL, which may be a local filename
             or any URL type supported by urllib
 
         returns (baseURL, file, filename, headers)
         """
-        headers = None
-        if url in self.cache:
-            filename = self.cache.get(url)
-            log.debug("cached: %s %s", url, filename)
-            try:
-                file = open(filename, "rb")
-            except (IOError, TypeError, ValueError):
-                pass
-        try:
-            log.debug("load: %s", url)
-            filename = url
-            baseURL = pathname2url(filename)
-            if os.path.exists(url):
-                file = open(url, "rb")
-            else:
-                raise ValueError(filename)
-        except (IOError, TypeError, ValueError):
-            if url.startswith("res://"):
-                # virtual URL in our resources directories...
-                module = url[6:]
-                if "." not in module:
-                    # TODO: check for other bad values?
-                    name = "OpenGLContext.resources.%s" % (module,)
-                    module = __import__(name, {}, {}, name.split("."))
-                    filename = module.source
-                    file = StringIO(as_8_bit(module.data))
-                    baseURL = url
-                else:
-                    raise ValueError("Invalid character in resource url: %s" % (url,))
-            else:
-                # try to download
-                try:
-                    log.debug("download: %s", url)
-                    filename, headers = self.download(url)
-                    log.debug("downloaded to: %s", filename)
-                    file = open(filename, "rb")
-                    baseURL = url
-                except (IOError, TypeError, ValueError):
-                    return (None, None, None, None)
-        self.cache[url] = filename
-        self.cache[baseURL] = filename
-        return baseURL, file, filename, headers
-
-    def download(self, url):
-        """Download the given url to local disk, return local filename"""
-        filename, headers = urlretrieve(
-            url,
-        )
-        return filename, headers
+        if url.startswith("res://"):
+            module = url[6:]
+            if "." in module:
+                raise ValueError("Invalid character in resource url: %s" % (url,))
+            name = "OpenGLContext.resources.%s" % (module,)
+            module = __import__(name, {}, {}, name.split("."))
+            return (url, BytesIO(as_8_bit(module.data)), module.source, None)
+        scheme = urllib.parse.urlsplit(url).scheme.lower()
+        if scheme in _ALLOWED_URL_SCHEMES:
+            log.debug("download: %s", url)
+            data = _fetch_url(url)
+            return (url, BytesIO(data), url, None)
+        # Local file: resolve to an absolute path so the scenegraph's baseURI is
+        # the file's own location, not a path relative to the process's cwd.
+        path = os.path.abspath(_local_path(url))
+        file = open(path, "rb")
+        return (path, file, path, None)
 
     loadedHandlers = {}
 

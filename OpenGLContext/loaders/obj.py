@@ -67,12 +67,15 @@ import logging
 log = logging.getLogger(__name__)
 from OpenGLContext.loaders import base, loader
 from OpenGLContext.scenegraph import basenodes
-import urllib
+import urllib.parse
+from hashlib import md5
 
-try:
-    from hashlib import md5
-except ImportError as err:
-    from md5 import md5
+
+def _as_text(data):
+    """Decode loader bytes to text (mtl/obj content is UTF-8 text)."""
+    if isinstance(data, bytes):
+        return data.decode("utf-8", "replace")
+    return data
 
 
 class OBJHandler(base.BaseHandler):
@@ -94,7 +97,7 @@ class OBJHandler(base.BaseHandler):
         sg = basenodes.sceneGraph()
 
         # these three are shared among all shapes
-        hash = md5(baseURL).hexdigest()
+        hash = md5(baseURL.encode("utf-8") if isinstance(baseURL, str) else baseURL).hexdigest()
         coord = basenodes.Coordinate(DEF="Coord-%s" % (hash,))
         normal = basenodes.Normal(DEF="Norm-%s" % (hash,))
         texCoord = basenodes.TextureCoordinate(DEF="TexCoord-%s" % (hash,))
@@ -236,19 +239,17 @@ class OBJHandler(base.BaseHandler):
         try:
             finalURL, filename, file, headers = loader.Loader(url, baseURL)
         except IOError:
-            if "/" in url:
-                possible = url.split("/")[-1]
-                try:
-                    finalURL, filename, file, headers = loader.Loader(possible, baseURL)
-                except IOError:
-                    log.warning(
-                        """Unable to load material library: %s""",
-                        url,
-                    )
-                    return False
+            possible = url.split("/")[-1] if "/" in url else None
+            try:
+                if possible is None:
+                    raise IOError(url)
+                finalURL, filename, file, headers = loader.Loader(possible, baseURL)
+            except IOError:
+                log.warning("""Unable to load material library: %s""", url)
+                return False
 
         material = None
-        for line in file.read().splitlines():
+        for line in _as_text(file.read()).splitlines():
             if line.startswith("#"):
                 continue
             values = line.split()
@@ -280,11 +281,11 @@ class OBJHandler(base.BaseHandler):
                         img_url = [values[1], values[1].split("/")[-1]]
                     else:
                         img_url = [values[1]]
-                    img_url = [urllib.basejoin(baseURL, u) for u in img_url]
+                    img_url = [urllib.parse.urljoin(baseURL, u) for u in img_url]
                     texture = basenodes.ImageTexture(url=img_url)
                     material.texture = texture
-            except:
-                log.warning("Parse error in %s.", url)
+            except Exception as err:
+                log.warning("Parse error in %s (%s): %s", url, values[0], err)
 
 
 def defaultHandler():
