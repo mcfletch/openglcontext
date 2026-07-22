@@ -21,7 +21,8 @@ from OpenGLContext.scenegraph.basenodes import *
 
 
 # Path to test textures
-TEXTURE_DIR = os.path.join(os.path.dirname(__file__), 'wrls')
+from OpenGLContext.testing.paths import tests_root
+TEXTURE_DIR = os.path.join(str(tests_root(__file__)), 'wrls')
 
 
 class TextureTestContext(BaseContext):

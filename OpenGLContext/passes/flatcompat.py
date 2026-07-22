@@ -62,7 +62,8 @@ class FlatPass( _flat.FlatPass ):
         
         # do we need to do a selection-render pass?
         events = context.getPickEvents()
-        debugSelection = mode.context.contextDefinition.debugSelection
+        debugSelection = (mode.context.contextDefinition.debugSelection
+                          and mode.context.contextDefinition.pickEnabled)
         
         if events or debugSelection:
             self.selectRender( mode, toRender, events )
@@ -80,6 +81,8 @@ class FlatPass( _flat.FlatPass ):
             self.transparent = False
             self.lighting = True
             self.textured = True
+            # Runtime-transparent shapes deferred from the opaque pass (3b).
+            self._deferredTransparent = []
 
             self.legacyBackgroundRender( vp,matrix )
             # Set up generic "geometric" rendering parameters
@@ -197,99 +200,19 @@ class FlatPass( _flat.FlatPass ):
                 glDepthMask( 1 )
                 glDepthFunc( GL_LEQUAL )
                 glEnable( GL_DEPTH_TEST )
+        # Draw shapes deferred from the opaque pass.
+        self._renderDeferredTransparent()
 
     def selectRender( self, mode, toRender, events ):
-        """Render each path to color buffer
+        """Legacy colour-buffer pick for the compatibility profile.
 
-        We render all geometry as non-transparent geometry with
-        unique colour values for each object.  We should be able
-        to handle up to 2**24 objects before that starts failing.
+        Packs the id unshifted into RGB and toggles the fixed-function lighting
+        state. Shared body in :func:`_flat._color_select_render`.
         """
-        # TODO: allow context to signal that it is "captured" by a
-        # movement manager that doesn't need select rendering...
-        # e.g. for an examine manager there's no reason to do select
-        # render passes...
-        # TODO: do line-box intersection tests for bounding boxes to
-        # only render the geometry which is under the cursor
-        # TODO: render to an FBO instead of the back buffer
-        # (when available)
-        # TODO: render at 1/2 size compared to context to create a
-        # 2x2 selection square and reduce overhead.
-        glClearColor( 0,0,0, 0 )
-        glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
-        glDisable( GL_LIGHTING )
-        glEnable( GL_COLOR_MATERIAL )
-
-        self.visible = False
-        self.transparent = False
-        self.lighting = False
-        self.textured = False
-
-        matrix = self.matrix
-        map = {}
-
-        pickPoints = {}
-        # TODO: this could be faster, and we could do further filtering
-        # using a frustum a-la select render mode approach...
-        min_x,min_y = self.getViewport()[2:]
-        max_x,max_y = 0,0
-        pickSize = 2
-        offset = pickSize//2
-        for event in events.values():
-            x,y = key = tuple(event.getPickPoint())
-            pickPoints.setdefault( key, []).append( event )
-            min_x = min((x-offset,min_x))
-            max_x = max((x+offset,max_x))
-            min_y = min((y-offset,min_y))
-            max_y = max((y+offset,max_y))
-        min_x = int(max((0,min_x)))
-        min_y = int(max((0,min_y)))
-        if max_x < min_x or max_y < min_y:
-            # no pick points were found 
-            return
-        debugSelection = mode.context.contextDefinition.debugSelection
-            
-        if not debugSelection:
-            glScissor( min_x,min_y,int(max_x)-min_x,int(max_y)-min_y)
-            glEnable( GL_SCISSOR_TEST )
-
-        glMatrixMode( GL_MODELVIEW )
-        try:
-            idHolder = array( [0,0,0,0], 'B' )
-            idSetter = idHolder.view( '<I' )
-            for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
-                k_id = id + 1
-                idSetter[0] = k_id
-                glColor4ubv( idHolder )
-                self.matrix = mvmatrix
-                self.renderPath = path
-                glLoadMatrixf( mvmatrix )
-                path[-1].Render( mode=self )
-                map[k_id] = path
-            pixel = array([0,0,0,0],'B')
-            depth_pixel = array([[0]],'f')
-            for point,eventSet in pickPoints.items():
-                # get the pixel colour (id) under the cursor.
-                px, py = int(point[0]), int(point[1])
-                glReadPixels( px,py,1,1,GL_RGB,GL_UNSIGNED_BYTE, pixel )
-                lpixel = long( pixel.view( '<I' )[0] )
-                paths = map.get( lpixel, [] )
-                event.setObjectPaths( [paths] )
-                # get the depth value under the cursor...
-                glReadPixels(
-                    px,py,1,1,GL_DEPTH_COMPONENT,GL_FLOAT,depth_pixel
-                )
-                event.viewCoordinate = point[0],point[1],depth_pixel[0][0]
-                event.modelViewMatrix = matrix
-                event.projectionMatrix = self.projection
-                event.viewport = self.viewport
-                if hasattr( mode.context, 'ProcessEvent'):
-                    mode.context.ProcessEvent( event )
-        finally:
-            glColor4f( 1.0,1.0,1.0, 1.0)
-            glDisable( GL_COLOR_MATERIAL )
-            glEnable( GL_LIGHTING )
-            glDisable( GL_SCISSOR_TEST )
+        _flat._color_select_render(
+            self, mode, toRender, events,
+            id_shift=0, read_format=GL_RGB,
+            setup_fixed_function=True, require_pick_enabled=True)
 
     MAX_LIGHTS = -1
     def __call__( self, context ):

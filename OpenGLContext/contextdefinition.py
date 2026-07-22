@@ -30,6 +30,20 @@ def _get_default_version():
     return (0, 0)
 
 
+def _get_default_picking():
+    """Whether colour-based scenegraph picking is enabled by default.
+
+    Disabled when OPENGLCONTEXT_PICKING is set to a falsey value
+    (0/off/false/no). Turning picking off skips the selection render, the MRT
+    id/depth buffer and its readback -- useful for headless capture or any
+    context that never queries object ids.
+    """
+    value = os.environ.get('OPENGLCONTEXT_PICKING')
+    if value is None:
+        return True
+    return value.strip().lower() not in ('0', 'off', 'false', 'no', '')
+
+
 class ContextDefinition( node.Node ):
     """Node which defines required parameters for creating a visual context
 
@@ -64,7 +78,7 @@ class ContextDefinition( node.Node ):
 
     # together these define the  colour format for the buffer
     rgb = field.newField( "rgb", "SFBool", 1, True)
-    alpha = field.newField( "alpha", "SFBool", 1, True)
+    alpha = field.newField( "alpha", "SFBool", 1, False)
 
     multisampleBuffer = field.newField( "multisampleBuffer", "SFInt32", 1, -1)
     multisampleSamples = field.newField( "multisampleSamples", "SFInt32", 1, -1)
@@ -73,6 +87,16 @@ class ContextDefinition( node.Node ):
     debugBBox = field.newField( "debugBBox", "SFBool", 1, False )
     debugSelection = field.newField( "debugSelection", "SFBool", 1, False )
     debug = field.newField( 'debug', 'SFBool', 1, False )
+
+    # Colour-based scenegraph picking. When false the selection render, MRT
+    # object-id buffer and its readback are all skipped (env: OPENGLCONTEXT_PICKING).
+    pickEnabled = field.newField( "pickEnabled", "SFBool", 1, _get_default_picking() )
+
+    # Non-blocking pick readback: read the MRT object-id/depth under each pick
+    # sample into a PBO with a fence instead of a synchronous glReadPixels, and
+    # dispatch the resolved events a frame later. Avoids the GPU->CPU stall so
+    # picking can run every frame (on-move painting). False = synchronous readback.
+    pickAsync = field.newField( "pickAsync", "SFBool", 1, True )
 
     # OpenGL profile selection - can be overridden by OPENGLCONTEXT_PROFILE env var
     # "core" requires GLFW or another backend that supports core profile contexts

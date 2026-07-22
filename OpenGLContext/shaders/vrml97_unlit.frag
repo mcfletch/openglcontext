@@ -3,6 +3,8 @@
 // Unlit fragment shader for selection/picking and text rendering
 // Supports solid color, textured, and text rendering modes
 
+#include "_objectid_inc.glsl"
+
 uniform vec4 solidColor;
 uniform sampler2D diffuseTexture;
 uniform bool useTexture;
@@ -13,9 +15,16 @@ uniform vec4 textColor;          // Color for text pixels (where texture alpha >
 uniform vec4 backgroundColor;    // Background color (used when textSolidBg is true)
 uniform bool textSolidBg;        // When true, render solid background instead of transparent
 
+// Object ID for the selection buffer (MRT). Set by the render pass for real
+// geometry drawn through this program (e.g. an unlit PointSet); left 0 for text.
+uniform uint objectId;
+
 in vec2 vTexCoord;
 
-out vec4 fragColor;
+// Output color (attachment 0)
+layout(location = 0) out vec4 fragColor;
+// Output object ID (attachment 1)
+layout(location = 1) out vec4 fragObjectId;
 
 void main() {
     if (textMode) {
@@ -37,5 +46,14 @@ void main() {
     } else {
         // Pure solid color mode (for selection rendering)
         fragColor = solidColor;
+    }
+
+    // Text / HUD stays non-pickable (id 0); real unlit geometry writes its id so
+    // it selects like lit geometry. objectId defaults to 0 when the pass never
+    // sets it (the text path), so guarding on textMode keeps HUD unpickable.
+    if (textMode) {
+        fragObjectId = vec4(0.0, 0.0, 0.0, 0.0);
+    } else {
+        fragObjectId = encodeObjectId(objectId);
     }
 }

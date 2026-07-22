@@ -37,6 +37,7 @@ import weakref, os, time, sys, logging
 
 log = logging.getLogger(__name__)
 from OpenGL._bytes import bytes, unicode
+from OpenGLContext.contextconfig import ContextConfigMixin
 
 
 class LockingError(Exception):
@@ -66,7 +67,7 @@ def inContextThread():
     return 1
 
 
-class Context(object):
+class Context(ContextConfigMixin):
     """Abstract base class on which all Rendering Contexts are based
 
     The Context object represents a single rendering context
@@ -94,8 +95,8 @@ class Context(object):
 
         viewportDimensions -- Storage for the current viewport
             dimensions, see:
-                Context.Viewport( ... )
-                Context.getViewport( ... )
+                Context.ViewPort( ... )
+                Context.getViewPort( ... )
             for the API used to interact with this attribute.
 
         drawPollTimeout -- default timeout for the drawPoll method
@@ -160,9 +161,25 @@ class Context(object):
     # Set to false to trigger a redraw on the next available iteration
     alreadyDrawn = None
     drawing = None
+    # When true, triggerRedraw/triggerPick only flag a redraw request rather
+    # than rendering synchronously in-thread. Backends that drive their own
+    # render loop (e.g. GLFW) set this so a burst of input events coalesces
+    # into a single render per loop iteration instead of one render per event.
+    deferRedraw = False
     viewportDimensions = (0, 0)
     drawPollTimeout = 0.01
     coreProfile = False
+    # True only for backends that have called glutInit and can safely use
+    # GLUT bitmap fonts. GLUT functions segfault if used without a GLUT
+    # context, so font providers must consult this before selecting them.
+    providesGLUT = False
+
+    # Auto-exit support for automated testing
+    # Set OPENGLCONTEXT_AUTO_EXIT_FRAMES environment variable to exit after N frames
+    # Set OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR to capture screenshot before exit
+    _autoExitFrames = None
+    _autoExitFrameCount = 0
+    _autoExitCaptureDir = None
 
     ### Node-like attributes
     PROTO = "Context"
@@ -203,7 +220,86 @@ class Context(object):
         self.setupCache()
         self.setupFontProviders()
         self.setupFrameRateCounter()
+        self.setupAutoExit()
         self.DoInit()
+
+    def setupAutoExit(self):
+        """Setup auto-exit for automated testing.
+
+        If OPENGLCONTEXT_AUTO_EXIT_FRAMES environment variable is set,
+        the context will automatically exit after rendering that many frames.
+        This enables automated testing of interactive scripts.
+
+        If OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR is also set, a screenshot
+        will be captured before exiting.
+        """
+        auto_exit = os.environ.get('OPENGLCONTEXT_AUTO_EXIT_FRAMES')
+        if auto_exit:
+            try:
+                self._autoExitFrames = int(auto_exit)
+                self._autoExitFrameCount = 0
+                log.info(f"Auto-exit enabled: will exit after {self._autoExitFrames} frames")
+            except ValueError:
+                log.warning(f"Invalid OPENGLCONTEXT_AUTO_EXIT_FRAMES value: {auto_exit}")
+
+        capture_dir = os.environ.get('OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR')
+        if capture_dir:
+            self._autoExitCaptureDir = capture_dir
+            log.info(f"Auto-exit capture enabled: screenshots will be saved to {capture_dir}")
+
+    def _autoExitDraw(self):
+        """Render one final frame and capture it before auto-exit.
+
+        The auto-exit check runs at the top of OnDraw, where the context is not yet
+        current and the previous frame has already been swapped to the front buffer,
+        so the back buffer holds stale (often black) data. To capture the on-screen
+        image we draw one more frame and read the back buffer *before* that frame's
+        swap, by intercepting the single SwapBuffers the render pass performs.
+        """
+        if not self._autoExitCaptureDir:
+            return
+        # Suppress the auto-exit branch so the forced redraw below renders normally
+        # instead of recursing back into here.
+        self._autoExitFrames = None
+        swap = self.SwapBuffers
+        captured = []
+
+        def _captureThenSwap():
+            if not captured:
+                captured.append(True)
+                self._autoExitCapture()
+            swap()
+
+        self.SwapBuffers = _captureThenSwap
+        try:
+            self.OnDraw(force=1)
+        finally:
+            self.SwapBuffers = swap
+        if not captured:
+            # Render produced no visible change, so no swap occurred and the back
+            # buffer was never captured; fall back to a direct read.
+            self.setCurrent()
+            try:
+                self._autoExitCapture()
+            finally:
+                self.unsetCurrent()
+
+    def _autoExitCapture(self):
+        """Write the current back buffer to the configured capture path."""
+        if not self._autoExitCaptureDir:
+            return
+        try:
+            from OpenGLContext.capture import capture_to_png
+            # Use test name from environment, or fall back to class attribute or class name
+            test_name = os.environ.get(
+                'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME',
+                getattr(self, 'test_name', self.__class__.__name__)
+            )
+            filepath = os.path.join(self._autoExitCaptureDir, f"{test_name}.png")
+            if capture_to_png(filepath, skip_blank=False):
+                log.info(f"Auto-exit capture saved: {filepath}")
+        except Exception as e:
+            log.warning(f"Auto-exit capture failed: {e}")
 
     def setupLogging(self):
         import logging
@@ -231,17 +327,10 @@ class Context(object):
         method processed after their initialization has
         completed.  The default implementation here simply
         calls OnInit directly w/ appropriate setCurrent
-        and unsetCurrent calls and calls the glutInit()
-        function with an empty argument-list.
+        and unsetCurrent calls.
         """
         self.setCurrent()
         try:
-            try:
-                from OpenGL import GLUT
-
-                GLUT.glutInit([])
-            except Exception as err:
-                pass
             self.OnInit()
         finally:
             self.unsetCurrent()
@@ -340,50 +429,34 @@ class Context(object):
         overwrite=False,
     ):
         """Save our current screen to disk (if possible)"""
-        try:
-            try:
-                from PIL import Image  # get PIL's functionality...
-            except ImportError as err:
-                # old style?
-                import Image
-        except ImportError as err:
-            log.error("Unable to import PIL")
-            saved = False
+        from OpenGLContext.capture import ensure_pillow, read_back_buffer, save_png
+        if ensure_pillow() is None:
             return (0, 0)
-        else:
-            width, height = self.getViewPort()
-            if not width or not height:
-                return (width, height)
-            # Ensure width/height are Python ints (not numpy scalars) for glReadPixels
-            width, height = int(width), int(height)
-            glPixelStorei(GL_PACK_ALIGNMENT, 1)
-            data = glReadPixelsub(0, 0, width, height, GL_RGB, outputType=None)
-            if hasattr(data, "tostring"):
-                string = data.tobytes()
-            else:
-                string = data
-            image = Image.frombytes("RGB", (int(width), int(height)), string)
-            image = image.transpose(Image.FLIP_TOP_BOTTOM)
-            if script is None:
-                import sys
+        width, height = self.getViewPort()
+        if not width or not height:
+            return (width, height)
+        width, height = int(width), int(height)
+        pixels, width, height = read_back_buffer()
+        if script is None:
+            import sys
 
-                script = sys.argv[0]
-            if date is None:
-                import datetime
+            script = sys.argv[0]
+        if date is None:
+            import datetime
 
-                date = datetime.datetime.now().isoformat()
-            count = 0
-            saved = False
-            while (not saved) and count <= 9999:
-                count += 1
-                test = template % locals()
-                if overwrite or (not os.path.exists(test)):
-                    log.warning("Saving to file: %s", test)
-                    image.save(test, "PNG")
-                    saved = True
+            date = datetime.datetime.now().isoformat()
+        count = 0
+        saved = False
+        while (not saved) and count <= 9999:
+            count += 1
+            test = template % locals()
+            if overwrite or (not os.path.exists(test)):
+                log.warning("Saving to file: %s", test)
+                if save_png(test, pixels):
                     return (width, height)
-                else:
-                    log.info("Existing file: %s", test)
+                return (0, 0)
+            else:
+                log.info("Existing file: %s", test)
         return (0, 0)
 
     def setupThreading(self):
@@ -405,6 +478,9 @@ class Context(object):
         Updates to the framecounter are performed by OnDraw
         iff there is a visible change processed.
 
+        If OPENGLCONTEXT_DISABLE_FPS_DISPLAY environment variable is set,
+        the FPS display will be hidden (useful for automated testing).
+
         Note:
             If you override this method, you need to either use
             an object which has the same API as a FrameCounter or
@@ -414,6 +490,9 @@ class Context(object):
         from OpenGLContext import framecounter
 
         self.frameCounter = framecounter.FrameCounter()
+        # Disable FPS display for automated testing if requested
+        if os.environ.get('OPENGLCONTEXT_DISABLE_FPS_DISPLAY'):
+            self.frameCounter.display = False
 
     def initializeEventManagers(self, managerClasses=()):
         """Customisation point for initialising event manager objects
@@ -472,6 +551,13 @@ class Context(object):
         self.unlockScenegraph()
         Context.currentContext = None
         contextLock.release()
+
+    @classmethod
+    def ContextMainLoop(cls, *args, **named):
+        """Enter the GUI toolkit's main loop; each backend sub-class overrides this"""
+        raise NotImplementedError(
+            """No mainloop specified for context class %r""" % (cls,)
+        )
 
     def OnInit(self):
         """Customization point for scene set up and initial processing
@@ -533,6 +619,17 @@ class Context(object):
         # could use if self.frameCounter, but that introduces a
         # potential race condition, so eat the extra call...
         t = perf()
+
+        # Check for auto-exit on each OnDraw call, even if we return early
+        # This ensures we count total calls rather than just rendered frames
+        if self._autoExitFrames is not None:
+            self._autoExitFrameCount += 1
+            if self._autoExitFrameCount >= self._autoExitFrames:
+                log.info(f"Auto-exit: {self._autoExitFrameCount} OnDraw calls")
+                self._autoExitDraw()
+                self.OnQuit()
+                return 0
+
         self.lockScenegraph()
         try:
             changed = self.DoEventCascade()
@@ -622,7 +719,7 @@ class Context(object):
         """
         contextLock.acquire()
         try:
-            if (not self.drawing) and inContextThread():
+            if (not self.drawing) and (not self.deferRedraw) and inContextThread():
                 self.OnDraw()
             elif threading:
                 self.redrawRequest.set()
@@ -641,7 +738,7 @@ class Context(object):
             self.alreadyDrawn = 0
         finally:
             contextLock.release()
-        if force and (not self.drawing) and inContextThread():
+        if force and (not self.drawing) and (not self.deferRedraw) and inContextThread():
             self.OnDraw()
         elif threading:
             self.redrawRequest.set()
@@ -698,6 +795,13 @@ class Context(object):
         """
         return self.viewportDimensions
 
+    # Case-insensitive alias: a render pass exposes ``getViewport`` (a 4-tuple),
+    # the context ``getViewPort`` (a width,height pair), and the two differ only by
+    # capitalisation -- an easy typo that used to AttributeError on the context.
+    # Accept either spelling here so a mixed-case call degrades to the right value
+    # instead of crashing.
+    getViewport = getViewPort
+
     def addPickEvent(self, event):
         """Add event to list of events to be processed by selection-render-mode
 
@@ -709,11 +813,29 @@ class Context(object):
         loop.  As a result, there is (almost) never an
         active context when the pick-event-request comes in.
         """
+        cd = self.contextDefinition
+        if cd is not None and not cd.pickEnabled:
+            return
         self.pickEvents[(event.type, event.getKey())] = event
 
     def getPickEvents(self):
         """Get the currently active pick-events"""
         return self.pickEvents
+
+    def hasMouseMoveHandlers(self):
+        """Check if any mouse-move related handlers are registered.
+
+        Returns True if there are handlers for mousemove, mousein, or mouseout
+        events. Used to optimize selection by skipping mouse-move processing
+        when no handlers would receive the events. Asks each relevant event
+        manager whether it has live receivers rather than walking the pydispatch
+        registry here.
+        """
+        for event_type in ('mousemove', 'mousein', 'mouseout'):
+            manager = self.getEventManager(event_type)
+            if manager is not None and manager.hasReceivers():
+                return True
+        return False
 
     def getSceneGraph(self):
         """Get the scene graph for the context (or None)
@@ -751,216 +873,46 @@ class Context(object):
         else:
             return (sg,)
 
-    ### app-framework stuff
-    APPLICATION_NAME = "OpenGLContext"
-
-    def getApplicationName(cls):
-        """Retrieve the application name for configuration purposes"""
-        return cls.APPLICATION_NAME
-
-    getApplicationName = classmethod(getApplicationName)
-
-    def getUserAppDataDirectory(cls):
-        """Retrieve user-specific configuration directory
-
-        Default implementation gives a directory-name in the
-        user's (system-specific) "application data" directory
-        named
-        """
-        from OpenGLContext.browser import homedirectory
-
-        # import ipdb;ipdb.set_trace()
-        base = homedirectory.appdatadirectory()
-        if sys.platform == "win32":
-            name = cls.getApplicationName()
-        else:
-            # use a hidden directory on non-win32 systems
-            # as we are storing in the user's home directory
-            name = "%s" % (cls.getApplicationName())
-        path = os.path.join(
-            base,
-            name,
-        )
-        if not os.path.isdir(path):
-            os.makedirs(path, mode=0o770)
-        return path
-
-    getUserAppDataDirectory = classmethod(getUserAppDataDirectory)
-
+    # App-framework config / backend factory lives in ContextConfigMixin
+    # (getApplicationName, getUserAppDataDirectory, get/setDefault*, getContextType*).
+    # getTTFFiles and fromConfig stay here: they name the concrete Context class
+    # directly.
     ttfFileRegistry = None
 
     def getTTFFiles(self):
         """Get TrueType font-file registry object"""
-        if self.ttfFileRegistry:
-            return self.ttfFileRegistry
-        from ttfquery import ttffiles
+        if not self.ttfFileRegistry:
+            from ttfquery import ttffiles
 
-        registryFile = os.path.join(
-            self.getUserAppDataDirectory(), "font_metadata.cache"
-        )
-        from OpenGLContext.scenegraph.text import ttfregistry
-
-        registry = ttfregistry.TTFRegistry()
-        if os.path.isfile(registryFile):
-            log.info("Loading font metadata from cache %r", registryFile)
-            registry.load(registryFile)
-            if not registry.fonts:
-                log.warning("Re-scanning fonts, no fonts found in cache")
-                registry.scan()
-                registry.save()
-                log.info("Font metadata stored in cache %r", registryFile)
-        else:
-            log.warning(
-                "Scanning font metadata into cache %r, please wait", registryFile
+            registryFile = os.path.join(
+                self.getUserAppDataDirectory(), "font_metadata.cache"
             )
-            registry.scan()
-            registry.save(registryFile)
-            log.info("Font metadata stored in cache %r", registryFile)
-        # make this a globally-available object
-        Context.ttfFileRegistry = registry
-        return registry
+            from OpenGLContext.scenegraph.text import ttfregistry
 
-    def getDefaultTTFFont(cls, type="sans"):
-        """Get the current user's preference for a default font"""
-        import os
-
-        directory = cls.getUserAppDataDirectory()
-        filename = os.path.join(directory, "defaultfont-%s.txt" % (type.lower(),))
-        name = None
-        try:
-            name = open(filename).readline().strip()
-        except IOError as err:
-            pass
-        if not name:
-            name = None
-        return name
-
-    getDefaultTTFFont = classmethod(getDefaultTTFFont)
-
-    def setDefaultTTFFont(cls, name, type="sans"):
-        """Set the current user's preference for a default font"""
-        import os
-
-        directory = cls.getUserAppDataDirectory()
-        filename = os.path.join(directory, "defaultfont-%s.txt" % (type.lower(),))
-        if not name:
-            try:
-                os.remove(filename)
-            except Exception as err:
-                return False
+            registry = ttfregistry.TTFRegistry()
+            if os.path.isfile(registryFile):
+                log.info("Loading font metadata from cache %r", registryFile)
+                registry.load(registryFile)
+                if not registry.fonts:
+                    log.warning("Re-scanning fonts, no fonts found in cache")
+                    registry.scan()
+                    registry.save()
+                    log.info("Font metadata stored in cache %r", registryFile)
             else:
-                return True
-        else:
-            try:
-                open(filename, "w").write(name)
-            except IOError as err:
-                return False
-            return True
-
-    setDefaultTTFFont = classmethod(setDefaultTTFFont)
-
-    def getContextTypes(cls, type=plugins.InteractiveContext):
-        """Retrieve the set of defined context types
-
-        type -- testing type key from setup.py for the registered modules
-
-        returns list of setuptools entry-point objects which can be passed to
-        getContextType( name ) to retrieve the actual context type.
-        """
-        return type.all()
-
-    getContextTypes = classmethod(getContextTypes)
-
-    def getContextType(
-        cls,
-        entrypoint=None,
-        type=plugins.InteractiveContext,
-    ):
-        """Load a single context type via entry-point resolution
-
-        returns a Context sub-class *or* None if there is no such
-        context defined/available, will have a ContextMainLoop method
-        for running the Context top-level loop.
-        """
-        if entrypoint is None:
-            entrypoint = cls.getDefaultContextType() or "glut"
-        log.warning("Default context type: %s", entrypoint)
-        if isinstance(entrypoint, (bytes, unicode)):
-            for ep in cls.getContextTypes(type):
-                if entrypoint == ep.name:
-                    return cls.getContextType(ep, type=type)
-            return None
-        try:
-            classObject = entrypoint.load()
-        except ImportError as err:
-            return None
-        else:
-            return classObject
-
-    getContextType = classmethod(getContextType)
-
-    def getDefaultContextType(cls):
-        """Get the current user's preference for a default context type
-
-        Checks in order:
-            1. OPENGLCONTEXT_BACKEND environment variable
-            2. ~/.OpenGLContext/defaultcontext.txt file
-
-        Valid backend names: glut, pygame, wx, glfw
-        """
-        import os
-
-        # First check environment variable
-        name = os.environ.get('OPENGLCONTEXT_BACKEND')
-        if name:
-            return name.strip()
-
-        # Fall back to config file
-        directory = cls.getUserAppDataDirectory()
-        filename = os.path.join(directory, "defaultcontext.txt")
-        name = None
-        if os.path.exists(filename):
-            try:
-                name = open(filename).readline().strip()
-            except IOError as err:
-                pass
-        else:
-            log.warning("No default context type in %s", filename)
-        if not name:
-            name = None
-        return name
-
-    getDefaultContextType = classmethod(getDefaultContextType)
-
-    def setDefaultContextType(cls, name):
-        """Set the current user's preference for a default font"""
-        import os
-
-        directory = cls.getUserAppDataDirectory()
-        filename = os.path.join(directory, "defaultcontext.txt")
-        if not name:
-            try:
-                os.remove(filename)
-            except Exception as err:
-                return False
-            else:
-                return True
-        else:
-            try:
-                open(filename, "w").write(name)
-            except IOError as err:
-                return False
-            return True
-
-    setDefaultContextType = classmethod(setDefaultContextType)
-
-    def ContextMainLoop(cls, *args, **named):
-        """Mainloop for the context, each GUI sub-class must override this"""
-        raise NotImplementedError(
-            """No mainloop specified for context class %r""" % (cls,)
-        )
-
-    ContextMainLoop = classmethod(ContextMainLoop)
+                log.warning(
+                    "Scanning font metadata into cache %r, please wait", registryFile
+                )
+                registry.scan()
+                registry.save(registryFile)
+                log.info("Font metadata stored in cache %r", registryFile)
+            # make this a globally-available object
+            Context.ttfFileRegistry = registry
+        # Keep the font-provider class registry in sync so that font providers
+        # registered without a full setupFontProviders() call (e.g. plain
+        # InteractiveContext + a direct toolsfont import) can still resolve fonts.
+        from OpenGLContext.scenegraph.text import fontprovider
+        fontprovider.setTTFRegistry(self.ttfFileRegistry)
+        return self.ttfFileRegistry
 
     ##	def getUserContextPreferences( cls ):
     ##		"""Retrieve user-specific context preferences"""

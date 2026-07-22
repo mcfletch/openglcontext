@@ -11,17 +11,21 @@ The shader pass is designed to:
 from __future__ import annotations
 
 import os
+import re
 import logging
 from math import cos, sin
 from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 from OpenGL.GL import (
     GL_FALSE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER,
-    GL_TEXTURE0, GL_TEXTURE_2D, GL_CURRENT_PROGRAM,
+    GL_TEXTURE0, GL_TEXTURE_2D, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_CUBE_MAP,
+    GL_TEXTURE_CUBE_MAP_ARRAY,
+    GL_CURRENT_PROGRAM, GL_TEXTURE_COMPARE_MODE, GL_NONE, GL_NEAREST,
+    GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER,
     glUseProgram, glGetUniformLocation, glGetIntegerv,
-    glUniform1i, glUniform1f,
-    glUniform3fv, glUniform4fv, glUniformMatrix3fv, glUniformMatrix4fv,
-    glActiveTexture, glBindTexture,
+    glUniform1i, glUniform1f, glUniform1ui,
+    glUniform2fv, glUniform3fv, glUniform4fv, glUniformMatrix3fv, glUniformMatrix4fv,
+    glActiveTexture, glBindTexture, glGenSamplers, glSamplerParameteri, glBindSampler,
 )
 from OpenGL.GL import shaders as GL_shaders
 from OpenGLContext.arrays import array
@@ -41,11 +45,117 @@ Vec4 = Tuple[float, float, float, float]
 Matrix4 = npt.NDArray[np.float32]
 Matrix3 = npt.NDArray[np.float32]
 
-# Path to shader files
-SHADER_DIR: str = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
+# Shader-text assembly (#include resolution, define injection, shadow budget)
+# lives in shadersource; SHADER_DIR / preprocess_shader are re-exported here
+# because tests and sibling passes import them from shaderpass.
+from OpenGLContext.passes.shadersource import (
+    SHADER_DIR,
+    SHADOW_INCLUDE_MARKER,
+    SHADOW_INCLUDE_PATH,
+    HARD_MAX_SHADOW_LIGHTS,
+    preprocess_shader,
+    shadow_defines,
+    resolve_shadow_config,
+    load_fragment_source,
+)
+from OpenGLContext.passes.shaderpass_shadow import _ShadowUniformMixin
 
 
-class VRML97ShaderProgram:
+def normal_matrix(modelview: Matrix4) -> Matrix4:
+    """Inverse-transpose of a modelview's upper-left 3x3 (the normal matrix).
+
+    Computed as the cofactor matrix / determinant directly, avoiding a
+    ``np.linalg.inv`` (LAPACK) call per shape per frame -- ~3x faster, which
+    matters for high-node-count scenes (CAD assemblies, skinned characters).
+    Falls back to the plain 3x3 for a singular (degenerate) transform.
+    """
+    a = modelview.tolist()
+    (a00, a01, a02) = a[0][0], a[0][1], a[0][2]
+    (a10, a11, a12) = a[1][0], a[1][1], a[1][2]
+    (a20, a21, a22) = a[2][0], a[2][1], a[2][2]
+    c00 = a11 * a22 - a12 * a21
+    c01 = a12 * a20 - a10 * a22
+    c02 = a10 * a21 - a11 * a20
+    det = a00 * c00 + a01 * c01 + a02 * c02
+    if -1e-12 < det < 1e-12:
+        return np.ascontiguousarray(modelview[:3, :3], dtype='f')
+    inv = 1.0 / det
+    # Row-major cofactor matrix already equals adjugate-transpose, so cofactor/det
+    # is exactly inv(M).T -- the normal matrix.
+    return np.array((
+        (c00 * inv, c01 * inv, c02 * inv),
+        ((a02 * a21 - a01 * a22) * inv, (a00 * a22 - a02 * a20) * inv, (a01 * a20 - a00 * a21) * inv),
+        ((a01 * a12 - a02 * a11) * inv, (a02 * a10 - a00 * a12) * inv, (a00 * a11 - a01 * a10) * inv),
+    ), dtype='f')
+
+
+def _as_floats(value) -> tuple:
+    return tuple(float(v) for v in value)
+
+
+def _vec_uploader(gl_fn):
+    """Wrap a glUniform{2,3,4}fv into the (loc, value) upload signature."""
+    def upload(loc, value):
+        gl_fn(loc, 1, array(value, 'f'))
+    return upload
+
+
+_UPLOAD_2FV = _vec_uploader(glUniform2fv)
+_UPLOAD_3FV = _vec_uploader(glUniform3fv)
+_UPLOAD_4FV = _vec_uploader(glUniform4fv)
+
+
+def _affine2d_translate(tx: float, ty: float) -> Matrix3:
+    m = np.eye(3, dtype='f')
+    m[0, 2] = tx
+    m[1, 2] = ty
+    return m
+
+
+def _affine2d_scale(sx: float, sy: float) -> Matrix3:
+    m = np.eye(3, dtype='f')
+    m[0, 0] = sx
+    m[1, 1] = sy
+    return m
+
+
+def _affine2d_rotate(angle: float) -> Matrix3:
+    c, s = cos(angle), sin(angle)
+    m = np.eye(3, dtype='f')
+    m[0, 0], m[0, 1] = c, -s
+    m[1, 0], m[1, 1] = s, c
+    return m
+
+
+def texture_transform_matrix(transform_node: Optional[Any]) -> Matrix3:
+    """3x3 homogeneous UV transform for a VRML97 TextureTransform node.
+
+    ``None`` yields identity. Composition order matches the VRML97 spec:
+    translate(center) -> rotate -> scale -> translate(-center) -> translate.
+    The three translation matrices share one builder so the five
+    hand-written matrices this replaced can't drift apart.
+    """
+    if transform_node is None:
+        return np.eye(3, dtype='f')
+    tx, ty = transform_node.translation
+    cx, cy = transform_node.center
+    angle = transform_node.rotation
+    sx, sy = transform_node.scale
+    m = np.eye(3, dtype='f')
+    if cx != 0 or cy != 0:
+        m = m @ _affine2d_translate(cx, cy)
+    if angle != 0:
+        m = m @ _affine2d_rotate(angle)
+    if sx != 1 or sy != 1:
+        m = m @ _affine2d_scale(sx, sy)
+    if cx != 0 or cy != 0:
+        m = m @ _affine2d_translate(-cx, -cy)
+    if tx != 0 or ty != 0:
+        m = m @ _affine2d_translate(tx, ty)
+    return m
+
+
+class VRML97ShaderProgram(_ShadowUniformMixin):
     """Manages the VRML97 lighting shader program and uniforms.
 
     This class encapsulates shader compilation, uniform management,
@@ -61,93 +171,203 @@ class VRML97ShaderProgram:
         self.vertex_color_program: Optional[int] = None  # For per-vertex color geometry
         self.point_program: Optional[int] = None  # For PointSet with per-vertex colors
         self.line_program: Optional[int] = None  # For IndexedLineSet with per-vertex colors
+        self.depth_program: Optional[int] = None  # Position-only, for shadow depth passes
         # Cache uniform locations per program: {program_id: {uniform_name: location}}
         self._location_cache: Dict[int, Dict[str, int]] = {}
+        # Cache last value uploaded per (program, uniform) so a redundant set
+        # (e.g. the same material on many shapes) skips the glUniform call. The
+        # cache reflects exactly what we uploaded, so skipping is never stale.
+        self._uniform_value_cache: Dict[int, Dict[str, Any]] = {}
         self._compiled: bool = False
+        # True only after every sub-program linked. Distinct from _compiled (which
+        # means "compile was attempted"): a partial failure leaves _compiled=True
+        # but _ok=False so use*/use_depth refuse to bind a half-built set of
+        # programs.
+        self._ok: bool = False
+        # Shadow-sampler budget, resolved from the driver at compile time. The
+        # class-level MAX_SHADOW_LIGHTS is the ceiling; the instance value may be
+        # smaller on a texture-unit-starved driver. shadow_cube_array selects the
+        # packed cube-array sampler over per-slot cube samplers.
+        self.MAX_SHADOW_LIGHTS: int = type(self).MAX_SHADOW_LIGHTS
+        self.shadow_cube_array: bool = False
+        # Picking: the current shape's object id follows program switches. The
+        # pass sets it on the lit program, but geometry may bind another program
+        # (an unlit PointSet, per-vertex line/point) whose objectId uniform would
+        # otherwise stay 0 -- making that geometry silently non-pickable. use*()
+        # re-applies this to the newly-bound program, but only while _pick_active
+        # (id buffer being written), so there is zero cost when not picking.
+        self._current_object_id: int = 0
+        self._pick_active: bool = False
+        # The program this class last bound. Tracking it lets use*()
+        # skip re-binding the already-active program every shape, and lets
+        # set_matrices/set_object_id find the current program without a
+        # glGetIntegerv(GL_CURRENT_PROGRAM) round-trip per draw. Reset each frame
+        # by begin_frame() so a cross-frame external bind can't cause a stale skip.
+        self._active_program: Optional[int] = None
+        # Programs the static shadow sampler->unit mapping has been applied to, so
+        # it isn't re-uploaded 2-3x per frame (the mapping never changes). A set,
+        # since more than one program (lit + vertex-colour) receives shadows.
+        self._shadow_samplers_program: set = set()
+        # The program the shadow-uniform setters target. Defaults to the lit
+        # program; bindShadowUniforms retargets it to also configure the
+        # vertex-colour program so per-vertex-coloured / NURBS geometry gets
+        # shadows.
+        self._shadow_program: Optional[int] = None
+
+    def begin_frame(self) -> None:
+        """Reset per-frame bind tracking; call once at the top of each frame.
+
+        Within a frame every VRML97 program switch goes through use*(), so the
+        cached ``_active_program`` stays truthful and use*() can safely skip a
+        redundant re-bind. Clearing it here bounds any staleness to a single
+        frame (e.g. a background/legacy shader binding its own program).
+        """
+        self._active_program = None
+
+    def _bind_program(self, program: Optional[int]) -> None:
+        """glUseProgram and record the program for the default-arg lookups.
+
+        This deliberately always issues glUseProgram rather than skipping when the
+        program "looks" already-active: other passes (the IBL probe build, bloom)
+        bind their own programs mid-frame without going through this class, so a
+        skip-cache would leave the wrong program bound (verified: it broke IBL
+        uniform uploads with GL_INVALID_OPERATION). The cheap driver-side re-bind
+        is kept; only the per-draw GL_CURRENT_PROGRAM *read* is eliminated.
+        """
+        glUseProgram(program)
+        self._active_program = program
+
+    def _program_for_default(self) -> int:
+        """Program a default-arg set_matrices/set_object_id targets.
+
+        Geometry calls those right after a use*(), so the class's last-bound
+        program is the one being drawn with -- no glGetIntegerv round-trip.
+        Falls back to the lit program before anything is bound this frame (or
+        after an explicit unbind).
+        """
+        return self._active_program or self.program
+
+    # Every GL program handle the pass may bind; cleared together on failure.
+    _PROGRAM_ATTRS: Tuple[str, ...] = (
+        'program', 'unlit_program', 'vertex_color_program',
+        'point_program', 'line_program', 'depth_program',
+    )
+
+    def _clear_programs(self) -> None:
+        """Null every program handle after a failed/partial compile.
+
+        Leaves nothing for a later ``use*`` to bind, so a compile that got halfway
+        can't hand a draw a ``None`` (or a linked-but-incomplete) program.
+        """
+        for name in self._PROGRAM_ATTRS:
+            setattr(self, name, None)
+        self._ok = False
+
+    @staticmethod
+    def _delete_shaders(*shaders) -> None:
+        """Flag compiled shader objects for deletion once linked into a program.
+
+        The program keeps them alive until it is itself deleted, so this just
+        drops the standalone references that would otherwise leak per recompile.
+        """
+        from OpenGL.GL import glDeleteShader
+        for sh in shaders:
+            try:
+                glDeleteShader(sh)
+            except Exception:
+                pass
+
+    def _compile_one(self, label, vert_name, frag_name,
+                     validate=True, shadow_frag=False):
+        """Compile one program in isolation; return its handle or None.
+
+        A break in any single shader must degrade only that feature, not take
+        down the whole shader system. Failures are logged and return
+        None so the caller can keep the programs that did compile.
+        """
+        try:
+            # preprocess_shader resolves shared #includes (the _objectid_inc /
+            # _lights_inc helpers); a shader with no includes
+            # round-trips unchanged. The lit fragment additionally needs the
+            # shadow-budget defines, so it goes through load_fragment_source.
+            vert_source = preprocess_shader(vert_name)
+            if shadow_frag:
+                frag_source = load_fragment_source(
+                    frag_name, self.MAX_SHADOW_LIGHTS, self.shadow_cube_array)
+            else:
+                frag_source = preprocess_shader(frag_name)
+            vertex = GL_shaders.compileShader(vert_source, GL_VERTEX_SHADER)
+            fragment = GL_shaders.compileShader(frag_source, GL_FRAGMENT_SHADER)
+            program = GL_shaders.compileProgram(vertex, fragment, validate=validate)
+            self._delete_shaders(vertex, fragment)
+            return program
+        except Exception as err:
+            log.error("Failed to compile %s shader (%s/%s): %s",
+                      label, vert_name, frag_name, err)
+            return None
 
     def compile(self) -> bool:
         """Compile the shader programs from source files.
 
+        Each program is compiled in isolation so one broken shader degrades only
+        its feature; the lit program is the one the system can't do
+        without, so ``_ok`` (the return value) tracks it.
+
         Returns:
-            True if compilation succeeded, False otherwise
+            True if the essential (lit) program compiled, False otherwise.
         """
         if self._compiled:
-            return self.program is not None
+            return self._ok
 
-        try:
-            # Load and compile main lighting shader
-            vert_path = os.path.join(SHADER_DIR, 'vrml97_lighting.vert')
-            frag_path = os.path.join(SHADER_DIR, 'vrml97_lighting.frag')
+        # Resolve how many shadow lights (and which cube path) this driver's
+        # texture-unit budget allows, then bake it into the fragment source.
+        self.MAX_SHADOW_LIGHTS, self.shadow_cube_array = resolve_shadow_config()
 
-            with open(vert_path, 'r') as f:
-                vert_source = f.read()
-            with open(frag_path, 'r') as f:
-                frag_source = f.read()
+        # validate=False on the lit program: it declares shadow samplers of
+        # several texture targets that all default to unit 0 at link time (a
+        # spurious "different type / same unit" validation failure). Real unit
+        # assignment happens via init_shadow_samplers() before drawing.
+        self.program = self._compile_one(
+            'lit', 'vrml97_lighting.vert', 'vrml97_lighting.frag',
+            validate=False, shadow_frag=True)
+        self.unlit_program = self._compile_one(
+            'unlit', 'vrml97_unlit.vert', 'vrml97_unlit.frag')
+        # shadow_frag: the vertex-colour shader now #includes _shadow_inc, so it
+        # needs the MAX_SHADOW_LIGHTS defines baked in like the lit program (2a).
+        self.vertex_color_program = self._compile_one(
+            'vertex_color', 'vrml97_vertex_color.vert', 'vrml97_vertex_color.frag',
+            shadow_frag=True)
+        self.point_program = self._compile_one(
+            'point', 'vrml97_point.vert', 'vrml97_point.frag')
+        self.line_program = self._compile_one(
+            'line', 'vrml97_line.vert', 'vrml97_line.frag')
+        # Position-only depth program for the shadow-map pass.
+        self.depth_program = self._compile_one(
+            'depth', 'shadow_depth.vert', 'shadow_depth.frag', validate=False)
 
-            vertex_shader = GL_shaders.compileShader(vert_source, GL_VERTEX_SHADER)
-            fragment_shader = GL_shaders.compileShader(frag_source, GL_FRAGMENT_SHADER)
-            self.program = GL_shaders.compileProgram(vertex_shader, fragment_shader)
-
-            # Load and compile unlit shader for selection
-            unlit_vert_path = os.path.join(SHADER_DIR, 'vrml97_unlit.vert')
-            unlit_frag_path = os.path.join(SHADER_DIR, 'vrml97_unlit.frag')
-
-            with open(unlit_vert_path, 'r') as f:
-                unlit_vert_source = f.read()
-            with open(unlit_frag_path, 'r') as f:
-                unlit_frag_source = f.read()
-
-            unlit_vertex = GL_shaders.compileShader(unlit_vert_source, GL_VERTEX_SHADER)
-            unlit_fragment = GL_shaders.compileShader(unlit_frag_source, GL_FRAGMENT_SHADER)
-            self.unlit_program = GL_shaders.compileProgram(unlit_vertex, unlit_fragment)
-
-            # Load and compile vertex color shader (for NURBS and other per-vertex color geometry)
-            vc_vert_path = os.path.join(SHADER_DIR, 'vrml97_vertex_color.vert')
-            vc_frag_path = os.path.join(SHADER_DIR, 'vrml97_vertex_color.frag')
-
-            with open(vc_vert_path, 'r') as f:
-                vc_vert_source = f.read()
-            with open(vc_frag_path, 'r') as f:
-                vc_frag_source = f.read()
-
-            vc_vertex = GL_shaders.compileShader(vc_vert_source, GL_VERTEX_SHADER)
-            vc_fragment = GL_shaders.compileShader(vc_frag_source, GL_FRAGMENT_SHADER)
-            self.vertex_color_program = GL_shaders.compileProgram(vc_vertex, vc_fragment)
-
-            # Load and compile point shader (for PointSet with per-vertex colors)
-            pt_vert_path = os.path.join(SHADER_DIR, 'vrml97_point.vert')
-            pt_frag_path = os.path.join(SHADER_DIR, 'vrml97_point.frag')
-
-            with open(pt_vert_path, 'r') as f:
-                pt_vert_source = f.read()
-            with open(pt_frag_path, 'r') as f:
-                pt_frag_source = f.read()
-
-            pt_vertex = GL_shaders.compileShader(pt_vert_source, GL_VERTEX_SHADER)
-            pt_fragment = GL_shaders.compileShader(pt_frag_source, GL_FRAGMENT_SHADER)
-            self.point_program = GL_shaders.compileProgram(pt_vertex, pt_fragment)
-
-            # Load and compile line shader (for IndexedLineSet with per-vertex colors)
-            ln_vert_path = os.path.join(SHADER_DIR, 'vrml97_line.vert')
-            ln_frag_path = os.path.join(SHADER_DIR, 'vrml97_line.frag')
-
-            with open(ln_vert_path, 'r') as f:
-                ln_vert_source = f.read()
-            with open(ln_frag_path, 'r') as f:
-                ln_frag_source = f.read()
-
-            ln_vertex = GL_shaders.compileShader(ln_vert_source, GL_VERTEX_SHADER)
-            ln_fragment = GL_shaders.compileShader(ln_frag_source, GL_FRAGMENT_SHADER)
-            self.line_program = GL_shaders.compileProgram(ln_vertex, ln_fragment)
-
-            self._compiled = True
-            log.info("VRML97 shader programs compiled successfully")
-            return True
-
-        except Exception as err:
-            log.error("Failed to compile VRML97 shaders: %s", err)
-            self._compiled = True  # Mark as attempted
-            return False
+        self._compiled = True
+        self._ok = self.program is not None
+        if self._ok:
+            # Assign shadow samplers to distinct texture units immediately, even
+            # when shadows are disabled: the 2D-array and cube shadow samplers
+            # are active in the lit program and must not alias unit 0 (a 2D
+            # target) or every draw fails with GL_INVALID_OPERATION.
+            try:
+                self._bind_program(self.program)
+                self.init_shadow_samplers()
+                self._bind_program(0)
+            except Exception as err:
+                log.error("Shadow sampler init failed: %s", err)
+            log.info("VRML97 shader programs compiled (lit ok; "
+                     "unlit=%s vc=%s point=%s line=%s depth=%s)",
+                     self.unlit_program is not None,
+                     self.vertex_color_program is not None,
+                     self.point_program is not None,
+                     self.line_program is not None,
+                     self.depth_program is not None)
+        else:
+            log.error("VRML97 lit shader failed to compile; shader rendering off")
+        return self._ok
 
     def use(self, lit: bool = True, vertex_colors: bool = False) -> bool:
         """Activate the shader program.
@@ -161,6 +381,8 @@ class VRML97ShaderProgram:
         """
         if not self._compiled:
             self.compile()
+        if not self._ok:
+            return False
 
         if lit and vertex_colors:
             program = self.vertex_color_program
@@ -169,8 +391,25 @@ class VRML97ShaderProgram:
         else:
             program = self.unlit_program
         if program:
-            glUseProgram(program)
+            self._bind_program(program)
+            if self._pick_active:
+                self._apply_object_id(program)
         return program is not None
+
+    def use_depth(self) -> Optional[int]:
+        """Activate the position-only depth program for shadow passes.
+
+        Returns the program id in use. Falls back to the full lit program when a
+        depth-only program was not compiled (keeps non-PBR paths working).
+        """
+        if not self._compiled:
+            self.compile()
+        if not self._ok:
+            return None
+        program = self.depth_program or self.program
+        if program:
+            self._bind_program(program)
+        return program
 
     def use_vertex_color(self) -> bool:
         """Activate the vertex color shader program.
@@ -193,8 +432,12 @@ class VRML97ShaderProgram:
         """
         if not self._compiled:
             self.compile()
+        if not self._ok:
+            return False
         if self.point_program:
-            glUseProgram(self.point_program)
+            self._bind_program(self.point_program)
+            if self._pick_active:
+                self._apply_object_id(self.point_program)
             return True
         return False
 
@@ -209,14 +452,18 @@ class VRML97ShaderProgram:
         """
         if not self._compiled:
             self.compile()
+        if not self._ok:
+            return False
         if self.line_program:
-            glUseProgram(self.line_program)
+            self._bind_program(self.line_program)
+            if self._pick_active:
+                self._apply_object_id(self.line_program)
             return True
         return False
 
     def unuse(self) -> None:
         """Deactivate the shader program."""
-        glUseProgram(0)
+        self._bind_program(0)
 
     def _get_location(self, name: str, program: Optional[int] = None) -> int:
         """Get uniform location, caching the result.
@@ -261,35 +508,33 @@ class VRML97ShaderProgram:
               which rendering mode (lit vs unlit) is active.
         """
         if program is None:
-            # Use the currently bound program
-            program = glGetIntegerv(GL_CURRENT_PROGRAM)
-            if program == 0:
-                # No program bound, default to lit program
-                program = self.program
+            # The program the class last bound -- geometry always
+            # calls set_matrices right after a use*(), so this is the drawing
+            # program, without a glGetIntegerv(GL_CURRENT_PROGRAM) round-trip.
+            program = self._program_for_default()
 
-        mv_loc = self._get_location('modelViewMatrix', program)
-        proj_loc = self._get_location('projectionMatrix', program)
+        # Skip the modelview upload -- and, crucially, the normal-matrix solve --
+        # when the matrix is unchanged from the last draw. Merged static scenes
+        # render many shapes under one shared transform, so this collapses a
+        # per-shape glUniform + cofactor solve into once-per-transform.
+        mv = np.ascontiguousarray(modelview, dtype='f')
+        mv_changed = not self._uniform_unchanged(program, 'modelViewMatrix', mv.tobytes())
+        if mv_changed:
+            mv_loc = self._get_location('modelViewMatrix', program)
+            if mv_loc != -1:
+                glUniformMatrix4fv(mv_loc, 1, GL_FALSE, mv)
+        # The projection is constant across every object in a frame; only upload
+        # it when it actually changes (camera/frustum), not once per shape.
+        self._set_matrix_cached('projectionMatrix', projection, program)
 
-        if mv_loc != -1:
-            glUniformMatrix4fv(mv_loc, 1, GL_FALSE, modelview.astype('f'))
-        if proj_loc != -1:
-            glUniformMatrix4fv(proj_loc, 1, GL_FALSE, projection.astype('f'))
-
-        # Calculate and set normal matrix (inverse transpose of upper-left 3x3)
-        # Do this for any lit shader that uses normals (main or vertex color)
-        if program == self.program or program == self.vertex_color_program:
+        # Normal matrix (inverse transpose of the upper-left 3x3) tracks modelview,
+        # so it only needs recomputing/uploading when modelview changed.
+        if mv_changed and (program == self.program or program == self.vertex_color_program):
             normal_loc = self._get_location('normalMatrix', program)
             if normal_loc != -1:
-                # Extract the upper-left 3x3 of the modelview matrix
-                mv3 = modelview[:3, :3].astype('f')
-                # Compute inverse-transpose for proper normal transformation
-                # This handles non-uniform scaling correctly
-                try:
-                    normal_matrix = np.linalg.inv(mv3).T
-                except np.linalg.LinAlgError:
-                    # Fallback if matrix is singular
-                    normal_matrix = mv3
-                glUniformMatrix3fv(normal_loc, 1, GL_FALSE, normal_matrix.astype('f'))
+                # Inverse-transpose of the upper-left 3x3 (handles non-uniform
+                # scale); a direct cofactor solve, not a per-shape LAPACK inv().
+                glUniformMatrix3fv(normal_loc, 1, GL_FALSE, normal_matrix(mv))
 
     def set_material(
         self,
@@ -347,6 +592,7 @@ class VRML97ShaderProgram:
         intensity: float = 1.0,
         beam_width: float = 1.57,
         cutoff_angle: float = 0.785,
+        light_range: float = 0.0,
         program: Optional[int] = None
     ) -> None:
         """Set parameters for a single light.
@@ -374,6 +620,7 @@ class VRML97ShaderProgram:
         self._set_uniform4f(f'lightPosition[{index}]', position, program)
         self._set_uniform3f(f'lightDirection[{index}]', direction, program)
         self._set_uniform3f(f'lightAttenuation[{index}]', attenuation, program)
+        self._set_uniform1f(f'lightRange[{index}]', light_range, program)
         self._set_uniform1f(f'lightIntensity[{index}]', intensity, program)
         self._set_uniform1f(f'lightBeamWidth[{index}]', beam_width, program)
         self._set_uniform1f(f'lightCutOffAngle[{index}]', cutoff_angle, program)
@@ -400,6 +647,49 @@ class VRML97ShaderProgram:
         loc = self._get_location('solidColor', self.unlit_program)
         if loc != -1:
             glUniform4fv(loc, 1, array(color, 'f'))
+
+    def set_object_id(self, object_id: int, program: Optional[int] = None) -> None:
+        """Set object ID for selection buffer (MRT).
+
+        Args:
+            object_id: Unique object ID (32-bit unsigned integer)
+            program: Shader program (defaults to currently active program)
+        """
+        # Remember it so a later program switch (use_point/use_line/use(lit=False))
+        # can carry the id onto whatever program the geometry actually draws with.
+        self._current_object_id = object_id
+        if program is None:
+            program = self._program_for_default()
+
+        loc = self._get_location('objectId', program)
+        if loc != -1:
+            glUniform1ui(loc, object_id)
+
+    def set_instancing(self, enabled: bool, program: Optional[int] = None) -> None:
+        """Toggle the shader's per-instance path (instanced model + object id).
+
+        When on, the vertex shader reads the modelview and picking id from the
+        per-instance attributes (locations 5-9) instead of the per-draw uniforms.
+        A single uniform, shared by the vertex and fragment stages.
+        """
+        if program is None:
+            program = self.program
+        loc = self._get_location('instancingEnabled', program)
+        if loc != -1:
+            glUniform1i(loc, 1 if enabled else 0)
+
+    def _apply_object_id(self, program: Optional[int]) -> None:
+        """Set the current object id on ``program`` (assumed just bound).
+
+        Called from use*() during picking so geometry that switches away from the
+        lit program still writes the right selection id. A no-op program or a
+        program lacking the uniform is skipped.
+        """
+        if not program:
+            return
+        loc = self._get_location('objectId', program)
+        if loc != -1:
+            glUniform1ui(loc, self._current_object_id)
 
     def set_text_mode(
         self,
@@ -469,98 +759,74 @@ class VRML97ShaderProgram:
         self.set_texture_enabled(False)
 
     def set_texture_transform(self, transform_node: Optional[Any] = None) -> None:
-        """Set texture transform matrix from a VRML97 TextureTransform node.
+        """Upload the UV transform matrix for a VRML97 TextureTransform node.
 
         Args:
             transform_node: TextureTransform node, or None for identity
         """
-        if transform_node is None:
-            # Identity matrix (no transform)
-            tex_matrix = np.eye(3, dtype='f')
-        else:
-            # Build 2D homogeneous transform matrix from TextureTransform fields
-            # Order: translate(center) -> rotate -> scale -> translate(-center) -> translate
-            tx, ty = transform_node.translation
-            cx, cy = transform_node.center
-            angle = transform_node.rotation
-            sx, sy = transform_node.scale
-
-            # Start with identity
-            tex_matrix = np.eye(3, dtype='f')
-
-            # Translate to center
-            if cx != 0 or cy != 0:
-                T_center = np.array([
-                    [1, 0, cx],
-                    [0, 1, cy],
-                    [0, 0, 1]
-                ], dtype='f')
-                tex_matrix = tex_matrix @ T_center
-
-            # Rotate
-            if angle != 0:
-                c, s = cos(angle), sin(angle)
-                R = np.array([
-                    [c, -s, 0],
-                    [s, c, 0],
-                    [0, 0, 1]
-                ], dtype='f')
-                tex_matrix = tex_matrix @ R
-
-            # Scale
-            if sx != 1 or sy != 1:
-                S = np.array([
-                    [sx, 0, 0],
-                    [0, sy, 0],
-                    [0, 0, 1]
-                ], dtype='f')
-                tex_matrix = tex_matrix @ S
-
-            # Translate from center
-            if cx != 0 or cy != 0:
-                T_neg_center = np.array([
-                    [1, 0, -cx],
-                    [0, 1, -cy],
-                    [0, 0, 1]
-                ], dtype='f')
-                tex_matrix = tex_matrix @ T_neg_center
-
-            # Apply translation
-            if tx != 0 or ty != 0:
-                T = np.array([
-                    [1, 0, tx],
-                    [0, 1, ty],
-                    [0, 0, 1]
-                ], dtype='f')
-                tex_matrix = tex_matrix @ T
-
         loc = self._get_location('textureMatrix')
         if loc != -1:
-            glUniformMatrix3fv(loc, 1, GL_FALSE, tex_matrix)
+            glUniformMatrix3fv(loc, 1, GL_FALSE, texture_transform_matrix(transform_node))
 
     def set_default_texture_transform(self) -> None:
         """Set identity texture transform."""
         self.set_texture_transform(None)
 
-    def _set_uniform1i(self, name: str, value: int, program: Optional[int] = None) -> None:
+    def _set_matrix_cached(self, name: str, matrix: Any, program: Optional[int] = None) -> None:
+        """Upload a mat4 uniform, skipping the call when its bytes are unchanged.
+
+        For matrices that repeat across many draws in a frame (projection, an
+        identity texture transform) this removes a per-draw glUniformMatrix call.
+        """
+        m = np.ascontiguousarray(matrix, dtype='f')
+        key = m.tobytes()
+        if self._uniform_unchanged(program, name, key):
+            return
         loc = self._get_location(name, program)
         if loc != -1:
-            glUniform1i(loc, value)
+            glUniformMatrix4fv(loc, 1, GL_FALSE, m)
+
+    def _uniform_unchanged(self, program: int, name: str, value: Any) -> bool:
+        """True if ``value`` equals the last value uploaded for this uniform."""
+        if program is None:
+            program = self.program
+        pc = self._uniform_value_cache.get(program)
+        if pc is None:
+            pc = self._uniform_value_cache[program] = {}
+        if name in pc and pc[name] == value:
+            return True
+        pc[name] = value
+        return False
+
+    def _set_uniform(self, name: str, value: Any, program: Optional[int],
+                     upload) -> None:
+        """Shared scalar/vector uniform upload.
+
+        Skips when the value is unchanged from the last upload for this program,
+        resolves the location, then hands off to the type-specific ``upload(loc,
+        value)``. ``value`` must already be normalized (int/float/float-tuple) so
+        the change-cache key is canonical.
+        """
+        if self._uniform_unchanged(program, name, value):
+            return
+        loc = self._get_location(name, program)
+        if loc != -1:
+            upload(loc, value)
+
+    def _set_uniform1i(self, name: str, value: int, program: Optional[int] = None) -> None:
+        self._set_uniform(name, int(value), program, glUniform1i)
 
     def _set_uniform1f(self, name: str, value: float, program: Optional[int] = None) -> None:
-        loc = self._get_location(name, program)
-        if loc != -1:
-            glUniform1f(loc, float(value))
+        self._set_uniform(name, float(value), program, glUniform1f)
+
+    def _set_uniform2f(self, name: str, value, program: Optional[int] = None) -> None:
+        self._set_uniform(name, _as_floats(value), program, _UPLOAD_2FV)
 
     def _set_uniform3f(self, name: str, value: Vec3, program: Optional[int] = None) -> None:
-        loc = self._get_location(name, program)
-        if loc != -1:
-            glUniform3fv(loc, 1, array(value, 'f'))
+        self._set_uniform(name, _as_floats(value), program, _UPLOAD_3FV)
 
     def _set_uniform4f(self, name: str, value: Vec4, program: Optional[int] = None) -> None:
-        loc = self._get_location(name, program)
-        if loc != -1:
-            glUniform4fv(loc, 1, array(value, 'f'))
+        self._set_uniform(name, _as_floats(value), program, _UPLOAD_4FV)
 
 
 class ShaderRenderMode:
@@ -689,6 +955,7 @@ def configure_light_from_node(
             intensity=intensity,
             beam_width=beam_width,
             cutoff_angle=cutoff_angle,
+            light_range=float(getattr(light_node, '_gltf_range', 0.0)),
             program=program,
         )
 
@@ -704,6 +971,7 @@ def configure_light_from_node(
             position=position,
             attenuation=attenuation,
             intensity=intensity,
+            light_range=float(getattr(light_node, '_gltf_range', 0.0)),
             program=program,
         )
 
@@ -735,20 +1003,14 @@ def configure_material_from_node(
         shader_program.set_default_material()
         return
 
-    diffuse = tuple(material_node.diffuseColor)
-    specular = tuple(material_node.specularColor)
-    emissive = tuple(material_node.emissiveColor)
-    ambient = float(material_node.ambientIntensity)
-    shininess = float(material_node.shininess)
-    transparency = float(material_node.transparency)
-
-    log.debug(f"Material: diffuse={diffuse}, specular={specular}, ambient={ambient}")
+    from OpenGLContext.scenegraph.material_fields import read_material_fields
+    f = read_material_fields(material_node)   # shared raw read
 
     shader_program.set_material(
-        diffuse=diffuse,
-        specular=specular,
-        emissive=emissive,
-        ambient_intensity=ambient,
-        shininess=shininess,
-        transparency=transparency,
+        diffuse=f.diffuseColor,
+        specular=f.specularColor,
+        emissive=f.emissiveColor,
+        ambient_intensity=f.ambientIntensity,
+        shininess=f.shininess,
+        transparency=f.transparency,
     )

@@ -30,5 +30,13 @@ class Viewpoint(basenodes.Viewpoint):
             ).XYZR()
             platform.setPosition( newPosition )
             platform.setOrientation( newOrientation )
-        platform.setFrustum( node.fieldOfView )
+        # near/far are not VRML97 Viewpoint fields, but a loader (e.g. glTF) may
+        # stash them on the node so a bound camera keeps its authored clip planes;
+        # both default to None, which setFrustum reads as "leave unchanged".
+        platform.setFrustum(
+            node.fieldOfView,
+            None,
+            getattr( node, 'near', None ),
+            getattr( node, 'far', None ),
+        )
     

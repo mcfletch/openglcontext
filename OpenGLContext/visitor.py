@@ -194,7 +194,7 @@ class Visitor( object ):
                                 tokens = [token]
                             else:
                                 tokens.append( token )
-                    except:
+                    except Exception:
                         traceback.print_exc( )
                         log.error(
                             """method %s for node %s""",
@@ -203,7 +203,7 @@ class Visitor( object ):
                         )
                 try:
                     children = self.children( node )
-                except:
+                except Exception:
                     traceback.print_exc( )
                     log.error(
                         """exception in children method for node %s""",
@@ -276,7 +276,7 @@ class Visitor( object ):
                                 tokens = [token]
                             else:
                                 tokens.append( token )
-                    except:
+                    except Exception:
                         traceback.print_exc( )
                         log.error(
                             """method %s for node %s""",
@@ -285,7 +285,7 @@ class Visitor( object ):
                         )
                 try:
                     children = self.children( node )
-                except:
+                except Exception:
                     traceback.print_exc( )
                     log.error(
                         """exception in children method for node %s""",
@@ -348,7 +348,7 @@ class _Finder( Visitor ):
             is_desired = isinstance( node, self.desiredTypes )
             try:
                 children = self.children( node, types=childrenTypes )
-            except:
+            except Exception:
                 traceback.print_exc( )
                 log.error(
                     """exception in children method for node %s""",

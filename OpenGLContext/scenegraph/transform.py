@@ -1,6 +1,8 @@
 """VRML97-style Transform node"""
+import numpy as np
 from OpenGL.GL import *
 from OpenGLContext.scenegraph import grouping, boundingvolume
+from vrml import cache
 from vrml.vrml97 import basenodes, transformmatrix
 
 from OpenGLContext.arrays import array, allclose, any
@@ -100,7 +102,7 @@ class Transform(grouping.Grouping, basenodes.Transform):
         """Calculate the transform's matrix manually"""
         data = mode.cache.getData( self, 'localMatrix' )
         if data is not None:
-            return data 
+            return data
         d = self.__dict__
         data = transformmatrix.transformMatrix (
             translation = d.get( "translation"),
@@ -112,7 +114,67 @@ class Transform(grouping.Grouping, basenodes.Transform):
         holder = mode.cache.holder( self, data, 'localMatrix' )
         for attr in ('translation','rotation','scale','scaleOrientation','center'):
             holder.depend( self, attr )
-        return data 
+        return data
+
+
+class MatrixTransform( Transform ):
+    """Transform driven by an explicit local matrix rather than TRS fields.
+
+    glTF nodes may carry a raw 4x4 ``matrix`` that does not cleanly decompose
+    into translation/rotation/scale: a 180-degree rotation has an ambiguous
+    axis, and a mirror (negative-determinant) basis is not a rotation at all.
+    Decomposing those misplaces the node, which is why a *subset* of parts in
+    CAD assemblies (Buggy, GearboxAssy, ReciprocatingSaw, 2CylinderEngine) come
+    out wrong. This subclass applies the exact matrix instead.
+
+    The stored matrix is row-vector (``p' = p @ M``), matching VRML convention
+    and the row-vector forward matrix already used for bounds.
+    """
+    _BAKED_KEY = ('baked_local_matrices',)
+
+    def __init__( self, localMatrix=None, **named ):
+        super(MatrixTransform, self).__init__(**named)
+        self._forward = None
+        self._inverse = None
+        if localMatrix is not None:
+            self.setLocalMatrix( localMatrix )
+
+    def setLocalMatrix( self, matrix ):
+        m = np.ascontiguousarray( matrix, dtype='d' ).reshape(4, 4)
+        self._forward = m
+        try:
+            self._inverse = np.linalg.inv( m )
+        except np.linalg.LinAlgError:
+            self._inverse = np.identity(4, dtype='d')
+        holder = cache.CACHE.getHolder( self, key=self._BAKED_KEY )
+        if holder is not None:
+            holder.data = (self._forward, self._inverse)
+
+    def localMatrices( self, translate=True, scale=True, rotate=True ):
+        # Only the all-components matrix is baked; partial requests (e.g. a
+        # background's rotate-only) fall back to the TRS fields, which glTF mesh
+        # nodes never exercise.
+        if self._forward is None or not (translate and scale and rotate):
+            return super(MatrixTransform, self).localMatrices(
+                translate=translate, scale=scale, rotate=rotate)
+        holder = cache.CACHE.getHolder( self, key=self._BAKED_KEY )
+        if holder is None:
+            holder = cache.CACHE.holder(
+                self, (self._forward, self._inverse), key=self._BAKED_KEY )
+        return holder
+
+    def localMatrix( self, mode=None ):
+        if self._forward is None:
+            return super(MatrixTransform, self).localMatrix( mode )
+        return self._forward
+
+    def transform( self, mode=None, translate=1, scale=1, rotate=1 ):
+        # Legacy fixed-function path: multiply the exact matrix in (row-vector
+        # storage transposes to the column-major matrix OpenGL multiplies).
+        if self._forward is None:
+            return super(MatrixTransform, self).transform(
+                mode=mode, translate=translate, scale=scale, rotate=rotate)
+        glMultMatrixd( np.ascontiguousarray(self._forward) )
 
     
     

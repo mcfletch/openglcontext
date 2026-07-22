@@ -540,7 +540,8 @@ Press 'q' - Quit
         scene = TEST_SCENES[self.scene_index]
 
         # Save screenshot
-        screenshot_dir = os.path.join(os.path.dirname(__file__), 'screenshots')
+        from OpenGLContext.testing.paths import tests_root
+        screenshot_dir = os.path.join(str(tests_root(__file__)), 'screenshots')
         os.makedirs(screenshot_dir, exist_ok=True)
         filename = os.path.join(screenshot_dir, f"{scene.name.lower().replace(' ', '_')}_{mode}.npy")
         np.save(filename, pixels)

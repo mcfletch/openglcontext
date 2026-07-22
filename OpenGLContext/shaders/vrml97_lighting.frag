@@ -1,4 +1,7 @@
 #version 330 core
+// Desktop OpenGL 3.3 only, by design (finding 5.3): no GLSL-ES / WebGL profile is
+// provided -- OpenGLContext targets desktop core profiles. A GLSL-ES port would
+// need precision qualifiers and the array-shadow-sampler fallbacks reworking.
 
 // VRML97-compatible lighting fragment shader
 // Implements the VRML97 lighting equation for directional, point, and spot lights
@@ -6,11 +9,17 @@
 // Maximum number of lights (VRML97 typically allows 8)
 #define MAX_LIGHTS 8
 
-// Light types
-#define LIGHT_OFF 0
-#define LIGHT_DIRECTIONAL 1
-#define LIGHT_POINT 2
-#define LIGHT_SPOT 3
+// Maximum number of simultaneous shadow-casting lights, and CSM cascades each.
+// MAX_SHADOW_LIGHTS is injected at compile time (derived from the driver's real
+// GL_MAX_TEXTURE_IMAGE_UNITS); a default keeps standalone compiles valid.
+#ifndef MAX_SHADOW_LIGHTS
+#define MAX_SHADOW_LIGHTS 4
+#endif
+#define MAX_CASCADES 4
+
+// Light/shadow enums, the scene light-uniform block (numLights, lightType[],
+// lightColor[], ..., sceneAmbient), and encodeObjectId() -- shared with pbr.frag.
+#include "_lights_inc.glsl"
 
 // Inputs from vertex shader
 in vec3 vNormal;
@@ -25,106 +34,39 @@ uniform float ambientIntensity;
 uniform float shininess;
 uniform float transparency;
 
-// Light uniforms
-uniform int numLights;
-uniform int lightType[MAX_LIGHTS];
-uniform vec3 lightColor[MAX_LIGHTS];
-uniform vec4 lightPosition[MAX_LIGHTS];   // w=0 for directional, w=1 for positional
-uniform vec3 lightDirection[MAX_LIGHTS];  // For directional and spot lights
-uniform vec3 lightAttenuation[MAX_LIGHTS]; // constant, linear, quadratic
-uniform float lightBeamWidth[MAX_LIGHTS];  // Spot inner cone (radians)
-uniform float lightCutOffAngle[MAX_LIGHTS]; // Spot outer cone (radians)
-uniform float lightIntensity[MAX_LIGHTS];
-
 // Texture uniforms
 uniform sampler2D diffuseTexture;
 uniform bool hasDiffuseTexture;
 
-// Global ambient (scene ambient)
-uniform vec3 sceneAmbient;
+uniform mat4 eyeToWorld;   // inverse camera view (cube shadow direction)
 
-// Output color
-out vec4 fragColor;
+// Shadow-map uniforms, samplers and sampling functions (spot/CSM packed into one
+// depth array, point shadows into a cube-array or per-slot cubes). Needs the
+// enums (above), the vPosition/vNormal varyings and eyeToWorld, all above here.
+#include "_shadow_inc.glsl"
 
-// Calculate attenuation for point/spot lights
-float calcAttenuation(int lightIndex, float distance) {
-    vec3 atten = lightAttenuation[lightIndex];
-    // VRML97 attenuation: 1 / (constant + linear*d + quadratic*d*d)
-    return 1.0 / (atten.x + atten.y * distance + atten.z * distance * distance);
-}
+// Object ID for selection buffer (MRT)
+uniform uint objectId;
+uniform bool instancingEnabled;   // take the id from the per-instance varying
+flat in uint vObjectId;
 
-// Calculate spot light effect
-float calcSpotEffect(int lightIndex, vec3 lightDir) {
-    vec3 spotDir = normalize(lightDirection[lightIndex]);
-    float cosAngle = dot(-lightDir, spotDir);
-    float cutoff = cos(lightCutOffAngle[lightIndex]);
-    float beamWidth = cos(lightBeamWidth[lightIndex]);
+// Output color (attachment 0)
+layout(location = 0) out vec4 fragColor;
+// Output object ID (attachment 1) - for selection buffer
+layout(location = 1) out vec4 fragObjectId;
 
-    if (cosAngle < cutoff) {
-        return 0.0;
-    } else if (cosAngle > beamWidth) {
-        return 1.0;
-    } else {
-        // Smooth falloff between beam width and cutoff
-        return (cosAngle - cutoff) / (beamWidth - cutoff);
-    }
-}
-
-// DEBUG: Simple function to visualize a value as grayscale
-// float debugValue = 0.0;
-
-// Calculate lighting contribution from a single light
-vec3 calcLight(int lightIndex, vec3 normal, vec3 viewDir, vec3 matDiffuse, vec3 matSpecular) {
-    if (lightType[lightIndex] == LIGHT_OFF) {
-        return vec3(0.0);
-    }
-
-    vec3 lightDir;
-    float attenuation = 1.0;
-
-    if (lightType[lightIndex] == LIGHT_DIRECTIONAL) {
-        // Directional light - VRML direction is where light POINTS (toward surface)
-        // For N·L we need direction FROM surface TO light, so negate
-        lightDir = normalize(-lightDirection[lightIndex]);
-    } else {
-        // Point or spot light - calculate direction from position
-        vec3 lightVec = lightPosition[lightIndex].xyz - vPosition;
-        float distance = length(lightVec);
-        lightDir = lightVec / distance;
-        attenuation = calcAttenuation(lightIndex, distance);
-
-        if (lightType[lightIndex] == LIGHT_SPOT) {
-            attenuation *= calcSpotEffect(lightIndex, lightDir);
-        }
-    }
-
-    // Early exit if no contribution
-    if (attenuation <= 0.0) {
-        return vec3(0.0);
-    }
-
-    vec3 color = lightColor[lightIndex] * lightIntensity[lightIndex];
-
-    // Diffuse component (Lambert)
-    float nDotL = max(dot(normal, lightDir), 0.0);
-    vec3 diffuse = matDiffuse * color * nDotL;
-
-    // Specular component (Blinn-Phong)
-    vec3 specular = vec3(0.0);
-    if (nDotL > 0.0 && shininess > 0.0) {
-        vec3 halfDir = normalize(lightDir + viewDir);
-        float nDotH = max(dot(normal, halfDir), 0.0);
-        // VRML97 shininess is 0-1, map to exponent (0.0 -> 1, 1.0 -> 128)
-        float specPower = shininess * 128.0;
-        specular = matSpecular * color * pow(nDotH, specPower);
-    }
-
-    return attenuation * (diffuse + specular);
-}
+// Shared VRML97 lighting math (calcAttenuation / calcSpotEffect / calcLight),
+// also used by vrml97_vertex_color.frag so the two stay in lock-step (finding 2a).
+#include "_vrml97_lighting_inc.glsl"
 
 void main() {
     // Normalize interpolated normal
     vec3 normal = normalize(vNormal);
+
+    // Two-sided lighting: for solid=FALSE geometry the back faces are visible,
+    // so flip the normal toward the viewer (as pbr.frag does) instead of leaving
+    // back faces dark. Matches the fixed-function GL_LIGHT_MODEL_TWO_SIDE path.
+    if (!gl_FrontFacing) normal = -normal;
 
     // View direction (camera is at origin in eye space)
     vec3 viewDir = normalize(-vPosition);
@@ -146,11 +88,15 @@ void main() {
     // Emissive contribution (glow)
     vec3 emissive = emissiveColor;
 
+    // Resolve a shadow factor per light (shaders/_shadow_inc.glsl).
+    float lightShadow[MAX_LIGHTS];
+    resolveShadows(lightShadow);
+
     // Accumulate light contributions
     vec3 lighting = vec3(0.0);
     for (int i = 0; i < MAX_LIGHTS; i++) {
         if (i >= numLights) break;
-        lighting += calcLight(i, normal, viewDir, matDiffuse, specularColor);
+        lighting += calcLight(i, normal, viewDir, matDiffuse, specularColor, lightShadow[i]);
     }
 
     // Final color
@@ -159,15 +105,7 @@ void main() {
     // Clamp to valid range
     finalColor = clamp(finalColor, 0.0, 1.0);
 
-    // DEBUG: Output normal as color to visualize
-    // fragColor = vec4(normal * 0.5 + 0.5, 1.0); return;
-
-    // DEBUG: Output light direction as color (should be same across all pixels)
-    // vec3 ld = normalize(lightDirection[0]);
-    // fragColor = vec4(ld * 0.5 + 0.5, 1.0); return;
-
-    // DEBUG: Output just diffuse color to check material
-    // fragColor = vec4(matDiffuse, 1.0); return;
-
     fragColor = vec4(finalColor, alpha);
+    // Per-instance id when instancing, else the per-draw uniform.
+    fragObjectId = encodeObjectId(instancingEnabled ? vObjectId : objectId);
 }

@@ -2,6 +2,7 @@
 
 from OpenGL.GL import *
 from vrml.vrml97 import basenodes
+from vrml import field
 from OpenGLContext.scenegraph import boundingvolume, polygonsort
 from OpenGLContext.arrays import array
 import traceback
@@ -33,6 +34,12 @@ class Shape(basenodes.Shape):
     Reference:
         http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Shape
     """
+
+    # "Transparent to clicking": when False, the shape writes nothing to the MRT
+    # object-id attachment, so a pick reads through to whatever is behind it (an
+    # axis gizmo, an annotation, a water surface). It still renders normally to
+    # the colour buffer. Default True keeps every existing shape pickable.
+    pickable = field.newField('pickable', 'SFBool', 1, True)
 
     def Render(self, mode=None):
         """Do run-time rendering of the Shape for the given mode"""
@@ -91,6 +98,19 @@ class Shape(basenodes.Shape):
 
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:
+            return
+
+        # Shadow depth pass: only positions matter, skip appearance/material/texture.
+        # Matrices and program are configured by the shadow pass itself.
+        if getattr(mode, 'shadow_pass', False):
+            self.geometry.render(textured=False, mode=mode)
+            return
+
+        # PBR program: it configures its own material + texture maps (and
+        # up-converts VRML97 Material), then we just render the geometry.
+        if getattr(mode, 'visible', True) and hasattr(shader_program, 'configure_appearance'):
+            shader_program.configure_appearance(self.appearance, mode)
+            self.geometry.render(textured=True, mode=mode)
             return
 
         # Skip material/texture setup during selection rendering (mode.visible=False)
@@ -159,19 +179,23 @@ class Shape(basenodes.Shape):
 
     def sortKey(self, mode, matrix):
         """Produce the sorting key for this shape's appearance/shaders/etc"""
-        # distance calculation...
-        distance = polygonsort.distances(
-            LOCAL_ORIGIN,
-            modelView=matrix,
-            projection=mode.getProjection(),
-            viewport=mode.getViewport(),
-        )[0]
         if self.appearance:
             key = self.appearance.sortKey(mode, matrix)
         else:
             key = (False, [], None)
+        # Only transparent shapes need a real back-to-front distance. Opaque
+        # geometry is depth-buffer-correct in any order and every render pass
+        # re-sorts by eye-space z anyway, so skip the per-shape projection for
+        # opaque -- it dominated frame time on high-part-count scenes.
         if key[0]:
-            distance = -distance
+            distance = -float(polygonsort.distances(
+                LOCAL_ORIGIN,
+                modelView=matrix,
+                projection=mode.getProjection(),
+                viewport=mode.getViewport(),
+            )[0])
+        else:
+            distance = 0.0
         return key[0:2] + (distance,) + key[1:]
 
     def boundingVolume(self, mode):

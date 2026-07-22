@@ -7,15 +7,17 @@ shader-based rendering using the VRML97 lighting model.
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+import numpy as np
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
-from OpenGLContext.arrays import array, dot, allclose
+from OpenGLContext.arrays import array, dot, allclose, concatenate, ones
 from OpenGLContext import frustum
 from OpenGLContext.debug.logs import getTraceback
 from vrml.vrml97 import nodetypes
 from vrml import olist
 from OpenGLContext.scenegraph import shaders
+import os
 import sys
 from pydispatch.dispatcher import connect
 import logging
@@ -34,6 +36,31 @@ __all__ = (
     'get_projection',
 )
 
+
+from OpenGLContext.passes.selection import (
+    SelectionFBO, SelectionBufferFBO, SelectionMixin,
+)
+from OpenGLContext.passes.flateffects import _FlatEffectsMixin
+
+# MRT draw-buffer index carrying the packed object id (attachment 1).
+OBJECT_ID_ATTACHMENT = 1
+
+
+def disable_object_id_blend() -> None:
+    """Keep the object-id MRT attachment out of alpha blending.
+
+    The transparent / transmissive passes enable blending for the colour
+    attachment; the same enable would blend the packed object id in attachment 1,
+    so a pick behind transparent geometry reads a corrupted (averaged) id. Indexed
+    blend enables (core GL 3.3) switch blending off for just that attachment. A
+    later ``glEnable(GL_BLEND)`` re-enables all attachments, so this must be issued
+    after each pass turns blending on. Best-effort: drivers without indexed enables
+    simply keep the prior (harmless in the single-attachment case) behaviour.
+    """
+    try:
+        glDisablei(GL_BLEND, OBJECT_ID_ATTACHMENT)
+    except Exception as err:
+        log.debug("indexed blend disable unavailable: %s", err)
 class SGObserver( object ):
     """Observer of a scenegraph that creates a flat set of paths
 
@@ -137,6 +164,12 @@ class SGObserver( object ):
                             del self.nodePaths[id(v)]
                         except KeyError as err:
                             pass
+                    # Drop the removed path's persistent picking id so a later
+                    # pick can't resolve a stale object.
+                    sel_map = getattr( self, '_sel_id_map', None )
+                    oid = getattr( v, '_sel_id', 0 )
+                    if sel_map is not None and oid:
+                        sel_map.pop( oid, None )
             self.paths[key][:] = filtered
 
 def get_modelview( shader, mode ):
@@ -155,7 +188,92 @@ def get_inv_modelproj( shader, mode ):
     proj = get_inv_projection( shader, mode )
     return dot( proj, mv )
 
-class FlatPass( SGObserver ):
+def _color_select_render(pass_obj, mode, toRender, events, *,
+                         id_shift, read_format, setup_fixed_function,
+                         require_pick_enabled):
+    """Shared legacy colour-buffer pick.
+
+    Draws every renderable path in a unique colour-encoded id, reads back the id
+    under each pick point and resolves it to a path. The compatibility and
+    core-fallback passes differ only in how the id is packed and read and whether
+    the fixed-function lighting state is toggled -- passed in here so the ~90-line
+    body lives in one place instead of two copies that had already diverged. This
+    is the legacy fallback; the modern path is ``SelectionMixin`` (MRT).
+    """
+    self = pass_obj
+    glClearColor(0, 0, 0, 0)
+    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT)
+    if setup_fixed_function:
+        glDisable(GL_LIGHTING)
+        glEnable(GL_COLOR_MATERIAL)
+
+    self.visible = False
+    self.transparent = False
+    self.lighting = False
+    self.textured = False
+
+    matrix = self.matrix
+    id_map = {}
+
+    pick_points = {}
+    min_x, min_y = self.getViewport()[2:]
+    max_x, max_y = 0, 0
+    offset = 1   # half of the 2px pick square
+    for event in events.values():
+        x, y = key = tuple(event.getPickPoint())
+        pick_points.setdefault(key, []).append(event)
+        min_x = min((x - offset, min_x))
+        max_x = max((x + offset, max_x))
+        min_y = min((y - offset, min_y))
+        max_y = max((y + offset, max_y))
+    min_x = int(max((0, min_x)))
+    min_y = int(max((0, min_y)))
+    if max_x < min_x or max_y < min_y:
+        return   # no pick points
+
+    cd = mode.context.contextDefinition
+    debug_selection = cd.debugSelection and (cd.pickEnabled or not require_pick_enabled)
+    if not debug_selection:
+        glScissor(min_x, min_y, int(max_x) - min_x, int(max_y) - min_y)
+        glEnable(GL_SCISSOR_TEST)
+
+    glMatrixMode(GL_MODELVIEW)
+    try:
+        id_holder = array([0, 0, 0, 0], 'B')
+        id_setter = id_holder.view('<I')
+        for index, (key, mvmatrix, tmatrix, bvolume, path) in enumerate(toRender):
+            color_id = (index + 1) << id_shift
+            id_setter[0] = color_id
+            glColor4ubv(id_holder)
+            self.matrix = mvmatrix
+            self.renderPath = path
+            glLoadMatrixf(mvmatrix)
+            path[-1].Render(mode=self)
+            id_map[color_id] = path
+        pixel = array([0, 0, 0, 0], 'B')
+        depth_pixel = array([[0]], 'f')
+        for point, event_set in pick_points.items():
+            px, py = int(point[0]), int(point[1])
+            glReadPixels(px, py, 1, 1, read_format, GL_UNSIGNED_BYTE, pixel)
+            lpixel = int(pixel.view('<I')[0])
+            paths = id_map.get(lpixel, [])
+            glReadPixels(px, py, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, depth_pixel)
+            for event in event_set:
+                event.setObjectPaths([paths])
+                event.viewCoordinate = point[0], point[1], depth_pixel[0][0]
+                event.modelViewMatrix = matrix
+                event.projectionMatrix = self.projection
+                event.viewport = self.viewport
+                if hasattr(mode.context, 'ProcessEvent'):
+                    mode.context.ProcessEvent(event)
+    finally:
+        glColor4f(1.0, 1.0, 1.0, 1.0)
+        glDisable(GL_COLOR_MATERIAL)
+        glEnable(GL_LIGHTING)
+        glDisable(GL_SCISSOR_TEST)
+
+
+class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
     Uses structural scenegraph observations to allow the actual
@@ -203,7 +321,32 @@ class FlatPass( SGObserver ):
     shader_mode: bool = False  # Set True during shader render passes
     shader_program: Optional['VRML97ShaderProgram'] = None
     _shader_program_instance: Optional['VRML97ShaderProgram'] = None
-    
+
+    # Shadow-mapping support (provided by ShadowMapMixin; no-ops on the base pass)
+    use_shadows: bool = False
+    shadow_pass: bool = False
+
+    # IBL / transmission / bloom / cull phases live in _FlatEffectsMixin; the
+    # first-frame block sets _gl_renderer, which those phases read.
+    _gl_renderer: str = ''
+
+    def renderShadowMaps(self, toRender):
+        """Render shadow depth maps before the lit passes (mixin override)."""
+        return None   # base pass has no shadows; ShadowMapMixin overrides this
+
+    def bindShadowUniforms(self):
+        """Bind shadow maps onto the lit program after lights (mixin override)."""
+        return None   # base pass has no shadows; ShadowMapMixin overrides this
+
+    # The selection framebuffers, picking methods and use_mrt_selection flag live
+    # in SelectionMixin.
+    # Frames for which to keep reading back the MRT id/depth buffers. Reading the
+    # whole id+depth buffer every frame is a CPU cost and a GPU pipeline stall;
+    # since the readback only feeds pick lookups, we do it only while picking is
+    # active (events seen) and for a couple of frames after, then stop.
+    _pick_warm_frames: int = 0
+    _PICK_WARM_RESET: int = 3
+
     _UNIFORM_NAMES = '''mat_modelview inv_modelview tps_modelview itp_modelview 
         mat_projection inv_projection tps_projection itp_projection
         mat_modelproj inv_modelproj tps_modelproj itp_modelproj'''.split()
@@ -324,84 +467,178 @@ class FlatPass( SGObserver ):
             glClearColor(0.0, 0.0, 0.0, 1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-    def shaderRenderOpaque(self, toRender: List) -> None:
+    @staticmethod
+    def _materialSortKey(rec) -> int:
+        """Group key so shapes sharing one material batch together in the draw.
+
+        Identity of the material object; glTF/CAD loaders share one material
+        instance across the parts that use it, so this collapses hundreds of
+        parts to a handful of appearance uploads. Alive-this-frame, so ids are
+        stable within the sort.
+        """
+        shape = rec[4][-1]
+        appearance = getattr(shape, 'appearance', None)
+        return id(getattr(appearance, 'material', None))
+
+    def shaderRenderOpaque(self, toRender: List, id_map: Optional[Dict] = None,
+                           skip: Optional[set] = None) -> None:
         """Render opaque geometry using shaders.
 
         Args:
             toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path) tuples
+            id_map: Optional dict to populate with {object_id: path} for MRT selection.
+                   If provided, object IDs will be set for each rendered object.
+            skip: Optional set of toRender indices to omit (transmissive shapes,
+                   which draw in shaderRenderTransmissive after the backdrop capture).
         """
         self.transparent = False
         debugFrustum = self.context.contextDefinition.debugBBox
 
         shader = self.shader_program
+        shader._pick_active = id_map is not None
         shader.use(lit=True)
+        # New frame: forget the last material so per-frame edits are re-uploaded.
+        reset = getattr(shader, 'reset_appearance_cache', None)
+        if reset is not None:
+            reset()
 
-        for key, mvmatrix, tmatrix, bvolume, path in toRender:
-            if not key[0]:  # Not transparent
-                self.matrix = mvmatrix
-                self.renderPath = path
+        # Draw opaque geometry front-to-back so the GPU's early depth test can
+        # reject occluded fragments before the (expensive) PBR fragment shader
+        # runs -- this cuts overdraw cost, which dominates at high resolution.
+        # The original toRender index is kept as the stable picking object id.
+        opaque = [(i, rec) for i, rec in enumerate(toRender)
+                  if not rec[0][0] and not (skip and i in skip)]
+        # Opaque draw order is depth-buffer-correct in any order, so group by
+        # material first (a CAD assembly is hundreds of parts sharing a handful of
+        # materials); consecutive same-material shapes then skip the per-shape
+        # appearance re-upload. Front-to-back is kept as the secondary key so early
+        # depth rejection still helps within each material group.
+        opaque.sort(key=lambda ir: (self._materialSortKey(ir[1]), -ir[1][1][3][2]))
 
-                # Set matrices for this object
-                shader.set_matrices(mvmatrix, self.projection)
+        prog = shader.program
 
+        # Instanced fast path: collapse groups of shapes that share one geometry
+        # (and a compatible appearance) into single instanced draws, cutting the
+        # O(N) per-object draw cost that dominates large duplicated-geometry
+        # scenes. Off in the base pass; PBRPass enables it when the driver and
+        # program support the per-instance attributes. Everything not grouped
+        # (unique geometry, sub-threshold batches) falls through to the loop.
+        singles = opaque
+        if getattr(self, 'instancing_enabled', False):
+            from OpenGLContext.passes.instancing import build_instance_groups
+            groups, single_recs = build_instance_groups(
+                [rec for (_i, rec) in opaque],
+                min_instances=self.INSTANCE_MIN,
+                key=self._instanceKey,
+                instanceable=self._instanceable,
+            )
+            for group in groups:
                 try:
-                    path[-1].Render(mode=self)
-                    if debugFrustum and bvolume:
-                        bvolume.debugRender()
+                    self._drawInstanceGroup(group, shader, prog, id_map)
                 except Exception as err:
-                    log.error(
-                        "Failure in shader opaque render: %s",
-                        getTraceback(err),
-                    )
+                    log.error("Failure in instanced group render: %s",
+                              getTraceback(err))
+            singles = [(None, rec) for rec in single_recs]
+
+        for obj_index, (key, mvmatrix, tmatrix, bvolume, path) in singles:
+            self.matrix = mvmatrix
+            self.renderPath = path
+
+            # Set matrices for this object (pass the program to avoid a per-draw
+            # glGetIntegerv(GL_CURRENT_PROGRAM) round-trip).
+            shader.set_matrices(mvmatrix, self.projection, program=prog)
+
+            # Set object ID for MRT selection buffer (stable per-path id; the
+            # persistent map is maintained by _objectIdFor, not rebuilt here).
+            # A non-pickable shape masks the id attachment instead, reading
+            # through to whatever is behind it.
+            masked = self._writeShapeId(shader, path, prog, id_map)
+
+            try:
+                path[-1].Render(mode=self)
+                if debugFrustum and bvolume:
+                    bvolume.debugRender()
+            except Exception as err:
+                log.error(
+                    "Failure in shader opaque render: %s",
+                    getTraceback(err),
+                )
+            finally:
+                self._restoreShapeId(masked)
 
         shader.unuse()
 
-    def shaderRenderTransparent(self, toRender: List) -> None:
+    def shaderRenderTransparent(self, toRender: List, id_map: Optional[Dict] = None) -> None:
         """Render transparent geometry using shaders.
 
         Args:
             toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path) tuples
+            id_map: Optional dict to populate with {object_id: path} for MRT selection.
+                   If provided, object IDs will be set for each rendered object.
         """
+        # Blended surfaces (glTF alphaMode=BLEND, or VRML97 transparency>0) draw
+        # after all opaque geometry, back-to-front, with depth writes disabled so
+        # overlapping translucent layers accumulate in the correct order. The
+        # original toRender index is preserved as the picking object id.
+        transparent = [(i, rec) for i, rec in enumerate(toRender) if rec[0][0]]
+        if not transparent:
+            return
+        # Eye looks down -z, so farthest-first is ascending eye-space origin z.
+        transparent.sort(key=lambda ir: ir[1][1][3][2])
+
         self.transparent = True
-        setup = False
         debugFrustum = self.context.contextDefinition.debugBBox
 
         shader = self.shader_program
+        shader._pick_active = id_map is not None
+        shader.use(lit=True)
+        glEnable(GL_BLEND)
+        if id_map is not None:
+            disable_object_id_blend()   # don't blend the picking id (4.6)
+        # Straight (non-premultiplied) alpha src-over: src*srcA + dst*(1-srcA).
+        # This is coupled to the shader's alpha output: both the
+        # VRML97 (vrml97_lighting.frag: `alpha = 1.0 - transparency`) and PBR
+        # fragment shaders emit alpha as *opacity*, so these are the correct
+        # factors. The legacy fixed-function path (renderTransparent below) emits
+        # alpha as *transparency* and therefore uses the reversed factors -- do not
+        # unify the two blindly; changing one side without the other inverts every
+        # transparent surface. Locked by tests/test_transparent_blend.py.
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        glDepthMask(0)
+        glDepthFunc(GL_LEQUAL)
+        prog = shader.program
 
         try:
-            for key, mvmatrix, tmatrix, bvolume, path in toRender:
-                if key[0]:  # Transparent
-                    if not setup:
-                        setup = True
-                        shader.use(lit=True)
-                        glEnable(GL_BLEND)
-                        glBlendFunc(GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA)
-                        glDepthMask(0)
-                        glDepthFunc(GL_LEQUAL)
+            for obj_index, (key, mvmatrix, tmatrix, bvolume, path) in transparent:
+                self.matrix = mvmatrix
+                self.renderPath = path
 
-                    self.matrix = mvmatrix
-                    self.renderPath = path
+                # Set matrices for this object (pass program to avoid a
+                # per-draw glGetIntegerv round-trip).
+                shader.set_matrices(mvmatrix, self.projection, program=prog)
 
-                    # Set matrices for this object
-                    shader.set_matrices(mvmatrix, self.projection)
+                # Set object ID for MRT selection buffer (stable per-path id),
+                # or mask it for a non-pickable shape.
+                masked = self._writeShapeId(shader, path, prog, id_map)
 
-                    try:
-                        path[-1].RenderTransparent(mode=self)
-                        if debugFrustum and bvolume:
-                            bvolume.debugRender()
-                    except Exception as err:
-                        log.error(
-                            "Failure in shader transparent render: %s",
-                            getTraceback(err),
-                        )
+                try:
+                    path[-1].RenderTransparent(mode=self)
+                    if debugFrustum and bvolume:
+                        bvolume.debugRender()
+                except Exception as err:
+                    log.error(
+                        "Failure in shader transparent render: %s",
+                        getTraceback(err),
+                    )
+                finally:
+                    self._restoreShapeId(masked)
         finally:
             self.transparent = False
-            if setup:
-                shader.unuse()
-                glDisable(GL_BLEND)
-                glDepthMask(1)
-                glDepthFunc(GL_LEQUAL)
-                glEnable(GL_DEPTH_TEST)
+            shader.unuse()
+            glDisable(GL_BLEND)
+            glDepthMask(1)
+            glDepthFunc(GL_LEQUAL)
+            glEnable(GL_DEPTH_TEST)
 
     def shaderRenderFrameCounter(self, context) -> None:
         """Render the frame counter using shader-based text rendering.
@@ -421,12 +658,15 @@ class FlatPass( SGObserver ):
             if not tx or not ty:
                 return
 
-            # Get frame counter data
-            count, avg, last = context.frameCounter.summary()
+            # Get frame counter data. Show the windowed median rate, not the
+            # cumulative lifetime average -- the latter bakes in one-off model
+            # loads / first-frame compiles and reads far below the live rate.
+            count, _avg, last = context.frameCounter.summary()
+            avg = context.frameCounter.recentFps()
             last *= 1000  # Convert to milliseconds
 
             # Format the text
-            text = f'fps avg:{avg:.1f}\ncurr ms: {last:.0f}'
+            text = f'fps:{avg:.1f}\ncurr ms: {last:.0f}'
 
             # Get a text renderer (use 14px font for frame counter)
             text_renderer = get_text_renderer(14)
@@ -450,96 +690,6 @@ class FlatPass( SGObserver ):
         except Exception as e:
             log.debug("Failed to render frame counter: %s", e)
 
-    def shaderSelectRender(self, mode: Any, toRender: List, events: Dict) -> None:
-        """Render for selection using unlit shader.
-
-        Args:
-            mode: Render mode
-            toRender: Render set
-            events: Pick events
-        """
-        glClearColor(0, 0, 0, 0)
-        glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT)
-
-        self.visible = False
-        self.transparent = False
-        self.lighting = False
-        self.textured = False
-
-        matrix = self.matrix
-        id_map = {}
-
-        pickPoints = {}
-        min_x, min_y = self.getViewport()[2:]
-        max_x, max_y = 0, 0
-        pickSize = 2
-        offset = pickSize // 2
-
-        for event in events.values():
-            x, y = key = tuple(event.getPickPoint())
-            pickPoints.setdefault(key, []).append(event)
-            min_x = min((x - offset, min_x))
-            max_x = max((x + offset, max_x))
-            min_y = min((y - offset, min_y))
-            max_y = max((y + offset, max_y))
-
-        min_x = int(max((0, min_x)))
-        min_y = int(max((0, min_y)))
-        if max_x < min_x or max_y < min_y:
-            return
-
-        debugSelection = mode.context.contextDefinition.debugSelection
-
-        if not debugSelection:
-            glScissor(min_x, min_y, int(max_x) - min_x, int(max_y) - min_y)
-            glEnable(GL_SCISSOR_TEST)
-
-        shader = self.shader_program
-        shader.use(lit=False)  # Use unlit shader
-
-        try:
-            for obj_id, (key, mvmatrix, tmatrix, bvolume, path) in enumerate(toRender):
-                obj_id = (obj_id + 1) << 12
-
-                # Convert ID to color (RGBA bytes)
-                r = (obj_id >> 0) & 0xFF
-                g = (obj_id >> 8) & 0xFF
-                b = (obj_id >> 16) & 0xFF
-                a = 255
-
-                # Ensure unlit shader is active (geometry may have switched shaders)
-                shader.use(lit=False)
-                shader.set_solid_color((r / 255.0, g / 255.0, b / 255.0, a / 255.0))
-                shader.set_matrices(mvmatrix, self.projection, program=shader.unlit_program)
-
-                self.matrix = mvmatrix
-                self.renderPath = path
-                path[-1].Render(mode=self)
-                id_map[obj_id] = path
-
-            shader.unuse()
-
-            pixel = array([0, 0, 0, 0], 'B')
-            depth_pixel = array([[0]], 'f')
-
-            for point, eventSet in pickPoints.items():
-                # Convert coordinates to integers for glReadPixels
-                px, py = int(point[0]), int(point[1])
-                glReadPixels(px, py, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel)
-                lpixel = int(pixel.view('<I')[0])
-                paths = id_map.get(lpixel, [])
-                event.setObjectPaths([paths])
-                glReadPixels(
-                    px, py, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, depth_pixel
-                )
-                event.viewCoordinate = px, py, depth_pixel[0][0]
-                event.modelViewMatrix = matrix
-                event.projectionMatrix = self.projection
-                event.viewport = self.viewport
-                if hasattr(mode.context, 'ProcessEvent'):
-                    mode.context.ProcessEvent(event)
-        finally:
-            glDisable(GL_SCISSOR_TEST)
 
     INTERESTING_TYPES = [
         nodetypes.Rendering,
@@ -563,6 +713,89 @@ class FlatPass( SGObserver ):
             current[-1].bound = 1
             return current
         return None
+
+    # Persistent object-id <-> path map for MRT picking. Stable per-path ids
+    # (stashed on the NodePath) mean the {id: path} map is only mutated when the
+    # scene structure changes, not rebuilt every warm frame -- the O(N) build
+    # dominated pick cost on 10^5-part scenes. See purge() for invalidation.
+    _sel_id_map = None
+    _sel_next = 1
+
+    # Instanced-geometry hooks. The base pass never instances; PBRPass overrides
+    # instancing_enabled + the two methods below. INSTANCE_MIN is the minimum
+    # batch size worth an instanced draw (instancing has fixed per-batch setup).
+    instancing_enabled = False
+    INSTANCE_MIN = 8
+
+    def _instanceable( self, path ) -> bool:
+        """Whether this path's geometry can be drawn instanced (base: never)."""
+        return False
+
+    def _instanceKey( self, path ):
+        """Batch key for a path. Base: geometry + material + texture identity, so a
+        group is a set of visually identical shapes. PBRPass widens this to
+        geometry + texture set (materials vary per instance via a material array)."""
+        from OpenGLContext.passes.instancing import geometry_instance_key
+        return geometry_instance_key( path )
+
+    def _drawInstanceGroup( self, group, shader, prog, id_map ):
+        """Draw one InstanceGroup in a single instanced call (subclass override)."""
+        raise NotImplementedError(
+            "instancing_enabled is True but _drawInstanceGroup is not implemented"
+        )
+
+    def _shapePickable( self, path ):
+        """Whether this path's rendered node accepts picks (the default).
+
+        The ``pickable`` flag is opt-out: only a Shape explicitly marked
+        ``pickable=False`` is skipped; any node without the field (non-Shape
+        renderables) stays pickable.
+        """
+        return bool( getattr( path[-1], 'pickable', True ) )
+
+    def _writeShapeId( self, shader, path, prog, id_map ):
+        """Set this shape's object id, or mask the id attachment if non-pickable.
+
+        Returns True when the id attachment (MRT draw buffer OBJECT_ID_ATTACHMENT)
+        was masked off; the caller must restore it with ``_restoreShapeId`` once
+        the shape has drawn. A masked shape is never allocated an id, so it can
+        neither be resolved from the id map nor overwrite the id of geometry
+        behind it -- the pick reads straight through.
+        """
+        if id_map is None:
+            return False
+        if self._shapePickable( path ):
+            shader.set_object_id( self._objectIdFor( path ), program=prog )
+            return False
+        glColorMaski( OBJECT_ID_ATTACHMENT, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE )
+        return True
+
+    def _restoreShapeId( self, masked ):
+        """Re-enable writes to the id attachment after a masked (non-pickable) draw."""
+        if masked:
+            glColorMaski( OBJECT_ID_ATTACHMENT, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE )
+
+    def _objectIdFor( self, path ):
+        """Return this path's stable object-id, allocating on first sight.
+
+        The id is independent of draw/sort order (transparent shapes reorder with
+        the camera), so the persistent map stays valid across frames.
+        """
+        if self._sel_id_map is None:
+            self._sel_id_map = {}
+        oid = getattr( path, '_sel_id', 0 )
+        if not oid:
+            oid = self._sel_next
+            self._sel_next += 1
+            path._sel_id = oid
+            self._sel_id_map[oid] = path
+        return oid
+
+    def _selectionIdMap( self ):
+        """The persistent {object_id: path} map (created lazily)."""
+        if self._sel_id_map is None:
+            self._sel_id_map = {}
+        return self._sel_id_map
 
     def renderSet( self, matrix ):
         """Calculate ordered rendering set to display"""
@@ -597,29 +830,6 @@ class FlatPass( SGObserver ):
         maxDepth = max((maxDepth,101))
         return -(maxDepth*1.01)
 
-    def frustumVisibilityFilter( self, records ):
-        """Filter records for visibility using frustum planes
-
-        This does per-object culling based on frustum lookups
-        rather than object query values.  It should be fast
-        *if* the frustcullaccel module is available, if not
-        it will be dog-slow.
-        """
-        result = []
-        for record in records:
-            (key,mv,tm,bv,path) = record
-            if bv is not None:
-                visible = bv.visible(
-                    self.frustum, tm.astype('f'),
-                    occlusion=False,
-                    mode=self
-                )
-                if visible:
-                    result.append( record )
-            else:
-                result.append( record )
-        return result
-    
     _render_mode_logged = False
 
     def Render( self, context, mode ):
@@ -629,7 +839,47 @@ class FlatPass( SGObserver ):
             self._render_mode_logged = True
             profile = getattr(context.contextDefinition, 'profile', 'unknown')
             render_mode = 'SHADER' if self.use_shaders else 'LEGACY'
-            log.info(f"Render mode: {render_mode}, Profile: {profile}")
+            mrt_mode = 'MRT' if (self.use_shaders and self.use_mrt_selection) else 'LEGACY'
+            log.info(f"Render mode: {render_mode}, Profile: {profile}, Selection: {mrt_mode}")
+            # Report the actual GL driver. A `llvmpipe`/`softpipe`/`swrast`
+            # renderer here means GL fell back to CPU software rendering (e.g. a
+            # misconfigured container) -- warn loudly, since it silently caps
+            # performance ~100x below the real GPU.
+            try:
+                from OpenGL.GL import (
+                    glGetString, GL_VENDOR, GL_RENDERER, GL_VERSION,
+                )
+                vendor = (glGetString(GL_VENDOR) or b'?').decode('latin-1')
+                renderer = (glGetString(GL_RENDERER) or b'?').decode('latin-1')
+                version = (glGetString(GL_VERSION) or b'?').decode('latin-1')
+                self._gl_renderer = renderer
+                log.info("GL vendor=%s renderer=%s version=%s", vendor, renderer, version)
+                if any(s in renderer.lower() for s in ('llvmpipe', 'softpipe', 'swrast', 'software')):
+                    log.warning(
+                        "GL is running on a SOFTWARE rasteriser (%s) -- the GPU "
+                        "is not being used; rendering will be very slow.", renderer)
+            except Exception as err:
+                log.debug("Could not query GL driver strings: %s", err)
+
+            # Colour is written already sRGB-encoded: the PBR/VRML97 shaders end
+            # with an explicit linearToSRGB() and the legacy path outputs
+            # display-referred colour directly, so the framebuffer must NOT
+            # re-encode. GL_FRAMEBUFFER_SRGB defaults off, but a backend that
+            # requests an sRGB-capable default framebuffer can hand it to us
+            # enabled -- which would double-encode and wash the frame out. We
+            # never enable it ourselves (grep confirms), so disabling it once
+            # here, on the first frame with the context current, is enough; any
+            # future pass that turns it on owns restoring it.
+            try:
+                glDisable(GL_FRAMEBUFFER_SRGB)
+            except Exception as err:
+                log.debug("GL_FRAMEBUFFER_SRGB not available to disable: %s", err)
+
+        # Reset per-frame caches
+        self._has_mousemove_handlers = None
+        # Deferred runtime-transparent shapes are collected fresh each frame
+        #; drained by renderTransparent.
+        self._deferredTransparent = []
 
         # clear the projection matrix set up by legacy sg
         matrix = self.getModelView()
@@ -645,21 +895,54 @@ class FlatPass( SGObserver ):
         if self.use_shaders:
             self.shader_program = self.getShaderProgram()
             self.shader_program.compile()
+            # Reset the per-frame program-bind cache so a skip can
+            # never be based on a program another pass/frame left bound.
+            self.shader_program.begin_frame()
             self.shader_mode = True
         else:
             self.shader_mode = False
             self.shader_program = None
 
-        # do we need to do a selection-render pass?
+        # Get pick events
         events = context.getPickEvents()
-        debugSelection = mode.context.contextDefinition.debugSelection
+        # pickEnabled=False suppresses the whole selection subsystem; events are
+        # already empty (gated in addPickEvent), so only debugSelection remains.
+        debugSelection = (mode.context.contextDefinition.debugSelection
+                          and mode.context.contextDefinition.pickEnabled)
 
-        if events or debugSelection:
+        # Optimize events: filter mouse-move if no handlers, de-duplicate by pixel
+        if events:
+            events = self._optimizePickEvents(context, events)
+
+        # Keep the id/depth readback warm only while picking is active.
+        if events:
+            self._pick_warm_frames = self._PICK_WARM_RESET
+
+        # Log pick event count for debugging
+        if events:
+            log.debug("Render: processing %d pick events", len(events))
+
+        # MRT selection path: resolve picks from the object-id buffer.
+        use_mrt = self.use_shaders and self.use_mrt_selection and not debugSelection
+        self.use_async_pick = (use_mrt and
+                               getattr(context.contextDefinition, 'pickAsync', True))
+        # Deferred events submitted on earlier frames are dispatched here as soon
+        # as their fence signals; this frame's events are submitted after the
+        # selection buffer is rendered (see below), so they resolve next frame.
+        if self.use_async_pick:
+            self.drainAsyncPicks(mode)
+        elif use_mrt and events:
+            # Synchronous readback of the PREVIOUS frame's buffer (one-frame
+            # latency, but a GPU stall per pick).
+            self.processPickEventsFromBuffer(mode, events)
+            context.pickEvents.clear()
+        elif events or debugSelection:
+            # Legacy selection path
             if self.use_shaders:
-                self.shaderSelectRender(mode, toRender, events)
+                self.shaderSelectRenderOptimized(mode, toRender, events)
             else:
                 self.selectRender( mode, toRender, events )
-            events.clear()
+            context.pickEvents.clear()
 
         # Load the root
         if not debugSelection:
@@ -677,13 +960,97 @@ class FlatPass( SGObserver ):
             glCullFace(GL_BACK)
 
             if self.use_shaders:
+                # Render shadow maps before binding the MRT selection FBO; the
+                # shadow pass binds/unbinds its own depth FBOs and restores state.
+                if self.use_shadows:
+                    self.shader_program.use(lit=True)
+                    self.renderShadowMaps(toRender)
+
+                # Render into the MRT selection FBO only while picking is active.
+                # Otherwise render straight to the screen: no second render
+                # target, no full-buffer readback (a GPU stall), and no blit --
+                # all of which are wasted when nothing is querying object IDs.
+                selection_buffer = None
+                id_map = None
+                vp_size = context.getViewPort()
+
+                if use_mrt and self._pick_warm_frames > 0:
+                    selection_buffer = self._getSelectionBuffer()
+                    if selection_buffer.ensure_size(int(vp_size[0]), int(vp_size[1])):
+                        id_map = self._selectionIdMap()
+                        selection_buffer.bind()
+                        selection_buffer.clear()
+                    else:
+                        selection_buffer = None
+
                 # Shader-based rendering path (core-profile compatible)
                 self.shaderBackgroundRender(vp, matrix)
                 self.setupShaderLights(matrix)
+                if self.use_shadows:
+                    self.bindShadowUniforms()
+                self.iblSetup(matrix)
                 self.shader_program.set_default_material()
-                self.shader_program.set_scene_ambient((0.2, 0.2, 0.2))
-                self.shaderRenderOpaque(toRender)
-                self.shaderRenderTransparent(toRender)
+                # glTF lighting is IBL + punctual only -- a flat white fill is
+                # non-physical and washes out self-lit scenes (DirectionalLight,
+                # PointLightIntensityTest read pale grey instead of dark + crisp
+                # lights). A glTF viewer sets context.gltf_scene_ambient low/zero;
+                # legacy VRML scenes keep the 0.2 fill that stands in for no lights.
+                amb = getattr(getattr(self, 'context', None),
+                              'gltf_scene_ambient', None)
+                if amb is None:
+                    amb = (0.2, 0.2, 0.2)
+                elif not isinstance(amb, (tuple, list)):
+                    amb = (float(amb),) * 3
+                self.shader_program.set_scene_ambient(tuple(amb))
+                # Transmissive (glass) shapes are opaque-alpha but must draw after
+                # the opaque scene so they can sample it as a backdrop; split them
+                # out of the opaque pass unless transmission is disabled.
+                transmissive = (self.transmissiveRecords(toRender)
+                                if self.transmissionMode() != 'off' else set())
+                self.shaderRenderOpaque(toRender, id_map, skip=transmissive)
+                self.shaderRenderTransmissive(toRender, transmissive, id_map)
+                self.shaderRenderTransparent(toRender, id_map)
+
+                # Restore winding/cull GL defaults once, after the geometry loop,
+                # so a PBR mesh's CW winding or disabled culling never leaks past
+                # this frame. No-op for pure VRML97 scenes. Guarded
+                # lazy import keeps the generic pass free of a hard PBR dependency.
+                try:
+                    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+                    PBRMesh.reset_draw_state(self)
+                    # Delete VAOs whose meshes were GC'd since last frame, now
+                    # that this context is current.
+                    PBRMesh.flush_pending_deletes(self)
+                except Exception:
+                    pass
+
+                # Finalize MRT selection buffer: keep the id->path map for next
+                # frame's per-pixel pick lookups (read on demand from the FBO --
+                # no full-framebuffer readback), then present.
+                if selection_buffer is not None and id_map is not None:
+                    self._pick_warm_frames -= 1
+                    selection_buffer.set_id_map(id_map)
+                    selection_buffer.blit_to_screen(int(vp_size[0]), int(vp_size[1]))
+
+                # Async pick: submit this frame's samples now that the id buffer
+                # holds this frame's render; they resolve on a later frame with no
+                # GPU stall. Always clear the queue so events aren't resubmitted.
+                if self.use_async_pick and events:
+                    if selection_buffer is not None and id_map is not None:
+                        self.submitAsyncPicks(mode, events, id_map)
+                    context.pickEvents.clear()
+
+                # Render frame counter to screen (not to MRT buffer)
+                if context.frameCounter and context.frameCounter.display:
+                    self.shaderRenderFrameCounter(context)
+
+                # Optional application overlay (game HUD, etc.): a context may
+                # define ``renderShaderOverlay(flatpass)`` to draw screen-space
+                # content over the finished frame, using this pass's shader
+                # program and the shader text renderer.
+                overlay = getattr(context, 'renderShaderOverlay', None)
+                if overlay is not None:
+                    overlay(self)
             else:
                 # Legacy fixed-function rendering path
                 self.legacyBackgroundRender( vp,matrix )
@@ -691,11 +1058,8 @@ class FlatPass( SGObserver ):
                 self.renderOpaque( toRender )
                 self.renderTransparent( toRender )
 
-            # Render frame counter if enabled
-            if context.frameCounter and context.frameCounter.display:
-                if self.use_shaders:
-                    self.shaderRenderFrameCounter(context)
-                else:
+                # Render frame counter if enabled
+                if context.frameCounter and context.frameCounter.display:
                     context.frameCounter.Render(context)
 
         context.SwapBuffers()
@@ -740,17 +1104,6 @@ class FlatPass( SGObserver ):
 #            l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
     
-    def renderGeometry( self, mvmatrix ):
-        """Render geometry present in the given mvmatrix
-        
-        Intended for use in e.g. setting up a light texture, this 
-        operation *just* does a query to find the visible objects 
-        and then passes them (all) to renderOpaque
-        """
-        toRender = self.renderSet( mvmatrix )
-        self.renderOpaque( toRender )
-        self.renderTransparent( toRender )
-
     def renderOpaque( self, toRender ):
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
@@ -807,98 +1160,65 @@ class FlatPass( SGObserver ):
                 glDepthMask( 1 )
                 glDepthFunc( GL_LEQUAL )
                 glEnable( GL_DEPTH_TEST )
+        # Draw shapes deferred from the opaque pass.
+        self._renderDeferredTransparent()
     def addTransparent( self, other ):
-        pass
+        """Defer a shape found transparent during the opaque pass.
+
+        `Shape.Render` calls this and returns without drawing when a shape
+        statically classed opaque turns out transparent at render time. Record it
+        (with the current modelview matrix and path) so `renderTransparent` can
+        replay it, instead of silently dropping it for the frame.
+        """
+        if getattr( self, '_deferredTransparent', None ) is None:
+            self._deferredTransparent = []
+        self._deferredTransparent.append(
+            ( self.matrix, self.renderPath, other ) )
+
+    def _renderDeferredTransparent( self ):
+        """Draw shapes deferred via addTransparent, then clear the queue.
+
+        Self-contained blend setup/teardown so it renders correctly whether or
+        not the main transparent loop already ran.
+        """
+        deferred = getattr( self, '_deferredTransparent', None )
+        if not deferred:
+            return
+        self.transparent = True
+        glEnable( GL_BLEND )
+        glBlendFunc( GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA )
+        glDepthMask( 0 )
+        glDepthFunc( GL_LEQUAL )
+        try:
+            for matrix, path, shape in deferred:
+                self.matrix = matrix
+                self.renderPath = path
+                glLoadMatrixf( matrix )
+                try:
+                    shape.RenderTransparent( mode = self )
+                except Exception as err:
+                    log.error(
+                        """Failure rendering deferred transparent %s: %s""",
+                        shape, getTraceback( err ),
+                    )
+        finally:
+            self._deferredTransparent = []
+            glDisable( GL_BLEND )
+            glDepthMask( 1 )
+            glDepthFunc( GL_LEQUAL )
+            glEnable( GL_DEPTH_TEST )
+            self.transparent = False
 
     def selectRender( self, mode, toRender, events ):
-        """Render each path to color buffer
+        """Legacy colour-buffer pick fallback for the core/shader FlatPass.
 
-        We render all geometry as non-transparent geometry with
-        unique colour values for each object.  We should be able
-        to handle up to 2**24 objects before that starts failing.
+        Packs the id shifted 12 bits into RGBA (no fixed-function lighting).
+        Shared body in :func:`_color_select_render`.
         """
-        # TODO: allow context to signal that it is "captured" by a
-        # movement manager that doesn't need select rendering...
-        # e.g. for an examine manager there's no reason to do select
-        # render passes...
-        # TODO: do line-box intersection tests for bounding boxes to
-        # only render the geometry which is under the cursor
-        # TODO: render to an FBO instead of the back buffer
-        # (when available)
-        # TODO: render at 1/2 size compared to context to create a
-        # 2x2 selection square and reduce overhead.
-        glClearColor( 0,0,0, 0 )
-        glClear( GL_DEPTH_BUFFER_BIT|GL_COLOR_BUFFER_BIT )
-
-        self.visible = False
-        self.transparent = False
-        self.lighting = False
-        self.textured = False
-
-        matrix = self.matrix
-        map = {}
-
-        pickPoints = {}
-        # TODO: this could be faster, and we could do further filtering
-        # using a frustum a-la select render mode approach...
-        min_x,min_y = self.getViewport()[2:]
-        max_x,max_y = 0,0
-        pickSize = 2
-        offset = pickSize//2
-        for event in events.values():
-            x,y = key = tuple(event.getPickPoint())
-            pickPoints.setdefault( key, []).append( event )
-            min_x = min((x-offset,min_x))
-            max_x = max((x+offset,max_x))
-            min_y = min((y-offset,min_y))
-            max_y = max((y+offset,max_y))
-        min_x = int(max((0,min_x)))
-        min_y = int(max((0,min_y)))
-        if max_x < min_x or max_y < min_y:
-            # no pick points were found 
-            return
-        debugSelection = mode.context.contextDefinition.debugSelection
-            
-        if not debugSelection:
-            glScissor( min_x,min_y,int(max_x)-min_x,int(max_y)-min_y)
-            glEnable( GL_SCISSOR_TEST )
-
-        glMatrixMode( GL_MODELVIEW )
-        try:
-            idHolder = array( [0,0,0,0], 'B' )
-            idSetter = idHolder.view( '<I' )
-            for id,(key,mvmatrix,tmatrix,bvolume,path) in enumerate(toRender):
-                id = (id+1) << 12
-                idSetter[0] = id
-                glColor4ubv( idHolder )
-                self.matrix = mvmatrix
-                self.renderPath = path
-                glLoadMatrixf( mvmatrix )
-                path[-1].Render( mode=self )
-                map[id] = path
-            pixel = array([0,0,0,0],'B')
-            depth_pixel = array([[0]],'f')
-            for point,eventSet in pickPoints.items():
-                # get the pixel colour (id) under the cursor.
-                glReadPixels( point[0],point[1],1,1,GL_RGBA,GL_UNSIGNED_BYTE, pixel )
-                lpixel = long( pixel.view( '<I' )[0] )
-                paths = map.get( lpixel, [] )
-                event.setObjectPaths( [paths] )
-                # get the depth value under the cursor...
-                glReadPixels(
-                    point[0],point[1],1,1,GL_DEPTH_COMPONENT,GL_FLOAT,depth_pixel
-                )
-                event.viewCoordinate = point[0],point[1],depth_pixel[0][0]
-                event.modelViewMatrix = matrix
-                event.projectionMatrix = self.projection
-                event.viewport = self.viewport
-                if hasattr( mode.context, 'ProcessEvent'):
-                    mode.context.ProcessEvent( event )
-        finally:
-            glColor4f( 1.0,1.0,1.0, 1.0)
-            glDisable( GL_COLOR_MATERIAL )
-            glEnable( GL_LIGHTING )
-            glDisable( GL_SCISSOR_TEST )
+        _color_select_render(
+            self, mode, toRender, events,
+            id_shift=12, read_format=GL_RGBA,
+            setup_fixed_function=False, require_pick_enabled=False)
 
     MAX_LIGHTS = -1
     def __call__( self, context ):
@@ -915,8 +1235,15 @@ class FlatPass( SGObserver ):
         
         self.calculateFrustum()
 
-        self.Render( context, self )
+        if self._begin_bloom():
+            try:
+                self.Render( context, self )
+            finally:
+                self._end_bloom()
+        else:
+            self.Render( context, self )
         return True # flip yes, for now we always flip...
+
 
     def calculateFrustum( self ):
         """Construct our Frustum instance (currently by extracting from mv matrix)"""

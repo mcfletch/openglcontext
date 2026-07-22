@@ -28,7 +28,7 @@ if __name__ == "__main__":
             from OpenGL.GLUT import glutSolidTeapot
             try:
                 glutSolidTeapot(1.0)
-            except:
+            except Exception:
                 pass  # GLUT may not be available
 
     TestRenderer.ContextMainLoop()

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Core-Profile Rendering in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Core-Profile Rendering</h1>
+</header>
+<section>
+<p class="introduction">OpenGLContext can render the same scenegraph two ways:
+through the legacy fixed-function pipeline (the compatibility profile), or
+through GLSL shaders on an OpenGL&nbsp;3.3 core-profile context. This document
+describes the core-profile path: how it is selected, the passes it runs, the
+shader programs it manages, and the conventions a geometry node must follow to
+draw through it. The <a href="pbr.html">physically based renderer</a> is a
+specialization of this same path.</p>
+</section>
+
+<section>
+<h2>Choosing a Profile</h2>
+<p>The profile is read once, from the environment, when a context is created:</p>
+<pre>OPENGLCONTEXT_PROFILE=core   python your_script.py     # shader pipeline
+OPENGLCONTEXT_PROFILE=compatibility python your_script.py  # fixed-function (default)</pre>
+<p><code>core</code> requests an OpenGL&nbsp;3.3 core-profile context and uses the
+shader-based render pass. <code>compatibility</code> (the default) uses the
+fixed-function pipeline. Core profile is the only path that works on platforms
+that have dropped fixed-function support, such as macOS.</p>
+<p>The GLFW backend creates core-profile contexts cleanly and is the recommended
+choice for core / PBR work:</p>
+<pre>OPENGLCONTEXT_PROFILE=core OPENGLCONTEXT_BACKEND=glfw python your_script.py</pre>
+<p class="technical">The dispatch lives in <code>passes/renderpass.py</code>. When
+the context definition reports <code>profile == 'core'</code>, the renderer
+instantiates the core <code>FlatPass</code> (from
+<code>passes/flatcore.py</code>); otherwise it uses the compatibility
+<code>FlatPass</code> (from <code>passes/flatcompat.py</code>). The choice is made
+per context, not per frame.</p>
+</section>
+
+<section>
+<h2>Compatibility vs. Core, side by side</h2>
+<p>Both profiles run through a <code>FlatPass</code> (see
+<a href="flat.html">Flat Rendering</a>). The base class in
+<code>passes/_flat.py</code> carries both code paths; the single flag
+<code>use_shaders</code> selects between them. The core pass sets
+<code>use_shaders = True</code>; the compatibility pass leaves it
+<code>False</code>.</p>
+<table style="width: 100%;" border="0" cellpadding="5" cellspacing="3">
+  <tbody>
+    <tr>
+      <th style="vertical-align: top;">&nbsp;</th>
+      <th style="vertical-align: top;">Compatibility<br>(<code>flatcompat.py</code>)</th>
+      <th style="vertical-align: top;">Core<br>(<code>flatcore.py</code>)</th>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Selected by</td>
+      <td style="vertical-align: top;">default</td>
+      <td style="vertical-align: top;"><code>OPENGLCONTEXT_PROFILE=core</code></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Lighting</td>
+      <td style="vertical-align: top;">fixed-function <code>glLight*</code>,
+        <code>glEnable(GL_LIGHTING)</code></td>
+      <td style="vertical-align: top;">VRML97 lighting model in GLSL; light
+        properties uploaded as uniforms</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Materials</td>
+      <td style="vertical-align: top;"><code>glMaterial*</code>,
+        <code>glColorMaterial</code></td>
+      <td style="vertical-align: top;">material uniforms set on the shader
+        program</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Matrices</td>
+      <td style="vertical-align: top;"><code>glMatrixMode</code> /
+        <code>glLoadMatrixf</code> / <code>glPushMatrix</code></td>
+      <td style="vertical-align: top;">client-side node-path matrices uploaded as
+        <code>mat4</code> uniforms</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Geometry</td>
+      <td style="vertical-align: top;">vertex pointers, display lists</td>
+      <td style="vertical-align: top;">VAOs and VBOs at fixed attribute
+        locations</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Selection / picking</td>
+      <td style="vertical-align: top;"><code>glColor4ubv</code> back-buffer
+        colour codes</td>
+      <td style="vertical-align: top;">object-id written to a second render
+        target (MRT), or the unlit program</td>
+    </tr>
+  </tbody>
+</table>
+</section>
+
+<section>
+<h2>Watching the Scenegraph</h2>
+<p>The flat pass does not traverse the scenegraph every frame. It observes the
+graph and keeps a flat list of paths to every renderable node. The
+<code>SGObserver</code> base class (in <code>passes/_flat.py</code>) connects to
+the scenegraph's change signals -- child added, child removed, Switch changed --
+and rebuilds a <code>NodePath</code> for each affected node. A
+<code>NodePath</code> caches the combined transform matrix for the route from the
+root to that node, so per-frame rendering is a small number of iterations over a
+prepared list rather than a recursive traversal. This is the same mechanism
+described in <a href="flat.html">Flat Rendering</a>; the core pass reuses
+it unchanged.</p>
+</section>
+
+<section>
+<h2>The Passes</h2>
+<p>On each visible frame the core <code>FlatPass</code> runs these steps in
+order:</p>
+<ul>
+  <li><strong>Shadow maps</strong> -- if shadows are enabled, render each
+    shadow-casting light's depth into its map first (see
+    <a href="shadows.html">Shadows</a>). On by default in core profile.</li>
+  <li><strong>Background</strong> -- sky/ground gradient or cube background.</li>
+  <li><strong>Lights</strong> -- upload the scene's light uniforms, bind shadow
+    samplers, and set the default material and scene ambient.</li>
+  <li><strong>Opaque</strong> -- draw non-transparent geometry, grouped by
+    material and sorted front-to-back.</li>
+  <li><strong>Transmissive</strong> -- glass-like surfaces
+    (<a href="pbr.html">PBR</a> only); the opaque backdrop is captured first so
+    it can be sampled through the surface.</li>
+  <li><strong>Transparent</strong> -- draw blended geometry back-to-front with
+    depth writes disabled.</li>
+  <li><strong>Selection</strong> -- resolve mouse-pick events, either from the
+    object-id render target (MRT) or with the unlit program.</li>
+  <li><strong>Overlay</strong> -- the frame counter and any HUD elements, drawn
+    to the screen rather than into the object-id buffer.</li>
+</ul>
+<p class="technical">The compatibility pass runs the analogous fixed-function
+sequence: legacy background, legacy lights, opaque, transparent.</p>
+</section>
+
+<section>
+<h2>sRGB Output</h2>
+<p>The shaders write colour that is already sRGB-encoded, so the framebuffer must
+not encode it a second time. On the first frame (with the context current) the
+pass disables <code>GL_FRAMEBUFFER_SRGB</code> once and leaves it off. It is a
+one-time call: nothing in OpenGLContext ever enables it, and some backends hand
+the application an sRGB-capable default framebuffer that would otherwise
+double-encode and wash the frame out.</p>
+</section>
+
+<section>
+<h2>Shader Programs</h2>
+<p>Core-profile rendering is managed by <code>VRML97ShaderProgram</code> (in
+<code>passes/shaderpass.py</code>), which compiles and owns a small family of
+programs, each for a different kind of geometry:</p>
+<ul>
+  <li><code>program</code> -- the main lit shader
+    (<code>vrml97_lighting.vert/frag</code>), implementing the VRML97 Phong
+    lighting model.</li>
+  <li><code>unlit_program</code> -- unlit drawing, selection and text
+    (<code>vrml97_unlit.*</code>).</li>
+  <li><code>vertex_color_program</code> -- per-vertex coloured geometry such as
+    NURBS output (<code>vrml97_vertex_color.*</code>).</li>
+  <li><code>point_program</code> -- <code>PointSet</code> / particles with
+    per-vertex colour (<code>vrml97_point.*</code>).</li>
+  <li><code>line_program</code> -- <code>IndexedLineSet</code>
+    (<code>vrml97_line.*</code>).</li>
+  <li><code>depth_program</code> -- position-only, used for the shadow depth
+    passes (<code>shadow_depth.*</code>).</li>
+</ul>
+<p>Background nodes carry their own small shader
+(<code>vrml97_background.*</code>). The <a href="pbr.html">PBR pass</a> subclasses
+<code>VRML97ShaderProgram</code> and replaces only the main lit program with its
+Cook-Torrance shader, inheriting the rest.</p>
+
+<h3>Fixed Attribute Locations</h3>
+<p>Geometry binds vertex attributes to fixed locations so a cached VAO stays
+valid across programs. Two conventions are in use, by shader family:</p>
+<table style="width: 100%;" border="0" cellpadding="5" cellspacing="3">
+  <tbody>
+    <tr>
+      <th style="vertical-align: top;">Location</th>
+      <th style="vertical-align: top;">Lit / unlit / vertex-colour / depth</th>
+      <th style="vertical-align: top;">Point / line / background</th>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">0</td>
+      <td style="vertical-align: top;"><code>aTexCoord</code></td>
+      <td style="vertical-align: top;"><code>aPosition</code></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">1</td>
+      <td style="vertical-align: top;"><code>aNormal</code></td>
+      <td style="vertical-align: top;"><code>aColor</code></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">2</td>
+      <td style="vertical-align: top;"><code>aPosition</code></td>
+      <td style="vertical-align: top;">&mdash;</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">3</td>
+      <td style="vertical-align: top;"><code>aColor</code> (vertex-colour
+        program only)</td>
+      <td style="vertical-align: top;">&mdash;</td>
+    </tr>
+  </tbody>
+</table>
+<p class="technical">The two conventions differ because the lit family carries a
+normal and texture coordinate while the point/line family does not. The
+shadow-depth vertex shader deliberately binds position at location&nbsp;2 to
+match the lit shader, so a VAO built for lit drawing can be reused for the depth
+pass without rebinding.</p>
+</section>
+
+<section>
+<h2>How Shaders Are Assembled</h2>
+<p>The shaders are not monolithic files. Common code lives in include files
+(<code>_common_inc.glsl</code>, <code>_brdf_inc.glsl</code>,
+<code>_lights_inc.glsl</code>, <code>_shadow_inc.glsl</code>,
+<code>_cubemap_inc.glsl</code>) that are spliced in at compile time. The
+preprocessing in <code>shaderpass.py</code> does two things:</p>
+<ul>
+  <li><code>#include "file.glsl"</code> directives are resolved recursively from
+    the shader directory, each file spliced at most once per program (an
+    include guard). Included files carry no <code>#version</code> of their own;
+    the top-level shader owns it.</li>
+  <li>Compile-time <code>#define</code>s are injected immediately after the
+    <code>#version</code> line. This is how per-driver limits are baked in --
+    for example the number of shadow-casting lights the driver can support
+    (<code>MAX_SHADOW_LIGHTS</code>) and whether cube-map arrays are available.</li>
+</ul>
+<p>Assembling shaders this way keeps a single source of truth for the lighting
+math and lets the same shader compile correctly across drivers with very
+different texture-unit budgets. See <a href="pbr.html">Physically Based
+Rendering</a> for the BRDF include and the shadow budget in detail.</p>
+</section>
+
+<section>
+<h2>Drawing Through the Core Pass (for geometry nodes)</h2>
+<p>A geometry node checks <code>mode.shader_mode</code> and, when true, draws with
+VAOs/VBOs instead of fixed-function calls:</p>
+<pre>def render(self, mode=None, **kwargs):
+    if getattr(mode, 'shader_mode', False):
+        return self._render_shader(mode)
+    # ... legacy fixed-function path ...
+
+def _render_shader(self, mode):
+    program = mode.shader_program
+    program.use(lit=True)                 # or use_point(), use(lit=False), ...
+    program.set_matrices(mode.matrix, mode.projection)
+    # bind a VAO with attributes at the fixed locations above, then:
+    glDrawArrays(GL_TRIANGLES, 0, count)</pre>
+<p>The <code>Shape</code> node sets up material and texture before calling the
+geometry's <code>render()</code>, so the geometry only has to supply vertex data
+and issue the draw. See <a href="structure.html">the structural overview</a> for
+how Shape, Appearance and geometry interact.</p>
+</section>
+
+    <footer>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
+    </footer>
+
+</body>
+</html>

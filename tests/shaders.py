@@ -1,82 +1,154 @@
 #! /usr/bin/env python
-'''Tests rendering using the ARB shader objects extension...
+'''Tests rendering of a quantized ("toon") shader via the scenegraph shader nodes.
+
+This is the same rendering setup as shadergeometry.py: geometry is handed to
+ShaderGeometry nodes as raw vertex buffers with a custom Shader appearance,
+rather than the legacy glUseProgram / glutSolid* / glRotate calls the original
+version of this test used.  The sphere, cube and teapot buffers come from the
+scenegraph geometry generators, so no GLUT primitives are needed.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
-from OpenGL.GL import shaders
-from OpenGL.GL.ARB.shader_objects import *
-from OpenGL.GL.ARB.fragment_shader import *
-from OpenGL.GL.ARB.vertex_shader import *
-from OpenGL.GLU import *
-from OpenGL.GLUT import *
-from OpenGLContext.arrays import array
+from OpenGLContext.arrays import array, concatenate
 from OpenGLContext.events.timer import Timer
-import time, sys,logging,math
+from OpenGLContext.scenegraph.basenodes import *
+from OpenGLContext.scenegraph.shaders import *
+from OpenGLContext.scenegraph.quadrics import Sphere
+from OpenGLContext.scenegraph import box
+import math, logging
 log = logging.getLogger( 'shaderobjects' )
 
+STRIDE = 32  # 8 interleaved floats per vertex
+
+TOON_VERTEX = '''
+attribute vec3 position;
+attribute vec3 normal;
+varying vec3 baseNormal;
+void main() {
+    baseNormal = gl_NormalMatrix * normal;
+    gl_Position = gl_ModelViewProjectionMatrix * vec4( position, 1.0 );
+}'''
+
+TOON_FRAGMENT = '''
+uniform vec3 light_location;
+varying vec3 baseNormal;
+void main() {
+    vec3 n = normalize( baseNormal );
+    vec3 l = normalize( light_location );
+    // quantize to 5 steps (0, .25, .5, .75 and 1)
+    float intensity = (floor(dot(l, n) * 4.0) + 1.0)/4.0;
+    gl_FragColor = vec4( intensity, intensity*0.5, intensity*0.5, 1.0 );
+}'''
+
+
 class TestContext( BaseContext ):
-    rotation = 0.00
-    rotation_2 = 0.00
-    light_location = (0,10,5)
-    def Render( self, mode = 0):
-        BaseContext.Render( self, mode )
-        glRotate( self.rotation, 0,1,0 )
-        glRotate( self.rotation_2, 1,0,1 )
-        glUseProgram(self.program)
-        glUniform3fv( self.light_uniform_loc, 1, self.light_location )
-        glutSolidSphere(1.0,32,32)
-        glTranslate( 1,0,2 )
-        glutSolidCube( 1.0 )
-        glTranslate( 2,0,0 )
-        glFrontFace(GL_CW)
-        try:
-            glutSolidTeapot( 1.0)
-        finally:
-            glFrontFace(GL_CCW)
+    light_location = (0, 10, 5)
+
     def OnInit( self ):
         """Scene set up and initial processing"""
-        self.program = shaders.compileProgram(
-            shaders.compileShader(
-                '''
-                varying vec3 normal;
-                void main() {
-                    normal = gl_NormalMatrix * gl_Normal;
-                    gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
-                }
-                ''',
-                GL_VERTEX_SHADER,
-            ),
-            shaders.compileShader(
-                '''
-                uniform vec3 light_location;
-                varying vec3 normal;
-                void main() {
-                    float intensity;
-                    vec4 color;
-                    vec3 n = normalize(normal);
-                    vec3 l = normalize(light_location).xyz;
-                
-                    // quantize to 5 steps (0, .25, .5, .75 and 1)
-                    intensity = (floor(dot(l, n) * 4.0) + 1.0)/4.0;
-                    color = vec4(intensity*1.0, intensity*0.5, intensity*0.5,
-                        intensity*1.0);
-                
-                    gl_FragColor = color;
-                }
-                ''',
-                GL_FRAGMENT_SHADER,
-            ),
+        appearance = Shader(
+            objects=[
+                GLSLObject(
+                    DEF="toon_shader",
+                    uniforms=[
+                        FloatUniform3f(
+                            name="light_location",
+                            value=self.light_location,
+                        ),
+                    ],
+                    shaders=[
+                        GLSLShader( source=[TOON_VERTEX], type="VERTEX" ),
+                        GLSLShader( source=[TOON_FRAGMENT], type="FRAGMENT" ),
+                    ],
+                ),
+            ],
         )
-        self.light_uniform_loc = glGetUniformLocation( self.program, 'light_location' )
+        self.tumble = Transform(
+            children=[
+                self.geometry( self.sphereVertices(), appearance,
+                               position_offset=0, normal_offset=20 ),
+                Transform(
+                    translation=(1, 0, 2),
+                    children=[
+                        self.geometry( self.cubeVertices(), appearance,
+                                       position_offset=20, normal_offset=8 ),
+                    ],
+                ),
+                Transform(
+                    translation=(3, 0, 2),
+                    children=[
+                        self.geometry( self.teapotVertices(), appearance,
+                                       position_offset=20, normal_offset=8 ),
+                    ],
+                ),
+            ],
+        )
+        self.pivot = Transform( children=[ self.tumble ] )
+        self.sg = sceneGraph( children=[ self.pivot ] )
         self.time = Timer( duration = 2.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
         self.time.register (self)
         self.time.start ()
+
+    def geometry( self, vertices, appearance, position_offset, normal_offset ):
+        """Wrap an interleaved vertex array in a ShaderGeometry node.
+
+        The generators interleave texcoord/normal/position in different orders,
+        so the caller passes the byte offset of the position and normal
+        components within each 8-float record.
+        """
+        buffer = ShaderBuffer( buffer=vertices )
+        return ShaderGeometry(
+            slices=[ ShaderSlice( offset=0, count=len(vertices) ) ],
+            attributes=[
+                ShaderAttribute(
+                    name="position",
+                    offset=position_offset,
+                    stride=STRIDE,
+                    size=3,
+                    dataType="FLOAT",
+                    buffer=buffer,
+                    isCoord=True,
+                ),
+                ShaderAttribute(
+                    name="normal",
+                    offset=normal_offset,
+                    stride=STRIDE,
+                    size=3,
+                    dataType="FLOAT",
+                    buffer=buffer,
+                ),
+            ],
+            appearance=appearance,
+        )
+
+    def sphereVertices( self ):
+        """Unit sphere as a flat triangle list (position, texcoord, normal)."""
+        coords, indices = Sphere( radius=1.0 ).compileArrays( 0 )
+        return array( coords, 'f' )[ indices ]
+
+    def cubeVertices( self ):
+        """Unit cube as a flat triangle list (texcoord, normal, position)."""
+        return array( list( box.yieldVertices( (1, 1, 1) ) ), 'f' )
+
+    def teapotVertices( self ):
+        """Teapot shell as a flat triangle list (texcoord, normal, position)."""
+        from OpenGLContext.scenegraph.teapot_nurbs import (
+            tessellate_teapot, steps_for_level,
+        )
+        base, lid = tessellate_teapot(
+            steps=steps_for_level( 0 ), interior=False,
+        )
+        return concatenate(
+            [ array( base, 'f' ), array( lid, 'f' ) ]
+        ).reshape( (-1, 8) )
+
     def OnTimerFraction( self, event ):
-        self.rotation = event.fraction() * 360
-        self.rotation_2 = -event.fraction() * 360
-        
+        fraction = event.fraction()
+        self.pivot.rotation = (0, 1, 0, fraction * 2 * math.pi)
+        self.tumble.rotation = (0.7071, 0, 0.7071, -fraction * 2 * math.pi)
+
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

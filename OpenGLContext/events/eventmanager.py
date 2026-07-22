@@ -29,6 +29,24 @@ class EventManager(object):
         """Initialise the event manager"""
         self.mapping = {
         }
+    def hasReceivers( self ):
+        """Whether any live callback is registered for this manager's event type.
+
+        Encapsulates the pydispatch lookup here, in the events layer, so callers
+        (e.g. Context.hasMouseMoveHandlers) query the relevant managers rather than
+        walking the global dispatcher registry inline. Callbacks are
+        registered under a ``(type, capture, key)`` signal, so a live receiver for
+        this manager is any connection whose signal starts with ``self.type``.
+        (``dispatcher.getAllReceivers()`` with no arguments only returns the
+        register-for-Any receivers, so it cannot answer this -- hence the scan of
+        the connection table.)
+        """
+        for signals in dispatcher.connections.values():
+            for signal, receivers in signals.items():
+                if (isinstance( signal, tuple ) and signal and signal[0] == self.type
+                        and any( True for _ in dispatcher.liveReceivers( receivers ) )):
+                    return True
+        return False
     def ProcessEvent(self, event):
         """Dispatch an incoming event
 

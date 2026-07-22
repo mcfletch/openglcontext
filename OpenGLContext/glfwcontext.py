@@ -60,11 +60,28 @@ class GLFWContext(
         # Make context current before calling Context.__init__
         glfw.make_context_current(self.window)
 
+        # Optionally disable vsync (OPENGLCONTEXT_NO_VSYNC). On Wayland, swap
+        # buffers with vsync on blocks on a compositor frame callback; a leaked GL
+        # context from an earlier abnormally-terminated process can wedge that
+        # callback and hang every later swap. Test/benchmark runs set this so a
+        # leaked context can't stall the suite (and timing reflects real work).
+        import os as _os
+        if _os.environ.get('OPENGLCONTEXT_NO_VSYNC', '').strip().lower() in (
+                '1', 'true', 'yes', 'on'):
+            try:
+                glfw.swap_interval(0)
+            except Exception:
+                pass
+
         # Call base Context initialization
         Context.__init__(self, definition)
 
-        # Set initial viewport
-        self.ViewPort(*definition.size)
+        # Set initial viewport from the real framebuffer size, not the requested
+        # window size. Under HiDPI/fractional scaling (e.g. Wayland) the
+        # framebuffer is measured in pixels and differs from the window's screen
+        # coordinates; using definition.size would leave an undrawn border.
+        fbWidth, fbHeight = glfw.get_framebuffer_size(self.window)
+        self.ViewPort(fbWidth, fbHeight)
 
     def _setWindowHints(self, definition):
         """Apply ContextDefinition to GLFW window hints"""
@@ -95,6 +112,15 @@ class GLFWContext(
             glfw.window_hint(glfw.ACCUM_BLUE_BITS, bits)
             glfw.window_hint(glfw.ACCUM_ALPHA_BITS, bits)
 
+        # Color buffer alpha. GLFW defaults to 8 alpha bits; compositors that
+        # honor destination alpha (Wayland/EGL, forwarded GL) then treat
+        # cleared pixels as transparent, bleeding through windows behind ours.
+        # Only request a window alpha channel when explicitly asked for.
+        if definition.alpha:
+            glfw.window_hint(glfw.ALPHA_BITS, 8)
+        else:
+            glfw.window_hint(glfw.ALPHA_BITS, 0)
+
         # Multisampling
         if definition.multisampleSamples > 0:
             glfw.window_hint(glfw.SAMPLES, definition.multisampleSamples)
@@ -123,6 +149,16 @@ class GLFWContext(
         # Make window resizable
         glfw.window_hint(glfw.RESIZABLE, glfw.TRUE)
 
+        # Offscreen/hidden window (OPENGLCONTEXT_HIDDEN) for captures. A mapped
+        # Wayland surface serializes on the compositor's frame callback, so back-
+        # to-back capture subprocesses stall each other's SwapBuffers; a hidden
+        # window renders + glReadPixels the same but never maps, so captures don't
+        # contend. Pair with OPENGLCONTEXT_NO_VSYNC=1 (swap_interval 0).
+        import os as _os
+        if _os.environ.get('OPENGLCONTEXT_HIDDEN', '').strip().lower() in (
+                '1', 'true', 'yes', 'on'):
+            glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
+
     def setupCallbacks(self):
         """Register GLFW callbacks"""
         if self.window:
@@ -132,6 +168,7 @@ class GLFWContext(
             glfw.set_cursor_pos_callback(self.window, self._cursorPosCallback)
             glfw.set_framebuffer_size_callback(self.window, self._framebufferSizeCallback)
             glfw.set_window_close_callback(self.window, self._windowCloseCallback)
+            glfw.set_window_focus_callback(self.window, self._windowFocusCallback)
 
     def _keyCallback(self, window, key, scancode, action, mods):
         """GLFW key callback wrapper"""
@@ -156,6 +193,13 @@ class GLFWContext(
     def _windowCloseCallback(self, window):
         """GLFW window close callback"""
         self.OnQuit()
+
+    def _windowFocusCallback(self, window, focused):
+        """Drop held-key state on focus loss (no RELEASE arrives when unfocused)."""
+        if not focused:
+            clear = getattr(self, 'clearHeldKeys', None)
+            if clear is not None:
+                clear()
 
     def setCurrent(self):
         """Make this context's OpenGL context current"""
@@ -183,30 +227,51 @@ class GLFWContext(
             glfw.set_window_should_close(self.window, True)
         return super(GLFWContext, self).OnQuit(event)
 
+    def OnIdle(self, *arguments):
+        """Animation hook for the GLFW loop.
+
+        The default Context.OnIdle renders via drawPoll, which would double up
+        with MainLoop's own OnDraw. Demos that animate override this to call
+        triggerRedraw; the base behaviour here is to do nothing and let
+        MainLoop drive rendering.
+        """
+        return 0
+
     def MainLoop(self):
         """Run the main event loop"""
+        # We drive rendering ourselves, so suppress the synchronous in-callback
+        # renders triggerPick/triggerRedraw would otherwise do. A burst of input
+        # events (e.g. mouse-drag rotate) then coalesces into a single render per
+        # iteration instead of one full render per event, which kept the display
+        # lagging behind the cursor.
+        self.deferRedraw = True
         renderedFirst = False
 
         while self.window and not glfw.window_should_close(self.window):
-            # Process pending events first
+            # Dispatch queued GLFW callbacks; with deferRedraw set these only
+            # flag a redraw and coalesce pick events (keyed by buttons/modifiers)
+            # down to the latest position.
             glfw.poll_events()
 
-            # Call OnIdle if defined - this is how animations trigger redraws
-            # (e.g. nehe4.py calls triggerRedraw(1) in OnIdle)
-            if hasattr(self, 'OnIdle'):
-                self.OnIdle()
+            # Synthesise key-repeat where the platform doesn't deliver it (the
+            # GLFW Wayland backend in a nested compositor). No-op otherwise.
+            pump = getattr(self, 'pumpKeyRepeats', None)
+            if pump is not None:
+                pump()
 
-            # Wait briefly for redraw requests (allows time events to accumulate)
-            timeout = self.drawPollTimeout
-            self.redrawRequest.wait(timeout)
+            # Animation hook (overridden by animating demos to triggerRedraw).
+            self.OnIdle()
 
-            # Always call OnDraw - force=0 allows DoEventCascade to process
-            # time events which may trigger redraws for animations
+            # Wait briefly so input and time events accumulate before rendering.
+            self.redrawRequest.wait(self.drawPollTimeout)
+
+            # One OnDraw per iteration. force=1 when a redraw is pending; force=0
+            # still runs DoEventCascade so time events (animations) are processed
+            # and only renders if they produced a visible change.
             if self.redrawRequest.isSet() or not renderedFirst:
                 renderedFirst = True
                 self.OnDraw(force=1)
             else:
-                # This processes time events and redraws if they generated changes
                 self.OnDraw(force=0)
 
         # Cleanup

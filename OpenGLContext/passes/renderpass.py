@@ -7,7 +7,7 @@ used as the base classes for the shadow/passes.py
 module which implements the shadow-casting rendering
 algorithm.
 """
-import time, weakref, traceback, sys
+import time, weakref
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
@@ -154,27 +154,14 @@ class VisitingRenderPass( RenderPass, rendervisitor.RenderVisitor ):
             USE_FRUSTUM_CULLING
         """
         base = super( VisitingRenderPass, self).children( node )
-        if self.frustumCulling == -1:
-            context = self.overall.context
-            if getattr( context, 'USE_FRUSTUM_CULLING',None):
-                if getattr( context, 'USE_OCCLUSION_CULLING',None):
-                    if context.extensions.initExtension( 'ARB_occlusion_query' ):
-                        self.__class__.frustumCulling = 2
-                    elif context.extensions.initExtension( "GL_HP_occlusion_test"):
-                        self.__class__.frustumCulling = 2
-                    else:
-                        self.__class__.frustumCulling = 1
-                else:
-                    self.__class__.frustumCulling = 1
-            else:
-                self.__class__.frustumCulling = 0
-        if self.frustumCulling and self.frustum:
+        mode = self._frustumCullingMode()
+        if mode and self.frustum:
             matrix = self.currentStack.transformMatrix()
             for child in base:
                 if hasattr( child, 'visible'):
                     if child.visible(
                         self.frustum, matrix,
-                        occlusion=(self.frustumCulling==2),
+                        occlusion=(mode==2),
                         mode=self
                     ):
                         yield child
@@ -183,7 +170,33 @@ class VisitingRenderPass( RenderPass, rendervisitor.RenderVisitor ):
         else:
             for child in base:
                 yield child
-    
+
+    def _frustumCullingMode( self ):
+        """Resolve (and cache) the frustum-culling mode for this render's context.
+
+        Cached on the *context*, not the pass class: writing the shared class
+        attribute let the first context to render permanently decide culling for
+        every context sharing the pass class in a multi-context process. The context is the correct scope -- the answer depends on its GL
+        extensions.
+        """
+        context = self.overall.context
+        mode = getattr( context, '_frustumCullingMode', None )
+        if mode is None:
+            mode = self._detectFrustumCulling( context )
+            context._frustumCullingMode = mode
+        return mode
+
+    @staticmethod
+    def _detectFrustumCulling( context ):
+        """Choose the culling mode: 2 = occlusion query, 1 = bbox, 0 = off."""
+        if not getattr( context, 'USE_FRUSTUM_CULLING', None ):
+            return 0
+        if getattr( context, 'USE_OCCLUSION_CULLING', None ):
+            if context.extensions.initExtension( 'ARB_occlusion_query' ) \
+                    or context.extensions.initExtension( "GL_HP_occlusion_test" ):
+                return 2
+        return 1
+
 
 class OpaqueRenderPass(VisitingRenderPass):
     """Opaque geometry rendering through scenegraph visitation
@@ -255,6 +268,15 @@ class TransparentRenderPass(RenderPass):
         If there are none, then the entire pass will be skipped.
         """
         return self.getTransparent()
+    @staticmethod
+    def depthSort( items ):
+        """Order (distance, object, matrix) triples far-to-near for blending
+
+        Transparent geometry blends correctly only when drawn back-to-front,
+        so the largest projected depth is rendered first. Equal depths keep
+        their input order.
+        """
+        return sorted( items, key=lambda item: item[0], reverse=True )
     def __call__( self ):
         """Render all registered transparent objects
 
@@ -288,9 +310,7 @@ class TransparentRenderPass(RenderPass):
                             )
                         )
                 
-                items.sort( lambda x,y: cmp(x[0],y[0]))
-                # we want to render front-to-back
-                items.reverse()
+                items = self.depthSort( items )
                 for distance, object, matrix in items:
                     glMatrixMode(GL_MODELVIEW)
                     glLoadMatrixd( matrix )
@@ -509,7 +529,7 @@ class SelectRenderPass( VisitingRenderPass ):
                     event.setNameStack( nameStack )
                     event.setObjectPaths([
                         nodepath.NodePath(filter(None,[
-                            self.selectable.get(long(name))
+                            self.selectable.get(int(name))
                             for name in names
                         ]))
                         for (near,far,names) in nameStack
@@ -633,7 +653,10 @@ class OverallPass (object):
     viewPaths = None
     backgroundPaths = None
     fogPaths = None
-    
+    # Class-level default so the trailing `if self.visibleChange` in __call__ is
+    # safe even when the first sub-pass raises before it is assigned.
+    visibleChange = 0
+
     def __init__ (
         self, 
         context=None,
@@ -674,9 +697,10 @@ class OverallPass (object):
             try:
                 changed += passObject()
                 self.visibleChange = changed
-            except Exception as error:
-                traceback.print_exc( limit=6 )
-                sys.stderr.write( """Exception in rendering object %s"""%(passObject))
+            except Exception:
+                # Route through logging with the traceback: the old
+                # bare stderr print left an empty log and hid real render bugs.
+                log.exception( "Exception in rendering object %s", passObject )
         if self.visibleChange:
             self.context.SwapBuffers()
         return changed
@@ -848,19 +872,65 @@ visitingDefaultRenderPasses = PassSet(
 )
 USE_FLAT = True
 FLAT = None
+
+
+def _core_flatpass_class():
+    """Core-profile pass class, guarding the experimental PBR import.
+
+    The dispatcher must not name ``pbrpass`` unconditionally: an import-time fault
+    anywhere in the PBR chain (pbrpass -> pbrmaterial/transmission/ibl/flatcore)
+    would otherwise break plain core rendering for every user, PBR or not. The PBR
+    path is attempted defensively and falls back to the base core ``FlatPass``.
+    """
+    want_pbr = False
+    try:
+        from OpenGLContext.passes.pbrpass import renderer_is_pbr
+        want_pbr = renderer_is_pbr()
+    except Exception as err:
+        log.warning("PBR renderer detection failed (%s); using plain core", err)
+    if want_pbr:
+        try:
+            from OpenGLContext.passes.pbrpass import PBRPass
+            log.info('Using core profile (PBR renderer)')
+            return PBRPass
+        except Exception as err:
+            log.warning("PBR pass unavailable (%s); using plain core", err)
+    else:
+        log.info('Using core profile')
+    from OpenGLContext.passes.flatcore import FlatPass
+    return FlatPass
+
+
 class _defaultRenderPasses( object ):
     def __call__( self,context ):
         global FLAT
-        if FLAT is None:
-            sg = context.getSceneGraph()
+        sg = context.getSceneGraph()
+        # Rebuild when the scenegraph reference itself changes — wholesale
+        # replacement (self.sg = new_sg) doesn't fire the per-child dispatcher
+        # signals SGObserver listens to, so the cached FlatPass would keep
+        # rendering the old tree.
+        if FLAT is None or FLAT.scene is not sg:
+            # Free the outgoing pass's GPU-side shadow maps before dropping it.
+            # We're inside OnDraw with the context current, so this is the safe
+            # point to delete those FBOs/textures rather than leak them when the
+            # cached pass is replaced on a scenegraph swap.
+            if FLAT is not None and hasattr(FLAT, 'disposeShadowMaps'):
+                try:
+                    FLAT.disposeShadowMaps()
+                except Exception as err:
+                    log.debug("shadow map disposal on pass swap failed: %s", err)
             if context.contextDefinition.profile == 'core':
-                log.info( 'Using core profile' )
-                from OpenGLContext.passes.flatcore import FlatPass
+                FlatPass = _core_flatpass_class()
             else:
                 log.info( 'Using compatibility profile' )
                 from OpenGLContext.passes.flatcompat import FlatPass
             FLAT = FlatPass( sg, context.allContexts )
             if sg is None:
                 FLAT.integrate( context.renderedChildren()[0] )
+        if context.contextDefinition.profile == 'core':
+            # The core FlatPass takes its camera from the view platform only, so
+            # bind the scene's active Viewpoint into the platform here (the legacy
+            # path does this inside its scenegraph traversal instead).
+            rendervisitor.bind_scene_viewpoint( context )
         return FLAT( context )
 defaultRenderPasses = _defaultRenderPasses()

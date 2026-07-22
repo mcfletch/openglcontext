@@ -200,6 +200,50 @@ def unbind_attributes(enabled_attrs: Dict[str, int], bound_vbos: Optional[List[v
             vbo_obj.unbind()
 
 
+def _same_refs(a, b) -> bool:
+    """Identity comparison of two VBO reference tuples (Nones allowed)."""
+    return len(a) == len(b) and all(x is y for x, y in zip(a, b))
+
+
+def _get_or_build_vao(owner, program, vbo_refs, build):
+    """Return a cached VAO for (owner, program), building it once via ``build``.
+
+    A VAO records attribute layout once, so it should be created once per
+    (node, shader-program) pair and merely re-bound on every later frame -- the
+    same discipline ``passes/instancing`` and ``pbrmesh`` already use. The VAO is
+    keyed by shader program (attribute locations are program-specific) and by the
+    identity of the VBOs it wraps, so a data-driven VBO replacement rebuilds it
+    rather than binding stale buffers.
+
+    ``build`` runs with the new VAO bound and must set up (and leave enabled) the
+    vertex attributes; it must NOT draw or disable them. Returns the VAO name.
+    Falls back to a transient VAO (returns None) if ``owner`` cannot hold a cache.
+    """
+    cache = getattr(owner, '_shader_vao_cache', None)
+    if cache is None:
+        try:
+            cache = {}
+            owner._shader_vao_cache = cache
+        except (AttributeError, TypeError):
+            return None
+    key = int(program)
+    entry = cache.get(key)
+    if entry is not None:
+        cached_refs, vao = entry
+        if _same_refs(cached_refs, vbo_refs):
+            return vao
+        # VBOs were replaced (data changed) -> the recorded pointers are stale.
+        glDeleteVertexArrays(1, [vao])
+    vao = glGenVertexArrays(1)
+    glBindVertexArray(vao)
+    try:
+        build()
+    finally:
+        glBindVertexArray(0)
+    cache[key] = (vbo_refs, vao)
+    return vao
+
+
 def render_shader_interleaved(
     mode: Any,
     vbo_obj: vbo.VBO,
@@ -208,8 +252,13 @@ def render_shader_interleaved(
     draw_mode: int = GL_TRIANGLES,
     index_vbo: Optional[vbo.VBO] = None,
     index_count: Optional[int] = None,
+    owner: Any = None,
 ) -> bool:
     """Render geometry using an interleaved VBO with the shader.
+
+    When ``owner`` is supplied the VAO is cached on it (keyed by shader program +
+    VBO identity) and merely re-bound on later frames instead of being
+    regenerated and deleted every draw.
 
     Args:
         mode: Render mode with shader_program attribute
@@ -219,6 +268,7 @@ def render_shader_interleaved(
         draw_mode: GL draw mode (GL_TRIANGLES, etc.)
         index_vbo: Optional index buffer for indexed drawing
         index_count: Number of indices (required if index_vbo provided)
+        owner: node to cache the VAO on (falls back to per-frame VAO if None)
 
     Returns:
         True if rendering succeeded
@@ -226,13 +276,34 @@ def render_shader_interleaved(
     shader_program = getattr(mode, 'shader_program', None)
     if shader_program is None or shader_program.program is None:
         return False
+    program = shader_program.program
 
-    # Create VAO for core profile compatibility
+    def draw():
+        if index_vbo is not None and index_count is not None:
+            glDrawElements(draw_mode, index_count, GL_UNSIGNED_SHORT, None)
+        else:
+            glDrawArrays(draw_mode, 0, vertex_count)
+
+    if owner is not None:
+        def build():
+            bind_interleaved_vbo(vbo_obj, program, vertex_format)
+            if index_vbo is not None:
+                index_vbo.bind()   # element-array binding is recorded in the VAO
+            vbo_obj.unbind()
+        vao = _get_or_build_vao(owner, program, (vbo_obj, index_vbo), build)
+        if vao is not None:
+            glBindVertexArray(vao)
+            try:
+                draw()
+            finally:
+                glBindVertexArray(0)
+            return True
+
+    # Transient (uncached) fallback.
     vao = glGenVertexArrays(1)
     glBindVertexArray(vao)
-
     try:
-        enabled = bind_interleaved_vbo(vbo_obj, shader_program.program, vertex_format)
+        enabled = bind_interleaved_vbo(vbo_obj, program, vertex_format)
         try:
             if index_vbo is not None and index_count is not None:
                 index_vbo.bind()
@@ -258,8 +329,12 @@ def render_shader_arrays(
     texcoords: Optional[vbo.VBO],
     vertex_count: int,
     draw_mode: int = GL_TRIANGLES,
+    owner: Any = None,
 ) -> bool:
     """Render geometry using separate VBOs for each attribute.
+
+    When ``owner`` is supplied the VAO is cached on it (keyed by shader program +
+    VBO identity) and merely re-bound on later frames.
 
     Args:
         mode: Render mode with shader_program attribute
@@ -268,6 +343,7 @@ def render_shader_arrays(
         texcoords: VBO of texture coordinates (optional)
         vertex_count: Number of vertices to draw
         draw_mode: GL draw mode (GL_TRIANGLES, etc.)
+        owner: node to cache the VAO on (falls back to per-frame VAO if None)
 
     Returns:
         True if rendering succeeded
@@ -275,14 +351,29 @@ def render_shader_arrays(
     shader_program = getattr(mode, 'shader_program', None)
     if shader_program is None or shader_program.program is None:
         return False
+    program = shader_program.program
 
-    # Create VAO for core profile compatibility
+    if owner is not None:
+        def build():
+            _enabled, bound = bind_separate_arrays(program, vertices, normals, texcoords)
+            for bound_vbo in bound:
+                bound_vbo.unbind()
+        vao = _get_or_build_vao(
+            owner, program, (vertices, normals, texcoords), build)
+        if vao is not None:
+            glBindVertexArray(vao)
+            try:
+                glDrawArrays(draw_mode, 0, vertex_count)
+            finally:
+                glBindVertexArray(0)
+            return True
+
+    # Transient (uncached) fallback.
     vao = glGenVertexArrays(1)
     glBindVertexArray(vao)
-
     try:
         enabled, bound_vbos = bind_separate_arrays(
-            shader_program.program, vertices, normals, texcoords
+            program, vertices, normals, texcoords
         )
         try:
             glDrawArrays(draw_mode, 0, vertex_count)
