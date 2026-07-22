@@ -1,9 +1,9 @@
 """Standard Light-node types"""
 from OpenGL.GL import *
-from math import pi
+from math import pi, sqrt
 from vrml.vrml97 import basenodes, nodetypes
 from vrml.vrml97 import transformmatrix
-from vrml import node
+from vrml import node, field
 from OpenGLContext.arrays import array, dot, identity
 from OpenGLContext import vectorutilities
 
@@ -80,7 +80,10 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
         """
         if cutOffAngle is None:
             if hasattr( self, 'cutOffAngle' ):
-                cutOffAngle = self.cutOffAngle /2 # note, in radians already...
+                # cutOffAngle is the cone's half-angle (from the axis); the shadow
+                # projection needs the FULL vertical field of view (gluPerspective
+                # convention), i.e. twice the half-angle, to cover the whole cone.
+                cutOffAngle = self.cutOffAngle * 2 # radians
             else:
                 cutOffAngle = pi/3 # just a reasonable default
         return transformmatrix.perspectiveMatrix(
@@ -117,6 +120,33 @@ class PointLight(basenodes.PointLight, Light):
         (+ Light attributes)
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#PointLight
     """
+    # Shadow-mapping controls (OpenGLContext extension fields)
+    castShadows = field.newField('castShadows', 'SFBool', 1, True)
+    shadowBias = field.newField('shadowBias', 'SFFloat', 1, 0.0015)
+    shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
+
+    def effectiveRange(self, threshold=1.0 / 255.0):
+        """Distance past which this light's contribution is negligible.
+
+        Solves the VRML97 attenuation 1/(c + l*d + q*d^2) scaled by intensity
+        for the distance where it drops below ``threshold``. Returns a positive
+        radius, or None when the light never attenuates below the threshold
+        (e.g. constant-only attenuation), meaning unbounded range.
+        """
+        c, l, q = (float(self.attenuation[0]), float(self.attenuation[1]),
+                   float(self.attenuation[2]))
+        intensity = max(float(self.intensity), 1e-6)
+        # want intensity / (c + l*d + q*d^2) = threshold
+        target = intensity / threshold  # = c + l*d + q*d^2
+        if q > 1e-9:
+            disc = l * l - 4 * q * (c - target)
+            if disc < 0:
+                return None
+            return max(0.0, (-l + sqrt(disc)) / (2 * q))
+        if l > 1e-9:
+            return max(0.0, (target - c) / l)
+        return None  # constant attenuation only -> unbounded
+
     def Light( self, lightID, mode = None):
         """Render the light (i.e. cause it to alter the scene"""
         if super(PointLight,self).Light( lightID, mode ):
@@ -173,3 +203,11 @@ class DirectionalLight (basenodes.DirectionalLight, Light):
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#DirectionalLight
     '''
     pointSource = 0.0
+    # Shadow-mapping controls (OpenGLContext extension fields)
+    castShadows = field.newField('castShadows', 'SFBool', 1, True)
+    shadowBias = field.newField('shadowBias', 'SFFloat', 1, 0.0015)
+    shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
+
+    def effectiveRange(self, threshold=1.0 / 255.0):
+        """Directional lights have no attenuation; range is unbounded."""
+        return None

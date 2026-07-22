@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Shadows in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <style>
+    figure.diagram { margin: 0 1em 1em; }
+    figure.diagram svg { max-width: 100%; height: auto; display: block; }
+    figure.diagram figcaption { font-size: smaller; color: #555555; padding: .3em 0; }
+  </style>
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Shadows</h1>
+</header>
+<section>
+<p class="introduction">OpenGLContext renders dynamic, real-time shadows in the
+core profile. The same shadow system lights both the
+<a href="renderpasses.html">VRML97 core lighting shader</a> and the
+<a href="pbr.html">PBR renderer</a>, so shadows behave identically whichever you
+use. This document explains, from the ground up, how the shadows are made, why
+they sometimes look wrong, what each fix actually does, and how the different
+light types are handled.</p>
+</section>
+<section>
+<figure style="margin: 0 1em;">
+  <img src="images/shadow_demo.jpg" alt="A red sphere, a green NURBS hill and a blue box casting coloured shadows onto a floor, with a wall rising behind" style="max-width: 100%; border-radius: 3px; display: block;">
+  <figcaption style="font-size: smaller; color: #555555; padding: .3em 0;">The
+    core-profile shadow system in <code>tests/shadow_demo.py</code>: three
+    coloured lights cast live shadows from moving objects onto the floor and
+    wall. Where an object blocks one light, its shadow is tinted by the others.</figcaption>
+</figure>
+</section>
+
+<section>
+<h2>The Core Idea: Photograph the Scene From the Light</h2>
+<p>A surface is in shadow when something blocks the light from reaching it. The
+trick real-time renderers use to work that out is <em>shadow mapping</em>: before
+drawing the scene from the camera, draw it once more from the light's point of
+view, and keep only the distance to the nearest surface the light can see. That
+depth image is the <strong>shadow map</strong> -- think of it as a photograph the
+light takes, recording "the closest thing in each direction".</p>
+<figure class="diagram">
+<svg viewBox="0 0 720 380" role="img" aria-label="The camera and the light each view the scene; a point is in shadow when the light's nearest-depth record shows something closer than that point.">
+  <defs>
+    <marker id="s-ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#555"></path></marker>
+  </defs>
+  <!-- ground -->
+  <line x1="70" y1="330" x2="700" y2="330" stroke="#9a8654" stroke-width="3"></line>
+  <text x="70" y="350" font-size="12" fill="#776">ground</text>
+  <!-- light -->
+  <circle cx="590" cy="46" r="20" fill="#ffdf6b" stroke="#c9a400" stroke-width="2"></circle>
+  <text x="560" y="24" font-size="13" font-weight="bold" fill="#665">light</text>
+  <!-- occluder -->
+  <rect x="380" y="235" width="36" height="95" fill="#a7bbe0" stroke="#5a6a90"></rect>
+  <text x="398" y="228" font-size="12" fill="#456" text-anchor="middle">occluder</text>
+  <!-- shadow region on ground: LEFT of the occluder, away from the light -->
+  <polygon points="380,330 274,330 380,235" fill="#3a3f4a" fill-opacity="0.18"></polygon>
+  <!-- ray from the light grazing the occluder's top corner + the shadow edge -->
+  <line x1="590" y1="46" x2="380" y2="235" stroke="#e0b000" stroke-width="1.5" stroke-dasharray="5,4"></line>
+  <line x1="380" y1="235" x2="274" y2="330" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="3,4"></line>
+  <!-- ray light -> P: a lit point just left of the shadow; the ray clears the
+       occluder's top, so the light reaches it -->
+  <line x1="590" y1="46" x2="250" y2="330" stroke="#e0b000" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#s-ah)"></line>
+  <circle cx="250" cy="330" r="5" fill="#3a9a3a"></circle>
+  <text x="242" y="322" font-size="12" fill="#284" text-anchor="end">P: lit</text>
+  <!-- ray light -> Q, intercepted by the occluder (Q sits in the shadow) -->
+  <line x1="590" y1="46" x2="416" y2="244" stroke="#e0b000" stroke-width="1.5" stroke-dasharray="5,4"></line>
+  <line x1="416" y1="244" x2="340" y2="330" stroke="#cc4444" stroke-width="1.3" stroke-dasharray="3,4"></line>
+  <circle cx="340" cy="330" r="5" fill="#b23"></circle>
+  <text x="300" y="352" font-size="12" fill="#822">Q: shadowed</text>
+  <!-- camera -->
+  <rect x="36" y="180" width="40" height="30" rx="3" fill="#dfe4ee" stroke="#66708a"></rect>
+  <polygon points="76,188 96,180 96,210 76,202" fill="#dfe4ee" stroke="#66708a"></polygon>
+  <text x="30" y="175" font-size="13" font-weight="bold" fill="#556">camera</text>
+  <!-- camera view lines to P and Q (neither passes through the occluder) -->
+  <line x1="90" y1="202" x2="250" y2="330" stroke="#8894b0" stroke-width="1"></line>
+  <line x1="90" y1="202" x2="340" y2="330" stroke="#8894b0" stroke-width="1"></line>
+  <!-- note box (top-left, clear of the rays) -->
+  <rect x="60" y="34" width="256" height="88" rx="8" fill="#f6f8ff" stroke="#aab6d8"></rect>
+  <text x="72" y="56" font-size="12" fill="#334">The light records the nearest</text>
+  <text x="72" y="74" font-size="12" fill="#334">depth it sees in each direction.</text>
+  <text x="72" y="96" font-size="12" fill="#334">Q sits behind the occluder from</text>
+  <text x="72" y="113" font-size="12" fill="#334">the light &#8594; blocked &#8594; shadowed.</text>
+</svg>
+<figcaption>Both the camera and the light "see" the scene. When drawing point Q,
+the renderer asks the light's map how close the nearest surface was in Q's
+direction; the occluder was nearer, so Q is in shadow. P has nothing between it
+and the light, so it is lit.</figcaption>
+</figure>
+<p>When the visible scene is finally drawn from the camera, every lit point is
+tested: transform the point into the light's view, look up the stored nearest
+depth for that direction, and compare. If something was closer to the light than
+this point is, the light is blocked here and the point is in shadow. The depth-only
+pass uses a stripped-down position-only shader and writes no colour, but it does
+mean the scene geometry is drawn once per shadow-casting light in addition to the
+camera view -- so shadow cost grows with the number of shadow-casting lights and
+the amount of geometry.</p>
+</section>
+
+<section>
+<h2>Turning Shadows On and Off</h2>
+<p>Shadows are on by default in the core profile. Control them with environment
+variables:</p>
+<table style="width: 100%;" border="0" cellpadding="5" cellspacing="3">
+  <tbody>
+    <tr><th style="vertical-align: top;">Variable</th><th style="vertical-align: top;">Effect</th></tr>
+    <tr><td style="vertical-align: top;"><code>OPENGLCONTEXT_SHADOWS</code></td>
+        <td style="vertical-align: top;">shadows on/off (default on; <code>0</code>/<code>false</code>/<code>off</code> disables)</td></tr>
+    <tr><td style="vertical-align: top;"><code>OPENGLCONTEXT_SHADOWS_SOFT=1</code></td>
+        <td style="vertical-align: top;">contact-hardening (PCSS) soft shadows for spot lights</td></tr>
+    <tr><td style="vertical-align: top;"><code>OPENGLCONTEXT_SHADOW_CASCADES=<em>n</em></code></td>
+        <td style="vertical-align: top;">pin the directional detail level instead of adapting to the frame rate</td></tr>
+  </tbody>
+</table>
+<p>A light casts a shadow when it is marked to. Directional lights (a sun) cast by
+default; point and spot lights cast when their <code>castShadows</code> field is
+set. Loaded glTF <code>KHR_lights_punctual</code> lights follow the same rule.</p>
+</section>
+
+<section>
+<h2>Why Shadow Edges Look Blocky</h2>
+<p>The shadow map is an ordinary image with a fixed number of pixels (texels). One
+map has to cover everything the light illuminates. When the camera looks closely at
+a shadow edge, a single map texel can cover many screen pixels, so the edge steps
+along texel boundaries -- the classic blocky, stair-stepped shadow. It is exactly
+like zooming into a small photo.</p>
+<p>There are two independent ways to attack this. Give the map <strong>more
+texels</strong> where they are needed, and <strong>blur the edge</strong> when
+reading it. Cascaded shadow maps (below) do the first for sun light; PCF and PCSS
+filtering (below) do the second. Neither is free: more resolution costs memory and
+fill time, and blurring costs extra samples per pixel.</p>
+</section>
+
+<section id="acne">
+<h2>Shadow Acne, Bias, and Peter-Panning</h2>
+<p>The depth comparison has a precision problem. The stored depths are quantized to
+the map's texels, so a lit surface's own depth rarely matches the map exactly.
+Where the stored value lands just in front of the surface, the surface reports
+itself as blocking the light -- it shadows itself, producing a shimmer of dark
+speckles and stripes called <strong>shadow acne</strong>.</p>
+<figure class="diagram">
+<svg viewBox="0 0 720 250" role="img" aria-label="Without bias a surface self-shadows (acne); a small bias clears it; too much bias detaches the shadow from the object (peter-panning).">
+  <!-- panel 1: acne. The stored depth is quantized to one value per texel, so the
+       sloped surface crosses it: where a step sits ABOVE the surface (red), the
+       surface reads as farther than the recorded nearest depth and shadows itself. -->
+  <text x="20" y="24" font-size="13" font-weight="bold" fill="#556">No bias</text>
+  <g stroke-width="2.4">
+    <!-- treads: red = above the surface (self-shadow), gold = below -->
+    <line x1="20" y1="146" x2="40" y2="146" stroke="#c0392b"></line>
+    <line x1="40" y1="146" x2="60" y2="146" stroke="#c9a24a"></line>
+    <line x1="60" y1="138" x2="80" y2="138" stroke="#c0392b"></line>
+    <line x1="80" y1="138" x2="100" y2="138" stroke="#c9a24a"></line>
+    <line x1="100" y1="130" x2="120" y2="130" stroke="#c0392b"></line>
+    <line x1="120" y1="130" x2="140" y2="130" stroke="#c9a24a"></line>
+    <line x1="140" y1="122" x2="160" y2="122" stroke="#c0392b"></line>
+    <line x1="160" y1="122" x2="180" y2="122" stroke="#c9a24a"></line>
+    <line x1="180" y1="114" x2="200" y2="114" stroke="#c0392b"></line>
+    <line x1="200" y1="114" x2="220" y2="114" stroke="#c9a24a"></line>
+    <!-- risers -->
+    <line x1="60" y1="146" x2="60" y2="138" stroke="#c9a24a" stroke-width="1.4"></line>
+    <line x1="100" y1="138" x2="100" y2="130" stroke="#c9a24a" stroke-width="1.4"></line>
+    <line x1="140" y1="130" x2="140" y2="122" stroke="#c9a24a" stroke-width="1.4"></line>
+    <line x1="180" y1="122" x2="180" y2="114" stroke="#c9a24a" stroke-width="1.4"></line>
+  </g>
+  <!-- true surface on top -->
+  <line x1="20" y1="150" x2="220" y2="110" stroke="#333" stroke-width="2.5"></line>
+  <!-- speckles on the surface under each step that pokes above it -->
+  <g fill="#b23">
+    <circle cx="29" cy="148" r="2.6"></circle><circle cx="69" cy="140" r="2.6"></circle>
+    <circle cx="109" cy="132" r="2.6"></circle><circle cx="149" cy="124" r="2.6"></circle>
+    <circle cx="189" cy="116" r="2.6"></circle>
+  </g>
+  <text x="20" y="192" font-size="11.5" fill="#822">steps poke above the surface &#8594; it shadows itself</text>
+  <line x1="20" y1="206" x2="38" y2="206" stroke="#c0392b" stroke-width="2.4"></line>
+  <text x="44" y="210" font-size="10.5" fill="#666">stored depth (one value per texel)</text>
+
+  <!-- panel 2: biased -->
+  <text x="260" y="24" font-size="13" font-weight="bold" fill="#556">Small bias</text>
+  <line x1="260" y1="150" x2="460" y2="110" stroke="#666" stroke-width="2.5"></line>
+  <path d="M260,166 h34 v-8 h34 v-8 h34 v-8 h34 v-8 h34 v-8" fill="none" stroke="#c9a24a" stroke-width="1.6" stroke-dasharray="4,3"></path>
+  <text x="260" y="196" font-size="11.5" fill="#284">stored depth pushed below surface &#8594; clean</text>
+
+  <!-- panel 3: peter-panning -->
+  <text x="500" y="24" font-size="13" font-weight="bold" fill="#556">Too much bias</text>
+  <line x1="500" y1="180" x2="560" y2="180" stroke="#666" stroke-width="2.5"></line>
+  <rect x="560" y="120" width="26" height="60" fill="#a7bbe0" stroke="#5a6a90"></rect>
+  <line x1="586" y1="180" x2="700" y2="180" stroke="#666" stroke-width="2.5"></line>
+  <!-- shadow detached from base -->
+  <rect x="612" y="176" width="70" height="8" fill="#3a3f4a" fill-opacity="0.3"></rect>
+  <text x="596" y="150" font-size="11.5" fill="#822">shadow floats away</text>
+  <text x="596" y="205" font-size="11.5" fill="#822">from the contact point</text>
+</svg>
+<figcaption>Left: the quantized stored depth crosses the true surface, so it
+shadows itself. Middle: nudging the comparison clears the surface. Right: nudging
+too far detaches the shadow from where the object meets the ground
+("peter-panning"). The fix is a balance between the two.</figcaption>
+</figure>
+<p>OpenGLContext combats acne with three cooperating nudges rather than one heavy
+one, which keeps the bias small enough to avoid peter-panning:</p>
+<ul>
+  <li><strong>Polygon offset</strong> (the primary control) -- while the depth map
+    is being drawn, the hardware pushes each polygon's stored depth slightly away
+    from the light, so surfaces clear their own texels.</li>
+  <li><strong>A constant depth bias</strong> in the receiver shader -- a small
+    fixed amount subtracted from the compared depth.</li>
+  <li><strong>A normal offset</strong> -- the point being tested is nudged a short
+    distance along its surface normal before the lookup, which cancels most of the
+    remaining acne on surfaces facing the light at an angle, without the ground-gap
+    that a larger depth bias would cause.</li>
+</ul>
+<p class="technical">The values live in <code>passes/shadowmixin.py</code>
+(<code>SHADOW_POLYGON_OFFSET_FACTOR/UNITS</code>, <code>SHADOW_DEPTH_BIAS</code>,
+<code>SHADOW_NORMAL_OFFSET</code>) and the shader (<code>_shadow_inc.glsl</code>,
+uniforms <code>shadowBias</code> / <code>shadowNormalOffset</code>); cube-map faces
+get a little extra bias (<code>CUBE_BIAS_SCALE</code>). There is deliberately no
+slope-scaled bias: the normal-offset covers the common cases, and slope-scaling can
+be added per target if a low-precision GPU needs it. A per-light
+<code>shadowBias</code> field lets a specific light override the default.</p>
+
+<h3>A note on rendering back faces</h3>
+<p>A well-known alternative acne fix is to draw only the <em>back</em> faces of
+objects into the shadow map (front-face culling), so the self-shadowing error lands
+on surfaces the camera cannot see. OpenGLContext tried this and
+<strong>removed</strong> it: it silently dropped shadows from open or single-sided
+casters -- a ground quad, a leaf card, a wall with one-sided geometry -- and,
+stacked on top of the offsets above, over-biased into peter-panning. Instead the
+depth pass draws <em>all</em> faces (culling is disabled for it) and each geometry
+node still honours its own <code>solid</code> flag, so closed solids cull normally
+and open shapes still cast. Where the driver supports it, depth clamping is also
+enabled so a caster poking through the edge of the light's view still writes depth
+instead of being clipped away.</p>
+</section>
+
+<section>
+<h2>One Technique per Light Type</h2>
+<p>The three light types cover space differently, so each uses a shadow technique
+suited to its shape. This is automatic; you do not choose it.</p>
+
+<h3>Directional light (a sun): cascaded shadow maps</h3>
+<p>A sun lights the whole visible scene with parallel rays. Covering that entire
+area with one shadow map would spread its texels thin, and everything near the
+camera -- where you notice detail most -- would be blocky. Cascaded shadow maps
+(CSM) split the camera's view into a few depth slices and give <em>each slice its
+own shadow map</em>. The near slice covers a small area with a full-resolution map,
+so close shadows are crisp; distant slices cover more ground more coarsely, where
+it matters less.</p>
+<figure class="diagram">
+<svg viewBox="0 0 720 260" role="img" aria-label="The camera view is split into near, mid and far slices; each slice is covered by its own equal-resolution shadow map, so the near slice gets the finest detail.">
+  <!-- camera -->
+  <polygon points="40,130 40,130 700,30 700,230" fill="none"></polygon>
+  <rect x="18" y="116" width="34" height="28" rx="3" fill="#dfe4ee" stroke="#66708a"></rect>
+  <text x="14" y="112" font-size="12" fill="#556">camera</text>
+  <!-- frustum wedge -->
+  <polygon points="52,130 700,34 700,226" fill="#eef2fb" stroke="#9aa8cc"></polygon>
+  <!-- split lines -->
+  <line x1="250" y1="98" x2="250" y2="162" stroke="#5a6a90" stroke-width="1.5" stroke-dasharray="4,3"></line>
+  <line x1="450" y1="66" x2="450" y2="194" stroke="#5a6a90" stroke-width="1.5" stroke-dasharray="4,3"></line>
+  <text x="120" y="135" font-size="12" fill="#345">near</text>
+  <text x="330" y="135" font-size="12" fill="#345">mid</text>
+  <text x="560" y="135" font-size="12" fill="#345">far</text>
+  <!-- maps below, all same pixel size -->
+  <g>
+    <rect x="70" y="205" width="46" height="46" fill="#fff" stroke="#77aa77"></rect>
+    <rect x="300" y="205" width="46" height="46" fill="#fff" stroke="#77aa77"></rect>
+    <rect x="560" y="205" width="46" height="46" fill="#fff" stroke="#77aa77"></rect>
+    <line x1="140" y1="205" x2="112" y2="200" stroke="#999"></line>
+  </g>
+  <text x="60" y="200" font-size="10.5" fill="#476">map (fine)</text>
+  <text x="292" y="200" font-size="10.5" fill="#476">map</text>
+  <text x="548" y="200" font-size="10.5" fill="#476">map (coarse coverage)</text>
+  <text x="60" y="20" font-size="11.5" fill="#556">Each slice &#8594; its own equal-resolution map; the small near slice gets the most texels per metre.</text>
+</svg>
+<figcaption>Cascaded shadow maps dedicate a full map to each depth slice of the
+view, concentrating resolution where the camera is looking.</figcaption>
+</figure>
+<p>The number of slices adapts to the frame rate so shadows stay smooth; pin it
+with <code>OPENGLCONTEXT_SHADOW_CASCADES</code> when you need identical output every
+run (see below).</p>
+<p class="technical">Directional cascades use a fixed-width soft edge rather than
+the contact-hardening PCSS below: a sun is infinitely far away and has no finite
+size, so there is no distance-based penumbra to compute.</p>
+
+<h3>Spot light: a single map</h3>
+<p>A spotlight illuminates a cone, which fits neatly inside one shadow map viewed
+along the spotlight's direction -- no cascades needed. Spot shadows can also soften
+with distance (see PCSS below).</p>
+
+<h3>Point light: a cube map (and why big ones hurt)</h3>
+<p>A point light (a bare bulb) throws light in <em>every</em> direction, which no
+single flat map can capture. The renderer surrounds the light with a
+<strong>cube map</strong>: six shadow maps, one per face of a box, together covering
+all directions.</p>
+<figure class="diagram">
+<svg viewBox="0 0 640 300" role="img" aria-label="A point light sits inside a cube of six depth maps; a ray through one face measures the distance to an object. The cube unfolds into six faces, one depth render each.">
+  <defs>
+    <marker id="p-ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#333"></path></marker>
+    <marker id="p-ah2" markerWidth="9" markerHeight="9" refX="1" refY="3" orient="auto"><path d="M8,0 L1,3 L8,6 Z" fill="#333"></path></marker>
+  </defs>
+  <!-- cube around the light (oblique) : back square + connectors -->
+  <polygon points="110,102 200,102 200,192 110,192" fill="none" stroke="#9aa8cc" stroke-width="1" stroke-dasharray="4,3"></polygon>
+  <line x1="70" y1="140" x2="110" y2="102" stroke="#9aa8cc" stroke-width="1"></line>
+  <line x1="160" y1="140" x2="200" y2="102" stroke="#9aa8cc" stroke-width="1"></line>
+  <line x1="160" y1="230" x2="200" y2="192" stroke="#9aa8cc" stroke-width="1"></line>
+  <line x1="70" y1="230" x2="110" y2="192" stroke="#9aa8cc" stroke-width="1"></line>
+  <!-- right (+X) face highlighted: the ray passes through it -->
+  <polygon points="160,140 200,102 200,192 160,230" fill="#cfe0c9" fill-opacity="0.6" stroke="#77aa77"></polygon>
+  <!-- front face of the cube -->
+  <rect x="70" y="140" width="90" height="90" fill="none" stroke="#5a6a90" stroke-width="1.5"></rect>
+  <text x="60" y="252" font-size="11.5" fill="#556">a cube of six depth maps around the light</text>
+  <!-- the light, at the centre of the cube -->
+  <circle cx="135" cy="170" r="12" fill="#ffdf6b" stroke="#c9a400" stroke-width="1.5"></circle>
+  <text x="103" y="164" font-size="11" font-weight="bold" fill="#665">light</text>
+  <!-- an object outside the cube -->
+  <rect x="288" y="152" width="34" height="34" rx="3" fill="#a7bbe0" stroke="#5a6a90"></rect>
+  <text x="288" y="204" font-size="11" fill="#456">object</text>
+  <!-- ray from the light through the +X face to the object, measuring distance -->
+  <line x1="135" y1="170" x2="305" y2="169" stroke="#333" stroke-width="1.4" marker-start="url(#p-ah2)" marker-end="url(#p-ah)"></line>
+  <circle cx="181" cy="169" r="3.6" fill="#c0392b"></circle>
+  <text x="150" y="150" font-size="11" fill="#334">distance to the object,</text>
+  <text x="150" y="164" font-size="11" fill="#334">stored in the +X face</text>
+  <!-- unfolded cube (cross of six faces) -->
+  <text x="428" y="34" font-size="12" font-weight="bold" fill="#556">unfolded: six faces</text>
+  <g fill="#ffffff" stroke="#77aa77">
+    <rect x="474" y="66" width="44" height="44"></rect>
+    <rect x="430" y="110" width="44" height="44"></rect>
+    <rect x="474" y="110" width="44" height="44"></rect>
+    <rect x="562" y="110" width="44" height="44"></rect>
+    <rect x="474" y="154" width="44" height="44"></rect>
+  </g>
+  <rect x="518" y="110" width="44" height="44" fill="#cfe0c9" fill-opacity="0.6" stroke="#77aa77"></rect>
+  <text x="530" y="137" font-size="11" fill="#254">+X</text>
+  <text x="428" y="224" font-size="11.5" fill="#822">six faces &#8594; six depth renders / frame</text>
+  <text x="428" y="242" font-size="11.5" fill="#822">memory = 6 &#215; resolution&#178; per light</text>
+</svg>
+<figcaption>A point light needs six shadow-map faces to see in every direction, so
+raising its resolution multiplies memory and drawing cost by six.</figcaption>
+</figure>
+<p>This is why point-light shadows are the expensive kind. A cube map costs six
+depth renders per frame and six times the memory of a single map, per light, and
+that memory grows with the <em>square</em> of the resolution -- so a "big" cube map
+gets costly fast. OpenGLContext keeps this in check by packing all the point
+lights' cubes into one cube-map array where the driver supports it, and by limiting
+how many lights cast shadows at once (below).</p>
+</section>
+
+<section>
+<h2>Softening the Edge: PCF and PCSS</h2>
+<p>The plain depth test gives one hard yes/no per pixel, which is where the blocky
+edge comes from. <strong>Percentage-closer filtering</strong> (PCF) instead tests a
+few neighbouring texels and averages the results, turning the jagged boundary into
+a soft band a few pixels wide -- the cheap, always-on smoothing.</p>
+<p>Real shadows are not uniformly soft, though: a shadow is sharp where an object
+touches the ground and blurs as it gets farther from what cast it.
+<code>OPENGLCONTEXT_SHADOWS_SOFT=1</code> turns on <strong>percentage-closer soft
+shadows</strong> (PCSS) for spot lights, which first estimates how far the blocker
+is from the surface, then widens the blur with that distance, so contact points
+stay crisp while distant shadow spreads out.</p>
+</section>
+
+<section id="budget">
+<h2>Working Within Hardware Limits</h2>
+<p>Every shadow map a light needs is a texture the fragment shader must sample, and
+those samplers compete for a fixed, small number of texture units -- as few as 16
+on integrated graphics -- shared with the material and environment textures. The
+renderer cannot just assume "enough" exist.</p>
+<p>So at start-up it asks the driver how many texture units it has
+(<code>GL_MAX_TEXTURE_IMAGE_UNITS</code>) and works out how many lights can cast
+shadows at once within that budget. That number is compiled into the shader as a
+constant, so the shader always links and runs -- on a 16-unit laptop as well as a
+32-unit workstation -- just with a different shadow-light ceiling. Spot and
+directional maps are packed into one array texture, and point-light cubes into a
+cube-map array where available, to spend as few units as possible.</p>
+<p class="technical">The ceiling is <code>MAX_SHADOW_LIGHTS</code>, computed by
+<code>ShadowCapabilities.max_shadow_lights()</code> (<code>passes/shadowcaps.py</code>),
+capped at 4, and injected into the shader as a <code>#define</code> alongside a
+<code>SHADOW_CUBE_ARRAY</code> flag (see <a href="renderpasses.html">shader
+assembly</a>). The GLSL lives in <code>shaders/_shadow_inc.glsl</code>, shared by
+<code>vrml97_lighting.frag</code> and <code>pbr.frag</code>; its
+<code>resolveShadows()</code> loop is unrolled to the compiled ceiling. If more
+shadow-casting lights are present than the budget allows, only the first are
+shadowed.</p>
+</section>
+
+<section>
+<h2>Implementation Notes</h2>
+<p class="technical">Shadow storage is pooled in immutable depth textures allocated
+once with <code>glTexStorage*</code>: a 2D array holding all spot maps and
+directional cascades (<code>ShadowMapArray</code>), and a cube-map array (or a
+single-cube fallback) for point lights (<code>passes/shadowmap.py</code>). The
+depth textures are hardware comparison samplers
+(<code>GL_COMPARE_REF_TO_TEXTURE</code> / <code>GL_LEQUAL</code>), so the 2&times;2
+PCF tap is free in the sampler and the software kernel only adds the extra taps.
+Cascade fitting (splitting the view frustum and fitting a light-space box to each
+slice) is GL-free math in <code>passes/shadowmath.py</code>; the per-frame
+orchestration and the adaptive cascade controller are in
+<code>passes/shadowmixin.py</code>. Both the VRML97 core pass and the PBR pass
+inherit this through <code>ShadowMapMixin</code>, which is why shadows are identical
+between them. For the design discussion and what was deferred (for example variance
+shadow maps), see the
+<a href="https://github.com/mcfletch/openglcontext/blob/main/plans/SHADOW-MAPPING.md">shadow-mapping
+plan</a>.</p>
+</section>
+
+<section>
+<h2>Reproducible Shadows for Testing</h2>
+<p>Because the directional cascade count adapts to the frame rate, shadowed frames
+are not deterministic by default -- the same scene can render with a different
+number of cascades from run to run. For reference-image tests, pin the count:</p>
+<pre>OPENGLCONTEXT_SHADOW_CASCADES=3 python your_test.py</pre>
+<p>This bypasses the frame-rate probe so the shadow output is identical every run.</p>
+</section>
+
+<section>
+<h2>Learning More: Tutorials and the Demo</h2>
+<p>Two step-by-step tutorials build a depth-mapped shadow renderer from scratch --
+the best way to understand the technique this document describes. They use the
+older fixed-function / ARB path, the direct ancestor of the core-profile system:</p>
+<ul>
+  <li><a href="tutorials/shadow_1.html">Depth-map Shadows: ARB Shadow on the Back
+    Buffer</a> -- render the scene's depth from the light into a depth texture and
+    project it back to shade the scene, dealing first-hand with the depth
+    comparison and the bias/acne trade-offs.</li>
+  <li><a href="tutorials/shadow_2.html">Depth-map Shadows: Shadows in a Frame
+    Buffer Object</a> -- the same technique, rendering the depth map off-screen
+    into an FBO so the shadow map can be larger than the window.</li>
+</ul>
+<p>To see the shadow system built into OpenGLContext <em>in use</em> -- rather than
+implemented by hand -- run the demo pictured at the top of this page: animated
+occluders and moving coloured lights casting live shadows onto a floor and wall.</p>
+<pre>OPENGLCONTEXT_PROFILE=core python tests/shadow_demo.py</pre>
+<p>Add <code>OPENGLCONTEXT_SHADOWS_SOFT=1</code> for soft shadows, or
+<code>OPENGLCONTEXT_SHADOWS=0</code> to compare with shadows off. The
+<a href="https://github.com/mcfletch/openglcontext/blob/main/tests/shadow_demo.py">source</a>
+shows how little it takes: build a scenegraph with lights and geometry on a
+core-profile context, and the shadows are handled for you.</p>
+</section>
+
+    <footer>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
+    </footer>
+
+</body>
+</html>

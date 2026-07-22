@@ -105,7 +105,7 @@ class EdgeSet( object ):
         doubleVectors = [] # planar equations of faces
         doubleIndices = []
         # XXX just ignore the longer sets for now
-        for key,(first,second) in pointSet.iteritems():
+        for key,(first,second) in pointSet.items():
             if len(first) == 1 and len(second) == 1:
                 if first[0] == second[0]:
                     continue
