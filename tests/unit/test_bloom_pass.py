@@ -1,0 +1,76 @@
+"""In-process GL test of the bloom post-process (no subprocess/viewer).
+
+Renders a small bright square into the bloom pass's HDR target and composites; the
+glow must bleed a soft halo around the square (which a no-bloom copy would not).
+Skips cleanly when a GL context can't be created.
+"""
+import os
+
+import numpy as np
+import pytest
+
+glfw = pytest.importorskip("glfw")
+
+
+@pytest.fixture
+def gl_context():
+    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
+    if not glfw.init():
+        pytest.skip("glfw init failed")
+    # GLFW window hints are sticky/process-global; reset them so a prior
+    # core-profile test's profile can't leak into this context.
+    glfw.default_window_hints()
+    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
+    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+    win = glfw.create_window(96, 96, "bloom", None, None)
+    if not win:
+        pytest.skip("no GL window")
+    glfw.make_context_current(win)
+    yield win
+    glfw.destroy_window(win)
+
+
+def test_bloom_spreads_a_halo(gl_context):
+    from OpenGL.GL import (
+        glViewport, glEnable, glDisable, glScissor, glClear, glClearColor,
+        glReadPixels, GL_SCISSOR_TEST, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT,
+        GL_RGB, GL_UNSIGNED_BYTE, glBindFramebuffer, GL_FRAMEBUFFER,
+    )
+    from OpenGLContext.passes.bloom import BloomPass
+    W = H = 96
+    bp = BloomPass()
+
+    # render a bright HDR square into the scene target (begin() binds + clears it)
+    bp.begin(W, H)
+    glEnable(GL_SCISSOR_TEST)
+    cx0, cy0, s = 40, 40, 16
+    glScissor(cx0, cy0, s, s)
+    glClearColor(6.0, 6.0, 6.0, 1.0)          # HDR bright (>1, blooms)
+    glClear(GL_COLOR_BUFFER_BIT)
+    glDisable(GL_SCISSOR_TEST)
+
+    bp.composite()                             # -> back to the default framebuffer
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0)
+    glViewport(0, 0, W, H)
+    raw = glReadPixels(0, 0, W, H, GL_RGB, GL_UNSIGNED_BYTE)
+    img = np.frombuffer(raw, dtype=np.uint8).reshape(H, W, 3).astype(int)
+
+    lum = img.max(axis=2)
+    # the square (core) should be bright
+    core = lum[cy0 + 2:cy0 + s - 2, cx0 + 2:cx0 + s - 2]
+    assert core.mean() > 150, "bright square did not render (%.0f)" % core.mean()
+
+    # a ring OUTSIDE the square must pick up the bloom halo (mid-bright), which a
+    # plain copy would leave black.
+    ring = np.ones((H, W), bool)
+    ring[cy0 - 8:cy0 + s + 8, cx0 - 8:cx0 + s + 8] = False   # exclude core+near
+    halo = np.zeros((H, W), bool)
+    halo[cy0 - 8:cy0 + s + 8, cx0 - 8:cx0 + s + 8] = True
+    halo[cy0 - 2:cy0 + s + 2, cx0 - 2:cx0 + s + 2] = False   # exclude the core
+    halo_pixels = lum[halo]
+    assert (halo_pixels > 15).mean() > 0.3, (
+        "bloom did not spread a halo around the bright square "
+        "(lit halo fraction %.2f)" % (halo_pixels > 15).mean())

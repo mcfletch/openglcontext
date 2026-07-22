@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Physically Based Rendering in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Physically Based Rendering</h1>
+</header>
+<section>
+<p class="introduction">Physically based rendering (PBR) is a way of describing
+materials by their physical properties -- how metallic a surface is, how rough or
+polished, what colour -- rather than by hand-tuned lighting numbers. Describe a
+material once and it looks right under any lighting. OpenGLContext's PBR renderer
+uses the same material model as glTF&nbsp;2.0 and most modern engines, so models
+authored in tools like Blender look the way their authors intended. This document
+is about using it: what the material model lets you do, and how to build the look
+you want.</p>
+<p><img src="images/gltf/DamagedHelmet.jpg" alt="PBR render of the glTF DamagedHelmet sample"
+    style="max-width: 100%; border-radius: 3px;"></p>
+<p class="technical">The helmet above uses every part of the model at once: a
+colour map, metal and roughness, surface-detail (normal) mapping, a glowing
+(emissive) display, environment reflections and a cast shadow -- all from a single
+material.</p>
+</section>
+
+<section>
+<h2>Turning It On</h2>
+<p>The easiest way to see the PBR renderer is the
+<a href="gltf.html"><code>oglc-gltf</code></a> viewer, which switches everything
+on for you:</p>
+<pre>oglc-gltf path/to/model.glb</pre>
+<p>To use PBR for your own scene, set two environment variables on a
+core-profile context:</p>
+<pre>OPENGLCONTEXT_PROFILE=core OPENGLCONTEXT_RENDERER=pbr OPENGLCONTEXT_BACKEND=glfw \
+    python your_script.py</pre>
+<p><code>OPENGLCONTEXT_PROFILE=core</code> selects the shader pipeline and
+<code>OPENGLCONTEXT_RENDERER=pbr</code> chooses the PBR renderer. If PBR cannot be
+started for any reason, the plain <a href="renderpasses.html">core renderer</a> is
+used instead.</p>
+</section>
+
+<section>
+<h2>The Material Model: Two Dials</h2>
+<p>Most of a PBR material comes down to a colour and two dials. The image below is
+the <code>MetalRoughSpheres</code> sample: metalness changes along one axis,
+roughness along the other.</p>
+<p><img src="images/gltf/MetalRoughSpheres.jpg" alt="A grid of spheres from metal to non-metal and smooth to rough"
+    style="max-width: 100%; border-radius: 3px;"></p>
+<ul>
+  <li><strong>Base colour</strong> -- the surface's own colour. For an ordinary
+    (non-metal) surface this is the colour you see; for a metal it tints the
+    reflection (gold vs. silver vs. copper).</li>
+  <li><strong>Metalness</strong> (0 to 1) -- is this a metal? Leave it at
+    <strong>0</strong> for everyday materials: plastic, wood, stone, skin, cloth.
+    Set it to <strong>1</strong> for bare metal: steel, gold, aluminium. Metals
+    reflect their surroundings and have almost no colour of their own except
+    through their reflection; non-metals show their base colour and a plain white
+    highlight. Values in between are rare and usually only appear where a metal
+    meets a coating (rust, paint).</li>
+  <li><strong>Roughness</strong> (0 to 1) -- how polished or matte the surface is.
+    <strong>0</strong> is a mirror or clear gloss with sharp reflections and a
+    tight highlight; <strong>1</strong> is fully matte, scattering light softly
+    with no visible reflection. Most real surfaces sit somewhere between.</li>
+</ul>
+<p>That is enough to describe a huge range of materials. A polished chrome ball is
+metalness&nbsp;1, roughness&nbsp;0. A rubber ball is metalness&nbsp;0,
+roughness&nbsp;0.9. A glossy plastic toy is metalness&nbsp;0,
+roughness&nbsp;0.2.</p>
+</section>
+
+<section>
+<h2>Material Recipes</h2>
+<p>Starting points for common looks. Adjust to taste, and add a
+<a href="#maps">normal map</a> for fine surface detail.</p>
+<table style="width: 100%;" border="0" cellpadding="5" cellspacing="3">
+  <tbody>
+    <tr>
+      <th style="vertical-align: top;">Look</th>
+      <th style="vertical-align: top;">Metalness</th>
+      <th style="vertical-align: top;">Roughness</th>
+      <th style="vertical-align: top;">Extras</th>
+    </tr>
+    <tr><td>Polished metal / chrome</td><td>1.0</td><td>0.05 - 0.15</td><td>base colour tints it (gold, copper)</td></tr>
+    <tr><td>Brushed / satin metal</td><td>1.0</td><td>0.3 - 0.5</td><td>normal map for the brush lines</td></tr>
+    <tr><td>Glossy plastic</td><td>0.0</td><td>0.1 - 0.3</td><td>bright base colour</td></tr>
+    <tr><td>Matte plastic / rubber</td><td>0.0</td><td>0.7 - 1.0</td><td>&mdash;</td></tr>
+    <tr><td>Polished stone / marble</td><td>0.0</td><td>0.2 - 0.4</td><td>normal map; optional clearcoat</td></tr>
+    <tr><td>Rough stone / concrete</td><td>0.0</td><td>0.8 - 1.0</td><td>normal + occlusion maps</td></tr>
+    <tr><td>Leather</td><td>0.0</td><td>0.5 - 0.7</td><td>normal map for the grain</td></tr>
+    <tr><td>Wood (varnished)</td><td>0.0</td><td>0.3 - 0.5</td><td>colour map; optional clearcoat</td></tr>
+    <tr><td>Car paint</td><td>0.0</td><td>0.4</td><td>clearcoat 1.0 (see below)</td></tr>
+    <tr><td>Velvet / fabric</td><td>0.0</td><td>0.8</td><td>sheen (see below)</td></tr>
+    <tr><td>Glass / water</td><td>0.0</td><td>0.0 - 0.2</td><td>transmission (see below)</td></tr>
+  </tbody>
+</table>
+</section>
+
+<section id="maps">
+<h2>Texture Maps: Painting the Dials</h2>
+<p>A single colour and two numbers give a whole object one uniform look. To vary
+the look across the surface -- rust here, clean metal there, a label on a bottle
+-- you paint the properties into <em>texture maps</em>. A mesh carries texture
+coordinates (UVs) that say where each point of the surface lands on a flat image;
+the renderer looks up each map at those coordinates. Each map drives a specific
+role:</p>
+<ul>
+  <li><strong>Base colour map</strong> -- the colour and pattern of the surface
+    (the label, the paint, the wood grain). Stored as an ordinary (sRGB) image.</li>
+  <li><strong>Metallic-roughness map</strong> -- which parts are metal and how
+    rough each part is, packed into one image (roughness in the green channel,
+    metalness in the blue). This is how a single object can be shiny metal in one
+    place and matte paint in another.</li>
+  <li><strong>Normal map</strong> -- fine surface bumps (pores, scratches, brush
+    lines, fabric weave) faked without adding geometry. It makes a flat triangle
+    catch light as if it were textured.</li>
+  <li><strong>Occlusion map</strong> -- baked soft shadow in creases and cavities,
+    so recessed areas read as darker.</li>
+  <li><strong>Emissive map</strong> -- the parts that glow (a screen, an LED, hot
+    metal). Emissive areas are lit from within and do not depend on scene lights.</li>
+</ul>
+<p>You do not have to supply every map. A material can be just a base colour and
+two dials, or a full set of maps, or anything between. Any property with a map
+still has a plain factor too, and the two multiply -- so a white base-colour map
+with a red base-colour factor gives a red surface.</p>
+<p class="technical">glTF lets each map reference a different UV set; the loader
+currently uses the first UV set (<code>TEXCOORD_0</code>) for every map, so all
+maps on a material share one set of texture coordinates. A single
+<code>KHR_texture_transform</code> (offset/scale/rotate of the coordinates) is
+honoured.</p>
+</section>
+
+<section>
+<h2>Glass, Clearcoat and Fabric</h2>
+<p>Three optional effects extend the basic model. They are always available; a
+material simply sets the relevant properties.</p>
+<ul>
+  <li><strong>Transmission (glass, water)</strong> -- makes a thin surface let
+    light through so you can see the scene behind it, refracted. Set
+    <code>transmission</code> toward 1, keep <code>metalness</code> at 0, and use
+    a low <code>roughness</code> for clear glass or a higher one for frosted
+    glass. <code>ior</code> (index of refraction, about 1.5 for glass, 1.33 for
+    water) controls how much the view bends. This is the effect in the olive dish
+    below.</li>
+  <li><strong>Clearcoat</strong> -- a thin glossy layer over the base material,
+    like the lacquer on car paint or varnish on wood. Set <code>clearcoat</code>
+    toward 1 and <code>clearcoatRoughness</code> low for a sharp second highlight
+    on top of the material underneath.</li>
+  <li><strong>Sheen</strong> -- the soft rim-glow of cloth: velvet, satin, brushed
+    fabric. Set a <code>sheenColor</code> and a <code>sheenRoughness</code>.</li>
+</ul>
+<p><img src="images/gltf/IridescentDishWithOlives.jpg" alt="A dish of olives under a glass cover, light passing through the glass"
+    style="max-width: 100%; border-radius: 3px;"></p>
+<p>Emissive (glow) is part of the basic model: set <code>emissiveColor</code> for
+a surface that gives off light of its own, and <code>emissiveStrength</code> to
+push it brighter than white for a bloomed, hot look.</p>
+<p class="technical">On software rasterizers, or with
+<code>OPENGLCONTEXT_TRANSMISSION=blend</code>, glass falls back to simple alpha
+blending instead of true refraction.</p>
+</section>
+
+<section>
+<h2>Where Materials Come From</h2>
+<p>Most PBR materials arrive ready-made inside a <a href="gltf.html">glTF
+model</a> authored in a tool such as Blender -- you load the file and the
+materials come with it. You can also build a material in Python with a
+<code>PBRMaterial</code> node and attach it to a <code>Shape</code> through an
+<code>Appearance</code>:</p>
+<pre>from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.basenodes import Shape, Appearance
+
+# brushed gold
+gold = PBRMaterial(
+    baseColor = (1.0, 0.78, 0.34),
+    metallic  = 1.0,
+    roughness = 0.35,
+)
+
+# glowing green sign
+sign = PBRMaterial(
+    baseColor     = (0.1, 0.1, 0.1),
+    metallic      = 0.0,
+    roughness     = 0.6,
+    emissiveColor = (0.1, 1.0, 0.2),
+)
+
+# clear glass
+glass = PBRMaterial(
+    baseColor    = (1.0, 1.0, 1.0),
+    metallic     = 0.0,
+    roughness    = 0.05,
+    transmission = 1.0,
+    ior          = 1.5,
+)
+
+shape = Shape(appearance=Appearance(material=gold), geometry=my_geometry)</pre>
+<p>The commonly used fields are <code>baseColor</code>, <code>metallic</code>,
+<code>roughness</code>, <code>emissiveColor</code>, <code>emissiveStrength</code>,
+<code>clearcoat</code> / <code>clearcoatRoughness</code>, <code>sheenColor</code>
+/ <code>sheenRoughness</code>, <code>transmission</code>, <code>ior</code>, and
+the transparency controls <code>alphaMode</code> (<code>OPAQUE</code>,
+<code>MASK</code> or <code>BLEND</code>) and <code>alphaCutoff</code>. Legacy
+VRML97 <code>Material</code> nodes are converted to metallic/roughness
+automatically, so a mixed scene works without changes.</p>
+<p class="technical">Textures are supplied through a <code>textures</code>
+dictionary keyed by channel (<code>baseColor</code>,
+<code>metallicRoughness</code>, <code>normal</code>, <code>occlusion</code>,
+<code>emissive</code>), each a <code>PBRTexture</code> wrapping a PIL image; base
+colour and emissive images are sRGB, the rest linear. The glTF loader builds
+these for you when it imports a model.</p>
+</section>
+
+<section>
+<h2>What Feeds the Shader</h2>
+<p>A <code>PBRMaterial</code> supplies the surface properties; the scene supplies
+the lighting. The shader combines them into the final colour of each pixel:</p>
+<div style="overflow-x: auto;">
+<svg viewBox="0 0 780 470" width="780" style="max-width: 100%; height: auto; font-family: Arial, Helvetica, sans-serif;" role="img" aria-label="Diagram: material properties and scene lighting feed the PBR shader, which produces the shaded pixel">
+  <defs>
+    <marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#555"></path>
+    </marker>
+    <radialGradient id="sphere" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#fdfcf5"></stop>
+      <stop offset="55%" stop-color="#c9a15a"></stop>
+      <stop offset="100%" stop-color="#3d2f14"></stop>
+    </radialGradient>
+  </defs>
+
+  <!-- Material inputs -->
+  <text x="20" y="30" font-size="15" font-weight="bold" fill="#334">Material (PBRMaterial)</text>
+  <rect x="12" y="40" width="252" height="372" rx="10" fill="#f4f6ff" stroke="#8899cc"></rect>
+  <g font-size="12.5">
+    <rect x="24" y="52"  width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="70" font-weight="bold" fill="#223">Base colour</text>
+    <text x="34" y="87" fill="#556">surface colour / metal reflection tint</text>
+
+    <rect x="24" y="100" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="118" font-weight="bold" fill="#223">Metalness</text>
+    <text x="34" y="135" fill="#556">metal &#8596; non-metal</text>
+
+    <rect x="24" y="148" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="166" font-weight="bold" fill="#223">Roughness</text>
+    <text x="34" y="183" fill="#556">glossy &#8596; matte</text>
+
+    <rect x="24" y="196" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="214" font-weight="bold" fill="#223">Normal map</text>
+    <text x="34" y="231" fill="#556">fine surface detail (bumps)</text>
+
+    <rect x="24" y="244" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="262" font-weight="bold" fill="#223">Occlusion</text>
+    <text x="34" y="279" fill="#556">shadow in creases</text>
+
+    <rect x="24" y="292" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="310" font-weight="bold" fill="#223">Emissive</text>
+    <text x="34" y="327" fill="#556">self-glow (screens, LEDs)</text>
+
+    <rect x="24" y="340" width="228" height="60" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="358" font-weight="bold" fill="#223">Optional lobes</text>
+    <text x="34" y="375" fill="#556">clearcoat &#183; sheen</text>
+    <text x="34" y="392" fill="#556">transmission (glass) &#183; ior</text>
+  </g>
+
+  <!-- Shader -->
+  <rect x="336" y="150" width="200" height="150" rx="12" fill="#eef7ee" stroke="#77aa77"></rect>
+  <text x="436" y="212" font-size="15" font-weight="bold" fill="#254" text-anchor="middle">PBR shader</text>
+  <text x="436" y="234" font-size="12" fill="#476" text-anchor="middle">Cook-Torrance +</text>
+  <text x="436" y="250" font-size="12" fill="#476" text-anchor="middle">image-based lighting</text>
+
+  <!-- Lighting -->
+  <rect x="336" y="336" width="200" height="72" rx="10" fill="#fff7e6" stroke="#ccaa55"></rect>
+  <text x="436" y="366" font-size="14" font-weight="bold" fill="#653" text-anchor="middle">Scene lighting</text>
+  <text x="436" y="386" font-size="12" fill="#875" text-anchor="middle">lights &#183; environment &#183; shadows</text>
+
+  <!-- Result -->
+  <circle cx="670" cy="225" r="46" fill="url(#sphere)" stroke="#3d2f14" stroke-width="0.5"></circle>
+  <text x="670" y="300" font-size="13" font-weight="bold" fill="#334" text-anchor="middle">Shaded pixels</text>
+
+  <!-- Arrows -->
+  <line x1="266" y1="225" x2="330" y2="225" stroke="#555" stroke-width="2.5" marker-end="url(#ah)"></line>
+  <line x1="436" y1="336" x2="436" y2="306" stroke="#555" stroke-width="2.5" marker-end="url(#ah)"></line>
+  <line x1="538" y1="225" x2="616" y2="225" stroke="#555" stroke-width="2.5" marker-end="url(#ah)"></line>
+</svg>
+</div>
+<p>Each knob on the left changes one aspect of the surface; the scene's lights,
+environment and shadows do the rest. The table below lists every property you can
+set.</p>
+
+<h3>Every Knob</h3>
+<p><strong>Surface basics</strong></p>
+<table style="width: 100%;" border="0" cellpadding="5" cellspacing="3">
+  <tbody>
+    <tr><th style="vertical-align: top;">Property</th><th style="vertical-align: top;">Default</th><th style="vertical-align: top;">What it controls</th></tr>
+    <tr><td><code>baseColor</code></td><td>(1, 1, 1)</td><td>the surface's own colour; tints a metal's reflection</td></tr>
+    <tr><td><code>metallic</code></td><td>1.0</td><td>metal (1) versus everyday material (0)</td></tr>
+    <tr><td><code>roughness</code></td><td>1.0</td><td>polished/glossy (0) versus matte (1)</td></tr>
+    <tr><td><code>emissiveColor</code></td><td>(0, 0, 0)</td><td>colour the surface gives off on its own</td></tr>
+    <tr><td><code>emissiveStrength</code></td><td>1.0</td><td>multiplier to push emissive brighter than white</td></tr>
+    <tr><td><code>normalScale</code></td><td>1.0</td><td>strength of the normal (bump) map</td></tr>
+    <tr><td><code>occlusionStrength</code></td><td>1.0</td><td>strength of the baked occlusion map</td></tr>
+    <tr><td><code>ior</code></td><td>1.5</td><td>index of refraction; base reflectivity and how much glass bends the view</td></tr>
+    <tr><td><code>specular</code> / <code>specularColor</code></td><td>1.0 / (1,1,1)</td><td>fine control of the non-metal highlight strength and tint</td></tr>
+  </tbody>
+</table>
+<p><strong>Optional lobes</strong> (each off at 0)</p>
+<table style="width: 100%;" border="0" cellpadding="5" cellspacing="3">
+  <tbody>
+    <tr><th style="vertical-align: top;">Property</th><th style="vertical-align: top;">Default</th><th style="vertical-align: top;">What it controls</th></tr>
+    <tr><td><code>clearcoat</code></td><td>0.0</td><td>strength of a clear glossy layer on top (car paint, varnish)</td></tr>
+    <tr><td><code>clearcoatRoughness</code></td><td>0.0</td><td>how sharp the clearcoat's highlight is</td></tr>
+    <tr><td><code>sheenColor</code></td><td>(0, 0, 0)</td><td>colour of the soft fabric rim-glow (velvet, satin)</td></tr>
+    <tr><td><code>sheenRoughness</code></td><td>0.0</td><td>how spread-out the sheen is</td></tr>
+    <tr><td><code>transmission</code></td><td>0.0</td><td>how see-through the surface is (glass, water)</td></tr>
+    <tr><td><code>thickness</code></td><td>0.0</td><td>volume thickness for tinting transmitted light</td></tr>
+    <tr><td><code>attenuationColor</code> / <code>attenuationDistance</code></td><td>(1,1,1) / 0</td><td>colour picked up passing through the volume, and over what distance</td></tr>
+  </tbody>
+</table>
+<p><strong>Transparency and rendering</strong></p>
+<table style="width: 100%;" border="0" cellpadding="5" cellspacing="3">
+  <tbody>
+    <tr><th style="vertical-align: top;">Property</th><th style="vertical-align: top;">Default</th><th style="vertical-align: top;">What it controls</th></tr>
+    <tr><td><code>alphaMode</code></td><td><code>OPAQUE</code></td><td><code>OPAQUE</code>, <code>MASK</code> (hard cutout) or <code>BLEND</code> (see-through)</td></tr>
+    <tr><td><code>alphaCutoff</code></td><td>0.5</td><td>threshold used in <code>MASK</code> mode</td></tr>
+    <tr><td><code>transparency</code></td><td>0.0</td><td>legacy opacity (1 = fully transparent)</td></tr>
+    <tr><td><code>doubleSided</code></td><td>false</td><td>draw back faces as well as front</td></tr>
+    <tr><td><code>unlit</code></td><td>false</td><td>show the base colour flat, ignoring lighting</td></tr>
+  </tbody>
+</table>
+<p><strong>Texture maps</strong> -- supplied through the <code>textures</code>
+dictionary, keyed by channel: <code>baseColor</code>,
+<code>metallicRoughness</code>, <code>normal</code>, <code>occlusion</code>,
+<code>emissive</code>. Each map paints its property across the surface (see
+<a href="#maps">Texture Maps</a> above); where a map and a factor both exist, they
+multiply.</p>
+<p class="technical">Defaults follow the glTF&nbsp;2.0 spec, which is why
+<code>metallic</code> and <code>roughness</code> default to 1.0: a bare material
+with no maps is a rough non-reflective metal until you set them. Authoring tools
+almost always set both.</p>
+</section>
+
+<section>
+<h2>Lighting the Scene</h2>
+<p>A material only looks right if the scene is lit. The PBR renderer lights
+surfaces two ways at once: direct lights (sun, lamps, spotlights) and the
+surrounding environment.</p>
+<h3>Environment Lighting (Reflections and Ambient)</h3>
+<p>Real surfaces reflect their surroundings and pick up soft colour from the whole
+scene, not just from direct lights. The renderer supplies this "image-based
+lighting" from a built-in studio environment, so metals have something to reflect
+and matte surfaces are softly lit even in shadow. It is on by default. You can
+adjust or disable it:</p>
+<ul>
+  <li><code>OPENGLCONTEXT_IBL_INTENSITY</code> -- scale the environment/ambient
+    strength (default 1.0). The viewer lowers it to 0.4 so cast shadows stay
+    readable.</li>
+  <li><code>OPENGLCONTEXT_IBL</code> -- force it <code>full</code>,
+    <code>analytic</code> (a cheaper approximation), or <code>off</code> (flat
+    ambient, no reflections).</li>
+</ul>
+</section>
+
+<section id="shadows">
+<h2>Shadows</h2>
+<p>The PBR renderer casts dynamic shadows, on by default. Directional lights (a
+sun) shadow the whole scene, spot lights cast a cone, and point lights shadow in
+every direction; turn them off with <code>OPENGLCONTEXT_SHADOWS=0</code> or soften
+spot shadows with <code>OPENGLCONTEXT_SHADOWS_SOFT=1</code>.</p>
+<p>Shadows are shared with the <a href="renderpasses.html">VRML97 core lighting
+shader</a> -- the same system serves both -- so they have their own document:
+see <a href="shadows.html">Shadows</a> for the full discussion and controls.</p>
+</section>
+
+<section>
+<h2>Under the Hood: the Shading Math</h2>
+<p class="technical">This section is a short overview for the curious; you do not
+need it to use the renderer. For a full line-by-line walkthrough of the fragment
+shader -- every texture, uniform and buffer it reads, and how each lobe is sampled
+and combined -- see <a href="ubershader.html">The PBR Uber-Shader, Step by
+Step</a>.</p>
+<p class="technical">Direct light is evaluated with the Cook-Torrance microfacet
+model: a specular term plus a Lambertian diffuse term. The specular term is the
+product of three functions, <code>D&nbsp;*&nbsp;V&nbsp;*&nbsp;F</code>:</p>
+<ul>
+  <li class="technical"><strong>D</strong> -- the GGX / Trowbridge-Reitz normal
+    distribution: how microfacets are oriented for a given roughness.</li>
+  <li class="technical"><strong>V</strong> -- the height-correlated Smith
+    visibility term. It folds the geometric shadowing/masking <em>and</em> the
+    <code>1 / (4&#183;NdotL&#183;NdotV)</code> denominator into one function,
+    so the shader multiplies <code>D&nbsp;*&nbsp;V&nbsp;*&nbsp;F</code> with no
+    separate denominator.</li>
+  <li class="technical"><strong>F</strong> -- the Fresnel-Schlick term: the rise in
+    reflectance at grazing angles.</li>
+</ul>
+<p class="technical">The diffuse term is <code>albedo / &pi;</code>, scaled by
+<code>(1 - F)</code> to conserve energy and by <code>(1 - metalness)</code>
+because metals have no diffuse reflection. The BRDF works in terms of
+<code>alpha = roughness&sup2;</code>; the perceptual roughness you set is squared
+exactly once, and the same convention is shared between the direct-lighting and
+environment-lighting paths (both use one include, <code>shaders/_brdf_inc.glsl</code>)
+so the two halves integrate the same lobe.</p>
+<p class="technical">Environment lighting uses the split-sum approximation: a
+prefiltered environment cube (one blur level per roughness), an irradiance cube
+for diffuse ambient, and a BRDF lookup table, all precomputed once from the studio
+environment.</p>
+<p class="technical"><strong>Colour.</strong> Lighting is computed in linear
+colour. Base-colour and emissive texels are decoded from sRGB on input; the final
+colour is tone-mapped with an ACES filmic curve and re-encoded to sRGB. Because
+the shader encodes sRGB itself, <code>GL_FRAMEBUFFER_SRGB</code> is left disabled
+(see <a href="renderpasses.html">Core-Profile Rendering</a>).</p>
+<p class="technical"><strong>One shader for the scene.</strong> Clearcoat, sheen
+and transmission are branches inside a single "uber-shader" driven by uniforms
+that are constant per draw call, so the whole scene binds one program rather than
+switching shaders per material -- the switches are coherent and cheap. The three
+optional lobes are gated by compile-time defines (all on today) as a designed-in
+place to build a leaner shader for a constrained platform: chosen once per
+platform, never per material. Material factors are packed into a std140 uniform
+buffer, built once per material and reused across frames.</p>
+</section>
+
+    <footer>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &#183; BSD-licensed open source
+      </p>
+    </footer>
+
+</body>
+</html>

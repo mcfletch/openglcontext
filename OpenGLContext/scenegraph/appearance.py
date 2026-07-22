@@ -79,9 +79,15 @@ class Appearance(basenodes.Appearance):
         """
         # TODO: this is now pretty expensive, should cache it...
         if self.material:
-            #materialParams = self.material.sortKey( mode )
             materialParams = None
-            transparent = bool(self.material.transparency)
+            # glTF/PBR materials carry an explicit alphaMode which is authoritative:
+            # only BLEND blends. OPAQUE ignores any baseColor/texture alpha, and MASK
+            # is opaque with a shader discard. Legacy VRML97 materials (no alphaMode)
+            # fall back to the transparency field. Transmissive OPAQUE glass stays
+            # opaque here -- the dedicated transmission pass handles it (see
+            # material_is_transparent).
+            from OpenGLContext.scenegraph.pbrmaterial import material_is_transparent
+            transparent = material_is_transparent(self.material)
         else:
             transparent = False
             materialParams = None

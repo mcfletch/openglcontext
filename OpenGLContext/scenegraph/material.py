@@ -76,23 +76,21 @@ class Material(basenodes.Material):
         dl = displaylist.DisplayList( )
         dl.start()
         try:
-            alpha = 1.0 - self.transparency
+            from OpenGLContext.scenegraph.material_fields import read_material_fields
+            from OpenGLContext.arrays import array as _array
+            f = read_material_fields( self )   # shared raw read
+            alpha = 1.0 - f.transparency
             renderingData = zeros( (4,4),'f')
             renderingData[:,3] = alpha
-            diffuseColor = self.diffuseColor.astype( 'f' )
+            diffuseColor = _array( f.diffuseColor, 'f' )
             renderingData[0,:3] = diffuseColor
-            renderingData[1,:3] = self.emissiveColor.astype( 'f' )
-            renderingData[2,:3] = self.specularColor.astype( 'f' )
-            renderingData[3,:3] = (diffuseColor*self.ambientIntensity).astype('f')
+            renderingData[1,:3] = _array( f.emissiveColor, 'f' )
+            renderingData[2,:3] = _array( f.specularColor, 'f' )
+            renderingData[3,:3] = (diffuseColor*f.ambientIntensity).astype('f')
             for (face,data,rendering) in zip(self.faces,self.datamap,renderingData):
                 glMaterialfv(face,data,rendering)
-            glMaterialf( self.faces[0], GL_SHININESS, self.shininess*128 )
+            glMaterialf( self.faces[0], GL_SHININESS, f.shininess*128 )
         finally:
             dl.end()
         holder.data = dl
         return holder.data
-
-    def sortKey( self, mode ):
-        """Produce the sorting key for this shape's appearance/shaders/etc
-        """
-        
