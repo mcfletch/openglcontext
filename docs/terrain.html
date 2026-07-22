@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Terrain &amp; Landscapes, Explained</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Terrain &amp; Landscapes, Explained</h1>
+</header>
+
+<section>
+<p class="introduction">OpenGLContext streams large landscapes as an
+<strong>OGC&nbsp;3D&nbsp;Tiles</strong> octree of <strong>glTF</strong> tiles: a
+screen-space-error traversal refines detail toward the camera, frustum culling keeps
+the resident set a moving window around the view, and tiles page in and out under a
+memory budget on background threads. The same tiles carry per-tile collision meshes,
+so a first-person character <em>walks on exactly what it sees</em>, or flies above and
+drops back to the surface. A procedural generator ships real-world-like features
+&mdash; rolling grassland, a river canyon, a lake and snow-capped mountains &mdash;
+and real heightmaps (DEMs) load through the same path. Vegetation scatters on the
+surface with distance level-of-detail. The indented
+<span class="technical">technical notes</span> point at the code, all under
+<code>OpenGLContext/loaders/tiles3d/</code>.</p>
+
+  <h2>Quick start &mdash; walk a world</h2>
+  <p>The viewer is the <code>oglc-terrain</code> command (installed with the package)
+  or, from a checkout, <code>python -m OpenGLContext.bin.terrain_view</code>:</p>
+  <pre><code>oglc-terrain                         # walk the default procedural world
+oglc-terrain --fly                   # start in free-fly
+oglc-terrain --extent 4096 --levels 4   # a bigger, deeper-LOD world (85 tiles)
+oglc-terrain --dem heightmap.png --height-scale 600   # a real heightmap
+oglc-terrain path/to/tileset.json    # view an existing 3D Tiles tileset
+oglc-terrain --size 1280x720 --sse 12 --memory 512    # window + quality/budget</code></pre>
+  <p><strong>Controls:</strong> <code>W A S D</code> move, <code>Q E</code> turn,
+  <code>Shift</code> (hold) sprint, <code>Space</code> jump, <code>G</code> toggles
+  walk&nbsp;/&nbsp;fly, <code>R F</code> rise&nbsp;/&nbsp;descend while flying, and
+  <code>-</code>&nbsp;/&nbsp;<code>=</code> slow down&nbsp;/&nbsp;speed up (fly &amp;
+  sprint). Fly is fast, for covering a big world quickly.</p>
+  <p>A dense forest of instanced conifers and knee-high grass surrounds you, refreshed
+  as you move so it stays dense wherever you walk, with the sun casting shadows through
+  the canopy. Trees and grass are <strong>alpha-cut textured cards</strong> (procedural
+  bark, pine-needle and grass-blade textures) rather than solid geometry, so they read
+  as foliage. Tune density with <code>--density</code> (lower is faster) or drop it with
+  <code>--no-vegetation</code>.</p>
+  <p class="technical">For a procedural/DEM world the close-up ground is a detailed
+  camera-following <strong>textured patch</strong> (photographic CC0 material) rather
+  than the coarse streamed tiles, so it can carry real detail; the streamed tiles are
+  used only to view a raw <code>tileset.json</code>. Materials come from
+  <strong>ambientCG</strong> (CC0, cached under the user cache dir with a provenance
+  manifest) via <code>loaders/tiles3d/cc0.py</code>, with a procedural fallback offline.
+  Foliage textures and textured glTF prototypes are in
+  <code>loaders/tiles3d/foliage.py</code> (grass/bark/needle generators, CC0-bark
+  option, alpha-MASK cards, instanced); shadows are the engine's cascaded shadow maps
+  (<code>OPENGLCONTEXT_SHADOWS</code>, see <a href="shadows.html">Shadow Mapping</a>).</p>
+  <p class="technical">The viewer is <code>bin/terrain_view.py</code>. It needs the
+  <strong>core profile + PBR renderer</strong> (it sets
+  <code>OPENGLCONTEXT_PROFILE=core</code>, <code>OPENGLCONTEXT_RENDERER=pbr</code> and
+  the GLFW backend itself), because terrain tiles are PBR glTF and their per-vertex
+  colours only render under the PBR pass. Input is bound on both key-down and character
+  events (some Wayland/GLFW setups deliver only the latter), and the character controller
+  drives the camera from <code>OnIdle</code> with the default free-fly navigator unbound
+  so the two don't fight. <strong>Ground collision is analytic</strong>: the avatar is
+  clamped to <code>height_fn(x, z)</code> each frame — exact, matching the visible tiles,
+  and impossible to tunnel through at any frame rate — so no separate collision mesh is
+  needed for the floor. Vegetation is instanced (one shared prototype per layer) with a
+  full-mesh-near / single-cone-far LOD, in two camera-following fields (frequent grass,
+  occasional trees). Water is a translucent plane at the water level.</p>
+
+  <h2>Viewing real 3D Tiles datasets &mdash; <code>oglc-tiles</code></h2>
+  <p><code>oglc-terrain</code> above is the procedural/DEM playground. To load and
+  stream a <strong>real, third-party OGC&nbsp;3D&nbsp;Tiles dataset</strong> &mdash; a
+  photogrammetry capture, a city model, a GIS terrain &mdash; use the dedicated
+  <code>oglc-tiles</code> viewer (or <code>python -m OpenGLContext.bin.tiles_view</code>).
+  It is the interactive front end for the <code>loaders/tiles3d</code> runtime and is
+  built for the parts real data actually uses:</p>
+  <pre><code>oglc-tiles path/to/tileset.json          # a local tileset
+oglc-tiles https://host/path/tileset.json    # stream a tileset straight from the web
+oglc-tiles tileset.json --sse 8          # more detail (lower screen-space error)
+oglc-tiles tileset.json --memory 1024    # bigger tile memory budget (MiB)
+oglc-tiles tileset.json --capture shot.png   # render one offscreen still, then exit</code></pre>
+  <p>The <code>source</code> is a local path <em>or</em> an <code>http(s)://</code> URL;
+  with a URL the root, its tile content, and any external tilesets are fetched over the
+  network and cached on disk (under <code>~/.cache/openglcontext/tiles3d</code>, or
+  <code>--cache-dir</code>), so each tile downloads once. It auto-frames the whole tileset
+  at startup and lets you <strong>free-fly</strong> with the mouse and <code>W A S D</code>/
+  arrow keys; tiles stream in and out by screen-space error as you move. Supported today:</p>
+  <ul>
+    <li><strong>local files and <code>http(s)://</code> URLs</strong> for the root, tile
+      content and nested tilesets, with an on-disk fetch cache.</li>
+    <li><strong>glTF/GLB and <code>b3dm</code></strong> tile content (the Batched-3D-Model
+      wrapper is unwrapped to its embedded GLB and rendered by the normal glTF loader).</li>
+    <li><strong>box, sphere and geodetic <code>region</code></strong> bounding volumes
+      (regions convert to WGS&nbsp;84 ECEF, as used by Cesium&nbsp;ion / Google
+      Photorealistic / most GIS tilesets).</li>
+    <li><strong>external (nested) tilesets</strong> &mdash; a tile whose content is another
+      <code>.json</code> is loaded and grafted into the tree.</li>
+    <li><strong>Earth-Centered (ECEF) tilesets</strong>, recentred to the origin so
+      32-bit float precision holds (disable with <code>--no-recenter</code>). Non-identity
+      tile transforms are honoured.</li>
+    <li><strong>multiple contents per tile</strong> (3D Tiles 1.1 <code>contents</code>),
+      e.g. buildings and trees as separate glTF combined into one tile.</li>
+  </ul>
+  <p class="technical">Tested against Cesium's <code>TilesetWithDiscreteLOD</code> sample
+  (a <code>tileset.json</code> with an ECEF root transform and a
+  <code>low&rarr;medium&rarr;high</code> <code>b3dm</code> LOD chain): the framed view
+  selects the coarse tile and flying closer (or <code>--sse&nbsp;0.02</code>) refines to
+  the finest. Like <code>oglc-terrain</code> it forces the core profile + PBR renderer.
+  A known limitation: a hard camera teleport can hole for a few frames, because REPLACE
+  refinement keeps no standing coarse-LOD fallback resident; gradual flight sharpens in
+  cleanly.</p>
+
+  <h3 id="samples">Sample datasets to try</h3>
+  <p>The <strong>CesiumGS 3D Tiles sample tilesets</strong>
+  (<a href="https://github.com/CesiumGS/3d-tiles-samples">github.com/CesiumGS/3d-tiles-samples</a>,
+  Apache&nbsp;2.0) are small and self-contained, and served over raw GitHub with no
+  authentication &mdash; so you can stream them <strong>straight from the URL, no download
+  step</strong>. These are verified to load:</p>
+  <pre><code># Cesium "dragon" — b3dm, an ECEF transform and a low/medium/high LOD chain
+oglc-tiles https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.0/TilesetWithDiscreteLOD/tileset.json
+#   add --sse 0.02 to pull the finest LOD over the network
+
+# 1.1 glTF-native scene — houses and trees, several glTF contents per tile
+oglc-tiles https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MetadataGranularities/tileset.json
+
+# 1.1 multiple-contents plane
+oglc-tiles https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MultipleContents/tileset.json</code></pre>
+  <p>Each tile is cached under <code>~/.cache/openglcontext/tiles3d</code> on first fetch,
+  so re-runs are offline and instant. Prefer a local copy? Clone the repo
+  (<code>git clone https://github.com/CesiumGS/3d-tiles-samples</code>) and pass a path to
+  <code>&hellip;/1.0/TilesetWithDiscreteLOD/tileset.json</code> instead &mdash; identical
+  result. You can also point the viewer at any tileset you bake yourself with
+  <code>oglc-terrain</code> (see <a href="#making">Making a world</a>) or at your own
+  captures exported to 3D Tiles (RealityCapture, Cesium ion, py3dtiles, etc.).</p>
+  <p class="technical"><strong>Not yet loadable</strong> (the viewer skips or errors on
+  these): point clouds (<code>.pnts</code>), instanced models (<code>.i3dm</code>),
+  composite tiles (<code>.cmpt</code>), and implicit tiling (<code>.subtree</code>) &mdash;
+  so Cesium's <code>TilesetWithTreeBillboards</code> (i3dm), <code>TilesetWithRequestVolume</code>
+  (pnts) and the <code>SparseImplicit*</code> samples don't render yet. Plain
+  <code>http(s)://</code> tilesets stream fine (above); only <strong>API-key services</strong>
+  (Cesium ion, Google Photorealistic 3D Tiles) need auth headers / token handling that
+  isn't wired up &mdash; for those, export or download the tiles first.</p>
+
+  <h2>How it works</h2>
+  <p>Terrain is an OGC 3D Tiles dataset: a <code>tileset.json</code> bounding-volume
+  hierarchy whose leaves are glTF meshes. Every frame the runtime walks the tree,
+  converts each tile's <em>geometric error</em> to a <em>screen-space error</em> (pixels)
+  against the live camera, and refines a tile into its children only while that error
+  exceeds a threshold &mdash; so detail concentrates near the viewer. Frustum culling
+  prunes tiles outside the view, which is what bounds the working set.</p>
+  <p class="technical"><code>screenspaceerror.py</code> (the perspective SSE),
+  <code>tileset.py</code> (the parsed world-space tree; we parse box/sphere ourselves
+  because py3dtiles rejects sphere volumes), <code>traversal.py</code>
+  (<code>select_tiles</code> &rarr; a render set and a speculative <em>want</em> set),
+  and <code>frustum.py</code> (Gribb-Hartmann plane extraction +
+  <code>bounding_sphere</code> tests).</p>
+
+  <p>Streaming is what the traversal <em>decides</em>: wanted tiles that are not
+  resident are queued for background loading (priority by distance); finished loads are
+  uploaded to GL, throttled per frame; and tiles that fall out of the want set are
+  evicted least-recently-wanted-first once the resident bytes exceed the budget. A tile
+  still loading falls back to its nearest resident ancestor, so the world sharpens in
+  rather than popping holes.</p>
+  <p class="technical"><code>loadmanager.py</code> (priority queue + worker pool,
+  cancellable), <code>residency.py</code> (lifecycle
+  <code>UNLOADED&rarr;LOADING&rarr;READY&rarr;RENDERABLE</code>, LRU eviction under a
+  byte budget), and <code>runtime.py</code> (<code>TilesetRuntime.update</code> ties it
+  together each frame). Loading and glTF parsing run off the render thread; only the
+  cheap mount and draw are on the GL thread.</p>
+
+  <p>The runtime is mounted as a scenegraph node, <code>TilesTerrain</code>, so it
+  renders, shadows and picks like any other geometry. Each resident tile also registers
+  its mesh as a static <em>trimesh</em> collider in a physics world, which is what makes
+  the terrain walkable.</p>
+  <p class="technical"><code>scenegraph/tilesterrain.py</code> (the node; call
+  <code>update_for_camera(camera, viewport_height, view_projection=…)</code> each frame
+  before rendering) and <code>physics_colliders.py</code> (streams colliders via the
+  runtime's <code>on_renderable</code>/<code>on_evicted</code> hooks). See
+  <a href="physics.html">Physics&nbsp;&amp;&nbsp;Collision</a> for the character controller.</p>
+
+  <h2 id="making">Making a world</h2>
+  <p>Three sources feed one baker. Each writes a <code>tileset.json</code> plus its
+  <code>.glb</code> tiles and returns the tileset path.</p>
+  <pre><code>from OpenGLContext.loaders.tiles3d import procedural, dem
+
+# 1. Procedural: hills, canyon, lake, mountains (per-vertex coloured, with skirts).
+procedural.build_terrain_tileset("world/", extent=2048, levels=3, tile_res=33)
+
+# 2. A real heightmap (grayscale DEM from QGIS/USGS/SRTM, any format PIL reads):
+dem.build_dem_tileset("dem.png", "world/", extent=4096,
+                      height_scale=600, base=-40, levels=4)
+
+# 3. Your own function y = f(x, z) (numpy arrays in, heights out):
+procedural.build_terrain_tileset("world/", height_fn=my_height_fn)</code></pre>
+  <p>Mount the result and drive it from the camera each frame:</p>
+  <pre><code>from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
+terrain = TilesTerrain("world/tileset.json", max_sse=16.0,
+                       physics_world=world)          # physics_world optional
+# in your render/idle callback, before the pass runs:
+terrain.update_for_camera(eye_xyz, viewport_height, view_projection=vp_matrix)</code></pre>
+  <p class="technical">A <code>quadtree</code> of depth <em>L</em> has
+  <code>sum(4**l)</code> tiles; each is meshed at <code>tile_res</code> vertices per
+  edge, so deeper tiles cover less ground at the same vertex count (finer detail). The
+  procedural field (value-noise fBM + ridged mountains + a carved canyon + a lake
+  basin) is <code>procedural.terrain_height</code>; colours come from height and slope
+  in <code>terrain_colors</code>. A <strong>skirt</strong> is dropped around every tile
+  edge (<code>terrain_patch(skirt_depth=…)</code>) so seams between adjacent LOD tiles
+  show no gaps.</p>
+
+  <h2>Vegetation</h2>
+  <p>Vegetation scatters deterministically on the tile surface, area-weighted, and
+  filtered to sensible places (grass elevations, not water or peaks). Every instance
+  shares one prototype so the instancing engine collapses them to a single draw. Trees
+  use a distance LOD &mdash; a full mesh near the camera, a cheap billboard far away
+  &mdash; and grass is a dense blade layer limited to a disc around the viewer.</p>
+  <pre><code>from OpenGLContext.loaders.tiles3d.vegetation import (
+    build_vegetation_lod, build_grass_patch)
+pos, nrm, col, idx = procedural.terrain_patch(-700, 700, -700, 700, 48)
+trees = build_vegetation_lod(pos, idx.reshape(-1, 3), near_mesh, far_billboard,
+                             density=0.00035, seed=7, camera=eye,
+                             near_distance=450,
+                             keep=lambda p: (p[:,1] > 4) & (p[:,1] < 130))</code></pre>
+  <p class="technical"><code>scatter.py</code> (per-triangle uniform barycentric
+  sampling, seeded, with a <code>keep</code> mask) and <code>vegetation.py</code>
+  (<code>group_from_scatter</code>, <code>partition_by_distance</code>,
+  <code>build_vegetation_lod</code>, <code>build_grass_patch</code>).</p>
+
+  <h2>Refining &amp; tuning</h2>
+  <table>
+    <tr><th>Knob</th><th>Effect</th></tr>
+    <tr><td><code>--sse</code> / <code>max_sse</code></td><td>screen-space-error target
+      in pixels; <em>lower = more detail</em> (more tiles, higher cost)</td></tr>
+    <tr><td><code>--memory</code> / <code>memory_budget</code></td><td>resident tile
+      byte budget; smaller forces more aggressive eviction/streaming</td></tr>
+    <tr><td><code>--extent</code>, <code>--levels</code>, <code>--tile-res</code></td>
+      <td>world size, LOD depth (tile count), and per-tile mesh resolution</td></tr>
+    <tr><td><code>prefetch_factor</code></td><td>how far ahead finer tiles load before
+      they are strictly needed (hides pop-in when moving)</td></tr>
+    <tr><td><code>hysteresis</code></td><td>sticky refinement so LOD does not flicker at
+      the threshold</td></tr>
+    <tr><td><code>--dem</code>, <code>--height-scale</code>, <code>--base</code></td>
+      <td>ingest a real heightmap; <code>base</code>&lt;0 sinks low areas below the
+      water level so they read as lakes/sea</td></tr>
+  </table>
+  <p class="technical">The runtime exposes these on <code>TilesetRuntime</code>/
+  <code>TilesTerrain</code> constructors. Frustum culling is enabled by passing a
+  <code>view_projection</code> to <code>update_for_camera</code>; without it, tiles are
+  considered by distance only (useful for tests, wasteful for a real view).</p>
+
+  <h2>Caves, overhangs &amp; arbitrary 3D</h2>
+  <p>Because tiles are ordinary glTF meshes, terrain is not limited to a height surface:
+  a cave, arch or overhang is just a tile with arbitrary geometry, placed in the octree
+  and streamed, culled and collided like any other. A heightfield cannot express the
+  solid-air-solid column of an overhang; a glTF tile can.</p>
+  <p class="technical"><code>sample.build_overhang_tileset</code> bakes an elevated slab
+  over ground (genuine solid-air-solid) that streams, renders and yields a walkable
+  collider &mdash; the pattern a procedural voxel/Transvoxel cave baker would follow.</p>
+
+  <h2>Demos &amp; validation</h2>
+  <ul>
+    <li><code>oglc-terrain</code> &mdash; the procedural/DEM interactive viewer (above).</li>
+    <li><code>oglc-tiles</code> &mdash; stream and fly a real OGC 3D Tiles
+      <code>tileset.json</code> (b3dm, region volumes, external + ECEF tilesets).</li>
+    <li><code>tests/tiles_landscape.py</code> &mdash; aerial showcase (terrain + vegetation).</li>
+    <li><code>tests/tiles_walk.py</code> &mdash; first-person walk/fly.</li>
+    <li><code>tests/tiles_terrain.py</code>, <code>tests/tiles_vegetation.py</code>
+      &mdash; minimal heightfield / instanced-vegetation demos.</li>
+  </ul>
+  <p class="technical">The behaviour is pinned by <code>tests/tiles3d/</code> (SSE,
+  traversal, residency, load manager, runtime, frustum, procedural terrain, DEM,
+  scatter/vegetation, geomorph/skirts, and <strong>navigation</strong>: gravity settles
+  the avatar on the surface, walking follows it, flying ascends, fly&rarr;walk drops to
+  the surface &mdash; including on the actual streamed colliders) plus offscreen render
+  regressions (<code>tests/test_tiles_*_render.py</code>). Run them with
+  <code>python -m pytest tests/tiles3d/</code>.</p>
+
+</section>
+</body></html>
