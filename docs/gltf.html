@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Loading glTF in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <style>
+    .gallery { display: flex; flex-wrap: wrap; gap: .5em; margin: 0 1em; }
+    .gallery figure { margin: 0; flex: 1 1 320px; }
+    .gallery img { width: 100%; border-radius: 3px; display: block; }
+    .gallery figcaption { font-size: smaller; color: #555555; padding: .2em 0; }
+  </style>
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Loading glTF</h1>
+</header>
+<section>
+<p class="introduction">OpenGLContext can load glTF&nbsp;2.0 and binary GLB
+models and render them with the <a href="pbr.html">PBR renderer</a>. It ships an
+installed viewer command, <code>oglc-gltf</code>, that opens a local file or an
+http(s) URL and lets you walk around the model. This document covers the viewer,
+what the loader supports, and how to load models from your own code.</p>
+<p>File parsing is handled by
+<a href="https://gitlab.com/dodgyville/pygltflib">pygltflib</a>; OpenGLContext
+maps the parsed glTF onto its own scenegraph and PBR materials. Install it with
+the <code>gltf</code> extra (below), or directly from
+<a href="https://pypi.org/project/pygltflib/">PyPI</a>.</p>
+</section>
+
+<section>
+<h2>The <code>oglc-gltf</code> Viewer</h2>
+<p>Installing OpenGLContext with the <code>gltf</code> extra registers the
+<code>oglc-gltf</code> command (it pulls in <code>pygltflib</code>):</p>
+<pre>pip install "OpenGLContext[gltf]"</pre>
+<p>Then open a model -- a local file, a URL, or via the <code>GLTF</code>
+environment variable:</p>
+<pre>oglc-gltf path/to/model.glb
+oglc-gltf https://example.com/model.glb
+GLTF=path/to/model.gltf oglc-gltf</pre>
+<p>The viewer selects the core profile, the PBR renderer, the GLFW backend and
+shadows for you, so you do not need to set any environment variables. A binary
+<code>.glb</code> is self-contained, so URLs to a <code>.glb</code> work
+directly.</p>
+<p>A non-binary <code>.gltf</code> usually references external <code>.bin</code>
+and texture files. The loader's <code>load_gltf_url()</code> function (below)
+resolves those relative to the document's URL, but the <code>oglc-gltf</code>
+viewer currently downloads only the single file it is given, so a remote
+multi-file <code>.gltf</code> loses its external resources in the viewer. For
+now, download the whole model set locally to view it, or load it from code with
+<code>load_gltf_url()</code>. Routing the viewer through <code>load_gltf_url()</code>
+is tracked in the <a href="https://github.com/mcfletch/openglcontext/blob/main/plans/GLTF-REMOTE-RESOURCES.md">project
+plan</a>.</p>
+<h3>Controls</h3>
+<p>These are OpenGLContext's default view-platform navigation keys:</p>
+<ul>
+  <li>Up / Down -- walk forward / back.</li>
+  <li>Left / Right -- turn (yaw) left / right.</li>
+  <li>Ctrl+Up / Ctrl+Down -- look up / down (pitch).</li>
+  <li>Alt+Up / Alt+Down -- move up / down (fly).</li>
+  <li>Alt+Left / Alt+Right -- strafe (slide) left / right.</li>
+  <li><code>-</code> levels the horizon.</li>
+  <li>Right-mouse drag orbits about a point.</li>
+  <li>PageUp / PageDown (or <code>p</code> / <code>n</code>) cycle through the
+    model's baked cameras, if it has any.</li>
+</ul>
+<p>If the file contains no lights, the viewer adds a default sun-plus-fill rig so
+the model is never in the dark.</p>
+</section>
+
+<section>
+<h2>Sample Gallery</h2>
+<p>These are Khronos glTF sample models rendered by the PBR pass. Each shows a
+different part of the material model.</p>
+<div class="gallery">
+  <figure>
+    <img src="images/gltf/DamagedHelmet.jpg" alt="DamagedHelmet">
+    <figcaption>DamagedHelmet -- base colour, metallic/roughness, normal and
+      emissive maps.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/gltf/MetalRoughSpheres.jpg" alt="MetalRoughSpheres">
+    <figcaption>MetalRoughSpheres -- a sweep of metalness and roughness.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/gltf/WaterBottle.jpg" alt="WaterBottle">
+    <figcaption>WaterBottle -- brushed metal and printed labels.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/gltf/BoomBox.jpg" alt="BoomBox">
+    <figcaption>BoomBox -- fine metal and plastic detail at small scale.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/gltf/BarramundiFish.jpg" alt="BarramundiFish">
+    <figcaption>BarramundiFish -- organic surface with a subtle clearcoat.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/gltf/Duck.jpg" alt="Duck">
+    <figcaption>Duck -- a classic simple textured model.</figcaption>
+  </figure>
+  <figure>
+    <img src="images/gltf/IridescentDishWithOlives.jpg" alt="IridescentDishWithOlives">
+    <figcaption>IridescentDishWithOlives -- glass transmission
+      (<code>KHR_materials_transmission</code>).</figcaption>
+  </figure>
+</div>
+<p class="technical">The loader knows the names of the Khronos sample models and
+can fetch them on demand, which is how <code>tests/pbr_gltf_demo.py</code>
+browses the whole sample set with side-by-side reference screenshots.</p>
+</section>
+
+<section>
+<h2>What the Loader Supports</h2>
+<p>The loader imports static meshes with their materials and textures:</p>
+<ul>
+  <li><strong>PBR metallic-roughness</strong> materials: base colour, metallic
+    and roughness factors and textures.</li>
+  <li><strong>Texture maps</strong>: base colour, metallic-roughness, normal
+    (with scale), occlusion (with strength) and emissive.</li>
+  <li><strong>Alpha</strong>: opaque, mask (with cutoff) and blend modes.</li>
+  <li><strong>Cameras</strong>: each perspective camera in the file becomes a
+    viewpoint you can cycle to with PageUp / PageDown.</li>
+  <li><strong>Lights</strong>: <code>KHR_lights_punctual</code> directional,
+    point and spot lights.</li>
+  <li><strong>Material extensions</strong>: <code>KHR_materials_clearcoat</code>,
+    <code>KHR_materials_sheen</code>, <code>KHR_materials_transmission</code>,
+    <code>KHR_materials_volume</code>, <code>KHR_materials_ior</code>,
+    <code>KHR_materials_specular</code>, <code>KHR_materials_emissive_strength</code>,
+    <code>KHR_materials_unlit</code>, <code>KHR_texture_transform</code>, and the
+    legacy <code>KHR_materials_pbrSpecularGlossiness</code> (converted to
+    metallic-roughness).</li>
+  <li><strong>Geometry compression</strong>: <code>KHR_draco_mesh_compression</code>
+    when the optional <code>DracoPy</code> package is installed
+    (<code>pip install DracoPy</code>, or <code>OpenGLContext[draco]</code>). Without
+    it, a Draco-compressed primitive is skipped with a warning and the rest of the
+    scene still loads.</li>
+</ul>
+<p>glTF nodes become <code>Transform</code> nodes, meshes become
+<code>Shape</code> nodes with a PBR mesh geometry and a PBR material, so a loaded
+model is a normal OpenGLContext scenegraph you can inspect and modify.</p>
+<h3>Current Limitations</h3>
+<ul>
+  <li>No animation, skinning or morph targets (static meshes only).</li>
+  <li>Only the first texture-coordinate set (<code>TEXCOORD_0</code>).</li>
+  <li>Point and line primitives are skipped (triangles are triangulated as
+    needed).</li>
+</ul>
+<p class="technical">The loader fetches remote resources with same-origin checks
+and blocks link-local / metadata addresses, and caps download sizes, so pointing
+it at a URL is reasonably safe.</p>
+</section>
+
+<section>
+<h2>Loading From Python</h2>
+<p>The loader returns a small scene object carrying the scenegraph group, its
+bounds and any cameras:</p>
+<pre>from OpenGLContext.loaders import gltf
+
+scene = gltf.load_gltf( "model.glb" )   # or gltf.load_gltf_url( url )
+group   = scene.group      # a scenegraph Group you can add to your own scene
+centre  = scene.center     # bounding-sphere centre, for framing
+radius  = scene.radius     # bounding-sphere radius
+cameras = scene.cameras    # list of baked camera poses</pre>
+<p>You can drop <code>scene.group</code> straight into a context's scenegraph, or
+use <code>scene.center</code> / <code>scene.radius</code> to frame the model, as
+the viewer does.</p>
+</section>
+
+<section>
+<h2>A Worked Example: the Parthenon</h2>
+<p>The sibling <a href="https://github.com/mcfletch/openglcontext">Parthenon
+project</a> builds a metre-scale glTF model of the temple and bakes a set of
+cameras into it -- a walking tour from the eastern approach, up the steps,
+through the pronaos door and into the naos. Loading it in
+<code>oglc-gltf</code> and pressing PageDown steps through these cameras. The
+shots below are one per baked camera.</p>
+<div class="gallery">
+  <figure><img src="images/parthenon/1-east-approach.jpg" alt="east approach"><figcaption>1 &mdash; east approach</figcaption></figure>
+  <figure><img src="images/parthenon/2-steps-foot.jpg" alt="foot of the steps"><figcaption>2 &mdash; foot of the steps</figcaption></figure>
+  <figure><img src="images/parthenon/3-steps-top.jpg" alt="top of the steps"><figcaption>3 &mdash; top of the steps</figcaption></figure>
+  <figure><img src="images/parthenon/4-pronaos-door.jpg" alt="pronaos door"><figcaption>4 &mdash; pronaos door</figcaption></figure>
+  <figure><img src="images/parthenon/5-naos-entering.jpg" alt="entering the naos"><figcaption>5 &mdash; entering the naos</figcaption></figure>
+  <figure><img src="images/parthenon/6-naos-look-out.jpg" alt="naos looking out"><figcaption>6 &mdash; naos, looking out</figcaption></figure>
+  <figure><img src="images/parthenon/7-west-chamber.jpg" alt="west chamber"><figcaption>7 &mdash; west chamber</figcaption></figure>
+  <figure><img src="images/parthenon/8-north-flank.jpg" alt="north flank"><figcaption>8 &mdash; north flank</figcaption></figure>
+  <figure><img src="images/parthenon/9-ne-corner.jpg" alt="north-east corner"><figcaption>9 &mdash; north-east corner</figcaption></figure>
+  <figure><img src="images/parthenon/10-aerial.jpg" alt="aerial"><figcaption>10 &mdash; aerial</figcaption></figure>
+</div>
+</section>
+
+<section>
+<h2>Regenerating These Images</h2>
+<p>The images on this page are produced by a script in the source tree so they
+can be refreshed whenever the renderer changes:</p>
+<pre>python scripts/generate_doc_images.py             # gallery + Parthenon
+python scripts/generate_doc_images.py --gltf-only</pre>
+<p>It downloads the sample models on demand, renders one shot of each with the
+PBR pass, and writes the results into <code>docs/images/</code>. It renders each
+model in its own process, so it needs a display or an offscreen GL platform
+(for example <code>PYOPENGL_PLATFORM=egl</code>).</p>
+</section>
+
+    <footer>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
+    </footer>
+
+</body>
+</html>
