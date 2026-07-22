@@ -353,11 +353,18 @@ class _SphereBackground( object ):
 
             glUseProgram(program)
 
-            # Set matrices
+            # Set matrices. The background is infinitely far away, so it must
+            # follow the camera's orientation but not its position -- otherwise
+            # a camera far from the world origin sees the finite gradient sphere
+            # off to one side (black elsewhere). Strip the translation (row 3 in
+            # this row-vector convention) so the sphere stays centred on the eye.
             if locations['modelViewMatrix'] != -1:
+                mv = mode.matrix.astype('f').copy()
+                # Zero the translation regardless of row/column-vector convention.
+                mv[3, 0] = mv[3, 1] = mv[3, 2] = 0.0
+                mv[0, 3] = mv[1, 3] = mv[2, 3] = 0.0
                 glUniformMatrix4fv(
-                    locations['modelViewMatrix'], 1, GL_FALSE,
-                    mode.matrix.astype('f')
+                    locations['modelViewMatrix'], 1, GL_FALSE, mv
                 )
             if locations['projectionMatrix'] != -1:
                 glUniformMatrix4fv(

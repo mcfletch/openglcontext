@@ -83,8 +83,9 @@ class _CubeBackground( object ):
                             matrix = dot(mode.matrix,mode.projection).astype('f')
                             glUniformMatrix4fv(mvp_matrix_loc,1,GL_FALSE,matrix)
                             with index_vbo:
-                                # 6 faces, 4 indices each
-                                glDrawElements(GL_QUADS, 24, GL_UNSIGNED_SHORT, index_vbo)
+                                # 6 faces x 2 triangles x 3 indices (GL_QUADS is
+                                # gone from core profile)
+                                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, index_vbo)
                         glDisableVertexAttribArray(vertex_loc)
                         glBindVertexArray(0)
             finally:
@@ -103,14 +104,16 @@ class _CubeBackground( object ):
         100.0, -100.0, -100.0,
         100.0,  100.0, -100.0,
     ],'f')
+    # Two triangles per cube face (fan of the former GL_QUADS a,b,c,d ->
+    # a,b,c + a,c,d), so the skybox draws in a core profile.
     CUBE_INDICES = array([
-        3,2,1,0,
-        0,1,5,4,
-        7,6,2,3,
-        4,5,6,7,
-        4,7,3,0,
-        1,2,6,5,
-    ],'H')
+        3, 2, 1,  3, 1, 0,
+        0, 1, 5,  0, 5, 4,
+        7, 6, 2,  7, 2, 3,
+        4, 5, 6,  4, 6, 7,
+        4, 7, 3,  4, 3, 0,
+        1, 2, 6,  1, 6, 5,
+    ], 'H')
 
     # TODO: should have one-per-context...
     def compile( self, mode ):
