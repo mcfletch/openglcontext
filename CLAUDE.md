@@ -1,5 +1,13 @@
 # OpenGLContext - Claude Code Guidelines
 
+## Development environment: real OpenGL IS available
+
+This is a **Wayland** dev container with **full NVIDIA OpenGL** support (`WAYLAND_DISPLAY` set).
+Real GL runs here — render, benchmark, and reproduce visual bugs directly via the **GLFW default
+context** (backend `glfw`; a hidden window with `glfw.window_hint(glfw.VISIBLE, glfw.FALSE)` works).
+Do **not** claim the sandbox is headless or that GL can't run. EGL/OSMesa default-display init fails
+in this container; that is a quirk of those paths, NOT evidence that GL is unavailable — use GLFW.
+
 ## Project Overview
 
 OpenGLContext is a Python OpenGL framework providing a scenegraph-based rendering system with VRML97 compatibility. It supports both legacy fixed-function OpenGL (compatibility profile) and modern shader-based rendering (core profile).
@@ -192,6 +200,30 @@ Controls the OpenGL profile used for rendering:
 export OPENGLCONTEXT_PROFILE=core
 ```
 
+**GL feature floor.** All shaders target `#version 330 core` and the VRML97/base
+shader path runs on GL 3.3. The **advanced render paths** — runtime IBL
+(`passes/ibl.py`), shadow maps (`passes/shadowmap.py`), bloom and screen-space
+transmission — additionally use **immutable texture storage**
+(`glTexStorage2D/3D`), which is **GL 4.2 core / `ARB_texture_storage`**. That
+extension is present on every desktop GPU driver since ~2012 (integrated Intel/AMD
+included) and on macOS 4.1, so it is not a practical restriction, but it means the
+effective floor for those paths is GL 4.1 + `ARB_texture_storage`, not 3.3. There
+is no per-level `glTexImage` fallback; a driver lacking immutable storage raises
+during IBL/shadow setup (IBL then degrades to the analytic path, see
+`resolve_ibl_mode`).
+
+### OPENGLCONTEXT_LOD
+
+Distance level-of-detail for procedurally tessellated geometry (teapot, quadrics,
+NURBS surfaces). On by default: geometry far from the camera is tessellated (and
+cached) more coarsely, scaled by object size. Set to `0`/`off`/`false` to force
+full detail at every distance (deterministic output, e.g. reference-image
+regression). The finest level (0, close up) matches the pre-LOD tessellation.
+
+```bash
+export OPENGLCONTEXT_LOD=off
+```
+
 ### OPENGLCONTEXT_BACKEND
 
 Selects the windowing backend:
@@ -208,6 +240,58 @@ export OPENGLCONTEXT_BACKEND=glfw
 **Note:** When using `OPENGLCONTEXT_PROFILE=core`, the backend should typically be set to `glfw` as it properly supports core profile context creation.
 
 ## Code Conventions
+
+### Writing Style
+
+Use simple, plain-spoken text. Omit needless adjectives and adverbs.
+
+**Comments:** Leave off "what I'm doing" comments in non-tutorial code. Comments should explain a hidden idea, an underlying motivation, or an intention that isn't clear from the code itself.
+
+```python
+# Bad: Set the color to red
+color = (1.0, 0.0, 0.0)
+
+# Good: Red indicates selection failure in legacy GL implementations
+color = (1.0, 0.0, 0.0)
+```
+
+**Docstrings describe what is, never history.** A docstring is for a reader who
+opens the file today with no memory of how it got here. Say why the module/class
+exists, what it does for the caller, and where and how it is used. Do **not**
+record how the code came to be — that provenance is dead the day it lands, git
+blame already keeps it, and it crowds out the description a reader actually needs.
+This applies to every docstring, comment, and module header.
+
+Phrasings that are always history, never description — if you write one, delete it:
+
+- **Origin of the code:** "Split out of X", "moved from / extracted from Y",
+  "promoted to a package", "was part of Z".
+- **Review/ticket bookkeeping:** "finding 7c", "(finding 4.14)", "per the code
+  review", any bare issue/finding number.
+- **A former state or behavior:** "previously this was…", "the old default
+  was…", "used to be…", "was doubled, which…", "originally we…".
+- **Continuity reassurance:** "still works", "keeps resolving", "as they always
+  have", "for backward compatibility with the old path".
+- **The size of what changed:** "~22% of the god class", "the ~250-line cluster",
+  "cut from 1857 lines".
+
+When a *reason* survives the history (why a path is chosen, why a subtle branch
+exists), state the reason in the present tense and drop the backstory.
+
+```python
+# Bad: "Split out of :mod:`context` (finding 7c): the config factory made up
+#       ~22% of the god class and was mostly classmethods with no state."
+# Good: "Per-user configuration and backend selection for `Context`: resolves the
+#        app-data directory, reads/writes the default-font and default-backend
+#        preferences, and loads a backend `Context` subclass from entry points."
+
+# Bad: "The old default (<system-temp>/oglc_gltf_cache) is world-writable and
+#       shared between accounts, so another user could pre-seed a cache (finding 4.14)."
+# Good: "Cache under the per-user app-data directory, not world-writable system
+#        temp, so another account cannot pre-seed an entry this user then loads."
+```
+
+### File Locations
 
 - Tests are in the `tests/` directory
 - Scenegraph nodes are in `OpenGLContext/scenegraph/`
@@ -251,6 +335,20 @@ The `Shape` node handles material and texture setup, then calls `geometry.render
 
 ## Testing
 
+**The test suite must pass. Always. It does not matter who broke a test or when —
+if it is red, it is your job to make it green before you are done.** Never dismiss
+a failure as "pre-existing", "environmental", "unrelated to my change", or
+"flaky". A failure in the full run is a real failure; investigate and fix it (or
+fix the test if the test itself is wrong). "It passes in isolation" is not passing
+— if a test only fails in the full run, that is a real test-isolation bug to fix,
+not to wave away.
+
+Order-dependent GL failures are almost always **context/state pollution** between
+tests. The fix is better isolation, not weaker assertions: prefer the test harness
+that creates a **fresh window/GL context per test** (and tears it down), so no test
+inherits another's GL state. Run the *whole* suite (not just the files you touched)
+before declaring done.
+
 Run tests from the project root:
 
 ```bash
@@ -258,6 +356,85 @@ Run tests from the project root:
 ```
 
 Many tests are interactive demos that display OpenGL content.
+
+### Automated Test Suite
+
+The automated test suite runs all test scripts in subprocesses with coverage collection:
+
+```bash
+# Run all tests with visual regression and HTML report
+pytest tests/test_all_scripts.py::TestVisualRegression -v
+
+# Run all tests (including non-visual functionality tests)
+pytest tests/test_all_scripts.py::TestAllScripts -v
+
+# View the HTML report after tests complete
+open tests/report.html
+```
+
+The test infrastructure provides:
+
+- **Auto-exit**: Scripts exit automatically after N frames via `OPENGLCONTEXT_AUTO_EXIT_FRAMES` env var
+- **Screenshot capture**: Auto-capture on exit via `OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR` and `OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME`
+- **FPS display toggle**: Disable FPS overlay via `OPENGLCONTEXT_DISABLE_FPS_DISPLAY` for clean screenshots
+- **Visual regression**: Compare result images against reference images in `tests/reference_images/`
+- **HTML reports**: Generated at `tests/report.html` with side-by-side image comparisons
+
+### Test Categories
+
+Scripts are categorized for appropriate testing:
+
+- **Visual scripts**: Produce graphical output, included in visual regression (`TestVisualRegression`)
+- **Non-visual scripts**: Functionality tests with stdout output (glget.py, boundingvolume.py, etc.) - run via `TestAllScripts`
+- **Platform-specific**: Windows-only (WGL), wxPython, pygame scripts with automatic skip logic
+- **Randomized**: Scripts with non-deterministic output marked with `expect_visual_diff`
+
+### Unit Test Requirements
+
+**All new functionality must have unit tests before a task is considered complete.**
+
+**Coverage goal:** 80-100% code coverage. Use coverage reports to identify uncovered lines and target new test cases accordingly:
+
+```bash
+../.env/bin/python -m pytest --cov=OpenGLContext --cov-report=term-missing tests/
+```
+
+**Test framework:** Use pytest. Run tests in subprocesses when they require OpenGL contexts or other isolated environments.
+
+**Test naming:** Name tests after the use case or condition being tested, not the implementation detail.
+
+Unit tests should:
+
+1. **Verify code execution** - Tests must actually exercise the new code paths. A common failure mode is tests that pass but don't call the code being tested (mocking too much, testing the wrong class, or import errors that silently skip tests).
+
+2. **Test with realistic inputs** - Use inputs that exercise the actual logic, not just edge cases that short-circuit.
+
+3. **Verify outputs** - Assert on actual behavior/output, not just that code didn't crash.
+
+4. **Run independently** - Tests should run without requiring a GUI or OpenGL context when possible. Use mock objects for context-dependent code.
+
+5. **Review for refactoring** - After tests pass, review for opportunities to create fixtures or helper functions to reduce duplicate code.
+
+Example:
+
+```python
+def test_mousemove_events_filtered_when_no_handlers():
+    """Mousemove events should be removed when no handlers are registered."""
+    fp = FlatPass.__new__(FlatPass)
+    fp._has_mousemove_handlers = None
+
+    events = {
+        ('mousemove', (100, 200)): MockEvent('mousemove', 100, 200),
+        ('mousebutton', (100, 200)): MockEvent('mousebutton', 100, 200),
+    }
+
+    result = fp._optimizePickEvents(MockContext(), events)
+
+    assert len(result) == 1
+    assert list(result.values())[0].type == 'mousebutton'
+```
+
+**Tutorial code:** Files with embedded triple-quoted strings describing the code at length are tutorials. Do not modify tutorial code as part of test suite changes.
 
 ### Testing Core Profile
 
@@ -296,6 +473,29 @@ Key test files:
 - `tests/nurbssurface.py` - NURBS with per-vertex colors
 - `tests/shader_*.py` - Shader-specific tests
 - `tests/lighting_*.py` - Lighting model tests
+
+### Headless / CI rendering
+
+The visual suite renders real frames, so it needs *some* GL target. Without one
+it skips every visual test, which reads as green even though nothing rendered.
+On a headless runner provide a target explicitly:
+
+- **Offscreen GL:** set `PYOPENGL_PLATFORM=egl` (or `osmesa`). The suite treats
+  EGL/OSMesa as a usable display and runs instead of skipping.
+- **Virtual X server:** wrap the run in `xvfb-run -a pytest ...`.
+
+Reference images are compared with a **percentage tolerance** (default 2% of
+pixels, per-channel delta > 5), not byte-for-byte, because cross-GPU
+rasterization, anti-aliasing and gamma differ. For byte-stable references pin a
+software rasterizer (llvmpipe / `LIBGL_ALWAYS_SOFTWARE=1`) in CI so every run
+uses the same renderer. `OPENGLCONTEXT_CAPTURE_DELAY` (seconds) makes the
+pre-capture stabilization wait more generous on slow CI; capture also waits for
+a minimum frame count, so it is a floor, not the only readiness signal.
+
+Directional-shadow cascade count is normally fps-adaptive, which makes shadowed
+frames nondeterministic. Set `OPENGLCONTEXT_SHADOW_CASCADES=<n>` to pin the
+rendered cascade count (bypassing the fps probe) so shadow output is reproducible
+for reference-image regression.
 
 ## Common Debugging
 

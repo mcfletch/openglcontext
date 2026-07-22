@@ -27,6 +27,11 @@ exclude docs/tutorials/*.png
 exclude tests/test-results/*.png
 exclude tests/test-results/*.html
 
+# AI-workflow / internal planning docs are not user-facing; keep them out of the
+# published sdist (finding 4.27).
+exclude CLAUDE.md
+prune plans
+
 global-exclude *CVS*
 global-exclude *Cvs*
 global-exclude *.pyc
@@ -40,5 +45,4 @@ global-exclude *.profile
 global-exclude *.directory
 global-exclude *.cvsignore
 global-exclude *.ttf
-
 

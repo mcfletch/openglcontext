@@ -1,0 +1,141 @@
+[build-system]
+# setuptools >= 77 is required for the PEP 639 SPDX `license` expression below
+# (61-76 reject the string form) -- finding 3.30.
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "OpenGLContext"
+dynamic = ["version"]
+description = "Demonstration and testing contexts for PyOpenGL/OpenGL-ctypes"
+readme = "readme.txt"
+license = "BSD-3-Clause"
+# The license file is lowercase, so it does NOT match setuptools' case-sensitive
+# default LICEN[CS]E* glob and would be dropped from the wheel/sdist metadata.
+# Name it explicitly so PEP 639 packaging carries it through (finding 4.26).
+license-files = ["license.txt"]
+# numpy>=2.0 resolves to 2.1+ on new installs, which dropped Python 3.9, so the
+# effective floor is 3.10 -- align requires-python with it (finding 4.28).
+requires-python = ">=3.10"
+authors = [
+    { name = "Mike C. Fletcher", email = "mcfletch@vrplumber.com" }
+]
+keywords = [
+    "PyOpenGL", "OpenGL", "Context", "OpenGLContext", "render", "3D",
+    "TrueType", "text", "VRML", "VRML97", "scenegraph"
+]
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Multimedia :: Graphics :: 3D Rendering",
+    "Intended Audience :: Developers",
+    "Environment :: X11 Applications",
+    "Environment :: Win32 (MS Windows)",
+]
+
+dependencies = [
+    "numpy>=2.0",
+    "omi_physics>=0.2.1",
+    "pillow",
+    "PyOpenGL>=4.0.0a1",
+    "PyOpenGL-accelerate>=4.0.0a1",
+    "PyVRML97>=2.3.4b1",
+    "PyVRML97-accelerate>=2.3.4b1",
+    "pydispatcher",
+    "TTFQuery>=2.0.1a1",
+    "simpleparse",
+]
+
+[project.optional-dependencies]
+wx = ["wxPython>=4.0"]
+pygame = ["pygame>=2.0"]
+glfw = ["glfw>=2.0"]
+gltf = ["pygltflib>=1.16"]
+draco = ["DracoPy>=1.4"]
+# accelerate is now part of the core install; kept as an empty set so external
+# setups that still request OpenGLContext[accelerate] don't break.
+accelerate = []
+all = ["OpenGLContext[wx,pygame,glfw,gltf,draco,accelerate]"]
+dev = ["OpenGLContext[all]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
+
+[project.scripts]
+oglc-test = "OpenGLContext.bin.gltest:main"
+oglc-lorentz = "OpenGLContext.bin.lorentz:main"
+oglc-vrml = "OpenGLContext.bin.vrml_view:main"
+oglc-gltf = "OpenGLContext.bin.gltf_view:main"
+oglc-terrain = "OpenGLContext.bin.terrain_view:main"
+oglc-tiles = "OpenGLContext.bin.tiles_view:main"
+oglc-gltf-demo = "OpenGLContext.bin.gltf_demo:main"
+oglc-gltf-regression = "OpenGLContext.bin.gltf_regression:main"
+oglc-profile = "OpenGLContext.bin.profile_view:main"
+oglc-visual = "OpenGLContext.bin.visualshell:main"
+
+[project.urls]
+Homepage = "http://pyopengl.sourceforge.net/context/"
+Documentation = "http://pyopengl.sourceforge.net/context/documentation.html"
+Repository = "https://github.com/mcfletch/openglcontext"
+
+[tool.setuptools.dynamic]
+version = {attr = "OpenGLContext.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["OpenGLContext*"]
+
+[tool.setuptools.package-data]
+OpenGLContext = ["shaders/*.vert", "shaders/*.frag", "shaders/*.glsl"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "B",   # flake8-bugbear
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "E741",  # ambiguous variable name
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+# numpy arithmetic is typed to return ``Any`` in the shipped stubs, so
+# ``warn_return_any`` fires on nearly every array-returning function in the
+# vectorized physics core and buries the genuine type errors.  Turn it off for
+# that package only; every other check (arg types, optionals, attributes) stays on.
+[[tool.mypy.overrides]]
+module = "OpenGLContext.physics.*"
+warn_return_any = false
+
+[tool.pytest.ini_options]
+testpaths = ["OpenGLContext/tests", "tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# Backstop timeout so a single hung GL test can never wedge the whole session,
+# independent of the custom subprocess runner's own per-script timeouts (4.36).
+# Set via the ini key rather than addopts so a checkout without pytest-timeout
+# only warns about an unknown option instead of erroring on `--timeout`.
+timeout = 300
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "visual: marks tests as visual regression tests",
+    "interactive: marks tests that use event simulation",
+    "core_profile: marks tests that require core profile",
+    "compatibility_profile: marks tests for compatibility profile",
+    "network: marks tests that fetch remote sample assets",
+]

@@ -1,16 +1,10 @@
-numpy >= 2; python_version>='3.9'
-numpy < 2; python_version<'3.9'
-#PIL
-
-#FontTools-TTX
-http://sourceforge.net/projects/fonttools/files/2.3/fonttools-2.3.tar.gz/download
-TTFQuery
-
-PyOpenGL
-PyOpenGL-accelerate
-
+numpy>=2
+pillow
+PyOpenGL>=4.0.0a1
+PyOpenGL-accelerate>=4.0.0a1
+PyVRML97>=2.3.4b1
+PyVRML97-accelerate>=2.3.4b1
 pydispatcher
-PyVRML97
-PyVRML97-accelerate
-
 simpleparse
+TTFQuery
+fonttools

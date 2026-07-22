@@ -12,6 +12,10 @@ except ImportError as err:
 import sys, os
 sys.path.insert(0, '.' )
 
+# OpenGLContext is pure Python. The rigid-body physics engine (and its compiled
+# accelerators) lives in the separate ``omi_physics`` package, which this package
+# depends on.
+
 def find_version( ):
     for line in open( os.path.join(
         'OpenGLContext','__init__.py',
@@ -79,6 +83,11 @@ used to maintain and extend PyOpenGL.
                 'oglc-vrml=OpenGLContext.bin.vrml_view:main',
                 'oglc-profile=OpenGLContext.bin.profile_view:main',
                 'oglc-visual=OpenGLContext.bin.visualshell:main',
+                'oglc-gltf=OpenGLContext.bin.gltf_view:main',
+                'oglc-terrain=OpenGLContext.bin.terrain_view:main',
+                'oglc-tiles=OpenGLContext.bin.tiles_view:main',
+                'oglc-gltf-demo=OpenGLContext.bin.gltf_demo:main',
+                'oglc-gltf-regression=OpenGLContext.bin.gltf_regression:main',
             ],
         },
         # non python files of examples      

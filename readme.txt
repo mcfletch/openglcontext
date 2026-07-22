@@ -1,4 +1,8 @@
-OpenGLContext 2.0
+OpenGLContext 2.3.0
+
+Requires Python 3.10+. (Python 2 is no longer supported; older changelog
+entries below mention 2.x-era Python and the Numeric array package, both long
+superseded by Python 3 and NumPy.)
 
 Changelog:
 
