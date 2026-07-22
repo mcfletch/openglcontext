@@ -96,8 +96,24 @@ class Box( basenodes.Box ):
         )
         vb = self._get_shader_vbo(mode)
         return render_shader_interleaved(
-            mode, vb, 36, VertexFormat.T2F_N3F_V3F
+            mode, vb, 36, VertexFormat.T2F_N3F_V3F, owner=self
         )
+
+    def instanceContentKey(self):
+        """Boxes of the same size share geometry, so they batch as instances."""
+        return ('Box', tuple(round(float(v), 6) for v in self.size))
+
+    def instanceGPU(self, mode):
+        """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
+        from OpenGLContext.passes.instancing import build_mesh_gpu
+        verts = list(yieldVertices(self.size))   # (u,v, nx,ny,nz, x,y,z) * 36
+        texcoords = [v[0:2] for v in verts]
+        normals = [v[2:5] for v in verts]
+        positions = [v[5:8] for v in verts]
+        return build_mesh_gpu(
+            mode, self, positions, normals, texcoords, indices=None,
+            cache_key='instance_gpu',
+            depend_fields=(protofunctions.getField(self, 'size'),))
     def boundingVolume( self, mode ):
         """Create a bounding-volume object for this node"""
         from OpenGLContext.scenegraph import boundingvolume

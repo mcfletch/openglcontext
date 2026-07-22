@@ -3,6 +3,7 @@
 This implementation does not use the gluQuadric objects, it 
 does direct creation via numpy operations.
 """
+import numpy as np
 from OpenGL.GL import *
 from vrml import field, protofunctions, node
 from vrml.vrml97 import basenodes, nodetypes
@@ -12,7 +13,40 @@ from OpenGLContext.arrays import (
     zeros, arange, sin, cos, pi, concatenate, allclose, copy,
 )
 from OpenGLContext import vectorutilities
+from OpenGLContext.scenegraph import tessellationlod
 from OpenGL.arrays import vbo
+
+
+# Distance-LOD tuning (Option B: dense base + gentle steps). A UV quadric's
+# silhouette is its slice count, so *any* visible drop in slices reads as the
+# outline turning polygonal (an octagon) -- the only way to keep transitions from
+# popping is to start dense and step down GENTLY, never below a "still round"
+# floor. Measured object-pop (fraction of the object's own pixels that change at
+# a switch) for this schedule is ~2-14% per step, versus ~75% for an aggressive
+# halving; see tests/test_lod_transitions.py.
+#
+# Each level keeps this fraction of the full-resolution slice count:
+LOD_STEP_FACTOR = (1.0, 0.83, 0.67, 0.5)
+# ...but never fewer than this many slices, so the coarsest level stays a
+# recognizable round solid rather than a smoothed tetrahedron.
+LOD_MIN_STEPS = 6
+
+
+def lod_phi( base_phi, level, period ):
+    """Angular step for an LOD level that divides ``period`` into whole steps.
+
+    ``period`` is the angular span the steps must close over: ``pi`` for a
+    sphere's pole-to-pole latitude (which also makes its 2*pi longitude close),
+    ``2*pi`` for a cone/cylinder's ring. Returning ``period / steps`` for an
+    integer ``steps`` is essential -- ``arange(0, period, phi)`` only reaches
+    ``period`` (closing the mesh) when phi divides it evenly; an arbitrary scaled
+    phi left the last step short, so coarse quadrics were missing a pole cap /
+    seam wedge (off-by-one whose size grew with the level).
+    """
+    full_steps = max( LOD_MIN_STEPS, round( period / base_phi ) )
+    factor = LOD_STEP_FACTOR[min(level, len(LOD_STEP_FACTOR) - 1)]
+    steps = max( LOD_MIN_STEPS, round( full_steps * factor ) )
+    return period / steps
 
 
 def mesh_indices( zstep,ystep, xstep=1 ):
@@ -42,9 +76,7 @@ class Quadric( nodetypes.Geometry, node.Node ):
             return self._render_shader(mode)
 
         # Legacy rendering path
-        vbos = mode.cache.getData(self)
-        if not vbos:
-            vbos = self.compile( mode = mode )
+        vbos = self._lod_vbos( mode )
         if vbos is None:
             return 1
         coords,indices,count = vbos
@@ -81,49 +113,119 @@ class Quadric( nodetypes.Geometry, node.Node ):
         from OpenGLContext.scenegraph.shadergeometry import (
             render_shader_interleaved, VertexFormat
         )
-        vbos = mode.cache.getData(self)
-        if not vbos:
-            vbos = self.compile(mode=mode)
+        vbos = self._lod_vbos( mode )
         if vbos is None:
             return 1
         coords, indices, count = vbos
         return render_shader_interleaved(
             mode, coords, 0, VertexFormat.V3F_T2F_N3F,
-            index_vbo=indices, index_count=count
+            index_vbo=indices, index_count=count, owner=self
         )
 
-    def compile( self, mode=None ):
+    # -- distance level-of-detail -----------------------------------------
+    def _lod_bounding_radius( self ):
+        """Characteristic local radius for the distance metric (subclass hook)."""
+        return 1.0
+
+    def _lod_vbos( self, mode ):
+        """Return the (coords, indices, count) VBOs for this frame's LOD level.
+
+        Each level is tessellated and cached separately under ``mode.cache`` so a
+        near quadric keeps full detail while a far one reuses a coarse mesh; the
+        level 0 mesh matches the pre-LOD tessellation, so close-up appearance is
+        unchanged.
+        """
+        level = tessellationlod.lod_level( mode, (0, 0, 0), self._lod_bounding_radius() )
+        key = 'lod%d' % level
+        vbos = None
+        if hasattr( mode, 'cache' ):
+            vbos = mode.cache.getData( self, key=key )
+        if not vbos:
+            vbos = self.compile( mode=mode, level=level, key=key )
+        return vbos
+
+    def compile( self, mode=None, level=0, key='' ):
         """Compile this sphere for use on mode"""
         raise NotImplementedError( """Haven't implemented %s compilation yet"""%(self.__class__.__name__,))
 
+    # -- instancing -------------------------------------------------------
+    # Quadrics share one interleaved V3F_T2F_N3F layout, so one instanced-draw
+    # GPU builder serves them all; each subclass supplies its arrays + content key.
+    def _instanceArrays( self ):
+        """(coords Nx8 interleaved V3F_T2F_N3F, indices) at a fixed LOD level."""
+        raise NotImplementedError
+
+    def _instanceDependFields( self ):
+        """Fields whose change should rebuild the cached instance GPU."""
+        return ()
+
+    def instanceGPU( self, mode ):
+        """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing.
+
+        De-interleaves the quadric's V3F_T2F_N3F arrays (fixed LOD, so every
+        instance shares one tessellation) into the shader attribute layout.
+        """
+        from OpenGLContext.passes.instancing import build_mesh_gpu
+        coords, indices = self._instanceArrays()
+        c = np.asarray( coords, dtype='f' ).reshape( -1, 8 )
+        return build_mesh_gpu(
+            mode, self, positions=c[:, 0:3], normals=c[:, 5:8],
+            texcoords=c[:, 3:5], indices=np.asarray( indices ).ravel(),
+            cache_key='instance_gpu', depend_fields=self._instanceDependFields() )
+
 class Sphere( basenodes.Sphere, Quadric ):
     """Sphere geometry rendered with GLU quadratic calls"""
-    _unitSphere = None
-    phi = field.newField( 'phi', 'SFFloat', 1, pi/6.0)
-    def compile( self, mode=None ):
+    # Unit spheres are context-independent and shared across instances, one per
+    # LOD level (keyed by level -> (coords, indices)).
+    _unitSpheres = None
+    # Base angular step. Raised from the old pi/6 (a chunky 12-gon that made every
+    # LOD step read as an octagon) to pi/12 (a smooth 24-gon), giving headroom for
+    # the gentle LOD schedule to step down without a visible silhouette pop.
+    phi = field.newField( 'phi', 'SFFloat', 1, pi/12.0)
+
+    def _lod_bounding_radius( self ):
+        return float( self.radius )
+
+    def compile( self, mode=None, level=0, key='' ):
         """Compile this sphere for use on mode
-        
+
         returns coordvbo,indexvbo,count
         """
-        coords, indices = self.compileArrays( )
+        coords, indices = self.compileArrays( level )
         vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
         if hasattr(mode,'cache'):
-            holder = mode.cache.holder( self, vbos )
+            holder = mode.cache.holder( self, vbos, key=key )
             holder.depend( self, 'radius' )
         return vbos
-    
-    def compileArrays( self ):
-        """Compile to arrays...
-        
+
+    def compileArrays( self, level=0 ):
+        """Compile to arrays at the given LOD level...
+
         returns coordarray, indexarray
         """
-        if self._unitSphere is None:
-            # create a unitsphere instance for all instances
-            Sphere._unitSphere = self.sphere( self.phi )
-        coords,indices = self._unitSphere
+        if Sphere._unitSpheres is None:
+            Sphere._unitSpheres = {}
+        if level not in Sphere._unitSpheres:
+            # one unit sphere per level, tessellated with a coarser phi as the
+            # level rises; level 0 uses the node's base phi (unchanged look).
+            # period=pi: phi must divide the pole-to-pole latitude evenly (which
+            # also closes the 2*pi longitude) or the mesh has a cap/seam gap.
+            Sphere._unitSpheres[level] = self.sphere( lod_phi( self.phi, level, pi ) )
+        coords,indices = Sphere._unitSpheres[level]
         coords = copy( coords )
         coords[:,0:3] *= self.radius
         return coords, indices
+
+    def instanceContentKey( self ):
+        """Spheres of the same radius/tessellation share geometry -> one instanced
+        draw (the molecular-model case: thousands of identical atoms)."""
+        return ('Sphere', round(float(self.radius), 6), round(float(self.phi), 6))
+
+    def _instanceArrays( self ):
+        return self.compileArrays( 0 )
+
+    def _instanceDependFields( self ):
+        return ('radius',)
     
     @classmethod
     def sphere( cls, phi=pi/8.0, latAngle=pi, longAngle=(pi*2) ):
@@ -201,17 +303,36 @@ class Sphere( basenodes.Sphere, Quadric ):
         
 class Cone( basenodes.Cone, Quadric ):
     """Cone geometry rendered with GLU quadratic calls"""
-    def compile( self, mode=None ):
+    _BASE_PHI = pi/16
+
+    def _lod_bounding_radius( self ):
+        return max( float(self.bottomRadius), float(self.height) / 2.0 )
+
+    def compile( self, mode=None, level=0, key='' ):
         """Compile this sphere for use on mode"""
-        coords,indices = self.cone( self.height, self.bottomRadius, self.bottom, self.side )
+        coords,indices = self.cone(
+            self.height, self.bottomRadius, self.bottom, self.side,
+            phi=lod_phi( self._BASE_PHI, level, 2*pi ),   # ring closes over 2*pi
+        )
         vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
-        holder = mode.cache.holder( self, vbos )
+        holder = mode.cache.holder( self, vbos, key=key )
         holder.depend( self, 'bottomRadius' )
         holder.depend( self, 'height' )
         return vbos
-    
+
+    def instanceContentKey( self ):
+        return ('Cone', round(float(self.height), 6), round(float(self.bottomRadius), 6),
+                bool(self.bottom), bool(self.side))
+
+    def _instanceArrays( self ):
+        return self.cone( self.height, self.bottomRadius, self.bottom, self.side,
+                          phi=lod_phi( self._BASE_PHI, 0, 2*pi ) )
+
+    def _instanceDependFields( self ):
+        return ('bottomRadius', 'height', 'bottom', 'side')
+
     @classmethod
-    def cone( 
+    def cone(
         cls, height=2.0, radius=1.0, bottom=True, side=True,
         phi = pi/16, longAngle=(pi*2), top=False, cylinder=False
     ):
@@ -319,17 +440,34 @@ class Cone( basenodes.Cone, Quadric ):
 
 class Cylinder( basenodes.Cylinder, Quadric ):
     """Cylinder geometry rendered with GLU quadratic calls"""
-    def compile( self, mode=None ):
+    def _lod_bounding_radius( self ):
+        return max( float(self.radius), float(self.height) / 2.0 )
+
+    def compile( self, mode=None, level=0, key='' ):
         """Compile this sphere for use on mode"""
-        coords,indices = Cone.cone( 
+        coords,indices = Cone.cone(
             self.height, self.radius, self.bottom, self.side,
+            phi=lod_phi( Cone._BASE_PHI, level, 2*pi ),   # ring closes over 2*pi
             top=self.top, cylinder=True,
         )
         vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
-        holder = mode.cache.holder( self, vbos )
+        holder = mode.cache.holder( self, vbos, key=key )
         holder.depend( self, 'radius' )
         holder.depend( self, 'height' )
         return vbos
+
+    def instanceContentKey( self ):
+        return ('Cylinder', round(float(self.height), 6), round(float(self.radius), 6),
+                bool(self.bottom), bool(self.side), bool(self.top))
+
+    def _instanceArrays( self ):
+        return Cone.cone( self.height, self.radius, self.bottom, self.side,
+                          phi=lod_phi( Cone._BASE_PHI, 0, 2*pi ),
+                          top=self.top, cylinder=True )
+
+    def _instanceDependFields( self ):
+        return ('radius', 'height', 'bottom', 'side', 'top')
+
     def boundingVolume( self, mode=None ):
         """Create a bounding-volume object for this node
 

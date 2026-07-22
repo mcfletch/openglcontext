@@ -11,319 +11,51 @@ Shader-based rendering:
     When mode.shader_mode is True, NURBS surfaces are tessellated using
     GLU's tessellator callbacks and rendered with VBOs and shaders.
     This allows NURBS to work in OpenGL core profile.
+
+This module holds the surface/curve geometry nodes. Supporting concerns live in
+sibling modules, re-exported below so ``nurbs.X`` resolves:
+
+* :mod:`nurbssampling` -- sampling nodes + object-space-tess probe
+* :mod:`nurbstrim` -- 2D trim primitives
+* :mod:`nurbstess` -- the GLU-callback tessellation-to-VBO service
 """
 
 from vrml.vrml97 import nurbs, nodetypes
 from vrml import node, field, fieldtypes, protofunctions
 from OpenGL.GLU import *
 from OpenGL.GL import *
-from OpenGL.GLU.EXT.object_space_tess import *
-from OpenGL.arrays import vbo
-import numpy as np
 import logging
 
 log = logging.getLogger(__name__)
 from OpenGLContext import arrays
+from OpenGLContext.scenegraph.shadergeometry import _get_or_build_vao
 
-object_space_tess = None
-
-
-class NURBSTessellatorCallback:
-    """Collects tessellated NURBS data via GLU callbacks.
-
-    This class is used to tessellate NURBS surfaces into triangle data
-    that can be rendered with shaders in core profile.
-    """
-
-    def __init__(self):
-        """Initialize the callback collector."""
-        self.reset()
-
-    def reset(self):
-        """Reset collection state for a new tessellation."""
-        self.vertices = []
-        self.normals = []
-        self.colors = []
-        self.primitives = []  # List of (prim_type, start_index, count)
-        self._current_type = None
-        self._current_start = 0
-        self._current_count = 0
-        self._has_colors = False
-
-    def on_begin(self, prim_type):
-        """Callback for primitive begin."""
-        self._current_type = prim_type
-        self._current_start = len(self.vertices)
-        self._current_count = 0
-
-    def on_vertex(self, vertex):
-        """Callback for vertex data."""
-        self.vertices.append((float(vertex[0]), float(vertex[1]), float(vertex[2])))
-        self._current_count += 1
-
-    def on_normal(self, normal):
-        """Callback for normal data."""
-        self.normals.append((float(normal[0]), float(normal[1]), float(normal[2])))
-
-    def on_color(self, color):
-        """Callback for color data."""
-        self.colors.append((float(color[0]), float(color[1]), float(color[2]), float(color[3])))
-        self._has_colors = True
-
-    def on_end(self):
-        """Callback for primitive end."""
-        if self._current_count > 0:
-            self.primitives.append((
-                self._current_type,
-                self._current_start,
-                self._current_count
-            ))
-        self._current_type = None
-
-    def on_error(self, errno):
-        """Callback for errors."""
-        log.error("GLU NURBS tessellation error %d: %s", errno, gluErrorString(errno))
-
-    def build_triangles(self):
-        """Convert collected primitives to triangle vertex list.
-
-        Returns:
-            List of (vertex_index, vertex_index, vertex_index) tuples
-        """
-        triangles = []
-        for prim_type, start, count in self.primitives:
-            if prim_type == GL_TRIANGLES:
-                # Already triangles - take them directly
-                for i in range(0, count - 2, 3):
-                    triangles.append((start + i, start + i + 1, start + i + 2))
-            elif prim_type == GL_TRIANGLE_STRIP:
-                # Convert strip to triangles
-                for i in range(count - 2):
-                    if i % 2 == 0:
-                        triangles.append((start + i, start + i + 1, start + i + 2))
-                    else:
-                        triangles.append((start + i + 1, start + i, start + i + 2))
-            elif prim_type == GL_TRIANGLE_FAN:
-                # Convert fan to triangles
-                for i in range(1, count - 1):
-                    triangles.append((start, start + i, start + i + 1))
-            elif prim_type == GL_POLYGON:
-                # Convert polygon to triangles (as fan)
-                for i in range(1, count - 1):
-                    triangles.append((start, start + i, start + i + 1))
-            elif prim_type == GL_QUAD_STRIP:
-                # Convert quad strip to triangles
-                # Each quad is: v[i], v[i+1], v[i+3], v[i+2] (CCW order)
-                for i in range(0, count - 2, 2):
-                    # First triangle of quad
-                    triangles.append((start + i, start + i + 1, start + i + 3))
-                    # Second triangle of quad
-                    triangles.append((start + i, start + i + 3, start + i + 2))
-            elif prim_type == GL_QUADS:
-                # Convert quads to triangles
-                for i in range(0, count - 3, 4):
-                    # First triangle
-                    triangles.append((start + i, start + i + 1, start + i + 2))
-                    # Second triangle
-                    triangles.append((start + i, start + i + 2, start + i + 3))
-        return triangles
+# Re-exported so importers / node registrations that reference nurbs.X keep
+# working after the split (see module docstring).
+from OpenGLContext.scenegraph.nurbssampling import (
+    NurbsSampling,
+    NurbsToleranceSample,
+    NurbsDomainDistanceSample,
+    defaultSampling,
+    initialise,
+)
+from OpenGLContext.scenegraph.nurbstrim import Polyline2D, NurbsCurve2D, Contour2D
+from OpenGLContext.scenegraph.nurbstess import (
+    NURBSTessellatorCallback,
+    _get_tess_callback,
+    _tessellate_nurbs_surface,
+    _build_nurbs_vbo,
+)
 
 
-# Module-level tessellator callback instance
-_tess_callback = None
+# Distance-LOD GLU domain-distance step per level. Level 0 is None -> keep the
+# node's own ``sampling`` (unchanged close-up look); coarser levels override with
+# progressively fewer steps so a far-off surface tessellates far more cheaply.
+NURBS_LOD_STEPS = (None, 16.0, 8.0, 4.0)
 
 
-def _get_tess_callback():
-    """Get the module-level tessellator callback instance."""
-    global _tess_callback
-    if _tess_callback is None:
-        _tess_callback = NURBSTessellatorCallback()
-    return _tess_callback
-
-
-def _tessellate_nurbs_surface(surface, trimming_contours=None, sampling=None):
-    """Tessellate a NURBS surface using GLU callbacks.
-
-    Args:
-        surface: NurbsSurface node with controlPoint, uKnot, vKnot, etc.
-        trimming_contours: Optional list of Contour2D for trimming
-        sampling: Optional sampling node
-
-    Returns:
-        NURBSTessellatorCallback with collected data
-    """
-    callback = _get_tess_callback()
-    callback.reset()
-
-    nurb = gluNewNurbsRenderer()
-    try:
-        # Set to tessellator mode - generates callbacks instead of rendering
-        gluNurbsProperty(nurb, GLU_NURBS_MODE, GLU_NURBS_TESSELLATOR)
-
-        # Register callbacks
-        gluNurbsCallback(nurb, GLU_NURBS_BEGIN, callback.on_begin)
-        gluNurbsCallback(nurb, GLU_NURBS_VERTEX, callback.on_vertex)
-        gluNurbsCallback(nurb, GLU_NURBS_NORMAL, callback.on_normal)
-        gluNurbsCallback(nurb, GLU_NURBS_COLOR, callback.on_color)
-        gluNurbsCallback(nurb, GLU_NURBS_END, callback.on_end)
-        gluNurbsCallback(nurb, GLU_NURBS_ERROR, callback.on_error)
-
-        # Configure sampling
-        # Note: Screen-space tolerance (GLU_PATH_LENGTH) doesn't work reliably in
-        # tessellator callback mode because there's no viewport context. We use
-        # domain-distance sampling instead for predictable results.
-        if sampling and isinstance(sampling, NurbsDomainDistanceSample):
-            # Domain distance sampling works fine in callback mode
-            sampling.properties(nurb)
-        elif sampling and isinstance(sampling, NurbsToleranceSample):
-            # Convert tolerance-based sampling to domain-distance for callback mode
-            # A tolerance of 3.0 pixels roughly corresponds to uStep/vStep of 30-50
-            # depending on surface size. We use a heuristic based on tolerance.
-            tolerance = getattr(sampling, 'tolerance', 50.0)
-            # Smaller tolerance = more detail = higher steps
-            # tolerance=3 -> steps=50, tolerance=50 -> steps=20
-            steps = max(20.0, min(100.0, 150.0 / max(1.0, tolerance)))
-            gluNurbsProperty(nurb, GLU_SAMPLING_METHOD, GLU_DOMAIN_DISTANCE)
-            gluNurbsProperty(nurb, GLU_U_STEP, steps)
-            gluNurbsProperty(nurb, GLU_V_STEP, steps)
-        else:
-            gluNurbsProperty(nurb, GLU_SAMPLING_METHOD, GLU_DOMAIN_DISTANCE)
-            gluNurbsProperty(nurb, GLU_U_STEP, 30.0)
-            gluNurbsProperty(nurb, GLU_V_STEP, 30.0)
-
-        # Begin surface
-        gluBeginSurface(nurb)
-        try:
-            # Get control points
-            control_points = arrays.reshape(
-                surface.controlPoint,
-                (surface.vDimension, surface.uDimension, 3)
-            ).astype('f')
-            v_knot = surface.vKnot.astype('f')
-            u_knot = surface.uKnot.astype('f')
-
-            # Add color surface if present
-            if len(surface.color):
-                color_data = arrays.zeros(
-                    (len(surface.controlPoint), 4), 'f'
-                )
-                color_data[:, :3] = surface.color.astype('f')
-                color_data[:, 3] = 1.0
-                color_data = arrays.reshape(
-                    color_data,
-                    (surface.vDimension, surface.uDimension, 4)
-                )
-                gluNurbsSurface(nurb, v_knot, u_knot, color_data, GL_MAP2_COLOR_4)
-
-            # Add vertex surface
-            gluNurbsSurface(nurb, v_knot, u_knot, control_points, GL_MAP2_VERTEX_3)
-
-            # Apply trimming
-            if trimming_contours:
-                for contour in trimming_contours:
-                    contour.trim(nurb)
-
-        finally:
-            gluEndSurface(nurb)
-
-    finally:
-        gluDeleteNurbsRenderer(nurb)
-        # Clear any GL errors left by GLU tessellation (GLU may use deprecated functions)
-        while glGetError() != GL_NO_ERROR:
-            pass
-
-    return callback
-
-
-def _build_nurbs_vbo(callback):
-    """Build a VBO from tessellated NURBS data.
-
-    Args:
-        callback: NURBSTessellatorCallback with collected data
-
-    Returns:
-        Tuple of (vbo, triangle_count, has_colors)
-    """
-    if not callback.vertices:
-        return None, 0, False
-
-    triangles = callback.build_triangles()
-    if not triangles:
-        return None, 0, False
-
-    # Build vertex array from triangles
-    # Format: normal(3) + vertex(3) = 6 floats per vertex
-    # For colored: color(4) + normal(3) + vertex(3) = 10 floats
-    has_colors = callback._has_colors and len(callback.colors) == len(callback.vertices)
-
-    vertex_data = []
-    for tri in triangles:
-        for idx in tri:
-            if has_colors:
-                vertex_data.extend(callback.colors[idx])
-            vertex_data.extend(callback.normals[idx] if idx < len(callback.normals) else (0, 0, 1))
-            vertex_data.extend(callback.vertices[idx])
-
-    vertex_array = arrays.array(vertex_data, 'f')
-    nurbs_vbo = vbo.VBO(vertex_array)
-    return nurbs_vbo, len(triangles) * 3, has_colors
-
-
-def initialise(context=None):
-    """Initialise the NURBs extensions for a context"""
-    global object_space_tess
-    if object_space_tess is None:
-        object_space_tess = gluInitObjectSpaceTessEXT()
-    return bool(object_space_tess)
-
-
-class Polyline2D(nurbs.Polyline2D):
-    """Simple polyline in 2D
-
-    Basically this just calls gluPwlCurve
-    """
-
-    def render(self, nurbObject):
-        """Render to the given nurbs object"""
-        gluPwlCurve(nurbObject, self.point, GLU_MAP1_TRIM_2)
-
-
-class NurbsCurve2D(nurbs.NurbsCurve2D):
-    """Nurbs curve in 2D
-
-    Basically this just calls gluNurbsCurve
-    """
-
-    def render(self, nurbObject):
-        """Render to the given nurbs object"""
-        gluNurbsCurve(nurbObject, self.knot, self.controlPoint, GLU_MAP1_TRIM_2)
-
-
-class Contour2D(nurbs.Contour2D):
-    """A 2D contour (collection of joined segments)
-
-    children -- a set of polylines and/or curves which are
-        joined to form the trimming contour
-
-    Normally used to trim a Nurbs surface...
-    """
-
-    def trim(self, nurbObject):
-        """Render the contour as a trim of the current surface"""
-        gluBeginTrim(nurbObject)
-        try:
-            for child in self.children:
-                child.render(nurbObject)
-        finally:
-            gluEndTrim(nurbObject)
-
-
-def defaultSampling():
-    """Get a default sampling node"""
-    if initialise():
-        return NurbsToleranceSample(method="object", parametric=1, tolerance=5)
-    else:
-        return NurbsToleranceSample(method="screen", parametric=1, tolerance=5)
+def nurbs_lod_steps(level):
+    return NURBS_LOD_STEPS[min(level, len(NURBS_LOD_STEPS) - 1)]
 
 
 class _SurfaceRenderer(object):
@@ -385,11 +117,14 @@ class _SurfaceRenderer(object):
         Uses GLU tessellator callbacks to generate geometry, then
         renders via VBOs with the active shader.
         """
-        # Build/update the VBO if needed - use mode.cache to store per-context
-        cache_key = 'nurbs_shader_data'
+        # Build/update the VBO if needed - use mode.cache to store per-context,
+        # one entry per distance-LOD level so a far-off surface reuses a coarse
+        # tessellation instead of the full one (level 0 keeps the node's sampling).
+        level = self._lod_level(mode)
+        cache_key = 'nurbs_shader_data_lod%d' % level
         cached = mode.cache.getData(self, key=cache_key)
         if cached is None:
-            cached = self._build_shader_geometry_cached()
+            cached = self._build_shader_geometry_cached(steps=nurbs_lod_steps(level))
             if cached is not None:
                 # Create cache holder with dependencies on NURBS surface data
                 holder = mode.cache.holder(self, cached, key=cache_key)
@@ -437,63 +172,51 @@ class _SurfaceRenderer(object):
             # Set up lights on the vertex color program using scene lights
             self._setup_vertex_color_lights(mode, shader_program, vc_prog)
 
-        # Create temporary VAO for core profile compatibility
-        vao = glGenVertexArrays(1)
-        glBindVertexArray(vao)
+        # Interleaved layout: with colours it's color(4)+normal(3)+vertex(3);
+        # without, normal(3)+vertex(3). Attribute locations match the VRML97
+        # shaders: 1=aNormal, 2=aPosition, 3=aColor.
+        from ctypes import c_void_p
+        if has_colors:
+            stride, color_offset, normal_offset, vertex_offset = 40, 0, 16, 28
+        else:
+            stride, color_offset, normal_offset, vertex_offset = 24, None, 0, 12
+
+        # Cache the VAO on the node keyed by program + VBO identity:
+        # the VBO is already cached per LOD level, so only the per-frame VAO
+        # gen/delete + attribute re-binding remained. A tessellation change makes
+        # a new VBO, which rebuilds the VAO.
+        program = vc_prog if has_colors else shader_program.program
+
+        def _bind_attributes():
+            shader_vbo.bind()
+            glEnableVertexAttribArray(2)
+            glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(vertex_offset))
+            glEnableVertexAttribArray(1)
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(normal_offset))
+            if has_colors and color_offset is not None:
+                glEnableVertexAttribArray(3)
+                glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, c_void_p(color_offset))
+            shader_vbo.unbind()
 
         try:
-            # Render using the VBO
-            shader_vbo.bind()
-            try:
-                # Determine stride based on whether we have colors
-                if has_colors:
-                    # color(4) + normal(3) + vertex(3) = 10 floats = 40 bytes
-                    stride = 40
-                    color_offset = 0
-                    normal_offset = 16
-                    vertex_offset = 28
-                else:
-                    # normal(3) + vertex(3) = 6 floats = 24 bytes
-                    stride = 24
-                    color_offset = None
-                    normal_offset = 0
-                    vertex_offset = 12
-
-                # Set up vertex attributes for the shader
-                # VRML97 shader attribute locations:
-                # 0 = aTexCoord (vec2) - not used for NURBS
-                # 1 = aNormal (vec3)
-                # 2 = aPosition (vec3)
-                # 3 = aColor (vec4) - for vertex color shader
-                from ctypes import c_void_p
-
-                # Position attribute (location 2 in VRML97 shaders)
-                glEnableVertexAttribArray(2)
-                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(vertex_offset))
-
-                # Normal attribute (location 1 in VRML97 shaders)
-                glEnableVertexAttribArray(1)
-                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(normal_offset))
-
-                # Color attribute (location 3 in vertex color shader)
-                if has_colors and color_offset is not None:
-                    glEnableVertexAttribArray(3)
-                    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, c_void_p(color_offset))
-
-                # Draw the triangles
-                glDrawArrays(GL_TRIANGLES, 0, vertex_count)
-
-                # Clean up vertex attributes
-                glDisableVertexAttribArray(2)
-                glDisableVertexAttribArray(1)
-                if has_colors:
-                    glDisableVertexAttribArray(3)
-            finally:
-                shader_vbo.unbind()
+            vao = _get_or_build_vao(self, program, (shader_vbo,), _bind_attributes)
+            if vao is not None:
+                glBindVertexArray(vao)
+                try:
+                    glDrawArrays(GL_TRIANGLES, 0, vertex_count)
+                finally:
+                    glBindVertexArray(0)
+            else:
+                # Owner can't hold a cache -> transient VAO (rare fallback).
+                transient = glGenVertexArrays(1)
+                glBindVertexArray(transient)
+                try:
+                    _bind_attributes()
+                    glDrawArrays(GL_TRIANGLES, 0, vertex_count)
+                finally:
+                    glBindVertexArray(0)
+                    glDeleteVertexArrays(1, [transient])
         finally:
-            glBindVertexArray(0)
-            glDeleteVertexArrays(1, [vao])
-
             # Restore the original lit shader if we switched
             if switched_shader:
                 shader_program.use(lit=True, vertex_colors=False)
@@ -505,8 +228,11 @@ class _SurfaceRenderer(object):
                     shader_program.program
                 )
 
-    def _build_shader_geometry_cached(self):
+    def _build_shader_geometry_cached(self, steps=None):
         """Build VBO geometry from GLU tessellation.
+
+        Args:
+            steps: Optional GLU domain-distance step override (distance-LOD).
 
         Returns:
             Tuple of (vbo, vertex_count, has_colors) or None if not supported/failed.
@@ -515,6 +241,35 @@ class _SurfaceRenderer(object):
         """
         # Base class returns None - subclasses override with actual implementation
         return None  # type: ignore[return-value]
+
+    # -- distance level-of-detail -----------------------------------------
+    def _lod_bounding_sphere(self):
+        """(center, radius) of this surface in local space, or None (subclass hook)."""
+        return None
+
+    def _lod_level(self, mode):
+        """Distance-LOD level (0 = finest) for this surface this frame."""
+        from OpenGLContext.scenegraph import tessellationlod
+        sphere = self._lod_bounding_sphere()
+        if sphere is None:
+            return 0
+        center, radius = sphere
+        return tessellationlod.lod_level(mode, center, radius)
+
+    @staticmethod
+    def _control_point_sphere(control_point):
+        """Local bounding sphere (center, radius) from a control-point array."""
+        try:
+            cp = arrays.reshape(arrays.array(control_point, 'd'), (-1, 3))
+        except Exception:
+            return None
+        if not len(cp):
+            return None
+        lo = cp.min(0)
+        hi = cp.max(0)
+        center = tuple(float(v) for v in (lo + hi) * 0.5)
+        radius = 0.5 * float((((hi - lo) ** 2).sum()) ** 0.5)
+        return center, (radius or 1.0)
 
     def _setup_vertex_color_lights(self, mode, shader_program, vc_prog):
         """Set up lights on the vertex color shader program.
@@ -635,7 +390,10 @@ class NurbsSurface(_SurfaceRenderer, nurbs.NurbsSurface):
             if field_obj is not None:
                 holder.depend(self, field_obj)
 
-    def _build_shader_geometry_cached(self):
+    def _lod_bounding_sphere(self):
+        return self._control_point_sphere(self.controlPoint)
+
+    def _build_shader_geometry_cached(self, steps=None):
         """Build VBO geometry from GLU tessellation for shader rendering.
 
         Returns:
@@ -646,6 +404,7 @@ class NurbsSurface(_SurfaceRenderer, nurbs.NurbsSurface):
                 self,
                 trimming_contours=self._get_trimming_contours(),
                 sampling=self.sampling,
+                u_step=steps, v_step=steps,
             )
             shader_vbo, vertex_count, has_colors = _build_nurbs_vbo(callback)
             return (shader_vbo, vertex_count, has_colors)
@@ -728,7 +487,12 @@ class TrimmedSurface(_SurfaceRenderer, nurbs.TrimmedSurface):
         if trim_field is not None:
             holder.depend(self, trim_field)
 
-    def _build_shader_geometry_cached(self):
+    def _lod_bounding_sphere(self):
+        if not self.surface:
+            return None
+        return self._control_point_sphere(self.surface.controlPoint)
+
+    def _build_shader_geometry_cached(self, steps=None):
         """Build VBO geometry from GLU tessellation for shader rendering.
 
         Returns:
@@ -745,6 +509,7 @@ class TrimmedSurface(_SurfaceRenderer, nurbs.TrimmedSurface):
                 self.surface,
                 trimming_contours=self._get_trimming_contours(),
                 sampling=sampling,
+                u_step=steps, v_step=steps,
             )
             shader_vbo, vertex_count, has_colors = _build_nurbs_vbo(callback)
             return (shader_vbo, vertex_count, has_colors)
@@ -870,63 +635,3 @@ class NurbsCurve(nurbs.NurbsCurve):
                         t[0],
                     )
         return 1, "All increasing"
-
-
-class NurbsSampling(node.Node):
-    """A node-type specifying NURBs sampling method and parameters"""
-
-
-class NurbsToleranceSample(NurbsSampling):
-    """Path-length tolerance sampling
-
-    Can be either screen-space or object space,
-        method = "screen" -> tolerance in pixels
-        method = "object" -> tolerance in object-space coordinates
-    and either parametric or not
-        if true, tolerance is parametric tolerance (e.g. 0.5)
-    """
-
-    method = field.newField("method", "SFString", 1, "screen")  # "screen"/"object"
-    parametric = field.newField("parametric", "SFBool", 1, 0)
-    tolerance = field.newField("tolerance", "SFFloat", 1, 50.0)
-
-    def properties(self, nurbObject):
-        """Configure this sampling type"""
-        ### get the appropriate sampling method...
-        methods = (GLU_PATH_LENGTH, GLU_PARAMETRIC_ERROR)
-        if self.method == "object":
-            if not initialise():
-                # do regular (non-extension) screen sampling...
-                log.warning(
-                    """%s declares 'object' sampling method, extension: object_space_tess not available -> ignoring""",
-                    self,
-                )
-                self.method = "screen"
-            else:
-                methods = (GLU_OBJECT_PATH_LENGTH_EXT, GLU_OBJECT_PARAMETRIC_ERROR_EXT)
-        elif self.method != "screen":
-            log.warning(
-                """%s declares %s sampling method, unknown type -> ignoring""",
-                self,
-                repr(self.method),
-            )
-        method = methods[self.parametric]
-
-        gluNurbsProperty(nurbObject, GLU_SAMPLING_METHOD, method)
-        if self.parametric:
-            gluNurbsProperty(nurbObject, GLU_PARAMETRIC_TOLERANCE, self.tolerance)
-        else:
-            gluNurbsProperty(nurbObject, GLU_SAMPLING_TOLERANCE, self.tolerance)
-
-
-class NurbsDomainDistanceSample(NurbsSampling):
-    """Domain-distance parametric u and v coordinate sampling"""
-
-    uStep = field.newField("uStep", "SFFloat", 1, 100.0)
-    vStep = field.newField("vStep", "SFFloat", 1, 100.0)
-
-    def properties(self, nurbObject):
-        """Configure this sampling type"""
-        gluNurbsProperty(nurbObject, GLU_SAMPLING_METHOD, GLU_DOMAIN_DISTANCE)
-        gluNurbsProperty(nurbObject, GLU_U_STEP, self.uStep)
-        gluNurbsProperty(nurbObject, GLU_V_STEP, self.vStep)

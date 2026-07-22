@@ -5,6 +5,7 @@ from vrml import node, field, protofunctions
 from OpenGLContext.scenegraph import coordinatebounded
 from OpenGLContext import triangleutilities
 from OpenGLContext.scenegraph import polygonsort
+from OpenGLContext.scenegraph.winding import apply_winding_cull
 from OpenGL.arrays import vbo
 
 from OpenGL.GL import *
@@ -205,6 +206,11 @@ class IndexedPolygons(
         """
         if not len(self.index):
             return 1
+
+        if getattr(mode, 'shader_mode', False):
+            return self._render_shader(mode, visible=visible, lit=lit,
+                                       textured=textured, transparent=transparent)
+
         glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
         glPushAttrib(GL_ALL_ATTRIB_BITS)
         try:
@@ -232,15 +238,7 @@ class IndexedPolygons(
                     """%s node has unsupported polygonSides value %s (3 or 4 expected)"""
                     % (str(self), self.polygonSides)
                 )
-            if self.ccw:
-                glFrontFace(GL_CCW)
-            else:
-                glFrontFace(GL_CW)
-
-            if self.solid:  # and not transparent:
-                glEnable(GL_CULL_FACE)
-            else:
-                glDisable(GL_CULL_FACE)
+            apply_winding_cull(mode, bool(self.ccw), self.solid)
 
             # do the actual rendering
             if visible and transparent:
@@ -253,6 +251,84 @@ class IndexedPolygons(
         finally:
             glPopAttrib()
             glPopClientAttrib()
+        return 1
+
+    def _get_index_vbo(self, mode):
+        """Element-array VBO for self.index (uint32), cached and index-versioned."""
+        ivbo = mode.cache.getData(self, key="shader_index")
+        if ivbo is None:
+            ivbo = vbo.VBO(
+                self.index.astype("I"), target="GL_ELEMENT_ARRAY_BUFFER")
+            holder = mode.cache.holder(self, ivbo, key="shader_index")
+            holder.depend(self, "index")
+        return ivbo
+
+    def _render_shader(self, mode, visible=1, lit=1, textured=1, transparent=0):
+        """Core-profile shader rendering path (mirrors ArrayGeometry/Quadric).
+
+        Draws the equal-indexed position/normal/texcoord arrays with the VRML97
+        shader program via a cached VAO. Only triangles are supported (core
+        profile has no GL_QUADS); the IFS compiler always emits triangles.
+        """
+        from OpenGLContext.scenegraph import shadergeometry as sg
+
+        shader_program = getattr(mode, "shader_program", None)
+        if shader_program is None or shader_program.program is None:
+            return 1
+        if self.polygonSides != 3:
+            log.warning(
+                "%s: only triangles render under core profile (polygonSides=%s)",
+                self, self.polygonSides)
+            return 1
+
+        vbos = self.get_vbos(mode)
+        if vbos.coord is None:
+            return 1
+        index_vbo = self._get_index_vbo(mode)
+        program = shader_program.program
+
+        glFrontFace(GL_CCW if self.ccw else GL_CW)
+        if self.solid:
+            glEnable(GL_CULL_FACE)
+        else:
+            glDisable(GL_CULL_FACE)
+
+        normals = vbos.normal if lit else None
+        texcoords = vbos.texCoord if textured else None
+
+        def build():
+            _enabled, bound = sg.bind_separate_arrays(
+                program, vbos.coord, normals, texcoords)
+            index_vbo.bind()   # element-array binding is recorded in the VAO
+            for bound_vbo in bound:
+                bound_vbo.unbind()
+
+        vao = sg._get_or_build_vao(
+            self, program, (vbos.coord, normals, texcoords, index_vbo), build)
+        count = len(self.index)
+        if vao is not None:
+            glBindVertexArray(vao)
+            try:
+                glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, None)
+            finally:
+                glBindVertexArray(0)
+            return 1
+
+        # Transient fallback (owner could not hold a cache).
+        transient = glGenVertexArrays(1)
+        glBindVertexArray(transient)
+        try:
+            enabled, bound = sg.bind_separate_arrays(
+                program, vbos.coord, normals, texcoords)
+            index_vbo.bind()
+            try:
+                glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, index_vbo)
+            finally:
+                index_vbo.unbind()
+                sg.unbind_attributes(enabled, bound)
+        finally:
+            glBindVertexArray(0)
+            glDeleteVertexArrays(1, [transient])
         return 1
 
     def drawTransparent(self, constant, mode=None):

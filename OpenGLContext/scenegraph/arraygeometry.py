@@ -3,6 +3,7 @@ from OpenGL.GL import *
 from ..arrays import *
 from . import polygonsort
 from .. import triangleutilities
+from .winding import apply_winding_cull
 from OpenGL.arrays import vbo
 import logging
 log = logging.getLogger( __name__ )
@@ -172,11 +173,7 @@ class ArrayGeometry(object):
                 self.callBound( glTexCoordPointerf, self.textures )
 #			else:
 #				glDisableClientState( GL_TEXTURE_COORD_ARRAY )
-            glFrontFace( self.ccw)
-            if self.solid:# and not transparent:
-                glEnable( GL_CULL_FACE )
-            else:
-                glDisable( GL_CULL_FACE )
+            apply_winding_cull( mode, self.ccw == GL_CCW, self.solid )
             # do the actual rendering
             if visible and transparent:
                 self.drawTransparent( mode = mode )
@@ -193,11 +190,7 @@ class ArrayGeometry(object):
         from OpenGLContext.scenegraph.shadergeometry import render_shader_arrays
 
         objectType, startIndex, count = self.arguments
-        glFrontFace(self.ccw)
-        if self.solid:
-            glEnable(GL_CULL_FACE)
-        else:
-            glDisable(GL_CULL_FACE)
+        apply_winding_cull(mode, self.ccw == GL_CCW, self.solid)
 
         return render_shader_arrays(
             mode,
@@ -205,7 +198,8 @@ class ArrayGeometry(object):
             self.normals,
             self.textures,
             count,
-            draw_mode=objectType
+            draw_mode=objectType,
+            owner=self,
         )
     def draw( self ):
         """Does the actual rendering after the arrays are set up

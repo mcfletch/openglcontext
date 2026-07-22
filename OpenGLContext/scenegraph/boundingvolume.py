@@ -150,19 +150,14 @@ class BoundingBox(BoundingVolume):
             points = dot(points, matrix)
             points[:, -1] = 1.0
             if frust:
-                for plane in frust.planes:
-                    foundInFront = 0
-                    for point in points:
-                        distance = sum(plane * point)
-                        if distance >= 0:
-                            # point is in front of plane, so:
-                            #   this plane can't eliminate the object
-                            foundInFront = 1
-                            break
-                    if not foundInFront:
-                        # planePoint, planeNormal = utilities.plane2PointNormal(plane)
-                        # got all the way through, this plane eliminated us!
-                        return 0
+                # Vectorized plane test: distances[i, j] is point i's signed
+                # distance to plane j (points @ planes.T). The object is culled
+                # iff some plane has ALL points strictly behind it (< 0) -- the
+                # same decision as the per-point loop, but one matmul instead of
+                # 6*8 tiny numpy sum() calls, which dominated large-scene culling.
+                distances = dot(points, array(frust.planes, 'f').T)
+                if (distances < 0).all(axis=0).any():
+                    return 0
             else:
                 log.warning(
                     """BoundingBox visible called with Null frustum""",

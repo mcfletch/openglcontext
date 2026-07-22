@@ -1,12 +1,15 @@
 """Geometry type for "point-arrays" w/ colour support"""
 
 from OpenGL.GL import *
+from OpenGL.arrays import vbo
 from vrml.vrml97 import basenodes
 from OpenGLContext.scenegraph import coordinatebounded
 from OpenGLContext.arrays import array
 from OpenGL.extensions import alternate
 from OpenGL.GL.ARB.point_parameters import *
 from OpenGL.GL.EXT.point_parameters import *
+import ctypes
+import numpy as np
 import logging
 
 log = logging.getLogger(__name__)
@@ -18,6 +21,9 @@ glPointParameterfv = alternate(
     glPointParameterfv, glPointParameterfvARB, glPointParameterfEXT
 )
 RESET_ATTENUATION = array([1, 0, 0], "f")
+
+# MRT draw-buffer index carrying the packed object id (mirrors _flat.py).
+_OBJECT_ID_ATTACHMENT = 1
 
 
 class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
@@ -141,80 +147,106 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
                 glActiveTexture(GL_TEXTURE0)
                 glBindTexture(GL_TEXTURE_2D, 0)
 
-        # Create VAO for core profile compatibility
-        vao = glGenVertexArrays(1)
-        glBindVertexArray(vao)
+        # Cached VAO+VBO: the point buffer is built once and re-uploaded (into
+        # the same buffer) only when coord/color change, then every warm frame is
+        # just bind-VAO + draw. The VAO is keyed per shader program (attribute
+        # locations are program-specific); a data change clears them so the layout
+        # is rebound against the re-uploaded buffer.
+        vbo_obj, stride = self._point_buffer(mode, points, has_colors)
+        gpu = self._point_gpu
+        vao = gpu['vao'].get(int(program))
+        if vao is None:
+            vao = glGenVertexArrays(1)
+            glBindVertexArray(vao)
+            vbo_obj.bind()
+            glEnableVertexAttribArray(0)
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, None)
+            if has_colors:
+                glEnableVertexAttribArray(1)
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
+            vbo_obj.unbind()
+            glBindVertexArray(0)
+            gpu['vao'][int(program)] = vao
 
-        buffer = None
+        # Set point size (both fixed-function and shader-controlled)
+        glPointSize(point_size)
+        # Enable shader-controlled point sizes (gl_PointSize in vertex shader)
+        glEnable(GL_PROGRAM_POINT_SIZE)
+
+        # Enable blending for particle effects
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        # Keep the packed object-id MRT attachment out of the blend (finding
+        # 4.6): blending it uses the id's own alpha byte as the factor, which
+        # is 0 for most ids, so the id would be multiplied to zero and the
+        # point would be unpickable. Best-effort; drivers without indexed
+        # blend enables (or a single-attachment target) simply skip it.
         try:
-            # Point shader uses fixed attribute locations:
-            # layout(location = 0) in vec3 aPosition;
-            # layout(location = 1) in vec3 aColor;
-            pos_loc = 0
-            color_loc = 1
+            glDisablei(GL_BLEND, _OBJECT_ID_ATTACHMENT)
+        except Exception:
+            pass
 
-            # Interleave position and color data into a single buffer
-            # Format: [x,y,z,r,g,b, x,y,z,r,g,b, ...]
-            import numpy as np
-            points_array = np.asarray(points, dtype='f')
-
-            if has_colors:
-                colors_array = np.asarray(self.color.color, dtype='f')
-                # Interleave: each vertex has 6 floats (3 pos + 3 color)
-                interleaved = np.empty((len(points), 6), dtype='f')
-                interleaved[:, 0:3] = points_array
-                interleaved[:, 3:6] = colors_array
-                # Ensure contiguous memory layout
-                interleaved = np.ascontiguousarray(interleaved)
-                stride = 6 * 4  # 6 floats * 4 bytes
-            else:
-                interleaved = np.ascontiguousarray(points_array)
-                stride = 0
-
-            buffer = glGenBuffers(1)
-            glBindBuffer(GL_ARRAY_BUFFER, buffer)
-            glBufferData(GL_ARRAY_BUFFER, interleaved.nbytes, interleaved, GL_DYNAMIC_DRAW)
-
-            # Set up position attribute
-            glEnableVertexAttribArray(pos_loc)
-            glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, stride, None)
-
-            # Set up color attribute if we have per-vertex colors
-            if has_colors:
-                import ctypes
-                glEnableVertexAttribArray(color_loc)
-                glVertexAttribPointer(color_loc, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
-            else:
-                color_loc = -1  # Mark as unused for cleanup
-
-            # Set point size (both fixed-function and shader-controlled)
-            glPointSize(point_size)
-            # Enable shader-controlled point sizes (gl_PointSize in vertex shader)
-            glEnable(GL_PROGRAM_POINT_SIZE)
-
-            # Enable blending for particle effects
-            glEnable(GL_BLEND)
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-
+        glBindVertexArray(vao)
+        try:
             glDrawArrays(GL_POINTS, 0, len(points))
-
-            glDisable(GL_BLEND)
-            glDisable(GL_PROGRAM_POINT_SIZE)
-            glPointSize(1.0)
-
-            glDisableVertexAttribArray(pos_loc)
-            if color_loc >= 0:
-                glDisableVertexAttribArray(color_loc)
-
         finally:
             glBindVertexArray(0)
-            glDeleteVertexArrays(1, [vao])
-            if buffer:
-                glDeleteBuffers(1, [buffer])
+
+        glDisable(GL_BLEND)
+        glDisable(GL_PROGRAM_POINT_SIZE)
+        glPointSize(1.0)
 
         # Restore the lit shader
         shader_program.use(lit=True)
         return 1
+
+    def _point_buffer(self, mode, points, has_colors):
+        """Return (vbo, stride) for the point data, re-uploading only on change.
+
+        A persistent VBO is kept on the node; when coord/color change (tracked
+        through mode.cache field dependencies) the interleaved data is rebuilt and
+        re-uploaded into the same buffer via set_array, and the per-program VAOs
+        are cleared so the layout is rebound.
+        """
+        gpu = getattr(self, '_point_gpu', None)
+        clean = mode.cache.getData(self, key='point_clean')
+        if gpu is not None and clean is not None and gpu['has_colors'] == has_colors:
+            return gpu['vbo'], gpu['stride']
+
+        points_array = np.asarray(points, dtype='f')
+        if has_colors:
+            interleaved = np.empty((len(points), 6), dtype='f')
+            interleaved[:, 0:3] = points_array
+            interleaved[:, 3:6] = np.asarray(self.color.color, dtype='f')
+            interleaved = np.ascontiguousarray(interleaved)
+            stride = 6 * 4
+        else:
+            interleaved = np.ascontiguousarray(points_array)
+            stride = 0
+
+        if gpu is None:
+            gpu = self._point_gpu = {
+                'vbo': vbo.VBO(interleaved, usage='GL_DYNAMIC_DRAW'),
+                'vao': {},
+                'stride': stride,
+                'has_colors': has_colors,
+            }
+        else:
+            gpu['vbo'].set_array(interleaved)
+            gpu['stride'] = stride
+            gpu['has_colors'] = has_colors
+            gpu['vao'] = {}   # layout may have changed; rebind against new upload
+        # Force the (re-)upload now so the buffer is populated before draw.
+        gpu['vbo'].bind()
+        gpu['vbo'].unbind()
+
+        holder = mode.cache.holder(self, True, key='point_clean')
+        holder.depend(self, 'coord')
+        if self.coord:
+            holder.depend(self.coord, 'point')
+        if self.color:
+            holder.depend(self.color, 'color')
+        return gpu['vbo'], gpu['stride']
 
     def boundingVolume(self, mode=None):
         """Create a bounding-volume object for this node"""

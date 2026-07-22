@@ -1,141 +1,157 @@
 """Teapot node for use in geometry attribute of Shapes
 
-Provides both legacy GLUT-based rendering and modern shader-based rendering
-using the embedded Utah Teapot mesh data.
+The Utah Teapot (a.k.a. the Newell teapot) is the standard reference object
+of computer graphics, modelled by Martin Newell in 1975 at the University of
+Utah.  See https://graphics.cs.utah.edu/teapot/ for its history.
+
+The geometry is generated from the Newell teapot's 32 bicubic Bezier patches by
+tessellating each patch with the GLU NURBS tessellators (see
+:mod:`OpenGLContext.scenegraph.teapot_nurbs`), which works in both the legacy
+and the shader/core pipelines.  GLU is a practical hard dependency, so there is
+no static-mesh fallback; the legacy ``glutSolidTeapot`` endpoint remains only as
+an explicit ``useGlut`` comparison option.
+
+Tessellation is distance-LOD aware: the mesh is built (and cached) at a coarser
+GLU sampling step the further the camera is, so a teapot that is a small part of
+the frame costs far fewer triangles.  Level 0 (close up) reproduces the previous
+default sampling, so near appearance is unchanged.
 """
-from vrml import cache
-from OpenGLContext.arrays import array
-from OpenGL.arrays import vbo
 from OpenGL.GL import *
 from vrml.vrml97 import nodetypes
-from vrml import node, field, fieldtypes
+from vrml import node, field
 import numpy as np
 import ctypes
 import logging
 
+from OpenGLContext.scenegraph import tessellationlod
+
 log = logging.getLogger(__name__)
 
-# Try to import GLUT teapot functions for legacy rendering
+# GLUT teapot functions for the explicit legacy-comparison path.
 try:
     from OpenGL.GLUT import glutSolidTeapot, glutWireTeapot
     HAS_GLUT_TEAPOT = True
 except ImportError:
     HAS_GLUT_TEAPOT = False
-    log.debug("GLUT teapot not available, using embedded mesh")
+    log.debug("GLUT teapot not available (only affects useGlut=True)")
 
 
 class Teapot(nodetypes.Geometry, node.Node):
     """Utah Teapot geometry node.
 
-    Supports both legacy GLUT rendering (when available) and modern
-    shader-based rendering using embedded mesh data from the classic
-    Utah Teapot model.
+    The geometry is generated from the Newell teapot's Bezier control points by
+    tessellating each patch with the GLU NURBS tessellators (see
+    :mod:`OpenGLContext.scenegraph.teapot_nurbs`); tessellation happens once per
+    LOD level, lazily, on the first render at that level within a GL context.
 
     Attributes:
-        size: Scale factor for the teapot (default 1.0)
-        solid: If True, render filled polygons; if False, render wireframe
-        forceEmbedded: If True, always use embedded mesh even when GLUT available
+        size: Scale factor for the teapot (default 1.0).  Matches the sizing
+            of ``glutSolidTeapot(size)``.
+        solid: If True, render filled polygons; if False, render wireframe.
+        lid: If True (default), render the teapot lid; if False, omit the
+            entire lid (the eight lid patches).
+        useGlut: If True, render with the legacy ``glutSolidTeapot`` endpoint
+            (when GLUT is available and not in shader mode), kept for
+            comparison.  Default False: use the NURBS-tessellated mesh.
     """
     PROTO = 'Teapot'
     size = field.newField('size', 'SFFloat', 1, 1.0)
     solid = field.newField('solid', 'SFBool', 1, True)
-    forceEmbedded = field.newField('forceEmbedded', 'SFBool', 1, False)
+    lid = field.newField('lid', 'SFBool', 1, True)
+    useGlut = field.newField('useGlut', 'SFBool', 1, False)
 
-    # Cached GL resources (class-level, shared across instances)
-    _vao = None
-    _vbo = None
-    _ebo = None
-    _vertex_count = 0
-    _index_count = 0
-    _initialized = False
+    # Approximate local bounding sphere of the unit (size=1) y-up teapot, used
+    # only to pick a distance-LOD level; precision is not needed, and using an
+    # estimate avoids forcing a tessellation just to measure the mesh.
+    _UNIT_CENTER = (0.0, 0.0, 0.0)
+    _UNIT_RADIUS = 1.9   # ~half-diagonal of the ~3.0 x 1.6 x 2.0 extent
 
+    # Tessellated N3F_V3F arrays per LOD level: {level: (base, lid)}. Shared
+    # across instances (the geometry is context-independent).
+    _arrays = {}
+    # Retry budget per level: the first render at a level can fail
+    # for transient reasons (no current GL context); latching it off disabled the
+    # teapot. Retry up to this many times before giving up on that level.
+    _tessellate_attempts = {}
+    _MAX_TESSELLATE_ATTEMPTS = 3
+
+    # Shader-path GL resources per LOD level:
+    # {level: {'base_vao','base_count','lid_vao','lid_count'}}.
+    _buffers = {}
+
+    # -- tessellation ------------------------------------------------------
     @classmethod
-    def _initialize_buffers(cls):
-        """Initialize VAO/VBO/EBO with embedded teapot mesh data."""
-        if cls._initialized:
-            return True
-
+    def _ensure_tessellated(cls, level=0):
+        """Tessellate the Bezier patches into vertex arrays for ``level`` once."""
+        entry = cls._arrays.get(level)
+        if entry is not None:
+            return entry[0] is not None
         try:
-            from OpenGLContext.scenegraph.teapot_data import VERTEX_DATA, INDICES
-
-            # Convert to numpy arrays
-            vertex_data = np.array(VERTEX_DATA, dtype=np.float32)
-            index_data = np.array(INDICES, dtype=np.uint32)
-
-            # T2F_N3F_V3F format: 8 floats per vertex
-            cls._vertex_count = len(vertex_data) // 8
-            cls._index_count = len(index_data)
-
-            # Create VAO
-            cls._vao = glGenVertexArrays(1)
-            glBindVertexArray(cls._vao)
-
-            # Create and populate VBO
-            cls._vbo = glGenBuffers(1)
-            glBindBuffer(GL_ARRAY_BUFFER, cls._vbo)
-            glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_STATIC_DRAW)
-
-            # Create and populate EBO
-            cls._ebo = glGenBuffers(1)
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cls._ebo)
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, index_data.nbytes, index_data, GL_STATIC_DRAW)
-
-            # Set up vertex attributes for T2F_N3F_V3F format
-            # Layout: texcoord (2 floats) + normal (3 floats) + position (3 floats) = 32 bytes
-            stride = 8 * 4  # 8 floats * 4 bytes
-
-            # Texture coordinate attribute (location 0 in our shaders)
-            glEnableVertexAttribArray(0)
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, None)
-
-            # Normal attribute (location 1 in our shaders)
-            glEnableVertexAttribArray(1)
-            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(8))
-
-            # Position attribute (location 2 in our shaders)
-            glEnableVertexAttribArray(2)
-            glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(20))
-
-            glBindVertexArray(0)
-            glBindBuffer(GL_ARRAY_BUFFER, 0)
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
-
-            cls._initialized = True
-            log.debug("Teapot buffers initialized: %d vertices, %d indices",
-                     cls._vertex_count, cls._index_count)
+            from OpenGLContext.scenegraph.teapot_nurbs import (
+                tessellate_teapot, steps_for_level,
+            )
+            base, lid = tessellate_teapot(steps=steps_for_level(level))
+            cls._arrays[level] = (base, lid)
             return True
-
         except Exception as e:
-            log.error("Failed to initialize teapot buffers: %s", e)
+            attempts = cls._tessellate_attempts.get(level, 0) + 1
+            cls._tessellate_attempts[level] = attempts
+            # Only give up permanently after repeated failures; a single failure
+            # may be transient (no current GL context on the first frame), so let
+            # a later render retry instead of disabling the level.
+            if attempts >= cls._MAX_TESSELLATE_ATTEMPTS:
+                log.error("Failed to tessellate teapot (level %d) after %d attempts: %s",
+                          level, attempts, e)
+                cls._arrays[level] = (None, None)
+            else:
+                log.warning("Teapot tessellation (level %d) attempt %d failed (will retry): %s",
+                            level, attempts, e)
             return False
 
-    def render(
-            self,
-            visible=1,
-            lit=1,
-            textured=1,
-            transparent=0,
-            mode=None,
-    ):
+    def _lod_level(self, mode):
+        """Distance-LOD level for this teapot, size-normalized (0 = finest)."""
+        center = tuple(c * self.size for c in self._UNIT_CENTER)
+        radius = self._UNIT_RADIUS * self.size
+        return tessellationlod.lod_level(mode, center, radius)
+
+    # Deliberately NOT instanceable: an instanced draw shares one fixed
+    # tessellation across all instances, which bypasses the distance-LOD that
+    # makes far teapots cheap. A field of teapots would then pay full-detail
+    # vertex cost at every distance -- a loss outside demo-only setups. Same
+    # reasoning applies to the quadrics' heavy meshes and NURBS surfaces; see
+    # plans/INSTANCED-GEOMETRY.md. IndexedFaceSet has no LOD, so it instances.
+
+    # -- render dispatch ---------------------------------------------------
+    def render(self, visible=1, lit=1, textured=1, transparent=0, mode=None):
         """Render the Teapot.
 
-        Uses shader-based rendering when in shader mode or forceEmbedded is True,
-        falls back to GLUT rendering in legacy mode (if available).
+        Uses the NURBS-tessellated mesh (distance-LOD selected).  The legacy
+        GLUT endpoint is used only when useGlut is set, GLUT is available, and we
+        are not in shader mode (GLUT's fixed-function teapot cannot render in a
+        core profile).
         """
-        # Check if we should use embedded mesh
-        use_embedded = (
-            self.forceEmbedded or
-            (mode is not None and getattr(mode, 'shader_mode', False)) or
-            not HAS_GLUT_TEAPOT
-        )
+        shader_mode = mode is not None and getattr(mode, 'shader_mode', False)
 
-        if use_embedded:
-            self._render_shader(mode)
-        else:
+        if self.useGlut and HAS_GLUT_TEAPOT and not shader_mode:
             self._render_glut()
+            return
+
+        level = self._lod_level(mode)
+        if not self._ensure_tessellated(level):
+            # Tessellation unavailable (e.g. no GLU / no current context yet).
+            if HAS_GLUT_TEAPOT and not shader_mode:
+                self._render_glut()
+            else:
+                log.warning("Cannot render teapot: NURBS tessellation unavailable")
+            return
+
+        if shader_mode:
+            self._render_shader(mode, level)
+        else:
+            self._render_legacy(level)
 
     def _render_glut(self):
-        """Legacy GLUT-based rendering."""
+        """Explicit legacy GLUT-based rendering (useGlut comparison option)."""
         glFrontFace(GL_CW)
         try:
             if not self.solid:
@@ -145,9 +161,110 @@ class Teapot(nodetypes.Geometry, node.Node):
         finally:
             glFrontFace(GL_CCW)
 
-    def _render_shader(self, mode):
-        """Shader-based rendering using embedded mesh data."""
-        if not self._initialize_buffers():
+    # -- legacy fixed-function path ----------------------------------------
+    def _render_legacy(self, level):
+        """Fixed-function rendering of the interleaved N3F_V3F arrays."""
+        base_array, lid_array = self._arrays[level]
+        glPushAttrib(GL_ENABLE_BIT | GL_POLYGON_BIT)
+        # Exterior faces are CCW/outward; interior faces are the reversed copies.
+        # Cull backfaces so each surface point shows its exterior from outside and
+        # its interior (through the mouth) from inside, with no coincident-face
+        # z-fighting.
+        glEnable(GL_CULL_FACE)
+        glCullFace(GL_BACK)
+        glFrontFace(GL_CCW)
+        if not self.solid:
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+        try:
+            if self.size != 1.0:
+                glPushMatrix()
+                glScalef(self.size, self.size, self.size)
+            try:
+                glEnableClientState(GL_VERTEX_ARRAY)
+                glEnableClientState(GL_NORMAL_ARRAY)
+                try:
+                    self._draw_legacy_array(base_array)
+                    if self.lid:
+                        self._draw_legacy_array(lid_array)
+                finally:
+                    glDisableClientState(GL_VERTEX_ARRAY)
+                    glDisableClientState(GL_NORMAL_ARRAY)
+            finally:
+                if self.size != 1.0:
+                    glPopMatrix()
+        finally:
+            glPopAttrib()
+
+    @staticmethod
+    def _draw_legacy_array(array):
+        from OpenGLContext.scenegraph.teapot_nurbs import FLOATS_PER_VERTEX
+        if array is None or len(array) == 0:
+            return
+        glInterleavedArrays(GL_T2F_N3F_V3F, 0, array)
+        glDrawArrays(GL_TRIANGLES, 0, len(array) // FLOATS_PER_VERTEX)
+
+    # -- shader / core-profile path ----------------------------------------
+    @classmethod
+    def _initialize_buffers(cls, level):
+        """Build VAOs/VBOs for the tessellated arrays of ``level`` (shader path)."""
+        entry = cls._buffers.get(level)
+        if entry is not None:
+            return entry['base_vao'] is not None
+        if not cls._ensure_tessellated(level):
+            return False
+        base_array, lid_array = cls._arrays[level]
+        try:
+            from OpenGLContext.scenegraph.teapot_nurbs import (
+                FLOATS_PER_VERTEX, compute_tangents,
+            )
+            stride = FLOATS_PER_VERTEX * 4
+
+            def make(array):
+                count = len(array) // FLOATS_PER_VERTEX
+                if count == 0:
+                    return None, None, 0
+                vao = glGenVertexArrays(1)
+                glBindVertexArray(vao)
+                buf = glGenBuffers(1)
+                glBindBuffer(GL_ARRAY_BUFFER, buf)
+                glBufferData(GL_ARRAY_BUFFER, array.nbytes, array, GL_STATIC_DRAW)
+                # Interleaved T2F_N3F_V3F: texcoord@0, normal@8, position@20 bytes.
+                glEnableVertexAttribArray(0)
+                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, None)
+                glEnableVertexAttribArray(1)
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(8))
+                glEnableVertexAttribArray(2)
+                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(20))
+                # Tangents (location 3) in their own VBO, for PBR normal/bump mapping.
+                # Harmless to the lit shader, which ignores location 3.
+                tangents = compute_tangents(array)
+                tbuf = glGenBuffers(1)
+                glBindBuffer(GL_ARRAY_BUFFER, tbuf)
+                glBufferData(GL_ARRAY_BUFFER, tangents.nbytes, tangents, GL_STATIC_DRAW)
+                glEnableVertexAttribArray(3)
+                glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 0, None)
+                glBindVertexArray(0)
+                return vao, buf, count
+
+            base_vao, base_vbo, base_count = make(base_array)
+            lid_vao, lid_vbo, lid_count = make(lid_array)
+            glBindBuffer(GL_ARRAY_BUFFER, 0)
+            cls._buffers[level] = {
+                'base_vao': base_vao, 'base_vbo': base_vbo, 'base_count': base_count,
+                'lid_vao': lid_vao, 'lid_vbo': lid_vbo, 'lid_count': lid_count,
+            }
+            log.debug("Teapot buffers (level %d) initialized: %d base, %d lid vertices",
+                      level, base_count, lid_count)
+            return base_vao is not None
+        except Exception as e:
+            log.error("Failed to initialize teapot buffers (level %d): %s", level, e)
+            cls._buffers[level] = {'base_vao': None, 'base_count': 0,
+                                   'lid_vao': None, 'lid_count': 0}
+            return False
+
+    def _render_shader(self, mode, level):
+        """Shader-based rendering using the tessellated mesh for ``level``."""
+        if not self._initialize_buffers(level):
             log.warning("Cannot render teapot: buffers not initialized")
             return
 
@@ -156,41 +273,85 @@ class Teapot(nodetypes.Geometry, node.Node):
             log.warning("Cannot render teapot: no shader program")
             return
 
-        # Apply size scaling - update modelview matrix in shader
-        if self.size != 1.0:
-            current_mv = mode.matrix.copy()
-            scale = self.size
-            scale_matrix = np.array([
-                [scale, 0, 0, 0],
-                [0, scale, 0, 0],
-                [0, 0, scale, 0],
-                [0, 0, 0, 1],
-            ], dtype=np.float32)
-            scaled_mv = np.dot(current_mv, scale_matrix)
-            shader_program.set_matrices(scaled_mv, mode.projection)
+        bufs = self._buffers[level]
 
-        # The GLUT teapot uses CW winding, match that for consistency
-        glFrontFace(GL_CW)
+        def draw():
+            cull_was_enabled = glIsEnabled(GL_CULL_FACE)
+            # Interior faces are the reversed copies of the shell; cull backfaces
+            # so exterior shows from outside and interior through the mouth,
+            # without coincident-face z-fighting.
+            glEnable(GL_CULL_FACE)
+            glCullFace(GL_BACK)
+            glFrontFace(GL_CCW)
+            if not self.solid:
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+            self._draw_shader_array(bufs['base_vao'], bufs['base_count'])
+            if self.lid:
+                self._draw_shader_array(bufs['lid_vao'], bufs['lid_count'])
+            if not self.solid:
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+            if not cull_was_enabled:
+                glDisable(GL_CULL_FACE)
 
-        # Bind VAO and draw
-        glBindVertexArray(self._vao)
+        self._with_scaled_matrix(mode, shader_program, draw)
 
-        if self.solid:
-            glDrawElements(GL_TRIANGLES, self._index_count, GL_UNSIGNED_INT, None)
-        else:
-            # Wireframe mode
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-            glDrawElements(GL_TRIANGLES, self._index_count, GL_UNSIGNED_INT, None)
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+    def _with_scaled_matrix(self, mode, shader_program, draw):
+        """Run ``draw`` with ``size`` folded into the modelview, then restore it.
 
+        ``size`` matches glutSolidTeapot's scale argument and is applied here
+        rather than baked into the mesh, so every ``size`` shares one cached
+        tessellation.  Extracted so the (formerly duplicated) scale block lives
+        in one place.
+        """
+        if self.size == 1.0:
+            draw()
+            return
+        base_mv = mode.matrix.copy()
+        scale = np.array([
+            [self.size, 0, 0, 0],
+            [0, self.size, 0, 0],
+            [0, 0, self.size, 0],
+            [0, 0, 0, 1],
+        ], dtype=np.float32)
+        shader_program.set_matrices(np.dot(base_mv, scale), mode.projection)
+        try:
+            draw()
+        finally:
+            shader_program.set_matrices(base_mv, mode.projection)
+
+    @staticmethod
+    def _draw_shader_array(vao, count):
+        if vao is None or count == 0:
+            return
+        glBindVertexArray(vao)
+        glDrawArrays(GL_TRIANGLES, 0, count)
         glBindVertexArray(0)
 
-        # Restore front face to default CCW
-        glFrontFace(GL_CCW)
+    # -- bounding volume ---------------------------------------------------
+    @classmethod
+    def _mesh_aabb(cls):
+        """(min, max) corner of the tessellated unit teapot, or None.
 
-        # Restore original matrices if we modified them
-        if self.size != 1.0:
-            shader_program.set_matrices(current_mv, mode.projection)
+        Computed from the level-0 N3F_V3F vertex arrays already in memory rather
+        than eyeballed extents that risk frustum-culling the visible teapot.
+        Returns None when tessellation is unavailable.
+        """
+        if not cls._ensure_tessellated(0):
+            return None
+        base_array, lid_array = cls._arrays[0]
+        chunks = []
+        from OpenGLContext.scenegraph.teapot_nurbs import FLOATS_PER_VERTEX
+        for arr in (base_array, lid_array):
+            if arr is None:
+                continue
+            # T2F_N3F_V3F -> position is the last 3 of each 8-float vertex.
+            v = np.asarray(arr, dtype='f').reshape(-1, FLOATS_PER_VERTEX)[:, 5:8]
+            if len(v):
+                chunks.append(v)
+        if not chunks:
+            return None
+        allv = np.concatenate(chunks, axis=0)
+        return allv.min(axis=0), allv.max(axis=0)
 
     def boundingVolume(self, mode):
         """Create a bounding-volume object for this node."""
@@ -198,15 +359,16 @@ class Teapot(nodetypes.Geometry, node.Node):
         current = boundingvolume.getCachedVolume(self)
         if current:
             return current
-        # The embedded mesh matches GLUT teapot dimensions (size=1.0):
-        # X: -0.98 to 0.98 (width ~1.96)
-        # Y: -0.77 to 0.77 (height ~1.54)
-        # Z: -1.575 to 1.575 (depth ~3.15)
-        # These are multiplied by self.size
-        return boundingvolume.cacheVolume(
-            self,
-            boundingvolume.AABoundingBox(
-                size=[self.size * 2.0, self.size * 1.55, self.size * 3.15],
-            ),
-            ((self, 'size'),),
-        )
+        aabb = self._mesh_aabb()
+        if aabb is not None:
+            lo, hi = aabb
+            box = boundingvolume.AABoundingBox(
+                size=[float((hi[i] - lo[i]) * self.size) for i in range(3)],
+                center=[float((hi[i] + lo[i]) * 0.5 * self.size) for i in range(3)],
+            )
+        else:
+            # Fallback when tessellation isn't available yet: eyeballed extents of
+            # the unit y-up teapot (spout+handle span ~x3.0, ~y1.6, ~z2.0), scaled.
+            box = boundingvolume.AABoundingBox(
+                size=[self.size * 3.0, self.size * 1.6, self.size * 2.0])
+        return boundingvolume.cacheVolume(self, box, ((self, 'size'),))

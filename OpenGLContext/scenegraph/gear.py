@@ -56,7 +56,7 @@ class Gear( nodetypes.Geometry, node.Node ):
         vertices, normals, count = shader_data
         return render_shader_arrays(
             mode, vertices, normals, None, count,
-            draw_mode=GL_TRIANGLES
+            draw_mode=GL_TRIANGLES, owner=self
         )
 
     def _compile_shader_geometry(self, mode):
