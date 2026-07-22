@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Tutorial: Add Physics to a Scene</title>
+  <link rel="stylesheet" type="text/css" href="../style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="../index.html">OpenGLContext</a></li>
+          <li><a href="../documentation.html">Docs</a></li>
+          <li><a href="../physics.html">Physics</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Tutorial: Add Physics to a Scene</h1>
+</header>
+
+<section>
+<p class="introduction">This tutorial builds a small physics scene &mdash; a walled
+room that objects fall into and stack up &mdash; using the same helper the demos
+use. By the end you will have an animated, interactive window with a live collision
+debug overlay. It mirrors <code>tests/physics_room_drop.py</code>; run that file to
+see the finished result.</p>
+</section>
+
+<section id="scene">
+  <h2>1. A world and a floor</h2>
+  <p>A <code>DemoScene</code> keeps a scenegraph and a physics world in lockstep.
+    Static bodies (<code>dynamic=False</code>) never move &mdash; they are the
+    world:</p>
+  <pre><code>from OpenGLContext.physics.demo import DemoScene
+from OpenGLContext.physics import debugdraw
+
+scene = DemoScene(debug_flags=debugdraw.PROXIES | debugdraw.CONTACTS)
+scene.add_box(size=(12,1,12), position=(0,-0.5,0), dynamic=False)   # floor
+for sx, sz in ((1,0),(-1,0),(0,1),(0,-1)):                          # four walls
+    if sx:
+        scene.add_box(size=(0.4,4,12), position=(sx*6,2,0), dynamic=False)
+    else:
+        scene.add_box(size=(12,4,0.4), position=(0,2,sz*6), dynamic=False)
+</code></pre>
+</section>
+
+<section id="bodies">
+  <h2>2. Dynamic bodies</h2>
+  <p>Dynamic boxes and spheres fall under gravity and collide. A material preset
+    (<code>wood</code>, <code>metal</code>, <code>rubber</code>, <code>ice</code>)
+    sets friction and restitution:</p>
+  <pre><code>for k in range(8):
+    if k % 2:
+        scene.add_box(size=(1,1,1), position=(0, 6+k, 0), material='wood')
+    else:
+        scene.add_sphere(radius=0.6, position=(0.2, 6+k, 0), material='rubber')
+</code></pre>
+</section>
+
+<section id="loop">
+  <h2>3. The frame loop</h2>
+  <p>Step the world from real elapsed time and let it write the poses back onto
+    the <code>Transform</code> nodes. Inside an OpenGLContext
+    <code>TestContext</code>:</p>
+  <pre><code>import time
+from OpenGLContext.physics.demo import disable_vsync
+
+class TestContext(BaseContext):
+    initialPosition = (0, 7, 18)
+    def OnInit(self):
+        disable_vsync()                 # uncap fps for a forced-redraw loop
+        self.scene = scene              # built as above
+        self.scene.advance(0.0)
+        self.sg = self.scene.scene_graph()
+        self._last = time.time()
+    def OnIdle(self, *args):
+        now = time.time()
+        self.scene.advance(min(now - self._last, 0.05))   # clamp the spiral of death
+        self._last = now
+        self.triggerRedraw(1)
+        return 1
+</code></pre>
+  <p><code>advance(dt)</code> runs the fixed-timestep accumulator internally, so
+    the simulation stays stable and deterministic regardless of frame rate.</p>
+</section>
+
+<section id="debug">
+  <h2>4. Reading the debug overlay</h2>
+  <p>With the debug flags set above you will see a green wireframe of each
+    collision proxy and short red stubs at contact points (the contact normals).
+    Add <code>debugdraw.VELOCITY | debugdraw.ACCELERATION | debugdraw.ANGULAR</code>
+    to draw motion vectors: cyan velocity, orange acceleration, and magenta
+    angular-velocity stubs at the box corners that make spin visible. Colour-code
+    sleeping bodies with <code>debugdraw.SLEEP</code>.</p>
+</section>
+
+<section id="next">
+  <h2>Next steps</h2>
+  <ul>
+    <li>Load a real physics asset: point the glTF loader at a Godot/Blender export
+      with <code>OMI_physics_*</code> extensions.</li>
+    <li>Cook a collider for an un-annotated mesh with
+      <code>cookery.cook_shape()</code> (see <code>physics_cook_view.py</code>).</li>
+    <li>Walk around with the character controller
+      (<code>physics_navigate.py</code>).</li>
+    <li>Read the <a href="../physics.html">Physics &amp; Collision</a> overview for
+      the full model.</li>
+  </ul>
+</section>
+
+</body></html>

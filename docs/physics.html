@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Physics &amp; Collision, Explained</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Physics &amp; Collision, Explained</h1>
+</header>
+
+<section>
+<p class="introduction">OpenGLContext ships a small, fast, game-style rigid-body
+physics engine that runs in real time <em>alongside</em> the scenegraph. It
+integrates gravity and drag, resolves collisions between primitives and meshes,
+supports triggers, gravity zones and joints, and drives a first-person character
+controller &mdash; all while the render tree, culling, shadows and picking stay
+untouched. The data model is <strong>not</strong> a private format: it is the
+<a href="https://github.com/omigroup/gltf-extensions">OMI glTF physics extension
+family</a>, so real Godot/Blender physics assets import with no translation layer
+and your scenes round-trip back out to glTF. The indented
+<span class="technical">technical notes</span> point at the code.</p>
+</section>
+
+<section id="model">
+  <h2>The data model is OMI glTF physics</h2>
+  <p>Every concept in the engine is an OMI concept. Rather than invent a
+    <code>RigidBody</code> node and map it onto glTF at the loader, the OMI schema
+    <em>is</em> the in-memory model &mdash; the loader, the nodes and the
+    simulation all speak the same structure.</p>
+  <table>
+    <tr><th>OMI extension</th><th>Provides</th><th>In code</th></tr>
+    <tr><td><code>OMI_physics_shape</code></td>
+        <td>box, sphere, capsule, cylinder, convex, trimesh</td>
+        <td><code>model.Shape</code></td></tr>
+    <tr><td><code>OMI_physics_body</code></td>
+        <td><code>motion</code> / <code>collider</code> / <code>trigger</code>,
+            materials, collision filters</td>
+        <td><code>model.Motion</code>, <code>Collider</code>, <code>Trigger</code>,
+            <code>Material</code>, <code>CollisionFilter</code></td></tr>
+    <tr><td><code>OMI_physics_gravity</code></td>
+        <td>global gravity <em>and</em> per-volume gravity zones</td>
+        <td><code>model.Gravity</code></td></tr>
+    <tr><td><code>OMI_physics_joint</code></td>
+        <td>limits + drives between bodies</td>
+        <td><code>model.Joint</code>, <code>joints.*</code></td></tr>
+  </table>
+  <p class="technical">The structures live in
+    <code>OpenGLContext/physics/model.py</code> with the OMI spec defaults. The
+    reader/writer is <code>omi_gltf.py</code>; <code>load_document()</code> parses
+    a glTF's extension blocks into these structures and <code>export_extensions()</code>
+    writes them back &mdash; a near-identity round-trip. A future
+    <code>KHR_physics_rigid_bodies</code> reader drops onto the <em>same</em>
+    structures.</p>
+  <p><strong>Object characteristics</strong> are just OMI motion fields: an
+    immobile Earth is <code>type:"static"</code>; weight is
+    <code>mass&nbsp;&times;&nbsp;|g|</code>; the centre of gravity is
+    <code>centerOfMass</code>.</p>
+</section>
+
+<section id="engine">
+  <h2>How the simulation runs</h2>
+  <p>The engine follows the standard real-time recipe (Catto/Box2D, Gaffer's
+    <em>Fix Your Timestep</em>):</p>
+  <ul>
+    <li><strong>Semi-implicit (symplectic) Euler</strong> integration &mdash;
+      energy-stable at trivial cost.</li>
+    <li><strong>Fixed timestep with an accumulator</strong> decoupled from render
+      fps; the render pose interpolates the last two states, so motion is smooth
+      and deterministic.</li>
+    <li><strong>Broad phase</strong>: a dynamic AABB tree with fattened boxes,
+      filtered by collision groups, culls the O(N&sup2;) pair explosion.</li>
+    <li><strong>Narrow phase</strong>: analytic tests for primitive pairs;
+      <strong>GJK + EPA</strong> for convex&harr;convex and convex&harr;triangle
+      (dynamic-vs-static mesh).</li>
+    <li><strong>Solver</strong>: sequential impulses (projected Gauss-Seidel) with
+      warm starting and split-impulse position correction; restitution and
+      Coulomb friction combine per the OMI material modes. Contacts partition into
+      <strong>islands</strong>; settled bodies <strong>sleep</strong>.</li>
+  </ul>
+  <p class="technical">State lives in a flat structure-of-arrays
+    (<code>world.py</code>) beside the tree, synced to <code>Transform</code> nodes
+    only at step boundaries. The per-stage kernels sit behind a
+    <code>backend.py</code> seam with two implementations: <code>NumpyBackend</code>
+    (vectorized CPU) and <code>GLComputeBackend</code> (<code>glcompute.py</code>),
+    which runs the per-body force and position integration as GL&nbsp;4.3 compute
+    shaders over the same columnar arrays &mdash; fused into one dispatch when a
+    step has no collision or joints, so the intermediate velocity never leaves the
+    GPU. It is ~2.4&times; faster than numpy at 10<sup>5</sup> movers.</p>
+  <p class="technical">The default <code>auto</code> policy runs on numpy and hands
+    off to the GPU only once the awake-body count crosses <code>gpu_threshold</code>
+    (10k) &mdash; below that, numpy wins because transfer overhead outweighs the
+    tiny per-body integrate &mdash; with hysteresis on the way back down and a numpy
+    fallback where GL&nbsp;4.3 compute is absent.
+    <code>OPENGLCONTEXT_PHYSICS_BACKEND=numpy|gpu|auto</code> overrides. The GPU
+    computes in float32, so trajectories match the CPU backend within tolerance
+    rather than bit-for-bit. The broad phase, narrow phase, and solver still run on
+    the CPU; a full GPU-resident loop (LBVH broad phase, graph-colored/XPBD solver)
+    is the next step. <code>tests/physics_stress.py</code> toggles backends live
+    with the <code>b</code> key.</p>
+</section>
+
+<section id="authoring">
+  <h2>Adding physics to a scene</h2>
+  <p>The demos build scenes with the <code>physics.demo.DemoScene</code> helper,
+    which mirrors a scenegraph <code>Transform</code> with a
+    <code>PhysicsBody</code> the world drives:</p>
+  <pre><code>from OpenGLContext.physics.demo import DemoScene
+scene = DemoScene()                       # default gravity 9.81 down
+scene.add_box(size=(20,1,20), position=(0,-0.5,0), dynamic=False)  # floor
+ball = scene.add_sphere(radius=0.5, position=(0,6,0), material='rubber')
+# each frame:
+scene.advance(dt)                         # steps the world, writes back Transforms
+</code></pre>
+  <p>Under the hood a <code>PhysicsBody</code> binds an OMI
+    <code>motion</code>/<code>collider</code> to a <code>Transform</code>; the
+    world owns the transform while the body is a dynamic awake mover and hands it
+    back when the body sleeps or is kinematic.</p>
+</section>
+
+<section id="cooking">
+  <h2>Cooking collision shapes from a mesh</h2>
+  <p>Most authored geometry has no hand-made collider, so
+    <code>cookery.cook_shape()</code> derives one from an arbitrary vertex array:
+    a best-fit <code>primitive</code>, a <code>convex</code> hull (default for
+    movers), a <code>decompose</code> compound of convex pieces for concave
+    movers, or a <code>trimesh</code> triangle-soup (default for static world
+    geometry). The <code>physics-cook</code> CLI bakes these into a glTF so import
+    is free.</p>
+  <p class="technical">Convex hulls and approximate convex decomposition are in
+    <code>hull.py</code> (no scipy dependency); results cache on the vertex array.
+    The <code>physics_cook_view.py</code> demo overlays the cooked proxy on the
+    render mesh so you can see the fit.</p>
+</section>
+
+<section id="character">
+  <h2>The character controller &amp; safe binding</h2>
+  <p>Navigation uses a kinematic capsule with move-and-slide: tiered speed
+    (walk/run/sprint/crouch), jump when grounded, fly/noclip, step-up over small
+    ledges, and sliding on steep slopes &mdash; configured by a non-OMI
+    <code>CharacterCapabilities</code> node. Crucially, on every viewpoint bind it
+    runs <strong>safe placement</strong>: depenetrate from any overlapping
+    geometry, then snap the base onto the floor, so a camera authored low or
+    inside a wall <em>never</em> leaves the user stuck in the ground. If no free
+    space is found it enters fly rather than wedging.</p>
+  <p class="technical"><code>character.py</code> holds the controller;
+    <code>move/physicsplatform.py</code>'s <code>PhysicsViewPlatform</code> drives
+    a context camera from it. See the <code>physics_navigate.py</code> demo.</p>
+</section>
+
+<section id="debug">
+  <h2>The debug overlay</h2>
+  <p>Physics bugs are visual, so a wireframe overlay draws, per a bit-flag mask:
+    collision <strong>proxies</strong>, broad-phase <strong>AABBs</strong>,
+    <strong>contact</strong> points and normals, <strong>joint</strong>
+    connections, and &mdash; to make motion legible &mdash; per-body
+    <strong>velocity</strong>, <strong>acceleration</strong>, and
+    <strong>angular-velocity</strong> vectors. The spin vectors are drawn at the
+    body's corners so opposite corners point opposite ways, making rotation
+    visible at a glance. Sleeping bodies are colour-coded.</p>
+  <p class="technical"><code>debugdraw.PhysicsDebugDraw</code> builds an
+    <code>IndexedLineSet</code> (per-vertex colour) each frame, so it renders in
+    both the legacy and core profiles. Flags:
+    <code>PROXIES | AABBS | CONTACTS | VELOCITY | ACCELERATION | ANGULAR | SLEEP |
+    JOINTS</code>.</p>
+</section>
+
+<section id="demos">
+  <h2>Demos</h2>
+  <p>Every feature ships a runnable demo in <code>tests/</code> that doubles as
+    its visual-regression test (auto-exit + screenshot capture):</p>
+  <ul>
+    <li><code>physics_room_drop.py</code> &mdash; objects fall into a room and
+      stack; the core engine + debug overlay.</li>
+    <li><code>physics_bounce.py</code> &mdash; a row of balls, restitution 0&hellip;1.</li>
+    <li><code>physics_friction.py</code> &mdash; boxes on ramps; the slide
+      threshold.</li>
+    <li><code>physics_gravity_zones.py</code> &mdash; a point-gravity planet.</li>
+    <li><code>physics_triggers.py</code> &mdash; sensor volumes and events.</li>
+    <li><code>physics_joints.py</code> &mdash; pendulum, chain and a motor.</li>
+    <li><code>physics_cook_view.py</code> &mdash; cook a collider and compare it to
+      the mesh.</li>
+    <li><code>physics_navigate.py</code> &mdash; first-person walk through walls,
+      a doorway, stairs and a ramp.</li>
+    <li><code>physics_stress.py</code> &mdash; scaling under load.</li>
+  </ul>
+  <p>The <a href="tutorials/physics_getting_started.html">Add physics to a
+    scene</a> tutorial walks through building the first of these from scratch.</p>
+</section>
+
+</body></html>
