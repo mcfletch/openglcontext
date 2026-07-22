@@ -7,13 +7,12 @@
 <body>
 <header>
       <nav>
-      <ul class="menu">
-        <li><a href="/index.html">PyOpenGL</a></li>
-        <li><a href="/context/index.html">OpenGLContext</a></li>
-        <li><a href="/context/documentation.html">Docs</a></li>
-        <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
-            <li><a href="https://launchpad.net/openglcontext">Project</a></li>
-      </ul>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
       </nav>
     <h1>OpenGLContext Structural Overview</h1>
 </header>
@@ -46,6 +45,12 @@ RenderMode</a> objects, which implement the various rendering mode
 algorithms common in OpenGL.&nbsp; Currently there are Timer, Opaque,
 Transparent, and Select modes available, and all default Contexts
 include all four.</p>
+
+<p>These RenderMode objects are the original design. Current rendering runs
+through the <strong>passes</strong> package described in <a href="#passes">Rendering
+Passes</a> below -- a single "flat" pass that observes the scenegraph and draws it
+in a fixed sequence -- which the default contexts use in place of the legacy
+per-mode traversal. See <a href="flat.html">Flat Rendering</a> for the overview.</p>
 
 <h3>OpenGL Core Profile Support</h3>
 
@@ -89,6 +94,60 @@ modules, including drawcube (a testing function), <a href="../pydoc/OpenGLContex
 vector utilities</a>, and <a href="../pydoc/OpenGLContext.triangleutilities.html">
 triangle utilities</a>.</p>
 </section>
+<section id="passes">
+<h2>Rendering Passes</h2>
+<p>The <strong>passes</strong> package holds the current rendering system. A
+single <code>FlatPass</code> observes the scenegraph and, each frame, draws it in a
+fixed sequence -- background, opaque, transmissive, transparent, selection and
+overlay -- rather than traversing it once per rendering mode. The base class
+(<code>passes/_flat.py</code>) carries two code paths, chosen by one flag:</p>
+<ul>
+  <li><code>flatcompat.py</code> -- the compatibility-profile pass, using the
+    fixed-function pipeline (<code>glLight*</code>, <code>glMaterial*</code>).</li>
+  <li><code>flatcore.py</code> -- the core-profile pass, using GLSL shaders. See
+    <a href="renderpasses.html">Core-Profile Rendering</a>.</li>
+</ul>
+<p>Shader programs are managed by <code>VRML97ShaderProgram</code>
+(<code>passes/shaderpass.py</code>), which compiles the lit, unlit, vertex-colour,
+point, line and shadow-depth programs and assembles them from the GLSL sources in
+the <code>shaders/</code> directory (the <code>.vert</code>/<code>.frag</code>
+files plus shared <code>_*.glsl</code> include files, spliced together at compile
+time). Built on top of this are:</p>
+<ul>
+  <li><code>pbrpass.py</code> -- the physically based (metallic/roughness)
+    renderer, a Cook-Torrance uber-shader. See
+    <a href="pbr.html">Physically Based Rendering</a> and the
+    <a href="ubershader.html">shader walkthrough</a>.</li>
+  <li><code>ibl.py</code> -- image-based (environment) lighting: the precomputed
+    irradiance/prefilter/BRDF-LUT probe.</li>
+  <li><code>shadowmap.py</code>, <code>shadowmixin.py</code>,
+    <code>shadowcaps.py</code>, <code>shadowmath.py</code> -- the shared shadow
+    subsystem used by both the VRML97 and PBR lit shaders. See
+    <a href="shadows.html">Shadows</a>.</li>
+  <li><code>transmission.py</code> -- the backdrop capture for glass
+    (<code>KHR_materials_transmission</code>).</li>
+  <li><code>selection.py</code> -- colour/object-id picking.</li>
+  <li><code>renderpass.py</code>, <code>rendervisitor.py</code> -- the original
+    visitor-based multi-pass system, kept for the legacy path (see
+    <a href="renderprocess.html">Legacy Rendering</a>).</li>
+</ul>
+</section>
+<section>
+<h2>Loaders and Command-Line Tools</h2>
+<p>The <strong>loaders</strong> package reads external model formats into the
+scenegraph:</p>
+<ul>
+  <li>VRML97 / VRML files, parsed with SimpleParse (see
+    <a href="vrml97.html">Using VRML97</a>).</li>
+  <li>glTF&nbsp;2.0 and binary GLB, via pygltflib, mapped onto PBR materials (see
+    <a href="gltf.html">Loading glTF</a>).</li>
+  <li>Wavefront OBJ.</li>
+</ul>
+<p>The <strong>bin</strong> package provides console commands, registered as
+scripts when the package is installed: <code>oglc-gltf</code> (glTF viewer),
+<code>oglc-vrml</code> (VRML97 viewer), <code>oglc-test</code>,
+<code>oglc-lorentz</code>, <code>oglc-profile</code> and <code>oglc-visual</code>.</p>
+</section>
 <section>
 <h2>Scenegraph Rendering</h2>
 
@@ -109,6 +168,13 @@ with the modules of those names simply instantiating ArrayGeometry
 instances with the appropriate parameters.&nbsp; The text package
 provides basic text rendering in 3D or 2D forms using TTFQuery or one
 of the GUI library engines.</p>
+<p>Alongside the VRML97-style nodes, the scenegraph includes
+<code>PBRMaterial</code> and a <code>PBRMesh</code> geometry
+(<code>scenegraph/pbrmaterial.py</code>), the metallic/roughness material and mesh
+produced by the <a href="gltf.html">glTF loader</a> and rendered by the
+<a href="pbr.html">PBR pass</a>. Legacy <code>Material</code> nodes are converted
+to the same model when the PBR renderer is active, so both kinds of content share
+one pipeline.</p>
 </section>
 <section>
 <h2>Events and Selection</h2>
@@ -122,10 +188,10 @@ classes (which are mixin classes) are then included in the GUI library's
 Context class to provide the event handling interfaces.</p>
 </section>
     <footer>
-    <p class="footer">
-      A SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
-          style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge"
-          title="" align="middle"></a></p>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
     </footer>
 
 </body>

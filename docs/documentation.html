@@ -9,11 +9,10 @@
     <header>
       <nav>
         <ul class="menu">
-          <li><a href="/index.html">PyOpenGL</a></li>
-          <li><a href="/context/index.html">OpenGLContext</a></li>
-          <li><a href="/context/documentation.html">Docs</a></li>
-          <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
-          <li><a href="https://launchpad.net/openglcontext">Project</a></li>
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
         </ul>
       </nav>
       <h1>OpenGLContext Documentation</h1>
@@ -21,18 +20,50 @@
     <section>
       <p class="introduction">This document collects <a href="index.html">OpenGLContext</a>-specific
 documentation.
-        &nbsp;The main <a href="http://pyopengl.sourceforge.net/documentation/">PyOpenGL
+        &nbsp;The main <a href="https://github.com/mcfletch/pyopengl">PyOpenGL
 documentation
           collection</a> includes links to both PyOpenGL and OpenGL
         documentation which will be of use to the OpenGLContext programmer as
         well.</p>
     </section>
+    <section id="installation">
+      <h2>Installation</h2>
+      <p>OpenGLContext needs Python&nbsp;3.10 or newer. Install it and its core
+        dependencies (NumPy, PyOpenGL, PyVRML97, TTFQuery, SimpleParse and
+        PyDispatcher) from PyPI:</p>
+      <pre>pip install OpenGLContext</pre>
+      <p>Optional extras pull in the pieces you need for particular features:</p>
+      <ul>
+        <li><code>OpenGLContext[glfw]</code> -- the GLFW backend (recommended for
+          core-profile and PBR rendering)</li>
+        <li><code>OpenGLContext[gltf]</code> -- the
+          <a href="gltf.html">glTF loader and <code>oglc-gltf</code> viewer</a>
+          (pulls in pygltflib)</li>
+        <li><code>OpenGLContext[pygame]</code>, <code>OpenGLContext[wx]</code> --
+          the PyGame and wxPython backends</li>
+        <li><code>OpenGLContext[accelerate]</code> -- optional C acceleration</li>
+        <li><code>OpenGLContext[all]</code> -- every backend plus glTF and
+          acceleration</li>
+      </ul>
+      <h3>Using <code>uv</code></h3>
+      <p><a href="https://docs.astral.sh/uv/">uv</a> resolves and installs the
+        whole dependency set (including SimpleParse, PyVRML97 and TTFQuery) from
+        PyPI. In a checkout:</p>
+      <pre>uv venv
+uv pip install -e ".[glfw,gltf]"</pre>
+      <p>or, to run a script without managing a virtual environment yourself:</p>
+      <pre>uv run --with "OpenGLContext[glfw,gltf]" oglc-gltf model.glb</pre>
+      <p class="technical">The console commands installed with the package are
+        <code>oglc-gltf</code> (glTF viewer), <code>oglc-vrml</code> (VRML97
+        viewer), <code>oglc-test</code>, <code>oglc-lorentz</code>,
+        <code>oglc-profile</code> and <code>oglc-visual</code>.</p>
+    </section>
     <section>
       <h2>OpenGLContext-Specific Documentation</h2>
-      <p>There is little OpenGLContext-specific documentation at the moment.
-        The most useful items are probably the rendering process
-        description, and the pydoc-generated reference. The NeHe tutorial
-        translations should be useful for beginning OpenGL programmers.</p>
+      <p>Start with the rendering-process documents if you want to understand
+        how a frame is drawn, or the VRML97 and glTF documents if you want to
+        load and display content. The NeHe tutorial translations are a good
+        starting point for beginning OpenGL programmers.</p>
       <ul>
         <li><a href="tutorials/index.html">Tutorials</a> --
           Documentation for users unfamiliar with OpenGL</li>
@@ -43,12 +74,41 @@ documentation
           <li>Special Effects<br>
           </li>
         </ul>
-        <li><a href="renderflat.html"> The Rendering Process</a> -- The
-          rendering algorithm(s), including the scenegraph traversal
-          mechanism(s),
-          used by OpenGLContext when rendering a scene</li>
-        <li><a href="vrml97.html">Using VRML97</a> -- Tutorial on using the
-          (partial) VRML97 loader and the nodes it creates</li>
+        <li>Rendering</li>
+        <ul>
+          <li><a href="flat.html">Flat Rendering</a> -- The current
+            client-side "flat" rendering pass used for both profiles</li>
+          <li><a href="renderpasses.html">Core-Profile Rendering</a> -- The
+            shader-based core-profile pass, its shader programs and passes</li>
+          <li><a href="pbr.html">Physically Based Rendering</a> -- The PBR
+            metallic/roughness pass, materials and image-based lighting</li>
+          <li><a href="ubershader.html">The PBR Uber-Shader</a> -- Line-by-line
+            walkthrough of the fragment shader: textures, uniforms and lobes</li>
+          <li><a href="shadows.html">Shadows</a> -- Dynamic shadow mapping shared
+            by the core lighting and PBR passes</li>
+          <li><a href="instancing.html">Instanced Geometry</a> -- Collapsing many
+            copies of one shape into a single draw call: how grouping, per-instance
+            data, picking, caching and cluster culling work</li>
+          <li><a href="physics.html">Physics &amp; Collision</a> -- Real-time
+            rigid-body physics built on the OMI glTF model: collision, gravity
+            zones, triggers, joints, shape cooking, a character controller with
+            safe viewpoint binding, and a motion debug overlay</li>
+          <li><a href="terrain.html">Terrain &amp; Landscapes</a> -- Streamed OGC
+            3D&nbsp;Tiles terrain with screen-space-error LOD, frustum-culled paging,
+            per-tile walkable colliders, procedural &amp; DEM heightmaps, caves/overhangs,
+            and distance-LOD vegetation -- plus the <code>oglc-terrain</code> viewer</li>
+          <li><a href="renderprocess.html">Legacy Rendering</a> -- The original
+            visitor/RenderPass traversal (historical)</li>
+        </ul>
+        <li>Content</li>
+        <ul>
+          <li><a href="vrml97.html">Using VRML97</a> -- Using the (partial)
+            VRML97 loader and the nodes it creates</li>
+          <li><a href="gltf.html">Loading glTF</a> -- The glTF&nbsp;2.0 loader
+            and the <code>oglc-gltf</code> viewer command</li>
+          <li><a href="text.html">Rendering Text</a> -- The Text and FontStyle
+            nodes and the font providers</li>
+        </ul>
         <li><a href="eventmodel.html">Event Model</a> -- The event model which
           manages changes to the VRML97 scenegraph</li>
         <li>PyDoc References (Automatically generated documentation)</li>
@@ -67,16 +127,16 @@ documentation
         <li><a href="text.html"> Rendering Text</a> -- Overview of the Text and
           FontStyle scenegraph nodes, general notes regarding support of text in
           OpenGLContext</li>
-        <li><a href="numeric_arrays.html">Using Numeric Python</a> -- Overview
-          of using Numeric Python within OpenGLContext (and PyOpenGL), with
-          emphasis on the basics of Numeric Python, rather than PyOpenGL
-          specifics.</li>
+        <li><a href="numeric_arrays.html">Using NumPy Arrays</a> -- Overview
+          of using array math within OpenGLContext (and PyOpenGL). The examples
+          predate NumPy and use the old Numeric API; the concepts carry over,
+          but use <code>numpy</code> in new code.</li>
       </ul>
     </section>
     <section>
       <h2>Sample Code (Where to Look)<br>
       </h2>
-      <p>The râison d'ętre (apologies for my rusty French) for <a href="http://pyopengl.sourceforge.net/context/">OpenGLContext</a>
+      <p>The râison d'ętre (apologies for my rusty French) for <a href="https://github.com/mcfletch/openglcontext">OpenGLContext</a>
         is to
         provide a platform for testing and sample code, so you'll find a lot of
         it lurking about in the project. In particular, in the source-code
@@ -86,17 +146,17 @@ documentation
       <ul>
         <li>Shader-Based Drawing</li>
         <ul>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/tests/shader_instanced.py">Instanced
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/tests/shader_instanced.py">Instanced
               Rendering Sample<br>
             </a></li>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/shaders.py">Shader-based
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/shaders.py">Shader-based
               Geometry Scenegraph Nodes</a></li>
         </ul>
         <li>GLU polygon tessellation</li>
         <ul>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/polygontessellator.py">Scenegraph
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/polygontessellator.py">Scenegraph
               Node</a></li>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/tests/glu_tess.py">Usage
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/tests/glu_tess.py">Usage
               Sample</a></li>
         </ul>
         <li>Polygon-sorting by screen depth</li>
@@ -104,70 +164,74 @@ documentation
           <li>passes sub-package, flat.py and passes.py<br>
           </li>
         </ul>
-        <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/tests/nehe6_multi.py">Multi-texturing</a></li>
-        <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/tests/saveimage.py">Saving
+        <li><a href="https://github.com/mcfletch/openglcontext/blob/main/tests/nehe6_multi.py">Multi-texturing</a></li>
+        <li><a href="https://github.com/mcfletch/openglcontext/blob/main/tests/saveimage.py">Saving
             buffers to disk</a> (screen capture)</li>
-        <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/tests/selectrendermode.py">Select
+        <li><a href="https://github.com/mcfletch/openglcontext/blob/main/tests/selectrendermode.py">Select
             render mode</a> (mouse interactions)</li>
-        <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/tests/particles_simple.py">Particle-systems</a></li>
-        <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/displaylist.py">Display
+        <li><a href="https://github.com/mcfletch/openglcontext/blob/main/tests/particles_simple.py">Particle-systems</a></li>
+        <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/displaylist.py">Display
             Lists</a></li>
         <li>Geometry Drawing</li>
         <ul>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/box.py">Box</a></li>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/quadrics.py">Sphere,
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/box.py">Box</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/quadrics.py">Sphere,
               Cone and Cylinder</a></li>
           <li>Non-Uniform Rational B-Splines (NURBS), including surfaces and
             curves, with trimming</li>
           <ul>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/nurbs.py">Scenegraph
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/nurbs.py">Scenegraph
                 Node</a></li>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/tests/molehill.py">Usage
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/tests/molehill.py">Usage
                 Sample</a></li>
           </ul>
           <li>Array Based Geometry</li>
           <ul>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/arraygeometry.py">Basic</a></li>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/indexedfaceset.py">IndexedFaceSet</a></li>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/indexedpolygons.py">IndexPolygons</a></li>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/indexedlineset.py">IndexLineSet</a></li>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/pointset.py">Pointset</a>
-              including sprite support<a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/pointset.py"><br>
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/arraygeometry.py">Basic</a></li>
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/indexedfaceset.py">IndexedFaceSet</a></li>
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/indexedpolygons.py">IndexPolygons</a></li>
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/indexedlineset.py">IndexLineSet</a></li>
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/pointset.py">Pointset</a>
+              including sprite support<a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/pointset.py"><br>
               </a></li>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/teapot.py">GLUT
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/teapot.py">GLUT
                 Teapot</a></li>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/gear.py">Gear</a></li>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/extrusions.py">Extrusions</a>
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/gear.py">Gear</a></li>
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/extrusions.py">Extrusions</a>
               GLE-based tubing and extrusion</li>
           </ul>
           <li>Text</li>
           <ul>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/text/toolsfont.py">Solid/3D
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/text/toolsfont.py">Solid/3D
                 Font</a> Extraction with TTFQuery</li>
-            <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/text/pygamefont.py">Pygame
+            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/text/pygamefont.py">Pygame
                 Bitmap Font</a></li>
           </ul>
         </ul>
         <li>Scene Setup</li>
         <ul>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/spherebackground.py">SphereBackground</a>
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/spherebackground.py">SphereBackground</a>
             spherical gradiant backgrounds<br>
           </li>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/cubebackground.py">CubeBackground</a>
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/cubebackground.py">CubeBackground</a>
             skybox implementation</li>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/light.py">Lights</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/light.py">Lights</a></li>
         </ul>
         <li>Material Properties</li>
         <ul>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/material.py">Material</a></li>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/scenegraph/appearance.py">Appearance</a></li>
-          <li><a href="http://bazaar.launchpad.net/%7Emcfletch/openglcontext/trunk/view/head:/OpenGLContext/texture.py">Textures</a>
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/material.py">Material</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/appearance.py">Appearance</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/texture.py">Textures</a>
             with PIL/Pillow<br>
           </li>
         </ul>
       </ul>
     </section>
-    <footer><br>
+    <footer>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
     </footer>
   </body>
 </html>

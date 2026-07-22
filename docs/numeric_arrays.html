@@ -7,26 +7,31 @@
 <body>
 <header>
       <nav>
-      <ul class="menu">
-        <li><a href="/index.html">PyOpenGL</a></li>
-        <li><a href="/context/index.html">OpenGLContext</a></li>
-        <li><a href="/context/documentation.html">Docs</a></li>
-        <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
-            <li><a href="https://launchpad.net/openglcontext">Project</a></li>
-      </ul>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
       </nav>
     <h1>Using Numpy with OpenGLContext</h1>
 </header>
 <section>
       <p class="introduction">In this document you will learn to</p>
       <ul>
-        <li> create Numeric Python arrays </li>
-        <li> perform common manipulations of Numeric Python arrays </li>
-        <li> draw geometry using data from a Numeric Python array </li>
+        <li> create NumPy arrays </li>
+        <li> perform common manipulations of NumPy arrays </li>
+        <li> draw geometry using data from a NumPy array </li>
       </ul>
-      <p>Numeric Python is used throughout the OpenGLContext project,
-and you will likely want to make use of the package in your  own
-code.&nbsp; This document focuses primarily on Numeric Python
+      <p class="technical">A note on terminology: this document was written for
+"Numeric Python", the array package that preceded
+<a href="https://numpy.org/">NumPy</a>. OpenGLContext and PyOpenGL use NumPy
+today. The concepts and most of the array operations shown here carry over
+directly, but the import is <code>import numpy</code> and new code should use
+NumPy rather than the old <code>Numeric</code> module.</p>
+      <p>Array math is used throughout the OpenGLContext project,
+and you will likely want to make use of it in your  own
+code.&nbsp; This document focuses primarily on the array package
 itself, rather than on PyOpenGL.&nbsp; Mastering the features shown
 here will be useful when doing non-trivial programming in PyOpenGL,
 but it's not necessary to know this material before you start
@@ -343,12 +348,10 @@ or a list of indices into the arrays which are to be drawn).</p>
 </section>
 <section>
       <h2>Further Reading</h2>
-      <p>For information on using Numeric for image manipulation, see <a
- href="images_and_textures.html">Images         and Textures</a></p>
-      <p>For further information on Numeric, see the <a
- href="http://www.pfdubois.com/numpy/html2/numpy.html">Numeric
-Python Handbook</a> and/or the <a href="http://www.pfdubois.com/numpy/">Numeric
-Python Homepage</a></p>
+      <p>For the current array package, see the
+        <a href="https://numpy.org/doc/stable/">NumPy documentation</a> and the
+        <a href="https://numpy.org/doc/stable/user/absolute_beginners.html">NumPy
+        beginner's guide</a>.</p>
       <p>OpenGLContext.scenegraph.arraygeometry module for a simple
 implementation of array-based geometry rendering.</p>
       <p>OpenGLContext.vectorutilities, OpenGLContext.triangleutilities
@@ -360,10 +363,10 @@ glarrayelement, glinterleavedarrays. </p>
 </section>
 
     <footer>
-    <p class="footer">
-      A SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
-          style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge"
-          title="" align="middle"></a></p>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
     </footer>
 
 </body>

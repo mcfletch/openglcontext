@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta content="text/html; charset=windows-1252" http-equiv="content-type">
+    <meta charset="utf-8">
     <title>OpenGLContext</title>
     <link rel="stylesheet" type="text/css" href="style/modern.css">
   </head>
@@ -9,11 +9,10 @@
     <header>
       <nav>
         <ul class="menu">
-          <li><a href="/index.html">PyOpenGL</a></li>
-          <li><a href="/context/index.html">OpenGLContext</a></li>
-          <li><a href="/context/documentation.html">Docs</a></li>
-          <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
-          <li><a href="https://launchpad.net/openglcontext">Project</a></li>
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
         </ul>
       </nav>
       <h1>OpenGLContext <span class="subheading">A Learning Environment for
@@ -22,22 +21,23 @@
     <section id="introduction">
       <h2>Introduction</h2>
       <p class="introduction">OpenGLContext is a testing and learning
-        environment for <a href="http://pyopengl.sourceforge.net/">PyOpenGL</a>.
+        environment for <a href="https://github.com/mcfletch/pyopengl">PyOpenGL</a>.
         It provides a generic scenegraph engine (based on VRML97's scenegraph model) as
         well as basic context creation and interaction support in multiple GUI
-        environments.</p>
+        environments. Recent work adds a modern OpenGL 3.3 core-profile renderer,
+        a physically based rendering (PBR) pass, and a glTF&nbsp;2.0 loader and
+        viewer.</p>
       <h2>Quick Links</h2>
       <ul>
         <li><a href="documentation.html">Documentation</a></li>
-        <li><a href="../installation.html#context">Installation</a></li>
-         <li>Projects</li>
+        <li><a href="documentation.html#installation">Installation</a></li>
+         <li>Related projects on GitHub</li>
         <ul>
-          <li><a href="https://launchpad.net/openglcontext">OpenGLContext</a></li>
-          <li><a href="https://launchpad.net/openglcontext-qt">OpenGLContext_qt</a></li>
-          <li><a href="https://launchpad.net/pyvrml97">PyVRML97</a></li>
-          <li><a href="https://launchpad.net/ttfquery">TTFQuery</a></li>
-          <li><a href="https://launchpad.net/twitch">Twitch BSP File
-              Loader</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">OpenGLContext</a></li>
+          <li><a href="https://github.com/mcfletch/pyvrml97">PyVRML97</a></li>
+          <li><a href="https://github.com/mcfletch/ttfquery">TTFQuery</a></li>
+          <li><a href="https://github.com/mcfletch/simpleparse">SimpleParse</a></li>
+          <li><a href="https://github.com/mcfletch/pydispatcher">PyDispatcher</a></li>
         </ul>
       </ul>
       <div class="clear-both"><br /></div>
@@ -48,8 +48,9 @@
         <li>Works on Multiple GUI Environments with Keyboard, Mouse and GUI
           events</li>
         <ul>
-          <li>Pygame</li>
+          <li>GLFW (recommended for core-profile / PBR rendering)</li>
           <li>GLUT</li>
+          <li>Pygame</li>
           <li>wxPython</li>
           <li>Qt (using the <a href="../pydoc/OpenGLContext_qt.html">OpenGLContext_qt</a>
             project)</li>
@@ -69,29 +70,37 @@
           <li>Extruded Shapes (with GLE)</li>
           <li>Spheres, Cylinders, Cones</li>
         </ul>
-        <li>Textures (with PIL/Pillow), Materials</li>
-        <li>Shader Scenegraph Nodes</li>
+        <li>Textures (with Pillow), Materials, and
+          <a href="pbr.html">physically based (PBR) materials</a></li>
+        <li>Rendering</li>
+        <ul>
+          <li>Legacy fixed-function pipeline (compatibility profile)</li>
+          <li><a href="flat.html">Modern shader pipeline</a>
+            (OpenGL&nbsp;3.3 core profile)</li>
+          <li>Image-based lighting and dynamic shadows</li>
+          <li>Shader scenegraph nodes</li>
+        </ul>
         <li>Optimizations</li>
         <ul>
-          <li>Caching Infrastructure</li>
+          <li>Caching infrastructure</li>
           <li>Frustum culling</li>
+          <li>CPU node-path matrix calculation (forward/backward transforms)</li>
         </ul>
-        <li>Node-path Calculations</li>
+        <li>Loaders</li>
         <ul>
-          <li>CPU-based calculations for forward/backward transformation
-            matrices</li>
+          <li><a href="gltf.html">glTF&nbsp;2.0 / GLB loader and viewer</a></li>
+          <li>VRML97 loader (SimpleParse is a required dependency)</li>
+          <li>Wavefront OBJ loader</li>
+          <li>BSP (Quake&nbsp;III file loader/viewer, with the Twitch project)</li>
         </ul>
-        <li>OBJ Loader</li>
-        <li>VRML97 Loader (with SimpleParse installed)</li>
-        <li>BSP (Quake(TM) 3 File Loader/Viewer, with the Twitch project
-          installed)</li>
       </ul>
       See the <a href="documentation.html">documentation</a> page for more
       details. </section>
     <footer>
-      <p class="footer"> A SourceForge Open-Source project: <a href="http://sourceforge.net"><img
-            src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1" style="border: 0px solid ; width: 88px; height: 31px;"
-            alt="SourceForge" title="" align="middle"></a></p>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
     </footer>
   </body>
 </html>

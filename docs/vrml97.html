@@ -7,13 +7,12 @@
 <body>
 <header>
       <nav>
-      <ul class="menu">
-        <li><a href="/index.html">PyOpenGL</a></li>
-        <li><a href="/context/index.html">OpenGLContext</a></li>
-        <li><a href="/context/documentation.html">Docs</a></li>
-        <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
-            <li><a href="https://launchpad.net/openglcontext">Project</a></li>
-      </ul>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
       </nav>
     <h1>Using VRML97 with OpenGLContext</h1>
 </header>
@@ -143,6 +142,14 @@ lists above.<br>
 
 </p>
 
+<p class="technical">VRML97 scenes render through the same rendering passes as
+the rest of OpenGLContext: the legacy fixed-function pipeline in the
+compatibility profile, and the GLSL VRML97 lighting shaders in the
+<a href="renderpasses.html">core profile</a>. Under the
+<a href="pbr.html">PBR renderer</a>, VRML97 <code>Material</code> nodes are
+up-converted to metallic/roughness so a VRML97 scene can be lit by the same
+physically based pipeline used for glTF content.</p>
+
 </section>
 <section>
 <h2>Loading VRML97 Files</h2>
@@ -165,14 +172,16 @@ converted to a scenegraph instance.<br>
 
 </p>
 
-<p class="technical">The VRML97 parser is based on SimpleParse 2.0.0,
-and uses the "cut" production to raise SyntaxError's when a file isn't
-properly formed. &nbsp;You can catch those, as well as IOErrors around
-the call to "load". &nbsp;Note, however, that for certain resources
-(image textures at the moment), the actual loading of the textures is
-done in separate worker threads, which will print messages if errors
-are
-encountered during loading.</p>
+<p class="technical">The VRML97 parser is built on
+<a href="https://github.com/mcfletch/simpleparse">SimpleParse</a>, which is now a
+required dependency of OpenGLContext and is installed automatically with it (it
+also underpins <a href="https://github.com/mcfletch/pyvrml97">PyVRML97</a>). The
+grammar uses the "cut" production to raise a <code>SyntaxError</code> when a file
+isn't properly formed. &nbsp;You can catch those, as well as
+<code>IOError</code>s, around the call to "load". &nbsp;Note, however, that for
+certain resources (image textures at the moment), the actual loading of the
+textures is done in separate worker threads, which will print messages if errors
+are encountered during loading.</p>
 
 <p>You can register a new prototype for use by the VRML97 loader by
 calling the standardPrototype function in the loader module with your
@@ -212,7 +221,7 @@ field "DEF" or "root" which shadows those convenience properties.
 
 <p>Sample of interacting with a VRML node...</p>
 
-<pre>from OpenGLContext.scenegraph import basenodes<br>transform = basenodes.Transform (<br>	translation = [0, 1,0],<br>	rotation = [0, 1,0,3.14159],<br>	children = [<br>		basenodes.Group ()<br>	],<br>)<br>print "Transform Translation", transform.translation<br>transform.translation = [2,3,4]<br>print "After Alteration", transform.translation<br>for child in transform.children:<br>	print child<br></pre>
+<pre>from OpenGLContext.scenegraph import basenodes<br>transform = basenodes.Transform (<br>	translation = [0, 1,0],<br>	rotation = [0, 1,0,3.14159],<br>	children = [<br>		basenodes.Group ()<br>	],<br>)<br>print("Transform Translation", transform.translation)<br>transform.translation = [2,3,4]<br>print("After Alteration", transform.translation)<br>for child in transform.children:<br>	print(child)<br></pre>
 
 <p>Field-type equivalents. &nbsp;Note that there is coercian support...<br>
 
@@ -248,7 +257,7 @@ field "DEF" or "root" which shadows those convenience properties.
 
       </td>
 
-      <td style="vertical-align: top;">Numeric-Python int array</td>
+      <td style="vertical-align: top;">NumPy int array</td>
 
     </tr>
 
@@ -262,7 +271,7 @@ field "DEF" or "root" which shadows those convenience properties.
 
       </td>
 
-      <td style="vertical-align: top;">Numeric-Python double array</td>
+      <td style="vertical-align: top;">NumPy double array</td>
 
     </tr>
 
@@ -291,7 +300,7 @@ unicode)<br>
 
       </td>
 
-      <td style="vertical-align: top;">Numeric-Python double array</td>
+      <td style="vertical-align: top;">NumPy double array</td>
 
     </tr>
 
@@ -317,10 +326,10 @@ unicode)<br>
 
       </td>
 
-      <td style="vertical-align: top;">2-item Numeric-Python double
+      <td style="vertical-align: top;">2-item NumPy double
 array</td>
 
-      <td style="vertical-align: top;">x*2 Numeric-Python double array</td>
+      <td style="vertical-align: top;">x*2 NumPy double array</td>
 
     </tr>
 
@@ -330,12 +339,12 @@ array</td>
 
       </td>
 
-      <td style="vertical-align: top;">3-item Numeric-Python double
+      <td style="vertical-align: top;">3-item NumPy double
 array<br>
 
       </td>
 
-      <td style="vertical-align: top;">x*3 Numeric-Python double array</td>
+      <td style="vertical-align: top;">x*3 NumPy double array</td>
 
     </tr>
 
@@ -345,12 +354,12 @@ array<br>
 
       </td>
 
-      <td style="vertical-align: top;">4-item Numeric-Python double
+      <td style="vertical-align: top;">4-item NumPy double
 array<br>
 
       </td>
 
-      <td style="vertical-align: top;">x*4 Numeric-Python double array</td>
+      <td style="vertical-align: top;">x*4 NumPy double array</td>
 
     </tr>
 
@@ -360,7 +369,7 @@ array<br>
 
       </td>
 
-      <td style="vertical-align: top;">Numeric-Python int array</td>
+      <td style="vertical-align: top;">NumPy int array</td>
 
       <td style="vertical-align: top;"><br>
 
@@ -477,10 +486,10 @@ field.&nbsp; The ROUTE machinery watches for the
 
 </section>
     <footer>
-    <p class="footer">
-      A SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
-          style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge"
-          title="" align="middle"></a></p>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
     </footer>
 
 </body></html>

@@ -1,0 +1,45 @@
+name: Deploy docs to GitHub Pages
+
+# Publishes the docs/ directory to GitHub Pages.
+#
+# The two GENERATED parts of the site -- the code-walkthrough tutorials extracted
+# from tests/*.py, and the rendered screenshots in docs/images/ -- are produced
+# by docs/build.sh and committed to the repository. That extraction needs the
+# sibling 'directdocs' tool and a GL display, neither of which is available on a
+# stock GitHub Actions runner, so it is run locally BEFORE pushing. This workflow
+# only publishes the committed result.
+#
+# To refresh the generated content: run `bash docs/build.sh`, then commit and push.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; let a newer push supersede an in-progress run.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4

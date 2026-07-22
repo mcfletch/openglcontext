@@ -7,22 +7,27 @@
 <body>
 <header>
       <nav>
-      <ul class="menu">
-        <li><a href="/index.html">PyOpenGL</a></li>
-        <li><a href="/context/index.html">OpenGLContext</a></li>
-        <li><a href="/context/documentation.html">Docs</a></li>
-        <li><a href="/documentation/installation.html#openglcontext">Install</a></li>
-            <li><a href="https://launchpad.net/openglcontext">Project</a></li>
-      </ul>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
       </nav>
     <h1>OpenGLContext Flat Rendering</h1>
 </header>
 <section>
-<p class="introduction">This document describes OpenGLContext's new
+<p class="introduction">This document describes OpenGLContext's
 "flat" rendering process. &nbsp;This process uses client-side (not
 GL-side) calculations to produce composed transformation matrices which
 are directly loaded before rendering geometry. &nbsp;The rendering
 process is considerably less involved than the <a href="renderprocess.html">original set</a> of separate "RenderPass" objects which would traverse the scenegraph for each pass.</p>
+<p class="technical">The flat pass carries two implementations: a legacy
+fixed-function path (the compatibility profile) and a shader path (the core
+profile). For how the shader path works -- its passes, shader programs and the
+VRML97 lighting shaders -- read <a href="renderpasses.html">Core-Profile
+Rendering</a>; for the physically based renderer built on it, read
+<a href="pbr.html">Physically Based Rendering</a>.</p>
 </section>
 <section>
 <h2>Observables and Tree Updates</h2>
@@ -181,10 +186,10 @@ VisitingRenderPass.</p>
 </section>
 
     <footer>
-    <p class="footer">
-      A SourceForge Open-Source project: <a href="http://sourceforge.net"><img src="http://sourceforge.net/sflogo.php?group_id=5988&amp;type=1"
-          style="border: 0px solid ; width: 88px; height: 31px;" alt="SourceForge"
-          title="" align="middle"></a></p>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
     </footer>
 
 </body></html>

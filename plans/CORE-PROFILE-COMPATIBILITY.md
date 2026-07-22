@@ -1,5 +1,16 @@
 # Core Profile Compatibility for flatcore.py
 
+**Status: Complete** — delivered largely under [SHADER-BASED-VRML97.md](SHADER-BASED-VRML97.md). `flatcore.py` and the geometry nodes it renders now run under an OpenGL 3.2+ core profile. What actually landed vs. this plan:
+
+- **Geometry/background/text nodes have shader paths** gated on `mode.shader_mode`: box, quadrics, indexedlineset, pointset, gear, arraygeometry (IndexedFaceSet compiles to ArrayGeometry, so it renders via VBOs), cube/sphere backgrounds, and the text nodes (`shaderfont`/`shadertext`).
+- **flatcore.py / _flat.py push matrices as shader uniforms** (`shader.set_matrices`). The remaining fixed-function `glMatrixMode`/`glLoadMatrixf`/`GL_LIGHTING`/`glMaterial`/`glColor` calls all live behind `if self.use_shaders: <shader> else: <legacy>` and never execute under a core profile.
+- **Lighting/material were not rewritten** in `light.py`/`material.py`/`appearance.py` (as the table below proposed). Instead the shader path bypasses them via uniform helpers `configure_light_from_node` and `configure_material_from_node`; the legacy node code only runs in the compatibility profile. Functionally equivalent, less churn.
+- **Testing** is done through the `conftest.py` `PROFILES = ['compatibility', 'core']` parametrization + `run_core_tests.py` + `test_core_pass_dispatch.py`, rather than the dedicated `tests/test_core_profile.py` / `tests/core/` files proposed below (those were superseded, never created).
+
+The original problem statement and task breakdown are kept below for historical reference.
+
+---
+
 **Problem**: Despite its name and stated intent, `flatcore.py` is not actually core-profile compatible. It still relies on numerous deprecated fixed-function pipeline features that are unavailable in OpenGL core profiles.
 
 **Goal**: Make `flatcore.py` (and the geometry nodes it renders) fully functional with an OpenGL 3.2+ core profile context.

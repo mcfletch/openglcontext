@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(OPENGLCONTEXT_PROFILE=core OPENGLCONTEXT_BACKEND=glfw timeout 8 python3:*)",
+      "Bash(OPENGLCONTEXT_AUTO_EXIT_FRAMES=2 ../.env/bin/python tests/solid_font.py)",
+      "Bash(OPENGLCONTEXT_AUTO_EXIT_FRAMES=5 ../.env/bin/python -u tests/solid_font.py)"
+    ]
+  }
+}
