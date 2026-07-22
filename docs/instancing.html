@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Instanced Geometry, Explained</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Instanced Geometry, Explained</h1>
+</header>
+
+<section>
+<p class="introduction">Many 3D scenes draw the <em>same shape</em> over and over:
+a hundred columns in a temple, a thousand atoms in a molecule, a field of identical
+bolts, trees or crates. Drawn naively, each copy costs a separate draw call, and the
+CPU spends more time <em>telling</em> the GPU to draw than the GPU spends drawing.
+<strong>Instancing</strong> is the OpenGL feature that fixes this: you hand the GPU
+the shape <em>once</em> and say &ldquo;now draw it 1000 times, here is the little bit
+of data that differs for each copy.&rdquo; This page explains how OpenGLContext applies
+instancing automatically, what it can and cannot batch, and the switches that control
+it. The indented <span class="technical">technical notes</span> point to the code that
+implements each piece.</p>
+</section>
+
+<section id="problem">
+  <h2>The problem: one draw call per object is expensive</h2>
+  <p>To draw an object, your program sends the GPU a stream of commands: bind this
+    geometry, set this transform, set this colour, now draw. That handshake has a
+    fixed cost paid <em>per object</em>, on the CPU, whether the object fills the
+    screen or is a single pixel. Draw ten objects and it is nothing. Draw ten
+    thousand and the CPU is still setting up object number 9,999 while the GPU sits
+    idle, waiting for work. This is the <em>draw-call bottleneck</em>, and it is the
+    wall large scenes hit first.</p>
+  <p class="technical">In OpenGLContext the per-object cost lives in
+    <code>Shape.Render</code> and the surrounding loop (matrix upload, material
+    upload, id assignment, the draw), on the order of tens of microseconds per object.
+    A scene with tens of thousands of objects can spend a whole frame on setup before a
+    single triangle is shaded. Instancing collapses that loop into one call.</p>
+</section>
+
+<section id="idea">
+  <h2>The core idea: draw the shape once, vary a little data per copy</h2>
+  <p>A normal draw call is <code>glDrawElements</code>: &ldquo;draw this mesh once.&rdquo;
+    The instanced version is <code>glDrawElementsInstanced</code>: &ldquo;draw this mesh
+    <em>N</em> times.&rdquo; One command, N copies. The GPU runs the vertex shader for
+    every vertex of every copy, but your CPU issued a <em>single</em> call.</p>
+  <p>For that to be useful, each copy needs to end up somewhere different, with maybe
+    a different colour. So alongside the shared mesh you give the GPU a second, small
+    array &mdash; one entry per instance &mdash; holding the data that differs. OpenGL
+    calls this a <em>per-instance vertex attribute</em>, and you mark it with
+    <code>glVertexAttribDivisor(location,&nbsp;1)</code>. The divisor is the whole
+    trick:</p>
+  <ul>
+    <li><strong>divisor 0</strong> (the default): the attribute advances once per
+      <em>vertex</em> &mdash; this is ordinary per-vertex data like position or normal.</li>
+    <li><strong>divisor 1</strong>: the attribute advances once per <em>instance</em>
+      &mdash; every vertex of copy&nbsp;0 reads entry&nbsp;0, every vertex of copy&nbsp;1
+      reads entry&nbsp;1, and so on.</li>
+  </ul>
+  <p>So the shape's vertices are shared by all copies, while the per-instance array
+    supplies each copy's own transform, id and material.</p>
+  <p class="technical">OpenGLContext packs three things per instance, at fixed
+    attribute locations that the shaders (<code>pbr.vert</code>,
+    <code>vrml97_lighting.vert</code>, <code>shadow_depth.vert</code>) agree on:
+    <em>locations&nbsp;5&ndash;8</em> a <code>mat4</code> model-view matrix (a matrix
+    occupies four consecutive vec4 locations), <em>location&nbsp;9</em> a
+    <code>uint</code> object id for picking, <em>location&nbsp;10</em> a
+    <code>uint</code> material index. The shaders multiply by the per-instance matrix
+    instead of a uniform, and are gated by an <code>instancingEnabled</code> uniform
+    so the ordinary non-instanced path is byte-for-byte unchanged. See
+    <code>passes/instancing.py</code> (<code>pack_instance_buffer</code>,
+    <code>draw_instanced_mesh</code>).</p>
+</section>
+
+<section id="grouping">
+  <h2>How shapes are grouped into one draw</h2>
+  <p>Instancing only helps when copies genuinely share geometry, so the first job is
+    to decide which shapes may ride in the same instanced draw. OpenGLContext does
+    this every frame by computing an <em>instance key</em> for each shape and bucketing
+    shapes with equal keys. A bucket with enough members becomes one instanced draw;
+    everything else falls back to the ordinary per-shape path, unchanged.</p>
+  <p>Two shapes share a key &mdash; and therefore one draw &mdash; when they agree on:</p>
+  <ul>
+    <li><strong>Geometry.</strong> The same mesh. This can be the <em>same node</em>
+      (a VRML <code>USE</code>/<code>DEF</code> reference, or a glTF mesh reused by many
+      nodes), or two <em>different</em> nodes that happen to hold <em>identical</em>
+      vertex data (a Sphere of the same radius authored a hundred times). The latter is
+      called <em>content collapse</em> &mdash; see below.</li>
+    <li><strong>Texture set.</strong> Instances may differ by material <em>numbers</em>
+      (colour, metalness, roughness), but not by <em>textures</em>: plain OpenGL cannot
+      swap a texture per instance, so a different texture image starts a new group.</li>
+    <li><strong>Pass properties.</strong> Things that decide <em>how</em> or <em>in
+      which pass</em> a shape draws &mdash; transparency, alpha mode, transmission
+      &mdash; must match, because they are shared state for the whole draw.</li>
+  </ul>
+
+  <h3>Two ways instances are found</h3>
+  <p>The grouping is fed from two directions that converge on the same batcher:</p>
+  <ul>
+    <li><strong>Explicit.</strong> The scene <em>declares</em> the repetition: a VRML
+      file that shares one geometry node across many <code>Transform</code>s, or a glTF
+      file using the <code>EXT_mesh_gpu_instancing</code> extension (per-instance
+      translate/rotate/scale on a node). These arrive already knowing they are
+      instances.</li>
+    <li><strong>Opportunistic.</strong> The renderer <em>notices</em> that many
+      separately-authored shapes carry the same geometry and collapses them on its
+      own, with no hint from the file. This is what turns a naive scene of 500 distinct
+      &ldquo;same crate&rdquo; nodes into one draw for free.</li>
+  </ul>
+
+  <h3>Content collapse: matching identical-but-separate meshes</h3>
+  <p>Node identity (&ldquo;is this literally the same object in memory?&rdquo;) catches
+    the explicit cases cheaply. To catch the opportunistic ones, a geometry can supply a
+    <em>content key</em> &mdash; a short signature of its shape &mdash; so two distinct
+    nodes with the same signature land in one bucket. A Sphere's signature is just
+    <code>('Sphere',&nbsp;radius,&nbsp;tessellation)</code>; a general mesh hashes its
+    vertex arrays.</p>
+  <p class="technical">The keys live in <code>passes/instancing.py</code>:
+    <code>geometry_content_key</code> (PBR pass, keys on content + texture set + pass
+    signature, lets material factors vary) and
+    <code>geometry_content_instance_key</code> (VRML97 lit pass, which binds one
+    material per group so it also splits on material identity). A geometry opts in by
+    implementing <code>instanceContentKey()</code>; without one, a mesh's vertex arrays
+    are hashed once and cached on the node (<code>_geometry_content_id</code>). Grouping
+    itself is <code>build_instance_groups</code>; the minimum bucket size is
+    <code>OPENGLCONTEXT_INSTANCE_MIN</code> (below it, per-shape drawing is cheaper than
+    instancing's fixed setup). Opportunistic collapse can be turned off with
+    <code>OPENGLCONTEXT_INSTANCE_COLLAPSE=0</code>, which falls back to node-identity
+    grouping only.</p>
+
+  <h3>Per-instance materials without per-instance draws</h3>
+  <p>A field of &ldquo;same sphere, different colour&rdquo; should still be one draw. It
+    is: the group's distinct materials are packed into a small array on the GPU, and each
+    instance carries an <em>index</em> (that location-10 attribute) selecting its own
+    entry. The shader reads <code>materials[index]</code>. So colour, metalness,
+    roughness and the other numeric factors vary per instance for free.</p>
+  <p class="technical">The array is a std140 uniform block
+    (<code>MaterialBlock</code> in <code>pbr.frag</code>), sized to the guaranteed
+    16&nbsp;KB UBO minimum &mdash; 90 materials &mdash; though desktop drivers report much
+    more (~370 at 64&nbsp;KB). A group with more distinct materials than fit is split into
+    a few instanced draws (&ldquo;chunking&rdquo;), still a huge win over per-shape. Only
+    the PBR pass has the material array; the VRML97 lit pass binds one material per group,
+    so it splits colour variants into separate groups instead.</p>
+</section>
+
+<section id="picking">
+  <h2>Picking still works, per instance</h2>
+  <p>OpenGLContext lets you click objects to select them. It does this by drawing each
+    object's id into a hidden buffer and reading back the id under the cursor. Instancing
+    must not break that &mdash; you should be able to click one atom out of a thousand in
+    a single instanced draw. It works because the id is just another per-instance value
+    (location&nbsp;9): every copy writes its own stable id, so the hidden buffer ends up
+    with a thousand distinct ids exactly as if they had been drawn separately.</p>
+  <p class="technical">Ids come from <code>_objectIdFor(path)</code>, stable per scene
+    path across frames. A shape marked <code>pickable=False</code> is handled by
+    <em>masking</em> the id attachment (<code>glColorMaski</code>) so it writes no id and
+    picks read <em>through</em> it &mdash; the water-surface / gizmo case. Masking is
+    per-draw state, so a mix of pickable and non-pickable instances is split into two
+    draws, the non-pickable one drawn with the id attachment masked.</p>
+</section>
+
+<section id="coverage">
+  <h2>What instances &mdash; and what deliberately does not</h2>
+  <p>A geometry becomes instanceable by exposing its mesh in the shared attribute layout
+    (an <code>instanceGPU(mode)</code> method); the passes pick it up automatically. Today
+    that covers:</p>
+  <ul>
+    <li><strong>Box, Sphere, Cone, Cylinder</strong> &mdash; the primitive / molecular
+      cases (a lattice of atoms, a field of crates).</li>
+    <li><strong>PBRMesh</strong> and <strong>IndexedFaceSet</strong> &mdash; the general
+      triangle meshes, the common shape in <code>.wrl</code> and glTF content. An
+      IndexedFaceSet reuses the exact triangle data it already tessellates for normal
+      drawing, so an instanced one looks identical to a per-shape one.</li>
+    <li><strong>glTF <code>EXT_mesh_gpu_instancing</code></strong> and glTF shared meshes
+      &mdash; recognised by the loader and collapsed automatically.</li>
+  </ul>
+  <p>Some geometry is deliberately <em>left out</em>, because instancing it would cost
+    more than it saves:</p>
+  <ul>
+    <li><strong>Teapot, NURBS surfaces, and the GLE extrusions (Lathe/Screw/Spiral).</strong>
+      These are <em>procedural</em> surfaces with <em>distance level-of-detail</em>: far
+      or small copies are normally tessellated coarsely and cheaply. An instanced draw is
+      forced to share <em>one</em> fixed tessellation across every copy, which throws that
+      saving away &mdash; a field of teapots would pay full, close-up detail at every
+      distance (a single teapot is ~170k vertices). So they render per-shape, keeping their
+      LOD. (Extrusions additionally have no reusable vertex arrays at all &mdash; they draw
+      straight through the GLE C library.)</li>
+    <li><strong>Transparent objects.</strong> Correct transparency needs the copies sorted
+      back-to-front every frame, which fights batching. Instancing is opaque-only; the rare
+      &ldquo;thousands of transparent things&rdquo; case is better served by the point/particle
+      path or, in future, order-independent transparency.</li>
+  </ul>
+</section>
+
+<section id="optimizations">
+  <h2>The optimisations, and how they work</h2>
+
+  <h3>Reusing GPU objects instead of rebuilding them</h3>
+  <p>The first time a group is drawn, OpenGLContext builds the GPU objects it needs
+    &mdash; the VAO that wires up the mesh and per-instance arrays, and the per-instance
+    buffer &mdash; then caches them on the mesh. Each subsequent frame re-uploads only the
+    instance data into the existing buffer; the material array's buffer is reused the same
+    way. There is no per-frame create/destroy of GPU objects.</p>
+  <p class="technical">See <code>_build_instance_vao</code> /
+    <code>draw_instanced_mesh</code> (the VAO + instance <code>vbo.VBO</code> live on the
+    mesh's <code>_MeshGPU</code>, reclaimed with it) and <code>_bind_material_array</code>
+    (one persistent UBO on the pass, orphaned and re-uploaded per group). The instance
+    matrices are eye-space (they fold in the camera), so the buffer is re-uploaded each
+    frame even for a static scene; keeping it static would mean uploading model-space
+    matrices and doing the view transform in the shader.
+    <code>tests/test_instanced_caching_gl.py</code> counts GPU-object creations per frame
+    and requires zero in steady state.</p>
+
+  <h3>Not drawing what is off-screen</h3>
+  <p>An object outside the camera's view (the <em>frustum</em>) should not be drawn at all.
+    OpenGLContext already tests every object against the frustum <em>before</em> it forms
+    instanced groups, so off-screen copies never reach the instanced draw &mdash; they cost
+    no vertex-shader work. (If you point the camera so half a field is off-screen, the
+    instanced draw contains only the visible half.)</p>
+  <p>The remaining cost is the <em>test itself</em>: checking a very large field one object
+    at a time, every frame, on the CPU. <strong>Cluster culling</strong> makes that cheaper.
+    It sorts the instances by spatial locality (a <em>Morton</em>, or Z-order, code from
+    each instance's position), groups them into small contiguous <em>clusters</em> each with
+    a combined bounding box, and tests the box. A cluster wholly outside the view is thrown
+    away in one test instead of one-test-per-member. Clusters that straddle the edge fall
+    back to the exact per-object test, so the result is identical, just reached with less
+    work.</p>
+  <p class="technical">Implemented as pure, testable functions in
+    <code>passes/instancing.py</code> (<code>morton_order</code>, <code>build_clusters</code>,
+    <code>cluster_cull</code>) and wired into <code>frustumVisibilityFilter</code>. The
+    cluster box is padded by the largest member's world radius so it can never reject a
+    cluster that has a visible member &mdash; correctness is provably identical to the
+    per-object filter (<code>tests/test_instance_cluster_cull_gl.py</code> checks the drawn
+    set matches exactly). Because per-object culling already gives correctness, this is a
+    pure cost optimisation and is <em>opt-in</em>:
+    <code>OPENGLCONTEXT_INSTANCE_CLUSTER_CULL=1</code>, active only above 256 objects.</p>
+</section>
+
+<section id="controls">
+  <h2>Switches that control instancing</h2>
+  <p>Instancing is on by default and needs no code changes to benefit from &mdash; load a
+    scene with repeated geometry and it batches. These environment variables let you tune or
+    disable it, mostly for debugging and benchmarking:</p>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>OPENGLCONTEXT_INSTANCING</code></td><td><code>1</code> (on)</td>
+        <td>Master switch. Set <code>0</code> to draw every shape per-object (compare
+          correctness / measure the speed-up).</td></tr>
+      <tr><td><code>OPENGLCONTEXT_INSTANCE_COLLAPSE</code></td><td><code>1</code> (on)</td>
+        <td>Opportunistic content collapse of distinct-but-identical meshes. Set
+          <code>0</code> to batch only explicitly-shared geometry (node identity).</td></tr>
+      <tr><td><code>OPENGLCONTEXT_INSTANCE_MIN</code></td><td><code>4</code></td>
+        <td>Minimum copies before a bucket is worth an instanced draw; smaller buckets draw
+          per-shape (instancing has a fixed per-batch setup cost).</td></tr>
+      <tr><td><code>OPENGLCONTEXT_INSTANCE_CLUSTER_CULL</code></td><td>off</td>
+        <td>Turn on cluster culling to lower the per-frame CPU cost of frustum-testing very
+          large static fields. Correctness is unchanged; it only saves work.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="limits">
+  <h2>Limitations at a glance</h2>
+  <ul>
+    <li><strong>Same texture per group.</strong> Instances can vary by material numbers but
+      not by texture image; a different texture set starts a new group (plain OpenGL has no
+      per-instance texture without bindless-texture hardware).</li>
+    <li><strong>Opaque only.</strong> Transparent objects need per-frame depth sorting and
+      are not instanced.</li>
+    <li><strong>One tessellation per group.</strong> Procedural LOD surfaces (Teapot, NURBS,
+      extrusions) are not instanced, to keep their distance level-of-detail.</li>
+    <li><strong>Per-vertex colour is dropped</strong> by the shared instanced mesh: a
+      colour-per-vertex mesh still batches, but renders with its material colour rather than
+      baked vertex colours.</li>
+    <li><strong>Material-count cap per group</strong> (~90&ndash;370 distinct materials,
+      driver-dependent); larger groups are split into a few draws.</li>
+  </ul>
+</section>
+
+<section id="where">
+  <h2>Where the code lives</h2>
+  <p class="technical">The engine is <code>OpenGLContext/passes/instancing.py</code>
+    (grouping keys, <code>build_instance_groups</code>, capability detection, cluster
+    culling, and the <code>draw_instanced_mesh</code> draw path). Each pass wires it in via
+    <code>instancing_enabled</code> / <code>_instanceable</code> / <code>_instanceKey</code>
+    / <code>_drawInstanceGroup</code>: the PBR pass in <code>passes/pbrpass.py</code> (with
+    the per-instance material array), the VRML97 lit pass in <code>passes/flatcore.py</code>,
+    and the shadow depth pass in <code>passes/shadowmixin.py</code> (so an instanced scene
+    also casts shadows in one draw per light instead of re-drawing every caster). Geometry
+    nodes opt in with <code>instanceGPU(mode)</code> + <code>instanceContentKey()</code>
+    (see <code>scenegraph/box.py</code>, <code>quadrics.py</code>, <code>pbrmesh.py</code>,
+    <code>indexedfaceset.py</code>). The design record, including the deferred
+    hardware-accelerated paths (SSBO material arrays, multi-draw-indirect, bindless
+    textures), is in <code>plans/INSTANCED-GEOMETRY.md</code>.</p>
+</section>
+
+    <footer>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
+    </footer>
+
+</body>
+</html>
