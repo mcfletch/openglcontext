@@ -184,6 +184,10 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glEnable(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, self._texture)
+        # Modulate so the glyph alpha drives blending. Scene geometry (e.g.
+        # textured Shapes) may leave the env mode as GL_DECAL, which discards
+        # the texture alpha and renders solid opaque cells instead of glyphs.
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
 
         try:
             spacing = self.getSpacing(fontStyle=fontStyle, mode=mode)

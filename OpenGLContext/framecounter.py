@@ -2,18 +2,20 @@
 from vrml import node, field
 from OpenGL.GL import *
 
-# Try to get a working font - prefer glutfont, fall back to shaderfont
-_font_module = None
+# Prefer the texture-atlas (shader) font for on-screen display: it renders in
+# both core and compatibility profiles and needs no GLUT display. The GLUT
+# bitmap font is only safe on a GLUT context (its routines segfault otherwise),
+# so it is used solely as a fallback and only when the context provides GLUT.
 try:
-    from OpenGLContext.scenegraph.text import glutfont
-    _font_module = glutfont
+    from OpenGLContext.scenegraph.text import shaderfont as _shaderfont
+    if not _shaderfont.is_available():
+        _shaderfont = None
 except ImportError:
-    try:
-        from OpenGLContext.scenegraph.text import shaderfont
-        if shaderfont.is_available():
-            _font_module = shaderfont
-    except ImportError:
-        pass
+    _shaderfont = None
+try:
+    from OpenGLContext.scenegraph.text import glutfont as _glutfont
+except ImportError:
+    _glutfont = None
 
 
 class FrameCounter( node.Node ):
@@ -28,14 +30,22 @@ class FrameCounter( node.Node ):
     lastTime = field.newField( 'lastTime', 'SFFloat', 1, 0.0)
     display = field.newField( 'display', 'SFBool', 1, True)
     _font = None
+    # Window of recent frame durations for the displayed rate. A *cumulative*
+    # average (count/totalTime) bakes in one-off stalls forever -- a synchronous
+    # model load (network + decode) or the first-frame shader compile lands in a
+    # timed frame and permanently drags the number down. A windowed median
+    # reflects current rendering speed and shrugs off those outliers.
+    _recent = None
+    _RECENT_WINDOW = 90
 
     def font( self, context ):
-        if not self._font and _font_module is not None:
+        if self._font is None:
             from OpenGLContext.scenegraph.basenodes import FontStyle
-            if hasattr(_font_module, 'GLUTBitmapFont'):
-                self._font = _font_module.GLUTBitmapFont(FontStyle(size=1.0))
-            elif hasattr(_font_module, 'ShaderBitmapFont'):
-                self._font = _font_module.ShaderBitmapFont(FontStyle(size=1.0), size=16)
+            style = FontStyle(size=1.0)
+            if _shaderfont is not None:
+                self._font = _shaderfont.ShaderBitmapFont(style, size=16)
+            elif _glutfont is not None and getattr(context, 'providesGLUT', False):
+                self._font = _glutfont.GLUTBitmapFont(style)
         return self._font
 
     def addFrame( self, duration ):
@@ -48,11 +58,31 @@ class FrameCounter( node.Node ):
         self.__class__.count.fset( self, self.count + 1, notify=0)
         self.__class__.totalTime.fset( self, self.totalTime + duration, notify=0)
         self.__class__.lastTime.fset( self, duration, notify=0)
+        r = self._recent
+        if r is None:
+            r = self._recent = []
+        r.append( duration )
+        if len(r) > self._RECENT_WINDOW:
+            del r[: -self._RECENT_WINDOW]
         return duration
+
+    def recentFps( self ):
+        """Median frame rate over the recent window (ignores load/compile spikes)."""
+        r = self._recent
+        if r:
+            ordered = sorted( r )
+            median = ordered[len(ordered) // 2]
+            if median > 0:
+                return round( 1.0 / median, 4 )
+        return self.summary()[1]
+
     def summary( self ):
         """Give a summary of framerates
 
         returns (count, average fps, last frame-time)
+
+        ``average fps`` is the *cumulative* lifetime rate; for a live display use
+        :meth:`recentFps`, which is windowed and outlier-resistant.
         """
         if self.count:
             reallySmall = 0.00000000001
@@ -83,7 +113,8 @@ class FrameCounter( node.Node ):
                 glColor4f( 1.0,1.0,1.0, 1.0)
                 try:
                     glTranslated( 10,margin*2,0.0 )
-                    count,avg,last = self.summary()
+                    count,_avg,last = self.summary()
+                    avg = self.recentFps()
                     last *= 1000
                     font.render(
                         'fps avg:%0.1f\ncurr ms: %0.0f'%(avg,last)

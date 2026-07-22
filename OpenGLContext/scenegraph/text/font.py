@@ -179,7 +179,7 @@ class Font(object):
         for key,(dl,metrics) in displayLists.items():
             try:
                 glDeleteLists( dl, 1 )
-            except:
+            except Exception:
                 pass
 
 class RenderSelectMixIn( object ):

@@ -91,7 +91,7 @@ class PyGameBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font
                 1,
                 (255,255,255)
             )
-        except:
+        except Exception:
             traceback.print_exc()
             return None, font.CharacterMetrics(char,0,0)
         else:

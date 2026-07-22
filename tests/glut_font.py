@@ -3,7 +3,7 @@
 '''
 from OpenGL.GL import *
 from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+BaseContext = testingcontext.getInteractive( 'glut' )
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.text import glutfont
 

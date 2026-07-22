@@ -75,10 +75,19 @@ class TestContext( BaseContext ):
                         ),
                     ],
                 ),
-                # Add a light so we can see the text
-                DirectionalLight(
-                    direction=(0.5, -1, -0.5),
+                # Point light above and to the right of the camera
+                # (camera is at initialPosition (0, 0, 10), looking down -Z),
+                # placed slightly behind it so it lights from over the shoulder.
+                PointLight(
+                    location=(5, 5, 12),
                     intensity=1.0,
+                ),
+                # Dim, faintly-blue fill to the left, down and forward (beyond
+                # the text in -Z) so it backlights the text away from the camera.
+                PointLight(
+                    location=(-15, -6, 0),
+                    color=(0.9, 0.9, 1.0),
+                    intensity=0.7,
                 ),
             ],
         )

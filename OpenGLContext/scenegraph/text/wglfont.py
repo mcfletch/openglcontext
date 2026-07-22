@@ -140,7 +140,7 @@ class WGLFont(font.Font):
         """
         if not self._lineHeight:
             heights = []
-            for b, m in self._displayLists.itervalues():
+            for b, m in self._displayLists.values():
                 heights.append(m.height)
             self._lineHeight = max(heights)
         return self._lineHeight
@@ -167,7 +167,7 @@ class WGLFont(font.Font):
                 WGL_FONT_POLYGONS,
                 metrics,  # metrics float structure to be filled
             )
-        except:
+        except Exception:
             print("""couldn't get outline for character""", repr(char))
         realMetrics = font.CharacterMetrics(
             char,
