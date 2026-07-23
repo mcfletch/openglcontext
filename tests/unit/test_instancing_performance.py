@@ -18,6 +18,12 @@ import sys
 import pytest
 
 from OpenGLContext.testing.paths import tests_root
+
+# The frame-time assertion below compares wall-clock medians, so a busy GPU/CPU
+# compresses the on/off ratio and makes it read slower than it is. Run it apart
+# from the rest of the suite; the draw-call test guards the feature regardless.
+pytestmark = pytest.mark.serial
+
 HARNESS = os.path.join(str(tests_root(__file__)), 'helpers',
                        '_instancing_perf_harness.py')
 SHAPES = 800

@@ -138,4 +138,5 @@ markers = [
     "core_profile: marks tests that require core profile",
     "compatibility_profile: marks tests for compatibility profile",
     "network: marks tests that fetch remote sample assets",
+    "serial: marks tests that need a quiet machine (no concurrent GPU/CPU load); wall-clock timing checks whose ratio compresses under load. Run them alone with '-m serial' after a '-m \"not serial\"' bulk pass.",
 ]

@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -187,11 +187,53 @@ wheels = [
 ]
 
 [[package]]
+name = "dracopy"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/18/1c/5cb492dfa367ba85ac124e7f5d3e685ce32e4ff6d1358cf3266b46fd26b3/dracopy-2.0.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e3704682b9f013b820d598b451a1b5917bc09f4fb439597f351ef9576a595148", size = 2753432, upload-time = "2025-11-11T16:10:16.464Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/3a/812cee5204bee8b9a8063de0c5ddc0cb86d17dede230cdfb2ac59551631b/dracopy-2.0.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:c171d213f8c810747e4be1b191f537fb2319dadaf1c1874feee29b185274a6c2", size = 2583081, upload-time = "2025-11-11T16:47:18.159Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/d0/62d18a620691a274018bf1ca23e4f887bccac34c315934a6b0fe8b1eea66/dracopy-2.0.0-cp310-cp310-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:50816fe2c5bb253584a4f1556ccd6cfb9885db30a6bdbfed2e09f22dcaf5a28b", size = 4922707, upload-time = "2026-02-23T23:04:56.503Z" },
+    { url = "https://files.pythonhosted.org/packages/73/fd/26c6a1ecf4e0fcc7b30e0f1ba183151cfbf1bbf643beed18a3e738ddf393/dracopy-2.0.0-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:cf63039f1abb5bc1e4d1b380985b277994b0e00afe9169276ebce7b4802c7456", size = 5074752, upload-time = "2025-11-11T16:13:06.155Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/c9/85aa8e3b302b6c4c88cece4a75e002a4e5a99211bb3a9999797bd928074f/dracopy-2.0.0-cp310-cp310-win32.whl", hash = "sha256:9fb438db1ea9f4ce1af19c4a8643b3f7c43b12498ed7929ed41b6aba308ae1ec", size = 4282964, upload-time = "2025-11-11T16:13:08.946Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/f5/b28ff30aff5dabba9cfa489db83cf45451d3736ad26ada26fc726f0fb59a/dracopy-2.0.0-cp310-cp310-win_amd64.whl", hash = "sha256:4a0136a40e3fc3a0ca3cdc25b5f6277f9536b4f4bb10cd45aaa0baa4baae655a", size = 5059040, upload-time = "2025-11-11T16:13:07.538Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/98/79ab63a4e4b4114e7dde47e52c12718952c0d5e06c6e2e63020902378f95/dracopy-2.0.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:c41311512caee19e6c4ea1eded3895cfa557984a878aa3e4a96b8cf44e769325", size = 2752855, upload-time = "2025-11-11T16:13:10.436Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/29/cf35fcc673f8fd2cb094cf8f1368894818eaa80ead18b9fc1e526c8bee43/dracopy-2.0.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:e16575abfe1ba2d21c55641b425e6238ee87637256fe573021b4ba8fa450028f", size = 2582155, upload-time = "2025-11-11T16:47:20.261Z" },
+    { url = "https://files.pythonhosted.org/packages/46/8a/d24295229fd2ba12d3b08cc332d175d929fedca625a517a4f6e598429705/dracopy-2.0.0-cp311-cp311-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:418964da7c21f6c3583a3c3113da8afe25efeb77dd80de441ab4efe4f7960d62", size = 4962806, upload-time = "2026-02-23T23:04:58.839Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/b7/e67c59d8a2e4f9362c5c07353818c85125821c0f32ab97f2536a7a1f5e98/dracopy-2.0.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:fa9a32159669f4291c5e37775b26beb36fac2164afce64d883d6a8f96a32e88e", size = 5116896, upload-time = "2025-11-11T16:14:17.424Z" },
+    { url = "https://files.pythonhosted.org/packages/af/f7/d9c60758b80e31614b162f65b3968001fa953b252af33ba2a3d8c79cb09a/dracopy-2.0.0-cp311-cp311-win32.whl", hash = "sha256:33ddaf26e26485aa0f951df3283d8a4dd94e5c9dc5da727c5db4a44f596b9a38", size = 4282085, upload-time = "2025-11-11T16:14:21.057Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/3f/baac5aa88aab4117f9f74b892366bb336c9d682588cda11e71b7abc0a930/dracopy-2.0.0-cp311-cp311-win_amd64.whl", hash = "sha256:106c968fd20fd0d46eab5d3c624db55f5b1dade504c9ae31879459e350d7cf44", size = 5059285, upload-time = "2025-11-11T16:14:19.316Z" },
+    { url = "https://files.pythonhosted.org/packages/2b/be/7fccb6eadf9a18118fc125929b078e083e35e97aa3c10b8df677c5d93862/dracopy-2.0.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:00ed24e138bcfbf2605d495c3a4e6c17b71cbd0b63b78e945d9d3c89d4fb9d69", size = 2749370, upload-time = "2025-11-11T16:14:24.499Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/59/6c2c83cb8a0f56f61ca297241abb51f4157a0eebebfc24f213e707996857/dracopy-2.0.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:218626fc0ec0326ca65dbc47035926a15175d9044d71bcde475e25433eea0056", size = 2579812, upload-time = "2025-11-11T16:47:22.093Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/f9/f8d0e9283e17854e2e265a5249b2cc1ba16d89547dd5414f08ae8ecf0ccd/dracopy-2.0.0-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e7787814cf6e7a70814c78228a84f22accbfc5662053260a5756d7eabb87ad23", size = 4938162, upload-time = "2026-02-23T23:05:00.702Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/b7/28dff0bc2f992df437aaeeaeffba8f2f1ec031f054cedfc0390ea4300370/dracopy-2.0.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:4d6ea2821545b5fa1cfb1ca2911ea6425a2606932cf4fac2f9b1f2d4ccb6e52d", size = 5096811, upload-time = "2025-11-11T16:14:26.18Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/2b/69af07d283aa3a7d3bbbf4236631742fdbb0a647f605f477161e4203e11c/dracopy-2.0.0-cp312-cp312-win32.whl", hash = "sha256:956c3077342d3b62d28cec10a85e4fa1836caf4641a219f4a536205f8f6e9ad1", size = 4280701, upload-time = "2025-11-11T16:14:29.676Z" },
+    { url = "https://files.pythonhosted.org/packages/35/16/3c9cf0ef315de04ff2a8754685c14e58c04394077d10cf3f3a01ff9afe9e/dracopy-2.0.0-cp312-cp312-win_amd64.whl", hash = "sha256:7f1991d0f0575d5096847ef2320d76b2c4a2cf1f88c741cb35dea75d3d682ff4", size = 5058707, upload-time = "2025-11-11T16:14:28.062Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/b7/41d0831a0055b1be47768dd3e07f3486e4b159ac58763b0dbe70605e68e0/dracopy-2.0.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:05b5d4054402877f50221bc917e2943214a956d8d746e01b21f57ecc2d0adf21", size = 2748796, upload-time = "2025-11-11T16:14:31.353Z" },
+    { url = "https://files.pythonhosted.org/packages/49/dc/321bdc51d6c34d5934873a8625ce1325ac8f7e3e73823540ff2384cf5583/dracopy-2.0.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:a3e617385b4de48a564ef1ef9cd8dad6fe89f4a1c1897923893dcda51cd992dc", size = 2579323, upload-time = "2025-11-11T16:47:23.465Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/ad/fd8a123a65ca53d42446f03edbaf928d96530767082a7393c37cda48668a/dracopy-2.0.0-cp313-cp313-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:802c3904d0454d17284e6bda08c24bf09f47ff7e01bade80c93f67d972a4f410", size = 4934109, upload-time = "2026-02-23T23:05:03.13Z" },
+    { url = "https://files.pythonhosted.org/packages/bd/94/59bdf4654dd9a62520696a91f281464315c3d7331859b8b8f6ccdcd25df9/dracopy-2.0.0-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:aa08c837b1011409a1e5807f42abe339a845b5c93160099ca3dd5f321e9d1e02", size = 5095890, upload-time = "2025-11-11T16:14:33.562Z" },
+    { url = "https://files.pythonhosted.org/packages/35/e7/ee246cc789b4bade55d76b71370d4b549e01981452885d3c19fbe4db7516/dracopy-2.0.0-cp313-cp313-win32.whl", hash = "sha256:0ed1b4442c9143956311f2dc70b873eb19577bdddaf44fb7004dcec7739f425a", size = 4280436, upload-time = "2025-11-11T16:14:39.108Z" },
+    { url = "https://files.pythonhosted.org/packages/01/8f/be11f3e6548392bd304f4c929d85be39bde0e058b34936bf22deb2418e58/dracopy-2.0.0-cp313-cp313-win_amd64.whl", hash = "sha256:c837bf652077f34634af74f5f24015c8c15f1e20b010a12b7804234b7c3c06e0", size = 5058881, upload-time = "2025-11-11T16:14:36.034Z" },
+    { url = "https://files.pythonhosted.org/packages/01/15/8c239cc920afbf2e70fe2436b11608adaf168f68e31275ff70733d531ad5/dracopy-2.0.0-cp314-cp314-macosx_10_13_x86_64.whl", hash = "sha256:47db9ab359b88f418b9543cc7abc7b2d2388364c332c9420de6dd89161cefeda", size = 2748758, upload-time = "2025-11-11T16:14:40.741Z" },
+    { url = "https://files.pythonhosted.org/packages/24/df/45509f28831e8b920dbdf1756741b780def9f0ca38bb7d69f49f4ccda0d8/dracopy-2.0.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:ad406697d234b838281655cb1062efa501ff3139fa9846538271c8698dc794a1", size = 2580154, upload-time = "2025-11-11T16:47:24.906Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/78/93930cdc4bd1a751e8731e8dd743e5f2e94395961fc52c2d6aa0d1341995/dracopy-2.0.0-cp314-cp314-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:73e76f23dd1926162ef52b3788da1a0144a1cbc2c225bfed495985e07c2822bd", size = 4931080, upload-time = "2026-02-23T23:05:05.639Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/26/41fc7f8ff3324e654b4b09021334086d885c35518d3a22562b0c38d6b960/dracopy-2.0.0-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:6bf0d9c40bb0d1542d3490f66b200d9cf3a514e9a92d243c3c67f7d3d0e72ac4", size = 5087188, upload-time = "2025-11-11T16:14:42.45Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/7f/5d085464c97600467b0157178ef0e87553fd4ff570f52cad3a40b37d8619/dracopy-2.0.0-cp314-cp314-win32.whl", hash = "sha256:7edc47132ac8ff952ddfe21802001422ad3183487045d84b6a3a56da8a20d52a", size = 4331506, upload-time = "2025-11-11T16:14:47.652Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/85/a9f3b885c473c7e8723443cada998c62d8bf10e425ee2ac26fbdb18b89ec/dracopy-2.0.0-cp314-cp314-win_amd64.whl", hash = "sha256:e25930548cb1b5ca7265148d1cc5cdeba00e3c0cebc66c83fcba3f777495c3a5", size = 5121733, upload-time = "2025-11-11T16:14:45.832Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/e8/12851207603bcb44b4a0064338e0bd1922a58e2ad2e458d82bbe0116b821/dracopy-2.0.0-cp314-cp314t-macosx_10_13_x86_64.whl", hash = "sha256:15122deb126096b045253696e8bb4eca94ec511a9e76bd671fbffe6962c020d9", size = 2756222, upload-time = "2025-11-11T16:14:49.106Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/65/de189ece32805ab1b9f877cb39f228129c25cf3e3cff34ff9def17d102c0/dracopy-2.0.0-cp314-cp314t-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:75a2122273f09299e452b4396cb1af9773aebbe247808646055f03844c008c63", size = 4942463, upload-time = "2026-02-23T23:05:07.952Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/ef/52d1bd38bef6edfcb53b42d579f23006a434f5f6b3218c9998729f2fa3d1/dracopy-2.0.0-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1298b7e68dde7c8caf04f69605a38d22a5e7465df20d4b7528f056b2daa93c96", size = 5044015, upload-time = "2025-11-11T16:14:50.886Z" },
+    { url = "https://files.pythonhosted.org/packages/04/39/a79b683de8e50b4c740c9f7a73f5bdf4cc3a2359cdba4344b2ac79f30ebf/dracopy-2.0.0-cp314-cp314t-win32.whl", hash = "sha256:0bf6da2e4806f1c97937fb670095c1a75adee5747e492b4eff2e242a3806d884", size = 4347194, upload-time = "2025-11-11T16:14:54.858Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/79/54936d436c3d5c2ae82f5a6bf5cde3d525f67056a6ee8c6258dc0b795cb4/dracopy-2.0.0-cp314-cp314t-win_amd64.whl", hash = "sha256:c45e0cad9afd7c26d189b8788e9db8e2d649a6ab37794eda1376aec14fcdc38a", size = 5141115, upload-time = "2025-11-11T16:14:52.675Z" },
+]
+
+[[package]]
 name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -764,12 +806,51 @@ wheels = [
 ]
 
 [[package]]
+name = "omi-physics"
+version = "0.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1c/bc/60580fbe864de3061c5da3a05ffc507194fb72c705c340655025d85c7799/omi_physics-0.2.1.tar.gz", hash = "sha256:9bcf33f6711d44a0f47991320d5ecbcfe2a4ac8d69599e419ac809eec4360ece", size = 427976, upload-time = "2026-07-22T04:08:23.875Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/1e/27ac4f4dc7eaae7eb8db6d2e01c6208e68eff20eac17347c483dfd8fcd24/omi_physics-0.2.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:8787763a0839a9e9818949f9290c4b4ff1cae5c5de69927a36bd586483f433d7", size = 590415, upload-time = "2026-07-22T04:07:47.11Z" },
+    { url = "https://files.pythonhosted.org/packages/d9/96/27161345d77af411eba077312cafb0fec3c0abbf614f9e2fb45ab06b3fd9/omi_physics-0.2.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:03ae9e29796d149c52249899698faad6b5e083e3b7b86a6cda287e1c649ad997", size = 1437550, upload-time = "2026-07-22T04:07:48.861Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/9c/08364814ba27b7315f0e3aa68f842f45cf6b9ba5e751678c27ace9bd462f/omi_physics-0.2.1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:f52dc6ec3b42f791aa320d1dcef4f00fb3f1b8561baac3bc1e18f52da5098655", size = 1446269, upload-time = "2026-07-22T04:07:50.389Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/25/8e293d3e7c5489839d8cee7139f8575532d327f5d037af0f9e6a51989587/omi_physics-0.2.1-cp310-cp310-win32.whl", hash = "sha256:b3e2fc9a0842e85583a00dc3a1f9108846874f97932a9e6b9a2ea591b43e74b0", size = 546060, upload-time = "2026-07-22T04:07:52.289Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/a8/7c878fba1fefe4bd780830a85c4c5307ca937a6a4b40e98fabfb27bfb8e9/omi_physics-0.2.1-cp310-cp310-win_amd64.whl", hash = "sha256:5a0ff0e31bb725b63a427b874b5491e956d3ffc9825b70ec58d9edb69307169b", size = 572614, upload-time = "2026-07-22T04:07:53.719Z" },
+    { url = "https://files.pythonhosted.org/packages/9b/9f/ebb53f578d03ee48ec7fac6f29d692e9819674d282767d7a48ed3e0cdd64/omi_physics-0.2.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:71ff22f588853205edb239c2baeada902e028619ed57c646eabf6f2e5415286d", size = 589905, upload-time = "2026-07-22T04:07:55.209Z" },
+    { url = "https://files.pythonhosted.org/packages/31/a1/f12bc8697c0ee202085e6e9dfe0ec337f296cf622e658660acc31b55ba44/omi_physics-0.2.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7397153087fad9c06ad1ef55c640dcb3a2c0de5982cf6e3a2f852751be383e7c", size = 1487982, upload-time = "2026-07-22T04:07:56.668Z" },
+    { url = "https://files.pythonhosted.org/packages/20/dc/9a6e3eeb23f68c2f4160db512ec8a74de6a04b76b9d90db3ccc8025f3dc0/omi_physics-0.2.1-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:5a0d02a4c8542d9d95e52b16cffcc3a0a5cda26556fc196d3c696c308f4f3dd4", size = 1498311, upload-time = "2026-07-22T04:07:58.026Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/d9/cf668296d9377c73e46996d07b0320426b5350424ea64fade4a7fbccb600/omi_physics-0.2.1-cp311-cp311-win32.whl", hash = "sha256:6b6c5cda415cc26a928ab0758cb05944b976411041773257177b289eb785ab52", size = 545036, upload-time = "2026-07-22T04:07:59.634Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/0c/591e62044106d1954155296523eb671e06bbae82541b4557b50711839921/omi_physics-0.2.1-cp311-cp311-win_amd64.whl", hash = "sha256:c4bd6a21a3a2aeab859f7b2f7e4ed426dcf7c56866f5b297e79e2570addefee0", size = 572975, upload-time = "2026-07-22T04:08:00.982Z" },
+    { url = "https://files.pythonhosted.org/packages/92/78/c56494bd0421d09b4bb52be3c3f7cecb9d63a22acdfd46752b70a47a7918/omi_physics-0.2.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:9ae91c7f928e93e6ab817e83a40df6b894a6fb20340591321ec3495525d7def0", size = 591850, upload-time = "2026-07-22T04:08:02.481Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/04/5d1b11f5eb21e3ce46974116c28b72edaf6c7acc681f44b9ed90931a7af5/omi_physics-0.2.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e36d051a50651e05e7c3518f2622db3355adcc2d1f8f3f0b0dff84770116d69c", size = 1508922, upload-time = "2026-07-22T04:08:03.769Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/c5/08cc69e578e41fcfccd11dcbedaabfac424f583d304ab7ee95ebc8aebaf7/omi_physics-0.2.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:82c270585b77bf58b5d05974ce56e8eb67394aec09695aabe687e6312630b8a0", size = 1508689, upload-time = "2026-07-22T04:08:05.074Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/4d/a48d0981d535d04e83d24baa21f5ccfde8bcdb3499660e2149880328c575/omi_physics-0.2.1-cp312-cp312-win32.whl", hash = "sha256:3708df85c41dfc0da04923cbaeddf791300335a2f9f6a7a02052d9afdae33102", size = 546691, upload-time = "2026-07-22T04:08:06.866Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/3d/8822d648aa22ec4a61ffbf70770418898b931efc84a6e8d80f7b52ba84ba/omi_physics-0.2.1-cp312-cp312-win_amd64.whl", hash = "sha256:105e1d0c38ee963628fe472fbc5fa12b607b5742bd86f26957c1f6588a3bec99", size = 575698, upload-time = "2026-07-22T04:08:08.172Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/ff/8ff1f737d421a5c4fb3ddfa00f3d874386dada7174ab95efa53c84ea1723/omi_physics-0.2.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:c75b6412e3ec80eb57911199ee943db7100eb20718754a2dede0251c24d4d8bc", size = 590570, upload-time = "2026-07-22T04:08:09.551Z" },
+    { url = "https://files.pythonhosted.org/packages/3e/b5/c7505e54ab1441ebbd0959695e69e6e7ddaae8edb04b0c46d0fa33e80429/omi_physics-0.2.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d1d555ccba98f22a0e8593831a475ca9c9cefa1709fa11b260cfe809c7d14461", size = 1501151, upload-time = "2026-07-22T04:08:11.188Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/ab/980ee02caad384c28cc72ee34701203a3dfc6bef77b06b69238562486016/omi_physics-0.2.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:51738bba2ae9fc8718a00118718af35b689ad8e33b46022df0252cf81468cd81", size = 1500980, upload-time = "2026-07-22T04:08:12.509Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/76/438bd1cde11ff57107db278a03dba399ff35f5e74244ceca05d1706b574b/omi_physics-0.2.1-cp313-cp313-win32.whl", hash = "sha256:98008200154aa569748f13260169480de79771912a3556d2faf491cb78400b5a", size = 546594, upload-time = "2026-07-22T04:08:13.976Z" },
+    { url = "https://files.pythonhosted.org/packages/d6/2d/9f15e254499eeda91b7aea0435da103ea9c6a2bf8804185808d7dc3f50ef/omi_physics-0.2.1-cp313-cp313-win_amd64.whl", hash = "sha256:5737a39665c1647e0e493de5fe881e740a3d1ad2823092b3196a7f7bcb609645", size = 575285, upload-time = "2026-07-22T04:08:15.38Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/45/5680fd735a465d828a74eaf146bf6168f4bb30e460abc9c8105c3d4d7778/omi_physics-0.2.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:984cd1f3e2245c9cb0dece32ac9d8e122c3bf75ce3667006c1083a3922b9bf2e", size = 598014, upload-time = "2026-07-22T04:08:16.832Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/7a/33e0b71856d60973c9acabc014603d0bb31d44e764c33f32b6a8aafade9a/omi_physics-0.2.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3307e57381063cecd61bac242b5b024fabdeaeff12f8d10ef833b5498685e6d2", size = 1496283, upload-time = "2026-07-22T04:08:18.106Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/88/5f06d745e8b8d69f50fac91e1776f4be2773f38c0c9eb47d1dce1aaf42a3/omi_physics-0.2.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:360702684f3afa0e44b47841f4b2b0d30be5c256133fded434912541644c6209", size = 1499737, upload-time = "2026-07-22T04:08:19.708Z" },
+    { url = "https://files.pythonhosted.org/packages/59/25/962695eaa9db12a8dd7f2c78457b1c30e4fd0bd1672af99786874f025cd3/omi_physics-0.2.1-cp314-cp314-win32.whl", hash = "sha256:41e312ec3aa0a7a8a111d5d454786a6e5b41f9916b316c3d01a1cbaa81154d15", size = 554767, upload-time = "2026-07-22T04:08:21.331Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/65/e0bb2c111a2f7e935876f7ecb4e2541e10f269f01923c4a5ea320f5b5d15/omi_physics-0.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:1cc98dc0231a6e4be1005742b12441ab3bf6e0e1fb86986d0e199ed45e8cb256", size = 584305, upload-time = "2026-07-22T04:08:22.612Z" },
+]
+
+[[package]]
 name = "openglcontext"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "omi-physics" },
     { name = "pillow" },
     { name = "pydispatcher" },
     { name = "pyopengl" },
@@ -782,12 +863,14 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "dracopy" },
     { name = "glfw" },
     { name = "pygame" },
     { name = "pygltflib" },
     { name = "wxpython" },
 ]
 dev = [
+    { name = "dracopy" },
     { name = "glfw" },
     { name = "mypy" },
     { name = "psutil" },
@@ -799,6 +882,9 @@ dev = [
     { name = "pytest-timeout" },
     { name = "ruff" },
     { name = "wxpython" },
+]
+draco = [
+    { name = "dracopy" },
 ]
 glfw = [
     { name = "glfw" },
@@ -815,10 +901,12 @@ wx = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dracopy", marker = "extra == 'draco'", specifier = ">=1.4" },
     { name = "glfw", marker = "extra == 'glfw'", specifier = ">=2.0" },
     { name = "mypy", marker = "extra == 'dev'" },
     { name = "numpy", specifier = ">=2.0" },
-    { name = "openglcontext", extras = ["accelerate", "glfw", "gltf", "pygame", "wx"], marker = "extra == 'all'" },
+    { name = "omi-physics", specifier = ">=0.2.1" },
+    { name = "openglcontext", extras = ["accelerate", "draco", "glfw", "gltf", "pygame", "wx"], marker = "extra == 'all'" },
     { name = "openglcontext", extras = ["all"], marker = "extra == 'dev'" },
     { name = "pillow" },
     { name = "psutil", marker = "extra == 'dev'" },
@@ -838,7 +926,7 @@ requires-dist = [
     { name = "ttfquery", specifier = ">=2.0.1a1" },
     { name = "wxpython", marker = "extra == 'wx'", specifier = ">=4.0" },
 ]
-provides-extras = ["wx", "pygame", "glfw", "gltf", "accelerate", "all", "dev"]
+provides-extras = ["wx", "pygame", "glfw", "gltf", "draco", "accelerate", "all", "dev"]
 
 [[package]]
 name = "packaging"
