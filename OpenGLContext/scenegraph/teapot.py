@@ -114,12 +114,74 @@ class Teapot(nodetypes.Geometry, node.Node):
         radius = self._UNIT_RADIUS * self.size
         return tessellationlod.lod_level(mode, center, radius)
 
-    # Deliberately NOT instanceable: an instanced draw shares one fixed
-    # tessellation across all instances, which bypasses the distance-LOD that
-    # makes far teapots cheap. A field of teapots would then pay full-detail
-    # vertex cost at every distance -- a loss outside demo-only setups. Same
-    # reasoning applies to the quadrics' heavy meshes and NURBS surfaces; see
-    # plans/INSTANCED-GEOMETRY.md. IndexedFaceSet has no LOD, so it instances.
+    # -- instancing --------------------------------------------------------
+    # Many shapes sharing one Teapot node (or the same size/lid) collapse into a
+    # single instanced draw. The instanced mesh bakes the finest (level-0)
+    # tessellation, so instances give up the distance-LOD that the per-object
+    # path applies: a field of instanced teapots pays full vertex detail at every
+    # distance, trading that for one draw call. The quadrics make the same trade;
+    # see plans/INSTANCED-GEOMETRY.md.
+    def instanceContentKey(self):
+        """Teapots of the same size/lid/solid share one baked mesh -> one draw.
+
+        ``size`` is folded into the instance mesh (the per-instance modelview
+        carries only the scene transform), and ``lid``/``solid`` change the mesh
+        or its polygon mode, so all three split the batch.
+        """
+        return ('Teapot', round(float(self.size), 6),
+                bool(self.lid), bool(self.solid))
+
+    def _instanceArrays(self):
+        """Baked (positions, normals, texcoords) for the instanced mesh, or None.
+
+        The finest (level-0) tessellation with ``size`` folded into the
+        positions, de-interleaved from the T2F_N3F_V3F arrays into the shader's
+        separate-attribute layout. Returns None when tessellation is unavailable
+        (no GLU / no context yet), matching the render path's own guard.
+        """
+        from OpenGLContext.scenegraph.teapot_nurbs import FLOATS_PER_VERTEX
+        if not self._ensure_tessellated(0):
+            return None
+        base_array, lid_array = self._arrays[0]
+        chunks = [base_array]
+        if self.lid and lid_array is not None:
+            chunks.append(lid_array)
+        chunks = [np.asarray(a, dtype='f') for a in chunks
+                  if a is not None and len(a)]
+        if not chunks:
+            return None
+        v = np.concatenate(chunks).reshape(-1, FLOATS_PER_VERTEX)
+        positions = np.ascontiguousarray(v[:, 5:8] * self.size, dtype='f')
+        normals = np.ascontiguousarray(v[:, 2:5], dtype='f')
+        texcoords = np.ascontiguousarray(v[:, 0:2], dtype='f')
+        return positions, normals, texcoords
+
+    def instanceGPU(self, mode):
+        """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
+        from OpenGLContext.passes.instancing import build_mesh_gpu
+        arrays = self._instanceArrays()
+        if arrays is None:
+            return None
+        positions, normals, texcoords = arrays
+        return build_mesh_gpu(
+            mode, self, positions=positions, normals=normals,
+            texcoords=texcoords, indices=None, cache_key='instance_gpu',
+            depend_fields=('size', 'lid'))
+
+    def _apply_draw_state(self, mode):
+        """Cull backfaces for the instanced draw, as the single-draw path does.
+
+        The tessellated mesh carries reversed interior faces coincident with the
+        shell; culling backfaces keeps the exterior clean and shows the interior
+        only through the mouth. The pass culls by default, but an earlier
+        instanced group (a double-sided PBR mesh) may have disabled it, so force
+        the state and track it for the pass's end-of-loop reset.
+        """
+        glEnable(GL_CULL_FACE)
+        glCullFace(GL_BACK)
+        glFrontFace(GL_CCW)
+        mode._pbr_cull_enabled = True
+        mode._pbr_front_face = GL_CCW
 
     # -- render dispatch ---------------------------------------------------
     def render(self, visible=1, lit=1, textured=1, transparent=0, mode=None):

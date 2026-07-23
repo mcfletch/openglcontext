@@ -5,9 +5,10 @@ paths, the required geometry coverage and the required performance work are all
 implemented and tested. Since the last revision: **IndexedFaceSet** (the general
 triangle mesh) now instances; the per-frame **VAO / VBO / material-array UBO churn
 is cached away**; and **cluster culling** was added (after finding off-screen
-instances were already culled per-object -- see below). Teapot / NURBS / Extrusion
-are deliberately **not** instanced (they would lose their distance-LOD; rationale
-below), and the three hardware-gated fast paths (SSBO / MDI / bindless) are
+instances were already culled per-object -- see below). Teapot instances (trading
+its distance-LOD for the draw-call collapse, as the quadrics do); NURBS / Extrusion
+remain **not** instanced (they would lose their distance-LOD with no equivalent
+payoff; rationale below), and the three hardware-gated fast paths (SSBO / MDI / bindless) are
 detected-but-deferred as optional (the plan always classed them so). What remains
 is genuinely optional and low-priority: Text glyph-quad instancing, PointSet/Line
 repeat, and those three hardware paths. User-facing docs:
@@ -93,21 +94,28 @@ geometry is settled: expose `instanceGPU(mode)` (usually via
       mesh (a `build_mesh_gpu` limitation) -- a color-varying field still batches,
       it just renders with the material colour.
 
-**Declined: Teapot, NURBS surfaces, Extrusion (LOD-loss, not worth it).** An
-instanced draw shares ONE fixed tessellation (level 0, finest) across every
-instance, which bypasses the distance-LOD that makes far/small copies of these
-procedural surfaces cheap. A field of teapots or NURBS surfaces would then pay
-full-detail vertex cost at *every* distance -- a net loss outside demo-only
-setups, and these meshes are heavy (a single LOD-0 teapot is ~170k vertices).
-IndexedFaceSet has no LOD to lose, so it instances cleanly; the procedural
-surfaces do not. (Cluster culling below removes *off-screen* instances but does
-not restore per-instance LOD for on-screen ones.) Extrusion (the GLE
-Lathe/Screw/Spiral) additionally has no reusable vertex arrays at all -- it draws
-straight into a display list via the GLE C library -- so instancing it would mean
-reimplementing GLE tessellation in numpy, disproportionate for the same
-LOD-losing payoff. If a real workload needs these instanced, the prerequisite is
-per-instance LOD selection (draw each distance bucket as its own instanced group),
-which is a larger design than this plan.
+**Teapot instances (LOD traded for draw-call collapse).** The Teapot exposes the
+`instanceContentKey` / `instanceGPU` hooks like the quadrics, baking the finest
+(level-0) tessellation with `size` folded into the positions. Many teapots
+sharing one geometry node (or the same size/lid) collapse into a single draw. The
+cost of the trade is the distance-LOD the per-object path applies: instanced
+teapots pay full-detail vertex cost at *every* distance (a LOD-0 teapot is heavy).
+That is the same trade the quadrics already make, and it is a clear win when many
+same-material teapots are on screen; cluster culling below still removes
+off-screen instances. In the VRML97 lit path a group binds one material, so
+differently-coloured teapots only collapse under the PBR pass's per-instance
+material array.
+
+**Declined: NURBS surfaces, Extrusion (LOD-loss, not worth it).** An instanced
+draw shares ONE fixed tessellation (level 0, finest) across every instance, which
+bypasses the distance-LOD that makes far/small copies of these procedural
+surfaces cheap. A field of NURBS surfaces would then pay full-detail vertex cost
+at *every* distance. Extrusion (the GLE Lathe/Screw/Spiral) additionally has no
+reusable vertex arrays at all -- it draws straight into a display list via the GLE
+C library -- so instancing it would mean reimplementing GLE tessellation in numpy,
+disproportionate for the same LOD-losing payoff. If a real workload needs these
+instanced, the prerequisite is per-instance LOD selection (draw each distance
+bucket as its own instanced group), which is a larger design than this plan.
 
 - [ ] **Text** -- glyph-quad instancing is a different model (per-glyph transforms
       from one quad); worth it for large text but out of scope of the mesh path.

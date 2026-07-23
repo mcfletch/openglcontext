@@ -1,4 +1,21 @@
 #! /usr/bin/env python
+"""Add teapots to the scene at runtime, staying fast via instancing.
+
+Every teapot shares one ``Teapot`` geometry node but carries its own coloured
+``Material``.  Under the PBR pass (selected by the two environment variables
+below) they collapse into a single ``glDrawElementsInstanced`` -- each instance
+indexes its own colour in the group's material array -- so the frame cost stays
+flat as the count climbs instead of growing with one draw call per teapot.
+
+PBR pass selection is a whole-process decision (see passes/renderpass.py) and
+must be set before the first render; glfw is required for a core context.
+"""
+import os
+
+os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
+os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
+os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
+
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
@@ -25,6 +42,7 @@ class TestContext( BaseContext ):
         self.time.addEventHandler( "cycle", self.OnAdd )
         self.time.register (self)
         self.time.start ()
+        self.teapot = Teapot( size=.2)
         
     def OnAdd( self, event ):
         """Add a new box to the scene"""
@@ -43,7 +61,7 @@ class TestContext( BaseContext ):
                 translation = position,
                 children = [
                     Shape(
-                        geometry = Teapot( size=.2),
+                        geometry = self.teapot,
                         appearance = Appearance(
                             material=Material( 
                                 diffuseColor = color,

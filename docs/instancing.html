@@ -185,14 +185,16 @@ implements each piece.</p>
   <p>Some geometry is deliberately <em>left out</em>, because instancing it would cost
     more than it saves:</p>
   <ul>
-    <li><strong>Teapot, NURBS surfaces, and the GLE extrusions (Lathe/Screw/Spiral).</strong>
+    <li><strong>NURBS surfaces and the GLE extrusions (Lathe/Screw/Spiral).</strong>
       These are <em>procedural</em> surfaces with <em>distance level-of-detail</em>: far
       or small copies are normally tessellated coarsely and cheaply. An instanced draw is
       forced to share <em>one</em> fixed tessellation across every copy, which throws that
-      saving away &mdash; a field of teapots would pay full, close-up detail at every
-      distance (a single teapot is ~170k vertices). So they render per-shape, keeping their
-      LOD. (Extrusions additionally have no reusable vertex arrays at all &mdash; they draw
-      straight through the GLE C library.)</li>
+      saving away &mdash; a field of surfaces would pay full, close-up detail at every
+      distance. So they render per-shape, keeping their LOD. (Extrusions additionally have
+      no reusable vertex arrays at all &mdash; they draw straight through the GLE C library.)
+      The <strong>Teapot</strong> makes the opposite trade: it <em>does</em> instance
+      (baking the finest tessellation), giving up its distance-LOD in exchange for the
+      draw-call collapse when many same-material teapots share the screen.</li>
     <li><strong>Transparent objects.</strong> Correct transparency needs the copies sorted
       back-to-front every frame, which fights batching. Instancing is opaque-only; the rare
       &ldquo;thousands of transparent things&rdquo; case is better served by the point/particle
@@ -276,8 +278,9 @@ implements each piece.</p>
       per-instance texture without bindless-texture hardware).</li>
     <li><strong>Opaque only.</strong> Transparent objects need per-frame depth sorting and
       are not instanced.</li>
-    <li><strong>One tessellation per group.</strong> Procedural LOD surfaces (Teapot, NURBS,
-      extrusions) are not instanced, to keep their distance level-of-detail.</li>
+    <li><strong>One tessellation per group.</strong> Procedural LOD surfaces (NURBS,
+      extrusions) are not instanced, to keep their distance level-of-detail. The Teapot
+      instances at its finest tessellation, trading LOD for the batched draw.</li>
     <li><strong>Per-vertex colour is dropped</strong> by the shared instanced mesh: a
       colour-per-vertex mesh still batches, but renders with its material colour rather than
       baked vertex colours.</li>
