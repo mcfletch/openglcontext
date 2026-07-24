@@ -1,6 +1,7 @@
 '''Simple utility functions that should really be in a C module'''
-from math import *
-from OpenGLContext.arrays import *
+from OpenGLContext.arrays import (
+    cos,sin,array,asarray,zeros,reshape,compress,allclose,dot,
+)
 from OpenGLContext import vectorutilities
 
 def rotMatrix( rota ):

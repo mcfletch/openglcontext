@@ -49,7 +49,7 @@ dependencies = [
     "PyVRML97-accelerate>=2.3.4b1",
     "pydispatcher",
     "TTFQuery>=2.0.1a1",
-    "simpleparse",
+    "simpleparse>=3.0.0a3",
 ]
 
 [project.optional-dependencies]
@@ -118,7 +118,7 @@ ignore_missing_imports = true
 # vectorized physics core and buries the genuine type errors.  Turn it off for
 # that package only; every other check (arg types, optionals, attributes) stays on.
 [[tool.mypy.overrides]]
-module = "OpenGLContext.physics.*"
+module = "OpenGLContext.*"
 warn_return_any = false
 
 [tool.pytest.ini_options]

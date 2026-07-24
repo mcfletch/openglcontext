@@ -175,17 +175,22 @@ Shader attribute locations are fixed:
 
 ## Environment
 
-Use the virtualenv at `../.env` for all Python operations:
+Use the virtualenv at `/workspaces/OpenGL-dev/.venv` for all Python operations. It
+is a Python 3.12 environment with OpenGL installed as an editable install from
+`pyopengl/`; it is the only interpreter here that imports OpenGL and OpenGLContext.
 
 ```bash
-source ../.env/bin/activate
+source /workspaces/OpenGL-dev/.venv/bin/activate
 ```
 
 Or run directly with:
 
 ```bash
-../.env/bin/python <script.py>
+/workspaces/OpenGL-dev/.venv/bin/python <script.py>
 ```
+
+Do **not** use `../.env` or the project-local `openglcontext/.venv` — neither can
+`import OpenGL` in this devcontainer.
 
 ## Environment Variables
 
@@ -270,6 +275,11 @@ Phrasings that are always history, never description — if you write one, delet
   review", any bare issue/finding number.
 - **A former state or behavior:** "previously this was…", "the old default
   was…", "used to be…", "was doubled, which…", "originally we…".
+- **A replaced or rejected alternative:** "replaces the …-lists pattern that X
+  used", "instead of the old closure approach", "rather than the previous
+  helper", "no longer needs the …". The reader does not care about the design
+  that never landed or the one that was removed — describe only the code that is
+  there now.
 - **Continuity reassurance:** "still works", "keeps resolving", "as they always
   have", "for backward compatibility with the old path".
 - **The size of what changed:** "~22% of the god class", "the ~250-line cluster",
@@ -324,6 +334,54 @@ class MyGeometry(basenodes.MyGeometry):
         return 1
 ```
 
+### Instanced Rendering
+
+`render()` above is the **per-object** path — one draw per shape. When many shapes
+share one geometry (a sphere field, repeated glTF parts, a scatter of props), the
+pass collapses them into a single instanced draw instead of calling `render()` once
+each. There are two distinct instancing paths, and **neither goes through
+`render()`**:
+
+**1. Pass-level automatic batching (the common case).** The pass groups opaque
+records that share geometry + a compatible appearance
+(`passes/instancing.build_instance_groups`) and draws each group with one
+`glDrawElementsInstanced` (`draw_instanced_mesh`) — see `_drawInstanceGroup` in
+`passes/pbrpass.py` and `passes/flatcore.py`. A geometry node opts in by exposing
+two methods; it does **not** touch its own `render()`:
+
+```python
+def instanceContentKey(self):
+    # Cheap content signature: distinct nodes with an equal key batch together.
+    # Boxes of equal size, spheres of equal radius, etc.
+    return ('Box', tuple(round(float(v), 6) for v in self.size))
+
+def instanceGPU(self, mode):
+    # A separate-VBO _MeshGPU (position=2, normal=1, texcoord=0) that
+    # draw_instanced_mesh() can draw. build_mesh_gpu caches it on the context and
+    # rebuilds it when a depend_field changes (e.g. size / radius).
+    from OpenGLContext.passes.instancing import build_mesh_gpu
+    return build_mesh_gpu(
+        mode, self, positions, normals, texcoords, indices=None,
+        cache_key='instance_gpu',
+        depend_fields=(protofunctions.getField(self, 'size'),))
+```
+
+Working examples: `scenegraph/box.py`, `quadrics.py` (Sphere/Cone/Cylinder),
+`teapot.py`, `indexedfaceset.py`. The batcher is format-neutral, so VRML
+`USE`/`DEF` sharing, glTF shared meshes and `EXT_mesh_gpu_instancing` all feed it.
+
+**2. Node-driven raw-GL instancing (vegetation / terrain).** Nodes under
+`scenegraph/vegetation/` and `scenegraph/terrain/` drive core-profile GL directly
+inside their own `render()` — their own program, VAO, per-instance buffer and
+`glDraw*Instanced` — bypassing the VRML97/Shape path entirely. They restream
+per-frame instance data (camera-following fields) via the shared helpers in
+`scenegraph/instancedgl.py`: `InstanceBuffer` (grow-or-`glBufferSubData`, no
+per-frame realloc), `setup_instance_attribs`, `ensure_gl` (disable-on-failure so a
+driver quirk drops the layer instead of crashing the frame), and
+`save_draw_state`/`restore_draw_state` (compose with the PBR pass's cached GL
+state). Reach for this only when the standard batcher can't express the node
+(dynamic instance sets, array textures, custom shaders).
+
 ### Shape/Geometry Interaction
 
 The `Shape` node handles material and texture setup, then calls `geometry.render()`:
@@ -332,6 +390,65 @@ The `Shape` node handles material and texture setup, then calls `geometry.render
 2. Shape binds texture and stores ID in `mode._bound_texture_id`
 3. Shape calls `geometry.render(textured=True/False, mode=mode)`
 4. Geometry can access the bound texture via `mode._bound_texture_id`
+
+## Requirements for New Code
+
+**The goal is perfect code quality, not merely code that runs.** "It works" is the
+floor, not the bar. Every one of the following applies to new code before a task is
+done:
+
+### Red/Green TDD
+
+Write the failing test first, watch it fail (red), then write the code that makes
+it pass (green). The test must genuinely exercise the new behavior and fail for the
+right reason before the implementation exists — a test that was never red proves
+nothing.
+
+### Coverage: 100%, or as near as is practical
+
+New code should be fully covered by tests. Aim for 100%; where a line is genuinely
+impractical to reach (a defensive branch that needs a broken GL driver, say),
+cover everything around it and leave the gap deliberate and explained, not
+accidental.
+
+```bash
+/workspaces/OpenGL-dev/.venv/bin/python -m pytest --cov=OpenGLContext --cov-report=term-missing tests/
+```
+
+### Test real machinery, not mocks of the whole world
+
+Tests should drive as much of the actual code path as practical. Do not mock out
+the entire world just to assert one line — a test that replaces every collaborator
+with a stub proves the stubs work, not the code. Prefer real objects, real
+geometry, a real GL context (this container has one — see the top of this file)
+over a mock whenever it is feasible. Reserve mocks for the genuinely
+hard-to-instantiate edges (a specific GL error, missing hardware, network).
+
+### Types: annotated, mypy-clean
+
+All new code is fully type annotated and passes mypy with the project config in
+[pyproject.toml](pyproject.toml). No new `# type: ignore` without a reason, and no
+widening the `physics.*` override to escape a real error.
+
+```bash
+/workspaces/OpenGL-dev/.venv/bin/python -m mypy --follow-imports=silent OpenGLContext/<path>/
+```
+
+### Lint: ruff-clean
+
+New code passes `ruff check` with no warnings under the project config
+(`E`/`W`/`F`/`B`).
+
+```bash
+/workspaces/OpenGL-dev/.venv/bin/python -m ruff check OpenGLContext/<path>/
+```
+
+### Imports
+
+`from x import *` is traditional in this codebase and should **not** be churned out
+of *old* code — leave existing star imports alone. In **new** code, prefer explicit
+imports; `from OpenGL import GL as gl` (and similar aliased module imports) is the
+preferred style where a qualified namespace helps readability.
 
 ## Testing
 
@@ -352,7 +469,7 @@ before declaring done.
 Run tests from the project root:
 
 ```bash
-../.env/bin/python tests/<testname>.py
+/workspaces/OpenGL-dev/.venv/bin/pytest tests/<testname>.py
 ```
 
 Many tests are interactive demos that display OpenGL content.
@@ -363,10 +480,10 @@ The automated test suite runs all test scripts in subprocesses with coverage col
 
 ```bash
 # Run all tests with visual regression and HTML report
-pytest tests/test_all_scripts.py::TestVisualRegression -v
+/workspaces/OpenGL-dev/.venv/bin/python -m pytest tests/test_all_scripts.py::TestVisualRegression -v
 
 # Run all tests (including non-visual functionality tests)
-pytest tests/test_all_scripts.py::TestAllScripts -v
+/workspaces/OpenGL-dev/.venv/bin/python -m pytest tests/test_all_scripts.py::TestAllScripts -v
 
 # View the HTML report after tests complete
 open tests/report.html
@@ -396,7 +513,7 @@ Scripts are categorized for appropriate testing:
 **Coverage goal:** 80-100% code coverage. Use coverage reports to identify uncovered lines and target new test cases accordingly:
 
 ```bash
-../.env/bin/python -m pytest --cov=OpenGLContext --cov-report=term-missing tests/
+/workspaces/OpenGL-dev/.venv/bin/python -m pytest --cov=OpenGLContext --cov-report=term-missing tests/
 ```
 
 **Test framework:** Use pytest. Run tests in subprocesses when they require OpenGL contexts or other isolated environments.
@@ -439,7 +556,7 @@ def test_mousemove_events_filtered_when_no_handlers():
 ### Testing Core Profile
 
 ```bash
-OPENGLCONTEXT_PROFILE=core python tests/<testname>.py
+OPENGLCONTEXT_PROFILE=core /workspaces/OpenGL-dev/.venv/bin/pytests tests/<testname>.py
 ```
 
 #### wxPython GTK3 Requires EGL for Core Profile
@@ -452,7 +569,7 @@ The `wxcontext` module attempts to set this automatically when GTK3 is detected,
 but if OpenGL is imported before wxcontext, you must set it manually:
 
 ```bash
-PYOPENGL_PLATFORM=egl OPENGLCONTEXT_PROFILE=core python tests/<testname>.py
+PYOPENGL_PLATFORM=egl OPENGLCONTEXT_PROFILE=core /workspaces/OpenGL-dev/.venv/bin/pytest tests/<testname>.py
 ```
 
 Or in code (before any OpenGL imports):
@@ -482,7 +599,8 @@ On a headless runner provide a target explicitly:
 
 - **Offscreen GL:** set `PYOPENGL_PLATFORM=egl` (or `osmesa`). The suite treats
   EGL/OSMesa as a usable display and runs instead of skipping.
-- **Virtual X server:** wrap the run in `xvfb-run -a pytest ...`.
+- **Virtual X server:** wrap the run in
+  `xvfb-run -a /workspaces/OpenGL-dev/.venv/bin/python -m pytest ...`.
 
 Reference images are compared with a **percentage tolerance** (default 2% of
 pixels, per-channel delta > 5), not byte-for-byte, because cross-GPU
