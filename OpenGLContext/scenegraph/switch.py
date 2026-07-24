@@ -17,7 +17,7 @@ class Switch(basenodes.Switch):
             signal=('set',self.__class__.whichChoice), 
             sender=self 
         )
-    def _onSwitchChange( self ):
+    def _onSwitchChange( self, value ):
         """Generate signal telling the world that switch's child has changed"""
         if self.whichChoice < 0 or self.whichChoice >= len(self.choice):
             value = None 
