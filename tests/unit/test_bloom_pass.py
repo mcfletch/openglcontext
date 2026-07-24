@@ -35,7 +35,7 @@ def gl_context():
 def test_bloom_spreads_a_halo(gl_context):
     from OpenGL.GL import (
         glViewport, glEnable, glDisable, glScissor, glClear, glClearColor,
-        glReadPixels, GL_SCISSOR_TEST, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT,
+        glReadPixels, GL_SCISSOR_TEST, GL_COLOR_BUFFER_BIT,
         GL_RGB, GL_UNSIGNED_BYTE, glBindFramebuffer, GL_FRAMEBUFFER,
     )
     from OpenGLContext.passes.bloom import BloomPass
@@ -74,3 +74,62 @@ def test_bloom_spreads_a_halo(gl_context):
     assert (halo_pixels > 15).mean() > 0.3, (
         "bloom did not spread a halo around the bright square "
         "(lit halo fraction %.2f)" % (halo_pixels > 15).mean())
+
+
+def test_bloom_enabled_reads_env(monkeypatch):
+    from OpenGLContext.passes.bloom import bloom_enabled
+    for val in ('1', 'on', 'true', 'YES'):
+        monkeypatch.setenv('OPENGLCONTEXT_BLOOM', val)
+        assert bloom_enabled() is True
+    for val in ('', '0', 'off', 'no'):
+        monkeypatch.setenv('OPENGLCONTEXT_BLOOM', val)
+        assert bloom_enabled() is False
+
+
+def test_same_size_begin_reuses_targets(gl_context):
+    """A second begin() at the same size must not reallocate the scene target."""
+    from OpenGLContext.passes.bloom import BloomPass
+    bp = BloomPass()
+    bp.begin(64, 64)
+    first_fbo = bp._scene_fbo
+    first_tex = bp._scene_tex
+    bp.begin(64, 64)                     # size unchanged -> early return in _ensure
+    assert bp._scene_fbo == first_fbo
+    assert bp._scene_tex == first_tex
+    assert bp._size == (64, 64)
+
+
+def test_resize_reallocates_targets(gl_context):
+    """begin() at a new size releases the old targets and allocates fresh ones."""
+    from OpenGLContext.passes.bloom import BloomPass
+    bp = BloomPass()
+    bp.begin(64, 64)
+    old_tex = bp._scene_tex
+    assert old_tex is not None
+    bp.begin(96, 48)                     # different size -> _release_targets + realloc
+    # The driver may recycle the freed texture name, so the id is not a reliable
+    # witness -- the new dimensions are.
+    assert bp._size == (96, 48)
+    assert bp._bloom_size == (48, 24)
+    assert bp._scene_tex is not None
+
+
+def test_release_targets_swallows_delete_errors(gl_context, monkeypatch):
+    """A GL failure while freeing any target must not escape _release_targets."""
+    from OpenGLContext.passes import bloom
+    from OpenGLContext.passes.bloom import BloomPass
+    bp = BloomPass()
+    bp.begin(32, 32)
+
+    def boom(*a, **k):
+        raise RuntimeError("simulated driver delete failure")
+
+    monkeypatch.setattr(bloom, 'glDeleteFramebuffers', boom)
+    monkeypatch.setattr(bloom, 'glDeleteTextures', boom)
+    monkeypatch.setattr(bloom, 'glDeleteRenderbuffers', boom)
+    bp._release_targets()                # every delete throws; must still reset
+    assert bp._scene_fbo is None
+    assert bp._scene_tex is None
+    assert bp._depth_rb is None
+    assert bp._ping_fbo == [None, None]
+    assert bp._ping_tex == [None, None]

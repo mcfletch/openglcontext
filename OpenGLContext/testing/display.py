@@ -7,13 +7,14 @@ visual suite silently skip (and read green) on a headless runner configured with
 an offscreen GL platform. Import ``display_available`` instead of re-implementing.
 """
 import os
+from collections.abc import Mapping
 
 # Offscreen PyOpenGL platforms that render without an X/Wayland display, so the
 # visual suite can run on a headless CI runner instead of skipping.
 OFFSCREEN_GL_PLATFORMS = ('egl', 'osmesa')
 
 
-def display_available(env=None):
+def display_available(env: Mapping[str, str] | None = None) -> bool:
     """Return True if OpenGL can render: a windowed display OR an offscreen platform.
 
     A headless runner has no ``DISPLAY``/``WAYLAND_DISPLAY`` but can still render

@@ -11,12 +11,12 @@ without a GL context.
 """
 from __future__ import annotations
 
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple, Union
 
 import numpy as np
 from vrml.vrml97 import transformmatrix
 
-Vec3 = Sequence[float]
+Vec3 = Union[Sequence[float], np.ndarray]
 Matrix4 = np.ndarray
 
 
@@ -169,7 +169,7 @@ def cascade_splits(near: float, far: float, count: int, blend: float = 0.5) -> l
 
 def directional_cascade(light_dir: Vec3, corners_world: np.ndarray,
                         texel_snap: int = 0,
-                        caster_bounds: np.ndarray = None) -> Tuple[Matrix4, Matrix4]:
+                        caster_bounds: Optional[np.ndarray] = None) -> Tuple[Matrix4, Matrix4]:
     """Light view + ortho projection fitting a directional light to frustum corners.
 
     light_dir -- direction the light travels (world space).

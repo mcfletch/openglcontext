@@ -11,7 +11,15 @@ import numpy as np
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
-from OpenGLContext.arrays import array, dot, allclose, concatenate, ones
+from OpenGL.GL import (
+    glEnable, glDisable, glDisablei, glBlendFunc, glDepthMask, glDepthFunc,
+    glClear, glClearColor,
+    GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_LEQUAL, GL_DEPTH_TEST,
+    GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT,
+)
+# numpy names re-exported dynamically through OpenGLContext.arrays; mypy cannot
+# see them, so the attr-defined here is a false positive.
+from OpenGLContext.arrays import array, dot, allclose, concatenate, ones  # type: ignore[attr-defined]
 from OpenGLContext import frustum
 from OpenGLContext.debug.logs import getTraceback
 from vrml.vrml97 import nodetypes
@@ -495,6 +503,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         debugFrustum = self.context.contextDefinition.debugBBox
 
         shader = self.shader_program
+        assert shader is not None  # shader passes only run with a program bound
         shader._pick_active = id_map is not None
         shader.use(lit=True)
         # New frame: forget the last material so per-frame edits are re-uploaded.
@@ -506,7 +515,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         # reject occluded fragments before the (expensive) PBR fragment shader
         # runs -- this cuts overdraw cost, which dominates at high resolution.
         # The original toRender index is kept as the stable picking object id.
-        opaque = [(i, rec) for i, rec in enumerate(toRender)
+        opaque: List[Tuple[Optional[int], Any]] = [(i, rec) for i, rec in enumerate(toRender)
                   if not rec[0][0] and not (skip and i in skip)]
         # Opaque draw order is depth-buffer-correct in any order, so group by
         # material first (a CAD assembly is hundreds of parts sharing a handful of
@@ -523,7 +532,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         # scenes. Off in the base pass; PBRPass enables it when the driver and
         # program support the per-instance attributes. Everything not grouped
         # (unique geometry, sub-threshold batches) falls through to the loop.
-        singles = opaque
+        singles: List[Tuple[Optional[int], Any]] = opaque
         if getattr(self, 'instancing_enabled', False):
             from OpenGLContext.passes.instancing import build_instance_groups
             groups, single_recs = build_instance_groups(
@@ -590,6 +599,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         debugFrustum = self.context.contextDefinition.debugBBox
 
         shader = self.shader_program
+        assert shader is not None  # shader passes only run with a program bound
         shader._pick_active = id_map is not None
         shader.use(lit=True)
         glEnable(GL_BLEND)

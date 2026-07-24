@@ -18,7 +18,7 @@ lifecycle of ``SelectionFBO`` in :mod:`OpenGLContext.passes._flat`.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 from OpenGL.GL import (
     GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE, GL_DEPTH_ATTACHMENT,
@@ -31,7 +31,7 @@ from OpenGL.GL import (
     GL_TEXTURE_2D_ARRAY, GL_TEXTURE_CUBE_MAP, GL_TEXTURE_CUBE_MAP_POSITIVE_X,
     GL_TEXTURE_CUBE_MAP_SEAMLESS, GL_TEXTURE_CUBE_MAP_ARRAY,
     glGenFramebuffers, glBindFramebuffer, glGenTextures, glBindTexture,
-    glTexImage2D, glTexImage3D, glTexStorage2D, glTexStorage3D,
+    glTexStorage2D, glTexStorage3D,
     glTexParameteri, glTexParameterfv,
     glFramebufferTexture2D, glFramebufferTextureLayer,
     glCheckFramebufferStatus, glDeleteFramebuffers, glDeleteTextures,
@@ -42,13 +42,13 @@ from OpenGL.GL import (
 log = logging.getLogger(__name__)
 
 
-def _save_target():
+def _save_target() -> Tuple[int, Tuple[int, ...]]:
     fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
     viewport = tuple(int(v) for v in glGetIntegerv(GL_VIEWPORT))
     return fbo, viewport
 
 
-def _restore_target(fbo, viewport):
+def _restore_target(fbo: int, viewport: Optional[Tuple[int, ...]]) -> None:
     glBindFramebuffer(GL_FRAMEBUFFER, fbo)
     if viewport is not None:
         glViewport(*viewport)
@@ -68,7 +68,7 @@ class ShadowMapArray:
     One layer per cascade; sampled in the shader through a sampler2DArrayShadow.
     """
 
-    def __init__(self, size: int = 2048, layers: int = 4):
+    def __init__(self, size: int = 2048, layers: int = 4) -> None:
         self.size = int(size)
         self.layers = int(layers)
         self.fbo: Optional[int] = None
@@ -158,7 +158,7 @@ class ShadowMapCubeArray:
     GL_ARB_texture_cube_map_array.
     """
 
-    def __init__(self, size: int = 1024, num_cubes: int = 4):
+    def __init__(self, size: int = 1024, num_cubes: int = 4) -> None:
         self.size = int(size)
         self.num_cubes = int(num_cubes)
         self.fbo: Optional[int] = None
@@ -243,7 +243,7 @@ class ShadowMapCube:
     Six faces of projective depth; sampled in the shader via a samplerCubeShadow.
     """
 
-    def __init__(self, size: int = 1024):
+    def __init__(self, size: int = 1024) -> None:
         self.size = int(size)
         self.fbo: Optional[int] = None
         self.depth_texture: Optional[int] = None

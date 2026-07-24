@@ -74,6 +74,24 @@ def test_unsupported_mode_raises(tmp_path):
         HeightField.from_image(str(p), R, 100.0, 50.0)
 
 
+def test_non_2d_resample_result_raises(tmp_path, monkeypatch):
+    """If resampling yields more than one channel the loader refuses it rather than
+    passing a 3-D grid downstream. The accepted modes all fold to 2-D, so this
+    guard is provoked by forcing resize() to hand back a multi-channel image."""
+    R = 8
+    arr = np.tile(np.linspace(0, 255, R).astype(np.uint8), (R, 1))
+    path = _save(tmp_path, "ramp_guard.png", arr, "L")
+
+    real_resize = Image.Image.resize
+
+    def _rgb_resize(self, *a, **k):
+        return real_resize(self, *a, **k).convert("RGB")   # 3 channels -> ndim 3
+
+    monkeypatch.setattr(Image.Image, "resize", _rgb_resize)
+    with pytest.raises(ValueError, match="single 2-D channel"):
+        HeightField.from_image(path, R, 100.0, 50.0)
+
+
 def test_sample_at_texel_matches_image_value(tmp_path):
     """sample() at the grid corner returns that texel's encoded height."""
     R = 8

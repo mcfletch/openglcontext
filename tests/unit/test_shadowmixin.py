@@ -71,7 +71,8 @@ class TestWorldHelpers:
         self.mixin = ShadowMapMixin()
 
     def test_world_point_translation(self):
-        tmat = np.eye(4); tmat[3, 1] = 5.0
+        tmat = np.eye(4)
+        tmat[3, 1] = 5.0
         out = self.mixin._world_point((0, 0, 0), tmat)
         assert np.allclose(out, [0, 5, 0])
 
@@ -238,7 +239,6 @@ class TestLightDirectionConsistency:
     way. Inverse-transpose would desynchronise the two."""
 
     def test_matches_lighting_path_under_nonuniform_scale(self):
-        from OpenGLContext.passes.shaderpass import configure_light_from_node
         import numpy as np
         # rotation about Z composed with a non-uniform scale (shear in the 3x3)
         theta = 0.6
@@ -390,6 +390,49 @@ class TestDisposeShadowMaps:
         m = ShadowMapMixin()
         m.disposeShadowMaps()
         m.disposeShadowMaps()   # nothing allocated -> no crash
+
+
+class TestRenderShadowMapsGuards:
+    """The cheap early-outs of renderShadowMaps (no GL needed to reach them)."""
+
+    def _node(self, casts=True):
+        return types.SimpleNamespace(castsShadow=casts)
+
+    def _record(self, node):
+        return (None, None, np.identity(4, 'd'), None, [node])
+
+    def test_disabled_shadows_clears_bindings_and_returns(self):
+        m = ShadowMapMixin()
+        m.use_shadows = False
+        m.renderShadowMaps([self._record(self._node())])
+        assert m._shadow_bindings == []
+
+    def test_empty_render_set_returns(self):
+        m = ShadowMapMixin()
+        m.use_shadows = True
+        m.renderShadowMaps([])
+        assert m._shadow_bindings == []
+
+    def test_all_casters_opted_out_returns(self):
+        m = ShadowMapMixin()
+        m.use_shadows = True
+        # every record's node opts out of casting -> filtered set is empty
+        m.renderShadowMaps([self._record(self._node(casts=False))])
+        assert m._shadow_bindings == []
+
+    def test_no_shader_program_returns(self):
+        m = ShadowMapMixin()
+        m.use_shadows = True
+        m.shader_program = None
+        m.renderShadowMaps([self._record(self._node(casts=True))])
+        assert m._shadow_bindings == []
+
+    def test_no_compiled_program_returns(self):
+        m = ShadowMapMixin()
+        m.use_shadows = True
+        m.shader_program = types.SimpleNamespace(program=None)
+        m.renderShadowMaps([self._record(self._node(casts=True))])
+        assert m._shadow_bindings == []
 
 
 if __name__ == '__main__':

@@ -18,8 +18,8 @@ viewer's auto-fit exposes (`oglc-gltf --yaw/--elevation/--tilt/--margin`); their
 defaults reproduce the viewer's built-in framing, so an unlisted model still
 frames sensibly and a listed model only moves for the fields it overrides.
 """
-from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Iterator, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -50,12 +50,12 @@ class SceneSpec:
                                        # deterministic capture; None => bind pose
     description: str = ''
 
-    def camera_ids(self):
+    def camera_ids(self) -> list[Optional[int]]:
         """The camera selectors to render: the baked indices, or a single None
         meaning 'auto-frame the model' (the `--no-cameras` path)."""
         return list(self.cameras) if self.cameras else [None]
 
-    def slug(self, camera=None):
+    def slug(self, camera: Optional[int] = None) -> str:
         """Stable per-view basename: ``Name`` or ``Name__cam<NN>``."""
         if camera is None:
             return self.name
@@ -96,20 +96,20 @@ ENV_BACKGROUND_MODELS = frozenset({
 PARTHENON_RELATIVE = ('../parthenon/parthenon.glb', '../../parthenon/parthenon.glb')
 
 
-def _cube(name, **kw):
+def _cube(name: str, **kw: Any) -> SceneSpec:
     """A SceneSpec for a model that needs the image-cube environment."""
     kw.setdefault('background', 'cube')
     return SceneSpec(name, **kw)
 
 
-def _studio(name, **kw):
+def _studio(name: str, **kw: Any) -> SceneSpec:
     """A cube-env SceneSpec that reflects the neutral studio set, like the
     Khronos material references (metals/glass/anisotropy on a grey backdrop)."""
     kw.setdefault('background', 'cube')
     kw.setdefault('environment', 'studio')
     return SceneSpec(name, **kw)
 
-def _studiobright(name, **kw):
+def _studiobright(name: str, **kw: Any) -> SceneSpec:
     """A cube-env SceneSpec reflecting the near-white studio set -- for showcase
     metals/glass whose Khronos reference is shot against a bright white cyclorama
     (the lamp/dish read gold, the mirror row reads silver)."""
@@ -118,7 +118,7 @@ def _studiobright(name, **kw):
     return SceneSpec(name, **kw)
 
 
-def _hdr(name, panorama, **kw):
+def _hdr(name: str, panorama: str, **kw: Any) -> SceneSpec:
     """A cube-env SceneSpec lit and backed by a specific CC0 Poly Haven HDR panorama.
 
     ``panorama`` is a Poly Haven catalogue name (see :mod:`OpenGLContext.loaders.hdri`)
@@ -366,27 +366,27 @@ DEMO_SCENES = (
 _BY_NAME = {s.name: s for s in DEMO_SCENES}
 
 
-def iter_scenes():
+def iter_scenes() -> Iterator[SceneSpec]:
     """Iterate the demo scenes in canonical order."""
     return iter(DEMO_SCENES)
 
 
-def scene_for(name):
+def scene_for(name: str) -> SceneSpec:
     """The :class:`SceneSpec` for ``name`` (a default-framed spec if unlisted)."""
     return _BY_NAME.get(name) or SceneSpec(name)
 
 
-def yaw_for(name):
+def yaw_for(name: str) -> float:
     """Facing yaw (radians) for a model -- shared with the browser demo."""
     return scene_for(name).yaw
 
 
-def needs_env_background(name):
+def needs_env_background(name: str) -> bool:
     """Whether the model's materials need a lit environment to read correctly."""
     return name in ENV_BACKGROUND_MODELS
 
 
-def find_parthenon(start=None):
+def find_parthenon(start: Optional[str] = None) -> Optional[str]:
     """Absolute path to a local Parthenon ``.glb``, or None if not present.
 
     Looked up relative to the OpenGLContext repo root so the demo/regression
@@ -404,7 +404,7 @@ def find_parthenon(start=None):
     return None
 
 
-def resolve_source(spec, parthenon=None):
+def resolve_source(spec: SceneSpec, parthenon: Optional[str] = None) -> Tuple[Optional[str], bool]:
     """Resolve a spec's model source to something loadable.
 
     Returns (source, is_local). A Khronos sample (`source is None`) resolves to

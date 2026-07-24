@@ -7,6 +7,8 @@ and colour factors are VRML fields; texture maps are held as light-weight
 ``baseColor``, ``metallicRoughness``, ``normal``, ``occlusion``, ``emissive``)
 so PIL-backed images need not be squeezed into VRML field types.
 """
+from typing import Any
+
 from vrml import node, field
 
 
@@ -17,8 +19,9 @@ class PBRTexture(object):
     same way the scenegraph's texture nodes do (``cached(mode)`` -> Texture).
     """
 
-    def __init__(self, image, srgb=False, wrap_s=None, wrap_t=None,
-                 min_filter=None, mag_filter=None):
+    def __init__(self, image: Any, srgb: bool = False, wrap_s: Any = None,
+                 wrap_t: Any = None, min_filter: Any = None,
+                 mag_filter: Any = None) -> None:
         self.image = image          # PIL.Image
         self.srgb = srgb            # base-color/emissive are sRGB, others linear
         # glTF sampler enums == GL enums, so they are applied directly.
@@ -26,9 +29,9 @@ class PBRTexture(object):
         self.wrap_t = wrap_t
         self.min_filter = min_filter
         self.mag_filter = mag_filter
-        self._per_context = {}      # id(context) -> Texture
+        self._per_context: dict[int, Any] = {}      # id(context) -> Texture
 
-    def cached(self, mode):
+    def cached(self, mode: Any) -> Any:
         ctx = getattr(mode, 'context', None)
         key = id(ctx)
         tex = self._per_context.get(key)
@@ -39,7 +42,7 @@ class PBRTexture(object):
             self._per_context[key] = tex
         return tex
 
-    def _apply_sampler(self, tex):
+    def _apply_sampler(self, tex: Any) -> None:
         """Apply the glTF sampler's wrap modes and filters (+ mipmaps)."""
         from OpenGL.GL import (
             glBindTexture, glTexParameteri, glGenerateMipmap, GL_TEXTURE_2D,
@@ -132,7 +135,7 @@ class PBRMaterial(node.Node):
         'uv_transform', 'textures',
     })
 
-    def __init__(self, **named):
+    def __init__(self, **named: Any) -> None:
         textures = named.pop('textures', None)
         uv_transform = named.pop('uv_transform', None)
         super(PBRMaterial, self).__init__(**named)
@@ -141,18 +144,18 @@ class PBRMaterial(node.Node):
         # 3x3 row-major UV transform (KHR_texture_transform), or None for identity
         self.uv_transform = uv_transform
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: str, value: Any) -> None:
         super(PBRMaterial, self).__setattr__(name, value)
         if name in self._UBO_FIELDS:
             object.__setattr__(
                 self, '_ubo_version',
                 int(self.__dict__.get('_ubo_version', 0)) + 1)
 
-    def texture(self, channel):
+    def texture(self, channel: str) -> Any:
         return self.textures.get(channel)
 
 
-def material_is_transparent(material) -> bool:
+def material_is_transparent(material: Any) -> bool:
     """Whether a material sorts into the back-to-front blended transparent pass.
 
     True for an explicit ``BLEND`` alphaMode or, for a legacy material with no
@@ -174,7 +177,8 @@ def material_is_transparent(material) -> bool:
     return bool(getattr(material, 'transparency', 0.0))
 
 
-def uv_transform_matrix(offset=(0.0, 0.0), rotation=0.0, scale=(1.0, 1.0)):
+def uv_transform_matrix(offset: tuple[float, float] = (0.0, 0.0), rotation: float = 0.0,
+                        scale: tuple[float, float] = (1.0, 1.0)) -> list[list[float]]:
     """Build a 3x3 UV transform (KHR_texture_transform): uv' = uv * S * R * T.
 
     Returns a row-major 3x3 list suitable for a GLSL mat3 (uploaded transposed).
@@ -195,7 +199,7 @@ def uv_transform_matrix(offset=(0.0, 0.0), rotation=0.0, scale=(1.0, 1.0)):
     ]
 
 
-def material_to_pbr(material_node):
+def material_to_pbr(material_node: Any) -> dict[str, Any]:
     """Up-convert a VRML97 Material to plausible metallic/roughness PBR inputs.
 
     Lets a PBR pass draw legacy materials through the single PBR program:

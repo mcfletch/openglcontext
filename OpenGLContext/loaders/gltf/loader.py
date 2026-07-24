@@ -12,14 +12,18 @@ lazily with a clear error so importing the package does not require it.
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING, Optional, Union
 
 from OpenGLContext.loaders.resolver import (
     _check_size, Resolver, _fetch_url, DEFAULT_MAX_RESOURCE_BYTES,
 )
 from OpenGLContext.loaders.gltf.scene import _build_scene, GLTFScene
 
+if TYPE_CHECKING:
+    import pygltflib
 
-def _require_pygltflib():
+
+def _require_pygltflib() -> "type[pygltflib.GLTF2]":
     try:
         from pygltflib import GLTF2
         return GLTF2
@@ -29,9 +33,9 @@ def _require_pygltflib():
         ) from err
 
 
-def load_gltf(source, base_url=None,
-              max_resource_bytes=DEFAULT_MAX_RESOURCE_BYTES,
-              pointer_time=None) -> GLTFScene:
+def load_gltf(source: Union[bytes, bytearray, str], base_url: Optional[str] = None,
+              max_resource_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
+              pointer_time: Optional[float] = None) -> GLTFScene:
     """Load a glTF/GLB from bytes, a file path, or (with base_url) relative refs.
 
     ``pointer_time`` bakes KHR_animation_pointer channels at that animation time
@@ -59,8 +63,8 @@ def load_gltf(source, base_url=None,
     return _build_scene(g, resolver, pointer_time=pointer_time)
 
 
-def load_gltf_url(url, cache_dir=None,
-                  max_resource_bytes=DEFAULT_MAX_RESOURCE_BYTES) -> GLTFScene:
+def load_gltf_url(url: str, cache_dir: Optional[str] = None,
+                  max_resource_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES) -> GLTFScene:
     """Fetch a glTF/GLB from a URL (caching bytes) and load it.
 
     External buffers/images referenced by a ``.gltf`` are resolved relative to the

@@ -237,6 +237,53 @@ class TestDirectionalCascade:
         assert np.allclose(lp0, lp1)
 
 
+class TestNormalizeDegenerate:
+    def test_zero_vector_returned_unchanged(self):
+        """A (near-)zero vector has no direction, so it is returned as-is
+        rather than dividing by ~0 and producing inf/nan."""
+        z = np.zeros(3, dtype='d')
+        out = shadowmath._normalize(z)
+        assert np.array_equal(out, z)
+
+    def test_tiny_vector_below_epsilon_returned_unchanged(self):
+        tiny = np.array([1e-13, 0.0, 0.0])
+        out = shadowmath._normalize(tiny)
+        assert np.array_equal(out, tiny)
+
+
+class TestNearFarDegenerate:
+    def test_all_points_behind_light_falls_back(self):
+        """Points entirely behind the light (far <= 0) yield the safe default
+        instead of a negative/zero far plane."""
+        view = shadowmath.look_at_matrix((0, 0, 10), (0, 0, -1))
+        # points behind the light (z > 10 -> negative depth in front)
+        pts = np.array([[0, 0, 20], [1, 1, 30]], dtype='d')
+        near, far = shadowmath.near_far_from_points(view, pts, min_near=0.05)
+        assert near == pytest.approx(0.05)
+        assert far == pytest.approx(1.0)
+
+
+class TestExtendNearDegenerateBounds:
+    def test_empty_caster_bounds_leave_near_unchanged(self):
+        """An empty (0,8,3) caster-bounds array must not move the near plane."""
+        view = shadowmath.look_at_matrix((0, 0, 10), (0, 0, -1))
+        proj = shadowmath.perspective_matrix(np.pi / 3, 1.0, 1.0, 20.0)
+        corners = shadowmath.frustum_corners_world(view, proj)
+        lv0, lp0 = shadowmath.directional_cascade((0, -1, -0.3), corners)
+        lv1, lp1 = shadowmath.directional_cascade(
+            (0, -1, -0.3), corners, caster_bounds=np.zeros((0, 8, 3)))
+        assert np.allclose(lp0, lp1)
+
+    def test_wrong_ndim_caster_bounds_leave_near_unchanged(self):
+        """Caster bounds that are not (K,8,3) are ignored, not misinterpreted."""
+        view = shadowmath.look_at_matrix((0, 0, 10), (0, 0, -1))
+        mins = np.zeros(3)
+        maxs = np.ones(3)
+        near = shadowmath._extend_near_for_casters(
+            np.zeros((8, 3)), view.astype('d'), mins, maxs, 5.0)
+        assert near == 5.0
+
+
 class TestCube:
     def test_six_faces_orthonormal(self):
         for face in range(6):

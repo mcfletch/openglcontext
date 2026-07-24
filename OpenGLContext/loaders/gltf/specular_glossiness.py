@@ -20,8 +20,12 @@ declare the spec/gloss extension are routed through it by :mod:`materials`.
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING, Optional, Sequence, Tuple
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 
 # --- KHR_materials_pbrSpecularGlossiness -> metallic/roughness ---------------
@@ -34,11 +38,12 @@ import numpy as np
 _DIELECTRIC_SPECULAR = 0.04
 
 
-def _perceived_brightness(c):
+def _perceived_brightness(c: Sequence[float]) -> float:
     return math.sqrt(0.299 * c[0] * c[0] + 0.587 * c[1] * c[1] + 0.114 * c[2] * c[2])
 
 
-def _solve_metallic(diffuse_b, specular_b, one_minus_spec_strength):
+def _solve_metallic(diffuse_b: float, specular_b: float,
+                    one_minus_spec_strength: float) -> float:
     """Recover the metallic factor from diffuse/specular perceived brightness."""
     if specular_b < _DIELECTRIC_SPECULAR:
         return 0.0
@@ -50,7 +55,8 @@ def _solve_metallic(diffuse_b, specular_b, one_minus_spec_strength):
     return min(max((-b + math.sqrt(disc)) / (2.0 * a), 0.0), 1.0)
 
 
-def _specgloss_to_metalrough(diffuse_rgb, spec_rgb, glossiness):
+def _specgloss_to_metalrough(diffuse_rgb: Sequence[float], spec_rgb: Sequence[float],
+                             glossiness: float) -> Tuple[list, float, float]:
     """Convert (diffuse, specular, glossiness) -> (baseColor, metallic, roughness)."""
     eps = 1e-6
     one_minus_spec_strength = 1.0 - max(spec_rgb[0], spec_rgb[1], spec_rgb[2])
@@ -59,7 +65,7 @@ def _specgloss_to_metalrough(diffuse_rgb, spec_rgb, glossiness):
         one_minus_spec_strength)
     denom = max(1.0 - metallic, eps)
     base = []
-    for d, s in zip(diffuse_rgb[:3], spec_rgb[:3]):
+    for d, s in zip(diffuse_rgb[:3], spec_rgb[:3], strict=True):
         from_diffuse = d * one_minus_spec_strength / (1.0 - _DIELECTRIC_SPECULAR) / denom
         from_specular = (s - _DIELECTRIC_SPECULAR * (1.0 - metallic)) / max(metallic, eps)
         c = from_diffuse * (1.0 - metallic * metallic) + from_specular * (metallic * metallic)
@@ -67,17 +73,20 @@ def _specgloss_to_metalrough(diffuse_rgb, spec_rgb, glossiness):
     return base, metallic, 1.0 - float(glossiness)
 
 
-def _srgb_to_linear(c):
+def _srgb_to_linear(c: np.ndarray) -> np.ndarray:
     return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
 
 
-def _linear_to_srgb(c):
+def _linear_to_srgb(c: np.ndarray) -> np.ndarray:
     c = np.clip(c, 0.0, 1.0)
     return np.where(c <= 0.0031308, c * 12.92, 1.055 * (c ** (1.0 / 2.4)) - 0.055)
 
 
-def _specgloss_textures_to_metalrough(diffuse_pil, sg_pil, diffuse_factor,
-                                      spec_factor, gloss_factor):
+def _specgloss_textures_to_metalrough(diffuse_pil: "Optional[Image.Image]",
+                                      sg_pil: "Optional[Image.Image]",
+                                      diffuse_factor: Sequence[float],
+                                      spec_factor: Sequence[float],
+                                      gloss_factor: float) -> "Tuple[Image.Image, Image.Image]":
     """Per-pixel spec/gloss -> (baseColorTexture, metallicRoughnessTexture) PILs.
 
     The metalness of texture-driven spec/gloss assets (e.g. SpecGlossVsMetalRough)
@@ -91,11 +100,13 @@ def _specgloss_textures_to_metalrough(diffuse_pil, sg_pil, diffuse_factor,
     w = max(diffuse_pil.width if diffuse_pil else 1, sg_pil.width if sg_pil else 1)
     h = max(diffuse_pil.height if diffuse_pil else 1, sg_pil.height if sg_pil else 1)
 
-    def as_array(pil, default):
+    def as_array(pil: "Optional[Image.Image]", default: float) -> np.ndarray:
         if pil is None:
             return np.full((h, w, 4), default, dtype='f')
         if (pil.width, pil.height) != (w, h):
-            pil = pil.resize((w, h), Image.BILINEAR)
+            # Pillow keeps BILINEAR as a module-level alias at runtime; its inline
+            # types only expose it under Image.Resampling, so mypy can't see it.
+            pil = pil.resize((w, h), Image.BILINEAR)  # type: ignore[attr-defined]
         return np.asarray(pil, dtype='f') / 255.0
 
     diff = as_array(diffuse_pil, 1.0)

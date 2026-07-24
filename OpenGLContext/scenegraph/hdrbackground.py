@@ -15,18 +15,30 @@ geometry, so the background and the objects lit by it share one response.
 import logging
 import os
 import threading
+from typing import Any, Optional
 
 import numpy as np
-from OpenGL.GL import *
+from OpenGL.GL import (
+    GL_CLAMP_TO_EDGE, GL_COLOR_BUFFER_BIT, GL_CULL_FACE, GL_DEPTH_BUFFER_BIT,
+    GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER,
+    GL_LIGHTING, GL_LINEAR, GL_REPEAT, GL_RGB, GL_RGB16F, GL_RGBA, GL_RGBA8,
+    GL_STENCIL_BUFFER_BIT, GL_TEXTURE0, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
+    GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TRIANGLES, GL_TRUE,
+    GL_UNSIGNED_BYTE, GL_UNSIGNED_SHORT, GL_VERTEX_SHADER, glActiveTexture,
+    glBindTexture, glClear, glDeleteTextures, glDepthMask, glDisable,
+    glDisableVertexAttribArray, glDrawElements, glEnable, glEnableVertexAttribArray,
+    glGenTextures, glGetAttribLocation, glGetUniformLocation, glIsEnabled, glTexImage2D,
+    glTexParameteri, glUniform1f, glUniform1i, glUniformMatrix4fv, glUseProgram,
+    glVertexAttribPointer,
+)
 from OpenGL.GL import shaders as GL_shaders
 from OpenGL.GL import glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays
 from OpenGL.arrays import vbo
 
-from vrml import field, fieldtypes, node, protofunctions
+from vrml import field, fieldtypes, node
 from vrml.vrml97 import nodetypes
 
 from OpenGLContext import context
-from OpenGLContext.arrays import array
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +52,7 @@ class HDRURLField(fieldtypes.MFString):
 
     fieldType = "MFString"
 
-    def __set__(self, client, value, notify=True):
+    def __set__(self, client: Any, value: Any, notify: bool = True) -> Any:
         value = super(HDRURLField, self).fset(client, value, notify=True)
         if value:
             threading.Thread(
@@ -53,7 +65,7 @@ class HDRURLField(fieldtypes.MFString):
 
     fset = __set__
 
-    def fdel(self, client, notify=1):
+    def fdel(self, client: Any, notify: int = 1) -> Any:
         value = super(HDRURLField, self).fdel(client, notify)
         client.setImage(None)
         return value
@@ -63,20 +75,20 @@ class HDRURLField(fieldtypes.MFString):
 
 # A large cube whose vertices double as sky directions; drawn with depth writes
 # masked and the depth buffer cleared afterwards, so it sits behind everything.
-_CUBE_VERTICES = array([
+_CUBE_VERTICES = np.array([
     -100.0,  100.0,  100.0,  -100.0, -100.0,  100.0,
      100.0, -100.0,  100.0,   100.0,  100.0,  100.0,
     -100.0,  100.0, -100.0,  -100.0, -100.0, -100.0,
      100.0, -100.0, -100.0,   100.0,  100.0, -100.0,
 ], 'f')
-_CUBE_INDICES = array([
+_CUBE_INDICES = np.array([
     3, 2, 1,  3, 1, 0,   0, 1, 5,  0, 5, 4,
     7, 6, 2,  7, 2, 3,   4, 5, 6,  4, 6, 7,
     4, 7, 3,  4, 3, 0,   1, 2, 6,  1, 6, 5,
 ], 'H')
 
 
-def _free_render_data(render_data):
+def _free_render_data(render_data: Any) -> None:
     """Delete the GL objects of one compiled skybox (texture, cube VBOs, VAO).
 
     The shader program is shared on the class and kept. Must run on the GL thread,
@@ -119,16 +131,16 @@ class _HDRBackground(object):
     # thread, so setImage queues the superseded compiled skybox in
     # _stale_render_data instead of deleting it.
     # Decoded (H, W, 3) linear float32 panorama, or None until it loads.
-    _equirect = None
+    _equirect: Optional[np.ndarray] = None
 
-    _shader = None
-    _shader_locations = None
+    _shader: Any = None
+    _shader_locations: Optional[dict[str, int]] = None
     # Compiled skybox GL objects from a superseded panorama, awaiting deletion on
     # the GL thread (see setImage / _drain_stale_render_data).
-    _stale_render_data = None
+    _stale_render_data: Optional[list[Any]] = None
 
     # -- loading -----------------------------------------------------------
-    def loadBackground(self, url, contexts=()):
+    def loadBackground(self, url: Any, contexts: Any = ()) -> Any:
         """Fetch + decode the panorama (off the render thread) and install it.
 
         ``url`` is an MFString; the first entry that decodes wins. http(s) URLs are
@@ -153,7 +165,7 @@ class _HDRBackground(object):
             return self.setImage(image, contexts)
         log.warning("HDR background: no usable url in %s", urls)
 
-    def setImage(self, image, contexts=()):
+    def setImage(self, image: Any, contexts: Any = ()) -> Any:
         """Install a decoded ``(H, W, 3)`` float panorama (or None to clear).
 
         Registers it as the IBL probe environment and triggers a redraw of every
@@ -182,7 +194,7 @@ class _HDRBackground(object):
 
     # -- shader ------------------------------------------------------------
     @classmethod
-    def _compile_shader(cls):
+    def _compile_shader(cls) -> tuple[Any, Any]:
         if cls._shader is not None:
             return cls._shader, cls._shader_locations
         from OpenGLContext.passes.shaderpass import preprocess_shader
@@ -202,9 +214,9 @@ class _HDRBackground(object):
         }
         return cls._shader, cls._shader_locations
 
-    _render_data = None
+    _render_data: Optional[tuple[Any, ...]] = None
 
-    def compile(self, mode=None):
+    def compile(self, mode: Any = None) -> Optional[tuple[Any, ...]]:
         """Build (once) the float panorama texture + cube VBOs + VAO for the skybox."""
         if self._equirect is None:
             return None
@@ -227,7 +239,7 @@ class _HDRBackground(object):
         self._render_data = (tex, vert_vbo, index_vbo, program, locations, vao)
         return self._render_data
 
-    def _upload_panorama(self, arr, w, h):
+    def _upload_panorama(self, arr: np.ndarray, w: int, h: int) -> None:
         """Upload the panorama to the bound 2D texture, float if the GPU supports it.
 
         The skybox shader expects linear radiance and finishes it itself (exposure,
@@ -249,7 +261,7 @@ class _HDRBackground(object):
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA,
                      GL_UNSIGNED_BYTE, rgba8)
 
-    def _drain_stale_render_data(self):
+    def _drain_stale_render_data(self) -> None:
         """Delete skybox GL objects queued by a superseded panorama (GL thread)."""
         stale = self._stale_render_data
         if not stale:
@@ -258,7 +270,7 @@ class _HDRBackground(object):
         for render_data in stale:
             _free_render_data(render_data)
 
-    def dispose(self):
+    def dispose(self) -> None:
         """Free every skybox GL object this node holds. Call on the GL thread."""
         self._drain_stale_render_data()
         if self._render_data is not None:
@@ -266,7 +278,7 @@ class _HDRBackground(object):
             self._render_data = None
 
     # -- rendering ---------------------------------------------------------
-    def _render(self, mode, clear=True):
+    def _render(self, mode: Any, clear: bool = True) -> int:
         if getattr(mode, 'passCount', 0) != 0 or not self.bound:
             return 0
         self._drain_stale_render_data()   # free GL objects a prior env change queued
@@ -289,8 +301,7 @@ class _HDRBackground(object):
         glDisable(GL_CULL_FACE)
         glDepthMask(GL_FALSE)
 
-        from OpenGLContext.arrays import dot
-        mvp = dot(mode.matrix, mode.projection).astype('f')
+        mvp = np.dot(mode.matrix, mode.projection).astype('f')
         glUseProgram(program)
         glBindVertexArray(vao)
         glActiveTexture(GL_TEXTURE0)
@@ -329,7 +340,7 @@ class _HDRBackground(object):
                 glEnable(GL_LIGHTING)
         return 1
 
-    def _effective_exposure(self, mode):
+    def _effective_exposure(self, mode: Any) -> float:
         """The camera exposure to render the sky at, matching the lit pass.
 
         A glTF scene with absolute-unit lights sets ``gltf_exposure`` on the
@@ -340,11 +351,11 @@ class _HDRBackground(object):
         cam = float(getattr(ctx, 'gltf_exposure', 1.0)) if ctx is not None else 1.0
         return cam * float(self.exposure)
 
-    def RenderShader(self, mode, clear=True):
+    def RenderShader(self, mode: Any, clear: bool = True) -> int:
         """Shader-mode (core-profile) skybox render."""
         return self._render(mode, clear=clear)
 
-    def Render(self, mode, clear=True):
+    def Render(self, mode: Any, clear: bool = True) -> int:
         """Compatibility-mode render (also shader-based; HDR has no fixed path)."""
         return self._render(mode, clear=clear)
 
@@ -367,7 +378,7 @@ class HDRBackground(_HDRBackground, nodetypes.Background, nodetypes.Children,
 
     PROTO = "HDRBackground"
 
-    def __init__(self, image=None, **named):
+    def __init__(self, image: Any = None, **named: Any) -> None:
         super(HDRBackground, self).__init__(**named)
         if image is not None:
             self.setImage(image)

@@ -10,7 +10,12 @@ dissolve). Returns arrays ready for
 :meth:`~OpenGLContext.scenegraph.vegetation.billboards.InstancedBillboards.update_instances`.
 """
 import math
+from typing import TYPE_CHECKING, Callable, Optional
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 
 
 # Independent per-stream seeds. Each derived value (jitter x/z, keep decision, yaw,
@@ -27,7 +32,7 @@ _C_J = np.uint32(0x85EBCA77)
 _INV_24 = 1.0 / float(1 << 24)
 
 
-def _mix32(h):
+def _mix32(h: np.ndarray) -> np.ndarray:
     """Finalize a uint32 array with the lowbias32 avalanche (murmur-style).
 
     Every input bit affects every output bit, so nearby cell indices and nearby
@@ -41,7 +46,7 @@ def _mix32(h):
     return h
 
 
-def _cell_hash(I, J, seed):
+def _cell_hash(I: np.ndarray, J: np.ndarray, seed: np.uint32) -> np.ndarray:
     """Uniform float in [0, 1) keyed on an integer cell index and a stream seed.
 
     Integer bit-mixing rather than ``sin()`` of a float index: the cell indices
@@ -59,8 +64,11 @@ def _cell_hash(I, J, seed):
     return (h >> np.uint32(8)).astype(np.float64) * _INV_24
 
 
-def world_grid_scatter(cx, cz, radius, density, height_field, scale_mul=0.7, jitter=0.95,
-                       mask=None):
+def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
+                       height_field: "HeightField", scale_mul: float = 0.7,
+                       jitter: float = 0.95,
+                       mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None
+                       ) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
     """Deterministic disc of instances around ``(cx, cz)`` on a world-anchored grid.
 
     :param cx, cz: disc centre (world XZ), typically the camera position.
@@ -77,19 +85,27 @@ def world_grid_scatter(cx, cz, radius, density, height_field, scale_mul=0.7, jit
     :returns: ``(positions Nx3 float32, yaws N float32, scales N float32)``.
     """
     s = 1.0 / math.sqrt(density)
-    i0 = int(math.floor((cx - radius) / s)); i1 = int(math.ceil((cx + radius) / s))
-    j0 = int(math.floor((cz - radius) / s)); j1 = int(math.ceil((cz + radius) / s))
+    i0 = int(math.floor((cx - radius) / s))
+    i1 = int(math.ceil((cx + radius) / s))
+    j0 = int(math.floor((cz - radius) / s))
+    j1 = int(math.ceil((cz + radius) / s))
     I, J = np.meshgrid(np.arange(i0, i1 + 1, dtype=np.int64),
                        np.arange(j0, j1 + 1, dtype=np.int64))
-    I = I.ravel(); J = J.ravel()
-    hsh = lambda seed: _cell_hash(I, J, seed)   # deterministic per-cell [0,1)
-    fx = hsh(_SEED_JITTER_X); fz = hsh(_SEED_JITTER_Z)
-    px = I * s + (fx - 0.5) * s * jitter; pz = J * s + (fz - 0.5) * s * jitter
+    I = I.ravel()
+    J = J.ravel()
+
+    def hsh(seed: np.uint32) -> np.ndarray:   # deterministic per-cell [0,1)
+        return _cell_hash(I, J, seed)
+    fx = hsh(_SEED_JITTER_X)
+    fz = hsh(_SEED_JITTER_Z)
+    px = I * s + (fx - 0.5) * s * jitter
+    pz = J * s + (fz - 0.5) * s * jitter
     keep = ((px - cx) ** 2 + (pz - cz) ** 2) < radius * radius
     if mask is not None:
         w = np.clip(np.asarray(mask(px, pz), float), 0.0, 1.0)
         keep &= w > hsh(_SEED_KEEP)     # per-cell hash: keep with prob = weight
-    px = px[keep]; pz = pz[keep]
+    px = px[keep]
+    pz = pz[keep]
     pos = np.stack([px, height_field.sample(px, pz), pz], 1).astype(np.float32)
     yaw = (hsh(_SEED_YAW)[keep] * 2.0 * math.pi).astype(np.float32)
     sca = ((0.5 + 0.5 * hsh(_SEED_SCALE)[keep]) * scale_mul).astype(np.float32)

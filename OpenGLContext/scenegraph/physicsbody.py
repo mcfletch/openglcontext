@@ -5,18 +5,20 @@ A body binds a :class:`~omi_physics.model` ``motion`` / ``collider`` /
 The physics world owns the transform while the body is a *dynamic* awake mover
 (world → tree); authoring owns it while *kinematic* or *static* (tree → world).
 """
+from typing import Any, Optional
+
 import numpy as np
 
 from omi_physics import model, mathutil
 
 
-def vrml_rotation_to_quat(rotation):
+def vrml_rotation_to_quat(rotation: Any) -> np.ndarray:
     """VRML axis-angle ``(x, y, z, angle)`` → glTF quaternion ``(x, y, z, w)``."""
     x, y, z, a = rotation
     return mathutil.quat_from_axis_angle((x, y, z), a)
 
 
-def quat_to_vrml_rotation(quat):
+def quat_to_vrml_rotation(quat: Any) -> np.ndarray:
     """glTF quaternion ``(x, y, z, w)`` → VRML axis-angle ``(x, y, z, angle)``."""
     q = mathutil.quat_normalize(np.asarray(quat, dtype='d'))
     w = np.clip(q[3], -1.0, 1.0)
@@ -31,15 +33,16 @@ def quat_to_vrml_rotation(quat):
 class PhysicsBody:
     """Binds an OMI motion/collider/trigger to a Transform in a world."""
 
-    def __init__(self, transform, motion=None, collider=None, trigger=None):
+    def __init__(self, transform: Any, motion: Any = None, collider: Any = None,
+                 trigger: Any = None) -> None:
         self.transform = transform
         self.motion = motion if motion is not None else model.Motion()
         self.collider = collider
         self.trigger = trigger
-        self.index = None
-        self.world = None
+        self.index: Optional[int] = None
+        self.world: Any = None
 
-    def register(self, world):
+    def register(self, world: Any) -> Optional[int]:
         self.world = world
         pos = tuple(self.transform.translation)
         quat = vrml_rotation_to_quat(self.transform.rotation)
@@ -47,14 +50,14 @@ class PhysicsBody:
                                     position=pos, orientation=quat, handle=self)
         return self.index
 
-    def push_authored_pose(self):
+    def push_authored_pose(self) -> None:
         """Copy the authored Transform pose into the world (tree → world)."""
         if self.index is None:
             return
         self.world.position[self.index] = self.transform.translation[:3]
         self.world.orientation[self.index] = vrml_rotation_to_quat(self.transform.rotation)
 
-    def sync_to_scene(self, alpha=1.0):
+    def sync_to_scene(self, alpha: float = 1.0) -> None:
         """Write the (interpolated) world pose back onto the Transform."""
         if self.index is None:
             return

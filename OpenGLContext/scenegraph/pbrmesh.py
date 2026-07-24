@@ -15,9 +15,11 @@ and the shadow depth pass.
 """
 from __future__ import annotations
 
+from typing import Any, Optional
+
 import numpy as np
 from OpenGL.GL import (
-    GL_TRIANGLES, GL_POINTS, GL_LINES, GL_FLOAT, GL_FALSE, GL_UNSIGNED_INT,
+    GL_TRIANGLES, GL_POINTS, GL_FLOAT, GL_FALSE, GL_UNSIGNED_INT,
     GL_ELEMENT_ARRAY_BUFFER, GL_CULL_FACE, GL_CCW, GL_CW,
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
     glEnableVertexAttribArray, glVertexAttribPointer,
@@ -43,6 +45,10 @@ class _MeshGPU(object):
     collected, and the VAO id is freed in ``release``.
     """
 
+    # Deform counter of the arrays last uploaded to the dynamic VBOs; the cache in
+    # PBRMesh._gpu re-uploads when it lags the node's ``_deform_version``.
+    _uploaded_morph_version: int = 0
+
     _ATTRS = (
         ('positions', LOC_POSITION, 3),
         ('normals', LOC_NORMAL, 3),
@@ -52,7 +58,7 @@ class _MeshGPU(object):
         ('texcoords1', LOC_TEXCOORD1, 2),
     )
 
-    def __init__(self, mesh, pending_deletes=None):
+    def __init__(self, mesh: Any, pending_deletes: Optional[list[Any]] = None) -> None:
         # Shared per-context list the finalizer hands its VAO id to; deleted at a
         # safe point by PBRMesh.flush_pending_deletes. A list, not
         # the context, so this GPU object never keeps a context alive.
@@ -71,11 +77,11 @@ class _MeshGPU(object):
         if self.indexed:
             self.idx_vbo = vbo.VBO(mesh.indices, target=GL_ELEMENT_ARRAY_BUFFER)
 
-        self.attr_layout = []  # [(vbo, location, size), ...] recorded into the VAO
+        self.attr_layout: list[tuple[Any, int, int]] = []  # (vbo, location, size) recorded into the VAO
         # name -> VBO for the attributes a morph deform re-uploads in place. The
         # VAO records the attribute *binding* (buffer id + pointer), so updating
         # the buffer's contents keeps the VAO valid -- no re-specification needed.
-        self.dyn = {}
+        self.dyn: dict[str, Any] = {}
         for name, loc, size in self._ATTRS:
             # Optional attributes (e.g. a second UV set) may be absent on simpler
             # mesh types such as the quadric/IFS _ArrayMesh; treat missing as None.
@@ -93,24 +99,24 @@ class _MeshGPU(object):
         if self.idx_vbo is not None:
             self.idx_vbo.bind()  # recorded in the VAO's element-buffer binding
         glBindVertexArray(0)
-        for buf, loc, size in self.attr_layout:
+        for buf, _loc, _size in self.attr_layout:
             buf.unbind()
         if self.idx_vbo is not None:
             self.idx_vbo.unbind()
 
-    def _bind_attributes(self):
+    def _bind_attributes(self) -> None:
         for buf, loc, size in self.attr_layout:
             buf.bind()
             glEnableVertexAttribArray(loc)
             glVertexAttribPointer(loc, size, GL_FLOAT, GL_FALSE, 0, None)
 
-    def _draw_elements(self):
+    def _draw_elements(self) -> None:
         if self.indexed:
             glDrawElements(self.draw_mode, self.count, GL_UNSIGNED_INT, None)
         else:
             glDrawArrays(self.draw_mode, 0, self.count)
 
-    def update_dynamic(self, mesh):
+    def update_dynamic(self, mesh: Any) -> None:
         """Re-upload morph-deformed position/normal/tangent buffers in place."""
         for name, buf in self.dyn.items():
             data = getattr(mesh, name)
@@ -119,7 +125,7 @@ class _MeshGPU(object):
                 buf.bind()      # pushes the new data to the existing buffer id
                 buf.unbind()
 
-    def draw(self):
+    def draw(self) -> None:
         glBindVertexArray(self.vao)
         if self.draw_mode == GL_POINTS:
             # let the vertex shader's gl_PointSize take effect (core profile)
@@ -131,7 +137,7 @@ class _MeshGPU(object):
             self._draw_elements()
         glBindVertexArray(0)
 
-    def release(self):
+    def release(self) -> None:
         """Delete the VAOs now. Only safe when the owning context is current."""
         for attr in ('vao', '_instance_vao'):
             vao = getattr(self, attr, None)
@@ -142,7 +148,7 @@ class _MeshGPU(object):
                     pass
                 setattr(self, attr, None)
 
-    def __del__(self):
+    def __del__(self) -> None:
         # Never call GL from a finalizer: GC can run this with no current context
         # (leaking the VAO) or with a *different* context current (deleting an
         # unrelated live VAO that happens to reuse this id). Hand the id to the
@@ -170,11 +176,12 @@ class PBRMesh(node.Node):
 
     solid = field.newField('solid', 'SFBool', 1, True)
 
-    def __init__(self, positions=None, normals=None, texcoords=None,
-                 tangents=None, colors=None, indices=None, solid=True,
-                 material=None, morph_targets=None,
-                 skin_joints=None, skin_weights=None, texcoords1=None,
-                 draw_mode=GL_TRIANGLES, **named):
+    def __init__(self, positions: Any = None, normals: Any = None, texcoords: Any = None,
+                 tangents: Any = None, colors: Any = None, indices: Any = None,
+                 solid: bool = True,
+                 material: Any = None, morph_targets: Any = None,
+                 skin_joints: Any = None, skin_weights: Any = None, texcoords1: Any = None,
+                 draw_mode: int = GL_TRIANGLES, **named: Any) -> None:
         super(PBRMesh, self).__init__(solid=solid, **named)
         # GL primitive mode (glTF primitive.mode == the GL enum): GL_TRIANGLES for the
         # common case, or GL_POINTS/GL_LINES/GL_LINE_LOOP/GL_LINE_STRIP.
@@ -191,11 +198,11 @@ class PBRMesh(node.Node):
         self.tangents = self._farray(tangents, 4)
         self.colors = self._farray(colors, 4)
         self.indices = None if indices is None else np.asarray(indices, dtype=np.uint32).ravel()
-        self._volume = None
+        self._volume: Any = None
         self._init_deform(morph_targets, skin_joints, skin_weights)
 
     @staticmethod
-    def _farray(a, width):
+    def _farray(a: Any, width: int) -> Optional[np.ndarray]:
         if a is None:
             return None
         a = np.asarray(a, dtype=np.float32)
@@ -204,7 +211,7 @@ class PBRMesh(node.Node):
         return np.ascontiguousarray(a, dtype=np.float32)
 
     # -- deformation (morph targets + linear-blend skinning) ----------------
-    def _init_deform(self, morph_targets, skin_joints, skin_weights):
+    def _init_deform(self, morph_targets: Any, skin_joints: Any, skin_weights: Any) -> None:
         """Store rest-pose base arrays and set up morph / skin state.
 
         A deformable mesh keeps immutable ``_base_*`` rest arrays; every frame the
@@ -213,11 +220,11 @@ class PBRMesh(node.Node):
         ``tangents`` as morph-then-skin (the glTF-defined order). ``_deform_version``
         is bumped on each change so each per-context GPU re-uploads when stale.
         """
-        self.morph_targets = []
-        self.morph_weights = None
-        self.skin_joints = None
-        self.skin_weights = None
-        self._skin_matrices = None
+        self.morph_targets: list[dict[str, Any]] = []
+        self.morph_weights: Optional[np.ndarray] = None
+        self.skin_joints: Any = None
+        self.skin_weights: Any = None
+        self._skin_matrices: Any = None
         self._deform_version = 0
         skinned = skin_joints is not None and skin_weights is not None
         if not morph_targets and not skinned:
@@ -226,7 +233,7 @@ class PBRMesh(node.Node):
         self._base_normals = None if self.normals is None else self.normals.copy()
         self._base_tangents = None if self.tangents is None else self.tangents.copy()
         for tgt in (morph_targets or []):
-            entry = {}
+            entry: dict[str, Any] = {}
             for key, width in (('positions', 3), ('normals', 3), ('tangents', 3)):
                 arr = tgt.get(key) if tgt else None
                 if arr is not None:
@@ -244,17 +251,17 @@ class PBRMesh(node.Node):
             self.skin_weights = np.ascontiguousarray(w / wsum, dtype=np.float32)
 
     @property
-    def _morph_version(self):
+    def _morph_version(self) -> int:
         # back-compat alias: the GPU cache keys re-upload off this counter.
         return self._deform_version
 
     @property
-    def is_deformable(self):
+    def is_deformable(self) -> bool:
         """True when the mesh has morph targets or skin joints (per-frame CPU
         deform + dynamic VBO re-upload); a plain static mesh returns False."""
         return bool(self.morph_targets) or self.skin_joints is not None
 
-    def set_morph_weights(self, weights):
+    def set_morph_weights(self, weights: Any) -> None:
         """Set morph-target weights and recompute the deformed mesh (CPU)."""
         if not self.morph_targets:
             return
@@ -264,21 +271,21 @@ class PBRMesh(node.Node):
         self.morph_weights = w
         self._apply_deform()
 
-    def set_skin_matrices(self, matrices):
+    def set_skin_matrices(self, matrices: Any) -> None:
         """Set the per-joint skin matrices (J,4,4 row-vector) and recompute."""
         if self.skin_joints is None:
             return
         self._skin_matrices = np.ascontiguousarray(matrices, dtype=np.float64)
         self._apply_deform()
 
-    def _apply_deform(self):
+    def _apply_deform(self) -> None:
         """Recompute positions/normals/tangents = skin(morph(base))."""
         pos = None if self._base_positions is None else self._base_positions.astype(np.float64)
         nrm = None if self._base_normals is None else self._base_normals.astype(np.float64)
         tan = None if self._base_tangents is None else self._base_tangents.copy()
         # 1) morph: base + sum_i weight_i * target_i
         if self.morph_weights is not None:
-            for wi, tgt in zip(self.morph_weights, self.morph_targets):
+            for wi, tgt in zip(self.morph_weights, self.morph_targets, strict=True):
                 if wi == 0.0:
                     continue
                 if pos is not None and 'positions' in tgt:
@@ -310,7 +317,7 @@ class PBRMesh(node.Node):
         self._deform_version += 1
 
     # -- bounding volume (frustum culling + shadow occluder points) ---------
-    def boundingVolume(self, mode=None):
+    def boundingVolume(self, mode: Any = None) -> Any:
         if self._volume is None:
             if self.positions is None or not len(self.positions):
                 self._volume = boundingvolume.BoundingVolume()
@@ -322,11 +329,11 @@ class PBRMesh(node.Node):
     # Cache key under which the per-context VAO+VBOs hang off ``mode.cache``.
     _GPU_CACHE_KEY = 'pbrmesh_gpu'
 
-    def instanceGPU(self, mode):
+    def instanceGPU(self, mode: Any) -> "_MeshGPU":
         """The cached mesh-GPU used by the instanced draw path (its own VAO)."""
         return self._gpu(mode)
 
-    def _gpu(self, mode):
+    def _gpu(self, mode: Any) -> "_MeshGPU":
         """Return the cached ``_MeshGPU`` (VAO + VBOs) for this context.
 
         The VAO records the vertex-attribute and element-buffer bindings once,
@@ -354,7 +361,7 @@ class PBRMesh(node.Node):
     _PENDING_DELETE_ATTR = '_pbr_pending_vao_deletes'
 
     @classmethod
-    def _pending_delete_queue(cls, mode):
+    def _pending_delete_queue(cls, mode: Any) -> list[Any]:
         target = getattr(mode, 'context', None) or mode
         q = getattr(target, cls._PENDING_DELETE_ATTR, None)
         if q is None:
@@ -366,7 +373,7 @@ class PBRMesh(node.Node):
         return q
 
     @classmethod
-    def flush_pending_deletes(cls, mode):
+    def flush_pending_deletes(cls, mode: Any) -> None:
         """Delete VAOs orphaned by collected meshes.
 
         Called once per pass with the context current, so the ids -- which are
@@ -384,7 +391,8 @@ class PBRMesh(node.Node):
             except Exception:
                 pass
 
-    def render(self, visible=1, lit=1, textured=1, transparent=0, mode=None):
+    def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
+               transparent: int = 0, mode: Any = None) -> int:
         if self.positions is None or not len(self.positions):
             return 1
         if not getattr(mode, 'shader_mode', False):
@@ -404,7 +412,7 @@ class PBRMesh(node.Node):
         gpu.draw()
         return 1
 
-    def _wants_cull(self, mode) -> bool:
+    def _wants_cull(self, mode: Any) -> bool:
         """Whether back-face culling should be on for this mesh in this pass.
 
         Off during the shadow depth pass (all casters write depth),
@@ -418,7 +426,7 @@ class PBRMesh(node.Node):
             return False
         return True
 
-    def _apply_draw_state(self, mode) -> None:
+    def _apply_draw_state(self, mode: Any) -> None:
         """Set winding + cull state, skipping redundant GL calls.
 
         A negative-determinant modelview flips triangle winding, so the front-face
@@ -438,7 +446,7 @@ class PBRMesh(node.Node):
             mode._pbr_cull_enabled = want_cull
 
     @staticmethod
-    def reset_draw_state(mode) -> None:
+    def reset_draw_state(mode: Any) -> None:
         """Restore GL winding/cull defaults after the geometry loop.
 
         Called once per pass, not per draw, so a mesh's CW winding or disabled
@@ -452,7 +460,7 @@ class PBRMesh(node.Node):
         mode._pbr_front_face = None
         mode._pbr_cull_enabled = None
 
-    def _front_face(self, mv):
+    def _front_face(self, mv: Any) -> int:
         if mv is None:
             return GL_CCW
         try:
@@ -466,7 +474,7 @@ class PBRMesh(node.Node):
             return GL_CCW
         return GL_CW if det < 0 else GL_CCW
 
-    def sortKey(self, mode, matrix):
+    def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         # Report transparency from the attached material so a mesh placed without a
         # Shape still sorts into the transparent pass. The common
         # path renders through a Shape, where Appearance.sortKey decides instead.

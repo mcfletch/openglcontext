@@ -15,21 +15,22 @@ grows with strength (EmissiveStrengthTest), instead of clamping flat to white.
 from __future__ import annotations
 
 import os
+from typing import Any, List, Optional, Tuple
 
 from OpenGL.GL import (
     GL_TRIANGLES, GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA16F, GL_RGBA, GL_FLOAT,
     GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_BINDING,
-    GL_FRAMEBUFFER_COMPLETE, GL_CLAMP_TO_EDGE, GL_LINEAR, GL_NEAREST,
+    GL_CLAMP_TO_EDGE, GL_LINEAR,
     GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_WRAP_S,
-    GL_TEXTURE_WRAP_T, GL_DEPTH_TEST, GL_BLEND, GL_VIEWPORT,
+    GL_TEXTURE_WRAP_T, GL_DEPTH_TEST, GL_BLEND,
     GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT,
     GL_DEPTH_COMPONENT24, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
     glGenFramebuffers, glBindFramebuffer, glFramebufferTexture2D, glDeleteFramebuffers,
     glGenTextures, glBindTexture, glTexImage2D, glTexParameteri, glDeleteTextures,
     glGenRenderbuffers, glBindRenderbuffer, glRenderbufferStorage,
     glFramebufferRenderbuffer, glDeleteRenderbuffers,
-    glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
-    glCheckFramebufferStatus, glViewport, glClear, glClearColor, glUseProgram,
+    glGenVertexArrays, glBindVertexArray,
+    glViewport, glClear, glClearColor, glUseProgram,
     glDrawArrays, glActiveTexture, glEnable, glDisable, glGetIntegerv,
     glGetUniformLocation, glUniform1i, glUniform1f, glUniform2f,
 )
@@ -89,13 +90,13 @@ void main(){
 }"""
 
 
-def _compile(vert, frag):
+def _compile(vert: str, frag: str) -> Any:
     return GL_shaders.compileProgram(
         GL_shaders.compileShader(vert, GL_VERTEX_SHADER),
         GL_shaders.compileShader(frag, GL_FRAGMENT_SHADER), validate=False)
 
 
-def _color_tex(w, h, filt=GL_LINEAR):
+def _color_tex(w: int, h: int, filt: int = GL_LINEAR) -> int:
     t = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, t)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, None)
@@ -114,16 +115,22 @@ class BloomPass(object):
     STRENGTH = 0.6         # bloom add-back weight
     BLUR_ITERATIONS = 5    # ping-pong passes (each = one H + one V blur)
 
-    def __init__(self):
-        self._size = None
-        self._scene_fbo = self._scene_tex = self._depth_rb = None
-        self._ping_fbo = [None, None]
-        self._ping_tex = [None, None]
-        self._vao = None
-        self._prog_bright = self._prog_blur = self._prog_comp = None
+    def __init__(self) -> None:
+        self._size: Optional[Tuple[int, int]] = None
+        self._bloom_size: Optional[Tuple[int, int]] = None
+        self._prev_fbo: int = 0
+        self._scene_fbo: Optional[int] = None
+        self._scene_tex: Optional[int] = None
+        self._depth_rb: Optional[int] = None
+        self._ping_fbo: List[Optional[int]] = [None, None]
+        self._ping_tex: List[Optional[int]] = [None, None]
+        self._vao: Optional[int] = None
+        self._prog_bright: Optional[int] = None
+        self._prog_blur: Optional[int] = None
+        self._prog_comp: Optional[int] = None
 
     # -- lifecycle --------------------------------------------------------
-    def _ensure(self, w, h):
+    def _ensure(self, w: int, h: int) -> None:
         if self._vao is None:
             self._vao = glGenVertexArrays(1)
             self._prog_bright = _compile(_FS_VERT, _BRIGHT_FRAG)
@@ -153,7 +160,7 @@ class BloomPass(object):
         self._size = (w, h)
         self._bloom_size = (bw, bh)
 
-    def begin(self, w, h):
+    def begin(self, w: int, h: int) -> bool:
         """Bind the HDR scene target and clear it; returns True if bloom is active."""
         self._ensure(w, h)
         self._prev_fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
@@ -163,8 +170,9 @@ class BloomPass(object):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         return True
 
-    def composite(self):
+    def composite(self) -> None:
         """Bright-pass + blur the HDR scene and composite it to the previous target."""
+        assert self._size is not None and self._bloom_size is not None
         w, h = self._size
         bw, bh = self._bloom_size
         glDisable(GL_DEPTH_TEST)
@@ -208,7 +216,7 @@ class BloomPass(object):
         glEnable(GL_DEPTH_TEST)
 
     @staticmethod
-    def _bind_tex(prog, name, tex, unit):
+    def _bind_tex(prog: Any, name: str, tex: Optional[int], unit: int) -> None:
         glActiveTexture(GL_TEXTURE0 + unit)
         glBindTexture(GL_TEXTURE_2D, tex)
         loc = glGetUniformLocation(prog, name)
@@ -216,18 +224,24 @@ class BloomPass(object):
             glUniform1i(loc, unit)
 
     # -- cleanup ----------------------------------------------------------
-    def _release_targets(self):
+    def _release_targets(self) -> None:
         for fbo in [self._scene_fbo] + list(self._ping_fbo):
             if fbo:
-                try: glDeleteFramebuffers(1, [fbo])
-                except Exception: pass
+                try:
+                    glDeleteFramebuffers(1, [fbo])
+                except Exception:
+                    pass
         for tex in [self._scene_tex] + list(self._ping_tex):
             if tex:
-                try: glDeleteTextures([tex])
-                except Exception: pass
+                try:
+                    glDeleteTextures([tex])
+                except Exception:
+                    pass
         if self._depth_rb:
-            try: glDeleteRenderbuffers(1, [self._depth_rb])
-            except Exception: pass
+            try:
+                glDeleteRenderbuffers(1, [self._depth_rb])
+            except Exception:
+                pass
         self._scene_fbo = self._scene_tex = self._depth_rb = None
         self._ping_fbo = [None, None]
         self._ping_tex = [None, None]

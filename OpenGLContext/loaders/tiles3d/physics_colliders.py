@@ -12,9 +12,13 @@ would grow forever. Resident terrain is bounded, so the live collider set stays
 finite even though evicted bodies are not yet reclaimed.
 """
 import logging
+from typing import TYPE_CHECKING, Any
 
 from omi_physics import model
 from OpenGLContext.physics import gltf_world
+
+if TYPE_CHECKING:
+    from omi_physics.world import PhysicsWorld
 
 log = logging.getLogger(__name__)
 
@@ -22,20 +26,23 @@ log = logging.getLogger(__name__)
 class TerrainColliders:
     """Adds static trimesh colliders for renderable tiles to a physics world."""
 
-    def __init__(self, world, min_hull_size=0.0):
+    def __init__(self, world: "PhysicsWorld", min_hull_size: float = 0.0) -> None:
         self.world = world
         self.min_hull_size = min_hull_size
-        self._bodies = {}   # id(tile) -> body index
+        self._bodies: dict[int, int] = {}   # id(tile) -> body index
         # Kept for API compatibility; stays empty because we never accumulate
         # unremovable handles (see the module docstring).
-        self.pending_removals = []
+        self.pending_removals: list[Any] = []
         self._warned_no_removal = False
 
-    def on_renderable(self, tile, drawable):
+    def on_renderable(self, tile: Any, drawable: Any) -> None:
         if id(tile) in self._bodies:
             return
-        points, indices = gltf_world.extract_trimesh(
+        extracted = gltf_world.extract_trimesh(
             drawable, min_hull_size=self.min_hull_size)
+        if extracted is None:
+            return
+        points, indices = extracted
         if len(indices) == 0:
             return
         shape = self.world.add_shape(model.Shape.trimesh(points, indices))
@@ -44,7 +51,7 @@ class TerrainColliders:
             collider=model.Collider(shape=shape))
         self._bodies[id(tile)] = body
 
-    def on_evicted(self, tile, drawable):
+    def on_evicted(self, tile: Any, drawable: Any) -> None:
         """Forget the evicted tile's collider.
 
         Removes the body from the world when `PhysicsWorld.remove_body` is
@@ -67,5 +74,5 @@ class TerrainColliders:
                 "working set bounded.")
 
     @property
-    def collider_count(self):
+    def collider_count(self) -> int:
         return len(self._bodies)

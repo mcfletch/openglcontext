@@ -7,6 +7,8 @@ instance reuses the same geometry object, the existing instancing engine
 can carry thousands of plants cheaply. Octahedral impostor far-LODs are a later add.
 """
 import math
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -16,7 +18,11 @@ from OpenGLContext.scenegraph.transform import Transform
 from OpenGLContext.loaders.tiles3d.scatter import scatter_on_mesh, Scatter
 
 
-def poisson_thin(positions, radii, priority=None):
+def poisson_thin(
+    positions: np.ndarray,
+    radii: np.ndarray,
+    priority: Optional[np.ndarray] = None,
+) -> np.ndarray:
     """Blue-noise thinning: drop overcrowded points so no two kept points overlap.
 
     A uniform (Poisson) scatter clumps — many points land far closer than the mean
@@ -59,9 +65,10 @@ def poisson_thin(positions, radii, priority=None):
             d = np.hypot(xz[a, 0] - xz[b, 0], xz[a, 1] - xz[b, 1])
             hit = d < (rad[a] + rad[b])
             a, b = a[hit], b[hit]
-            adj = [[] for _ in range(n)]
-            for i, j in zip(a.tolist(), b.tolist()):
-                adj[i].append(j); adj[j].append(i)
+            adj: list[list[int]] = [[] for _ in range(n)]
+            for i, j in zip(a.tolist(), b.tolist(), strict=True):
+                adj[i].append(j)
+                adj[j].append(i)
             for i in order:
                 if not keep[i]:
                     continue
@@ -72,17 +79,22 @@ def poisson_thin(positions, radii, priority=None):
     # scipy-free fallback: a spatial hash on a cell = max conflict diameter, so all
     # conflicts for a point fall in its own + 8 neighbouring cells.
     cell = 2.0 * maxr
-    grid = {}
+    grid: dict[tuple[int, int], list[int]] = {}
     for i in order:
-        i = int(i); x, z = xz[i]; ri = rad[i]
-        cx = int(math.floor(x / cell)); cz = int(math.floor(z / cell))
+        i = int(i)
+        x, z = xz[i]
+        ri = rad[i]
+        cx = int(math.floor(x / cell))
+        cz = int(math.floor(z / cell))
         ok = True
         for gx in (cx - 1, cx, cx + 1):
             for gz in (cz - 1, cz, cz + 1):
                 for j in grid.get((gx, gz), ()):
-                    dx = x - xz[j, 0]; dz = z - xz[j, 1]
+                    dx = x - xz[j, 0]
+                    dz = z - xz[j, 1]
                     if dx * dx + dz * dz < (ri + rad[j]) ** 2:
-                        ok = False; break
+                        ok = False
+                        break
                 if not ok:
                     break
             if not ok:
@@ -94,8 +106,16 @@ def poisson_thin(positions, radii, priority=None):
     return keep
 
 
-def scatter_disc(center, radius, density, seed, height_fn, keep=None,
-                 scale_range=(1.0, 1.0), water_level=0.0):
+def scatter_disc(
+    center: Sequence[float],
+    radius: float,
+    density: float,
+    seed: int,
+    height_fn: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    keep: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+    scale_range: tuple[float, float] = (1.0, 1.0),
+    water_level: float = 0.0,
+) -> Scatter:
     """Scatter instances in a disc around `center`, seated on the terrain surface.
 
     Points are drawn uniformly in the disc and lifted to `height_fn(x, z)` (clamped to
@@ -121,9 +141,11 @@ def scatter_disc(center, radius, density, seed, height_fn, keep=None,
     return Scatter(pos, yaws, scales)
 
 
-def grass_tuft(height=0.55, color=(0.26, 0.45, 0.14)):
+def grass_tuft(
+    height: float = 0.55, color: tuple[float, float, float] = (0.26, 0.45, 0.14)
+) -> Group:
     """A knee-high grass/weed tuft: crossed thin blades sharing one material."""
-    from OpenGLContext.scenegraph.basenodes import (
+    from OpenGLContext.scenegraph.basenodes import (  # type: ignore[attr-defined]  # basenodes builds node classes dynamically from entry points
         Shape, Box, Appearance, Material,
     )
     mat = Appearance(material=Material(diffuseColor=list(color)))
@@ -136,9 +158,11 @@ def grass_tuft(height=0.55, color=(0.26, 0.45, 0.14)):
     return Group(children=blades)
 
 
-def bush(size=1.3, color=(0.13, 0.31, 0.10)):
+def bush(
+    size: float = 1.3, color: tuple[float, float, float] = (0.13, 0.31, 0.10)
+) -> Group:
     """A low shrub: a couple of overlapping foliage blobs."""
-    from OpenGLContext.scenegraph.basenodes import (
+    from OpenGLContext.scenegraph.basenodes import (  # type: ignore[attr-defined]  # basenodes builds node classes dynamically from entry points
         Shape, Sphere, Appearance, Material,
     )
     mat = Appearance(material=Material(diffuseColor=list(color)))
@@ -151,20 +175,32 @@ def bush(size=1.3, color=(0.13, 0.31, 0.10)):
         for bx, by, bz, br in blobs])
 
 
-def build_forest_patch(center, height_fn, tree=None, tree_far=None, seed=0,
-                       water_level=0.0,
-                       grass_radius=42.0, grass_density=0.22,
-                       bush_radius=75.0, bush_density=0.014,
-                       tree_radius=190.0, tree_density=0.012,
-                       tree_lod_distance=120.0):
+def build_forest_patch(
+    center: Sequence[float],
+    height_fn: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    tree: Any = None,
+    tree_far: Any = None,
+    seed: int = 0,
+    water_level: float = 0.0,
+    grass_radius: float = 42.0,
+    grass_density: float = 0.22,
+    bush_radius: float = 75.0,
+    bush_density: float = 0.014,
+    tree_radius: float = 190.0,
+    tree_density: float = 0.012,
+    tree_lod_distance: float = 120.0,
+) -> Group:
     """A dense, ground-hugging forest around `center`: grass, shrubs and trees.
 
     Grass fills a tight disc (you walk through it), shrubs a wider one, and trees the
     widest with a near-mesh / far-billboard LOD. All layers share one prototype each,
     so the instancing engine draws each in a handful of calls. Rebuild this around the
     camera as it moves to keep a bounded, always-dense field."""
-    from OpenGLContext.scenegraph.basenodes import Shape, Box, Appearance, Material
-    keep = lambda p: (p[:, 1] > water_level + 2.0) & (p[:, 1] < 135.0)
+    from OpenGLContext.scenegraph.basenodes import Shape, Box, Appearance, Material  # type: ignore[attr-defined]  # basenodes builds node classes dynamically from entry points
+
+    def keep(p: np.ndarray) -> np.ndarray:
+        return (p[:, 1] > water_level + 2.0) & (p[:, 1] < 135.0)
+
     tree = tree or conifer(height=10.0)
     tree_far = tree_far or Shape(
         geometry=Box(size=(5.0, 11.0, 1.0)),
@@ -184,14 +220,17 @@ def build_forest_patch(center, height_fn, tree=None, tree_far=None, seed=0,
     return Group(children=[grass, shrubs, trees])
 
 
-def conifer(height=9.0, trunk_color=(0.30, 0.20, 0.11),
-            foliage_color=(0.11, 0.34, 0.12)):
+def conifer(
+    height: float = 9.0,
+    trunk_color: tuple[float, float, float] = (0.30, 0.20, 0.11),
+    foliage_color: tuple[float, float, float] = (0.11, 0.34, 0.12),
+) -> Group:
     """A layered pine-tree prototype: a trunk plus three stacked foliage skirts.
 
     Returned as a `Group` of `Shape`s reused across instances, so the instancing
     engine collapses each sub-part across all trees. Much more tree-like than a single
     cone, still cheap enough for instancing."""
-    from OpenGLContext.scenegraph.basenodes import (
+    from OpenGLContext.scenegraph.basenodes import (  # type: ignore[attr-defined]  # basenodes builds node classes dynamically from entry points
         Shape, Cylinder, Cone, Appearance, Material,
     )
     trunk_h = height * 0.32
@@ -211,11 +250,11 @@ def conifer(height=9.0, trunk_color=(0.30, 0.20, 0.11),
     return Group(children=parts)
 
 
-def group_from_scatter(placements, prototype):
+def group_from_scatter(placements: Scatter, prototype: Any) -> Group:
     """A `Group` of per-instance `Transform`s over one shared `prototype`."""
     children = []
     for position, yaw, scale in zip(placements.positions, placements.yaws,
-                                    placements.scales):
+                                    placements.scales, strict=True):
         children.append(Transform(
             translation=[float(position[0]), float(position[1]), float(position[2])],
             rotation=[0.0, 1.0, 0.0, float(yaw)],
@@ -225,7 +264,9 @@ def group_from_scatter(placements, prototype):
     return Group(children=children)
 
 
-def partition_by_distance(placements, camera, near_distance):
+def partition_by_distance(
+    placements: Scatter, camera: Sequence[float], near_distance: float
+) -> tuple[Scatter, Scatter]:
     """Split placements into (near, far) about a distance from `camera`.
 
     Near instances render as full meshes; far ones as cheap billboard impostors.
@@ -238,14 +279,21 @@ def partition_by_distance(placements, camera, near_distance):
     near_mask = d <= near_distance
     far_mask = ~near_mask
 
-    def sub(mask):
+    def sub(mask: np.ndarray) -> Scatter:
         return Scatter(placements.positions[mask], placements.yaws[mask],
                        placements.scales[mask])
     return sub(near_mask), sub(far_mask)
 
 
-def build_vegetation_group(points, tris, prototype, density, seed,
-                           scale_range=(1.0, 1.0), keep=None):
+def build_vegetation_group(
+    points: np.ndarray,
+    tris: np.ndarray,
+    prototype: Any,
+    density: float,
+    seed: int,
+    scale_range: tuple[float, float] = (1.0, 1.0),
+    keep: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+) -> Group:
     """A `Group` of per-instance `Transform`s placing `prototype` over the mesh.
 
     `prototype` is a single node reused by every instance (so instancing collapses
@@ -257,8 +305,17 @@ def build_vegetation_group(points, tris, prototype, density, seed,
     return group_from_scatter(placements, prototype)
 
 
-def build_grass_patch(points, tris, blade, camera, radius, density, seed,
-                      elevation=None, scale_range=(0.7, 1.4)):
+def build_grass_patch(
+    points: np.ndarray,
+    tris: np.ndarray,
+    blade: Any,
+    camera: Sequence[float],
+    radius: float,
+    density: float,
+    seed: int,
+    elevation: Optional[tuple[float, float]] = None,
+    scale_range: tuple[float, float] = (0.7, 1.4),
+) -> Group:
     """Dense instanced grass blades within `radius` of the camera.
 
     Grass is only worth drawing near the viewer, so placements are limited to a disc
@@ -267,7 +324,7 @@ def build_grass_patch(points, tris, blade, camera, radius, density, seed,
     """
     cam = np.asarray(camera, dtype="f4")
 
-    def keep(pos):
+    def keep(pos: np.ndarray) -> np.ndarray:
         d = np.linalg.norm(pos[:, [0, 2]] - cam[[0, 2]], axis=1)
         mask = d <= radius
         if elevation is not None:
@@ -280,9 +337,18 @@ def build_grass_patch(points, tris, blade, camera, radius, density, seed,
     return group_from_scatter(placements, blade)
 
 
-def build_vegetation_lod(points, tris, near_prototype, far_prototype, density,
-                         seed, camera, near_distance, scale_range=(1.0, 1.0),
-                         keep=None):
+def build_vegetation_lod(
+    points: np.ndarray,
+    tris: np.ndarray,
+    near_prototype: Any,
+    far_prototype: Any,
+    density: float,
+    seed: int,
+    camera: Sequence[float],
+    near_distance: float,
+    scale_range: tuple[float, float] = (1.0, 1.0),
+    keep: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+) -> Group:
     """A `Group` with near instances as `near_prototype` and far as `far_prototype`.
 
     `far_prototype` is typically a camera-facing billboard (a cheap impostor) so

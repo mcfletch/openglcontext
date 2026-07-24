@@ -15,8 +15,16 @@ Per-instance data (position, yaw, scale) can be replaced each frame with
 :meth:`update_instances` for a camera-following field.
 """
 import ctypes
+from typing import Any
+
 import numpy as np
-from OpenGL.GL import *
+from OpenGL.GL import (
+    GL_ARRAY_BUFFER, GL_CULL_FACE, GL_DEPTH_TEST, GL_FALSE, GL_FLOAT, GL_STATIC_DRAW,
+    GL_TEXTURE0, GL_TEXTURE_2D, GL_TRIANGLES, glActiveTexture, glBindBuffer,
+    glBindTexture, glBindVertexArray, glBufferData, glDisable, glDrawArraysInstanced,
+    glEnable, glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays,
+    glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
+)
 from OpenGLContext.scenegraph.instancedgl import (
     load_program, texture_rgba, delete_gl, setup_instance_attribs, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import (
@@ -37,32 +45,47 @@ class InstancedBillboards(InstancedVegBase):
     :param bounds: (sx, sy, sz) node bounding box (kept large so a follow-field is
         never frustum-culled as a whole).
     """
-    def __init__(self, positions, yaws, scales, texture, width=0.62,
-                 near_fade=False, far_fade=0.0, near_cut=0.0, sun_level=0.5, bounds=_BIG):
+    def __init__(self, positions: np.ndarray, yaws: np.ndarray, scales: np.ndarray,
+                 texture: str, width: float = 0.62, near_fade: bool = False,
+                 far_fade: float = 0.0, near_cut: float = 0.0, sun_level: float = 0.5,
+                 bounds: "tuple[float, float, float]" = _BIG) -> None:
         super(InstancedBillboards, self).__init__()
-        self.pos = np.asarray(positions, np.float32); self.yaws = np.asarray(yaws, np.float32)
-        self.scales = np.asarray(scales, np.float32); self.texture = texture; self.width = width
-        self.near_fade = near_fade; self.far_fade = float(far_fade)
-        self.near_cut = float(near_cut); self.sun_level = float(sun_level); self.bounds = bounds
-        self._gl = None; self._pending = False; self._disabled = False
+        self.pos = np.asarray(positions, np.float32)
+        self.yaws = np.asarray(yaws, np.float32)
+        self.scales = np.asarray(scales, np.float32)
+        self.texture = texture
+        self.width = width
+        self.near_fade = near_fade
+        self.far_fade = float(far_fade)
+        self.near_cut = float(near_cut)
+        self.sun_level = float(sun_level)
+        self.bounds = bounds
+        self._gl: Any = None
+        self._pending = False
+        self._disabled = False
 
-    def _instance_rows(self):
+    def _instance_rows(self) -> np.ndarray:
         if not len(self.pos):
             return np.zeros((0, 5), np.float32)
         return np.concatenate([self.pos, self.yaws[:, None], self.scales[:, None]], 1).astype(np.float32)
 
-    def _init_gl(self):
+    def _init_gl(self) -> None:
         self._prog = load_program("veg_billboard.vert", "veg_billboard.frag")
         # single quad, camera-faced in the vertex shader: x in [-0.5,0.5], y in [0,1].
         # v is flipped (1 at the base) because textures store row 0 at the top.
         mesh = np.array([(-0.5, 0, 0, 0, 1), (0.5, 0, 0, 1, 1), (0.5, 1, 0, 1, 0),
                          (-0.5, 0, 0, 0, 1), (0.5, 1, 0, 1, 0), (-0.5, 1, 0, 0, 0)], np.float32)
-        self._vao = glGenVertexArrays(1); glBindVertexArray(self._vao)
-        self._mvb = glGenBuffers(1); glBindBuffer(GL_ARRAY_BUFFER, self._mvb)
+        self._vao = glGenVertexArrays(1)
+        glBindVertexArray(self._vao)
+        self._mvb = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self._mvb)
         glBufferData(GL_ARRAY_BUFFER, mesh.nbytes, mesh, GL_STATIC_DRAW)
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, ctypes.c_void_p(0)); glEnableVertexAttribArray(0)
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, ctypes.c_void_p(12)); glEnableVertexAttribArray(1)
-        self._ibuf = InstanceBuffer(); glBindBuffer(GL_ARRAY_BUFFER, self._ibuf.id)
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(0)
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, ctypes.c_void_p(12))
+        glEnableVertexAttribArray(1)
+        self._ibuf = InstanceBuffer()
+        glBindBuffer(GL_ARRAY_BUFFER, self._ibuf.id)
         setup_instance_attribs(2, 3)
         self._ibuf.upload(self._instance_rows())
         glBindVertexArray(0)
@@ -74,18 +97,23 @@ class InstancedBillboards(InstancedVegBase):
         self._commit_constants()
         self._gl = self._prog
 
-    def _upload_constants(self):
+    def _upload_constants(self) -> None:
         U = self.U
-        glUniform1i(U["pine"], 0); glUniform1f(U["uWidth"], self.width)
+        glUniform1i(U["pine"], 0)
+        glUniform1f(U["uWidth"], self.width)
         glUniform1f(U["uNearFade"], 1.0 if self.near_fade else 0.0)
-        glUniform1f(U["uFarFade"], self.far_fade); glUniform1f(U["uNearCut"], self.near_cut)
+        glUniform1f(U["uFarFade"], self.far_fade)
+        glUniform1f(U["uNearCut"], self.near_cut)
         glUniform1f(U["uSunLevel"], self.sun_level)
-        glUniform1f(U["uLodStart"], LOD_NEAR); glUniform1f(U["uLodEnd"], LOD_FAR)
+        glUniform1f(U["uLodStart"], LOD_NEAR)
+        glUniform1f(U["uLodEnd"], LOD_FAR)
         glUniform3f(U["sunColor"], 1.3, 1.22, 1.05)
-        glUniform3f(U["skyAmbient"], 0.5, 0.58, 0.66); glUniform3f(U["groundAmbient"], 0.14, 0.16, 0.11)
-        glUniform1f(U["fogDensity"], 0.00016); glUniform3f(U["fogColor"], 0.46, 0.58, 0.76)
+        glUniform3f(U["skyAmbient"], 0.5, 0.58, 0.66)
+        glUniform3f(U["groundAmbient"], 0.14, 0.16, 0.11)
+        glUniform1f(U["fogDensity"], 0.00016)
+        glUniform3f(U["fogColor"], 0.46, 0.58, 0.76)
 
-    def dispose(self):
+    def dispose(self) -> None:
         """Free this node's GL objects (VAO, buffers, texture, program). GL thread."""
         if not self._gl:
             return
@@ -93,19 +121,25 @@ class InstancedBillboards(InstancedVegBase):
                   textures=[self._tex], programs=[self._prog])
         self._gl = None
 
-    def update_instances(self, positions, yaws, scales):
+    def update_instances(self, positions: np.ndarray, yaws: np.ndarray,
+                         scales: np.ndarray) -> None:
         """Stage new per-instance data; uploaded on the GL thread in :meth:`render`."""
-        self.pos = np.asarray(positions, np.float32); self.yaws = np.asarray(yaws, np.float32)
-        self.scales = np.asarray(scales, np.float32); self._pending = True
+        self.pos = np.asarray(positions, np.float32)
+        self.yaws = np.asarray(yaws, np.float32)
+        self.scales = np.asarray(scales, np.float32)
+        self._pending = True
 
-    def _stream(self):
+    def _stream(self) -> bool:
         if self._pending:
-            self._ibuf.upload(self._instance_rows()); self._pending = False
+            self._ibuf.upload(self._instance_rows())
+            self._pending = False
         return self._ibuf.count > 0
 
-    def _draw(self, mode):
-        glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, self._tex)
-        glEnable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE)
+    def _draw(self, mode: Any) -> None:
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D, self._tex)
+        glEnable(GL_DEPTH_TEST)
+        glDisable(GL_CULL_FACE)
         glBindVertexArray(self._vao)
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, self._ibuf.count)
         glBindVertexArray(0)

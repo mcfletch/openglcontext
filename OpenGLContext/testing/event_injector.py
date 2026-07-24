@@ -27,11 +27,10 @@ import fcntl
 import json
 import logging
 import os
-import select
 import socket
 import sys
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from OpenGLContext.testing.process_exit import flush_and_exit
 
@@ -124,6 +123,7 @@ class EventInjector:
 
     def _read_from_socket(self) -> str:
         """Read available data from socket."""
+        assert self._socket is not None  # reached only while the listener exists
         data = ''
 
         # Accept new connection if needed
@@ -146,7 +146,8 @@ class EventInjector:
         except BlockingIOError:
             pass
         except ConnectionResetError:
-            self._conn.close()
+            if self._conn is not None:
+                self._conn.close()
             self._conn = None
 
         return data
@@ -193,6 +194,11 @@ class EventInjectionMixin:
 
     _event_injector: Optional[EventInjector] = None
     _injection_captures: Dict[str, Any] = {}
+
+    if TYPE_CHECKING:
+        # Provided by the concrete Context this mixin is composed into
+        # (OpenGLContext.events.eventhandlermixin.EventHandlerMixin).
+        def getEventManager(self, eventType: str) -> Any: ...
 
     @classmethod
     def add_event_injection_arguments(cls, parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -283,7 +289,7 @@ class EventInjectionMixin:
         # ProcessEvent(). Passing kwargs / calling the manager directly (as the
         # original code did) raised before any handler ran -- which is why this
         # path had no working consumer.
-        synth_event = MouseButtonEvent()
+        synth_event: Any = MouseButtonEvent()
         synth_event.context = self
         synth_event.button = event.get('button', 0)
         synth_event.state = event.get('state', 1)  # 1 = press, 0 = release
@@ -301,7 +307,7 @@ class EventInjectionMixin:
         """Inject a mouse move event."""
         from OpenGLContext.events.mouseevents import MouseMoveEvent
 
-        synth_event = MouseMoveEvent()
+        synth_event: Any = MouseMoveEvent()
         synth_event.context = self
         synth_event.buttons = tuple(event.get('buttons', []))
         synth_event.modifiers = tuple(event.get('modifiers', [0, 0, 0]))
@@ -326,7 +332,7 @@ class EventInjectionMixin:
         state = event.get('state', 1)  # 1 = press, 0 = release
         modifiers = tuple(event.get('modifiers', [0, 0, 0]))
 
-        synth_event = KeyboardEvent()
+        synth_event: Any = KeyboardEvent()
         synth_event.context = self
         synth_event.name = key
         synth_event.state = state
@@ -337,7 +343,7 @@ class EventInjectionMixin:
             manager.ProcessEvent(synth_event)
 
         if state:
-            press_event = KeypressEvent()
+            press_event: Any = KeypressEvent()
             press_event.context = self
             press_event.name = key
             press_event.modifiers = modifiers

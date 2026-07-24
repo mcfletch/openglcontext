@@ -125,3 +125,54 @@ def test_setimage_none_also_defers_stale_render_data():
     bg.setImage(None)                        # clear
     assert bg._render_data is None
     assert bg._stale_render_data == [sentinel]
+
+
+def test_deleting_url_clears_the_panorama(tmp_path):
+    """`del bg.url` runs the field's fdel, which clears the installed image."""
+    import threading
+    from tests.unit.test_hdr_loader import encode_flat
+    p = tmp_path / "todelete.hdr"
+    p.write_bytes(encode_flat(_panorama(8, 16)))
+    bg = HDRBackground()
+    bg.url = [str(p)]                        # stores the field value + spawns loader
+    for t in threading.enumerate():
+        if t.name.startswith("HDR background load"):
+            t.join(timeout=10)
+    assert bg._equirect is not None
+    del bg.url                               # HDRURLField.fdel -> setImage(None)
+    assert bg._equirect is None
+    assert ibl.get_equirect_env() is None
+
+
+def test_setimage_redraws_live_contexts():
+    """Each live context reference that resolves is asked to redraw; dead ones
+    (weakref returning None) are skipped."""
+    redrawn = []
+
+    class _Ctx:
+        def triggerRedraw(self, flag):
+            redrawn.append(flag)
+
+    live = _Ctx()
+    bg = HDRBackground()
+    bg.setImage(_panorama(), contexts=[lambda: live, lambda: None])
+    assert redrawn == [1]                     # live redrawn once, dead one skipped
+
+
+def test_load_background_http_url_fetches_to_cache(tmp_path, monkeypatch):
+    """An http(s) url is fetched to the asset cache before decoding."""
+    from tests.unit.test_hdr_loader import encode_flat
+    import OpenGLContext.loaders.resolver as resolver
+    cached = tmp_path / "remote.hdr"
+    cached.write_bytes(encode_flat(_panorama(8, 16)))
+    calls = []
+
+    def _fake_fetch(url):
+        calls.append(url)
+        return str(cached)
+
+    monkeypatch.setattr(resolver, 'fetch_to_cache', _fake_fetch)
+    bg = HDRBackground()
+    bg.loadBackground("https://example.test/sky.hdr")
+    assert calls == ["https://example.test/sky.hdr"]   # took the http branch
+    assert bg._equirect is not None

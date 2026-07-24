@@ -13,13 +13,28 @@ through it so the three cannot drift.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import ctypes
 
-from OpenGL.GL import *
-from OpenGLContext.arrays import frombuffer
+import numpy as np
+
+from OpenGL.GL import (
+    GL_ALREADY_SIGNALED, GL_COLOR_ATTACHMENT1, GL_CONDITION_SATISFIED,
+    GL_DEPTH_COMPONENT, GL_FLOAT, GL_MAP_READ_BIT, GL_PIXEL_PACK_BUFFER,
+    GL_READ_FRAMEBUFFER, GL_READ_FRAMEBUFFER_BINDING, GL_RGBA, GL_STREAM_READ,
+    GL_SYNC_FLUSH_COMMANDS_BIT, GL_SYNC_GPU_COMMANDS_COMPLETE, GL_UNSIGNED_BYTE,
+    glBindBuffer, glBindFramebuffer, glBufferData, glClientWaitSync, glDeleteSync,
+    glFenceSync, glGenBuffers, glGetIntegerv, glMapBufferRange, glReadBuffer,
+    glReadPixels, glUnmapBuffer,
+)
+# frombuffer is numpy.frombuffer re-exported through vrml.arrays' star import,
+# which mypy cannot trace across.
+from OpenGLContext.arrays import frombuffer  # type: ignore[attr-defined]
 import logging
+
+if TYPE_CHECKING:
+    from OpenGLContext.passes.selectionbuffers import SelectionBufferFBO
 
 log = logging.getLogger(__name__)
 
@@ -32,9 +47,17 @@ class _AsyncPickMixin:
     _pbo_free: Optional[List] = None
     _ASYNC_MAX_INFLIGHT = 4
 
+    if TYPE_CHECKING:
+        matrix: Any
+        projection: Any
+        viewport: Any
+
+        def _getSelectionBuffer(self) -> "SelectionBufferFBO": ...
+
     @staticmethod
     def _dispatchPickEvent(mode: Any, event: Any, object_paths: List,
-                           x, y, depth, matrix, projection, viewport) -> None:
+                           x: float, y: float, depth: float,
+                           matrix: Any, projection: Any, viewport: Any) -> None:
         """Populate a pick event and hand it to the context.
 
         ``object_paths`` is the already-formed list passed to
@@ -50,7 +73,7 @@ class _AsyncPickMixin:
         if hasattr(mode.context, 'ProcessEvent'):
             mode.context.ProcessEvent(event)
 
-    def _acquirePBO(self, nbytes: int):
+    def _acquirePBO(self, nbytes: int) -> tuple[int, int]:
         """Get a pooled Pixel Pack Buffer of at least nbytes (id, capacity)."""
         pool = self._pbo_free
         if pool is None:
@@ -66,7 +89,7 @@ class _AsyncPickMixin:
         glBindBuffer(GL_PIXEL_PACK_BUFFER, 0)
         return pid, cap
 
-    def _releasePBO(self, pid: int, cap: int):
+    def _releasePBO(self, pid: int, cap: int) -> None:
         if self._pbo_free is None:
             self._pbo_free = []
         self._pbo_free.append((pid, cap))
@@ -145,7 +168,7 @@ class _AsyncPickMixin:
                 remaining.append(b)
         self._async_batches = remaining
 
-    def _readPBO(self, pid: int, n: int) -> 'array':
+    def _readPBO(self, pid: int, n: int) -> np.ndarray:
         """Copy n*4 bytes out of a Pixel Pack Buffer as a uint8 array."""
         glBindBuffer(GL_PIXEL_PACK_BUFFER, pid)
         ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, n * 4, GL_MAP_READ_BIT)

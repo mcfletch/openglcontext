@@ -14,9 +14,14 @@ whose accessors share one buffer decodes it once.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, Optional
+
 import numpy as np
 
-from OpenGLContext.loaders.resolver import _decode_data_uri, _resolver_max
+from OpenGLContext.loaders.resolver import Resolver, _decode_data_uri, _resolver_max
+
+if TYPE_CHECKING:
+    import pygltflib
 
 
 # glTF accessor componentType enums (== GL type enums)
@@ -29,27 +34,27 @@ _TYPE_COUNT = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4,
                'MAT2': 4, 'MAT3': 9, 'MAT4': 16}
 
 
-def _component_dtype(component_type):
+def _component_dtype(component_type: int) -> type:
     """numpy dtype for an accessor componentType, or a located ValueError (5c)."""
     try:
         return _COMPONENT_DTYPE[component_type]
-    except KeyError:
+    except KeyError as err:
         raise ValueError(
             "glTF accessor has unknown componentType %r (expected one of %s)"
-            % (component_type, sorted(_COMPONENT_DTYPE)))
+            % (component_type, sorted(_COMPONENT_DTYPE))) from err
 
 
-def _type_count(accessor_type):
+def _type_count(accessor_type: str) -> int:
     """Component count for an accessor ``type``, or a located ValueError (5c)."""
     try:
         return _TYPE_COUNT[accessor_type]
-    except KeyError:
+    except KeyError as err:
         raise ValueError(
             "glTF accessor has unknown type %r (expected one of %s)"
-            % (accessor_type, sorted(_TYPE_COUNT)))
+            % (accessor_type, sorted(_TYPE_COUNT))) from err
 
 
-def _buffer_bytes(g, buffer_index: int, resolver) -> bytes:
+def _buffer_bytes(g: "pygltflib.GLTF2", buffer_index: int, resolver: Resolver) -> bytes:
     """Return the decoded bytes of buffer ``buffer_index`` (decoded once, cached).
 
     A ``.gltf`` with several accessors sharing one data-URI or GLB binary blob was
@@ -72,7 +77,8 @@ def _buffer_bytes(g, buffer_index: int, resolver) -> bytes:
     return data
 
 
-def _accessor_base(g, acc, resolver, index: int = None) -> np.ndarray:
+def _accessor_base(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", resolver: Resolver,
+                   index: Optional[int] = None) -> np.ndarray:
     """Decode the (dense) buffer-view data of an accessor as an (count, ncomp) array.
 
     Handles interleaved (``byteStride``) accessors with a strided view rather than a
@@ -110,11 +116,11 @@ def _accessor_base(g, acc, resolver, index: int = None) -> np.ndarray:
     return np.ascontiguousarray(strided)
 
 
-def _acc_label(index):
+def _acc_label(index: Optional[int]) -> str:
     return "accessor %s" % ('?' if index is None else index)
 
 
-def _read_accessor(g, index: int, resolver) -> np.ndarray:
+def _read_accessor(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
     acc = g.accessors[index]
     dtype = np.dtype(_component_dtype(acc.componentType))
     ncomp = _type_count(acc.type)
@@ -130,7 +136,9 @@ def _read_accessor(g, index: int, resolver) -> np.ndarray:
     return arr
 
 
-def _apply_sparse(g, acc, sparse, base, dtype, ncomp, resolver):
+def _apply_sparse(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", sparse: "pygltflib.Sparse",
+                  base: np.ndarray, dtype: np.dtype, ncomp: int,
+                  resolver: Resolver) -> np.ndarray:
     """Scatter a sparse accessor's index->value overrides onto the base array."""
     n = int(sparse.count)
     si, sv = sparse.indices, sparse.values
@@ -148,7 +156,7 @@ def _apply_sparse(g, acc, sparse, base, dtype, ncomp, resolver):
     return out
 
 
-def _normalize_component(value):
+def _normalize_component(value: np.integer) -> float:
     """glTF normalized-integer -> float. Unsigned maps [0,MAX]->[0,1]; signed maps
     [-MAX,MAX]->[-1,1] with the extra negative code (e.g. int8 -128) clamped to -1."""
     info = np.iinfo(value.dtype)
@@ -157,7 +165,7 @@ def _normalize_component(value):
     return float(value) / float(info.max)
 
 
-def _normalize_array(arr: np.ndarray, dtype=None) -> np.ndarray:
+def _normalize_array(arr: np.ndarray, dtype: Optional[Any] = None) -> np.ndarray:
     """Vectorised :func:`_normalize_component` for a whole integer array.
 
     ``dtype`` selects the integer type whose range sets the divisor and the
@@ -172,12 +180,12 @@ def _normalize_array(arr: np.ndarray, dtype=None) -> np.ndarray:
     return out
 
 
-def _read_floats(g, index: int, resolver) -> np.ndarray:
+def _read_floats(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
     arr = _read_accessor(g, index, resolver).astype(np.float32)
     return np.ascontiguousarray(arr)
 
 
-def _read_normalized(g, index: int, resolver) -> np.ndarray:
+def _read_normalized(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
     """Read an accessor as float32, honoring ``accessor.normalized``.
 
     Float accessors pass through; integer accessors are divided by their type
@@ -193,7 +201,7 @@ def _read_normalized(g, index: int, resolver) -> np.ndarray:
     return np.ascontiguousarray(arr.astype(np.float32))
 
 
-def _coerce_normalized(acc, arr: np.ndarray) -> np.ndarray:
+def _coerce_normalized(acc: "pygltflib.Accessor", arr: np.ndarray) -> np.ndarray:
     """Apply :func:`_read_normalized`'s policy to an already-decoded array.
 
     The Draco path yields attribute values without the accessor's bufferView, but
@@ -218,10 +226,10 @@ def _colors_to_rgba(arr: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(arr)
 
 
-def _read_texcoords(g, index: int, resolver) -> np.ndarray:
+def _read_texcoords(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
     return _read_normalized(g, index, resolver)
 
 
-def _read_colors(g, index: int, resolver) -> np.ndarray:
+def _read_colors(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
     """Read a COLOR_0 accessor (VEC3/VEC4, float or normalized int) as RGBA float32."""
     return _colors_to_rgba(_read_normalized(g, index, resolver))

@@ -21,6 +21,8 @@ The decoder handles the three scanline encodings Radiance emits:
 """
 from __future__ import annotations
 
+from typing import BinaryIO, Union, cast
+
 import numpy as np
 
 __all__ = ['load_hdr', 'load_hdr_bytes', 'rgbe_to_float']
@@ -30,7 +32,7 @@ class HDRError(ValueError):
     """A file that is not a well-formed Radiance RGBE image."""
 
 
-def _readline(fh):
+def _readline(fh: BinaryIO) -> str:
     """Read one newline-terminated header line as ``str`` (headers are ASCII)."""
     buf = bytearray()
     while True:
@@ -43,7 +45,7 @@ def _readline(fh):
     return buf.decode('latin-1')
 
 
-def _parse_header(fh):
+def _parse_header(fh: BinaryIO) -> tuple[int, int, bool, bool]:
     """Consume the Radiance header, returning ``(width, height, flip_x, flip_y)``.
 
     Leaves ``fh`` positioned at the first scanline byte. Raises :class:`HDRError`
@@ -90,7 +92,7 @@ def _parse_header(fh):
     return width, height, flip_x, flip_y
 
 
-def _decode_new_rle(fh, width):
+def _decode_new_rle(fh: BinaryIO, width: int) -> np.ndarray:
     """Decode one new-style adaptive-RLE scanline into a ``(width, 4)`` uint8 row.
 
     ``fh`` is positioned just after the ``2 2 hi lo`` prefix. Each of the four
@@ -127,7 +129,7 @@ def _decode_new_rle(fh, width):
     return row.T.copy()   # (width, 4)
 
 
-def _decode_flat_or_old_rle(fh, first4, width):
+def _decode_flat_or_old_rle(fh: BinaryIO, first4: bytes, width: int) -> np.ndarray:
     """Decode a flat / old-RLE scanline given its already-read first pixel.
 
     Old-style RLE marks a repeat with an ``(1, 1, 1, count)`` pixel: the previous
@@ -159,7 +161,7 @@ def _decode_flat_or_old_rle(fh, first4, width):
     return row
 
 
-def _decode_scanlines(fh, width, height):
+def _decode_scanlines(fh: BinaryIO, width: int, height: int) -> np.ndarray:
     """Decode all ``height`` scanlines into a ``(height, width, 4)`` uint8 array."""
     out = np.empty((height, width, 4), dtype=np.uint8)
     # New-style adaptive RLE is only used for 8 <= width < 32768; narrower or wider
@@ -177,7 +179,7 @@ def _decode_scanlines(fh, width, height):
     return out
 
 
-def rgbe_to_float(rgbe):
+def rgbe_to_float(rgbe: np.ndarray) -> np.ndarray:
     """Convert an ``(..., 4)`` uint8 RGBE array to ``(..., 3)`` float32 radiance.
 
     A pixel with exponent byte ``e`` and mantissa byte ``m`` decodes to
@@ -196,7 +198,7 @@ def rgbe_to_float(rgbe):
     return np.ascontiguousarray(out, dtype=np.float32)
 
 
-def _load(fh):
+def _load(fh: BinaryIO) -> np.ndarray:
     width, height, flip_x, flip_y = _parse_header(fh)
     rgbe = _decode_scanlines(fh, width, height)
     img = rgbe_to_float(rgbe)
@@ -207,7 +209,7 @@ def _load(fh):
     return np.ascontiguousarray(img, dtype=np.float32)
 
 
-def load_hdr(source):
+def load_hdr(source: Union[str, BinaryIO]) -> np.ndarray:
     """Load a Radiance ``.hdr``/``.pic`` image as an ``(H, W, 3)`` float32 array.
 
     ``source`` is a filesystem path or an already-open binary file object. The
@@ -215,12 +217,12 @@ def load_hdr(source):
     values well above 1.0 -- that dynamic range is the whole point of the format.
     """
     if hasattr(source, 'read'):
-        return _load(source)
-    with open(source, 'rb') as fh:
+        return _load(cast(BinaryIO, source))
+    with open(cast(str, source), 'rb') as fh:
         return _load(fh)
 
 
-def load_hdr_bytes(data):
+def load_hdr_bytes(data: bytes) -> np.ndarray:
     """Load a Radiance HDR image from an in-memory ``bytes`` buffer."""
     import io
     return _load(io.BytesIO(data))

@@ -13,7 +13,7 @@ context.
 from __future__ import annotations
 
 import logging
-from typing import Optional, Set, Tuple
+from typing import Any, Optional, Set, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ class ShadowCapabilities:
         return 0
 
     @staticmethod
-    def _parse_version(raw) -> Tuple[int, int]:
+    def _parse_version(raw: Any) -> Tuple[int, int]:
         try:
             if isinstance(raw, bytes):
                 raw = raw.decode('ascii', 'replace')

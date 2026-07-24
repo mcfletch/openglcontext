@@ -34,7 +34,7 @@ class HDRI:
 _PH = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/%s_1k.hdr'
 
 
-def _polyhaven(name, author, description=''):
+def _polyhaven(name: str, author: str, description: str = '') -> HDRI:
     return HDRI(name=name, url=_PH % name, license='CC0', author=author,
                 source='https://polyhaven.com/a/%s' % name, description=description)
 
@@ -60,12 +60,12 @@ CATALOG = {
 DEFAULT = 'studio_small_03'
 
 
-def default_url():
+def default_url() -> str:
     """URL of the default demo HDRI."""
     return CATALOG[DEFAULT].url
 
 
-def resolve(name_or_source):
+def resolve(name_or_source: str) -> str:
     """Resolve a catalogue name to its URL, or pass a path/URL through unchanged.
 
     Accepts ``studio_small_03``, ``polyhaven:studio_small_03``, an ``http(s)://``

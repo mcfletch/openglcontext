@@ -8,10 +8,11 @@ regardless of how deep the test sits, so a resource is ``tests_root(__file__) /
 from the installed package keeps it resolvable both under pytest and when a test
 is run directly.
 """
+import os
 from pathlib import Path
 
 
-def tests_root(start) -> Path:
+def tests_root(start: str | os.PathLike[str]) -> Path:
     """The nearest ancestor directory named ``tests`` at or above ``start``.
 
     ``start`` is a path inside the tree, normally a test module's ``__file__``.

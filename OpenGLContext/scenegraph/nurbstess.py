@@ -11,12 +11,25 @@ their ``_build_shader_geometry_cached`` overrides. :mod:`nurbs` re-exports
 :mod:`teapot_nurbs` reaches for as ``nurbs._tessellate_nurbs_surface``.
 """
 
-from OpenGL.GLU import *
-from OpenGL.GL import *
-from OpenGL.arrays import vbo
 import logging
+from typing import Any, Optional
 
-from OpenGLContext import arrays
+from OpenGL.GLU import (
+    GLU_DOMAIN_DISTANCE, GLU_NURBS_BEGIN, GLU_NURBS_COLOR, GLU_NURBS_END,
+    GLU_NURBS_ERROR, GLU_NURBS_MODE, GLU_NURBS_NORMAL, GLU_NURBS_TESSELLATOR,
+    GLU_NURBS_TEXTURE_COORD, GLU_NURBS_VERTEX, GLU_SAMPLING_METHOD, GLU_U_STEP,
+    GLU_V_STEP, gluBeginSurface, gluDeleteNurbsRenderer, gluEndSurface, gluErrorString,
+    gluNewNurbsRenderer, gluNurbsCallback, gluNurbsProperty, gluNurbsSurface,
+)
+from OpenGL.GL import (
+    GL_MAP2_COLOR_4, GL_MAP2_TEXTURE_COORD_2, GL_MAP2_VERTEX_3, GL_NO_ERROR, GL_POLYGON,
+    GL_QUADS, GL_QUAD_STRIP, GL_TRIANGLES, GL_TRIANGLE_FAN, GL_TRIANGLE_STRIP,
+    glGetError,
+)
+from OpenGL.arrays import vbo
+
+import numpy as np
+
 from OpenGLContext.scenegraph.nurbssampling import (
     NurbsToleranceSample,
     NurbsDomainDistanceSample,
@@ -32,47 +45,47 @@ class NURBSTessellatorCallback:
     that can be rendered with shaders in core profile.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the callback collector."""
         self.reset()
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset collection state for a new tessellation."""
-        self.vertices = []
-        self.normals = []
-        self.colors = []
-        self.texcoords = []
-        self.primitives = []  # List of (prim_type, start_index, count)
-        self._current_type = None
+        self.vertices: list[tuple[float, float, float]] = []
+        self.normals: list[tuple[float, float, float]] = []
+        self.colors: list[tuple[float, float, float, float]] = []
+        self.texcoords: list[tuple[float, float]] = []
+        self.primitives: list[tuple[Any, int, int]] = []  # (prim_type, start_index, count)
+        self._current_type: Any = None
         self._current_start = 0
         self._current_count = 0
         self._has_colors = False
 
-    def on_begin(self, prim_type):
+    def on_begin(self, prim_type: Any) -> None:
         """Callback for primitive begin."""
         self._current_type = prim_type
         self._current_start = len(self.vertices)
         self._current_count = 0
 
-    def on_vertex(self, vertex):
+    def on_vertex(self, vertex: Any) -> None:
         """Callback for vertex data."""
         self.vertices.append((float(vertex[0]), float(vertex[1]), float(vertex[2])))
         self._current_count += 1
 
-    def on_normal(self, normal):
+    def on_normal(self, normal: Any) -> None:
         """Callback for normal data."""
         self.normals.append((float(normal[0]), float(normal[1]), float(normal[2])))
 
-    def on_color(self, color):
+    def on_color(self, color: Any) -> None:
         """Callback for color data."""
         self.colors.append((float(color[0]), float(color[1]), float(color[2]), float(color[3])))
         self._has_colors = True
 
-    def on_texcoord(self, tex):
+    def on_texcoord(self, tex: Any) -> None:
         """Callback for texture-coordinate data (parametric u, v)."""
         self.texcoords.append((float(tex[0]), float(tex[1])))
 
-    def on_end(self):
+    def on_end(self) -> None:
         """Callback for primitive end."""
         if self._current_count > 0:
             self.primitives.append((
@@ -82,17 +95,17 @@ class NURBSTessellatorCallback:
             ))
         self._current_type = None
 
-    def on_error(self, errno):
+    def on_error(self, errno: int) -> None:
         """Callback for errors."""
         log.error("GLU NURBS tessellation error %d: %s", errno, gluErrorString(errno))
 
-    def build_triangles(self):
+    def build_triangles(self) -> list[tuple[int, int, int]]:
         """Convert collected primitives to triangle vertex list.
 
         Returns:
             List of (vertex_index, vertex_index, vertex_index) tuples
         """
-        triangles = []
+        triangles: list[tuple[int, int, int]] = []
         for prim_type, start, count in self.primitives:
             if prim_type == GL_TRIANGLES:
                 # Already triangles - take them directly
@@ -132,10 +145,10 @@ class NURBSTessellatorCallback:
 
 
 # Module-level tessellator callback instance
-_tess_callback = None
+_tess_callback: Optional[NURBSTessellatorCallback] = None
 
 
-def _get_tess_callback():
+def _get_tess_callback() -> NURBSTessellatorCallback:
     """Get the module-level tessellator callback instance."""
     global _tess_callback
     if _tess_callback is None:
@@ -143,8 +156,9 @@ def _get_tess_callback():
     return _tess_callback
 
 
-def _tessellate_nurbs_surface(surface, trimming_contours=None, sampling=None,
-                              u_step=None, v_step=None, texcoord=False):
+def _tessellate_nurbs_surface(surface: Any, trimming_contours: Any = None, sampling: Any = None,
+                              u_step: Optional[float] = None, v_step: Optional[float] = None,
+                              texcoord: bool = False) -> NURBSTessellatorCallback:
     """Tessellate a NURBS surface using GLU callbacks.
 
     Args:
@@ -212,7 +226,7 @@ def _tessellate_nurbs_surface(surface, trimming_contours=None, sampling=None,
         gluBeginSurface(nurb)
         try:
             # Get control points
-            control_points = arrays.reshape(
+            control_points = np.reshape(
                 surface.controlPoint,
                 (surface.vDimension, surface.uDimension, 3)
             ).astype('f')
@@ -221,12 +235,12 @@ def _tessellate_nurbs_surface(surface, trimming_contours=None, sampling=None,
 
             # Add color surface if present
             if len(surface.color):
-                color_data = arrays.zeros(
+                color_data = np.zeros(
                     (len(surface.controlPoint), 4), 'f'
                 )
                 color_data[:, :3] = surface.color.astype('f')
                 color_data[:, 3] = 1.0
-                color_data = arrays.reshape(
+                color_data = np.reshape(
                     color_data,
                     (surface.vDimension, surface.uDimension, 4)
                 )
@@ -240,9 +254,9 @@ def _tessellate_nurbs_surface(surface, trimming_contours=None, sampling=None,
             if texcoord:
                 u0, u1 = float(u_knot[0]), float(u_knot[-1])
                 v0, v1 = float(v_knot[0]), float(v_knot[-1])
-                tex_u_knot = arrays.array([u0, u0, u1, u1], 'f')
-                tex_v_knot = arrays.array([v0, v0, v1, v1], 'f')
-                tex_grid = arrays.array(
+                tex_u_knot = np.array([u0, u0, u1, u1], 'f')
+                tex_v_knot = np.array([v0, v0, v1, v1], 'f')
+                tex_grid = np.array(
                     [[[0.0, 0.0], [1.0, 0.0]],
                      [[0.0, 1.0], [1.0, 1.0]]], 'f')
                 gluNurbsSurface(
@@ -268,7 +282,7 @@ def _tessellate_nurbs_surface(surface, trimming_contours=None, sampling=None,
     return callback
 
 
-def _build_nurbs_vbo(callback):
+def _build_nurbs_vbo(callback: NURBSTessellatorCallback) -> tuple[Any, int, bool]:
     """Build a VBO from tessellated NURBS data.
 
     Args:
@@ -289,7 +303,7 @@ def _build_nurbs_vbo(callback):
     # For colored: color(4) + normal(3) + vertex(3) = 10 floats
     has_colors = callback._has_colors and len(callback.colors) == len(callback.vertices)
 
-    vertex_data = []
+    vertex_data: list[float] = []
     for tri in triangles:
         for idx in tri:
             if has_colors:
@@ -297,6 +311,6 @@ def _build_nurbs_vbo(callback):
             vertex_data.extend(callback.normals[idx] if idx < len(callback.normals) else (0, 0, 1))
             vertex_data.extend(callback.vertices[idx])
 
-    vertex_array = arrays.array(vertex_data, 'f')
+    vertex_array = np.array(vertex_data, 'f')
     nurbs_vbo = vbo.VBO(vertex_array)
     return nurbs_vbo, len(triangles) * 3, has_colors

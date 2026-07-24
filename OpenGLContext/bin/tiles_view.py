@@ -32,19 +32,25 @@ os.environ.setdefault("OPENGLCONTEXT_PROFILE", "core")
 os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")
 os.environ.setdefault("OPENGLCONTEXT_BACKEND", "glfw")
 
+from typing import TYPE_CHECKING, Any
 from OpenGLContext import testingcontext
-from OpenGLContext.scenegraph.basenodes import (
-    sceneGraph, DirectionalLight, Background,
-)
+from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
+from OpenGLContext.scenegraph.light import DirectionalLight
+from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.loaders.tiles3d.gltf_uploader import make_tile_loader
 from OpenGLContext.loaders.tiles3d.frustum import view_projection
 
-BaseContext = testingcontext.getInteractive()
+if TYPE_CHECKING:
+    from OpenGLContext.context import Context as BaseContext
+    from OpenGLContext.loaders.tiles3d.tileset import RuntimeTile
+    from OpenGLContext.quaternion import Quaternion
+else:
+    BaseContext = testingcontext.getInteractive()
 
 
-def _leaf_tile(tile):
+def _leaf_tile(tile: "RuntimeTile") -> "RuntimeTile":
     """Descend to the first tile that actually carries drawable content.
 
     An external-tileset or grouping tile has no content of its own; its geometry
@@ -55,16 +61,16 @@ def _leaf_tile(tile):
     return tile
 
 
-def _forward(quaternion):
+def _forward(quaternion: "Quaternion") -> np.ndarray:
     """World-space look direction for a view platform's orientation quaternion."""
     r = np.asarray(quaternion.matrix())[:3, :3]
     return r.T @ np.array([0.0, 0.0, -1.0])
 
 
 class TilesViewContext(BaseContext):
-    config = None
+    config: Any = None
 
-    def OnInit(self):
+    def OnInit(self) -> None:  # pragma: no cover - live GL context, streaming + upload
         try:
             import glfw
             glfw.swap_interval(0)          # never block on vsync (offscreen hangs)
@@ -107,7 +113,7 @@ class TilesViewContext(BaseContext):
             % len(self.terrain.children))
         sys.stdout.flush()
 
-    def _framing(self):
+    def _framing(self) -> tuple[np.ndarray, float]:
         """(centre, radius) of the whole tileset, aimed at real geometry.
 
         The root bounding volume gives extent; the first content tile's glTF centre
@@ -129,12 +135,13 @@ class TilesViewContext(BaseContext):
             pass
         return center, float(radius or 1.0)
 
-    def _eye(self):
-        if getattr(self, "platform", None) is not None:
-            return tuple(float(v) for v in self.platform.position[:3])
+    def _eye(self) -> tuple[float, ...]:
+        platform = getattr(self, "platform", None)
+        if platform is not None:
+            return tuple(float(v) for v in platform.position[:3])
         return tuple(float(v) for v in self._eye0[:3])
 
-    def _frame_camera(self):
+    def _frame_camera(self) -> None:
         """Place the camera to fit the whole tileset, looking slightly down.
 
         Explicit frustum: a real tileset spans metres to kilometres, so the default
@@ -145,16 +152,20 @@ class TilesViewContext(BaseContext):
         fov = math.radians(self.config.fov)
         distance = r / max(1e-3, math.sin(fov / 2.0)) * self.config.margin
         self._eye0 = self._center + np.array([0.0, r * 0.22, distance])
-        if getattr(self, "platform", None) is not None:
-            self.platform.setFrustum(fov, None, max(1e-4, r * 0.02), r * 60.0)
-            self.platform.setPosition(tuple(float(v) for v in self._eye0))
-            self.platform.setOrientation((1, 0, 0, 0.10))
+        platform = getattr(self, "platform", None)
+        if platform is not None:
+            platform.setFrustum(fov, None, max(1e-4, r * 0.02), r * 60.0)
+            platform.setPosition(tuple(float(v) for v in self._eye0))
+            platform.setOrientation((1, 0, 0, 0.10))
 
-    def _view_projection(self, eye):
-        if getattr(self, "platform", None) is not None:
-            fwd = _forward(self.platform.quaternion)
+    def _view_projection(self, eye: tuple[float, ...]) -> np.ndarray:
+        platform = getattr(self, "platform", None)
+        if platform is not None:
+            fwd = _forward(platform.quaternion)
         else:
-            fwd = (self._center - np.asarray(eye)) or np.array([0, 0, -1.0])
+            fwd = self._center - np.asarray(eye)
+            if not np.asarray(fwd).any():   # degenerate (eye at center)
+                fwd = np.array([0, 0, -1.0])
         center = np.asarray(eye) + np.asarray(fwd) * (self._radius or 1.0)
         aspect = (self.getViewPort()[0] / max(1, self.getViewPort()[1])) or 1.0
         r = self._radius
@@ -162,30 +173,30 @@ class TilesViewContext(BaseContext):
                                math.radians(self.config.fov), aspect,
                                max(1e-4, r * 0.02), r * 60.0)
 
-    def _stream(self, eye):
+    def _stream(self, eye: tuple[float, ...]) -> None:
         self.terrain.update_for_camera(
             eye, self.getViewPort()[1] or 700,
             view_projection=self._view_projection(eye))
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *args: Any) -> Any:  # pragma: no cover - per-frame GL stream callback
         if getattr(self, "terrain", None) is not None:
             self._stream(self._eye())
             self.triggerRedraw(1)
         return super().OnIdle(*args) if hasattr(super(), "OnIdle") else None
 
-    def OnDraw(self, *args, **named):
+    def OnDraw(self, *args: Any, **named: Any) -> Any:  # pragma: no cover - GL draw callback
         if getattr(self, "terrain", None) is not None:
             self._stream(self._eye())
         return super().OnDraw(*args, **named)
 
-    def OnShutdown(self, *args, **named):
+    def OnShutdown(self, *args: Any, **named: Any) -> Any:  # pragma: no cover - GL teardown
         if getattr(self, "terrain", None) is not None:
             self.terrain.shutdown()
-        return super().OnShutdown(*args, **named) if hasattr(
-            super(), "OnShutdown") else None
+        on_shutdown = getattr(super(), "OnShutdown", None)
+        return on_shutdown(*args, **named) if on_shutdown is not None else None
 
 
-def build_parser():
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="oglc-tiles", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -214,7 +225,7 @@ def build_parser():
     return p
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     if not fetch.is_url(args.source) and not os.path.exists(args.source):
         build_parser().error("tileset not found: %s" % args.source)
@@ -229,5 +240,5 @@ def main(argv=None):
     TilesViewContext.ContextMainLoop()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
     main()

@@ -48,6 +48,7 @@ import os
 import sys
 import threading
 from math import pi, sin, asin, atan2
+from typing import TYPE_CHECKING, Any, Callable, Optional, cast
 
 os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
@@ -63,29 +64,32 @@ os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
 os.environ.setdefault('OPENGLCONTEXT_IBL_INTENSITY', '0.4')
 
 from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
-
-from OpenGLContext.scenegraph.basenodes import (
-    sceneGraph, Transform, DirectionalLight, PointLight, Background,
-)
-from OpenGLContext.scenegraph.light import Light
+from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
+from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.scenegraph.light import Light, DirectionalLight, PointLight
+from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import look_orientation
 from OpenGLContext.capture import SettleCapture
+
+if TYPE_CHECKING:
+    from OpenGLContext.context import Context as BaseContext
+    from OpenGLContext.loaders.gltf.scene import GLTFScene
+else:
+    BaseContext = testingcontext.getInteractive()
 
 # look_orientation used to live here as ``_orientation``; kept as an alias so any
 # external caller importing it keeps working.
 _orientation = look_orientation
 
 
-def _is_url(src):
+def _is_url(src: object) -> bool:
     """True if ``src`` is an http(s) URL rather than a local filesystem path."""
     return isinstance(src, str) and (
         src.startswith('http://') or src.startswith('https://'))
 
 
-def _resolve_source(src):
+def _resolve_source(src: str | None) -> str | None:
     """Validate a CLI/env source. A local path must exist; an http(s) URL is
     returned unchanged so the loader fetches it and resolves its external
     resources against the document origin (see :func:`_load_source`)."""
@@ -98,7 +102,7 @@ def _resolve_source(src):
     return src
 
 
-def _load_source(src):
+def _load_source(src: str) -> "GLTFScene":
     """Load a :class:`GLTFScene` from a local path or an http(s) URL.
 
     A URL goes through :func:`gltf.load_gltf_url`, which fetches the document over
@@ -113,7 +117,7 @@ def _load_source(src):
     return gltf.load_gltf(src)
 
 
-def _count_lights(node, seen=None):
+def _count_lights(node: Any, seen: set[int] | None = None) -> int:
     """Recursively count Light nodes reachable through ``children`` fields."""
     if seen is None:
         seen = set()
@@ -128,16 +132,16 @@ def _count_lights(node, seen=None):
 
 # -- command line ---------------------------------------------------------
 
-def _parse_size(text):
+def _parse_size(text: str) -> tuple[int, int]:
     """Parse a ``WxH`` window size into an (int, int) tuple."""
     try:
         w, h = (int(v) for v in text.lower().split('x'))
         return (w, h)
     except Exception:
-        raise argparse.ArgumentTypeError("size must be WxH, e.g. 1100x680")
+        raise argparse.ArgumentTypeError("size must be WxH, e.g. 1100x680") from None
 
 
-def build_parser(prog='oglc-gltf'):
+def build_parser(prog: str = 'oglc-gltf') -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=prog,
         description='Walk-around viewer for a single glTF/GLB model.',
@@ -212,19 +216,20 @@ def build_parser(prog='oglc-gltf'):
     return parser
 
 
-def _parse_vec3(text):
+def _parse_vec3(text: str) -> tuple[float, ...]:
     parts = text.split(',')
     if len(parts) != 3:
         raise argparse.ArgumentTypeError('expected X,Y,Z, got %r' % text)
     return tuple(float(v) for v in parts)
 
 
-def parse_args(argv=None, prog='oglc-gltf'):
+def parse_args(argv: list[str] | None = None,
+               prog: str = 'oglc-gltf') -> argparse.Namespace:
     """Parse viewer command-line arguments into a Namespace (pure, no GL)."""
     return build_parser(prog).parse_args(argv)
 
 
-def _is_hdr_environment(spec):
+def _is_hdr_environment(spec: str | None) -> bool:
     """Whether ``--environment SPEC`` names a Radiance ``.hdr`` panorama.
 
     An equirectangular ``.hdr``/``.pic`` (local path or http(s) URL) is treated as
@@ -237,7 +242,7 @@ def _is_hdr_environment(spec):
     return path.lower().endswith(('.hdr', '.pic'))
 
 
-def apply_render_env(args):
+def apply_render_env(args: argparse.Namespace) -> None:
     """Translate render-affecting flags into the env vars the renderer reads."""
     if args.shadows is not None:
         os.environ['OPENGLCONTEXT_SHADOWS'] = '1' if args.shadows else '0'
@@ -279,40 +284,49 @@ class TestContext(BaseContext):
 
     # Config Namespace (from parse_args); main() sets it. A bare __main__/subclass
     # run without one falls back to defaults.
-    config = None
+    config: Any = None
     # Source (local path or URL); main() may set this directly for back-compat.
-    _gltf_source = None
+    _gltf_source: str | None = None
+    # Members supplied by the interactive runtime base (event + navigation mixins)
+    # that the minimal type-check-time ``Context`` alias does not expose.
+    platform: Any
+    movementManager: Any
+    addEventHandler: Any
+    # The scenegraph root: the runtime base stores/reads it dynamically
+    # (``getSceneGraph`` is a ``getattr``), so type it here for the subclass.
+    sg: Any
 
-    def OnInit(self):
+    def OnInit(self) -> None:  # pragma: no cover - live GL context setup + async kickoff
         if self.config is None:
             self.config = parse_args([])
-        self._settle = None
-        self._start = None
-        self.model_xform = None
-        self.viewpoints = []
+        self._settle: Optional[SettleCapture] = None
+        self._start: float | None = None
+        self.model_xform: Optional[Transform] = None
+        self.viewpoints: list[Any] = []
         self.cam_index = 0
-        self._camera_names = []
+        self._camera_names: list[str] = []
         self.overlay_text = ''
         self.overlay_error = False
         from time import time
         self._start = time()
-        self._physics = None
+        self._physics: Any = None
         self._physics_on = False
-        self._free_manager = None
-        self._pkeys = {}
-        self._player = None
-        self._animations = []
+        self._free_manager: Any = None
+        self._pkeys: dict[str, float] = {}
+        self._player: Any = None
+        self._animations: list[Any] = []
         self._anim_index = 0
-        self._anim_names = []
-        self._anim_playing = getattr(self.config, 'animate', True)
+        self._anim_names: list[str] = []
+        self._anim_playing: bool = getattr(self.config, 'animate', True)
         self._anim_clock = 0.0
-        self._anim_last = None
-        self._default_model_rotation = (0, 1, 0, 0.0)
+        self._anim_last: float | None = None
+        self._default_model_rotation: tuple[float, ...] = (0, 1, 0, 0.0)
         # Async scene loading: the download/decode runs off the render thread and the
         # result is handed back here (via OnIdle) to build the scenegraph and upload to
         # the card. State guarding that handoff:
         self._load_lock = threading.Lock()
-        self._pending = None        # (scene|None, error|None) awaiting render-thread apply
+        # (scene|None, error|None) awaiting render-thread apply
+        self._pending: Optional[tuple[Any, Any]] = None
         self._load_token = 0        # bumped per request; a superseded worker's result is dropped
         self._loading = False       # a background load is in flight
         self._scene_loaded = False  # a real scene has been applied (vs the empty placeholder)
@@ -344,7 +358,7 @@ class TestContext(BaseContext):
             self._request_initial_scene()
 
     # -- source + scene loading (overridable seams) -----------------------
-    def _prepare_source(self):
+    def _prepare_source(self) -> None:
         """Resolve ``self.source`` from config/env. Subclasses may source scenes
         elsewhere (e.g. a downloaded sample catalogue) and skip this."""
         src = self._gltf_source or self.config.source or os.environ.get('GLTF')
@@ -354,14 +368,15 @@ class TestContext(BaseContext):
             sys.stderr.write("\nERROR: no glTF/GLB file or URL given.\n")
             raise SystemExit(2)
 
-    def _load_scene(self):
+    def _load_scene(self) -> "GLTFScene":
         """Return a GLTFScene for the current source. Subclasses override to load
         from somewhere other than a single file."""
         sys.stdout.write("Loading %s ...\n" % self.source)
         sys.stdout.flush()
         # KHR_animation_pointer plays live through the Player (the viewer pins it to
         # --anim-time for a deterministic capture), so no load-time baking is needed.
-        return _load_source(self.source)
+        # _prepare_source raises if the source is unresolved, so it is set here.
+        return _load_source(cast(str, self.source))
 
     # -- async scene loading ----------------------------------------------
     # The slow part of showing a model is the download + decode, which only produces
@@ -369,15 +384,15 @@ class TestContext(BaseContext):
     # apply the result on the render thread, where the scenegraph is built and the
     # geometry/textures are uploaded to the card. The render loop keeps drawing (a
     # "Loading ..." overlay) throughout, so switching models never freezes the window.
-    def _request_initial_scene(self):
+    def _request_initial_scene(self) -> None:
         """Kick off the first async load. Subclasses browsing a catalogue override
         this to pull their first model instead of a single source file."""
         self._request_scene(self._load_scene, self._loading_label())
 
-    def _loading_label(self):
+    def _loading_label(self) -> str:
         return "Loading %s ..." % os.path.basename(self.source or 'scene')
 
-    def _request_scene(self, produce, label):
+    def _request_scene(self, produce: Callable[[], Any], label: str) -> None:
         """Load a scene off the render thread. ``produce`` is a no-arg callable run in
         a background thread; it downloads/decodes and returns a scene (and must not
         touch GL). Its result is applied on the render thread by
@@ -389,7 +404,7 @@ class TestContext(BaseContext):
         self.overlay_error = False
         self.triggerRedraw(1)
 
-        def worker():
+        def worker() -> None:
             error = None
             try:
                 scene = produce()
@@ -401,7 +416,7 @@ class TestContext(BaseContext):
                     self._loading = False
         threading.Thread(target=worker, name='gltf-load', daemon=True).start()
 
-    def _poll_pending_scene(self):
+    def _poll_pending_scene(self) -> bool:
         """On the render thread: apply a background-loaded scene if one is ready.
 
         Building the scenegraph here (not in the worker) keeps every GL upload on the
@@ -419,12 +434,12 @@ class TestContext(BaseContext):
         self.triggerRedraw(1)
         return True
 
-    def _apply_loaded(self, scene):
+    def _apply_loaded(self, scene: Any) -> None:
         """Render thread: build the scenegraph for a freshly loaded scene."""
         self._build_scenegraph(scene)
         self._on_scene_ready()
 
-    def _apply_failed(self, error):
+    def _apply_failed(self, error: BaseException | None) -> None:
         """Render thread: a background load raised. Keep a visible error overlay."""
         if getattr(self, 'sg', None) is None:
             self.sg = sceneGraph(children=[])
@@ -434,7 +449,7 @@ class TestContext(BaseContext):
         sys.stderr.write("Load failed: %s\n" % (error,))
         sys.stderr.flush()
 
-    def _on_scene_ready(self):
+    def _on_scene_ready(self) -> None:
         """Render thread, just after a freshly loaded scene's scenegraph is built.
         Establish physics for the new scene (the single-file viewer loads once)."""
         first = not self._scene_loaded
@@ -448,13 +463,13 @@ class TestContext(BaseContext):
                 sys.stdout.flush()
 
     # -- screenshot -------------------------------------------------------
-    def _request_screenshot(self, event=None):
+    def _request_screenshot(self, event: Any = None) -> None:
         """Queue a framebuffer grab; taken in SwapBuffers before the swap (reading
         the buffer after the swap returns stale data in the dev-container)."""
         self._screenshot_pending = True
         self.triggerRedraw(1)
 
-    def _save_screenshot(self):
+    def _save_screenshot(self) -> None:  # pragma: no cover - GL framebuffer read-back
         from datetime import datetime
         from OpenGLContext.capture import capture_to_png
         name = datetime.now().strftime("gltf-%Y-%m-%dT%H-%M-%S.png")
@@ -466,7 +481,7 @@ class TestContext(BaseContext):
         sys.stdout.flush()
 
     # -- scenegraph assembly ----------------------------------------------
-    def _build_scenegraph(self, scene):
+    def _build_scenegraph(self, scene: Any) -> None:
         """(Re)build ``self.sg`` from a loaded scene, honouring the config. Safe to
         call again to swap the model (subclasses browsing a catalogue rely on this)."""
         self.radius = scene.radius or 1.0
@@ -524,7 +539,7 @@ class TestContext(BaseContext):
         self._update_overlay()
 
     # -- animation --------------------------------------------------------
-    def _setup_animation(self, scene):
+    def _setup_animation(self, scene: Any) -> None:
         """Bind a Player to the chosen animation of the freshly loaded scene."""
         self._animations = list(getattr(scene, 'animations', []) or [])
         self._anim_names = [a.name or ('animation%d' % i)
@@ -546,7 +561,7 @@ class TestContext(BaseContext):
                 # Show the first pose immediately (before the first idle tick).
                 self._player.evaluate(self._pinned_or(0.0))
 
-    def _resolve_animation(self, sel):
+    def _resolve_animation(self, sel: Any) -> int:
         """Index of the animation named/numbered ``sel`` (default 0)."""
         if not self._animations:
             return 0
@@ -560,11 +575,11 @@ class TestContext(BaseContext):
         sys.stderr.write("No animation matching %r; playing the first.\n" % sel)
         return 0
 
-    def _pinned_or(self, t):
+    def _pinned_or(self, t: float) -> float:
         at = getattr(self.config, 'anim_time', None)
         return at if at is not None else t
 
-    def _advance_animation(self):
+    def _advance_animation(self) -> bool:
         """Advance the animation clock by wall time and evaluate. Returns True if
         a redraw is needed."""
         if self._player is None:
@@ -581,13 +596,13 @@ class TestContext(BaseContext):
         self._player.evaluate(self._anim_clock)
         return True
 
-    def _toggle_animation(self, event=None):
+    def _toggle_animation(self, event: Any = None) -> None:
         self._anim_playing = not self._anim_playing
         self._anim_last = None      # avoid a jump from paused wall-time
         self._update_overlay()
         self.triggerRedraw(1)
 
-    def _cycle_animation(self, delta):
+    def _cycle_animation(self, delta: int) -> None:
         if not self._animations:
             return
         self._anim_index = (self._anim_index + delta) % len(self._animations)
@@ -602,13 +617,13 @@ class TestContext(BaseContext):
         self._update_overlay()
         self.triggerRedraw(1)
 
-    def _next_animation(self, event=None):
+    def _next_animation(self, event: Any = None) -> None:
         self._cycle_animation(1)
 
-    def _prev_animation(self, event=None):
+    def _prev_animation(self, event: Any = None) -> None:
         self._cycle_animation(-1)
 
-    def _toggle_turntable(self, event=None):
+    def _toggle_turntable(self, event: Any = None) -> None:
         """Start/stop the slow model spin; stopping snaps back to the default
         (reference-comparable) orientation so a capture matches the reference pose."""
         self.config.turntable = not getattr(self.config, 'turntable', False)
@@ -618,7 +633,7 @@ class TestContext(BaseContext):
             self.model_xform.rotation = self._default_model_rotation
         self.triggerRedraw(1)
 
-    def _lights_children(self, scene, radius):
+    def _lights_children(self, scene: Any, radius: float) -> list[Any]:
         """Light nodes to add, per ``--lights`` (auto/on/off)."""
         mode = self.config.lights
         if mode == 'off':
@@ -632,7 +647,7 @@ class TestContext(BaseContext):
         sys.stdout.flush()
         return self._default_lights(radius)
 
-    def _make_background(self):
+    def _make_background(self) -> Any:
         """Background node from ``--background`` (None -> 'sky').
 
         A loaded IBL environment cubemap (``OPENGLCONTEXT_ENV_CUBEMAP``) is also
@@ -664,7 +679,7 @@ class TestContext(BaseContext):
         return Background(skyColor=[rgb])
 
     @staticmethod
-    def _env_hdr_background():
+    def _env_hdr_background() -> Any:
         """An HDRBackground skybox from ``OPENGLCONTEXT_ENV_HDR``, or None.
 
         The same Radiance panorama the IBL probe reflects is drawn behind the
@@ -677,7 +692,7 @@ class TestContext(BaseContext):
         return HDRBackground(url=[src])
 
     @staticmethod
-    def _env_cube_background():
+    def _env_cube_background() -> Any:
         """A CubeBackground skybox from the IBL env cubemap face set, or None."""
         from OpenGLContext.passes.ibl import environment_cubemap_prefix, _CUBE_FACES, _CUBE_EXTS
         prefix = environment_cubemap_prefix()
@@ -686,7 +701,7 @@ class TestContext(BaseContext):
         # map the loader's face suffixes to CubeBackground's url fields
         field_for = {'RT': 'rightUrl', 'LF': 'leftUrl', 'UP': 'topUrl',
                      'DN': 'bottomUrl', 'FR': 'frontUrl', 'BK': 'backUrl'}
-        urls = {}
+        urls: dict[str, list[str]] = {}
         for suffix, _ in _CUBE_FACES:
             path = next((prefix + suffix + ext for ext in _CUBE_EXTS
                          if os.path.exists(prefix + suffix + ext)), None)
@@ -697,7 +712,7 @@ class TestContext(BaseContext):
         return CubeBackground(**urls)
 
     # -- camera selection + cycling ---------------------------------------
-    def _resolve_camera(self, sel):
+    def _resolve_camera(self, sel: str) -> int | None:
         """Index of the camera named/numbered ``sel``, or None."""
         for i, name in enumerate(self._camera_names):
             if name == sel:
@@ -712,7 +727,7 @@ class TestContext(BaseContext):
                 return i
         return None
 
-    def _select_initial_camera(self):
+    def _select_initial_camera(self) -> None:
         sel = self.config.camera
         if not sel:
             return
@@ -724,7 +739,7 @@ class TestContext(BaseContext):
         self.viewpoints[idx].isBound = True
         self.cam_index = idx
 
-    def setupCallbacks(self):
+    def setupCallbacks(self) -> None:  # pragma: no cover - binds live event handlers
         BaseContext.setupCallbacks(self)
         for key in ('<pagedown>', 'n'):
             self.addEventHandler('keyboard', name=key, function=self._next_cam)
@@ -736,13 +751,13 @@ class TestContext(BaseContext):
         self.addEventHandler('keyboard', name='t', function=self._toggle_turntable)
         self.addEventHandler('keyboard', name='<F2>', function=self._request_screenshot)
 
-    def _next_cam(self, event=None):
+    def _next_cam(self, event: Any = None) -> None:
         self._cycle_viewpoint(1)
 
-    def _prev_cam(self, event=None):
+    def _prev_cam(self, event: Any = None) -> None:
         self._cycle_viewpoint(-1)
 
-    def _cycle_viewpoint(self, delta):
+    def _cycle_viewpoint(self, delta: int) -> None:
         if not self.viewpoints:
             return
         sg = self.getSceneGraph()
@@ -769,7 +784,7 @@ class TestContext(BaseContext):
         self._update_overlay()
         self.triggerRedraw(1)
 
-    def _update_overlay(self):
+    def _update_overlay(self) -> None:
         cam = ''
         if self.viewpoints:
             name = self._camera_names[self.cam_index] if self.cam_index < len(
@@ -780,7 +795,7 @@ class TestContext(BaseContext):
             os.path.basename(self.source or 'scene'), cam, self._anim_line(),
             self._mode_line())
 
-    def _anim_line(self):
+    def _anim_line(self) -> str:
         """Overlay line naming the current animation + play state (or '')."""
         if not getattr(self, '_animations', None):
             return ''
@@ -791,7 +806,7 @@ class TestContext(BaseContext):
         return "anim [%d/%d] %s  (%s, k: pause)%s\n" % (
             self._anim_index + 1, len(self._animations), name, state, extra)
 
-    def _mode_line(self):
+    def _mode_line(self) -> str:
         """Control hint reflecting the current walk/free-fly mode + the toggle."""
         if getattr(self, '_physics_on', False):
             return "walk: arrows/WASD move, space jump, f fly   g: free-fly"
@@ -799,7 +814,7 @@ class TestContext(BaseContext):
 
     # -- lights / sky / framing -------------------------------------------
     @staticmethod
-    def _sky():
+    def _sky() -> Background:
         """A bright, clear Mediterranean afternoon sky: strong blue zenith fading
         to a pale hazy horizon, over a sunlit stone ground."""
         return Background(
@@ -810,7 +825,7 @@ class TestContext(BaseContext):
             groundAngle=[1.5708],
         )
 
-    def _default_lights(self, radius):
+    def _default_lights(self, radius: float) -> list[Light]:
         r = radius
         # A bright, low, warm sun -- Mediterranean summer, ~6 pm -- is the single
         # shadow-caster and does the readable work; the (dimmed) analytic sky IBL
@@ -824,7 +839,7 @@ class TestContext(BaseContext):
                        intensity=0.25, attenuation=(1, 0, 0), castShadows=False),
         ]
 
-    def _frame(self, radius):
+    def _frame(self, radius: float) -> None:
         """Frame the whole (centred) model, looking straight down -Z.
 
         A distance that fits a sphere of `radius` in the field of view, with a
@@ -853,7 +868,7 @@ class TestContext(BaseContext):
         self.platform.setPosition((0.0, radius * elevation, distance))
         self.platform.setOrientation((1, 0, 0, tilt))
 
-    def _frame_eye_lookat(self, eye, target, radius):
+    def _frame_eye_lookat(self, eye: Any, target: Any, radius: float) -> None:
         """Place the camera at an explicit world-space ``eye`` looking at ``target``.
 
         For interior shots (e.g. standing inside Sponza looking across the arcade)
@@ -876,14 +891,14 @@ class TestContext(BaseContext):
         self.platform.quaternion = q
 
     # -- capture / idle ---------------------------------------------------
-    def _install_capture(self):
+    def _install_capture(self) -> None:
         if self.config.capture:
             self._settle = SettleCapture(
                 self.config.capture, delay=self.config.capture_delay,
                 min_frames=self.config.frames)
 
     # -- physics walk mode ------------------------------------------------
-    def _setup_physics(self):
+    def _setup_physics(self) -> None:
         """Install the walk/free-fly toggle.
 
         Physics walk mode (gravity + collision) replaces the free-fly camera; the
@@ -908,10 +923,10 @@ class TestContext(BaseContext):
         sys.stdout.write("Press 'g' to toggle walk (physics) / free-fly.\n")
         sys.stdout.flush()
 
-    def _toggle_physics(self, event=None):
+    def _toggle_physics(self, event: Any = None) -> None:
         self._set_physics(not self._physics_on)
 
-    def _set_physics(self, on):
+    def _set_physics(self, on: bool) -> bool:
         """Switch between walk (physics) and free-fly, keeping the camera put.
 
         Returns True on success; False if walk mode was requested but the model
@@ -941,7 +956,7 @@ class TestContext(BaseContext):
         self.triggerRedraw(1)
         return True
 
-    def _ensure_physics(self):
+    def _ensure_physics(self) -> bool:
         """Build the collision world + character once (curated initial spawn).
 
         Returns False if the model yields no walkable geometry."""
@@ -968,7 +983,7 @@ class TestContext(BaseContext):
         self._physics.apply(self)
         return True
 
-    def _bind_physics_input(self):
+    def _bind_physics_input(self) -> None:
         """(Re)bind the character-controller movement keys.
 
         Re-registered on every enable: binding/unbinding the free-fly navigator
@@ -983,7 +998,7 @@ class TestContext(BaseContext):
         self.addEventHandler('keyboard', name='<down>', state=1, modifiers=(0, 1, 0),
                              function=self._plook_down)
 
-    def _sync_avatar_to_camera(self):
+    def _sync_avatar_to_camera(self) -> None:
         """Seat the avatar at the current free-fly camera pose (safe-bound)."""
         p = self._physics
         p.yaw = self._yaw_from_platform()
@@ -993,12 +1008,12 @@ class TestContext(BaseContext):
         p.set_fly(not p.character.grounded)
         self._plast = self._now()
 
-    def _yaw_from_platform(self):
+    def _yaw_from_platform(self) -> float:
         import numpy as np
         fwd = self.platform.quaternion * [0.0, 0.0, -1.0, 0.0]
         return float(np.arctan2(fwd[0], -fwd[2]))
 
-    def _spawn_from_viewpoint_or_floor(self, lo, hi, caps):
+    def _spawn_from_viewpoint_or_floor(self, lo: Any, hi: Any, caps: Any) -> None:
         """Stand the avatar on clear model floor, facing the first camera's heading.
 
         The model centre is often solid (a statue, thick walls), so sample several
@@ -1013,7 +1028,7 @@ class TestContext(BaseContext):
         # Prefer the authored camera viewpoints (curated, open spots) projected
         # straight down to the floor; then fall back to sampling the footprint for
         # models whose cameras are all aerial/outside.
-        candidates = []
+        candidates: list[tuple[float, float]] = []
         for vp in self.viewpoints:
             p = vp.position
             if lo[0] <= p[0] <= hi[0] and lo[2] <= p[2] <= hi[2]:
@@ -1025,7 +1040,7 @@ class TestContext(BaseContext):
                     candidates.append((cx + fx * (hi[0] - lo[0]),
                                        cz + fz * (hi[2] - lo[2])))
         y = lo[1] + caps.standHeight
-        best = None                                 # (clearance, -dist_from_centre, x, z)
+        best: Any = None                            # (clearance, -dist_from_centre, x, z)
         for x, z in candidates:
             self._physics.bind((x, y, z))
             ch = self._physics.character
@@ -1043,7 +1058,7 @@ class TestContext(BaseContext):
             self._physics.bind((cx, y, cz))
 
     @staticmethod
-    def _clearance(character, radius):
+    def _clearance(character: Any, radius: float) -> int:
         """How many of the 4 horizontal directions the avatar can actually *move*
         into (not merely not-overlap) — a point probe misses a wall that a step
         would hit, so test the real move-and-slide.  Avoids spawning wedged."""
@@ -1059,7 +1074,7 @@ class TestContext(BaseContext):
         return clear
 
     @staticmethod
-    def _yaw_from_viewpoint(vp):
+    def _yaw_from_viewpoint(vp: Any) -> float:
         import numpy as np
         from OpenGLContext import quaternion
         x, y, z, r = vp.orientation
@@ -1069,36 +1084,36 @@ class TestContext(BaseContext):
         return float(np.arctan2(-fwd[0], -fwd[2]))
 
     @staticmethod
-    def _now():
+    def _now() -> float:
         from time import time
         return time()
 
-    def _pkey(self, event):
+    def _pkey(self, event: Any) -> None:
         self._pkeys[event.name] = self._now()
 
-    def _pjump(self, event):
+    def _pjump(self, event: Any) -> None:
         if self._physics:
             self._physics.jump()
 
-    def _pfly(self, event):
+    def _pfly(self, event: Any) -> None:
         if self._physics:
             self._physics.set_fly(not self._physics.character.flying)
 
-    def _plook_up(self, event):
+    def _plook_up(self, event: Any) -> None:
         if self._physics:
             self._physics.look(-0.08)
 
-    def _plook_down(self, event):
+    def _plook_down(self, event: Any) -> None:
         if self._physics:
             self._physics.look(0.08)
 
-    def _physics_step(self):
+    def _physics_step(self) -> None:  # pragma: no cover - per-frame physics walk loop
         now = self._now()
         dt = min(now - self._plast, 0.05)
         self._plast = now
         hold = 0.2
 
-        def held(k):
+        def held(k: str) -> bool:
             return now - self._pkeys.get(k, 0) < hold
         fwd = (held('<up>') or held('w')) - (held('<down>') or held('s'))
         strafe = float(held('d')) - float(held('a'))
@@ -1123,7 +1138,7 @@ class TestContext(BaseContext):
         p.apply(self)
         self.triggerRedraw(1)
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *args: Any) -> int:  # pragma: no cover - interactive idle/redraw loop
         # A background scene load that finished gets applied here (render thread),
         # before anything else touches the scenegraph.
         if self._poll_pending_scene():
@@ -1142,14 +1157,15 @@ class TestContext(BaseContext):
             # Spin from the model's default (per-model reference-facing) yaw, so a
             # profile that aims the model at the camera is honoured while rotating.
             base = self._default_model_rotation[3]
-            self.model_xform.rotation = (0, 1, 0, base + (time() - self._start) * 0.5)
+            start = cast(float, self._start)
+            self.model_xform.rotation = (0, 1, 0, base + (time() - start) * 0.5)
             self.triggerRedraw(1)
         elif animated:
             self.triggerRedraw(1)
         return 1
 
     # -- overlay ----------------------------------------------------------
-    def SwapBuffers(self):
+    def SwapBuffers(self) -> Any:  # pragma: no cover - GL swap, overlay draw + capture tick
         shader = self._active_shader()
         if shader is not None:
             if self._settle is None:              # a clean capture skips the HUD
@@ -1178,11 +1194,11 @@ class TestContext(BaseContext):
             self.OnQuit()
         return result
 
-    def _extra_overlay(self, shader):
+    def _extra_overlay(self, shader: Any) -> None:
         """Hook for subclasses to draw extra HUD elements. No-op by default."""
 
     @staticmethod
-    def _active_shader():
+    def _active_shader() -> Any:
         from OpenGLContext.passes import renderpass
         flat = getattr(renderpass, 'FLAT', None)
         shader = getattr(flat, 'shader_program', None)
@@ -1190,13 +1206,13 @@ class TestContext(BaseContext):
             return None
         return shader
 
-    def _viewport(self):
+    def _viewport(self) -> tuple[int, int] | None:
         vp = self.getViewPort()
         if not vp or not vp[0] or not vp[1]:
             return None
         return int(vp[0]), int(vp[1])
 
-    def _draw_overlay(self, shader):
+    def _draw_overlay(self, shader: Any) -> None:  # pragma: no cover - GL text overlay draw
         vp = self._viewport()
         if vp is None or not self.overlay_text:
             return
@@ -1213,7 +1229,7 @@ class TestContext(BaseContext):
             pass
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> Any:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -1237,5 +1253,5 @@ def main(argv=None):
         else TestContext.ContextMainLoop()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
     main()

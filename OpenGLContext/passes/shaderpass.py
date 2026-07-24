@@ -177,7 +177,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         # Cache last value uploaded per (program, uniform) so a redundant set
         # (e.g. the same material on many shapes) skips the glUniform call. The
         # cache reflects exactly what we uploaded, so skipping is never stale.
-        self._uniform_value_cache: Dict[int, Dict[str, Any]] = {}
+        self._uniform_value_cache: Dict[Optional[int], Dict[str, Any]] = {}
         self._compiled: bool = False
         # True only after every sub-program linked. Distinct from _compiled (which
         # means "compile was attempted"): a partial failure leaves _compiled=True
@@ -245,7 +245,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         Falls back to the lit program before anything is bound this frame (or
         after an explicit unbind).
         """
-        return self._active_program or self.program
+        program = self._active_program or self.program
+        assert program is not None  # a program is always compiled+bound at draw time
+        return program
 
     # Every GL program handle the pass may bind; cleared together on failure.
     _PROGRAM_ATTRS: Tuple[str, ...] = (
@@ -786,7 +788,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         if loc != -1:
             glUniformMatrix4fv(loc, 1, GL_FALSE, m)
 
-    def _uniform_unchanged(self, program: int, name: str, value: Any) -> bool:
+    def _uniform_unchanged(self, program: Optional[int], name: str, value: Any) -> bool:
         """True if ``value`` equals the last value uploaded for this uniform."""
         if program is None:
             program = self.program

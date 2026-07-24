@@ -9,6 +9,11 @@ hard wall that can strand the current view.
 Recency uses a monotonic internal counter (not wall-clock) so ticks are deterministic
 and reproducible for tests and replay.
 """
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from OpenGLContext.loaders.tiles3d.tileset import RuntimeTile
 
 
 class TileState:
@@ -19,45 +24,45 @@ class TileState:
 
 
 class Residency:
-    def __init__(self, memory_budget):
+    def __init__(self, memory_budget: float) -> None:
         self.memory_budget = memory_budget
-        self.resident_bytes = 0
-        self._state = {}
-        self._bytes = {}
-        self._recency = {}
-        self._tiles = {}
+        self.resident_bytes: float = 0
+        self._state: dict[int, str] = {}
+        self._bytes: dict[int, int] = {}
+        self._recency: dict[int, int] = {}
+        self._tiles: "dict[int, RuntimeTile]" = {}
         # Ids of the currently-renderable tiles -- the only eviction candidates.
         # Scanning this instead of all of `_state` keeps `enforce_budget` O(resident)
         # per frame rather than O(every tile ever touched).
-        self._resident = set()
+        self._resident: set[int] = set()
         self._tick = 0
 
-    def _touch(self, tile):
+    def _touch(self, tile: "RuntimeTile") -> None:
         self._tick += 1
         self._recency[id(tile)] = self._tick
         self._tiles[id(tile)] = tile
 
-    def get_state(self, tile):
+    def get_state(self, tile: "RuntimeTile") -> str:
         return self._state.get(id(tile), TileState.UNLOADED)
 
-    def note_wanted(self, tiles):
+    def note_wanted(self, tiles: "Iterable[RuntimeTile]") -> None:
         """Refresh recency for tiles wanted this frame (most recently wanted last)."""
         for tile in tiles:
             self._touch(tile)
 
-    def wanted_to_load(self, want):
+    def wanted_to_load(self, want: "Iterable[RuntimeTile]") -> "list[RuntimeTile]":
         """Wanted tiles that are not yet loading or resident, in order."""
         return [t for t in want if self.get_state(t) == TileState.UNLOADED]
 
-    def begin_load(self, tile):
+    def begin_load(self, tile: "RuntimeTile") -> None:
         self._state[id(tile)] = TileState.LOADING
         self._tiles[id(tile)] = tile
 
-    def set_ready(self, tile):
+    def set_ready(self, tile: "RuntimeTile") -> None:
         self._state[id(tile)] = TileState.READY
         self._tiles[id(tile)] = tile
 
-    def set_renderable(self, tile, nbytes):
+    def set_renderable(self, tile: "RuntimeTile", nbytes: int) -> None:
         prev = self._bytes.get(id(tile), 0)
         self.resident_bytes += nbytes - prev
         self._bytes[id(tile)] = nbytes
@@ -66,7 +71,7 @@ class Residency:
         self._recency.setdefault(id(tile), self._tick)
         self._resident.add(id(tile))
 
-    def evict(self, tile):
+    def evict(self, tile: "RuntimeTile") -> None:
         tid = id(tile)
         self.resident_bytes -= self._bytes.pop(tid, 0)
         self._resident.discard(tid)
@@ -77,7 +82,7 @@ class Residency:
         # defaults to UNLOADED, so `_state` never accumulates dead entries.
         self._state.pop(tid, None)
 
-    def enforce_budget(self, keep):
+    def enforce_budget(self, keep: "Iterable[RuntimeTile]") -> "list[RuntimeTile]":
         """Evict least-recently-wanted renderable tiles until within budget.
 
         `keep` is the set of tiles that must stay resident (this frame's want set plus
@@ -85,7 +90,7 @@ class Residency:
         their GL resources.
         """
         keep_ids = {id(t) for t in keep}
-        evicted = []
+        evicted: "list[RuntimeTile]" = []
         while self.resident_bytes > self.memory_budget:
             candidates = [tid for tid in self._resident if tid not in keep_ids]
             if not candidates:

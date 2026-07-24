@@ -33,9 +33,9 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import urllib.parse
 import urllib.request
+from typing import Any, cast
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders import resolver
@@ -45,7 +45,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))          # this package's parent dir
 
 
-def _source_root():
+def _source_root() -> str | None:
     """Locate the openglcontext source checkout (dir with OpenGLContext/ + tests/).
 
     Searched from the current directory upward, then this file's location. When
@@ -53,7 +53,7 @@ def _source_root():
     ``site-packages`` -- deriving output paths from it drops the report inside the
     venv. The working tree is what we want, so prefer it.
     """
-    def markers(d):
+    def markers(d: str) -> bool:
         return (os.path.isdir(os.path.join(d, 'tests')) and
                 os.path.isfile(os.path.join(d, 'OpenGLContext', '__init__.py')))
 
@@ -70,7 +70,7 @@ def _source_root():
     return None
 
 
-def default_report_path():
+def default_report_path() -> str:
     """Default report location: a subdirectory of the source tree's tests/."""
     root = _source_root() or REPO
     return os.path.join(root, 'tests', 'gltf_regression', 'gltf_regression_report.html')
@@ -90,7 +90,7 @@ DEFAULT_TOLERANCE = 2.0
 DIFF_THRESHOLD = 8
 
 
-def default_baseline_root():
+def default_baseline_root() -> str:
     """Where verified 'our reference' baselines live.
 
     ``OPENGLCONTEXT_GLTF_BASELINE`` wins; otherwise the sibling ``reference-images``
@@ -103,7 +103,7 @@ def default_baseline_root():
     return os.path.join(parent, 'reference-images', 'gltf_baseline')
 
 
-def _env_prefix(name='pimbackground_'):
+def _env_prefix(name: str = 'pimbackground_') -> str | None:
     """Path prefix of a bundled environment cubemap face set, or None.
 
     ``pimbackground_`` is the default outdoor set; ``studio_`` is the neutral
@@ -116,7 +116,7 @@ def _env_prefix(name='pimbackground_'):
     return prefix if os.path.exists(prefix + 'UP.jpg') else None
 
 
-def _env_prefix_for(spec):
+def _env_prefix_for(spec: gltf_demos.SceneSpec) -> str | None:
     """The env-cubemap prefix a scene should reflect, honouring ``spec.environment``."""
     env = getattr(spec, 'environment', None)
     if env == 'studio':
@@ -136,7 +136,7 @@ _STUDIO_HDR = 'brown_photostudio_02'
 _PROCEDURAL_ENVS = (None, 'studio', 'studiobright')
 
 
-def _environment_for(spec):
+def _environment_for(spec: gltf_demos.SceneSpec) -> tuple[Any, str]:
     """Return ``(--environment value, --ibl-intensity)`` for a cube-background scene.
 
     ``'studio'``/``'studiobright'`` resolve to the HDR studio panorama; ``None``
@@ -163,14 +163,14 @@ def _environment_for(spec):
 _MIRROR_DIR = os.path.join(resolver._default_cache_dir(), 'gltf_mirror')
 
 
-def _cached_url_path(url, cache_dir):
+def _cached_url_path(url: str, cache_dir: str) -> str:
     """Fetch ``url`` into the sha1-keyed cache and return its local path."""
     resolver._fetch_url(url, cache_dir)
     key = hashlib.sha1(url.encode('utf-8')).hexdigest() + os.path.splitext(url)[1]
     return os.path.join(cache_dir, key)
 
 
-def _dl(url, dst):
+def _dl(url: str, dst: str) -> None:
     """Download ``url`` to ``dst`` (once), preserving the on-disk layout so a
     ``.gltf``'s relative buffer/image URIs resolve when the viewer loads it."""
     if os.path.exists(dst) and os.path.getsize(dst) > 0:
@@ -181,7 +181,7 @@ def _dl(url, dst):
         f.write(r.read())
 
 
-def resolve_model(spec, parthenon=None):
+def resolve_model(spec: gltf_demos.SceneSpec, parthenon: str | None = None) -> str | None:
     """Return a local, loadable path for a scene's model (or None if unavailable).
 
     Khronos samples resolve to the cached ``.glb``; a sample published only as
@@ -194,7 +194,7 @@ def resolve_model(spec, parthenon=None):
     if is_local:
         return source if source and os.path.exists(source) else None
 
-    name = source
+    name = cast(str, source)          # a non-local scene resolves to a sample name
     cache_dir = resolver._default_cache_dir()
     glb_url = gltf.sample_model_url(name)
     try:
@@ -224,7 +224,9 @@ def resolve_model(spec, parthenon=None):
 # --------------------------------------------------------------------------- #
 # Render one view through the viewer CLI (its own hidden GL context).
 # --------------------------------------------------------------------------- #
-def render_view(spec, camera, model, out, size, frames, delay, env_prefix):
+def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out: str,
+                size: tuple[int, int], frames: int, delay: float,
+                env_prefix: str | None) -> tuple[bool, dict[str, Any]]:
     """Render one scene/camera to ``out``. Returns ``(ok, stats)`` where ``stats``
     holds the viewer-reported ``load_seconds``/``fps`` for the run (empty on failure)."""
     w, h = size
@@ -248,7 +250,7 @@ def render_view(spec, camera, model, out, size, frames, delay, env_prefix):
             args += ['--environment', env_arg, '--ibl-intensity', ibl]
     # Pin animated models to a fixed time so the captured pose is reproducible
     # (otherwise the frame lands at whatever animation time the settle reached).
-    if getattr(spec, 'anim_time', None) is not None:
+    if spec.anim_time is not None:
         args += ['--anim-time', repr(float(spec.anim_time))]
 
     env = dict(os.environ, OPENGLCONTEXT_HIDDEN='1', OPENGLCONTEXT_NO_VSYNC='1',
@@ -268,9 +270,9 @@ def render_view(spec, camera, model, out, size, frames, delay, env_prefix):
     return os.path.exists(out), stats
 
 
-def _parse_capture_stats(stdout):
+def _parse_capture_stats(stdout: str | None) -> dict[str, Any]:
     """Pull ``load_seconds``/``fps`` from the viewer's ``CAPTURE_STATS`` line."""
-    stats = {}
+    stats: dict[str, Any] = {}
     for line in (stdout or '').splitlines():
         if line.startswith('CAPTURE_STATS'):
             for tok in line.split()[1:]:
@@ -285,7 +287,8 @@ def _parse_capture_stats(stdout):
 # --------------------------------------------------------------------------- #
 # Compare new render vs baseline.
 # --------------------------------------------------------------------------- #
-def compare(baseline_path, new_path, diff_out, threshold):
+def compare(baseline_path: str, new_path: str, diff_out: str,
+            threshold: int) -> tuple[Any, dict[str, Any]]:
     """Compare two PNGs. Returns (ComparisonResult, stats_dict) or (None, None)."""
     import numpy as np
     from PIL import Image
@@ -307,7 +310,7 @@ def compare(baseline_path, new_path, diff_out, threshold):
     return result, stats
 
 
-def is_regression(result, tolerance):
+def is_regression(result: Any, tolerance: float) -> bool:
     """A regression is a shape change or more than ``tolerance`` percent of pixels
     differing beyond the per-channel threshold."""
     if not result.shapes_match:
@@ -318,7 +321,7 @@ def is_regression(result, tolerance):
 # --------------------------------------------------------------------------- #
 # Driver.
 # --------------------------------------------------------------------------- #
-def select_scenes(only):
+def select_scenes(only: list[str] | None) -> list[gltf_demos.SceneSpec]:
     """The scenes to run: all, or the subset named in ``only`` (case-sensitive)."""
     if not only:
         return list(gltf_demos.iter_scenes())
@@ -326,7 +329,7 @@ def select_scenes(only):
     return [s for s in gltf_demos.iter_scenes() if s.name in wanted]
 
 
-def _gl_renderer():
+def _gl_renderer() -> dict[str, str]:
     """The GPU's GL_RENDERER/GL_VERSION, queried in a throwaway hidden context."""
     code = ("import glfw;glfw.init();glfw.window_hint(glfw.VISIBLE,glfw.FALSE);"
             "w=glfw.create_window(8,8,'r',None,None);glfw.make_context_current(w);"
@@ -344,7 +347,7 @@ def _gl_renderer():
         return {'gl_renderer': 'unknown', 'gl_version': ''}
 
 
-def _provenance():
+def _provenance() -> dict[str, str]:
     """Git hash (+``-dirty``), timestamp and GPU identity, stamped into every
     render's metadata so a baseline records exactly how (and on what) it was made."""
     import datetime
@@ -365,7 +368,9 @@ def _provenance():
     return prov
 
 
-def _view_metadata(spec, camera, url, args, provenance, stats=None):
+def _view_metadata(spec: gltf_demos.SceneSpec, camera: int | None, url: str | None,
+                   args: argparse.Namespace, provenance: dict[str, str],
+                   stats: dict[str, Any] | None = None) -> dict[str, Any]:
     """The per-view render metadata recorded to a sidecar JSON and shown in the
     report: what was rendered, how it was framed/lit, and the run provenance.
 
@@ -403,14 +408,15 @@ def _view_metadata(spec, camera, url, args, provenance, stats=None):
     }
 
 
-def default_out_dir():
+def default_out_dir() -> str:
     """Persistent directory of the latest per-view renders/metadata/diffs. Kept
     across runs so re-rendering one scene (``--only``) leaves the others intact;
     the report is assembled from whatever it holds."""
     return os.path.join(os.path.dirname(default_report_path()), 'renders')
 
 
-def resolve_model_url(spec, parthenon=None):
+def resolve_model_url(spec: gltf_demos.SceneSpec,
+                      parthenon: str | None = None) -> tuple[str | None, bool]:
     """The source the viewer should load, and whether it is a URL.
 
     A Khronos sample resolves to its **http(s) URL** so the viewer loads it through
@@ -423,7 +429,7 @@ def resolve_model_url(spec, parthenon=None):
     source, is_local = gltf_demos.resolve_source(spec, parthenon)
     if is_local:
         return (source if source and os.path.exists(source) else None), False
-    name = source
+    name = cast(str, source)          # a non-local scene resolves to a sample name
     glb_url = gltf.sample_model_url(name)
     try:
         _cached_url_path(glb_url, resolver._default_cache_dir())   # confirm it exists
@@ -432,7 +438,9 @@ def resolve_model_url(spec, parthenon=None):
         return '%s/%s/glTF/%s.gltf' % (gltf.SAMPLE_MODELS_BASE, name, name), True
 
 
-def render_scenes(scenes, out_dir, baseline_root, parthenon, args, provenance):
+def render_scenes(scenes: list[gltf_demos.SceneSpec], out_dir: str, baseline_root: str,
+                  parthenon: str | None, args: argparse.Namespace,
+                  provenance: dict[str, str]) -> None:
     """Render each selected view to ``out_dir`` (``<slug>.png`` + ``<slug>.json``),
     blessing to ``baseline_root`` when asked. Overwrites only the rendered views, so
     prior renders of other scenes survive for the report."""
@@ -469,7 +477,8 @@ def render_scenes(scenes, out_dir, baseline_root, parthenon, args, provenance):
             print('  %-5s %s' % ('BLESS' if do_bless else 'OK', slug))
 
 
-def build_report(out_dir, baseline_root, report_path, tolerance, diff_threshold):
+def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: float,
+                 diff_threshold: int) -> int:
     """Assemble the HTML report from whatever renders are present in ``out_dir``
     (each ``<slug>.json`` + ``<slug>.png``), diffed against the baseline. Decoupled
     from rendering, so re-rendering one scene then rebuilding keeps every other row.
@@ -479,7 +488,7 @@ def build_report(out_dir, baseline_root, report_path, tolerance, diff_threshold)
     gen = TestReportGenerator(title='glTF Demo Regression -- our reference vs new')
     report_dir = os.path.dirname(os.path.abspath(report_path))
 
-    def stage(src, name):
+    def stage(src: str | None, name: str) -> str | None:
         """Return an image for the report to link, guaranteeing it lives under the
         report directory. The result and diff already do; the baseline and Khronos
         upstream live in other trees, so copy those in under ``name`` -- then the
@@ -546,7 +555,7 @@ def build_report(out_dir, baseline_root, report_path, tolerance, diff_threshold)
     return regressions
 
 
-def run(args):
+def run(args: argparse.Namespace) -> int:
     baseline_root = args.baseline_root or default_baseline_root()
     out_dir = args.out_dir or default_out_dir()
     os.makedirs(out_dir, exist_ok=True)
@@ -570,12 +579,12 @@ def run(args):
     return 1 if regressions else 0
 
 
-def _parse_size(text):
+def _parse_size(text: str) -> tuple[int, int]:
     w, _, h = text.lower().partition('x')
     return (int(w), int(h))
 
 
-def build_parser(prog='oglc-gltf-regression'):
+def build_parser(prog: str = 'oglc-gltf-regression') -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog=prog, description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--bless', nargs='*', metavar='NAME', default=None,
@@ -610,10 +619,10 @@ def build_parser(prog='oglc-gltf-regression'):
     return p
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     return run(args)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover - CLI entry point
     sys.exit(main())

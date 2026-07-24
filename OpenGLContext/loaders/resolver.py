@@ -26,9 +26,10 @@ import threading
 import urllib.parse
 import urllib.request
 import urllib.error
+from typing import Any, Optional, Tuple
 
 
-def safe_url(url):
+def safe_url(url: str) -> str:
     """Percent-encode the path of a URL so non-ASCII names (e.g. Unicode model
     directories) can be fetched; existing %-escapes and '/' are preserved."""
     parts = urllib.parse.urlsplit(url)
@@ -52,7 +53,7 @@ DEFAULT_MAX_RESOURCE_BYTES = 256 * 1024 * 1024   # 256 MiB
 _ALLOWED_URL_SCHEMES = ('http', 'https')
 
 
-def _origin(url):
+def _origin(url: str) -> Tuple[str, str]:
     """(scheme, netloc) security origin of a URL.
 
     ``netloc`` keeps host, port and any userinfo verbatim, so two virtual hosts on
@@ -62,7 +63,7 @@ def _origin(url):
     return (parts.scheme.lower(), parts.netloc.lower())
 
 
-def _same_origin(a, b):
+def _same_origin(a: str, b: str) -> bool:
     return _origin(a) == _origin(b)
 
 
@@ -76,10 +77,12 @@ class _OriginLockedRedirectHandler(urllib.request.HTTPRedirectHandler):
     the request is refused.
     """
 
-    def __init__(self, base_url):
+    def __init__(self, base_url: str) -> None:
         self._base_url = base_url
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(self, req: urllib.request.Request, fp: Any, code: int,
+                         msg: Any, headers: Any,
+                         newurl: str) -> Optional[urllib.request.Request]:
         if (_origin(newurl)[0] not in _ALLOWED_URL_SCHEMES
                 or not _same_origin(self._base_url, newurl)):
             raise urllib.error.HTTPError(
@@ -89,13 +92,13 @@ class _OriginLockedRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def _urlopen_same_origin(url, base_url, timeout=30):
+def _urlopen_same_origin(url: str, base_url: str, timeout: int = 30) -> Any:
     """Open ``url`` refusing any redirect that leaves ``base_url``'s origin."""
     opener = urllib.request.build_opener(_OriginLockedRedirectHandler(base_url))
     return opener.open(safe_url(url), timeout=timeout)
 
 
-def _resolve_local(base_dir, uri):
+def _resolve_local(base_dir: str, uri: str) -> str:
     """Resolve a relative ``uri`` under ``base_dir``, refusing to escape it.
 
     A ``uri`` like ``../../../etc/passwd``, an absolute path, or one carrying a URL
@@ -115,14 +118,14 @@ def _resolve_local(base_dir, uri):
     return full
 
 
-def _check_size(nbytes, max_bytes, what):
+def _check_size(nbytes: int, max_bytes: Optional[int], what: str) -> None:
     if max_bytes is not None and nbytes > max_bytes:
         raise ValueError(
             "resource %s is %d bytes, over the %d-byte limit"
             % (what, nbytes, max_bytes))
 
 
-def _read_capped(response, max_bytes):
+def _read_capped(response: Any, max_bytes: Optional[int]) -> bytes:
     """Read a URL response, rejecting a body larger than ``max_bytes``."""
     if max_bytes is None:
         return response.read()
@@ -132,7 +135,7 @@ def _read_capped(response, max_bytes):
     return data
 
 
-def _decode_data_uri(uri, max_bytes=None):
+def _decode_data_uri(uri: str, max_bytes: Optional[int] = None) -> bytes:
     """Decode a ``data:`` URI to bytes.
 
     Handles ``data:[<mediatype>][;base64],<payload>`` -- base64 or percent-encoded
@@ -150,7 +153,7 @@ def _decode_data_uri(uri, max_bytes=None):
     return data
 
 
-def _resolver_max(resolver):
+def _resolver_max(resolver: Optional["Resolver"]) -> Optional[int]:
     return getattr(resolver, 'max_resource_bytes', None) if resolver is not None else None
 
 
@@ -162,17 +165,17 @@ class Resolver:
     files under its own directory. Each resource is size-capped.
     """
 
-    def __init__(self, base_url=None, base_dir=None,
-                 max_resource_bytes=DEFAULT_MAX_RESOURCE_BYTES):
+    def __init__(self, base_url: Optional[str] = None, base_dir: Optional[str] = None,
+                 max_resource_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES) -> None:
         self.base_url = base_url
         self.base_dir = base_dir
         self.max_resource_bytes = max_resource_bytes
-        self._cache = {}
-        self._buffers = {}   # decoded buffer bytes, keyed by buffer index
-        self._resolved = {}  # resolved absolute location, keyed by raw uri
+        self._cache: dict[str, bytes] = {}
+        self._buffers: dict[int, bytes] = {}   # decoded buffer bytes, keyed by buffer index
+        self._resolved: dict[str, str] = {}    # resolved absolute location, keyed by raw uri
         self._draco_warned = False   # the "install DracoPy" warning fired once
 
-    def resolve(self, uri):
+    def resolve(self, uri: str) -> str:
         """Return the absolute location ``uri`` resolves to under the policy.
 
         For a URL-based document this is the same-origin absolute http(s) URL; for
@@ -191,7 +194,7 @@ class Resolver:
         self._resolved[uri] = target
         return target
 
-    def _resolve(self, uri):
+    def _resolve(self, uri: str) -> str:
         if self.base_url is not None:
             full = urllib.parse.urljoin(self.base_url, uri)
             # Same-origin http(s) only: an external ref must share the exact origin
@@ -207,7 +210,7 @@ class Resolver:
             return _resolve_local(self.base_dir, uri)
         raise IOError("Cannot resolve external resource %r" % uri)
 
-    def fetch(self, uri):
+    def fetch(self, uri: str) -> bytes:
         """Return the bytes of an external reference, enforcing the policy.
 
         Resolves ``uri`` against the document's base URL (same-origin http(s)
@@ -235,7 +238,7 @@ class Resolver:
         return data
 
 
-def _default_cache_dir():
+def _default_cache_dir() -> str:
     """Per-user cache directory for fetched remote assets.
 
     Cache under the per-user app-data location the rest of OpenGLContext uses
@@ -252,7 +255,7 @@ def _default_cache_dir():
     return os.path.join(base, 'OpenGLContext', 'asset_cache')
 
 
-def cached_path(url, cache_dir=None):
+def cached_path(url: str, cache_dir: Optional[str] = None) -> str:
     """Local cache path a fetch of ``url`` uses, whether or not it is cached yet.
 
     The single definition of the on-disk key (a sha1 of the URL, keeping the URL's
@@ -265,7 +268,7 @@ def cached_path(url, cache_dir=None):
     return os.path.join(cache_dir, key)
 
 
-def _read_cached(path):
+def _read_cached(path: str) -> Optional[bytes]:
     """Return the bytes of a cached file (touching its mtime), or None if absent.
 
     An atomic write (:func:`_atomic_write`) means the path exists only when it is
@@ -288,10 +291,10 @@ def _read_cached(path):
 # Guarded by _INFLIGHT_LOCK; each entry is [lock, waiter_count] and is dropped
 # once the last waiter leaves, so the map does not grow unbounded.
 _INFLIGHT_LOCK = threading.Lock()
-_INFLIGHT = {}
+_INFLIGHT: dict[str, list] = {}
 
 
-def _acquire_download_slot(path):
+def _acquire_download_slot(path: str) -> Any:
     with _INFLIGHT_LOCK:
         entry = _INFLIGHT.get(path)
         if entry is None:
@@ -301,7 +304,7 @@ def _acquire_download_slot(path):
         return entry[0]
 
 
-def _release_download_slot(path):
+def _release_download_slot(path: str) -> None:
     with _INFLIGHT_LOCK:
         entry = _INFLIGHT.get(path)
         if entry is not None:
@@ -310,7 +313,8 @@ def _release_download_slot(path):
                 del _INFLIGHT[path]
 
 
-def _fetch_url(url, cache_dir=None, max_bytes=DEFAULT_MAX_RESOURCE_BYTES):
+def _fetch_url(url: str, cache_dir: Optional[str] = None,
+               max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES) -> bytes:
     """Fetch ``url`` into the on-disk cache (keyed by URL hash) and return its bytes.
 
     A cache hit is touched so its mtime tracks last-use, letting
@@ -348,7 +352,7 @@ def _fetch_url(url, cache_dir=None, max_bytes=DEFAULT_MAX_RESOURCE_BYTES):
         _release_download_slot(path)
 
 
-def _atomic_write(path, data, cache_dir):
+def _atomic_write(path: str, data: bytes, cache_dir: str) -> None:
     """Write ``data`` to ``path`` atomically, so ``path`` never appears partial.
 
     Two callers can fetch the same URL concurrently (e.g. the IBL probe and an HDR
@@ -371,7 +375,8 @@ def _atomic_write(path, data, cache_dir):
         raise
 
 
-def fetch_to_cache(url, cache_dir=None, max_bytes=DEFAULT_MAX_RESOURCE_BYTES):
+def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
+                   max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES) -> str:
     """Fetch ``url`` into the cache (once) and return its local file path.
 
     The path variant of :func:`_fetch_url`, for callers that want the cached file
@@ -381,7 +386,7 @@ def fetch_to_cache(url, cache_dir=None, max_bytes=DEFAULT_MAX_RESOURCE_BYTES):
     return cached_path(url, cache_dir)
 
 
-def purge_cache(cache_dir=None, max_age_days=30):
+def purge_cache(cache_dir: Optional[str] = None, max_age_days: int = 30) -> int:
     """Delete cached assets not used within ``max_age_days``, returning the count.
 
     :func:`_fetch_url` touches an entry on every hit, so its mtime is its

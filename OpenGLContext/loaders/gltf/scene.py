@@ -17,13 +17,26 @@ the public entry points in :mod:`loader`.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from OpenGLContext.scenegraph.basenodes import (
-    Transform, Viewpoint, DirectionalLight, PointLight, SpotLight,
-)
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
+from OpenGLContext.loaders.resolver import Resolver
+
+if TYPE_CHECKING:
+    import pygltflib
+    from OpenGLContext.loaders.gltf.animation import Player
+    # These node classes are registered into basenodes dynamically (plugin entry
+    # points), so mypy cannot see them there; take the types from their defining
+    # modules.
+    from OpenGLContext.scenegraph.transform import Transform
+    from OpenGLContext.scenegraph.viewpoint import Viewpoint
+    from OpenGLContext.scenegraph.light import DirectionalLight, PointLight, SpotLight
+else:
+    from OpenGLContext.scenegraph.basenodes import (
+        Transform, Viewpoint, DirectionalLight, PointLight, SpotLight,
+    )
 from OpenGLContext.loaders.gltf.accessors import _read_normalized
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
 from OpenGLContext.loaders.gltf.transforms import (
@@ -44,9 +57,11 @@ class GLTFScene(object):
     so ``getDEF(name)`` returns an individual imported node for manipulation.
     """
 
-    def __init__(self, group, center, radius, camera=None, cameras=None,
-                 viewpoints=None, sceneGraph=None, animations=None,
-                 node_transforms=None):
+    def __init__(self, group: "Transform", center: Sequence[float], radius: float,
+                 camera: Optional[dict] = None, cameras: Optional[list] = None,
+                 viewpoints: Optional[list] = None, sceneGraph: Optional[SceneGraph] = None,
+                 animations: Optional[list] = None,
+                 node_transforms: Optional[dict] = None) -> None:
         self.group = group
         self.center = center      # (x, y, z) of the bounding box centre
         self.radius = radius      # bounding-sphere radius (for camera framing)
@@ -57,12 +72,12 @@ class GLTFScene(object):
         self.node_transforms = node_transforms if node_transforms is not None else {}
         # node_morph: node index -> [weight-setter callables], one per primitive of
         # the node's morphable mesh (populated by the loader when targets exist).
-        self.node_morph = {}
+        self.node_morph: dict = {}
         # skins: Skin objects; the loader also stashes the node
         # hierarchy (_skin_roots/_skin_children) for per-frame joint assembly.
-        self.skins = []
-        self._skin_roots = []
-        self._skin_children = {}
+        self.skins: list = []
+        self._skin_roots: list = []
+        self._skin_children: dict = {}
         # camera: None, or a dict with position/forward/up/fov/near/far taken from
         # the first camera the glTF defines (so a viewer can adopt its viewpoint).
         self.camera = camera
@@ -82,7 +97,7 @@ class GLTFScene(object):
         # it to the PBR pass so the frame doesn't clip to white.
         self.exposure = 1.0
 
-    def getDEF(self, name):
+    def getDEF(self, name: str) -> Any:
         """Return the Transform node imported from the glTF node with this DEF
         name (its glTF ``name``, or ``node<index>`` if the glTF node was
         unnamed), or None. The name is looked up in the SceneGraph registry."""
@@ -90,7 +105,7 @@ class GLTFScene(object):
             return None
         return self.sceneGraph.getDEF(name)
 
-    def player(self, index=0, loop=True):
+    def player(self, index: int = 0, loop: bool = True) -> "Optional[Player]":
         """A :class:`~OpenGLContext.loaders.gltf.animation.Player` bound to animation ``index``.
 
         Returns None when the file defines no animations. The player writes
@@ -103,13 +118,15 @@ class GLTFScene(object):
         if self.skins:
             roots, children, nts = (self._skin_roots, self._skin_children,
                                     self.node_transforms)
-            compute_worlds = lambda: compute_world_matrices(roots, children, nts)
+
+            def compute_worlds() -> dict[int, np.ndarray]:
+                return compute_world_matrices(roots, children, nts)
         return Player(self.animations[index], self.node_transforms,
                       node_morph=self.node_morph, loop=loop,
                       skins=self.skins, compute_worlds=compute_worlds)
 
 
-def _scene_root_indices(g):
+def _scene_root_indices(g: "pygltflib.GLTF2") -> list:
     """Root node indices to build, tolerant of missing/empty scenes.
 
     ``scene.nodes`` may be absent or ``None`` (then there are no roots, rather than
@@ -133,7 +150,7 @@ def _scene_root_indices(g):
 _DEF_RESERVED = re.compile(r'[\x00-\x20"#\',.\[\]{}\\+-]')
 
 
-def _def_name(raw, index):
+def _def_name(raw: Optional[str], index: int) -> str:
     """DEF token for a glTF node.
 
     Uses the node's glTF ``name`` (characters VRML forbids in a DEF replaced by
@@ -150,7 +167,7 @@ def _def_name(raw, index):
     return tok
 
 
-def _unique_def(base, used):
+def _unique_def(base: str, used: set) -> str:
     """Keep DEF names unique so duplicate glTF names stay individually
     addressable (glTF node names need not be unique); appends ``_001`` ..."""
     name = base
@@ -162,7 +179,8 @@ def _unique_def(base, used):
     return name
 
 
-def gpu_instance_transforms(g, ext_dict, resolver):
+def gpu_instance_transforms(g: "pygltflib.GLTF2", ext_dict: Optional[dict],
+                            resolver: Resolver) -> list:
     """Per-instance Transforms for an EXT_mesh_gpu_instancing node.
 
     The extension carries optional TRANSLATION (VEC3), ROTATION (VEC4 quaternion)
@@ -173,18 +191,23 @@ def gpu_instance_transforms(g, ext_dict, resolver):
     """
     attrs = (ext_dict or {}).get('attributes') or {}
     ti, ri, si = attrs.get('TRANSLATION'), attrs.get('ROTATION'), attrs.get('SCALE')
-    T = R = S = None
+    T: Optional[np.ndarray] = None
+    R: Optional[np.ndarray] = None
+    S: Optional[np.ndarray] = None
     count = 0
     # _read_normalized honours accessor.normalized, so a quantized (normalized byte/
     # short) ROTATION quaternion is dequantized to [-1,1] instead of read as raw ints
     # (which produced garbage rotations); float accessors pass straight through.
     if ti is not None:
-        T = _read_normalized(g, ti, resolver); count = len(T)
+        T = _read_normalized(g, ti, resolver)
+        count = len(T)
     if ri is not None:
-        R = _read_normalized(g, ri, resolver); count = max(count, len(R))
+        R = _read_normalized(g, ri, resolver)
+        count = max(count, len(R))
     if si is not None:
-        S = _read_normalized(g, si, resolver); count = max(count, len(S))
-    out = []
+        S = _read_normalized(g, si, resolver)
+        count = max(count, len(S))
+    out: list = []
     for i in range(count):
         t = Transform()
         if T is not None:
@@ -197,7 +220,7 @@ def gpu_instance_transforms(g, ext_dict, resolver):
     return out
 
 
-def _one_camera_pose(world, cam):
+def _one_camera_pose(world: np.ndarray, cam: "pygltflib.Camera") -> dict:
     """World pose + perspective params for a single (world_matrix, camera_def).
 
     World matrices are row-vector (p' = p @ M). A glTF camera looks down its
@@ -219,12 +242,12 @@ def _one_camera_pose(world, cam):
     }
 
 
-def _camera_poses(cameras):
+def _camera_poses(cameras: list) -> list:
     """World poses for every (world_matrix, camera_def), in node order."""
     return [_one_camera_pose(world, cam) for world, cam in cameras]
 
 
-def _viewpoints_for_poses(poses, scene_graph, used_defs):
+def _viewpoints_for_poses(poses: list, scene_graph: SceneGraph, used_defs: set) -> list:
     """Build one root-space ``Viewpoint`` node per camera pose, in order.
 
     Each Viewpoint is authored in world space (the loader already resolved the
@@ -234,7 +257,7 @@ def _viewpoints_for_poses(poses, scene_graph, used_defs):
     for :meth:`Viewpoint.moveTo` to apply. Prefer names over indices, per the
     glTF-camera intent.
     """
-    viewpoints = []
+    viewpoints: list = []
     for i, pose in enumerate(poses):
         vp = Viewpoint(
             position=tuple(pose['position']),
@@ -250,13 +273,13 @@ def _viewpoints_for_poses(poses, scene_graph, used_defs):
     return viewpoints
 
 
-def _camera_pose(cameras):
+def _camera_pose(cameras: list) -> Optional[dict]:
     """World pose of the first glTF camera, or None (back-compat helper)."""
     poses = _camera_poses(cameras)
     return poses[0] if poses else None
 
 
-def _meter_exposure(light_meter, center):
+def _meter_exposure(light_meter: list, center: Sequence[float]) -> float:
     """A camera exposure that stops absolute-unit punctual scenes down, else 1.0.
 
     glTF KHR_lights_punctual intensities are physical (point/spot candela,
@@ -286,7 +309,8 @@ def _meter_exposure(light_meter, center):
     return min(1.0, TARGET / max(key, TARGET))
 
 
-def _light_node(light_def, world):
+def _light_node(light_def: Any,
+                world: np.ndarray) -> "Optional[Union[DirectionalLight, PointLight, SpotLight]]":
     """Build a scenegraph light from a KHR_lights_punctual light + world matrix.
 
     Intensities/colours are passed through as authored. Directional lights cast
@@ -349,34 +373,35 @@ class _SceneBuilder:
     capture time, reproduces a posed still.
     """
 
-    def __init__(self, g, resolver, pointer_time=None):
+    def __init__(self, g: "pygltflib.GLTF2", resolver: Resolver,
+                 pointer_time: Optional[float] = None) -> None:
         self.g = g
         self.resolver = resolver
-        self.mat_cache = {}
-        self.tex_cache = {}
-        self.mesh_cache = {}   # decoded mesh shapes + local bounds per mesh index
+        self.mat_cache: dict = {}
+        self.tex_cache: dict = {}
+        self.mesh_cache: dict = {}   # decoded mesh shapes + local bounds per mesh index
         # SceneGraph holds the DEF registry; every node's Transform is registered
         # under a DEF so a caller can grab it by name (see _def_name).
         self.scene_graph = SceneGraph()
-        self.used_defs = set()
+        self.used_defs: set = set()
         self.world_min = np.array([np.inf] * 3)
         self.world_max = np.array([-np.inf] * 3)
-        self.cameras = []       # (world_matrix, camera_def)
-        self.light_meter = []   # (light_node, world_position or None) for auto-exposure
-        self.node_transforms = {}   # node index -> the Transform built for it
-        self.node_light = {}        # node index -> the light node built for it
-        self.node_morph = {}        # node index -> [morph-weight setter callables]
-        self.skins = []             # Skin, one per skinned mesh node
+        self.cameras: list = []       # (world_matrix, camera_def)
+        self.light_meter: list = []   # (light_node, world_position or None) for auto-exposure
+        self.node_transforms: dict = {}   # node index -> the Transform built for it
+        self.node_light: dict = {}        # node index -> the light node built for it
+        self.node_morph: dict = {}        # node index -> [morph-weight setter callables]
+        self.skins: list = []             # Skin, one per skinned mesh node
         # TRS-animated nodes must be plain Transforms (glTF forbids a ``matrix`` on
         # an animated node) so a Player's TRS writes drive the localMatrix.
         self.trs_animated = _trs_animated_nodes(g)
         # KHR_lights_punctual light defs (raw dicts), or [] if the ext is absent.
         top_ext = getattr(g, 'extensions', None) or {}
-        self.light_defs = []
+        self.light_defs: list = []
         if isinstance(top_ext, dict):
             self.light_defs = (top_ext.get('KHR_lights_punctual', {}) or {}).get('lights', []) or []
 
-    def mesh_shapes(self, mesh_index):
+    def mesh_shapes(self, mesh_index: int) -> list:
         if mesh_index in self.mesh_cache:
             return self.mesh_cache[mesh_index]
         shapes = []
@@ -397,7 +422,8 @@ class _SceneBuilder:
             self.mesh_cache[mesh_index] = shapes
         return shapes
 
-    def build(self, node_index, parent_world, ancestry=(), parent_visible=True):
+    def build(self, node_index: int, parent_world: np.ndarray,
+              ancestry: Tuple[int, ...] = (), parent_visible: bool = True) -> "Transform":
         # A glTF node graph is meant to be a forest, but nothing in the format
         # prevents a node from listing an ancestor as a child. Walking that with
         # plain recursion stack-overflows; track the current path and reject a
@@ -428,7 +454,7 @@ class _SceneBuilder:
         # so the flag threads down the recursion as `parent_visible`. The authored
         # initial flag may itself be a KHR_animation_pointer target baked in above.
         node_visible = parent_visible
-        gpu_inst = None
+        gpu_inst: Optional[list] = None
         if isinstance(node_ext, dict):
             nv = node_ext.get('KHR_node_visibility')
             if isinstance(nv, dict):
@@ -469,7 +495,7 @@ class _SceneBuilder:
                     self.light_meter.append((light, wpos))
         for child in (node.children or []):
             children.append(self.build(child, world, ancestry, node_visible))
-        group.children = children
+        group.children = children  # type: ignore[assignment]
         return group
 
     def run(self) -> GLTFScene:
@@ -478,7 +504,8 @@ class _SceneBuilder:
         # renderable container (GLTFScene.group); the SceneGraph is its parent and
         # carries the DEF registry for by-name lookup.
         root = Transform()
-        root.children = [self.build(ni, np.eye(4)) for ni in _scene_root_indices(g)]
+        # children is a VRML ChildrenTypedField descriptor that coerces a node list.
+        root.children = [self.build(ni, np.eye(4)) for ni in _scene_root_indices(g)]  # type: ignore[assignment]
         self.scene_graph.children = [root]
 
         if not np.isfinite(self.world_min).all():
@@ -511,5 +538,6 @@ class _SceneBuilder:
         return scene
 
 
-def _build_scene(g, resolver, pointer_time=None) -> GLTFScene:
+def _build_scene(g: "pygltflib.GLTF2", resolver: Resolver,
+                 pointer_time: Optional[float] = None) -> GLTFScene:
     return _SceneBuilder(g, resolver, pointer_time).run()

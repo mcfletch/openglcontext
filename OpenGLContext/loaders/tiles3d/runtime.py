@@ -15,21 +15,48 @@ viewport_height)` call that returns the drawables to render this frame. The step
 GL work is delegated to an `uploader` (`upload(tile, payload) -> (drawable, nbytes)`
 and `release(drawable)`), so the orchestration is testable without a GL context.
 """
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, Any, Optional, Protocol
+
+import numpy as np
+
 from OpenGLContext.loaders.tiles3d.traversal import select_tiles
 from OpenGLContext.loaders.tiles3d.residency import Residency
 from OpenGLContext.loaders.tiles3d.loadmanager import LoadManager
 from OpenGLContext.loaders.tiles3d.frustum import Frustum
 
+if TYPE_CHECKING:
+    from OpenGLContext.loaders.tiles3d.tileset import RuntimeTile, RuntimeTileset
+
+
+class Uploader(Protocol):
+    """GL-facing sink: turns a loaded payload into a drawable and frees it later."""
+
+    def upload(self, tile: "RuntimeTile", payload: Any) -> tuple[Any, int]: ...
+
+    def release(self, drawable: Any) -> None: ...
+
 
 class TilesetRuntime:
-    def __init__(self, tileset, loader_fn, uploader, memory_budget,
-                 fovy, max_sse=16.0, prefetch_factor=2.0,
-                 max_uploads_per_update=4, workers=2, hysteresis=0.0,
-                 on_renderable=None, on_evicted=None):
+    def __init__(
+        self,
+        tileset: "RuntimeTileset",
+        loader_fn: "Callable[[RuntimeTile], Any]",
+        uploader: Uploader,
+        memory_budget: float,
+        fovy: float,
+        max_sse: float = 16.0,
+        prefetch_factor: float = 2.0,
+        max_uploads_per_update: int = 4,
+        workers: int = 2,
+        hysteresis: float = 0.0,
+        on_renderable: "Optional[Callable[[RuntimeTile, Any], None]]" = None,
+        on_evicted: "Optional[Callable[[RuntimeTile, Any], None]]" = None,
+    ) -> None:
         self.tileset = tileset
         self.uploader = uploader
         self.hysteresis = hysteresis
-        self._refined_state = {}
+        self._refined_state: dict[int, bool] = {}
         # Fired when a tile's content becomes drawable / is evicted, so consumers
         # (e.g. physics colliders) can track the resident set. Both take (tile, drawable).
         self.on_renderable = on_renderable
@@ -40,16 +67,23 @@ class TilesetRuntime:
         self.max_sse = max_sse
         self.prefetch_factor = prefetch_factor
         self.max_uploads_per_update = max_uploads_per_update
-        self._drawables = {}   # id(tile) -> drawable
-        self._ready_payloads = {}  # id(tile) -> (tile, payload) awaiting upload
+        self._drawables: dict[int, Any] = {}   # id(tile) -> drawable
+        # id(tile) -> (tile, payload) awaiting upload
+        self._ready_payloads: "dict[int, tuple[RuntimeTile, Any]]" = {}
 
-    def update(self, camera, viewport_height, max_sse=None, visible=None,
-               view_projection=None):
+    def update(
+        self,
+        camera: np.ndarray,
+        viewport_height: float,
+        max_sse: Optional[float] = None,
+        visible: "Optional[Callable[[RuntimeTile], bool]]" = None,
+        view_projection: Optional[np.ndarray] = None,
+    ) -> "list[Any]":
         max_sse = self.max_sse if max_sse is None else max_sse
         if visible is None and view_projection is not None:
             frustum = Frustum.from_matrix(view_projection)
 
-            def visible(tile):
+            def visible(tile: "RuntimeTile") -> bool:
                 center, radius = tile.bounding_volume.bounding_sphere()
                 return frustum.contains_sphere(center, radius)
         selection = select_tiles(
@@ -65,19 +99,19 @@ class TilesetRuntime:
         self._evict(selection.want, pinned)
         return draw
 
-    def wait_for_loads(self, timeout=5.0):
+    def wait_for_loads(self, timeout: float = 5.0) -> bool:
         return self.loadmgr.wait_idle(timeout=timeout)
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         self.loadmgr.shutdown()
 
-    def _request_loads(self, want, camera):
+    def _request_loads(self, want: "Iterable[RuntimeTile]", camera: np.ndarray) -> None:
         for tile in self.residency.wanted_to_load(want):
             self.residency.begin_load(tile)
             priority = tile.bounding_volume.distance_to(camera)
             self.loadmgr.request(tile, priority)
 
-    def _collect_ready(self):
+    def _collect_ready(self) -> None:
         for tile, payload in self.loadmgr.poll_ready():
             if isinstance(payload, Exception):
                 # Failed load: drop back to unloaded so it can be retried later.
@@ -86,7 +120,7 @@ class TilesetRuntime:
             self.residency.set_ready(tile)
             self._ready_payloads[id(tile)] = (tile, payload)
 
-    def _upload_ready(self):
+    def _upload_ready(self) -> None:
         uploaded = 0
         for key in list(self._ready_payloads):
             if uploaded >= self.max_uploads_per_update:
@@ -99,7 +133,7 @@ class TilesetRuntime:
             if self.on_renderable is not None:
                 self.on_renderable(tile, drawable)
 
-    def _renderable_or_ancestor(self, tile):
+    def _renderable_or_ancestor(self, tile: "RuntimeTile") -> "Optional[RuntimeTile]":
         if id(tile) in self._drawables:
             return tile
         for ancestor in tile.ancestors():
@@ -107,10 +141,12 @@ class TilesetRuntime:
                 return ancestor
         return None
 
-    def _build_draw_list(self, render):
-        draw = []
-        pinned = []
-        seen = set()
+    def _build_draw_list(
+        self, render: "Iterable[RuntimeTile]"
+    ) -> "tuple[list[Any], list[RuntimeTile]]":
+        draw: "list[Any]" = []
+        pinned: "list[RuntimeTile]" = []
+        seen: set[int] = set()
         for tile in render:
             resolved = self._renderable_or_ancestor(tile)
             if resolved is None or id(resolved) in seen:
@@ -121,7 +157,9 @@ class TilesetRuntime:
                 pinned.append(resolved)
         return draw, pinned
 
-    def _evict(self, want, pinned):
+    def _evict(
+        self, want: "Iterable[RuntimeTile]", pinned: "list[RuntimeTile]"
+    ) -> None:
         for tile in self.residency.enforce_budget(keep=list(want) + pinned):
             drawable = self._drawables.pop(id(tile), None)
             if drawable is not None:

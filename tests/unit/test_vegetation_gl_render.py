@@ -19,7 +19,6 @@ from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.clumps import InstancedClumps
 from OpenGLContext.scenegraph.vegetation.nearmesh import InstancedMeshLOD
 from OpenGLContext.scenegraph.vegetation import LOD_NEAR, LOD_FAR
-from OpenGLContext.scenegraph import instancedgl
 
 
 def _uniformf(prog, name):
@@ -128,6 +127,22 @@ def test_clumps_render_with_in_memory_texture_and_dispose(gl):
 
     node.dispose()
     assert node._gl is None
+    node.dispose()                                # idempotent: no GL objects left to free
+
+
+def test_meshlod_skips_species_with_no_near_instances(gl, tmp_path):
+    """A species whose near-set is empty is skipped in the draw loop while another
+    species still draws -- the per-species empty-buffer guard."""
+    two = [_species_npz(tmp_path), _species_npz(tmp_path)]
+    pos = np.array([[0, 0, 0], [0, 0, 500]], 'f4')   # species 1 tree is far away
+    node = InstancedMeshLOD(pos, np.zeros(2, 'f4'), np.ones(2, 'f4'), two,
+                            species_id=np.array([0, 1]))
+    node.update(0.0, 0.0, radius=42.0)               # only the species-0 tree is near
+    assert node.render(_mode()) == 1
+    assert glGetError() == GL_NO_ERROR
+    assert node._sp[0]["buf"].count == 1
+    assert node._sp[1]["buf"].count == 0             # empty species -> `continue`
+    node.dispose()
 
 
 def test_lod_window_shared_by_impostor_and_near_mesh(gl, tmp_path):

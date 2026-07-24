@@ -109,7 +109,7 @@ def resolve_shadow_config() -> Tuple[int, bool]:
 
 
 def load_fragment_source(filename: str, max_shadow_lights: int,
-                         cube_array: bool, extra_defines=None) -> str:
+                         cube_array: bool, extra_defines: Optional[list] = None) -> str:
     """Read a lit fragment shader assembled for the current driver tier.
 
     Resolves its ``#include``s (the shared shadow / BRDF / colour code) and injects

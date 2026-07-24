@@ -72,6 +72,117 @@ class TestIBLController:
         assert c.effective_mode(500.0) == 'off'
 
 
+class TestIBLIsAdaptive:
+    @pytest.mark.parametrize('value,expected', [
+        ('', True), ('auto', True),
+        ('full', False), ('analytic', False), ('off', False),
+    ])
+    def test_only_auto_or_unset_adapts(self, value, expected, monkeypatch):
+        if value == '':
+            monkeypatch.delenv('OPENGLCONTEXT_IBL', raising=False)
+        else:
+            monkeypatch.setenv('OPENGLCONTEXT_IBL', value)
+        assert ibl.ibl_is_adaptive() is expected
+
+
+class TestProbeMaxLod:
+    def test_max_lod_is_levels_minus_one(self):
+        """max_lod is a pure property; no probe build / GL needed."""
+        p = ibl.IBLProbe()
+        assert p.max_lod == float(ibl.IBLProbe.PRE_LEVELS - 1)
+
+
+class TestEquirectSource:
+    def teardown_method(self):
+        ibl.set_equirect_env(None)
+
+    def test_registered_panorama_wins(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_ENV_HDR', raising=False)
+        arr = np.ones((4, 8, 3), dtype=np.float32)
+        ibl.set_equirect_env(arr)
+        out = ibl.resolve_equirect_source()
+        assert out is not None
+        assert out.shape == (4, 8, 3)
+
+    def test_env_hdr_path_decoded_when_no_registered_env(self, monkeypatch):
+        ibl.set_equirect_env(None)
+        monkeypatch.setenv('OPENGLCONTEXT_ENV_HDR', '/some/panorama.hdr')
+        loaded = np.zeros((2, 4, 3), dtype=np.float32)
+        monkeypatch.setattr(ibl, 'load_equirect_hdr', lambda src: loaded)
+        out = ibl.resolve_equirect_source()
+        assert out is loaded
+
+    def test_bad_env_hdr_is_logged_and_treated_as_unset(self, monkeypatch):
+        ibl.set_equirect_env(None)
+        monkeypatch.setenv('OPENGLCONTEXT_ENV_HDR', '/nonexistent.hdr')
+
+        def boom(src):
+            raise IOError("cannot read")
+
+        monkeypatch.setattr(ibl, 'load_equirect_hdr', boom)
+        assert ibl.resolve_equirect_source() is None
+
+    def test_no_source_configured_returns_none(self, monkeypatch):
+        ibl.set_equirect_env(None)
+        monkeypatch.delenv('OPENGLCONTEXT_ENV_HDR', raising=False)
+        assert ibl.resolve_equirect_source() is None
+
+
+class TestLoadEquirectHDR:
+    def test_url_source_is_fetched_to_cache_first(self, monkeypatch):
+        """An http(s) HDR is fetched to the asset cache, then decoded from disk."""
+        from OpenGLContext.loaders import hdr
+        from OpenGLContext.loaders import resolver
+        seen = {}
+
+        def fake_fetch(url):
+            seen['url'] = url
+            return '/cache/panorama.hdr'
+
+        decoded = np.zeros((2, 4, 3), dtype=np.float32)
+
+        def fake_load(path):
+            seen['path'] = path
+            return decoded
+
+        monkeypatch.setattr(resolver, 'fetch_to_cache', fake_fetch)
+        monkeypatch.setattr(hdr, 'load_hdr', fake_load)
+        out = ibl.load_equirect_hdr('https://example.com/pano.hdr')
+        assert seen['url'] == 'https://example.com/pano.hdr'
+        assert seen['path'] == '/cache/panorama.hdr'
+        assert out is decoded
+
+    def test_local_path_decoded_directly(self, monkeypatch):
+        from OpenGLContext.loaders import hdr
+        decoded = np.zeros((2, 4, 3), dtype=np.float32)
+        monkeypatch.setattr(hdr, 'load_hdr', lambda path: decoded)
+        assert ibl.load_equirect_hdr('/local/pano.hdr') is decoded
+
+
+class TestGLContextPresent:
+    def test_absent_context_when_query_raises(self, monkeypatch):
+        def boom(enum):
+            raise RuntimeError("no current context")
+
+        monkeypatch.setattr(ibl, 'glGetString', boom)
+        assert ibl._gl_context_present() is False
+
+
+class TestFloatRenderProbe:
+    def test_missing_immutable_storage_fails_probe(self, monkeypatch):
+        """No glTexStorage2D entry point -> the 'full' path cannot run."""
+        monkeypatch.setattr(ibl, 'glTexStorage2D', None)
+        assert ibl._run_float_render_capability_probe() is False
+
+    def test_no_context_defers_and_reports_capable(self, monkeypatch):
+        """With no current context the probe is deferred (returns True, uncached)
+        so headless mode resolution stays on the renderer-name path."""
+        monkeypatch.setattr(ibl, '_gl_context_present', lambda: False)
+        ibl._FLOAT_RENDER_CAP['checked'] = False
+        assert ibl.probe_float_render_capability(force=True) is True
+        assert ibl._FLOAT_RENDER_CAP['checked'] is False
+
+
 class TestSpecGlossFactorConversion:
     def test_pure_dielectric_is_non_metal(self):
         base, metallic, rough = _specgloss_to_metalrough(

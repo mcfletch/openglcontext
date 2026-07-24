@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 import os
+from typing import Optional
 
 from OpenGL.GL import (
     GL_TEXTURE_2D, GL_TEXTURE0, GL_RGB8,
@@ -57,8 +58,8 @@ class TransmissionBuffer(object):
 
     UNIT = TRANSMISSION_UNIT
 
-    def __init__(self):
-        self.tex = None
+    def __init__(self) -> None:
+        self.tex: Optional[int] = None
         self.w = 0
         self.h = 0
         self.levels = 1

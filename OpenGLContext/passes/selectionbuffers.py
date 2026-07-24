@@ -16,10 +16,22 @@ picking *logic* in :mod:`selection` stays free of framebuffer bookkeeping.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
-from OpenGL.GL import *
-from OpenGLContext.arrays import array
+from OpenGL.GL import (
+    GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_BUFFER_BIT, GL_DEPTH_ATTACHMENT,
+    GL_DEPTH_BUFFER_BIT, GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT24, GL_DRAW_FRAMEBUFFER,
+    GL_FLOAT, GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE, GL_NEAREST, GL_READ_FRAMEBUFFER,
+    GL_READ_FRAMEBUFFER_BINDING, GL_RENDERBUFFER, GL_RGBA, GL_RGBA8, GL_TEXTURE_2D,
+    GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_UNSIGNED_BYTE, glBindFramebuffer,
+    glBindRenderbuffer, glBindTexture, glBlitFramebuffer, glCheckFramebufferStatus,
+    glClear, glClearColor, glDeleteFramebuffers, glDeleteRenderbuffers, glDeleteTextures,
+    glDrawBuffers, glFramebufferRenderbuffer, glFramebufferTexture2D, glGenFramebuffers,
+    glGenRenderbuffers, glGenTextures, glGetIntegerv, glReadBuffer, glReadPixels,
+    glRenderbufferStorage, glTexImage2D, glTexParameteri, glViewport,
+)
+# array is numpy.array re-exported through vrml.arrays' star import.
+from OpenGLContext.arrays import array  # type: ignore[attr-defined]
 import logging
 
 log = logging.getLogger(__name__)
@@ -32,7 +44,7 @@ class SelectionFBO:
     dramatically reducing pixel fill cost for selection operations.
     """
 
-    def __init__(self, max_width: int = 512, max_height: int = 512):
+    def __init__(self, max_width: int = 512, max_height: int = 512) -> None:
         """Initialize the selection FBO.
 
         Args:
@@ -41,9 +53,9 @@ class SelectionFBO:
         """
         self.max_width = max_width
         self.max_height = max_height
-        self.fbo = None
-        self.color_texture = None
-        self.depth_renderbuffer = None
+        self.fbo: Optional[int] = None
+        self.color_texture: Optional[int] = None
+        self.depth_renderbuffer: Optional[int] = None
         self.current_width = 0
         self.current_height = 0
         self._initialized = False
@@ -117,7 +129,7 @@ class SelectionFBO:
             glBindFramebuffer(GL_FRAMEBUFFER, 0)
             return False
 
-    def _cleanup(self):
+    def _cleanup(self) -> None:
         """Clean up OpenGL resources."""
         if self.fbo is not None:
             try:
@@ -163,7 +175,7 @@ class SelectionFBO:
         glViewport(0, 0, region_width, region_height)
         return True
 
-    def unbind(self):
+    def unbind(self) -> None:
         """Unbind the FBO and restore default framebuffer."""
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
@@ -196,18 +208,18 @@ class SelectionBufferFBO:
     events are resolved by simple array lookup with no GPU interaction.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the selection buffer (lazy GPU resource creation)."""
-        self.fbo = None
-        self.color_texture = None       # Normal scene color (attachment 0)
-        self.id_texture = None          # Object ID buffer (attachment 1)
-        self.depth_renderbuffer = None
+        self.fbo: Optional[int] = None
+        self.color_texture: Optional[int] = None       # Normal scene color (attachment 0)
+        self.id_texture: Optional[int] = None          # Object ID buffer (attachment 1)
+        self.depth_renderbuffer: Optional[int] = None
         self.width = 0
         self.height = 0
         self._initialized = False
 
         # Object ID to path mapping (rebuilt each frame)
-        self.id_map = {}
+        self.id_map: Dict = {}
 
     def ensure_size(self, width: int, height: int) -> bool:
         """Ensure FBO is created and sized to match viewport.
@@ -305,7 +317,7 @@ class SelectionBufferFBO:
             glBindFramebuffer(GL_FRAMEBUFFER, 0)
             return False
 
-    def _cleanup(self):
+    def _cleanup(self) -> None:
         """Clean up OpenGL resources."""
         if self.fbo is not None:
             try:
@@ -352,11 +364,11 @@ class SelectionBufferFBO:
         glDrawBuffers(2, [GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1])
         return True
 
-    def unbind(self):
+    def unbind(self) -> None:
         """Unbind the FBO."""
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear both color attachments and depth buffer.
 
         Clears color attachment 0 to scene background (handled by caller)
@@ -374,7 +386,7 @@ class SelectionBufferFBO:
         # Restore both draw buffers
         glDrawBuffers(2, [GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1])
 
-    def read_pixel(self, x: int, y: int):
+    def read_pixel(self, x: int, y: int) -> Tuple[int, float]:
         """Read (object_id, depth) at one pixel straight from the FBO.
 
         This replaces reading back the *entire* id+depth buffer every frame (a
@@ -401,7 +413,7 @@ class SelectionBufferFBO:
         obj_id = int(px[0]) | (int(px[1]) << 8) | (int(px[2]) << 16) | (int(px[3]) << 24)
         return obj_id, float(dz[0])
 
-    def blit_to_screen(self, target_width: int, target_height: int):
+    def blit_to_screen(self, target_width: int, target_height: int) -> None:
         """Blit the color buffer to the default framebuffer.
 
         Args:
@@ -425,6 +437,6 @@ class SelectionBufferFBO:
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
-    def set_id_map(self, id_map: dict):
+    def set_id_map(self, id_map: dict) -> None:
         """Set the object ID to path mapping for this frame."""
         self.id_map = id_map

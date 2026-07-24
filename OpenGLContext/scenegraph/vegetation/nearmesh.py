@@ -12,8 +12,17 @@ so every family — including alpha-MASK conifer branches — writes depth and o
 correctly, with no foliage texture bleeding across trunks.
 """
 import ctypes
+from typing import Any, Optional
+
 import numpy as np
-from OpenGL.GL import *
+from OpenGL.GL import (
+    GL_ARRAY_BUFFER, GL_BLEND, GL_CULL_FACE, GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER,
+    GL_FALSE, GL_FLOAT, GL_STATIC_DRAW, GL_TEXTURE0, GL_TEXTURE_2D, GL_TRIANGLES,
+    GL_TRUE, GL_UNSIGNED_INT, glActiveTexture, glBindBuffer, glBindTexture,
+    glBindVertexArray, glBufferData, glDepthMask, glDisable, glDrawElementsInstanced,
+    glEnable, glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays,
+    glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
+)
 from OpenGLContext.scenegraph.instancedgl import (
     load_program, texture_rgba, delete_gl, setup_instance_attribs, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import (
@@ -38,8 +47,11 @@ class InstancedMeshLOD(InstancedVegBase):
     :param species_id: optional (N,) int assigning each tree to a species index;
         defaults to round-robin. Set before the first :meth:`update`.
     """
-    def __init__(self, all_pos, all_yaw, all_scale, species, sun=DEFAULT_SUN,
-                 species_id=None, bounds=_BIG):
+    def __init__(self, all_pos: np.ndarray, all_yaw: np.ndarray, all_scale: np.ndarray,
+                 species: "list[dict[str, Any]]",
+                 sun: "tuple[float, float, float]" = DEFAULT_SUN,
+                 species_id: Optional[np.ndarray] = None,
+                 bounds: "tuple[float, float, float]" = _BIG) -> None:
         super(InstancedMeshLOD, self).__init__()
         self.all_pos = np.asarray(all_pos, np.float32)
         self.all_yaw = np.asarray(all_yaw, np.float32)
@@ -49,11 +61,14 @@ class InstancedMeshLOD(InstancedVegBase):
             species_id = np.arange(len(self.all_pos)) % n
         self.all_sp = np.asarray(species_id, int)
         self.species = species
-        self.sun = np.asarray(sun, 'd'); self.sun /= np.linalg.norm(self.sun)
+        self.sun = np.asarray(sun, 'd')
+        self.sun /= np.linalg.norm(self.sun)
         self.bounds = bounds
-        self._gl = None; self._pending = None; self._disabled = False
+        self._gl: Any = None
+        self._pending: "Optional[dict[int, np.ndarray]]" = None
+        self._disabled = False
 
-    def update(self, cx, cz, radius=42.0):
+    def update(self, cx: float, cz: float, radius: float = 42.0) -> None:
         """Select trees within ``radius`` of ``(cx, cz)`` and stage their instance data."""
         d2 = (self.all_pos[:, 0] - cx) ** 2 + (self.all_pos[:, 2] - cz) ** 2
         near = d2 < radius * radius
@@ -63,39 +78,54 @@ class InstancedMeshLOD(InstancedVegBase):
                                self.all_scale[near & (self.all_sp == s), None]], 1).astype(np.float32)
             for s in range(len(self.species))}
 
-    def _mkvao(self, P, N, U, I, ibuf):
+    def _mkvao(self, P: np.ndarray, N: np.ndarray, U: np.ndarray, I: np.ndarray,
+               ibuf: InstanceBuffer) -> "tuple[Any, int]":
         mesh = np.concatenate([P, N, U], 1).astype(np.float32)
-        vao = glGenVertexArrays(1); glBindVertexArray(vao)
-        mvb = glGenBuffers(1); glBindBuffer(GL_ARRAY_BUFFER, mvb)
+        vao = glGenVertexArrays(1)
+        glBindVertexArray(vao)
+        mvb = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, mvb)
         glBufferData(GL_ARRAY_BUFFER, mesh.nbytes, mesh, GL_STATIC_DRAW)
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(0)); glEnableVertexAttribArray(0)
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(12)); glEnableVertexAttribArray(1)
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(24)); glEnableVertexAttribArray(2)
-        idx = I.astype(np.uint32); ib = glGenBuffers(1); glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib)
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(0)
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(12))
+        glEnableVertexAttribArray(1)
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 32, ctypes.c_void_p(24))
+        glEnableVertexAttribArray(2)
+        idx = I.astype(np.uint32)
+        ib = glGenBuffers(1)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.nbytes, idx, GL_STATIC_DRAW)
         glBindBuffer(GL_ARRAY_BUFFER, ibuf.id)
         setup_instance_attribs(3, 4)
         glBindVertexArray(0)
-        self._vaos.append(vao); self._buffers += [mvb, ib]
+        self._vaos.append(vao)
+        self._buffers += [mvb, ib]
         return vao, len(idx)
 
-    def _init_gl(self):
+    def _init_gl(self) -> None:
         self._prog = load_program("veg_mesh.vert", "veg_mesh.frag")
         # Retain every generated handle so dispose() can free it -- the mesh/index
         # VBOs would otherwise be unreachable the moment _mkvao returns.
-        self._vaos = []; self._buffers = []; self._textures = []
-        tc = {}
-        def tex(path):
+        self._vaos: "list[Any]" = []
+        self._buffers: "list[Any]" = []
+        self._textures: "list[Any]" = []
+        tc: "dict[str, Any]" = {}
+
+        def tex(path: str) -> Any:
             if path not in tc:
                 tc[path] = texture_rgba(path, clamp=False)
                 self._textures.append(tc[path])
             return tc[path]
-        self._sp = []
+        self._sp: "list[dict[str, Any]]" = []
         for sd in self.species:
             with np.load(sd["npz"]) as d:
-                ok = sd["o_keys"]; bk = sd["b_keys"]
-                op = [d[k] for k in ok]; bp = [d[k] for k in bk]
-            ibuf = InstanceBuffer(); self._buffers.append(ibuf.id)
+                ok = sd["o_keys"]
+                bk = sd["b_keys"]
+                op = [d[k] for k in ok]
+                bp = [d[k] for k in bk]
+            ibuf = InstanceBuffer()
+            self._buffers.append(ibuf.id)
             ov, onc = self._mkvao(op[0], op[1], op[2], op[3], ibuf)
             bv, bnc = self._mkvao(bp[0], bp[1], bp[2], bp[3], ibuf)
             self._sp.append(dict(buf=ibuf, o=(ov, onc, tex(sd["o_tex"])), b=(bv, bnc, tex(sd["b_tex"]))))
@@ -106,39 +136,50 @@ class InstancedMeshLOD(InstancedVegBase):
         self._commit_constants()
         self._gl = self._prog
 
-    def _upload_constants(self):
+    def _upload_constants(self) -> None:
         U = self.U
-        glUniform1i(U["atlas"], 0); glUniform3f(U["sunColor"], 1.25, 1.18, 1.02)
-        glUniform3f(U["skyAmbient"], 0.5, 0.58, 0.66); glUniform3f(U["groundAmbient"], 0.14, 0.16, 0.11)
-        glUniform1f(U["fogDensity"], 0.00016); glUniform3f(U["fogColor"], 0.46, 0.58, 0.76)
-        glUniform1f(U["uLodStart"], LOD_NEAR); glUniform1f(U["uLodEnd"], LOD_FAR)
+        glUniform1i(U["atlas"], 0)
+        glUniform3f(U["sunColor"], 1.25, 1.18, 1.02)
+        glUniform3f(U["skyAmbient"], 0.5, 0.58, 0.66)
+        glUniform3f(U["groundAmbient"], 0.14, 0.16, 0.11)
+        glUniform1f(U["fogDensity"], 0.00016)
+        glUniform3f(U["fogColor"], 0.46, 0.58, 0.76)
+        glUniform1f(U["uLodStart"], LOD_NEAR)
+        glUniform1f(U["uLodEnd"], LOD_FAR)
 
-    def dispose(self):
+    def dispose(self) -> None:
         """Free this node's GL objects (VAOs, buffers, textures, program). GL thread."""
         if self._gl is None:
             return
         delete_gl(vaos=self._vaos, buffers=self._buffers,
                   textures=self._textures, programs=[self._prog])
-        self._vaos = []; self._buffers = []; self._textures = []; self._sp = []
+        self._vaos = []
+        self._buffers = []
+        self._textures = []
+        self._sp = []
         self._gl = None
 
-    def _stream(self):
+    def _stream(self) -> bool:
         if self._pending is not None:
             for s, inst in self._pending.items():
                 self._sp[s]["buf"].upload(inst)
             self._pending = None
         return any(s["buf"].count for s in self._sp)
 
-    def _draw(self, mode):
+    def _draw(self, mode: Any) -> None:
         # single alpha-cutout pass, depth-write on, no blend -> depth-correct, no bleed
         glActiveTexture(GL_TEXTURE0)
-        glEnable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE)
-        glDisable(GL_BLEND); glDepthMask(GL_TRUE)
+        glEnable(GL_DEPTH_TEST)
+        glDisable(GL_CULL_FACE)
+        glDisable(GL_BLEND)
+        glDepthMask(GL_TRUE)
         for s in self._sp:
             n = s["buf"].count
             if not n:
                 continue
             for part in ("o", "b"):
-                v, cnt, t = s[part]; glBindTexture(GL_TEXTURE_2D, t); glBindVertexArray(v)
+                v, cnt, t = s[part]
+                glBindTexture(GL_TEXTURE_2D, t)
+                glBindVertexArray(v)
                 glDrawElementsInstanced(GL_TRIANGLES, cnt, GL_UNSIGNED_INT, None, n)
         glBindVertexArray(0)

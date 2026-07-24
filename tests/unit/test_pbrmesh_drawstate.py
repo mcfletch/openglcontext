@@ -78,8 +78,8 @@ class TestStateChurn:
         m._apply_draw_state(mode)
         PBRMesh.reset_draw_state(mode)
         assert ('front', pbrmesh.GL_CCW) in rec.calls     # winding restored
-        assert getattr(mode, '_pbr_front_face') is None
-        assert getattr(mode, '_pbr_cull_enabled') is None
+        assert mode._pbr_front_face is None
+        assert mode._pbr_cull_enabled is None
 
     def test_reset_reenables_culling_if_left_disabled(self, monkeypatch):
         rec = _GLRec(monkeypatch)
@@ -140,13 +140,61 @@ class TestFinalizerNeverTouchesGL:
         assert deleted == []
 
     def test_queue_is_per_context(self):
-        mode_a = FakeMode(); mode_a.context = _FakeContext()
-        mode_b = FakeMode(); mode_b.context = _FakeContext()
+        mode_a = FakeMode()
+        mode_a.context = _FakeContext()
+        mode_b = FakeMode()
+        mode_b.context = _FakeContext()
         qa = PBRMesh._pending_delete_queue(mode_a)
         qb = PBRMesh._pending_delete_queue(mode_b)
         assert qa is not qb
         # same context -> same queue
         assert PBRMesh._pending_delete_queue(mode_a) is qa
+
+
+class TestDefensiveTeardown:
+    """The GL-teardown paths swallow driver/attribute failures so a bad frame can
+    never crash the app. Each guard is provoked with a failing collaborator."""
+
+    def _bare_gpu(self, vao=1):
+        gpu = pbrmesh._MeshGPU.__new__(pbrmesh._MeshGPU)   # skip GL-touching __init__
+        gpu.vao = vao
+        gpu._instance_vao = None
+        return gpu
+
+    def test_release_swallows_delete_failure(self, monkeypatch):
+        monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
+                            lambda *a: (_ for _ in ()).throw(RuntimeError("bad ctx")))
+        gpu = self._bare_gpu()
+        gpu.release()                       # exception is caught
+        assert gpu.vao is None              # slot still cleared
+
+    def test_finalizer_swallows_enqueue_failure(self):
+        class _BadQueue:
+            def append(self, _v):
+                raise RuntimeError("queue is full")
+
+        gpu = self._bare_gpu(vao=7)
+        gpu._pending_deletes = _BadQueue()
+        gpu.__del__()                       # append raises -> swallowed, no crash
+        assert gpu.vao is None
+
+    def test_pending_queue_falls_back_when_context_is_unwritable(self):
+        class _Slotted:
+            __slots__ = ()                  # setattr of the queue attr will fail
+
+        mode = FakeMode()
+        mode.context = _Slotted()
+        assert PBRMesh._pending_delete_queue(mode) == []   # can't stash -> empty list
+
+    def test_flush_swallows_delete_failure(self, monkeypatch):
+        monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
+                            lambda *a: (_ for _ in ()).throw(RuntimeError("bad ctx")))
+        mode = FakeMode()
+        mode.context = _FakeContext()
+        queue = PBRMesh._pending_delete_queue(mode)
+        queue.append(11)
+        PBRMesh.flush_pending_deletes(mode)   # delete raises -> caught
+        assert queue == []                    # queue still drained
 
 
 if __name__ == '__main__':

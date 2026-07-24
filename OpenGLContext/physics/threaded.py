@@ -36,7 +36,7 @@ class ThreadedPhysicsManager(PhysicsManager):
         """Stop the simulation thread and wait for it to exit."""
         self._sim.stop()
 
-    def with_world(self):
+    def with_world(self) -> Any:
         """Context manager giving exclusive access to the world (pauses stepping)."""
         return self._sim.with_world()
 

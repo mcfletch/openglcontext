@@ -10,16 +10,17 @@ import hashlib
 import os
 import urllib.parse
 import urllib.request
+from typing import Optional
 
 _USER_AGENT = "OpenGLContext-tiles3d"
 
 
-def is_url(uri):
+def is_url(uri: str) -> bool:
     """True for an http/https URI (as opposed to a local filesystem path)."""
     return bool(uri) and urllib.parse.urlparse(uri).scheme in ("http", "https")
 
 
-def resolve_uri(base, uri):
+def resolve_uri(base: str, uri: str) -> str:
     """Resolve `uri` against `base`, which may be a URL or a local directory path.
 
     An absolute URI (its own scheme, or an absolute path) is returned unchanged.
@@ -31,7 +32,7 @@ def resolve_uri(base, uri):
     return os.path.join(base, uri)
 
 
-def dir_of(uri):
+def dir_of(uri: str) -> str:
     """The base (directory) of a URI, with a trailing separator, for child URIs.
 
     A bare filename (no directory) yields "" so its children resolve as siblings.
@@ -42,12 +43,12 @@ def dir_of(uri):
     return head + os.sep if head else ""
 
 
-def default_cache_dir():
+def default_cache_dir() -> str:
     root = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
     return os.path.join(root, "openglcontext", "tiles3d")
 
 
-def read_bytes(uri, cache_dir=None):
+def read_bytes(uri: str, cache_dir: Optional[str] = None) -> bytes:
     """Return the bytes at `uri` (local path or http/https URL).
 
     Remote responses are cached under `cache_dir` (default: the per-user cache dir)

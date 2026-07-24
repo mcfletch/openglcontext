@@ -12,22 +12,41 @@ set is the render set unioned with a deeper selection at a lower (prefetch) thre
 so finer tiles the camera is approaching load before they are strictly needed while
 the coarse ancestor stays resident as a fallback.
 """
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Optional
+
+import numpy as np
+
 from OpenGLContext.loaders.tiles3d.screenspaceerror import (
     screen_space_error,
     should_refine,
 )
 
+if TYPE_CHECKING:
+    from OpenGLContext.loaders.tiles3d.tileset import RuntimeTile, RuntimeTileset
+
 
 class SelectionResult:
     """Outcome of one traversal: `render` (draw list) and `want` (keep-resident set)."""
 
-    def __init__(self, render, want):
+    def __init__(
+        self, render: "list[RuntimeTile]", want: "list[RuntimeTile]"
+    ) -> None:
         self.render = render
         self.want = want
 
 
-def _select(tile, camera, viewport_height, fovy, max_sse, visible, out,
-            hysteresis, refined_state):
+def _select(
+    tile: "RuntimeTile",
+    camera: np.ndarray,
+    viewport_height: float,
+    fovy: float,
+    max_sse: float,
+    visible: "Optional[Callable[[RuntimeTile], bool]]",
+    out: "list[RuntimeTile]",
+    hysteresis: float,
+    refined_state: Optional[dict[int, bool]],
+) -> None:
     if visible is not None and not visible(tile):
         return
     distance = tile.bounding_volume.distance_to(camera)
@@ -55,9 +74,17 @@ def _select(tile, camera, viewport_height, fovy, max_sse, visible, out,
                 hysteresis, refined_state)
 
 
-def select_tiles(tileset, camera, viewport_height, fovy, max_sse,
-                 prefetch_factor=1.0, visible=None,
-                 hysteresis=0.0, refined_state=None):
+def select_tiles(
+    tileset: "RuntimeTileset",
+    camera: np.ndarray,
+    viewport_height: float,
+    fovy: float,
+    max_sse: float,
+    prefetch_factor: float = 1.0,
+    visible: "Optional[Callable[[RuntimeTile], bool]]" = None,
+    hysteresis: float = 0.0,
+    refined_state: Optional[dict[int, bool]] = None,
+) -> SelectionResult:
     """Select render and want sets for `tileset` from `camera`.
 
     `prefetch_factor` >= 1 lowers the effective threshold for the want set
@@ -67,12 +94,12 @@ def select_tiles(tileset, camera, viewport_height, fovy, max_sse,
     `refined_state` dict makes refinement sticky across frames to prevent LOD flicker;
     only the render traversal updates that state (the prefetch pass does not).
     """
-    render = []
+    render: "list[RuntimeTile]" = []
     _select(tileset.root, camera, viewport_height, fovy, max_sse, visible, render,
             hysteresis, refined_state)
     if prefetch_factor <= 1.0:
         return SelectionResult(render=render, want=list(render))
-    deep = []
+    deep: "list[RuntimeTile]" = []
     _select(tileset.root, camera, viewport_height, fovy,
             max_sse / prefetch_factor, visible, deep, 0.0, None)
     seen = {id(t) for t in render}

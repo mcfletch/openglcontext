@@ -39,6 +39,38 @@ def gl_context():
     glfw.destroy_window(win)
 
 
+@pytest.fixture
+def gl_context_compat():
+    """A compatibility-profile 3.3 context, so the legacy fixed-function enums the
+    non-shader render arm touches (GL_LIGHTING) are valid while GLSL 330 still
+    compiles."""
+    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
+    if not glfw.init():
+        pytest.skip("glfw init failed")
+    glfw.default_window_hints()
+    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
+    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_COMPAT_PROFILE)
+    win = glfw.create_window(128, 128, "hdr-bg-compat", None, None)
+    if not win:
+        pytest.skip("no compatibility GL window")
+    glfw.make_context_current(win)
+    from OpenGL.GL import glIsEnabled, GL_LIGHTING
+    try:
+        glIsEnabled(GL_LIGHTING)                       # probe: is this really compat?
+    except Exception:
+        glfw.destroy_window(win)
+        pytest.skip("driver gave a core-only context; GL_LIGHTING unavailable")
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    HDRBackground._shader = None
+    HDRBackground._shader_locations = None
+    yield win
+    HDRBackground._shader = None
+    HDRBackground._shader_locations = None
+    glfw.destroy_window(win)
+
+
 def _perspective(fovy, aspect, near, far):
     """Row-vector perspective (clip = vertex_row . P), matching the engine layout."""
     f = 1.0 / math.tan(fovy / 2.0)
@@ -132,6 +164,108 @@ def test_skybox_falls_back_to_ldr_without_float_support(gl_context, monkeypatch)
     assert top.max() > 20, "LDR fallback sky is black: %s" % top.tolist()
     assert top[0] > top[2], "LDR fallback lost the red-sky orientation: %s" % top.tolist()
     assert bottom[2] > bottom[0], "LDR fallback lost the blue-ground orientation: %s" % bottom.tolist()
+
+
+def test_render_clears_when_requested(gl_context):
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    bg = HDRBackground(image=_panorama())
+    bg.bound = 1
+    assert bg.RenderShader(mode=_Mode(), clear=True) == 1   # clear=True path
+
+
+def test_render_restores_depth_and_cull_state(gl_context):
+    from OpenGL.GL import (
+        glEnable, glIsEnabled, GL_DEPTH_TEST, GL_CULL_FACE,
+    )
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    glEnable(GL_DEPTH_TEST)
+    glEnable(GL_CULL_FACE)
+    bg = HDRBackground(image=_panorama())
+    bg.bound = 1
+    bg.RenderShader(mode=_Mode(), clear=False)
+    # both were enabled going in, so both must be re-enabled on the way out
+    assert glIsEnabled(GL_DEPTH_TEST)
+    assert glIsEnabled(GL_CULL_FACE)
+
+
+def test_render_legacy_mode_toggles_lighting(gl_context_compat):
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+
+    class _LegacyMode(_Mode):
+        shader_mode = False       # exercises the glDisable/glEnable(GL_LIGHTING) arms
+
+    bg = HDRBackground(image=_panorama())
+    bg.bound = 1
+    assert bg._render(_LegacyMode(), clear=False) == 1
+
+
+def test_render_via_compat_render_method(gl_context):
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    bg = HDRBackground(image=_panorama())
+    bg.bound = 1
+    assert bg.Render(mode=_Mode(), clear=False) == 1     # Render() delegates to _render
+
+
+def test_render_skipped_when_not_bound(gl_context):
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    bg = HDRBackground(image=_panorama())      # bound stays 0
+    assert bg._render(_Mode()) == 0
+
+
+def test_render_skipped_on_secondary_pass(gl_context):
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+
+    class _SecondPass(_Mode):
+        passCount = 1
+
+    bg = HDRBackground(image=_panorama())
+    bg.bound = 1
+    assert bg._render(_SecondPass()) == 0
+
+
+def test_render_skipped_without_panorama(gl_context):
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    bg = HDRBackground()                        # no image
+    bg.bound = 1
+    assert bg._render(_Mode()) == 0
+
+
+def test_render_skipped_when_compile_yields_nothing(gl_context):
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    bg = HDRBackground(image=_panorama())
+    bg.bound = 1
+    bg.compile = lambda mode=None: None         # simulate a compile that produced nothing
+    assert bg._render(_Mode()) == 0
+
+
+def test_compile_without_panorama_returns_none(gl_context):
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    assert HDRBackground().compile(_Mode()) is None
+
+
+def test_dispose_frees_compiled_skybox(gl_context):
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    bg = HDRBackground(image=_panorama())
+    bg.compile(_Mode())
+    assert bg._render_data is not None
+    bg.dispose()
+    assert bg._render_data is None
+
+
+def test_free_render_data_deletes_real_objects(gl_context):
+    from OpenGLContext.scenegraph import hdrbackground as H
+    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+    bg = HDRBackground(image=_panorama())
+    render_data = bg.compile(_Mode())
+    H._free_render_data(render_data)            # real texture/VBO/VAO teardown
+    bg._render_data = None
+
+
+def test_free_render_data_ignores_falsey_and_broken_data(gl_context):
+    from OpenGLContext.scenegraph import hdrbackground as H
+    H._free_render_data(None)                    # nothing to free -> early return
+    # A malformed tuple exercises every teardown except-guard without crashing.
+    H._free_render_data((None, object(), object(), None, None, None))
 
 
 if __name__ == '__main__':

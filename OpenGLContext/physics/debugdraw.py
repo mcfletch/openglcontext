@@ -14,7 +14,6 @@ from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 import numpy as np
 
 from OpenGLContext.scenegraph import basenodes as _basenodes
-from omi_physics import mathutil
 from omi_physics.body import (make_proxy, SphereProxy, BoxProxy, CapsuleProxy, ConvexProxy,
                    TriangleMeshProxy, Proxy)
 from omi_physics import hull
@@ -166,7 +165,7 @@ class PhysicsDebugDraw:
         if added:
             self._proxy_group.children = children
 
-    def _wire_for(self, shape: Any):
+    def _wire_for(self, shape: Any) -> Any:
         """Shared unit wireframe geometry for a shape type, or None if unsupported."""
         wire = self._wire_cache.get(shape.type)
         if wire is None:
@@ -180,7 +179,7 @@ class PhysicsDebugDraw:
         return wire
 
     @staticmethod
-    def _wire_scale(shape: Any):
+    def _wire_scale(shape: Any) -> Tuple[float, ...]:
         """Transform scale that fits the unit wireframe to ``shape``."""
         if shape.type == 'box':
             return tuple(float(s) for s in shape.size)

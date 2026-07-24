@@ -5,8 +5,12 @@ between ``gluBeginTrim``/``gluEndTrim``. :mod:`nurbs` re-exports these, so the
 ``nurbs.Polyline2D`` / ``nurbs.Contour2D`` node registrations resolve.
 """
 
+from typing import Any
+
 from vrml.vrml97 import nurbs
-from OpenGL.GLU import *
+from OpenGL.GLU import (
+    GLU_MAP1_TRIM_2, gluBeginTrim, gluEndTrim, gluNurbsCurve, gluPwlCurve,
+)
 
 
 class Polyline2D(nurbs.Polyline2D):
@@ -15,7 +19,7 @@ class Polyline2D(nurbs.Polyline2D):
     Basically this just calls gluPwlCurve
     """
 
-    def render(self, nurbObject):
+    def render(self, nurbObject: Any) -> None:
         """Render to the given nurbs object"""
         gluPwlCurve(nurbObject, self.point, GLU_MAP1_TRIM_2)
 
@@ -26,7 +30,7 @@ class NurbsCurve2D(nurbs.NurbsCurve2D):
     Basically this just calls gluNurbsCurve
     """
 
-    def render(self, nurbObject):
+    def render(self, nurbObject: Any) -> None:
         """Render to the given nurbs object"""
         gluNurbsCurve(nurbObject, self.knot, self.controlPoint, GLU_MAP1_TRIM_2)
 
@@ -40,7 +44,7 @@ class Contour2D(nurbs.Contour2D):
     Normally used to trim a Nurbs surface...
     """
 
-    def trim(self, nurbObject):
+    def trim(self, nurbObject: Any) -> None:
         """Render the contour as a trim of the current surface"""
         gluBeginTrim(nurbObject)
         try:

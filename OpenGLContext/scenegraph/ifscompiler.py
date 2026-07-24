@@ -15,10 +15,18 @@ of tessellated arrays shared by the per-shape and instanced draw paths.
 ``from ...indexedfaceset import IndexedPolygonsCompiler`` (and friends) resolves.
 """
 
-from OpenGL.GL import *
-from OpenGLContext.arrays import *
+import logging
+from itertools import zip_longest
+from typing import Any, Iterator, Optional
+
+from numpy import add, arccos, array, divide, dot, ones, repeat
+from OpenGL.GL import (
+    GL_LINES, GL_POLYGON, GL_QUADS, GL_TRIANGLES, glBegin, glColor3dv, glColor3f, glEnd,
+    glNormal3dv, glTexCoord2dv, glVertex3dv,
+)
 
 from OpenGLContext import triangleutilities, displaylist
+from OpenGLContext.debug.logs import getTraceback
 from OpenGLContext.scenegraph import arraygeometry
 from OpenGLContext.scenegraph import (
     polygon,
@@ -28,17 +36,11 @@ from OpenGLContext.scenegraph import (
 )
 from vrml import protofunctions
 
-try:
-    from itertools import izip_longest as zip_longest
-except ImportError:
-    from itertools import zip_longest
-import logging
-
 log = logging.getLogger(__name__)
 
 
 class DummyRender(object):
-    def render(self, *args, **named):
+    def render(self, *args: Any, **named: Any) -> None:
         pass
 
 
@@ -46,28 +48,28 @@ DUMMY_RENDER = DummyRender()
 
 
 class DisplayListRenderer(object):
-    def __init__(self, dl):
+    def __init__(self, dl: Any) -> None:
         self.dl = dl
 
-    def render(self, *args, **named):
+    def render(self, *args: Any, **named: Any) -> None:
         self.dl()
 
 
-COMPILER_CLASSES = []
+COMPILER_CLASSES: list[type["IFSCompiler"]] = []
 
 
 class IFSCompiler(object):
-    _indexedSourceNodes = None
+    _indexedSourceNodes: Optional[list[Any]] = None
 
-    def __init__(self, target):
+    def __init__(self, target: Any) -> None:
         self.target = target
 
     @classmethod
-    def weight(cls, target):
+    def weight(cls, target: Any) -> float:
         """Determine weighting for the target for this style of compilation"""
         return 1.0
 
-    def __call__(self, *args, **named):
+    def __call__(self, *args: Any, **named: Any) -> Any:
         """Call the compiler to produce the renderer or None if no renderer needed"""
         if (
             not len(self.target.coordIndex)
@@ -81,7 +83,7 @@ class IFSCompiler(object):
         except Exception as err:
             log.error(
                 """Failure during compilation of IndexedFaceSet: %s""",
-                log.getTraceback(err),
+                getTraceback(err),
             )
             compiler = DUMMY_RENDER
         holder.data = compiler
@@ -89,16 +91,16 @@ class IFSCompiler(object):
 
     def compile(
         self,
-        visible=1,
-        lit=1,
-        textured=1,
-        transparent=0,
-        mode=None,
-    ):
+        visible: int = 1,
+        lit: int = 1,
+        textured: int = 1,
+        transparent: int = 0,
+        mode: Any = None,
+    ) -> Any:
         """Compile a renderer to represent the IFS at run-time"""
-        raise NotImplemented
+        raise NotImplementedError
 
-    def buildCacheHolder(self, key="", mode=None):
+    def buildCacheHolder(self, key: str = "", mode: Any = None) -> Any:
         """Get a cache holder with all dependencies set"""
         holder = mode.cache.holder(self.target, None, key=key)
         for field in protofunctions.getFields(self.target):
@@ -114,7 +116,7 @@ class IFSCompiler(object):
                 holder.depend(n, protofunctions.getField(n, attr))
         return holder
 
-    def tessellate(self, polygons=None, sources=None):
+    def tessellate(self, polygons: Any = None, sources: Any = None) -> list[Any]:
         """Tessellate our arrays into triangle-only arrays
 
         The return value is a list of triangle vertices, with
@@ -142,7 +144,7 @@ class IFSCompiler(object):
             vertices.extend(poly)
         return vertices
 
-    def buildIndexedSources(self):
+    def buildIndexedSources(self) -> list["IndexedValueSource"]:
         """Build the set of IndexedValueSource objects for this node
 
         These are color, normal and texture-coordinate only,
@@ -194,20 +196,23 @@ class IFSCompiler(object):
             ]
         ]
 
-    def indexedSourceNodes(self):
+    def indexedSourceNodes(self) -> list[Any]:
         """Lookup node-types for our indexed source set"""
         if not self._indexedSourceNodes:
             from OpenGLContext.scenegraph import basenodes
 
+            # basenodes populates its node classes at import time from entry
+            # points, so they are invisible to static analysis.
+            bn: Any = basenodes
             self._indexedSourceNodes = [
-                basenodes.Coordinate,
-                basenodes.Color,
-                basenodes.Normal,
-                basenodes.TextureCoordinate,
+                bn.Coordinate,
+                bn.Color,
+                bn.Normal,
+                bn.TextureCoordinate,
             ]
         return self._indexedSourceNodes
 
-    def polygons(self, sources=None):
+    def polygons(self, sources: Any = None) -> Iterator[Any]:
         """Yield each polygon in the IFS
 
         The polygon object is a sub-class of list holding
@@ -260,7 +265,7 @@ class IFSCompiler(object):
 class ArrayGeometryCompiler(IFSCompiler):
     """Compiles to an ArrayGeometry instance for rendering uniform arrays of data"""
 
-    def expandedArrays(self):
+    def expandedArrays(self) -> Optional[tuple[Any, Any, Any, Any]]:
         """Tessellate the IFS to expanded triangle-soup arrays.
 
         Returns ``(vertexArray, colorArray, normalArray, textureCoordinateArray)``
@@ -323,12 +328,12 @@ class ArrayGeometryCompiler(IFSCompiler):
 
     def compile(
         self,
-        visible=1,
-        lit=1,
-        textured=1,
-        transparent=0,
-        mode=None,
-    ):
+        visible: int = 1,
+        lit: int = 1,
+        textured: int = 1,
+        transparent: int = 0,
+        mode: Any = None,
+    ) -> Any:
         """Compile the rendering structures for an ArrayGeometry version of IFS
 
         XXX Should redo to cache like so...
@@ -373,7 +378,7 @@ class IndexedPolygonsCompiler(IFSCompiler):
     """Compile to set of equal-indexed vertex arrays"""
 
     @classmethod
-    def weight(cls, target):
+    def weight(cls, target: Any) -> float:
         """Determine weighting for the target for this style of compilation"""
         if (
             # we have per-vertex normals...
@@ -399,12 +404,12 @@ class IndexedPolygonsCompiler(IFSCompiler):
 
     def compile(
         self,
-        visible=1,
-        lit=1,
-        textured=1,
-        transparent=0,
-        mode=None,
-    ):
+        visible: int = 1,
+        lit: int = 1,
+        textured: int = 1,
+        transparent: int = 0,
+        mode: Any = None,
+    ) -> Any:
         """Compile the rendering structures for an ArrayGeometry version of IFS
 
         XXX Should redo to cache like so...
@@ -428,13 +433,13 @@ class IndexedPolygonsCompiler(IFSCompiler):
         sources = self.buildIndexedSources()
         vertices = self.tessellate(sources=sources)
 
-        arrays = [[] for source in sources]
-        indices = []
+        arrays: list[list[Any]] = [[] for source in sources]
+        indices: list[int] = []
 
-        seenVertices = {}
+        seenVertices: dict[Any, int] = {}
         sourceArrays = list(enumerate(sources))
         for vert in vertices:
-            if not vert.indexKey in seenVertices:
+            if vert.indexKey not in seenVertices:
                 i = len(arrays[0])
                 seenVertices[vert.indexKey] = i
                 indices.append(i)
@@ -450,10 +455,10 @@ class IndexedPolygonsCompiler(IFSCompiler):
             solid=self.target.solid,
             ccw=self.target.ccw,
         )
-        for source, array, nodetype in zip_longest(sources, arrays, self.indexedSourceNodes()):
-            if array:
+        for source, arr, nodetype in zip_longest(sources, arrays, self.indexedSourceNodes()):
+            if arr:
                 node = nodetype()
-                setattr(node, source.attribute, array)
+                setattr(node, source.attribute, arr)
                 setattr(ip, source.name, node)
         return ip
 
@@ -472,18 +477,18 @@ class DisplayListCompiler(IFSCompiler):
     """
 
     @classmethod
-    def weight(cls, target):
+    def weight(cls, target: Any) -> float:
         """Determine weighting for the target for this style of compilation"""
         return 0.9
 
     def compile(
         self,
-        visible=1,
-        lit=1,
-        textured=1,
-        transparent=0,
-        mode=None,
-    ):
+        visible: int = 1,
+        lit: int = 1,
+        textured: int = 1,
+        transparent: int = 0,
+        mode: Any = None,
+    ) -> Any:
         """Compile to an opaque textured display-list"""
         dl = displaylist.DisplayList()
         dl.start()
@@ -500,6 +505,7 @@ class DisplayListCompiler(IFSCompiler):
                     normalArray = build_normalPerVertex(vertices, self.target.creaseAngle)
                     normalStep = 1
                 else:
+                    vertexArray = array([vertex.point for vertex in vertices], "f")
                     normalArray = triangleutilities.normalPerFace(vertexArray)
                     normalArray = repeat(normalArray, [3] * len(normalArray), 0)
                     normalStep = 3
@@ -564,14 +570,14 @@ class DisplayListCompiler(IFSCompiler):
 COMPILER_CLASSES.append(DisplayListCompiler)
 
 
-def getXNull(node, attr):
+def getXNull(node: Any, attr: str) -> Any:
     """Get attribute or [] list"""
     if node:
         return getattr(node, attr)
     return []
 
 
-def build_normalPerVertex(vertices, creaseAngle, vertexArray=None):
+def build_normalPerVertex(vertices: Any, creaseAngle: float, vertexArray: Any = None) -> Any:
     """Create a normal vector using creaseAngle to determine smoothing
 
     Note: the semantics of normalPerVertex requires using expanded
@@ -590,11 +596,11 @@ def build_normalPerVertex(vertices, creaseAngle, vertexArray=None):
     faceNormals = triangleutilities.normalPerFace(vertexArray)
     vertexNormals = repeat(faceNormals, [3] * len(faceNormals), 0)
     faceNormals = array(vertexNormals[:])
-    items = {}
+    items: dict[Any, list[int]] = {}
     for index in range(len(vertices)):
         try:
             items.setdefault(vertices[index].coordIndex, []).append(index)
-        except TypeError as err:
+        except TypeError:
             print(vertices[index])
             print(type(vertices[index].coordIndex), vertices[index].coordIndex)
             raise
@@ -614,8 +620,8 @@ def build_normalPerVertex(vertices, creaseAngle, vertexArray=None):
                 # cos(creaseAngle) instead of using arccos each time
                 try:
                     angle = arccos(dot(primaryNormal, secondaryNormal))
-                except ValueError as err:  # arccos of equal vectors goes kablooie
-                    angle = 0
+                except ValueError:  # pragma: no cover - numpy arccos returns nan for
+                    angle = 0        # out-of-domain dot products, it never raises here
                 if angle < creaseAngle:
                     # add to each other's cummulative total (in place)
                     add(
@@ -651,14 +657,14 @@ class IndexedValueSource(object):
 
     def __init__(
         self,
-        vertexIndices,
-        indices,
-        values,
-        perFace,
-        name="color",
-        attribute="color",
-        vertexAttribute="color",
-    ):
+        vertexIndices: Any,
+        indices: Any,
+        values: Any,
+        perFace: Any,
+        name: str = "color",
+        attribute: str = "color",
+        vertexAttribute: str = "color",
+    ) -> None:
         """Initialize the IndexedValueSource object
 
         vertexIndices -- the vertex indices for the indexedfaceset
@@ -682,7 +688,7 @@ class IndexedValueSource(object):
         self.attribute = attribute
         self.vertexAttribute = vertexAttribute
 
-    def __call__(self, metaIndex, faceIndex):
+    def __call__(self, metaIndex: Any, faceIndex: Any) -> tuple[Any, int]:
         """Return the value for the meta index or None"""
         if self.perFace:
             index = faceIndex
@@ -693,7 +699,7 @@ class IndexedValueSource(object):
                 # have both indices and values...
                 try:
                     finalIndex = self.indices[index]
-                except IndexError as err:
+                except IndexError:
                     return None, -1
                 if finalIndex < 0:
                     log.warning(
@@ -706,7 +712,8 @@ class IndexedValueSource(object):
                 elif finalIndex >= len(self.values):
                     # XXX should be the last *index* not the last value!
                     finalIndex = self.lastNonNullIndex()
-                    if finalIndex is None:
+                    if finalIndex is None:  # pragma: no cover - reaching here needs
+                        # every index == -1, but then indices[index] < 0 above wins first
                         return None, -1
                 return self.values[finalIndex], finalIndex
             else:
@@ -716,13 +723,13 @@ class IndexedValueSource(object):
                 )
         return None, -1
 
-    def lastNonNullIndex(self):
+    def lastNonNullIndex(self) -> Any:
         for i in range(len(self.indices) - 1, -1, -1):
             if self.indices[i] != -1:
                 return self.indices[i]
         return None
 
-    def vertexIndex(self, metaIndex, faceIndex):
+    def vertexIndex(self, metaIndex: Any, faceIndex: Any) -> Any:
         """Produce key-fragment for this index
 
         This is used to produce a key that allows us to uniquify the
@@ -735,7 +742,7 @@ class IndexedValueSource(object):
             index = metaIndex
         try:
             return self.indices[index]
-        except IndexError as err:
+        except IndexError:
             if index >= len(self.indices):
                 return self.lastNonNullIndex()
             return None

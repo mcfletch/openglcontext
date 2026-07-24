@@ -10,11 +10,14 @@ duplicated.  Runs on ``.gltf`` JSON documents.
 import argparse
 import json
 import sys
+from typing import Any
 
 from omi_physics import model
 
 
-def cook_document(gltf, motion_type=model.STATIC, mass=1.0):
+def cook_document(
+    gltf: dict[str, Any], motion_type: str = model.STATIC, mass: float = 1.0
+) -> tuple[dict[str, Any], int]:
     """Add OMI shapes + colliders to mesh nodes lacking a physics body.
 
     Mutates and returns ``gltf`` (a parsed glTF dict).  Idempotent: nodes that
@@ -29,9 +32,9 @@ def cook_document(gltf, motion_type=model.STATIC, mass=1.0):
             used.append(name)
 
     shape_type = 'trimesh' if motion_type == model.STATIC else 'convex'
-    shape_for_mesh = {}
+    shape_for_mesh: dict[int, int] = {}
 
-    def shape_index(mesh):
+    def shape_index(mesh: int) -> int:
         if mesh not in shape_for_mesh:
             shape_for_mesh[mesh] = len(shapes)
             shapes.append({'type': shape_type, shape_type: {'mesh': mesh}})
@@ -45,7 +48,7 @@ def cook_document(gltf, motion_type=model.STATIC, mass=1.0):
         node_ext = node.setdefault('extensions', {})
         if 'OMI_physics_body' in node_ext:
             continue
-        body = {'collider': {'shape': shape_index(mesh)}}
+        body: dict[str, Any] = {'collider': {'shape': shape_index(mesh)}}
         if motion_type != model.STATIC:
             body['motion'] = {'type': motion_type, 'mass': mass}
         else:
@@ -55,7 +58,7 @@ def cook_document(gltf, motion_type=model.STATIC, mass=1.0):
     return gltf, count
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('input', help='input .gltf document')
     parser.add_argument('-o', '--output', help='output path (default: overwrite)')
@@ -74,5 +77,5 @@ def main(argv=None):
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover - CLI entry point
     sys.exit(main())

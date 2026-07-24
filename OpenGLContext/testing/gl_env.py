@@ -25,7 +25,7 @@ _KEEP_PREFIXES = (
 )
 
 
-def gl_subprocess_env(**overrides):
+def gl_subprocess_env(**overrides: object) -> dict[str, str]:
     """Environment for a GL subprocess: infrastructure vars plus ``overrides``.
 
     Values are stringified. Anything not in the infrastructure allow-list is

@@ -15,13 +15,23 @@ spec/gloss workflow is converted to metallic/roughness in the sibling
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
+
 from OpenGLContext.scenegraph.pbrmaterial import (
     PBRMaterial, PBRTexture, uv_transform_matrix,
 )
+from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf.textures import _info, _texture_holder, _pil_for_texinfo
 from OpenGLContext.loaders.gltf.specular_glossiness import (
     _specgloss_to_metalrough, _specgloss_textures_to_metalrough,
 )
+
+if TYPE_CHECKING:
+    import pygltflib
+
+# collector.add(channel, textureInfo, srgb) -> None; the extension handlers call it
+# to register their textures.
+AddTexture = Callable[..., None]
 
 
 _ALPHA_MODE = {None: 'OPAQUE', 'OPAQUE': 'OPAQUE', 'MASK': 'MASK', 'BLEND': 'BLEND'}
@@ -34,22 +44,21 @@ _TEXCOORD_BIT = {'baseColor': 1, 'metallicRoughness': 2, 'normal': 4,
 class _TextureCollector:
     """Accumulates a material's texture holders and KHR_texture_transform state.
 
-    Replaces the closure-over-``[0]``-lists pattern that ``_build_material`` used:
     ``add()`` records a channel's texture holder, its UV set bit, and -- when the
     textureInfo carries KHR_texture_transform -- the shared transform matrix/params
     and the high ``texCoordMask`` bits that mark which channels it applies to.
     """
 
-    def __init__(self, g, resolver, tex_cache):
+    def __init__(self, g: "pygltflib.GLTF2", resolver: Resolver, tex_cache: dict) -> None:
         self._g = g
         self._resolver = resolver
         self._tex_cache = tex_cache
-        self.textures = {}
+        self.textures: dict = {}
         self.tex_coord_mask = 0
-        self.uv_transform = None
-        self.uv_params = None
+        self.uv_transform: Optional[List[List[float]]] = None
+        self.uv_params: Optional[dict] = None
 
-    def add(self, channel, info, srgb):
+    def add(self, channel: str, info: Any, srgb: bool) -> None:
         if info is None or getattr(info, 'index', None) is None:
             return
         holder = _texture_holder(self._g, info.index, self._resolver, srgb, self._tex_cache)
@@ -81,30 +90,30 @@ class _TextureCollector:
 # no longer inlines ~15 near-identical blocks. Absent extensions fall back to
 # _MATERIAL_EXT_DEFAULTS.
 
-def _ext_unlit(ext, add):
+def _ext_unlit(ext: dict, add: AddTexture) -> dict:
     return {'unlit': True}
 
 
-def _ext_emissive_strength(ext, add):
+def _ext_emissive_strength(ext: dict, add: AddTexture) -> dict:
     return {'emissiveStrength': float(ext.get('emissiveStrength', 1.0))}
 
 
-def _ext_ior(ext, add):
+def _ext_ior(ext: dict, add: AddTexture) -> dict:
     return {'ior': float(ext.get('ior', 1.5))}
 
 
-def _ext_dispersion(ext, add):
+def _ext_dispersion(ext: dict, add: AddTexture) -> dict:
     return {'dispersion': float(ext.get('dispersion', 0.0))}
 
 
-def _ext_specular(ext, add):
+def _ext_specular(ext: dict, add: AddTexture) -> dict:
     add('specular', _info(ext.get('specularTexture')), srgb=False)          # .a
     add('specularColor', _info(ext.get('specularColorTexture')), srgb=True)  # .rgb
     return {'specular': float(ext.get('specularFactor', 1.0)),
             'specularColor': tuple(ext.get('specularColorFactor', [1, 1, 1]))}
 
 
-def _ext_clearcoat(ext, add):
+def _ext_clearcoat(ext: dict, add: AddTexture) -> dict:
     add('clearcoat', _info(ext.get('clearcoatTexture')), srgb=False)
     add('clearcoatRoughness', _info(ext.get('clearcoatRoughnessTexture')), srgb=False)
     add('clearcoatNormal', _info(ext.get('clearcoatNormalTexture')), srgb=False)
@@ -112,14 +121,14 @@ def _ext_clearcoat(ext, add):
             'clearcoatRoughness': float(ext.get('clearcoatRoughnessFactor', 0.0))}
 
 
-def _ext_sheen(ext, add):
+def _ext_sheen(ext: dict, add: AddTexture) -> dict:
     add('sheenColor', _info(ext.get('sheenColorTexture')), srgb=True)          # .rgb
     add('sheenRoughness', _info(ext.get('sheenRoughnessTexture')), srgb=False)  # .a
     return {'sheenColor': tuple(ext.get('sheenColorFactor', [0, 0, 0])),
             'sheenRoughness': float(ext.get('sheenRoughnessFactor', 0.0))}
 
 
-def _ext_iridescence(ext, add):
+def _ext_iridescence(ext: dict, add: AddTexture) -> dict:
     add('iridescence', _info(ext.get('iridescenceTexture')), srgb=False)
     add('iridescenceThickness', _info(ext.get('iridescenceThicknessTexture')), srgb=False)
     return {'iridescence': float(ext.get('iridescenceFactor', 0.0)),
@@ -128,12 +137,12 @@ def _ext_iridescence(ext, add):
             'iridescenceThicknessMax': float(ext.get('iridescenceThicknessMaximum', 400.0))}
 
 
-def _ext_transmission(ext, add):
+def _ext_transmission(ext: dict, add: AddTexture) -> dict:
     add('transmission', _info(ext.get('transmissionTexture')), srgb=False)
     return {'transmission': float(ext.get('transmissionFactor', 0.0))}
 
 
-def _ext_diffuse_transmission(ext, add):
+def _ext_diffuse_transmission(ext: dict, add: AddTexture) -> dict:
     # Colour texture (.rgb, sRGB) tints transmitted light; factor texture (.a)
     # modulates the factor.
     add('diffuseTransmissionColor',
@@ -145,7 +154,7 @@ def _ext_diffuse_transmission(ext, add):
                 ext.get('diffuseTransmissionColorFactor', [1.0, 1.0, 1.0]))[:3]}
 
 
-def _ext_volume(ext, add):
+def _ext_volume(ext: dict, add: AddTexture) -> dict:
     add('thickness', _info(ext.get('thicknessTexture')), srgb=False)
     ad = ext.get('attenuationDistance')
     # attenuationDistance defaults to +inf (no absorption); 0.0 is our sentinel.
@@ -154,7 +163,7 @@ def _ext_volume(ext, add):
             'attenuationDistance': float(ad) if ad is not None else 0.0}
 
 
-def _ext_anisotropy(ext, add):
+def _ext_anisotropy(ext: dict, add: AddTexture) -> dict:
     add('anisotropy', _info(ext.get('anisotropyTexture')), srgb=False)
     return {'anisotropyStrength': float(ext.get('anisotropyStrength', 0.0)),
             'anisotropyRotation': float(ext.get('anisotropyRotation', 0.0))}
@@ -186,7 +195,7 @@ _MATERIAL_EXT_DEFAULTS = dict(
 )
 
 
-def _read_material_extensions(exts, add):
+def _read_material_extensions(exts: dict, add: AddTexture) -> dict:
     """Merge every present KHR material extension into PBRMaterial kwargs (5d)."""
     kwargs = dict(_MATERIAL_EXT_DEFAULTS)
     for name, handler in _MATERIAL_EXT_HANDLERS.items():
@@ -195,7 +204,8 @@ def _read_material_extensions(exts, add):
     return kwargs
 
 
-def _build_material(g, material_index, resolver, tex_cache):
+def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
+                    resolver: Resolver, tex_cache: dict) -> PBRMaterial:
     if material_index is None:
         return PBRMaterial(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.7)
     mat = g.materials[material_index]

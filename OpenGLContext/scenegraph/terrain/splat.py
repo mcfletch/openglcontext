@@ -12,14 +12,32 @@ textures), saving and restoring the active program so it composes with whatever
 render pass is driving the scenegraph.
 """
 import ctypes
+from typing import TYPE_CHECKING, Any, Callable, Optional
+
 import numpy as np
 from PIL import Image
-from OpenGL.GL import *
+from OpenGL.GL import (
+    GL_ARRAY_BUFFER, GL_BACK, GL_CCW, GL_CLAMP_TO_EDGE, GL_CULL_FACE, GL_CURRENT_PROGRAM,
+    GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER, GL_FALSE, GL_FLOAT, GL_LINEAR,
+    GL_LINEAR_MIPMAP_LINEAR, GL_R8, GL_RED, GL_REPEAT, GL_RGBA, GL_RGBA8, GL_STATIC_DRAW,
+    GL_TEXTURE0, GL_TEXTURE1, GL_TEXTURE2, GL_TEXTURE3, GL_TEXTURE4, GL_TEXTURE_2D,
+    GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_S,
+    GL_TEXTURE_WRAP_T, GL_TRIANGLES, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT, glActiveTexture,
+    glBindBuffer, glBindTexture, glBindVertexArray, glBufferData, glCullFace,
+    glDrawElements, glEnable, glEnableVertexAttribArray, glFrontFace, glGenBuffers,
+    glGenTextures, glGenVertexArrays, glGenerateMipmap, glGetIntegerv,
+    glGetUniformLocation, glTexImage2D, glTexImage3D, glTexParameteri, glTexSubImage3D,
+    glUniform1f, glUniform1i, glUniform2f, glUniform3f, glUniformMatrix3fv,
+    glUniformMatrix4fv, glUseProgram, glVertexAttribPointer,
+)
 from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
     load_program, texture_rgba, ensure_gl, save_draw_state, restore_draw_state,
     delete_gl)
+
+if TYPE_CHECKING:
+    from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 
 DEFAULT_SUN = (-0.5, -0.72, -0.48)
 
@@ -38,17 +56,21 @@ FOG_DENSITY = 0.00016
 FOG_COLOR = (0.46, 0.58, 0.76)
 
 
-def _array_texture(kind, layers, material_fn, size=1024):
+def _array_texture(kind: str, layers: "list[str]",
+                   material_fn: "Callable[..., dict[str, Any]]",
+                   size: int = 1024) -> int:
     """A GL_TEXTURE_2D_ARRAY of ``kind`` (color/normal/roughness) for each layer.
 
     ``material_fn(name, res)`` returns a dict with at least a ``color`` path and
     optionally ``normal``/``roughness`` paths (the ambientCG/cc0 material API)."""
-    tid = glGenTextures(1); glBindTexture(GL_TEXTURE_2D_ARRAY, tid)
+    tid = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D_ARRAY, tid)
     glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, size, size, len(layers),
                  0, GL_RGBA, GL_UNSIGNED_BYTE, None)
     for i, name in enumerate(layers):
-        m = material_fn(name, "1K"); p = m.get(kind) or m["color"]
-        im = Image.open(p).convert("RGBA").resize((size, size), Image.LANCZOS)
+        m = material_fn(name, "1K")
+        p = m.get(kind) or m["color"]
+        im = Image.open(p).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
         glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, i, size, size, 1,
                         GL_RGBA, GL_UNSIGNED_BYTE, np.asarray(im))
     glGenerateMipmap(GL_TEXTURE_2D_ARRAY)
@@ -73,8 +95,10 @@ class SplatTerrain(vnodes.PointSet):
     :param canopy: optional (N, 3) trunk positions; when set the baked shadow is
         darkened under tree cover for dappled shade. Set before first render.
     """
-    def __init__(self, height_field, layers, control, sun=DEFAULT_SUN,
-                 material_fn=None, canopy=None):
+    def __init__(self, height_field: "HeightField", layers: "list[str]", control: str,
+                 sun: "tuple[float, float, float]" = DEFAULT_SUN,
+                 material_fn: "Optional[Callable[..., dict[str, Any]]]" = None,
+                 canopy: Optional[np.ndarray] = None) -> None:
         super(SplatTerrain, self).__init__()
         self.hf = height_field
         self.layers = layers
@@ -83,20 +107,27 @@ class SplatTerrain(vnodes.PointSet):
             from OpenGLContext.loaders import cc0
             material_fn = cc0.material
         self.material_fn = material_fn
-        self.sun = np.asarray(sun, 'd'); self.sun /= np.linalg.norm(self.sun)
+        self.sun = np.asarray(sun, 'd')
+        self.sun /= np.linalg.norm(self.sun)
         self.canopy = canopy
-        self._gl = None; self._disabled = False
+        self._gl: Any = None
+        self._disabled = False
 
-    def _init_gl(self):
+    def _init_gl(self) -> None:
         prog = load_program("terrain_splat.vert", "terrain_splat.frag")
         inter, idx = self.hf.mesh()
-        vao = glGenVertexArrays(1); glBindVertexArray(vao)
-        vb = glGenBuffers(1); glBindBuffer(GL_ARRAY_BUFFER, vb)
+        vao = glGenVertexArrays(1)
+        glBindVertexArray(vao)
+        vb = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, vb)
         glBufferData(GL_ARRAY_BUFFER, inter.nbytes, inter, GL_STATIC_DRAW)
-        ib = glGenBuffers(1); glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib)
+        ib = glGenBuffers(1)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.nbytes, idx, GL_STATIC_DRAW)
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0)); glEnableVertexAttribArray(0)
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(12)); glEnableVertexAttribArray(1)
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(0)
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(12))
+        glEnableVertexAttribArray(1)
         glBindVertexArray(0)
         tex = dict(col=_array_texture("color", self.layers, self.material_fn),
                    nrm=_array_texture("normal", self.layers, self.material_fn),
@@ -105,7 +136,8 @@ class SplatTerrain(vnodes.PointSet):
         lit = self.hf.sun_shadow(self.sun)
         if self.canopy is not None and len(self.canopy):
             lit = self.hf.canopy_shadow(lit, self.canopy, self.sun)
-        st = glGenTextures(1); glBindTexture(GL_TEXTURE_2D, st)
+        st = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, st)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, lit.shape[1], lit.shape[0], 0,
                      GL_RED, GL_FLOAT, np.ascontiguousarray(lit))
         for pp, vv in [(GL_TEXTURE_MIN_FILTER, GL_LINEAR), (GL_TEXTURE_MAG_FILTER, GL_LINEAR),
@@ -119,7 +151,7 @@ class SplatTerrain(vnodes.PointSet):
               "sunDirEye", "sunColor", "skyColor", "groundAmbient", "fogDensity", "fogColor")}
         self._gl = dict(prog=prog, vao=vao, vb=vb, ib=ib, ncount=len(idx), tex=tex, U=U)
 
-    def dispose(self):
+    def dispose(self) -> None:
         """Free this node's GL objects (VAO, buffers, textures, program). GL thread."""
         g = self._gl
         if not g:
@@ -128,16 +160,19 @@ class SplatTerrain(vnodes.PointSet):
                   textures=list(g["tex"].values()), programs=[g["prog"]])
         self._gl = None
 
-    def boundingVolume(self, mode):
-        E = self.hf.extent; H = self.hf.relief * 3
+    def boundingVolume(self, mode: Any) -> "boundingvolume.AABoundingBox":
+        E = self.hf.extent
+        H = self.hf.relief * 3
         return boundingvolume.AABoundingBox(size=(E, H, E), center=(0, 0, 0))
 
-    def render(self, mode=None, **kw):
+    def render(self, mode: Any = None, **kw: Any) -> int:
         if getattr(mode, 'shadow_pass', False) or not getattr(mode, 'visible', True):
             return 1
         if not ensure_gl(self):
             return 1
-        g = self._gl; U = g["U"]; E = self.hf.extent
+        g = self._gl
+        U = g["U"]
+        E = self.hf.extent
         prev_prog = int(glGetIntegerv(GL_CURRENT_PROGRAM))
         glUseProgram(g["prog"])
         glUniformMatrix4fv(U["uModelView"], 1, GL_FALSE, np.ascontiguousarray(mode.matrix, np.float32))
@@ -146,24 +181,44 @@ class SplatTerrain(vnodes.PointSet):
         # block is orthonormal (rotation only). The terrain carries no scale, so no
         # inverse-transpose is needed; a scaled terrain transform would skew normals.
         glUniformMatrix3fv(U["uNormalMatrix"], 1, GL_FALSE, np.ascontiguousarray(np.asarray(mode.matrix)[:3, :3], np.float32))
-        se = np.asarray(mode.matrix)[:3, :3].T @ self.sun; se /= np.linalg.norm(se)
+        se = np.asarray(mode.matrix)[:3, :3].T @ self.sun
+        se /= np.linalg.norm(se)
         glUniform3f(U["sunDirEye"], *se.astype(np.float32))
-        glUniform1i(U["layerColor"], 0); glUniform1i(U["layerNormal"], 1); glUniform1i(U["layerRough"], 2)
-        glUniform1i(U["controlMap"], 3); glUniform1i(U["sunShadow"], 4)
+        glUniform1i(U["layerColor"], 0)
+        glUniform1i(U["layerNormal"], 1)
+        glUniform1i(U["layerRough"], 2)
+        glUniform1i(U["controlMap"], 3)
+        glUniform1i(U["sunShadow"], 4)
         glUniform1i(U["numLayers"], len(self.layers))
-        glUniform2f(U["worldMin"], -E / 2, -E / 2); glUniform2f(U["worldSize"], E, E)
-        glUniform1f(U["detailScale"], DETAIL_SCALE); glUniform1f(U["macroScale"], MACRO_SCALE)
+        glUniform2f(U["worldMin"], -E / 2, -E / 2)
+        glUniform2f(U["worldSize"], E, E)
+        glUniform1f(U["detailScale"], DETAIL_SCALE)
+        glUniform1f(U["macroScale"], MACRO_SCALE)
         glUniform1f(U["normalStrength"], NORMAL_STRENGTH)
         glUniform3f(U["sunColor"], *SUN_COLOR)
-        glUniform3f(U["skyColor"], *SKY_COLOR); glUniform3f(U["groundAmbient"], *GROUND_AMBIENT)
-        glUniform1f(U["fogDensity"], FOG_DENSITY); glUniform3f(U["fogColor"], *FOG_COLOR)
-        glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D_ARRAY, g["tex"]["col"])
-        glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D_ARRAY, g["tex"]["nrm"])
-        glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D_ARRAY, g["tex"]["rgh"])
-        glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, g["tex"]["ctl"])
-        glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, g["tex"]["sun"]); glActiveTexture(GL_TEXTURE0)
+        glUniform3f(U["skyColor"], *SKY_COLOR)
+        glUniform3f(U["groundAmbient"], *GROUND_AMBIENT)
+        glUniform1f(U["fogDensity"], FOG_DENSITY)
+        glUniform3f(U["fogColor"], *FOG_COLOR)
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_2D_ARRAY, g["tex"]["col"])
+        glActiveTexture(GL_TEXTURE1)
+        glBindTexture(GL_TEXTURE_2D_ARRAY, g["tex"]["nrm"])
+        glActiveTexture(GL_TEXTURE2)
+        glBindTexture(GL_TEXTURE_2D_ARRAY, g["tex"]["rgh"])
+        glActiveTexture(GL_TEXTURE3)
+        glBindTexture(GL_TEXTURE_2D, g["tex"]["ctl"])
+        glActiveTexture(GL_TEXTURE4)
+        glBindTexture(GL_TEXTURE_2D, g["tex"]["sun"])
+        glActiveTexture(GL_TEXTURE0)
         saved = save_draw_state()
-        glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glFrontFace(GL_CCW)
-        glBindVertexArray(g["vao"]); glDrawElements(GL_TRIANGLES, g["ncount"], GL_UNSIGNED_INT, None); glBindVertexArray(0)
-        glUseProgram(prev_prog); restore_draw_state(saved)
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_CULL_FACE)
+        glCullFace(GL_BACK)
+        glFrontFace(GL_CCW)
+        glBindVertexArray(g["vao"])
+        glDrawElements(GL_TRIANGLES, g["ncount"], GL_UNSIGNED_INT, None)
+        glBindVertexArray(0)
+        glUseProgram(prev_prog)
+        restore_draw_state(saved)
         return 1

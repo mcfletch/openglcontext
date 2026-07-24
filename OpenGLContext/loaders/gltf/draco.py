@@ -15,12 +15,17 @@ per load) instead of crashing the whole scene.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
+from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf.accessors import (
     _buffer_bytes, _coerce_normalized, _colors_to_rgba,
 )
+
+if TYPE_CHECKING:
+    import pygltflib
 
 log = logging.getLogger(__name__)
 
@@ -34,11 +39,11 @@ except ImportError:  # pragma: no cover - absence is exercised via monkeypatch
     HAVE_DRACO = False
 
 
-def _ext_field(ext, name):
+def _ext_field(ext: Any, name: str) -> Any:
     return ext.get(name) if isinstance(ext, dict) else getattr(ext, name, None)
 
 
-def draco_extension(primitive):
+def draco_extension(primitive: "pygltflib.Primitive") -> Optional[dict]:
     """Return a primitive's KHR_draco_mesh_compression payload, or None."""
     ext = getattr(primitive, 'extensions', None) or {}
     if not isinstance(ext, dict):
@@ -51,7 +56,7 @@ def draco_extension(primitive):
 _warned_missing_no_resolver = False
 
 
-def _warn_missing_once(resolver):
+def _warn_missing_once(resolver: Optional[Resolver]) -> None:
     global _warned_missing_no_resolver
     if resolver is not None:
         if getattr(resolver, '_draco_warned', False):
@@ -67,7 +72,7 @@ def _warn_missing_once(resolver):
         _warned_missing_no_resolver = True
 
 
-def _decode_blob(g, ext, resolver):
+def _decode_blob(g: "pygltflib.GLTF2", ext: Any, resolver: Resolver) -> Any:
     """Decode the extension's compressed bufferView into a DracoPy mesh."""
     bv_index = _ext_field(ext, 'bufferView')
     if bv_index is None:
@@ -83,7 +88,8 @@ def _decode_blob(g, ext, resolver):
     return DracoPy.decode(bytes(data[start:end]))
 
 
-def draco_arrays(g, primitive, resolver):
+def draco_arrays(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
+                 resolver: Resolver) -> Optional[dict[str, np.ndarray]]:
     """Decoded attribute arrays for a Draco ``primitive``, or None to skip it.
 
     Returns a dict with ``positions`` and ``indices`` (flat uint32) plus whichever
@@ -102,7 +108,7 @@ def draco_arrays(g, primitive, resolver):
     attr_map = _ext_field(ext, 'attributes') or {}
     attrs = primitive.attributes
 
-    def decoded(semantic):
+    def decoded(semantic: str) -> Optional[np.ndarray]:
         uid = attr_map.get(semantic)
         if uid is None:
             return None
@@ -113,7 +119,7 @@ def draco_arrays(g, primitive, resolver):
             return None
         return np.asarray(attr['data'])
 
-    def accessor(semantic):
+    def accessor(semantic: str) -> "pygltflib.Accessor":
         # A Draco stream may list a semantic in its extension `attributes` map
         # while the primitive omits the matching accessor. The accessor is
         # authoritative for componentType/normalization, so a decoded attribute

@@ -22,13 +22,18 @@ from __future__ import annotations
 
 import logging
 import math
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Tuple
 
 import numpy as np
 
 from vrml.vrml97 import transformmatrix
 
 from OpenGLContext.scenegraph.pbrmaterial import uv_transform_matrix
+from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf.accessors import _read_floats, _read_normalized
+
+if TYPE_CHECKING:
+    import pygltflib
 
 log = logging.getLogger(__name__)
 
@@ -38,13 +43,13 @@ log = logging.getLogger(__name__)
 # ======================================================================
 
 # glTF stores quaternions as [x, y, z, w].
-def quat_normalize(q):
+def quat_normalize(q: np.ndarray) -> np.ndarray:
     q = np.asarray(q, dtype='d')
     n = np.linalg.norm(q)
     return q / n if n else np.array([0.0, 0.0, 0.0, 1.0])
 
 
-def quat_slerp(q0, q1, u):
+def quat_slerp(q0: np.ndarray, q1: np.ndarray, u: float) -> np.ndarray:
     """Spherical linear interpolation of two [x,y,z,w] quaternions.
 
     Takes the shorter arc (flips ``q1`` when the dot product is negative) and
@@ -67,7 +72,7 @@ def quat_slerp(q0, q1, u):
     return quat_normalize(s0 * q0 + s1 * q1)
 
 
-def quat_xyzw_to_vrml(q):
+def quat_xyzw_to_vrml(q: np.ndarray) -> Tuple[float, float, float, float]:
     """glTF quaternion [x,y,z,w] -> VRML97 axis-angle (x, y, z, radians)."""
     x, y, z, w = quat_normalize(q)
     w = max(-1.0, min(1.0, w))
@@ -89,7 +94,8 @@ class Sampler(object):
     quaternion-aware interpolation (slerp / renormalise).
     """
 
-    def __init__(self, times, values, interpolation='LINEAR', is_rotation=False):
+    def __init__(self, times: np.ndarray, values: np.ndarray,
+                 interpolation: str = 'LINEAR', is_rotation: bool = False) -> None:
         self.times = np.ascontiguousarray(times, dtype='d').ravel()
         self.values = np.ascontiguousarray(values, dtype='d')
         if self.values.ndim == 1:
@@ -100,10 +106,10 @@ class Sampler(object):
         self.is_rotation = is_rotation
 
     @property
-    def duration(self):
+    def duration(self) -> float:
         return float(self.times[-1]) if len(self.times) else 0.0
 
-    def _segment(self, t):
+    def _segment(self, t: float) -> Tuple[int, float]:
         """Return (i, u): the segment start index i and the [0,1] fraction u."""
         times = self.times
         n = len(times)
@@ -117,7 +123,7 @@ class Sampler(object):
         u = (t - times[i]) / dt if dt > 0 else 0.0
         return i, u
 
-    def evaluate(self, t):
+    def evaluate(self, t: float) -> np.ndarray:
         """Interpolated value at time ``t`` as a 1-D float array of length C."""
         n = len(self.times)
         if n == 0:
@@ -135,13 +141,13 @@ class Sampler(object):
         return a + (b - a) * u
 
     # -- helpers ----------------------------------------------------------
-    def _key(self, i):
+    def _key(self, i: int) -> np.ndarray:
         """Value of keyframe i (accounts for the CUBICSPLINE 3-per-key layout)."""
         if self.interpolation == 'CUBICSPLINE':
             return self.values[3 * i + 1]
         return self.values[i]
 
-    def _eval_cubic(self, i, u, t):
+    def _eval_cubic(self, i: int, u: float, t: float) -> np.ndarray:
         n = len(self.times)
         if n == 1:
             return np.array(self.values[1])           # the sole key's value
@@ -169,7 +175,7 @@ class Sampler(object):
 class Channel(object):
     """Binds a sampler to a target node's TRS path or morph ``weights``."""
 
-    def __init__(self, node_index, path, sampler):
+    def __init__(self, node_index: int, path: str, sampler: "Sampler") -> None:
         self.node_index = node_index
         self.path = path              # 'translation'|'rotation'|'scale'|'weights'
         self.sampler = sampler
@@ -180,7 +186,8 @@ class PointerChannel(object):
     a resolved ``setter(value)`` (built by the loader against the live scenegraph --
     a material factor, texture transform, node visibility or light property)."""
 
-    def __init__(self, sampler, setter, pointer=''):
+    def __init__(self, sampler: "Sampler", setter: Callable[..., Any],
+                 pointer: Optional[str] = '') -> None:
         self.sampler = sampler
         self.setter = setter
         self.pointer = pointer
@@ -189,29 +196,30 @@ class PointerChannel(object):
 class Animation(object):
     """A named set of channels; ``duration`` is the longest sampler."""
 
-    def __init__(self, name, channels, pointer_channels=None):
+    def __init__(self, name: Optional[str], channels: Iterable["Channel"],
+                 pointer_channels: Optional[Iterable["PointerChannel"]] = None) -> None:
         self.name = name or ''
-        self.channels = list(channels)
-        self.pointer_channels = list(pointer_channels or [])
+        self.channels: list = list(channels)
+        self.pointer_channels: list = list(pointer_channels or [])
 
     @property
-    def duration(self):
+    def duration(self) -> float:
         return max((c.sampler.duration
                     for c in self.channels + self.pointer_channels), default=0.0)
 
-    def evaluate(self, t):
+    def evaluate(self, t: float) -> dict:
         """Map ``node_index -> {path: value}`` at time ``t`` (value is an array).
 
         ``rotation`` values are the raw glTF [x,y,z,w] quaternion; ``translation``
         and ``scale`` are 3-vectors; ``weights`` is the morph-weight vector.
         """
-        out = {}
+        out: dict = {}
         for ch in self.channels:
             out.setdefault(ch.node_index, {})[ch.path] = ch.sampler.evaluate(t)
         return out
 
 
-def _node_local_rv(transform_node):
+def _node_local_rv(transform_node: Any) -> np.ndarray:
     """Row-vector local matrix of a Transform/MatrixTransform (current field values)."""
     baked = getattr(transform_node, '_forward', None)
     if baked is not None:
@@ -224,7 +232,8 @@ def _node_local_rv(transform_node):
     return m if m.shape == (4, 4) else np.eye(4)
 
 
-def compute_world_matrices(roots, children, node_transforms):
+def compute_world_matrices(roots: Iterable[int], children: dict,
+                           node_transforms: dict) -> dict:
     """Row-vector world matrix per node, from the current Transform field values.
 
     A top-down pass composing ``world = local @ parent`` (row-vector, matching how
@@ -232,9 +241,9 @@ def compute_world_matrices(roots, children, node_transforms):
     world space as the mesh's modelview. Recomputed each frame because animated
     joint transforms change.
     """
-    worlds = {}
+    worlds: dict = {}
 
-    def walk(idx, parent_world):
+    def walk(idx: int, parent_world: np.ndarray) -> None:
         xform = node_transforms.get(idx)
         local = _node_local_rv(xform) if xform is not None else np.eye(4)
         w = local @ parent_world
@@ -258,13 +267,14 @@ class Skin(object):
     and pushes the stack into each bound mesh.
     """
 
-    def __init__(self, joints, inverse_bind, mesh_node, meshes):
+    def __init__(self, joints: Iterable[int], inverse_bind: np.ndarray,
+                 mesh_node: int, meshes: Iterable) -> None:
         self.joints = list(joints)
         self.inverse_bind = np.asarray(inverse_bind, dtype='d')
         self.mesh_node = mesh_node
         self.meshes = list(meshes)
 
-    def apply(self, worlds):
+    def apply(self, worlds: dict) -> None:
         node_world = worlds.get(self.mesh_node)
         node_inv = np.linalg.inv(node_world) if node_world is not None else np.eye(4)
         mats = np.empty((len(self.joints), 4, 4), dtype='d')
@@ -285,28 +295,30 @@ class Player(object):
     animation duration so playback repeats.
     """
 
-    def __init__(self, animation, node_transforms, node_morph=None, loop=True,
-                 skins=None, compute_worlds=None):
+    def __init__(self, animation: "Animation", node_transforms: Optional[dict],
+                 node_morph: Optional[dict] = None, loop: bool = True,
+                 skins: Optional[Iterable] = None,
+                 compute_worlds: Optional[Callable[[], dict]] = None) -> None:
         self.animation = animation
         self.node_transforms = node_transforms or {}
         self.node_morph = node_morph or {}
         self.loop = loop
         # skins re-evaluate after the joint transforms are written; compute_worlds
         # is a no-arg callable returning the current node world-matrix dict.
-        self.skins = list(skins) if skins else []
+        self.skins: list = list(skins) if skins else []
         self.compute_worlds = compute_worlds
 
     @property
-    def duration(self):
+    def duration(self) -> float:
         return self.animation.duration
 
-    def time(self, t):
+    def time(self, t: float) -> float:
         d = self.duration
         if self.loop and d > 0:
             return float(t) % d
         return float(t)
 
-    def evaluate(self, t):
+    def evaluate(self, t: float) -> None:
         """Sample at ``t`` (looped), write bound nodes, then re-skin."""
         tt = self.time(t)
         sampled = self.animation.evaluate(tt)
@@ -325,7 +337,7 @@ class Player(object):
                 pass
         self.update_skins()
 
-    def update_skins(self):
+    def update_skins(self) -> None:
         """Recompute joint matrices from the current joint transforms and apply."""
         if not self.skins or self.compute_worlds is None:
             return
@@ -333,7 +345,7 @@ class Player(object):
         for skin in self.skins:
             skin.apply(worlds)
 
-    def _apply_trs(self, xform, path, value):
+    def _apply_trs(self, xform: Any, path: str, value: np.ndarray) -> None:
         if path == 'translation':
             xform.translation = (float(value[0]), float(value[1]), float(value[2]))
         elif path == 'scale':
@@ -341,7 +353,7 @@ class Player(object):
         elif path == 'rotation':
             xform.rotation = quat_xyzw_to_vrml(value)
 
-    def _apply_weights(self, node_index, value):
+    def _apply_weights(self, node_index: int, value: np.ndarray) -> None:
         for setter in self.node_morph.get(node_index, ()):
             setter(np.asarray(value, dtype='f'))
 
@@ -353,7 +365,7 @@ class Player(object):
 _TRS_PATHS = ('translation', 'rotation', 'scale')
 
 
-def _trs_animated_nodes(g):
+def _trs_animated_nodes(g: "pygltflib.GLTF2") -> set:
     """Set of node indices targeted by a translation/rotation/scale channel."""
     out = set()
     for anim in (getattr(g, 'animations', None) or []):
@@ -365,7 +377,8 @@ def _trs_animated_nodes(g):
     return out
 
 
-def _sampler_values(g, samp, times_len, interp, resolver):
+def _sampler_values(g: "pygltflib.GLTF2", samp: "pygltflib.AnimationSampler",
+                    times_len: int, interp: str, resolver: Resolver) -> np.ndarray:
     """Read a sampler's output accessor as ``(keys, per_key)`` float64.
 
     One row per keyframe (or three per keyframe for CUBICSPLINE: in-tangent,
@@ -383,17 +396,18 @@ def _sampler_values(g, samp, times_len, interp, resolver):
     return np.ascontiguousarray(raw, dtype='d').reshape(divisor, total // divisor)
 
 
-def _pointer_setter(g, pointer, node_transforms, node_light, mat_cache):
+def _pointer_setter(g: "pygltflib.GLTF2", pointer: str, node_transforms: dict,
+                    node_light: dict, mat_cache: dict) -> Optional[Callable[..., None]]:
     """Resolve a KHR_animation_pointer JSON-pointer to a ``setter(value)`` that
     mutates the live scenegraph, or None if the target is unsupported. Covers node
     visibility (of a light), material factors, emissive strength and per-texture
     KHR_texture_transform components."""
     toks = [t for t in pointer.split('/') if t]
 
-    def _bump(m):
+    def _bump(m: Any) -> None:
         m._ubo_version = int(getattr(m, '_ubo_version', 0)) + 1
 
-    def _v(value):
+    def _v(value: Any) -> np.ndarray:
         return np.ravel(np.asarray(value, dtype='d'))
 
     try:
@@ -403,7 +417,8 @@ def _pointer_setter(g, pointer, node_transforms, node_light, mat_cache):
                 light = node_light.get(ni)
                 if light is not None:
                     base_i = float(getattr(light, 'intensity', 1.0)) or 1.0
-                    def set_light_vis(value, light=light, base_i=base_i):
+                    def set_light_vis(value: Any, light: Any = light,
+                                      base_i: float = base_i) -> None:
                         light.intensity = base_i if _v(value)[0] > 0.5 else 0.0
                     return set_light_vis
             return None
@@ -414,7 +429,7 @@ def _pointer_setter(g, pointer, node_transforms, node_light, mat_cache):
             rest = toks[2:]
             if len(rest) >= 2 and rest[-2] == 'KHR_texture_transform':
                 comp = rest[-1]                     # rotation | offset | scale
-                def set_uvt(value, m=m, comp=comp):
+                def set_uvt(value: Any, m: Any = m, comp: str = comp) -> None:
                     p = getattr(m, '_uv_params', None)
                     if p is None:
                         p = {'offset': [0, 0], 'rotation': 0.0, 'scale': [1, 1]}
@@ -442,33 +457,38 @@ def _pointer_setter(g, pointer, node_transforms, node_light, mat_cache):
             key = tuple(rest)
             if key in _SCALAR:
                 attr = _SCALAR[key]
-                def set_scalar(value, m=m, attr=attr):
-                    setattr(m, attr, float(_v(value)[0])); _bump(m)
+                def set_scalar(value: Any, m: Any = m, attr: str = attr) -> None:
+                    setattr(m, attr, float(_v(value)[0]))
+                    _bump(m)
                 return set_scalar
             if key in _COLOR3:
                 attr = _COLOR3[key]
-                def set_color(value, m=m, attr=attr):
+                def set_color(value: Any, m: Any = m, attr: str = attr) -> None:
                     val = _v(value)
-                    setattr(m, attr, tuple(float(x) for x in val[:3])); _bump(m)
+                    setattr(m, attr, tuple(float(x) for x in val[:3]))
+                    _bump(m)
                 return set_color
             if key == ('extensions', 'KHR_materials_emissive_strength', 'emissiveStrength'):
-                def set_es(value, m=m):
-                    m.emissiveStrength = float(_v(value)[0]); _bump(m)
+                def set_es(value: Any, m: Any = m) -> None:
+                    m.emissiveStrength = float(_v(value)[0])
+                    _bump(m)
                 return set_es
         return None
     except (ValueError, IndexError, KeyError, TypeError):
         return None
 
 
-def _build_animations(g, resolver, node_transforms=None, node_light=None, mat_cache=None):
+def _build_animations(g: "pygltflib.GLTF2", resolver: Resolver,
+                      node_transforms: Optional[dict] = None, node_light: Optional[dict] = None,
+                      mat_cache: Optional[dict] = None) -> list:
     """Parse ``g.animations`` into :class:`Animation` objects (TRS/weights
     channels plus resolved KHR_animation_pointer channels)."""
     node_light = node_light or {}
     mat_cache = mat_cache or {}
-    out = []
+    out: list = []
     for anim in (getattr(g, 'animations', None) or []):
-        channels = []
-        pointer_channels = []
+        channels: list = []
+        pointer_channels: list = []
         samplers = getattr(anim, 'samplers', None) or []
         for ch in (getattr(anim, 'channels', None) or []):
             tgt = getattr(ch, 'target', None)
@@ -508,7 +528,8 @@ def _build_animations(g, resolver, node_transforms=None, node_light=None, mat_ca
     return out
 
 
-def _resolve_json_pointer(g, tokens):
+def _resolve_json_pointer(g: "pygltflib.GLTF2",
+                          tokens: list) -> Optional[Tuple[Any, str, str]]:
     """Resolve a JSON pointer against a parsed glTF document.
 
     Walk ``g`` (a pygltflib object tree mixing attributes, lists and extension
@@ -536,7 +557,8 @@ def _resolve_json_pointer(g, tokens):
     return cur, last, 'attr'
 
 
-def _register_morph(node, node_index, shapes, g, node_morph):
+def _register_morph(node: Any, node_index: int, shapes: list, g: "pygltflib.GLTF2",
+                    node_morph: dict) -> None:
     """Register a node's morph-weight setters and apply its default weights.
 
     A node's ``weights`` override its mesh's ``weights`` (glTF spec); either
@@ -556,7 +578,8 @@ def _register_morph(node, node_index, shapes, g, node_morph):
             setter(weights)
 
 
-def _read_inverse_bind(g, skin_def, njoints, resolver):
+def _read_inverse_bind(g: "pygltflib.GLTF2", skin_def: "pygltflib.Skin", njoints: int,
+                       resolver: Resolver) -> np.ndarray:
     """(J,4,4) row-vector inverse-bind stack for a skin (identity if unspecified).
 
     glTF stores each inverse-bind as a column-major MAT4; ``reshape(-1,4,4)`` of
@@ -570,7 +593,8 @@ def _read_inverse_bind(g, skin_def, njoints, resolver):
     return np.ascontiguousarray(flat, dtype='d').reshape(-1, 4, 4)
 
 
-def _register_skin(node, node_index, shapes, g, resolver, skins):
+def _register_skin(node: Any, node_index: int, shapes: list, g: "pygltflib.GLTF2",
+                   resolver: Resolver, skins: list) -> None:
     """Build a Skin for a node that references one (its meshes + joint matrices)."""
     if getattr(node, 'skin', None) is None or not getattr(g, 'skins', None):
         return

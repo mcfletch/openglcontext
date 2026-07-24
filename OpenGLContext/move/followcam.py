@@ -17,16 +17,19 @@ that (after ``setOrientation`` negates it, as it does for every VRML orientation
 places the target on the camera's view -Z axis — verified end-to-end against
 ``ViewPlatform.modelMatrix`` in ``tests/test_followcam.py``.
 """
+from typing import Any, Optional, Tuple
+
 import numpy as np
 
 
-def _normalize(v):
+def _normalize(v: Any) -> np.ndarray:
     v = np.asarray(v, dtype='d')
     n = np.linalg.norm(v)
     return v / n if n > 1e-12 else v
 
 
-def look_at_orientation(eye, target, up=(0.0, 1.0, 0.0)):
+def look_at_orientation(eye: Any, target: Any,
+                        up: Any = (0.0, 1.0, 0.0)) -> Tuple[float, float, float, float]:
     """VRML axis-angle ``(x, y, z, radians)`` orienting a camera at ``eye`` to
     look at ``target``.
 
@@ -48,7 +51,7 @@ def look_at_orientation(eye, target, up=(0.0, 1.0, 0.0)):
     return _matrix_to_axis_angle(R)
 
 
-def _matrix_to_axis_angle(R):
+def _matrix_to_axis_angle(R: np.ndarray) -> Tuple[float, float, float, float]:
     """Convert a 3×3 rotation matrix to VRML axis-angle ``(x, y, z, radians)``."""
     trace = np.trace(R)
     cos_angle = np.clip((trace - 1.0) / 2.0, -1.0, 1.0)
@@ -76,14 +79,15 @@ def _matrix_to_axis_angle(R):
 class FollowCamera:
     """Drive a ``ViewPlatform`` to a fixed offset from a target, looking at it."""
 
-    def __init__(self, platform, offset=(0.0, 14.0, 14.0), up=(0.0, 1.0, 0.0)):
+    def __init__(self, platform: Any, offset: Any = (0.0, 14.0, 14.0),
+                 up: Any = (0.0, 1.0, 0.0)) -> None:
         self.platform = platform
         self.offset = np.asarray(offset, dtype='d')
         self.up = np.asarray(up, dtype='d')
         self._target = np.zeros(3)
-        self._held_target = None
+        self._held_target: Optional[np.ndarray] = None
 
-    def target(self, position):
+    def target(self, position: Any) -> None:
         """Record the live point to follow.
 
         Always updates the live target; while holding, :meth:`apply` simply
@@ -92,24 +96,24 @@ class FollowCamera:
         """
         self._target = np.asarray(position, dtype='d')[:3]
 
-    def hold(self):
+    def hold(self) -> None:
         """Freeze the camera on the current target until :meth:`release`."""
         if self._held_target is None:
             self._held_target = self._target.copy()
 
-    def release(self):
+    def release(self) -> None:
         """Resume following live targets."""
         self._held_target = None
 
     @property
-    def is_holding(self):
+    def is_holding(self) -> bool:
         return self._held_target is not None
 
     @property
-    def active_target(self):
+    def active_target(self) -> np.ndarray:
         return self._held_target if self._held_target is not None else self._target
 
-    def apply(self):
+    def apply(self) -> None:
         """Write the camera pose onto the platform for this frame."""
         target = self.active_target
         eye = target + self.offset

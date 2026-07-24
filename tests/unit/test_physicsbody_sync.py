@@ -60,6 +60,66 @@ def test_rotation_roundtrip():
     assert angle == pytest.approx(1.2, abs=1e-9)
 
 
+def test_identity_quat_yields_zero_angle_default_axis():
+    # w ~ 1 -> sin(angle/2) ~ 0: no well-defined axis, so a safe default is used.
+    rot = quat_to_vrml_rotation((0.0, 0.0, 0.0, 1.0))
+    assert np.allclose(rot, (0.0, 1.0, 0.0, 0.0))
+
+
+def _registered_body(translation=(0, 0, 0), rotation=(0, 1, 0, 0.0), motion=None):
+    t = Transform(translation=translation, rotation=rotation)
+    mgr = PhysicsManager(gravity=model.Gravity(gravity=0.0))
+    body = PhysicsBody(t, motion if motion is not None else model.Motion(type=model.DYNAMIC))
+    mgr.add(body)
+    return mgr, body, t
+
+
+def test_push_authored_pose_copies_transform_into_world():
+    mgr, body, t = _registered_body()
+    t.translation = (3.0, 4.0, 5.0)
+    t.rotation = (0.0, 1.0, 0.0, 1.5)
+    body.push_authored_pose()
+    i = body.index
+    assert np.allclose(mgr.world.position[i], (3.0, 4.0, 5.0))
+    assert np.allclose(mgr.world.orientation[i], vrml_rotation_to_quat((0, 1, 0, 1.5)))
+
+
+def test_push_authored_pose_noop_when_unregistered():
+    body = PhysicsBody(Transform(), model.Motion())
+    assert body.index is None
+    body.push_authored_pose()                     # must not raise without a world
+
+
+def test_sync_to_scene_writes_interpolated_pose():
+    mgr, body, t = _registered_body()
+    i = body.index
+    w = mgr.world
+    w.prev_position[i] = (0.0, 0.0, 0.0)
+    w.position[i] = (10.0, 0.0, 0.0)
+    w.prev_orientation[i] = vrml_rotation_to_quat((0, 1, 0, 0.0))
+    w.orientation[i] = vrml_rotation_to_quat((0, 1, 0, 0.0))
+    w.awake[i] = True
+    body.sync_to_scene(alpha=0.5)
+    assert t.translation[0] == pytest.approx(5.0)   # halfway between prev and cur
+
+
+def test_sync_to_scene_skips_sleeping_dynamic_body():
+    mgr, body, t = _registered_body()
+    i = body.index
+    w = mgr.world
+    w.position[i] = (99.0, 0.0, 0.0)
+    w.awake[i] = False
+    w.motion_type[i] = 2                            # dynamic + asleep -> no writeback
+    before = tuple(t.translation)
+    body.sync_to_scene()
+    assert tuple(t.translation) == before
+
+
+def test_sync_to_scene_noop_when_unregistered():
+    body = PhysicsBody(Transform(), model.Motion())
+    body.sync_to_scene()                            # must not raise without a world
+
+
 if __name__ == '__main__':
     import sys
     sys.exit(pytest.main([__file__, '-v']))

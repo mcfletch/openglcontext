@@ -16,11 +16,22 @@ from __future__ import annotations
 
 import enum
 import logging
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 import numpy as np
 
-from OpenGLContext.scenegraph.basenodes import Shape, Appearance
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.loaders.resolver import Resolver
+
+if TYPE_CHECKING:
+    import pygltflib
+    # ``Shape``/``Appearance`` are registered into basenodes dynamically (plugin
+    # entry points), so mypy cannot see them there; take the types from their
+    # defining modules.
+    from OpenGLContext.scenegraph.shape import Shape
+    from OpenGLContext.scenegraph.appearance import Appearance
+else:
+    from OpenGLContext.scenegraph.basenodes import Shape, Appearance
 from OpenGLContext.loaders.gltf.accessors import (
     _read_floats, _read_accessor, _read_texcoords, _read_normalized, _read_colors,
 )
@@ -42,7 +53,8 @@ class PrimitiveMode(enum.IntEnum):
     TRIANGLE_FAN = 6
 
 
-def _triangulate_indices(mode, indices, vertex_count):
+def _triangulate_indices(mode: Optional[int], indices: Optional[np.ndarray],
+                         vertex_count: int) -> Tuple[Optional[np.ndarray], Optional[int]]:
     """Map a primitive's (mode, indices) to a (indices, gl_draw_mode) pair.
 
     The glTF primitive.mode enum equals the GL primitive enum (POINTS=0 … TRIANGLES=4),
@@ -62,7 +74,7 @@ def _triangulate_indices(mode, indices, vertex_count):
         n = len(src)
         if n < 3:
             return None, PrimitiveMode.TRIANGLES
-        tris = []
+        tris: list = []
         if mode == PrimitiveMode.TRIANGLE_STRIP:
             for i in range(n - 2):
                 # every other triangle flips winding to keep a consistent facing
@@ -75,7 +87,9 @@ def _triangulate_indices(mode, indices, vertex_count):
     return None, None
 
 
-def _primitive_shape(g, primitive, resolver, mat_cache, tex_cache):
+def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
+                     resolver: Resolver, mat_cache: dict, tex_cache: dict
+                     ) -> Tuple[Optional["Shape"], Optional[Tuple[np.ndarray, np.ndarray]]]:
     attrs = primitive.attributes
     if attrs.POSITION is None:
         return None, None
@@ -173,7 +187,8 @@ def _primitive_shape(g, primitive, resolver, mat_cache, tex_cache):
     return shape, bounds
 
 
-def _read_morph_targets(g, primitive, resolver, nverts):
+def _read_morph_targets(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
+                        resolver: Resolver, nverts: int) -> Optional[list]:
     """Read a primitive's morph ``targets`` into position/normal/tangent deltas.
 
     Each target is a dict/object with any of POSITION, NORMAL, TANGENT accessors
@@ -185,7 +200,7 @@ def _read_morph_targets(g, primitive, resolver, nverts):
     if not targets:
         return None
 
-    def acc(t, name):
+    def acc(t: Any, name: str) -> Any:
         return t.get(name) if isinstance(t, dict) else getattr(t, name, None)
 
     out = []
@@ -206,7 +221,7 @@ def _read_morph_targets(g, primitive, resolver, nverts):
     return out
 
 
-def _estimate_normals(positions, indices):
+def _estimate_normals(positions: np.ndarray, indices: Optional[np.ndarray]) -> np.ndarray:
     normals = np.zeros_like(positions)
     if indices is None:
         idx = np.arange(len(positions), dtype=np.uint32)
@@ -225,7 +240,8 @@ def _estimate_normals(positions, indices):
     return np.ascontiguousarray((normals / lens).astype(np.float32))
 
 
-def _estimate_tangents(positions, normals, texcoords, indices):
+def _estimate_tangents(positions: np.ndarray, normals: np.ndarray, texcoords: np.ndarray,
+                       indices: Optional[np.ndarray]) -> np.ndarray:
     """Per-vertex tangents (vec4 xyz + w handedness) from UVs, for normal mapping.
 
     Lengyel's method: accumulate each triangle's UV-derived tangent/bitangent onto

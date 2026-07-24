@@ -7,17 +7,25 @@ re-exports these names, and the node registrations in
 ``OpenGLContext/__init__.py`` resolve them as ``nurbs.NurbsToleranceSample`` etc.
 """
 
-from vrml import node, field
-from OpenGL.GLU import *
-from OpenGL.GLU.EXT.object_space_tess import *
 import logging
+from typing import Any
+
+from vrml import node, field
+from OpenGL.GLU import (
+    GLU_DOMAIN_DISTANCE, GLU_OBJECT_PARAMETRIC_ERROR_EXT, GLU_OBJECT_PATH_LENGTH_EXT,
+    GLU_PARAMETRIC_ERROR, GLU_PARAMETRIC_TOLERANCE, GLU_PATH_LENGTH, GLU_SAMPLING_METHOD,
+    GLU_SAMPLING_TOLERANCE, GLU_U_STEP, GLU_V_STEP, gluNurbsProperty,
+)
+from OpenGL.GLU.EXT.object_space_tess import (
+    gluInitObjectSpaceTessEXT,
+)
 
 log = logging.getLogger(__name__)
 
-object_space_tess = None
+object_space_tess: Any = None
 
 
-def initialise(context=None):
+def initialise(context: Any = None) -> bool:
     """Initialise the NURBs extensions for a context"""
     global object_space_tess
     if object_space_tess is None:
@@ -25,7 +33,7 @@ def initialise(context=None):
     return bool(object_space_tess)
 
 
-def defaultSampling():
+def defaultSampling() -> "NurbsToleranceSample":
     """Get a default sampling node"""
     if initialise():
         return NurbsToleranceSample(method="object", parametric=1, tolerance=5)
@@ -51,7 +59,7 @@ class NurbsToleranceSample(NurbsSampling):
     parametric = field.newField("parametric", "SFBool", 1, 0)
     tolerance = field.newField("tolerance", "SFFloat", 1, 50.0)
 
-    def properties(self, nurbObject):
+    def properties(self, nurbObject: Any) -> None:
         """Configure this sampling type"""
         ### get the appropriate sampling method...
         methods = (GLU_PATH_LENGTH, GLU_PARAMETRIC_ERROR)
@@ -86,7 +94,7 @@ class NurbsDomainDistanceSample(NurbsSampling):
     uStep = field.newField("uStep", "SFFloat", 1, 100.0)
     vStep = field.newField("vStep", "SFFloat", 1, 100.0)
 
-    def properties(self, nurbObject):
+    def properties(self, nurbObject: Any) -> None:
         """Configure this sampling type"""
         gluNurbsProperty(nurbObject, GLU_SAMPLING_METHOD, GLU_DOMAIN_DISTANCE)
         gluNurbsProperty(nurbObject, GLU_U_STEP, self.uStep)

@@ -8,15 +8,20 @@ double-sided) that the runtime loads once and instances thousands of times.
 Textures are deterministic (seeded) so a scene is reproducible.
 """
 import os
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
 from OpenGLContext.loaders import gltf
 
+# Terrain height sampler: height_fn(x, z) -> height (scalar or array, matching x/z).
+HeightFn = Callable[..., Any]
+
 
 # --- procedural textures ------------------------------------------------------
 
-def _noise2d(h, w, scale, seed):
+def _noise2d(h: int, w: int, scale: int, seed: int) -> np.ndarray:
     rng = np.random.default_rng(seed)
     small = rng.random((max(2, h // scale), max(2, w // scale)))
     ys = np.linspace(0, small.shape[0] - 1, h)
@@ -32,7 +37,7 @@ def _noise2d(h, w, scale, seed):
     return top * (1 - fy) + bot * fy
 
 
-def grass_texture(size=128, blades=26, seed=3):
+def grass_texture(size: int = 128, blades: int = 26, seed: int = 3) -> np.ndarray:
     """RGBA grass-blade card: tapered green blades on a transparent background."""
     img = np.zeros((size, size, 4), np.uint8)
     rng = np.random.default_rng(seed)
@@ -60,7 +65,7 @@ def grass_texture(size=128, blades=26, seed=3):
     return img
 
 
-def bark_texture(size=128, seed=7):
+def bark_texture(size: int = 128, seed: int = 7) -> np.ndarray:
     """RGB bark: vertical brown fibres with noise."""
     n = _noise2d(size, size, 6, seed)
     v = _noise2d(size, size, 2, seed + 1) * 0.4
@@ -73,7 +78,7 @@ def bark_texture(size=128, seed=7):
     return img
 
 
-def ground_texture(size=128, seed=5):
+def ground_texture(size: int = 128, seed: int = 5) -> np.ndarray:
     """RGB forest-floor: brown earth with moss and litter mottle (offline fallback)."""
     dirt = _noise2d(size, size, 8, seed)
     moss = _noise2d(size, size, 4, seed + 2)
@@ -89,7 +94,7 @@ def ground_texture(size=128, seed=5):
     return img
 
 
-def procedural_ground_maps(seed=5):
+def procedural_ground_maps(seed: int = 5) -> dict[str, str]:
     """A color-only ground map set (dict) for offline use; cached to a temp file."""
     import tempfile
     from PIL import Image
@@ -101,7 +106,7 @@ def procedural_ground_maps(seed=5):
     return {"color": path}
 
 
-def needle_texture(size=128, sprigs=40, seed=11):
+def needle_texture(size: int = 128, sprigs: int = 40, seed: int = 11) -> np.ndarray:
     """RGBA pine-foliage card: clusters of needles on a transparent background."""
     img = np.zeros((size, size, 4), np.uint8)
     rng = np.random.default_rng(seed)
@@ -124,8 +129,11 @@ def needle_texture(size=128, sprigs=40, seed=11):
 
 # --- glTF prototypes ----------------------------------------------------------
 
-def _textured_glb(positions, uvs, indices, texture, alpha_mode="OPAQUE",
-                  double_sided=True, base_color=(1, 1, 1, 1)):
+def _textured_glb(positions: np.ndarray, uvs: np.ndarray, indices: np.ndarray,
+                  texture: np.ndarray, alpha_mode: str = "OPAQUE",
+                  double_sided: bool = True,
+                  base_color: tuple[float, float, float, float] = (1, 1, 1, 1)
+                  ) -> bytes:
     from PIL import Image
     import io
     from pygltflib import (
@@ -178,8 +186,11 @@ def _textured_glb(positions, uvs, indices, texture, alpha_mode="OPAQUE",
     return b"".join(g.save_to_bytes())
 
 
-def _crossed_quads(width, height, planes=2):
-    V, UV, IDX = [], [], []
+def _crossed_quads(width: float, height: float, planes: int = 2
+                   ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    V: list[tuple[float, float, float]] = []
+    UV: list[tuple[float, float]] = []
+    IDX: list[int] = []
     for i in range(planes):
         rot = np.pi * i / planes
         c, s = np.cos(rot), np.sin(rot)
@@ -193,7 +204,8 @@ def _crossed_quads(width, height, planes=2):
     return np.array(V, "f4"), np.array(UV, "f4"), np.array(IDX, "u4")
 
 
-def _cylinder(radius, height, sides=10):
+def _cylinder(radius: float, height: float, sides: int = 10
+              ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     V, UV, IDX = [], [], []
     for i in range(sides + 1):
         a = 2 * np.pi * i / sides
@@ -207,12 +219,14 @@ def _cylinder(radius, height, sides=10):
     return np.array(V, "f4"), np.array(UV, "f4"), np.array(IDX, "u4")
 
 
-def grass_card_glb(width=0.9, height=0.6, seed=3, planes=3):
+def grass_card_glb(width: float = 0.9, height: float = 0.6, seed: int = 3,
+                   planes: int = 3) -> bytes:
     V, UV, IDX = _crossed_quads(width, height, planes=planes)
     return _textured_glb(V, UV, IDX, grass_texture(seed=seed), alpha_mode="MASK")
 
 
-def conifer_glb(height=9.0, seed=11, bark_path=None):
+def conifer_glb(height: float = 9.0, seed: int = 11,
+                bark_path: Optional[str] = None) -> bytes:
     """Bark-textured trunk + stacked alpha needle skirts baked into one glTF.
 
     `bark_path` uses a real CC0 bark JPG for the trunk; otherwise procedural bark."""
@@ -227,7 +241,6 @@ def conifer_glb(height=9.0, seed=11, bark_path=None):
     trunk_h = height * 0.45
     tV, tUV, tIDX = _cylinder(height * 0.045, trunk_h, sides=8)
     # Three needle skirts (crossed cards) up the tree.
-    parts = []
     off = len(tV)
     fV = [tV]
     fUV = [tUV]
@@ -248,7 +261,7 @@ def conifer_glb(height=9.0, seed=11, bark_path=None):
     trunk_count = len(tIDX)
     IDX = np.concatenate(fIDX).astype("<u4")
 
-    def png_of(arr):
+    def png_of(arr: np.ndarray) -> bytes:
         mode = "RGBA" if arr.shape[2] == 4 else "RGB"
         b = io.BytesIO()
         Image.fromarray(arr, mode).save(b, format="PNG")
@@ -310,8 +323,9 @@ def conifer_glb(height=9.0, seed=11, bark_path=None):
     return b"".join(g.save_to_bytes())
 
 
-def _pbr_glb(positions, uvs, indices, maps, tile=1.0, alpha_mode="OPAQUE",
-            double_sided=True):
+def _pbr_glb(positions: np.ndarray, uvs: np.ndarray, indices: np.ndarray,
+            maps: dict[str, str], tile: float = 1.0, alpha_mode: str = "OPAQUE",
+            double_sided: bool = True) -> bytes:
     """Build a glTF mesh textured with a CC0 PBR map set (color + normal[+rough]).
 
     `maps` is the dict from `cc0.material(...)` (local jpg paths). UVs are scaled by
@@ -325,7 +339,7 @@ def _pbr_glb(positions, uvs, indices, maps, tile=1.0, alpha_mode="OPAQUE",
     V = np.asarray(positions, "<f4")
     UV = (np.asarray(uvs, "<f4") * tile).astype("<f4")
     IDX = np.asarray(indices, "<u4")
-    imgs, order = [], ["color", "normal", "roughness"]
+    order = ["color", "normal", "roughness"]
     present = [k for k in order if maps.get(k)]
     blob, spans = b"", []
     for arr in (V, UV, IDX):
@@ -375,13 +389,15 @@ def _pbr_glb(positions, uvs, indices, maps, tile=1.0, alpha_mode="OPAQUE",
     return b"".join(g.save_to_bytes())
 
 
-def textured_ground(positions, uvs, indices, maps, tile=1.0):
+def textured_ground(positions: np.ndarray, uvs: np.ndarray, indices: np.ndarray,
+                    maps: dict[str, str], tile: float = 1.0) -> Any:
     """A loaded ground node textured with a CC0 material set."""
     return gltf.load_gltf(_pbr_glb(positions, uvs, indices, maps, tile=tile,
                                    alpha_mode="OPAQUE", double_sided=False)).group
 
 
-def _scene_glb(positions, uvs, primitives):
+def _scene_glb(positions: np.ndarray, uvs: np.ndarray,
+               primitives: list[dict[str, Any]]) -> bytes:
     """Build a glTF from shared POSITION/TEXCOORD and a list of primitives.
 
     Each primitive is a dict: ``indices`` (u4 array), and either ``maps`` (a CC0 map
@@ -409,16 +425,6 @@ def _scene_glb(positions, uvs, primitives):
         idx_spans.append((len(blob), len(raw), len(arr)))
         blob += raw
 
-    img_cache, img_spans = {}, []
-    def add_img(path):
-        if path in img_cache:
-            return img_cache[path]
-        data = open(path, "rb").read()
-        o = len(blob)
-        img_spans.append((o, len(data), path))
-        i = len(img_cache)
-        img_cache[path] = i
-        return i
     # collect images
     img_data = {}
     for prim in primitives:
@@ -481,7 +487,8 @@ def _scene_glb(positions, uvs, primitives):
     return b"".join(g.save_to_bytes())
 
 
-def slope01(height_fn, x, z, eps=1.5):
+def slope01(height_fn: HeightFn, x: np.ndarray, z: np.ndarray,
+            eps: float = 1.5) -> np.ndarray:
     """Terrain steepness at (x,z): 0 flat .. ~1 very steep (gradient magnitude)."""
     x = np.asarray(x, "d")
     z = np.asarray(z, "d")
@@ -490,8 +497,11 @@ def slope01(height_fn, x, z, eps=1.5):
     return np.sqrt(hx * hx + hz * hz) / (2 * eps)
 
 
-def ground_patch_split(center, radius, height_fn, dirt_maps, rock_maps, res=64,
-                       uv_scale=6.0, water_level=0.0, rock_slope=0.55):
+def ground_patch_split(center: Sequence[float], radius: float, height_fn: HeightFn,
+                       dirt_maps: dict[str, str],
+                       rock_maps: Optional[dict[str, str]], res: int = 64,
+                       uv_scale: float = 6.0, water_level: float = 0.0,
+                       rock_slope: float = 0.55) -> Any:
     """Textured ground where flat areas are dirt and steep areas are rock.
 
     Triangles are classified by their face slope, so slopes read as exposed stone.
@@ -503,7 +513,8 @@ def ground_patch_split(center, radius, height_fn, dirt_maps, rock_maps, res=64,
     gy = np.maximum(np.asarray(height_fn(gx, gz), "d"), water_level) + 0.03
     V = np.stack([gx, gy, gz], -1).reshape(-1, 3)
     UV = np.stack([(gx - cx) / uv_scale, (gz - cz) / uv_scale], -1).reshape(-1, 2)
-    dirt, rock = [], []
+    dirt: list[int] = []
+    rock: list[int] = []
     for i in range(res - 1):
         for j in range(res - 1):
             a = i * res + j
@@ -521,20 +532,22 @@ def ground_patch_split(center, radius, height_fn, dirt_maps, rock_maps, res=64,
     return gltf.load_gltf(_scene_glb(V, UV, prims)).group
 
 
-def _load_rgb(path, size):
+def _load_rgb(path: str, size: int) -> np.ndarray:
     from PIL import Image
     return np.asarray(Image.open(path).convert("RGB").resize((size, size)),
                       np.float32)
 
 
-def _upsample(grid, size):
+def _upsample(grid: np.ndarray, size: int) -> np.ndarray:
     from PIL import Image
     g = np.asarray(grid, np.float32)
     im = Image.fromarray((np.clip(g, 0, 1) * 255).astype(np.uint8))
     return np.asarray(im.resize((size, size)), np.float32) / 255.0
 
 
-def blended_ground_texture(mat_paths, slope_grid, size=1024, tile_px=256, seed=5):
+def blended_ground_texture(mat_paths: Sequence[str], slope_grid: np.ndarray,
+                           size: int = 1024, tile_px: int = 256,
+                           seed: int = 5) -> np.ndarray:
     """Bake a ground albedo by blending [dirt, rock, needle] materials with a large-
     scale 'painting': rock where the terrain is steep, needle-litter and dirt in
     low-frequency patches. This is texture splatting realised at bake time — one
@@ -556,12 +569,14 @@ def blended_ground_texture(mat_paths, slope_grid, size=1024, tile_px=256, seed=5
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
-def ground_patch_blended(center, radius, height_fn, mat_paths, res=64, uv_scale=8.0,
-                         water_level=0.0, tex_size=1024, seed=5):
+def ground_patch_blended(center: Sequence[float], radius: float,
+                         height_fn: HeightFn, mat_paths: Sequence[str],
+                         res: int = 64, uv_scale: float = 8.0,
+                         water_level: float = 0.0, tex_size: int = 1024,
+                         seed: int = 5) -> Any:
     """A ground patch whose single albedo is a splat-blended bake of several CC0
     materials (dirt/rock/needle), painted by slope + noise. UVs span the patch 1:1 so
     the baked painting maps across it; material tiling inside the bake gives detail."""
-    import io
     cx, _, cz = center
     xs = np.linspace(cx - radius, cx + radius, res)
     zs = np.linspace(cz - radius, cz + radius, res)
@@ -586,8 +601,9 @@ def ground_patch_blended(center, radius, height_fn, mat_paths, res=64, uv_scale=
                                         double_sided=False)).group
 
 
-def ground_patch_node(center, radius, height_fn, maps, res=48, uv_scale=8.0,
-                      water_level=0.0):
+def ground_patch_node(center: Sequence[float], radius: float, height_fn: HeightFn,
+                      maps: dict[str, str], res: int = 48, uv_scale: float = 8.0,
+                      water_level: float = 0.0) -> Any:
     """A CC0-textured ground mesh over a disc-ish square around `center`.
 
     Meshes `height_fn` at `res`x`res`, UV-tiled every `uv_scale` metres, textured with
@@ -609,7 +625,8 @@ def ground_patch_node(center, radius, height_fn, maps, res=48, uv_scale=8.0,
     return textured_ground(V, UV, np.array(idx, "u4"), maps, tile=1.0)
 
 
-def _uv_sphere(rings=5, sectors=7):
+def _uv_sphere(rings: int = 5, sectors: int = 7
+               ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     V, UV, IDX = [], [], []
     for i in range(rings + 1):
         phi = np.pi * i / rings
@@ -626,7 +643,7 @@ def _uv_sphere(rings=5, sectors=7):
     return np.array(V, "f4"), np.array(UV, "f4"), np.array(IDX, "u4")
 
 
-def rock_glb(maps, seed=0):
+def rock_glb(maps: dict[str, str], seed: int = 0) -> bytes:
     """A rough low-poly boulder textured with a CC0 rock material.
 
     The origin sits *inside* the rock (base below y=0) so that, placed at terrain
@@ -643,11 +660,11 @@ def rock_glb(maps, seed=0):
                       [{"indices": IDX, "maps": maps, "double_sided": False}])
 
 
-def rock(maps, seed=0):
+def rock(maps: dict[str, str], seed: int = 0) -> Any:
     return gltf.load_gltf(rock_glb(maps, seed)).group
 
 
-def flower_texture(size=64, seed=0):
+def flower_texture(size: int = 64, seed: int = 0) -> np.ndarray:
     """RGBA wildflower card: a couple of bright blooms on a transparent background."""
     img = np.zeros((size, size, 4), np.uint8)
     rng = np.random.default_rng(seed)
@@ -673,13 +690,14 @@ def flower_texture(size=64, seed=0):
     return img[::-1]
 
 
-def flower_card(width=0.5, height=0.5, seed=0):
+def flower_card(width: float = 0.5, height: float = 0.5, seed: int = 0) -> Any:
     V, UV, IDX = _crossed_quads(width, height, planes=2)
     return gltf.load_gltf(_textured_glb(V, UV, IDX, flower_texture(seed=seed),
                                         alpha_mode="MASK")).group
 
 
-def branch_glb(bark_path=None, length=1.4, seed=0):
+def branch_glb(bark_path: Optional[str] = None, length: float = 1.4,
+               seed: int = 0) -> bytes:
     """A fallen stick lying on the ground — a thin gnarled cylinder laid horizontal.
 
     Modelled along +Z at ground level (so instance yaw spins its direction), with a
@@ -704,11 +722,12 @@ def branch_glb(bark_path=None, length=1.4, seed=0):
                       [{"indices": IDX, "maps": maps, "double_sided": False}])
 
 
-def branch(bark_path=None, length=1.4, seed=0):
+def branch(bark_path: Optional[str] = None, length: float = 1.4,
+           seed: int = 0) -> Any:
     return gltf.load_gltf(branch_glb(bark_path, length, seed)).group
 
 
-def tree_texture(size=128, seed=0):
+def tree_texture(size: int = 128, seed: int = 0) -> np.ndarray:
     """RGBA conifer silhouette (stacked foliage + trunk) on a transparent background."""
     img = np.zeros((size, size, 4), np.uint8)
     yy, xx = np.mgrid[0:size, 0:size]
@@ -733,7 +752,7 @@ def tree_texture(size=128, seed=0):
     return img[::-1]
 
 
-def tree_billboard(width=6.0, height=10.0, seed=0):
+def tree_billboard(width: float = 6.0, height: float = 10.0, seed: int = 0) -> Any:
     """A cheap 2-plane conifer billboard for distant trees (no shadow-casting)."""
     V, UV, IDX = _crossed_quads(width, height, planes=2)
     node = gltf.load_gltf(_textured_glb(V, UV, IDX, tree_texture(seed=seed),
@@ -741,7 +760,7 @@ def tree_billboard(width=6.0, height=10.0, seed=0):
     return no_shadow(node)
 
 
-def no_shadow(node):
+def no_shadow(node: Any) -> Any:
     """Mark every Shape under `node` as not casting shadows (returns the node).
 
     Dense alpha foliage into every shadow cascade is the dominant cost; opting grass
@@ -755,11 +774,13 @@ def no_shadow(node):
     return node
 
 
-def grass_card(width=0.9, height=0.6, seed=3, planes=3):
+def grass_card(width: float = 0.9, height: float = 0.6, seed: int = 3,
+               planes: int = 3) -> Any:
     """A loaded, mountable grass-card node (share it across instances)."""
     return gltf.load_gltf(grass_card_glb(width, height, seed, planes)).group
 
 
-def conifer(height=9.0, seed=11, bark_path=None):
+def conifer(height: float = 9.0, seed: int = 11,
+            bark_path: Optional[str] = None) -> Any:
     """A loaded, mountable textured-conifer node (share it across instances)."""
     return gltf.load_gltf(conifer_glb(height, seed, bark_path=bark_path)).group

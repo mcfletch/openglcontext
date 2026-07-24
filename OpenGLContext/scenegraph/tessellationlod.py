@@ -23,6 +23,8 @@ reference-image regression) or per node via a ``lod=False`` field.
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
@@ -48,7 +50,7 @@ def lod_enabled() -> bool:
     )
 
 
-def camera_distance_radii(center_local, radius_local, modelview) -> float:
+def camera_distance_radii(center_local: Any, radius_local: float, modelview: Any) -> float:
     """Eye-space camera distance to ``center_local``, in units of ``radius_local``.
 
     The modelview maps local space to eye space, where the camera sits at the
@@ -61,7 +63,7 @@ def camera_distance_radii(center_local, radius_local, modelview) -> float:
     return dist / max(float(radius_local), _TINY)
 
 
-def level_from_distance(distance_radii, thresholds=DEFAULT_THRESHOLDS) -> int:
+def level_from_distance(distance_radii: float, thresholds: Sequence[float] = DEFAULT_THRESHOLDS) -> int:
     """Map a normalized camera distance to an LOD level (0 = finest)."""
     for i, t in enumerate(thresholds):
         if distance_radii < t:
@@ -69,7 +71,8 @@ def level_from_distance(distance_radii, thresholds=DEFAULT_THRESHOLDS) -> int:
     return len(thresholds)
 
 
-def lod_level(mode, center_local, radius_local, thresholds=DEFAULT_THRESHOLDS) -> int:
+def lod_level(mode: Any, center_local: Any, radius_local: float,
+              thresholds: Sequence[float] = DEFAULT_THRESHOLDS) -> int:
     """LOD level (0 = finest) for a mesh at this frame, size-normalized.
 
     Returns 0 (finest) when LOD is disabled or the distance can't be determined,

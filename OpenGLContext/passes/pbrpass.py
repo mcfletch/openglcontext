@@ -14,13 +14,9 @@ from __future__ import annotations
 import os
 import logging
 import weakref
-from typing import Any, Optional
+from typing import Any, Iterator, Optional, Sequence
 
 import numpy as np
-
-# Sentinel distinct from any real material (including None) so the first shape of
-# each frame always reconfigures.
-_APPEARANCE_UNSET = object()
 
 from OpenGL.GL import (
     GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_TEXTURE0, GL_TEXTURE_2D,
@@ -39,8 +35,13 @@ from OpenGLContext.passes.shaderpass import (
 )
 from OpenGLContext.passes.transmission import TransmissionBuffer
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, material_to_pbr
+from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
 
 log = logging.getLogger(__name__)
+
+# Sentinel distinct from any real material (including None) so the first shape of
+# each frame always reconfigures.
+_APPEARANCE_UNSET = object()
 
 # Fragment texture-unit budget. GL 3.3 core only guarantees 16 units
 # (valid indices 0..15), so every sampler the PBR program uses must fit under 16.
@@ -59,7 +60,6 @@ PBR_UNITS = {
 # and leaving them at the default unit 0 collides with the 2D material samplers,
 # which the driver rejects at draw time (same reason the shadow samplers are
 # pre-assigned).
-from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
 _PBR_SAMPLER = {
     'baseColor': 'baseColorTexture', 'metallicRoughness': 'metallicRoughnessTexture',
     'normal': 'normalTexture', 'occlusion': 'occlusionTexture',
@@ -148,7 +148,7 @@ MATERIAL_UBO_BINDING = 1        # glUniformBlockBinding / glBindBufferBase point
 GLASS_MIN_OPACITY = 0.08
 
 
-def _material_factors(material) -> dict:
+def _material_factors(material: Any) -> dict:
     """Uniform-ready factors for a PBRMaterial, a VRML97 Material, or None."""
     if isinstance(material, PBRMaterial):
         m = material
@@ -198,7 +198,7 @@ def _material_factors(material) -> dict:
 PBR_OPTIONAL_FEATURES = ('CLEARCOAT', 'SHEEN', 'TRANSMISSION')
 
 
-def pbr_feature_defines(enabled=None) -> list:
+def pbr_feature_defines(enabled: Optional[Any] = None) -> list:
     """USE_* defines choosing which optional lobes the PBR uber-shader includes.
 
     FUTURE FEATURE -- not wired into compile() yet. Today the program is always
@@ -222,20 +222,29 @@ def pbr_feature_defines(enabled=None) -> list:
             for f in PBR_OPTIONAL_FEATURES]
 
 
-def pack_material_block(material) -> np.ndarray:
+def pack_material_block(material: Any) -> np.ndarray:
     """Pack a material into the std140 MaterialBlock byte layout (float32 array)."""
     d = _material_factors(material)
     buf = np.zeros(MATERIAL_BLOCK_WORDS, dtype=np.float32)
     iv = buf.view(np.int32)
-    buf[0:3] = d['base_color'];        buf[3] = d['metallic']
-    buf[4:7] = d['emissive'];          buf[7] = d['roughness']
-    buf[8:11] = d['specular_color'];   buf[11] = d['occlusion']
-    buf[12:15] = d['sheen_color'];     buf[15] = d['normal_scale']
-    buf[16:19] = d['attenuation_color']; buf[19] = d['alpha_cutoff']
-    buf[20] = d['emissive_strength'];  buf[21] = d['specular']
-    buf[22] = d['clearcoat'];          buf[23] = d['clearcoat_roughness']
-    buf[24] = d['sheen_roughness'];    buf[25] = d['ior']
-    buf[26] = d['thickness'];          buf[27] = d['attenuation_distance']
+    buf[0:3] = d['base_color']
+    buf[3] = d['metallic']
+    buf[4:7] = d['emissive']
+    buf[7] = d['roughness']
+    buf[8:11] = d['specular_color']
+    buf[11] = d['occlusion']
+    buf[12:15] = d['sheen_color']
+    buf[15] = d['normal_scale']
+    buf[16:19] = d['attenuation_color']
+    buf[19] = d['alpha_cutoff']
+    buf[20] = d['emissive_strength']
+    buf[21] = d['specular']
+    buf[22] = d['clearcoat']
+    buf[23] = d['clearcoat_roughness']
+    buf[24] = d['sheen_roughness']
+    buf[25] = d['ior']
+    buf[26] = d['thickness']
+    buf[27] = d['attenuation_distance']
     iv[28] = 1 if d['unlit'] else 0
     iv[29] = int(d.get('tex_coord_mask', 0))
     # words 30, 31 are the std140 padding before the 16-byte-aligned mat3 -- reuse
@@ -264,7 +273,7 @@ def pack_material_block(material) -> np.ndarray:
     return buf
 
 
-def _compile_file(vert_name: str, frag_name: str, validate: bool = True):
+def _compile_file(vert_name: str, frag_name: str, validate: bool = True) -> Any:
     # preprocess_shader resolves the shared #includes: the auxiliary
     # VRML97 shaders the PBR pass reuses (unlit/point/line/vertex_color) now pull
     # encodeObjectId in via `#include "_objectid_inc.glsl"`, which the GLSL
@@ -278,7 +287,7 @@ def _compile_file(vert_name: str, frag_name: str, validate: bool = True):
     return prog
 
 
-def _delete_shaders(*shaders) -> None:
+def _delete_shaders(*shaders: Any) -> None:
     """Flag standalone shader objects for deletion after they are linked (3.4)."""
     from OpenGL.GL import glDeleteShader
     for sh in shaders:
@@ -289,7 +298,8 @@ def _delete_shaders(*shaders) -> None:
 
 
 def _compile_shadow_frag(vert_name: str, frag_name: str, max_shadow_lights: int,
-                         cube_array: bool, validate: bool = False, extra_defines=None):
+                         cube_array: bool, validate: bool = False,
+                         extra_defines: Optional[list] = None) -> Any:
     """Compile a program whose fragment shader carries the shared shadow include."""
     with open(os.path.join(SHADER_DIR, vert_name)) as f:
         vert = f.read()
@@ -402,7 +412,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         if idx != GL_INVALID_INDEX:
             glUniformBlockBinding(self.program, idx, self.MATERIAL_UBO_BINDING)
 
-    def _upload_material_ubo(self, material) -> int:
+    def _upload_material_ubo(self, material: Any) -> int:
         data = pack_material_block(material)
         buf = int(glGenBuffers(1))
         glBindBuffer(GL_UNIFORM_BUFFER, buf)
@@ -410,7 +420,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         glBindBuffer(GL_UNIFORM_BUFFER, 0)
         return buf
 
-    def _material_ubo(self, material) -> int:
+    def _material_ubo(self, material: Any) -> int:
         """The GL buffer holding ``material``'s factor block, built on first use.
 
         Cached across frames: PBR materials are static, so the block is packed and
@@ -431,7 +441,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
             return buf
         return entry[0]
 
-    def invalidate_material_ubo(self, material=None) -> None:
+    def invalidate_material_ubo(self, material: Any = None) -> None:
         """Drop a cached block so the next draw re-packs it (after a material edit).
 
         ``material=None`` clears every cached block. The GL buffers are left for
@@ -443,14 +453,14 @@ class PBRShaderProgram(VRML97ShaderProgram):
         else:
             self._material_ubos.pop(material, None)
 
-    def bind_material_block(self, material) -> None:
+    def bind_material_block(self, material: Any) -> None:
         """Bind ``material``'s factor block for the shapes that follow."""
         if self.program is None:
             return
         glBindBufferBase(GL_UNIFORM_BUFFER, self.MATERIAL_UBO_BINDING,
                          self._material_ubo(material))
 
-    def bind_transmission_backdrop(self, buffer) -> None:
+    def bind_transmission_backdrop(self, buffer: TransmissionBuffer) -> None:
         """Make the captured opaque backdrop available to the transmission path."""
         buffer.bind()
         self._set_uniform1i('hasTransmissionBackdrop', 1, self.program)
@@ -469,7 +479,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1f('alphaValue', float(alpha), self.program)
         self._set_uniform1i('alphaMode', int(alpha_mode), self.program)
 
-    def bind_pbr_textures(self, material, mode) -> None:
+    def bind_pbr_textures(self, material: Any, mode: Any) -> None:
         # Sampler -> texture-unit assignments are constant; they are set once at
         # compile time (see _init_pbr_samplers in compile), so don't re-set them
         # per draw.
@@ -489,12 +499,13 @@ class PBRShaderProgram(VRML97ShaderProgram):
             tex = holder.cached(mode) if holder is not None else None
             has = tex is not None and getattr(tex, 'texture', None)
             if has:
+                assert tex is not None
                 glActiveTexture(GL_TEXTURE0 + unit)
                 glBindTexture(GL_TEXTURE_2D, tex.texture)
             self._set_uniform1i(_PBR_EXT_HAS[channel], 1 if has else 0, self.program)
         glActiveTexture(GL_TEXTURE0)
 
-    def configure_appearance(self, appearance, mode) -> None:
+    def configure_appearance(self, appearance: Any, mode: Any) -> None:
         """Configure PBR material + textures from a Shape's appearance.
 
         Routes both PBRMaterial (directly) and VRML97 Material (up-converted)
@@ -553,22 +564,25 @@ class PBRShaderProgram(VRML97ShaderProgram):
         clip to white; everything else stays at 1.0."""
         self._set_uniform1f('exposure', float(exposure), self.program)
 
-    def set_fog(self, density: float = 0.0, color=(0.6, 0.7, 0.85)) -> None:
+    def set_fog(self, density: float = 0.0,
+                color: Sequence[float] = (0.6, 0.7, 0.85)) -> None:
         """Set aerial-perspective fog: exp density per eye-space unit + linear colour.
         Density 0 (default) disables it, leaving non-terrain scenes unchanged."""
         self._set_uniform1f('fogDensity', float(density), self.program)
-        self._set_uniform3f('fogColor', tuple(color)[:3], self.program)
+        self._set_uniform3f('fogColor', (color[0], color[1], color[2]), self.program)
 
-    def set_transmission(self, transmission_factor, material=None) -> None:
+    def set_transmission(self, transmission_factor: float, material: Any = None) -> None:
         """Set the frame-gated transmission factor (volume params are in the UBO)."""
         self._set_uniform1f('transmissionFactor', float(transmission_factor), self.program)
 
-    def set_diffuse_transmission(self, factor, color=(1.0, 1.0, 1.0)) -> None:
+    def set_diffuse_transmission(self, factor: float,
+                                 color: Sequence[float] = (1.0, 1.0, 1.0)) -> None:
         """Set KHR_materials_diffuse_transmission factor + colour (0 = opaque)."""
         self._set_uniform1f('diffuseTransmissionFactor', float(factor), self.program)
-        self._set_uniform3f('diffuseTransmissionColor', tuple(color)[:3], self.program)
+        self._set_uniform3f('diffuseTransmissionColor',
+                            (color[0], color[1], color[2]), self.program)
 
-    def set_anisotropy(self, strength, rotation=0.0) -> None:
+    def set_anisotropy(self, strength: float, rotation: float = 0.0) -> None:
         """Set KHR_materials_anisotropy strength + rotation direction (0 = isotropic).
 
         The shader wants the rotation as a (cos, sin) tangent-plane direction so it
@@ -616,11 +630,13 @@ class PBRPass(flatcore.FlatPass):
     # setup cost). Overridable for benchmarking / small test scenes.
     INSTANCE_MIN: int = int(os.environ.get('OPENGLCONTEXT_INSTANCE_MIN', '4') or 4)
 
+    # The base _flat.FlatPass declares instancing_enabled as a writeable class
+    # attribute; the shader passes intentionally compute it as a read-only property.
     @property
-    def instancing_enabled(self) -> bool:
+    def instancing_enabled(self) -> bool:  # type: ignore[override]
         return instancing_is_enabled()
 
-    def getShaderProgram(self):
+    def getShaderProgram(self) -> VRML97ShaderProgram:
         if self._shader_program_instance is None:
             self._shader_program_instance = PBRShaderProgram()
         return self._shader_program_instance
@@ -629,11 +645,11 @@ class PBRPass(flatcore.FlatPass):
     # 73 * 224 B = 16352 B, within the guaranteed 16384-byte UBO block).
     MAX_INSTANCE_MATERIALS: int = 73   # 224 B/material fits the 16 KB UBO min
 
-    def _instanceable(self, path) -> bool:
+    def _instanceable(self, path: Any) -> bool:
         """Any geometry exposing ``instanceGPU(mode)`` (PBRMesh, Box, Sphere, ...)."""
         return hasattr(getattr(path[-1], 'geometry', None), 'instanceGPU')
 
-    def _instanceKey(self, path):
+    def _instanceKey(self, path: Any) -> Any:
         """Batch by geometry + texture set: materials differing only by FACTORS
         share one instanced draw (each instance indexes the material array). With
         opportunistic collapse on, key geometry by CONTENT so distinct nodes with
@@ -645,7 +661,8 @@ class PBRPass(flatcore.FlatPass):
             return geometry_content_key(path)
         return geometry_texture_key(path)
 
-    def _material_chunks(self, members, materials, indices, max_mats):
+    def _material_chunks(self, members: list, materials: list, indices: list,
+                         max_mats: int) -> Iterator[tuple]:
         """Split a group so no draw needs more materials than the UBO array holds.
 
         Yields (members, materials, indices) chunks, each with <= max_mats distinct
@@ -655,8 +672,11 @@ class PBRPass(flatcore.FlatPass):
         if len(materials) <= max_mats:
             yield members, materials, indices
             return
-        cm, cmat, cidx, slot = [], [], [], {}
-        for member, gi in zip(members, indices):
+        cm: list = []
+        cmat: list = []
+        cidx: list = []
+        slot: dict = {}
+        for member, gi in zip(members, indices, strict=True):
             mat = materials[gi]
             if id(mat) not in slot:
                 if len(cmat) >= max_mats:
@@ -669,7 +689,7 @@ class PBRPass(flatcore.FlatPass):
         if cm:
             yield cm, cmat, cidx
 
-    def _bind_material_array(self, materials):
+    def _bind_material_array(self, materials: list) -> int:
         """Pack N materials into one std140 array UBO and bind it at the material
         binding. Reuses one persistent buffer on the pass (orphan + re-upload each
         call) instead of gen/deleting a UBO per group per frame. The array element
@@ -689,7 +709,8 @@ class PBRPass(flatcore.FlatPass):
         glBindBufferBase(GL_UNIFORM_BUFFER, MATERIAL_UBO_BINDING, buf)
         return buf
 
-    def _drawInstanceGroup(self, group, shader, prog, id_map) -> None:
+    def _drawInstanceGroup(self, group: Any, shader: Any, prog: Any,
+                           id_map: Optional[dict]) -> None:
         """Draw a whole InstanceGroup with one glDrawElementsInstanced per chunk.
 
         Instances in a group share geometry and textures but may differ by

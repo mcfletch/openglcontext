@@ -6,10 +6,12 @@ Under a mirror the triangle winding flips, so the front face must follow it or
 solid geometry culls the wrong side (renders inside-out / vanishes). This module
 centralises that decision so all geometry types share the mirror-aware logic.
 """
+from typing import Any
+
 from OpenGL.GL import GL_CCW, GL_CW, GL_CULL_FACE, glFrontFace, glEnable, glDisable
 
 
-def _det3(mv):
+def _det3(mv: Any) -> float:
     """Sign-carrying determinant of the modelview's upper-left 3x3.
 
     Direct 3x3 solve (no LAPACK), matching pbrmesh._front_face.
@@ -20,7 +22,7 @@ def _det3(mv):
             + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]))
 
 
-def front_face(ccw, mv=None):
+def front_face(ccw: bool, mv: Any = None) -> int:
     """GL front-face enum for CCW/CW geometry under modelview ``mv``.
 
     ``ccw`` is the geometry's own winding (True => CCW). A negative-determinant
@@ -38,7 +40,7 @@ def front_face(ccw, mv=None):
     return base
 
 
-def apply_winding_cull(mode, ccw, solid):
+def apply_winding_cull(mode: Any, ccw: bool, solid: bool) -> None:
     """Set mirror-aware front face and back-face culling for a geometry draw."""
     glFrontFace(front_face(ccw, getattr(mode, 'matrix', None)))
     if solid:

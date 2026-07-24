@@ -97,9 +97,9 @@ def test_injective_interior_and_exterior_are_separate():
     """Exterior body faces sit in the upper bottom-half band, interior below it."""
     base_ext, base_int, _, _ = teapot_nurbs.injective_uv_transforms()
     # Body is the first 12 base patches; exterior v in [0.25, 0.5], interior [0, 0.25].
-    for su, sv, ou, ov in base_ext[:12]:
+    for _su, _sv, _ou, ov in base_ext[:12]:
         assert ov >= 0.25 - 1e-6
-    for su, sv, ou, ov in base_int[:12]:
+    for _su, sv, _ou, ov in base_int[:12]:
         assert ov + sv <= 0.25 + 1e-6
 
 
@@ -154,26 +154,32 @@ class TestTeapotLOD:
         assert teapot_nurbs.steps_for_level(99) == teapot_nurbs.steps_for_level(3)
 
     def test_near_teapot_is_level0(self):
-        m = np.eye(4); m[3, 2] = -3.0      # ~1.5 radii away
+        m = np.eye(4)
+        m[3, 2] = -3.0      # ~1.5 radii away
         assert Teapot(size=1.0)._lod_level(_Mode(False, m)) == 0
 
     def test_far_teapot_is_coarser(self):
-        near = np.eye(4); near[3, 2] = -3.0
-        far = np.eye(4); far[3, 2] = -400.0
+        near = np.eye(4)
+        near[3, 2] = -3.0
+        far = np.eye(4)
+        far[3, 2] = -400.0
         t = Teapot(size=1.0)
         assert t._lod_level(_Mode(False, far)) > t._lod_level(_Mode(False, near))
 
     def test_size_normalizes_level(self, monkeypatch):
         # a big teapot and a small one at proportional distances get the same level
-        m = np.eye(4); m[3, 2] = -40.0
+        m = np.eye(4)
+        m[3, 2] = -40.0
         small = Teapot(size=1.0)._lod_level(_Mode(False, m))
-        m2 = np.eye(4); m2[3, 2] = -400.0
+        m2 = np.eye(4)
+        m2[3, 2] = -400.0
         big = Teapot(size=10.0)._lod_level(_Mode(False, m2))
         assert small == big
 
     def test_lod_off_forces_level0(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_LOD', 'off')
-        far = np.eye(4); far[3, 2] = -400.0
+        far = np.eye(4)
+        far[3, 2] = -400.0
         assert Teapot(size=1.0)._lod_level(_Mode(False, far)) == 0
 
 
@@ -242,6 +248,56 @@ def test_bounding_volume_scales_with_size():
     big = Teapot(size=2.0).boundingVolume(None)
     assert isinstance(small, boundingvolume.AABoundingBox)
     assert np.allclose(np.asarray(big.size), np.asarray(small.size) * 2.0)
+
+
+# -- compute_tangents (pure CPU, T2F_N3F_V3F triangle soup) -------------------
+
+def _tri(uvs, positions, normal=(0.0, 0.0, 1.0)):
+    """One triangle interleaved as T2F_N3F_V3F (u,v, nx,ny,nz, x,y,z)."""
+    rows = []
+    for uv, pos in zip(uvs, positions, strict=True):
+        rows.append([uv[0], uv[1], normal[0], normal[1], normal[2],
+                     pos[0], pos[1], pos[2]])
+    return np.array(rows, dtype=np.float32).reshape(-1)
+
+
+def test_tangent_points_along_u_axis():
+    # UV u grows with world +x, so the tangent must be +x, orthonormal, w=+1.
+    interleaved = _tri(
+        uvs=[(0, 0), (1, 0), (0, 1)],
+        positions=[(0, 0, 0), (1, 0, 0), (0, 1, 0)])
+    tangents = teapot_nurbs.compute_tangents(interleaved)
+    assert tangents.shape == (3, 4)
+    assert np.allclose(tangents[:, 0:3], [1.0, 0.0, 0.0], atol=1e-6)
+    assert np.allclose(tangents[:, 3], 1.0)
+
+
+def test_tangent_is_orthogonal_to_normal():
+    # A slanted UV mapping still yields a tangent perpendicular to the normal.
+    interleaved = _tri(
+        uvs=[(0, 0), (1, 0.5), (0.2, 1)],
+        positions=[(0, 0, 0), (2, 0, 0), (0, 3, 0)])
+    tangents = teapot_nurbs.compute_tangents(interleaved)
+    normals = interleaved.reshape(-1, teapot_nurbs.FLOATS_PER_VERTEX)[:, 2:5]
+    dots = np.sum(tangents[:, 0:3] * normals, axis=1)
+    assert np.allclose(dots, 0.0, atol=1e-6)
+    lengths = np.linalg.norm(tangents[:, 0:3], axis=1)
+    assert np.allclose(lengths, 1.0, atol=1e-6)   # unit tangent
+
+
+def test_degenerate_uv_yields_zero_tangent():
+    # All three vertices share one UV -> zero UV area -> no defined tangent.
+    interleaved = _tri(
+        uvs=[(0.5, 0.5), (0.5, 0.5), (0.5, 0.5)],
+        positions=[(0, 0, 0), (1, 0, 0), (0, 1, 0)])
+    tangents = teapot_nurbs.compute_tangents(interleaved)
+    assert np.allclose(tangents[:, 0:3], 0.0)
+    assert np.allclose(tangents[:, 3], 1.0)
+
+
+def test_empty_input_returns_empty_tangents():
+    tangents = teapot_nurbs.compute_tangents(np.zeros(0, dtype=np.float32))
+    assert tangents.shape == (0, 4)
 
 
 # -- GL tessellation (requires a GL context) ---------------------------------

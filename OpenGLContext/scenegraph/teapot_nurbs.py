@@ -15,6 +15,7 @@ The Utah Teapot was modelled by Martin Newell in 1975 at the University of
 Utah.  See https://graphics.cs.utah.edu/teapot/ for its history.
 """
 import logging
+from typing import Any, Optional
 
 import numpy as np
 
@@ -33,7 +34,8 @@ log = logging.getLogger(__name__)
 _BEZIER_KNOT = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
 
 
-def _grid_cell(rect, cols, rows, col, row):
+def _grid_cell(rect: Any, cols: int, rows: int, col: int,
+               row: int) -> tuple[float, float, float, float]:
     """Affine ``(su, sv, ou, ov)`` mapping [0,1]^2 into cell (col,row) of ``rect``.
 
     ``rect`` is ``(u0, v0, u1, v1)``; the region is a ``cols x rows`` grid and
@@ -45,7 +47,9 @@ def _grid_cell(rect, cols, rows, col, row):
     return (cw, ch, u0 + col * cw, v0 + row * ch)
 
 
-def injective_uv_transforms():
+def injective_uv_transforms() -> tuple[
+        list[tuple[float, float, float, float]], list[tuple[float, float, float, float]],
+        list[tuple[float, float, float, float]], list[tuple[float, float, float, float]]]:
     """Per-patch exterior/interior atlas affines for the injective layout.
 
     Implements the Utah Teapot "injective, with interior" texture layout
@@ -71,12 +75,13 @@ def injective_uv_transforms():
         'handle': 0.0, 'knob': 0.25, 'lid': 0.5, 'spout': 0.75,
     }
 
-    def top(part, interior):
+    def top(part: str, interior: bool) -> tuple[float, float, float, float]:
         u0 = cols[part]
         v0 = 0.75 if interior else 0.5
         return (u0, v0, u0 + 0.25, v0 + 0.25)
 
-    base_ext, base_int = [], []
+    base_ext: list[tuple[float, float, float, float]] = []
+    base_int: list[tuple[float, float, float, float]] = []
     # body: 12 patches, band-major (band = i//4, around = i%4) -> rows 0..2.
     for i in range(len(PATCH_GROUPS['body'])):
         band, around = i // 4, i % 4
@@ -97,7 +102,8 @@ def injective_uv_transforms():
 
     # lid: 8 patches = knob (0..3) then lid skirt (4..7). Knob shares the 'knob'
     # column; the skirt uses the 'lid' column.
-    lid_ext, lid_int = [], []
+    lid_ext: list[tuple[float, float, float, float]] = []
+    lid_int: list[tuple[float, float, float, float]] = []
     for i in range(len(PATCH_GROUPS['lid'])):
         part = 'knob' if i < 4 else 'lid'
         j = i % 4
@@ -112,7 +118,7 @@ def injective_uv_transforms():
 FLOATS_PER_VERTEX = 8
 
 
-def _orient(point):
+def _orient(point: Any) -> tuple[float, float, float]:
     """Map a raw Newell control point to glutSolidTeapot(1.0) space.
 
     The Newell dataset is z-up with the body resting on z=0.  GLUT renders it
@@ -127,7 +133,7 @@ def _orient(point):
     return (0.5 * x, 0.5 * (z - 1.5), -0.5 * y)
 
 
-def _patch_surface(indices, sampling):
+def _patch_surface(indices: Any, sampling: Any) -> Any:
     """Build a NurbsSurface for a single 16-point Bezier patch.
 
     The 4x4 control grid is transposed (u and v swapped).  The Newell patch
@@ -150,7 +156,8 @@ def _patch_surface(indices, sampling):
     )
 
 
-def _emit_face(out, texcoords, normals, vertices, idx, xform, flip):
+def _emit_face(out: list[float], texcoords: Any, normals: Any, vertices: Any,
+               idx: int, xform: Any, flip: bool) -> None:
     """Append one T2F_N3F_V3F vertex, atlas-remapped and optionally inverted."""
     su, sv, ou, ov = xform
     u, v = texcoords[idx] if idx < len(texcoords) else (0.0, 0.0)
@@ -164,7 +171,8 @@ def _emit_face(out, texcoords, normals, vertices, idx, xform, flip):
     out.extend(vertices[idx])
 
 
-def _emit_patch(callback, out, ext_xform, int_xform=None):
+def _emit_patch(callback: Any, out: list[float], ext_xform: Any,
+                int_xform: Any = None) -> None:
     """Append a tessellated patch's triangles to ``out`` as T2F_N3F_V3F floats.
 
     ``ext_xform`` is an ``(su, sv, ou, ov)`` affine mapping the patch's raw
@@ -196,12 +204,13 @@ def _emit_patch(callback, out, ext_xform, int_xform=None):
 LOD_STEPS = (30.0, 16.0, 8.0, 4.0)
 
 
-def steps_for_level(level):
+def steps_for_level(level: int) -> float:
     return LOD_STEPS[min(level, len(LOD_STEPS) - 1)]
 
 
-def tessellate_patches(patches, sampling=None, steps=None,
-                       ext_transforms=None, int_transforms=None):
+def tessellate_patches(patches: Any, sampling: Any = None, steps: Optional[float] = None,
+                       ext_transforms: Any = None,
+                       int_transforms: Any = None) -> np.ndarray:
     """Tessellate patches into a flat float32 T2F_N3F_V3F array.
 
     Must be called with a current GL context.  ``steps`` sets the GLU
@@ -210,7 +219,7 @@ def tessellate_patches(patches, sampling=None, steps=None,
     atlas affines (parallel to ``patches``); when both are None the raw
     per-patch parametric (u, v) is used and no interior faces are emitted.
     """
-    out = []
+    out: list[float] = []
     for i, indices in enumerate(patches):
         surface = _patch_surface(indices, sampling)
         callback = nurbs._tessellate_nurbs_surface(
@@ -221,7 +230,8 @@ def tessellate_patches(patches, sampling=None, steps=None,
     return np.array(out, dtype=np.float32)
 
 
-def tessellate_teapot(sampling=None, steps=None, interior=True):
+def tessellate_teapot(sampling: Any = None, steps: Optional[float] = None,
+                      interior: bool = True) -> tuple[np.ndarray, np.ndarray]:
     """Tessellate the whole teapot into injectively textured T2F_N3F_V3F arrays.
 
     Returns a ``(base, lid)`` pair of flat float32 arrays.  The lid is kept
@@ -231,13 +241,13 @@ def tessellate_teapot(sampling=None, steps=None, interior=True):
     the interior half of the injective atlas (see :func:`injective_uv_transforms`).
     """
     base_ext, base_int, lid_ext, lid_int = injective_uv_transforms()
-    if not interior:
-        base_int = lid_int = None
-    base_patches = []
+    base_int_arg: Any = None if not interior else base_int
+    lid_int_arg: Any = None if not interior else lid_int
+    base_patches: list[Any] = []
     for part in PART_ORDER:
         base_patches.extend(PATCH_GROUPS[part])
-    base = tessellate_patches(base_patches, sampling, steps, base_ext, base_int)
-    lid = tessellate_patches(PATCH_GROUPS[LID_PART], sampling, steps, lid_ext, lid_int)
+    base = tessellate_patches(base_patches, sampling, steps, base_ext, base_int_arg)
+    lid = tessellate_patches(PATCH_GROUPS[LID_PART], sampling, steps, lid_ext, lid_int_arg)
     log.debug(
         "Teapot tessellated: %d base vertices, %d lid vertices",
         len(base) // FLOATS_PER_VERTEX,
@@ -246,7 +256,7 @@ def tessellate_teapot(sampling=None, steps=None, interior=True):
     return base, lid
 
 
-def compute_tangents(interleaved):
+def compute_tangents(interleaved: Any) -> np.ndarray:
     """Per-vertex tangents (vec4, w=handedness) for a T2F_N3F_V3F triangle soup.
 
     Tangent-space normal (bump) mapping needs, per vertex, the surface direction

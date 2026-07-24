@@ -8,23 +8,34 @@ capture and stable as the tile pages in and out.
 The result feeds instanced rendering (per-instance transform), the vegetation
 backbone in [passes/instancing.py]; grass uses the same placements at higher density.
 """
+from collections.abc import Callable
+from typing import Optional
+
 import numpy as np
 
 
 class Scatter:
     """Instance placements: `positions` (N,3), `yaws` (N,), `scales` (N,)."""
 
-    def __init__(self, positions, yaws, scales):
+    def __init__(
+        self, positions: np.ndarray, yaws: np.ndarray, scales: np.ndarray
+    ) -> None:
         self.positions = positions
         self.yaws = yaws
         self.scales = scales
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.positions)
 
 
-def scatter_on_mesh(points, tris, density, seed, scale_range=(1.0, 1.0),
-                    keep=None):
+def scatter_on_mesh(
+    points: np.ndarray,
+    tris: np.ndarray,
+    density: float,
+    seed: int,
+    scale_range: tuple[float, float] = (1.0, 1.0),
+    keep: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+) -> Scatter:
     """Scatter instances over the triangle mesh (`points`, `tris`).
 
     `density` is instances per unit surface area. Returns a `Scatter`. Uniform

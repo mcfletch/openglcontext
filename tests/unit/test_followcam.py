@@ -13,9 +13,51 @@ centered (x≈0, y≈0, z<0).  Testing the actual consumer, not an assumed quate
 convention, is what catches aim bugs the renderer would show.
 """
 import numpy as np
+import pytest
 
 from OpenGLContext.move.viewplatform import ViewPlatform
-from OpenGLContext.move.followcam import look_at_orientation, FollowCamera
+from OpenGLContext.move.followcam import (
+    look_at_orientation, FollowCamera, _matrix_to_axis_angle)
+
+
+def _axis_angle_matrix(axis, angle):
+    """Rodrigues rotation matrix for ``angle`` radians about a unit ``axis``."""
+    axis = np.asarray(axis, dtype='d')
+    axis = axis / np.linalg.norm(axis)
+    x, y, z = axis
+    c, s = np.cos(angle), np.sin(angle)
+    k = np.array([[0, -z, y], [z, 0, -x], [-y, x, 0]])
+    return np.eye(3) + s * k + (1 - c) * (k @ k)
+
+
+def test_identity_rotation_returns_zero_angle():
+    """A near-identity matrix maps to the canonical zero-angle axis-angle."""
+    x, y, z, angle = _matrix_to_axis_angle(np.eye(3))
+    assert (x, y, z) == (0.0, 1.0, 0.0)
+    assert angle == 0.0
+
+
+def test_180_degree_rotation_recovers_axis_from_diagonal():
+    """At exactly pi the axis comes from the diagonal (the off-diagonal form is degenerate)."""
+    for axis in [(1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 1, 1)]:
+        x, y, z, angle = _matrix_to_axis_angle(_axis_angle_matrix(axis, np.pi))
+        assert angle == pytest.approx(np.pi, abs=1e-6)
+        recovered = np.array([x, y, z])
+        want = np.asarray(axis, dtype='d')
+        want = want / np.linalg.norm(want)
+        # axis sign is free at 180 degrees, so compare up to a flip
+        assert np.allclose(recovered, want, atol=1e-6) or \
+            np.allclose(recovered, -want, atol=1e-6)
+
+
+def test_general_rotation_axis_and_angle_roundtrip():
+    """A mid-range rotation recovers both its axis and angle."""
+    axis, angle = (0.3, -0.7, 0.4), 0.9
+    x, y, z, got = _matrix_to_axis_angle(_axis_angle_matrix(axis, angle))
+    assert got == pytest.approx(angle, abs=1e-9)
+    want = np.asarray(axis, dtype='d')
+    want = want / np.linalg.norm(want)
+    assert np.allclose((x, y, z), want, atol=1e-9)
 
 
 def _target_in_view_space(eye, target, up=(0.0, 1.0, 0.0)):

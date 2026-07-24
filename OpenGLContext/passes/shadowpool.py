@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.passes.shadowmap import ShadowMapArray, ShadowMapCube, ShadowMapCubeArray
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
@@ -25,6 +25,12 @@ log = logging.getLogger(__name__)
 
 class _CascadeControllerMixin:
     """Fps-adaptive directional-cascade count (VRAM cap + frame-rate ramp)."""
+
+    if TYPE_CHECKING:
+        _shadow_caps: Optional[ShadowCapabilities]
+        shadow_cascades: int
+        shadow_cascades_adaptive: bool
+        shader_program: Any
 
     # Adaptive-cascade controller state.
     _adaptive_cascades: int = 1     # current effective count (ramps up with headroom)
@@ -96,6 +102,11 @@ class _CascadeControllerMixin:
 
 class _ShadowMapPoolMixin:
     """Lazy alloc + teardown of the shared depth array / cube-array / cube maps."""
+
+    if TYPE_CHECKING:
+        shader_program: Any
+        shadow_resolution: int
+        shadow_cube_resolution: int
 
     _shadow_caps: Optional[ShadowCapabilities] = None
     # Spot maps and directional cascades share one depth array;

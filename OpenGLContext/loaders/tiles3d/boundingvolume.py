@@ -6,6 +6,9 @@ surface, zero when the point is inside — which feeds screen-space error, and a
 and `region` volumes) are supported; all are stored already in the renderer's
 world frame.
 """
+from collections.abc import Sequence
+from typing import Any, Optional
+
 import numpy as np
 
 # WGS 84 ellipsoid, the datum EPSG:4979 region volumes are expressed against.
@@ -15,7 +18,7 @@ WGS84_B = WGS84_A * (1.0 - _WGS84_F)    # semi-minor axis (polar), metres
 _WGS84_E2 = 1.0 - (WGS84_B / WGS84_A) ** 2   # first eccentricity squared
 
 
-def geodetic_to_ecef(longitude, latitude, height):
+def geodetic_to_ecef(longitude: Any, latitude: Any, height: Any) -> np.ndarray:
     """Convert geodetic (lon, lat in radians; height in metres) to ECEF metres.
 
     Earth-Centered, Earth-Fixed Cartesian coordinates on the WGS 84 ellipsoid:
@@ -34,15 +37,15 @@ def geodetic_to_ecef(longitude, latitude, height):
 class SphereBV:
     """World-space bounding sphere (`center`, `radius`)."""
 
-    def __init__(self, center, radius):
+    def __init__(self, center: Any, radius: float) -> None:
         self.center = np.asarray(center, dtype="d")
         self.radius = float(radius)
 
-    def distance_to(self, point):
+    def distance_to(self, point: Any) -> float:
         d = np.linalg.norm(np.asarray(point, dtype="d") - self.center)
         return max(0.0, float(d) - self.radius)
 
-    def bounding_sphere(self):
+    def bounding_sphere(self) -> tuple[np.ndarray, float]:
         return self.center, self.radius
 
 
@@ -54,7 +57,7 @@ class BoxBV:
     the offset onto each unit axis and accumulates the per-axis overshoot.
     """
 
-    def __init__(self, center, half_axes):
+    def __init__(self, center: Any, half_axes: Any) -> None:
         self.center = np.asarray(center, dtype="d")
         axes = np.asarray(half_axes, dtype="d")
         self._half = np.linalg.norm(axes, axis=1)
@@ -64,13 +67,13 @@ class BoxBV:
                 self._half[:, None] > 0, axes / self._half[:, None], 0.0
             )
 
-    def distance_to(self, point):
+    def distance_to(self, point: Any) -> float:
         d = np.asarray(point, dtype="d") - self.center
         proj = self._dirs @ d
         excess = np.maximum(0.0, np.abs(proj) - self._half)
         return float(np.linalg.norm(excess))
 
-    def bounding_sphere(self):
+    def bounding_sphere(self) -> tuple[np.ndarray, float]:
         # Enclosing sphere: centre of the box, radius to the far corner.
         return self.center, float(np.linalg.norm(self._half))
 
@@ -86,26 +89,26 @@ class RegionBV:
     recentred tileset renders near the origin instead of ~6.4 million metres out.
     """
 
-    def __init__(self, region, offset=None):
+    def __init__(self, region: Sequence[float], offset: Optional[Any] = None) -> None:
         west, south, east, north, min_h, max_h = (float(v) for v in region)
         offset = np.zeros(3, dtype="d") if offset is None else np.asarray(offset, "d")
         lons = np.linspace(west, east, 3)
         lats = np.linspace(south, north, 3)
-        pts = [
+        corners = [
             geodetic_to_ecef(lon, lat, h) - offset
             for lon in lons for lat in lats for h in (min_h, max_h)
         ]
-        pts = np.asarray(pts, dtype="d")
+        pts = np.asarray(corners, dtype="d")
         self.center = pts.mean(axis=0)
         self.radius = float(np.linalg.norm(pts - self.center, axis=1).max())
 
-    def distance_to(self, point):
+    def distance_to(self, point: Any) -> float:
         d = np.linalg.norm(np.asarray(point, dtype="d") - self.center)
         return max(0.0, float(d) - self.radius)
 
-    def bounding_sphere(self):
+    def bounding_sphere(self) -> tuple[np.ndarray, float]:
         return self.center, self.radius
 
-    def ecef_center(self):
+    def ecef_center(self) -> np.ndarray:
         """The un-offset ECEF centre, used to pick a recenter origin."""
         return self.center

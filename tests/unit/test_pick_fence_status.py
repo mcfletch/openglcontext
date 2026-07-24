@@ -6,6 +6,7 @@ dispatched (stale/zero) ids as if the GPU write had completed. It now drops the
 batch instead. The GL wait/readback are stubbed so no context is needed.
 """
 import pytest
+from OpenGL.GL import GL_TIMEOUT_EXPIRED, GL_ALREADY_SIGNALED
 
 from OpenGLContext.passes import asyncpick
 from OpenGLContext.passes.selection import SelectionMixin
@@ -18,7 +19,7 @@ def _bare():
 class TestFenceStatus:
     def test_timeout_drops_batch_without_reading(self, monkeypatch):
         monkeypatch.setattr(asyncpick, 'glClientWaitSync',
-                            lambda *a, **k: asyncpick.GL_TIMEOUT_EXPIRED, raising=False)
+                            lambda *a, **k: GL_TIMEOUT_EXPIRED, raising=False)
         read = {'n': 0}
         sel = _bare()
         sel._readPBO = lambda *a, **k: read.__setitem__('n', read['n'] + 1)
@@ -29,7 +30,7 @@ class TestFenceStatus:
 
     def test_signalled_batch_is_read(self, monkeypatch):
         monkeypatch.setattr(asyncpick, 'glClientWaitSync',
-                            lambda *a, **k: asyncpick.GL_ALREADY_SIGNALED, raising=False)
+                            lambda *a, **k: GL_ALREADY_SIGNALED, raising=False)
         reached = {'hit': False}
 
         def fake_read(*a, **k):

@@ -5,10 +5,15 @@ parent; as the tile nears its coarsen threshold the vertices lerp toward the par
 positions, so the LOD switch is continuous rather than a pop. These are the data and
 blend primitives; the morph factor is driven by screen-space error.
 """
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 
+HeightFn = Callable[[Any, Any], np.ndarray]
 
-def morph_factor(sse, coarsen_sse, band):
+
+def morph_factor(sse: float, coarsen_sse: float, band: float) -> float:
     """0 (full detail) .. 1 (matches parent) as sse drops through the transition band.
 
     `coarsen_sse` is the error at which the tile would coarsen; `band` is how wide the
@@ -21,14 +26,15 @@ def morph_factor(sse, coarsen_sse, band):
     return float(np.clip(t, 0.0, 1.0))
 
 
-def morphed_positions(fine, parent, factor):
+def morphed_positions(fine: np.ndarray, parent: np.ndarray, factor: float) -> np.ndarray:
     """Lerp vertex positions from `fine` toward `parent` by `factor` (0..1)."""
     fine = np.asarray(fine, dtype="f4")
     parent = np.asarray(parent, dtype="f4")
     return (fine * (1.0 - factor) + parent * factor).astype("f4")
 
 
-def parent_heightfield(height_fn, x0, x1, z0, z1, res):
+def parent_heightfield(height_fn: HeightFn, x0: float, x1: float, z0: float,
+                       z1: float, res: int) -> np.ndarray:
     """Sample `height_fn` at half the resolution then upsample to `res` — the surface
     the coarser parent tile would present over this footprint. Vertices lerp toward
     this to morph into the parent LOD without a seam."""

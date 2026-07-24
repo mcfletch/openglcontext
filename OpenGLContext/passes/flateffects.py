@@ -12,12 +12,20 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import numpy as np
-from OpenGL.GL import *
+from OpenGL.GL import (
+    glEnable, glDisable, glBlendFunc, glDepthMask,
+    GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
+)
 
 from OpenGLContext.debug.logs import getTraceback
+
+if TYPE_CHECKING:
+    from OpenGLContext.passes.bloom import BloomPass
+    from OpenGLContext.passes.ibl import IBLController, IBLProbe
+    from OpenGLContext.passes.transmission import TransmissionBuffer
 
 log = logging.getLogger(__name__)
 
@@ -25,15 +33,31 @@ log = logging.getLogger(__name__)
 class _FlatEffectsMixin:
     """IBL + transmission + bloom + visibility culling phases for FlatPass."""
 
+    if TYPE_CHECKING:
+        shader_program: Any
+        _gl_renderer: str
+        context: Any
+        matrix: Any
+        projection: Any
+        viewport: Any
+        frustum: Any
+        renderPath: Any
+        transparent: bool
+
+        def _writeShapeId(self, shader: Any, path: Any, prog: Any,
+                          id_map: Optional[Dict]) -> Any: ...
+
+        def _restoreShapeId(self, masked: Any) -> None: ...
+
     # Transmission (KHR_materials_transmission). Filled on the first frame from the
     # GL renderer string; 'full' captures an opaque backdrop, 'blend' fakes it.
     _transmission_mode: Optional[str] = None
-    _transmission_buffer = None
+    _transmission_buffer: Optional["TransmissionBuffer"] = None
 
     # Image-based lighting (environment reflection for metals). Resolved once from
     # the GL renderer; the probe is built lazily on the first 'full' frame.
-    _ibl_controller = None
-    _ibl_probe = None
+    _ibl_controller: Optional["IBLController"] = None
+    _ibl_probe: Optional["IBLProbe"] = None
 
     # Cluster-cull the per-object frustum test when there are at least this many
     # records and OPENGLCONTEXT_INSTANCE_CLUSTER_CULL is set. The per-object test
@@ -43,11 +67,11 @@ class _FlatEffectsMixin:
     CLUSTER_CULL_MIN = 256
     CLUSTER_CULL_SIZE = 64
 
-    _bloom_pass = None
+    _bloom_pass: Optional["BloomPass"] = None
     _bloom_active = False
 
     # -- image-based lighting ----------------------------------------------
-    def iblSetup(self, matrix):
+    def iblSetup(self, matrix: Any) -> str:
         """Bind the environment-lighting path onto the PBR program for this frame.
 
         Resolves the effective IBL mode (with fps-adaptive degradation), builds the
@@ -192,7 +216,7 @@ class _FlatEffectsMixin:
         self.transparent = (mode == 'blend')
         debugFrustum = self.context.contextDefinition.debugBBox
         try:
-            for obj_index, (key, mvmatrix, tmatrix, bvolume, path) in records:
+            for _obj_index, (_key, mvmatrix, _tmatrix, bvolume, path) in records:
                 self.matrix = mvmatrix
                 self.renderPath = path
                 shader.set_matrices(mvmatrix, self.projection, program=prog)
@@ -220,11 +244,11 @@ class _FlatEffectsMixin:
             shader.unuse()
 
     # -- visibility culling ------------------------------------------------
-    def _cluster_cull_enabled(self):
+    def _cluster_cull_enabled(self) -> bool:
         return os.environ.get('OPENGLCONTEXT_INSTANCE_CLUSTER_CULL', '').strip().lower() \
             in ('1', 'true', 'yes', 'on')
 
-    def frustumVisibilityFilter( self, records ):
+    def frustumVisibilityFilter(self, records: List) -> List:
         """Filter records for visibility using frustum planes
 
         This does per-object culling based on frustum lookups
@@ -253,7 +277,7 @@ class _FlatEffectsMixin:
                 result.append( record )
         return result
 
-    def _clusterFrustumFilter( self, records ):
+    def _clusterFrustumFilter(self, records: List) -> List:
         """Cluster-accelerated equivalent of frustumVisibilityFilter.
 
         Spatially clusters the records by world translation and tests each
@@ -274,7 +298,7 @@ class _FlatEffectsMixin:
 
         positions = np.empty((len(cullable), 3), 'f')
         max_radius = 0.0
-        for i, (key, mv, tm, bv, path) in enumerate(cullable):
+        for i, (_key, _mv, tm, bv, _path) in enumerate(cullable):
             tm = np.asarray(tm, 'f')
             positions[i] = tm[3][:3]
             scale = max(float(np.linalg.norm(tm[j][:3])) for j in range(3))
@@ -284,13 +308,13 @@ class _FlatEffectsMixin:
         ident = np.eye(4, dtype='f')
         R = max_radius
 
-        def cluster_visible(mn, mx):
+        def cluster_visible(mn: np.ndarray, mx: np.ndarray) -> bool:
             center = ((mn + mx) * 0.5).tolist()
             size = (mx - mn + 2.0 * R).tolist()
             aabb = boundingvolume.AABoundingBox(center=center, size=size)
             return bool(aabb.visible(self.frustum, ident, occlusion=False, mode=self))
 
-        def instance_visible(rec):
+        def instance_visible(rec: Any) -> bool:
             return bool(rec[3].visible(self.frustum, np.asarray(rec[2], 'f'),
                                        occlusion=False, mode=self))
 
@@ -299,7 +323,7 @@ class _FlatEffectsMixin:
         return forced + kept
 
     # -- HDR bloom wrap ----------------------------------------------------
-    def _begin_bloom(self):
+    def _begin_bloom(self) -> bool:
         """Start rendering into the HDR bloom target, if bloom is enabled. The scene
         renders to a linear HDR FBO; _end_bloom composites the glow back to screen."""
         from OpenGLContext.passes import bloom
@@ -320,8 +344,9 @@ class _FlatEffectsMixin:
             self._bloom_active = False
             return False
 
-    def _end_bloom(self):
+    def _end_bloom(self) -> None:
         try:
+            assert self._bloom_pass is not None
             self._bloom_pass.composite()
         except Exception:
             pass

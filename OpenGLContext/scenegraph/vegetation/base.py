@@ -11,8 +11,13 @@ The near mesh dithers OUT and the impostor billboard dithers IN across the SAME
 window; sharing one constant pair keeps the two shaders complementary so the
 handoff never shows a seam or a double-draw.
 """
+from typing import Any, Optional
+
 import numpy as np
-from OpenGL.GL import *
+from OpenGL.GL import (
+    GL_CURRENT_PROGRAM, GL_FALSE, glGetIntegerv, glUniform3f, glUniformMatrix4fv,
+    glUseProgram,
+)
 from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
@@ -40,30 +45,30 @@ class InstancedVegBase(vnodes.PointSet):
     _BIG = _BIG
     #: world-space sun direction, or None for the camera-faced billboards, which use
     #: a flat sun term rather than a per-fragment eye-space sun vector.
-    sun = None
+    sun: "Optional[np.ndarray]" = None
 
-    def boundingVolume(self, mode):
+    def boundingVolume(self, mode: Any) -> "boundingvolume.AABoundingBox":
         return boundingvolume.AABoundingBox(size=self.bounds, center=(0, 0, 0))
 
-    def _commit_constants(self):
+    def _commit_constants(self) -> None:
         """Send the never-per-frame uniforms once, at GL init, program saved/restored."""
         prev = int(glGetIntegerv(GL_CURRENT_PROGRAM))
         glUseProgram(self._prog)
         self._upload_constants()
         glUseProgram(prev)
 
-    def _upload_constants(self):
+    def _upload_constants(self) -> None:
         """Upload uniforms constant for this node's lifetime (program already bound)."""
 
-    def _stream(self):
+    def _stream(self) -> bool:
         """Upload any staged per-instance data; return True if there is anything to draw."""
         raise NotImplementedError
 
-    def _draw(self, mode):
+    def _draw(self, mode: Any) -> None:
         """Bind VAO(s)/textures + per-frame uniforms and issue the instanced draw."""
         raise NotImplementedError
 
-    def render(self, mode=None, **kw):
+    def render(self, mode: Any = None, **kw: Any) -> int:
         if getattr(mode, 'shadow_pass', False) or not getattr(mode, 'visible', True):
             return 1
         if not ensure_gl(self):
@@ -71,17 +76,21 @@ class InstancedVegBase(vnodes.PointSet):
         if not self._stream():
             return 1
         U = self.U
-        prev = int(glGetIntegerv(GL_CURRENT_PROGRAM)); glUseProgram(self._prog)
+        prev = int(glGetIntegerv(GL_CURRENT_PROGRAM))
+        glUseProgram(self._prog)
         glUniformMatrix4fv(U["uModelView"], 1, GL_FALSE, np.ascontiguousarray(mode.matrix, np.float32))
         glUniformMatrix4fv(U["uProjection"], 1, GL_FALSE, np.ascontiguousarray(mode.projection, np.float32))
         nm = np.asarray(mode.matrix)[:3, :3].T   # normal-matrix path shared by sun and up
         if self.sun is not None:
-            se = nm @ self.sun; se /= np.linalg.norm(se)
+            se = nm @ self.sun
+            se /= np.linalg.norm(se)
             glUniform3f(U["sunDirEye"], *se.astype(np.float32))
         if U.get("uUpEye", -1) != -1:
-            ue = nm @ _UP_WORLD; ue /= np.linalg.norm(ue)
+            ue = nm @ _UP_WORLD
+            ue /= np.linalg.norm(ue)
             glUniform3f(U["uUpEye"], *ue.astype(np.float32))
         saved = save_draw_state()
         self._draw(mode)
-        glUseProgram(prev); restore_draw_state(saved)
+        glUseProgram(prev)
+        restore_draw_state(saved)
         return 1

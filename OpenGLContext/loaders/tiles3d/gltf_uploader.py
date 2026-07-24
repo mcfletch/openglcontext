@@ -19,6 +19,8 @@ so no runtime matrix is applied; non-identity tile transforms are a bake-time co
 """
 import logging
 import struct
+from collections.abc import Callable, Iterator
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
 
@@ -27,10 +29,14 @@ from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.transform import MatrixTransform
 
+if TYPE_CHECKING:
+    from OpenGLContext.loaders.gltf import GLTFScene
+    from OpenGLContext.loaders.tiles3d.tileset import RuntimeTile
+
 log = logging.getLogger(__name__)
 
 
-def _strip_b3dm(data):
+def _strip_b3dm(data: bytes) -> bytes:
     """Return the embedded glTF/GLB from a b3dm (Batched 3D Model) tile.
 
     b3dm wraps a GLB behind a 28-byte header plus a feature table and batch table;
@@ -52,7 +58,7 @@ class _CombinedScene:
     viewer's auto-framing treat one- and many-content tiles identically.
     """
 
-    def __init__(self, scenes):
+    def __init__(self, scenes: "list[GLTFScene]") -> None:
         self.group = Group(children=[s.group for s in scenes])
         centers = np.array([np.asarray(s.center, "d") for s in scenes])
         self.center = centers.mean(axis=0)
@@ -62,20 +68,24 @@ class _CombinedScene:
             for s in scenes)
 
 
-def make_tile_loader(cache_dir=None):
+_Scene = Union["GLTFScene", "_CombinedScene"]
+_LoaderFn = Callable[["RuntimeTile"], "tuple[_Scene, int]"]
+
+
+def make_tile_loader(cache_dir: Optional[str] = None) -> _LoaderFn:
     """A tile loader that reads content from local paths or http(s) URLs.
 
     `cache_dir` is where remote tile payloads are cached (default: the per-user cache
     dir). Returns a `loader_fn(tile) -> (scene, nbytes)` for `TilesetRuntime`.
     """
-    def load(tile):
-        scenes = []
+    def load(tile: "RuntimeTile") -> "tuple[_Scene, int]":
+        scenes: "list[GLTFScene]" = []
         nbytes = 0
         for uri in tile.content_uris:
             data = fetch.read_bytes(uri, cache_dir=cache_dir)
             nbytes += len(data)
             scenes.append(gltf.load_gltf(_strip_b3dm(data)))
-        scene = scenes[0] if len(scenes) == 1 else _CombinedScene(scenes)
+        scene: _Scene = scenes[0] if len(scenes) == 1 else _CombinedScene(scenes)
         return scene, nbytes
     return load
 
@@ -85,13 +95,13 @@ def make_tile_loader(cache_dir=None):
 file_tile_loader = make_tile_loader()
 
 
-def _drawable_shapes(root):
+def _drawable_shapes(root: Any) -> Iterator[Any]:
     """Yield the Shape-like nodes (those with a `geometry`) in a drawable subtree.
 
     Depth-first and cycle-safe, so a malformed subtree can't loop forever.
     """
     stack = [root]
-    seen = set()
+    seen: set[int] = set()
     while stack:
         node = stack.pop()
         if id(node) in seen:
@@ -103,9 +113,9 @@ def _drawable_shapes(root):
             stack.append(child)
 
 
-def _mesh_vbos(gpu):
+def _mesh_vbos(gpu: Any) -> list[Any]:
     """The distinct vertex/index/instance VBOs a `_MeshGPU` holds."""
-    bufs = {}
+    bufs: dict[int, Any] = {}
     for buf in (getattr(gpu, 'idx_vbo', None), getattr(gpu, '_instance_vbo', None)):
         if buf is not None:
             bufs[id(buf)] = buf
@@ -119,7 +129,7 @@ def _mesh_vbos(gpu):
     return list(bufs.values())
 
 
-def _dispose_mesh_gpu(cache, geometry):
+def _dispose_mesh_gpu(cache: Any, geometry: Any) -> None:
     """Delete the per-context VAO/VBOs cached for `geometry`, then drop the entry.
 
     The mesh's GL resources hang off the context cache keyed on the node; deleting
@@ -145,7 +155,7 @@ def _dispose_mesh_gpu(cache, geometry):
         holder()               # de-register so the freed GPU handle is never reused
 
 
-def _dispose_material_textures(material, context):
+def _dispose_material_textures(material: Any, context: Any) -> None:
     """Delete this context's GL textures for a material's PBR texture maps.
 
     A tile's `PBRTexture` maps are built from its own images and cached per context;
@@ -172,7 +182,7 @@ def _dispose_material_textures(material, context):
 _warned_no_context = False
 
 
-def _warn_no_context_once():
+def _warn_no_context_once() -> None:
     global _warned_no_context
     if not _warned_no_context:
         _warned_no_context = True
@@ -180,7 +190,7 @@ def _warn_no_context_once():
                     "context is current at release; falling back to GC reclamation.")
 
 
-def _make_dispose(drawable):
+def _make_dispose(drawable: Any) -> Callable[[], None]:
     """Build the drawable's `dispose`: delete its GL buffers/textures, once.
 
     Idempotent (a second call is a no-op) and guarded against there being no current
@@ -188,7 +198,7 @@ def _make_dispose(drawable):
     """
     state = {'done': False}
 
-    def dispose():
+    def dispose() -> None:
         if state['done']:
             return
         from OpenGLContext.context import getCurrentContext
@@ -198,7 +208,7 @@ def _make_dispose(drawable):
             _warn_no_context_once()
             return
         state['done'] = True
-        seen_materials = set()
+        seen_materials: set[int] = set()
         for shape in _drawable_shapes(drawable):
             geometry = shape.geometry
             _dispose_mesh_gpu(cache, geometry)
@@ -215,9 +225,11 @@ def _make_dispose(drawable):
 class GLTileUploader:
     """Mounts parsed tile scenes as drawable scenegraph nodes."""
 
-    def upload(self, tile, payload):
+    def upload(self, tile: "RuntimeTile",
+               payload: "tuple[_Scene, int]") -> "tuple[Any, int]":
         scene, nbytes = payload
         m = tile.world_transform
+        drawable: Any
         if np.allclose(m, np.identity(4)):
             drawable = scene.group
         else:
@@ -226,7 +238,7 @@ class GLTileUploader:
         drawable.dispose = _make_dispose(drawable)
         return drawable, nbytes
 
-    def release(self, drawable):
+    def release(self, drawable: Any) -> None:
         dispose = getattr(drawable, 'dispose', None)
         if dispose is not None:
             dispose()

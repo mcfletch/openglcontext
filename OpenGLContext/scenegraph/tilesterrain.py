@@ -12,6 +12,7 @@ and the draw run on the GL thread.
 import json
 import math
 import os
+from typing import Any, Optional
 
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.loaders.tiles3d import fetch
@@ -31,18 +32,26 @@ class TilesTerrain(Group):
     `cache_dir` (default: the per-user cache dir).
     """
 
-    def __init__(self, tileset_path, memory_budget=256 * 1024 * 1024,
-                 max_sse=16.0, fovy=math.radians(45.0), prefetch_factor=2.0,
-                 max_uploads_per_update=4, workers=2, physics_world=None,
-                 recenter=True, cache_dir=None, **named):
+    def __init__(self, tileset_path: str, memory_budget: int = 256 * 1024 * 1024,
+                 max_sse: float = 16.0, fovy: Optional[float] = None,
+                 prefetch_factor: float = 2.0,
+                 max_uploads_per_update: int = 4, workers: int = 2,
+                 physics_world: Any = None,
+                 recenter: bool = True, cache_dir: Optional[str] = None,
+                 **named: Any) -> None:
         super().__init__(**named)
+        if fovy is None:
+            fovy = math.radians(45.0)
         self.fovy = fovy
         doc = json.loads(fetch.read_bytes(tileset_path, cache_dir=cache_dir))
         if fetch.is_url(tileset_path):
             base_uri = fetch.dir_of(tileset_path)
         else:
             base_uri = os.path.dirname(os.path.abspath(tileset_path)) + os.sep
-        resolver = lambda uri: json.loads(fetch.read_bytes(uri, cache_dir=cache_dir))
+
+        def resolver(uri: str) -> Any:
+            return json.loads(fetch.read_bytes(uri, cache_dir=cache_dir))
+
         tileset = build_runtime_tileset(doc, base_uri=base_uri, recenter=recenter,
                                         resolve_external=resolver)
         self.tileset = tileset
@@ -61,8 +70,9 @@ class TilesTerrain(Group):
             on_renderable=on_renderable, on_evicted=on_evicted,
         )
 
-    def update_for_camera(self, camera, viewport_height, max_sse=None,
-                          view_projection=None):
+    def update_for_camera(self, camera: Any, viewport_height: float,
+                          max_sse: Optional[float] = None,
+                          view_projection: Any = None) -> Any:
         """Run one streaming tick and update the visible tile children.
 
         `view_projection` (a 4x4 view-projection matrix) enables frustum culling so
@@ -74,11 +84,12 @@ class TilesTerrain(Group):
         # Preserve node identity for the pass's add/remove observers: only rewrite
         # `children` when the visible set actually changes.
         if list(self.children) != drawables:
-            self.children = drawables
+            # children is a VRML ChildrenTypedField descriptor that coerces a node list.
+            self.children = drawables  # type: ignore[assignment]
         return drawables
 
-    def wait_for_loads(self, timeout=5.0):
+    def wait_for_loads(self, timeout: float = 5.0) -> Any:
         return self.runtime.wait_for_loads(timeout=timeout)
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         self.runtime.shutdown()

@@ -8,8 +8,12 @@ security-hardened :mod:`resolver`; :func:`load_sample` defers to the package's
 """
 
 import urllib.parse
+from typing import TYPE_CHECKING, Optional
 
 from OpenGLContext.loaders.resolver import _fetch_url, fetch_to_cache
+
+if TYPE_CHECKING:
+    from OpenGLContext.loaders.gltf.scene import GLTFScene
 
 # Khronos glTF-Sample-Assets. The older glTF-Sample-Models repo is deprecated
 # (frozen; newer models 404 there), so we resolve against the current assets repo.
@@ -30,12 +34,12 @@ SAMPLE_MODELS = [
 SAMPLE_README_URL = SAMPLE_MODELS_BASE + '/Models.md'
 
 
-def sample_model_url(name):
+def sample_model_url(name: str) -> str:
     """URL of a Khronos sample model's glTF-Binary file."""
     return '%s/%s/glTF-Binary/%s.glb' % (SAMPLE_MODELS_BASE, name, name)
 
 
-def fetch_sample_catalog(cache_dir=None):
+def fetch_sample_catalog(cache_dir: Optional[str] = None) -> list[dict[str, Optional[str]]]:
     """Parse the Khronos 2.0 README.md into the full model catalogue.
 
     Returns a list of dicts ``{name, display, screenshot_url}`` -- every model
@@ -75,7 +79,7 @@ def fetch_sample_catalog(cache_dir=None):
     return rows
 
 
-def reference_screenshot_url(name, cache_dir=None):
+def reference_screenshot_url(name: str, cache_dir: Optional[str] = None) -> Optional[str]:
     """URL of a model's Khronos reference screenshot, or None if not catalogued."""
     for entry in fetch_sample_catalog(cache_dir):
         if entry['name'] == name:
@@ -83,7 +87,7 @@ def reference_screenshot_url(name, cache_dir=None):
     return None
 
 
-def cache_reference_screenshot(name, cache_dir=None):
+def cache_reference_screenshot(name: str, cache_dir: Optional[str] = None) -> Optional[str]:
     """Download (once) a model's Khronos reference screenshot to the disk cache.
 
     Returns the local file path, or None if the model has no catalogued
@@ -97,7 +101,7 @@ def cache_reference_screenshot(name, cache_dir=None):
     return fetch_to_cache(url, cache_dir)
 
 
-def load_sample(name, cache_dir=None) -> "GLTFScene":
+def load_sample(name: str, cache_dir: Optional[str] = None) -> "GLTFScene":
     """Load a Khronos sample model by directory name, trying each glTF variant.
 
     Prefers the self-contained ``glTF-Binary`` (.glb); falls back to ``glTF``

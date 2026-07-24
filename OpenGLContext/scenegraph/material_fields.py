@@ -10,6 +10,7 @@ nothing pinning them consistent. This module centralises the *read* -- the six
 raw factors -- so the three derivations start from identical numbers; each
 consumer still applies its own lighting-model semantics on top.
 """
+from typing import Any
 from collections import namedtuple
 
 # The raw factors, as plain Python (tuples/floats) so consumers are decoupled
@@ -30,7 +31,7 @@ DEFAULT_MATERIAL_FIELDS = MaterialFields(
 )
 
 
-def read_material_fields(material_node):
+def read_material_fields(material_node: Any) -> MaterialFields:
     """Return the raw VRML97 ``Material`` factors as a :class:`MaterialFields`.
 
     ``None`` (or any node without material fields -- ``vrml``'s NULL sentinel, or

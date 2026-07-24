@@ -76,6 +76,12 @@ class TestLodLevelPipeline:
     def test_missing_matrix_is_finest(self):
         assert lod.lod_level(types.SimpleNamespace(), (0, 0, 0), 1.0) == 0
 
+    def test_malformed_matrix_falls_back_to_finest(self):
+        # A present-but-unusable matrix must not crash the draw; the distance
+        # computation raises and the level degrades to finest (0).
+        bad = types.SimpleNamespace(matrix=np.zeros((2, 2), dtype='d'))
+        assert lod.lod_level(bad, (0, 0, 0), 1.0) == 0
+
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))

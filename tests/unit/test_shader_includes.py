@@ -128,6 +128,21 @@ class TestPBRFeatureDefines:
         assert len(pbr_feature_defines(None)) == len(PBR_OPTIONAL_FEATURES)
 
 
+class TestResolveShadowConfig:
+    def test_detection_failure_uses_conservative_baseline(self, monkeypatch):
+        """If capability detection raises, resolve_shadow_config must not
+        propagate the error -- it returns the safe 1-light, no-cube-array baseline."""
+        from OpenGLContext.passes import shadowcaps
+
+        def boom(_ctx):
+            raise RuntimeError("no context")
+
+        monkeypatch.setattr(shadowcaps.ShadowCapabilities, 'detect', boom)
+        n, cube = SP.resolve_shadow_config()
+        assert n == 1
+        assert cube is False
+
+
 # ----------------------------------------------------------- assembled-source locks
 class TestAssembledSource:
     def test_direct_lighting_uses_height_correlated_visibility(self):

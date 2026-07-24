@@ -64,7 +64,7 @@ def max_materials_per_ubo(block_size_bytes: int,
     return max(1, int(block_size_bytes) // int(stride))
 
 
-def geometry_instance_key(path) -> Optional[tuple]:
+def geometry_instance_key(path: Any) -> Optional[tuple]:
     """Instance-batch key for a render path, or None if it has no geometry.
 
     Two records share a batch when they share geometry AND a compatible
@@ -87,7 +87,7 @@ def geometry_instance_key(path) -> Optional[tuple]:
     return (id(geometry), id(material), id(texture))
 
 
-def _material_texture_ids(material):
+def _material_texture_ids(material: Any) -> tuple:
     """Identity tuple of the textures a material references (empty if none).
 
     Two materials with the same textures (or both untextured) can share one
@@ -106,7 +106,7 @@ def _material_texture_ids(material):
     # Fallback for other material types: scan common single-texture attributes,
     # skipping methods (e.g. PBRMaterial.texture is a lookup method, not a node)
     # and unset channels.
-    ids = []
+    ids: list = []
     for attr in ('baseColorTexture', 'metallicRoughnessTexture', 'normalTexture',
                  'occlusionTexture', 'emissiveTexture'):
         tex = getattr(material, attr, None)
@@ -115,7 +115,7 @@ def _material_texture_ids(material):
     return tuple(ids)
 
 
-def _material_pass_signature(material):
+def _material_pass_signature(material: Any) -> tuple:
     """Properties that are pass-level uniforms, not per-instance UBO factors.
 
     ``alphaMode``, transmission and transparency drive shared uniforms / which
@@ -132,7 +132,7 @@ def _material_pass_signature(material):
     return (str(am) if am is not None else None, transmission, transparency)
 
 
-def geometry_texture_key(path):
+def geometry_texture_key(path: Any) -> Optional[tuple]:
     """Stage 2 batch key: geometry + texture set + pass signature, IGNORING
     material identity.
 
@@ -154,7 +154,7 @@ def geometry_texture_key(path):
     return (id(geometry), tex_key, _material_pass_signature(material))
 
 
-def _geometry_content_id(geometry):
+def _geometry_content_id(geometry: Any) -> Any:
     """A content signature for a mesh: two nodes with identical geometry get the
     same id, so distinct-but-identical geometry can batch (a sphere field of many
     same-radius Sphere nodes, glTF repeated meshes, a primitive authored several
@@ -194,7 +194,7 @@ def _geometry_content_id(geometry):
     return cid
 
 
-def geometry_content_key(path):
+def geometry_content_key(path: Any) -> Optional[tuple]:
     """Stage 3 batch key: geometry CONTENT + texture set + pass signature.
 
     Like :func:`geometry_texture_key` but keys geometry by content hash instead of
@@ -218,7 +218,7 @@ def geometry_content_key(path):
     return (content, tex_key, _material_pass_signature(material))
 
 
-def geometry_content_instance_key(path):
+def geometry_content_instance_key(path: Any) -> Optional[tuple]:
     """Content-based key that ALSO splits on material identity.
 
     For passes that bind a single material per instanced group (the VRML97 lit
@@ -240,8 +240,10 @@ def geometry_content_instance_key(path):
     return (content, id(material), id(texture))
 
 
-def build_mesh_gpu(mode, node, positions, normals=None, texcoords=None,
-                   indices=None, cache_key='instance_gpu', depend_fields=()):
+def build_mesh_gpu(mode: Any, node: Any, positions: Any, normals: Any = None,
+                   texcoords: Any = None, indices: Any = None,
+                   cache_key: str = 'instance_gpu',
+                   depend_fields: tuple = ()) -> Any:
     """Build (and cache on the context) a PBRMesh-style ``_MeshGPU`` from raw arrays.
 
     Lets any geometry become instanceable by handing over its expanded vertex
@@ -258,6 +260,13 @@ def build_mesh_gpu(mode, node, positions, normals=None, texcoords=None,
     class _ArrayMesh(object):
         __slots__ = ('positions', 'normals', 'texcoords', 'texcoords1',
                      'tangents', 'colors', 'indices')
+        positions: np.ndarray
+        normals: Optional[np.ndarray]
+        texcoords: Optional[np.ndarray]
+        texcoords1: Optional[np.ndarray]
+        tangents: Optional[np.ndarray]
+        colors: Optional[np.ndarray]
+        indices: Optional[np.ndarray]
 
     m = _ArrayMesh()
     m.positions = np.ascontiguousarray(positions, dtype=np.float32)
@@ -277,7 +286,7 @@ def build_mesh_gpu(mode, node, positions, normals=None, texcoords=None,
     return gpu
 
 
-def group_material_table(group):
+def group_material_table(group: Any) -> tuple[list, list]:
     """Distinct materials of a group + a per-member index into that table.
 
     Returns (materials, indices): ``materials`` lists the group's distinct
@@ -285,9 +294,9 @@ def group_material_table(group):
     list. This is what the material-array UBO is packed from and what the
     per-instance material-index attribute carries.
     """
-    materials = []
-    slot = {}
-    indices = []
+    materials: list = []
+    slot: dict = {}
+    indices: list = []
     for rec in group.members:
         shape = rec[-1][-1]
         appearance = getattr(shape, 'appearance', None)
@@ -300,7 +309,7 @@ def group_material_table(group):
     return materials, indices
 
 
-def morton_order(positions):
+def morton_order(positions: Any) -> list:
     """Indices that sort ``positions`` (Nx3) by 3D Morton (Z-order) code.
 
     Morton codes interleave the bits of the quantized x/y/z coordinates, so points
@@ -319,7 +328,7 @@ def morton_order(positions):
     span[span == 0] = 1.0
     q = np.clip(((pts - lo) / span * 1023.0).astype(np.uint64), 0, 1023)
 
-    def _spread(v):
+    def _spread(v: np.ndarray) -> np.ndarray:
         # Spread 10 low bits of v so there are two zero bits between each.
         v = v & 0x3FF
         v = (v | (v << 16)) & 0x030000FF
@@ -342,13 +351,14 @@ class Cluster:
 
     __slots__ = ('indices', 'aabb_min', 'aabb_max')
 
-    def __init__(self, indices, aabb_min, aabb_max):
+    def __init__(self, indices: list, aabb_min: np.ndarray,
+                 aabb_max: np.ndarray) -> None:
         self.indices = indices
         self.aabb_min = aabb_min
         self.aabb_max = aabb_max
 
 
-def build_clusters(positions, cluster_size=64):
+def build_clusters(positions: Any, cluster_size: int = 64) -> list[Cluster]:
     """Partition instance ``positions`` (Nx3) into Morton-ordered clusters.
 
     Each cluster holds up to ``cluster_size`` spatially-adjacent instances and its
@@ -358,7 +368,7 @@ def build_clusters(positions, cluster_size=64):
     """
     pts = np.asarray(positions, dtype='f')
     order = morton_order(pts)
-    clusters = []
+    clusters: list[Cluster] = []
     for start in range(0, len(order), cluster_size):
         idx = order[start:start + cluster_size]
         block = pts[idx]
@@ -366,8 +376,8 @@ def build_clusters(positions, cluster_size=64):
     return clusters
 
 
-def cluster_cull(records, positions, cluster_visible, instance_visible,
-                 cluster_size=64):
+def cluster_cull(records: list, positions: Any, cluster_visible: Callable,
+                 instance_visible: Callable, cluster_size: int = 64) -> list:
     """Return the visible subset of ``records`` using cluster pre-culling.
 
     ``positions`` are the records' world translations (Nx3). Instances are grouped
@@ -402,20 +412,21 @@ class InstanceGroup:
 
     __slots__ = ('key', 'geometry', 'appearance', 'members')
 
-    def __init__(self, key, geometry, appearance, members):
+    def __init__(self, key: Any, geometry: Any, appearance: Any,
+                 members: list) -> None:
         self.key = key
         self.geometry = geometry
         self.appearance = appearance
         self.members = members
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.members)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return 'InstanceGroup(%d instances of %r)' % (len(self.members), self.geometry)
 
 
-def _winding_sign(mv) -> int:
+def _winding_sign(mv: Any) -> int:
     """Sign of a modelview's upper-3x3 determinant (-1 flips triangle winding).
 
     A direct 3x3 solve (not LAPACK), tolerant of a numpy array or a nested list.
@@ -514,9 +525,11 @@ class GLCapabilities(object):
     __slots__ = ('version', 'max_uniform_block_size', 'ssbo',
                  'multi_draw_indirect', 'bindless_texture', 'extensions')
 
-    def __init__(self, version=(3, 3), max_uniform_block_size=16384,
-                 ssbo=False, multi_draw_indirect=False, bindless_texture=False,
-                 extensions=()):
+    def __init__(self, version: tuple = (3, 3),
+                 max_uniform_block_size: int = 16384,
+                 ssbo: bool = False, multi_draw_indirect: bool = False,
+                 bindless_texture: bool = False,
+                 extensions: Any = ()) -> None:
         self.version = version
         self.max_uniform_block_size = max_uniform_block_size
         self.ssbo = ssbo
@@ -528,7 +541,7 @@ class GLCapabilities(object):
         """Per-instance material array capacity via a UBO (UBO-path chunk size)."""
         return max_materials_per_ubo(self.max_uniform_block_size)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return ('GLCapabilities(version=%r ubo=%d ssbo=%r mdi=%r bindless=%r)'
                 % (self.version, self.max_uniform_block_size, self.ssbo,
                    self.multi_draw_indirect, self.bindless_texture))
@@ -548,7 +561,7 @@ def detect_capabilities(force: bool = False) -> GLCapabilities:
         return _CAPS_CACHE
     try:
         from OpenGL.GL import (
-            glGetIntegerv, glGetString, GL_MAX_UNIFORM_BLOCK_SIZE,
+            glGetIntegerv, GL_MAX_UNIFORM_BLOCK_SIZE,
             GL_MAJOR_VERSION, GL_MINOR_VERSION, GL_NUM_EXTENSIONS,
             GL_EXTENSIONS,
         )
@@ -593,10 +606,10 @@ def detect_capabilities(force: bool = False) -> GLCapabilities:
 # GL instanced draw for a PBRMesh's cached VAO + a per-instance data buffer.    #
 # --------------------------------------------------------------------------- #
 
-_INSTANCE_DTYPE = None
+_INSTANCE_DTYPE: Optional[np.dtype] = None
 
 
-def _instance_dtype():
+def _instance_dtype() -> np.dtype:
     """One instance: mat4 modelview (16 f32) + object id (u32) + material idx (u32)."""
     global _INSTANCE_DTYPE
     if _INSTANCE_DTYPE is None:
@@ -604,7 +617,8 @@ def _instance_dtype():
     return _INSTANCE_DTYPE
 
 
-def pack_instance_buffer(modelviews, object_ids, material_indices=None):
+def pack_instance_buffer(modelviews: Any, object_ids: Any,
+                         material_indices: Any = None) -> np.ndarray:
     """Pack per-instance modelviews + object ids + material indices.
 
     The modelview is stored row-major (as OpenGLContext keeps it); read straight
@@ -628,7 +642,7 @@ def pack_instance_buffer(modelviews, object_ids, material_indices=None):
     return arr
 
 
-def _build_instance_vao(gpu, arr, stride):
+def _build_instance_vao(gpu: Any, arr: np.ndarray, stride: int) -> tuple:
     """Build the persistent instanced-draw VAO + instance VBO for ``gpu`` once.
 
     The VAO records the mesh's static attribute VBOs (0..4), its element buffer,
@@ -679,7 +693,8 @@ def _build_instance_vao(gpu, arr, stride):
     return vao, inst_vbo
 
 
-def draw_instanced_mesh(gpu, modelviews, object_ids, material_indices=None):
+def draw_instanced_mesh(gpu: Any, modelviews: Any, object_ids: Any,
+                        material_indices: Any = None) -> int:
     """Draw ``gpu`` (a PBRMesh ``_MeshGPU``) once per instance in one GL call.
 
     Uses a VAO + per-instance VBO cached on ``gpu`` (built once by

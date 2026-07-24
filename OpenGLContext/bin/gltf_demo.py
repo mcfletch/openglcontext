@@ -27,11 +27,12 @@ Start elsewhere:  MODEL=DamagedHelmet oglc-gltf-demo
 Every ``oglc-gltf`` command-line option applies (``--shadows/--no-shadows``,
 ``--lights``, ``--ibl-intensity``, ...); see ``oglc-gltf-demo -h``.
 """
-import math
+import argparse
 import os
 import sys
 import urllib.request
 from dataclasses import dataclass
+from typing import Any
 
 os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
 
@@ -102,7 +103,7 @@ for _name in _BLOOM_MODELS:
         fly=_base.fly, background=_base.background, bloom=True)
 
 
-def default_env_prefix():
+def default_env_prefix() -> str | None:
     """Path prefix of the bundled demo environment cubemap (or an override).
 
     ``OPENGLCONTEXT_ENV_CUBEMAP`` wins; otherwise the faces shipped under the
@@ -119,17 +120,17 @@ def default_env_prefix():
     return None
 
 
-def profile_for(name):
+def profile_for(name: str) -> ModelProfile:
     """Return the :class:`ModelProfile` for a model name (default if unlisted)."""
     return MODEL_PROFILES.get(name, DEFAULT_PROFILE)
 
 
-def resolve_bloom(name):
+def resolve_bloom(name: str) -> bool:
     """Whether the per-model profile asks for HDR bloom (emissive glow)."""
     return profile_for(name).bloom
 
 
-def resolve_background(config, name):
+def resolve_background(config: argparse.Namespace, name: str) -> Any:
     """Background spec for a model: explicit --background wins, else the per-model
     profile ('cube'/'sky'), else the demo default (black 'none')."""
     if getattr(config, '_background_explicit', False):
@@ -142,7 +143,7 @@ def resolve_background(config, name):
     return config.background
 
 
-def resolve_view(config, name):
+def resolve_view(config: argparse.Namespace, name: str) -> tuple[float, bool]:
     """(yaw, turntable) for a model, honouring --no-rotate / explicit --turntable /
     explicit --yaw over the per-model profile."""
     prof = profile_for(name)
@@ -156,7 +157,7 @@ def resolve_view(config, name):
     return yaw, turntable
 
 
-def resolve_physics(config, name):
+def resolve_physics(config: argparse.Namespace, name: str) -> tuple[bool, bool]:
     """(physics, fly) for a model. A --capture run never walks (deterministic
     frame); an explicit --physics/--no-physics overrides the per-model profile."""
     prof = profile_for(name)
@@ -170,13 +171,13 @@ def resolve_physics(config, name):
 class TestContext(ViewerContext):
     """The viewer, browsing the sample catalogue instead of one file."""
 
-    def _prepare_source(self):
+    def _prepare_source(self) -> None:
         self.source = None
         self.overlay_error = False
-        self._ref_textures = {}     # model name -> (Texture, aspect) or False
-        self._ref_current = None
+        self._ref_textures: dict[str, Any] = {}     # model name -> (Texture, aspect) or False
+        self._ref_current: Any = None
         try:
-            self.catalog = gltf.fetch_sample_catalog()
+            self.catalog: Any = gltf.fetch_sample_catalog()
         except Exception as err:
             print("Could not fetch the model catalogue: %s" % err)
             self.catalog = [{'name': n, 'display': n, 'screenshot_url': None}
@@ -190,7 +191,7 @@ class TestContext(ViewerContext):
         else:
             self.index = 0
 
-    def _load_scene(self):
+    def _load_scene(self) -> Any:
         entry = self.catalog[self.index]
         label = "[%d/%d] %s" % (self.index + 1, len(self.catalog), entry['display'])
         self._ref_current = entry['name']
@@ -207,11 +208,11 @@ class TestContext(ViewerContext):
         return scene
 
     # -- async catalogue loading -----------------------------------------
-    def _request_initial_scene(self):
+    def _request_initial_scene(self) -> None:
         """Pull the initial catalogue model in the background instead of a file."""
         self._request_current_model()
 
-    def _request_current_model(self):
+    def _request_current_model(self) -> None:
         """Kick off a background load of the model at ``self.index``. The window keeps
         rendering the previous model (with a "Loading ..." overlay) until it lands."""
         entry = self.catalog[self.index]
@@ -223,7 +224,7 @@ class TestContext(ViewerContext):
         self._request_scene(lambda: gltf.load_sample(name),
                             label="Loading %s ..." % label)
 
-    def _apply_loaded(self, scene):
+    def _apply_loaded(self, scene: Any) -> None:
         # _build_scenegraph reads _ref_current for the per-model profile, so set the
         # newly loaded model's identity before building.
         self._ref_current = self._pending_name
@@ -232,7 +233,7 @@ class TestContext(ViewerContext):
         self._build_scenegraph(scene)
         self._on_scene_ready()
 
-    def _apply_failed(self, error):
+    def _apply_failed(self, error: BaseException | None) -> None:
         self._ref_current = self._pending_name
         self.overlay_error = True
         msg = str(error).splitlines()[0][:50] if error else 'load failed'
@@ -240,11 +241,11 @@ class TestContext(ViewerContext):
         self.overlay_text = self._label
         print("  " + self._label.replace("\n", "  "))
 
-    def _on_scene_ready(self):
+    def _on_scene_ready(self) -> None:
         self._scene_loaded = True
         self._apply_physics_profile()
 
-    def _build_scenegraph(self, scene):
+    def _build_scenegraph(self, scene: Any) -> None:
         # Apply the per-model facing/turntable/background BEFORE the base builds the
         # scenegraph (it reads config.yaw/turntable and calls _make_background there).
         self.config.yaw, self.config.turntable = resolve_view(
@@ -255,7 +256,7 @@ class TestContext(ViewerContext):
         ViewerContext._build_scenegraph(self, scene)
         self.overlay_text = self._label
 
-    def _setup_physics(self):
+    def _setup_physics(self) -> None:
         # Enable physics for the *initial* model only if its profile asks for it.
         physics, fly = resolve_physics(self.config, getattr(self, '_ref_current', ''))
         self.config.physics = physics
@@ -265,7 +266,7 @@ class TestContext(ViewerContext):
             if fly:
                 self._physics.set_fly(True)
 
-    def _apply_physics_profile(self):
+    def _apply_physics_profile(self) -> None:
         """Turn physics on/off for the newly loaded model per its profile.
 
         Called on model *switch* (after `_setup_physics` has captured the free-fly
@@ -292,7 +293,7 @@ class TestContext(ViewerContext):
     PREV_MODEL_KEYS = ('p', '<pageup>')
 
     # -- catalogue navigation --------------------------------------------
-    def setupCallbacks(self):
+    def setupCallbacks(self) -> None:  # pragma: no cover - binds live event handlers
         # Skip the viewer's PageUp/PageDown viewpoint bindings (this browser has no
         # per-model cameras); n/p and PageUp/PageDown advance the *model* instead.
         from OpenGLContext import testingcontext
@@ -303,18 +304,18 @@ class TestContext(ViewerContext):
             self.addEventHandler('keyboard', name=key, function=self._prev_model)
         self.addEventHandler('keyboard', name='<F2>', function=self._request_screenshot)
 
-    def _next_model(self, event=None):
+    def _next_model(self, event: Any = None) -> None:
         self._go(1)
 
-    def _prev_model(self, event=None):
+    def _prev_model(self, event: Any = None) -> None:
         self._go(-1)
 
-    def _go(self, delta):
+    def _go(self, delta: int) -> None:
         self.index = (self.index + delta) % len(self.catalog)
         self._request_current_model()
 
     # -- overlays --------------------------------------------------------
-    def _draw_overlay(self, shader):
+    def _draw_overlay(self, shader: Any) -> None:  # pragma: no cover - GL text overlay draw
         vp = self._viewport()
         if vp is None or not self.overlay_text:
             return
@@ -330,7 +331,7 @@ class TestContext(ViewerContext):
         except Exception:
             pass
 
-    def _extra_overlay(self, shader):
+    def _extra_overlay(self, shader: Any) -> None:  # pragma: no cover - GL thumbnail blit
         """Draw the model's reference screenshot thumbnail, top-right."""
         if self.overlay_error:
             return
@@ -360,14 +361,14 @@ class TestContext(ViewerContext):
         except Exception:
             pass
 
-    def _reference_texture(self):
+    def _reference_texture(self) -> Any:
         """Return (Texture, aspect) for the current model's reference image, or None."""
         name = self._ref_current
         if name in self._ref_textures:
             return self._ref_textures[name] or None
         entry = self.catalog[self.index]
         url = entry.get('screenshot_url')
-        result = False
+        result: Any = False
         if url:
             try:
                 from io import BytesIO
@@ -383,7 +384,7 @@ class TestContext(ViewerContext):
         return result or None
 
 
-def _blit_texture(shader, texture_id, ndc_rect):
+def _blit_texture(shader: Any, texture_id: Any, ndc_rect: Any) -> None:  # pragma: no cover - raw GL quad blit
     """Draw a textured quad in NDC space using the unlit program's texture mode."""
     import ctypes
     import numpy as np
@@ -449,7 +450,7 @@ def _blit_texture(shader, texture_id, ndc_rect):
     shader.use(lit=True)
 
 
-def demo_config(argv=None):
+def demo_config(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse + massage the browser's config (no GL). Separated so it is testable.
 
     The browser centres + turntables every model and ignores embedded cameras, so
@@ -483,7 +484,7 @@ def demo_config(argv=None):
     return args
 
 
-def apply_environment(args):
+def apply_environment(args: argparse.Namespace) -> None:
     """Set the render env so metals reflect a real environment in the browser.
 
     Loads the bundled environment cubemap into the IBL probe and pins full IBL, so
@@ -504,7 +505,7 @@ def apply_environment(args):
         os.environ['OPENGLCONTEXT_IBL_INTENSITY'] = '0.9'
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> Any:
     args = demo_config(argv)
     apply_environment(args)
     apply_render_env(args)             # an explicit --ibl-intensity still wins here
@@ -513,5 +514,5 @@ def main(argv=None):
         else TestContext.ContextMainLoop()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
     main()

@@ -33,6 +33,8 @@ import os
 import sys
 import tempfile
 import time
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, cast
 
 os.environ.setdefault("OPENGLCONTEXT_PROFILE", "core")
 os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")
@@ -43,11 +45,14 @@ os.environ.setdefault("OPENGLCONTEXT_SHADOW_CASCADES", "3")
 
 import numpy as np
 from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
-from OpenGLContext.scenegraph.basenodes import (
-    sceneGraph, DirectionalLight, Background, Shape, Cone, Box, Appearance, Material,
-)
+from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
+from OpenGLContext.scenegraph.light import DirectionalLight
+from OpenGLContext.scenegraph.background import Background
+from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.scenegraph.quadrics import Cone
+from OpenGLContext.scenegraph.box import Box
+from OpenGLContext.scenegraph.appearance import Appearance
+from OpenGLContext.scenegraph.material import Material
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 from OpenGLContext.scenegraph.group import Group
 from omi_physics.world import PhysicsWorld
@@ -63,18 +68,24 @@ from OpenGLContext.loaders.tiles3d import foliage
 from OpenGLContext.loaders import cc0
 from OpenGLContext.loaders.tiles3d.frustum import view_projection
 
+if TYPE_CHECKING:
+    from OpenGLContext.context import Context as BaseContext
+    from OpenGLContext.loaders.tiles3d.scatter import Scatter
+else:
+    BaseContext = testingcontext.getInteractive()
+
 HOLD = 0.6           # seconds a key event keeps driving movement; wide enough to bridge
                      # the OS char-repeat initial delay when only 'keypress' events come
                      # (key-up on 'keyboard', where available, stops movement promptly)
 
 
-def _slice_scatter(s, i, n):
+def _slice_scatter(s: "Scatter", i: int, n: int) -> "Scatter":
     """Every n-th placement, so a scatter can be split across several prototypes."""
     from OpenGLContext.loaders.tiles3d.scatter import Scatter
     return Scatter(s.positions[i::n], s.yaws[i::n], s.scales[i::n])
 
 
-def _resolve_world(cfg):
+def _resolve_world(cfg: argparse.Namespace) -> tuple[str, "P.HeightFn | None"]:
     """Return (tileset_path, height_fn|None). height_fn drives collision + vegetation."""
     if cfg.source and cfg.source.endswith(".json"):
         return cfg.source, None
@@ -91,11 +102,11 @@ def _resolve_world(cfg):
     return path, height_fn
 
 
-def _surface(height_fn, x, z):
+def _surface(height_fn: "P.HeightFn", x: float, z: float) -> float:
     return max(float(height_fn(np.array([x]), np.array([z]))[0]), P.WATER_LEVEL)
 
 
-def _water(extent):
+def _water(extent: float) -> Shape:
     """A large translucent water surface at the water level."""
     return Shape(
         geometry=Box(size=(extent * 1.2, 0.4, extent * 1.2)),
@@ -104,7 +115,7 @@ def _water(extent):
             specularColor=(0.5, 0.6, 0.7), shininess=0.9)))
 
 
-def _walkable_spawn(height_fn):
+def _walkable_spawn(height_fn: "P.HeightFn") -> tuple[float, float, float]:
     best, best_slope = (0.0, 0.0), 1e9
     for x in np.linspace(-300, 300, 13):
         for z in np.linspace(-300, 300, 13):
@@ -118,9 +129,13 @@ def _walkable_spawn(height_fn):
 
 
 class TerrainContext(BaseContext):
-    config = None
+    config: Any = None
+    # Members supplied by the interactive runtime base (event + navigation mixins)
+    # that the minimal type-check-time ``Context`` alias does not expose.
+    addEventHandler: Any
+    movementManager: Any
 
-    def OnInit(self):
+    def OnInit(self) -> None:  # pragma: no cover - live GL context, streaming + upload
         from OpenGLContext.physics.demo import disable_vsync
         disable_vsync()
         cfg = self.config
@@ -184,8 +199,9 @@ class TerrainContext(BaseContext):
         bark_maps = cc0.try_material("bark") or {}
         bark = bark_maps.get("color")
         # Materials the ground splat blends: [dirt, rock, needle/litter].
-        self._splat_mats = [m.get("color") for m in
-                            (dirt, self._rock_maps or dirt, needle) if m.get("color")]
+        self._splat_mats = cast("list[str]", [m.get("color") for m in
+                                (dirt, self._rock_maps or dirt, needle)
+                                if m.get("color")])
 
         # Textured, alpha-cut foliage. Grass and flowers don't cast shadows (the big
         # cost); trees and rocks do.
@@ -212,17 +228,18 @@ class TerrainContext(BaseContext):
         # don't start inside a trunk.
         self._tree_keep = lambda p: (
             (p[:, 1] > P.WATER_LEVEL + 2.0) & (p[:, 1] < 135.0)
-            & (foliage.slope01(self.height_fn, p[:, 0], p[:, 2]) < 0.42)
+            & (foliage.slope01(cast("P.HeightFn", self.height_fn), p[:, 0], p[:, 2])
+               < 0.42)
             & (np.hypot(p[:, 0] - self._spawn_xz[0],
                         p[:, 2] - self._spawn_xz[1]) > 6.0))
-        self._ground_node = None
-        self._ground_center = None
-        self._detail_node = None
-        self._detail_center = None
-        self._trees_node = None
-        self._grass_node = None
-        self._trees_center = None
-        self._grass_center = None
+        self._ground_node: Any = None
+        self._ground_center: Any = None
+        self._detail_node: Any = None
+        self._detail_center: Any = None
+        self._trees_node: Any = None
+        self._grass_node: Any = None
+        self._trees_center: Any = None
+        self._grass_center: Any = None
         if not self._veg:
             self._refresh_ground((sx, sy, sz))
             self._refresh_trees((sx, sy, sz))
@@ -251,7 +268,7 @@ class TerrainContext(BaseContext):
         # deliver only char events, so relying on 'keyboard' alone leaves WASD dead
         # while single-shot 'keypress' toggles (g/space) still work. HOLD is wide
         # enough to bridge the OS char-repeat initial delay when only char events come.
-        self._keys = {}
+        self._keys: dict[str, float] = {}
         for k in "wsadqerf":
             self.addEventHandler("keyboard", name=k, state=1, function=self._on_key)
             self.addEventHandler("keyboard", name=k, state=0, function=self._on_key_up)
@@ -270,36 +287,36 @@ class TerrainContext(BaseContext):
         self._last = time.time()
 
     # -- input -----------------------------------------------------------
-    def _on_key(self, event):
+    def _on_key(self, event: Any) -> None:
         self._keys[event.name] = time.time()
 
-    def _on_key_up(self, event):
+    def _on_key_up(self, event: Any) -> None:
         self._keys.pop(event.name, None)
 
-    def _shift_on(self, event):
+    def _shift_on(self, event: Any) -> None:
         self._sprint = True
 
-    def _shift_off(self, event):
+    def _shift_off(self, event: Any) -> None:
         self._sprint = False
 
-    def _on_jump(self, event):
+    def _on_jump(self, event: Any) -> None:
         self.avatar.jump()
 
-    def _toggle_fly(self, event):
+    def _toggle_fly(self, event: Any) -> None:
         self._flying = not self._flying
         self.avatar.set_fly(self._flying)
 
-    def _faster(self, event):
+    def _faster(self, event: Any) -> None:
         self._mult = min(self._mult * 1.5, 8.0)
 
-    def _slower(self, event):
+    def _slower(self, event: Any) -> None:
         self._mult = max(self._mult / 1.5, 0.25)
 
     # -- vegetation (camera-following forest) ---------------------------
     _KEEP = staticmethod(
         lambda p: (p[:, 1] > P.WATER_LEVEL + 2.0) & (p[:, 1] < 135.0))
 
-    def _swap_child(self, old, new):
+    def _swap_child(self, old: Any, new: Any) -> None:
         kids = list(self.sg.children)
         if old is not None and old in kids:
             kids[kids.index(old)] = new
@@ -307,11 +324,12 @@ class TerrainContext(BaseContext):
             kids.append(new)
         self.sg.children = kids
 
-    def _refresh_trees(self, center):
+    def _refresh_trees(self, center: Sequence[float]) -> None:
         d = self.config.density
+        hf = cast("P.HeightFn", self.height_fn)
         c = (float(center[0]), 0.0, float(center[2]))
         # A dense forest: full-mesh conifers close in, cheap billboards beyond.
-        trees = scatter_disc(c, 240.0, 0.03 * d, seed=101, height_fn=self.height_fn,
+        trees = scatter_disc(c, 240.0, 0.03 * d, seed=101, height_fn=hf,
                              keep=self._tree_keep, scale_range=(0.7, 1.8),
                              water_level=P.WATER_LEVEL)
         near, far = partition_by_distance(trees, c, 75.0)
@@ -322,23 +340,25 @@ class TerrainContext(BaseContext):
         self._trees_center = np.array([c[0], c[2]])
         self._tree_pos = trees.positions[:, [0, 2]].astype("d")
 
-    def _refresh_ground(self, center):
+    def _refresh_ground(self, center: Sequence[float]) -> None:
         c = (float(center[0]), 0.0, float(center[2]))
-        node = foliage.ground_patch_blended(c, 150.0, self.height_fn,
+        node = foliage.ground_patch_blended(c, 150.0,
+                                            cast("P.HeightFn", self.height_fn),
                                             self._splat_mats, res=52, tex_size=1024,
                                             water_level=P.WATER_LEVEL)
         self._swap_child(self._ground_node, node)
         self._ground_node = node
         self._ground_center = np.array([c[0], c[2]])
 
-    def _refresh_grass(self, center):
+    def _refresh_grass(self, center: Sequence[float]) -> None:
         d = self.config.density
+        hf = cast("P.HeightFn", self.height_fn)
         c = (float(center[0]), 0.0, float(center[2]))
         # Very dense near the camera; sparser, single-plane cards further out.
-        near = scatter_disc(c, 18.0, 1.2 * d, seed=303, height_fn=self.height_fn,
+        near = scatter_disc(c, 18.0, 1.2 * d, seed=303, height_fn=hf,
                             keep=self._KEEP, scale_range=(0.7, 1.6),
                             water_level=P.WATER_LEVEL)
-        far = scatter_disc(c, 55.0, 0.12 * d, seed=404, height_fn=self.height_fn,
+        far = scatter_disc(c, 55.0, 0.12 * d, seed=404, height_fn=hf,
                            keep=self._KEEP, scale_range=(0.8, 1.7),
                            water_level=P.WATER_LEVEL)
         node = Group(children=[group_from_scatter(near, self._grass_near),
@@ -347,13 +367,16 @@ class TerrainContext(BaseContext):
         self._grass_node = node
         self._grass_center = np.array([c[0], c[2]])
 
-    def _refresh_detail(self, center):
+    def _refresh_detail(self, center: Sequence[float]) -> None:
         """Rocks, pebbles, wildflowers and fallen branches near the camera."""
         d = self.config.density
         c = (float(center[0]), 0.0, float(center[2]))
-        hf = self.height_fn
-        rocky = lambda p: self._KEEP(p) & (foliage.slope01(hf, p[:, 0], p[:, 2]) > 0.12)
-        kids = []
+        hf = cast("P.HeightFn", self.height_fn)
+
+        def rocky(p: np.ndarray) -> np.ndarray:
+            return self._KEEP(p) & (foliage.slope01(hf, p[:, 0], p[:, 2]) > 0.12)
+
+        kids: list[Any] = []
         if self._rock_protos:
             rocks = scatter_disc(c, 90.0, 0.004 * d, seed=501, height_fn=hf,
                                  keep=self._KEEP, scale_range=(0.6, 2.4),
@@ -380,7 +403,7 @@ class TerrainContext(BaseContext):
         self._detail_node = node
         self._detail_center = np.array([c[0], c[2]])
 
-    def _maybe_refresh_vegetation(self, eye):
+    def _maybe_refresh_vegetation(self, eye: Sequence[float]) -> None:
         if self._veg:
             return
         here = np.array([eye[0], eye[2]])
@@ -393,7 +416,7 @@ class TerrainContext(BaseContext):
         if np.linalg.norm(here - self._ground_center) > 70.0:
             self._refresh_ground(eye)
 
-    def _view_projection(self, eye):
+    def _view_projection(self, eye: Sequence[float]) -> np.ndarray:
         yaw = self.avatar.yaw if getattr(self, "avatar", None) else 0.6
         pitch = self.avatar.pitch if getattr(self, "avatar", None) else -0.1
         fwd = (math.sin(yaw) * math.cos(pitch), math.sin(pitch),
@@ -402,7 +425,7 @@ class TerrainContext(BaseContext):
         return view_projection(eye, centre, (0, 1, 0), math.radians(60), 1.4,
                                1.0, 7000.0)
 
-    def _ground_clamp(self):
+    def _ground_clamp(self) -> None:
         """Keep the avatar on the exact terrain surface (walk mode).
 
         Snaps the capsule base to `height_fn(x, z)` whenever it is at or below the
@@ -425,7 +448,7 @@ class TerrainContext(BaseContext):
             if not self._flying:
                 ch.grounded = True
 
-    def _object_collision(self):
+    def _object_collision(self) -> None:
         """Push the avatar out of tree trunks and rocks (analytic capsule vs cylinder/
         sphere). Vectorised over the current collider set, so it's cheap."""
         ch = self.avatar.character
@@ -437,7 +460,7 @@ class TerrainContext(BaseContext):
             dx = px - pos[:, 0]
             dz = pz - pos[:, 1]
             d = np.hypot(dx, dz)
-            r = (rad if np.ndim(rad) else np.full(len(pos), rad)) + cr
+            r = cast(np.ndarray, rad if np.ndim(rad) else np.full(len(pos), rad)) + cr
             hit = (d < r) & (d > 1e-4)
             if hit.any():
                 k = np.argmin(d - r)          # resolve the deepest overlap
@@ -446,20 +469,25 @@ class TerrainContext(BaseContext):
                     ch.position[0] = px + dx[k] / d[k] * push
                     ch.position[2] = pz + dz[k] / d[k] * push
 
-    def _stream(self, eye):
+    def _stream(self, eye: Sequence[float]) -> None:
         if self.terrain is not None:
             self.terrain.update_for_camera(eye, self.getViewPort()[1] or 700,
                                            view_projection=self._view_projection(eye))
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *args: Any) -> int:
         if getattr(self, "avatar", None) is None:
             return 0
+        # The per-frame walk/fly movement loop below needs a live navigator +
+        # window; it is driven by the terrain render/subprocess tests.
+        return self._on_idle_move(*args)  # pragma: no cover - interactive movement loop
+
+    def _on_idle_move(self, *args: Any) -> int:  # pragma: no cover - interactive loop
         now = time.time()
         dt = min(now - self._last, 0.05)
         self._last = now
         nav = self.avatar
 
-        def held(k):
+        def held(k: str) -> bool:
             return now - self._keys.get(k, 0) < HOLD
         fwd = (1.0 if held("w") else 0.0) - (1.0 if held("s") else 0.0)
         strafe = (1.0 if held("d") else 0.0) - (1.0 if held("a") else 0.0)
@@ -487,7 +515,7 @@ class TerrainContext(BaseContext):
         return 1
 
 
-def build_parser():
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="oglc-terrain", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -519,7 +547,7 @@ def build_parser():
     return p
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> Any:
     args = build_parser().parse_args(argv)
     if args.source and args.dem:
         build_parser().error("give either a tileset.json or --dem, not both")
@@ -530,5 +558,5 @@ def main(argv=None):
     return TerrainContext.ContextMainLoop()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
     main()

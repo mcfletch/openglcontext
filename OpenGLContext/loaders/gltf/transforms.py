@@ -10,20 +10,28 @@ the scene builder and mesh loader share one implementation of each.
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING, Sequence, Tuple
 
 import numpy as np
 
-from OpenGLContext.scenegraph.basenodes import Transform
 from OpenGLContext.scenegraph.transform import MatrixTransform
 from vrml.vrml97 import transformmatrix
 
+if TYPE_CHECKING:
+    import pygltflib
+    # ``Transform`` is registered into basenodes dynamically (plugin entry points),
+    # so mypy cannot see it there; take the type from its defining module.
+    from OpenGLContext.scenegraph.transform import Transform
+else:
+    from OpenGLContext.scenegraph.basenodes import Transform
 
-def _bounds_from_points(points):
+
+def _bounds_from_points(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     p = np.asarray(points, dtype='d')
     return p.min(axis=0), p.max(axis=0)
 
 
-def _transform_for(node, force_trs=False):
+def _transform_for(node: "pygltflib.Node", force_trs: bool = False) -> "Transform":
     """Build a Transform whose matrix equals the node's local TRS/matrix.
 
     ``force_trs`` builds a plain TRS ``Transform`` even if the node carries a
@@ -49,7 +57,7 @@ def _transform_for(node, force_trs=False):
     return t
 
 
-def _quat_to_xyzr(q):
+def _quat_to_xyzr(q: Sequence[float]) -> Tuple[float, float, float, float]:
     x, y, z, w = [float(v) for v in q]
     # Normalize first: a slightly non-unit quaternion (common in exported assets)
     # otherwise yields a wrong angle from acos(w) and an unnormalized axis.
@@ -65,7 +73,7 @@ def _quat_to_xyzr(q):
     return (x / s, y / s, z / s, float(angle))
 
 
-def _local_matrix_rv(transform_node):
+def _local_matrix_rv(transform_node: "Transform") -> np.ndarray:
     """Row-vector local matrix for a Transform (matches transformMatrix usage)."""
     baked = getattr(transform_node, '_forward', None)
     if baked is not None:
@@ -79,7 +87,8 @@ def _local_matrix_rv(transform_node):
     return m if m.shape == (4, 4) else np.eye(4)
 
 
-def look_orientation(forward, up=(0, 1, 0)):
+def look_orientation(forward: Sequence[float],
+                     up: Sequence[float] = (0, 1, 0)) -> Tuple[float, float, float, float]:
     """VRML97 axis-angle orientation (x, y, z, angle) for a camera looking along
     ``forward`` with roughly ``up`` upward.
 
@@ -119,7 +128,8 @@ def look_orientation(forward, up=(0, 1, 0)):
     return (qx / s, qy / s, qz / s, angle)
 
 
-def _expand_bounds(world_matrix, local_bounds, world_min, world_max):
+def _expand_bounds(world_matrix: np.ndarray, local_bounds: Tuple[np.ndarray, np.ndarray],
+                   world_min: np.ndarray, world_max: np.ndarray) -> None:
     lo, hi = local_bounds
     corners = np.array([[x, y, z, 1.0]
                         for x in (lo[0], hi[0])

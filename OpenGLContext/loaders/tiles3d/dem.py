@@ -6,12 +6,19 @@ Tiles quadtree. This is the real-world-data path: export a DEM from QGIS/USGS/SR
 a grayscale image and bake it. Bilinear sampling gives smooth terrain between texels;
 positions outside the raster clamp to the edge.
 """
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 
 from OpenGLContext.loaders.tiles3d.procedural import build_terrain_tileset
 
+HeightFn = Callable[[Any, Any], np.ndarray]
 
-def height_function_from_array(heights, extent, height_scale, base=0.0):
+
+def height_function_from_array(
+    heights: np.ndarray, extent: float, height_scale: float, base: float = 0.0
+) -> HeightFn:
     """A height_fn(x, z) sampling `heights` (H,W) bilinearly over [-extent/2, extent/2].
 
     `height_scale` maps the raster's 0..1 range to world metres; `base` offsets it.
@@ -20,7 +27,7 @@ def height_function_from_array(heights, extent, height_scale, base=0.0):
     h, w = heights.shape
     lo = -extent / 2.0
 
-    def height_fn(x, z):
+    def height_fn(x: Any, z: Any) -> np.ndarray:
         x = np.asarray(x, dtype="d")
         z = np.asarray(z, dtype="d")
         # World -> texel coordinates (x -> column, z -> row), clamped to the raster.
@@ -39,7 +46,9 @@ def height_function_from_array(heights, extent, height_scale, base=0.0):
     return height_fn
 
 
-def height_function_from_image(path, extent, height_scale, base=0.0):
+def height_function_from_image(
+    path: str, extent: float, height_scale: float, base: float = 0.0
+) -> HeightFn:
     """A world-space height_fn from a grayscale DEM image at `path`."""
     from PIL import Image
     img = Image.open(path).convert("F")
@@ -49,8 +58,9 @@ def height_function_from_image(path, extent, height_scale, base=0.0):
     return height_function_from_array(arr, extent, height_scale, base=base)
 
 
-def build_dem_tileset(image_path, directory, extent=2048.0, height_scale=400.0,
-                      base=-40.0, levels=3, tile_res=33):
+def build_dem_tileset(image_path: str, directory: str, extent: float = 2048.0,
+                      height_scale: float = 400.0, base: float = -40.0,
+                      levels: int = 3, tile_res: int = 33) -> str:
     """Bake a streamable terrain tileset from a DEM image; return tileset.json path.
 
     `base` below 0 lets low DEM areas fall under the water level so they read as lakes/

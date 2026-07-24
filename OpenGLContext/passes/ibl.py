@@ -25,12 +25,13 @@ from __future__ import annotations
 
 import os
 import logging
+from typing import Any, Callable, Optional
 
 import numpy as np
 
 from OpenGL.GL import (
     GL_TRIANGLES, GL_TEXTURE_2D, GL_TEXTURE0,
-    GL_RGBA16F, GL_RG16F, GL_RGB16F, GL_TEXTURE_CUBE_MAP, GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+    GL_RGBA16F, GL_RGB16F, GL_TEXTURE_CUBE_MAP, GL_TEXTURE_CUBE_MAP_POSITIVE_X,
     GL_TEXTURE_CUBE_MAP_SEAMLESS,
     GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER,
     GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TEXTURE_WRAP_R,
@@ -51,7 +52,7 @@ from OpenGL.GL import (
 )
 from OpenGL.GL import shaders as GL_shaders
 
-from OpenGLContext.passes.shaderpass import SHADER_DIR, preprocess_shader
+from OpenGLContext.passes.shaderpass import preprocess_shader
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ _CUBE_FACES = (('RT', 0), ('LF', 1), ('UP', 2), ('DN', 3), ('FR', 4), ('BK', 5))
 _CUBE_EXTS = ('.jpg', '.jpeg', '.png', '.bmp')
 
 
-def environment_cubemap_prefix():
+def environment_cubemap_prefix() -> Optional[str]:
     """Path prefix of an environment cubemap face set, or None.
 
     ``OPENGLCONTEXT_ENV_CUBEMAP=/path/pimbackground_`` selects the six faces
@@ -90,10 +91,10 @@ def environment_cubemap_prefix():
 # probe that was already built notice the env changed and rebuild -- the panorama
 # loads asynchronously, after the first 'full' frame may already have built the
 # procedural probe.
-_EQUIRECT_ENV = {'array': None, 'generation': 0}
+_EQUIRECT_ENV: dict[str, Any] = {'array': None, 'generation': 0}
 
 
-def set_equirect_env(array):
+def set_equirect_env(array: Optional[np.ndarray]) -> int:
     """Register an equirectangular HDR panorama as the IBL probe env source.
 
     ``array`` is an ``(H, W, 3)`` linear float32 image (2:1 equirectangular), or
@@ -108,17 +109,17 @@ def set_equirect_env(array):
     return _EQUIRECT_ENV['generation']
 
 
-def get_equirect_env():
+def get_equirect_env() -> Optional[np.ndarray]:
     """The registered equirectangular HDR env array, or None."""
     return _EQUIRECT_ENV['array']
 
 
-def equirect_env_generation():
+def equirect_env_generation() -> int:
     """Monotonic counter bumped on every :func:`set_equirect_env` call."""
     return _EQUIRECT_ENV['generation']
 
 
-def equirect_hdr_path():
+def equirect_hdr_path() -> Optional[str]:
     """Path or URL of an equirect HDR env from ``OPENGLCONTEXT_ENV_HDR``, or None.
 
     Lets the regression/capture harness point the probe at a ``.hdr`` without a
@@ -129,7 +130,7 @@ def equirect_hdr_path():
     return val or None
 
 
-def load_equirect_hdr(source):
+def load_equirect_hdr(source: str) -> np.ndarray:
     """Decode an equirect Radiance ``.hdr`` from a path or http(s) URL.
 
     A URL is fetched into the shared asset cache (origin-locked, size-capped) via
@@ -143,7 +144,7 @@ def load_equirect_hdr(source):
     return hdr.load_hdr(source)
 
 
-def resolve_equirect_source():
+def resolve_equirect_source() -> Optional[np.ndarray]:
     """The equirect HDR env to build the probe from, or None.
 
     A node-registered panorama (:func:`set_equirect_env`) wins; otherwise
@@ -163,18 +164,18 @@ def resolve_equirect_source():
     return None
 
 
-def _srgb_to_linear(a):
+def _srgb_to_linear(a: np.ndarray) -> np.ndarray:
     return np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4)
 
 
-def load_cubemap_faces(prefix, size):
+def load_cubemap_faces(prefix: str, size: int) -> Optional[dict[int, np.ndarray]]:
     """Load a 6-face cubemap into ``{gl_face_offset: (size,size,3) linear float32}``.
 
     Faces are resized to ``size`` and decoded sRGB->linear (the env feeds linear
     lighting math). Returns None if the face files are not all present.
     """
     from PIL import Image
-    faces = {}
+    faces: dict[int, np.ndarray] = {}
     for suffix, offset in _CUBE_FACES:
         path = None
         for ext in _CUBE_EXTS:
@@ -186,7 +187,9 @@ def load_cubemap_faces(prefix, size):
             return None
         img = Image.open(path).convert('RGB')
         if img.size != (size, size):
-            img = img.resize((size, size), Image.BILINEAR)
+            # Image.BILINEAR is a runtime module-level resampling constant Pillow's
+            # type stubs no longer expose (moved to Image.Resampling).
+            img = img.resize((size, size), Image.BILINEAR)  # type: ignore[attr-defined]
         arr = np.asarray(img, dtype=np.float32) / 255.0
         faces[offset] = np.ascontiguousarray(
             _srgb_to_linear(arr).astype(np.float32))
@@ -197,7 +200,7 @@ def load_cubemap_faces(prefix, size):
 # Probed once against the live context and cached, so a driver that passes the
 # renderer-name check but still cannot render a float cube degrades to analytic
 # up front instead of when IBLProbe._build's completeness check raises.
-_FLOAT_RENDER_CAP = {'checked': False, 'ok': False}
+_FLOAT_RENDER_CAP: dict[str, bool] = {'checked': False, 'ok': False}
 
 
 def _gl_context_present() -> bool:
@@ -267,7 +270,8 @@ def probe_float_render_capability(force: bool = False) -> bool:
     return ok
 
 
-def resolve_ibl_mode(renderer: str = '', probe=None) -> str:
+def resolve_ibl_mode(renderer: str = '',
+                     probe: Optional[Callable[[], bool]] = None) -> str:
     """Choose the base IBL path: 'full', 'analytic', or 'off'.
 
     ``OPENGLCONTEXT_IBL`` overrides (full/on, analytic/approx, off/none).
@@ -305,7 +309,7 @@ def ibl_is_adaptive() -> bool:
     return env in ('', 'auto')
 
 
-def _compile(frag_name: str):
+def _compile(frag_name: str) -> int:
     # preprocess_shader resolves the shared #includes (_common/_brdf/_cubemap);
     # the fullscreen vert has none but round-trips unchanged.
     vert = preprocess_shader('ibl_fullscreen.vert')
@@ -315,13 +319,13 @@ def _compile(frag_name: str):
     return GL_shaders.compileProgram(v, fr, validate=False)
 
 
-def _uni1i(prog, name, value):
+def _uni1i(prog: int, name: str, value: int) -> None:
     loc = glGetUniformLocation(prog, name)
     if loc != -1:
         glUniform1i(loc, int(value))
 
 
-def _uni1f(prog, name, value):
+def _uni1f(prog: int, name: str, value: float) -> None:
     loc = glGetUniformLocation(prog, name)
     if loc != -1:
         glUniform1f(loc, float(value))
@@ -336,14 +340,14 @@ class IBLProbe(object):
     PRE_LEVELS = 5
     LUT_SIZE = 256
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._built = False
         self._failed = False
-        self._source_gen = None      # equirect_env_generation() at last build
-        self.env = None
-        self.irradiance = None
-        self.prefilter = None
-        self.brdf = None
+        self._source_gen: Optional[int] = None   # equirect_env_generation() at last build
+        self.env: Optional[int] = None
+        self.irradiance: Optional[int] = None
+        self.prefilter: Optional[int] = None
+        self.brdf: Optional[int] = None
 
     @property
     def ready(self) -> bool:
@@ -380,7 +384,7 @@ class IBLProbe(object):
         return self.ready
 
     # -- construction ------------------------------------------------------
-    def _make_cube(self, size: int, levels: int = 1):
+    def _make_cube(self, size: int, levels: int = 1) -> int:
         # Immutable storage: glTexStorage2D allocates all 6 faces x all mip levels
         # consistently, so every level is attachment-complete. Per-level
         # glTexImage2D left higher mips incomplete on this driver. glTexStorage is
@@ -400,7 +404,7 @@ class IBLProbe(object):
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0)
         return tex
 
-    def _upload_env_faces(self, faces):
+    def _upload_env_faces(self, faces: dict[int, np.ndarray]) -> None:
         """Upload loaded cubemap faces (linear float) into ``self.env``."""
         glBindTexture(GL_TEXTURE_CUBE_MAP, self.env)
         for offset, arr in faces.items():
@@ -409,7 +413,7 @@ class IBLProbe(object):
                             np.ascontiguousarray(arr, dtype=np.float32))
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0)
 
-    def _render_equirect_env(self, fbo, equirect):
+    def _render_equirect_env(self, fbo: int, equirect: np.ndarray) -> None:
         """Project an equirectangular HDR panorama onto the six env-cube faces.
 
         Uploads ``equirect`` (H, W, 3 linear float32) to a temporary float 2D
@@ -437,7 +441,7 @@ class IBLProbe(object):
 
         prog = _compile('ibl_equirect.frag')
 
-        def bind_equirect(p):
+        def bind_equirect(p: int) -> None:
             glActiveTexture(GL_TEXTURE0)
             glBindTexture(GL_TEXTURE_2D, src)
             _uni1i(p, 'equirectMap', 0)
@@ -454,7 +458,9 @@ class IBLProbe(object):
             except Exception as err:
                 log.debug("IBL equirect program teardown: %s", err)
 
-    def _render_cube_faces(self, fbo, prog, cube, size, level, setup=None):
+    def _render_cube_faces(self, fbo: int, prog: int, cube: Optional[int], size: int,
+                           level: int,
+                           setup: Optional[Callable[[int], None]] = None) -> None:
         for face in range(6):
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                    GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, cube, level)
@@ -470,7 +476,7 @@ class IBLProbe(object):
                 setup(prog)
             glDrawArrays(GL_TRIANGLES, 0, 3)
 
-    def _build_env_cube(self, fbo, env_prog):
+    def _build_env_cube(self, fbo: int, env_prog: int) -> None:
         """Build the environment cube (mip-chained) from the best available source.
 
         Source priority: a registered/loaded equirectangular HDR panorama
@@ -497,25 +503,25 @@ class IBLProbe(object):
         glGenerateMipmap(GL_TEXTURE_CUBE_MAP)
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0)
 
-    def _build_irradiance(self, fbo, irr_prog):
+    def _build_irradiance(self, fbo: int, irr_prog: int) -> None:
         """Convolve the env cube into a diffuse-irradiance cube (Lambertian ambient)."""
         self.irradiance = self._make_cube(self.IRR_SIZE, levels=1)
 
-        def bind_env(prog):
+        def bind_env(prog: int) -> None:
             glActiveTexture(GL_TEXTURE0)
             glBindTexture(GL_TEXTURE_CUBE_MAP, self.env)
             _uni1i(prog, 'envMap', 0)
         self._render_cube_faces(fbo, irr_prog, self.irradiance, self.IRR_SIZE, 0,
                                 setup=bind_env)
 
-    def _build_prefilter(self, fbo, pre_prog):
+    def _build_prefilter(self, fbo: int, pre_prog: int) -> None:
         """GGX-importance-sample the env cube into a per-roughness specular mip chain."""
         self.prefilter = self._make_cube(self.PRE_SIZE, levels=self.PRE_LEVELS)
         for lvl in range(self.PRE_LEVELS):
             size = max(1, self.PRE_SIZE >> lvl)
             roughness = lvl / float(max(1, self.PRE_LEVELS - 1))
 
-            def bind_env_rough(prog, roughness=roughness):
+            def bind_env_rough(prog: int, roughness: float = roughness) -> None:
                 glActiveTexture(GL_TEXTURE0)
                 glBindTexture(GL_TEXTURE_CUBE_MAP, self.env)
                 _uni1i(prog, 'envMap', 0)
@@ -524,7 +530,7 @@ class IBLProbe(object):
             self._render_cube_faces(fbo, pre_prog, self.prefilter, size, lvl,
                                     setup=bind_env_rough)
 
-    def _build_brdf_lut(self, fbo, brdf_prog):
+    def _build_brdf_lut(self, fbo: int, brdf_prog: int) -> int:
         """Render the environment-independent split-sum BRDF integration LUT.
 
         RGBA: .rg = the GGX split-sum (scale, bias); .b = the Charlie sheen
@@ -546,7 +552,7 @@ class IBLProbe(object):
         glDrawArrays(GL_TRIANGLES, 0, 3)
         return int(glCheckFramebufferStatus(GL_FRAMEBUFFER))
 
-    def _build(self):
+    def _build(self) -> None:
         prev_fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
         prev_vp = glGetIntegerv(GL_VIEWPORT)
         # The build binds a private probe FBO/viewport and disables depth+cull. If
@@ -606,7 +612,7 @@ class IBLProbe(object):
             raise RuntimeError("IBL framebuffer incomplete: 0x%x" % status)
 
     # -- per-frame binding -------------------------------------------------
-    def bind(self, program) -> None:
+    def bind(self, program: Any) -> None:
         """Bind the probe textures to their units and set prefilterMaxLod."""
         glActiveTexture(GL_TEXTURE0 + IBL_UNITS['irradiance'])
         glBindTexture(GL_TEXTURE_CUBE_MAP, self.irradiance)
@@ -638,7 +644,7 @@ class IBLProbe(object):
 try:
     from OpenGL.GL import glDeleteProgram
 except Exception:  # pragma: no cover
-    def glDeleteProgram(_prog):
+    def glDeleteProgram(_prog: Any) -> None:
         pass
 
 
@@ -658,7 +664,7 @@ class IBLController(object):
 
     _ORDER = ['off', 'analytic', 'full']
 
-    def __init__(self, base_mode: str, adaptive: bool = True):
+    def __init__(self, base_mode: str, adaptive: bool = True) -> None:
         self.base_mode = base_mode if base_mode in self._ORDER else 'off'
         self.adaptive = adaptive
         self._effective = self.base_mode

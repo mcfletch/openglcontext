@@ -68,16 +68,16 @@ class Teapot(nodetypes.Geometry, node.Node):
 
     # Tessellated N3F_V3F arrays per LOD level: {level: (base, lid)}. Shared
     # across instances (the geometry is context-independent).
-    _arrays = {}
+    _arrays: dict[int, tuple] = {}
     # Retry budget per level: the first render at a level can fail
     # for transient reasons (no current GL context); latching it off disabled the
     # teapot. Retry up to this many times before giving up on that level.
-    _tessellate_attempts = {}
+    _tessellate_attempts: dict[int, int] = {}
     _MAX_TESSELLATE_ATTEMPTS = 3
 
     # Shader-path GL resources per LOD level:
     # {level: {'base_vao','base_count','lid_vao','lid_count'}}.
-    _buffers = {}
+    _buffers: dict[int, dict] = {}
 
     # -- tessellation ------------------------------------------------------
     @classmethod

@@ -6,10 +6,8 @@ reference/result/diff images and comparison statistics.
 
 import base64
 import html
-import json
 import os
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
@@ -483,7 +481,7 @@ class TestReportGenerator:
         if has_upstream:
             columns.append(('Upstream (Khronos)', 'upstream_image'))
 
-        def _image_box(label, path):
+        def _image_box(label: str, path: str | None) -> str:
             src = _image_ref(path, embed_images, getattr(self, '_base_dir', None))
             if src:
                 img_html = (f'<a class="zoomable" href="{src}">'

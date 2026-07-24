@@ -5,7 +5,6 @@ instead of crashing the frame loop) and the in-memory texture-upload path (an
 embedded image uploads without writing a file beside a read-only asset). Neither
 needs a real GL context: the GL entry points are stubbed.
 """
-import types
 import numpy as np
 from PIL import Image
 
@@ -63,7 +62,8 @@ def test_texture_rgba_accepts_in_memory_image(monkeypatch):
 
 def test_setup_instance_attribs_advances_per_instance(monkeypatch):
     """The shared divisor block: vec4 xform @0 + float scale @16, stride 20, divisor 1."""
-    ptrs = []; divs = []
+    ptrs = []
+    divs = []
     monkeypatch.setattr(ig, 'glVertexAttribPointer',
                         lambda loc, sz, typ, norm, stride, off: ptrs.append((loc, sz, stride)))
     monkeypatch.setattr(ig, 'glEnableVertexAttribArray', lambda loc: None)
@@ -97,3 +97,26 @@ def test_instance_buffer_grows_only_when_capacity_exceeded(monkeypatch):
     assert buf.count == 0
 
     assert [e[0] for e in events] == ['data', 'sub', 'data']
+
+
+def test_instance_buffer_delete_frees_its_store(monkeypatch):
+    monkeypatch.setattr(ig, 'glGenBuffers', lambda n: 42)
+    monkeypatch.setattr(ig, 'glBindBuffer', lambda *a: None)
+    freed = {}
+    monkeypatch.setattr(ig, 'delete_gl', lambda **k: freed.update(k))
+    buf = ig.InstanceBuffer()
+    buf.delete()
+    assert freed == {'buffers': [42]}
+
+
+def test_delete_gl_swallows_bad_handles(monkeypatch):
+    """A double-free or absent GL context must not crash teardown -- every
+    per-object delete is guarded, so freeing already-dead handles is a no-op."""
+    def boom(*a):
+        raise RuntimeError("no current GL context")
+    monkeypatch.setattr(ig, 'glDeleteVertexArrays', boom)
+    monkeypatch.setattr(ig, 'glDeleteBuffers', boom)
+    monkeypatch.setattr(ig, 'glDeleteTextures', boom)
+    monkeypatch.setattr(ig, 'glDeleteProgram', boom)
+    # Must not raise despite every underlying delete throwing.
+    ig.delete_gl(vaos=[1], buffers=[2], textures=[3], programs=[4])

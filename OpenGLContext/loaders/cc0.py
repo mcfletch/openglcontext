@@ -15,6 +15,7 @@ import os
 import ssl
 import urllib.request
 import zipfile
+from typing import Optional
 
 _UA = {"User-Agent": "Mozilla/5.0 (OpenGLContext terrain)"}
 _CTX = ssl.create_default_context()
@@ -32,14 +33,14 @@ CATALOG = {
 }
 
 
-def cache_dir():
+def cache_dir() -> str:
     base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
     d = os.path.join(base, "openglcontext", "cc0")
     os.makedirs(d, exist_ok=True)
     return d
 
 
-def _download(asset, resolution="1K"):
+def _download(asset: str, resolution: str = "1K") -> zipfile.ZipFile:
     req = urllib.request.Request(_API % asset, headers=_UA)
     data = json.load(urllib.request.urlopen(req, timeout=25, context=_CTX))
     folders = (data["foundAssets"][0]["downloadFolders"]["default"]
@@ -59,7 +60,7 @@ def _download(asset, resolution="1K"):
     return zipfile.ZipFile(io.BytesIO(blob))
 
 
-def material(name, resolution="1K"):
+def material(name: str, resolution: str = "1K") -> dict[str, str]:
     """Return {'color','normal','roughness','ao'} local map paths for a CATALOG name.
 
     Downloads + caches on first use. Raises on network failure (caller falls back).
@@ -86,7 +87,7 @@ def material(name, resolution="1K"):
     return written
 
 
-def _write_manifest(asset, resolution):
+def _write_manifest(asset: str, resolution: str) -> None:
     path = os.path.join(cache_dir(), "CREDITS.txt")
     line = "%s (%s) — CC0, https://ambientcg.com/view?id=%s\n" % (
         asset, resolution, asset)
@@ -99,7 +100,7 @@ def _write_manifest(asset, resolution):
         pass
 
 
-def try_material(name, resolution="1K"):
+def try_material(name: str, resolution: str = "1K") -> Optional[dict[str, str]]:
     """Like `material` but returns None on any failure (offline-safe)."""
     try:
         return material(name, resolution)

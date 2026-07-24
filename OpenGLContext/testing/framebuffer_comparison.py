@@ -28,9 +28,13 @@ import logging
 import os
 import sys
 import time
+from typing import Any, Dict, Optional, TYPE_CHECKING
 import numpy as np
 from OpenGLContext.capture import ensure_pillow, read_back_buffer, save_png
 from OpenGLContext.testing.process_exit import flush_and_exit
+
+if TYPE_CHECKING:
+    import subprocess
 
 log = logging.getLogger(__name__)
 
@@ -557,9 +561,9 @@ class VisualRegressionTest:
         self._result_path = os.path.join(reference_dir, f'{test_name}_result.png')
         self._diff_path = os.path.join(reference_dir, f'{test_name}_diff.png')
 
-        self._reference_pixels = None
-        self._result_pixels = None
-        self._comparison_result = None
+        self._reference_pixels: Optional[np.ndarray] = None
+        self._result_pixels: Optional[np.ndarray] = None
+        self._comparison_result: Optional[ComparisonResult] = None
         self._status = 'pending'
         self._stdout = ''
         self._stderr = ''
@@ -620,7 +624,7 @@ class VisualRegressionTest:
             log.error("Failed to save reference: %s", e)
             return False
 
-    def compare(self, result_pixels: np.ndarray) -> ComparisonResult:
+    def compare(self, result_pixels: np.ndarray) -> Optional[ComparisonResult]:
         """Compare result against reference.
 
         Args:
@@ -684,7 +688,7 @@ class VisualRegressionTest:
         Returns:
             Dict with test information for report generation
         """
-        data = {
+        data: Dict[str, Any] = {
             'test_name': self.test_name,
             'status': self._status,
             'reference_image': self._reference_path if self.has_reference else None,

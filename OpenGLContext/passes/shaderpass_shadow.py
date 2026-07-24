@@ -12,7 +12,7 @@ per-driver instance ``MAX_SHADOW_LIGHTS``) that these methods read.
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from OpenGL.GL import (
     GL_FALSE, GL_TEXTURE0, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_CUBE_MAP,
@@ -24,9 +24,27 @@ from OpenGL.GL import (
 
 from OpenGLContext.passes.shadersource import HARD_MAX_SHADOW_LIGHTS
 
+if TYPE_CHECKING:
+    from OpenGLContext.passes.shadowmath import Matrix4
+
 
 class _ShadowUniformMixin:
     """Shadow sampler layout + per-light shadow uniform binding."""
+
+    if TYPE_CHECKING:
+        program: Optional[int]
+        vertex_color_program: Optional[int]
+        _shadow_program: Optional[int]
+        _shadow_samplers_program: set
+        shadow_cube_array: bool
+
+        def _set_uniform1i(self, name: str, value: int, program: Optional[int]) -> None: ...
+
+        def _set_uniform1f(self, name: str, value: float, program: Optional[int]) -> None: ...
+
+        def _set_uniform3f(self, name: str, value: Any, program: Optional[int]) -> None: ...
+
+        def _get_location(self, name: str, program: Optional[int]) -> int: ...
 
     # Packed shadow-sampler texture units. Spot maps and directional
     # cascades share ONE sampler2DArrayShadow (+ one raw view); point shadows a
@@ -46,7 +64,7 @@ class _ShadowUniformMixin:
     def _shadow_prog(self) -> Optional[int]:
         return self._shadow_program if self._shadow_program is not None else self.program
 
-    def shadow_receiver_programs(self):
+    def shadow_receiver_programs(self) -> List[int]:
         """Programs whose shadow uniforms bindShadowUniforms must set.
 
         The lit program (or the PBR program) plus the vertex-colour program, which
@@ -149,7 +167,8 @@ class _ShadowUniformMixin:
         self._set_uniform1i(f'shadowKind[{slot}]', self.SHADOW_KIND['spot'], self._shadow_prog)
         self._set_cascade_matrix(slot, 0, shadow_matrix_eye)
 
-    def bind_csm_slot(self, slot: int, light_index: int, matrices_eye, splits) -> None:
+    def bind_csm_slot(self, slot: int, light_index: int,
+                      matrices_eye: Any, splits: Any) -> None:
         """Point a slot at a directional light's cascades (array layer block)."""
         if slot >= self.MAX_SHADOW_LIGHTS or self._shadow_prog is None:
             return
@@ -164,7 +183,7 @@ class _ShadowUniformMixin:
 
     def bind_cube_slot(self, slot: int, light_index: int,
                        cube_texture_id: Optional[int],
-                       light_pos_world, near: float, far: float) -> None:
+                       light_pos_world: Any, near: float, far: float) -> None:
         """Point a slot at a point light. Fallback path binds a per-slot cube map;
         the cube-array path shares one texture bound via :meth:`bind_cube_array`."""
         if slot >= self.MAX_SHADOW_LIGHTS or self._shadow_prog is None:

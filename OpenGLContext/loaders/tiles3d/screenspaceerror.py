@@ -7,7 +7,9 @@ relationship. Traversal refines a tile when this exceeds a pixel threshold.
 import math
 
 
-def screen_space_error(geometric_error, distance, viewport_height, fovy):
+def screen_space_error(
+    geometric_error: float, distance: float, viewport_height: float, fovy: float
+) -> float:
     """Pixel error for `geometric_error` seen at `distance` under a perspective camera.
 
     `fovy` is the vertical field of view in radians. A tile at or behind the camera
@@ -20,7 +22,7 @@ def screen_space_error(geometric_error, distance, viewport_height, fovy):
     return (geometric_error * viewport_height) / (distance * sse_denominator)
 
 
-def should_refine(sse, max_sse):
+def should_refine(sse: float, max_sse: float) -> bool:
     """True when a tile's screen-space error exceeds the pixel threshold.
 
     Equality renders the tile (does not refine), so `max_sse` is the largest error

@@ -11,14 +11,25 @@ framebuffers live in :mod:`selectionbuffers` and the async PBO/fence readback in
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from OpenGL.GL import *
-from OpenGLContext.arrays import array, dot, concatenate, ones
+import numpy as np
+
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_DEPTH_COMPONENT, GL_FLOAT,
+    GL_FRAMEBUFFER, GL_RGBA, GL_SCISSOR_TEST, GL_UNSIGNED_BYTE, glBindFramebuffer,
+    glClear, glClearColor, glDisable, glEnable, glReadPixels, glScissor, glViewport,
+)
+# array/dot/concatenate/ones are numpy names re-exported through vrml.arrays'
+# star import, which mypy cannot trace across.
+from OpenGLContext.arrays import array, dot, concatenate, ones  # type: ignore[attr-defined]
 import logging
 
 from OpenGLContext.passes.selectionbuffers import SelectionFBO, SelectionBufferFBO
 from OpenGLContext.passes.asyncpick import _AsyncPickMixin
+
+if TYPE_CHECKING:
+    from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +38,17 @@ __all__ = ['SelectionFBO', 'SelectionBufferFBO', 'SelectionMixin']
 
 class SelectionMixin(_AsyncPickMixin):
     """Adds colour-based picking (per-pick FBO + MRT id buffer) to a FlatPass."""
+
+    if TYPE_CHECKING:
+        visible: bool
+        transparent: bool
+        lighting: bool
+        textured: bool
+        renderPath: Any
+        modelView: Any
+        shader_program: Optional["VRML97ShaderProgram"]
+
+        def getViewport(self) -> Tuple[int, int, int, int]: ...
 
     # Selection FBO for optimized picking (lazily initialized per instance)
     _selection_fbo: Optional['SelectionFBO'] = None
@@ -80,7 +102,7 @@ class SelectionMixin(_AsyncPickMixin):
         optimized = {}
         filtered_move_count = 0
 
-        for key, event in events.items():
+        for _key, event in events.items():
             event_type = getattr(event, 'type', 'unknown')
 
             # Skip mouse-move events if no handlers are registered
@@ -144,7 +166,7 @@ class SelectionMixin(_AsyncPickMixin):
                 matrix, self.projection, self.viewport)
 
     def _createPickProjection(self, pick_region: Tuple[int, int, int, int],
-                              viewport: Tuple[int, int, int, int]) -> 'array':
+                              viewport: Tuple[int, int, int, int]) -> np.ndarray:
         """Create a pick projection matrix that zooms into the pick region.
 
         Args:
@@ -154,7 +176,8 @@ class SelectionMixin(_AsyncPickMixin):
         Returns:
             Modified projection matrix focused on pick region
         """
-        from OpenGLContext.arrays import identity
+        # identity is numpy.identity re-exported through vrml.arrays' star import.
+        from OpenGLContext.arrays import identity  # type: ignore[attr-defined]
 
         px, py, pw, ph = pick_region
         vx, vy, vw, vh = viewport
@@ -216,13 +239,13 @@ class SelectionMixin(_AsyncPickMixin):
         debugSelection = mode.context.contextDefinition.debugSelection
 
         # Collect pick points grouped by location
-        pickPoints = {}
+        pickPoints: Dict[Any, List] = {}
         for event in events.values():
             x, y = key = tuple(event.getPickPoint())
             pickPoints.setdefault(key, []).append(event)
 
-        if not pickPoints:
-            return
+        if not pickPoints:  # pragma: no cover - unreachable: non-empty events
+            return          # always yield at least one pick point above
 
         # Pre-compute screen-space bounding boxes for all objects (done once)
         # This is the key optimization - project all bounding volumes to screen space
@@ -230,6 +253,7 @@ class SelectionMixin(_AsyncPickMixin):
 
         # Set up shader
         shader = self.shader_program
+        assert shader is not None  # selection pass only runs with a program bound
         shader.use(lit=False)
 
         # Use a tiny FBO (3x3) for each pick point
@@ -321,7 +345,10 @@ class SelectionMixin(_AsyncPickMixin):
                     read_x, read_y = int(px), int(py)
 
                 glReadPixels(read_x, read_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel)
-                lpixel = int(pixel.view('<I')[0])
+                # id_map is keyed by the 24-bit RGB colour id; the solid-colour
+                # fill writes alpha 1.0 (0xFF) so the fragment survives, so mask
+                # the alpha byte out of the packed readback before the lookup.
+                lpixel = int(pixel.view('<I')[0]) & 0xFFFFFF
                 paths = id_map.get(lpixel, [])
 
                 glReadPixels(read_x, read_y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, depth_pixel)
@@ -364,8 +391,7 @@ class SelectionMixin(_AsyncPickMixin):
         Returns:
             List of (min_x, min_y, max_x, max_y) tuples or None for objects without bounds
         """
-        result = []
-        modelViewProjection = dot(self.modelView, self.projection)
+        result: List[Optional[Tuple[float, float, float, float]]] = []
 
         for record in toRender:
             key, mvmatrix, tmatrix, bvolume, path = record

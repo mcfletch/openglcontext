@@ -72,8 +72,11 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
     # PBR subclass. The base _flat default (8) does not read the env.
     INSTANCE_MIN: int = int(os.environ.get('OPENGLCONTEXT_INSTANCE_MIN', '4') or 4)
 
+    # The base _flat.FlatPass declares instancing_enabled as a writeable class
+    # attribute; this read-only property refines it (env-gated), so mypy's
+    # attribute/property override check does not apply.
     @property
-    def instancing_enabled(self) -> bool:
+    def instancing_enabled(self) -> bool:  # type: ignore[override]
         """Instance shapes sharing one geometry through the VRML97 lit shader.
 
         Off with OPENGLCONTEXT_INSTANCING=0. Only geometry exposing a cached VAO

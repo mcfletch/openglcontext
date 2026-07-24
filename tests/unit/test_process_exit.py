@@ -47,6 +47,22 @@ def test_flush_and_exit_without_coverage(monkeypatch):
     assert exited['code'] == 0
 
 
+def test_flush_and_exit_survives_coverage_error(monkeypatch):
+    """A failure while saving coverage is swallowed; the process still exits."""
+    exited = {'code': None}
+    monkeypatch.setattr('os._exit', lambda code: exited.__setitem__('code', code))
+
+    import coverage
+
+    def boom():
+        raise RuntimeError('coverage save exploded')
+
+    monkeypatch.setattr(coverage.Coverage, 'current', staticmethod(boom))
+
+    flush_and_exit(5)
+    assert exited['code'] == 5
+
+
 def test_flush_and_exit_really_terminates():
     """Integration: the process actually exits with the requested code."""
     code = textwrap.dedent(

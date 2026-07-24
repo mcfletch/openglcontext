@@ -8,15 +8,18 @@ toolchain (§7) — enough to exercise streaming, LOD, and rendering end to end.
 import json
 import math
 import os
+from collections.abc import Sequence
 
 import numpy as np
 
 
-def _height(x, z, amp=6.0):
+def _height(x: float, z: float, amp: float = 6.0) -> float:
     return amp * math.sin(x * 0.06) * math.cos(z * 0.05)
 
 
-def _grid_mesh(x0, x1, z0, z1, n):
+def _grid_mesh(
+    x0: float, x1: float, z0: float, z1: float, n: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """A heightfield mesh over [x0,x1]x[z0,z1] as (positions, normals, indices)."""
     xs = np.linspace(x0, x1, n)
     zs = np.linspace(z0, z1, n)
@@ -43,7 +46,7 @@ def _grid_mesh(x0, x1, z0, z1, n):
             np.array(idx, "<u4"))
 
 
-def _bounding_box(pos):
+def _bounding_box(pos: np.ndarray) -> list[float]:
     mins = pos.min(0)
     maxs = pos.max(0)
     center = (mins + maxs) / 2.0
@@ -57,7 +60,12 @@ def _bounding_box(pos):
     ]
 
 
-def _glb(pos, nrm, idx, color=(0.30, 0.55, 0.25, 1.0)):
+def _glb(
+    pos: np.ndarray,
+    nrm: np.ndarray,
+    idx: np.ndarray,
+    color: tuple[float, float, float, float] = (0.30, 0.55, 0.25, 1.0),
+) -> bytes:
     from pygltflib import (
         GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,
         Buffer, Material, PbrMetallicRoughness,
@@ -92,7 +100,9 @@ def _glb(pos, nrm, idx, color=(0.30, 0.55, 0.25, 1.0)):
     return b"".join(g.save_to_bytes())
 
 
-def _box_mesh(center, size):
+def _box_mesh(
+    center: Sequence[float], size: Sequence[float]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """An axis-aligned box as (positions, normals, indices), outward-facing CCW."""
     cx, cy, cz = center
     hx, hy, hz = size[0] / 2.0, size[1] / 2.0, size[2] / 2.0
@@ -104,7 +114,9 @@ def _box_mesh(center, size):
         ((0, 0, 1), [(-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]),
         ((0, 0, -1), [(1, -1, -1), (-1, -1, -1), (-1, 1, -1), (1, 1, -1)]),
     ]
-    pos, nrm, idx = [], [], []
+    pos: list[tuple[float, float, float]] = []
+    nrm: list[tuple[float, float, float]] = []
+    idx: list[int] = []
     for normal, quad in faces:
         base = len(pos)
         for sx, sy, sz in quad:
@@ -114,7 +126,9 @@ def _box_mesh(center, size):
     return (np.array(pos, "f4"), np.array(nrm, "f4"), np.array(idx, "<u4"))
 
 
-def build_overhang_tileset(directory, span=120.0, ground_res=17):
+def build_overhang_tileset(
+    directory: str, span: float = 120.0, ground_res: int = 17
+) -> str:
     """Write a tileset with ground plus an elevated slab (an overhang).
 
     The slab sits above the ground over the same footprint, so a vertical column has
@@ -154,7 +168,9 @@ def build_overhang_tileset(directory, span=120.0, ground_res=17):
     return path
 
 
-def build_sample_tileset(directory, span=120.0, root_res=9, child_res=17):
+def build_sample_tileset(
+    directory: str, span: float = 120.0, root_res: int = 9, child_res: int = 17
+) -> str:
     """Write a heightfield tileset (root + 4 children) into `directory`.
 
     Returns the path to the written tileset.json.
