@@ -111,7 +111,7 @@ class TestEstimateTangentsGuard:
         pos = np.array([[0, 0, 0], [1, 0, 0]], dtype=np.float32)
         nrm = np.array([[0, 0, 1], [0, 0, 1]], dtype=np.float32)
         uv = np.array([[0, 0], [1, 0]], dtype=np.float32)
-        t = gm._estimate_tangents(pos, nrm, uv, None)
+        t = gm.estimate_tangents(pos, nrm, uv, None)
         assert t.shape == (2, 4)
         assert np.allclose(t, 0.0)
 

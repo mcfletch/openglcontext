@@ -89,6 +89,13 @@ using the keyboard arrow keys (walk/fly) and the   ALT-arrow keys
 ExamineManager</a> and <a href="../pydoc/OpenGLContext.dragwatcher.html">
 DragWatcher</a> classes as well.</p>
 
+<p>An application wanting more than that declares <strong>movement modes</strong>
+on its <code>ContextDefinition</code>: walking, flying, swimming and first-person
+mouse-look as scenegraph nodes, each with its own speeds and key bindings, driven
+from sampled input rather than from events so several inputs act in one frame.
+See <a href="navigation.html">Movement Modes &amp; Navigation</a>. A context that
+declares none keeps the older navigation untouched.</p>
+
 <p>Finally, at the top-level, we have a number of utility functions and
 modules, including drawcube (a testing function), <a href="../pydoc/OpenGLContext.quaternion.html">Quaternion</a>,<a href="../pydoc/OpenGLContext.utilities.html">utilities</a>,<a href="../pydoc/OpenGLContext.vectorutilities.html">
 vector utilities</a>, and <a href="../pydoc/OpenGLContext.triangleutilities.html">

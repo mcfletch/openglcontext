@@ -82,8 +82,13 @@ class PBRMaterial(node.Node):
     # KHR material extensions
     # Per-texture UV-set selector (KHR: each textureInfo has its own texCoord 0/1).
     # Bit per channel: 1=baseColor 2=metallicRoughness 4=normal 8=occlusion
-    # 16=emissive; a set bit means "sample TEXCOORD_1 instead of TEXCOORD_0".
+    # 16=emissive 32=lightmap; a set bit means "sample TEXCOORD_1 instead of
+    # TEXCOORD_0".
     texCoordMask = field.newField('texCoordMask', 'SFInt32', 1, 0)
+    # Multiplier on the baked-irradiance ``lightmap`` texture channel. Not a glTF
+    # material property: baked lighting comes from BSP-style level formats, whose
+    # lightmaps are authored against an engine-specific exposure.
+    lightmapStrength = field.newField('lightmapStrength', 'SFFloat', 1, 1.0)
     unlit = field.newField('unlit', 'SFBool', 1, False)               # KHR_materials_unlit
     emissiveStrength = field.newField('emissiveStrength', 'SFFloat', 1, 1.0)  # KHR_materials_emissive_strength
     specular = field.newField('specular', 'SFFloat', 1, 1.0)          # KHR_materials_specular factor

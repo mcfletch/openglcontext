@@ -63,6 +63,14 @@ class PhysicsViewPlatform:
     def jump(self) -> Any:
         return self.character.jump()
 
+    def apply_impulse(self, velocity: Any) -> None:
+        """Launch the capsule at ``velocity`` in world metres/second.
+
+        The world-space form is what map features want: a jump pad or a blast
+        aims in world terms and does not care which way the camera is facing.
+        """
+        self.character.apply_impulse(velocity)
+
     def set_crouch(self, crouch: bool) -> Any:
         return self.character.set_crouch(crouch)
 

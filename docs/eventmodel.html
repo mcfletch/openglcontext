@@ -150,6 +150,31 @@ tables for the handler callbacks.<br>
 
 <pre>self.addEventHandler( "mousein", function = self.OnMouseIn )<br>self.addEventHandler( "mouseout", function = self.OnMouseOut )<br>self.addEventHandler( 'keyboard', name='&lt;up&gt;', state=1, modifiers=(0,0,0), function=self.forward )<br>self.addEventHandler( 'keypress', name='-', modifiers=(0,0,0), function=self.straighten)<br>self.addEventHandler( 'mousebutton', button=1, state = 1, modifiers=(0,0,0), function=self.startExamineMode)<br>self.addEventHandler( 'mousemove', buttons=(), modifiers=(0,0,0), function=self.RefreshTooltip)<br></pre>
 
+<h3>Callbacks are held weakly &mdash; you must keep them alive</h3>
+
+<p>PyDispatcher holds each registered callback by <strong>weak</strong>
+reference, and OpenGLContext relies on that: it is what lets a node or a
+context be garbage collected without first unbinding every handler it
+registered.</p>
+
+<p>The consequence is that <strong>the caller owns the callback</strong>.  A
+function with no other reference to it is collected as soon as
+<code>addEventHandler</code> returns, and the binding then does nothing at
+all &mdash; the key or button is silently dead, with no error raised at
+registration or at dispatch.  This is the usual explanation for &ldquo;my
+handler never fires and nothing is logged&rdquo;.</p>
+
+<p>Pass something that outlives the binding.  A bound method of a live object
+is the normal choice, and is what every example above uses.  A bare closure, a
+<code>lambda</code>, a <code>functools.partial</code> or any other object
+created purely for the call will <em>not</em> survive it; if you need one,
+store it on something that lives as long as the binding should:</p>
+
+<pre>self.handlers = []            # an attribute of a long-lived object
+handler = lambda event: self.step( +1 )
+self.handlers.append( handler )
+self.addEventHandler( 'keyboard', name='w', state=1, function=handler )</pre>
+
 <p>&nbsp;Timer objects are also based on the same mechanism (with some
 significant extra machinery).<br>
 

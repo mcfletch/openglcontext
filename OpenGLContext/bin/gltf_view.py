@@ -83,6 +83,38 @@ else:
 _orientation = look_orientation
 
 
+#: Movement speeds a viewer offers, in scene units per second at scale 1.
+WALK_SPEED = 3.0
+RUN_SPEED = 6.0
+FLY_SPEED = 8.0
+
+#: Radians per second a turn starts at, and the multiple a held turn ramps up
+#: to: a viewer needs both a precise nudge and a quick spin in close quarters.
+TURN_RATE = 0.9
+TURN_ACCELERATION = 3.0
+
+
+def movement_modes(scale: float = 1.0):
+    """The ways of moving this viewer offers, as declared nodes.
+
+    Declared rather than hand-rolled: one settings screen can present the
+    navigation of every viewer, and a game embedding this one retunes it by
+    setting fields rather than subclassing.
+
+    ``scale`` sizes the speeds to the thing being viewed — a viewer frames
+    models from a bolt to a city, and a speed that suits one is useless for the
+    other, so it is a parameter rather than a constant.
+    """
+    from OpenGLContext.move import modes as _modes
+    return [
+        _modes.WalkMode(name='walk', walkSpeed=WALK_SPEED * scale,
+                        runSpeed=RUN_SPEED * scale,
+                        turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
+        _modes.FlyMode(name='fly', flySpeed=FLY_SPEED * scale,
+                       turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
+    ]
+
+
 def _is_url(src: object) -> bool:
     """True if ``src`` is an http(s) URL rather than a local filesystem path."""
     return isinstance(src, str) and (
@@ -312,7 +344,6 @@ class TestContext(BaseContext):
         self._physics: Any = None
         self._physics_on = False
         self._free_manager: Any = None
-        self._pkeys: dict[str, float] = {}
         self._player: Any = None
         self._animations: list[Any] = []
         self._anim_index = 0
@@ -976,27 +1007,42 @@ class TestContext(BaseContext):
             crouchHeight=1.0 * s, radius=0.3 * s, eyeHeight=1.6 * s)
         self._physics = PhysicsViewPlatform(world, caps, yaw=self.config.yaw,
                                             gravity=9.81 * s)
+        # The speeds have to match the avatar, and the avatar is sized to the
+        # model, so the modes are declared here rather than at startup.
+        self.contextDefinition.movementModes = movement_modes(s)
         self._spawn_from_viewpoint_or_floor(lo, hi, caps)
         self._plast = self._now()
-        self._turn_hold = 0.0
-        self._turn_dir = 0.0
         self._physics.apply(self)
         return True
 
+    def getNavigationPlatform(self) -> Any:
+        """What the declared movement modes drive.
+
+        The character controller while walking, so a mode moves the avatar and
+        the camera follows it; the view platform otherwise, where the free-fly
+        navigator still owns the camera.
+        """
+        if getattr(self, '_physics_on', False) and self._physics is not None:
+            return self._physics
+        return self.platform
+
     def _bind_physics_input(self) -> None:
-        """(Re)bind the character-controller movement keys.
+        """(Re)bind the keys the declared movement modes name.
 
         Re-registered on every enable: binding/unbinding the free-fly navigator
-        rewrites the shared arrow-key handlers, so physics must reclaim them."""
-        for key in ('<up>', '<down>', '<left>', '<right>', 'w', 'a', 's', 'd'):
-            self.addEventHandler('keyboard', name=key, state=1, function=self._pkey)
-        self.addEventHandler('keyboard', name=' ', state=1, function=self._pjump)
+        rewrites the shared arrow-key handlers, so physics must reclaim them.
+        The modes decide what each key *means*; this only arranges for the
+        events to arrive, since the sampler is fed by event dispatch itself.
+        """
+        navigation = self.getNavigation()
+        if navigation is None:
+            return
+        for _name, binding in navigation.binding_table():
+            for key in binding.keys:
+                for state in (1, 0):
+                    self.addEventHandler('keyboard', name=key, state=state,
+                                         function=self._pkey)
         self.addEventHandler('keyboard', name='f', state=1, function=self._pfly)
-        # ctrl + up/down looks up/down (matches the free-fly viewer's pitch keys)
-        self.addEventHandler('keyboard', name='<up>', state=1, modifiers=(0, 1, 0),
-                             function=self._plook_up)
-        self.addEventHandler('keyboard', name='<down>', state=1, modifiers=(0, 1, 0),
-                             function=self._plook_down)
 
     def _sync_avatar_to_camera(self) -> None:
         """Seat the avatar at the current free-fly camera pose (safe-bound)."""
@@ -1089,51 +1135,29 @@ class TestContext(BaseContext):
         return time()
 
     def _pkey(self, event: Any) -> None:
-        self._pkeys[event.name] = self._now()
-
-    def _pjump(self, event: Any) -> None:
-        if self._physics:
-            self._physics.jump()
+        """Wake the frame loop; the sampler is fed by event dispatch itself."""
+        self.triggerRedraw(1)
 
     def _pfly(self, event: Any) -> None:
-        if self._physics:
-            self._physics.set_fly(not self._physics.character.flying)
+        """Swap between the walking and flying modes.
 
-    def _plook_up(self, event: Any) -> None:
-        if self._physics:
-            self._physics.look(-0.08)
-
-    def _plook_down(self, event: Any) -> None:
-        if self._physics:
-            self._physics.look(0.08)
+        Flying is a property of the character controller as well as of the
+        movement, so the mode change has to reach it.
+        """
+        navigation = self.getNavigation()
+        if navigation is None or self._physics is None:
+            return
+        current = getattr(self.contextDefinition, 'movementMode', None)
+        wanted = 'walk' if current is not None and current.name == 'fly' else 'fly'
+        if navigation.select(wanted):
+            self._physics.set_fly(wanted == 'fly')
 
     def _physics_step(self) -> None:  # pragma: no cover - per-frame physics walk loop
         now = self._now()
         dt = min(now - self._plast, 0.05)
         self._plast = now
-        hold = 0.2
-
-        def held(k: str) -> bool:
-            return now - self._pkeys.get(k, 0) < hold
-        fwd = (held('<up>') or held('w')) - (held('<down>') or held('s'))
-        strafe = float(held('d')) - float(held('a'))
-        # Turn with acceleration: a small step on first press, ramping up to ~3x
-        # while held, resetting when you stop or change direction — so you can
-        # both nudge precisely and spin quickly in close quarters.
-        turn_dir = float(held('<right>')) - float(held('<left>'))
-        if turn_dir != 0.0 and turn_dir == self._turn_dir:
-            self._turn_hold += dt
-        else:
-            self._turn_hold = 0.0
-        self._turn_dir = turn_dir
-        if turn_dir != 0.0:
-            ramp = min(1.0 + 3.0 * self._turn_hold, 3.0)    # reaches 3x after ~0.67 s
-            self._physics.turn(turn_dir * 0.9 * ramp * dt)
+        self.updateNavigation(dt)
         p = self._physics
-        if p.character.flying:
-            p.set_fly_move(forward=float(fwd), strafe=strafe)
-        else:
-            p.set_move(forward=float(fwd), strafe=strafe, mode='walk')
         p.update(dt)
         p.apply(self)
         self.triggerRedraw(1)

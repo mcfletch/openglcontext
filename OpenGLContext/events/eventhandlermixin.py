@@ -64,6 +64,33 @@ class EventHandlerMixin(object):
         dispatches to the handler's registerCallback method (without the
         eventType argument).
 
+        **The caller owns the callback and must keep it alive.** Handlers are
+        held by *weak* reference, so a callback with no other reference to it is
+        collected as soon as this call returns, and the binding then does nothing
+        at all -- the key or button is silently dead, with no error raised here
+        or at dispatch time.  This is deliberate: it is what lets a node or
+        context be garbage collected without first unbinding every handler it
+        registered.
+
+        Pass something that outlives the binding.  A bound method of a live
+        object is the normal choice, and is what every example below uses::
+
+            self.addEventHandler( 'keyboard', name='<up>', state=1,
+                                  function=self.forward )
+
+        A bare closure, a lambda, a functools.partial, or any other object
+        created purely for the call will *not* survive it.  If you need one,
+        store it somewhere that lives as long as the binding should::
+
+            self.handlers = []            # an attribute of a long-lived object
+            handler = lambda event: self.step( +1 )
+            self.handlers.append( handler )
+            self.addEventHandler( 'keyboard', name='w', state=1,
+                                  function=handler )
+
+        Passing function=None deregisters instead, and returns the previous
+        callback.
+
         See: mouseevents, keyboardevents
         """
         manager = self.getEventManager(as_str(eventType))

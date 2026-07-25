@@ -154,3 +154,16 @@ def test_apply_writes_pose_onto_the_context_platform():
 if __name__ == '__main__':
     import sys
     sys.exit(pytest.main([__file__, '-v']))
+
+
+def test_apply_impulse_launches_the_capsule_and_lifts_the_camera():
+    """A jump-pad impulse reaches the character and shows up in the camera pose."""
+    plat = _platform()
+    plat.bind_eye((0, 1.7, 0))
+    plat.update(1 / 60)
+    before = plat.camera_position()[1]
+    plat.apply_impulse((0.0, 8.0, 0.0))
+    for _ in range(20):
+        plat.update(1 / 60)
+    assert not plat.character.grounded
+    assert plat.camera_position()[1] > before + 0.5

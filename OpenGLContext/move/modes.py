@@ -1,0 +1,315 @@
+"""Movement modes as scenegraph nodes.
+
+A mode is one named way of moving — walking, flying, swimming, first-person
+mouse-look — declared as a ``PROTO`` like any other node, so it can be written
+into a parsed file, carried in an ``SFNode`` field, and watched for change.
+
+Each concrete mode declares **its own typed fields** for whatever it is
+tunable by: one game's swim speed is 3 and another's is 10, and both are an
+``SFFloat`` on :class:`SwimMode` rather than entries in a free-form mapping.
+That buys validation, defaults and serialisation from the field system instead
+of a parallel settings layer.
+
+Two kinds of mode share the base class:
+
+* **user-selected** — walk, fly, first-person.  The player chooses them.
+* **world-imposed** — swim.  :meth:`MovementMode.enter_when` is how a mode says
+  "I apply right now"; the mode itself decides, because only it knows what its
+  trigger is.
+
+A mode does not handle events.  It *samples* an
+:class:`~OpenGLContext.events.inputstate.InputState` once per frame, so
+several inputs act together — the reason walking and jumping at the same
+moment needs no special case.
+"""
+
+from gettext import gettext as _
+from typing import Any, Sequence, Tuple
+
+from vrml import field, node
+
+
+class KeyBinding(node.Node):
+    """One command, what it is called, and the keys that trigger it.
+
+    A node rather than a dict entry so a settings window can enumerate, label
+    and rewrite bindings with no knowledge of any particular mode.
+    """
+
+    PROTO = 'KeyBinding'
+    #: The command this triggers, as the mode names it.
+    command = field.newField('command', 'SFString', 1, '')
+    #: What a settings window shows the user.
+    label = field.newField('label', 'SFString', 1, '')
+    #: Key names, as the event system spells them; any one triggers it.
+    keys = field.newField('keys', 'MFString', 1, list)
+    #: A modifier that must be held with the key: ``shift``, ``ctrl``, ``alt``
+    #: or empty for none.  It is what tells `ctrl` + arrow (tilt the view)
+    #: apart from the same arrow alone (walk).
+    modifier = field.newField('modifier', 'SFString', 1, '')
+
+
+#: Which entry of the event system's modifier triple each name reads.
+MODIFIER_INDEX = {'shift': 0, 'ctrl': 1, 'alt': 2}
+
+
+class MovementMode(node.Node):
+    """Base prototype: a named way of moving, with its own tunables."""
+
+    PROTO = 'MovementMode'
+    #: Whether the mode steers with the pointer and so wants it grabbed.
+    capturePointer = field.newField( 'capturePointer', 'SFBool', 1, False )
+    #: How the mode is referred to when selecting one.
+    name = field.newField('name', 'SFString', 1, '')
+    #: A disabled mode is never selected and never claims the avatar.
+    enabled = field.newField('enabled', 'SFBool', 1, True)
+    #: Command-to-key bindings; replace wholesale to rebind.
+    bindings = field.newField('bindings', 'MFNode', 1, list)
+
+    #: Commands this mode acts on.  A settings window needs no more than this
+    #: plus the bindings to present the mode.
+    commands: Sequence[str] = ()
+
+    #: How long the current turn has been held, and which way, for the ramp of
+    #: :attr:`_GroundMode.turnAcceleration`.  Not fields: this is the state of
+    #: one gesture in progress, not something to save or edit.
+    _turn_held: float = 0.0
+    _turning: float = 0.0
+
+    def defaultBindings(self) -> Sequence[KeyBinding]:
+        """The bindings a fresh instance starts with."""
+        return []
+
+    def __init__(self, **named: Any) -> None:
+        super(MovementMode, self).__init__(**named)
+        if not self.bindings:
+            self.bindings = list(self.defaultBindings())
+
+    def keys_for(self, command: str) -> Tuple[str, ...]:
+        """The keys currently bound to ``command``."""
+        for binding in self.bindings:
+            if binding.command == command:
+                return tuple(binding.keys)
+        return ()
+
+    def active(self, inputs: Any, command: str) -> bool:
+        """Whether ``command`` is being asked for right now.
+
+        A binding with a ``modifier`` needs that modifier held; a binding
+        without one loses its key while another of this mode's bindings claims
+        the same key with a modifier that *is* held, which is what stops
+        `ctrl` + arrow walking forward as well as tilting the view.  A modifier
+        no binding claims -- shift, which walking binds to run -- leaves the
+        plain binding alone.
+        """
+        for binding in self.bindings:
+            if binding.command != command:
+                continue
+            for key in binding.keys:
+                if not inputs.held(key):
+                    continue
+                if binding.modifier:
+                    index = MODIFIER_INDEX.get(binding.modifier)
+                    if index is not None and inputs.modifiers(key)[index]:
+                        return True
+                elif not self._claimed(inputs, key):
+                    return True
+        return False
+
+    def _claimed(self, inputs: Any, key: str) -> bool:
+        """Whether a modified binding of this mode has taken ``key``."""
+        for binding in self.bindings:
+            index = MODIFIER_INDEX.get(binding.modifier)
+            if (index is not None and binding.modifier
+                    and key in binding.keys
+                    and inputs.modifiers(key)[index]):
+                return True
+        return False
+
+    def enter_when(self, platform: Any) -> bool:
+        """Whether the world imposes this mode right now.
+
+        False for a mode the player chooses.  A mode that the world can force —
+        swimming, being carried, low gravity — overrides this, because the
+        condition belongs to the mode and nothing else can know it.
+        """
+        return False
+
+    def update(self, dt: float, inputs: Any, platform: Any) -> None:
+        """Advance one frame from sampled input.  Overridden by each mode."""
+
+    # -- helpers shared by the concrete modes ----------------------------
+    def _axis(self, inputs: Any, positive: str, negative: str) -> float:
+        """A -1..1 axis from two commands of this mode."""
+        return ((1.0 if self.active(inputs, positive) else 0.0)
+                - (1.0 if self.active(inputs, negative) else 0.0))
+
+    def _turn(self, dt: float, inputs: Any, platform: Any, rate: float) -> None:
+        """Apply the turn command every walking-style mode shares.
+
+        The ramp resets when the turn stops or reverses, so the next tap starts
+        slow again rather than overshooting at full speed.
+        """
+        turn = self._axis(inputs, 'turnright', 'turnleft')
+        if turn and turn == self._turning:
+            self._turn_held += dt
+        else:
+            self._turn_held = 0.0
+        self._turning = turn
+        if not turn:
+            return
+        peak = max(float(self.turnAcceleration), 1.0)
+        ramp = min(1.0 + (peak - 1.0) * (self._turn_held / TURN_RAMP_SECONDS),
+                   peak)
+        platform.turn(turn * rate * ramp * dt)
+
+
+#: How long a turn must be held to reach ``turnAcceleration`` x ``turnRate``.
+TURN_RAMP_SECONDS = 0.67
+
+
+class _GroundMode(MovementMode):
+    """Shared behaviour of the modes that walk a surface."""
+
+    turnRate = field.newField('turnRate', 'SFFloat', 1, 2.0)
+    #: Radians of pitch per second while a look command is held.
+    lookRate = field.newField('lookRate', 'SFFloat', 1, 1.0)
+    #: Multiple of ``turnRate`` a held turn ramps up to, reached after
+    #: :data:`TURN_RAMP_SECONDS`.  1.0 turns at a steady rate.  A viewer wants
+    #: both a precise nudge and a quick spin in close quarters, and one rate
+    #: gives only one of them.
+    turnAcceleration = field.newField('turnAcceleration', 'SFFloat', 1, 1.0)
+
+    commands: Sequence[str] = (
+        'forward', 'back', 'left', 'right', 'turnleft', 'turnright',
+        'lookup', 'lookdown')
+
+    def defaultBindings(self) -> Sequence[KeyBinding]:
+        return [
+            KeyBinding(command='forward', label=_('Forward'), keys=['w', '<up>']),
+            KeyBinding(command='back', label=_('Back'), keys=['s', '<down>']),
+            KeyBinding(command='left', label=_('Strafe left'), keys=['a']),
+            KeyBinding(command='right', label=_('Strafe right'), keys=['d']),
+            KeyBinding(command='turnleft', label=_('Turn left'), keys=['q', '<left>']),
+            KeyBinding(command='turnright', label=_('Turn right'), keys=['e', '<right>']),
+            KeyBinding(command='lookup', label=_('Look up'), keys=['<up>'],
+                       modifier='ctrl'),
+            KeyBinding(command='lookdown', label=_('Look down'), keys=['<down>'],
+                       modifier='ctrl'),
+        ]
+
+    def _movement(self, inputs: Any) -> Tuple[float, float]:
+        return (self._axis(inputs, 'forward', 'back'),
+                self._axis(inputs, 'right', 'left'))
+
+    def _look(self, dt: float, inputs: Any, platform: Any) -> None:
+        """Tilt the view from the look commands.
+
+        A rising pitch tips the gaze down, so looking up subtracts.
+        """
+        pitch = self._axis(inputs, 'lookup', 'lookdown')
+        if pitch:
+            platform.look(-pitch * self.lookRate * dt)
+
+
+class WalkMode(_GroundMode):
+    """Walk, run and jump against gravity."""
+
+    PROTO = 'WalkMode'
+    walkSpeed = field.newField('walkSpeed', 'SFFloat', 1, 3.0)
+    runSpeed = field.newField('runSpeed', 'SFFloat', 1, 6.0)
+
+    commands: Sequence[str] = tuple(_GroundMode.commands) + ('run', 'jump')
+
+    def defaultBindings(self) -> Sequence[KeyBinding]:
+        return list(super(WalkMode, self).defaultBindings()) + [
+            KeyBinding(command='run', label=_('Run'), keys=['<shift>']),
+            KeyBinding(command='jump', label=_('Jump'), keys=[' ']),
+        ]
+
+    def update(self, dt: float, inputs: Any, platform: Any) -> None:
+        forward, strafe = self._movement(inputs)
+        self._turn(dt, inputs, platform, self.turnRate)
+        self._look(dt, inputs, platform)
+        running = inputs.held(*self.keys_for('run'))
+        platform.set_move(forward=forward, strafe=strafe,
+                          mode='run' if running else 'walk')
+        # `pressed` rather than `held`: a jump is one launch per press, however
+        # long the key stays down.
+        if inputs.pressed(*self.keys_for('jump')):
+            platform.jump()
+
+
+class FlyMode(_GroundMode):
+    """Free movement in three axes, ignoring gravity and geometry."""
+
+    PROTO = 'FlyMode'
+    flySpeed = field.newField('flySpeed', 'SFFloat', 1, 8.0)
+
+    commands: Sequence[str] = tuple(_GroundMode.commands) + ('up', 'down')
+
+    def defaultBindings(self) -> Sequence[KeyBinding]:
+        return list(super(FlyMode, self).defaultBindings()) + [
+            KeyBinding(command='up', label=_('Rise'), keys=[' ']),
+            KeyBinding(command='down', label=_('Sink'), keys=['c']),
+        ]
+
+    def update(self, dt: float, inputs: Any, platform: Any) -> None:
+        forward, strafe = self._movement(inputs)
+        self._turn(dt, inputs, platform, self.turnRate)
+        self._look(dt, inputs, platform)
+        platform.set_fly_move(forward=forward, strafe=strafe,
+                              up=self._axis(inputs, 'up', 'down'))
+
+
+class SwimMode(_GroundMode):
+    """Movement while submerged — imposed by the world, not chosen.
+
+    ``buoyancy`` is the fraction of gravity that pushes back up: 1.0 floats,
+    0.0 sinks like a stone.
+    """
+
+    PROTO = 'SwimMode'
+    swimSpeed = field.newField('swimSpeed', 'SFFloat', 1, 2.0)
+    buoyancy = field.newField('buoyancy', 'SFFloat', 1, 0.9)
+    commands: Sequence[str] = tuple(_GroundMode.commands) + ('up', 'down')
+
+    def defaultBindings(self) -> Sequence[KeyBinding]:
+        return list(super(SwimMode, self).defaultBindings()) + [
+            KeyBinding(command='up', label=_('Swim up'), keys=[' ']),
+            KeyBinding(command='down', label=_('Dive'), keys=['c']),
+        ]
+
+    def enter_when(self, platform: Any) -> bool:
+        """Submerged, so the world has put the avatar in this mode."""
+        return bool(self.enabled and getattr(platform, 'submerged', False))
+
+    def update(self, dt: float, inputs: Any, platform: Any) -> None:
+        forward, strafe = self._movement(inputs)
+        self._turn(dt, inputs, platform, self.turnRate)
+        self._look(dt, inputs, platform)
+        platform.set_fly_move(forward=forward, strafe=strafe,
+                              up=self._axis(inputs, 'up', 'down'))
+
+
+class FPSMode(WalkMode):
+    """Walking with the mouse steering the view.
+
+    ``sensitivity`` is radians of turn per pixel of mouse motion.
+    """
+
+    PROTO = 'FPSMode'
+    sensitivity = field.newField('sensitivity', 'SFFloat', 1, 0.003)
+    capturePointer = field.newField('capturePointer', 'SFBool', 1, True)
+    #: Whether pushing the mouse forward looks down (flight-sim style).
+    invertLook = field.newField('invertLook', 'SFBool', 1, False)
+
+    def update(self, dt: float, inputs: Any, platform: Any) -> None:
+        super(FPSMode, self).update(dt, inputs, platform)
+        dx, dy = inputs.mouse_delta()
+        if dx:
+            platform.turn(dx * self.sensitivity)
+        if dy:
+            # A rising pitch tips the gaze down, so an un-inverted mouse
+            # subtracts: pushing forward should look up.
+            platform.look(-dy * self.sensitivity * (-1.0 if self.invertLook else 1.0))

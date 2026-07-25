@@ -1,8 +1,6 @@
 """Definition of a Context's visual parameters"""
 import os
-from vrml.vrml97 import nodetypes
-from vrml import node, field, fieldtypes
-from OpenGL import GL
+from vrml import node, field
 
 
 def _get_default_profile():
@@ -69,6 +67,16 @@ class ContextDefinition( node.Node ):
     title = field.newField( "title", "SFString", 1, "")
     profileFile = field.newField( "profileFile", 'SFString',1,"")
 
+    #: Movement modes this context offers, as nodes (see
+    #: :mod:`OpenGLContext.move.modes`).  Declared rather than hard-coded so a
+    #: game states which ways of moving it has and how each is tuned.
+    movementModes = field.newField( 'movementModes', 'MFNode', 1, list )
+    #: The mode in force right now.  Written by the navigation manager and
+    #: watchable like any field, so a game can react to entering water without
+    #: the manager knowing anything about it.
+    movementMode = field.newField( 'movementMode', 'SFNode', 1, node.NULL )
+
+
     # optional buffers...
     doubleBuffer = field.newField( "doubleBuffer", "SFBool", 1, True)
 
@@ -108,8 +116,9 @@ class ContextDefinition( node.Node ):
         """Generate a ContextDefinition from a ConfigParser instance"""
         from vrml import protofunctions
         instance = cls()
-        for field in protofunctions.getFields( cls ):
-            if cfg.has_option( section, field.name ):
-                setattr( instance, field.name, cfg.get( section, field.name ))
+        for definition in protofunctions.getFields( cls ):
+            if cfg.has_option( section, definition.name ):
+                setattr( instance, definition.name,
+                         cfg.get( section, definition.name ))
         return instance
 

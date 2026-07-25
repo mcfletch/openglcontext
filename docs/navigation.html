@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Movement Modes &amp; Navigation</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Movement Modes &amp; Navigation</h1>
+</header>
+
+<section>
+<p class="introduction">A <strong>movement mode</strong> is one named way of
+moving &mdash; walking, flying, swimming, first-person mouse-look &mdash;
+declared as a scenegraph node with its own speeds and its own key bindings. A
+context lists the modes it offers on its <code>ContextDefinition</code>, and one
+manager decides which is in force and gives it the frame. Because the modes are
+nodes, a settings screen can enumerate and rewrite them with no knowledge of any
+particular application, and a game can retune a mode by setting a field rather
+than subclassing anything.</p>
+</section>
+
+<section id="modes">
+  <h2>Declaring the modes</h2>
+  <p>The modes live in <code>OpenGLContext.move.modes</code>. Each is a
+    <code>PROTO</code> like any other node, so it can be written into a parsed
+    file, carried in an <code>SFNode</code> field, and watched for change.</p>
+<pre>from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move import modes
+
+definition = ContextDefinition(movementModes=[
+    modes.WalkMode(name='walk', walkSpeed=3.0, runSpeed=6.0),
+    modes.FlyMode(name='fly', flySpeed=8.0),
+    modes.FPSMode(name='fps', sensitivity=0.003),
+    modes.SwimMode(name='swim', swimSpeed=2.0),
+])
+MyContext.ContextMainLoop(definition=definition)</pre>
+  <table>
+    <tr><th>Mode</th><th>Its own fields</th><th>Moves by</th></tr>
+    <tr><td><code>WalkMode</code></td><td><code>walkSpeed</code>,
+      <code>runSpeed</code></td><td>gravity and collision, with a jump</td></tr>
+    <tr><td><code>FlyMode</code></td><td><code>flySpeed</code></td>
+      <td>three axes, ignoring gravity and geometry</td></tr>
+    <tr><td><code>FPSMode</code></td><td>walk's, plus <code>sensitivity</code>
+      and <code>invertLook</code></td><td>walking, steered by the pointer</td></tr>
+    <tr><td><code>SwimMode</code></td><td><code>swimSpeed</code>,
+      <code>buoyancy</code></td><td>three axes, while submerged</td></tr>
+  </table>
+  <p>Every mode also carries <code>name</code>, <code>enabled</code>,
+    <code>bindings</code> and <code>capturePointer</code>, and the ground-based
+    modes carry <code>turnRate</code> and <code>lookRate</code>. Speeds are in
+    scene units per second, rates in radians per second, and
+    <code>sensitivity</code> in radians of turn per pixel of pointer motion.</p>
+  <p>Each mode declares <em>its own typed fields</em> rather than sharing a
+    free-form settings mapping: one game's swim speed is 3 and another's is 10,
+    and both are an <code>SFFloat</code> on <code>SwimMode</code>. That buys
+    validation, defaults and serialisation from the field system.</p>
+
+  <h3>Chosen modes and imposed modes</h3>
+  <p>Two kinds of mode share the base class. <strong>User-selected</strong>
+    modes &mdash; walk, fly, first-person &mdash; are what
+    <code>NavigationManager.cycle()</code> steps through. A
+    <strong>world-imposed</strong> mode overrides <code>enter_when(platform)</code>
+    to say "I apply right now"; <code>SwimMode</code> does, returning true while
+    <code>platform.submerged</code> is set. An imposed mode never appears in the
+    cycle &mdash; switching into swimming while standing on dry land is not a
+    thing a player wants &mdash; and it takes precedence while its condition
+    holds, handing the mode back afterwards.</p>
+</section>
+
+<section id="input">
+  <h2>Input is sampled, not reacted to</h2>
+  <p>A controller bound to key <em>events</em> can only act once per event, so
+    holding one key and tapping another loses whichever the handler did not see
+    &mdash; the reason "jump while running" has to be special-cased in every
+    application that wants it.
+    <code>OpenGLContext.events.inputstate.InputState</code> instead accumulates
+    key-down/key-up and pointer motion as they arrive, and a mode asks it once
+    per frame what is currently true.</p>
+  <table>
+    <tr><th>Ask</th><th>Answers</th></tr>
+    <tr><td><code>held(*names)</code></td><td>is any of these down now</td></tr>
+    <tr><td><code>pressed(*names)</code></td><td>was any pressed since last
+      asked &mdash; consumed by reading, so a jump fires once per press</td></tr>
+    <tr><td><code>axis(positive, negative)</code></td><td>+1/&minus;1/0 from two
+      opposed sets; holding both cancels</td></tr>
+    <tr><td><code>modifiers(name)</code></td><td>the shift/ctrl/alt triple
+      recorded when that key was last pressed</td></tr>
+    <tr><td><code>mouse_delta()</code></td><td>pointer motion since the last
+      call, then reset</td></tr>
+  </table>
+  <p class="technical"><code>ViewPlatformMixin</code> feeds the sampler from the
+    ordinary keyboard and pointer events every backend already emits, so nothing
+    backend-specific is needed. Pointer events carry an absolute position and
+    mouse-look wants a delta, so the difference is taken there; the first event
+    establishes the origin and reports no motion, or entering a window would read
+    as one violent flick of the view.</p>
+</section>
+
+<section id="bindings">
+  <h2>Bindings, and the modifier rule</h2>
+  <p>A <code>KeyBinding</code> node carries a <code>command</code> as the mode
+    names it, a <code>label</code> for a settings window to show, the
+    <code>keys</code> that trigger it, and an optional <code>modifier</code> of
+    <code>shift</code>, <code>ctrl</code> or <code>alt</code>.</p>
+<pre>from OpenGLContext.move import modes
+
+walk = modes.WalkMode(name='walk')
+walk.bindings = list(walk.bindings) + [
+    modes.KeyBinding(command='lookup', label='Look up',
+                     keys=['&lt;up&gt;'], modifier='ctrl'),
+]</pre>
+  <p>A binding with a modifier needs that modifier held. A binding
+    <em>without</em> one loses its key only while another binding of the same
+    mode claims that key with a modifier that is currently down &mdash; which is
+    what lets <kbd>ctrl</kbd>+<kbd>&uarr;</kbd> tilt the view without also
+    walking forward, while <kbd>shift</kbd>+<kbd>w</kbd> keeps walking because
+    no binding claims <kbd>w</kbd> with shift.</p>
+  <p>For a rebinding screen, <code>NavigationManager.binding_table()</code>
+    returns <code>(mode name, binding)</code> for every command, and
+    <code>rebind(mode, command, keys)</code> points one at different keys. It
+    takes effect at once: modes resolve a command to keys when they sample, not
+    when they are built.</p>
+</section>
+
+<section id="context">
+  <h2>What the context does</h2>
+  <p>A context that declares no <code>movementModes</code> is untouched and
+    keeps whatever movement manager it had. One that declares them gets a
+    <code>NavigationManager</code>, and drives it once a frame:</p>
+<pre>def OnIdle(self, *args):
+    self.updateNavigation(dt)          # settle the mode, give it the frame
+    return 1</pre>
+  <table>
+    <tr><th>Method</th><th>What it is for</th></tr>
+    <tr><td><code>getNavigation()</code></td><td>the manager, or None when no
+      modes are declared</td></tr>
+    <tr><td><code>getNavigationPlatform()</code></td><td>what the modes drive.
+      The view platform by default; a game overrides it to return its character
+      controller, and the manager is rebuilt when the answer changes</td></tr>
+    <tr><td><code>updateNavigation(dt)</code></td><td>one frame</td></tr>
+    <tr><td><code>setPointerCapture(capture)</code></td><td>grab or release the
+      pointer; returns False where the backend cannot</td></tr>
+    <tr><td><code>suspendPointerCapture(suspend)</code></td><td>hand the pointer
+      back while an overlay wants it, and take it again after</td></tr>
+  </table>
+  <p>The mode in force is published on <code>contextDefinition.movementMode</code>
+    (an <code>SFNode</code>), so anything that wants to know &mdash; a HUD, a
+    settings screen, an animation state machine &mdash; watches that field
+    rather than polling.</p>
+  <p>A platform driven by the modes needs <code>set_move</code>,
+    <code>set_fly_move</code>, <code>turn</code>, <code>look</code> and
+    <code>jump</code>. <code>ViewPlatform</code> and
+    <code>PhysicsViewPlatform</code> both have them.</p>
+
+  <h3>Pointer capture</h3>
+  <p>A mode whose <code>capturePointer</code> field is set has the pointer
+    grabbed for as long as it is in force. Mouse-look needs unbounded motion: a
+    visible cursor stops at the edge of the screen and the view stops turning
+    with it. The GLFW backend disables the cursor and asks for raw, unaccelerated
+    motion where the platform has it &mdash; pointer acceleration is a desktop
+    convenience that would make how far a turn goes depend on how fast it
+    started. The grab is applied only when the answer changes, never once a
+    frame, and a backend that cannot capture simply keeps working with the view
+    turning as far as the window edge.</p>
+</section>
+
+<section id="viewers">
+  <h2>The shipped viewers</h2>
+  <table>
+    <tr><th>Viewer</th><th>Modes</th><th>Driven by them</th></tr>
+    <tr><td><code>oglc-gltf</code> (<code>bin/gltf_view</code>)</td>
+      <td>walk, fly</td><td>yes, in walk mode &mdash; the modes move the
+      character controller and the camera follows</td></tr>
+    <tr><td>twitch (BSP map viewer)</td><td>walk, fly, first-person, swim</td>
+      <td>yes</td></tr>
+    <tr><td><code>bin/vrml_view</code></td><td>walk, fly</td>
+      <td>declared only; its camera is still the older navigator</td></tr>
+  </table>
+  <p>Each exposes <code>movement_modes(scale=1.0)</code>. The
+    <code>scale</code> parameter exists because a viewer frames models from a
+    bolt to a city and one walking speed cannot suit both; <code>oglc-gltf</code>
+    passes the same scale it sizes the avatar by, and twitch converts from map
+    units. A viewer keeps the free-fly navigator for its non-walking mode, and
+    the two never both drive the camera: the older manager is unbound while the
+    modes are in charge.</p>
+  <p>A settings GUI over all of this &mdash; widgets, focus, skinning and a
+    rebinding page built from <code>binding_table()</code> &mdash; is designed in
+    <code>plans/OVERLAY-UI.md</code>.</p>
+</section>
+
+</body></html>

@@ -113,6 +113,41 @@ def main() -> int:
                        attenuation=(1, 0, 0)),
         ])
 
+    def lightmap_scene():
+        # Two identical unlit-grey quads, no lights at all: the only illumination
+        # is the baked lightmap on the left quad (a black->white horizontal ramp
+        # on TEXCOORD_1). The right quad has none, so it stays at the flat ambient
+        # level and gives the comparison baseline.
+        import numpy as np
+        from PIL import Image
+        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+
+        ramp = np.tile(np.linspace(0, 255, 64, dtype='u1')[None, :, None], (64, 1, 3))
+        lightmap = PBRTexture(Image.fromarray(ramp, 'RGB'), srgb=True)
+
+        def quad(x, material):
+            p = np.array([[x - 1, -1, 0], [x + 1, -1, 0],
+                          [x + 1, 1, 0], [x - 1, 1, 0]], 'f')
+            uv = np.array([[0, 1], [1, 1], [1, 0], [0, 0]], 'f')
+            return Shape(
+                geometry=PBRMesh(
+                    positions=p, normals=np.tile([0, 0, 1], (4, 1)).astype('f'),
+                    texcoords=uv, texcoords1=uv,
+                    indices=np.array([0, 1, 2, 0, 2, 3], 'I'), solid=False),
+                appearance=Appearance(material=material))
+
+        base = dict(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.9)
+        state['pos'] = (0, 0, 5.5)
+        return sceneGraph(children=[
+            quad(-1.2, PBRMaterial(texCoordMask=32, textures={'lightmap': lightmap},
+                                   **base)),
+            quad(1.2, PBRMaterial(**base)),
+            # A near-dark light rather than none: a scene with no lights at all
+            # gets a default headlight, which would wash both quads out and hide
+            # what the lightmap contributes.
+            DirectionalLight(direction=(0, 0, -1), color=(1, 1, 1), intensity=0.02),
+        ])
+
     def gltf_scene():
         from OpenGLContext.loaders import gltf
         # sc.group is the model's root Transform (one child Transform per glTF
@@ -138,6 +173,8 @@ def main() -> int:
                 self.sg = transmission_scene()
             elif mode == 'teapot':
                 self.sg = teapot_scene()
+            elif mode == 'lightmap':
+                self.sg = lightmap_scene()
             else:
                 self.sg = spheres_scene()
             self.platform.setPosition(state['pos'])

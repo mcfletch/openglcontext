@@ -171,7 +171,7 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
     # normal fallback above, so authored normal maps actually perturb the surface.
     if (tangents is None and texcoords is not None
             and 'normal' in getattr(material, 'textures', {})):
-        tangents = _estimate_tangents(positions, normals, texcoords, indices)
+        tangents = estimate_tangents(positions, normals, texcoords, indices)
 
     morph_targets = _read_morph_targets(g, primitive, resolver, nverts)
     mesh = PBRMesh(positions=positions, normals=normals, texcoords=texcoords,
@@ -240,7 +240,7 @@ def _estimate_normals(positions: np.ndarray, indices: Optional[np.ndarray]) -> n
     return np.ascontiguousarray((normals / lens).astype(np.float32))
 
 
-def _estimate_tangents(positions: np.ndarray, normals: np.ndarray, texcoords: np.ndarray,
+def estimate_tangents(positions: np.ndarray, normals: np.ndarray, texcoords: np.ndarray,
                        indices: Optional[np.ndarray]) -> np.ndarray:
     """Per-vertex tangents (vec4 xyz + w handedness) from UVs, for normal mapping.
 

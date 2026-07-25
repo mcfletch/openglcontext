@@ -47,7 +47,7 @@ gl = pytest.mark.skipif(not _gl_available(), reason='no GL target available')
 
 
 @gl
-@pytest.mark.parametrize('mode', ['physics', 'nophysics'])
+@pytest.mark.parametrize('mode', ['physics', 'nophysics', 'walk'])
 def test_walk_freefly_toggle(mode):
     env = dict(os.environ, OPENGLCONTEXT_BACKEND='glfw')
     try:

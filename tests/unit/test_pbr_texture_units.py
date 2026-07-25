@@ -43,9 +43,13 @@ def test_pbr_sampler_units_are_unique():
     assert len(values) == len(set(values))
 
 
-def test_material_maps_avoid_scratch_unit_zero():
-    # unit 0 is the conventional scratch/bind unit; keep the semantic PBR maps off it
-    assert 0 not in _pbr_units()
+def test_only_the_lightmap_uses_scratch_unit_zero():
+    # Unit 0 is the conventional scratch/bind unit, so the semantic PBR maps stay
+    # off it. The lightmap is the one exception: units 1-15 are fully allocated
+    # and baked lighting has to work inside the guaranteed-16 budget.
+    on_zero = {name for name, unit in PBR_UNITS.items() if unit == 0}
+    assert on_zero == {'lightmap'}
+    assert 0 not in set(IBL_UNITS.values()) | {TRANSMISSION_UNIT}
 
 
 if __name__ == '__main__':

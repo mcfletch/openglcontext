@@ -3,7 +3,9 @@
 Runs one walk/free-fly toggle scenario against the oglc-gltf viewer in an isolated
 process (multiple GL contexts can't coexist in one process), asserts the invariants,
 and prints ``TOGGLE_OK`` on success.  Usage: ``_gltf_toggle_driver.py MODEL MODE``
-where MODE is ``physics`` (start walking, via ``--physics``) or ``nophysics``.
+where MODE is ``physics`` (start walking, via ``--physics``), ``nophysics``, or
+``walk`` (drive the declared movement modes with real key events and check the
+avatar actually moves).
 
 The viewer defaults to free-fly (an isolated/floorless model would otherwise drop
 the avatar past the geometry), so the walk scenario opts in with ``--physics``.
@@ -67,6 +69,48 @@ def main():
         eye = np.asarray(ctx._physics.character.eye(), dtype='d')
         assert np.linalg.norm((eye - target)[[0, 2]]) < 1.0, \
             ('avatar did not reseat at camera', eye, target)
+    elif mode == 'walk':
+        # The declared movement modes, driven by real key events: the sampler is
+        # fed from event dispatch, a mode reads it once per frame, and the
+        # character controller is what moves.
+        assert ctx._physics_on, 'expected to start in walk mode'
+        assert ctx.getNavigation() is not None, 'no navigation manager'
+        assert ctx.getNavigationPlatform() is ctx._physics
+
+        from OpenGLContext.events.keyboardevents import KeyboardEvent
+
+        def key(name, state):
+            event = KeyboardEvent()
+            event.name = name
+            event.state = state
+            return event
+
+        start = np.asarray(ctx._physics.character.position, dtype='d').copy()
+        ctx.ProcessEvent(key('w', 1))
+        for _ in range(40):
+            ctx.OnIdle()
+            time.sleep(0.005)
+        moved = np.asarray(ctx._physics.character.position, dtype='d') - start
+        assert np.linalg.norm(moved[[0, 2]]) > 1e-3, ('holding w moved nothing',
+                                                      moved)
+
+        ctx.ProcessEvent(key('w', 0))
+        for _ in range(5):
+            ctx.OnIdle()
+        here = np.asarray(ctx._physics.character.position, dtype='d').copy()
+        for _ in range(20):
+            ctx.OnIdle()
+            time.sleep(0.005)
+        after = np.asarray(ctx._physics.character.position, dtype='d')
+        assert np.linalg.norm((after - here)[[0, 2]]) < 1e-3, \
+            ('released w kept moving', here, after)
+
+        # The mode in force is published for anything watching it.
+        assert ctx.contextDefinition.movementMode is not None
+        assert ctx.contextDefinition.movementMode.name == 'walk'
+        ctx._pfly(None)
+        assert ctx.contextDefinition.movementMode.name == 'fly'
+        assert ctx._physics.character.flying
     else:
         # --no-physics: starts free-fly, physics not built; 'g' builds it lazily
         assert not ctx._physics_on

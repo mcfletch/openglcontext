@@ -165,7 +165,7 @@ class TestTangentEstimation:
     def _uv_triangle(self, uv):
         pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
         nrm = np.array([[0, 0, 1]] * 3, dtype=np.float32)
-        return gltf.meshes._estimate_tangents(pos, nrm, np.asarray(uv, np.float32),
+        return gltf.meshes.estimate_tangents(pos, nrm, np.asarray(uv, np.float32),
                                        np.array([0, 1, 2], np.uint32))
 
     def test_tangent_points_along_the_u_axis(self):
@@ -190,7 +190,7 @@ class TestTangentEstimation:
         pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [9, 9, 9]], dtype=np.float32)
         nrm = np.array([[0, 0, 1]] * 4, dtype=np.float32)
         uv = np.array([[0, 0], [1, 0], [0, 1], [0, 0]], dtype=np.float32)
-        t = gltf.meshes._estimate_tangents(pos, nrm, uv, None)      # non-indexed
+        t = gltf.meshes.estimate_tangents(pos, nrm, uv, None)      # non-indexed
         assert t.shape == (4, 4)
         assert np.allclose(t[3, :3], [0, 0, 0])
 
@@ -856,8 +856,11 @@ class TestSameOriginFetch:
         seen = {}
 
         class _Opener:
-            def open(self, url, timeout=None):
-                seen['url'] = url
+            def open(self, request, timeout=None):
+                # A Request rather than a bare URL: the fetch identifies itself
+                # with a User-Agent, which some asset hosts require.
+                seen['url'] = request.full_url
+                seen['agent'] = request.get_header('User-agent')
                 return _Resp()
         # Patch build_opener: the fetch is now made through a redirect-guarded
         # opener rather than a bare urlopen.
@@ -866,6 +869,7 @@ class TestSameOriginFetch:
         r = resolver.Resolver(base_url='https://example.com/a/model.gltf')
         assert r.fetch('buf.bin') == b'OK'
         assert seen['url'].startswith('https://example.com/a/')
+        assert 'OpenGLContext' in seen['agent']
 
 
 class TestLocalPathConfinement:

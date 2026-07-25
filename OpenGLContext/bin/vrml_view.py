@@ -27,6 +27,31 @@ from OpenGLContext import vrmlcontext
 USE_SHADERS = os.environ.get('OPENGLCONTEXT_PROFILE', 'compatibility') == 'core'
 
 
+#: Movement speeds a viewer offers, in scene units per second at scale 1.
+WALK_SPEED = 3.0
+RUN_SPEED = 6.0
+FLY_SPEED = 8.0
+
+
+def movement_modes(scale: float = 1.0):
+    """The ways of moving this viewer offers, as declared nodes.
+
+    Declared rather than hand-rolled: one settings screen can present the
+    navigation of every viewer, and a game embedding this one retunes it by
+    setting fields rather than subclassing.
+
+    ``scale`` sizes the speeds to the thing being viewed — a viewer frames
+    models from a bolt to a city, and a speed that suits one is useless for the
+    other, so it is a parameter rather than a constant.
+    """
+    from OpenGLContext.move import modes as _modes
+    return [
+        _modes.WalkMode(name='walk', walkSpeed=WALK_SPEED * scale,
+                        runSpeed=RUN_SPEED * scale),
+        _modes.FlyMode(name='fly', flySpeed=FLY_SPEED * scale),
+    ]
+
+
 class TestContext(
     vrmlcontext.VRMLContext,
     BaseContext

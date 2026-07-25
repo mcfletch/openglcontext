@@ -148,7 +148,7 @@ Material _M;
 // apply the KHR_texture_transform matrix only if this channel's *transform* bit
 // (the same bit << 8) is set -- KHR_texture_transform is per-texture, so a material
 // may transform e.g. only its emissive map. `bit`: 1=baseColor 2=metallicRoughness
-// 4=normal 8=occlusion 16=emissive.
+// 4=normal 8=occlusion 16=emissive 32=lightmap.
 vec2 uvFor(int bit) {
     vec2 base = ((texCoordMask & bit) != 0) ? vTexCoord1 : vTexCoord;
     if ((texCoordMask & (bit << 8)) != 0)
@@ -275,6 +275,12 @@ uniform sampler2D metallicRoughnessTexture;  uniform bool hasMetallicRoughness;
 uniform sampler2D normalTexture;             uniform bool hasNormal;
 uniform sampler2D occlusionTexture;          uniform bool hasOcclusion;
 uniform sampler2D emissiveTexture;           uniform bool hasEmissive;
+// Baked static irradiance (the BSP/Quake lightmap workflow): the map compiler
+// solved the static lights offline into a texture on a second UV set. Treated as
+// an extra ambient irradiance source, so normal mapping, IBL reflection and
+// dynamic lights still apply on top of it.
+uniform sampler2D lightmapTexture;           uniform bool hasLightmap;
+uniform float lightmapStrength;              // exposure of the baked levels
 
 // Environment / image-based lighting. iblMode: 0=off (flat ambient), 1=analytic
 // (procedural env + analytic split-sum BRDF), 2=full (prefiltered probe + LUT).
@@ -410,6 +416,15 @@ void main() {
 
     vec3 emissive = emissiveFactor * emissiveStrength;   // KHR_materials_emissive_strength
     if (hasEmissive) emissive *= toLinear(texture(emissiveTexture, uvFor(16)).rgb);
+
+    // Baked irradiance, read as LINEAR light. A lightmap is not a colour
+    // texture: it is a radiosity solution written straight to 8 bits, and the
+    // engines that produce them modulate in 8 bits with no gamma step. Decoding
+    // it as sRGB would crush the midtones -- a mid-grey luxel would arrive at
+    // about a tenth of its intended irradiance and the level would look unlit.
+    vec3 lightmap = vec3(0.0);
+    if (hasLightmap)
+        lightmap = texture(lightmapTexture, uvFor(32)).rgb * lightmapStrength;
 
     // --- normal (with optional tangent-space normal map) ---
     vec3 Ngeom = normalize(vNormal);
@@ -730,6 +745,18 @@ void main() {
         ambDiffuse  = sceneAmbient * albedo * (1.0 - metallic) * ao;
         ambSpecular = vec3(0.0);
         irrBack = sceneAmbient;
+    }
+    // Baked irradiance joins the environment terms: it is light arriving at the
+    // surface, so it multiplies albedo for the diffuse lobe and goes through the
+    // same split-sum reflectance for the specular one. Without the specular half a
+    // glossy lightmapped surface reads flat -- the baked light would never
+    // reflect. The direction of the baked light is not recorded, so the specular
+    // uses the ambient (view-dependent, normal-independent) approximation.
+    if (hasLightmap) {
+        vec2 lmAB = envBRDFApprox(NdotV, roughness);
+        ambDiffuse += lightmap * albedo * (1.0 - metallic) * ao;
+        ambSpecular += lightmap * (F0 * lmAB.x + specF90 * lmAB.y) * ao;
+        irrBack += lightmap;
     }
     // Diffuse transmission gives up some reflected-diffuse energy to a back-lit lobe
     // fed by the environment behind the surface (the punctual back lobe is added in

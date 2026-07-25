@@ -94,6 +94,12 @@ class EventManager(object):
         Note: this method would normally be called by a sub-
             class with the calculated key for the sub-class.
 
+        Note: the callback is connected by *weak* reference, so the caller
+            must hold the only strong one -- see addEventHandler.  A function
+            that nothing else refers to is collected the moment this returns
+            and the binding becomes a silent no-op.  This is what allows a
+            node to be collected without unbinding its handlers first.
+
         return previous callback function or None
         """
         previous = cls._removeCurrentCallbacks( key, node=node, capture=capture )

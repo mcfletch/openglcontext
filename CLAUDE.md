@@ -397,6 +397,19 @@ The `Shape` node handles material and texture setup, then calls `geometry.render
 floor, not the bar. Every one of the following applies to new code before a task is
 done:
 
+### Workspace-wide rules also apply
+
+[../CLAUDE.md](../CLAUDE.md) binds every project here. Two of its requirements
+are easy to skip and must not be:
+
+- **Documentation ships with the change.** New feature, new option, changed
+  default, changed public API — update `docs/` (and `plans/` where a design note
+  exists) in the same piece of work, and say in your report what you changed.
+- **Never copy copyleft code.** Any task that would involve reading a GPL/LGPL/
+  AGPL/CC-BY-SA codebase must follow [../CLEAN-ROOM.md](../CLEAN-ROOM.md):
+  prefer a non-copyleft source, split the Reader and Implementer roles, and let
+  only a spec in [../specs/](../specs/) cross the wall.
+
 ### Red/Green TDD
 
 Write the failing test first, watch it fail (red), then write the code that makes

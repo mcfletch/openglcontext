@@ -1,7 +1,9 @@
 """Extra coverage for loaders.resolver: uncapped reads, the no-base and cache-hit
 paths, the app-data fallback, and the best-effort OSError swallows.
 """
+import io
 import os
+import urllib.request
 
 import pytest
 
@@ -108,3 +110,34 @@ def test_purge_cache_swallows_stat_errors(tmp_path, monkeypatch):
     monkeypatch.setattr(resolver.os.path, "getmtime", bad_getmtime)
     # The error on the single entry is swallowed; nothing removed, no raise.
     assert resolver.purge_cache(str(tmp_path), max_age_days=0) == 0
+
+
+class TestUserAgent:
+    """The fetcher identifies itself.
+
+    Python's default `Python-urllib/x.y` User-Agent is rejected outright by a
+    number of asset hosts (403), so a fetch that would otherwise succeed fails
+    for a reason nothing in the response explains.
+    """
+
+    def test_a_fetch_sends_a_user_agent_naming_the_project(self):
+        from OpenGLContext.loaders import resolver
+        seen = {}
+
+        class FakeOpener:
+            def open(self, request, timeout=None):
+                seen['agent'] = request.get_header('User-agent')
+                seen['url'] = request.full_url
+                return io.BytesIO(b'ok')
+
+        original = urllib.request.build_opener
+        urllib.request.build_opener = lambda *handlers: FakeOpener()
+        try:
+            resolver._urlopen_same_origin('https://example.invalid/a.zip',
+                                          'https://example.invalid/a.zip')
+        finally:
+            urllib.request.build_opener = original
+        assert seen['url'] == 'https://example.invalid/a.zip'
+        assert seen['agent']
+        assert 'OpenGLContext' in seen['agent']
+        assert 'urllib' not in seen['agent'].lower()

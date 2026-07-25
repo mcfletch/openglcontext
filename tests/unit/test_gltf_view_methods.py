@@ -572,27 +572,46 @@ class TestCameraSelection:
 
 
 class TestPhysicsInputHandlers:
-    def test_pkey_records_the_key_time(self):
-        inst = _inst()
-        inst._pkeys = {}
-        inst._pkey(types.SimpleNamespace(name='w'))
-        assert 'w' in inst._pkeys
+    """Movement itself belongs to the declared modes; these are what is left.
 
-    def test_jump_fly_and_look_delegate_to_the_physics_platform(self):
+    A key event only has to wake the frame loop -- the modes read the sampled
+    input state, not the events -- and ``f`` has to reach the character
+    controller, since flying is a property of it and not of the movement.
+    """
+
+    def test_a_movement_key_wakes_the_frame_loop(self):
+        inst = _inst()
+        drawn = []
+        inst.triggerRedraw = lambda value=1: drawn.append(value)
+        inst._pkey(types.SimpleNamespace(name='w'))
+        assert drawn
+
+    def test_the_fly_key_swaps_the_mode_and_tells_the_character(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.bin import gltf_view
         inst = _inst()
         seen = {}
-        looks = []
         inst._physics = types.SimpleNamespace(
-            jump=lambda: seen.setdefault('jump', True),
-            character=types.SimpleNamespace(flying=False),
-            set_fly=lambda v: seen.setdefault('fly', v),
-            look=looks.append)
-        inst._pjump(None)
+            jump=lambda: None, character=types.SimpleNamespace(flying=False),
+            set_fly=lambda v: seen.setdefault('fly', v), look=lambda d: None,
+            submerged=False, turn=lambda d: None,
+            set_move=lambda **k: None, set_fly_move=lambda **k: None)
+        inst._physics_on = True
+        inst.contextDefinition = ContextDefinition(
+            movementModes=gltf_view.movement_modes())
+        inst.navigation = None
         inst._pfly(None)
-        inst._plook_up(None)
-        inst._plook_down(None)
-        assert seen['jump'] is True and seen['fly'] is True
-        assert looks == [-0.08, 0.08]                     # look up, then look down
+        assert seen['fly'] is True
+        assert inst.contextDefinition.movementMode.name == 'fly'
+        inst._pfly(None)
+        assert seen['fly'] is True                        # first answer kept
+        assert inst.contextDefinition.movementMode.name == 'walk'
+
+    def test_the_fly_key_does_nothing_before_physics_exists(self):
+        inst = _inst()
+        inst._physics = None
+        inst.navigation = None
+        inst._pfly(None)
 
 
 class TestFrameDegenerate:

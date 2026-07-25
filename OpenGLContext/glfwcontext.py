@@ -201,6 +201,25 @@ class GLFWContext(
             if clear is not None:
                 clear()
 
+    def setPointerCapture(self, capture):
+        """Grab or release the pointer for a mouse-look movement mode.
+
+        The disabled cursor is the one that reports unbounded motion: hidden
+        still stops at the edge of the screen, and a view that stops turning
+        there is unusable.  Raw motion is asked for where the platform has it,
+        since pointer acceleration is a desktop convenience that would make how
+        far a turn goes depend on how fast it started.
+        """
+        if not self.window:
+            return False
+        glfw.set_input_mode(
+            self.window, glfw.CURSOR,
+            glfw.CURSOR_DISABLED if capture else glfw.CURSOR_NORMAL)
+        if glfw.raw_mouse_motion_supported():
+            glfw.set_input_mode(self.window, glfw.RAW_MOUSE_MOTION,
+                                bool(capture))
+        return True
+
     def setCurrent(self):
         """Make this context's OpenGL context current"""
         Context.setCurrent(self)

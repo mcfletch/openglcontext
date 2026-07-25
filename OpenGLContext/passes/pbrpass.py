@@ -47,13 +47,18 @@ _APPEARANCE_UNSET = object()
 # (valid indices 0..15), so every sampler the PBR program uses must fit under 16.
 # The shared shadow samplers occupy 4-5 (spot/CSM array + raw view) and 6..6+N-1
 # (point-light cubes: one unit for the packed cube-array, up to MAX_SHADOW_LIGHTS
-# for the per-slot fallback). That leaves units 1-3 and 10-15 free on every path
-# (unit 0 is left as the conventional scratch/bind unit). The nine PBR-specific
-# samplers are packed into those: material maps below/above the shadow block, then
-# transmission + the three IBL probes. Max index stays at 15.
+# for the per-slot fallback). That leaves units 0-3 and 10-15 free on every path.
+# The PBR-specific samplers are packed into those: material maps below/above the
+# shadow block, then transmission + the three IBL probes. Max index stays at 15.
+#
+# The lightmap takes unit 0 -- the conventional scratch/bind unit -- because every
+# other index inside the guaranteed 16 is spoken for and a baked-lighting workflow
+# must work on min-spec hardware, not only where the extension budget applies.
+# Nothing binds to unit 0 between bind_pbr_textures and the draw, and a material
+# without a lightmap clears hasLightmap, so a stray bind there is never sampled.
 PBR_UNITS = {
     'baseColor': 1, 'metallicRoughness': 2, 'normal': 3,
-    'occlusion': 10, 'emissive': 11,
+    'occlusion': 10, 'emissive': 11, 'lightmap': 0,
 }
 # IBL probe samplers (transmission is 12). Assigned to distinct units even when
 # IBL is analytic/off: the PBR program has both samplerCube and sampler2D uniforms,
@@ -63,11 +68,12 @@ PBR_UNITS = {
 _PBR_SAMPLER = {
     'baseColor': 'baseColorTexture', 'metallicRoughness': 'metallicRoughnessTexture',
     'normal': 'normalTexture', 'occlusion': 'occlusionTexture',
-    'emissive': 'emissiveTexture',
+    'emissive': 'emissiveTexture', 'lightmap': 'lightmapTexture',
 }
 _PBR_HAS = {
     'baseColor': 'hasBaseColor', 'metallicRoughness': 'hasMetallicRoughness',
     'normal': 'hasNormal', 'occlusion': 'hasOcclusion', 'emissive': 'hasEmissive',
+    'lightmap': 'hasLightmap',
 }
 
 # --- Extension material textures, gated by the sampler budget ------------------
@@ -399,6 +405,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self._set_uniform1i(_IBL_SAMPLER[channel], unit, self.program)
         self._set_uniform1i('transmissionTexture', TransmissionBuffer.UNIT, self.program)
         self._set_uniform1i('hasTransmissionBackdrop', 0, self.program)
+        # A GLSL uniform starts at zero, which would make every lightmap black;
+        # the neutral multiplier has to be uploaded once up front.
+        self.set_lightmap_strength(1.0)
         # Extension-texture samplers exist only when the budget admitted them
         # (PBR_EXT_TEXTURES). Assign each to its unit and clear its presence flag.
         for channel, unit in getattr(self, 'ext_channels', {}).items():
@@ -468,6 +477,15 @@ class PBRShaderProgram(VRML97ShaderProgram):
 
     def clear_transmission_backdrop(self) -> None:
         self._set_uniform1i('hasTransmissionBackdrop', 0, self.program)
+
+    def set_lightmap_strength(self, strength: float = 1.0) -> None:
+        """Scale the baked irradiance a lightmap contributes (1.0 = as authored).
+
+        A loose uniform rather than a UBO field, so an instanced draw shares one
+        value across the batch; lightmapped geometry is per-surface unique and
+        does not instance.
+        """
+        self._set_uniform1f('lightmapStrength', float(strength), self.program)
 
     def set_vertex_color(self, enabled: bool) -> None:
         """Enable/disable per-vertex color (glTF COLOR_0) modulation of baseColor."""
@@ -544,6 +562,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
                 tf = 0.0                        # off, or not a transmissive frame
             self.set_alpha(alpha, alpha_mode)
             self.set_transmission(tf)
+            self.set_lightmap_strength(
+                float(getattr(material, 'lightmapStrength', 1.0) or 0.0))
             # anisotropy / dispersion / diffuse-transmission are per-instance UBO
             # fields (see pack_material_block), so they need no loose-uniform set.
             self.bind_pbr_textures(material, mode)

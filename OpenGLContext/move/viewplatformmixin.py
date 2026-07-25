@@ -50,6 +50,122 @@ class ViewPlatformMixin(object):
     slider = None
     initialPosition = (0,0,10)
     initialOrientation = (0,1,0,0)
+    #: Sampled key/pointer state, built on demand.  See
+    #: :mod:`OpenGLContext.events.inputstate`.
+    inputState = None
+    #: Drives the declared movement modes, when the context declares any.
+    navigation = None
+    #: Last pointer position, for turning absolute events into a delta.
+    _lastPointer = None
+    #: Whether the pointer is currently grabbed for a mouse-look mode.
+    _pointerCaptured = False
+    #: Whether something else -- an overlay being clicked -- has asked for the
+    #: pointer back for the moment.
+    _captureSuspended = False
+
+    def getInputState( self ):
+        """The context's sampled input state, created on demand.
+
+        Movement modes *sample* this once per frame rather than reacting to
+        events, which is what lets several inputs act together -- walking and
+        jumping in the same frame, without either having to know about the
+        other.
+        """
+        if self.inputState is None:
+            from OpenGLContext.events.inputstate import InputState
+            self.inputState = InputState()
+        return self.inputState
+
+    def getNavigationPlatform( self ):
+        """What the declared movement modes drive.
+
+        The view platform by default, which is what a viewer wants.  A game
+        overrides this to return its character controller: there the camera is
+        where the controller ends up rather than the thing being moved.
+        """
+        return self.getViewPlatform()
+
+    def getNavigation( self ):
+        """The navigation manager for this context's declared modes, or None.
+
+        A context that declares no ``movementModes`` gets None and keeps
+        whatever movement manager it already had, so the older navigation
+        continues to work untouched.
+
+        The manager is rebuilt when what it drives changes, since a character
+        controller usually comes into being when a world finishes loading --
+        after the context has already been navigating the camera.
+        """
+        definition = getattr( self, 'contextDefinition', None )
+        if definition is None or not getattr( definition, 'movementModes', None ):
+            return None
+        platform = self.getNavigationPlatform()
+        if self.navigation is None or self.navigation.platform is not platform:
+            from OpenGLContext.move.navigation import NavigationManager
+            self.navigation = NavigationManager( definition, platform )
+        return self.navigation
+
+    def updateNavigation( self, dt ):
+        """Give the frame to whichever declared mode is in force."""
+        navigation = self.getNavigation()
+        if navigation is not None:
+            mode = navigation.update( dt, self.getInputState() )
+            self._applyPointerCapture(
+                bool( mode is not None and mode.capturePointer ) )
+
+    def setPointerCapture( self, capture ):
+        """Grab or release the pointer; False if this backend cannot.
+
+        A backend that can hide the cursor and report unbounded motion
+        overrides this.  The default says it cannot, and mouse-look then works
+        as far as the window edge.
+        """
+        return False
+
+    def suspendPointerCapture( self, suspend ):
+        """Hand the pointer back for a moment, or take it again.
+
+        An overlay is clicked with the same pointer a mouse-look mode has
+        grabbed, so opening one has to release it and closing one has to take
+        it back -- without the mode having to know an overlay exists.
+        """
+        suspend = bool( suspend )
+        if suspend == self._captureSuspended:
+            return
+        self._captureSuspended = suspend
+        if self._pointerCaptured:
+            self.setPointerCapture( not suspend )
+
+    def _applyPointerCapture( self, wanted ):
+        """Ask the backend for the pointer only when the answer changes.
+
+        A grab is a window-manager call, not something to make once a frame.
+        """
+        if wanted == self._pointerCaptured:
+            return
+        self._pointerCaptured = wanted
+        if not self._captureSuspended:
+            self.setPointerCapture( wanted )
+
+    def _recordInput( self, event ):
+        """Feed one event to the sampler.
+
+        Pointer events carry an absolute position, while mouse-look wants how
+        far the pointer moved, so the delta is taken here.  The first event
+        establishes the origin and reports no motion -- otherwise entering a
+        window would read as one violent flick of the view.
+        """
+        kind = getattr( event, 'type', None )
+        if kind in ( 'keyboard', 'keypress' ):
+            self.getInputState().process( event )
+        elif kind == 'mousemove':
+            point = event.getPickPoint()
+            if point:
+                if self._lastPointer is not None:
+                    self.getInputState().mouse_moved(
+                        point[0] - self._lastPointer[0],
+                        point[1] - self._lastPointer[1] )
+                self._lastPointer = point
     def getViewPlatform( self ):
         """Customization Point: Instantiate ViewPlatform for this context
 
@@ -92,6 +208,16 @@ class ViewPlatformMixin(object):
         super( ViewPlatformMixin, self ).setupDefaultEventCallbacks()
         from OpenGLContext.move import direct, smooth
         self.setMovementManager( smooth.Smooth( self.getViewPlatform() ) )
+    def ProcessEvent( self, event ):
+        """Sample the event, then dispatch it as usual.
+
+        Sampling here rather than through ``addEventHandler`` is deliberate:
+        the sampler wants *every* key, and the handler registry is keyed by
+        name/state/modifiers, so registering for "any key" is not expressible.
+        """
+        self._recordInput( event )
+        return super( ViewPlatformMixin, self ).ProcessEvent( event )
+
     def setMovementManager( self, manager ):
         """Set our current movement manager"""
         if self.movementManager:
