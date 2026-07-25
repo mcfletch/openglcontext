@@ -92,10 +92,26 @@ class _OriginLockedRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def _user_agent() -> str:
+    """How this fetcher identifies itself to a server.
+
+    A number of asset hosts reject Python's default ``Python-urllib/x.y``
+    outright with a 403, so a fetch that would otherwise succeed fails for a
+    reason nothing in the response explains. Naming the project (and a contact
+    URL, as the convention asks) is also simply the polite thing for a client
+    that pulls other people's files.
+    """
+    from OpenGLContext import __version__
+    return ('OpenGLContext/%s (+https://github.com/mcfletch/openglcontext)'
+            % (__version__,))
+
+
 def _urlopen_same_origin(url: str, base_url: str, timeout: int = 30) -> Any:
     """Open ``url`` refusing any redirect that leaves ``base_url``'s origin."""
     opener = urllib.request.build_opener(_OriginLockedRedirectHandler(base_url))
-    return opener.open(safe_url(url), timeout=timeout)
+    request = urllib.request.Request(safe_url(url),
+                                     headers={'User-Agent': _user_agent()})
+    return opener.open(request, timeout=timeout)
 
 
 def _resolve_local(base_dir: str, uri: str) -> str:
