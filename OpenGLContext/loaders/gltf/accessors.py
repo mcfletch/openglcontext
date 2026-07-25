@@ -84,13 +84,13 @@ def _accessor_base(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", resolver: Re
     Handles interleaved (``byteStride``) accessors with a strided view rather than a
     per-vertex Python loop. Returns zeros when the accessor has no bufferView (a
     sparse accessor whose base is implicitly all-zero); the caller applies sparse
-    substitution on top. The declared ``count``/stride is validated against the real
-    buffer length so a malformed asset raises a located error instead of an opaque
-    numpy read past the end.
+    substitution on top. The declared ``count`` and ``byteStride`` are validated
+    against the real buffer length so a malformed asset raises a located error
+    instead of an opaque numpy read past the end.
     """
     dtype = np.dtype(_component_dtype(acc.componentType))
     ncomp = _type_count(acc.type)
-    count = acc.count
+    count = _checked_count(acc.count, _acc_label(index))
     if acc.bufferView is None:
         return np.zeros((count, ncomp), dtype=dtype)
     bv = g.bufferViews[acc.bufferView]
@@ -98,18 +98,25 @@ def _accessor_base(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", resolver: Re
     offset = (bv.byteOffset or 0) + (acc.byteOffset or 0)
     item = dtype.itemsize * ncomp
     stride = bv.byteStride or item
+    # A stride that is negative, zero, or does not divide the component size
+    # makes the strided window below walk outside the bytes it was built from --
+    # ``as_strided`` does no bounds checking of its own. glTF requires a positive
+    # byteStride that is a multiple of 4, so every conformant asset passes.
+    if stride <= 0 or stride % dtype.itemsize:
+        raise ValueError(
+            "glTF %s has an invalid byteStride %d for its %d-byte "
+            "component" % (_acc_label(index), stride, dtype.itemsize))
     span = (count - 1) * stride + item if count else 0
     if offset < 0 or offset + span > len(data):
         raise ValueError(
-            "glTF accessor %s reads %d bytes at offset %d but its buffer holds "
+            "glTF %s reads %d bytes at offset %d but its buffer holds "
             "only %d" % (_acc_label(index), span, offset, len(data)))
     if stride == item:
         flat = np.frombuffer(data, dtype=dtype, count=count * ncomp, offset=offset)
         return flat.reshape(count, ncomp)
     # Interleaved: read each component with a strided view (no per-vertex loop).
-    # glTF aligns byteOffset and byteStride to the component size, so a dtype view
-    # from ``offset`` is valid; as_strided then walks it at the vertex stride.
-    span = (count - 1) * stride + item
+    # The stride divides the component size, so ``span`` is a whole number of
+    # components and the window covers exactly the bytes as_strided walks.
     window = np.frombuffer(data, dtype=dtype, count=span // dtype.itemsize, offset=offset)
     strided = np.lib.stride_tricks.as_strided(
         window, shape=(count, ncomp), strides=(stride, dtype.itemsize))
@@ -118,6 +125,19 @@ def _accessor_base(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", resolver: Re
 
 def _acc_label(index: Optional[int]) -> str:
     return "accessor %s" % ('?' if index is None else index)
+
+
+def _checked_count(count: Any, what: str) -> int:
+    """A declared element count, refusing a negative one.
+
+    ``np.frombuffer`` reads *the whole remaining buffer* for any negative
+    ``count`` rather than raising, so a negative count from a file silently
+    widens every read that derives its length from it.
+    """
+    n = int(count)
+    if n < 0:
+        raise ValueError("glTF %s declares a negative count (%d)" % (what, n))
+    return n
 
 
 def _read_accessor(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
@@ -140,7 +160,7 @@ def _apply_sparse(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", sparse: "pygl
                   base: np.ndarray, dtype: np.dtype, ncomp: int,
                   resolver: Resolver) -> np.ndarray:
     """Scatter a sparse accessor's index->value overrides onto the base array."""
-    n = int(sparse.count)
+    n = _checked_count(sparse.count, "sparse accessor")
     si, sv = sparse.indices, sparse.values
     idx_dtype = np.dtype(_component_dtype(si.componentType))
     ibv = g.bufferViews[si.bufferView]

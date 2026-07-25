@@ -228,13 +228,13 @@ class IFSCompiler(object):
         for metaIndex in range(len(coordIndices)):
             point = coordIndices[metaIndex]
             if point >= 0:
-                if point >= len(coordIndices):
+                if point >= len(points):
                     log.info(
                         """Coordindex of node %s declares index %s at meta-index %s, beyond end of coordinate set (len %s), ignoring""",
                         self.target,
                         point,
                         metaIndex,
-                        len(coordIndices),
+                        len(points),
                     )
                     continue
                 set = dict(

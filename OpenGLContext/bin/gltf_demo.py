@@ -22,7 +22,7 @@ authored for the model's original placement and don't survive centring, so the
 viewer's ``--no-cameras`` framing is used.
 
 Run:  oglc-gltf-demo
-Start elsewhere:  MODEL=DamagedHelmet oglc-gltf-demo
+Start elsewhere:  oglc-gltf-demo --model DamagedHelmet  (or MODEL=DamagedHelmet)
 
 Every ``oglc-gltf`` command-line option applies (``--shadows/--no-shadows``,
 ``--lights``, ``--ibl-intensity``, ...); see ``oglc-gltf-demo -h``.
@@ -32,7 +32,7 @@ import os
 import sys
 import urllib.request
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 
 os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
 
@@ -132,7 +132,14 @@ def resolve_bloom(name: str) -> bool:
 
 def resolve_background(config: argparse.Namespace, name: str) -> Any:
     """Background spec for a model: explicit --background wins, else the per-model
-    profile ('cube'/'sky'), else the demo default (black 'none')."""
+    profile ('cube'/'sky'), else the demo default (black 'none').
+
+    The fallback is `_background_default`, the run's own default, not the live
+    `config.background`: the browser writes each model's resolved background back
+    onto the config, so reading it here would latch an env model's 'sky' onto
+    every plain model browsed after it -- and a self-lit scene shown against an
+    environment loses its metered exposure and clips to white.
+    """
     if getattr(config, '_background_explicit', False):
         return config.background
     prof = profile_for(name)
@@ -140,7 +147,23 @@ def resolve_background(config: argparse.Namespace, name: str) -> Any:
         return 'cube'
     if prof.background == 'sky':
         return 'sky'
-    return config.background
+    return getattr(config, '_background_default', config.background)
+
+
+def resolve_start_index(names: Sequence[str], start: str) -> int:
+    """Catalogue index to open on for a ``--model``/``MODEL`` selector.
+
+    The selector is a model name, a 0-based catalogue index (wrapped, so `-1`-ish
+    over-runs still land on a model), or empty for the first model. An unknown
+    name opens the first model rather than failing -- the catalogue is fetched
+    from the network and its contents vary.
+    """
+    start = (start or '').strip()
+    if not start or not names:
+        return 0
+    if start.isnumeric():
+        return int(start) % len(names)
+    return names.index(start) if start in names else 0
 
 
 def resolve_view(config: argparse.Namespace, name: str) -> tuple[float, bool]:
@@ -182,14 +205,8 @@ class TestContext(ViewerContext):
             print("Could not fetch the model catalogue: %s" % err)
             self.catalog = [{'name': n, 'display': n, 'screenshot_url': None}
                             for n in gltf.SAMPLE_MODELS]
-        start = os.environ.get('MODEL', '')
-        names = [e['name'] for e in self.catalog]
-        if start and not start.isnumeric():
-            self.index = names.index(start) if start in names else 0
-        elif start:
-            self.index = int(start) % len(self.catalog)
-        else:
-            self.index = 0
+        start = getattr(self.config, 'model', None) or os.environ.get('MODEL', '')
+        self.index = resolve_start_index([e['name'] for e in self.catalog], start)
 
     def _load_scene(self) -> Any:
         entry = self.catalog[self.index]
@@ -459,6 +476,11 @@ def demo_config(argv: list[str] | None = None) -> argparse.Namespace:
     ``--physics``/``--no-physics`` on the command line is still honoured.
     """
     parser = build_parser(prog='oglc-gltf-demo')
+    parser.add_argument('--model', default=os.environ.get('MODEL', ''),
+                        metavar='NAME|INDEX',
+                        help='catalogue model to open on, by sample name '
+                             '(e.g. DamagedHelmet) or 0-based index; '
+                             'default: the MODEL env var, else the first model')
     args = parser.parse_args(argv)
     args.no_cameras = True
     args.turntable = True
@@ -474,6 +496,7 @@ def demo_config(argv: list[str] | None = None) -> argparse.Namespace:
     args._turntable_explicit = '--turntable' in tokens
     args._yaw_explicit = '--yaw' in tokens
     args._background_explicit = '--background' in tokens
+    args._background_default = args.background
     if not args._physics_explicit:
         args.physics = False
     # A --capture run wants a fixed, reference-comparable orientation; the

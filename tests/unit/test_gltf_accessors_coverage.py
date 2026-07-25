@@ -118,5 +118,91 @@ class TestSparseImplicitZeroBase:
         assert out[2].tolist() == [9, 8, 7]      # sparse override
 
 
+class TestStrideAndCountValidation:
+    """A malformed stride/count must be refused before any strided view exists.
+
+    ``np.lib.stride_tricks.as_strided`` performs no bounds checking and
+    ``np.frombuffer`` treats *any* negative ``count`` as "the rest of the
+    buffer", so a negative ``byteStride`` or ``count`` that reaches those calls
+    reads memory outside the buffer and hands it back as vertex data.
+    """
+
+    @staticmethod
+    def _g(count, stride, ncomp=3, acc_type='VEC3', nbytes=96):
+        g = pygltflib.GLTF2()
+        g.accessors = [Accessor(bufferView=0, componentType=5126, count=count,
+                                type=acc_type, byteOffset=0)]
+        g.bufferViews = [BufferView(buffer=0, byteOffset=0, byteLength=nbytes,
+                                    byteStride=stride)]
+        g.buffers = [Buffer(byteLength=nbytes)]
+        return g, _R(b'\xaa' * nbytes)
+
+    def test_negative_byte_stride_rejected(self):
+        g, r = self._g(count=4, stride=-16)
+        with pytest.raises(ValueError, match='byteStride'):
+            ga._accessor_base(g, g.accessors[0], r, 0)
+
+    def test_negative_byte_stride_does_not_read_before_the_buffer(self):
+        # Every float in the buffer is 0xaaaaaaaa; anything else came from
+        # outside it. The read must not happen at all.
+        g, r = self._g(count=4, stride=-16)
+        try:
+            out = ga._accessor_base(g, g.accessors[0], r, 0)
+        except ValueError:
+            return
+        expected = np.frombuffer(b'\xaa' * 4, dtype=np.float32)[0]
+        assert (out == expected).all(), (
+            "decoded values came from memory outside the declared buffer")
+
+    def test_stride_not_a_multiple_of_the_component_size_rejected(self):
+        # glTF requires byteStride to be a multiple of 4; a stride that does not
+        # divide the component size leaves the strided window short of the bytes
+        # the view walks over.
+        g, r = self._g(count=4, stride=13)
+        with pytest.raises(ValueError, match='byteStride'):
+            ga._accessor_base(g, g.accessors[0], r, 0)
+
+    def test_negative_count_rejected(self):
+        g, r = self._g(count=-1, stride=None, acc_type='SCALAR')
+        with pytest.raises(ValueError, match='count'):
+            ga._accessor_base(g, g.accessors[0], r, 0)
+
+    def test_zero_count_interleaved_accessor_is_empty(self):
+        g, r = self._g(count=0, stride=32)
+        out = ga._accessor_base(g, g.accessors[0], r, 0)
+        assert out.shape == (0, 3)
+
+    def test_valid_interleaved_accessor_still_decodes(self):
+        pos = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32)
+        raw = b''.join(row.tobytes() + b'\x00' * 4 for row in pos)
+        g = pygltflib.GLTF2()
+        g.accessors = [Accessor(bufferView=0, componentType=5126, count=2,
+                                type='VEC3', byteOffset=0)]
+        g.bufferViews = [BufferView(buffer=0, byteOffset=0, byteLength=len(raw),
+                                    byteStride=16)]
+        g.buffers = [Buffer(byteLength=len(raw))]
+        out = ga._accessor_base(g, g.accessors[0], _R(raw), 0)
+        assert np.allclose(out, pos)
+
+    def test_negative_sparse_count_rejected(self):
+        sidx = np.array([0], dtype=np.uint16)
+        svals = np.array([[9, 8, 7]], dtype=np.float32)
+        blob = sidx.tobytes() + svals.tobytes()
+        g = pygltflib.GLTF2()
+        sparse = Sparse(
+            count=-1,
+            indices=AccessorSparseIndices(bufferView=0, byteOffset=0, componentType=5123),
+            values=AccessorSparseValues(bufferView=1, byteOffset=0))
+        g.accessors = [Accessor(bufferView=None, componentType=5126, count=4,
+                                type='VEC3', sparse=sparse)]
+        g.bufferViews = [
+            BufferView(buffer=0, byteOffset=0, byteLength=sidx.nbytes),
+            BufferView(buffer=0, byteOffset=sidx.nbytes, byteLength=svals.nbytes),
+        ]
+        g.buffers = [Buffer(byteLength=len(blob))]
+        with pytest.raises(ValueError, match='count'):
+            ga._read_accessor(g, 0, _R(blob))
+
+
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))

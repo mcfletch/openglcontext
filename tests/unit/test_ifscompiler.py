@@ -91,13 +91,34 @@ class TestBaseCompiler:
 
 class TestPolygonWalk:
     def test_out_of_range_index_is_skipped(self):
-        # coordIndex value 99 is >= len(coordIndex)=4, so it is dropped with a log.
+        # coordIndex value 99 is past the end of the 3-point coordinate set, so
+        # it is dropped with a log.
         ifs = b.IndexedFaceSet(
             coord=b.Coordinate(point=[(0, 0, 0), (1, 0, 0), (1, 1, 0)]),
             coordIndex=[0, 1, 99, 2, -1])
         polys = list(ArrayGeometryCompiler(ifs).polygons())
         assert len(polys) == 1
         assert len(polys[0]) == 3        # the bad index left a triangle, not a quad
+
+    def test_out_of_range_index_skipped_when_indices_outnumber_points(self):
+        # The usual shape of a real mesh: many more indices than points. An
+        # index past the end of the coordinate set must be dropped, not used to
+        # read past the end of the point array.
+        ifs = b.IndexedFaceSet(
+            coord=b.Coordinate(point=[(0, 0, 0), (1, 0, 0), (1, 1, 0)]),
+            coordIndex=[0, 1, 2, -1] * 4 + [0, 1, 5, -1])
+        polys = list(ArrayGeometryCompiler(ifs).polygons())
+        assert len(polys) == 5
+        assert [len(p) for p in polys] == [3, 3, 3, 3, 2]
+
+    def test_valid_index_beyond_the_index_array_length_is_kept(self):
+        # More points than indices: index 9 is a legitimate reference into the
+        # 10-point coordinate set and must not be discarded.
+        ifs = b.IndexedFaceSet(
+            coord=b.Coordinate(point=[(i, 0, 0) for i in range(10)]),
+            coordIndex=[0, 1, 9])
+        polys = list(ArrayGeometryCompiler(ifs).polygons())
+        assert len(polys) == 1 and len(polys[0]) == 3
 
     def test_trailing_polygon_without_terminator(self):
         # No closing -1: the final accumulated polygon must still be yielded.
@@ -311,6 +332,10 @@ glfw = pytest.importorskip("glfw")
 def gl():
     if not glfw.init():
         pytest.skip("glfw init failed (no GL)")
+    # GLFW window hints are sticky/process-global; reset them so a prior
+    # core-profile test's profile can't leak into this context. The display-list
+    # path here is compatibility-profile only (glGenLists).
+    glfw.default_window_hints()
     glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
     win = glfw.create_window(64, 64, "ifs", None, None)
     if not win:
