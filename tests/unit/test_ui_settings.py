@@ -232,6 +232,97 @@ class TestResetToDefaults:
         assert not screen.find('shadows').read()
 
 
+class TestItUsesTheScreenWell:
+    """At 4K a page laid out to the window's width is unreadable, not roomy."""
+
+    def test_it_does_not_stretch_across_a_wide_display(self, context, metrics):
+        panel = settings.settings_panel(context)
+        panel.layout((3840, 2160), metrics)
+        assert panel.rect.width < 3840 // 2
+
+    def test_it_is_centred_on_a_wide_display(self, context, metrics):
+        panel = settings.settings_panel(context)
+        panel.layout((3840, 2160), metrics)
+        assert abs(panel.rect.x - (3840 - panel.rect.right)) <= 1
+
+    def test_a_narrow_window_still_uses_all_of_it(self, context, metrics):
+        panel = settings.settings_panel(context)
+        panel.layout((600, 800), metrics)
+        assert panel.rect.width > 600 // 2
+
+    def test_the_label_column_does_not_crowd_the_controls(self, screen):
+        """Labels left, controls right, with the width shared between them."""
+        label = screen.find('shadows.label')
+        control = screen.find('shadows')
+        assert control.rect.x > label.rect.right
+
+    def test_a_compact_control_sits_at_the_right_margin(self, screen):
+        """A switch adrift in the middle of a wide column reads as unrelated."""
+        page = screen.find('shadows').parent
+        assert screen.find('shadows').rect.right >= page.rect.right - 1
+
+    def test_a_slider_does_not_run_the_whole_width(self, context, metrics):
+        panel = settings.settings_panel(context)
+        panel.layout((3840, 2160), metrics)
+        assert panel.find('maximumLights').rect.width < panel.rect.width * 0.6
+
+    def test_the_rows_have_room_around_them(self, screen):
+        page = screen.find('shadows').parent
+        assert page.rowRects()[0].height > screen.find('shadows').rect.height
+
+
+class TestTheInterfaceSection:
+    def test_the_screen_offers_the_interface_scale(self, screen):
+        assert screen.find('uiScale') is not None
+
+    def test_it_is_a_slider(self, screen):
+        assert isinstance(screen.find('uiScale'), Slider)
+
+    def test_changing_it_takes_effect_on_apply(self, screen, context):
+        screen.find('uiScale').write(1.5)
+        screen.find('apply').activate()
+        assert context.contextDefinition.uiScale == 1.5
+
+
+class TestWhatHappensToTheChanges:
+    """A game decides what the player's settings mean -- including saving them."""
+
+    def test_a_caller_can_be_told_when_the_screen_is_applied(self, context):
+        seen = []
+        panel = settings.settings_panel(context, on_apply=seen.append)
+        panel.layout((1024, 768), FontMetrics(8, 16, 2))
+        panel.find('apply').activate()
+        assert len(seen) == 1
+
+    def test_it_is_handed_the_session_that_was_committed(self, context):
+        seen = []
+        panel = settings.settings_panel(context, on_apply=seen.append)
+        panel.layout((1024, 768), FontMetrics(8, 16, 2))
+        panel.find('apply').activate()
+        assert seen[0].target is context.contextDefinition
+
+    def test_it_is_told_which_settings_the_player_moved(self, context):
+        seen = []
+        panel = settings.settings_panel(context, on_apply=seen.append)
+        panel.layout((1024, 768), FontMetrics(8, 16, 2))
+        panel.find('shadows').activate()
+        panel.find('apply').activate()
+        assert seen[0].changed_fields() == {'shadows'}
+
+    def test_cancelling_tells_nobody(self, context):
+        seen = []
+        panel = settings.settings_panel(context, on_apply=seen.append)
+        panel.layout((1024, 768), FontMetrics(8, 16, 2))
+        panel.find('cancel').activate()
+        assert seen == []
+
+    def test_open_settings_passes_it_through(self, context):
+        seen = []
+        panel = settings.open_settings(context, on_apply=seen.append)
+        panel.find('apply').activate()
+        assert len(seen) == 1
+
+
 class TestOpeningItFromAContext:
     def test_a_context_can_open_its_own_settings(self, context):
         panel = settings.open_settings(context)

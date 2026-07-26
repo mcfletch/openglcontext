@@ -14,6 +14,12 @@ protocol; there is no constraint solver and no second pass.
     ``width``/``height``  an explicit size in pixels; 0 means "measure me"
     ``flex``              share of the leftover main-axis space; 0 means fixed
     ``left``/``right``/``top``/``bottom``   margin outside the widget
+    ``maximumWidth``      a ceiling on the width, whatever is offered; 0 for none
+    ``alignSelf``         where to sit when narrower than what was offered
+
+Pixel sizes here are **pixels at the reference font size** and are multiplied
+by the interface scale, exactly as the skin's are -- see
+:mod:`OpenGLContext.ui.metrics`.
 """
 
 from typing import Any, List, Optional, Sequence, Tuple
@@ -66,6 +72,16 @@ class GUINode(object):
     right = field.newField("right", "SFFloat", 1, 0.0)
     top = field.newField("top", "SFFloat", 1, 0.0)
     bottom = field.newField("bottom", "SFFloat", 1, 0.0)
+    #: A ceiling on how wide this may be drawn, whatever rectangle it is given;
+    #: 0 for none.  What stops a slider running the width of a 4K display when
+    #: the column it is in happens to be that wide.
+    maximumWidth = field.newField("maximumWidth", "SFFloat", 1, 0.0)
+    #: Where to sit inside the rectangle when narrower than it: ``stretch``
+    #: (the default, take it all), ``start``, ``center`` or ``end``.  Anything
+    #: but ``stretch`` also shrinks the widget to its measured width, which is
+    #: how a switch ends up against the right margin instead of adrift in the
+    #: middle of a wide column.
+    alignSelf = field.newField("alignSelf", "SFString", 1, "stretch")
 
     #: Where this ended up, set by :meth:`arrange`.  Empty until then, so a
     #: click that arrives before the first layout hits nothing rather than
@@ -93,15 +109,15 @@ class GUINode(object):
         how a game pins a column of controls to one width so their labels line
         up instead of stepping in and out with the text in them.
         """
-        margin_x = int(self.left + self.right)
+        margin_x = metrics.pixels(self.left) + metrics.pixels(self.right)
+        margin_y = metrics.pixels(self.top) + metrics.pixels(self.bottom)
         inner = None if available is None else max(0, int(available) - margin_x)
         content_w, content_h = self.content_size(metrics, inner)
         if self.width:
             content_w = int(self.width)
         if self.height:
             content_h = int(self.height)
-        return (int(content_w) + margin_x,
-                int(content_h + self.top + self.bottom))
+        return (int(content_w) + margin_x, int(content_h) + margin_y)
 
     def natural_width(self, metrics: Any,
                       available: Optional[int] = None) -> int:
@@ -116,9 +132,37 @@ class GUINode(object):
     # -- placement --------------------------------------------------------
     def arrange(self, rect: Rect, metrics: Any) -> None:
         """Take a rectangle, keep the part inside the margins, fill it in."""
-        self.rect = rect.inset(int(self.left), int(self.top),
-                               int(self.right), int(self.bottom))
+        self.rect = self._fitWidth(
+            rect.inset(metrics.pixels(self.left), metrics.pixels(self.top),
+                       metrics.pixels(self.right), metrics.pixels(self.bottom)),
+            metrics)
         self.arrange_content(metrics)
+
+    def _fitWidth(self, rect: Rect, metrics: Any) -> Rect:
+        """Narrow a rectangle to the cap and the alignment, if either asks.
+
+        Only ever narrower: a widget is offered a rectangle by its container
+        and may decline part of it, but taking more would draw over a sibling.
+        """
+        align = str(self.alignSelf)
+        limit = int(self.maximumWidth)
+        if align == 'stretch' and not limit:
+            return rect
+        width = rect.width
+        if align != 'stretch':
+            content = int(self.width) or int(
+                self.content_size(metrics, rect.width)[0])
+            width = min(width, content)
+        if limit:
+            width = min(width, metrics.pixels(limit))
+        if width >= rect.width:
+            return rect
+        if align == 'end':
+            return Rect(rect.right - width, rect.y, width, rect.height)
+        if align == 'center':
+            return Rect(rect.x + (rect.width - width) // 2, rect.y, width,
+                        rect.height)
+        return Rect(rect.x, rect.y, width, rect.height)
 
     def arrange_content(self, metrics: Any) -> None:
         """Place whatever is inside :attr:`rect`.  Overridden by containers."""
@@ -204,10 +248,11 @@ class GUIBox(GUINode, node.Node):
     def content_size(self, metrics: Any,
                      available: Optional[int] = None) -> Tuple[int, int]:
         children = self.layoutChildren()
-        sizes = [child.natural_size(metrics, self._childAvailable(available))
+        sizes = [child.natural_size(metrics,
+                                    self._childAvailable(available, metrics))
                  for child in children]
-        gaps = int(self.spacing) * max(0, len(children) - 1)
-        pad = int(self.padding) * 2
+        gaps = metrics.pixels(self.spacing) * max(0, len(children) - 1)
+        pad = metrics.pixels(self.padding) * 2
         if self.horizontal:
             main = sum(size[0] for size in sizes) + gaps
             cross = max([size[1] for size in sizes], default=0)
@@ -218,7 +263,8 @@ class GUIBox(GUINode, node.Node):
             return (main + pad, cross + pad)
         return (cross + pad, main + pad)
 
-    def _childAvailable(self, available: Optional[int]) -> Optional[int]:
+    def _childAvailable(self, available: Optional[int],
+                        metrics: Any) -> Optional[int]:
         """The width a child may measure against.
 
         A column hands its own width down; a row cannot, because its children
@@ -226,7 +272,7 @@ class GUIBox(GUINode, node.Node):
         """
         if available is None or self.horizontal:
             return None
-        return max(0, int(available) - int(self.padding) * 2)
+        return max(0, int(available) - metrics.pixels(self.padding) * 2)
 
     def arrange_content(self, metrics: Any) -> None:
         children = self.layoutChildren()
@@ -234,10 +280,10 @@ class GUIBox(GUINode, node.Node):
             child.parent = self
         if not children:
             return
-        inner = self.rect.inset(int(self.padding))
+        inner = self.rect.inset(metrics.pixels(self.padding))
         available = None if self.horizontal else inner.width
         sizes = [child.natural_size(metrics, available) for child in children]
-        spacing = int(self.spacing)
+        spacing = metrics.pixels(self.spacing)
         available = (inner.width if self.horizontal else inner.height)
         used = sum((size[0] if self.horizontal else size[1]) for size in sizes)
         used += spacing * (len(children) - 1)

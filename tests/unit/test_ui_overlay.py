@@ -358,3 +358,79 @@ class TestContextRouting:
         context.popOverlay()
         assert panel.closed
         assert not context.overlays.visible
+
+
+class TestAnInputTheOverlayTookIsTakenWhole:
+    """A press the overlay swallowed must take its release with it.
+
+    Otherwise the *last* panel on the stack is a trap: the key-down closes it,
+    the stack empties, and the key-up lands on whatever the world had bound --
+    which for Escape is the handler that quits the application.  A dialog is
+    never dismissed by a key-down alone in the player's mind; it is dismissed
+    by a keystroke, and a keystroke is both halves.
+    """
+
+    @pytest.fixture
+    def context(self):
+        return FakeContext()
+
+    def test_escape_closes_the_last_panel_without_reaching_the_world(
+            self, context):
+        panel = dialog()
+        context.pushOverlay(panel)
+        context.ProcessEvent(FakeEvent('keyboard', name='<escape>', state=1))
+        context.ProcessEvent(FakeEvent('keyboard', name='<escape>', state=0))
+        assert panel.closed
+        assert context.dispatched == []
+
+    def test_a_key_the_overlay_never_saw_the_press_of_gets_through(self, context):
+        """A key held before the panel opened is released to the world."""
+        context.ProcessEvent(FakeEvent('keyboard', name='w', state=1))
+        context.pushOverlay(dialog())
+        context.overlays.pop()
+        released = FakeEvent('keyboard', name='w', state=0)
+        context.ProcessEvent(released)
+        assert context.dispatched[-1] is released
+
+    def test_the_claim_is_dropped_once_the_release_is_taken(self, context):
+        panel = dialog()
+        context.pushOverlay(panel)
+        context.ProcessEvent(FakeEvent('keyboard', name='<escape>', state=1))
+        context.ProcessEvent(FakeEvent('keyboard', name='<escape>', state=0))
+        again = FakeEvent('keyboard', name='<escape>', state=0)
+        context.ProcessEvent(again)
+        assert context.dispatched[-1] is again
+
+    def test_a_mouse_release_follows_the_press_that_closed_the_panel(self, context):
+        """A click that dismisses a dialog must not also pick the world."""
+        panel = dialog()
+        context.pushOverlay(panel)
+        panel.accelerators.clear()
+        x, y = panel.find('ok').rect.centre
+        panel.find('ok').on_activate = lambda widget: panel.close(True)
+        context.ProcessEvent(FakeEvent('mousebutton', button=0, state=1,
+                                       pick=(x, y)))
+        context.ProcessEvent(FakeEvent('mousebutton', button=0, state=0,
+                                       pick=(x, y)))
+        assert context.dispatched == []
+
+    def test_a_claimed_key_is_not_recorded_as_held_on_release(self, context):
+        context.pushOverlay(dialog())
+        context.ProcessEvent(FakeEvent('keyboard', name='<escape>', state=1))
+        context.ProcessEvent(FakeEvent('keyboard', name='<escape>', state=0))
+        assert not context.getInputState().held('<escape>')
+
+    def test_nothing_is_claimed_when_no_overlay_is_up(self, context):
+        down = FakeEvent('keyboard', name='<escape>', state=1)
+        up = FakeEvent('keyboard', name='<escape>', state=0)
+        context.ProcessEvent(down)
+        context.ProcessEvent(up)
+        assert context.dispatched == [down, up]
+
+    def test_claims_do_not_leak_between_different_keys(self, context):
+        panel = dialog()
+        context.pushOverlay(panel)
+        context.ProcessEvent(FakeEvent('keyboard', name='<escape>', state=1))
+        stray = FakeEvent('keyboard', name='w', state=0)
+        context.ProcessEvent(stray)
+        assert context.dispatched[-1] is stray

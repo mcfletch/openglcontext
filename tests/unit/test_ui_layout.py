@@ -191,3 +191,109 @@ class TestGrid:
         grid.arrange(Rect(0, 0, 100, 100), metrics)
         assert cells[0].rect.top == 100
         assert cells[1].rect.top == 90
+
+    def test_its_spacing_grows_with_the_interface_scale(self):
+        cells = [box(20, 10), box(20, 10)]
+        grid = Grid(children=cells, columns=1, spacing=6)
+        grid.arrange(Rect(0, 0, 100, 200), FontMetrics(16, 32, 4, scale=2.0))
+        assert cells[0].rect.y - cells[1].rect.top == 12
+
+
+class TestGridRowsAreTargets:
+    """A settings row has to read as one thing and be easy to hit."""
+
+    @pytest.fixture
+    def grid(self, metrics):
+        cells = [Label(text='Shadows'), Button(text='on'),
+                 Label(text='Bloom'), Button(text='off')]
+        grid = Grid(children=cells, columns=2, spacing=6, rowPadding=8)
+        grid.arrange(Rect(0, 0, 400, 300), metrics)
+        return grid
+
+    def test_padding_makes_each_row_taller_than_its_contents(self, grid):
+        row = grid.rowRects()[0]
+        assert row.height > grid.children[0].rect.height
+
+    def test_a_row_spans_the_whole_grid(self, grid):
+        row = grid.rowRects()[0]
+        assert row.x == grid.rect.x and row.width == grid.rect.width
+
+    def test_there_is_one_row_rectangle_per_row(self, grid):
+        assert len(grid.rowRects()) == 2
+
+    def test_the_rows_do_not_overlap(self, grid):
+        first, second = grid.rowRects()
+        assert second.top <= first.y
+
+    def test_padding_is_asked_for_when_the_grid_is_measured(self, metrics):
+        cells = [Label(text='a'), Label(text='b')]
+        plain = Grid(children=list(cells), columns=2, spacing=0)
+        padded = Grid(children=list(cells), columns=2, spacing=0, rowPadding=8)
+        assert (padded.natural_size(metrics)[1]
+                == plain.natural_size(metrics)[1] + 16)
+
+    def test_a_hairline_is_drawn_between_the_rows(self, grid):
+        painted = _Recorder()
+        grid.paint(painted)
+        assert len(painted.calls('rect')) == 1
+
+    def test_none_is_drawn_above_the_first_row(self, metrics):
+        """A rule at the very top reads as the edge of a table nobody drew."""
+        grid = Grid(children=[Label(text='a'), Label(text='b')], columns=2)
+        grid.arrange(Rect(0, 0, 400, 300), metrics)
+        painted = _Recorder()
+        grid.paint(painted)
+        assert not painted.calls('rect')
+
+    def test_the_row_the_pointer_is_on_is_washed(self, grid):
+        grid.children[1].hovered = True
+        painted = _Recorder()
+        grid.paint(painted)
+        assert len(painted.calls('rect')) == 2
+
+    def test_the_row_the_keyboard_is_in_is_washed(self, metrics):
+        from OpenGLContext.ui.panel import Panel
+        button = Button(text='on')
+        grid = Grid(children=[Label(text='Shadows'), button], columns=2)
+        panel = Panel(children=[grid])
+        panel.layout((400, 300), metrics)
+        panel.focus(button)
+        painted = _Recorder()
+        grid.paint(painted)
+        assert painted.calls('rect')
+
+    def test_an_untouched_grid_washes_nothing(self, metrics):
+        grid = Grid(children=[Label(text='a'), Label(text='b')], columns=2)
+        grid.arrange(Rect(0, 0, 400, 300), metrics)
+        painted = _Recorder()
+        grid.paint(painted)
+        assert not painted.calls('rect')
+
+    def test_the_rows_move_with_the_content_when_it_scrolls(self, grid):
+        """Row rectangles come from the cells, which a scroll has already moved."""
+        from OpenGLContext.ui.scroll import _offsetTree
+        before = grid.rowRects()[0].y
+        _offsetTree(grid, 0, 37)
+        assert grid.rowRects()[0].y == before + 37
+
+
+class _Recorder:
+    """A renderer that records what it was asked to draw."""
+
+    def __init__(self):
+        from OpenGLContext.ui.skin import DEFAULT_SKIN
+        self.metrics = FontMetrics(8, 16, 2)
+        self.skin = DEFAULT_SKIN
+        self.recorded = []
+
+    def calls(self, name):
+        return [arguments for called, arguments in self.recorded
+                if called == name]
+
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+
+        def record(*arguments, **named):
+            self.recorded.append((name, arguments))
+        return record

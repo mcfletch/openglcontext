@@ -103,10 +103,26 @@ What is known:
   and the failing orders -- the GLUT import alone is not the difference.
 - Bisecting the alphabetical file order puts the change at exactly that module.
 
-Not yet known: which piece of state -- a module-level cache holding an id from a
-terminated context, a leaked GLFW/GLUT interaction, or a driver-level effect --
-carries across. Worth finding: it is the only thing standing between this suite
-and a clean full run, and "passes in isolation" is not passing.
+Ruled out since, by direct measurement rather than reasoning: the renderer *is*
+the PBR one, `contextDefinition.instancing` is on, `OPENGLCONTEXT_INSTANCE_MIN`
+is set, and `Sphere` still reports the same `instanceContentKey` and still has
+`instanceGPU` -- so the geometry is groupable and the pass that would group it
+is selected. Whatever survives the import is downstream of all four.
+
+Not yet known: which piece of state carries across. Worth finding: it is the
+only thing standing between this suite and a clean full run, and "passes in
+isolation" is not passing. The whole suite is otherwise green -- 3166 passed
+with this one file deselected.
+
+**One member of that family is fixed.** `scenegraph/text/shadertext.py` cached
+its `ShaderTextRenderer` per *font size* in a process-global dict, so a renderer
+built in one GL context was handed to the next window and bound a texture name
+that had died with the first -- silently drawing the wrong thing, or raising
+`GL_INVALID_OPERATION` when the driver reused the id for something else. The
+cache is now keyed by `(GL context, size)`, `drop_text_renderers()` releases the
+current context's entries, and `GLFWContext` calls it as the window goes down.
+This is a real multi-window bug as well as a test-isolation one; it is *not* the
+cause of the failure above, which reproduces with the fix in place.
 
 ## Original Plan (for reference)
 

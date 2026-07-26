@@ -175,16 +175,25 @@ class Widget(GUINode, node.Node):
         """Draw this widget's own body.  Containers draw nothing."""
 
     def paintFocus(self, renderer: Any) -> None:
-        """Draw the focus glow, when this is where the keyboard is.
+        """Draw the focus ring, when this is where the keyboard is.
 
-        Outside the widget's rectangle and additive, so it is never mistaken
-        for hover and never moves the text by a pixel when focus arrives.
+        Outside the widget's rectangle, so it never moves the text by a pixel
+        when focus arrives -- text that shifts as you Tab reads as broken.
+
+        Two marks rather than one, because either alone is unreliable over a
+        world the panel does not control: an additive glow disappears against a
+        bright scene, and a thin ring disappears against a busy one.  Neither
+        is the hover highlight, which is a fill *inside* the widget: the
+        pointer can rest on one control while the keyboard is on another, and
+        one shared highlight makes that unreadable.
         """
         panel = self.root()
         if not (self.focused and getattr(panel, 'focusVisible', False)):
             return
         skin = renderer.skin
-        renderer.glow(self.rect.expand(int(skin.focusMargin)), skin.focusGlow)
+        outer = self.rect.expand(int(skin.focusMargin))
+        renderer.glow(outer, skin.focusGlow)
+        renderer.border(outer, skin.focusBorder, max(1, int(skin.focusWidth)))
 
     def textColour(self, renderer: Any) -> Any:
         """The colour this widget's text is drawn in."""
@@ -350,7 +359,14 @@ class Button(BoundWidget):
 
 
 class Toggle(BoundWidget):
-    """A checkbox: a label, a box, and a boolean."""
+    """A boolean, drawn as a switch: a track and a knob that slides along it.
+
+    A switch rather than a check box because **the state is the shape**.  A
+    player scanning a settings page is asking which of these are on, and a
+    tick inside a box answers that only once you are close enough to see
+    whether the box is empty; a knob at one end or the other, on a track that
+    changes colour with it, answers it at a glance and from across the room.
+    """
 
     PROTO = 'Toggle'
     text = field.newField('text', 'SFString', 1, '')
@@ -361,10 +377,12 @@ class Toggle(BoundWidget):
 
     def content_size(self, metrics: Any,
                      available: Optional[int] = None) -> Tuple[int, int]:
-        box = metrics.char_height
-        text = metrics.text_width(self.text)
-        gap = metrics.char_width if self.text else 0
-        return (box + gap + text, box + int(self.activeSkin().buttonPaddingY))
+        skin = self.activeSkin()
+        width = int(skin.switchWidth)
+        height = max(int(skin.switchHeight), metrics.char_height)
+        if self.text:
+            width += metrics.char_width + metrics.text_width(self.text)
+        return (width, height + int(skin.buttonPaddingY))
 
     def read(self) -> bool:
         """The value as a real boolean.
@@ -374,11 +392,21 @@ class Toggle(BoundWidget):
         """
         return bool(super(Toggle, self).read())
 
-    def box_rect(self) -> Rect:
-        """The check box itself, at the left of the widget."""
-        size = min(self.rect.height, self.rect.width)
-        return Rect(self.rect.x, self.rect.y + (self.rect.height - size) // 2,
-                    size, size)
+    def switch_rect(self) -> Rect:
+        """The track, at the left of the widget and centred in its height."""
+        skin = self.activeSkin()
+        width = min(self.rect.width, int(skin.switchWidth))
+        height = min(self.rect.height, int(skin.switchHeight))
+        return Rect(self.rect.x, self.rect.y + (self.rect.height - height) // 2,
+                    width, height)
+
+    def knob_rect(self) -> Rect:
+        """The knob, at whichever end of the track the value says."""
+        track = self.switch_rect()
+        inset = min(int(self.activeSkin().switchInset), track.height // 3)
+        size = max(1, track.height - inset * 2)
+        x = track.right - inset - size if self.read() else track.x + inset
+        return Rect(x, track.y + inset, size, size)
 
     def activate(self) -> None:
         self.write(not self.read())
@@ -393,17 +421,30 @@ class Toggle(BoundWidget):
     def paint(self, renderer: Any) -> None:
         self.paintFocus(renderer)
         skin = renderer.skin
-        box = self.box_rect()
+        track = self.switch_rect()
         on = self.read()
-        image = skin._image(skin.checkFullImage if on else skin.checkEmptyImage)
-        renderer.frame(box, skin.checkFill, image)
-        renderer.border(box, skin.panelBorder)
-        if on and image is None:
-            renderer.rect(box.inset(max(2, box.width // 4)), skin.checkMark)
+        if not self.enabled:
+            fill = skin.buttonDisabledFill
+        else:
+            fill = skin.switchOnFill if on else skin.switchOffFill
+        image = skin._image(skin.switchOnImage if on else skin.switchOffImage)
+        if image is not None:
+            renderer.frame(track, fill, image)
+        else:
+            renderer.pill(track, fill)
+        knob = self.knob_rect()
         if self.hovered:
-            renderer.border(box, skin.buttonHoverFill, 2)
-        label = Rect(box.right + renderer.metrics.char_width, self.rect.y,
-                     max(0, self.rect.right - box.right), self.rect.height)
+            # A halo behind the knob rather than a lit track: the track's
+            # colour is carrying the value and must not be borrowed for hover.
+            renderer.disc(knob.expand(max(1, knob.width // 8)),
+                          skin.buttonHoverFill)
+        knobImage = skin._image(skin.switchKnobImage)
+        if knobImage is not None:
+            renderer.frame(knob, skin.switchKnob, knobImage)
+        else:
+            renderer.disc(knob, skin.switchKnob)
+        label = Rect(track.right + renderer.metrics.char_width, self.rect.y,
+                     max(0, self.rect.right - track.right), self.rect.height)
         renderer.textIn(label, self.text, self.textColour(renderer))
 
 
@@ -836,6 +877,6 @@ class KeyCapture(Widget):
         self.paintFocus(renderer)
         skin = renderer.skin
         renderer.frame(self.rect, skin.fieldFill, skin._image(skin.fieldImage))
-        colour = (skin.checkMark if self.captured is not None
+        colour = (skin.accentText if self.captured is not None
                   else self.textColour(renderer))
         renderer.textIn(self.rect, self.display_value(), colour, align='center')

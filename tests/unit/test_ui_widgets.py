@@ -150,6 +150,135 @@ class TestToggle:
         assert toggle.read() is False
 
 
+class TestTheSwitchAToggleDraws:
+    """A sliding switch rather than a check box: the state is the shape."""
+
+    @pytest.fixture
+    def toggle(self, metrics):
+        toggle = Toggle(value=False)
+        toggle.arrange(Rect(0, 0, 200, 40), metrics)
+        return toggle
+
+    def test_the_track_is_wider_than_it_is_tall(self, toggle):
+        track = toggle.switch_rect()
+        assert track.width > track.height
+
+    def test_the_track_sits_at_the_left_of_the_widget(self, toggle):
+        assert toggle.switch_rect().x == toggle.rect.x
+
+    def test_the_knob_rests_at_the_left_end_when_off(self, toggle):
+        assert toggle.knob_rect().x < toggle.switch_rect().centre[0]
+
+    def test_the_knob_slides_to_the_right_end_when_on(self, toggle):
+        toggle.write(True)
+        assert toggle.knob_rect().x > toggle.switch_rect().centre[0]
+
+    def test_the_knob_stays_inside_the_track(self, toggle):
+        for value in (False, True):
+            toggle.write(value)
+            knob, track = toggle.knob_rect(), toggle.switch_rect()
+            assert knob.x >= track.x and knob.right <= track.right
+
+    def test_the_knob_is_round(self, toggle):
+        knob = toggle.knob_rect()
+        assert knob.width == knob.height
+
+    def test_it_asks_for_room_for_the_whole_switch(self, metrics):
+        from OpenGLContext.ui.skin import DEFAULT_SKIN
+        assert (Toggle().natural_size(metrics)[0]
+                >= int(DEFAULT_SKIN.switchWidth))
+
+    def test_text_beside_it_makes_it_wider(self, metrics):
+        assert (Toggle(text='Shadows').natural_size(metrics)[0]
+                > Toggle().natural_size(metrics)[0])
+
+    def test_it_is_drawn_as_a_pill_with_a_round_knob(self, toggle):
+        painted = _Recorder()
+        toggle.paint(painted)
+        assert painted.calls('pill') and painted.calls('disc')
+
+    def test_the_track_changes_colour_with_the_value(self, toggle):
+        off = _Recorder()
+        toggle.paint(off)
+        toggle.write(True)
+        on = _Recorder()
+        toggle.paint(on)
+        assert tuple(off.calls('pill')[0][1]) != tuple(on.calls('pill')[0][1])
+
+    def test_the_whole_switch_is_clickable_not_just_the_knob(self, toggle):
+        """The knob is a small target and the track is the affordance."""
+        track = toggle.switch_rect()
+        toggle.press(track.right - 2, track.centre[1])
+        toggle.release(track.right - 2, track.centre[1])
+        assert toggle.read() is True
+
+
+class TestTheFocusRing:
+    """Focus has to be readable over a lit world, not merely present."""
+
+    @pytest.fixture
+    def button(self, metrics):
+        from OpenGLContext.ui.panel import Panel
+        button = Button(text='ok')
+        panel = Panel(children=[button])
+        panel.layout((400, 200), metrics)
+        panel.focus(button)
+        return button
+
+    def test_a_focused_widget_gets_a_solid_ring(self, button):
+        painted = _Recorder()
+        button.paintFocus(painted)
+        assert painted.calls('border')
+
+    def test_and_a_glow_outside_it(self, button):
+        painted = _Recorder()
+        button.paintFocus(painted)
+        assert painted.calls('glow')
+
+    def test_the_ring_is_outside_the_widget(self, button):
+        painted = _Recorder()
+        button.paintFocus(painted)
+        assert painted.calls('border')[0][0].width > button.rect.width
+
+    def test_an_unfocused_widget_draws_nothing(self, metrics):
+        from OpenGLContext.ui.panel import Panel
+        button = Button(text='ok')
+        panel = Panel(children=[button])
+        panel.layout((400, 200), metrics)
+        painted = _Recorder()
+        button.paintFocus(painted)
+        assert not painted.recorded
+
+
+class _Recorder:
+    """A renderer that records what it was asked to draw.
+
+    The widgets' painting is arithmetic over their own rectangles; that the
+    primitives reach the framebuffer is tested against real GL in
+    ``test_ui_draw_gl``.
+    """
+
+    def __init__(self):
+        from OpenGLContext.ui.metrics import FontMetrics
+        from OpenGLContext.ui.skin import DEFAULT_SKIN
+        self.metrics = FontMetrics(8, 16, 2)
+        self.skin = DEFAULT_SKIN
+        self.recorded = []
+
+    def calls(self, name):
+        """The arguments of every call to one primitive."""
+        return [arguments for called, arguments in self.recorded
+                if called == name]
+
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+
+        def record(*arguments, **named):
+            self.recorded.append((name, arguments))
+        return record
+
+
 class TestSelect:
     @pytest.fixture
     def select(self, metrics):

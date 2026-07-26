@@ -173,6 +173,13 @@ class ContextDefinition( node.Node ):
     #: frame rate and lets a benchmark measure it (env: OPENGLCONTEXT_NO_VSYNC).
     vsync = field.newField( "vsync", "SFBool", 1,
                             lambda: not renderoptions.env_flag('OPENGLCONTEXT_NO_VSYNC', False))
+    #: How large the overlay interface is drawn, on top of the size the window's
+    #: height already asks for: 1 leaves it alone, 2 doubles it.  A player with
+    #: a 4K display already gets a larger interface without touching this; this
+    #: is for eyesight and viewing distance rather than for resolution
+    #: (env: OPENGLCONTEXT_UI_SCALE).  See :mod:`OpenGLContext.ui.metrics`.
+    uiScale = field.newField( "uiScale", "SFFloat", 1,
+                              lambda: renderoptions.env_number('OPENGLCONTEXT_UI_SCALE', 1.0))
 
     #: Fields that are *published* rather than chosen, and so are never carried
     #: in a settings dialog's draft: ``movementMode`` says which mode is in
@@ -203,6 +210,8 @@ class ContextDefinition( node.Node ):
         'instancing': {'label': 'Instanced batching'},
         'tessellationLOD': {'label': 'Distance detail'},
         'vsync': {'label': 'Wait for refresh (vsync)'},
+        'uiScale': {'label': 'Interface size', 'minimum': 0.75, 'maximum': 2.0,
+                    'step': 0.25, 'suffix': 'x'},
         'multisampleSamples': {'label': 'Anti-aliasing samples', 'minimum': -1,
                                'maximum': 16, 'step': 1},
         'pickEnabled': {'label': 'Mouse picking'},
@@ -223,6 +232,11 @@ class ContextDefinition( node.Node ):
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
         'bloom', 'ibl', 'iblIntensity', 'transmission',
         'instancing', 'tessellationLOD', 'multisampleSamples', 'vsync',
+    )
+    #: Fields a settings screen shows under "Interface": how the overlay itself
+    #: is drawn, as opposed to the world.
+    INTERFACE_FIELDS = (
+        'uiScale',
     )
     #: Fields a settings screen shows under "Diagnostics".
     DIAGNOSTIC_FIELDS = (

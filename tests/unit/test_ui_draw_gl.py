@@ -39,6 +39,11 @@ def gl_context():
         pytest.skip("no GL window")
     glfw.make_context_current(window)
     yield window
+    # The cached atlases hold GL objects in this context, and the driver hands
+    # the next window the same identifier often enough that leaving them would
+    # make one test's textures another test's problem.
+    from OpenGLContext.scenegraph.text import shadertext
+    shadertext.drop_text_renderers()
     glfw.destroy_window(window)
 
 
@@ -332,3 +337,43 @@ def test_the_hook_does_nothing_with_no_overlay(gl_context):
     clear()
     Context().renderShaderOverlay(None)
     assert frame().max() == 0
+
+
+# -- text renderers belong to one GL context ---------------------------------
+
+def test_two_windows_get_their_own_text_renderer(gl_context):
+    """A texture id means nothing in another context.
+
+    The atlas is cached so that nine sizes do not become nine per frame, but
+    the cache cannot be per process: a second window binding the first
+    window's texture id is at best drawing the wrong thing and at worst a GL
+    error.
+    """
+    from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
+    first = get_text_renderer(16)
+    assert first.initialize()
+    second_window = glfw.create_window(WIDTH, HEIGHT, "second", None, None)
+    if not second_window:
+        pytest.skip("no second GL window")
+    try:
+        glfw.make_context_current(second_window)
+        second = get_text_renderer(16)
+        assert second is not first
+        assert second.initialize()
+    finally:
+        glfw.destroy_window(second_window)
+        glfw.make_context_current(gl_context)
+
+
+def test_the_same_window_keeps_the_one_atlas(gl_context):
+    from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
+    assert get_text_renderer(16) is get_text_renderer(16)
+
+
+def test_a_context_can_let_its_text_renderers_go(gl_context):
+    """What a window calls as it is destroyed, so nothing outlives its objects."""
+    from OpenGLContext.scenegraph.text import shadertext
+    made = shadertext.get_text_renderer(16)
+    made.initialize()
+    shadertext.drop_text_renderers()
+    assert shadertext.get_text_renderer(16) is not made

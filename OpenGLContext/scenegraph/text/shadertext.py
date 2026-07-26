@@ -387,12 +387,27 @@ class ShaderTextRenderer:
         shader_program.use(lit=True)
 
 
-# Module-level cache for text renderers by size
+# Cached text renderers, keyed by (GL context, size).  Per context and not
+# merely per size: a renderer owns a texture, a VAO and a VBO, and those names
+# mean nothing in another context, so a second window handed the first
+# window's renderer draws the wrong thing or raises.
 _renderers = {}
+
+
+def _gl_context():
+    """An identifier for the GL context that is current, or None."""
+    try:
+        from OpenGL import contextdata
+        return contextdata.getContext()
+    except Exception:                   # pragma: no cover - no GL at all
+        return None
 
 
 def get_text_renderer(font_size=16):
     """Get a text renderer for the specified font size.
+
+    One per (GL context, size), built on first use and kept: an atlas costs a
+    texture upload, and nine sizes must not become nine uploads a frame.
 
     Args:
         font_size: Desired font size in pixels
@@ -400,6 +415,19 @@ def get_text_renderer(font_size=16):
     Returns:
         ShaderTextRenderer instance
     """
-    if font_size not in _renderers:
-        _renderers[font_size] = ShaderTextRenderer(font_size)
-    return _renderers[font_size]
+    key = (_gl_context(), font_size)
+    if key not in _renderers:
+        _renderers[key] = ShaderTextRenderer(font_size)
+    return _renderers[key]
+
+
+def drop_text_renderers():
+    """Forget the renderers belonging to the current GL context.
+
+    Called as a window goes away.  Their GL objects die with the context, and a
+    later context can be handed the same identifier by the driver, which would
+    otherwise leave the new window drawing through names that are gone.
+    """
+    context = _gl_context()
+    for key in [key for key in _renderers if key[0] == context]:
+        del _renderers[key]

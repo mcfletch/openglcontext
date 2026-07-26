@@ -51,6 +51,16 @@ class Grid(Widget):
     this is not just a column of rows.  Space left over goes to the columns
     named in ``columnFlex``, or to the last column, which is where the controls
     are.
+
+    **A row is a thing, not two things side by side.**  ``rowPadding`` gives
+    each one room above and below, a hairline is drawn in the gap between one
+    row and the next, and the row the pointer is on or the keyboard is in is
+    washed with a faint fill.  Together they are what lets the eye run from a
+    label on the left to the control on the right without losing the line, and
+    what makes the whole row a target rather than the control alone.
+
+    Pixel sizes here are at the reference font size and are multiplied by the
+    interface scale; the colours come from the panel's skin.
     """
 
     PROTO = 'Grid'
@@ -60,8 +70,13 @@ class Grid(Widget):
     spacing = field.newField('spacing', 'SFFloat', 1, 4.0)
     #: Pixels between one column and the next.
     columnSpacing = field.newField('columnSpacing', 'SFFloat', 1, 8.0)
+    #: Pixels of clear space above and below each row's contents.
+    rowPadding = field.newField('rowPadding', 'SFFloat', 1, 0.0)
     #: Share of the leftover width per column.  Empty gives it all to the last.
     columnFlex = field.newField('columnFlex', 'MFFloat', 1, list)
+
+    #: ``rowPadding`` in real pixels, settled at layout time.
+    _laidOutPadding: int = 0
 
     def layoutChildren(self) -> Sequence[Any]:
         return [child for child in self.children
@@ -94,13 +109,16 @@ class Grid(Widget):
         if not self.layoutChildren():
             return (0, 0)
         widths, heights = self._measure(metrics)
-        return (sum(widths) + int(self.columnSpacing) * (len(widths) - 1),
-                sum(heights) + int(self.spacing) * (len(heights) - 1))
+        padding = metrics.pixels(self.rowPadding) * 2
+        return (sum(widths)
+                + metrics.pixels(self.columnSpacing) * (len(widths) - 1),
+                sum(heights) + padding * len(heights)
+                + metrics.pixels(self.spacing) * (len(heights) - 1))
 
     # -- placement --------------------------------------------------------
     def _columnWidths(self, metrics: Any, available: int) -> List[int]:
         widths, _heights = self._measure(metrics)
-        gaps = int(self.columnSpacing) * (len(widths) - 1)
+        gaps = metrics.pixels(self.columnSpacing) * (len(widths) - 1)
         spare = available - sum(widths) - gaps
         if spare <= 0:
             return widths
@@ -124,9 +142,10 @@ class Grid(Widget):
             return
         widths = self._columnWidths(metrics, self.rect.width)
         _columns, heights = self._measure(metrics)
-        spacing = int(self.spacing)
-        column_spacing = int(self.columnSpacing)
-        cursor_y = self.rect.top
+        spacing = metrics.pixels(self.spacing)
+        column_spacing = metrics.pixels(self.columnSpacing)
+        padding = self._laidOutPadding = metrics.pixels(self.rowPadding)
+        cursor_y = self.rect.top - padding
         for row, height in zip(rows, heights, strict=True):
             cursor_x = self.rect.x
             for index, child in enumerate(row):
@@ -134,4 +153,69 @@ class Grid(Widget):
                 child.arrange(Rect(cursor_x, cursor_y - height,
                                    widths[index], height), metrics)
                 cursor_x += widths[index] + column_spacing
-            cursor_y -= height + spacing
+            cursor_y -= height + padding * 2 + spacing
+
+    # -- rows as a whole ---------------------------------------------------
+    def rowRects(self) -> List[Rect]:
+        """One rectangle per row, spanning the grid and taking in the padding.
+
+        Derived from where the cells actually are rather than remembered from
+        layout, so a row drawn inside a scrolling viewport moves with its
+        contents instead of staying where the page started.
+        """
+        count = max(1, int(self.columns))
+        children = list(self.layoutChildren())
+        padding = self._rowPaddingPixels()
+        rects = []
+        for start in range(0, len(children), count):
+            row = children[start:start + count]
+            top = max(child.rect.top for child in row)
+            bottom = min(child.rect.y for child in row)
+            rects.append(Rect(self.rect.x, bottom - padding, self.rect.width,
+                              (top - bottom) + padding * 2))
+        return rects
+
+    def _rowPaddingPixels(self) -> int:
+        """The row padding in real pixels, settled when the grid was arranged.
+
+        A size rather than a position, so unlike the cells' rectangles it does
+        not move when the page is scrolled.
+        """
+        return self._laidOutPadding
+
+    def _activeRows(self) -> Tuple[Optional[int], Optional[int]]:
+        """Which row the pointer is on, and which the keyboard is in.
+
+        Read from the widgets' own state rather than from the panel, so a grid
+        highlights its rows whether or not it is on one -- and so a control
+        nested inside a cell still lights the row it belongs to.
+        """
+        hovered: Optional[int] = None
+        focused: Optional[int] = None
+        showFocus = getattr(self.root(), 'focusVisible', False)
+        count = max(1, int(self.columns))
+        for index, cell in enumerate(self.layoutChildren()):
+            for widget in cell.walk():
+                if getattr(widget, 'hovered', False):
+                    hovered = index // count
+                if showFocus and getattr(widget, 'focused', False):
+                    focused = index // count
+        return (hovered, focused)
+
+    def paint(self, renderer: Any) -> None:
+        skin = renderer.skin
+        hovered, focused = self._activeRows()
+        rects = self.rowRects()
+        for index, rect in enumerate(rects):
+            if index == focused:
+                renderer.rect(rect, skin.rowFocus)
+            elif index == hovered:
+                renderer.rect(rect, skin.rowHover)
+            if index and float(skin.rowRule[3]):
+                # In the gap above the row, where it separates rather than
+                # underlines: a rule against a row's own edge reads as a box.
+                # A whole pixel at every scale, or it is a line nobody can see.
+                previous = rects[index - 1]
+                thickness = max(1, renderer.metrics.pixels(1))
+                renderer.rect(Rect(rect.x, (rect.top + previous.y) // 2,
+                                   rect.width, thickness), skin.rowRule)

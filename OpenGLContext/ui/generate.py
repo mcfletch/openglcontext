@@ -33,13 +33,26 @@ from OpenGLContext.ui.widgets import (
     KeyCapture, Label, Select, Slider, TextField, Toggle, Widget,
 )
 
-__all__ = ['hints_for', 'editor_for', 'page_for', 'label_for']
+__all__ = ['hints_for', 'editor_for', 'page_for', 'label_for',
+           'COLUMN_FLEX', 'COLUMN_SPACING', 'ROW_SPACING', 'ROW_PADDING']
 
 #: Attribute a node class declares its presentation in.
 HINTS_ATTRIBUTE = 'UI_HINTS'
 #: Field types with no sensible one-line editor.  A sub-record gets a button to
 #: its own page, which is an authoring decision rather than a generated one.
 UNEDITABLE = ('SFNode', 'MFNode', 'SFImage', 'SFArray', 'SFArray32')
+#: Editors that are a fixed size and belong against the right margin.  The rest
+#: -- a slider, a text field -- have a length worth reading and stretch.
+COMPACT = (Toggle, Select, KeyCapture)
+#: How the label and control columns share the width.  Even, so the controls
+#: line up down the page instead of stepping in and out with the labels, and so
+#: neither column is a sliver on a wide display.
+COLUMN_FLEX = (1.0, 1.0)
+#: Pixels at the reference font size between the two columns, between one row
+#: and the next, and around each row's contents.
+COLUMN_SPACING = 24.0
+ROW_SPACING = 0.0
+ROW_PADDING = 7.0
 
 _CAMEL = re.compile(r'(?<=[a-z0-9])(?=[A-Z])')
 
@@ -120,6 +133,11 @@ def page_for(node: Any, hints: Optional[Dict[str, Dict[str, Any]]] = None,
     ``include`` names and orders the fields to show; without it every field
     that has an editor appears, in declaration order, which is what makes a
     newly added setting turn up on its own.
+
+    The two columns share the width evenly and each row is given room around
+    it, so a page reads as a list of settings at any window size rather than as
+    labels crushed against controls on the left and a great deal of nothing on
+    the right.
     """
     hints = dict(hints or hints_for(node))
     skipped = set(exclude)
@@ -133,8 +151,12 @@ def page_for(node: Any, hints: Optional[Dict[str, Dict[str, Any]]] = None,
             continue
         hint = hints.get(name) or {}
         cells.append(Label(text=label_for(name, hint), name='%s.label' % (name,)))
+        if isinstance(editor, COMPACT):
+            editor.alignSelf = 'end'
         cells.append(editor)
-    return Grid(children=cells, columns=columns)
+    return Grid(children=cells, columns=columns, columnFlex=list(COLUMN_FLEX),
+                columnSpacing=COLUMN_SPACING, spacing=ROW_SPACING,
+                rowPadding=ROW_PADDING)
 
 
 def _fieldNames(node: Any) -> List[str]:

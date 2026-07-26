@@ -192,10 +192,19 @@ class ViewPlatformMixin(object):
 
         The first call only establishes where the pointer is: otherwise
         entering a window would read as one violent flick of the view.
+
+        **Motion is ignored while the capture is suspended**, because the
+        pointer is then somebody else's -- an overlay is being clicked with it.
+        A backend reports cursor motion straight to here rather than through
+        the event queue, so gating ``ProcessEvent``, which is all an overlay
+        can do, does not reach this path; without the test below the world
+        keeps turning under the dialog the player is reading.  The position is
+        still tracked, so the journey across the dialog is not delivered as one
+        flick the moment the pointer is handed back.
         """
         self._directPointerMotion = True
         point = ( x, y )
-        if self._lastPointer is not None:
+        if self._lastPointer is not None and not self._captureSuspended:
             self.getInputState().mouse_moved(
                 point[0] - self._lastPointer[0],
                 point[1] - self._lastPointer[1] )

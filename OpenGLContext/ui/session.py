@@ -35,7 +35,7 @@ Two rules the copying keeps:
 
 from __future__ import annotations
 
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Set
 
 from pydispatch import dispatcher
 from vrml import node as vrmlnode, protofunctions
@@ -166,6 +166,10 @@ class SettingsSession:
         #: Called with this session whenever the draft is edited.
         self.on_dirty: Optional[Callable[['SettingsSession'], None]] = None
         self.draft = copy_node(target)
+        #: The values as they stood when the session opened, kept so the caller
+        #: can still be told what moved *after* a commit has made the draft and
+        #: the target agree.
+        self.original = copy_node(target)
         self._watch()
 
     # -- change notification ----------------------------------------------
@@ -203,6 +207,24 @@ class SettingsSession:
     def dirty(self) -> bool:
         """Whether the draft differs from what it would be saved over."""
         return not nodes_equal(self.draft, self.target)
+
+    def changed_fields(self) -> Set[str]:
+        """The names of the fields the user actually moved.
+
+        Against the values the session opened with rather than against the
+        target, so it is still the right answer once :meth:`commit` has written
+        the draft through -- which is when a caller saving the user's settings
+        wants it.
+
+        This is what tells a *user's* settings apart from the ones a game
+        shipped: a file holding only these keeps a player's choices without
+        also freezing every default the game may want to change in a later
+        build.
+        """
+        return set(
+            definition.name for definition in _editableFields(self.draft)
+            if not _valuesEqual(definition, getattr(self.draft, definition.name),
+                                getattr(self.original, definition.name)))
 
     def commit(self) -> None:
         """Write the draft's values into the target, field by field.

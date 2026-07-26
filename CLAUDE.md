@@ -213,7 +213,15 @@ feature for a script or a CI run, while the settings screen
 Passes read through `OpenGLContext.renderoptions`, never the environment
 directly. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
 `maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`, `instancing`,
-`tessellationLOD` and `vsync`; see [docs/overlayui.html](docs/overlayui.html).
+`tessellationLOD`, `vsync` and `uiScale`; see
+[docs/overlayui.html](docs/overlayui.html).
+
+`uiScale` (env: `OPENGLCONTEXT_UI_SCALE`) is the player's own multiplier on the
+overlay's size. It is *on top of* the automatic scaling the window's height
+already applies, so a 4K display gets a larger interface without anyone setting
+it. Every pixel measurement in the UI — skin insets, widget margins,
+`maximumWidth`, grid row padding — goes through that scale; see
+`OpenGLContext.ui.metrics`.
 
 ### OPENGLCONTEXT_PROFILE
 

@@ -310,8 +310,12 @@ class GLFWContext(
             else:
                 self.OnDraw(force=0)
 
-        # Cleanup
+        # Cleanup.  The cached text renderers own GL objects in this context,
+        # so they have to be let go before it is destroyed rather than left for
+        # a later window that the driver hands the same identifier.
         if self.window:
+            from OpenGLContext.scenegraph.text import shadertext
+            shadertext.drop_text_renderers()
             glfw.destroy_window(self.window)
             self.window = None
         glfw.terminate()

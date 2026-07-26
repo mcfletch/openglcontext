@@ -50,7 +50,7 @@ screen. It is deliberately not a widget toolkit.
 
 - A stack of overlays, nested modals, and per-dialog draft state.
 - Widgets: label, button (with a primary/secondary/danger role), toggle
-  (checkbox), select (cycle through options), text field (single line), slider,
+  (a sliding switch), select (cycle through options), text field (single line), slider,
   and a key-capture field for rebinding.
 - Layout: vertical and horizontal boxes, a grid for label/control pairs, and a
   scrollable viewport for when a page or a text block is longer than its space.
@@ -168,13 +168,15 @@ wants Enter for itself. That is what makes "Yes" the primary on the download
 prompt rather than merely the blue one, and it is why the field belongs on the
 widget rather than in the skin.
 
-**Focus is a glow, and it is not hover.** They are orthogonal — the pointer can
+**Focus is a ring, and it is not hover.** They are orthogonal — the pointer can
 rest on one widget while the keyboard is on another, and a design that shares one
-highlight makes that state unreadable. Hover lights the frame; focus draws an
-additive glow *outside* the widget's rect, from its own nine-slice ring in the
-skin. Outside rather than inset because a border either eats the widget's padding
-or moves its text by a pixel when focus arrives, and text that shifts as you Tab
-through a form is the thing that reads as broken.
+highlight makes that state unreadable. Hover lights the frame; focus draws a
+solid border *and* an additive glow *outside* the widget's rect. Outside rather
+than inset because a border drawn inside either eats the widget's padding or
+moves its text by a pixel when focus arrives, and text that shifts as you Tab
+through a form is the thing that reads as broken. Two marks rather than one
+because either alone is unreliable over a world the panel does not control: a
+glow disappears against a bright scene, a thin ring against a busy one.
 
 Two consequences to carry rather than discover:
 
@@ -372,9 +374,9 @@ Settled at review; the sections above are written to match.
    settings work, so it stays at stage 7, after the licence screen has proved
    the scrolling.
 4. **Emphasis is a `role` field rendered as text colour; focus is a separate
-   additive glow.** `primary`/`secondary`/`danger`, with `primary` doubling as
-   the panel's Enter default. Focus and hover are never the same highlight. See
-   §Emphasis and focus.
+   ring outside the widget.** `primary`/`secondary`/`danger`, with `primary`
+   doubling as the panel's Enter default. Focus and hover are never the same
+   highlight. See §Emphasis and focus.
 5. **Modals stack; a sub-record is edited by a nested session whose commit
    writes into the enclosing draft, not into the live node.** Only the outermost
    commit saves. Commit copies fields into the existing node rather than swapping
@@ -386,3 +388,44 @@ Settled at review; the sections above are written to match.
    `height` and `left`/`right`/`top`/`bottom` fields are what a Row/Column
    needs and are already declared; a second parallel set with different names
    would be the worse outcome.
+7. **The font size is the interface scale, and it comes from the window.** A
+   screen laid out in fixed pixels is comfortable at one resolution and
+   unusable at the next, so `ui.metrics.font_size_for` picks one of the nine
+   shipped atlases from the window's height (16 px at 1080 lines, 32 at 2160,
+   never smaller than the reference because text scaled *down* is unreadable),
+   `ContextDefinition.uiScale` is the player's own multiplier on top of that,
+   and the `FontMetrics.scale` that comes back multiplies **every** pixel
+   measurement in the system — the skin's insets and switch sizes, a widget's
+   margins and `maximumWidth`, a box's spacing and padding, a grid's row
+   padding. A skin is authored once at the reference size. The two deliberate
+   exceptions are in characters and so already scale: a button's horizontal
+   padding, and a panel's `preferredColumns`.
+8. **`preferredColumns` is also a maximum width, and `fill` means full height.**
+   The alternative — a separate `maximumWidth` in pixels on `Panel` — needs its
+   own scaling rule and a second number to keep in step with the first. In
+   characters it holds at every scale for free, and a settings screen on a 4K
+   display becomes a centred column instead of a page with a label at one edge
+   and its control at the other.
+9. **A boolean is a switch, not a check box, and its round parts are
+   generated.** The state is then the shape: a knob at one end of a coloured
+   track reads at a glance, while a tick inside a box has to be looked at. The
+   ends and the knob are sampled from one antialiased disc built at start-up, so
+   there is nothing to ship, nothing to keep in step with the skin, and no
+   aliasing at any scale — and because it is the same texture as the rest of the
+   batch, a switch costs no extra draw call.
+10. **A press the overlay took takes its release with it.** Gating on "is an
+    overlay up right now" is not enough, because the *last* panel closes on the
+    key-down and the key-up then lands on the world: Escape in a settings screen
+    quit the application, while Escape in a dialog raised over another one was
+    fine, which is the shape of the bug that found this. The mix-in keeps a small
+    ledger of the down-events it sank and swallows the matching ups whatever the
+    stack looks like by then. This is the "capture stack" idea in its smallest
+    honest form: no second dispatch path, no re-registration of the world's
+    handlers, and nothing to get out of step.
+11. **Suspending the pointer capture also suspends the motion.** An overlay can
+    only gate `ProcessEvent`, and a backend that knows where the pointer went
+    reports it straight to the sampler instead — deliberately, since mouse-look
+    must not depend on the pick pipeline. So the suspend has to be honoured in
+    both places, or the world turns under the dialog. The position is still
+    tracked while suspended, so the journey across the dialog is not delivered
+    as one flick on the way back.

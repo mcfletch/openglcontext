@@ -24,21 +24,41 @@ first::
 
 from __future__ import annotations
 
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Set, Tuple
 
 import logging
 
-from OpenGLContext.ui.metrics import FontMetrics, metrics_for
+from OpenGLContext.ui.metrics import FontMetrics, font_size_for, metrics_for
 from OpenGLContext.ui.panel import Panel
 
 log = logging.getLogger(__name__)
 
-__all__ = ['OverlayStack', 'OverlayMixin', 'OVERLAY_FONT_SIZE']
+__all__ = ['OverlayStack', 'OverlayMixin']
 
-#: Font size the overlay measures and draws with.
-OVERLAY_FONT_SIZE = 16
 #: Mouse buttons the wheel arrives on, in the traditional X11 spelling.
 WHEEL_UP, WHEEL_DOWN = 3, 4
+
+#: What identifies one held input: its kind, and the key name or button number.
+_Claim = Tuple[str, Any]
+
+
+def _claimKey(event: Any) -> Optional['_Claim']:
+    """What identifies one held input, or None if the event is not one half.
+
+    Only the events that come in a down/up pair are claimable.  A ``keypress``
+    is a whole keystroke on its own and a mouse move is neither half of
+    anything.
+    """
+    kind = getattr(event, 'type', None)
+    if kind == 'keyboard':
+        return ('keyboard', getattr(event, 'name', ''))
+    if kind == 'mousebutton':
+        return ('mousebutton', int(getattr(event, 'button', 0)))
+    return None
+
+
+def _isPress(event: Any) -> bool:
+    return bool(getattr(event, 'state', 0))
 
 
 class OverlayStack:
@@ -163,9 +183,6 @@ class OverlayStack:
 class OverlayMixin(object):
     """Gives a context an overlay stack, its input routing and its drawing."""
 
-    #: Font size the overlay is measured and drawn at.
-    overlayFontSize: int = OVERLAY_FONT_SIZE
-
     # Supplied by the context this is mixed into (annotations only, so the
     # real methods are still found at run time).
     getViewPort: Any
@@ -174,6 +191,9 @@ class OverlayMixin(object):
     suspendPointerCapture: Any
     _overlays: Optional[OverlayStack] = None
     _overlayActive: bool = False
+    #: Inputs whose press the overlay took, so their release is taken too.
+    #: See :meth:`overlaySinks`.
+    _claimed: Optional[Set['_Claim']] = None
 
     @property
     def overlays(self) -> OverlayStack:
@@ -222,14 +242,46 @@ class OverlayMixin(object):
         A modal overlay sinks everything, handled or not.  A modeless one --
         a HUD, a console left open while play continues -- sinks only what it
         actually used.
+
+        **A press the overlay took takes its release with it**, whether or not
+        an overlay is still up by the time the release arrives.  Without that
+        ledger the last panel on the stack is a trap: Escape's key-down closes
+        it, the stack empties, and the key-up lands on the world's own Escape
+        handler, which in every OpenGLContext application quits it.  The same
+        goes for the click that dismisses a dialog, whose release would
+        otherwise pick whatever was behind it.
         """
+        claim = _claimKey(event)
         stack = self._overlays
         if stack is None or not stack.visible:
-            return False
+            return self._releaseClaim(claim, event)
         acted = self._routeToOverlay(stack, event)
         if acted:
             self.triggerRedraw(1)
-        return bool(stack.sinks() or acted)
+        sunk = bool(stack.sinks() or acted)
+        if claim is not None and sunk:
+            self._holdClaim(claim, event)
+        elif claim is not None:
+            self._releaseClaim(claim, event)
+        return sunk
+
+    def _holdClaim(self, claim: '_Claim', event: Any) -> None:
+        """Remember a press the overlay took, or forget it on its release."""
+        if self._claimed is None:
+            self._claimed = set()
+        if _isPress(event):
+            self._claimed.add(claim)
+        else:
+            self._claimed.discard(claim)
+
+    def _releaseClaim(self, claim: Optional['_Claim'], event: Any) -> bool:
+        """Whether this release finishes an input the overlay already took."""
+        if claim is None or _isPress(event) or not self._claimed:
+            return False
+        if claim not in self._claimed:
+            return False
+        self._claimed.discard(claim)
+        return True
 
     def _routeToOverlay(self, stack: OverlayStack, event: Any) -> bool:
         kind = getattr(event, 'type', None)
@@ -275,6 +327,26 @@ class OverlayMixin(object):
         return super(OverlayMixin, self).hasMouseMoveHandlers()   # type: ignore[misc]
 
     # -- measurement and drawing ------------------------------------------
+    def interfaceScale(self) -> float:
+        """How much larger than usual the player wants the interface.
+
+        The window's own height is *not* in here: that is answered by
+        :func:`~OpenGLContext.ui.metrics.font_size_for` and applies whether or
+        not anyone has a preference.  This is the preference on top of it --
+        eyesight and viewing distance rather than resolution.
+        """
+        scale = getattr(getattr(self, 'contextDefinition', None), 'uiScale', 1.0)
+        return float(scale) or 1.0
+
+    def overlayFontSize(self) -> int:
+        """The atlas size the overlay measures and draws with right now.
+
+        A method rather than a setting, because the answer changes with the
+        window: a screen that was comfortable in a 1080p window is half the
+        size it should be when that window is dragged onto a 4K display.
+        """
+        return font_size_for(self.getViewPort()[1], self.interfaceScale())
+
     def overlayMetrics(self) -> Optional[FontMetrics]:
         """Measurements for the font the overlay draws with, or None.
 
@@ -282,7 +354,7 @@ class OverlayMixin(object):
         against a zero-sized character would collapse every widget in the tree.
         """
         from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
-        renderer = get_text_renderer(self.overlayFontSize)
+        renderer = get_text_renderer(self.overlayFontSize())
         try:
             if not renderer.initialize():
                 return None
@@ -325,6 +397,6 @@ class OverlayMixin(object):
         if not self.layoutOverlays():
             return
         from OpenGLContext.ui.draw import OverlayRenderer
-        renderer = OverlayRenderer.forContext(self, self.overlayFontSize)
+        renderer = OverlayRenderer.forContext(self, self.overlayFontSize())
         if renderer is not None:
             renderer.draw(stack, self.getViewPort())

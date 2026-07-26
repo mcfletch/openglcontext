@@ -139,6 +139,11 @@ class Game(OverlayMixin, GLFWInteractiveContext):
     <tr><td><code>vsync</code></td><td>bool</td>
       <td>Wait for the display's refresh before presenting.</td>
       <td><code>OPENGLCONTEXT_NO_VSYNC</code> (inverted)</td></tr>
+    <tr><td><code>uiScale</code></td><td>float, 0.75&ndash;2</td>
+      <td>How large the overlay is drawn, <em>on top of</em> the size the
+        window's height already asks for. See
+        <a href="#scale">Everything scales with the window</a>.</td>
+      <td><code>OPENGLCONTEXT_UI_SCALE</code></td></tr>
   </table>
   <p><strong>The environment variable is the field's default, not a competitor.</strong>
     A field nobody has set reads its environment variable every time the pass
@@ -166,6 +171,68 @@ definition = ContextDefinition(shadows=False, maximumLights=2, ibl='analytic')</
     <code>SFString</code> with <code>options</code> a cycling select,
     <code>MFString</code> with <code>{'editor': 'keys'}</code> a key capture.
     A screen wanting better grouping supplies an authored panel instead.</p>
+
+  <h3>What happens to the player's changes</h3>
+  <p>Apply writes the draft into the live definition and then tells whoever
+    opened the screen, which is where <strong>what to do with the settings</strong>
+    is decided &mdash; writing them to a file, sending them to a server, or
+    nothing at all:</p>
+<pre>def saveSettings(session):
+    changed = session.changed_fields()        # only what the player moved
+    with open(profilePath, 'w') as output:
+        json.dump({name: str(getattr(session.draft, name)) for name in changed},
+                  output)
+
+settings.open_settings(context, on_apply=saveSettings)</pre>
+  <p><code>changed_fields()</code> is measured against the values the screen
+    opened with, so it is still the right answer after the commit. Saving only
+    those keeps the player's choices without also freezing every default the
+    game ships &mdash; a later build can change a default and the player's file
+    will not quietly override it.</p>
+  <p>A context may instead define <code>settingsChanged()</code>, which is called
+    whether or not an <code>on_apply</code> was given, and is where the few
+    options set once on the window &mdash; the swap interval, the buffer format
+    &mdash; are re-applied. A changed profile or buffer format takes effect on
+    the next context, and nothing pretends otherwise.</p>
+</section>
+
+<section id="scale">
+  <h2>Everything scales with the window</h2>
+  <p>A screen laid out in fixed pixels is comfortable at one resolution and
+    unusable at the next: at 4K a 16-pixel font is a smudge and a checkbox is
+    too small to hit. So <strong>one number drives the whole interface</strong>.</p>
+  <ul>
+    <li>The window's height picks a font size
+      (<code>ui.metrics.font_size_for</code>): the reference is a 16-pixel atlas
+      in a 1080-line window, and a 2160-line window gets twice that. Smaller
+      windows stay at the reference &mdash; text scaled <em>down</em> for a 720p
+      display is unreadable rather than merely small. The answer is always one
+      of the nine atlases that exist, so dragging a window edge cannot build a
+      new atlas per pixel, and the largest of them is the ceiling.</li>
+    <li><code>uiScale</code> multiplies that, for eyesight and viewing distance
+      rather than for resolution. It is on the settings screen under
+      <em>Interface</em>, and applying it re-lays the panels out at once.</li>
+    <li>The font that comes back carries a <code>scale</code>, and
+      <strong>every pixel measurement goes through it</strong>: the skin's
+      paddings and switch sizes (<code>Skin.scaled</code>), a widget's margins
+      and <code>maximumWidth</code>, a box's spacing and padding, a grid's row
+      padding. A skin is authored once, at the reference size.</li>
+  </ul>
+  <p>Two things are deliberately <em>not</em> in pixels. A button's horizontal
+    padding is in characters, because the text already carries the size; and a
+    panel's <code>preferredColumns</code> is in characters, which is what makes
+    it a maximum width that holds at every scale:</p>
+<pre>Panel(fill=True, preferredColumns=78, ...)   # full height, at most 78 columns wide</pre>
+  <p><code>fill</code> means full <em>height</em>; the width is capped by
+    <code>preferredColumns</code> and the panel is centred in what is left. That
+    is what keeps the settings screen a readable column on a 4K display instead
+    of a page with a label at one edge and its control at the other.</p>
+  <p>A game drawing its own HUD into the overlay's renderer should ask the
+    context for the size rather than pinning one, since there is one renderer
+    per context and asking it for a second size every frame rebuilds its atlas
+    every frame:</p>
+<pre>renderer = OverlayRenderer.forContext(self, self.overlayFontSize())
+margin = renderer.metrics.pixels(12)          # 12 at the reference size</pre>
 </section>
 
 <section id="sessions">
@@ -203,9 +270,22 @@ session.revert()         # throw the draft away</pre>
       the player would walk into a wall while typing.</li>
     <li>The pointer is handed back
       (<code>ViewPlatformMixin.suspendPointerCapture</code>), so a mouse-look
-      mode's grabbed pointer does not fight the pointer needed to click with.</li>
+      mode's grabbed pointer does not fight the pointer needed to click with.
+      <strong>Its motion stops steering the view too</strong>: a backend reports
+      cursor motion straight to the sampler rather than through the event queue,
+      so gating the event queue does not reach it, and without that the world
+      keeps turning under the dialog the player is reading. The position is
+      still tracked, so the journey across the dialog is not delivered as one
+      flick when the pointer is handed back.</li>
     <li>Mouse-move events are kept alive while an overlay is up, so hover works
       even in a scene with no move handlers of its own.</li>
+    <li><strong>A press the overlay took takes its release with it</strong>,
+      whether or not an overlay is still up by the time the release arrives.
+      Without that ledger the last panel on the stack is a trap: Escape's
+      key-<em>down</em> closes it, the stack empties, and the key-<em>up</em>
+      lands on the world's own Escape handler, which in every OpenGLContext
+      application quits it. The same goes for the click that dismisses a dialog,
+      whose release would otherwise pick whatever was behind it.</li>
   </ul>
   <p>A panel may also declare itself <code>capturing</code>: while one is up the
     overlay runs no accelerators, no Tab traversal and no Enter default, so a
@@ -214,8 +294,12 @@ session.revert()         # throw the draft away</pre>
     key that cannot be bound.</p>
   <p>Press and release are distinct: a button arms on press over itself and fires
     on release over itself, so dragging off it cancels. Hover lights the frame;
-    <strong>focus is a separate additive glow drawn outside the widget</strong>,
-    shown for keyboard focus and text entry but not for an ordinary click.</p>
+    <strong>focus is a separate ring drawn outside the widget</strong> &mdash; a
+    solid border and an additive glow, because either alone disappears over a
+    world the panel does not control &mdash; shown for keyboard focus and text
+    entry but not for an ordinary click. On a generated settings page the whole
+    row the pointer is on or the keyboard is in is washed as well, so a row is
+    one target rather than two things that happen to be side by side.</p>
 </section>
 
 <section id="bindings">
@@ -257,7 +341,10 @@ context.pushOverlay(panel)</pre>
   <p>A <code>Skin</code> node holds every colour and inset the widgets use, plus
     an optional <code>NineSlice</code> image per widget state. The default skin
     is flat translucent rectangles and needs no artwork at all, which matters for
-    a viewer that is not a game.</p>
+    a viewer that is not a game. Its sizes are <strong>pixels at the reference
+    font size</strong> and are multiplied by the interface scale before anything
+    is measured against them, so a skin is authored once and works at every
+    resolution (see <a href="#scale">Everything scales with the window</a>).</p>
 <pre>from OpenGLContext.ui.skin import NineSlice, Skin
 
 panel.skin = Skin(
@@ -278,6 +365,14 @@ panel.skin = Skin(
     <code>primary</code> button is also the panel's Enter default;
     <code>danger</code> marks the actions a settings screen must not let someone
     hit by accident.</p>
+  <p><strong>Round shapes need no artwork.</strong> A boolean is drawn as a
+    sliding switch, not a check box, because the state is then the shape: a knob
+    at one end or the other on a track that changes colour reads at a glance,
+    while a tick inside a box has to be looked at. The track's ends and the knob
+    come from one antialiased disc the renderer generates at start-up, so they
+    stay smooth at any interface scale and cost nothing to ship. A game that
+    would rather draw its own supplies <code>switchOnImage</code>,
+    <code>switchOffImage</code> and <code>switchKnobImage</code>.</p>
 </section>
 
 <section id="authoring">
@@ -306,13 +401,34 @@ panel = Panel(title='Movement', modal=True, preferredColumns=48, children=[
     column of labels up across unrelated rows. Sizes are pixels and the origin is
     the bottom-left of the window &mdash; the same origin a mouse event's pick
     point arrives in. Layout runs when something changes, not every frame.</p>
-  <p>The layout fields live on <code>OpenGLContext.hud.GUINode</code>:
-    <code>width</code>/<code>height</code> (0 means "measure me"),
-    <code>flex</code>, and <code>left</code>/<code>right</code>/<code>top</code>/
-    <code>bottom</code> margins. A <code>Panel</code> adds
-    <code>preferredColumns</code>, a content width in characters, which is what
-    keeps a dialog holding one long sentence a readable column rather than as
-    wide as the window.</p>
+  <p>The layout fields live on <code>OpenGLContext.hud.GUINode</code>:</p>
+  <table>
+    <tr><th>Field</th><th>What it does</th></tr>
+    <tr><td><code>width</code>, <code>height</code></td>
+      <td>An explicit size; 0 means "measure me".</td></tr>
+    <tr><td><code>flex</code></td>
+      <td>Share of the leftover main-axis space; 0 keeps the natural size.</td></tr>
+    <tr><td><code>left</code>, <code>right</code>, <code>top</code>,
+      <code>bottom</code></td><td>Margin outside the widget.</td></tr>
+    <tr><td><code>maximumWidth</code></td>
+      <td>A ceiling on the width whatever rectangle is offered; 0 for none.
+        What stops a control running the width of a 4K display.</td></tr>
+    <tr><td><code>alignSelf</code></td>
+      <td><code>stretch</code> (take it all), <code>start</code>,
+        <code>center</code> or <code>end</code>. Anything but
+        <code>stretch</code> also shrinks the widget to its measured width,
+        which is how a switch ends up against the right margin rather than
+        adrift in the middle of a wide column.</td></tr>
+  </table>
+  <p>A <code>Panel</code> adds <code>preferredColumns</code>, a content width in
+    characters, which is both what keeps a dialog holding one long sentence a
+    readable column and the panel's maximum width.</p>
+  <p>A generated settings page uses <code>Grid</code>'s row treatment:
+    <code>rowPadding</code> gives each row room above and below (a bigger
+    target as well as air), a hairline is drawn in the gap between one row and
+    the next, and the active row is washed. The two columns share the width
+    evenly, so controls line up down the page instead of stepping in and out
+    with the labels.</p>
 </section>
 
 <section id="modules">

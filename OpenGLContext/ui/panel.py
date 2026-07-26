@@ -49,13 +49,16 @@ class Panel(Widget):
     closeOnEscape = field.newField('closeOnEscape', 'SFBool', 1, True)
     #: Dim the frame behind, so the eye goes to the question.
     scrim = field.newField('scrim', 'SFBool', 1, False)
-    #: Take the whole window rather than sitting at the natural size.
+    #: Take the whole window height rather than sitting at the natural size.
+    #: The *width* is still capped by ``preferredColumns``.
     fill = field.newField('fill', 'SFBool', 1, False)
     #: Pixels kept clear between the panel and the window edge.
     margin = field.newField('margin', 'SFFloat', 1, 24.0)
-    #: Preferred content width **in characters**, 0 for none.  Text is
-    #: measured against it, so a dialog holding one long sentence ends up a
-    #: readable column rather than as wide as the window.
+    #: Content width **in characters**, 0 for none.  This is both the width a
+    #: dialog's text is measured against and the **maximum width** the panel
+    #: will take, which is what keeps a settings screen a centred column on a
+    #: 4K display rather than a line of controls a metre apart.  In characters
+    #: rather than pixels so it holds at every interface scale.
     preferredColumns = field.newField('preferredColumns', 'SFInt32', 1, 0)
     #: The artwork and colours this screen paints with; the default flat skin
     #: when NULL.
@@ -77,6 +80,11 @@ class Panel(Widget):
     focusVisible: bool = False
     #: Room the title takes, settled at layout time; 0 for an untitled panel.
     _title_height: int = 0
+    #: This panel's skin at the current interface scale, and what it was made
+    #: from, so it is rebuilt only when one of the two changes.
+    _scaledSkin: Optional[Any] = None
+    _scaledFrom: Optional[Any] = None
+    _scaledBy: float = 1.0
     _focused: Optional[Widget] = None
     _armed: Optional[Widget] = None
     _hovered: Optional[Widget] = None
@@ -104,7 +112,25 @@ class Panel(Widget):
                 if getattr(child, 'visible', True)]
 
     def activeSkin(self) -> Any:
+        """The skin every widget on this screen paints with.
+
+        Scaled for the window the panel was last laid out in, so a measurement
+        read from it is in real pixels and no widget has to know the scale
+        exists.
+        """
+        if self._scaledSkin is not None:
+            return self._scaledSkin
         return self.skin if self.skin else DEFAULT_SKIN
+
+    def scaleSkin(self, metrics: Any) -> Any:
+        """Settle the skin for one interface scale, and hand it back."""
+        base = self.skin if self.skin else DEFAULT_SKIN
+        factor = float(getattr(metrics, 'scale', 1.0))
+        if self._scaledFrom is not base or self._scaledBy != factor:
+            self._scaledFrom = base
+            self._scaledBy = factor
+            self._scaledSkin = base.scaled(factor)
+        return self._scaledSkin
 
     def contentRect(self) -> Rect:
         """Where the children go: inside the padding, below any title."""
@@ -137,35 +163,59 @@ class Panel(Widget):
         a few dozen widgets, and re-measuring text for all of them at 144Hz is
         work nobody asked for.
         """
+        self.link()
         view_width, view_height = (int(viewport[0]), int(viewport[1]))
         self.viewport = Rect(0, 0, view_width, view_height)
-        margin = int(self.margin)
-        skin = self.activeSkin()
+        margin = metrics.pixels(self.margin)
+        skin = self.scaleSkin(metrics)
         self._title_height = (metrics.line_height + int(skin.rowSpacing)
                               if self.title else 0)
+        limit = max(0, view_width - margin * 2)
         if self.fill:
-            rect = Rect(margin, margin, max(0, view_width - margin * 2),
-                        max(0, view_height - margin * 2))
+            width = min(limit, self._maximumWidth(metrics) or limit)
+            height = max(0, view_height - margin * 2)
         else:
-            limit = max(0, view_width - margin * 2)
             width, height = self.natural_size(
                 metrics, self._preferredWidth(metrics, limit))
             width = min(int(self.width) or width, limit)
             height = min(int(self.height) or height,
                          max(0, view_height - margin * 2))
-            rect = Rect((view_width - width) // 2, (view_height - height) // 2,
-                        width, height)
-        self.rect = rect
+        self.rect = Rect((view_width - width) // 2,
+                         (view_height - height) // 2, width, height)
         self.arrange_content(metrics)
+
+    def _maximumWidth(self, metrics: Any) -> int:
+        """The widest this panel may be drawn, or 0 for no limit."""
+        if not self.preferredColumns:
+            return 0
+        return (int(self.preferredColumns) * metrics.char_width
+                + int(self.activeSkin().panelPadding) * 2)
+
+    def link(self) -> None:
+        """Point every widget in the tree at its container, top down.
+
+        Before measuring rather than while arranging, because a widget finds
+        its skin -- and therefore its padding, its switch size, everything it
+        measures against -- by walking up to the panel.  Measurement runs
+        before anything is placed, so a tree linked only as it is arranged
+        would size its first pass against the unscaled default and paint the
+        result at the real scale.
+        """
+        stack: List[Any] = [self]
+        while stack:
+            current = stack.pop()
+            for child in current.layoutChildren():
+                child.parent = current
+                stack.append(child)
 
     def _preferredWidth(self, metrics: Any,
                         limit: int) -> Optional[int]:
         """The content width to measure against, or None to let it be natural."""
-        if not self.preferredColumns:
+        maximum = self._maximumWidth(metrics)
+        if not maximum:
             return None
         padding = int(self.activeSkin().panelPadding) * 2
-        return max(0, min(int(self.preferredColumns) * metrics.char_width,
-                          limit - padding))
+        return max(0, min(maximum - padding, limit - padding))
 
     def arrange_content(self, metrics: Any) -> None:
         content = self.contentRect()

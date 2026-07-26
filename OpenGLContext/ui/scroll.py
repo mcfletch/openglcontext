@@ -49,6 +49,10 @@ class ScrollViewport(Widget):
     _thumbGrab: Optional[int] = None
     #: The content's height at the last layout.
     contentHeight: int = 0
+    #: The font's line height when this was laid out.  Scrolling is measured in
+    #: lines of the text being scrolled, so a notch of the wheel moves the same
+    #: amount of *reading* at every interface scale.
+    lineHeight: int = 20
 
     @property
     def focusable(self) -> bool:            # type: ignore[override]
@@ -64,15 +68,26 @@ class ScrollViewport(Widget):
                      available: Optional[int] = None) -> Tuple[int, int]:
         width = 0
         height = 0
-        inner = None if available is None else max(0, available - self._barWidth())
+        inner = None if available is None else max(0, available - self._barGutter())
         for child in self.layoutChildren():
             child_w, child_h = child.natural_size(metrics, inner)
             width = max(width, int(child_w))
             height += int(child_h)
-        return (width + self._barWidth(), height)
+        return (width + self._barGutter(), height)
 
     def _barWidth(self) -> int:
         return int(self.activeSkin().scrollbarWidth) if self.showBar else 0
+
+    def _barGutter(self) -> int:
+        """Width taken from the content: the bar, and a gap before it.
+
+        The gap because the right-hand end of a row is where a slider prints
+        its value and where a switch sits, and either of those touching the bar
+        reads as an overlap even when it is not one.
+        """
+        if not self.showBar:
+            return 0
+        return self._barWidth() + int(self.activeSkin().fieldPadding)
 
     def _endPadding(self) -> int:
         """Blank kept at the top and bottom of the content.
@@ -89,10 +104,11 @@ class ScrollViewport(Widget):
         if not self.needsBar:
             return self.rect
         return Rect(self.rect.x, self.rect.y,
-                    max(0, self.rect.width - self._barWidth()), self.rect.height)
+                    max(0, self.rect.width - self._barGutter()), self.rect.height)
 
     def arrange_content(self, metrics: Any) -> None:
         children = self.layoutChildren()
+        self.lineHeight = metrics.line_height
         if not children:
             self.contentHeight = 0
             return
@@ -102,7 +118,7 @@ class ScrollViewport(Widget):
         pad = self._endPadding()
         self.contentHeight = pad * 2 + sum(
             int(child.natural_size(metrics, max(0, self.rect.width
-                                                - self._barWidth()))[1])
+                                                - self._barGutter()))[1])
             for child in children)
         self.scroll = self._clamp(float(self.scroll))
         view = self.viewRect()
@@ -224,11 +240,12 @@ class ScrollViewport(Widget):
         """
         if not delta:
             return False
-        step = WHEEL_LINES * (self.activeSkin().rowSpacing + 16)
-        return self.scrollBy(-delta * step)
+        return self.scrollBy(-delta * WHEEL_LINES * self.lineHeight)
 
     def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
-        page = max(1, self.rect.height - 20)
+        # A page keeps one line of what was on screen, so the eye has
+        # something to land on rather than starting again from nothing.
+        page = max(1, self.rect.height - self.lineHeight)
         if name == '<pagedown>':
             return self.scrollBy(page) or True
         if name == '<pageup>':
@@ -238,9 +255,9 @@ class ScrollViewport(Widget):
         if name == '<end>':
             return self.scrollTo(self.maximumScroll) or True
         if name == '<down>':
-            return self.scrollBy(20) or True
+            return self.scrollBy(self.lineHeight) or True
         if name == '<up>':
-            return self.scrollBy(-20) or True
+            return self.scrollBy(-self.lineHeight) or True
         return False
 
     # -- drawing ----------------------------------------------------------

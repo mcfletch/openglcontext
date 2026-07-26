@@ -193,3 +193,26 @@ class TestHitTesting:
         view = ScrollViewport(children=[Column(children=buttons, spacing=4)])
         view.arrange(Rect(0, 0, 300, 100), metrics)
         assert view.widget_at(*buttons[0].rect.centre) is buttons[0]
+
+
+class TestTheBarDoesNotCrowdTheContent:
+    """A value printed at the right of a row must not run under the bar."""
+
+    @pytest.fixture
+    def viewport(self, metrics):
+        from OpenGLContext.ui.widgets import Label
+        view = ScrollViewport(children=[Label(text='x', height=1000)])
+        view.arrange(Rect(0, 0, 300, 200), metrics)
+        return view
+
+    def test_the_content_stops_clear_of_the_bar(self, viewport):
+        assert viewport.viewRect().right < viewport.barRect().x
+
+    def test_the_bar_still_reaches_the_edge(self, viewport):
+        assert viewport.barRect().right == viewport.rect.right
+
+    def test_nothing_is_reserved_when_there_is_no_bar(self, metrics):
+        from OpenGLContext.ui.widgets import Label
+        view = ScrollViewport(children=[Label(text='x', height=10)])
+        view.arrange(Rect(0, 0, 300, 200), metrics)
+        assert view.viewRect() == view.rect

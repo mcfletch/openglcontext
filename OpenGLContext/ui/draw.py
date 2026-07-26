@@ -14,6 +14,12 @@ whole settings page is normally two or three draws.
 The alpha-mask flag *is* per vertex, so text and frames batch together whenever
 they share a texture: the font atlas carries coverage in its alpha channel,
 while a skin's artwork is modulated in full colour.
+
+Round shapes -- the knob of a switch, the ends of its track -- come from one
+small disc generated here at start-up rather than from artwork.  A game that
+ships no assets at all still gets a switch with round ends, and the shape stays
+smooth at any interface scale because it is sampled, not rasterised into a
+fixed-size image.
 """
 
 from __future__ import annotations
@@ -49,6 +55,9 @@ __all__ = ['OverlayRenderer']
 
 #: Floats per vertex: x, y, u, v, r, g, b, a, mask.
 _STRIDE = 9
+#: Side of the generated disc texture.  Large enough that a knob drawn at any
+#: interface scale samples it up rather than down, small enough to be free.
+_DISC_SIZE = 64
 
 _VERTEX = """#version 330 core
 layout(location = 0) in vec2 aPosition;   // pixels, bottom-left origin
@@ -87,6 +96,25 @@ def _rgba(colour: Any) -> Tuple[float, float, float, float]:
     return (values[0], values[1], values[2], values[3])
 
 
+def _disc_coverage(size: int) -> bytes:
+    """A white RGBA square whose alpha is the coverage of an inscribed circle.
+
+    The edge is softened over a couple of texels so the shape stays clean when
+    it is sampled up to a knob several times this size, which is what a 4K
+    display asks for.
+    """
+    centre = (size - 1) / 2.0
+    radius = size / 2.0
+    rows, columns = np.mgrid[0:size, 0:size]
+    distance = np.hypot(columns - centre, rows - centre)
+    softness = max(1.0, size / 32.0)
+    alpha = np.clip((radius - distance) / softness, 0.0, 1.0)
+    image = np.empty((size, size, 4), dtype=np.uint8)
+    image[..., :3] = 255
+    image[..., 3] = (alpha * 255).astype(np.uint8)
+    return image.tobytes()
+
+
 class OverlayRenderer:
     """Draws an overlay stack with one program and one vertex buffer."""
 
@@ -101,6 +129,7 @@ class OverlayRenderer:
         self._vao: Any = None
         self._vbo: Any = None
         self._white: Any = None
+        self._disc: Any = None
         self._text: Any = None
         self._images: Dict[str, Any] = {}
         self._vertices: List[float] = []
@@ -117,24 +146,45 @@ class OverlayRenderer:
 
         Per context rather than per process: a GL object belongs to the context
         it was made in, and two windows would otherwise share one buffer id.
+        Asking for a different font size re-points the same renderer at another
+        atlas rather than building a second one, since the window growing is
+        exactly when that happens.
         """
         renderer = getattr(context, '_overlayRenderer', None)
         if renderer is None:
             renderer = cls(font_size)
             context._overlayRenderer = renderer
+        elif renderer.font_size != font_size:
+            renderer.useFontSize(font_size)
         if not renderer.initialize():
             return None
         return renderer
 
+    def useFontSize(self, font_size: int) -> None:
+        """Draw with another atlas from here on.
+
+        The program, buffers and generated textures are unaffected; only the
+        glyphs and the measurements taken from them change.
+        """
+        self.font_size = int(font_size)
+        self._text = None
+        self.metrics = None
+
     def initialize(self) -> bool:
-        """Build the program and buffers; False if the driver refuses."""
-        if self._program is not None:
-            return True
-        from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
+        """Build the program, the buffers and the font; False if any refuses.
+
+        The two halves are separate because the font is the one that changes
+        while the renderer lives: the window grows, the interface scale with
+        it, and another atlas is wanted for GL objects that are still perfectly
+        good.
+        """
+        if self._program is None and not self._buildProgram():
+            return False
+        return self._text is not None or self._buildFont()
+
+    def _buildProgram(self) -> bool:
+        """Compile the shader and make the buffers and generated textures."""
         try:
-            text = get_text_renderer(self.font_size)
-            if not text.initialize() or not text.char_width:
-                return False
             self._program = GL_shaders.compileProgram(
                 GL_shaders.compileShader(_VERTEX, GL_VERTEX_SHADER),
                 GL_shaders.compileShader(_FRAGMENT, GL_FRAGMENT_SHADER),
@@ -143,12 +193,26 @@ class OverlayRenderer:
             self._vao = glGenVertexArrays(1)
             self._vbo = glGenBuffers(1)
             self._white = self._uploadTexture(1, 1, b'\xff\xff\xff\xff')
-            self._text = text
+            self._disc = self._uploadTexture(_DISC_SIZE, _DISC_SIZE,
+                                             _disc_coverage(_DISC_SIZE))
         except Exception:                       # pragma: no cover - driver
             log.warning("overlay renderer unavailable", exc_info=True)
             self._program = None
             return False
+        return True
+
+    def _buildFont(self) -> bool:
+        """Point the renderer at the atlas for its font size, and measure it."""
+        from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
         from OpenGLContext.ui.metrics import metrics_for
+        try:
+            text = get_text_renderer(self.font_size)
+            if not text.initialize() or not text.char_width:
+                return False
+        except Exception:                       # pragma: no cover - driver
+            log.warning("overlay font unavailable", exc_info=True)
+            return False
+        self._text = text
         self.metrics = metrics_for(text)
         return True
 
@@ -162,11 +226,13 @@ class OverlayRenderer:
         # would not load, so the ids have to be picked out rather than passed
         # as they are stored.
         alive = [int(entry[0]) for entry in self._images.values() if entry]
-        if self._white is not None:
-            alive.append(int(self._white))
+        for generated in (self._white, self._disc):
+            if generated is not None:
+                alive.append(int(generated))
         if alive:
             glDeleteTextures(len(alive), alive)
         self._vao = self._vbo = self._white = self._program = None
+        self._disc = None
         self._images = {}
 
     @staticmethod
@@ -263,6 +329,37 @@ class OverlayRenderer:
     def glow(self, rect: Rect, colour: Any) -> None:
         """The focus ring: additive, and outside the widget's own rectangle."""
         self.quad(rect, colour, mode=self.ADD)
+
+    def disc(self, rect: Rect, colour: Any) -> None:
+        """A circle inscribed in a rectangle -- a switch's knob."""
+        if rect.empty:
+            return
+        self.quad(rect, colour, (0, 0, 1, 1), texture=self._disc, mask=1.0)
+
+    def pill(self, rect: Rect, colour: Any) -> None:
+        """A rectangle with semicircular ends -- a switch's track.
+
+        Three quads off the one disc: its left half, its right half, and a
+        single column from its middle stretched across the straight part.  That
+        column is opaque except where the circle's top and bottom edges fall,
+        which is exactly the antialiasing the straight edges want, and using
+        the same texture keeps the whole switch in the same batch as the text
+        around it.
+        """
+        if rect.empty:
+            return
+        radius = min(rect.height // 2, rect.width // 2)
+        if radius <= 0:
+            self.rect(rect, colour)
+            return
+        self.quad(Rect(rect.x, rect.y, radius, rect.height), colour,
+                  (0, 0, 0.5, 1), texture=self._disc, mask=1.0)
+        self.quad(Rect(rect.right - radius, rect.y, radius, rect.height),
+                  colour, (0.5, 0, 1, 1), texture=self._disc, mask=1.0)
+        middle = Rect(rect.x + radius, rect.y,
+                      rect.width - radius * 2, rect.height)
+        self.quad(middle, colour, (0.5, 0, 0.5, 1), texture=self._disc,
+                  mask=1.0)
 
     def border(self, rect: Rect, colour: Any, width: int = 1) -> None:
         """A hairline frame, drawn as four thin rectangles."""

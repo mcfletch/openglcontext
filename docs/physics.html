@@ -151,6 +151,66 @@ scene.advance(dt)                         # steps the world, writes back Transfo
     geometry, then snap the base onto the floor, so a camera authored low or
     inside a wall <em>never</em> leaves the user stuck in the ground. If no free
     space is found it enters fly rather than wedging.</p>
+
+  <h3>Speed is along the ground, not along the horizon</h3>
+  <p>The move direction is <strong>projected onto the surface underfoot</strong>
+    before it is used, so a run up a ramp covers the same metres per second as a
+    run along the flat and the climb is the vertical part of that. Moving
+    horizontally instead makes the capsule penetrate the slope and be pushed
+    back out along its normal, whose horizontal component opposes the motion, so
+    the pace falls away as the ramp steepens &mdash; a walkable ramp then feels
+    like wading. The step-down snap that keeps the capsule on the surface is
+    likewise applied <em>vertically only</em>, since the seating that finds it
+    also travels along the normal and would drag the capsule back downhill on
+    every step of a climb.</p>
+  <p><strong>What counts as ground is <code>maxSlope</code>, everywhere.</strong>
+    Standing, seating, and stepping up all ask the same question, so a face too
+    steep to walk cannot be stood on, snapped onto, or stepped up &mdash;
+    without which a cliff is climbable one <code>stepHeight</code> at a time by
+    anything moving fast enough.</p>
+  <p><strong>A step is mounted in one motion, and owes back the difference.</strong>
+    Getting onto a step means moving the capsule's <em>centre</em> past the
+    edge &mdash; about a radius, and it has to happen in one go, because a
+    capsule stopped against the riser is a radius behind it and a shorter probe
+    never reaches over. That single motion is further than a frame of running
+    covers, so a staircase taken one step per frame is climbed faster than the
+    same distance on the flat, and faster still the better the frame rate. What
+    a step advanced beyond its frame's due is therefore recorded and taken back
+    out of the frames that follow, a little at a time so the capsule never
+    stalls: stairs are climbed at running pace, whatever the frame rate.</p>
+
+  <h3>Jump fires when the player meant it</h3>
+  <p>A jump refused because <code>grounded</code> happened to be false on that
+    one frame is the commonest complaint about a first-person controller, and it
+    is worst where it is most noticed: running. A capsule at speed over a step,
+    a ramp lip or a seam between two colliders leaves the ground for a frame or
+    two at a time, and every press landing in one of those frames is swallowed
+    with no feedback at all. Two windows fix it, both in seconds so they hold at
+    any frame rate:</p>
+  <table>
+    <tr><th>Capability</th><th>Default</th><th>What it does</th></tr>
+    <tr><td><code>coyoteTime</code></td><td>0.12 s</td>
+      <td>A jump is still allowed for this long after walking off something.</td></tr>
+    <tr><td><code>jumpBuffer</code></td><td>0.12 s</td>
+      <td>A jump asked for this soon before landing fires on landing rather
+        than being dropped.</td></tr>
+  </table>
+  <p>Both forgive <em>falling</em>, never jumping: a capsule that left the
+    ground under its own power has no coyote time, so there is no free double
+    jump, and a buffered press is spent once. Set either to 0 to switch it off.
+    A refusal on any other ground &mdash; crouching, <code>canJump</code> off
+    &mdash; is a refusal rather than a delay, and is not buffered.</p>
+  <p><strong>A rising capsule is never grounded</strong>, whatever is beneath
+    it. When nothing touched the capsule during a step it looks
+    <code>GROUND_PROBE</code> (5 cm) below itself for floor, which is what keeps
+    a walker attached over the small gaps a step opens. One frame after a jump
+    the capsule has climbed only <code>vy&nbsp;&times;&nbsp;dt</code>, and on a
+    fast machine that is <em>less</em> than the probe reaches &mdash; so the
+    launch is snapped straight back down and its velocity zeroed in the frame it
+    started. The faster the machine the more jumps vanish, and because frame
+    times vary it takes some presses and not others. The capsule also still
+    touches the floor it is leaving, so the contact test says "ground" as well;
+    neither answer applies to something on its way up.</p>
   <p class="technical"><code>character.py</code> holds the controller;
     <code>move/physicsplatform.py</code>'s <code>PhysicsViewPlatform</code> drives
     a context camera from it. See the <code>physics_navigate.py</code> demo.</p>

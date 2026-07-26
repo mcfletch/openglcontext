@@ -33,7 +33,7 @@ weakly::
 from __future__ import annotations
 
 from gettext import gettext as _
-from typing import Any, List, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence
 
 from OpenGLContext.ui import dialogs, generate
 from OpenGLContext.ui.layout import Column, Row
@@ -49,31 +49,49 @@ __all__ = ['settings_panel', 'movement_panel', 'open_settings']
 #: Name the settings screen is pushed under, so a second F10 finds it rather
 #: than opening another one over it.
 SETTINGS_NAME = 'settings'
+#: Content width the screen aims for, **in characters**, and the widest it will
+#: draw itself.  A settings page laid out to the full width of a 4K display puts
+#: a label at one edge and its control at the other, which is not roominess; it
+#: is a page you have to sweep your eyes across to read one line.
+SETTINGS_COLUMNS = 78
 
 
-def open_settings(context: Any) -> Panel:
+def open_settings(context: Any,
+                  on_apply: Optional[Callable[[SettingsSession], None]] = None
+                  ) -> Panel:
     """Put the settings screen up, or bring the one already up to the front."""
     for panel in context.overlays.panels:
         if panel.name == SETTINGS_NAME:
             return panel
-    return context.pushOverlay(settings_panel(context))
+    return context.pushOverlay(settings_panel(context, on_apply=on_apply))
 
 
-def settings_panel(context: Any, session: Optional[SettingsSession] = None
+def settings_panel(context: Any, session: Optional[SettingsSession] = None,
+                   on_apply: Optional[Callable[[SettingsSession], None]] = None
                    ) -> Panel:
     """The whole settings screen for a context.
 
     ``session`` is normally left alone; pass one to edit something other than
     the context's own definition -- a saved profile, say.
+
+    ``on_apply`` is called with the session once its values have been written
+    into the definition, and is where **what to do with the player's settings**
+    is decided: writing them to a file, sending them to a server, or nothing at
+    all.  Ask the session which fields moved
+    (:meth:`~OpenGLContext.ui.session.SettingsSession.changed_fields`) to save
+    the player's choices without freezing the rest of a definition the game
+    ships and may want to change in a later build.
     """
     definition = context.contextDefinition
     session = session or SettingsSession(definition)
     draft = session.draft
 
-    body = Column(spacing=6, children=(
+    body = Column(spacing=10, children=(
         _section(_('Rendering'), generate.page_for(
             draft, include=_declared(draft, 'RENDERING_FIELDS')))
         + _modeSection(context, session)
+        + _section(_('Interface'), generate.page_for(
+            draft, include=_declared(draft, 'INTERFACE_FIELDS')))
         + _section(_('Diagnostics'), generate.page_for(
             draft, include=_declared(draft, 'DIAGNOSTIC_FIELDS')))
     ))
@@ -84,11 +102,11 @@ def settings_panel(context: Any, session: Optional[SettingsSession] = None
     keys = Button(text=_('Key bindings...'), name='keybindings')
     panel = Panel(
         title=_('Settings'), name=SETTINGS_NAME, modal=True, scrim=True,
-        fill=True,
-        children=[Column(spacing=6, children=[
+        fill=True, preferredColumns=SETTINGS_COLUMNS,
+        children=[Column(spacing=8, children=[
             ScrollViewport(name='body', flex=1, children=[body]),
-            Separator(top=4),
-            Row(spacing=8, top=4,
+            Separator(top=8),
+            Row(spacing=10, top=8,
                 children=[reset, keys, Spacer(), cancel, apply]),
         ])])
 
@@ -106,6 +124,8 @@ def settings_panel(context: Any, session: Optional[SettingsSession] = None
         session.on_dirty = None
         panel.on_close = None
         panel.close(True)
+        if on_apply is not None:
+            on_apply(session)
         # Most options are read per frame by the render pass; the few set once
         # on the window are re-applied here. A changed profile or buffer format
         # only takes effect on the next context, and nothing pretends otherwise.
@@ -114,6 +134,8 @@ def settings_panel(context: Any, session: Optional[SettingsSession] = None
             changed()
         else:
             context.triggerRedraw(1)
+        # The interface scale is one of the settings on this screen, so the
+        # panels have to be measured again before the next frame draws them.
         context.overlays.invalidate()
 
     def doCancel(widget: Any) -> None:

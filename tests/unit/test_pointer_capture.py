@@ -236,3 +236,53 @@ def test_a_mouse_look_mode_actually_grabs_through_the_backend():
     assert context.captures == [True]
     context._applyPointerCapture(False)
     assert context.captures == [True, False]
+
+
+# -- motion while the pointer is on loan -------------------------------------
+
+def test_motion_does_not_steer_the_view_while_the_pointer_is_on_loan():
+    """A settings screen is clicked with the same pointer mouse-look holds.
+
+    The backend reports cursor motion directly rather than through the event
+    queue, so gating ``ProcessEvent`` -- which is all an overlay can do -- does
+    not reach it.  Without this the world keeps turning under the dialog the
+    player is trying to read.
+    """
+    context = _context(modes.FPSMode(name='fps'))
+    context.updateNavigation(0.016)
+    context.recordPointerMotion(100, 100)
+    context.suspendPointerCapture(True)
+    context.recordPointerMotion(400, 100)
+    assert context.getInputState().mouse_delta() == (0.0, 0.0)
+
+
+def test_motion_steers_again_once_the_pointer_comes_back():
+    context = _context(modes.FPSMode(name='fps'))
+    context.updateNavigation(0.016)
+    context.recordPointerMotion(100, 100)
+    context.suspendPointerCapture(True)
+    context.recordPointerMotion(400, 100)
+    context.suspendPointerCapture(False)
+    context.recordPointerMotion(410, 100)
+    assert context.getInputState().mouse_delta()[0] == 10.0
+
+
+def test_the_view_does_not_jump_when_the_pointer_comes_back():
+    """The pointer moved across the dialog; the view must not follow it home."""
+    context = _context(modes.FPSMode(name='fps'))
+    context.updateNavigation(0.016)
+    context.recordPointerMotion(100, 100)
+    context.suspendPointerCapture(True)
+    for x in range(110, 900, 10):
+        context.recordPointerMotion(x, 300)
+    context.suspendPointerCapture(False)
+    context.recordPointerMotion(890, 300)
+    assert context.getInputState().mouse_delta() == (0.0, 0.0)
+
+
+def test_motion_still_steers_when_nothing_has_asked_for_the_pointer():
+    context = _context(modes.FPSMode(name='fps'))
+    context.updateNavigation(0.016)
+    context.recordPointerMotion(100, 100)
+    context.recordPointerMotion(130, 100)
+    assert context.getInputState().mouse_delta()[0] == 30.0

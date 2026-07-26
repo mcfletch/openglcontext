@@ -24,7 +24,7 @@ from gettext import gettext as _
 from typing import Any, List, Optional, Sequence, Tuple
 
 from OpenGLContext.move import bindingstore
-from OpenGLContext.ui import dialogs
+from OpenGLContext.ui import dialogs, generate
 from OpenGLContext.ui.layout import Column, Grid, Row
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.scroll import ScrollViewport
@@ -36,6 +36,8 @@ __all__ = ['bindings_panel', 'capture_panel', 'open_bindings']
 
 #: Name the page is pushed under, so a second request finds the one already up.
 BINDINGS_NAME = 'keybindings'
+#: Content width in characters, and the widest the page will draw itself.
+BINDINGS_COLUMNS = 66
 #: What a binding with no keys reads as.
 UNBOUND = _('(unbound)')
 
@@ -76,14 +78,18 @@ def bindings_panel(context: Any, navigation: Any,
     reset = Button(text=_('Reset all bindings'), role=DANGER, name='reset')
     panel = Panel(
         title=_('Key bindings'), name=BINDINGS_NAME, modal=True, scrim=True,
-        fill=True,
-        children=[Column(spacing=6, children=[
+        fill=True, preferredColumns=BINDINGS_COLUMNS,
+        children=[Column(spacing=10, children=[
             Label(text=_('Click a key to change it.  Escape leaves a capture '
                          'without rebinding.'), wrap=True),
             ScrollViewport(name='body', flex=1, children=[
-                Grid(children=rows, columns=2, spacing=4, columnSpacing=16)]),
-            Separator(top=4),
-            Row(spacing=8, top=4, children=[reset, Spacer(), close]),
+                Grid(children=rows, columns=2,
+                     columnFlex=list(generate.COLUMN_FLEX),
+                     spacing=generate.ROW_SPACING,
+                     columnSpacing=generate.COLUMN_SPACING,
+                     rowPadding=generate.ROW_PADDING)]),
+            Separator(top=8),
+            Row(spacing=10, top=8, children=[reset, Spacer(), close]),
         ])])
 
     def refresh() -> None:

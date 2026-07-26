@@ -171,6 +171,20 @@ walk.bindings = list(walk.bindings) + [
     started. The grab is applied only when the answer changes, never once a
     frame, and a backend that cannot capture simply keeps working with the view
     turning as far as the window edge.</p>
+  <p>An overlay is clicked with the same pointer, so opening one calls
+    <code>suspendPointerCapture(True)</code> and closing the last one hands it
+    back. <strong>The motion is suspended with it</strong>: a backend that knows
+    where the cursor went reports it straight to the sampler through
+    <code>recordPointerMotion</code>, deliberately, because mouse-look must not
+    depend on the pick pipeline &mdash; which means gating the event queue, all
+    an overlay can do, would not reach it, and the world would keep turning
+    under the dialog the player is reading. The position is still tracked while
+    suspended, so the journey across the dialog is not delivered as one flick on
+    the way back.</p>
+  <p><code>recordPointerMotion</code> takes its coordinates in the <strong>pick
+    point's origin</strong>: pixels from the bottom-left, y counting
+    <em>upward</em>. A backend whose windowing system counts y downward (GLFW
+    does) flips it before calling.</p>
 </section>
 
 <section id="viewers">
