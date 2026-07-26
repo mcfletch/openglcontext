@@ -28,15 +28,13 @@ from typing import Any, Callable, List, Optional, Set, Tuple
 
 import logging
 
+from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.ui.metrics import FontMetrics, font_size_for, metrics_for
 from OpenGLContext.ui.panel import Panel
 
 log = logging.getLogger(__name__)
 
-__all__ = ['OverlayStack', 'OverlayMixin']
-
-#: Mouse buttons the wheel arrives on, in the traditional X11 spelling.
-WHEEL_UP, WHEEL_DOWN = 3, 4
+__all__ = ['OverlayStack', 'OverlayMixin', 'WHEEL_UP', 'WHEEL_DOWN']
 
 #: What identifies one held input: its kind, and the key name or button number.
 _Claim = Tuple[str, Any]
@@ -82,6 +80,17 @@ class OverlayStack:
         """The panel that hears the input, or None."""
         return self.panels[-1] if self.panels else None
 
+    def named(self, name: str) -> Optional[Panel]:
+        """The panel already on the stack under that name, or None.
+
+        What lets a second press of the settings key raise the screen that is
+        already up rather than stacking another copy of it over itself.
+        """
+        for panel in self.panels:
+            if panel.name == name:
+                return panel
+        return None
+
     def sinks(self) -> bool:
         """Whether the world should hear nothing at all right now."""
         return any(panel.modal for panel in self.panels)
@@ -93,7 +102,16 @@ class OverlayStack:
 
     def push(self, panel: Panel, viewport: Optional[Tuple[int, int]] = None,
              metrics: Any = None) -> Panel:
-        """Put a panel on top, suspending whatever was there."""
+        """Put a panel on top, suspending whatever was there.
+
+        A panel that has already been closed is refused rather than accepted
+        and then quietly ignored: it would never fire the listener that takes
+        it back off, so it would sit on the stack sinking every event for the
+        rest of the session.
+        """
+        if panel.closed:
+            raise ValueError(
+                "cannot push a panel that has already been closed")
         if self.panels:
             self.panels[-1].suspend()
         self.panels.append(panel)
@@ -125,9 +143,17 @@ class OverlayStack:
         self._changed()
 
     def clear(self) -> None:
-        """Close every panel, innermost first."""
-        while self.panels:
-            self.pop()
+        """Close every panel, innermost first.
+
+        Over a snapshot rather than "until the stack is empty", so the loop is
+        bounded by the number of panels rather than by every one of them
+        reporting its own removal.  A panel closed behind the stack's back has
+        nothing left to notify anyone with, and a loop that waited for it would
+        never end.
+        """
+        for panel in list(reversed(self.panels)):
+            panel.close(None)
+            self.remove(panel)
 
     def _panelClosed(self, panel: Panel) -> None:
         self.remove(panel)
@@ -324,7 +350,7 @@ class OverlayMixin(object):
         """
         if self._overlays is not None and self._overlays.visible:
             return True
-        return super(OverlayMixin, self).hasMouseMoveHandlers()   # type: ignore[misc]
+        return bool(super(OverlayMixin, self).hasMouseMoveHandlers())   # type: ignore[misc]
 
     # -- measurement and drawing ------------------------------------------
     def interfaceScale(self) -> float:
@@ -384,7 +410,7 @@ class OverlayMixin(object):
         stack.layout(viewport, metrics)
         return True
 
-    def renderShaderOverlay(self, pass_: Any) -> None:   # pragma: no cover - GL
+    def renderShaderOverlay(self, pass_: Any) -> None:
         """Draw the overlay over the finished frame.
 
         Called by the shader render pass once everything else is done, with its

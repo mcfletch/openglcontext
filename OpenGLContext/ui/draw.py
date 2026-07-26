@@ -38,7 +38,7 @@ from OpenGL.GL import (
     GL_UNSIGNED_BYTE, GL_VERTEX_SHADER,
     glActiveTexture, glBindBuffer, glBindTexture, glBindVertexArray,
     glBlendFunc, glBufferData, glDeleteBuffers, glDeleteTextures,
-    glDeleteVertexArrays, glDisable, glDrawArrays, glEnable,
+    glDeleteProgram, glDeleteVertexArrays, glDisable, glDrawArrays, glEnable,
     glEnableVertexAttribArray, glGenBuffers, glGenTextures, glGenVertexArrays,
     glGetUniformLocation, glScissor, glTexImage2D, glTexParameteri,
     glUniform1i, glUniform2f, glUseProgram, glVertexAttribPointer,
@@ -217,7 +217,15 @@ class OverlayRenderer:
         return True
 
     def close(self) -> None:
-        """Release the GL objects.  Only useful when a context goes away."""
+        """Release the GL objects.  Called when the context goes away.
+
+        Everything made in :meth:`_buildProgram` goes, the program included: a
+        driver hands the next window the identifiers the last one gave back,
+        and an object still held here would then belong to a context that no
+        longer exists.
+        """
+        if self._program is not None:
+            glDeleteProgram(self._program)
         for deleter, value in ((glDeleteVertexArrays, self._vao),
                                (glDeleteBuffers, self._vbo)):
             if value is not None:
@@ -253,6 +261,10 @@ class OverlayRenderer:
     def imageTexture(self, url: str) -> Optional[Tuple[Any, int, int]]:
         """A skin image's texture, size included, loaded once and kept.
 
+        ``url`` is a filesystem path or a ``file:`` URL, resolved through
+        :func:`OpenGLContext.loaders.loader.local_path` so it means the same
+        thing here as it does for every other asset in the system.
+
         Returns None when the file cannot be read, so a missing skin asset
         degrades to the flat fill rather than taking the frame down.
         """
@@ -261,7 +273,8 @@ class OverlayRenderer:
             return cached if cached != () else None
         try:
             from PIL import Image
-            image = Image.open(url).convert('RGBA')
+            from OpenGLContext.loaders.loader import local_path
+            image = Image.open(local_path(url)).convert('RGBA')
             width, height = image.size
             entry = (self._uploadTexture(width, height, image.tobytes()),
                      width, height)
@@ -283,13 +296,19 @@ class OverlayRenderer:
     def quad(self, rect: Rect, colour: Any, uv: Sequence[float] = (0, 0, 1, 1),
              texture: Any = None, mask: float = 0.0,
              mode: str = BLEND) -> None:
-        """Add one quad to the batch."""
-        if rect.empty:
+        """Add one quad to the batch.
+
+        Everything that decides there is nothing to draw is settled *before*
+        the batch state is touched.  A transparent colour is ordinary here -- a
+        label's colour of ``(0,0,0,0)`` means "use the skin", a skin turns a
+        fill off by zeroing its alpha -- and switching texture only to find
+        there is nothing to put in it costs two draw calls: one to flush what
+        came before, and one to get back to it.
+        """
+        red, green, blue, alpha = _rgba(colour)
+        if rect.empty or alpha <= 0:
             return
         self._state(self._white if texture is None else texture, mode)
-        red, green, blue, alpha = _rgba(colour)
-        if alpha <= 0:
-            return
         x0, y0 = float(rect.x), float(rect.y)
         x1, y1 = float(rect.right), float(rect.top)
         u0, v0, u1, v1 = (float(value) for value in uv)
@@ -371,8 +390,13 @@ class OverlayRenderer:
         self.rect(Rect(rect.right - width, rect.y, width, rect.height), colour)
 
     def frame(self, rect: Rect, colour: Any, image: Any = None) -> None:
-        """A widget's body: its artwork if it has any, else a flat fill."""
-        if image is not None and self.ninepatch(rect, image):
+        """A widget's body: its artwork if it has any, else a flat fill.
+
+        ``image`` is an unset ``SFNode`` as readily as a real one, and both mean
+        "no artwork" -- so the check is here rather than at each of the dozen
+        call sites, none of which should have to know how a node spells absent.
+        """
+        if image and self.ninepatch(rect, image):
             return
         self.rect(rect, colour)
 
@@ -386,7 +410,13 @@ class OverlayRenderer:
         urls = [str(url) for url in getattr(image, 'url', ()) if url]
         if not urls or rect.empty:
             return False
-        entry = self.imageTexture(urls[0])
+        # The list is alternatives, tried in order, as an MFString ``url`` is
+        # everywhere else in the system: a skin naming a fallback gets it.
+        entry = None
+        for url in urls:
+            entry = self.imageTexture(url)
+            if entry is not None:
+                break
         if entry is None:
             return False
         texture, source_w, source_h = entry
@@ -502,9 +532,11 @@ class OverlayRenderer:
     def begin(self, viewport: Tuple[int, int]) -> bool:
         """Make the overlay program current and set the screen-space state.
 
-        Public so a game can draw its own HUD into the same batch rather than
-        standing up a second program for a handful of quads.  Every call must
-        be matched by :meth:`end`.
+        Takes depth testing and face culling off and blending on, and does
+        **not** remember what they were; :meth:`end` says what they are left
+        as.  Public so a game can draw its own HUD into the same batch rather
+        than standing up a second program for a handful of quads.  Every call
+        must be matched by :meth:`end`.
         """
         width, height = int(viewport[0]), int(viewport[1])
         if not width or not height or not self.initialize():
@@ -523,7 +555,24 @@ class OverlayRenderer:
         return True
 
     def end(self) -> None:
-        """Draw what is left and put the GL state back as it was found."""
+        """Draw what is left and leave the GL state in a documented condition.
+
+        **This restores nothing.**  It sets a known state rather than the one
+        it found, because reading the old one back means a ``glGet`` per
+        setting on a path that runs every frame, and that is a pipeline stall
+        on more drivers than it is worth.
+
+        What a caller can rely on afterwards:
+
+        * depth testing **on**, face culling **off**;
+        * blending **off**;
+        * the scissor test **off**;
+        * no program bound, no vertex array bound, no buffer bound, and
+          texture unit 0 unbound.
+
+        So call it last in a frame, or set the state you need after it.  The
+        overlay is drawn after everything else for exactly this reason.
+        """
         try:
             self.flush()
         finally:

@@ -33,6 +33,17 @@ class NavigationManager:
             self._selected = first[0]
             self._publish(first[0])
 
+    def retarget(self, platform: Any) -> None:
+        """Drive a different platform, keeping the player's chosen mode.
+
+        A character controller usually comes into being when a world finishes
+        loading, after the context has already been navigating the camera.
+        Building a fresh manager for it would forget which mode the player had
+        chosen and publish whichever is declared first -- a silent change of
+        how the controls behave, in the middle of a session.
+        """
+        self.platform = platform
+
     # -- the declared modes ----------------------------------------------
     def modes(self) -> Sequence[MovementMode]:
         return list(getattr(self.definition, 'movementModes', ()) or ())
@@ -40,12 +51,14 @@ class NavigationManager:
     def _selectable(self) -> List[MovementMode]:
         """Modes the player may choose: enabled, and not world-imposed.
 
-        A mode that can impose itself is excluded because cycling into water
-        movement while standing on dry land is not a thing a player wants.
+        A mode that *can* impose itself is excluded whether or not it applies
+        right now, because cycling into water movement while standing on dry
+        land is not a thing a player wants.  Asked of the class rather than of
+        the world, so this settles which modes are on the menu without a call
+        into the platform for each one, every frame.
         """
         return [mode for mode in self.modes()
-                if mode.enabled and not mode.enter_when(self.platform)
-                and not self._imposable(mode)]
+                if mode.enabled and not self._imposable(mode)]
 
     @staticmethod
     def _imposable(mode: MovementMode) -> bool:

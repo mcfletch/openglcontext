@@ -110,11 +110,17 @@ class SelectionMixin(_AsyncPickMixin):
                 filtered_move_count += 1
                 continue
 
-            # De-duplicate: use pixel coordinates as part of the key
-            # This keeps only the latest event per unique (type, x, y)
+            # De-duplicate by pixel, but only across events that are genuinely
+            # the same news twice.  Where the pointer is now is all a move has
+            # to say and moves arrive in floods, so one per pixel is plenty.
+            # Button events at one pixel are not redundant: a press and its
+            # release share a pixel by definition, as does every notch of a
+            # wheel, and dropping either half of a pair loses the whole input.
             pick_point = event.getPickPoint()
             pixel_x, pixel_y = int(pick_point[0]), int(pick_point[1])
-            dedup_key = (event_type, pixel_x, pixel_y)
+            distinguisher = (None if event_type == 'mousemove'
+                             else event.getPickKey())
+            dedup_key = (event_type, pixel_x, pixel_y, distinguisher)
 
             # Always keep the latest event for each unique position
             optimized[dedup_key] = event

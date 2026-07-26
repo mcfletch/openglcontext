@@ -152,6 +152,15 @@ class FontMetrics:
         return text[:columns - 1] + ELLIPSIS
 
 
+#: What a widget measures against before it has been laid out.  Its rectangle
+#: is empty until then, so nothing derived from these is ever drawn; they exist
+#: so geometry asked for early answers with arithmetic instead of an exception.
+#: The numbers are the reference atlas's own cell -- 8x16 at
+#: :data:`REFERENCE_FONT_SIZE` -- so the answer is the right shape as well as
+#: the right type.
+REFERENCE_METRICS = FontMetrics(char_width=8, char_height=REFERENCE_FONT_SIZE)
+
+
 def metrics_for(renderer: Any, line_gap: Optional[int] = None) -> FontMetrics:
     """Measurements for a live :class:`ShaderTextRenderer`.
 
@@ -195,12 +204,12 @@ def nearest_font_size(size: float) -> int:
 
 def reference_char_height() -> int:
     """Cell height of the atlas the skin's pixel measurements are authored for."""
-    return _atlas(REFERENCE_FONT_SIZE).char_height
+    return int(_atlas(REFERENCE_FONT_SIZE).char_height)
 
 
 def _available_sizes() -> Sequence[int]:
     from OpenGLContext.scenegraph.text import fonts
-    return fonts.get_available_sizes()
+    return [int(size) for size in fonts.get_available_sizes()]
 
 
 def _atlas(size: int) -> Any:

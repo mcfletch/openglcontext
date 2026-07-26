@@ -35,9 +35,11 @@ Emphasis and focus are answered separately and deliberately:
   line.
 """
 
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, Sequence, Tuple
 
 from vrml import field, node, protofunctions
+
+from OpenGLContext.ui.metrics import FontMetrics
 
 #: Button emphasis.  ``primary`` is also the panel's Enter default.
 PRIMARY = 'primary'
@@ -55,9 +57,10 @@ class NineSlice(node.Node):
     """
 
     PROTO = 'NineSlice'
-    #: Where the image is, as a path or a file URL.  Loaded once per renderer
-    #: and kept; a file that cannot be read leaves the widget with its flat
-    #: fill rather than taking the frame down.
+    #: Where the image is, as a filesystem path or a ``file:`` URL.  Several
+    #: are alternatives, tried in order, as an MFString ``url`` is everywhere
+    #: else.  Loaded once per renderer and kept; one that cannot be read leaves
+    #: the widget with its flat fill rather than taking the frame down.
     url = field.newField('url', 'MFString', 1, list)
     #: Corner size in source pixels: left, top, right, bottom.
     border = field.newField('border', 'SFVec4f', 1, (0, 0, 0, 0))
@@ -228,28 +231,48 @@ class Skin(node.Node):
         return self.secondaryText
 
     def buttonState(self, hovered: bool = False, down: bool = False,
-                    enabled: bool = True) -> Tuple[Any, Optional[NineSlice]]:
-        """Fill colour and artwork for one button state."""
+                    enabled: bool = True) -> Tuple[Any, Any]:
+        """Fill colour and artwork for one button state.
+
+        The artwork may be an unset ``SFNode``, which the renderer reads as no
+        artwork; nothing here has to normalise it.
+        """
         if not enabled:
-            return (self.buttonDisabledFill, self._image(self.buttonDisabledImage))
+            return (self.buttonDisabledFill, self.buttonDisabledImage)
         if down:
-            return (self.buttonDownFill, self._image(self.buttonDownImage))
+            return (self.buttonDownFill, self.buttonDownImage)
         if hovered:
-            return (self.buttonHoverFill, self._image(self.buttonHoverImage))
-        return (self.buttonFill, self._image(self.buttonImage))
+            return (self.buttonHoverFill, self.buttonHoverImage)
+        return (self.buttonFill, self.buttonImage)
 
-    @staticmethod
-    def _image(value: Any) -> Optional[NineSlice]:
-        return value if value else None
-
-    def buttonPadding(self, metrics: Any) -> Tuple[int, int]:
+    def buttonPadding(self, metrics: FontMetrics) -> Tuple[int, int]:
         """A button's padding in pixels, from its character-based width."""
         return (int(self.buttonPaddingX * metrics.char_width),
                 int(self.buttonPaddingY))
 
 
-#: Used by any panel that names no skin of its own.
+#: The colours and measurements a panel gets when it names no skin of its own.
+#: **Treat it as read-only** -- :func:`default_skin` hands out copies for
+#: exactly that reason.  Changing this one would change every dialog in the
+#: process, including the ones already on screen.
 DEFAULT_SKIN = Skin()
+
+
+def default_skin() -> Skin:
+    """A fresh copy of the default skin.
+
+    A copy rather than the shared instance: a ``Skin`` is authored data with
+    every field writable, and "tweak the default's ``panelFill``" is a natural
+    thing for a game to try.  Handing out the one instance makes that a change
+    to every panel in the process; handing out a copy makes it a change to the
+    panel that asked.
+    """
+    clone = Skin()
+    for definition in protofunctions.getFields(DEFAULT_SKIN):
+        name = definition.name
+        if not name.startswith(' '):
+            setattr(clone, name, getattr(DEFAULT_SKIN, name))
+    return clone
 
 
 def skin_for(widget: Any) -> Skin:
@@ -264,6 +287,8 @@ def skin_for(widget: Any) -> Skin:
     if root is not widget:
         active = getattr(root, 'activeSkin', None)
         if active is not None:
-            return active()
+            found = active()
+            if isinstance(found, Skin):
+                return found
     skin = getattr(root, 'skin', None)
-    return skin if isinstance(skin, Skin) else DEFAULT_SKIN
+    return skin if isinstance(skin, Skin) else default_skin()

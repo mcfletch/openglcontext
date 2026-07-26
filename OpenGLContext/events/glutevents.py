@@ -1,7 +1,11 @@
 """Module providing translation from GLUT callbacks to OpenGLContext events"""
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
+from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
 from OpenGL.GLUT import *
+import logging
+
+log = logging.getLogger(__name__)
 
 
 class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
@@ -78,12 +82,15 @@ class GLUTXEvent(object):
             GLUT_MIDDLE_BUTTON: 2,
         }.get(button)
         if index is None:
-            if button not in (3, 4):
-                # is a mouse-wheel button
-                log.warning(
-                    "Unrecognized button ID: %s",
-                    button,
-                )
+            # A wheel notch keeps its own number: it is not one of the buttons a
+            # drag is tracked with, and flattening it to -1 would leave it
+            # indistinguishable from a click on whatever the pointer is over.
+            if button in WHEEL_BUTTONS:
+                return button, state
+            log.warning(
+                "Unrecognized button ID: %s",
+                button,
+            )
             return -1, state
         else:
             self.CURRENTBUTTONSTATES[index] = state

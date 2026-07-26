@@ -247,3 +247,100 @@ class TestNotification:
         child.draft.speed = 8.0
         child.commit()
         assert seen == [session]
+
+
+class TestDirtyIsCheapToAsk:
+    """``dirty`` is asked on every keystroke of a slider drag.
+
+    Answering it with a deep comparison of the whole definition -- every
+    movement mode, every key binding under them -- on every mouse-move event is
+    work the session already has the answer to.
+    """
+
+    def test_a_fresh_session_is_clean(self):
+        session = SettingsSession(Settings())
+        assert not session.dirty
+
+    def test_an_edit_makes_it_dirty(self):
+        session = SettingsSession(Settings())
+        session.draft.lights = 2
+        assert session.dirty
+
+    def test_committing_makes_it_clean_again(self):
+        session = SettingsSession(Settings())
+        session.draft.lights = 2
+        session.commit()
+        assert not session.dirty
+
+    def test_reverting_makes_it_clean_again(self):
+        session = SettingsSession(Settings())
+        session.draft.lights = 2
+        session.revert()
+        assert not session.dirty
+
+    def test_a_change_in_a_sub_record_reaches_the_parent(self):
+        settings = Settings()
+        settings.walk = Walk()
+        session = SettingsSession(settings)
+        child = session.child('walk')
+        child.draft.speed = 9.0
+        child.commit()
+        assert session.dirty
+
+    def test_asking_again_does_not_walk_the_tree_again(self, monkeypatch):
+        """Nothing between two edits can change the answer, so it is kept."""
+        from OpenGLContext.ui import session as session_module
+        session = SettingsSession(Settings())
+        calls = []
+        real = session_module.nodes_equal
+        monkeypatch.setattr(session_module, 'nodes_equal',
+                            lambda a, b: calls.append(1) or real(a, b))
+        for _ in range(20):
+            assert not session.dirty
+        assert len(calls) == 1, "compared the whole tree once per question"
+
+    def test_an_edit_makes_it_work_the_answer_out_again(self, monkeypatch):
+        from OpenGLContext.ui import session as session_module
+        session = SettingsSession(Settings())
+        assert not session.dirty
+        session.draft.lights = 2
+        assert session.dirty
+
+    def test_setting_a_value_back_by_hand_puts_it_out_again(self):
+        settings = Settings()
+        session = SettingsSession(settings)
+        original = int(session.draft.lights)
+        session.draft.lights = original + 1
+        assert session.dirty
+        session.draft.lights = original
+        assert not session.dirty
+
+
+class TestASessionCanBeClosed:
+    """A dialog that has gone stops being told about its own draft."""
+
+    def test_closing_stops_the_notifications(self):
+        session = SettingsSession(Settings())
+        seen = []
+        session.on_dirty = seen.append
+        session.draft.lights = 2
+        assert seen
+        session.close()
+        seen.clear()
+        session.draft.lights = 3
+        assert not seen, "a closed session is still listening"
+
+    def test_it_can_be_used_as_a_context_manager(self):
+        seen = []
+        with SettingsSession(Settings()) as session:
+            session.on_dirty = seen.append
+            session.draft.lights = 2
+        assert seen
+        seen.clear()
+        session.draft.lights = 4
+        assert not seen
+
+    def test_closing_twice_is_harmless(self):
+        session = SettingsSession(Settings())
+        session.close()
+        session.close()

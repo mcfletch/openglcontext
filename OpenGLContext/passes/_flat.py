@@ -542,7 +542,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             from OpenGLContext.passes.instancing import build_instance_groups
             groups, single_recs = build_instance_groups(
                 [rec for (_i, rec) in opaque],
-                min_instances=self.INSTANCE_MIN,
+                min_instances=self.instanceMinimum(),
                 key=self._instanceKey,
                 instanceable=self._instanceable,
             )
@@ -737,10 +737,17 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     _sel_next = 1
 
     # Instanced-geometry hooks. The base pass never instances; PBRPass overrides
-    # instancing_enabled + the two methods below. INSTANCE_MIN is the minimum
-    # batch size worth an instanced draw (instancing has fixed per-batch setup).
+    # instancing_enabled + the two methods below.
     instancing_enabled = False
-    INSTANCE_MIN = 8
+
+    def instanceMinimum( self ) -> int:
+        """Smallest group worth collapsing into one instanced draw.
+
+        Instancing has a fixed per-batch setup cost, so a pair of shapes is
+        cheaper drawn as a pair. The shader passes override this to read
+        OPENGLCONTEXT_INSTANCE_MIN.
+        """
+        return 8
 
     def _instanceable( self, path ) -> bool:
         """Whether this path's geometry can be drawn instanced (base: never)."""

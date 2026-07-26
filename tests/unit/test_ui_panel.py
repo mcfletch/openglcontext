@@ -99,6 +99,19 @@ class TestPointer:
         assert not panel.rect.contains(2, 2)
         assert panel.pointer_pressed(2, 2) is False
 
+    def test_a_wheel_notch_over_the_bare_panel_does_nothing(self, panel):
+        """The panel is where the walk up the parents ends, not another rung.
+
+        It is its own ancestor at the top of that walk and is what
+        ``widget_at`` answers for a point on no widget at all, so offering it
+        the notch would start the identical walk over and never come back.
+        """
+        assert panel.wheel(-1, panel.rect.x + 2, panel.rect.top - 2) is False
+
+    def test_a_wheel_notch_over_a_widget_that_ignores_it_does_nothing(self,
+                                                                     panel):
+        assert panel.wheel(-1, *panel.find('yes').rect.centre) is False
+
     def test_dragging_a_slider_keeps_the_slider(self, metrics):
         slider = Slider(minimum=0, maximum=10, name='s')
         screen = Panel(children=[Column(children=[slider])], fill=True)

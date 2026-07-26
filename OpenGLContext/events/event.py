@@ -44,6 +44,17 @@ class Event(object):
         inclusion in the key (note that the key must be a hashable
         value).
         """
+    def getPickKey (self):
+        """Calculate the key that makes this event distinct within one frame.
+
+        A context holds pending pick events in a mapping under this key (see
+        Context.addPickEvent), so two events sharing one are the same question
+        asked twice and only the later is answered.  That is what is wanted of
+        a click or a movement, where the current state is the whole of the
+        news; an event that instead carries an *increment* overrides this so
+        that none of them is dropped.
+        """
+        return self.getKey()
     def getModifiers( self ):
         """Retrieve a tuple of the active modifier keys
 

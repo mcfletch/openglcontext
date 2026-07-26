@@ -156,6 +156,11 @@ class Teapot(nodetypes.Geometry, node.Node):
         texcoords = np.ascontiguousarray(v[:, 0:2], dtype='f')
         return positions, normals, texcoords
 
+    #: Fields the baked instance mesh is built from, so the cache is dropped
+    #: when one of them moves.  Named here rather than inline so a test can ask
+    #: what the mesh depends on instead of restating it.
+    instanceGPU_depend_fields = ('size', 'lid')
+
     def instanceGPU(self, mode):
         """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
         from OpenGLContext.passes.instancing import build_mesh_gpu
@@ -166,7 +171,7 @@ class Teapot(nodetypes.Geometry, node.Node):
         return build_mesh_gpu(
             mode, self, positions=positions, normals=normals,
             texcoords=texcoords, indices=None, cache_key='instance_gpu',
-            depend_fields=('size', 'lid'))
+            depend_fields=self.instanceGPU_depend_fields)
 
     def _apply_draw_state(self, mode):
         """Cull backfaces for the instanced draw, as the single-draw path does.
@@ -174,14 +179,12 @@ class Teapot(nodetypes.Geometry, node.Node):
         The tessellated mesh carries reversed interior faces coincident with the
         shell; culling backfaces keeps the exterior clean and shows the interior
         only through the mouth. The pass culls by default, but an earlier
-        instanced group (a double-sided PBR mesh) may have disabled it, so force
-        the state and track it for the pass's end-of-loop reset.
+        instanced group (a double-sided PBR mesh) may have disabled it, so the
+        state is asked for explicitly rather than assumed.
         """
-        glEnable(GL_CULL_FACE)
+        from OpenGLContext.passes.instancing import set_cull_state
         glCullFace(GL_BACK)
-        glFrontFace(GL_CCW)
-        mode._pbr_cull_enabled = True
-        mode._pbr_front_face = GL_CCW
+        set_cull_state(mode, True, GL_CCW)
 
     # -- render dispatch ---------------------------------------------------
     def render(self, visible=1, lit=1, textured=1, transparent=0, mode=None):

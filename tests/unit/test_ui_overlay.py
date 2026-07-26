@@ -434,3 +434,41 @@ class TestAnInputTheOverlayTookIsTakenWhole:
         stray = FakeEvent('keyboard', name='w', state=0)
         context.ProcessEvent(stray)
         assert context.dispatched[-1] is stray
+
+
+class TestAClosedPanelCannotTrapTheStack:
+    """A panel that is already closed must not be able to wedge the stack.
+
+    ``pop`` asks the panel to close, and a closed panel returns without
+    notifying the listener that takes it out -- so a loop that pops until the
+    stack is empty never finishes.  A hang with no exception and no log line
+    reads as a GPU stall, which is the hardest thing there is to find.
+    """
+
+    def test_pushing_a_closed_panel_is_refused(self):
+        panel = Panel()
+        panel.close()
+        stack = OverlayStack()
+        with pytest.raises(ValueError):
+            stack.push(panel)
+        assert not stack.panels
+
+    def test_clear_empties_the_stack_whatever_state_it_is_in(self):
+        stack = OverlayStack()
+        stack.push(Panel())
+        stack.push(Panel())
+        # Close one behind the stack's back, the way a caller holding the
+        # panel can.
+        stack.panels[0].closed = True
+        stack.clear()
+        assert stack.panels == []
+
+    def test_clear_closes_every_panel(self):
+        stack = OverlayStack()
+        closed = []
+        for _ in range(3):
+            panel = Panel()
+            panel.closeListeners.append(closed.append)
+            stack.push(panel)
+        stack.clear()
+        assert len(closed) == 3

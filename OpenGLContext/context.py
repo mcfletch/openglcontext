@@ -825,11 +825,18 @@ class Context(ContextConfigMixin):
         render a pick event occur outside of the rendering
         loop.  As a result, there is (almost) never an
         active context when the pick-event-request comes in.
+
+        Events are held under Event.getPickKey, which is what says whether two
+        of them within one frame are the same news twice (a click, a movement)
+        or two separate increments (the wheel, where each notch is another
+        line). An event object that does not offer one is keyed as it always
+        was, so a hand-rolled event still records.
         """
         cd = self.contextDefinition
         if cd is not None and not cd.pickEnabled:
             return
-        self.pickEvents[(event.type, event.getKey())] = event
+        key = getattr(event, 'getPickKey', event.getKey)()
+        self.pickEvents[(event.type, key)] = event
 
     def getPickEvents(self):
         """Get the currently active pick-events"""

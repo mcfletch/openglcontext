@@ -14,6 +14,7 @@ from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.layout import Column
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.panel import Panel
+from OpenGLContext.ui.session import nodes_equal
 from OpenGLContext.ui.skin import DEFAULT_SKIN, Skin
 from OpenGLContext.ui.widgets import Button, Label
 
@@ -125,10 +126,26 @@ class TestAPanelPaintsWithTheScaledSkin:
     def test_an_unscaled_layout_leaves_the_skin_as_authored(self, metrics):
         panel = Panel(children=[Column(children=[Label(text='a')])])
         panel.layout((800, 600), metrics)
-        assert panel.activeSkin() is DEFAULT_SKIN
+        assert nodes_equal(panel.activeSkin(), DEFAULT_SKIN)
 
     def test_a_widget_with_no_panel_falls_back_to_the_default(self):
-        assert Button(text='ok').activeSkin() is DEFAULT_SKIN
+        assert nodes_equal(Button(text='ok').activeSkin(), DEFAULT_SKIN)
+
+    def test_a_panel_gets_its_own_copy_of_the_default(self):
+        """A game adjusting one screen's colours must not adjust every screen."""
+        one = Panel(children=[Column(children=[Label(text='a')])])
+        other = Panel(children=[Column(children=[Label(text='b')])])
+        assert one.activeSkin() is not other.activeSkin()
+        assert one.activeSkin() is not DEFAULT_SKIN
+
+    def test_changing_one_panels_skin_leaves_the_others_alone(self, metrics):
+        one = Panel(children=[Column(children=[Label(text='a')])])
+        other = Panel(children=[Column(children=[Label(text='b')])])
+        one.layout((800, 600), metrics)
+        other.layout((800, 600), metrics)
+        one.activeSkin().panelPadding = 99.0
+        assert float(other.activeSkin().panelPadding) != 99.0
+        assert float(DEFAULT_SKIN.panelPadding) != 99.0
 
     def test_the_padding_a_scaled_panel_keeps_grows_with_it(self, metrics):
         """Same window, same contents: the frame around them gets thicker."""

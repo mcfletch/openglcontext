@@ -651,9 +651,16 @@ class PBRPass(flatcore.FlatPass):
 
     use_shaders: bool = True
 
-    # Minimum group size worth an instanced draw (instancing has fixed per-batch
-    # setup cost). Overridable for benchmarking / small test scenes.
-    INSTANCE_MIN: int = int(os.environ.get('OPENGLCONTEXT_INSTANCE_MIN', '4') or 4)
+    def instanceMinimum(self) -> int:
+        """Smallest group worth collapsing into one instanced draw.
+
+        Overridable for benchmarking and small test scenes with
+        OPENGLCONTEXT_INSTANCE_MIN, read once per process rather than at import
+        so an application -- or a test -- can still set it.
+        """
+        from OpenGLContext import renderoptions
+        return int(renderoptions.env_number_once(
+            'OPENGLCONTEXT_INSTANCE_MIN', 4, integer=True))
 
     # The base _flat.FlatPass declares instancing_enabled as a writeable class
     # attribute; the shader passes intentionally compute it as a read-only property.
@@ -789,10 +796,26 @@ def renderer_is_pbr() -> bool:
     """Whether the PBR renderer is selected (``OPENGLCONTEXT_RENDERER=pbr``).
 
     Cached after the first read: the environment doesn't change within a process
-    and this is consulted on the per-frame render-dispatch path.
+    and this is consulted on the per-frame render-dispatch path.  A test that
+    changes the variable calls :func:`reset_renderer_cache` to make the next
+    read see it.
     """
     global _renderer_is_pbr_cache
     if _renderer_is_pbr_cache is None:
         _renderer_is_pbr_cache = (
             os.environ.get('OPENGLCONTEXT_RENDERER', '').strip().lower() == 'pbr')
     return _renderer_is_pbr_cache
+
+
+def reset_renderer_cache() -> None:
+    """Forget the memoised renderer choice, so the next read consults the
+    environment again.
+
+    A process-lifetime memo of an environment variable needs one of these or it
+    is a one-way door: whichever value happened to be set the first time
+    anything rendered is the value for the rest of the session, and a test that
+    sets the variable is silently ignored -- or, worse, leaves the memo holding
+    *its* answer for every test that follows.
+    """
+    global _renderer_is_pbr_cache
+    _renderer_is_pbr_cache = None

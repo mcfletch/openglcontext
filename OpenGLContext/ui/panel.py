@@ -26,7 +26,8 @@ from vrml import field, node
 
 from OpenGLContext.hud import distribute
 from OpenGLContext.ui.geometry import Rect
-from OpenGLContext.ui.skin import DEFAULT_SKIN, PRIMARY
+from OpenGLContext.ui.metrics import FontMetrics
+from OpenGLContext.ui.skin import PRIMARY, Skin, default_skin
 from OpenGLContext.ui.widgets import Widget
 
 __all__ = ['Panel']
@@ -82,8 +83,10 @@ class Panel(Widget):
     _title_height: int = 0
     #: This panel's skin at the current interface scale, and what it was made
     #: from, so it is rebuilt only when one of the two changes.
-    _scaledSkin: Optional[Any] = None
-    _scaledFrom: Optional[Any] = None
+    _scaledSkin: Optional[Skin] = None
+    _scaledFrom: Optional[Skin] = None
+    #: This panel's own copy of the default skin; see :meth:`baseSkin`.
+    _defaultSkin: Optional[Skin] = None
     _scaledBy: float = 1.0
     _focused: Optional[Widget] = None
     _armed: Optional[Widget] = None
@@ -107,11 +110,11 @@ class Panel(Widget):
         self.closeListeners: List[Callable[['Panel'], None]] = []
 
     # -- layout -----------------------------------------------------------
-    def layoutChildren(self) -> Sequence[Any]:
+    def layoutChildren(self) -> Sequence[Widget]:
         return [child for child in self.children
                 if getattr(child, 'visible', True)]
 
-    def activeSkin(self) -> Any:
+    def activeSkin(self) -> Skin:
         """The skin every widget on this screen paints with.
 
         Scaled for the window the panel was last laid out in, so a measurement
@@ -120,13 +123,27 @@ class Panel(Widget):
         """
         if self._scaledSkin is not None:
             return self._scaledSkin
-        return self.skin if self.skin else DEFAULT_SKIN
+        return self.baseSkin()
 
-    def scaleSkin(self, metrics: Any) -> Any:
+    def baseSkin(self) -> Skin:
+        """The skin this screen is authored with, before any scaling.
+
+        Its **own copy** of the default when it names none: a ``Skin`` is
+        authored data with every field writable, and a game adjusting one
+        screen's colours should not adjust every screen in the process.
+        """
+        if self.skin:
+            return self.skin      # type: ignore[no-any-return]  # SFNode
+        if self._defaultSkin is None:
+            self._defaultSkin = default_skin()
+        return self._defaultSkin
+
+    def scaleSkin(self, metrics: FontMetrics) -> Skin:
         """Settle the skin for one interface scale, and hand it back."""
-        base = self.skin if self.skin else DEFAULT_SKIN
+        base = self.baseSkin()
         factor = float(getattr(metrics, 'scale', 1.0))
-        if self._scaledFrom is not base or self._scaledBy != factor:
+        if self._scaledSkin is None or self._scaledFrom is not base \
+                or self._scaledBy != factor:
             self._scaledFrom = base
             self._scaledBy = factor
             self._scaledSkin = base.scaled(factor)
@@ -141,7 +158,7 @@ class Panel(Widget):
                         max(0, inner.height - self._title_height))
         return inner
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         skin = self.activeSkin()
         widest = 0
@@ -156,7 +173,7 @@ class Panel(Widget):
         pad = int(skin.panelPadding) * 2
         return (widest + pad, total + pad)
 
-    def layout(self, viewport: Tuple[int, int], metrics: Any) -> None:
+    def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
         """Place the panel in a window of this size and arrange its contents.
 
         Run when something changes rather than every frame: a settings page is
@@ -165,7 +182,6 @@ class Panel(Widget):
         """
         self.link()
         view_width, view_height = (int(viewport[0]), int(viewport[1]))
-        self.viewport = Rect(0, 0, view_width, view_height)
         margin = metrics.pixels(self.margin)
         skin = self.scaleSkin(metrics)
         self._title_height = (metrics.line_height + int(skin.rowSpacing)
@@ -184,7 +200,7 @@ class Panel(Widget):
                          (view_height - height) // 2, width, height)
         self.arrange_content(metrics)
 
-    def _maximumWidth(self, metrics: Any) -> int:
+    def _maximumWidth(self, metrics: FontMetrics) -> int:
         """The widest this panel may be drawn, or 0 for no limit."""
         if not self.preferredColumns:
             return 0
@@ -208,7 +224,7 @@ class Panel(Widget):
                 child.parent = current
                 stack.append(child)
 
-    def _preferredWidth(self, metrics: Any,
+    def _preferredWidth(self, metrics: FontMetrics,
                         limit: int) -> Optional[int]:
         """The content width to measure against, or None to let it be natural."""
         maximum = self._maximumWidth(metrics)
@@ -217,7 +233,7 @@ class Panel(Widget):
         padding = int(self.activeSkin().panelPadding) * 2
         return max(0, min(maximum - padding, limit - padding))
 
-    def arrange_content(self, metrics: Any) -> None:
+    def arrange_content(self, metrics: FontMetrics) -> None:
         content = self.contentRect()
         children = self.layoutChildren()
         if not children:
@@ -246,16 +262,27 @@ class Panel(Widget):
                                content.width, height), metrics)
             cursor -= height + spacing
 
-    def titleRect(self, metrics: Any) -> Rect:
+    def titleRect(self, metrics: FontMetrics) -> Rect:
         """Where the title is drawn, along the top inside the padding."""
         inner = self.rect.inset(int(self.activeSkin().panelPadding))
         return Rect(inner.x, inner.top - metrics.line_height, inner.width,
                     metrics.line_height)
 
     # -- drawing ----------------------------------------------------------
+    def fillColour(self, skin: Any) -> Any:
+        """The colour behind this panel's contents.
+
+        A hook rather than a constant so a screen that reads differently -- a
+        console, which is read line by line and wants less of the world showing
+        through -- changes the one thing that differs instead of copying the
+        whole of :meth:`paint`.
+        """
+        return skin.panelFill
+
     def paint(self, renderer: Any) -> None:
         skin = renderer.skin
-        renderer.frame(self.rect, skin.panelFill, skin._image(skin.panelImage))
+        renderer.frame(self.rect, self.fillColour(skin),
+                       skin.panelImage)
         renderer.border(self.rect, skin.panelBorder, int(skin.borderWidth))
         if self.title:
             renderer.textIn(self.titleRect(renderer.metrics), self.title,
@@ -266,6 +293,16 @@ class Panel(Widget):
     def focused_widget(self) -> Optional[Widget]:
         """Where the keyboard is, or None."""
         return self._focused
+
+    @property
+    def hovered_widget(self) -> Optional[Widget]:
+        """What the pointer is over, or None.
+
+        The panel is the one place hover changes, so anything that wants to
+        react to it -- a grid washing the row under the pointer -- reads it
+        here rather than searching the tree for whichever widget says so.
+        """
+        return self._hovered
 
     def focusables(self) -> List[Widget]:
         """Every widget Tab can stop on, in the order they are laid out."""
@@ -356,9 +393,15 @@ class Panel(Widget):
         return armed.release(x, y)
 
     def wheel(self, delta: int, x: float, y: float) -> bool:
-        """Offer a wheel notch to the widget under the pointer, then its parents."""
+        """Offer a wheel notch to the widget under the pointer, then its parents.
+
+        The panel ends that walk rather than taking a turn in it.  It is the
+        ancestor every widget arrives at, and what ``widget_at`` answers for a
+        point over no widget at all, so offering it the notch would start the
+        identical walk over.
+        """
         current: Optional[Any] = self.widget_at(x, y)
-        while current is not None:
+        while current is not None and current is not self:
             if current.wheel(delta, x, y):
                 return True
             current = current.parent

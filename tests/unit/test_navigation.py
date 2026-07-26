@@ -219,3 +219,82 @@ def test_rebinding_an_unknown_command_reports_failure():
     manager, _definition = _manager(walk)
     assert not manager.rebind('walk', 'nonsense', ['i'])
     assert not manager.rebind('nonsense', 'forward', ['i'])
+
+
+class TestRetargetingKeepsTheChosenMode:
+    """A world that swaps in a character controller must not reset the player.
+
+    ``getNavigation`` rebuilds when what it drives changes -- a controller
+    usually comes into being when a world finishes loading, after the context
+    has already been navigating the camera.  Rebuilding from scratch would put
+    the player back in whichever mode happens to be declared first.
+    """
+
+    def _manager(self):
+        definition = ContextDefinition()
+        definition.movementModes = [modes.WalkMode(name='walk'),
+                                    modes.FlyMode(name='fly')]
+        return NavigationManager(definition, _Platform()), definition
+
+    def test_retargeting_keeps_the_selected_mode(self):
+        manager, definition = self._manager()
+        assert manager.select('fly')
+        manager.retarget(_Platform())
+        assert definition.movementMode.name == 'fly'
+
+    def test_retargeting_drives_the_new_platform(self):
+        manager, _definition = self._manager()
+        fresh = _Platform()
+        manager.retarget(fresh)
+        assert manager.platform is fresh
+
+    def test_a_context_reuses_the_manager_when_only_the_platform_moves(self):
+        from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+
+        class Ctx(ViewPlatformMixin):
+            def __init__(self, definition, platform):
+                self.contextDefinition = definition
+                self._platform = platform
+
+            def getNavigationPlatform(self):
+                return self._platform
+
+        definition = ContextDefinition()
+        definition.movementModes = [modes.WalkMode(name='walk'),
+                                    modes.FlyMode(name='fly')]
+        context = Ctx(definition, _Platform())
+        first = context.getNavigation()
+        first.select('fly')
+        context._platform = _Platform()
+        second = context.getNavigation()
+        assert second is first, "the manager was rebuilt from scratch"
+        assert definition.movementMode.name == 'fly'
+
+
+class TestSelectableIsDecidedOnce:
+    def test_a_world_imposed_mode_is_never_offered_to_the_player(self):
+        definition = ContextDefinition()
+        definition.movementModes = [modes.WalkMode(name='walk'),
+                                    modes.SwimMode(name='swim')]
+        manager = NavigationManager(definition, _Platform())
+        assert [mode.name for mode in manager._selectable()] == ['walk']
+
+    def test_deciding_does_not_ask_the_platform(self):
+        """``enter_when`` is a call into the world; it cannot decide this."""
+        definition = ContextDefinition()
+        definition.movementModes = [modes.SwimMode(name='swim')]
+        platform = _Platform()
+        platform.asked = 0
+
+        class Counting(modes.SwimMode):
+            PROTO = 'UITestCountingSwim'
+
+            def enter_when(self, platform):
+                platform.asked += 1
+                return super().enter_when(platform)
+
+        definition.movementModes = [Counting(name='swim')]
+        manager = NavigationManager(definition, platform)
+        platform.asked = 0
+        manager._selectable()
+        assert platform.asked == 0

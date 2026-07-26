@@ -80,6 +80,15 @@ def per_light_shadow_settings(
 class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     """Adds shadow-map depth pre-pass + uniform binding to a FlatPass."""
 
+    def instanceMinimum(self) -> int:
+        """Smallest caster group worth one instanced depth draw.
+
+        The host FlatPass overrides this with the environment-settled figure;
+        the fallback here is what lets the depth-grouping logic be exercised
+        without standing up a whole pass and a GL context.
+        """
+        return 8
+
     if TYPE_CHECKING:
         # Attributes/methods the host FlatPass supplies; declared for the type
         # checker so the mixin can reference them on ``self``.
@@ -87,7 +96,6 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         matrix: np.ndarray
         projection: np.ndarray
         _caster_points: Optional[np.ndarray]
-        INSTANCE_MIN: int
 
         def getModelView(self) -> np.ndarray: ...
         def _instanceKey(self, record: Any) -> Any: ...
@@ -826,7 +834,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             return hit
         from OpenGLContext.passes.instancing import build_instance_groups
         result = build_instance_groups(
-            list(toRender), min_instances=self.INSTANCE_MIN,
+            list(toRender), min_instances=self.instanceMinimum(),
             key=self._instanceKey, instanceable=self._instanceable)
         # Only a few distinct caster sets exist per frame (one per shadow-casting
         # light); clear rather than grow unbounded if the scene churns.

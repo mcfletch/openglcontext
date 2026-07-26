@@ -42,8 +42,9 @@ from vrml import node as vrmlnode, protofunctions
 
 __all__ = ['SettingsSession', 'copy_node', 'apply_node', 'nodes_equal']
 
-#: Field names the node system keeps for itself.
-_INTERNAL = (' DEF', ' root', ' PROTO', 'externalURL')
+#: Fields the node system keeps for itself that are *not* spelled with a
+#: leading space, so the space test below does not already catch them.
+_INTERNAL = ('externalURL',)
 #: A node class lists here any field that is *published* rather than chosen --
 #: state something else writes, which a settings dialog must not carry a stale
 #: copy of and write back on Apply.
@@ -170,6 +171,12 @@ class SettingsSession:
         #: can still be told what moved *after* a commit has made the draft and
         #: the target agree.
         self.original = copy_node(target)
+        #: The last answer :attr:`dirty` gave, or None when it has to be
+        #: worked out again.  Comparing every field of every node is what the
+        #: answer costs, and a settings screen asks for it from more than one
+        #: place per edit; nothing between two edits can change it.
+        self._dirtyKnown: Optional[bool] = None
+        self._closed = False
         self._watch()
 
     # -- change notification ----------------------------------------------
@@ -199,14 +206,25 @@ class SettingsSession:
         return found
 
     def _draftChanged(self, *args: Any, **named: Any) -> None:
+        self._dirtyKnown = None
         if self.on_dirty is not None:
             self.on_dirty(self)
 
     # -- the edit ----------------------------------------------------------
     @property
     def dirty(self) -> bool:
-        """Whether the draft differs from what it would be saved over."""
-        return not nodes_equal(self.draft, self.target)
+        """Whether the draft differs from what it would be saved over.
+
+        What lights an Apply button, including for a change made two dialogs
+        deep -- and what puts it out again when a value is set back by hand.
+
+        Worked out by comparing every field of every node, so the answer is
+        kept until the next edit: a settings screen asks for it from more than
+        one place per keystroke, and nothing between two edits can change it.
+        """
+        if self._dirtyKnown is None:
+            self._dirtyKnown = not nodes_equal(self.draft, self.target)
+        return self._dirtyKnown
 
     def changed_fields(self) -> Set[str]:
         """The names of the fields the user actually moved.
@@ -233,12 +251,34 @@ class SettingsSession:
         Apply within the dialog above rather than a save.
         """
         apply_node(self.draft, self.target)
+        self._dirtyKnown = None
 
     def revert(self) -> None:
         """Throw the draft away and start again from the target."""
         self._unwatch()
         self.draft = copy_node(self.target)
+        self._dirtyKnown = None
         self._watch()
+
+    # -- letting go --------------------------------------------------------
+    def close(self) -> None:
+        """Stop listening to the draft.  A closed session notifies nobody.
+
+        A dialog's session outlives the dialog by however long the caller holds
+        it, and until it is closed every edit to a draft nobody can see still
+        calls back into a screen that has gone.
+        """
+        if self._closed:
+            return
+        self._closed = True
+        self._unwatch()
+        self.on_dirty = None
+
+    def __enter__(self) -> 'SettingsSession':
+        return self
+
+    def __exit__(self, *exception: Any) -> None:
+        self.close()
 
     # -- nesting -----------------------------------------------------------
     def child(self, attribute: Optional[str] = None, index: Optional[int] = None,

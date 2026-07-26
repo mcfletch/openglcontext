@@ -19,17 +19,20 @@ Cancel becomes real.
 
 from __future__ import annotations
 
-from typing import Any, Callable, List, Optional, Tuple
+import re
+from typing import Any, Callable, Iterator, List, Optional, Tuple
 
 from vrml import field, node
 
 from OpenGLContext.hud import GUINode
 from OpenGLContext.ui.geometry import Rect
+from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.skin import DANGER, PRIMARY, SECONDARY, skin_for
 
 __all__ = [
     'Widget', 'BoundWidget', 'Label', 'Button', 'Toggle', 'Select', 'Slider',
-    'TextField', 'KeyCapture', 'Spacer', 'Separator', 'key_label',
+    'TextField', 'NumberField', 'KeyCapture', 'Spacer', 'Separator',
+    'key_label',
     'PRIMARY', 'SECONDARY', 'DANGER',
 ]
 
@@ -38,6 +41,11 @@ _EDIT_KEYS = ('<backspace>', '<delete>', '<left>', '<right>', '<home>', '<end>')
 
 #: Keys whose own spelling is invisible or unreadable on a button.
 _KEY_LABELS = {' ': '<space>', '\t': '<tab>', '\n': '<return>'}
+
+#: Text that is a number, or is on the way to being one.  Matching the
+#: *partial* forms is what lets someone type a minus sign before a digit.
+_NUMBER_TEXT = re.compile(r'^-?\d*\.?\d*$')
+_INTEGER_TEXT = re.compile(r'^-?\d*$')
 
 
 def key_label(name: str) -> str:
@@ -89,12 +97,25 @@ class Widget(GUINode, node.Node):
         if not self.visible:
             return None
         for child in reversed(list(self.layoutChildren())):
-            found = child.widget_at(x, y)
+            found: Optional['Widget'] = child.widget_at(x, y)
             if found is not None:
                 return found
         if self.interactive and self.enabled and self.rect.contains(x, y):
             return self
         return None
+
+    def walk(self) -> Iterator['Widget']:
+        """This widget and every descendant, parents before children.
+
+        Narrower than :meth:`~OpenGLContext.hud.GUINode.walk` because a widget
+        tree holds only widgets: a panel's children are widgets, and so is
+        everything they contain.  Saying so here is what lets the focus,
+        accelerator and hit-test code reach ``focusable``/``enabled`` without
+        each of them asserting it.
+        """
+        yield self
+        for child in self.layoutChildren():
+            yield from child.walk()
 
     def find(self, name: str) -> Optional['Widget']:
         """The first descendant (or this) with that ``name``."""
@@ -138,6 +159,18 @@ class Widget(GUINode, node.Node):
     def wheel(self, delta: int, x: float, y: float) -> bool:
         """A wheel notch over the widget.  True if it used it."""
         return False
+
+    def wheelAdjusts(self) -> bool:
+        """Whether a notch over this widget should change its value.
+
+        Only where the keyboard would also reach it.  A long page of controls
+        is read with the wheel, and a control that takes every notch crossing
+        it turns reading the page into editing it, silently, wherever the
+        pointer happened to rest.  Focus is the deliberate and visible signal
+        that this is the widget being used; without it the notch passes on to
+        whatever encloses the widget and can scroll.
+        """
+        return self.focused
 
     # -- keyboard ---------------------------------------------------------
     def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
@@ -269,7 +302,12 @@ class Label(Widget):
     #: Overrides the skin's label colour when set (alpha 0 means "use the skin").
     color = field.newField('color', 'SFVec4f', 1, (0, 0, 0, 0))
 
-    def content_size(self, metrics: Any,
+    @property
+    def wrapsToWidth(self) -> bool:                   # type: ignore[override]
+        """A wrapped label is taller in a narrow column than in a wide one."""
+        return bool(self.wrap)
+
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         if self.wrap:
             width = int(self.width) or available or self.rect.width
@@ -277,13 +315,13 @@ class Label(Widget):
                 return metrics.lines_size(metrics.wrap(self.text, width))
         return metrics.text_size(self.text)
 
-    def display_lines(self, metrics: Any) -> List[str]:
+    def display_lines(self, metrics: FontMetrics) -> List[str]:
         """The lines to draw, wrapped to the rectangle this ended up with."""
         if not self.text:
             return []
         if self.wrap:
             return metrics.wrap(self.text, self.rect.width or int(self.width))
-        return self.text.split('\n')
+        return str(self.text).split('\n')
 
     def textColour(self, renderer: Any) -> Any:
         if float(self.color[3]):
@@ -329,7 +367,7 @@ class Button(BoundWidget):
     interactive = True
     focusable = True
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         pad_x, pad_y = self.activeSkin().buttonPadding(metrics)
         return (metrics.text_width(self.text) + pad_x * 2,
@@ -375,7 +413,7 @@ class Toggle(BoundWidget):
     interactive = True
     focusable = True
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         skin = self.activeSkin()
         width = int(skin.switchWidth)
@@ -427,8 +465,11 @@ class Toggle(BoundWidget):
             fill = skin.buttonDisabledFill
         else:
             fill = skin.switchOnFill if on else skin.switchOffFill
-        image = skin._image(skin.switchOnImage if on else skin.switchOffImage)
-        if image is not None:
+        # Truthiness, not ``is not None``: an unset SFNode is a node-shaped
+        # "nothing", and a track drawn as a frame rather than a pill loses its
+        # rounded ends.
+        image = skin.switchOnImage if on else skin.switchOffImage
+        if image:
             renderer.frame(track, fill, image)
         else:
             renderer.pill(track, fill)
@@ -438,8 +479,8 @@ class Toggle(BoundWidget):
             # colour is carrying the value and must not be borrowed for hover.
             renderer.disc(knob.expand(max(1, knob.width // 8)),
                           skin.buttonHoverFill)
-        knobImage = skin._image(skin.switchKnobImage)
-        if knobImage is not None:
+        knobImage = skin.switchKnobImage
+        if knobImage:
             renderer.frame(knob, skin.switchKnob, knobImage)
         else:
             renderer.disc(knob, skin.switchKnob)
@@ -492,10 +533,10 @@ class Select(BoundWidget):
         index = self.index
         labels = list(self.optionLabels)
         if index < len(labels):
-            return labels[index]
-        return options[index]
+            return str(labels[index])
+        return str(options[index])
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         widest = max([len(self.display_label(index))
                       for index in range(len(self.options))], default=0)
@@ -508,9 +549,9 @@ class Select(BoundWidget):
         """What to show for one option."""
         labels = list(self.optionLabels)
         if index < len(labels):
-            return labels[index]
+            return str(labels[index])
         options = list(self.options)
-        return options[index] if index < len(options) else ''
+        return str(options[index]) if index < len(options) else ''
 
     def arrow_rects(self) -> Tuple[Rect, Rect]:
         """The left and right arrows, at the two ends of the widget."""
@@ -549,7 +590,7 @@ class Select(BoundWidget):
         # what the pointer expects of a cycling control, and the arrows are
         # small targets.
         self.step(self._pressed_arrow or 1)
-        super(Select, self).activate()
+        self.activate()
         return True
 
     def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
@@ -562,7 +603,7 @@ class Select(BoundWidget):
         return False
 
     def wheel(self, delta: int, x: float, y: float) -> bool:
-        if delta:
+        if delta and self.wheelAdjusts():
             self.step(1 if delta > 0 else -1)
             return True
         return False
@@ -570,7 +611,7 @@ class Select(BoundWidget):
     def paint(self, renderer: Any) -> None:
         self.paintFocus(renderer)
         skin = renderer.skin
-        renderer.frame(self.rect, skin.fieldFill, skin._image(skin.fieldImage))
+        renderer.frame(self.rect, skin.fieldFill, skin.fieldImage)
         left, right = self.arrow_rects()
         arrow = skin.secondaryText if self.enabled else skin.disabledText
         lit = skin.buttonHoverFill if self.hovered else None
@@ -601,29 +642,44 @@ class Slider(BoundWidget):
     interactive = True
     focusable = True
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         return (metrics.char_width * 14,
                 max(int(self.activeSkin().thumbWidth),
                     metrics.char_height + int(self.activeSkin().buttonPaddingY)))
 
     # -- geometry ---------------------------------------------------------
-    def value_width(self, metrics: Any) -> int:
-        """Room kept at the right for the printed value."""
-        return metrics.text_width(self.display_value(metrics)) + metrics.char_width
+    # All measured against :attr:`~OpenGLContext.hud.GUINode.metrics`, the
+    # numbers this widget was laid out with, so what a click is measured
+    # against is exactly what was drawn.  The printed value shortens the track,
+    # and a hit test that did not know that would put every value slightly low
+    # and never reach the maximum at all.
+    def value_width(self) -> int:
+        """Room kept at the right for the printed value.
 
-    def track_rect(self, metrics: Any = None) -> Rect:
+        Sized for the widest number this slider can ever print rather than for
+        the one it is showing.  A track that shortened as the value beside it
+        grew a digit would move the thumb out from under the pointer part-way
+        through a drag, and jump the whole control every time the number
+        crossed 9.
+        """
+        metrics = self.metrics
+        widest = max(metrics.text_width(self._format(end, widest=True))
+                     for end in (self.minimum, self.maximum))
+        return widest + metrics.char_width
+
+    def track_rect(self) -> Rect:
         """The groove the thumb runs along."""
-        reserved = self.value_width(metrics) if metrics is not None else 0
         thickness = int(self.activeSkin().trackThickness)
         half = int(self.activeSkin().thumbWidth) // 2
         return Rect(self.rect.x + half,
                     self.rect.y + (self.rect.height - thickness) // 2,
-                    max(1, self.rect.width - reserved - half * 2), thickness)
+                    max(1, self.rect.width - self.value_width() - half * 2),
+                    thickness)
 
-    def thumb_rect(self, metrics: Any = None) -> Rect:
+    def thumb_rect(self) -> Rect:
         """The grip, centred on the value's position along the track."""
-        track = self.track_rect(metrics)
+        track = self.track_rect()
         width = int(self.activeSkin().thumbWidth)
         centre = track.x + int(track.width * self.fraction())
         return Rect(centre - width // 2, self.rect.y, width, self.rect.height)
@@ -639,14 +695,25 @@ class Slider(BoundWidget):
             return 0.0
         return min(1.0, max(0.0, (float(self.read()) - float(self.minimum)) / span))
 
-    def display_value(self, metrics: Any = None) -> str:
+    def display_value(self) -> str:
         """The value as it is printed beside the track."""
-        value = self.read()
-        if self.integer or float(value) == int(value):
+        return self._format(self.read())
+
+    def _format(self, value: Any, widest: bool = False) -> str:
+        """One value as text.  ``widest`` asks for its longest spelling.
+
+        A whole number normally prints without a decimal part; measuring the
+        room to keep for it asks for the long form instead, so the space is
+        right for every value the slider can reach rather than for the one it
+        happens to hold.
+        """
+        if self.integer:
             text = '%d' % (int(value),)
-        else:
+        elif widest or float(value) != int(value):
             text = '%.2f' % (float(value),)
-        return text + self.suffix
+        else:
+            text = '%d' % (int(value),)
+        return text + str(self.suffix)
 
     # -- changing ---------------------------------------------------------
     def coerce(self, value: float) -> Any:
@@ -665,8 +732,8 @@ class Slider(BoundWidget):
         span = float(self.maximum) - float(self.minimum)
         return self.write(self.coerce(float(self.minimum) + span * fraction))
 
-    def _fraction_at(self, x: float, metrics: Any = None) -> float:
-        track = self.track_rect(metrics)
+    def _fraction_at(self, x: float) -> float:
+        track = self.track_rect()
         if track.width <= 0:
             return 0.0
         return min(1.0, max(0.0, (x - track.x) / float(track.width)))
@@ -700,7 +767,7 @@ class Slider(BoundWidget):
         return False
 
     def wheel(self, delta: int, x: float, y: float) -> bool:
-        if not delta:
+        if not delta or not self.wheelAdjusts():
             return False
         amount = float(self.step) or (float(self.maximum) - float(self.minimum)) / 20.0
         self.write(self.coerce(float(self.read()) + amount * (1 if delta > 0 else -1)))
@@ -709,18 +776,17 @@ class Slider(BoundWidget):
     def paint(self, renderer: Any) -> None:
         self.paintFocus(renderer)
         skin = renderer.skin
-        metrics = renderer.metrics
-        track = self.track_rect(metrics)
-        renderer.frame(track, skin.trackFill, skin._image(skin.trackImage))
+        track = self.track_rect()
+        renderer.frame(track, skin.trackFill, skin.trackImage)
         filled = Rect(track.x, track.y, int(track.width * self.fraction()),
                       track.height)
         renderer.rect(filled, skin.thumbFill)
-        thumb = self.thumb_rect(metrics)
+        thumb = self.thumb_rect()
         fill = skin.buttonHoverFill if (self.hovered or self.armed) else skin.thumbFill
-        renderer.frame(thumb, fill, skin._image(skin.thumbImage))
+        renderer.frame(thumb, fill, skin.thumbImage)
         value = Rect(track.right, self.rect.y,
                      max(0, self.rect.right - track.right), self.rect.height)
-        renderer.textIn(value, self.display_value(metrics),
+        renderer.textIn(value, self.display_value(),
                         self.textColour(renderer), align='right')
 
 
@@ -740,52 +806,93 @@ class TextField(BoundWidget):
 
     #: Where the next character goes, in characters from the start.
     caret: int = 0
+    #: Where a click just put the caret, so the focus that follows the click
+    #: does not send it back to the end.  None when focus arrived some other
+    #: way -- by Tab, where the end is what a reader expects.
+    _clicked_caret: Optional[int] = None
 
-    def content_size(self, metrics: Any,
+    def read(self) -> str:
+        """The value as text.
+
+        ``SFString`` stores it as one, but a widget pointed at some other
+        field would otherwise hand a non-string to every caller that slices it.
+        """
+        return str(super(TextField, self).read())
+
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         columns = int(self.maximumLength) or 20
         return (columns * metrics.char_width + int(self.activeSkin().fieldPadding) * 2,
                 metrics.char_height + int(self.activeSkin().buttonPaddingY))
 
     def focus_gained(self) -> None:
-        """Take the keyboard, with the caret at the end of what is there."""
+        """Take the keyboard, with the caret where the click put it.
+
+        At the end when focus arrived any other way: Tab into a field and the
+        end is where you want to carry on from, but a click that landed
+        mid-word and then jumped to the end means every correction has to be
+        made with the arrow keys, which is what a text field exists to avoid.
+        """
         super(TextField, self).focus_gained()
-        self.caret = len(self.read())
+        if self._clicked_caret is None:
+            self.caret = len(self.read())
+        else:
+            self.caret, self._clicked_caret = self._clicked_caret, None
 
     def press(self, x: float, y: float) -> bool:
         if not super(TextField, self).press(x, y):
             return False
-        self._pending_caret = x
+        # Both, because the two orders both happen: the panel focuses after the
+        # press for a field that did not have the keyboard, and not at all for
+        # one that did.
+        self.caret = self._clicked_caret = self.caret_from(x, self.metrics)
         return True
 
-    def caret_from(self, x: float, metrics: Any) -> int:
+    def caret_from(self, x: float, metrics: FontMetrics) -> int:
         """Which character position a click at ``x`` lands on."""
         pad = int(self.activeSkin().fieldPadding)
         offset = max(0, x - (self.rect.x + pad))
-        return min(len(self.read()), int(round(offset / max(1, metrics.char_width))))
+        return min(len(self.display_text()),
+                   int(round(offset / max(1, metrics.char_width))))
+
+    # -- what is being edited ---------------------------------------------
+    # Editing works on a *string*, and these two are the only place that
+    # string meets the field.  A subclass editing something that is not text
+    # -- a number -- overrides them and everything else keeps working.
+    def display_text(self) -> str:
+        """The text the caret moves through and the field draws."""
+        return self.read()
+
+    def set_display_text(self, text: str) -> bool:
+        """Take edited text.  True if it was accepted."""
+        self.write(text)
+        return True
 
     def character(self, text: str) -> bool:
-        current = self.read()
+        current = self.display_text()
         limit = int(self.maximumLength)
         if limit and len(current) >= limit:
             return True
         self.caret = min(self.caret, len(current))
-        self.write(current[:self.caret] + text + current[self.caret:])
-        self.caret += len(text)
+        if self.set_display_text(current[:self.caret] + text
+                                 + current[self.caret:]):
+            self.caret += len(text)
         return True
 
     def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
         if name not in _EDIT_KEYS:
             return False
-        current = self.read()
+        current = self.display_text()
         self.caret = min(self.caret, len(current))
         if name == '<backspace>':
             if self.caret:
-                self.write(current[:self.caret - 1] + current[self.caret:])
+                self.set_display_text(current[:self.caret - 1]
+                                      + current[self.caret:])
                 self.caret -= 1
         elif name == '<delete>':
             if self.caret < len(current):
-                self.write(current[:self.caret] + current[self.caret + 1:])
+                self.set_display_text(current[:self.caret]
+                                      + current[self.caret + 1:])
         elif name == '<left>':
             self.caret = max(0, self.caret - 1)
         elif name == '<right>':
@@ -800,10 +907,10 @@ class TextField(BoundWidget):
         self.paintFocus(renderer)
         skin = renderer.skin
         metrics = renderer.metrics
-        renderer.frame(self.rect, skin.fieldFill, skin._image(skin.fieldImage))
+        renderer.frame(self.rect, skin.fieldFill, skin.fieldImage)
         pad = int(skin.fieldPadding)
         inner = self.rect.inset(pad, 0)
-        text = self.read()
+        text = self.display_text()
         if text:
             renderer.textIn(inner, metrics.truncate(text, inner.width),
                             skin.fieldText if self.enabled else skin.disabledText)
@@ -817,7 +924,73 @@ class TextField(BoundWidget):
                           skin.caret)
 
 
-class KeyCapture(Widget):
+class NumberField(TextField):
+    """A number typed as text.
+
+    **A number on its way in is not a number yet.**  ``''``, ``'-'`` and
+    ``'3.'`` are all positions the caret passes through on the way to one, and
+    writing each of them to the field would either raise or store a value
+    nobody asked for -- which is why a plain text field bound to an
+    ``SFFloat`` cannot do this job.  The text being typed is kept here and
+    only a complete number reaches the node; a character that could not begin
+    one is refused outright rather than shown and then silently dropped.
+
+    This is what a generated page uses for a numeric field with no range hint,
+    where a slider over an invented 0..1 would be a wrong answer rather than a
+    missing one.  See :mod:`OpenGLContext.ui.generate`.
+    """
+
+    PROTO = 'NumberField'
+    #: Store whole numbers, and refuse a decimal point.
+    integer = field.newField('integer', 'SFBool', 1, False)
+
+    #: The text being typed, while it differs from the stored value.  None when
+    #: the two agree, so the field shows the canonical spelling of what is
+    #: actually stored.
+    _editing: Optional[str] = None
+
+    def display_text(self) -> str:
+        if self._editing is not None:
+            return self._editing
+        return self.format(super(NumberField, self).read())
+
+    def format(self, value: Any) -> str:
+        """One value as the text that would be typed to produce it."""
+        if self.integer:
+            return '%d' % (int(float(value)),)
+        return str(float(value))
+
+    def acceptable(self, text: str) -> bool:
+        """Whether ``text`` is a number or on the way to being one."""
+        return bool((_INTEGER_TEXT if self.integer else _NUMBER_TEXT).match(text))
+
+    def parse(self, text: str) -> Optional[Any]:
+        """``text`` as a number, or None while it is still incomplete."""
+        try:
+            return int(text) if self.integer else float(text)
+        except ValueError:
+            return None
+
+    def set_display_text(self, text: str) -> bool:
+        if not self.acceptable(text):
+            return False
+        parsed = self.parse(text)
+        if parsed is None:
+            # Incomplete but plausible: keep it on screen and leave the node
+            # holding the last value that *was* a number.
+            self._editing = text
+            return True
+        self._editing = text
+        self.write(parsed)
+        return True
+
+    def focus_lost(self) -> None:
+        """Give up the half-typed text, so the field shows what it stored."""
+        super(NumberField, self).focus_lost()
+        self._editing = None
+
+
+class KeyCapture(BoundWidget):
     """Takes the next key the user presses, whatever it is.
 
     While one of these has focus its panel is ``capturing``: no accelerator, no
@@ -826,10 +999,16 @@ class KeyCapture(Widget):
     the one key that cannot be bound -- the alternatives are a timeout, or
     requiring a mouse click on Cancel, which fails for exactly the person
     rebinding mouse buttons.
+
+    Bound to an ``MFString`` field, a capture writes straight to it and is all
+    a generated page needs.  Unbound, it keeps the captured key in
+    :attr:`captured` for a dialog to read with :meth:`result` -- which is what
+    the rebinding dialog does, because it has a conflict to resolve before
+    anything should be stored.
     """
 
     PROTO = 'KeyCapture'
-    #: The keys currently bound, shown until something is captured.
+    #: The keys currently bound, when this is not pointed at a field.
     keys = field.newField('keys', 'MFString', 1, list)
     #: Shown when nothing is bound.
     text = field.newField('text', 'SFString', 1, '')
@@ -841,42 +1020,70 @@ class KeyCapture(Widget):
     #: What was captured, or None while still waiting.
     captured: Optional[str] = None
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         return (metrics.text_width(self.display_value()) +
                 int(self.activeSkin().fieldPadding) * 2 + metrics.char_width * 4,
                 metrics.char_height + int(self.activeSkin().buttonPaddingY))
 
+    def read(self) -> List[str]:
+        """The keys as they stand: the bound field's, or this widget's own."""
+        source = (getattr(self.target, self.fieldName) if self.bound
+                  else self.keys)
+        return [str(key) for key in source]
+
+    def write(self, value: Any) -> bool:
+        """Store a set of keys; True if it actually changed."""
+        keys = [str(key) for key in value]
+        if keys == self.read():
+            return False
+        if self.bound:
+            setattr(self.target, self.fieldName, keys)
+        else:
+            self.keys = keys
+        self.changed()
+        return True
+
     def display_value(self) -> str:
         """What the field shows: the captured key, or the current binding."""
         if self.captured is not None:
             return key_label(self.captured)
-        return (', '.join(key_label(key) for key in self.keys)
-                or self.text or '(unbound)')
+        return (', '.join(key_label(key) for key in self.read())
+                or str(self.text) or '(unbound)')
+
+    def capture(self, name: str) -> bool:
+        """Take ``name`` as the binding.
+
+        Bound, it goes to the field at once: a generated page has nobody else
+        to write it, and a capture that lit up to say it had taken the key and
+        then discarded it would report success and change nothing.
+        """
+        self.captured = name
+        if self.bound:
+            self.write([name])
+        else:
+            self.changed()
+        return True
 
     def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
         if name == '<escape>':
             return False
-        self.captured = name
-        self.changed()
-        return True
+        return self.capture(name)
 
     def button(self, index: int) -> bool:
         """Bind a mouse button, spelled as the event system spells one."""
-        self.captured = '<mouse%d>' % (index,)
-        self.changed()
-        return True
+        return self.capture('<mouse%d>' % (index,))
 
     def result(self) -> List[str]:
         """The keys this dialog would store: what was captured, or the old set."""
         if self.captured is None:
-            return list(self.keys)
+            return self.read()
         return [self.captured]
 
     def paint(self, renderer: Any) -> None:
         self.paintFocus(renderer)
         skin = renderer.skin
-        renderer.frame(self.rect, skin.fieldFill, skin._image(skin.fieldImage))
+        renderer.frame(self.rect, skin.fieldFill, skin.fieldImage)
         colour = (skin.accentText if self.captured is not None
                   else self.textColour(renderer))
         renderer.textIn(self.rect, self.display_value(), colour, align='center')

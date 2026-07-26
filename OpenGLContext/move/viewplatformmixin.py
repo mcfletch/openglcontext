@@ -1,8 +1,8 @@
 """Mix-in class for contexts needing to control a viewplatform object"""
-from OpenGLContext import interactivecontext, context
+from typing import TYPE_CHECKING, Any, Optional, Tuple
+
+from OpenGLContext import context
 from OpenGLContext.move import viewplatform
-from OpenGL.GL import *
-import math
 class ViewPlatformMixin(object):
     """Mix-in for Context classes providing ViewPlatform support
 
@@ -45,18 +45,25 @@ class ViewPlatformMixin(object):
             "turn" should rotate the camera, single float
             value in radians.
     """
-    platform = None
-    movementManager = None
-    slider = None
+    platform: Any = None
+    movementManager: Any = None
+    slider: Any = None
     initialPosition = (0,0,10)
     initialOrientation = (0,1,0,0)
     #: Sampled key/pointer state, built on demand.  See
     #: :mod:`OpenGLContext.events.inputstate`.
-    inputState = None
+    if TYPE_CHECKING:
+        # Supplied by the Context this is mixed into.  Only the ones this
+        # mix-in *calls* without overriding: the three it does override reach
+        # their host through ``super()``, which the type checker cannot see
+        # into for a mix-in and which is marked at each call site.
+        def getViewPort( self ) -> Tuple[int, int]: ...
+
+    inputState: Any = None
     #: Drives the declared movement modes, when the context declares any.
-    navigation = None
+    navigation: Any = None
     #: Last pointer position, for turning an absolute position into a delta.
-    _lastPointer = None
+    _lastPointer: Optional[Tuple[float, float]] = None
     #: Whether the backend reports pointer motion directly.  Set the first time
     #: it does, so the same motion is not counted again off the event queue.
     _directPointerMotion = False
@@ -66,7 +73,7 @@ class ViewPlatformMixin(object):
     #: pointer back for the moment.
     _captureSuspended = False
 
-    def getInputState( self ):
+    def getInputState( self ) -> Any:
         """The context's sampled input state, created on demand.
 
         Movement modes *sample* this once per frame rather than reacting to
@@ -79,7 +86,7 @@ class ViewPlatformMixin(object):
             self.inputState = InputState()
         return self.inputState
 
-    def getNavigationPlatform( self ):
+    def getNavigationPlatform( self ) -> Any:
         """What the declared movement modes drive.
 
         The view platform by default, which is what a viewer wants.  A game
@@ -88,27 +95,31 @@ class ViewPlatformMixin(object):
         """
         return self.getViewPlatform()
 
-    def getNavigation( self ):
+    def getNavigation( self ) -> Any:
         """The navigation manager for this context's declared modes, or None.
 
         A context that declares no ``movementModes`` gets None and keeps
         whatever movement manager it already had, so the older navigation
         continues to work untouched.
 
-        The manager is rebuilt when what it drives changes, since a character
-        controller usually comes into being when a world finishes loading --
-        after the context has already been navigating the camera.
+        The manager is re-pointed when what it drives changes, since a
+        character controller usually comes into being when a world finishes
+        loading -- after the context has already been navigating the camera.
+        Re-pointed rather than rebuilt, so the player keeps the mode they
+        chose.
         """
         definition = getattr( self, 'contextDefinition', None )
         if definition is None or not getattr( definition, 'movementModes', None ):
             return None
         platform = self.getNavigationPlatform()
-        if self.navigation is None or self.navigation.platform is not platform:
+        if self.navigation is None:
             from OpenGLContext.move.navigation import NavigationManager
             self.navigation = NavigationManager( definition, platform )
+        elif self.navigation.platform is not platform:
+            self.navigation.retarget( platform )
         return self.navigation
 
-    def updateNavigation( self, dt ):
+    def updateNavigation( self, dt: float ) -> None:
         """Give the frame to whichever declared mode is in force."""
         navigation = self.getNavigation()
         if navigation is not None:
@@ -116,7 +127,7 @@ class ViewPlatformMixin(object):
             self._applyPointerCapture(
                 bool( mode is not None and mode.capturePointer ) )
 
-    def setPointerCapture( self, capture ):
+    def setPointerCapture( self, capture: bool ) -> bool:
         """Grab or release the pointer; False if this backend cannot.
 
         Passed **down the MRO** to the backend rather than answered here.  A
@@ -132,10 +143,10 @@ class ViewPlatformMixin(object):
         backend = getattr( super( ViewPlatformMixin, self ),
                            'setPointerCapture', None )
         if backend is not None:
-            return backend( capture )
+            return bool( backend( capture ) )
         return False
 
-    def suspendPointerCapture( self, suspend ):
+    def suspendPointerCapture( self, suspend: bool ) -> None:
         """Hand the pointer back for a moment, or take it again.
 
         An overlay is clicked with the same pointer a mouse-look mode has
@@ -149,7 +160,7 @@ class ViewPlatformMixin(object):
         if self._pointerCaptured:
             self.setPointerCapture( not suspend )
 
-    def _applyPointerCapture( self, wanted ):
+    def _applyPointerCapture( self, wanted: bool ) -> None:
         """Ask the backend for the pointer only when the answer changes.
 
         A grab is a window-manager call, not something to make once a frame.
@@ -160,7 +171,7 @@ class ViewPlatformMixin(object):
         if not self._captureSuspended:
             self.setPointerCapture( wanted )
 
-    def hasMouseMoveHandlers( self ):
+    def hasMouseMoveHandlers( self ) -> bool:
         """Whether anything wants mouse-move events this frame.
 
         The render pass drops moves when no handler is registered for them,
@@ -174,9 +185,10 @@ class ViewPlatformMixin(object):
                         'movementMode', None )
         if mode is not None and getattr( mode, 'capturePointer', False ):
             return True
-        return super( ViewPlatformMixin, self ).hasMouseMoveHandlers()
+        return bool( super( ViewPlatformMixin, self )      # type: ignore[misc]
+                     .hasMouseMoveHandlers() )
 
-    def recordPointerMotion( self, x, y ):
+    def recordPointerMotion( self, x: float, y: float ) -> None:
         """Feed the sampler pointer motion, straight from the backend.
 
         ``x``/``y`` are in the **pick point's** origin: pixels from the
@@ -210,7 +222,7 @@ class ViewPlatformMixin(object):
                 point[1] - self._lastPointer[1] )
         self._lastPointer = point
 
-    def _recordInput( self, event ):
+    def _recordInput( self, event: Any ) -> None:
         """Feed one event to the sampler.
 
         Pointer events carry an absolute position, while mouse-look wants how
@@ -230,7 +242,7 @@ class ViewPlatformMixin(object):
                         point[0] - self._lastPointer[0],
                         point[1] - self._lastPointer[1] )
                 self._lastPointer = point
-    def getViewPlatform( self ):
+    def getViewPlatform( self ) -> Any:
         """Customization Point: Instantiate ViewPlatform for this context
 
         The default implementation is to instantiate a
@@ -254,7 +266,7 @@ class ViewPlatformMixin(object):
                 aspect = aspect,
             )
         return self.platform
-    def setupDefaultEventCallbacks( self, ):
+    def setupDefaultEventCallbacks( self ) -> None:
         """Customization point: Setup application default callbacks
 
         This method binds a large number of callbacks which support
@@ -269,10 +281,10 @@ class ViewPlatformMixin(object):
             * Mouse-button-2 (right) for entering "examine" mode
             * '-' for straightening the view platform
         """
-        super( ViewPlatformMixin, self ).setupDefaultEventCallbacks()
-        from OpenGLContext.move import direct, smooth
+        super( ViewPlatformMixin, self ).setupDefaultEventCallbacks()   # type: ignore[misc]
+        from OpenGLContext.move import smooth
         self.setMovementManager( smooth.Smooth( self.getViewPlatform() ) )
-    def ProcessEvent( self, event ):
+    def ProcessEvent( self, event: Any ) -> Any:
         """Sample the event, then dispatch it as usual.
 
         Sampling here rather than through ``addEventHandler`` is deliberate:
@@ -280,16 +292,16 @@ class ViewPlatformMixin(object):
         name/state/modifiers, so registering for "any key" is not expressible.
         """
         self._recordInput( event )
-        return super( ViewPlatformMixin, self ).ProcessEvent( event )
+        return super( ViewPlatformMixin, self ).ProcessEvent( event )   # type: ignore[misc]
 
-    def setMovementManager( self, manager ):
+    def setMovementManager( self, manager: Any ) -> None:
         """Set our current movement manager"""
         if self.movementManager:
             self.movementManager.unbind( self )
         self.movementManager = manager
         self.movementManager.bind( self )
-        
-    def ViewPort( self, width, height ):
+
+    def ViewPort( self, width: int, height: int ) -> None:
         """Set the size of the OpenGL rendering viewport for the context
 
         Because the ViewPlatform provide support for
@@ -307,5 +319,5 @@ class ViewPlatformMixin(object):
         """
         if self.platform:
             self.platform.setViewport( width, height or 1)
-        ### this is ugly for a mix-in class :( 
-        context.Context.ViewPort( self, width, height )
+        ### this is ugly for a mix-in class :(
+        context.Context.ViewPort( self, width, height )   # type: ignore[arg-type]

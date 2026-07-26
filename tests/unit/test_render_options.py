@@ -214,3 +214,122 @@ class TestPassesHonourTheFields:
         render.context = FakeContext(ContextDefinition(shadowCascades=2))
         render.shader_program = Program()
         assert render._effectiveCascades() == 2
+
+
+class TestEnvironmentIsReadOnceAndOnlyOnce:
+    """One rule for when an environment variable is read, in one place.
+
+    These are start-up switches: a pass that changed its mind mid-session
+    because something else edited ``os.environ`` would be unpredictable, and
+    the ContextDefinition field is the thing meant to change at runtime.  So
+    the variable settles the *default* once and the field outranks it from
+    then on.
+    """
+
+    def test_a_flag_is_read_once_per_process(self, monkeypatch):
+        renderoptions.reset_env_cache()
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_FLAG', '1')
+        assert renderoptions.env_flag_once('OPENGLCONTEXT_TEST_FLAG', False)
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_FLAG', '0')
+        assert renderoptions.env_flag_once('OPENGLCONTEXT_TEST_FLAG', False), \
+            "the memo re-read the environment"
+
+    def test_resetting_makes_the_next_read_consult_it_again(self, monkeypatch):
+        renderoptions.reset_env_cache()
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_FLAG', '1')
+        assert renderoptions.env_flag_once('OPENGLCONTEXT_TEST_FLAG', False)
+        renderoptions.reset_env_cache()
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_FLAG', '0')
+        assert not renderoptions.env_flag_once('OPENGLCONTEXT_TEST_FLAG', True)
+
+    def test_a_number_is_memoised_the_same_way(self, monkeypatch):
+        renderoptions.reset_env_cache()
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_NUMBER', '4')
+        assert renderoptions.env_number_once('OPENGLCONTEXT_TEST_NUMBER', 1) == 4
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_NUMBER', '9')
+        assert renderoptions.env_number_once('OPENGLCONTEXT_TEST_NUMBER', 1) == 4
+
+    def test_instancing_does_not_re_read_the_environment_each_frame(
+            self, monkeypatch):
+        """The property said one thing and the helper beside it did another."""
+        from OpenGLContext.passes import flatcore
+        renderoptions.reset_env_cache()
+        monkeypatch.setenv('OPENGLCONTEXT_INSTANCING', '1')
+        flat = flatcore.FlatPass.__new__(flatcore.FlatPass)
+        assert flat.instancing_enabled
+        monkeypatch.setenv('OPENGLCONTEXT_INSTANCING', '0')
+        assert flat.instancing_enabled, "re-read the environment mid-session"
+
+    def test_the_instance_minimum_is_not_frozen_at_import(self, monkeypatch):
+        """Read at import, ``monkeypatch.setenv`` could never reach it."""
+        from OpenGLContext.passes import flatcore
+        renderoptions.reset_env_cache()
+        monkeypatch.setenv('OPENGLCONTEXT_INSTANCE_MIN', '7')
+        flat = flatcore.FlatPass.__new__(flatcore.FlatPass)
+        assert flat.instanceMinimum() == 7
+
+
+class TestABadEnvironmentValueIsReported:
+    """A typo that silently reverses a switch makes a CI result a lie."""
+
+    def test_an_unrecognised_boolean_warns(self, monkeypatch, caplog):
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_FLAG', 'ture')
+        with caplog.at_level('WARNING'):
+            assert renderoptions.env_flag('OPENGLCONTEXT_TEST_FLAG', True)
+        assert 'ture' in caplog.text
+
+    def test_an_unrecognised_choice_warns(self, monkeypatch, caplog):
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_CHOICE', 'sideways')
+        with caplog.at_level('WARNING'):
+            assert renderoptions.env_choice(
+                'OPENGLCONTEXT_TEST_CHOICE', ('auto', 'off'), {}) == 'auto'
+        assert 'sideways' in caplog.text
+
+    def test_an_unparseable_number_warns(self, monkeypatch, caplog):
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_NUMBER', 'lots')
+        with caplog.at_level('WARNING'):
+            assert renderoptions.env_number('OPENGLCONTEXT_TEST_NUMBER', 2.0) == 2.0
+        assert 'lots' in caplog.text
+
+    def test_an_empty_value_means_unset_for_both(self, monkeypatch):
+        """Same spelling, same meaning: an unexported shell variable."""
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_FLAG', '')
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_CHOICE', '')
+        assert renderoptions.env_flag('OPENGLCONTEXT_TEST_FLAG', True) is True
+        assert renderoptions.env_choice(
+            'OPENGLCONTEXT_TEST_CHOICE', ('auto', 'off'), {}) == 'auto'
+
+    def test_a_good_value_is_silent(self, monkeypatch, caplog):
+        monkeypatch.setenv('OPENGLCONTEXT_TEST_FLAG', 'off')
+        with caplog.at_level('WARNING'):
+            assert not renderoptions.env_flag('OPENGLCONTEXT_TEST_FLAG', True)
+        assert not caplog.text
+
+
+class TestEveryHintReachesTheScreen:
+    """A hint for a field no section shows is presentation nobody can reach.
+
+    The generated page exists so a new setting cannot silently go missing; the
+    same guarantee is worth having in the other direction, or the hints drift
+    into describing controls that were dropped.
+    """
+
+    def _sections(self):
+        definition = ContextDefinition
+        return set(definition.RENDERING_FIELDS + definition.INTERFACE_FIELDS
+                   + definition.DIAGNOSTIC_FIELDS)
+
+    def test_every_hint_names_a_field_a_section_shows(self):
+        unreachable = set(ContextDefinition.UI_HINTS) - self._sections()
+        assert not unreachable, sorted(unreachable)
+
+    def test_every_hint_names_a_field_that_exists(self):
+        from vrml import protofunctions
+        definition = ContextDefinition()
+        for name in ContextDefinition.UI_HINTS:
+            assert protofunctions.getField(definition, name) is not None, name
+
+    def test_the_profile_is_not_offered(self):
+        """Settled when the window is made; a screen cannot change it."""
+        assert 'profile' not in self._sections()
+        assert 'profile' not in ContextDefinition.UI_HINTS

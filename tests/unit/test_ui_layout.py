@@ -5,7 +5,8 @@ import pytest
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.layout import Column, Grid, Row
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.widgets import Button, Label, Spacer
+from OpenGLContext.ui.panel import Panel
+from OpenGLContext.ui.widgets import Button, Label, Select, Spacer
 
 
 @pytest.fixture
@@ -245,10 +246,17 @@ class TestGridRowsAreTargets:
         grid.paint(painted)
         assert not painted.calls('rect')
 
-    def test_the_row_the_pointer_is_on_is_washed(self, grid):
-        grid.children[1].hovered = True
+    def test_the_row_the_pointer_is_on_is_washed(self, metrics):
+        button = Button(text='on')
+        grid = Grid(children=[Label(text='Shadows'), button,
+                              Label(text='Bloom'), Button(text='off')],
+                    columns=2)
+        panel = Panel(children=[grid])
+        panel.layout((400, 300), metrics)
+        panel.pointer_moved(*button.rect.centre)
         painted = _Recorder()
         grid.paint(painted)
+        # The wash over the hovered row, plus the hairline above the second.
         assert len(painted.calls('rect')) == 2
 
     def test_the_row_the_keyboard_is_in_is_washed(self, metrics):
@@ -297,3 +305,147 @@ class _Recorder:
         def record(*arguments, **named):
             self.recorded.append((name, arguments))
         return record
+
+
+class TestAGridFitsTheRoomItHas:
+    """Controls stay inside the grid when the natural columns do not fit.
+
+    Overflowing puts a control over the scrollbar or outside the panel, where
+    it can still be clicked but cannot be seen.  A grid has slack a box does
+    not: the label column is the one that can give.
+    """
+
+    def _grid(self, width, metrics):
+        grid = Grid(children=[Label(text='A very long setting name indeed'),
+                              Button(text='Change'),
+                              Label(text='Another long setting name'),
+                              Button(text='Change')],
+                    columns=2, columnSpacing=8.0)
+        grid.arrange(Rect(0, 0, width, 200), metrics)
+        return grid
+
+    def test_cells_stay_inside_a_narrow_grid(self, metrics):
+        grid = self._grid(120, metrics)
+        for cell in grid.layoutChildren():
+            assert cell.rect.right <= grid.rect.right, cell.text
+
+    def test_the_control_column_keeps_a_usable_width(self, metrics):
+        grid = self._grid(120, metrics)
+        buttons = [c for c in grid.layoutChildren() if isinstance(c, Button)]
+        assert all(b.rect.width > 0 for b in buttons)
+
+    def test_a_roomy_grid_is_unchanged(self, metrics):
+        grid = self._grid(900, metrics)
+        for cell in grid.layoutChildren():
+            assert cell.rect.right <= grid.rect.right
+
+
+class TestRowHighlightsAreNotRecomputedPerFrame:
+    """Hover and focus change at one point each; paint should read, not search.
+
+    A grid that walked every widget in every cell on every frame would be
+    doing, per frame, work the layout deliberately does only on a change.
+    """
+
+    def test_the_hovered_row_is_known_without_walking_the_tree(self, metrics):
+        panel = Panel(children=[Grid(children=[Label(text='a'),
+                                              Button(text='b'),
+                                              Label(text='c'),
+                                              Button(text='d')], columns=2)])
+        panel.layout((400, 300), metrics)
+        grid = panel.children[0]
+        second = grid.layoutChildren()[3]
+        panel.pointer_moved(*second.rect.centre)
+        assert grid.activeRows()[0] == 1
+
+    def test_nothing_is_highlighted_before_the_pointer_arrives(self, metrics):
+        panel = Panel(children=[Grid(children=[Label(text='a'),
+                                              Button(text='b')], columns=2)])
+        panel.layout((400, 300), metrics)
+        assert panel.children[0].activeRows() == (None, None)
+
+    def test_the_focused_row_follows_the_keyboard(self, metrics):
+        panel = Panel(children=[Grid(children=[Label(text='a'),
+                                              Button(text='b'),
+                                              Label(text='c'),
+                                              Button(text='d')], columns=2)])
+        panel.layout((400, 300), metrics)
+        grid = panel.children[0]
+        panel.focus(grid.layoutChildren()[3])
+        assert grid.activeRows()[1] == 1
+
+
+class TestWrappedTextInARow:
+    """A row can offer its children a width to measure against.
+
+    A row cannot hand its width down before the flexible shares are settled,
+    so wrapped text used to measure against a stale rectangle -- zero on the
+    first layout -- and report a height for one very long line.  Two passes fix
+    it: measure to settle the shares, then re-measure the wrapping children
+    against the widths they actually got.
+    """
+
+    def test_a_wrapped_label_in_a_row_gets_a_real_height(self, metrics):
+        label = Label(text='a wrapped label with a good many words in it',
+                      wrap=True)
+        row = Row(children=[label])
+        row.arrange(Rect(0, 0, 160, 200), metrics)
+        assert label.rect.width <= 160
+        lines = metrics.wrap(label.text, label.rect.width)
+        assert len(lines) > 1
+        assert label.natural_size(metrics, label.rect.width)[1] \
+            == metrics.lines_size(lines)[1]
+
+    def test_the_row_is_tall_enough_for_the_wrapped_text(self, metrics):
+        label = Label(text='a wrapped label with a good many words in it',
+                      wrap=True)
+        row = Row(children=[label])
+        wanted = row.natural_size(metrics, 160)[1]
+        assert wanted >= metrics.lines_size(metrics.wrap(label.text, 160))[1]
+
+    def test_an_unwrapped_row_is_unchanged(self, metrics):
+        row = Row(children=[Label(text='abc'), Label(text='defg')])
+        row.arrange(Rect(0, 0, 400, 100), metrics)
+        assert row.natural_size(metrics)[0] == 7 * metrics.char_width
+
+
+class TestDistributeLeavesItsArgumentAlone:
+    """The sizes a caller measured are still the sizes it measured."""
+
+    def test_the_caller_s_list_is_not_written_through(self):
+        from OpenGLContext.hud import distribute
+        row = Row(children=[Spacer(), Spacer()])
+        measured = [10, 10]
+        distribute(row.layoutChildren(), measured, 80)
+        assert measured == [10, 10]
+
+    def test_the_shares_still_come_back(self):
+        from OpenGLContext.hud import distribute
+        row = Row(children=[Spacer(), Spacer()])
+        assert sum(distribute(row.layoutChildren(), [10, 10], 80)) == 100
+
+    def test_nothing_flexible_gives_the_sizes_back_unchanged(self):
+        from OpenGLContext.hud import distribute
+        row = Row(children=[Label(text='a'), Label(text='b')])
+        measured = [10, 20]
+        assert distribute(row.layoutChildren(), measured, 80) == [10, 20]
+        assert measured == [10, 20]
+
+
+class TestSelectActivatesItself:
+    def test_releasing_runs_the_widget_s_own_activate(self, metrics):
+        """A subclass adding an activate() must not be silently bypassed."""
+        seen = []
+
+        class Counting(Select):
+            PROTO = 'UITestCountingSelect'
+
+            def activate(self):
+                seen.append(1)
+                super().activate()
+
+        select = Counting(options=['a', 'b'])
+        select.arrange(Rect(0, 0, 120, 24), metrics)
+        select.press(*select.rect.centre)
+        select.release(*select.rect.centre)
+        assert seen == [1]

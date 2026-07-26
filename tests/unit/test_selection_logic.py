@@ -9,6 +9,7 @@ accessors and the buffer-path early-outs. The GL-driven pick paths live in
 import numpy as np
 
 from OpenGLContext.arrays import identity
+from OpenGLContext.events import mouseevents
 from OpenGLContext.passes.selection import (
     SelectionFBO, SelectionBufferFBO, SelectionMixin,
 )
@@ -23,14 +24,21 @@ def _bare():
     return sel
 
 
-class FakeEvent:
-    def __init__(self, etype, x, y):
-        self.type = etype
-        self._p = (x, y)
-        self.paths = None
+class FakeEvent(mouseevents.MouseButtonEvent):
+    """A real mouse event with a chosen type and pick point.
 
-    def getPickPoint(self):
-        return self._p
+    Only what the optimiser reads is stood in for; the keys it de-duplicates
+    on are the ones the event classes really produce, since which events count
+    as the same news is exactly what is under test.
+    """
+
+    def __init__(self, etype, x, y, button=0, state=1):
+        super(FakeEvent, self).__init__()
+        self.type = etype
+        self.pickPoint = (x, y)
+        self.button = button
+        self.state = state
+        self.paths = None
 
     def setObjectPaths(self, p):
         self.paths = p
@@ -95,6 +103,41 @@ class TestOptimizePickEvents:
             FakeContext(True), {'a': first, 'b': second})
         assert len(out) == 1
         assert list(out.values())[0] is second      # latest wins
+
+    def test_a_press_and_its_release_on_one_pixel_are_both_kept(self):
+        """They land on the same pixel by definition; only one is a click.
+
+        De-duplication is for events that say the same thing twice, and a
+        button's two halves do not: dropping the press leaves a release
+        nothing began, and dropping the release leaves a press nothing ends.
+        """
+        press = FakeEvent('mousebutton', 50, 60, button=0, state=1)
+        release = FakeEvent('mousebutton', 50, 60, button=0, state=0)
+        out = _bare()._optimizePickEvents(
+            FakeContext(True), {'a': press, 'b': release})
+        assert set(out.values()) == {press, release}
+
+    def test_wheel_notches_on_one_pixel_are_all_kept(self):
+        """The pointer does not move while scrolling, and each notch is a line."""
+        notches = [FakeEvent('mousebutton', 50, 60, button=3, state=1)
+                   for _ in range(3)]
+        events = {index: notch for index, notch in enumerate(notches)}
+        assert len(_bare()._optimizePickEvents(FakeContext(True), events)) == 3
+
+    def test_different_buttons_on_one_pixel_are_kept(self):
+        left = FakeEvent('mousebutton', 50, 60, button=0)
+        right = FakeEvent('mousebutton', 50, 60, button=1)
+        out = _bare()._optimizePickEvents(
+            FakeContext(True), {'a': left, 'b': right})
+        assert set(out.values()) == {left, right}
+
+    def test_moves_on_one_pixel_are_still_one_move(self):
+        """Where the pointer is now is the whole of the news, and moves flood."""
+        first = FakeEvent('mousemove', 50, 60)
+        second = FakeEvent('mousemove', 50, 60)
+        out = _bare()._optimizePickEvents(
+            FakeContext(True), {'a': first, 'b': second})
+        assert list(out.values()) == [second]
 
     def test_distinct_pixels_are_kept(self):
         sel = _bare()

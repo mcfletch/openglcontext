@@ -18,12 +18,14 @@ logging, which in a packaged game goes nowhere a player can see.  Attaching
 from __future__ import annotations
 
 import logging
+import weakref
 from gettext import gettext as _
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from vrml import field
 
 from OpenGLContext.ui.geometry import Rect
+from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.layout import Column, Row
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.scroll import ScrollViewport
@@ -85,7 +87,7 @@ class CommandRegistry:
             return _('unknown command %r; try "help"') % (name,)
         try:
             result = entry[0](panel, *arguments)
-        except Exception as error:              # noqa: BLE001 - reported, not raised
+        except Exception as error:              # reported, not re-raised
             return '%s: %s' % (type(error).__name__, error)
         return None if result is None else str(result)
 
@@ -136,7 +138,7 @@ class ConsoleView(Widget):
         """Forget the scrollback."""
         self.lines = []
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         widest = max([len(line.text) for line in self.lines], default=0)
         return (widest * metrics.char_width,
@@ -164,19 +166,13 @@ class ConsolePanel(Panel):
 
     PROTO = 'ConsolePanel'
 
-    def paint(self, renderer: Any) -> None:
-        """Draw the panel with the skin's console fill.
+    def fillColour(self, skin: Any) -> Any:
+        """Darker and less translucent than a settings panel.
 
-        Darker and less translucent than a settings panel: a console is read
-        line by line, and text over a moving world is hard to follow.
+        A console is read line by line, and text over a moving world is hard to
+        follow.
         """
-        skin = renderer.skin
-        renderer.frame(self.rect, skin.consoleFill,
-                       skin._image(skin.panelImage))
-        renderer.border(self.rect, skin.panelBorder, int(skin.borderWidth))
-        if self.title:
-            renderer.textIn(self.titleRect(renderer.metrics), self.title,
-                            skin.titleText)
+        return skin.consoleFill
 
     def __init__(self, **named: Any) -> None:
         super(ConsolePanel, self).__init__(**named)
@@ -190,30 +186,47 @@ class ConsolePanel(Panel):
 
     # -- output -----------------------------------------------------------
     def write(self, text: str, level: int = logging.INFO) -> None:
-        """Add to the scrollback and follow it down."""
+        """Add to the scrollback, following it down if the end was in view."""
         if self.view is None:
             return
+        following = self._atEnd()
         self.view.write(text, level)
-        self._follow()
+        if following:
+            self._follow()
 
     def clear(self) -> None:
         """Empty the scrollback -- what the ``clear`` command does."""
         if self.view is not None:
             self.view.clear()
 
-    def _follow(self) -> None:
-        """Keep the newest line in sight.
+    def _atEnd(self) -> bool:
+        """Whether the newest line is in view, so new output should follow it.
 
-        Only ever downward: a console that yanked the view back while somebody
-        was reading older output would be unusable in exactly the moment they
-        needed it.
+        Asked *before* the line is added, because adding it is what moves the
+        end.  Within a line of the bottom counts as the end: a reader who has
+        not deliberately scrolled away is still reading the tail.
+        """
+        if self.body is None:
+            return False
+        return bool(self.body.scroll
+                    >= self.body.maximumScroll - self.body.lineHeight)
+
+    def _follow(self) -> None:
+        """Put the newest line in sight.
+
+        Called only for a reader who was already at the end.  Someone who has
+        scrolled up is reading, and dragging them back to the bottom every time
+        the engine logs a line makes the console useless in exactly the moment
+        it is wanted.
         """
         if self.body is not None:
             self.body.scrollTo(self.body.maximumScroll)
 
-    def arrange_content(self, metrics: Any) -> None:
+    def arrange_content(self, metrics: FontMetrics) -> None:
+        following = self._atEnd()
         super(ConsolePanel, self).arrange_content(metrics)
-        self._follow()
+        if following:
+            self._follow()
 
     # -- input ------------------------------------------------------------
     def submit(self) -> None:
@@ -259,20 +272,45 @@ class ConsolePanel(Panel):
 class ConsoleLogHandler(logging.Handler):
     """A logging handler that writes into a console panel.
 
-    Held by the handler rather than the panel so a console that has been closed
-    simply stops receiving: a game may open and close several over a session,
-    and a handler still writing into a dead one is a leak with no symptom.
+    **The panel is held weakly and the handler takes itself off the logger when
+    the console closes.**  A handler outlives the thing it writes to: the
+    logging framework keeps it for the life of the process, so a strong
+    reference here would keep the panel, its whole widget tree, its scrollback
+    and every node a widget is bound to alive with it.  A game that opens and
+    closes several consoles over a session would accumulate all of them, with
+    no symptom until the memory ran out.
+
+    It attaches itself, so there is one call to make and one to forget::
+
+        console.ConsoleLogHandler(panel)        # on the 'OpenGLContext' logger
     """
 
-    def __init__(self, panel: ConsolePanel, level: int = logging.NOTSET) -> None:
+    def __init__(self, panel: ConsolePanel, level: int = logging.NOTSET,
+                 logger: Optional[logging.Logger] = None) -> None:
         super(ConsoleLogHandler, self).__init__(level)
-        self.panel = panel
+        self._panel = weakref.ref(panel)
+        self.logger = logger or logging.getLogger('OpenGLContext')
+        self.logger.addHandler(self)
+        panel.closeListeners.append(self._panelClosed)
+
+    @property
+    def panel(self) -> Optional[ConsolePanel]:
+        """The console this writes to, or None once it has gone."""
+        return self._panel()
+
+    def detach(self) -> None:
+        """Stop receiving.  Called when the console closes, and idempotent."""
+        self.logger.removeHandler(self)
+
+    def _panelClosed(self, panel: ConsolePanel) -> None:
+        self.detach()
 
     def emit(self, record: logging.LogRecord) -> None:
-        if self.panel is None or self.panel.closed:
+        panel = self.panel
+        if panel is None or panel.closed:
             return
         try:
-            self.panel.write(self.format(record), record.levelno)
+            panel.write(self.format(record), record.levelno)
         except Exception:                       # pragma: no cover - never fail a log
             self.handleError(record)
 

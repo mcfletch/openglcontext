@@ -72,7 +72,7 @@ OpenGLContext/
 ├── ui/               # Overlay UI (settings, dialogs, console) -- docs/overlayui.html
 │   ├── overlay.py    # OverlayStack + OverlayMixin: the stack and its input routing
 │   ├── panel.py      # One screen: focus, accelerators, modality
-│   ├── widgets.py    # Label/Button/Toggle/Select/Slider/TextField/KeyCapture
+│   ├── widgets.py    # Label/Button/Toggle/Select/Slider/Text+NumberField/KeyCapture
 │   ├── layout.py     # Row/Column/Grid (built on hud.GUIBox)
 │   ├── draw.py       # The GL renderer: one program, one batched buffer
 │   ├── session.py    # SettingsSession: editing a node on a copy
@@ -206,15 +206,30 @@ Do **not** use `../.env` or the project-local `openglcontext/.venv` — neither 
 ## Environment Variables
 
 **Most of these are now `ContextDefinition` fields**, and the environment
-variable is the field's *default* rather than a competitor: a field nobody has
-set reads its variable each time a pass asks, so a shell variable still pins a
-feature for a script or a CI run, while the settings screen
+variable is the field's *default* rather than a competitor: a shell variable
+still pins a feature for a script or a CI run, while the settings screen
 (`OpenGLContext.ui.settings`) writes the field and takes precedence from then on.
 Passes read through `OpenGLContext.renderoptions`, never the environment
 directly. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
 `maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`, `instancing`,
 `tessellationLOD`, `vsync` and `uiScale`; see
 [docs/overlayui.html](docs/overlayui.html).
+
+**These are start-up switches, and each is read once.** A pass that changed its
+mind mid-session because something else edited `os.environ` would be
+unpredictable, and the field is the thing meant to change at runtime. So the
+variable settles the default the first time it is asked for — through
+`renderoptions.env_flag_once` / `env_number_once`, which is the one place that
+memo lives — and the field outranks it from then on. Never read one at import
+time: the answer is then frozen before any application or test can set it, and
+nothing can reach it afterwards. `renderoptions.reset_env_cache()` clears the
+memo, and `tests/unit/conftest.py` calls it around every test.
+
+A value that is neither a yes nor a no is **reported rather than swallowed**:
+these variables are how a feature is pinned for a CI run, and a typo that
+silently reverses the pin makes that run's result a lie. An unset variable and
+an empty one mean the same thing, because that is what an unexported shell
+variable expands to.
 
 `uiScale` (env: `OPENGLCONTEXT_UI_SCALE`) is the player's own multiplier on the
 overlay's size. It is *on top of* the automatic scaling the window's height
@@ -392,7 +407,7 @@ def instanceGPU(self, mode):
     return build_mesh_gpu(
         mode, self, positions, normals, texcoords, indices=None,
         cache_key='instance_gpu',
-        depend_fields=(protofunctions.getField(self, 'size'),))
+        depend_fields=('size',))     # names or field objects; names are clearer
 ```
 
 Working examples: `scenegraph/box.py`, `quadrics.py` (Sphere/Cone/Cylinder),
@@ -475,6 +490,13 @@ widening the `physics.*` override to escape a real error.
 ```bash
 /workspaces/OpenGL-dev/.venv/bin/python -m mypy --follow-imports=silent OpenGLContext/<path>/
 ```
+
+**Per path, not the whole package.** `OpenGLContext/` as a whole still carries a
+large backlog of pre-existing errors — mostly `name-defined` from the star
+imports in the older modules — which was invisible for as long as `python_version`
+disagreed with the interpreter and mypy aborted on numpy's own stubs before
+checking anything. The gate is that the path you touched is clean; the backlog is
+its own job, and re-suppressing it package-wide is not a way to do it.
 
 ### Lint: ruff-clean
 

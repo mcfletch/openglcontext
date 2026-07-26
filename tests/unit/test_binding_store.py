@@ -136,3 +136,97 @@ class TestConflicts:
         """`ctrl`+up tilts the view while up alone walks; both are wanted."""
         table = navigation.binding_table()
         assert bindingstore.conflicts(table, '<up>', 'alt', mode='walk') == []
+
+
+class TestSavingIsAllOrNothing:
+    """The file is replaced, never truncated and then rewritten.
+
+    What is at stake is every binding the player has: a save interrupted
+    half-way leaves a file that will not parse, and loading reports that by
+    logging a warning and silently starting from the defaults.
+    """
+
+    def test_a_failed_save_leaves_the_previous_file_intact(self, navigation,
+                                                           tmp_path,
+                                                           monkeypatch):
+        path = str(tmp_path / 'keys.json')
+        navigation.modes()[0].bindings[0].keys = ['z']
+        bindingstore.save_bindings(navigation, path)
+        good = open(path).read()
+
+        def explode(*args, **named):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(bindingstore.json, 'dump', explode)
+        navigation.modes()[0].bindings[0].keys = ['q']
+        with pytest.raises(OSError):
+            bindingstore.save_bindings(navigation, path)
+        assert open(path).read() == good, "the old bindings were destroyed"
+
+    def test_a_failed_save_leaves_no_rubbish_behind(self, navigation, tmp_path,
+                                                    monkeypatch):
+        path = str(tmp_path / 'keys.json')
+
+        def explode(*args, **named):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(bindingstore.json, 'dump', explode)
+        with pytest.raises(OSError):
+            bindingstore.save_bindings(navigation, path)
+        assert list(tmp_path.iterdir()) == []
+
+    def test_the_directory_is_the_users_own(self, navigation, tmp_path):
+        import stat
+        directory = tmp_path / 'appdata'
+        bindingstore.save_bindings(navigation, str(directory / 'keys.json'))
+        mode = stat.S_IMODE(directory.stat().st_mode)
+        assert not mode & (stat.S_IRWXG | stat.S_IRWXO), oct(mode)
+
+
+class TestALoadedFileCannotBreakStartup:
+    """The file invites hand-editing, so a hand edit must not be fatal.
+
+    Forgiving of a mode or command that has gone, and equally forgiving of a
+    value of the wrong shape -- which is the mistake someone editing JSON by
+    hand actually makes.
+    """
+
+    def test_keys_given_as_a_string_are_refused_not_exploded_into_letters(
+            self, navigation, tmp_path):
+        path = tmp_path / 'keys.json'
+        path.write_text(json.dumps({'walk': {'forward': {'keys': 'wasd'}}}))
+        bindingstore.load_bindings(navigation, str(path))
+        assert list(navigation.modes()[0].keys_for('forward')) == ['w', '<up>']
+
+    def test_keys_of_the_wrong_type_do_not_raise(self, navigation, tmp_path):
+        path = tmp_path / 'keys.json'
+        path.write_text(json.dumps({'walk': {'forward': {'keys': 5}}}))
+        assert bindingstore.load_bindings(navigation, str(path))
+        assert list(navigation.modes()[0].keys_for('forward')) == ['w', '<up>']
+
+    def test_a_modifier_of_the_wrong_type_is_refused(self, navigation, tmp_path):
+        path = tmp_path / 'keys.json'
+        path.write_text(json.dumps(
+            {'walk': {'forward': {'keys': ['j'], 'modifier': ['ctrl']}}}))
+        bindingstore.load_bindings(navigation, str(path))
+        assert str(navigation.modes()[0].bindings[0].modifier) == ''
+
+    def test_a_modifier_nothing_understands_is_refused(self, navigation,
+                                                       tmp_path):
+        """An unknown modifier makes a binding permanently unreachable."""
+        path = tmp_path / 'keys.json'
+        path.write_text(json.dumps(
+            {'walk': {'forward': {'keys': ['j'], 'modifier': 'hyper'}}}))
+        bindingstore.load_bindings(navigation, str(path))
+        assert str(navigation.modes()[0].bindings[0].modifier) == ''
+
+    def test_the_good_entries_still_apply(self, navigation, tmp_path):
+        path = tmp_path / 'keys.json'
+        path.write_text(json.dumps({'walk': {
+            'forward': {'keys': 5},
+            'back': {'keys': ['j'], 'modifier': 'shift'},
+        }}))
+        bindingstore.load_bindings(navigation, str(path))
+        mode = navigation.modes()[0]
+        assert list(mode.keys_for('forward')) == ['w', '<up>']
+        assert list(mode.keys_for('back')) == ['j']

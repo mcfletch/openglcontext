@@ -206,6 +206,18 @@ major event and event handler classes.&nbsp; These   subclasses
 translate from native events to OpenGLContext events. The event handler
 classes (which are mixin classes) are then included in the GUI library's
 Context class to provide the event handling interfaces.</p>
+
+<p>Mouse events reach the application through the pick queue: a backend adds
+one with <code>Context.addPickEvent</code> and the selection pass dispatches it
+once it has resolved what the pick point is over. The queue is a mapping keyed
+by <code>Event.getPickKey</code>, so events that are the same news twice within
+one frame cost one dispatch. <strong>The wheel is the exception</strong>: a
+notch arrives as a press and release of button 3 or 4
+(<code>mouseevents.WHEEL_UP</code> and <code>WHEEL_DOWN</code>, the X11
+numbering), it is an increment rather than a state, and its pick key is
+distinct per notch so none is dropped. GLFW reports scrolling on a callback of
+its own in offsets and translates to those buttons; see
+<a href="overlayui.html#wheel">the overlay UI documentation</a>.</p>
 </section>
     <footer>
       <p class="footer">

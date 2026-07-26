@@ -22,11 +22,12 @@ by the interface scale, exactly as the skin's are -- see
 :mod:`OpenGLContext.ui.metrics`.
 """
 
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, Iterator, List, Optional, Sequence, Tuple
 
 from vrml import field, node
 
 from OpenGLContext.ui.geometry import Rect
+from OpenGLContext.ui.metrics import REFERENCE_METRICS, FontMetrics
 
 #: Main-axis directions a :class:`GUIBox` understands.
 ROW = 'row'
@@ -42,10 +43,14 @@ def distribute(children: Sequence[Any], mains: List[int], spare: int) -> List[in
     whatever size is left, which includes being smaller.  Fixed children are
     never squeezed -- a box too small for them overflows instead, because the
     overflow is visible while a crushed layout silently lies.
+
+    ``mains`` is read, never written: the answer comes back as a new list, so a
+    caller that keeps the sizes it measured still has them.
     """
     total_flex = sum(float(child.flex) for child in children)
     if not spare or total_flex <= 0:
-        return mains
+        return list(mains)
+    mains = list(mains)
     claimants = [index for index, child in enumerate(children) if child.flex]
     given = 0
     for position, index in enumerate(claimants):
@@ -89,9 +94,27 @@ class GUINode(object):
     rect = Rect(0, 0, 0, 0)
     #: The container this is inside, set when it is arranged.
     parent: Any = None
+    #: The measurements :attr:`rect` was made from, kept by :meth:`arrange`.
+    _metrics: Optional[FontMetrics] = None
+    #: Whether this reports a different height for a different width -- text
+    #: that wraps.  A row measures those a second time once it knows what
+    #: width each child ended up with; everything else is measured once.
+    wrapsToWidth: bool = False
+
+    @property
+    def metrics(self) -> FontMetrics:
+        """The measurements this was last laid out with.
+
+        Geometry derived from :attr:`rect` -- a slider's track, a text field's
+        caret column -- has to use the same numbers the rectangle was made
+        from.  Threading them back in through every caller is how the two come
+        apart: one path passes them, another does not, and the widget then
+        responds to the pointer somewhere other than where it drew itself.
+        """
+        return REFERENCE_METRICS if self._metrics is None else self._metrics
 
     # -- measurement ------------------------------------------------------
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         """Size of what is inside, ignoring margins.  Overridden by widgets.
 
@@ -101,7 +124,7 @@ class GUINode(object):
         """
         return (0, 0)
 
-    def natural_size(self, metrics: Any,
+    def natural_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         """Size this asks for, including its margins.
 
@@ -119,26 +142,27 @@ class GUINode(object):
             content_h = int(self.height)
         return (int(content_w) + margin_x, int(content_h) + margin_y)
 
-    def natural_width(self, metrics: Any,
+    def natural_width(self, metrics: FontMetrics,
                       available: Optional[int] = None) -> int:
         """The width this asks for, margins included."""
         return self.natural_size(metrics, available)[0]
 
-    def natural_height(self, metrics: Any,
+    def natural_height(self, metrics: FontMetrics,
                        available: Optional[int] = None) -> int:
         """The height this asks for, margins included."""
         return self.natural_size(metrics, available)[1]
 
     # -- placement --------------------------------------------------------
-    def arrange(self, rect: Rect, metrics: Any) -> None:
+    def arrange(self, rect: Rect, metrics: FontMetrics) -> None:
         """Take a rectangle, keep the part inside the margins, fill it in."""
+        self._metrics = metrics
         self.rect = self._fitWidth(
             rect.inset(metrics.pixels(self.left), metrics.pixels(self.top),
                        metrics.pixels(self.right), metrics.pixels(self.bottom)),
             metrics)
         self.arrange_content(metrics)
 
-    def _fitWidth(self, rect: Rect, metrics: Any) -> Rect:
+    def _fitWidth(self, rect: Rect, metrics: FontMetrics) -> Rect:
         """Narrow a rectangle to the cap and the alignment, if either asks.
 
         Only ever narrower: a widget is offered a rectangle by its container
@@ -164,7 +188,7 @@ class GUINode(object):
                         rect.height)
         return Rect(rect.x, rect.y, width, rect.height)
 
-    def arrange_content(self, metrics: Any) -> None:
+    def arrange_content(self, metrics: FontMetrics) -> None:
         """Place whatever is inside :attr:`rect`.  Overridden by containers."""
 
     # -- the tree ---------------------------------------------------------
@@ -177,7 +201,7 @@ class GUINode(object):
         """
         return ()
 
-    def walk(self):
+    def walk(self) -> Iterator['GUINode']:
         """This node and every descendant, parents before children."""
         yield self
         for child in self.layoutChildren():
@@ -204,7 +228,7 @@ class PaintedImage(GUINode, node.Node):
     PROTO = "PaintedImage"
     image = field.newField("image", "SFImage", 1, None)
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         if self.image is not None:
             return (int(self.image.width), int(self.image.height))
@@ -239,13 +263,13 @@ class GUIBox(GUINode, node.Node):
     @property
     def horizontal(self) -> bool:
         """Whether children run left to right rather than top to bottom."""
-        return self.direction != COLUMN
+        return bool(self.direction != COLUMN)
 
     def layoutChildren(self) -> Sequence[Any]:
         return [child for child in self.children
                 if getattr(child, 'visible', True)]
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         children = self.layoutChildren()
         sizes = [child.natural_size(metrics,
@@ -253,6 +277,14 @@ class GUIBox(GUINode, node.Node):
                  for child in children]
         gaps = metrics.pixels(self.spacing) * max(0, len(children) - 1)
         pad = metrics.pixels(self.padding) * 2
+        if self.horizontal and available is not None:
+            # Same two passes as arranging, so a row reports a height that
+            # accounts for its wrapped text rather than for one long line.
+            room = max(0, int(available) - pad - gaps)
+            mains = self._distribute(
+                children, sizes, room - sum(size[0] for size in sizes))
+            sizes, _mains = self._remeasure(children, sizes, mains, metrics,
+                                            room)
         if self.horizontal:
             main = sum(size[0] for size in sizes) + gaps
             cross = max([size[1] for size in sizes], default=0)
@@ -264,17 +296,45 @@ class GUIBox(GUINode, node.Node):
         return (cross + pad, main + pad)
 
     def _childAvailable(self, available: Optional[int],
-                        metrics: Any) -> Optional[int]:
-        """The width a child may measure against.
+                        metrics: FontMetrics) -> Optional[int]:
+        """The width a child may measure against, for the *first* pass.
 
-        A column hands its own width down; a row cannot, because its children
-        have not yet been given their shares of it.
+        A column hands its own width straight down.  A row cannot, because its
+        children have not yet been given their shares of it -- so a row
+        measures once to settle the shares and then asks anything whose height
+        depends on its width again, against the width it actually got.  See
+        :meth:`_remeasure`.
         """
         if available is None or self.horizontal:
             return None
-        return max(0, int(available) - metrics.pixels(self.padding) * 2)
+        return max(0, int(available) - int(metrics.pixels(self.padding)) * 2)
 
-    def arrange_content(self, metrics: Any) -> None:
+    @staticmethod
+    def _remeasure(children: Sequence[Any], sizes: List[Tuple[int, int]],
+                   mains: List[int], metrics: FontMetrics, room: int
+                   ) -> Tuple[List[Tuple[int, int]], List[int]]:
+        """Second pass along a row, for children whose height follows a width.
+
+        Two things happen, and only to the children that say they wrap.  Each
+        is held to the room its siblings left it -- text that wraps has no
+        natural width worth the name, only a longest line -- and is then asked
+        again for the height it needs at that width.
+
+        Everything else is left alone: it already measured against the width it
+        was going to get, and asking twice would be a second text-wrapping pass
+        over every label on the page.
+        """
+        settled = list(sizes)
+        widths = list(mains)
+        for index, child in enumerate(children):
+            if not getattr(child, 'wrapsToWidth', False):
+                continue
+            others = sum(widths) - widths[index]
+            widths[index] = max(0, min(widths[index], room - others))
+            settled[index] = child.natural_size(metrics, widths[index])
+        return (settled, widths)
+
+    def arrange_content(self, metrics: FontMetrics) -> None:
         children = self.layoutChildren()
         for child in children:
             child.parent = self
@@ -288,6 +348,12 @@ class GUIBox(GUINode, node.Node):
         used = sum((size[0] if self.horizontal else size[1]) for size in sizes)
         used += spacing * (len(children) - 1)
         mains = self._distribute(children, sizes, available - used)
+        if self.horizontal:
+            # The shares are settled, so anything whose height follows its
+            # width can now be held to the room left and asked again.
+            sizes, mains = self._remeasure(
+                children, sizes, mains, metrics,
+                available - spacing * (len(children) - 1))
         offset, gap = self._justify(available - sum(mains)
                                     - spacing * (len(children) - 1),
                                     len(children))

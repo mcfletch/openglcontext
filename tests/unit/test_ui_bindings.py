@@ -1,5 +1,7 @@
 """Rebinding a key: a capturing dialog, and a confirmation raised over it."""
 
+import os
+
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
@@ -127,9 +129,12 @@ class TestCapturing:
         context.overlays.key('t', (0, 0, 0))
         assert page.find('walk.forward').text == 't'
 
-    def test_the_new_binding_is_saved(self, page, context):
+    def test_the_new_binding_is_saved_once_the_page_is_saved(self, page,
+                                                             context):
+        """The capture takes effect at once; the file waits for Save."""
         page.find('walk.forward').activate()
         context.overlays.key('t', (0, 0, 0))
+        page.find('save').activate()
         fresh = NavigationManager(context.contextDefinition, Platform())
         for mode in fresh.modes():
             mode.bindings = list(mode.defaultBindings())
@@ -203,3 +208,84 @@ class TestReset:
         page.find('reset').activate()
         context.overlays.key('y', (0, 0, 0))
         assert 'w' in page.find('walk.forward').text
+
+
+class TestTheBindingsPageSavesOnlyOnSave:
+    """Rebinding is an edit like any other, and Cancel undoes it.
+
+    Writing the file on every captured key means there is no way back from a
+    mis-hit, and it puts a save between the player and every keystroke.  So the
+    page edits the live bindings -- a mode resolves a command to keys when it
+    samples, so the change is visible at once -- and the file is written only
+    when the page is left with Save.
+    """
+
+    @pytest.fixture
+    def page(self, context, tmp_path):
+        path = str(tmp_path / 'keys.json')
+        panel = bindings.bindings_panel(context, context.getNavigation(),
+                                        path=path)
+        context.overlays.push(panel)
+        panel.path = path
+        return panel
+
+    def _rebind(self, context, page, command, key):
+        page.find('walk.%s' % (command,)).activate()
+        capture = context.overlays.top.find('capture')
+        capture.key(key, (0, 0, 0))
+
+    def test_capturing_a_key_does_not_write_the_file(self, context, page):
+        self._rebind(context, page, 'forward', 'z')
+        assert not os.path.exists(page.path), "saved before Save was pressed"
+
+    def test_capturing_a_key_takes_effect_at_once(self, context, page):
+        self._rebind(context, page, 'forward', 'z')
+        mode = context.getNavigation().modes()[0]
+        assert list(mode.keys_for('forward')) == ['z']
+
+    def test_save_writes_the_file(self, context, page):
+        self._rebind(context, page, 'forward', 'z')
+        page.find('save').activate()
+        assert os.path.exists(page.path)
+        assert 'z' in open(page.path).read()
+
+    def test_cancel_puts_the_bindings_back(self, context, page):
+        before = list(context.getNavigation().modes()[0].keys_for('forward'))
+        self._rebind(context, page, 'forward', 'z')
+        page.find('cancel').activate()
+        assert list(context.getNavigation().modes()[0].keys_for('forward')) == before
+
+    def test_cancel_writes_nothing(self, context, page):
+        self._rebind(context, page, 'forward', 'z')
+        page.find('cancel').activate()
+        assert not os.path.exists(page.path)
+
+    def test_escape_is_a_cancel(self, context, page):
+        before = list(context.getNavigation().modes()[0].keys_for('forward'))
+        self._rebind(context, page, 'forward', 'z')
+        page.key('<escape>', (0, 0, 0))
+        assert list(context.getNavigation().modes()[0].keys_for('forward')) == before
+        assert not os.path.exists(page.path)
+
+    def test_a_reset_is_undone_by_cancel_too(self, context, tmp_path):
+        """Reset is an edit on the page, not an act of its own."""
+        navigation = context.getNavigation()
+        navigation.modes()[0].bindings[0].keys = ['z']       # what it opens with
+        panel = bindings.bindings_panel(context, navigation,
+                                        path=str(tmp_path / 'keys.json'))
+        context.overlays.push(panel)
+        panel.find('reset').activate()
+        context.overlays.top.find('yes').activate()
+        assert list(navigation.modes()[0].keys_for('forward')) != ['z']
+        panel.find('cancel').activate()
+        assert list(navigation.modes()[0].keys_for('forward')) == ['z']
+
+    def test_a_reset_that_is_saved_sticks(self, context, page):
+        self._rebind(context, page, 'forward', 'z')
+        page.find('reset').activate()
+        context.overlays.top.find('yes').activate()
+        page.find('save').activate()
+        assert 'z' not in open(page.path).read()
+
+    def test_save_is_the_default_action(self, context, page):
+        assert page.primary() is page.find('save')

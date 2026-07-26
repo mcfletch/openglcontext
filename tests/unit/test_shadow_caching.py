@@ -228,7 +228,7 @@ class TestDepthGroupingCache:
     def _mixin(self):
         m = ShadowMapMixin()
         m.instancing_enabled = True
-        m.INSTANCE_MIN = 2
+        m.instanceMinimum = lambda: 2
         m._instanceKey = lambda path: 'geo'
         m._instanceable = lambda path: True
         m._caster_sig = ('sceneA',)

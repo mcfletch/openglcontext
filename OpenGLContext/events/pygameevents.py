@@ -1,6 +1,7 @@
 """Module providing translation from pygame events to OpenGLContext events"""
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
+from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
 import pygame, string
 from pygame.locals import *
 import logging
@@ -94,10 +95,14 @@ class PygameXEvent(object):
             if button == pg:
                 self.CURRENTBUTTONSTATES[local] = state
                 return local
-        log.warning(
-            """Unrecognised button: %s""",
-            button,
-        )
+        # A wheel notch is one of the buttons no physical mouse has, and never
+        # enters the held-button state: no wheel is ever down, so a drag begun
+        # by one would have nothing to end it.
+        if button - 1 not in WHEEL_BUTTONS:
+            log.warning(
+                """Unrecognised button: %s""",
+                button,
+            )
         return button - 1
 
 

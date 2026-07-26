@@ -1,9 +1,14 @@
-"""Draw-state decisions for PBRMesh: double-sided culling (3.5) and per-draw
-GL state-churn / leaked-winding avoidance (4.3). No real GL context -- the GL
-entry points pbrmesh calls are monkeypatched to record calls."""
+"""Draw-state decisions for PBRMesh: which meshes cull, and how little GL state
+churns between draws that want the same thing.
+
+No real GL context: the entry points the shared cull-state helper calls are
+monkeypatched to record calls.  The helper lives with the rest of the instanced
+draw state in :mod:`OpenGLContext.passes.instancing`, because a node asking for
+a winding and the pass remembering what GL has are two halves of one thing."""
 import numpy as np
 import pytest
 
+from OpenGLContext.passes import instancing
 from OpenGLContext.scenegraph import pbrmesh
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
@@ -41,11 +46,11 @@ class TestWantsCull:
 class _GLRec:
     def __init__(self, monkeypatch):
         self.calls = []
-        monkeypatch.setattr(pbrmesh, 'glFrontFace',
+        monkeypatch.setattr(instancing, 'glFrontFace',
                             lambda v: self.calls.append(('front', v)))
-        monkeypatch.setattr(pbrmesh, 'glEnable',
+        monkeypatch.setattr(instancing, 'glEnable',
                             lambda v: self.calls.append(('enable', v)))
-        monkeypatch.setattr(pbrmesh, 'glDisable',
+        monkeypatch.setattr(instancing, 'glDisable',
                             lambda v: self.calls.append(('disable', v)))
 
 
@@ -77,9 +82,9 @@ class TestStateChurn:
         mode = FakeMode(np.diag([-1.0, 1.0, 1.0, 1.0]))   # CW winding
         m._apply_draw_state(mode)
         PBRMesh.reset_draw_state(mode)
-        assert ('front', pbrmesh.GL_CCW) in rec.calls     # winding restored
-        assert mode._pbr_front_face is None
-        assert mode._pbr_cull_enabled is None
+        assert ('front', instancing.GL_CCW) in rec.calls     # winding restored
+        assert mode._cull_front_face is None
+        assert mode._cull_enabled is None
 
     def test_reset_reenables_culling_if_left_disabled(self, monkeypatch):
         rec = _GLRec(monkeypatch)
@@ -87,7 +92,7 @@ class TestStateChurn:
         m = PBRMesh(positions=np.zeros((3, 3), 'f'), solid=False)  # disables cull
         m._apply_draw_state(mode)
         PBRMesh.reset_draw_state(mode)
-        assert ('enable', pbrmesh.GL_CULL_FACE) in rec.calls
+        assert ('enable', instancing.GL_CULL_FACE) in rec.calls
 
 
 class _FakeContext:

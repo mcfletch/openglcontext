@@ -13,9 +13,13 @@ Capture a key that is already bound in the same mode and a **confirmation is
 raised over the capture dialog** asking whether to steal it -- a modal over a
 modal, which is why the stack exists.
 
-Unlike the settings screen, this page edits the bindings directly and saves at
-once: a binding is one small fact, the page shows what it is, and an Apply step
-over a list of thirty rows only makes it possible to lose the lot.
+**The page edits the live bindings and saves when it is left with Save.**  The
+edits take effect at once, because a mode resolves a command to keys when it
+samples rather than when it is built -- so a rebinding can be tried without
+leaving the screen.  What is deferred is the *file*: writing it on every
+captured key puts a save between the player and every keystroke and leaves no
+way back from a mis-hit.  Cancel and Escape put every binding back as the page
+found it, a reset included.
 """
 
 from __future__ import annotations
@@ -38,8 +42,15 @@ __all__ = ['bindings_panel', 'capture_panel', 'open_bindings']
 BINDINGS_NAME = 'keybindings'
 #: Content width in characters, and the widest the page will draw itself.
 BINDINGS_COLUMNS = 66
-#: What a binding with no keys reads as.
-UNBOUND = _('(unbound)')
+def unbound_text() -> str:
+    """What a binding with no keys reads as.
+
+    A function rather than a module constant: ``gettext`` at import time is
+    resolved before an application can bind a text domain, so the one string
+    spelled that way would stay in the locale that happened to be in force when
+    this module was first imported.
+    """
+    return _('(unbound)')
 
 
 def open_bindings(context: Any, navigation: Any = None,
@@ -48,10 +59,12 @@ def open_bindings(context: Any, navigation: Any = None,
     navigation = navigation or context.getNavigation()
     if navigation is None:
         return None
-    for panel in context.overlays.panels:
-        if panel.name == BINDINGS_NAME:
-            return panel
-    return context.pushOverlay(bindings_panel(context, navigation, path=path))
+    existing: Optional[Panel] = context.overlays.named(BINDINGS_NAME)
+    if existing is not None:
+        return existing
+    opened: Panel = context.pushOverlay(bindings_panel(context, navigation,
+                                                       path=path))
+    return opened
 
 
 def bindings_panel(context: Any, navigation: Any,
@@ -74,14 +87,16 @@ def bindings_panel(context: Any, navigation: Any,
         # nothing reads any more.
         buttons.append((mode_name, str(binding.command), button))
 
-    close = Button(text=_('Close'), role=PRIMARY, name='close')
+    save = Button(text=_('Save'), role=PRIMARY, name='save')
+    cancel = Button(text=_('Cancel'), name='cancel')
     reset = Button(text=_('Reset all bindings'), role=DANGER, name='reset')
     panel = Panel(
         title=_('Key bindings'), name=BINDINGS_NAME, modal=True, scrim=True,
         fill=True, preferredColumns=BINDINGS_COLUMNS,
         children=[Column(spacing=10, children=[
             Label(text=_('Click a key to change it.  Escape leaves a capture '
-                         'without rebinding.'), wrap=True),
+                         'without rebinding, and leaves this page without '
+                         'saving.'), wrap=True),
             ScrollViewport(name='body', flex=1, children=[
                 Grid(children=rows, columns=2,
                      columnFlex=list(generate.COLUMN_FLEX),
@@ -89,28 +104,48 @@ def bindings_panel(context: Any, navigation: Any,
                      columnSpacing=generate.COLUMN_SPACING,
                      rowPadding=generate.ROW_PADDING)]),
             Separator(top=8),
-            Row(spacing=10, top=8, children=[reset, Spacer(), close]),
+            Row(spacing=10, top=8, children=[reset, Spacer(), cancel, save]),
         ])])
+
+    # What the page found, so Cancel is real -- plain data rather than the
+    # nodes, because a reset rebuilds a mode's bindings.
+    opened_with = bindingstore.snapshot(navigation)
 
     def refresh() -> None:
         for mode_name, command, button in buttons:
             binding = _binding(navigation, mode_name, command)
-            button.text = _keysText(binding) if binding is not None else UNBOUND
+            button.text = (_keysText(binding) if binding is not None
+                           else unbound_text())
 
     for mode_name, command, button in buttons:
         button.on_activate = _rebinder(context, navigation, mode_name, command,
-                                       refresh, path)
-    close.on_activate = lambda widget: panel.close(True)
+                                       refresh)
+
+    def doSave(widget: Any) -> None:
+        bindingstore.save_bindings(navigation, path)
+        panel.on_close = None
+        panel.close(True)
+
+    def doCancel(widget: Any) -> None:
+        panel.close(False)
+
+    save.on_activate = doSave
+    cancel.on_activate = doCancel
+    # Escape closes the panel without going through Cancel, so the restore
+    # hangs off the close itself and Save takes it off first.
+    panel.on_close = lambda closing: bindingstore.restore(navigation,
+                                                          opened_with)
     reset.on_activate = lambda widget: context.pushOverlay(dialogs.confirm(
         _('Reset every key binding to its default?'),
-        detail=_('Any keys you have changed will be forgotten.'),
+        detail=_('They go back to the defaults on this page; nothing is '
+                 'written until you press Save.'),
         danger=True, yes=_('Reset'), no=_('Keep'),
-        on_answer=lambda yes: _reset(navigation, refresh, path) if yes else None))
+        on_answer=lambda yes: _reset(navigation, refresh) if yes else None))
     return panel
 
 
 def capture_panel(context: Any, navigation: Any, mode_name: str, binding: Any,
-                  on_bound: Any, path: Optional[str] = None) -> Panel:
+                  on_bound: Any) -> Panel:
     """A dialog that takes the next key and binds it to one command."""
     capture = KeyCapture(keys=list(binding.keys), name='capture')
     cancel = Button(text=_('Cancel'), name='cancel')
@@ -135,7 +170,7 @@ def capture_panel(context: Any, navigation: Any, mode_name: str, binding: Any,
                                        str(binding.modifier), mode=mode_name,
                                        skip=binding)
         if not clash:
-            _bind(navigation, binding, key, on_bound, path)
+            _bind(binding, key, on_bound)
             panel.close(True)
             return
         # Ask over the capture dialog rather than under it: the capture is
@@ -146,8 +181,7 @@ def capture_panel(context: Any, navigation: Any, mode_name: str, binding: Any,
             % (key, _conflictNames(clash)),
             detail=_('That command loses this key; any others it has stay.'),
             danger=True, yes=_('Take it'), no=_('Leave it'),
-            on_answer=lambda yes: _steal(
-                navigation, binding, key, clash, on_bound, path, panel)
+            on_answer=lambda yes: _steal(binding, key, clash, on_bound, panel)
             if yes else None))
 
     capture.on_change = captured
@@ -157,7 +191,7 @@ def capture_panel(context: Any, navigation: Any, mode_name: str, binding: Any,
 # -- the things the buttons do -------------------------------------------
 def _keysText(binding: Any) -> str:
     keys = [key_label(str(key)) for key in binding.keys]
-    text = ', '.join(keys) if keys else UNBOUND
+    text = ', '.join(keys) if keys else unbound_text()
     if binding.modifier:
         return '%s + %s' % (str(binding.modifier), text)
     return text
@@ -177,33 +211,33 @@ def _binding(navigation: Any, mode_name: str, command: str) -> Optional[Any]:
 
 
 def _rebinder(context: Any, navigation: Any, mode_name: str, command: str,
-              refresh: Any, path: Optional[str]) -> Any:
+              refresh: Any) -> Any:
     def open(widget: Any) -> None:
         binding = _binding(navigation, mode_name, command)
         if binding is None:
             return
         context.pushOverlay(capture_panel(context, navigation, mode_name,
-                                          binding, refresh, path))
+                                          binding, refresh))
     return open
 
 
-def _bind(navigation: Any, binding: Any, key: str, on_bound: Any,
-          path: Optional[str]) -> None:
+def _bind(binding: Any, key: str, on_bound: Any) -> None:
+    """Point a command at a key.  The page writes the file, not this."""
     binding.keys = [key]
-    bindingstore.save_bindings(navigation, path)
     if on_bound is not None:
         on_bound()
 
 
-def _steal(navigation: Any, binding: Any, key: str,
-           clash: Sequence[Tuple[str, Any]], on_bound: Any,
-           path: Optional[str], capture: Panel) -> None:
+def _steal(binding: Any, key: str, clash: Sequence[Tuple[str, Any]],
+           on_bound: Any, capture: Panel) -> None:
     for _name, other in clash:
         other.keys = [existing for existing in other.keys if existing != key]
-    _bind(navigation, binding, key, on_bound, path)
+    _bind(binding, key, on_bound)
     capture.close(True)
 
 
-def _reset(navigation: Any, refresh: Any, path: Optional[str]) -> None:
-    bindingstore.reset_bindings(navigation, path)
+def _reset(navigation: Any, refresh: Any) -> None:
+    # Into the live bindings only; the page's Cancel can still put them back
+    # and its Save is what reaches the file.
+    bindingstore.reset_bindings(navigation)
     refresh()

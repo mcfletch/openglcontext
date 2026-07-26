@@ -60,10 +60,11 @@ def open_settings(context: Any,
                   on_apply: Optional[Callable[[SettingsSession], None]] = None
                   ) -> Panel:
     """Put the settings screen up, or bring the one already up to the front."""
-    for panel in context.overlays.panels:
-        if panel.name == SETTINGS_NAME:
-            return panel
-    return context.pushOverlay(settings_panel(context, on_apply=on_apply))
+    existing: Optional[Panel] = context.overlays.named(SETTINGS_NAME)
+    if existing is not None:
+        return existing
+    opened: Panel = context.pushOverlay(settings_panel(context, on_apply=on_apply))
+    return opened
 
 
 def settings_panel(context: Any, session: Optional[SettingsSession] = None,
@@ -117,13 +118,18 @@ def settings_panel(context: Any, session: Optional[SettingsSession] = None,
 
     session.on_dirty = refreshApply
     panel.session = session
-    panel.on_close = lambda closing: session.revert()
+
+    def doDiscard(closing: Any) -> None:
+        session.revert()
+        session.close()
+
+    panel.on_close = doDiscard
 
     def doApply(widget: Any) -> None:
         session.commit()
-        session.on_dirty = None
         panel.on_close = None
         panel.close(True)
+        session.close()
         if on_apply is not None:
             on_apply(session)
         # Most options are read per frame by the render pass; the few set once
@@ -197,6 +203,7 @@ def record_panel(context: Any, session: SettingsSession, title: str,
 
     apply.on_activate = doApply
     cancel.on_activate = doCancel
+    panel.closeListeners.append(lambda closing: session.close())
     return panel
 
 

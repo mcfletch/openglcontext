@@ -60,8 +60,10 @@ class GLFWContext(
         # Make context current before calling Context.__init__
         glfw.make_context_current(self.window)
 
-        self.contextDefinition = definition
-        self.applyVSync()
+        # Before the base class has stored it, so the definition is passed
+        # rather than read back off self: two references to the same object is
+        # one too many, and only one of them belongs to this class.
+        self.applyVSync(definition)
 
         # Call base Context initialization
         Context.__init__(self, definition)
@@ -78,7 +80,7 @@ class GLFWContext(
         self.applyVSync()
         Context.settingsChanged(self)
 
-    def applyVSync(self):
+    def applyVSync(self, definition=None):
         """Wait for the display's refresh, or don't (ContextDefinition.vsync).
 
         Off uncaps the frame rate, which is what a benchmark wants. It also
@@ -88,11 +90,13 @@ class GLFWContext(
         stall every later swap.
 
         Called again when the setting changes, so a settings screen's Apply
-        takes effect without a restart.
+        takes effect without a restart.  ``definition`` is for the call made
+        while the window is being built, before the base class has stored it.
         """
         from OpenGLContext import renderoptions
+        source = self if definition is None else definition
         wanted = renderoptions.flag(
-            self, 'vsync',
+            source, 'vsync',
             not renderoptions.env_flag('OPENGLCONTEXT_NO_VSYNC', False))
         try:
             glfw.swap_interval(1 if wanted else 0)
@@ -183,6 +187,7 @@ class GLFWContext(
             glfw.set_char_callback(self.window, self._charCallback)
             glfw.set_mouse_button_callback(self.window, self._mouseButtonCallback)
             glfw.set_cursor_pos_callback(self.window, self._cursorPosCallback)
+            glfw.set_scroll_callback(self.window, self._scrollCallback)
             glfw.set_framebuffer_size_callback(self.window, self._framebufferSizeCallback)
             glfw.set_window_close_callback(self.window, self._windowCloseCallback)
             glfw.set_window_focus_callback(self.window, self._windowFocusCallback)
@@ -202,6 +207,10 @@ class GLFWContext(
     def _cursorPosCallback(self, window, xpos, ypos):
         """GLFW cursor position callback wrapper"""
         self.glfwOnCursorPos(window, xpos, ypos)
+
+    def _scrollCallback(self, window, xoffset, yoffset):
+        """GLFW scroll callback wrapper"""
+        self.glfwOnScroll(window, xoffset, yoffset)
 
     def _framebufferSizeCallback(self, window, width, height):
         """GLFW framebuffer size callback wrapper"""

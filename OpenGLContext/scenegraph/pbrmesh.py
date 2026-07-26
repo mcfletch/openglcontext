@@ -20,10 +20,10 @@ from typing import Any, Optional
 import numpy as np
 from OpenGL.GL import (
     GL_TRIANGLES, GL_POINTS, GL_FLOAT, GL_FALSE, GL_UNSIGNED_INT,
-    GL_ELEMENT_ARRAY_BUFFER, GL_CULL_FACE, GL_CCW, GL_CW,
+    GL_ELEMENT_ARRAY_BUFFER, GL_CCW, GL_CW,
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
     glEnableVertexAttribArray, glVertexAttribPointer,
-    glDrawElements, glDrawArrays, glFrontFace, glEnable, glDisable,
+    glDrawElements, glDrawArrays,
 )
 from OpenGL.arrays import vbo
 from vrml import node, field
@@ -436,14 +436,9 @@ class PBRMesh(node.Node):
         pass restores the GL defaults once at the end via :meth:`reset_draw_state`,
         so no CW winding or disabled-cull state leaks past the geometry loop.
         """
-        want_face = self._front_face(getattr(mode, 'matrix', None))
-        if getattr(mode, '_pbr_front_face', None) != want_face:
-            glFrontFace(want_face)
-            mode._pbr_front_face = want_face
-        want_cull = self._wants_cull(mode)
-        if getattr(mode, '_pbr_cull_enabled', None) != want_cull:
-            (glEnable if want_cull else glDisable)(GL_CULL_FACE)
-            mode._pbr_cull_enabled = want_cull
+        from OpenGLContext.passes.instancing import set_cull_state
+        set_cull_state(mode, self._wants_cull(mode),
+                       self._front_face(getattr(mode, 'matrix', None)))
 
     @staticmethod
     def reset_draw_state(mode: Any) -> None:
@@ -453,12 +448,8 @@ class PBRMesh(node.Node):
         culling never leaks into the next pass/frame. Idempotent and safe to call
         even if no PBR mesh drew.
         """
-        if getattr(mode, '_pbr_front_face', None) not in (None, GL_CCW):
-            glFrontFace(GL_CCW)
-        if getattr(mode, '_pbr_cull_enabled', None) is False:
-            glEnable(GL_CULL_FACE)
-        mode._pbr_front_face = None
-        mode._pbr_cull_enabled = None
+        from OpenGLContext.passes.instancing import reset_cull_state
+        reset_cull_state(mode)
 
     def _front_face(self, mv: Any) -> int:
         if mv is None:

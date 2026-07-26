@@ -4,11 +4,20 @@ import pytest
 from vrml import field, node
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move import modes
 from OpenGLContext.ui import generate
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.widgets import (
     KeyCapture, Label, Select, Slider, TextField, Toggle,
 )
+
+
+class Numbers(node.Node):
+    """Numeric fields with no range hint -- the generated fallback's case."""
+
+    PROTO = 'UITestNumbers'
+    gain = field.newField('gain', 'SFFloat', 1, 1.0)
+    count = field.newField('count', 'SFInt32', 1, 12)
 
 
 class Tunable(node.Node):
@@ -170,3 +179,98 @@ class TestContextDefinitionPage:
                                  include=ContextDefinition.RENDERING_FIELDS)
         grid.arrange(Rect(0, 0, 600, 800), FontMetrics(8, 16, 2))
         assert all(child.rect.width > 0 for child in grid.children)
+
+
+class TestANumberEditorIsUsable:
+    """A generated editor for a number accepts a number.
+
+    Without a range hint there is no slider to give, but whatever is given has
+    to work: an editor that raises on the first keystroke is worse than a field
+    with no editor at all.
+    """
+
+    def test_an_unhinted_float_gets_an_editor_that_can_be_typed_into(self):
+        node = Numbers()
+        editor = generate.editor_for(node, 'gain')
+        assert editor is not None
+        editor.focus_gained()
+        editor.key('<end>', (0, 0, 0))
+        editor.character('5')
+        assert node.gain == pytest.approx(1.05)
+
+    def test_it_shows_the_current_value(self):
+        editor = generate.editor_for(Numbers(), 'gain')
+        assert editor.display_text() == '1.0'
+
+    def test_an_unhinted_integer_stores_an_integer(self):
+        node = Numbers()
+        editor = generate.editor_for(node, 'count')
+        editor.focus_gained()
+        for key in ('<backspace>',) * 2:
+            editor.key(key, (0, 0, 0))
+        editor.character('7')
+        assert node.count == 7
+        assert isinstance(node.count, int)
+
+    def test_a_half_typed_number_does_not_reach_the_node(self):
+        """'-' and '' are on the way to a number, not numbers."""
+        node = Numbers()
+        editor = generate.editor_for(node, 'gain')
+        editor.focus_gained()
+        for _ in range(4):
+            editor.key('<backspace>', (0, 0, 0))
+        assert node.gain == pytest.approx(1.0)
+        editor.character('-')
+        assert node.gain == pytest.approx(1.0)
+        editor.character('3')
+        assert node.gain == pytest.approx(-3.0)
+
+    def test_rubbish_is_refused_rather_than_stored(self):
+        node = Numbers()
+        editor = generate.editor_for(node, 'gain')
+        editor.focus_gained()
+        editor.character('z')
+        assert 'z' not in editor.display_text()
+        assert node.gain == pytest.approx(1.0)
+
+
+class TestAGeneratedKeyCaptureWritesBack:
+    """A key field on a generated page stores what it captured.
+
+    A capture that lights up to say it took the key and then discards it is
+    the worst of both: it reports success and changes nothing.
+    """
+
+    def test_capturing_a_key_writes_it_to_the_field(self):
+        binding = modes.KeyBinding(command='jump', label='Jump', keys=['x'])
+        capture = generate.editor_for(binding, 'keys')
+        assert capture is not None
+        capture.key('j', (0, 0, 0))
+        assert list(binding.keys) == ['j']
+
+    def test_escape_leaves_the_binding_alone(self):
+        binding = modes.KeyBinding(command='jump', keys=['x'])
+        capture = generate.editor_for(binding, 'keys')
+        assert not capture.key('<escape>', (0, 0, 0))
+        assert list(binding.keys) == ['x']
+
+    def test_a_mouse_button_is_bindable_too(self):
+        binding = modes.KeyBinding(command='jump', keys=['x'])
+        capture = generate.editor_for(binding, 'keys')
+        capture.button(2)
+        assert list(binding.keys) == ['<mouse2>']
+
+
+class TestLabelsReadWell:
+    def test_an_acronym_keeps_its_capitals(self):
+        assert generate.label_for('iblIntensity') == 'IBL intensity'
+
+    def test_the_interface_scale_reads_as_words(self):
+        assert generate.label_for('uiScale') == 'UI scale'
+
+    def test_an_ordinary_name_is_sentence_cased(self):
+        assert generate.label_for('walkSpeed') == 'Walk speed'
+
+    def test_a_hint_still_wins(self):
+        assert generate.label_for('iblIntensity',
+                                  {'label': 'Environment'}) == 'Environment'

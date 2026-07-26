@@ -89,11 +89,12 @@ def test_a_press_is_remembered_even_if_the_key_is_released_first():
     assert state.pressed('x')
 
 
-def test_modifiers_are_recorded_with_the_key():
+def test_modifiers_are_whatever_is_held_right_now():
+    """The same answer for every key: a modifier is held or it is not."""
     state = InputState()
     state.process(_Event('<up>', state=1, modifiers=(0, 1, 0)))
     assert state.modifiers('<up>') == (0, 1, 0)
-    assert state.modifiers('<down>') == (0, 0, 0)
+    assert state.modifiers('<down>') == (0, 1, 0)
 
 
 def test_mouse_motion_accumulates_and_is_consumed_by_reading():
@@ -141,3 +142,76 @@ def test_key_names_are_taken_as_the_backend_gives_them(name):
     state = InputState()
     state.process(_Event(name, state=1))
     assert state.held(name)
+
+
+class _Key:
+    """One keyboard event, as a backend delivers it."""
+
+    type = 'keyboard'
+
+    def __init__(self, name, state, modifiers=(0, 0, 0)):
+        self.name = name
+        self.state = state
+        self._modifiers = modifiers
+
+    def getModifiers(self):
+        return self._modifiers
+
+
+class TestModifiersAreSampledNotRemembered:
+    """A held modifier is a thing that is true *now*.
+
+    Recording the modifiers that happened to be down when a key was pressed
+    makes ``Ctrl`` + arrow depend on which of the two was pressed first, and
+    leaves it applying after Ctrl has been let go.
+    """
+
+    def test_a_modifier_pressed_after_the_key_still_counts(self):
+        inputs = InputState()
+        inputs.process(_Key('<up>', 1, (0, 0, 0)))
+        inputs.process(_Key('<control>', 1, (0, 1, 0)))
+        assert inputs.modifiers('<up>')[1], "ctrl held but not seen"
+
+    def test_a_modifier_released_while_the_key_is_held_stops_counting(self):
+        inputs = InputState()
+        inputs.process(_Key('<control>', 1, (0, 1, 0)))
+        inputs.process(_Key('<up>', 1, (0, 1, 0)))
+        assert inputs.modifiers('<up>')[1]
+        inputs.process(_Key('<control>', 0, (0, 0, 0)))
+        assert not inputs.modifiers('<up>')[1], "ctrl let go but still applied"
+
+    def test_clearing_forgets_the_modifiers_too(self):
+        inputs = InputState()
+        inputs.process(_Key('<control>', 1, (0, 1, 0)))
+        inputs.clear()
+        assert inputs.modifiers('<up>') == (0, 0, 0)
+
+    def test_a_key_up_carries_its_modifiers_too(self):
+        inputs = InputState()
+        inputs.process(_Key('a', 1, (1, 0, 0)))
+        inputs.process(_Key('a', 0, (0, 0, 0)))
+        assert inputs.modifiers('a') == (0, 0, 0)
+
+
+class TestModifiedBindingsFollowTheModifier:
+    """The mode's view of the same thing: ctrl+arrow tilts, arrow alone walks."""
+
+    def _mode(self):
+        from OpenGLContext.move import modes
+        return modes.WalkMode(name='walk')
+
+    def test_ctrl_after_the_arrow_tilts_rather_than_walks(self):
+        mode, inputs = self._mode(), InputState()
+        inputs.process(_Key('<up>', 1, (0, 0, 0)))
+        inputs.process(_Key('<control>', 1, (0, 1, 0)))
+        assert mode.active(inputs, 'lookup')
+        assert not mode.active(inputs, 'forward')
+
+    def test_letting_ctrl_go_walks_again(self):
+        mode, inputs = self._mode(), InputState()
+        inputs.process(_Key('<control>', 1, (0, 1, 0)))
+        inputs.process(_Key('<up>', 1, (0, 1, 0)))
+        assert mode.active(inputs, 'lookup')
+        inputs.process(_Key('<control>', 0, (0, 0, 0)))
+        assert mode.active(inputs, 'forward')
+        assert not mode.active(inputs, 'lookup')

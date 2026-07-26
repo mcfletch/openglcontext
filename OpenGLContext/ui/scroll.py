@@ -23,6 +23,7 @@ from typing import Any, Optional, Sequence, Tuple
 from vrml import field
 
 from OpenGLContext.ui.geometry import Rect
+from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.widgets import Widget
 
 __all__ = ['ScrollViewport']
@@ -59,12 +60,12 @@ class ScrollViewport(Widget):
         """Tab stops here only when there is something to scroll."""
         return self.maximumScroll > 0
 
-    def layoutChildren(self) -> Sequence[Any]:
+    def layoutChildren(self) -> Sequence[Widget]:
         return [child for child in self.children
                 if getattr(child, 'visible', True)]
 
     # -- measurement ------------------------------------------------------
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         width = 0
         height = 0
@@ -106,25 +107,28 @@ class ScrollViewport(Widget):
         return Rect(self.rect.x, self.rect.y,
                     max(0, self.rect.width - self._barGutter()), self.rect.height)
 
-    def arrange_content(self, metrics: Any) -> None:
+    def arrange_content(self, metrics: FontMetrics) -> None:
         children = self.layoutChildren()
         self.lineHeight = metrics.line_height
         if not children:
             self.contentHeight = 0
             return
-        # Measured against the width the content will actually have, which is
-        # the viewport's less the bar -- and whether there is a bar depends on
-        # the height, so measure once without it and settle the width after.
+        # Measured **once**, against the width the content will have if a bar
+        # is needed.  Whether one is needed depends on the height, and the
+        # height depends on the width, so the narrower of the two is the one
+        # that settles: it can only over-estimate, and over-estimating shows a
+        # bar that scrolls a little rather than clipping content away.
+        # Measuring twice would re-wrap every paragraph on the page for
+        # nothing, and against two different widths at that.
         pad = self._endPadding()
-        self.contentHeight = pad * 2 + sum(
-            int(child.natural_size(metrics, max(0, self.rect.width
-                                                - self._barGutter()))[1])
-            for child in children)
+        width = max(0, self.rect.width - self._barGutter())
+        sizes = [int(child.natural_size(metrics, width)[1])
+                 for child in children]
+        self.contentHeight = pad * 2 + sum(sizes)
         self.scroll = self._clamp(float(self.scroll))
         view = self.viewRect()
         cursor = view.top - pad + int(self.scroll)
-        for child in children:
-            height = int(child.natural_size(metrics, view.width)[1])
+        for child, height in zip(children, sizes, strict=True):
             child.parent = self
             child.arrange(Rect(view.x, cursor - height, view.width, height),
                           metrics)
@@ -193,7 +197,7 @@ class ScrollViewport(Widget):
         if self.needsBar and self.barRect().contains(x, y):
             return self
         for child in reversed(list(self.layoutChildren())):
-            found = child.widget_at(x, y)
+            found: Optional[Widget] = child.widget_at(x, y)
             if found is not None and self.viewRect().intersects(found.rect):
                 return found
         return self if self.maximumScroll else None
@@ -266,10 +270,10 @@ class ScrollViewport(Widget):
             return
         skin = renderer.skin
         renderer.frame(self.barRect(), skin.trackFill,
-                       skin._image(skin.trackImage))
+                       skin.trackImage)
         renderer.frame(self.thumbRect(),
                        skin.buttonHoverFill if self.hovered else skin.thumbFill,
-                       skin._image(skin.thumbImage))
+                       skin.thumbImage)
 
     def paintChildren(self, renderer: Any) -> None:
         """Draw the content clipped to the viewport."""

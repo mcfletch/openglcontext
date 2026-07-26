@@ -13,6 +13,7 @@ from vrml import field
 
 from OpenGLContext.hud import COLUMN, GUIBox, ROW
 from OpenGLContext.ui.geometry import Rect
+from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.widgets import Widget
 
 __all__ = ['Box', 'Row', 'Column', 'Grid']
@@ -78,7 +79,7 @@ class Grid(Widget):
     #: ``rowPadding`` in real pixels, settled at layout time.
     _laidOutPadding: int = 0
 
-    def layoutChildren(self) -> Sequence[Any]:
+    def layoutChildren(self) -> Sequence[Widget]:
         return [child for child in self.children
                 if getattr(child, 'visible', True)]
 
@@ -90,7 +91,7 @@ class Grid(Widget):
         return [children[start:start + count]
                 for start in range(0, len(children), count)]
 
-    def _measure(self, metrics: Any) -> Tuple[List[int], List[int]]:
+    def _measure(self, metrics: FontMetrics) -> Tuple[List[int], List[int]]:
         """Natural width of each column and height of each row."""
         rows = self._rows()
         widths = [0] * max(1, int(self.columns))
@@ -104,7 +105,7 @@ class Grid(Widget):
             heights.append(tallest)
         return (widths, heights)
 
-    def content_size(self, metrics: Any,
+    def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
         if not self.layoutChildren():
             return (0, 0)
@@ -116,11 +117,17 @@ class Grid(Widget):
                 + metrics.pixels(self.spacing) * (len(heights) - 1))
 
     # -- placement --------------------------------------------------------
-    def _columnWidths(self, metrics: Any, available: int) -> List[int]:
+    #: Characters a column is never squeezed below.  Narrower than this and a
+    #: label is not shortened, it is destroyed.
+    MINIMUM_COLUMN_CHARS = 4
+
+    def _columnWidths(self, metrics: FontMetrics, available: int) -> List[int]:
         widths, _heights = self._measure(metrics)
         gaps = metrics.pixels(self.columnSpacing) * (len(widths) - 1)
         spare = available - sum(widths) - gaps
-        if spare <= 0:
+        if spare < 0:
+            return self._squeeze(widths, -spare, metrics)
+        if spare == 0:
             return widths
         flex = [float(value) for value in self.columnFlex]
         if len(flex) != len(widths) or sum(flex) <= 0:
@@ -136,7 +143,28 @@ class Grid(Widget):
             given += share
         return widths
 
-    def arrange_content(self, metrics: Any) -> None:
+    def _squeeze(self, widths: List[int], shortfall: int,
+                 metrics: FontMetrics) -> List[int]:
+        """Take a shortfall out of the widest columns, never below a floor.
+
+        Unlike a box, a grid has an obvious place to find the room: the label
+        column is the one with slack, and text that is shortened -- with an
+        ellipsis, by whatever draws it -- still reads.  Overflowing instead
+        would put a control over the scrollbar or off the panel, where it can
+        be clicked but not seen.
+        """
+        floor = self.MINIMUM_COLUMN_CHARS * metrics.char_width
+        widths = list(widths)
+        while shortfall > 0:
+            widest = max(range(len(widths)), key=lambda index: widths[index])
+            if widths[widest] <= floor:
+                break                   # nothing left to give
+            take = min(shortfall, widths[widest] - floor)
+            widths[widest] -= take
+            shortfall -= take
+        return widths
+
+    def arrange_content(self, metrics: FontMetrics) -> None:
         rows = self._rows()
         if not rows:
             return
@@ -183,28 +211,42 @@ class Grid(Widget):
         """
         return self._laidOutPadding
 
-    def _activeRows(self) -> Tuple[Optional[int], Optional[int]]:
+    def rowOf(self, widget: Any) -> Optional[int]:
+        """Which row a widget sits in, or None if it is not in this grid.
+
+        A control nested inside a cell still belongs to the cell's row, so the
+        search is upward from the widget rather than downward from the grid --
+        which is also what makes it cheap enough to do when the pointer moves
+        instead of when the frame draws.
+        """
+        count = max(1, int(self.columns))
+        cells = list(self.layoutChildren())
+        current: Optional[Any] = widget
+        while current is not None:
+            for index, cell in enumerate(cells):
+                if cell is current:
+                    return index // count
+            current = current.parent
+        return None
+
+    def activeRows(self) -> Tuple[Optional[int], Optional[int]]:
         """Which row the pointer is on, and which the keyboard is in.
 
-        Read from the widgets' own state rather than from the panel, so a grid
-        highlights its rows whether or not it is on one -- and so a control
-        nested inside a cell still lights the row it belongs to.
+        Read from what the panel already knows rather than searched for: hover
+        and focus each change at exactly one place, and recomputing them by
+        walking every widget in every cell on every frame is work the layout
+        deliberately does only on a change.
         """
-        hovered: Optional[int] = None
-        focused: Optional[int] = None
-        showFocus = getattr(self.root(), 'focusVisible', False)
-        count = max(1, int(self.columns))
-        for index, cell in enumerate(self.layoutChildren()):
-            for widget in cell.walk():
-                if getattr(widget, 'hovered', False):
-                    hovered = index // count
-                if showFocus and getattr(widget, 'focused', False):
-                    focused = index // count
+        panel = self.root()
+        hovered = self.rowOf(getattr(panel, 'hovered_widget', None))
+        focused = None
+        if getattr(panel, 'focusVisible', False):
+            focused = self.rowOf(getattr(panel, 'focused_widget', None))
         return (hovered, focused)
 
     def paint(self, renderer: Any) -> None:
         skin = renderer.skin
-        hovered, focused = self._activeRows()
+        hovered, focused = self.activeRows()
         rects = self.rowRects()
         for index, rect in enumerate(rects):
             if index == focused:

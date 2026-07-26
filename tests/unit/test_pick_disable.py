@@ -67,3 +67,10 @@ class TestAddPickEventGate:
         ctx = _StubContext(None)
         Context.addPickEvent(ctx, _FakeEvent())
         assert len(ctx.pickEvents) == 1
+
+    def test_an_event_offering_no_pick_key_is_keyed_as_it_always_was(self):
+        """`_FakeEvent` has only `getKey`, as an event outside the tree may."""
+        ctx = _StubContext(None)
+        event = _FakeEvent(key=(7, 8))
+        Context.addPickEvent(ctx, event)
+        assert ctx.pickEvents == {('mousebutton', (7, 8)): event}

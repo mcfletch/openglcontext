@@ -35,8 +35,13 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def _local_path(url):
-    """Filesystem path for a local (no-scheme or ``file://``) URL."""
+def local_path(url):
+    """Filesystem path for a local (no-scheme or ``file://``) URL.
+
+    The one place that rule lives, so a ``file:`` URL means the same thing to
+    every part of the system that is handed one -- a scene's ``baseURI``, a
+    texture, a skin's artwork.
+    """
     parts = urllib.parse.urlsplit(url)
     if parts.scheme == "file":
         return url2pathname(parts.path)
@@ -56,7 +61,7 @@ def _resolver_for(baseURL, max_bytes=DEFAULT_MAX_RESOURCE_BYTES):
     if scheme in _ALLOWED_URL_SCHEMES:
         return Resolver(base_url=baseURL, max_resource_bytes=max_bytes)
     if scheme in ("", "file"):
-        base_dir = os.path.dirname(_local_path(baseURL))
+        base_dir = os.path.dirname(local_path(baseURL))
         return Resolver(base_dir=base_dir, max_resource_bytes=max_bytes)
     raise IOError("cannot resolve references against base url %r" % (baseURL,))
 
@@ -159,7 +164,7 @@ class _Loader(object):
             return (url, BytesIO(data), url, None)
         # Local file: resolve to an absolute path so the scenegraph's baseURI is
         # the file's own location, not a path relative to the process's cwd.
-        path = os.path.abspath(_local_path(url))
+        path = os.path.abspath(local_path(url))
         file = open(path, "rb")
         return (path, file, path, None)
 

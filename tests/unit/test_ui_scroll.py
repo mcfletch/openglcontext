@@ -104,6 +104,55 @@ class TestScrolling:
         assert view.maximumScroll == 0
 
 
+class TestScrollingPastTheControls:
+    """Scrolling a settings page must not edit it on the way past.
+
+    A long page is mostly sliders and selects, and the wheel is how it is read.
+    A control that takes every notch that crosses it turns reading the page
+    into changing it, silently, wherever the pointer happened to rest.  So a
+    control takes the wheel only where the keyboard would also reach it: when
+    it has focus, which is deliberate and visible.
+    """
+
+    @pytest.fixture
+    def page(self, metrics):
+        from OpenGLContext.ui.widgets import Select, Slider
+        slider = Slider(minimum=0, maximum=10, value=5, name='slider')
+        select = Select(options=['low', 'high'], value='low', name='select')
+        view = ScrollViewport(name='view', flex=1, children=[
+            Column(children=[slider, select]
+                            + [Label(text='line %d' % n) for n in range(40)])])
+        panel = Panel(fill=True, children=[view])
+        panel.layout((400, 300), metrics)
+        return panel
+
+    def test_a_notch_over_a_slider_scrolls_the_page(self, page):
+        view, slider = page.find('view'), page.find('slider')
+        assert page.wheel(-1, *slider.rect.centre)
+        assert view.scroll > 0
+        assert slider.read() == 5
+
+    def test_a_notch_over_a_select_scrolls_the_page(self, page):
+        view, select = page.find('view'), page.find('select')
+        assert page.wheel(-1, *select.rect.centre)
+        assert view.scroll > 0
+        assert select.read() == 'low'
+
+    def test_a_focused_slider_still_takes_the_wheel(self, page):
+        view, slider = page.find('view'), page.find('slider')
+        page.focus(slider)
+        scrolled = view.scroll                  # focusing may have revealed it
+        assert page.wheel(1, *slider.rect.centre)
+        assert slider.read() == 5.5             # one step of (max - min) / 20
+        assert view.scroll == scrolled
+
+    def test_a_focused_select_still_takes_the_wheel(self, page):
+        select = page.find('select')
+        page.focus(select)
+        assert page.wheel(1, *select.rect.centre)
+        assert select.read() == 'high'
+
+
 class TestScrollbar:
     def test_a_bar_appears_only_when_it_is_needed(self, viewport, metrics):
         assert viewport.needsBar

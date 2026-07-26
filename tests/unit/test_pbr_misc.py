@@ -10,7 +10,10 @@ from OpenGLContext.passes import pbrpass
 
 class TestRendererEnvCached:
     def test_env_read_once(self, monkeypatch):
-        pbrpass._renderer_is_pbr_cache = None
+        # setattr rather than a bare assignment: pytest then restores the memo
+        # afterwards, so this test cannot decide the answer for the rest of the
+        # session.  See OpenGLContext.passes.pbrpass.reset_renderer_cache.
+        monkeypatch.setattr(pbrpass, '_renderer_is_pbr_cache', None)
         calls = {'n': 0}
         real = pbrpass.os.environ.get
 
@@ -25,10 +28,10 @@ class TestRendererEnvCached:
         assert calls['n'] == 1
 
     def test_reflects_env_value(self, monkeypatch):
-        pbrpass._renderer_is_pbr_cache = None
+        monkeypatch.setattr(pbrpass, '_renderer_is_pbr_cache', None)
         monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'pbr')
         assert pbrpass.renderer_is_pbr() is True
-        pbrpass._renderer_is_pbr_cache = None
+        pbrpass.reset_renderer_cache()
         monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'other')
         assert pbrpass.renderer_is_pbr() is False
 

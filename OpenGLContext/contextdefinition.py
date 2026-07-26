@@ -5,6 +5,13 @@ from vrml import node, field
 from OpenGLContext import renderoptions
 
 
+# The three helpers below are passed to ``newField`` **uncalled**, so each is
+# evaluated the first time a definition is asked for that field rather than
+# when this module is imported.  An import-time read freezes whatever the
+# environment happened to hold when the first module to import this one was
+# loaded -- which no application, and no test, can reach afterwards.
+
+
 def _get_default_profile():
     """Get the default OpenGL profile from environment or fallback to compatibility.
 
@@ -100,7 +107,7 @@ class ContextDefinition( node.Node ):
 
     # Colour-based scenegraph picking. When false the selection render, MRT
     # object-id buffer and its readback are all skipped (env: OPENGLCONTEXT_PICKING).
-    pickEnabled = field.newField( "pickEnabled", "SFBool", 1, _get_default_picking() )
+    pickEnabled = field.newField( "pickEnabled", "SFBool", 1, _get_default_picking )
 
     # Non-blocking pick readback: read the MRT object-id/depth under each pick
     # sample into a PBO with a fence instead of a synchronous glReadPixels, and
@@ -110,8 +117,8 @@ class ContextDefinition( node.Node ):
 
     # OpenGL profile selection - can be overridden by OPENGLCONTEXT_PROFILE env var
     # "core" requires GLFW or another backend that supports core profile contexts
-    profile = field.newField( "profile", "SFString", 1, _get_default_profile() )
-    version = field.newField( "version", "SFVec2f", 1, _get_default_version())
+    profile = field.newField( "profile", "SFString", 1, _get_default_profile )
+    version = field.newField( "version", "SFVec2f", 1, _get_default_version )
 
     # -- rendering features -------------------------------------------------
     # Everything below was reachable only through an environment variable read
@@ -190,6 +197,12 @@ class ContextDefinition( node.Node ):
     #: How a generated settings page presents these fields: what to call each
     #: one, and what range or set of values it accepts.  Declared beside the
     #: fields so a new setting appears on the screen with no UI work.
+    #:
+    #: Every name here appears in one of the section lists below, and a test
+    #: holds them to it -- a hint for a field no section shows is presentation
+    #: for a control nobody can reach.  ``profile`` and ``title`` are settled
+    #: when the window is made and cannot be changed for a running one, so
+    #: neither is offered.
     #: See :mod:`OpenGLContext.ui.generate`.
     UI_HINTS = {
         'shadows': {'label': 'Shadows'},
@@ -219,11 +232,6 @@ class ContextDefinition( node.Node ):
         'debugBBox': {'label': 'Show bounding boxes'},
         'debugSelection': {'label': 'Show the selection buffer'},
         'debug': {'label': 'Debug output'},
-        'title': {'label': 'Window title'},
-        'profile': {'label': 'OpenGL profile',
-                    'options': renderoptions.CHOICES['profile'],
-                    'optionLabels': renderoptions.LABELS['profile'],
-                    'restart': True},
     }
 
     #: Fields a settings screen shows under "Rendering", in the order they

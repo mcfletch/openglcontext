@@ -3,6 +3,16 @@ from OpenGLContext.events import event, eventmanager
 from OpenGL.GLU import *
 from OpenGLContext.scenegraph import nodepath
 from OpenGLContext.arrays import array
+import itertools
+
+#: The buttons a wheel notch is reported on, in the X11 numbering the whole of
+#: OpenGLContext uses.  A notch is a press and release of a button no physical
+#: mouse has: no wheel is ever *held*, so these never enter the held-button
+#: state a drag is tracked with, and a backend that hears about scrolling some
+#: other way translates it to these (see :mod:`OpenGLContext.events.glfwevents`).
+WHEEL_UP, WHEEL_DOWN = 3, 4
+#: Both of them, for membership tests.
+WHEEL_BUTTONS = (WHEEL_UP, WHEEL_DOWN)
 
 class MouseEvent( event.Event ):
     """Base class for all mouse-based events.
@@ -157,9 +167,26 @@ class MouseButtonEvent (MouseEvent):
     type = "mousebutton"
     button = -1 # which button was depressed
     state = 0 # the new state of the button, 0 or 1
+    #: Numbers successive wheel notches; see getPickKey.
+    _notchCounter = itertools.count()
     def getKey (self):
         """Get the event key used to lookup a handler for this event"""
         return (self.button, self.state, self.getModifiers(),)
+    def getPickKey (self):
+        """Distinguish one wheel notch from the next; see Event.getPickKey.
+
+        Scrolling is reported far faster than frames are drawn, so an ordinary
+        flick of the wheel puts several notches into one frame's pick events.
+        Each is a line to scroll rather than a repetition of the last, and
+        collapsing them makes a fast scroll travel no further than a slow one.
+        """
+        if self.button not in WHEEL_BUTTONS:
+            return self.getKey()
+        key = self.__dict__.get('_pickKey')
+        if key is None:
+            key = self.__dict__['_pickKey'] = self.getKey() + (
+                next(MouseButtonEvent._notchCounter),)
+        return key
 
 class MouseEventManager( eventmanager.BubblingEventManager ):
     """Manager base-class for mouse-related events"""

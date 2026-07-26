@@ -61,34 +61,14 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
     # (pass.use_shadows = False) pins this pass and outranks the field.
     _use_shadows: Optional[bool] = None
     _shadow_soft: Optional[bool] = None
-    # The environment's answer, read once per pass rather than per frame.
-    _shadows_env: Optional[bool] = None
-    _shadow_soft_env: Optional[bool] = None
-
-    def _envDefault(self, attribute: str, variable: str,
-                    fallback: bool) -> bool:
-        """An environment switch, read once and then remembered by this pass.
-
-        These are start-up switches: a pass that changed its mind mid-session
-        because something else edited ``os.environ`` would be unpredictable, and
-        the whole point of the ContextDefinition field is that it is the thing
-        meant to change at runtime. So the variable settles the *default* the
-        first time this pass is asked, and the field -- checked every time --
-        outranks it.
-        """
-        remembered = getattr(self, attribute)
-        if remembered is None:
-            remembered = renderoptions.env_flag(variable, fallback)
-            setattr(self, attribute, remembered)
-        return remembered
 
     @property
     def use_shadows(self) -> bool:
         """Whether this pass renders shadow maps (ContextDefinition.shadows)."""
         if self._use_shadows is not None:
             return self._use_shadows
-        return renderoptions.flag(self, 'shadows', self._envDefault(
-            '_shadows_env', 'OPENGLCONTEXT_SHADOWS', True))
+        return renderoptions.flag(self, 'shadows', renderoptions.env_flag_once(
+            'OPENGLCONTEXT_SHADOWS', True))
 
     @use_shadows.setter
     def use_shadows(self, value: bool) -> None:
@@ -99,8 +79,9 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         """PCSS contact-hardening shadows (ContextDefinition.shadowsSoft)."""
         if self._shadow_soft is not None:
             return self._shadow_soft
-        return renderoptions.flag(self, 'shadowsSoft', self._envDefault(
-            '_shadow_soft_env', 'OPENGLCONTEXT_SHADOWS_SOFT', False))
+        return renderoptions.flag(
+            self, 'shadowsSoft',
+            renderoptions.env_flag_once('OPENGLCONTEXT_SHADOWS_SOFT', False))
 
     @shadow_soft.setter
     def shadow_soft(self, value: bool) -> None:
@@ -115,9 +96,15 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         return max(0, min(int(ceiling),
                           int(renderoptions.number(self, 'maximumLights', ceiling))))
 
-    # Minimum group size worth an instanced draw (env-overridable), shared by the
-    # PBR subclass. The base _flat default (8) does not read the env.
-    INSTANCE_MIN: int = int(os.environ.get('OPENGLCONTEXT_INSTANCE_MIN', '4') or 4)
+    def instanceMinimum(self) -> int:
+        """Smallest group worth collapsing into one instanced draw.
+
+        A method rather than a class attribute assigned at import: read at
+        import the variable is settled before a test -- or an application --
+        has had a chance to set it, and nothing can reach it afterwards.
+        """
+        return int(renderoptions.env_number_once(
+            'OPENGLCONTEXT_INSTANCE_MIN', 4, integer=True))
 
     # The base _flat.FlatPass declares instancing_enabled as a writeable class
     # attribute; this read-only property refines it (env-gated), so mypy's
@@ -133,7 +120,7 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         """
         return renderoptions.flag(
             self, 'instancing',
-            renderoptions.env_flag('OPENGLCONTEXT_INSTANCING', True))
+            renderoptions.env_flag_once('OPENGLCONTEXT_INSTANCING', True))
 
     def _instanceable(self, path) -> bool:
         """Geometry drawable through the shared instanced path -- anything exposing

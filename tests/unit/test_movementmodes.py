@@ -540,3 +540,50 @@ def test_the_look_up_command_looks_up():
     for _ in range(10):
         mode.update(0.05, Held(), platform)
     assert platform.gaze()[1] > 0, 'lookup looked down'
+
+
+class TestTurningBelongsToEveryMode:
+    """A mode that is not a ground mode can still turn.
+
+    ``MovementMode`` is the base a game extends, and a helper on it that read a
+    field only one subclass declared raised ``AttributeError`` the first time a
+    turn was held.
+    """
+
+    def test_a_bare_mode_declares_the_fields_its_turn_helper_reads(self):
+        mode = modes.MovementMode(name='custom')
+        assert float(mode.turnRate) > 0
+        assert float(mode.turnAcceleration) >= 1.0
+
+    def test_a_bare_mode_can_turn(self):
+        class Spin(modes.MovementMode):
+            PROTO = 'UITestSpin'
+            commands = ('turnleft', 'turnright')
+
+            def defaultBindings(self):
+                return [modes.KeyBinding(command='turnright', keys=['e'])]
+
+            def update(self, dt, inputs, platform):
+                self._turn(dt, inputs, platform)
+
+        platform = _Platform()
+        inputs = _Inputs(held={'e'})
+        Spin(name='spin').update(0.1, inputs, platform)
+        assert platform.yaw > 0, "a plain MovementMode could not turn"
+
+    def test_the_ramp_still_applies_at_the_base(self):
+        class Spin(modes.MovementMode):
+            PROTO = 'UITestSpin2'
+            commands = ('turnleft', 'turnright')
+
+            def defaultBindings(self):
+                return [modes.KeyBinding(command='turnright', keys=['e'])]
+
+        mode = Spin(name='spin', turnAcceleration=4.0)
+        platform, inputs = _Platform(), _Inputs(held={'e'})
+        mode._turn(0.1, inputs, platform)
+        first = platform.yaw
+        platform.yaw = 0.0
+        for _ in range(20):
+            mode._turn(0.1, inputs, platform)
+        assert platform.yaw / 20 > first, "the ramp did not build up"

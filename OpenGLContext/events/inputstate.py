@@ -12,7 +12,7 @@ emits, so it needs nothing backend-specific: a context connects it once and
 movement modes sample it.
 """
 
-from typing import Dict, Iterable, List, Set, Tuple
+from typing import Iterable, List, Set, Tuple
 
 
 class InputState:
@@ -20,7 +20,13 @@ class InputState:
 
     def __init__(self) -> None:
         self._held: Set[str] = set()
-        self._modifiers: Dict[str, Tuple[int, int, int]] = {}
+        #: Shift, control and alt as of the most recent key event, whichever
+        #: key it was.  **Sampled, not remembered per key**: a modifier is a
+        #: thing that is true *now*, and recording the ones that happened to be
+        #: down when a key was first pressed makes `ctrl` + arrow depend on
+        #: which of the two the player pressed first, and leaves it applying
+        #: after `ctrl` has been let go.
+        self._modifierState: Tuple[int, int, int] = (0, 0, 0)
         #: Keys pressed since the last time each was sampled.  Held separately
         #: from ``_held`` so a tap that starts and ends inside one frame is not
         #: lost between samples.
@@ -39,13 +45,16 @@ class InputState:
         name = getattr(event, 'name', None)
         if state is None or name is None:
             return
+        # Every key event carries the modifiers as they stand, and both halves
+        # are worth having: the key-up of Ctrl itself is what says it is no
+        # longer held.
+        getter = getattr(event, 'getModifiers', None)
+        if getter is not None:
+            mods = tuple(getter())
+            self._modifierState = (mods[0], mods[1], mods[2])
         if state:
             self._held.add(name)
             self._pressed.add(name)
-            getter = getattr(event, 'getModifiers', None)
-            if getter is not None:
-                mods = tuple(getter())
-                self._modifiers[name] = (mods[0], mods[1], mods[2])
         else:
             self._held.discard(name)
 
@@ -62,7 +71,7 @@ class InputState:
         """
         self._held.clear()
         self._pressed.clear()
-        self._modifiers.clear()
+        self._modifierState = (0, 0, 0)
         self._mouse[:] = [0.0, 0.0]
 
     # -- sampling --------------------------------------------------------
@@ -100,9 +109,14 @@ class InputState:
         return ((1.0 if self.held(*positive) else 0.0)
                 - (1.0 if self.held(*negative) else 0.0))
 
-    def modifiers(self, name: str) -> Tuple[int, int, int]:
-        """The modifier triple recorded when ``name`` was last pressed."""
-        return self._modifiers.get(name, (0, 0, 0))
+    def modifiers(self, name: str = '') -> Tuple[int, int, int]:
+        """Shift, control and alt as they stand right now.
+
+        ``name`` is accepted and ignored: a caller asks about the modifiers
+        that apply to one key, and the answer is the same for every key
+        because a modifier is held or it is not.
+        """
+        return self._modifierState
 
     def mouse_delta(self) -> Tuple[float, float]:
         """Mouse motion accumulated since the last call, then reset.

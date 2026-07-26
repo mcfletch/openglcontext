@@ -30,7 +30,7 @@ from vrml import protofunctions
 
 from OpenGLContext.ui.layout import Grid
 from OpenGLContext.ui.widgets import (
-    KeyCapture, Label, Select, Slider, TextField, Toggle, Widget,
+    KeyCapture, Label, NumberField, Select, Slider, TextField, Toggle, Widget,
 )
 
 __all__ = ['hints_for', 'editor_for', 'page_for', 'label_for',
@@ -54,15 +54,36 @@ COLUMN_SPACING = 24.0
 ROW_SPACING = 0.0
 ROW_PADDING = 7.0
 
-_CAMEL = re.compile(r'(?<=[a-z0-9])(?=[A-Z])')
+#: Names that are words in their own right and are shouted, not spelled.  A
+#: graphics settings page is full of them, and "Ibl" reads as a mistake.
+ACRONYMS = frozenset((
+    'ibl', 'ui', 'lod', 'fps', 'hdr', 'gl', 'gpu', 'msaa', 'ao', 'pbr',
+    'srgb', 'uv', 'vr', 'fov', 'dpi',
+))
+
+_CAMEL = re.compile(r'(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
 
 
 def label_for(name: str, hint: Optional[Dict[str, Any]] = None) -> str:
-    """What to call a field on screen: its hint, or its name made readable."""
+    """What to call a field on screen: its hint, or its name made readable.
+
+    Sentence case, because a settings page is a list of things rather than a
+    row of headings -- except for the acronyms a graphics setting is full of,
+    which are words in their own right and unreadable lower-cased.  "Ibl
+    intensity" is a typo; "IBL intensity" is the setting.
+    """
     if hint and hint.get('label'):
         return str(hint['label'])
-    words = _CAMEL.sub(' ', name)
-    return words[:1].upper() + words[1:].lower()
+    words = [_word(word, first=index == 0)
+             for index, word in enumerate(_CAMEL.sub(' ', name).split())]
+    return ' '.join(words)
+
+
+def _word(word: str, first: bool) -> str:
+    """One word of a generated label, cased for where it sits."""
+    if word.lower() in ACRONYMS:
+        return word.upper()
+    return word.capitalize() if first else word.lower()
 
 
 def hints_for(node: Any) -> Dict[str, Dict[str, Any]]:
@@ -83,13 +104,21 @@ def hints_for(node: Any) -> Dict[str, Dict[str, Any]]:
 
 def editor_for(node: Any, name: str, hint: Optional[Dict[str, Any]] = None
                ) -> Optional[Widget]:
-    """The widget that edits one field, or None if it has no simple editor."""
+    """The widget that edits one field, or None if it has no simple editor.
+
+    Without a ``hint`` the node's own ``UI_HINTS`` are consulted, so asking for
+    one field's editor gives the same answer as asking for the whole page.  A
+    hint that reached only the page builder would make a field editable in one
+    and not the other, which is the drift this module exists to prevent.
+    """
     try:
         definition = protofunctions.getField(node, name)
     except AttributeError:
         # A screen naming a field this build does not have shows nothing for
         # it rather than failing to open at all.
         return None
+    if hint is None:
+        hint = hints_for(node).get(name)
     hint = dict(hint or {})
     kind = definition.typeName()
     if kind in UNEDITABLE or hint.get('skip'):
@@ -107,7 +136,7 @@ def editor_for(node: Any, name: str, hint: Optional[Dict[str, Any]] = None
         return TextField(maximumLength=int(hint.get('maximumLength', 0)),
                          **common)
     if kind == 'MFString' and hint.get('editor') == 'keys':
-        return KeyCapture(keys=list(getattr(node, name)), name=name)
+        return KeyCapture(**common)
     return None
 
 
@@ -121,8 +150,10 @@ def _numberEditor(kind: str, hint: Dict[str, Any],
                       integer=integer, suffix=str(hint.get('suffix', '')),
                       **common)
     # No range means no slider: one over an invented 0..1 is a wrong answer
-    # rather than a missing one.
-    return TextField(**common)
+    # rather than a missing one.  A number is still typed as text, but through
+    # a field that knows it is a number -- a plain text field bound to an
+    # SFFloat would hand string arithmetic a float on the first keystroke.
+    return NumberField(integer=integer, **common)
 
 
 def page_for(node: Any, hints: Optional[Dict[str, Dict[str, Any]]] = None,

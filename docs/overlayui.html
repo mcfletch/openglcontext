@@ -166,11 +166,22 @@ definition = ContextDefinition(shadows=False, maximumLights=2, ibl='analytic')</
                       'maximum': 20.0, 'step': 0.5, 'suffix': ' m/s'},
     }</pre>
   <p>The field's type picks the editor: <code>SFBool</code> a toggle, a number
-    with a range a slider (without one, a text field &mdash; a slider over an
-    invented 0&ndash;1 is a wrong answer rather than a missing one), an
+    with a range a slider (without one a <em>number field</em> &mdash; a slider
+    over an invented 0&ndash;1 is a wrong answer rather than a missing one), an
     <code>SFString</code> with <code>options</code> a cycling select,
     <code>MFString</code> with <code>{'editor': 'keys'}</code> a key capture.
     A screen wanting better grouping supplies an authored panel instead.</p>
+  <p>A <code>NumberField</code> rather than a plain text field, because a
+    number on its way in is not a number yet: <code>''</code>, <code>'-'</code>
+    and <code>'3.'</code> are all positions the caret passes through, and each
+    of them written to an <code>SFFloat</code> would either raise or store
+    something nobody asked for. The text being typed is held by the widget and
+    only a complete number reaches the node; a character that could not begin
+    one is refused rather than shown and then dropped.</p>
+  <p>A hint names a field that a section actually shows &mdash; a test holds
+    them to it, so a hint cannot outlive the control it describes. The window's
+    profile and title are settled when the context is made and cannot be
+    changed for a running one, so neither is offered.</p>
 
   <h3>What happens to the player's changes</h3>
   <p>Apply writes the draft into the live definition and then tells whoever
@@ -279,6 +290,16 @@ session.revert()         # throw the draft away</pre>
       flick when the pointer is handed back.</li>
     <li>Mouse-move events are kept alive while an overlay is up, so hover works
       even in a scene with no move handlers of its own.</li>
+    <li><strong>A wheel notch is a press and release of a button no physical
+      mouse has</strong> &mdash; <code>WHEEL_UP</code> (3) and
+      <code>WHEEL_DOWN</code> (4) in
+      <code>OpenGLContext.events.mouseevents</code>, the X11 numbering.  Each
+      backend translates to that spelling: GLUT and pygame are told in those
+      buttons already, while GLFW reports scrolling on a callback of its own,
+      in offsets.  A notch goes to the widget under the pointer and then up
+      through its parents, so a wheel over a page that has nothing left to
+      scroll reaches whatever encloses it that has.  See
+      <a href="#wheel">the wheel</a>.</li>
     <li><strong>A press the overlay took takes its release with it</strong>,
       whether or not an overlay is still up by the time the release arrives.
       Without that ledger the last panel on the stack is a trap: Escape's
@@ -302,6 +323,39 @@ session.revert()         # throw the draft away</pre>
     one target rather than two things that happen to be side by side.</p>
 </section>
 
+<section id="wheel">
+  <h2>The wheel</h2>
+  <p>A notch scrolls by <code>ui.scroll.WHEEL_LINES</code> lines of the font the
+    content is drawn in, so it moves the same amount of text at every interface
+    scale, and a notch nothing uses is passed on rather than swallowed: a wheel
+    over a list already at its end reaches the page that encloses it.</p>
+  <p><strong>A control takes the wheel only while it has focus.</strong> A
+    slider or a select adjusts on a notch the way it does on an arrow key, and
+    for the same reason &mdash; but only when the keyboard would reach it too.
+    A settings page is mostly controls and the wheel is how it is read; one
+    that took every notch crossing it would turn reading the page into editing
+    it, wherever the pointer happened to rest. Unfocused, the notch passes on
+    to the viewport and scrolls. Override <code>Widget.wheelAdjusts</code> to
+    choose differently for a widget of your own.</p>
+  <p>Two things about a notch differ from a click, and both are why a wheel that
+    is nearly working scrolls nothing at all.</p>
+  <ul>
+    <li><strong>A notch is an increment, not a state.</strong> Pending pick
+      events are held in a mapping (<code>Context.addPickEvent</code>) so that
+      asking the same question twice in one frame costs one answer &mdash; right
+      for a click or a movement, where where-the-pointer-is-now is the whole of
+      the news, and wrong for the wheel, where each notch is another line. An
+      event says which of the two it is through
+      <code>Event.getPickKey</code>, and the wheel's is distinct per notch, so a
+      flick that lands three notches in one frame scrolls three.</li>
+    <li><strong>Scrolling arrives in fractions.</strong> A wheel reports whole
+      detents, but a touchpad reports a stream of parts of one. The GLFW
+      backend sums them and emits a notch per whole unit, keeping the remainder
+      for the next report and dropping it when the direction reverses, so a slow
+      drag still scrolls and a jitter over the pad does not scroll backwards.</li>
+  </ul>
+</section>
+
 <section id="bindings">
   <h2>Key bindings</h2>
   <p>The binding page lists every command of every declared movement mode.
@@ -309,14 +363,27 @@ session.revert()         # throw the draft away</pre>
     <em>same</em> mode and a confirmation is raised over that dialog asking
     whether to steal it. (The same key in another mode is not a conflict &mdash;
     walking and flying are never in force at the same moment.)</p>
+  <p><strong>The page saves when it is left with Save.</strong> A capture takes
+    effect immediately &mdash; a mode resolves a command to keys when it
+    samples, so a new binding can be tried without leaving the screen &mdash;
+    but the file is written only by Save. Cancel and Escape put every binding
+    back as the page found it, a Reset included. Writing on every captured key
+    would put a save between the player and every keystroke, and leave no way
+    back from a mis-hit.</p>
   <p>Bindings are saved as JSON in the per-user app-data directory
     (<code>keybindings.json</code>) by
-    <code>OpenGLContext.move.bindingstore</code>, and loading is forgiving: a
-    file naming a mode or command this build no longer has keeps the entries
-    that still resolve.</p>
+    <code>OpenGLContext.move.bindingstore</code>. The file is replaced whole
+    rather than truncated and rewritten, so an interrupted save cannot leave a
+    file that will not parse.</p>
+  <p>Loading is forgiving in both directions, because this is a file people
+    edit by hand: a mode or command this build no longer has is skipped, and so
+    is a value of the wrong shape. <code>"keys": "wasd"</code> is refused with a
+    warning rather than read as four separate bindings, and a modifier this
+    build does not know is dropped rather than left to make the binding
+    permanently unreachable.</p>
 <pre>from OpenGLContext.move import bindingstore
 bindingstore.load_bindings(context.getNavigation())     # at start-up
-bindingstore.save_bindings(context.getNavigation())     # after a change</pre>
+bindingstore.save_bindings(context.getNavigation())     # what Save does</pre>
 </section>
 
 <section id="console">
@@ -327,13 +394,24 @@ registry = console.CommandRegistry()
 registry.add('fps', lambda panel: '%.1f' % context.frameCounter.recentFps(),
              'the recent frame rate')
 panel = console.console_panel(registry=registry)
-logging.getLogger('OpenGLContext').addHandler(console.ConsoleLogHandler(panel))
+console.ConsoleLogHandler(panel)          # attaches itself to 'OpenGLContext'
 context.pushOverlay(panel)</pre>
   <p>Commands are called as <code>function(panel, *words)</code> and return the
     text to print. <code>help</code> and <code>clear</code> are built in. The
     logging handler is the point of it: engine warnings otherwise go somewhere a
     player cannot see. Scrollback is bounded (500 lines by default) and the
     arrow keys walk the command history.</p>
+  <p>The handler adds itself to the logger and takes itself off again when the
+    console closes, and holds the panel weakly. A handler outlives what it
+    writes to &mdash; the logging framework keeps it for the life of the process
+    &mdash; so a game that opens and closes several consoles over a session
+    would otherwise keep every one of them, with its whole widget tree, alive.
+    Pass <code>logger=</code> to attach it somewhere other than
+    <code>OpenGLContext</code>.</p>
+  <p><strong>New output follows the end only for a reader who is at the end.</strong>
+    Scroll up to read an earlier traceback and the lines the engine is still
+    logging no longer drag the view back down; scroll to the bottom again and it
+    resumes following.</p>
 </section>
 
 <section id="skinning">
@@ -440,7 +518,8 @@ panel = Panel(title='Movement', modal=True, preferredColumns=48, children=[
     <tr><td><code>hud</code></td><td>The layout protocol and the box.</td></tr>
     <tr><td><code>ui.layout</code></td><td>Row, Column, Grid.</td></tr>
     <tr><td><code>ui.widgets</code></td>
-      <td>Label, Button, Toggle, Select, Slider, TextField, KeyCapture.</td></tr>
+      <td>Label, Button, Toggle, Select, Slider, TextField, NumberField,
+        KeyCapture.</td></tr>
     <tr><td><code>ui.scroll</code></td><td>The clipping viewport and its bar.</td></tr>
     <tr><td><code>ui.panel</code></td>
       <td>One screen: focus, accelerators, modality, commands.</td></tr>

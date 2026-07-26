@@ -1,11 +1,19 @@
 """Module providing translation from GLFW callbacks to OpenGLContext events"""
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
+from OpenGLContext.events.mouseevents import (
+    WHEEL_BUTTONS, WHEEL_DOWN, WHEEL_UP,
+)
 import glfw
+import math
 import time
 import logging
 
 log = logging.getLogger(__name__)
+
+#: How near a whole wheel notch counts as one, for a touchpad reporting
+#: fractions whose sum lands a rounding error short.
+WHEEL_TOLERANCE = 1e-3
 
 
 class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
@@ -109,6 +117,52 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         )
         self.triggerPick()
 
+    def glfwOnScroll(self, window, xoffset, yoffset):
+        """Convert scrolling to the pair of button events a wheel notch is.
+
+        GLFW reports scrolling on a callback of its own, in offsets rather than
+        in the wheel buttons everything downstream reads (see
+        :data:`~OpenGLContext.events.mouseevents.WHEEL_UP`), so each whole notch
+        becomes a press and a release here.  Only the vertical offset is used:
+        nothing in the interface scrolls sideways.
+        """
+        for button in self._wheelNotches(yoffset):
+            self._emitWheel(window, button)
+
+    def _wheelNotches(self, offset):
+        """The whole notches in an offset, carrying the remainder to the next.
+
+        A wheel detent arrives as a whole notch, but a touchpad reports a
+        fraction of one at a time -- summed here, so a slow drag scrolls once it
+        has asked for a whole notch and a fast one scrolls no further than it was
+        pushed.  Turning back drops what was carried rather than letting a jitter
+        over the pad accumulate into a notch the way it is not moving.
+        """
+        offset = float(offset)
+        if not offset:
+            return []
+        carried = getattr(self, '_wheelRemainder', 0.0)
+        if (carried > 0.0) != (offset > 0.0):
+            carried = 0.0
+        total = carried + offset
+        # Ten reported tenths sum to a hair under one, so a notch is anything
+        # within a thousandth of whole: nobody can feel the difference, and
+        # without it a steady drag loses a notch every so often for no reason
+        # the user can see.
+        notches = int(total + math.copysign(WHEEL_TOLERANCE, total))
+        self._wheelRemainder = total - notches
+        return [WHEEL_UP if offset > 0.0 else WHEEL_DOWN] * abs(notches)
+
+    def _emitWheel(self, window, button):
+        """One notch, as the press and release of a button that is never held."""
+        x, y = glfw.get_cursor_pos(window)
+        x, y = self._cursorToFramebuffer(window, x, y)
+        for state in (1, 0):
+            self.addPickEvent(
+                GLFWMouseButtonEvent(self, button, state, int(x), int(y))
+            )
+        self.triggerPick()
+
     def glfwOnCursorPos(self, window, xpos, ypos):
         """Convert mouse-movement to a Context-style event.
 
@@ -159,6 +213,11 @@ class GLFWXEvent(object):
         """Update the global mouse-button-states with an event's data"""
         index = buttonMapping.get(button)
         if index is None:
+            # A wheel notch keeps its own number and never enters the held-button
+            # state: no wheel is ever down, so a drag begun by one would have
+            # nothing to end it.
+            if button in WHEEL_BUTTONS:
+                return button, state
             log.warning(
                 "Unrecognized button ID: %s",
                 button,

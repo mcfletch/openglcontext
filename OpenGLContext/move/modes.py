@@ -24,7 +24,7 @@ moment needs no special case.
 """
 
 from gettext import gettext as _
-from typing import Any, Sequence, Tuple
+from typing import Any, Optional, Sequence, Tuple
 
 from vrml import field, node
 
@@ -60,6 +60,9 @@ class KeyBinding(node.Node):
     }
 
 
+#: How long a turn must be held to reach ``turnAcceleration`` x ``turnRate``.
+TURN_RAMP_SECONDS = 0.67
+
 #: Which entry of the event system's modifier triple each name reads.
 MODIFIER_INDEX = {'shift': 0, 'ctrl': 1, 'alt': 2}
 
@@ -69,7 +72,14 @@ class MovementMode(node.Node):
 
     PROTO = 'MovementMode'
     #: Whether the mode steers with the pointer and so wants it grabbed.
-    capturePointer = field.newField( 'capturePointer', 'SFBool', 1, False )
+    capturePointer = field.newField('capturePointer', 'SFBool', 1, False)
+    #: Radians of turn per second while a turn command is held.
+    turnRate = field.newField('turnRate', 'SFFloat', 1, 2.0)
+    #: Multiple of ``turnRate`` a held turn ramps up to, reached after
+    #: :data:`TURN_RAMP_SECONDS`.  1.0 turns at a steady rate.  A viewer wants
+    #: both a precise nudge and a quick spin in close quarters, and one rate
+    #: gives only one of them.
+    turnAcceleration = field.newField('turnAcceleration', 'SFFloat', 1, 1.0)
     #: How the mode is referred to when selecting one.
     name = field.newField('name', 'SFString', 1, '')
     #: A disabled mode is never selected and never claims the avatar.
@@ -90,12 +100,6 @@ class MovementMode(node.Node):
         'enabled': {'label': 'Available'},
         'capturePointer': {'label': 'Steer with the mouse'},
     }
-
-    #: How long the current turn has been held, and which way, for the ramp of
-    #: :attr:`_GroundMode.turnAcceleration`.  Not fields: this is the state of
-    #: one gesture in progress, not something to save or edit.
-    _turn_held: float = 0.0
-    _turning: float = 0.0
 
     def defaultBindings(self) -> Sequence[KeyBinding]:
         """The bindings a fresh instance starts with."""
@@ -160,13 +164,20 @@ class MovementMode(node.Node):
         """Advance one frame from sampled input.  Overridden by each mode."""
 
     # -- helpers shared by the concrete modes ----------------------------
+    #: How long the current turn has been held, and which way, for the ramp of
+    #: :attr:`turnAcceleration`.  Not fields: this is the state of one gesture
+    #: in progress, not something to save or edit.
+    _turn_held: float = 0.0
+    _turning: float = 0.0
+
     def _axis(self, inputs: Any, positive: str, negative: str) -> float:
         """A -1..1 axis from two commands of this mode."""
         return ((1.0 if self.active(inputs, positive) else 0.0)
                 - (1.0 if self.active(inputs, negative) else 0.0))
 
-    def _turn(self, dt: float, inputs: Any, platform: Any, rate: float) -> None:
-        """Apply the turn command every walking-style mode shares.
+    def _turn(self, dt: float, inputs: Any, platform: Any,
+              rate: Optional[float] = None) -> None:
+        """Apply the turn command every mode shares.
 
         ``platform.turn`` takes a **positive angle to swing right**, so the
         right-hand command passes its axis through unchanged.  That sense is
@@ -176,6 +187,8 @@ class MovementMode(node.Node):
         The ramp resets when the turn stops or reverses, so the next tap starts
         slow again rather than overshooting at full speed.
         """
+        if rate is None:
+            rate = float(self.turnRate)
         turn = self._axis(inputs, 'turnright', 'turnleft')
         if turn and turn == self._turning:
             self._turn_held += dt
@@ -189,22 +202,11 @@ class MovementMode(node.Node):
                    peak)
         platform.turn(turn * rate * ramp * dt)
 
-
-#: How long a turn must be held to reach ``turnAcceleration`` x ``turnRate``.
-TURN_RAMP_SECONDS = 0.67
-
-
 class _GroundMode(MovementMode):
     """Shared behaviour of the modes that walk a surface."""
 
-    turnRate = field.newField('turnRate', 'SFFloat', 1, 2.0)
     #: Radians of pitch per second while a look command is held.
     lookRate = field.newField('lookRate', 'SFFloat', 1, 1.0)
-    #: Multiple of ``turnRate`` a held turn ramps up to, reached after
-    #: :data:`TURN_RAMP_SECONDS`.  1.0 turns at a steady rate.  A viewer wants
-    #: both a precise nudge and a quick spin in close quarters, and one rate
-    #: gives only one of them.
-    turnAcceleration = field.newField('turnAcceleration', 'SFFloat', 1, 1.0)
 
     UI_HINTS = {
         'turnRate': {'label': 'Turn rate', 'minimum': 0.25, 'maximum': 8.0,

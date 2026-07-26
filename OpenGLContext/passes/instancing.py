@@ -18,6 +18,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import numpy as np
 import ctypes
 
+from OpenGL.GL import (
+    GL_CCW, GL_CULL_FACE, glDisable, glEnable, glFrontFace,
+)
+
 __all__ = (
     'InstanceGroup',
     'geometry_instance_key',
@@ -284,6 +288,42 @@ def build_mesh_gpu(mode: Any, node: Any, positions: Any, normals: Any = None,
         except Exception:
             pass
     return gpu
+
+
+def set_cull_state(mode: Any, enabled: bool, front_face: int) -> None:
+    """Set face culling and winding for the next draw, if they are not already.
+
+    **The memo of what GL currently has belongs to the pass, and this is how it
+    is reached.**  A geometry node that wanted a particular winding used to
+    write the pass's private attributes from another package: an
+    underscore-prefixed protocol with two participants, no owner, and nothing
+    to find it by from the pass's own module.
+
+    Re-issued only when it actually changes -- an assembly draws hundreds of
+    same-state shapes in a row -- and reset once per pass by
+    :func:`reset_cull_state` rather than per draw.
+    """
+    if getattr(mode, '_cull_front_face', None) != front_face:
+        glFrontFace(front_face)
+        mode._cull_front_face = front_face
+    if getattr(mode, '_cull_enabled', None) != enabled:
+        (glEnable if enabled else glDisable)(GL_CULL_FACE)
+        mode._cull_enabled = enabled
+
+
+def reset_cull_state(mode: Any) -> None:
+    """Put culling and winding back to the GL defaults after a geometry loop.
+
+    Called once per pass, so a mesh's clockwise winding or disabled culling
+    never leaks into the next pass or frame.  Idempotent, and safe when nothing
+    set the state at all.
+    """
+    if getattr(mode, '_cull_front_face', None) not in (None, GL_CCW):
+        glFrontFace(GL_CCW)
+    if getattr(mode, '_cull_enabled', None) is False:
+        glEnable(GL_CULL_FACE)
+    mode._cull_front_face = None
+    mode._cull_enabled = None
 
 
 def group_material_table(group: Any) -> tuple[list, list]:

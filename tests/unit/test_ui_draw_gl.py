@@ -377,3 +377,184 @@ def test_a_context_can_let_its_text_renderers_go(gl_context):
     made.initialize()
     shadertext.drop_text_renderers()
     assert shadertext.get_text_renderer(16) is not made
+
+
+class TestTheContextDrawsItsOwnOverlay:
+    """``renderShaderOverlay`` is the seam the whole system hangs from.
+
+    It is what ties the stack, the window size, the font atlas and the renderer
+    together, and it is the only place that guarantees a panel is laid out for
+    the current window before it is drawn.  There is a real GL context here, so
+    there is no reason for it to be the one part nothing exercises.
+    """
+
+    @pytest.fixture
+    def context(self, gl_context):
+        from OpenGL.GL import glViewport
+        from OpenGLContext.ui.overlay import OverlayMixin
+        glViewport(0, 0, WIDTH, HEIGHT)
+
+        class Context(OverlayMixin):
+            contextDefinition = None
+            captured = False
+
+            def getViewPort(self):
+                return (WIDTH, HEIGHT)
+
+            def getInputState(self):
+                return _Sampler()
+
+            def triggerRedraw(self, flag):
+                pass
+
+            def suspendPointerCapture(self, suspend):
+                self.captured = suspend
+
+        made = Context()
+        yield made
+        renderer = getattr(made, '_overlayRenderer', None)
+        if renderer is not None:
+            renderer.close()
+
+    def test_an_empty_stack_draws_nothing_and_does_not_fail(self, context):
+        clear()
+        context.renderShaderOverlay(None)
+        assert frame().max() == 0
+
+    def test_a_pushed_panel_reaches_the_framebuffer(self, context):
+        context.pushOverlay(Panel(children=[Label(text='hello')], title='T'))
+        clear()
+        context.renderShaderOverlay(None)
+        assert frame().max() > 0, "the panel drew nothing at all"
+
+    def test_it_lays_out_for_the_window_before_drawing(self, context):
+        panel = context.pushOverlay(Panel(children=[Label(text='hello')]))
+        context.overlays.invalidate()
+        panel.rect = Rect(0, 0, 0, 0)
+        clear()
+        context.renderShaderOverlay(None)
+        assert not panel.rect.empty, "drawn without being laid out"
+
+    def test_it_draws_every_panel_in_the_stack(self, context):
+        """A parent screen keeps showing behind the dialog raised over it."""
+        under = context.pushOverlay(Panel(children=[Label(text='under')],
+                                          scrim=False, fill=True))
+        over = context.pushOverlay(Panel(children=[Label(text='over')],
+                                         scrim=False, preferredColumns=8))
+        clear()
+        context.renderShaderOverlay(None)
+        pixels = frame()
+        assert not over.rect.empty and not under.rect.empty
+        # A row of the lower panel that the upper one does not cover.
+        row = max(0, under.rect.y + 2)
+        outside = [x for x in range(under.rect.x + 2, under.rect.right - 2)
+                   if not over.rect.contains(x, row)]
+        assert outside, "the dialog covered the whole screen"
+        assert max(pixels[row][x].sum() for x in outside) > 0, \
+            "the panel underneath was not drawn"
+        assert pixels[over.rect.centre[1]][over.rect.centre[0]].sum() > 0, \
+            "the panel on top was not drawn"
+
+
+class _Sampler:
+    def clear(self):
+        pass
+
+
+class TestTheBatchDoesNotFlushForNothing:
+    """A quad with nothing to show must not disturb the batch.
+
+    A transparent colour is ordinary here -- a Label's default colour means
+    "use the skin", a Grid guards its hairline on the rule's alpha, and a skin
+    turns a fill off by zeroing it.  Changing the texture and then deciding
+    there is nothing to draw costs the batch two draw calls: one to flush what
+    came before, and one to get back to it.
+    """
+
+    def test_a_transparent_quad_leaves_the_batch_alone(self, renderer):
+        renderer.begin((WIDTH, HEIGHT))
+        try:
+            renderer.rect(Rect(0, 0, 8, 8), (1, 1, 1, 1))
+            before = (renderer._texture, renderer._mode, len(renderer._vertices))
+            renderer.quad(Rect(0, 0, 8, 8), (1, 1, 1, 0), texture=renderer._disc)
+            assert (renderer._texture, renderer._mode,
+                    len(renderer._vertices)) == before
+        finally:
+            renderer.end()
+
+    def test_an_empty_rectangle_leaves_the_batch_alone(self, renderer):
+        renderer.begin((WIDTH, HEIGHT))
+        try:
+            renderer.rect(Rect(0, 0, 8, 8), (1, 1, 1, 1))
+            before = (renderer._texture, len(renderer._vertices))
+            renderer.quad(Rect(0, 0, 0, 8), (1, 1, 1, 1), texture=renderer._disc)
+            assert (renderer._texture, len(renderer._vertices)) == before
+        finally:
+            renderer.end()
+
+    def test_a_visible_quad_still_switches_texture(self, renderer):
+        renderer.begin((WIDTH, HEIGHT))
+        try:
+            renderer.rect(Rect(0, 0, 8, 8), (1, 1, 1, 1))
+            renderer.quad(Rect(0, 0, 8, 8), (1, 1, 1, 1), texture=renderer._disc)
+            assert renderer._texture is renderer._disc
+        finally:
+            renderer.end()
+
+
+class TestClosingReleasesTheProgram:
+    def test_close_deletes_the_program(self, gl_context):
+        from OpenGL.GL import glIsProgram
+        from OpenGLContext.ui.draw import OverlayRenderer
+        made = OverlayRenderer(16)
+        if not made.initialize():
+            pytest.skip("no font atlas / program on this driver")
+        program = made._program
+        assert glIsProgram(program)
+        made.close()
+        assert not glIsProgram(program), "the GL program was leaked"
+
+    def test_closing_twice_is_harmless(self, gl_context):
+        from OpenGLContext.ui.draw import OverlayRenderer
+        made = OverlayRenderer(16)
+        if not made.initialize():
+            pytest.skip("no font atlas / program on this driver")
+        made.close()
+        made.close()
+
+
+class TestSkinArtworkUrls:
+    """A skin's ``url`` behaves the way an MFString url does everywhere else."""
+
+    @pytest.fixture
+    def artwork(self, tmp_path):
+        from PIL import Image
+        path = tmp_path / 'frame.png'
+        Image.new('RGBA', (12, 12), (200, 40, 40, 255)).save(str(path))
+        return path
+
+    def test_a_plain_path_loads(self, renderer, artwork):
+        assert renderer.imageTexture(str(artwork)) is not None
+
+    def test_a_file_url_loads(self, renderer, artwork):
+        assert renderer.imageTexture(artwork.as_uri()) is not None
+
+    def test_the_first_url_that_loads_is_used(self, renderer, artwork):
+        from OpenGLContext.ui.skin import NineSlice
+        image = NineSlice(url=[str(artwork.parent / 'missing.png'),
+                               str(artwork)], border=(4, 4, 4, 4))
+        renderer.begin((WIDTH, HEIGHT))
+        try:
+            assert renderer.ninepatch(Rect(0, 0, 32, 32), image)
+        finally:
+            renderer.end()
+
+    def test_artwork_that_cannot_be_read_falls_back_to_the_fill(self, renderer,
+                                                                tmp_path):
+        from OpenGLContext.ui.skin import NineSlice
+        image = NineSlice(url=[str(tmp_path / 'nope.png')])
+        renderer.begin((WIDTH, HEIGHT))
+        try:
+            assert not renderer.ninepatch(Rect(0, 0, 32, 32), image)
+        finally:
+            renderer.end()

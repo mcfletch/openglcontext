@@ -1,6 +1,8 @@
 """The console: scrollback, an input line, commands, and the log it shows."""
 
+import gc
 import logging
+import weakref
 
 import pytest
 
@@ -193,3 +195,90 @@ class TestPanelBehaviour:
         before = panel.body.scroll
         panel.wheel(1, *panel.body.rect.centre)
         assert panel.body.scroll < before
+
+
+class TestScrollbackDoesNotYankTheReaderAway:
+    """Output follows the end only for someone who is already at the end.
+
+    A console that jumped back to the bottom every time a line arrived would be
+    unusable in exactly the moment it is wanted -- reading the traceback that
+    the engine is still logging around.
+    """
+
+    def test_new_output_follows_when_already_at_the_end(self, metrics):
+        panel = console.console_panel()
+        panel.layout((400, 200), metrics)
+        for index in range(50):
+            panel.write('line %d' % (index,))
+        panel.layout((400, 200), metrics)
+        assert panel.body.scroll == panel.body.maximumScroll
+
+    def test_new_output_leaves_a_reader_who_scrolled_up_alone(self, metrics):
+        panel = console.console_panel()
+        panel.layout((400, 200), metrics)
+        for index in range(50):
+            panel.write('line %d' % (index,))
+        panel.layout((400, 200), metrics)
+        panel.body.scrollTo(0)
+        panel.write('a warning nobody asked to be dragged to')
+        assert panel.body.scroll == 0
+
+    def test_it_starts_following_again_once_scrolled_back_down(self, metrics):
+        panel = console.console_panel()
+        panel.layout((400, 200), metrics)
+        for index in range(50):
+            panel.write('line %d' % (index,))
+        panel.layout((400, 200), metrics)
+        panel.body.scrollTo(0)
+        panel.write('ignored')
+        panel.body.scrollTo(panel.body.maximumScroll)
+        panel.write('followed')
+        panel.layout((400, 200), metrics)
+        assert panel.body.scroll == panel.body.maximumScroll
+
+
+class TestTheLogHandlerLetsTheConsoleGo:
+    """A closed console is collectable, handler or no handler.
+
+    The handler outlives the panel -- it is held by the logging framework for
+    the life of the process -- so holding the panel strongly keeps its whole
+    widget tree, its scrollback and every node a widget is bound to alive with
+    it.
+    """
+
+    def test_closing_the_console_detaches_the_handler(self):
+        logger = logging.getLogger('OpenGLContext.test.console.detach')
+        panel = console.console_panel()
+        handler = console.ConsoleLogHandler(panel, logger=logger)
+        assert handler in logger.handlers
+        panel.close(True)
+        assert handler not in logger.handlers
+
+    def test_the_panel_can_be_collected_once_closed(self):
+        logger = logging.getLogger('OpenGLContext.test.console.collect')
+        panel = console.console_panel()
+        console.ConsoleLogHandler(panel, logger=logger)
+        reference = weakref.ref(panel)
+        panel.close(True)
+        del panel
+        gc.collect()
+        assert reference() is None, "the handler is still holding the console"
+
+    def test_logging_still_reaches_a_live_console(self):
+        logger = logging.getLogger('OpenGLContext.test.console.live')
+        logger.propagate = False
+        panel = console.console_panel()
+        console.ConsoleLogHandler(panel, logger=logger)
+        logger.warning('a texture would not load')
+        assert any('would not load' in line.text for line in panel.view.lines)
+
+    def test_a_collected_console_stops_receiving_rather_than_failing(self):
+        logger = logging.getLogger('OpenGLContext.test.console.dead')
+        logger.propagate = False
+        panel = console.console_panel()
+        handler = console.ConsoleLogHandler(panel, logger=logger)
+        panel.close(True)
+        del panel
+        gc.collect()
+        logger.warning('nobody is listening')      # must not raise
+        assert handler.panel is None

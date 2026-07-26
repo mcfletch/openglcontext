@@ -275,6 +275,15 @@ walking into a wall while typing into a text field. So:
 `InputState` itself is unchanged: it samples continuous movement, and discrete
 pointer-driven UI is a different job.
 
+**A wheel notch is a mouse button, not a fourth kind of input.** It arrives as
+a press and release of `WHEEL_UP` (3) or `WHEEL_DOWN` (4) — the X11 numbering,
+in `events.mouseevents` — so it needs no route of its own, is bindable like any
+other button, and a capturing panel sees it verbatim. Each backend translates
+into that spelling; GLFW reports scrolling on a separate callback in offsets,
+and on a touchpad in fractions of a notch, which are summed until they make one.
+Since a notch is an *increment* rather than a state, it is the one event the
+per-frame pick queue must not collapse: `Event.getPickKey` is what says so.
+
 ### Modals stack, and only the top one hears anything
 
 Overlays form a stack. The rule above is the stack applied recursively: **the
@@ -335,7 +344,8 @@ be the wrong direction.
 5. **Key binding** — `ui/bindings.py`, `move/bindingstore.py`. Delivered: a
    rebinding page over `NavigationManager.binding_table()`, with a `capturing`
    dialog, a conflict confirmation raised over it, and JSON persistence in the
-   per-user app-data directory.
+   per-user app-data directory. A capture takes effect at once and the *file*
+   waits for Save; Cancel and Escape put every binding back, a reset included.
 6. **Skinning** — `Skin`, `NineSlice` and the nine-slice draw path. Delivered:
    `oglc-ui --skin`, whose artwork is generated at start-up so the demo proves
    one image serves every widget width with no binary in the repository.
@@ -370,6 +380,13 @@ Settled at review; the sections above are written to match.
    `WalkMode` appears in the settings screen with no UI work and cannot silently
    go missing; a screen wanting better grouping or wording supplies an authored
    `Panel` instead. The cost is one fallback path, which is worth it.
+
+   A number with no declared range gets a `NumberField` rather than a text
+   field. A number on its way in is not a number yet — `''`, `'-'` and `'3.'`
+   are all positions the caret passes through — so the widget holds the text
+   being typed and only a complete number reaches the node. A text field bound
+   straight to an `SFFloat` cannot do this: it hands string arithmetic a float
+   on the first keystroke.
 3. **The console is deferred.** It shares only the scrolling viewport with the
    settings work, so it stays at stage 7, after the licence screen has proved
    the scrolling.
@@ -429,3 +446,19 @@ Settled at review; the sections above are written to match.
     both places, or the world turns under the dialog. The position is still
     tracked while suspended, so the journey across the dialog is not delivered
     as one flick on the way back.
+12. **A widget measures against the metrics it was laid out with.** Geometry
+    derived from a widget's rectangle — a slider's track, a text field's caret
+    column — has to use the numbers that rectangle was made from, so
+    `GUINode.metrics` keeps them and the geometry helpers take no metrics
+    argument at all. An optional one is how the two come apart: the paint path
+    passed it and the hit-test path did not, so a slider responded to the
+    pointer somewhere other than where it had drawn itself, and its maximum
+    could not be reached. The room a slider keeps for its printed value is
+    sized for the widest number it can ever show rather than the one it holds,
+    or the track changes length as you drag it.
+13. **A row measures twice, and only the children that need it.** A row cannot
+    hand its width down before the flexible shares are settled, so anything
+    whose height follows its width says so with `wrapsToWidth`; the row settles
+    the shares, holds those children to the room left, and asks them again.
+    Everything else is measured once — a second text-wrapping pass over every
+    label on the page is not free.

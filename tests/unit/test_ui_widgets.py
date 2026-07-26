@@ -328,13 +328,20 @@ class TestSelect:
     def test_it_falls_back_to_the_value_when_unlabelled(self):
         assert Select(options=['low'], value='low').display_value() == 'low'
 
-    def test_the_wheel_cycles_it(self, select):
+    def test_the_wheel_cycles_it_when_it_has_focus(self, select):
+        select.focus_gained()
         assert select.wheel(1, 10, 10)
         assert select.settings.quality == 'low'
         select.wheel(-1, 10, 10)
         assert select.settings.quality == 'high'
 
+    def test_the_wheel_passes_by_when_it_has_not(self, select):
+        """So scrolling a page of controls reads it rather than edits it."""
+        assert not select.wheel(1, 10, 10)
+        assert select.settings.quality == 'high'
+
     def test_a_wheel_notch_of_nothing_does_nothing(self, select):
+        select.focus_gained()
         assert not select.wheel(0, 10, 10)
 
     def test_a_key_it_does_not_use_is_left_alone(self, select):
@@ -408,13 +415,21 @@ class TestSlider:
         slider.key('<home>', (0, 0, 0))
         assert slider.settings.lights == 0
 
-    def test_the_wheel_steps_it(self, slider):
+    def test_the_wheel_steps_it_when_it_has_focus(self, slider):
+        slider.focus_gained()
         assert slider.wheel(1, 10, 10)
         assert slider.settings.lights == 5
         slider.wheel(-1, 10, 10)
         assert slider.settings.lights == 4
 
+    def test_the_wheel_passes_by_when_it_has_not(self, slider):
+        """So scrolling a page of controls reads it rather than edits it."""
+        before = slider.settings.lights
+        assert not slider.wheel(1, 10, 10)
+        assert slider.settings.lights == before
+
     def test_a_wheel_notch_of_nothing_does_nothing(self, slider):
+        slider.focus_gained()
         assert not slider.wheel(0, 10, 10)
 
     def test_a_key_it_does_not_use_is_left_alone(self, slider):
@@ -422,7 +437,7 @@ class TestSlider:
 
     def test_it_prints_its_value_with_the_suffix(self, metrics):
         slider = Slider(minimum=0, maximum=10, value=3, suffix=' m/s')
-        assert slider.display_value(metrics) == '3 m/s'
+        assert slider.display_value() == '3 m/s'
 
     def test_a_zero_range_slider_does_not_divide_by_zero(self, metrics):
         slider = Slider(minimum=1.0, maximum=1.0)
@@ -571,3 +586,92 @@ class TestSpacer:
         spacer = Spacer()
         assert spacer.natural_size(metrics) == (0, 0)
         assert spacer.flex == 1.0
+
+
+class TestSliderPointerMatchesWhatIsDrawn:
+    """The rectangle a click is measured against is the one on screen.
+
+    A slider prints its value beside the track, so the track is shorter than
+    the widget.  Measuring a click against the full width instead puts every
+    value slightly low and makes the maximum unreachable -- the thumb stops
+    following the pointer, which is the whole interaction.
+    """
+
+    @pytest.fixture
+    def slider(self, metrics):
+        settings = Settings()
+        slider = Slider(minimum=0.0, maximum=10.0, target=settings,
+                        fieldName='exposure')
+        slider.arrange(Rect(0, 0, 200, 24), metrics)
+        slider.settings = settings
+        return slider
+
+    def test_clicking_the_end_of_the_track_reaches_the_maximum(self, slider):
+        track = slider.track_rect()
+        slider.press(track.right, track.centre[1])
+        assert slider.read() == pytest.approx(10.0)
+
+    def test_clicking_the_start_of_the_track_reaches_the_minimum(self, slider):
+        track = slider.track_rect()
+        slider.press(track.x, track.centre[1])
+        assert slider.read() == pytest.approx(0.0)
+
+    def test_the_track_keeps_its_length_as_the_value_grows(self, slider):
+        """A track that shortened as the number beside it gained a digit would
+        move the thumb out from under the pointer part-way through a drag."""
+        before = slider.track_rect()
+        slider.press(*slider.thumb_rect().centre)
+        slider.drag(before.x + before.width * 3 // 4, before.centre[1])
+        assert slider.track_rect() == before
+
+    def test_clicking_the_middle_of_the_track_is_the_middle_value(self, slider):
+        track = slider.track_rect()
+        slider.press(*track.centre)
+        assert slider.read() == pytest.approx(5.0, abs=0.3)
+
+    def test_the_thumb_follows_the_pointer(self, slider):
+        track = slider.track_rect()
+        target = track.x + (track.width * 3) // 4
+        slider.press(*slider.thumb_rect().centre)
+        slider.drag(target, track.centre[1])
+        assert slider.thumb_rect().centre[0] == pytest.approx(target, abs=2)
+
+    def test_dragging_past_the_end_still_clamps(self, slider):
+        slider.press(*slider.thumb_rect().centre)
+        slider.drag(10_000, 12)
+        assert slider.read() == pytest.approx(10.0)
+
+
+class TestTextFieldCaretFollowsTheClick:
+    """Clicking into text puts the caret where the pointer is.
+
+    Landing at the end whatever was clicked means every correction has to be
+    made by arrow key, which is what a text field exists to avoid.
+    """
+
+    @pytest.fixture
+    def entry(self, metrics):
+        settings = Settings()
+        entry = TextField(target=settings, fieldName='title')
+        entry.arrange(Rect(0, 0, 200, 24), metrics)
+        entry.settings = settings
+        return entry
+
+    def test_clicking_mid_word_puts_the_caret_there(self, entry, metrics):
+        pad = int(entry.activeSkin().fieldPadding)
+        entry.press(entry.rect.x + pad + metrics.char_width * 2, 12)
+        assert entry.caret == 2
+
+    def test_clicking_past_the_end_puts_the_caret_at_the_end(self, entry):
+        entry.press(entry.rect.right - 1, 12)
+        assert entry.caret == len('hello')
+
+    def test_typing_after_a_click_inserts_at_the_caret(self, entry, metrics):
+        pad = int(entry.activeSkin().fieldPadding)
+        entry.press(entry.rect.x + pad + metrics.char_width * 2, 12)
+        entry.character('X')
+        assert entry.settings.title == 'heXllo'
+
+    def test_focus_arriving_by_tab_still_starts_at_the_end(self, entry):
+        entry.focus_gained()
+        assert entry.caret == len('hello')

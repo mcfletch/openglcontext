@@ -109,7 +109,11 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+# Matches the interpreter the project is developed and tested against.  The
+# shipped numpy stubs use syntax that only parses under 3.12, so a lower value
+# here does not check an older Python -- it aborts on numpy's own stub before
+# checking anything at all.
+python_version = "3.12"
 warn_return_any = true
 warn_unused_ignores = true
 ignore_missing_imports = true
@@ -119,7 +123,7 @@ ignore_missing_imports = true
 # vectorized physics core and buries the genuine type errors.  Turn it off for
 # that package only; every other check (arg types, optionals, attributes) stays on.
 [[tool.mypy.overrides]]
-module = "OpenGLContext.*"
+module = "OpenGLContext.physics.*"
 warn_return_any = false
 
 [tool.pytest.ini_options]
