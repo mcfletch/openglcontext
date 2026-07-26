@@ -422,9 +422,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         shader.use(lit=True)  # Ensure shader is bound before setting uniforms
         light_count = 0
         light_paths = self.paths.get(nodetypes.Light, ())
+        ceiling = self.maxLights(shader.MAX_LIGHTS)
 
         for path in light_paths:
-            if light_count >= shader.MAX_LIGHTS:
+            if light_count >= ceiling:
                 break
             tmatrix = path.transformMatrix()
             light_node = path[-1]
@@ -443,6 +444,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         else:
             shader.set_num_lights(light_count)
             log.debug("Set up %d lights", light_count)
+
+    def maxLights(self, ceiling: int) -> int:
+        """Lights to bind this frame.  The base pass uses all the shader has."""
+        return int(ceiling)
 
     def shaderBackgroundRender(self, vp: Any, matrix: Any) -> None:
         """Render background for shader mode.

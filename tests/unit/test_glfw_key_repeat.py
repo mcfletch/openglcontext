@@ -110,3 +110,42 @@ def test_pump_is_noop_when_no_key_held(ctx):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestSpecialKeysAreNotCharacters:
+    """Where a function key can be bound, and where it cannot.
+
+    GLFW reports character input and key transitions through different
+    callbacks: ``glfwOnCharacter`` produces the ``keypress`` events, and a
+    function key produces no character at all.  So a handler registered as
+    ``addEventHandler('keypress', name='<F10>', ...)`` is silently dead -- the
+    binding is accepted and never fires.  Special keys have to be bound on
+    ``keyboard`` with an explicit state.
+    """
+
+    def test_a_function_key_has_a_name_in_the_key_mapping(self):
+        from OpenGLContext.events import glfwevents
+        assert glfwevents.keyboardMapping[glfw.KEY_F10] == '<F10>'
+
+    def test_a_function_key_produces_a_keyboard_event(self):
+        from OpenGLContext.events import glfwevents
+
+        class Recorder(glfwevents.EventHandlerMixin):
+            def __init__(self):
+                self.events = []
+
+            def ProcessEvent(self, event):
+                self.events.append(event)
+
+        recorder = Recorder()
+        recorder.glfwOnKey(None, glfw.KEY_F10, 0, glfw.PRESS, 0)
+        assert [(e.type, e.name, e.state) for e in recorder.events] == [
+            ('keyboard', '<F10>', 1)]
+
+    def test_the_overlay_demo_binds_its_screens_where_they_arrive(self):
+        """The demo is the worked example, so its bindings have to be right."""
+        import inspect
+        from OpenGLContext.bin import ui_demo
+        source = inspect.getsource(ui_demo.UIDemoContext.OnInit)
+        assert "addEventHandler('keyboard'" in source
+        assert "addEventHandler('keypress'" not in source

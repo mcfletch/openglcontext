@@ -271,10 +271,12 @@ def probe_float_render_capability(force: bool = False) -> bool:
 
 
 def resolve_ibl_mode(renderer: str = '',
-                     probe: Optional[Callable[[], bool]] = None) -> str:
+                     probe: Optional[Callable[[], bool]] = None,
+                     requested: str = '') -> str:
     """Choose the base IBL path: 'full', 'analytic', or 'off'.
 
-    ``OPENGLCONTEXT_IBL`` overrides (full/on, analytic/approx, off/none).
+    ``requested`` is ``ContextDefinition.ibl``; 'auto' or empty falls back to
+    ``OPENGLCONTEXT_IBL`` (full/on, analytic/approx, off/none).
     Unset or 'auto': full on a hardware GPU, analytic on a software rasteriser
     (the prefilter/importance-sample precompute is too slow on llvmpipe).
 
@@ -284,7 +286,9 @@ def resolve_ibl_mode(renderer: str = '',
     :func:`probe_float_render_capability`) that reports False degrades the result
     to 'analytic' up front, rather than letting the shortfall surface mid-build.
     """
-    env = os.environ.get('OPENGLCONTEXT_IBL', '').strip().lower()
+    env = (requested or '').strip().lower()
+    if env in ('', 'auto'):
+        env = os.environ.get('OPENGLCONTEXT_IBL', '').strip().lower()
     if env in ('off', 'none', '0'):
         return 'off'
     if env in ('analytic', 'approx', 'analytical'):
@@ -300,11 +304,16 @@ def resolve_ibl_mode(renderer: str = '',
     return 'full'
 
 
-def ibl_is_adaptive() -> bool:
-    """Whether IBL should fps-adaptively degrade. An explicit ``OPENGLCONTEXT_IBL``
-    mode (full/analytic/off) pins that mode; only ``auto``/unset adapts. Pinning
-    matters for deterministic captures and for a loaded environment cubemap, which
-    only the ``full`` probe samples."""
+def ibl_is_adaptive(requested: str = '') -> bool:
+    """Whether IBL should fps-adaptively degrade.
+
+    An explicitly chosen mode (full/analytic/off), from the context definition
+    or from ``OPENGLCONTEXT_IBL``, pins that mode; only ``auto``/unset adapts.
+    Pinning matters for deterministic captures and for a loaded environment
+    cubemap, which only the ``full`` probe samples."""
+    env = (requested or '').strip().lower()
+    if env not in ('', 'auto'):
+        return False
     env = os.environ.get('OPENGLCONTEXT_IBL', '').strip().lower()
     return env in ('', 'auto')
 

@@ -618,14 +618,19 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1i('hdrOutput', 1 if enabled else 0, self.program)
 
 
-def instancing_is_enabled() -> bool:
-    """Whether instanced-geometry batching is on (``OPENGLCONTEXT_INSTANCING``).
+def instancing_is_enabled(source: Any = None) -> bool:
+    """Whether instanced-geometry batching is on.
 
-    Default on; set to 0/off/false to force the per-shape path (used to A/B the
-    performance win). Read per call so a benchmark can toggle it between frames.
+    ``ContextDefinition.instancing`` when a pass asks (``source``), otherwise
+    ``OPENGLCONTEXT_INSTANCING``. Default on; off forces the per-shape path,
+    which is how the performance win is A/B'd. Read per call, so a benchmark or
+    a settings screen can toggle it between frames.
     """
-    return os.environ.get('OPENGLCONTEXT_INSTANCING', '1').strip().lower() \
-        not in ('0', 'off', 'false', 'no')
+    from OpenGLContext import renderoptions
+    default = renderoptions.env_flag('OPENGLCONTEXT_INSTANCING', True)
+    if source is None:
+        return default
+    return renderoptions.flag(source, 'instancing', default)
 
 
 def instance_collapse_is_enabled() -> bool:
@@ -654,7 +659,7 @@ class PBRPass(flatcore.FlatPass):
     # attribute; the shader passes intentionally compute it as a read-only property.
     @property
     def instancing_enabled(self) -> bool:  # type: ignore[override]
-        return instancing_is_enabled()
+        return instancing_is_enabled(self)
 
     def getShaderProgram(self) -> VRML97ShaderProgram:
         if self._shader_program_instance is None:

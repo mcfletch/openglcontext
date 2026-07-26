@@ -155,6 +155,35 @@ class ShaderTextRenderer:
         """Actual font size being used."""
         return self._actual_size
 
+    @property
+    def texture(self):
+        """The atlas texture id, or None before initialize() has run.
+
+        Exposed so another renderer -- the overlay UI, which batches text and
+        widget frames into one draw with its own program -- can bind the same
+        atlas rather than building a second copy of it.
+        """
+        return self._texture
+
+    def glyph_uv(self, char):
+        """Texture coordinates for one character, as (u0, v0, u1, v1).
+
+        v0 goes with the *bottom* of the quad and v1 with the top: within a
+        cell, low V is the top of the glyph, so the pair is swapped here and
+        the caller draws the quad in ordinary screen order.  A character
+        outside the atlas falls back to '?'.
+        """
+        code = ord(char)
+        if code < self._first_char or code > self._last_char:
+            code = ord('?')
+        index = code - self._first_char
+        col = index % self._chars_per_row
+        row = index // self._chars_per_row
+        return (col * self._char_width / self._atlas_width,
+                (row + 1) * self._char_height / self._atlas_height,
+                (col + 1) * self._char_width / self._atlas_width,
+                row * self._char_height / self._atlas_height)
+
     def measure_text(self, text):
         """Measure the dimensions of rendered text.
 

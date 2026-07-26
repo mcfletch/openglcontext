@@ -172,7 +172,7 @@ class TestBloomWrapDefensive:
 
     def test_begin_bloom_disabled_returns_false(self, monkeypatch):
         from OpenGLContext.passes import bloom
-        monkeypatch.setattr(bloom, 'bloom_enabled', lambda: False)
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: False)
         p = _FlatEffectsMixin()
         p.viewport = (0, 0, 64, 64)
         assert p._begin_bloom() is False
@@ -180,7 +180,7 @@ class TestBloomWrapDefensive:
 
     def test_begin_bloom_zero_viewport_returns_false(self, monkeypatch):
         from OpenGLContext.passes import bloom
-        monkeypatch.setattr(bloom, 'bloom_enabled', lambda: True)
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
         p = _FlatEffectsMixin()
         p.viewport = (0, 0, 0, 0)
         assert p._begin_bloom() is False
@@ -193,7 +193,7 @@ class TestBloomWrapDefensive:
             def begin(self, w, h):
                 raise RuntimeError("simulated bloom setup failure")
 
-        monkeypatch.setattr(bloom, 'bloom_enabled', lambda: True)
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
         monkeypatch.setattr(bloom, 'BloomPass', _BoomPass)
         p = _FlatEffectsMixin()
         p.viewport = (0, 0, 64, 64)

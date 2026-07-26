@@ -726,6 +726,19 @@ class Context(ContextConfigMixin):
         finally:
             contextLock.release()
 
+    def settingsChanged(self):
+        """The context definition has been edited; re-read what is not per-frame.
+
+        Most rendering options are read by the render pass every frame (see
+        :mod:`OpenGLContext.renderoptions`), so a change shows up on its own.
+        The few that are set once on the window -- the swap interval, the buffer
+        format -- are re-applied here. A backend overrides this for its own;
+        anything that cannot be changed without a new context is left alone.
+
+        Called by the settings screen when Apply is pressed.
+        """
+        self.triggerRedraw(1)
+
     def triggerRedraw(self, force=0):
         """Indicate to the context that it should redraw when possible
 

@@ -74,6 +74,40 @@ Known failures:
 3. **Coverage improvement** - Currently 9%, target 80%+
 4. **CI integration (Phase 6)** - Deferred to separate plan
 
+## Open finding: an import that breaks a later GL test
+
+`tests/unit/test_passes_render_gl.py` fails its first four tests, and then the
+pytest process dies without printing a summary, whenever it runs after certain
+other modules. Two files reproduce it:
+
+```bash
+pytest tests/unit/test_glut_lineset.py tests/unit/test_passes_render_gl.py -p no:randomly
+```
+
+`test_glut_lineset.py` **collects no tests at all** -- its `TestContext` has an
+`__init__` and pytest skips it -- so the damage is done purely by importing the
+module. What survives that import is enough to stop the PBR pass instancing
+(`instanced_calls == 0` with `renderer_is_pbr()` still True, so the pass *is*
+selected and simply draws nothing through the instanced path).
+
+Confirmed **not** caused by the overlay-UI work: with every `OpenGLContext/`
+change of that branch stashed, the same run produces a byte-identical tail.
+
+What is known:
+
+- The failing tests pass in isolation and in small combinations; the fixture in
+  `test_passes_render_gl.py` already tears its windows down and calls
+  `glfw.terminate()`, so nothing accumulates *within* that file.
+- `OpenGL.GLUT` is imported by `scenegraph/boundingvolume.py` at module scope
+  (`from OpenGL.GLUT import glutSolidCube`), so it is loaded in both the passing
+  and the failing orders -- the GLUT import alone is not the difference.
+- Bisecting the alphabetical file order puts the change at exactly that module.
+
+Not yet known: which piece of state -- a module-level cache holding an id from a
+terminated context, a leaked GLFW/GLUT interaction, or a driver-level effect --
+carries across. Worth finding: it is the only thing standing between this suite
+and a clean full run, and "passes in isolation" is not passing.
+
 ## Original Plan (for reference)
 
 ## Implementation Plan

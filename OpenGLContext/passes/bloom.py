@@ -37,8 +37,18 @@ from OpenGL.GL import (
 from OpenGL.GL import shaders as GL_shaders
 
 
-def bloom_enabled() -> bool:
-    return os.environ.get('OPENGLCONTEXT_BLOOM', '').strip().lower() in ('1', 'on', 'true', 'yes')
+def bloom_enabled(source: Any = None) -> bool:
+    """Whether the bloom post-process runs (ContextDefinition.bloom).
+
+    ``source`` is the render pass asking, from which the context definition is
+    found; without one the environment default stands, which is what a bare
+    unit test gets.
+    """
+    from OpenGLContext import renderoptions
+    default = renderoptions.env_flag('OPENGLCONTEXT_BLOOM', False)
+    if source is None:
+        return default
+    return renderoptions.flag(source, 'bloom', default)
 
 
 _FS_VERT = """#version 330 core

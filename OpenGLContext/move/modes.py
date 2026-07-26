@@ -48,6 +48,17 @@ class KeyBinding(node.Node):
     #: apart from the same arrow alone (walk).
     modifier = field.newField('modifier', 'SFString', 1, '')
 
+    #: How a generated settings page presents this; see
+    #: :mod:`OpenGLContext.ui.generate`.
+    UI_HINTS = {
+        'keys': {'label': 'Keys', 'editor': 'keys'},
+        'command': {'skip': True},
+        'label': {'skip': True},
+        'modifier': {'label': 'Held with',
+                     'options': ('', 'shift', 'ctrl', 'alt'),
+                     'optionLabels': ('none', 'Shift', 'Ctrl', 'Alt')},
+    }
+
 
 #: Which entry of the event system's modifier triple each name reads.
 MODIFIER_INDEX = {'shift': 0, 'ctrl': 1, 'alt': 2}
@@ -69,6 +80,16 @@ class MovementMode(node.Node):
     #: Commands this mode acts on.  A settings window needs no more than this
     #: plus the bindings to present the mode.
     commands: Sequence[str] = ()
+
+    #: How a generated settings page presents this mode's tunables.
+    UI_HINTS = {
+        # The name is how a game and a saved file refer to this mode, not
+        # something a player chooses; renaming it from a settings screen would
+        # break the binding file that stores keys under it.
+        'name': {'skip': True},
+        'enabled': {'label': 'Available'},
+        'capturePointer': {'label': 'Steer with the mouse'},
+    }
 
     #: How long the current turn has been held, and which way, for the ramp of
     #: :attr:`_GroundMode.turnAcceleration`.  Not fields: this is the state of
@@ -147,6 +168,11 @@ class MovementMode(node.Node):
     def _turn(self, dt: float, inputs: Any, platform: Any, rate: float) -> None:
         """Apply the turn command every walking-style mode shares.
 
+        ``platform.turn`` takes a **positive angle to swing right**, so the
+        right-hand command passes its axis through unchanged.  That sense is
+        the opposite of what deriving it from the yaw usually suggests: see
+        :meth:`OpenGLContext.move.physicsplatform.PhysicsViewPlatform.turn`.
+
         The ramp resets when the turn stops or reverses, so the next tap starts
         slow again rather than overshooting at full speed.
         """
@@ -180,6 +206,15 @@ class _GroundMode(MovementMode):
     #: gives only one of them.
     turnAcceleration = field.newField('turnAcceleration', 'SFFloat', 1, 1.0)
 
+    UI_HINTS = {
+        'turnRate': {'label': 'Turn rate', 'minimum': 0.25, 'maximum': 8.0,
+                     'step': 0.25, 'suffix': ' rad/s'},
+        'lookRate': {'label': 'Look rate', 'minimum': 0.25, 'maximum': 8.0,
+                     'step': 0.25, 'suffix': ' rad/s'},
+        'turnAcceleration': {'label': 'Turn acceleration', 'minimum': 1.0,
+                             'maximum': 6.0, 'step': 0.25, 'suffix': 'x'},
+    }
+
     commands: Sequence[str] = (
         'forward', 'back', 'left', 'right', 'turnleft', 'turnright',
         'lookup', 'lookdown')
@@ -205,7 +240,9 @@ class _GroundMode(MovementMode):
     def _look(self, dt: float, inputs: Any, platform: Any) -> None:
         """Tilt the view from the look commands.
 
-        A rising pitch tips the gaze down, so looking up subtracts.
+        ``platform.look`` takes a **positive angle to look down**, so the
+        look-*up* command subtracts.  Measured rather than derived; see
+        :meth:`OpenGLContext.move.physicsplatform.PhysicsViewPlatform.look`.
         """
         pitch = self._axis(inputs, 'lookup', 'lookdown')
         if pitch:
@@ -218,6 +255,13 @@ class WalkMode(_GroundMode):
     PROTO = 'WalkMode'
     walkSpeed = field.newField('walkSpeed', 'SFFloat', 1, 3.0)
     runSpeed = field.newField('runSpeed', 'SFFloat', 1, 6.0)
+
+    UI_HINTS = {
+        'walkSpeed': {'label': 'Walking speed', 'minimum': 0.5, 'maximum': 20.0,
+                      'step': 0.5, 'suffix': ' m/s'},
+        'runSpeed': {'label': 'Running speed', 'minimum': 0.5, 'maximum': 40.0,
+                     'step': 0.5, 'suffix': ' m/s'},
+    }
 
     commands: Sequence[str] = tuple(_GroundMode.commands) + ('run', 'jump')
 
@@ -246,6 +290,11 @@ class FlyMode(_GroundMode):
     PROTO = 'FlyMode'
     flySpeed = field.newField('flySpeed', 'SFFloat', 1, 8.0)
 
+    UI_HINTS = {
+        'flySpeed': {'label': 'Flying speed', 'minimum': 0.5, 'maximum': 60.0,
+                     'step': 0.5, 'suffix': ' m/s'},
+    }
+
     commands: Sequence[str] = tuple(_GroundMode.commands) + ('up', 'down')
 
     def defaultBindings(self) -> Sequence[KeyBinding]:
@@ -272,6 +321,13 @@ class SwimMode(_GroundMode):
     PROTO = 'SwimMode'
     swimSpeed = field.newField('swimSpeed', 'SFFloat', 1, 2.0)
     buoyancy = field.newField('buoyancy', 'SFFloat', 1, 0.9)
+
+    UI_HINTS = {
+        'swimSpeed': {'label': 'Swimming speed', 'minimum': 0.25,
+                      'maximum': 20.0, 'step': 0.25, 'suffix': ' m/s'},
+        'buoyancy': {'label': 'Buoyancy', 'minimum': 0.0, 'maximum': 1.0,
+                     'step': 0.05},
+    }
     commands: Sequence[str] = tuple(_GroundMode.commands) + ('up', 'down')
 
     def defaultBindings(self) -> Sequence[KeyBinding]:
@@ -304,12 +360,22 @@ class FPSMode(WalkMode):
     #: Whether pushing the mouse forward looks down (flight-sim style).
     invertLook = field.newField('invertLook', 'SFBool', 1, False)
 
+    UI_HINTS = {
+        'sensitivity': {'label': 'Mouse sensitivity', 'minimum': 0.0005,
+                        'maximum': 0.02, 'step': 0.0005},
+        'invertLook': {'label': 'Invert look'},
+    }
+
     def update(self, dt: float, inputs: Any, platform: Any) -> None:
         super(FPSMode, self).update(dt, inputs, platform)
         dx, dy = inputs.mouse_delta()
         if dx:
+            # Positive turn swings right, and a rightward mouse gives a
+            # positive dx, so this one passes straight through.
             platform.turn(dx * self.sensitivity)
         if dy:
-            # A rising pitch tips the gaze down, so an un-inverted mouse
-            # subtracts: pushing forward should look up.
+            # The delta arrives in the pick point's origin -- y counting
+            # *upward* -- so pushing the mouse forward gives a positive dy,
+            # and positive look() tips the gaze *down*.  An un-inverted mouse
+            # therefore subtracts: forward looks up.
             platform.look(-dy * self.sensitivity * (-1.0 if self.invertLook else 1.0))

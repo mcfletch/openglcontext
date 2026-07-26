@@ -1,7 +1,18 @@
 # Plan: Overlay UI — settings, key bindings, console
 
-**Status:** 📋 Proposed — reviewed 2026-07-25; the four questions below §Decisions
-are settled and the plan reflects them. Work has not started.
+**Status:** ✅ Complete — all seven stages are built, tested and documented.
+User documentation is [docs/overlayui.html](../docs/overlayui.html); the demo is
+`oglc-ui` (`--skin` for the nine-slice artwork). The sections below are the
+design and its reasoning, which the code follows.
+
+Two things landed alongside the stages and are worth naming because they are not
+in the stage list. Every switchable rendering feature — shadows, soft shadows,
+cascades, the light limit, bloom, IBL and its intensity, transmission,
+instancing, distance LOD, vsync — is now a **field on `ContextDefinition`** read
+through `OpenGLContext.renderoptions`, with the environment variable as the
+field's default; the settings screen is generated from those fields. And
+`twitchoglc.confirm` is gone: the download prompt is a `dialogs.confirm` panel,
+so the prototype has been replaced rather than left beside its successor.
 
 ## What this is for
 
@@ -288,11 +299,11 @@ The natural example of nesting is exactly here: capture a key, find it is alread
 bound to something else, and raise a confirmation *over the capture dialog* to ask
 whether to steal it.
 
-**This reverses a rule the prototype states deliberately.**
-`twitchoglc.confirm.ConfirmPrompt.key()` documents that an unrecognised key is
-*not* consumed "so walking and looking keep working while the prompt is up", and
-`test_an_unrelated_key_is_not_consumed` pins it. Under modality that behaviour is
-wrong, and both the docstring and the test change with the panel work.
+**This reverses a rule the prototype stated deliberately.**
+`twitchoglc.confirm.ConfirmPrompt.key()` documented that an unrecognised key was
+*not* consumed "so walking and looking keep working while the prompt is up".
+Under modality that is wrong: the prototype and the test that pinned it are gone,
+and `Panel.key` is a lid.
 
 ## Console
 
@@ -306,28 +317,28 @@ warnings appear where a player can read them.
 Each stage ends with something usable and tested, and stops if it turns out to
 be the wrong direction.
 
-1. **Measurement and boxes** — text measurement, natural sizes, Row/Column/
-   Grid, the default flat skin. Deliverable: the download prompt redrawn as a
-   `Panel` with wrapped text that stays inside its box.
-2. **Widgets and focus** — label, button, toggle, focus traversal, modal input
-   sinking, roles and the focus glow. Deliverable: the download prompt as a
-   modal `Panel` whose Yes is the primary/Enter default.
-3. **Model binding** — `SettingsSession`, nested `child()` sessions, field-driven
-   editors, Apply/Cancel. Deliverable: a rendering-settings page generated from
-   `ContextDefinition`, opening a movement-settings sub-page whose Cancel is real
-   at both levels.
-4. **Scrolling** — viewport, scrollbar, wheel and keyboard paging. Deliverable:
-   a licence-notice screen that scrolls.
-5. **Key binding** — a `capturing` panel, conflict detection with a confirmation
-   raised over it (the first real nested modal), persistence to the per-user
-   app-data directory. Deliverable: a rebinding page over
-   `NavigationManager.binding_table()`.
-6. **Skinning** — `Skin` node, nine-slice, per-state images. Deliverable: a
-   demo with authored artwork.
-7. **Console** — scrollback, input line, command registry, log handler.
-
-Stages 1–2 are what the download prompt needs. Everything after is the settings
-screen proper, and could stop after 5 with the system still worth having.
+1. **Measurement and boxes** — `ui/geometry.py`, `ui/metrics.py`, `hud.py`
+   (`GUINode`/`GUIBox` implemented rather than replaced), `ui/layout.py`,
+   `ui/skin.py`. Delivered: the download prompt as a `Panel` whose text wraps
+   to a measured `preferredColumns` width and stays inside its box.
+2. **Widgets and focus** — `ui/widgets.py`, `ui/panel.py`, `ui/overlay.py`,
+   `ui/draw.py`. Delivered: the prompt as a modal `Panel` whose Download is the
+   primary/Enter default, drawn by one batched GL program;
+   `twitchoglc.confirm` deleted.
+3. **Model binding** — `ui/session.py`, `ui/generate.py`, `ui/settings.py`.
+   Delivered: a rendering-settings page generated from `ContextDefinition`'s
+   fields, opening a movement sub-page whose Cancel is real at both levels.
+4. **Scrolling** — `ui/scroll.py`. Delivered: `dialogs.notice`, a licence screen
+   that scrolls, and every long page in the system.
+5. **Key binding** — `ui/bindings.py`, `move/bindingstore.py`. Delivered: a
+   rebinding page over `NavigationManager.binding_table()`, with a `capturing`
+   dialog, a conflict confirmation raised over it, and JSON persistence in the
+   per-user app-data directory.
+6. **Skinning** — `Skin`, `NineSlice` and the nine-slice draw path. Delivered:
+   `oglc-ui --skin`, whose artwork is generated at start-up so the demo proves
+   one image serves every widget width with no binary in the repository.
+7. **Console** — `ui/console.py`: scrollback, input line, command registry and
+   a `logging.Handler` that puts engine warnings where a player can read them.
 
 ## Risks
 
@@ -339,9 +350,12 @@ screen proper, and could stop after 5 with the system still worth having.
   want signed-distance-field glyphs, which is a separate job.
 - **Whether nodes are the right substrate for widgets.** Fields give
   validation, serialisation and change notification for free, which is most of
-  a UI framework. The risk is per-widget-per-frame node overhead in a large
-  scrolling list; the mitigation is that layout is not per frame, and a long
-  list is virtualised in stage 4 or the design is revisited then.
+  a UI framework. The risk was per-widget-per-frame node overhead in a large
+  scrolling list. It has not bitten: layout runs on a change rather than a
+  frame, scrolling offsets the laid-out rectangles instead of re-measuring, and
+  the whole tree draws in two or three batched calls. A list long enough to
+  need virtualising has not appeared; the binding page, the longest so far, is
+  a few dozen widgets.
 
 ## Decisions
 

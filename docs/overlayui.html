@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Overlay UI &mdash; settings, dialogs and the console</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Overlay UI</h1>
+</header>
+
+<section>
+<p class="introduction">The <strong>overlay UI</strong> draws panels over a live
+frame and drives them with the pointer: a settings screen, a key-binding page, a
+licence notice, a yes/no question and a console. It is deliberately not a general
+widget toolkit &mdash; there is no window management, no docking, no rich text
+&mdash; but it is enough to give a game a screen it can bring up over the running
+world, and it needs no artwork to work at all.</p>
+<p>Try it: <code>oglc-ui</code> (add <code>--skin</code> for the same screens
+painted with nine-slice artwork). The keys it binds are printed when it starts.</p>
+</section>
+
+<section id="quickstart">
+  <h2>Putting a screen on the frame</h2>
+  <p>A context gains the overlay by mixing in
+    <code>OpenGLContext.ui.overlay.OverlayMixin</code>. Mix it in <strong>ahead
+    of</strong> the navigation mix-in, so its event routing runs first:</p>
+<pre>from OpenGLContext.ui import dialogs, settings
+from OpenGLContext.ui.overlay import OverlayMixin
+
+class Game(OverlayMixin, GLFWInteractiveContext):
+    def OnInit(self):
+        self.addEventHandler('keyboard', name='&lt;F10&gt;', state=1,
+                             function=self.openSettings)
+
+    def openSettings(self, event):
+        settings.open_settings(self)
+
+    def askAboutTextures(self):
+        self.pushOverlay(dialogs.confirm(
+            'Download the texture pack?',
+            detail='About 40MB, cached for next time.',
+            yes='Download', no='Not now',
+            on_answer=self.texturesAnswered))</pre>
+  <p><strong>Bind a function key on <code>keyboard</code>, not
+    <code>keypress</code>.</strong> A <code>keypress</code> is character input,
+    and a
+    function key produces no character -- GLFW never raises one, so a keypress
+    binding for <code>&lt;F10&gt;</code> is accepted and then silently never
+    fires. Ordinary letter keys are fine either way. And the handler must be a
+    bound method of something long-lived: the event system holds callbacks
+    weakly, so a lambda passed inline is collected the moment the call returns
+    and the key quietly does nothing.</p>
+  <p>The mix-in supplies <code>pushOverlay(panel)</code>,
+    <code>popOverlay()</code>, the <code>overlays</code> stack and the
+    <code>renderShaderOverlay</code> hook the core-profile render pass calls once
+    the frame is finished. Nothing else has to be wired up.</p>
+  <p><strong>The overlay draws in the shader (core-profile) path only.</strong>
+    A legacy fixed-function context renders no overlay; run with
+    <code>OPENGLCONTEXT_PROFILE=core</code>.</p>
+</section>
+
+<section id="dialogs">
+  <h2>The ready-made screens</h2>
+  <table>
+    <tr><th>Call</th><th>What it is</th></tr>
+    <tr><td><code>dialogs.confirm(question, detail, on_answer=...)</code></td>
+      <td>A modal yes/no question. <code>on_answer</code> is called once with
+        True or False; Escape answers False. <code>danger=True</code> marks the
+        affirmative as the destructive one.</td></tr>
+    <tr><td><code>dialogs.message(text, title)</code></td>
+      <td>Something to acknowledge, with one button.</td></tr>
+    <tr><td><code>dialogs.notice(title, text)</code></td>
+      <td>A wall of text that scrolls &mdash; a copyright or licence notice.</td></tr>
+    <tr><td><code>settings.open_settings(context)</code></td>
+      <td>The rendering settings screen (below).</td></tr>
+    <tr><td><code>bindings.open_bindings(context)</code></td>
+      <td>The key-binding page for the context's declared
+        <a href="navigation.html">movement modes</a>.</td></tr>
+    <tr><td><code>console.console_panel(registry=...)</code></td>
+      <td>A console: scrollback, an input line and a command registry.</td></tr>
+  </table>
+  <p>Every button is a <strong>measured rectangle</strong>, hovered and clicked
+    with the pointer; the keys on a dialog are accelerators for people who prefer
+    them, not the only way in.</p>
+</section>
+
+<section id="settings">
+  <h2>The settings screen</h2>
+  <p>Most of what the renderer does is decided for the player and is invisible:
+    shadows on, image-based lighting probed for and degraded on a weak GPU,
+    geometry batched, detail dropped with distance. Each of those is now a field
+    on the <code>ContextDefinition</code>, and the settings screen offers all of
+    them:</p>
+  <table>
+    <tr><th>Field</th><th>Type / range</th><th>What it does</th>
+      <th>Environment default</th></tr>
+    <tr><td><code>shadows</code></td><td>bool</td>
+      <td>Shadow maps. The most expensive feature, and the first thing to turn
+        off on a weak GPU.</td><td><code>OPENGLCONTEXT_SHADOWS</code></td></tr>
+    <tr><td><code>shadowsSoft</code></td><td>bool</td>
+      <td>PCSS contact-hardening shadows: softer and dearer.</td>
+      <td><code>OPENGLCONTEXT_SHADOWS_SOFT</code></td></tr>
+    <tr><td><code>shadowCascades</code></td><td>int, 0&ndash;4</td>
+      <td>Cascades for a directional light. 0 lets the pass choose from VRAM and
+        frame rate; a fixed value makes shadow output reproducible.</td>
+      <td><code>OPENGLCONTEXT_SHADOW_CASCADES</code></td></tr>
+    <tr><td><code>maximumLights</code></td><td>int, 0&ndash;8</td>
+      <td>Lights bound in one frame. The shader's own ceiling still applies.</td>
+      <td>&mdash;</td></tr>
+    <tr><td><code>bloom</code></td><td>bool</td>
+      <td>HDR bloom post-process.</td><td><code>OPENGLCONTEXT_BLOOM</code></td></tr>
+    <tr><td><code>ibl</code></td>
+      <td><code>auto</code>/<code>full</code>/<code>analytic</code>/<code>off</code></td>
+      <td>Image-based lighting. <code>auto</code> degrades itself on a software
+        rasteriser, where the prefilter precompute is too slow.</td>
+      <td><code>OPENGLCONTEXT_IBL</code></td></tr>
+    <tr><td><code>iblIntensity</code></td><td>float, 0&ndash;2</td>
+      <td>Scales the un-shadowed ambient/environment term.</td>
+      <td><code>OPENGLCONTEXT_IBL_INTENSITY</code></td></tr>
+    <tr><td><code>transmission</code></td>
+      <td><code>auto</code>/<code>full</code>/<code>blend</code>/<code>off</code></td>
+      <td>Refraction through glass.</td>
+      <td><code>OPENGLCONTEXT_TRANSMISSION</code></td></tr>
+    <tr><td><code>instancing</code></td><td>bool</td>
+      <td>Collapse shapes sharing a geometry into one instanced draw.</td>
+      <td><code>OPENGLCONTEXT_INSTANCING</code></td></tr>
+    <tr><td><code>tessellationLOD</code></td><td>bool</td>
+      <td>Distance level of detail for procedural geometry. Off gives
+        deterministic tessellation.</td><td><code>OPENGLCONTEXT_LOD</code></td></tr>
+    <tr><td><code>vsync</code></td><td>bool</td>
+      <td>Wait for the display's refresh before presenting.</td>
+      <td><code>OPENGLCONTEXT_NO_VSYNC</code> (inverted)</td></tr>
+  </table>
+  <p><strong>The environment variable is the field's default, not a competitor.</strong>
+    A field nobody has set reads its environment variable every time the pass
+    asks, so a shell variable still pins a feature for a script or a CI run;
+    writing the field &mdash; which is what the settings screen does &mdash;
+    takes precedence from then on. Passes read through
+    <code>OpenGLContext.renderoptions</code> rather than the environment
+    directly.</p>
+<pre>from OpenGLContext.contextdefinition import ContextDefinition
+definition = ContextDefinition(shadows=False, maximumLights=2, ibl='analytic')</pre>
+  <p>The page is <strong>generated from the node's fields</strong>
+    (<code>OpenGLContext.ui.generate</code>), so a new setting appears on the
+    screen with no UI work and cannot silently go missing. A node class says how
+    its fields should be presented by declaring <code>UI_HINTS</code> beside
+    them:</p>
+<pre>class WalkMode(_GroundMode):
+    walkSpeed = field.newField('walkSpeed', 'SFFloat', 1, 3.0)
+    UI_HINTS = {
+        'walkSpeed': {'label': 'Walking speed', 'minimum': 0.5,
+                      'maximum': 20.0, 'step': 0.5, 'suffix': ' m/s'},
+    }</pre>
+  <p>The field's type picks the editor: <code>SFBool</code> a toggle, a number
+    with a range a slider (without one, a text field &mdash; a slider over an
+    invented 0&ndash;1 is a wrong answer rather than a missing one), an
+    <code>SFString</code> with <code>options</code> a cycling select,
+    <code>MFString</code> with <code>{'editor': 'keys'}</code> a key capture.
+    A screen wanting better grouping supplies an authored panel instead.</p>
+</section>
+
+<section id="sessions">
+  <h2>Cancel is real, at every level</h2>
+  <p>Widgets edit a <strong>copy</strong> of the node
+    (<code>OpenGLContext.ui.session</code>). Nothing reaches the live settings
+    until Apply:</p>
+<pre>session = SettingsSession(context.contextDefinition)
+session.draft            # a copy; every widget binds to this
+session.dirty            # whether the draft differs from the target
+session.commit()         # copy the draft's fields back, field by field
+session.revert()         # throw the draft away</pre>
+  <p>A sub-record &mdash; a movement mode opened from the main page &mdash; is
+    edited by a <strong>nested session</strong> over a copy of the parent's
+    draft. Its Apply writes into that draft, and only the outermost
+    <code>commit()</code> reaches the real node. Cancel the movement page and the
+    walk speed is unchanged; cancel the settings screen after applying that page
+    and it is <em>still</em> unchanged.</p>
+  <p>Commit copies fields into the existing node and never swaps it, so a
+    sub-record <code>USE</code>d in two places keeps its identity and everything
+    already watching a field is notified normally.</p>
+</section>
+
+<section id="input">
+  <h2>Input: a modal overlay is a lid</h2>
+  <p><strong>While a modal panel is up, nothing below it hears anything</strong>
+    &mdash; not the events the panel handles, and not the ones it ignores; not
+    the world, and not a parent panel. It is not a filter that passes what it
+    does not want.</p>
+  <p>That has consequences the mix-in carries for you:</p>
+  <ul>
+    <li>The input sampler (<code>InputState</code>) is not fed while a modal
+      overlay is up, and is cleared when one opens and when the last one closes.
+      Without that, a key the overlay consumed would stay recorded as held and
+      the player would walk into a wall while typing.</li>
+    <li>The pointer is handed back
+      (<code>ViewPlatformMixin.suspendPointerCapture</code>), so a mouse-look
+      mode's grabbed pointer does not fight the pointer needed to click with.</li>
+    <li>Mouse-move events are kept alive while an overlay is up, so hover works
+      even in a scene with no move handlers of its own.</li>
+  </ul>
+  <p>A panel may also declare itself <code>capturing</code>: while one is up the
+    overlay runs no accelerators, no Tab traversal and no Enter default, so a
+    rebinding dialog sees Tab, Enter and the mouse buttons verbatim.
+    <strong>Escape is reserved</strong> as the way out and is therefore the one
+    key that cannot be bound.</p>
+  <p>Press and release are distinct: a button arms on press over itself and fires
+    on release over itself, so dragging off it cancels. Hover lights the frame;
+    <strong>focus is a separate additive glow drawn outside the widget</strong>,
+    shown for keyboard focus and text entry but not for an ordinary click.</p>
+</section>
+
+<section id="bindings">
+  <h2>Key bindings</h2>
+  <p>The binding page lists every command of every declared movement mode.
+    Clicking a row opens a capturing dialog; capture a key already bound in the
+    <em>same</em> mode and a confirmation is raised over that dialog asking
+    whether to steal it. (The same key in another mode is not a conflict &mdash;
+    walking and flying are never in force at the same moment.)</p>
+  <p>Bindings are saved as JSON in the per-user app-data directory
+    (<code>keybindings.json</code>) by
+    <code>OpenGLContext.move.bindingstore</code>, and loading is forgiving: a
+    file naming a mode or command this build no longer has keeps the entries
+    that still resolve.</p>
+<pre>from OpenGLContext.move import bindingstore
+bindingstore.load_bindings(context.getNavigation())     # at start-up
+bindingstore.save_bindings(context.getNavigation())     # after a change</pre>
+</section>
+
+<section id="console">
+  <h2>The console</h2>
+<pre>from OpenGLContext.ui import console
+
+registry = console.CommandRegistry()
+registry.add('fps', lambda panel: '%.1f' % context.frameCounter.recentFps(),
+             'the recent frame rate')
+panel = console.console_panel(registry=registry)
+logging.getLogger('OpenGLContext').addHandler(console.ConsoleLogHandler(panel))
+context.pushOverlay(panel)</pre>
+  <p>Commands are called as <code>function(panel, *words)</code> and return the
+    text to print. <code>help</code> and <code>clear</code> are built in. The
+    logging handler is the point of it: engine warnings otherwise go somewhere a
+    player cannot see. Scrollback is bounded (500 lines by default) and the
+    arrow keys walk the command history.</p>
+</section>
+
+<section id="skinning">
+  <h2>Skinning</h2>
+  <p>A <code>Skin</code> node holds every colour and inset the widgets use, plus
+    an optional <code>NineSlice</code> image per widget state. The default skin
+    is flat translucent rectangles and needs no artwork at all, which matters for
+    a viewer that is not a game.</p>
+<pre>from OpenGLContext.ui.skin import NineSlice, Skin
+
+panel.skin = Skin(
+    buttonImage=NineSlice(url=['art/button.png'], border=(8, 8, 8, 8)),
+    buttonHoverImage=NineSlice(url=['art/button_hover.png'], border=(8, 8, 8, 8)),
+    panelPadding=20.0,
+)</pre>
+  <p><code>border</code> is how many pixels of the source are corner, in the
+    order left, top, right, bottom: those four squares are drawn at their own
+    size, the edges stretch along one axis and the centre along both. Without
+    that one button image cannot serve two button widths. Any image left unset
+    falls back to the flat fill, so a game can skin the buttons and leave the
+    rest; an image that will not load logs a warning and falls back rather than
+    taking the frame down.</p>
+  <p><strong>Emphasis is a role, not a colour.</strong> A button carries
+    <code>role</code> &mdash; <code>primary</code>, <code>secondary</code> or
+    <code>danger</code> &mdash; which the skin renders as text colour. The
+    <code>primary</code> button is also the panel's Enter default;
+    <code>danger</code> marks the actions a settings screen must not let someone
+    hit by accident.</p>
+</section>
+
+<section id="authoring">
+  <h2>Authoring a screen</h2>
+  <p>Every widget is a scenegraph node, so a screen can be built in code or
+    parsed from a file and its parts <code>DEF</code>/<code>USE</code>d like
+    anything else:</p>
+<pre>from OpenGLContext.ui.layout import Column, Row
+from OpenGLContext.ui.panel import Panel
+from OpenGLContext.ui.widgets import Button, Label, Slider, Spacer, Toggle, PRIMARY
+
+panel = Panel(title='Movement', modal=True, preferredColumns=48, children=[
+    Column(spacing=6, children=[
+        Label(text='How the character moves.', wrap=True),
+        Row(children=[Label(text='Walk speed', flex=1),
+                      Slider(target=walk, fieldName='walkSpeed',
+                             minimum=1, maximum=10, step=0.5)]),
+        Toggle(text='Invert look', target=fps, fieldName='invertLook'),
+        Row(spacing=8, children=[Spacer(),
+                                 Button(text='Cancel', name='cancel'),
+                                 Button(text='Apply', role=PRIMARY, name='apply')]),
+    ])])</pre>
+  <p>Layout is one top-down pass with no constraint solver. A widget reports the
+    size it wants; a box gives fixed children their natural size and divides what
+    is left among the <code>flex</code> children; a <code>Grid</code> lines a
+    column of labels up across unrelated rows. Sizes are pixels and the origin is
+    the bottom-left of the window &mdash; the same origin a mouse event's pick
+    point arrives in. Layout runs when something changes, not every frame.</p>
+  <p>The layout fields live on <code>OpenGLContext.hud.GUINode</code>:
+    <code>width</code>/<code>height</code> (0 means "measure me"),
+    <code>flex</code>, and <code>left</code>/<code>right</code>/<code>top</code>/
+    <code>bottom</code> margins. A <code>Panel</code> adds
+    <code>preferredColumns</code>, a content width in characters, which is what
+    keeps a dialog holding one long sentence a readable column rather than as
+    wide as the window.</p>
+</section>
+
+<section id="modules">
+  <h2>Where things are</h2>
+  <table>
+    <tr><th>Module</th><th>What is in it</th></tr>
+    <tr><td><code>ui.geometry</code>, <code>ui.metrics</code></td>
+      <td>Rectangles, and measuring/wrapping text.</td></tr>
+    <tr><td><code>hud</code></td><td>The layout protocol and the box.</td></tr>
+    <tr><td><code>ui.layout</code></td><td>Row, Column, Grid.</td></tr>
+    <tr><td><code>ui.widgets</code></td>
+      <td>Label, Button, Toggle, Select, Slider, TextField, KeyCapture.</td></tr>
+    <tr><td><code>ui.scroll</code></td><td>The clipping viewport and its bar.</td></tr>
+    <tr><td><code>ui.panel</code></td>
+      <td>One screen: focus, accelerators, modality, commands.</td></tr>
+    <tr><td><code>ui.overlay</code></td>
+      <td>The stack and the context mix-in.</td></tr>
+    <tr><td><code>ui.draw</code></td>
+      <td>The GL renderer: one program, one batched vertex buffer.</td></tr>
+    <tr><td><code>ui.skin</code></td><td>Colours, insets and nine-slice art.</td></tr>
+    <tr><td><code>ui.session</code></td><td>Editing on a copy.</td></tr>
+    <tr><td><code>ui.generate</code></td><td>A page from a node's fields.</td></tr>
+    <tr><td><code>ui.dialogs</code>, <code>ui.settings</code>,
+      <code>ui.bindings</code>, <code>ui.console</code></td>
+      <td>The ready-made screens.</td></tr>
+    <tr><td><code>renderoptions</code></td>
+      <td>How a pass reads a rendering feature's setting.</td></tr>
+  </table>
+  <p>The design and its reasoning are in
+    <code>plans/OVERLAY-UI.md</code>.</p>
+</section>
+
+</body></html>

@@ -416,3 +416,127 @@ def test_changing_direction_resets_the_ramp():
     before = platform.turned
     mode.update(0.1, _Inputs(['q']), platform)
     assert platform.turned - before == pytest.approx(-0.1)
+
+
+# -- which way the view actually goes -----------------------------------------
+
+class _Gaze:
+    """A platform that records what it was asked to do, and where that points.
+
+    The sense is measured through the same maths the physics platform uses for
+    the camera, because the sign of a yaw says nothing on its own.
+    """
+
+    def __init__(self):
+        self.yaw = 0.0
+        self.pitch = 0.0
+
+    def set_move(self, **named):
+        pass
+
+    def set_fly_move(self, **named):
+        pass
+
+    def jump(self):
+        pass
+
+    def turn(self, delta):
+        self.yaw += delta
+
+    def look(self, delta):
+        self.pitch += delta
+
+    def gaze(self):
+        import numpy as np
+        from OpenGLContext import quaternion
+        q = (quaternion.fromXYZR(1, 0, 0, self.pitch)
+             * quaternion.fromXYZR(0, 1, 0, self.yaw))
+        return np.asarray(q.matrix())[:3, :3] @ np.array([0.0, 0.0, -1.0])
+
+
+class _Mouse:
+    """Sampled input reporting one burst of pointer motion, pick-point origin."""
+
+    def __init__(self, dx=0.0, dy=0.0):
+        self._delta = (dx, dy)
+
+    def held(self, *names):
+        return False
+
+    def pressed(self, *names):
+        return False
+
+    def modifiers(self, name):
+        return (0, 0, 0)
+
+    def mouse_delta(self):
+        delta, self._delta = self._delta, (0.0, 0.0)
+        return delta
+
+
+def test_moving_the_mouse_right_turns_the_view_right():
+    from OpenGLContext.move.modes import FPSMode
+    platform = _Gaze()
+    FPSMode(name='fps').update(0.016, _Mouse(dx=100), platform)
+    assert platform.gaze()[0] > 0, 'the view swung left for a rightward mouse'
+
+
+def test_pushing_the_mouse_forward_looks_up():
+    """Forward is *up* the screen, which in pick-point coordinates is +y."""
+    from OpenGLContext.move.modes import FPSMode
+    platform = _Gaze()
+    FPSMode(name='fps').update(0.016, _Mouse(dy=100), platform)
+    assert platform.gaze()[1] > 0, 'pushing the mouse forward looked down'
+
+
+def test_an_inverted_mouse_looks_down_instead():
+    from OpenGLContext.move.modes import FPSMode
+    platform = _Gaze()
+    FPSMode(name='fps', invertLook=True).update(0.016, _Mouse(dy=100), platform)
+    assert platform.gaze()[1] < 0
+
+
+def test_the_turn_command_turns_right():
+    from OpenGLContext.move.modes import WalkMode
+    platform = _Gaze()
+    mode = WalkMode(name='walk')
+
+    class Held:
+        def held(self, *names):
+            return 'e' in names or '<right>' in names
+
+        def pressed(self, *names):
+            return False
+
+        def modifiers(self, name):
+            return (0, 0, 0)
+
+        def mouse_delta(self):
+            return (0.0, 0.0)
+
+    for _ in range(20):
+        mode.update(0.05, Held(), platform)
+    assert platform.gaze()[0] > 0, 'turnright turned the view left'
+
+
+def test_the_look_up_command_looks_up():
+    from OpenGLContext.move.modes import WalkMode
+    platform = _Gaze()
+    mode = WalkMode(name='walk')
+
+    class Held:
+        def held(self, *names):
+            return '<up>' in names
+
+        def pressed(self, *names):
+            return False
+
+        def modifiers(self, name):
+            return (1, 1, 1)      # ctrl is held, which is what 'lookup' wants
+
+        def mouse_delta(self):
+            return (0.0, 0.0)
+
+    for _ in range(10):
+        mode.update(0.05, Held(), platform)
+    assert platform.gaze()[1] > 0, 'lookup looked down'

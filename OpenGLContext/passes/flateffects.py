@@ -20,6 +20,7 @@ from OpenGL.GL import (
     GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
 )
 
+from OpenGLContext import renderoptions
 from OpenGLContext.debug.logs import getTraceback
 
 if TYPE_CHECKING:
@@ -84,8 +85,10 @@ class _FlatEffectsMixin:
             return 'off'
         from OpenGLContext.passes import ibl
         if self._ibl_controller is None:
-            base = ibl.resolve_ibl_mode(self._gl_renderer)
-            self._ibl_controller = ibl.IBLController(base, adaptive=ibl.ibl_is_adaptive())
+            requested = renderoptions.choice(self, 'ibl', 'auto')
+            base = ibl.resolve_ibl_mode(self._gl_renderer, requested=requested)
+            self._ibl_controller = ibl.IBLController(
+                base, adaptive=ibl.ibl_is_adaptive(requested))
         fc = getattr(getattr(self, 'context', None), 'frameCounter', None)
         fps = fc.recentFps() if fc is not None else 0.0
         mode = self._ibl_controller.effective_mode(fps)
@@ -110,13 +113,12 @@ class _FlatEffectsMixin:
         if mode != 'off':
             eye_to_world = np.linalg.inv(np.asarray(matrix, dtype='d')).astype('f')
             shader.set_eye_to_world(eye_to_world)
-        # OPENGLCONTEXT_IBL_INTENSITY scales the (un-shadowed) ambient/environment
-        # term. Lowering it below 1.0 lets a shadow-casting key light read clearly
-        # instead of being lifted by full-strength ambient. Default 1.0 = unchanged.
-        try:
-            ibl_scale = float(os.environ.get('OPENGLCONTEXT_IBL_INTENSITY', '1.0'))
-        except ValueError:
-            ibl_scale = 1.0
+        # ContextDefinition.iblIntensity scales the (un-shadowed) ambient /
+        # environment term. Below 1.0 a shadow-casting key light reads clearly
+        # instead of being lifted by full-strength ambient. 1.0 = unchanged.
+        ibl_scale = float(renderoptions.number(
+            self, 'iblIntensity',
+            renderoptions.env_number('OPENGLCONTEXT_IBL_INTENSITY', 1.0)))
         shader.set_ibl_mode(ibl.MODE_CODE[mode], ibl_scale)
         # Camera exposure (1.0 unless a glTF scene with absolute-unit punctual lights
         # set a light-meter value on the context). Default keeps every other scene
@@ -146,10 +148,14 @@ class _FlatEffectsMixin:
         'off'. See :func:`OpenGLContext.passes.transmission.resolve_mode`.
         """
         if self._transmission_mode is None:
-            shader = self.shader_program
-            if shader is not None and hasattr(shader, 'set_transmission'):
+            requested = renderoptions.choice(self, 'transmission', 'auto')
+            shader = None if requested == 'off' else self.shader_program
+            if requested == 'off':
+                self._transmission_mode = 'off'
+            elif shader is not None and hasattr(shader, 'set_transmission'):
                 from OpenGLContext.passes.transmission import resolve_mode
-                self._transmission_mode = resolve_mode(self._gl_renderer)
+                self._transmission_mode = resolve_mode(self._gl_renderer,
+                                                       requested=requested)
             else:
                 self._transmission_mode = 'off'
         return self._transmission_mode
@@ -327,7 +333,7 @@ class _FlatEffectsMixin:
         """Start rendering into the HDR bloom target, if bloom is enabled. The scene
         renders to a linear HDR FBO; _end_bloom composites the glow back to screen."""
         from OpenGLContext.passes import bloom
-        if not bloom.bloom_enabled():
+        if not bloom.bloom_enabled(self):
             self._bloom_active = False
             return False
         w, h = int(self.viewport[2]), int(self.viewport[3])

@@ -184,6 +184,9 @@ walk.bindings = list(walk.bindings) + [
       <td>yes</td></tr>
     <tr><td><code>bin/vrml_view</code></td><td>walk, fly</td>
       <td>declared only; its camera is still the older navigator</td></tr>
+    <tr><td><code>oglc-ui</code> (<code>bin/ui_demo</code>)</td>
+      <td>walk, fly, first-person</td>
+      <td>declared, so the overlay demo has modes to show</td></tr>
   </table>
   <p>Each exposes <code>movement_modes(scale=1.0)</code>. The
     <code>scale</code> parameter exists because a viewer frames models from a
@@ -192,9 +195,25 @@ walk.bindings = list(walk.bindings) + [
     units. A viewer keeps the free-fly navigator for its non-walking mode, and
     the two never both drive the camera: the older manager is unbound while the
     modes are in charge.</p>
+  <p><strong>A mouse-look mode needs two things from the context beyond the
+    mode itself</strong>, and both are provided by
+    <code>ViewPlatformMixin</code> rather than by the mode: the pointer is
+    grabbed through the backend's <code>setPointerCapture</code> (passed down
+    the MRO, since the mix-in is listed <em>before</em> the backend in every
+    shipped context), and pointer motion is fed to the sampler by the backend
+    calling <code>recordPointerMotion(x, y)</code> as it happens. Motion is
+    deliberately <em>not</em> taken from the pick pipeline: a move delivered as
+    a pick event arrives only once the selection buffer resolves it, is dropped
+    when the pointer is over nothing, and never arrives at all with
+    <code>pickEnabled</code> off &mdash; none of which has anything to do with
+    turning the view. A backend that reports no motion directly (GLUT, pygame,
+    wx) still has its move events sampled.</p>
   <p>A settings GUI over all of this &mdash; widgets, focus, skinning and a
-    rebinding page built from <code>binding_table()</code> &mdash; is designed in
-    <code>plans/OVERLAY-UI.md</code>.</p>
+    rebinding page built from <code>binding_table()</code> &mdash; is built:
+    see <a href="overlayui.html">Overlay UI</a>. It generates a page per mode
+    from the mode's own fields, and its key-binding page saves to the per-user
+    app-data directory through
+    <code>OpenGLContext.move.bindingstore</code>.</p>
 </section>
 
 </body></html>

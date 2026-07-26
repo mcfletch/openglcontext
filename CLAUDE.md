@@ -69,6 +69,17 @@ OpenGLContext/
 ├── events/           # Event handling system
 ├── move/             # Camera/viewpoint movement
 ├── loaders/          # File format loaders (VRML, OBJ, etc.)
+├── ui/               # Overlay UI (settings, dialogs, console) -- docs/overlayui.html
+│   ├── overlay.py    # OverlayStack + OverlayMixin: the stack and its input routing
+│   ├── panel.py      # One screen: focus, accelerators, modality
+│   ├── widgets.py    # Label/Button/Toggle/Select/Slider/TextField/KeyCapture
+│   ├── layout.py     # Row/Column/Grid (built on hud.GUIBox)
+│   ├── draw.py       # The GL renderer: one program, one batched buffer
+│   ├── session.py    # SettingsSession: editing a node on a copy
+│   ├── generate.py   # A settings page from a node's fields (UI_HINTS)
+│   ├── skin.py       # Colours, insets, nine-slice artwork
+│   └── settings.py, bindings.py, dialogs.py, console.py, scroll.py
+├── renderoptions.py  # How a pass reads a rendering feature from the definition
 ├── context.py        # Base context class
 ├── glutcontext.py    # GLUT context implementation
 ├── glfwcontext.py    # GLFW context implementation
@@ -193,6 +204,16 @@ Do **not** use `../.env` or the project-local `openglcontext/.venv` — neither 
 `import OpenGL` in this devcontainer.
 
 ## Environment Variables
+
+**Most of these are now `ContextDefinition` fields**, and the environment
+variable is the field's *default* rather than a competitor: a field nobody has
+set reads its variable each time a pass asks, so a shell variable still pins a
+feature for a script or a CI run, while the settings screen
+(`OpenGLContext.ui.settings`) writes the field and takes precedence from then on.
+Passes read through `OpenGLContext.renderoptions`, never the environment
+directly. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
+`maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`, `instancing`,
+`tessellationLOD` and `vsync`; see [docs/overlayui.html](docs/overlayui.html).
 
 ### OPENGLCONTEXT_PROFILE
 

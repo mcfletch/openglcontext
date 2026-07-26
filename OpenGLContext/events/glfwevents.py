@@ -110,8 +110,24 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         self.triggerPick()
 
     def glfwOnCursorPos(self, window, xpos, ypos):
-        """Convert mouse-movement to a Context-style event"""
+        """Convert mouse-movement to a Context-style event.
+
+        The movement sampler is told directly as well as through the pick
+        queue: a mouse-look mode wants every scrap of motion as it happens,
+        while a pick event is only delivered once the selection buffer resolves
+        it -- and not at all when the pointer is over nothing or picking is off.
+
+        Both are told in the **same** coordinates: GLFW reports y downward and
+        everything else in OpenGLContext counts it upward from the bottom, so
+        the flip happens once, here.  Feeding the sampler the raw value inverts
+        mouse-look's vertical and nothing else, which is about the hardest sign
+        error there is to spot.
+        """
         xpos, ypos = self._cursorToFramebuffer(window, xpos, ypos)
+        height = self.getViewPort()[1]
+        record = getattr(self, 'recordPointerMotion', None)
+        if record is not None:
+            record(int(xpos), height - int(ypos))
         self.addPickEvent(GLFWMouseMoveEvent(self, int(xpos), int(ypos)))
         self.triggerPick()
 

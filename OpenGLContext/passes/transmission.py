@@ -34,13 +34,16 @@ TRANSMISSION_UNIT = 12
 _SOFTWARE = ('llvmpipe', 'softpipe', 'swrast', 'software')
 
 
-def resolve_mode(renderer: str = '') -> str:
+def resolve_mode(renderer: str = '', requested: str = '') -> str:
     """Choose the transmission path: 'full', 'blend', or 'off'.
 
-    ``OPENGLCONTEXT_TRANSMISSION`` overrides (full/on, blend/fake, off/none).
-    Unset or 'auto': full on real GPUs, blend on a software rasteriser.
+    ``requested`` is ``ContextDefinition.transmission``; 'auto' or empty falls
+    back to ``OPENGLCONTEXT_TRANSMISSION`` and then to the renderer, which is
+    full on real GPUs and blend on a software rasteriser.
     """
-    env = os.environ.get('OPENGLCONTEXT_TRANSMISSION', '').strip().lower()
+    env = (requested or '').strip().lower()
+    if env in ('', 'auto'):
+        env = os.environ.get('OPENGLCONTEXT_TRANSMISSION', '').strip().lower()
     if env in ('off', 'none', '0'):
         return 'off'
     if env in ('blend', 'fake'):

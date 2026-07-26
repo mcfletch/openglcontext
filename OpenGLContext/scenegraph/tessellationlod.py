@@ -43,11 +43,18 @@ COARSEST_LEVEL = len(DEFAULT_THRESHOLDS)
 _TINY = 1e-6
 
 
-def lod_enabled() -> bool:
-    """Whether distance LOD is active (env kill-switch for deterministic output)."""
-    return os.environ.get('OPENGLCONTEXT_LOD', '').strip().lower() not in (
-        '0', 'off', 'false', 'no', 'none',
-    )
+def lod_enabled(mode: Any = None) -> bool:
+    """Whether distance LOD is active (ContextDefinition.tessellationLOD).
+
+    Off gives deterministic tessellation, which is what reference-image
+    regression needs.  ``mode`` is the render mode being drawn through; without
+    one the environment default stands.
+    """
+    from OpenGLContext import renderoptions
+    default = renderoptions.env_flag('OPENGLCONTEXT_LOD', True)
+    if mode is None:
+        return default
+    return renderoptions.flag(mode, 'tessellationLOD', default)
 
 
 def camera_distance_radii(center_local: Any, radius_local: float, modelview: Any) -> float:
@@ -78,7 +85,7 @@ def lod_level(mode: Any, center_local: Any, radius_local: float,
     Returns 0 (finest) when LOD is disabled or the distance can't be determined,
     so the result is never *coarser* than the caller would otherwise draw.
     """
-    if not lod_enabled():
+    if not lod_enabled(mode):
         return 0
     matrix = getattr(mode, 'matrix', None)
     if matrix is None:

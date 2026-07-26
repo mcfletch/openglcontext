@@ -96,6 +96,15 @@ from sampled input rather than from events so several inputs act in one frame.
 See <a href="navigation.html">Movement Modes &amp; Navigation</a>. A context that
 declares none keeps the older navigation untouched.</p>
 
+<p>An application that needs a screen over the running world &mdash; rendering
+settings, key rebinding, a licence notice, a console &mdash; mixes in
+<code>ui.overlay.OverlayMixin</code>, which adds a stack of panels, routes input
+to the topmost one and draws it after the frame. While a modal panel is up the
+world hears nothing at all, including the input sampler. Every switchable
+rendering feature is a field on the <code>ContextDefinition</code>, read through
+<code>renderoptions</code>, so the settings screen is generated from those fields
+rather than hand-written. See <a href="overlayui.html">Overlay UI</a>.</p>
+
 <p>Finally, at the top-level, we have a number of utility functions and
 modules, including drawcube (a testing function), <a href="../pydoc/OpenGLContext.quaternion.html">Quaternion</a>,<a href="../pydoc/OpenGLContext.utilities.html">utilities</a>,<a href="../pydoc/OpenGLContext.vectorutilities.html">
 vector utilities</a>, and <a href="../pydoc/OpenGLContext.triangleutilities.html">

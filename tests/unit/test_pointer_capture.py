@@ -187,3 +187,52 @@ def test_capturing_without_a_window_is_refused():
     context = glfwcontext.GLFWContext.__new__(glfwcontext.GLFWContext)
     context.window = None
     assert not context.setPointerCapture(True)
+
+
+# -- the mix-in must not shadow the backend ----------------------------------
+
+class _Backend:
+    """A backend that really can grab the pointer, as GLFWContext can."""
+
+    def __init__(self):
+        self.captures = []
+
+    def setPointerCapture(self, capture):
+        self.captures.append(bool(capture))
+        return True
+
+    def hasMouseMoveHandlers(self):
+        return False
+
+
+class _MixinFirst(ViewPlatformMixin, _Backend):
+    """Ordered as every shipped context is: the mix-in before the backend.
+
+    ``GLFWInteractiveContext`` is ``(ViewPlatformMixin, InteractiveContext,
+    GLFWContext)``, so a stub on the mix-in shadows the backend's real
+    implementation and mouse-look silently never grabs anything.
+    """
+
+    def __init__(self):
+        _Backend.__init__(self)
+
+
+def test_the_backends_pointer_grab_is_reached_through_the_mixin():
+    context = _MixinFirst()
+    assert context.setPointerCapture(True) is True
+    assert context.captures == [True]
+
+
+def test_a_backend_with_no_grab_still_reports_that_it_cannot():
+    class _NoBackend(ViewPlatformMixin):
+        pass
+
+    assert _NoBackend().setPointerCapture(True) is False
+
+
+def test_a_mouse_look_mode_actually_grabs_through_the_backend():
+    context = _MixinFirst()
+    context._applyPointerCapture(True)
+    assert context.captures == [True]
+    context._applyPointerCapture(False)
+    assert context.captures == [True, False]

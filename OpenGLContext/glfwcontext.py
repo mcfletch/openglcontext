@@ -60,18 +60,8 @@ class GLFWContext(
         # Make context current before calling Context.__init__
         glfw.make_context_current(self.window)
 
-        # Optionally disable vsync (OPENGLCONTEXT_NO_VSYNC). On Wayland, swap
-        # buffers with vsync on blocks on a compositor frame callback; a leaked GL
-        # context from an earlier abnormally-terminated process can wedge that
-        # callback and hang every later swap. Test/benchmark runs set this so a
-        # leaked context can't stall the suite (and timing reflects real work).
-        import os as _os
-        if _os.environ.get('OPENGLCONTEXT_NO_VSYNC', '').strip().lower() in (
-                '1', 'true', 'yes', 'on'):
-            try:
-                glfw.swap_interval(0)
-            except Exception:
-                pass
+        self.contextDefinition = definition
+        self.applyVSync()
 
         # Call base Context initialization
         Context.__init__(self, definition)
@@ -82,6 +72,33 @@ class GLFWContext(
         # coordinates; using definition.size would leave an undrawn border.
         fbWidth, fbHeight = glfw.get_framebuffer_size(self.window)
         self.ViewPort(fbWidth, fbHeight)
+
+    def settingsChanged(self):
+        """Re-apply the window-level settings a changed definition affects."""
+        self.applyVSync()
+        Context.settingsChanged(self)
+
+    def applyVSync(self):
+        """Wait for the display's refresh, or don't (ContextDefinition.vsync).
+
+        Off uncaps the frame rate, which is what a benchmark wants. It also
+        matters on Wayland, where a vsynced swap blocks on a compositor frame
+        callback that a leaked GL context from an abnormally-terminated process
+        can wedge -- so the test suite turns it off and one flaky run cannot
+        stall every later swap.
+
+        Called again when the setting changes, so a settings screen's Apply
+        takes effect without a restart.
+        """
+        from OpenGLContext import renderoptions
+        wanted = renderoptions.flag(
+            self, 'vsync',
+            not renderoptions.env_flag('OPENGLCONTEXT_NO_VSYNC', False))
+        try:
+            glfw.swap_interval(1 if wanted else 0)
+        except Exception:
+            log.debug("this GLFW build would not set the swap interval",
+                      exc_info=True)
 
     def _setWindowHints(self, definition):
         """Apply ContextDefinition to GLFW window hints"""

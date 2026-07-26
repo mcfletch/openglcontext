@@ -55,8 +55,11 @@ class ViewPlatformMixin(object):
     inputState = None
     #: Drives the declared movement modes, when the context declares any.
     navigation = None
-    #: Last pointer position, for turning absolute events into a delta.
+    #: Last pointer position, for turning an absolute position into a delta.
     _lastPointer = None
+    #: Whether the backend reports pointer motion directly.  Set the first time
+    #: it does, so the same motion is not counted again off the event queue.
+    _directPointerMotion = False
     #: Whether the pointer is currently grabbed for a mouse-look mode.
     _pointerCaptured = False
     #: Whether something else -- an overlay being clicked -- has asked for the
@@ -116,10 +119,20 @@ class ViewPlatformMixin(object):
     def setPointerCapture( self, capture ):
         """Grab or release the pointer; False if this backend cannot.
 
-        A backend that can hide the cursor and report unbounded motion
-        overrides this.  The default says it cannot, and mouse-look then works
-        as far as the window edge.
+        Passed **down the MRO** to the backend rather than answered here.  A
+        mix-in is listed before the backend in every shipped context --
+        ``GLFWInteractiveContext`` is ``(ViewPlatformMixin, InteractiveContext,
+        GLFWContext)`` -- so a plain ``return False`` here shadows the real
+        implementation and mouse-look grabs nothing on any of them.
+
+        A backend that genuinely has no way to hide the cursor and report
+        unbounded motion simply does not define this, and the False below
+        stands: mouse-look then works as far as the window edge.
         """
+        backend = getattr( super( ViewPlatformMixin, self ),
+                           'setPointerCapture', None )
+        if backend is not None:
+            return backend( capture )
         return False
 
     def suspendPointerCapture( self, suspend ):
@@ -147,18 +160,60 @@ class ViewPlatformMixin(object):
         if not self._captureSuspended:
             self.setPointerCapture( wanted )
 
+    def hasMouseMoveHandlers( self ):
+        """Whether anything wants mouse-move events this frame.
+
+        The render pass drops moves when no handler is registered for them,
+        which is a real saving -- but the movement sampler consumes them
+        through ``ProcessEvent`` rather than through the handler registry, so
+        that test cannot see it.  While a mouse-look mode is in force the moves
+        it is dropping are exactly the ones the view turns from, and the result
+        is a mode that grabs the pointer and then never moves the camera.
+        """
+        mode = getattr( getattr( self, 'contextDefinition', None ),
+                        'movementMode', None )
+        if mode is not None and getattr( mode, 'capturePointer', False ):
+            return True
+        return super( ViewPlatformMixin, self ).hasMouseMoveHandlers()
+
+    def recordPointerMotion( self, x, y ):
+        """Feed the sampler pointer motion, straight from the backend.
+
+        ``x``/``y`` are in the **pick point's** origin: pixels from the
+        bottom-left, y counting *upward*.  A backend whose windowing system
+        counts y downward flips it before calling.
+
+        **Mouse-look is not picking.**  A move that arrives as a *pick* event
+        is delivered only once the selection buffer resolves it, is dropped
+        when the pointer is over nothing, and does not arrive at all when
+        picking is switched off -- none of which has anything to do with
+        turning the view.  A backend that knows where the pointer went calls
+        this as it happens.
+
+        The first call only establishes where the pointer is: otherwise
+        entering a window would read as one violent flick of the view.
+        """
+        self._directPointerMotion = True
+        point = ( x, y )
+        if self._lastPointer is not None:
+            self.getInputState().mouse_moved(
+                point[0] - self._lastPointer[0],
+                point[1] - self._lastPointer[1] )
+        self._lastPointer = point
+
     def _recordInput( self, event ):
         """Feed one event to the sampler.
 
         Pointer events carry an absolute position, while mouse-look wants how
-        far the pointer moved, so the delta is taken here.  The first event
-        establishes the origin and reports no motion -- otherwise entering a
-        window would read as one violent flick of the view.
+        far the pointer moved, so the delta is taken here -- for the backends
+        that report motion only as events.  One that calls
+        :meth:`recordPointerMotion` has already been counted, and taking the
+        delta from both would turn the view twice as far as the hand moved.
         """
         kind = getattr( event, 'type', None )
         if kind in ( 'keyboard', 'keypress' ):
             self.getInputState().process( event )
-        elif kind == 'mousemove':
+        elif kind == 'mousemove' and not self._directPointerMotion:
             point = event.getPickPoint()
             if point:
                 if self._lastPointer is not None:

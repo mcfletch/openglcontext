@@ -2,6 +2,8 @@
 import os
 from vrml import node, field
 
+from OpenGLContext import renderoptions
+
 
 def _get_default_profile():
     """Get the default OpenGL profile from environment or fallback to compatibility.
@@ -110,6 +112,122 @@ class ContextDefinition( node.Node ):
     # "core" requires GLFW or another backend that supports core profile contexts
     profile = field.newField( "profile", "SFString", 1, _get_default_profile() )
     version = field.newField( "version", "SFVec2f", 1, _get_default_version())
+
+    # -- rendering features -------------------------------------------------
+    # Everything below was reachable only through an environment variable read
+    # deep inside a render pass, which meant it could be set before the process
+    # started and shown to a player never. They are fields so a settings screen
+    # can offer them; the environment variable is still the field's *default*,
+    # so a script or a CI run pins one exactly as before. Read through
+    # :mod:`OpenGLContext.renderoptions`, which is where the passes ask.
+
+    #: Shadow maps (env: OPENGLCONTEXT_SHADOWS). The single most expensive
+    #: feature, and the first thing to turn off on a weak GPU.
+    shadows = field.newField( "shadows", "SFBool", 1,
+                              lambda: renderoptions.env_flag('OPENGLCONTEXT_SHADOWS', True))
+    #: PCSS contact-hardening shadows: softer and dearer than the default
+    #: filter (env: OPENGLCONTEXT_SHADOWS_SOFT).
+    shadowsSoft = field.newField( "shadowsSoft", "SFBool", 1,
+                                  lambda: renderoptions.env_flag('OPENGLCONTEXT_SHADOWS_SOFT', False))
+    #: Cascades rendered for a directional light: more is crisper at distance.
+    #: 0 lets the pass choose from VRAM and frame rate; a fixed value makes
+    #: shadow output reproducible (env: OPENGLCONTEXT_SHADOW_CASCADES).
+    shadowCascades = field.newField( "shadowCascades", "SFInt32", 1,
+                                     lambda: int(renderoptions.env_number('OPENGLCONTEXT_SHADOW_CASCADES', 0, integer=True)))
+    #: Lights the shader will bind in one frame. Lower is faster in a scene
+    #: with many lights; the shader's own ceiling still applies.
+    maximumLights = field.newField( "maximumLights", "SFInt32", 1, 8 )
+
+    #: HDR bloom post-process (env: OPENGLCONTEXT_BLOOM).
+    bloom = field.newField( "bloom", "SFBool", 1,
+                            lambda: renderoptions.env_flag('OPENGLCONTEXT_BLOOM', False))
+    #: Image-based lighting: "auto", "full", "analytic" or "off"
+    #: (env: OPENGLCONTEXT_IBL). "auto" degrades itself on a software
+    #: rasteriser, where the prefilter precompute is too slow.
+    ibl = field.newField( "ibl", "SFString", 1,
+                          lambda: renderoptions.env_choice(
+                              'OPENGLCONTEXT_IBL', renderoptions.CHOICES['ibl'],
+                              {'on': 'full', '1': 'full', 'approx': 'analytic',
+                               'analytical': 'analytic', 'none': 'off', '0': 'off'}))
+    #: Scales the un-shadowed ambient/environment term; below 1.0 lets a
+    #: shadow-casting key light read clearly (env: OPENGLCONTEXT_IBL_INTENSITY).
+    iblIntensity = field.newField( "iblIntensity", "SFFloat", 1,
+                                   lambda: renderoptions.env_number('OPENGLCONTEXT_IBL_INTENSITY', 1.0))
+    #: Refraction through glass: "auto", "full", "blend" or "off"
+    #: (env: OPENGLCONTEXT_TRANSMISSION).
+    transmission = field.newField( "transmission", "SFString", 1,
+                                   lambda: renderoptions.env_choice(
+                                       'OPENGLCONTEXT_TRANSMISSION',
+                                       renderoptions.CHOICES['transmission'],
+                                       {'on': 'full', '1': 'full', 'fake': 'blend',
+                                        'none': 'off', '0': 'off'}))
+    #: Collapse shapes sharing one geometry into a single instanced draw
+    #: (env: OPENGLCONTEXT_INSTANCING).
+    instancing = field.newField( "instancing", "SFBool", 1,
+                                 lambda: renderoptions.env_flag('OPENGLCONTEXT_INSTANCING', True))
+    #: Distance level-of-detail for procedurally tessellated geometry --
+    #: teapots, quadrics, NURBS (env: OPENGLCONTEXT_LOD).
+    tessellationLOD = field.newField( "tessellationLOD", "SFBool", 1,
+                                      lambda: renderoptions.env_flag('OPENGLCONTEXT_LOD', True))
+    #: Wait for the display's refresh before presenting a frame. Off uncaps the
+    #: frame rate and lets a benchmark measure it (env: OPENGLCONTEXT_NO_VSYNC).
+    vsync = field.newField( "vsync", "SFBool", 1,
+                            lambda: not renderoptions.env_flag('OPENGLCONTEXT_NO_VSYNC', False))
+
+    #: Fields that are *published* rather than chosen, and so are never carried
+    #: in a settings dialog's draft: ``movementMode`` says which mode is in
+    #: force right now and is written by the navigation manager every frame.
+    #: See :mod:`OpenGLContext.ui.session`.
+    TRANSIENT_FIELDS = ('movementMode',)
+
+    #: How a generated settings page presents these fields: what to call each
+    #: one, and what range or set of values it accepts.  Declared beside the
+    #: fields so a new setting appears on the screen with no UI work.
+    #: See :mod:`OpenGLContext.ui.generate`.
+    UI_HINTS = {
+        'shadows': {'label': 'Shadows'},
+        'shadowsSoft': {'label': 'Soft shadows'},
+        'shadowCascades': {'label': 'Shadow cascades', 'minimum': 0,
+                           'maximum': 4, 'step': 1},
+        'maximumLights': {'label': 'Lights', 'minimum': 0, 'maximum': 8,
+                          'step': 1},
+        'bloom': {'label': 'Bloom'},
+        'ibl': {'label': 'Environment lighting',
+                'options': renderoptions.CHOICES['ibl'],
+                'optionLabels': renderoptions.LABELS['ibl']},
+        'iblIntensity': {'label': 'Environment intensity', 'minimum': 0.0,
+                         'maximum': 2.0, 'step': 0.05},
+        'transmission': {'label': 'Glass refraction',
+                         'options': renderoptions.CHOICES['transmission'],
+                         'optionLabels': renderoptions.LABELS['transmission']},
+        'instancing': {'label': 'Instanced batching'},
+        'tessellationLOD': {'label': 'Distance detail'},
+        'vsync': {'label': 'Wait for refresh (vsync)'},
+        'multisampleSamples': {'label': 'Anti-aliasing samples', 'minimum': -1,
+                               'maximum': 16, 'step': 1},
+        'pickEnabled': {'label': 'Mouse picking'},
+        'pickAsync': {'label': 'Non-blocking picking'},
+        'debugBBox': {'label': 'Show bounding boxes'},
+        'debugSelection': {'label': 'Show the selection buffer'},
+        'debug': {'label': 'Debug output'},
+        'title': {'label': 'Window title'},
+        'profile': {'label': 'OpenGL profile',
+                    'options': renderoptions.CHOICES['profile'],
+                    'optionLabels': renderoptions.LABELS['profile'],
+                    'restart': True},
+    }
+
+    #: Fields a settings screen shows under "Rendering", in the order they
+    #: should read: the expensive things first, the diagnostics last.
+    RENDERING_FIELDS = (
+        'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
+        'bloom', 'ibl', 'iblIntensity', 'transmission',
+        'instancing', 'tessellationLOD', 'multisampleSamples', 'vsync',
+    )
+    #: Fields a settings screen shows under "Diagnostics".
+    DIAGNOSTIC_FIELDS = (
+        'pickEnabled', 'pickAsync', 'debugBBox', 'debugSelection', 'debug',
+    )
 
     @classmethod
     def fromConfig( cls, cfg, section='contextdefinition' ):

@@ -1,87 +1,292 @@
-"""Overlay HUD-style GUI layout for OpenGLContext"""
-from vrml import node, field
+"""Screen-space layout for overlay GUI nodes.
 
-# from OpenGLContext.scenegraph.text import glutfont
-# from OpenGL.GL import *
+This is the layout half of a widget: how big it wants to be, how much of the
+space left over it claims, and the margin around it.  The drawing half, the
+input half and the concrete widgets are in :mod:`OpenGLContext.ui`; keeping the
+geometry here means a container can lay out anything that answers these
+questions, widget or not.
+
+Sizes are **pixels**, and the origin is the bottom-left of the window -- the
+same origin a mouse event's pick point arrives in.  A :class:`GUINode` reports
+a natural size, a container hands it a rectangle, and that is the whole
+protocol; there is no constraint solver and no second pass.
+
+    ``width``/``height``  an explicit size in pixels; 0 means "measure me"
+    ``flex``              share of the leftover main-axis space; 0 means fixed
+    ``left``/``right``/``top``/``bottom``   margin outside the widget
+"""
+
+from typing import Any, List, Optional, Sequence, Tuple
+
+from vrml import field, node
+
+from OpenGLContext.ui.geometry import Rect
+
+#: Main-axis directions a :class:`GUIBox` understands.
+ROW = 'row'
+COLUMN = 'column'
+
+
+def distribute(children: Sequence[Any], mains: List[int], spare: int) -> List[int]:
+    """Share out (or claw back) main-axis space among the flexible children.
+
+    Space left over goes to the children that asked for it, in proportion to
+    their ``flex``.  A **shortfall** comes out of the same children, clamped so
+    none goes negative: a flexible child is the one that volunteered to be
+    whatever size is left, which includes being smaller.  Fixed children are
+    never squeezed -- a box too small for them overflows instead, because the
+    overflow is visible while a crushed layout silently lies.
+    """
+    total_flex = sum(float(child.flex) for child in children)
+    if not spare or total_flex <= 0:
+        return mains
+    claimants = [index for index, child in enumerate(children) if child.flex]
+    given = 0
+    for position, index in enumerate(claimants):
+        if position == len(claimants) - 1:
+            share = spare - given           # the last one absorbs rounding
+        else:
+            share = int(spare * float(children[index].flex) / total_flex)
+        mains[index] = max(0, mains[index] + share)
+        given += share
+    return mains
 
 
 class GUINode(object):
-    """Mix-in providing basic GUI node parameters"""
+    """Mix-in giving a node a natural size and a rectangle on screen."""
 
-    # Relative size in flex parent
-    flex = field.newField("flex", "SFFloat", 1, 0)
-    # When set, constrain the sizes of elements...
-    width = field.newField("width", "SFFloat", 1, 1.0)
-    height = field.newField("height", "SFFloat", 1, 1.0)
-    # offsets from left/right of regular box
-    left = field.newField("left", "SFFloat", 1, 0)
-    right = field.newField("right", "SFFloat", 1, 0)
-    top = field.newField("top", "SFFloat", 1, 0)
-    bottom = field.newField("bottom", "SFFloat", 1, 0)
+    #: Share of the leftover main-axis space this claims; 0 keeps it at its
+    #: natural size.
+    flex = field.newField("flex", "SFFloat", 1, 0.0)
+    #: Explicit size in pixels; 0 means measure the content instead.
+    width = field.newField("width", "SFFloat", 1, 0.0)
+    height = field.newField("height", "SFFloat", 1, 0.0)
+    #: Margin outside the widget, in pixels.
+    left = field.newField("left", "SFFloat", 1, 0.0)
+    right = field.newField("right", "SFFloat", 1, 0.0)
+    top = field.newField("top", "SFFloat", 1, 0.0)
+    bottom = field.newField("bottom", "SFFloat", 1, 0.0)
 
-    def natural_width(self):
-        """Attempt to get our natural width"""
-        if self.width != 0:
-            return self.width
-        if hasattr(self, "calculate_width"):
-            return self.calculate_width()
-        return 0
+    #: Where this ended up, set by :meth:`arrange`.  Empty until then, so a
+    #: click that arrives before the first layout hits nothing rather than
+    #: guessing.
+    rect = Rect(0, 0, 0, 0)
+    #: The container this is inside, set when it is arranged.
+    parent: Any = None
 
-    def natural_height(self):
-        """Attempt to get our natural height"""
-        if self.height != 0:
-            return self.height
-        if hasattr(self, "calculate_height"):
-            return self.calculate_height()
-        return 0
+    # -- measurement ------------------------------------------------------
+    def content_size(self, metrics: Any,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        """Size of what is inside, ignoring margins.  Overridden by widgets.
+
+        ``available`` is the width the caller can offer, or None when it does
+        not know yet.  It is what lets wrapped text report the height it will
+        actually need instead of one very long line.
+        """
+        return (0, 0)
+
+    def natural_size(self, metrics: Any,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        """Size this asks for, including its margins.
+
+        An explicit ``width``/``height`` wins over the measurement, which is
+        how a game pins a column of controls to one width so their labels line
+        up instead of stepping in and out with the text in them.
+        """
+        margin_x = int(self.left + self.right)
+        inner = None if available is None else max(0, int(available) - margin_x)
+        content_w, content_h = self.content_size(metrics, inner)
+        if self.width:
+            content_w = int(self.width)
+        if self.height:
+            content_h = int(self.height)
+        return (int(content_w) + margin_x,
+                int(content_h + self.top + self.bottom))
+
+    def natural_width(self, metrics: Any,
+                      available: Optional[int] = None) -> int:
+        """The width this asks for, margins included."""
+        return self.natural_size(metrics, available)[0]
+
+    def natural_height(self, metrics: Any,
+                       available: Optional[int] = None) -> int:
+        """The height this asks for, margins included."""
+        return self.natural_size(metrics, available)[1]
+
+    # -- placement --------------------------------------------------------
+    def arrange(self, rect: Rect, metrics: Any) -> None:
+        """Take a rectangle, keep the part inside the margins, fill it in."""
+        self.rect = rect.inset(int(self.left), int(self.top),
+                               int(self.right), int(self.bottom))
+        self.arrange_content(metrics)
+
+    def arrange_content(self, metrics: Any) -> None:
+        """Place whatever is inside :attr:`rect`.  Overridden by containers."""
+
+    # -- the tree ---------------------------------------------------------
+    def layoutChildren(self) -> Sequence[Any]:
+        """Children that take part in layout, in drawing order.
+
+        Typed loosely because the protocol is what matters: a container lays
+        out anything that reports a natural size and takes a rectangle, widget
+        or not.
+        """
+        return ()
+
+    def walk(self):
+        """This node and every descendant, parents before children."""
+        yield self
+        for child in self.layoutChildren():
+            yield from child.walk()
+
+    def root(self) -> 'GUINode':
+        """The outermost node of this tree -- normally the panel."""
+        current: GUINode = self
+        while current.parent is not None:
+            current = current.parent
+        return current
+
+
+class GUISpacer(GUINode, node.Node):
+    """Blank space.  Flexible by default, which is what pushes a row apart."""
+
+    PROTO = "GUISpacer"
+    flex = field.newField("flex", "SFFloat", 1, 1.0)
 
 
 class PaintedImage(GUINode, node.Node):
-    """Simple node holding Frame-counting values
-
-    This node is used to hold information about the amount
-    of time required to render frames for the context.
-    """
+    """An image laid out at its own pixel size."""
 
     PROTO = "PaintedImage"
     image = field.newField("image", "SFImage", 1, None)
 
-    def calculate_width(self):
-        if self.image:
-            # cache this...
-            height = self.image.height
-            width = self.image.width
-            if width and height:
-                if width > height:
-                    return 1.0
-                else:
-                    return width / height
-            return 1.0
-        return 0
-
-    def calculate_height(self):
-        if self.image:
-            height = self.image.height
-            width = self.image.width
-            if width and height:
-                if height > width:
-                    return 1.0
-                else:
-                    return height / width
-            return 1.0
-        return 0
-
-
-class GUISpacer(GUINode, node.Node):
-    """Used to provide a spacer for the GUI"""
-
-    PROTO = "GUISpacer"
+    def content_size(self, metrics: Any,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        if self.image is not None:
+            return (int(self.image.width), int(self.image.height))
+        return (0, 0)
 
 
 class GUIBox(GUINode, node.Node):
+    """Children in a line, along ``direction``, sharing the leftover space.
+
+    One pass: fixed children take their natural size, ``flex`` children divide
+    what is left in proportion to their flex.  ``flexJustify`` says what to do
+    when there is space left over and nothing flexible to absorb it, and
+    ``align`` places each child across the other axis.
+    """
+
     PROTO = "GUIBox"
-    children = field.NewField("children", "MFNode", 1, None)
-    # support row, column
-    direction = field.NewField("direction", "SFString", 1, "row")
-    # support stretch, start, end, center, space-around and space-between
-    flexJustify = field.NewField("flexJustify", "SFString", 1, "stretch")
+    children = field.newField("children", "MFNode", 1, list)
+    #: ``row`` or ``column``.  A column stacks downward from the top, because
+    #: that is the order the text in it reads.
+    direction = field.newField("direction", "SFString", 1, ROW)
+    #: Pixels between one child and the next.
+    spacing = field.newField("spacing", "SFFloat", 1, 0.0)
+    #: Pixels between the box's edge and its children.
+    padding = field.newField("padding", "SFFloat", 1, 0.0)
+    #: ``start``, ``end``, ``center``, ``stretch`` or ``space-between``:
+    #: what to do with main-axis space no child claimed.
+    flexJustify = field.newField("flexJustify", "SFString", 1, "start")
+    #: ``start``, ``end``, ``center`` or ``stretch``: how a child is placed
+    #: across the other axis.
+    align = field.newField("align", "SFString", 1, "stretch")
+
+    @property
+    def horizontal(self) -> bool:
+        """Whether children run left to right rather than top to bottom."""
+        return self.direction != COLUMN
+
+    def layoutChildren(self) -> Sequence[Any]:
+        return [child for child in self.children
+                if getattr(child, 'visible', True)]
+
+    def content_size(self, metrics: Any,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        children = self.layoutChildren()
+        sizes = [child.natural_size(metrics, self._childAvailable(available))
+                 for child in children]
+        gaps = int(self.spacing) * max(0, len(children) - 1)
+        pad = int(self.padding) * 2
+        if self.horizontal:
+            main = sum(size[0] for size in sizes) + gaps
+            cross = max([size[1] for size in sizes], default=0)
+        else:
+            main = sum(size[1] for size in sizes) + gaps
+            cross = max([size[0] for size in sizes], default=0)
+        if self.horizontal:
+            return (main + pad, cross + pad)
+        return (cross + pad, main + pad)
+
+    def _childAvailable(self, available: Optional[int]) -> Optional[int]:
+        """The width a child may measure against.
+
+        A column hands its own width down; a row cannot, because its children
+        have not yet been given their shares of it.
+        """
+        if available is None or self.horizontal:
+            return None
+        return max(0, int(available) - int(self.padding) * 2)
+
+    def arrange_content(self, metrics: Any) -> None:
+        children = self.layoutChildren()
+        for child in children:
+            child.parent = self
+        if not children:
+            return
+        inner = self.rect.inset(int(self.padding))
+        available = None if self.horizontal else inner.width
+        sizes = [child.natural_size(metrics, available) for child in children]
+        spacing = int(self.spacing)
+        available = (inner.width if self.horizontal else inner.height)
+        used = sum((size[0] if self.horizontal else size[1]) for size in sizes)
+        used += spacing * (len(children) - 1)
+        mains = self._distribute(children, sizes, available - used)
+        offset, gap = self._justify(available - sum(mains)
+                                    - spacing * (len(children) - 1),
+                                    len(children))
+        cursor = offset
+        for child, size, main in zip(children, sizes, mains, strict=True):
+            child.arrange(self._childRect(inner, cursor, main, size), metrics)
+            cursor += main + spacing + gap
+
+    def _distribute(self, children: Sequence[GUINode],
+                    sizes: Sequence[Tuple[int, int]], spare: int) -> List[int]:
+        """Main-axis size for each child: natural, plus its share of ``spare``."""
+        mains = [int(size[0] if self.horizontal else size[1]) for size in sizes]
+        return distribute(children, mains, spare)
+
+    def _justify(self, spare: int, count: int) -> Tuple[int, int]:
+        """Where the run of children starts, and any gap added between them."""
+        if spare <= 0:
+            return (0, 0)
+        justify = self.flexJustify
+        if justify == 'end':
+            return (spare, 0)
+        if justify == 'center':
+            return (spare // 2, 0)
+        if justify == 'space-between' and count > 1:
+            return (0, spare // (count - 1))
+        return (0, 0)
+
+    def _childRect(self, inner: Rect, cursor: int, main: int,
+                   size: Tuple[int, int]) -> Rect:
+        """One child's rectangle, from its main-axis run and the cross axis."""
+        if self.horizontal:
+            cross, extent = self._cross(inner.height, size[1])
+            return Rect(inner.x + cursor, inner.y + cross, main, extent)
+        # A column reads downward, so the first child sits at the top.
+        cross, extent = self._cross(inner.width, size[0])
+        return Rect(inner.x + cross, inner.top - cursor - main, extent, main)
+
+    def _cross(self, available: int, natural: int) -> Tuple[int, int]:
+        """Offset and size across the axis the box does not run along."""
+        align = self.align
+        if align == 'stretch':
+            return (0, available)
+        extent = min(natural, available)
+        if align == 'center':
+            return ((available - extent) // 2, extent)
+        if align == 'end':
+            return (available - extent, extent)
+        return (0, extent)

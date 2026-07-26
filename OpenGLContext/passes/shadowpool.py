@@ -62,19 +62,20 @@ class _CascadeControllerMixin:
         cascade immediately. This keeps shadows from dragging a scene below
         60 fps while still using the extra quality when the GPU can afford it.
 
-        ``OPENGLCONTEXT_SHADOW_CASCADES`` pins the count to a fixed value and
-        bypasses the fps probe entirely. The shared depth array is already
+        ``ContextDefinition.shadowCascades`` (or ``OPENGLCONTEXT_SHADOW_CASCADES``)
+        pins the count to a fixed value and bypasses the fps probe entirely. The shared depth array is already
         allocated at its full ``MAX_CASCADES`` size and never reallocated
        , so the only remaining source of frame-to-frame variation
         is *how many* of those layers get rendered; pinning it makes shadow
         output deterministic for reference-image regression / CI.
         """
-        forced = os.environ.get('OPENGLCONTEXT_SHADOW_CASCADES')
+        from OpenGLContext import renderoptions
+        forced = int(renderoptions.number(
+            self, 'shadowCascades',
+            renderoptions.env_number('OPENGLCONTEXT_SHADOW_CASCADES', 0,
+                                     integer=True)))
         if forced:
-            try:
-                return max(1, min(int(forced), self.shader_program.MAX_CASCADES))
-            except ValueError:
-                log.warning("ignoring non-integer OPENGLCONTEXT_SHADOW_CASCADES=%r", forced)
+            return max(1, min(forced, self.shader_program.MAX_CASCADES))
         cap = self._vramCascadeCap()
         if not self.shadow_cascades_adaptive:
             return max(1, min(self.shadow_cascades, cap,

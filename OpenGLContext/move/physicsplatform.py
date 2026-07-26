@@ -55,9 +55,31 @@ class PhysicsViewPlatform:
         self.character.set_fly_move(d)
 
     def turn(self, d_yaw: float) -> None:
+        """Swing the gaze about the vertical axis.  **Positive turns right.**
+
+        Take that from here rather than deriving it.  These angles rotate the
+        *world* rather than the camera, and the two obvious derivations give
+        opposite answers: ``_world_dir`` reads a rising yaw as swinging toward
+        +X while the quaternion in :meth:`camera_orientation` reads it the
+        other way, depending entirely on whether you apply the matrix as
+        ``v @ M`` or ``M @ v``.  Whichever you assume, assume the other one.
+
+        The sense above is *measured*, through
+        :func:`twitchoglc.viewer.gaze` -- the orientation applied to the
+        viewing axis -- and it is measured again in
+        ``tests/unit/test_movementmodes.py``, which asserts on where the gaze
+        ends up rather than on the sign of a number.  A test that restated the
+        sign would agree with whatever this line happens to say.
+        """
         self.yaw += d_yaw
 
     def look(self, d_pitch: float) -> None:
+        """Tilt the gaze.  **Positive looks down**, and the clamp is +/-1.4 rad.
+
+        Down, not up -- the same inversion as :meth:`turn`, for the same
+        reason, and a mode that wants "look up" therefore passes a *negative*
+        pitch.  Measured, not derived; see :meth:`turn`.
+        """
         self.pitch = float(np.clip(self.pitch + d_pitch, -1.4, 1.4))
 
     def jump(self) -> Any:

@@ -187,3 +187,156 @@ def test_the_manager_is_rebuilt_when_what_it_drives_changes():
     context.ProcessEvent(_Key('w', 1))
     context.updateNavigation(0.016)
     assert later.moved
+
+
+# -- the sampler is a mouse-move consumer the manager cannot see --------------
+
+class _Optimisable:
+    """Enough of a context for the pick optimiser to make its decision."""
+
+    def __init__(self, has_registered_handlers=False):
+        self._registered = has_registered_handlers
+
+    def hasMouseMoveHandlers(self):
+        return self._registered
+
+
+class _SamplingContext(_Context, _Optimisable):
+    def __init__(self, definition=None):
+        _Context.__init__(self, definition)
+        _Optimisable.__init__(self, False)
+
+
+def _fps_definition():
+    return ContextDefinition(movementModes=[
+        modes.WalkMode(name='walk'), modes.FPSMode(name='fps')])
+
+
+def test_a_mouse_look_mode_keeps_move_events_alive():
+    """The pass drops mouse-moves when 'nobody is listening', but the sampler
+    *is* listening -- through ProcessEvent, not through a registered handler.
+    Dropped moves leave mouse-look with a zero delta and a view that never
+    turns."""
+    context = _SamplingContext(_fps_definition())
+    navigation = context.getNavigation()
+    navigation.select('fps')
+    assert context.hasMouseMoveHandlers()
+
+
+def test_a_mode_that_does_not_steer_leaves_the_optimisation_alone():
+    context = _SamplingContext(_fps_definition())
+    context.getNavigation().select('walk')
+    assert not context.hasMouseMoveHandlers()
+
+
+def test_a_context_with_no_modes_leaves_the_optimisation_alone():
+    assert not _SamplingContext().hasMouseMoveHandlers()
+
+
+def test_the_pick_optimiser_keeps_a_move_while_mouse_look_is_in_force():
+    from OpenGLContext.passes.selection import SelectionMixin
+    context = _SamplingContext(_fps_definition())
+    context.getNavigation().select('fps')
+    optimiser = SelectionMixin.__new__(SelectionMixin)
+    optimiser._has_mousemove_handlers = None
+    kept = optimiser._optimizePickEvents(context, {('move', (1, 2)): _Move(1, 2)})
+    assert len(kept) == 1
+
+
+def test_mouse_look_turns_the_view_from_a_delivered_move():
+    """End to end: two moves in, a turn out."""
+    context = _SamplingContext(_fps_definition())
+    navigation = context.getNavigation()
+    navigation.select('fps')
+    turns = []
+    context.platform.turn = turns.append
+    context.ProcessEvent(_Move(100, 100))
+    context.ProcessEvent(_Move(140, 100))
+    navigation.update(0.016, context.getInputState())
+    assert turns and turns[0] != 0
+
+
+# -- pointer motion comes from the backend, not from the pick pipeline --------
+
+def test_pointer_motion_reaches_the_sampler_without_a_pick():
+    """Mouse-look is not picking.
+
+    Motion delivered as a *pick* event only arrives when the selection buffer
+    resolves it, is dropped when the pointer is over nothing, and does not
+    arrive at all with picking switched off -- none of which has anything to do
+    with turning the view.
+    """
+    context = _SamplingContext(_fps_definition())
+    context.recordPointerMotion(100, 100)
+    context.recordPointerMotion(140, 110)
+    assert context.getInputState().mouse_delta() == (40, 10)
+
+
+def test_the_first_motion_only_establishes_where_the_pointer_is():
+    """Otherwise entering the window reads as one violent flick of the view."""
+    context = _SamplingContext(_fps_definition())
+    context.recordPointerMotion(500, 400)
+    assert context.getInputState().mouse_delta() == (0.0, 0.0)
+
+
+def test_direct_motion_stops_the_event_path_double_counting():
+    """A backend that reports motion directly also queues a pick event; taking
+    the delta from both would turn the view twice as far as the hand moved."""
+    context = _SamplingContext(_fps_definition())
+    context.recordPointerMotion(100, 100)
+    context.recordPointerMotion(140, 100)
+    context.ProcessEvent(_Move(200, 100))
+    assert context.getInputState().mouse_delta() == (40, 0)
+
+
+def test_a_backend_that_reports_no_motion_still_uses_the_events():
+    """GLUT, pygame and wx deliver moves only as events; they must keep working."""
+    context = _SamplingContext(_fps_definition())
+    context.ProcessEvent(_Move(100, 100))
+    context.ProcessEvent(_Move(160, 100))
+    assert context.getInputState().mouse_delta() == (60, 0)
+
+
+def test_motion_is_sampled_even_with_picking_switched_off():
+    definition = _fps_definition()
+    definition.pickEnabled = False
+    context = _SamplingContext(definition)
+    context.recordPointerMotion(10, 10)
+    context.recordPointerMotion(30, 10)
+    assert context.getInputState().mouse_delta() == (20, 0)
+
+
+# -- one coordinate convention, measured rather than assumed ------------------
+
+def test_pointer_motion_uses_the_pick_points_origin():
+    """Bottom-left, y upward -- the origin every other pointer coordinate in
+    the system uses.  The GLFW callback reports y downward and flips it; a
+    backend that fed the raw value would invert mouse-look's vertical and
+    nothing else, which is the hardest kind of sign error to see."""
+    from OpenGLContext.events import glfwevents
+
+    class Backend(glfwevents.EventHandlerMixin):
+        def __init__(self):
+            self.motions = []
+            self.picks = []
+
+        def getViewPort(self):
+            return (800, 600)
+
+        def _cursorToFramebuffer(self, window, x, y):
+            return x, y
+
+        def recordPointerMotion(self, x, y):
+            self.motions.append((x, y))
+
+        def addPickEvent(self, event):
+            self.picks.append(event.getPickPoint())
+
+        def triggerPick(self):
+            pass
+
+    backend = Backend()
+    backend.glfwOnCursorPos(None, 100.0, 150.0)
+    assert backend.motions == backend.picks, (
+        'the sampler and the pick queue disagree about which way y runs')
+    assert backend.motions == [(100, 450)]

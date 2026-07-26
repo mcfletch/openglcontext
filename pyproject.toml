@@ -75,6 +75,7 @@ oglc-gltf-demo = "OpenGLContext.bin.gltf_demo:main"
 oglc-gltf-regression = "OpenGLContext.bin.gltf_regression:main"
 oglc-profile = "OpenGLContext.bin.profile_view:main"
 oglc-visual = "OpenGLContext.bin.visualshell:main"
+oglc-ui = "OpenGLContext.bin.ui_demo:main"
 
 [project.urls]
 Homepage = "http://pyopengl.sourceforge.net/context/"
