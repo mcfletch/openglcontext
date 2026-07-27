@@ -152,6 +152,37 @@ scene.advance(dt)                         # steps the world, writes back Transfo
     inside a wall <em>never</em> leaves the user stuck in the ground. If no free
     space is found it enters fly rather than wedging.</p>
 
+  <h3>A fall is caught however fast it arrives</h3>
+  <p>Contact is <strong>discrete</strong>: each step places the capsule and then
+    resolves whatever it overlaps. A step that carries the capsule clean past a
+    floor leaves nothing overlapping, and nothing overlapping is nothing to be
+    stopped by &mdash; a fall from three or four storeys does exactly that at
+    any ordinary frame rate. So a frame is advanced in <strong>pieces short
+    enough that the capsule cannot cross its own extent</strong> in one of them.
+    The two axes get different allowances because the capsule is taller than it
+    is wide, so an ordinary walk is not substepped at all while a fall is
+    stepped finely for exactly as long as it is fast.</p>
+  <p><strong>How much work that can ever be is calculated, not chosen.</strong>
+    <code>CharacterCapabilities.terminalVelocity</code> (55&nbsp;m/s by default,
+    about what a person reaches) caps the fall, and the ceiling on substeps
+    follows from it: whatever the capsule is allowed to reach is what the
+    stepping is sized for, so the two cannot drift apart. A fixed ceiling is a
+    number nobody can check &mdash; raise the fall speed past what it allows and
+    a step outruns collision again, silently and only at speed. Setting
+    <code>terminalVelocity</code> to 0 lets a fall accelerate without limit and
+    gives up the guarantee along with it; <code>max_substeps()</code> reports
+    that rather than returning a reassuring number.</p>
+  <p>The other half is which way a contact pushes. Depth against a triangle is
+    <strong>how far the capsule reaches past the face</strong>, resolved to the
+    side the capsule is on &mdash; not the distance to the nearest point on it.
+    Measuring the nearest point looks right while the capsule is barely
+    touching and is exactly wrong once it is not: a hard landing puts the lower
+    cap below the floor, that cap is then the nearest, and pushing toward it
+    drives the character down through the surface it just hit while reporting
+    no ground. The side is taken from the capsule rather than from the
+    triangle's winding, because a triangle soup does not promise one &mdash;
+    and taking it from the capsule is also what makes a ceiling push down.</p>
+
   <h3>Speed is along the ground, not along the horizon</h3>
   <p>The move direction is <strong>projected onto the surface underfoot</strong>
     before it is used, so a run up a ramp covers the same metres per second as a
