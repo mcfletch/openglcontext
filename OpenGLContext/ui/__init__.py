@@ -15,7 +15,12 @@ The pieces:
 * :mod:`~OpenGLContext.ui.layout` -- rows, columns and label/control grids.
 * :mod:`~OpenGLContext.ui.panel` -- one screen: focus, accelerators, modality.
 * :mod:`~OpenGLContext.ui.overlay` -- the stack of panels and the context
-  mix-in that feeds it input and draws it.
+  mix-in that feeds it input.
+* :mod:`~OpenGLContext.ui.hudwidgets` and
+  :mod:`~OpenGLContext.ui.debugoverlay` -- screen furniture that must *not*
+  take the input: a reticule, meters, messages, and the provider-fed developer
+  overlay.  :mod:`~OpenGLContext.ui.screen` holds both kinds of layer and draws
+  them, HUD first and panels over it, in one batch.
 * :mod:`~OpenGLContext.ui.session` -- editing a node on a copy, so Cancel is
   real at every level of a nested dialog.
 * :mod:`~OpenGLContext.ui.skin` -- colours and optional nine-slice artwork.

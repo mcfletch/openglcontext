@@ -38,6 +38,13 @@ Controls (OpenGLContext's default view-platform navigation)::
     k                       pause / resume animation; [ / ] switch animation
     t                       stop/start the turntable (stopping resets orientation)
     F2                      save a screenshot (iso-dated PNG in the current directory)
+    Alt + s                 the same thing through the engine's own handler,
+                            named for the program: oglc-gltf-screen-0001.png,
+                            also in the current directory
+    Alt + f                 the developer overlay: frame rate and time, which
+                            renderer features are on, what the last frame cost
+                            in shapes and draw calls, and where the camera is
+                            (see docs/hud.html)
 
 In walk mode (default) gravity + collision keep you on the ground and out of
 walls; press ``g`` to drop to the free-fly camera if an initial viewpoint leaves

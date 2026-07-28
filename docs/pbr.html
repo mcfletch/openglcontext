@@ -426,6 +426,71 @@ platform, never per material. Material factors are packed into a std140 uniform
 buffer, built once per material and reused across frames.</p>
 </section>
 
+<section id="animated-surfaces">
+<h2>Surfaces that move</h2>
+<p>Three things can move a PBR surface at run time, and they cost very different
+amounts. Reaching for the cheapest one that will do the job is most of the
+performance story for animated materials.</p>
+
+<h3>1. The UV transform &mdash; one uniform</h3>
+<p><code>PBRMaterial.uv_transform</code> is a 3&times;3
+<code>KHR_texture_transform</code> matrix. Assigning it bumps the material's
+upload version, so the pass re-uploads its uniform block and nothing else
+happens. A scrolling conveyor belt, a rotating fan or a stretching liquid costs
+this and no more, however large the surface is.</p>
+<pre>material.uv_transform = [[1, 0, u_offset],
+                         [0, 1, v_offset],
+                         [0, 0, 1]]        # translation in the last COLUMN</pre>
+<p>Which channels it applies to is the high half of
+<code>texCoordMask</code>: the channel's low bit shifted by 8. Set it for the
+base colour and leave it clear for the lightmap, or a scrolling texture drags
+the baked lighting along with it and takes the shadows off the walls.</p>
+<pre>material.texCoordMask |= (1 &lt;&lt; 8)     # baseColor transformed, lightmap not</pre>
+
+<h3>2. Colour, opacity and texture &mdash; one uniform or one bind</h3>
+<p><code>baseColor</code>, <code>emissiveColor</code> and
+<code>transparency</code> are ordinary material fields; assigning any of them
+re-uploads the block. Replacing <code>material.textures</code> with a new dict
+swaps a map &mdash; assign, do not mutate, or the version is not bumped and the
+old texture set is served.</p>
+
+<h3>3. The vertices &mdash; a per-frame CPU pass and a buffer re-upload</h3>
+<p>When the movement genuinely cannot be a matrix &mdash; a wave that heaves the
+geometry, a churn whose offset depends on where each vertex <em>is</em> &mdash;
+a mesh takes a <strong>surface deformer</strong>:</p>
+<pre>def churn(positions, normals, texcoords):
+    return positions + wave(positions, clock.now), normals, texcoords
+
+mesh.set_surface_deformer(churn)     # applies at once
+...
+mesh.refresh_surface()               # each frame; re-reads the deformer</pre>
+<p>This is a <em>third</em> stage on the same pipeline morph targets and
+skinning already use: rest arrays are kept, the deform chain is
+morph&nbsp;&rarr;&nbsp;skin&nbsp;&rarr;&nbsp;surface, a version counter bumps,
+and each per-context GPU object re-uploads the dynamic vertex buffers. Three
+properties are worth knowing:</p>
+<ul>
+  <li><strong>The deformer always sees the rest pose</strong>, never its own
+    last output. Deforming the previous frame compounds, and a one-unit wave
+    walks the surface away over a few seconds.</li>
+  <li><strong>It is handed copies</strong>, so a deformer that writes in place
+    cannot corrupt the rest arrays it will be handed next frame.</li>
+  <li><strong>UVs are only made dynamic if the mesh says they move</strong>
+    (<code>deforms_texcoords</code>, true once a deformer is set). Morphing and
+    skinning never move UVs, so a skinned character does not pay to re-upload
+    them &mdash; which is why the deformer must be set <em>before</em> the mesh
+    is first drawn.</li>
+</ul>
+<p>A deformer that returns nothing usable leaves the mesh alone: content is not
+always well formed, and a bad effect should cost its effect rather than its
+surface.</p>
+<p class="technical"><code>scenegraph/pbrmesh.py</code>:
+<code>set_surface_deformer</code>, <code>refresh_surface</code>,
+<code>deforms_texcoords</code>, and stage 3 of <code>_apply_deform</code>. The
+twitch map viewer drives all three of these from Quake&nbsp;3 `.shader` scripts;
+<code>twitchoglc/animator.py</code> is a worked example.</p>
+</section>
+
     <footer>
       <p class="footer">
         <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>

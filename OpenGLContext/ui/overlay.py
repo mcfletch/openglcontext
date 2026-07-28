@@ -29,8 +29,9 @@ from typing import Any, Callable, List, Optional, Set, Tuple
 import logging
 
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
-from OpenGLContext.ui.metrics import FontMetrics, font_size_for, metrics_for
+from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.panel import Panel
+from OpenGLContext.ui.screen import ScreenMixin
 
 log = logging.getLogger(__name__)
 
@@ -206,14 +207,17 @@ class OverlayStack:
         return bool(top is not None and top.wheel(delta, x, y))
 
 
-class OverlayMixin(object):
-    """Gives a context an overlay stack, its input routing and its drawing."""
+class OverlayMixin(ScreenMixin):
+    """Gives a context an overlay stack, its input routing and its drawing.
+
+    The HUD half -- the layers under these panels, and the drawing both go
+    through -- is :class:`~OpenGLContext.ui.screen.ScreenMixin`, which every
+    context has.  This is the half that takes input.
+    """
 
     # Supplied by the context this is mixed into (annotations only, so the
     # real methods are still found at run time).
-    getViewPort: Any
     getInputState: Any
-    triggerRedraw: Any
     suspendPointerCapture: Any
     _overlays: Optional[OverlayStack] = None
     _overlayActive: bool = False
@@ -352,45 +356,7 @@ class OverlayMixin(object):
             return True
         return bool(super(OverlayMixin, self).hasMouseMoveHandlers())   # type: ignore[misc]
 
-    # -- measurement and drawing ------------------------------------------
-    def interfaceScale(self) -> float:
-        """How much larger than usual the player wants the interface.
-
-        The window's own height is *not* in here: that is answered by
-        :func:`~OpenGLContext.ui.metrics.font_size_for` and applies whether or
-        not anyone has a preference.  This is the preference on top of it --
-        eyesight and viewing distance rather than resolution.
-        """
-        scale = getattr(getattr(self, 'contextDefinition', None), 'uiScale', 1.0)
-        return float(scale) or 1.0
-
-    def overlayFontSize(self) -> int:
-        """The atlas size the overlay measures and draws with right now.
-
-        A method rather than a setting, because the answer changes with the
-        window: a screen that was comfortable in a 1080p window is half the
-        size it should be when that window is dragged onto a 4K display.
-        """
-        return font_size_for(self.getViewPort()[1], self.interfaceScale())
-
-    def overlayMetrics(self) -> Optional[FontMetrics]:
-        """Measurements for the font the overlay draws with, or None.
-
-        None until there is a GL context with a built font atlas: measuring
-        against a zero-sized character would collapse every widget in the tree.
-        """
-        from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
-        renderer = get_text_renderer(self.overlayFontSize())
-        try:
-            if not renderer.initialize():
-                return None
-        except Exception:                       # pragma: no cover - broken driver
-            log.warning("could not build the overlay font atlas", exc_info=True)
-            return None
-        if not renderer.char_width or not renderer.char_height:
-            return None
-        return metrics_for(renderer)
-
+    # -- layout and drawing -----------------------------------------------
     def layoutOverlays(self, force: bool = False) -> bool:
         """Lay the panels out for the current window; False if not yet possible.
 
@@ -410,19 +376,11 @@ class OverlayMixin(object):
         stack.layout(viewport, metrics)
         return True
 
-    def renderShaderOverlay(self, pass_: Any) -> None:
-        """Draw the overlay over the finished frame.
-
-        Called by the shader render pass once everything else is done, with its
-        program current.  A context that wants its own HUD as well overrides
-        this and calls up.
-        """
+    def screenTrees(self, metrics: FontMetrics,
+                    now: Optional[float] = None) -> List[Any]:
+        """The HUD layers, and then the open panels on top of them."""
+        trees = super(OverlayMixin, self).screenTrees(metrics, now)
         stack = self._overlays
-        if stack is None or not stack.visible:
-            return
-        if not self.layoutOverlays():
-            return
-        from OpenGLContext.ui.draw import OverlayRenderer
-        renderer = OverlayRenderer.forContext(self, self.overlayFontSize())
-        if renderer is not None:
-            renderer.draw(stack, self.getViewPort())
+        if stack is not None and stack.visible and self.layoutOverlays():
+            trees.extend(stack.panels)
+        return trees

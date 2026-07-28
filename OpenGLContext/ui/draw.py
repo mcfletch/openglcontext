@@ -584,16 +584,27 @@ class OverlayRenderer:
             glEnable(GL_DEPTH_TEST)
             glUseProgram(0)
 
-    def draw(self, stack: Any, viewport: Tuple[int, int]) -> None:
-        """Draw every panel in the stack, oldest first so the newest is on top."""
+    def drawTrees(self, trees: Sequence[Any], viewport: Tuple[int, int]) -> None:
+        """Draw a run of widget trees, first to last, in one batch.
+
+        A tree is anything with a skin and a ``paintTree`` -- a HUD layer or an
+        overlay panel -- and the order is the order they are drawn in, so
+        whatever is last is on top.  One ``begin``/``end`` around all of them
+        is what keeps a whole HUD plus the screen over it down to a handful of
+        draw calls.
+        """
         if not self.begin(viewport):
             return
         width, height = self._viewport
         try:
-            for panel in stack.panels:
-                self.skin = panel.activeSkin()
-                if panel.scrim:
+            for tree in trees:
+                self.skin = tree.activeSkin()
+                if getattr(tree, 'scrim', False):
                     self.rect(Rect(0, 0, width, height), self.skin.scrimFill)
-                panel.paintTree(self)
+                tree.paintTree(self)
         finally:
             self.end()
+
+    def draw(self, stack: Any, viewport: Tuple[int, int]) -> None:
+        """Draw every panel in a stack, oldest first so the newest is on top."""
+        self.drawTrees(stack.panels, viewport)

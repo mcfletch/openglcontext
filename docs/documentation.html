@@ -99,10 +99,25 @@ uv pip install -e ".[glfw,gltf]"</pre>
             scrolling licence notice, a console, and nine-slice skinning.
             The whole interface scales with the window, so it stays readable
             and hittable at 4K -- plus the <code>oglc-ui</code> demo</li>
+          <li><a href="hud.html">HUD &amp; Developer Overlay</a> -- Screen
+            furniture drawn over a live world and never taking an event: a
+            reticule that belongs to the weapon, meters that colour themselves
+            from thresholds, an icon-and-number readout and a fading message
+            queue -- plus the developer overlay, fed by registered providers,
+            where the frame rate is now drawn</li>
           <li><a href="physics.html">Physics &amp; Collision</a> -- Real-time
             rigid-body physics built on the OMI glTF model: collision, gravity
             zones, triggers, joints, shape cooking, a character controller with
             safe viewpoint binding, and a motion debug overlay</li>
+          <li><a href="particles.html">Particle Effects</a> -- Fire, smoke,
+            sparks, explosions and trails as camera-facing quads in one
+            instanced draw: a numpy pool with a packed live set, emitters as
+            declared nodes, life curves as uniforms, and named presets</li>
+          <li><a href="audio.html">Spatial Audio</a> -- Sound placed in the
+            scene on glTF's <code>KHR_audio_emitter</code> model: distance
+            curves, directional cones, equal-power panning, a fixed voice pool
+            with priority stealing, an underwater muffle, and silence as a
+            first-class backend</li>
           <li><a href="terrain.html">Terrain &amp; Landscapes</a> -- Streamed OGC
             3D&nbsp;Tiles terrain with screen-space-error LOD, frustum-culled paging,
             per-tile walkable colliders, procedural &amp; DEM heightmaps, caves/overhangs,

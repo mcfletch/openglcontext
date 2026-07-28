@@ -1,8 +1,8 @@
 """Tests that GLUT bitmap fonts are only used on a GLUT context.
 
-GLUT bitmap routines segfault when called without a live GLUT context, so
-the provider and the frame counter must refuse to select them on non-GLUT
-backends (e.g. GLFW, pygame) and fall back to the texture-atlas font.
+GLUT bitmap routines segfault when called without a live GLUT context, so the
+provider must refuse to select them on non-GLUT backends (e.g. GLFW, pygame)
+and fall back to the texture-atlas font.
 """
 import pytest
 
@@ -69,26 +69,3 @@ def test_provider_selection_skips_glut_on_non_glut_context():
         assert font == "shader-font"
     finally:
         FontProvider.providers = saved
-
-
-def test_framecounter_no_glut_font_without_glut_context(monkeypatch):
-    """With no atlas available, the frame counter refuses a GLUT font off-GLUT."""
-    from OpenGLContext import framecounter
-
-    monkeypatch.setattr(framecounter, "_shaderfont", None)
-    monkeypatch.setattr(framecounter, "_glutfont", glutfont)
-
-    fc = framecounter.FrameCounter()
-    assert fc.font(_Ctx(providesGLUT=False)) is None
-
-
-def test_framecounter_uses_glut_font_on_glut_context(monkeypatch):
-    """With no atlas available, a GLUT context still gets a GLUT bitmap font."""
-    from OpenGLContext import framecounter
-
-    monkeypatch.setattr(framecounter, "_shaderfont", None)
-    monkeypatch.setattr(framecounter, "_glutfont", glutfont)
-
-    fc = framecounter.FrameCounter()
-    font = fc.font(_Ctx(providesGLUT=True))
-    assert isinstance(font, glutfont.GLUTBitmapFont)

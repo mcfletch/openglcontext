@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Spatial Audio, Explained</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <style>
+    figure { margin: 1.5em 0; }
+    figure svg { max-width: 100%; height: auto; display: block; }
+    figcaption { font-size: 0.9em; opacity: 0.8; margin-top: 0.5em; }
+    .diagram { font-family: sans-serif; font-size: 13px; }
+    .diagram .box { fill: #f4f4f4; stroke: #666; stroke-width: 1.2; }
+    .diagram .ctl { fill: #e8f0fb; stroke: #37629c; stroke-width: 1.2; }
+    .diagram .aud { fill: #fdeee6; stroke: #b4581f; stroke-width: 1.2; }
+    .diagram .lbl { fill: #111; }
+    .diagram .sub { fill: #444; font-size: 11px; }
+    .diagram .flow { stroke: #666; stroke-width: 1.4; fill: none;
+                     marker-end: url(#arrow); }
+    .diagram .thread { fill: none; stroke: #999; stroke-dasharray: 5 4; }
+    @media (prefers-color-scheme: dark) {
+      .diagram .box { fill: #2a2a2a; stroke: #999; }
+      .diagram .ctl { fill: #1e2b3d; stroke: #7ba7dd; }
+      .diagram .aud { fill: #3a2a1e; stroke: #d9924f; }
+      .diagram .lbl { fill: #eee; }
+      .diagram .sub { fill: #bbb; }
+      .diagram .flow { stroke: #aaa; }
+    }
+  </style>
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Spatial Audio, Explained</h1>
+</header>
+
+<section>
+<p class="introduction">OpenGLContext plays sound that is <em>in</em> the scene:
+an emitter under a <code>Transform</code> is heard from where that transform is,
+fades with distance, can be aimed like a spotlight, and pans as you walk past it.
+The data model is <strong>not</strong> a private format &mdash; it is glTF's
+<a href="https://github.com/omigroup/gltf-extensions/tree/main/extensions/2.0/KHR_audio_emitter"><code>KHR_audio_emitter</code></a>
+extension, which is the Web&nbsp;Audio <code>PannerNode</code> model, so a scene
+authored in Blender or Godot arrives with its sound intact and no translation
+layer. VRML97's own <code>Sound</code> node is implemented too, on the same
+machinery. The mixing is ours, in numpy, so nothing here depends on a copyleft
+audio library, and every gain curve is a testable function of geometry. The
+indented <span class="technical">technical notes</span> point at the code.</p>
+</section>
+
+<section id="quickstart">
+  <h2>The shortest thing that makes a noise</h2>
+  <p>Put an <code>AudioEmitter</code> under a <code>Transform</code>. That is the
+    whole of it &mdash; there is no engine to create, no device to open and
+    nothing to update per frame:</p>
+  <pre>from OpenGLContext.scenegraph.basenodes import (
+    AudioEmitter, AudioSource, Transform,
+)
+
+fountain = Transform(translation=(3, 0, -5), children=[
+    AudioEmitter(
+        gain=0.8,                 # linear, not decibels
+        refDistance=2.0,          # full volume within 2 metres
+        rolloffFactor=1.0,        # how fast it fades past that
+        sources=[AudioSource(url=['water.ogg'], loop=True)],
+    ),
+])</pre>
+  <p>The render pass finds the emitter while it is collecting the frame's nodes,
+    works out where it is from the transforms above it, and keeps it aimed at the
+    camera. The camera <em>is</em> the listener.</p>
+  <p class="technical">The nodes are in
+    <code>OpenGLContext/scenegraph/audio.py</code>; the pass calls
+    <code>FlatPass.renderAudio()</code>, which is four lines and delegates to
+    <code>OpenGLContext.audio.scene.update()</code>.</p>
+  <p><strong>Sound costs nothing until a scene has some.</strong> No device is
+    opened, and no audio thread starts, until a frame is drawn containing
+    something audible. Every existing OpenGLContext demo is untouched.</p>
+</section>
+
+<section id="dataflow">
+  <h2>How a sound gets from a file to your ears</h2>
+  <p>There are two threads and they meet in exactly one place. Everything
+    expensive, everything that can fail, and everything that needs to know about
+    the world happens on the <strong>control thread</strong>; the
+    <strong>audio thread</strong> multiplies numbers and adds them up.</p>
+
+  <figure>
+    <svg viewBox="0 0 860 470" class="diagram" role="img"
+         aria-label="Data flow from a URL through decoding, spatialisation and mixing to the device">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#666"/>
+        </marker>
+      </defs>
+
+      <rect class="thread" x="8" y="8" width="500" height="454" rx="8"/>
+      <text class="sub" x="20" y="28">control thread &mdash; the render loop</text>
+      <rect class="thread" x="524" y="8" width="328" height="454" rx="8"/>
+      <text class="sub" x="536" y="28">audio thread &mdash; the device callback</text>
+
+      <rect class="ctl" x="30" y="44" width="200" height="46" rx="5"/>
+      <text class="lbl" x="42" y="64">AudioSource.url</text>
+      <text class="sub" x="42" y="80">['water.ogg', ...]</text>
+
+      <rect class="ctl" x="30" y="118" width="200" height="60" rx="5"/>
+      <text class="lbl" x="42" y="138">ClipCache</text>
+      <text class="sub" x="42" y="154">decode once, keyed by</text>
+      <text class="sub" x="42" y="168">resolved path</text>
+
+      <rect class="ctl" x="30" y="206" width="200" height="60" rx="5"/>
+      <text class="lbl" x="42" y="226">Clip</text>
+      <text class="sub" x="42" y="242">mono float32,</text>
+      <text class="sub" x="42" y="256">one sample rate</text>
+
+      <rect class="ctl" x="278" y="44" width="212" height="76" rx="5"/>
+      <text class="lbl" x="290" y="64">Transform above the node</text>
+      <text class="sub" x="290" y="82">world position + forward</text>
+      <text class="sub" x="290" y="98">ViewPlatform &rarr; Listener</text>
+
+      <rect class="ctl" x="278" y="148" width="212" height="118" rx="5"/>
+      <text class="lbl" x="290" y="168">spatial</text>
+      <text class="sub" x="290" y="186">distance_gain()</text>
+      <text class="sub" x="290" y="202">&times; cone_gain()</text>
+      <text class="sub" x="290" y="218">&times; emitter.gain &times; source.gain</text>
+      <text class="sub" x="290" y="238">equal_power_pan(azimuth)</text>
+      <text class="sub" x="290" y="256">&rarr; (left, right)</text>
+
+      <rect class="ctl" x="120" y="308" width="300" height="60" rx="5"/>
+      <text class="lbl" x="132" y="328">Mixer.play_gains(clip, left, right)</text>
+      <text class="sub" x="132" y="346">claims a slot, or steals, or refuses</text>
+
+      <rect class="ctl" x="120" y="392" width="300" height="52" rx="5"/>
+      <text class="lbl" x="132" y="412">VoiceHandle.set_gain(l, r)</text>
+      <text class="sub" x="132" y="430">every frame, for a moving sound</text>
+
+      <rect class="aud" x="556" y="118" width="264" height="88" rx="5"/>
+      <text class="lbl" x="568" y="138">Voice pool (fixed size)</text>
+      <text class="sub" x="568" y="156">resample by rate</text>
+      <text class="sub" x="568" y="172">&times; ramped gain, per ear</text>
+      <text class="sub" x="568" y="188">accumulate into the block</text>
+
+      <rect class="aud" x="556" y="234" width="264" height="70" rx="5"/>
+      <text class="lbl" x="568" y="254">master gain, muffle, clip</text>
+      <text class="sub" x="568" y="272">low-pass blend, then</text>
+      <text class="sub" x="568" y="288">clamp to full scale</text>
+
+      <rect class="aud" x="556" y="332" width="264" height="56" rx="5"/>
+      <text class="lbl" x="568" y="352">Mixer.blocks()</text>
+      <text class="sub" x="568" y="370">yields a memoryview, no copy</text>
+
+      <rect class="aud" x="556" y="410" width="264" height="40" rx="5"/>
+      <text class="lbl" x="568" y="435">AudioDevice &rarr; speakers / silence</text>
+
+      <path class="flow" d="M 130 90 L 130 118"/>
+      <path class="flow" d="M 130 178 L 130 206"/>
+      <path class="flow" d="M 384 120 L 384 148"/>
+      <path class="flow" d="M 230 236 L 260 236 L 260 320 L 120 320 L 130 320"/>
+      <path class="flow" d="M 384 266 L 384 320 L 420 320"/>
+      <path class="flow" d="M 270 368 L 270 392"/>
+      <path class="flow" d="M 420 338 L 480 338 L 480 162 L 556 162"/>
+      <path class="flow" d="M 420 418 L 512 418 L 512 176 L 556 176"/>
+      <path class="flow" d="M 688 206 L 688 234"/>
+      <path class="flow" d="M 688 304 L 688 332"/>
+      <path class="flow" d="M 688 388 L 688 410"/>
+      <path class="flow" d="M 660 450 L 660 462 L 540 462 L 540 360 L 556 360"/>
+      <text class="sub" x="546" y="470">device pulls: send(frames)</text>
+    </svg>
+    <figcaption>Everything on the left happens once per frame, in the render
+      loop. Everything on the right happens on the device's own thread, tens of
+      times a second, and touches nothing but numpy arrays that already
+      exist.</figcaption>
+  </figure>
+
+  <p>The one thing crossing the boundary is <strong>a pair of floats per
+    playing sound</strong>. A moving emitter is not restarted, re-resolved or
+    re-decoded; its voice's target gains are overwritten, and the mixer ramps to
+    them across the next block.</p>
+  <p class="technical"><code>audio/engine.py</code> owns the left-hand side,
+    <code>audio/mixer.py</code> the right. The mixer imports no path, no matrix
+    and no listener &mdash; grep it and see.</p>
+</section>
+
+<section id="pipeline">
+  <h2>The module chain</h2>
+  <table>
+    <tr><th>Module</th><th>Answers</th><th>Depends on</th></tr>
+    <tr><td><code>audio/model.py</code></td>
+        <td><code>KHR_audio_emitter</code> as typed records, with the
+            extension's own field names and defaults; glTF round-trips through
+            <code>from_gltf</code>/<code>to_gltf</code></td>
+        <td><code>spatial</code></td></tr>
+    <tr><td><code>audio/spatial.py</code></td>
+        <td>Every gain curve, and where the listener is</td>
+        <td>numpy</td></tr>
+    <tr><td><code>audio/clip.py</code></td>
+        <td>Files &rarr; mono float32 samples, decoded once</td>
+        <td><code>miniaudio</code> (optional)</td></tr>
+    <tr><td><code>audio/synth.py</code></td>
+        <td>Tones, noise, chirps and impacts made out of arithmetic</td>
+        <td><code>clip</code></td></tr>
+    <tr><td><code>audio/mixer.py</code></td>
+        <td>The voice pool and the block mixing</td>
+        <td><code>clip</code>, <code>spatial</code></td></tr>
+    <tr><td><code>audio/device.py</code></td>
+        <td>Where blocks go, and what to do when nowhere</td>
+        <td><code>miniaudio</code> (optional)</td></tr>
+    <tr><td><code>audio/engine.py</code></td>
+        <td>The one object an application holds</td>
+        <td>all of the above</td></tr>
+    <tr><td><code>audio/scene.py</code></td>
+        <td>Attaching an engine to a context and driving a frame</td>
+        <td><code>engine</code></td></tr>
+    <tr><td><code>scenegraph/audio.py</code></td>
+        <td>The <code>AudioEmitter</code>, <code>AudioSource</code> and
+            <code>Sound</code> nodes</td>
+        <td><code>engine</code></td></tr>
+  </table>
+</section>
+
+<section id="curves">
+  <h2>The gain curves, and why there are four of them</h2>
+  <p>A sound's loudness at the listener is a <strong>product of independent
+    factors</strong>, each a small pure function. Splitting them this way is
+    what makes each of them testable in isolation and replaceable without
+    touching the others.</p>
+  <pre>level = source.gain
+      &times; emitter.gain
+      &times; distance_gain(distance, model, refDistance, maxDistance, rolloff)
+      &times; cone_gain(angle, coneInnerAngle, coneOuterAngle, coneOuterGain)
+
+left, right = equal_power_pan(azimuth)
+voice.set_gain(level * left, level * right)</pre>
+
+  <h3>Distance</h3>
+  <p>Three models, taken from <code>KHR_audio_emitter</code>, which takes them
+    from Web&nbsp;Audio. <code>refDistance</code> is the radius inside which
+    nothing is attenuated; <code>maxDistance</code> is where the fall stops
+    (<strong>zero means never</strong>, which is the extension's default).</p>
+  <table>
+    <tr><th><code>distanceModel</code></th><th>Gain</th><th>Reaches silence?</th></tr>
+    <tr><td><code>inverse</code> (default)</td>
+        <td><code>ref / (ref + rolloff &times; (d &minus; ref))</code></td>
+        <td>No &mdash; asymptotic. The physically natural one.</td></tr>
+    <tr><td><code>linear</code></td>
+        <td><code>1 &minus; rolloff &times; (d &minus; ref) / (max &minus; ref)</code></td>
+        <td>Yes, at <code>maxDistance</code>. Needs one set.</td></tr>
+    <tr><td><code>exponential</code></td>
+        <td><code>(d / ref) <sup>&minus;rolloff</sup></code></td>
+        <td>No &mdash; asymptotic, but falls faster than inverse.</td></tr>
+  </table>
+  <p>Reach for <code>linear</code> when a sound must be <em>gone</em> past a
+    certain range &mdash; it is the only one that gets there &mdash; and
+    <code>inverse</code> for anything meant to sound like a real object in a
+    real room.</p>
+
+  <h3>Direction: the cone</h3>
+  <p>Set <code>shapeType='cone'</code> and an emitter radiates like a spotlight.
+    Both angles are <strong>angular diameters</strong>, side to side, so the
+    boundary is at half of each. Inside the inner cone nothing is attenuated;
+    outside the outer cone the gain is <code>coneOuterGain</code>; between them
+    it interpolates linearly. The defaults are a full turn, which is why an
+    emitter that sets none of them is never attenuated by direction. The
+    emitter points along its own <strong>&minus;Z</strong>, as glTF cameras and
+    <code>KHR_lights_punctual</code> do.</p>
+
+  <h3>Panning</h3>
+  <p>The source is put into the listener's own frame &mdash; azimuth in the
+    horizontal plane, 0 straight ahead and positive to the right &mdash; and the
+    azimuth becomes a pair of ear gains that trace a quarter circle:
+    <code>left² + right² = 1</code> at every angle. Panning therefore moves a
+    sound across the stereo field without changing how loud it is. A sound dead
+    ahead is &minus;3&nbsp;dB in each ear; that is not a bug, it is what constant
+    power means.</p>
+  <p>A source <em>behind</em> the listener folds onto its mirror image in front:
+    behind-and-right pans right. Two loudspeakers cannot put a sound behind
+    anybody, and the fold is what Web&nbsp;Audio specifies rather than something
+    chosen here.</p>
+
+  <h3>VRML97's ellipsoids</h3>
+  <p>The <code>Sound</code> node describes something none of the above can:
+    <strong>two ellipsoids sharing a focus at the sound</strong>, with a ramp
+    between them that is linear in <em>decibels</em>. It is implemented rather
+    than approximated, because approximating a published specification is how a
+    world stops sounding the way its author heard it.</p>
+  <figure>
+    <svg viewBox="0 0 620 260" class="diagram" role="img"
+         aria-label="Two nested ellipsoids around a sound location, with the ramp between them">
+      <ellipse cx="330" cy="130" rx="230" ry="92" fill="none" stroke="#b4581f"
+               stroke-width="1.6" stroke-dasharray="6 4"/>
+      <ellipse cx="205" cy="130" rx="105" ry="42" fill="none" stroke="#37629c"
+               stroke-width="1.6"/>
+      <circle cx="140" cy="130" r="5" fill="#111"/>
+      <text class="lbl" x="112" y="118">location</text>
+      <line x1="140" y1="130" x2="560" y2="130" stroke="#888" stroke-width="1"/>
+      <path class="flow" d="M 140 168 L 300 168"/>
+      <text class="sub" x="180" y="186">direction</text>
+      <text class="sub" x="250" y="82">minFront</text>
+      <text class="sub" x="430" y="42">maxFront</text>
+      <text class="sub" x="86" y="150">minBack</text>
+      <text class="sub" x="86" y="222">maxBack</text>
+      <text class="lbl" x="176" y="136">full</text>
+      <text class="sub" x="330" y="136">0 dB &rarr; &minus;20 dB</text>
+      <text class="sub" x="470" y="240">silent beyond</text>
+    </svg>
+    <figcaption>The sound sits at a <em>focus</em> of both ellipsoids, not at
+      their centre, which is why a forward-facing sound reaches much further
+      ahead of itself than behind. The reach at any angle collapses to
+      <code>2&thinsp;f&thinsp;b / ((f+b) &minus; (f&minus;b)&thinsp;cos&thinsp;&theta;)</code>
+      &mdash; each distance along the axis, and their harmonic mean at right
+      angles.</figcaption>
+  </figure>
+  <p>At the outer ellipsoid the ramp has reached &minus;20&nbsp;dB, which the
+    specification calls inaudible, and beyond it the gain is zero. That step from
+    0.1 to 0 <em>is</em> a discontinuity &mdash; and it is left alone, because the
+    mixer ramps every gain change across a block anyway. The curve stays the
+    specification's own; the smoothing happens where smoothing belongs.</p>
+</section>
+
+<section id="mixer">
+  <h2>The mixer, and why it looks the way it does</h2>
+  <p>Everything about the mixer's shape follows from one fact: it runs on the
+    audio thread, and the audio thread must never be late. Miss a block and you
+    do not get a slow frame, you get a click.</p>
+  <ul>
+    <li><strong>The pool is fixed.</strong> <code>Voice</code> slots are made
+      once, at construction, and reused for ever. Starting a sound configures a
+      slot; it never allocates one. A scene firing a thousand sounds a second
+      costs what a scene firing ten does.</li>
+    <li><strong>The buffers are made once too.</strong> <code>Mixer.mix()</code>
+      writes through numpy's <code>out=</code> parameters into pre-allocated
+      arrays and returns a <em>view</em>. An allocation on the audio thread is a
+      garbage collection on the audio thread.</li>
+    <li><strong>Nothing there blocks, decodes, resolves a path or logs.</strong>
+      Those all happen on the control thread, before a clip reaches a voice.</li>
+    <li><strong>The lock is control-side only.</strong>
+      <code>Mixer.play()</code> takes it so two <em>control</em> threads cannot
+      claim one slot. The mixing never takes it.</li>
+  </ul>
+
+  <h3>Gain ramping</h3>
+  <p>A gain that jumps from one block to the next is a step, and a step is a
+    click. Each ear's gain is therefore interpolated from where the last block
+    left it to where the control thread has aimed it, reaching the target on the
+    block's final sample. A <em>new</em> voice, by contrast, starts at its gain
+    with no ramp &mdash; ramping in would soften the transient that makes a
+    gunshot read as a gunshot.</p>
+
+  <h3>Voice stealing</h3>
+  <p>The pool has to be able to refuse, and to take back. When every voice is
+    busy, the newcomer is ranked against the weakest one playing &mdash; by
+    <code>priority</code> first, then by how audible it currently is &mdash; and
+    either steals it or is refused. Stealing the quietest sound of the lowest
+    priority is the least audible theft available.</p>
+  <p>Because a slot can be taken back, <code>play()</code> hands out a
+    <code>VoiceHandle</code> rather than the slot itself. A handle remembers
+    <em>which</em> sound it was for, so a caller still steering a sound whose
+    slot was recycled steers nothing instead of steering somebody else's
+    explosion. That mistake is silent, intermittent and very hard to find, which
+    is why it is designed out rather than documented.</p>
+  <pre>handle = engine.play('explosion.wav', priority=0.9)
+...
+handle.set_gain(0.2, 0.4)   # does nothing at all once the sound has gone
+handle.stop()               # likewise; no caller ever has to test first</pre>
+
+  <h3>Muffling</h3>
+  <p><code>mixer.muffle</code> runs from 0 (clear) to 1 (underwater) and blends
+    the mix towards a low-passed copy of itself. The filter is a cascade of
+    two-tap averages &mdash; <code>y[n] = (x[n] + x[n&minus;1]) / 2</code>,
+    four times &mdash; which is the cheapest thing that is genuinely a low-pass
+    rather than merely quieter: about &minus;33&nbsp;dB near Nyquist and
+    essentially nothing at the bottom. It is a blend rather than a switch so an
+    application can fade it in as a listener submerges.</p>
+  <pre>engine.muffle = min(1.0, depth_below_surface / 0.5)</pre>
+</section>
+
+<section id="silence">
+  <h2>Silence is a backend, not an error</h2>
+  <p>Sound can be unavailable two ways, and both end in the same place:</p>
+  <ul>
+    <li><strong>The package is absent.</strong> <code>miniaudio</code> is an
+      optional dependency (<code>pip install OpenGLContext[audio]</code>).</li>
+    <li><strong>No device opens.</strong> A container with no ALSA or
+      PulseAudio, a machine with no sound card, a device something else holds
+      exclusively &mdash; or the backend falling back to its <em>own</em> null
+      output, which means the same thing wearing a disguise.</li>
+  </ul>
+  <p>Each produces <strong>one warning and a silent run</strong>: never an
+    exception that reaches the user, never a refusal to start.
+    <code>open_device()</code> cannot raise. A machine with no sound is a normal
+    machine, continuous integration is one, and audio must never be why an
+    application will not start.</p>
+  <p>That makes the fallback real code that has to keep working, so it is tested
+    directly &mdash; including a test that forces the import to fail &mdash;
+    rather than being assumed.</p>
+  <p class="technical"><code>tests/unit/test_audio_device.py</code> covers the
+    absent-package path, the will-not-open path and the backend's-own-null path;
+    <code>test_audio_clip.py</code> covers decoding with the backend forced
+    away.</p>
+</section>
+
+<section id="settings">
+  <h2>Settings, and whose volume is whose</h2>
+  <p>Sound is a <strong>sub-node</strong> of the
+    <code>ContextDefinition</code> &mdash; <code>definition.audio</code>, an
+    <code>AudioSettings</code> node &mdash; rather than loose fields, for the
+    same reason the movement modes are: it has more than one knob, they belong
+    together, and a node gets validation, defaults, serialisation and a
+    generated settings page from the field system.</p>
+  <table>
+    <tr><th>Field</th><th>Environment</th><th>Default</th><th>Means</th></tr>
+    <tr><td><code>audio.enabled</code></td>
+        <td><code>OPENGLCONTEXT_AUDIO</code></td><td>on</td>
+        <td>Off opens no device and starts no thread. What a capture run, a
+            benchmark or a headless build wants.</td></tr>
+    <tr><td><code>audio.volume</code></td>
+        <td><code>OPENGLCONTEXT_AUDIO_VOLUME</code></td><td>1.0</td>
+        <td>The <em>player's</em> volume, read every frame so a settings slider
+            takes effect at once.</td></tr>
+    <tr><td><code>audio.voices</code></td><td>&mdash;</td><td>32</td>
+        <td>How many sounds may play at once. A quality setting as much as a
+            budget: a busy scene on a small pool loses its quietest sounds
+            first.</td></tr>
+  </table>
+  <p>They appear in the F10 settings screen under <em>Sound</em>, generated from
+    the node's fields like every other setting.</p>
+
+  <h3>Two volumes, and they multiply</h3>
+  <p>This is the one thing here that is easy to get wrong, and the symptom of
+    getting it wrong is a volume control that prints a new number and changes
+    nothing:</p>
+  <table>
+    <tr><th></th><th>Who owns it</th><th>Written by</th></tr>
+    <tr><td><code>definition.audio.volume</code> &rarr;
+            <code>engine.volume</code></td>
+        <td>the <strong>player</strong></td>
+        <td>the settings screen, a volume key. Re-read every frame.</td></tr>
+    <tr><td><code>engine.master_gain</code></td>
+        <td>the <strong>application</strong></td>
+        <td>the application, once. How loud this scene is authored to be.</td></tr>
+  </table>
+  <p>The mixer sees their product. Writing one over the other every frame
+    &mdash; the tempting shortcut &mdash; makes whichever loses last exactly one
+    frame. A volume key should therefore write
+    <code>context.contextDefinition.audio.volume</code>, not
+    <code>engine.master_gain</code>: that is the number the settings screen
+    shows and the one that is saved.</p>
+</section>
+
+<section id="formats">
+  <h2>Clips, formats and the cache</h2>
+  <p>A <code>Clip</code> is the only shape of audio the mixer knows:
+    <strong>one channel of float32 samples at one rate</strong>. Everything is
+    normalised to that on the way in, because the alternative is a mixer that
+    branches on sample format, channel count and rate in its inner loop, sixty
+    times a second, on the audio thread.</p>
+  <p>Mono is not a simplification but a requirement: a stereo source has already
+    decided where it sits in the stereo field, and a sound that has decided
+    cannot then be panned to where it actually is in the world. A stereo file is
+    mixed down as it is decoded.</p>
+  <p><code>miniaudio</code> decodes <code>.wav</code>, <code>.mp3</code>,
+    <code>.ogg</code> (Vorbis) and <code>.flac</code>, and resamples and
+    re-channels <em>while</em> decoding, so the normalising above is one pass
+    rather than a decode followed by two conversions. It is MIT-licensed, as is
+    every decoder it bundles &mdash; nothing in the chain is copyleft, which is
+    the reason it is the only audio package this project takes.</p>
+  <p><code>ClipCache</code> is keyed by resolved path, so a sound fired sixty
+    times a second decodes once and two spellings of one file are one entry. A
+    name that fails to decode is remembered as a failure: a missing file warns
+    once, not once per shot, and yields a silence rather than an exception.</p>
+  <p><code>AudioSource.url</code> is a <em>list</em>, most preferred first, and
+    the first entry that decodes wins. That is how the glTF codec extensions
+    (<code>OMI_audio_ogg_vorbis</code>, <code>OMI_audio_opus</code>) are meant to
+    be read: offer the better format, fall back to the one everything can
+    play.</p>
+
+  <h3>Sounds with no files</h3>
+  <p><code>OpenGLContext.audio.synth</code> makes clips out of arithmetic
+    &mdash; a tone, a swept chirp, white noise, a percussive impact. They cost
+    nothing to redistribute, which is why the demo below ships no assets, and
+    they are genuinely useful as placeholders: a game with a synthesised gunshot
+    is a game that can be played and tuned.</p>
+  <pre>from OpenGLContext.audio import synth
+engine.clips.put('ping', synth.impact(0.4, seed=1))
+engine.play('ping', priority=1.0)</pre>
+</section>
+
+<section id="gltf">
+  <h2>Loading sound from glTF</h2>
+  <p>A document's <code>KHR_audio_emitter</code> block is read into the native
+    model and turned into scenegraph nodes as the scene is built. A node's
+    emitters become children of that node's <code>Transform</code>; a scene's
+    emitters &mdash; which the extension requires to be <code>global</code>
+    &mdash; hang off the root, where no transform reaches them.</p>
+  <pre>from OpenGLContext.loaders.gltf import loader
+scene = loader.load_gltf('room.gltf')   # its emitters are already in there</pre>
+  <p>Audio URIs go through the same security-hardened resolver every other
+    external reference does, so a sound is confined to the document's own origin
+    exactly as a texture is.</p>
+  <p class="technical"><code>loaders/gltf/scene.py</code>, method
+    <code>_audio_emitters</code>; the model reader is
+    <code>audio.model.from_gltf</code>, and
+    <code>audio.model.to_gltf</code> writes it back out, omitting every field
+    still at its default.</p>
+</section>
+
+<section id="vrml">
+  <h2>The VRML97 <code>Sound</code> node</h2>
+  <p>pyvrml97 has declared <code>Sound</code> and <code>AudioClip</code> for
+    twenty-odd years and nothing has ever played them. They work now:</p>
+  <pre>Sound(
+    source=AudioClip(url=['ambience.wav'], loop=True, pitch=1.0),
+    location=(0, 1, 0), direction=(0, 0, -1),
+    minFront=2.0, minBack=2.0, maxFront=40.0, maxBack=10.0,
+    intensity=0.8, priority=0.2, spatialize=True,
+)</pre>
+  <p>Of the time-dependent behaviour it honours what can be seen from outside:
+    <code>startTime</code> and <code>stopTime</code> bound when the clip sounds,
+    <code>loop</code> repeats it, <code>pitch</code> sets the playback rate, and
+    <code>isActive</code> and <code>duration_changed</code> are sent. Fractional
+    seeking into a clip that started before the scene did is not implemented; a
+    clip whose <code>startTime</code> has passed begins at its start.
+    <code>spatialize=FALSE</code> still fades with distance but sits in the
+    middle of the stereo field, which is what the specification says.</p>
+</section>
+
+<section id="api">
+  <h2>Driving it directly</h2>
+  <p>A game does not want to put a node in the scene for every gunshot. The
+    engine is available directly, and it is the same engine the nodes use:</p>
+  <pre>from OpenGLContext.audio import scene as audioscene
+
+engine = audioscene.engine_for(self)          # None if audio is switched off
+if engine is not None:
+    engine.play('weapon/rocket_fire.wav',
+                emitter=emitter_record,        # an audio.model.AudioEmitter
+                position=muzzle_world_position,
+                gain=1.0, priority=0.8)</pre>
+  <table>
+    <tr><th>Call</th><th>Does</th></tr>
+    <tr><td><code>engine.play(source, ...)</code></td>
+        <td>Starts a clip or a named file; returns a <code>VoiceHandle</code> or
+            None. None is an ordinary outcome, not an error.</td></tr>
+    <tr><td><code>engine.aim(handle, emitter, position, forward)</code></td>
+        <td>Re-points a playing sound. Accepts a None handle.</td></tr>
+    <tr><td><code>engine.gains_for(emitter, position, forward, gain)</code></td>
+        <td>The two numbers, without playing anything &mdash; useful for tests
+            and for deciding whether a sound is worth starting at all.</td></tr>
+    <tr><td><code>engine.listen(view_platform)</code></td>
+        <td>Moves the listener. The render pass already does this each
+            frame.</td></tr>
+    <tr><td><code>engine.master_gain</code></td>
+        <td>The application's mix level. Set it once; it is not the player's
+            volume and is never overwritten by one.</td></tr>
+    <tr><td><code>engine.volume</code></td>
+        <td>The player's volume, refreshed each frame from
+            <code>definition.audio.volume</code>. Write the field, not
+            this.</td></tr>
+    <tr><td><code>engine.muffle</code></td>
+        <td>0 clear to 1 underwater, on the whole mix.</td></tr>
+    <tr><td><code>audioscene.describe(context)</code></td>
+        <td>A dict for a debug overlay: device, voice count, volume,
+            muffle.</td></tr>
+  </table>
+</section>
+
+<section id="testing">
+  <h2>Testing sound without a sound card</h2>
+  <p>Nearly all of this is arithmetic over arrays, and an array can be asserted
+    about. Build an engine on a <code>NullDevice</code> and read the mix:</p>
+  <pre>from OpenGLContext.audio.device import NullDevice
+from OpenGLContext.audio.engine import AudioEngine
+from OpenGLContext.audio import synth
+
+engine = AudioEngine(device=NullDevice(sample_rate=8000), voices=8)
+engine.play(synth.tone(440.0, 1.0, sample_rate=8000), pan=1.0)
+block = engine.mixer.mix(64)          # (64, 2) float32
+assert block[:, 0].max() == 0.0       # nothing in the left ear</pre>
+  <p>The suite covers the curves at known distances and angles, panning either
+    side of the listener, voice stealing under pressure, the ramp, the muffle's
+    frequency response, the glTF round-trip, and both silent paths. One test
+    asserts that mixing a full pool for twenty blocks allocates nothing
+    measurable, which is the property the whole design rests on.</p>
+</section>
+
+<section id="demos">
+  <h2>Demo</h2>
+  <p><code>tests/audio_spatial.py</code> puts three sounds in a room and lets you
+    walk around them: one orbits you (panning), one sits far off (distance), and
+    one is a cone you can only hear from in front of. <code>m</code> muffles
+    everything; the space bar fires a one-shot. Every clip is synthesised, so the
+    demo ships no assets, and it runs identically &mdash; silently &mdash; on a
+    machine with no sound.</p>
+  <pre>python tests/audio_spatial.py</pre>
+</section>
+
+</body></html>

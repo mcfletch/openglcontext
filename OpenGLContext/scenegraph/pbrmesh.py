@@ -92,6 +92,10 @@ class _MeshGPU(object):
             self.attr_layout.append((buf, loc, size))
             if name in ('positions', 'normals', 'tangents'):
                 self.dyn[name] = buf
+            elif name == 'texcoords' and getattr(mesh, 'deforms_texcoords', False):
+                # Only where the mesh says its UVs move: a skinned character's
+                # never do, and re-uploading them every frame is pure waste.
+                self.dyn[name] = buf
 
         self.vao = glGenVertexArrays(1)
         glBindVertexArray(self.vao)
@@ -117,7 +121,12 @@ class _MeshGPU(object):
             glDrawArrays(self.draw_mode, 0, self.count)
 
     def update_dynamic(self, mesh: Any) -> None:
-        """Re-upload morph-deformed position/normal/tangent buffers in place."""
+        """Re-upload the deformed vertex buffers in place.
+
+        Which buffers those are was decided when they were built: positions,
+        normals and tangents always, texture coordinates only for a mesh whose
+        UVs move.
+        """
         for name, buf in self.dyn.items():
             data = getattr(mesh, name)
             if data is not None:
@@ -176,6 +185,15 @@ class PBRMesh(node.Node):
 
     solid = field.newField('solid', 'SFBool', 1, True)
 
+    #: The undeformed arrays, captured the first time anything wants to deform
+    #: this mesh -- by morph targets, by skinning, or by a material's own
+    #: surface deformer. None until then, which is also how a static mesh is
+    #: told apart from a posed one.
+    _base_positions: Any = None
+    _base_normals: Any = None
+    _base_tangents: Any = None
+    _base_texcoords: Any = None
+
     def __init__(self, positions: Any = None, normals: Any = None, texcoords: Any = None,
                  tangents: Any = None, colors: Any = None, indices: Any = None,
                  solid: bool = True,
@@ -226,12 +244,15 @@ class PBRMesh(node.Node):
         self.skin_weights: Any = None
         self._skin_matrices: Any = None
         self._deform_version = 0
+        #: A material's claim on this surface's shape -- see
+        #: :meth:`set_surface_deformer`.  Distinct from morph and skin, which
+        #: are the *mesh's* own animation; this is movement the thing painted
+        #: on the mesh asks for, and it runs last.
+        self._surface_deformer: Any = None
         skinned = skin_joints is not None and skin_weights is not None
         if not morph_targets and not skinned:
             return
-        self._base_positions = None if self.positions is None else self.positions.copy()
-        self._base_normals = None if self.normals is None else self.normals.copy()
-        self._base_tangents = None if self.tangents is None else self.tangents.copy()
+        self._capture_rest_pose()
         for tgt in (morph_targets or []):
             entry: dict[str, Any] = {}
             for key, width in (('positions', 3), ('normals', 3), ('tangents', 3)):
@@ -250,6 +271,57 @@ class PBRMesh(node.Node):
             wsum[wsum == 0] = 1.0
             self.skin_weights = np.ascontiguousarray(w / wsum, dtype=np.float32)
 
+    def _capture_rest_pose(self) -> None:
+        """Keep the undeformed arrays, so every frame deforms the *rest* pose.
+
+        Deforming the last frame's result compounds: a one-unit wave walks the
+        surface away over a few seconds.  Copies rather than references, so a
+        deformer that writes in place cannot corrupt what it is handed next
+        frame.
+        """
+        if self._base_positions is not None:
+            return
+        self._base_positions = None if self.positions is None else self.positions.copy()
+        self._base_normals = None if self.normals is None else self.normals.copy()
+        self._base_tangents = None if self.tangents is None else self.tangents.copy()
+        self._base_texcoords = None if self.texcoords is None else self.texcoords.copy()
+
+    def set_surface_deformer(self, deformer: Any) -> None:
+        """Set what a *material* does to this surface's vertices, or None.
+
+        ``deformer(positions, normals, texcoords)`` returns the three arrays
+        moved, and is called afresh whenever :meth:`refresh_surface` is -- so a
+        deformer that reads a clock is re-read rather than remembered.  It is
+        always handed the rest pose (after any morph and skin), never its own
+        last output.
+
+        This is how a Quake `.shader`'s ``deformVertexes`` and ``tcMod turb``
+        reach the geometry: the movement belongs to what is painted on the
+        surface rather than to the mesh, so it is set by whoever built the
+        material and runs after the mesh's own animation.
+
+        Set it **before** the mesh is first drawn: whether the texture-coordinate
+        buffer is uploaded as dynamic is decided when the GPU buffers are built
+        (:attr:`deforms_texcoords`).
+        """
+        self._capture_rest_pose()
+        self._surface_deformer = deformer
+        self._apply_deform()
+
+    def refresh_surface(self) -> None:
+        """Re-run the deform chain, picking up whatever the deformer now says."""
+        if self._surface_deformer is not None:
+            self._apply_deform()
+
+    @property
+    def deforms_texcoords(self) -> bool:
+        """Whether this mesh's UVs move and so want a dynamic vertex buffer.
+
+        Morphing and skinning never move UVs, so a skinned character does not
+        pay to re-upload them; a surface with a ``tcMod turb`` on it does.
+        """
+        return self._surface_deformer is not None and self.texcoords is not None
+
     @property
     def _morph_version(self) -> int:
         # back-compat alias: the GPU cache keys re-upload off this counter.
@@ -259,7 +331,8 @@ class PBRMesh(node.Node):
     def is_deformable(self) -> bool:
         """True when the mesh has morph targets or skin joints (per-frame CPU
         deform + dynamic VBO re-upload); a plain static mesh returns False."""
-        return bool(self.morph_targets) or self.skin_joints is not None
+        return (bool(self.morph_targets) or self.skin_joints is not None
+                or self._surface_deformer is not None)
 
     def set_morph_weights(self, weights: Any) -> None:
         """Set morph-target weights and recompute the deformed mesh (CPU)."""
@@ -306,6 +379,16 @@ class PBRMesh(node.Node):
             if tan is not None:
                 tan[:, :3] = np.einsum('ni,nij->nj', tan[:, :3].astype(np.float64),
                                        per_vertex[:, :3, :3]).astype(np.float32)
+        # 3) the material's own claim on the surface, last, on the posed mesh.
+        uvs = None if self._base_texcoords is None else self._base_texcoords.copy()
+        if self._surface_deformer is not None:
+            moved = self._surface_deformer(
+                None if pos is None else pos.copy(),
+                None if nrm is None else nrm.copy(), uvs)
+            if moved is not None:
+                # A deformer that returns nothing usable costs its effect, not
+                # the surface: content is not always well formed.
+                pos, nrm, uvs = moved
         if nrm is not None:
             lens = np.linalg.norm(nrm, axis=1, keepdims=True)
             lens[lens == 0] = 1.0
@@ -313,6 +396,8 @@ class PBRMesh(node.Node):
         self.positions = None if pos is None else np.ascontiguousarray(pos, dtype=np.float32)
         self.normals = None if nrm is None else np.ascontiguousarray(nrm, dtype=np.float32)
         self.tangents = tan
+        if uvs is not None:
+            self.texcoords = np.ascontiguousarray(uvs, dtype=np.float32)
         self._volume = None
         self._deform_version += 1
 

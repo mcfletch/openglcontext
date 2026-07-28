@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union
 import numpy as np
 
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
+from OpenGLContext.scenegraph import audio as audionodes
+from OpenGLContext.audio import model as audiomodel
 from OpenGLContext.loaders.resolver import Resolver
 
 if TYPE_CHECKING:
@@ -124,6 +126,14 @@ class GLTFScene(object):
         return Player(self.animations[index], self.node_transforms,
                       node_morph=self.node_morph, loop=loop,
                       skins=self.skins, compute_worlds=compute_worlds)
+
+
+def _scene_extension(g: "pygltflib.GLTF2", name: str) -> Any:
+    """The named extension block on the document's active scene, if any."""
+    if not g.scenes:
+        return None
+    extensions = getattr(g.scenes[g.scene or 0], 'extensions', None) or {}
+    return extensions.get(name) if isinstance(extensions, dict) else None
 
 
 def _scene_root_indices(g: "pygltflib.GLTF2") -> list:
@@ -400,6 +410,10 @@ class _SceneBuilder:
         self.light_defs: list = []
         if isinstance(top_ext, dict):
             self.light_defs = (top_ext.get('KHR_lights_punctual', {}) or {}).get('lights', []) or []
+        # KHR_audio_emitter: the document's audio/sources/emitters arrays, read
+        # into the native model so nodes and scenes can name emitters by index.
+        self.audio_document = audiomodel.from_gltf(
+            (top_ext.get(audiomodel.EXTENSION) or {}) if isinstance(top_ext, dict) else {})
 
     def mesh_shapes(self, mesh_index: int) -> list:
         if mesh_index in self.mesh_cache:
@@ -493,10 +507,25 @@ class _SceneBuilder:
                     wpos = (None if isinstance(light, DirectionalLight) else
                             tuple(float(v) for v in (np.array([0, 0, 0, 1.0]) @ world)[:3]))
                     self.light_meter.append((light, wpos))
+        if isinstance(node_ext, dict) and self.audio_document.emitters:
+            children.extend(self._audio_emitters(node_ext.get(audiomodel.EXTENSION)))
         for child in (node.children or []):
             children.append(self.build(child, world, ancestry, node_visible))
         group.children = children  # type: ignore[assignment]
         return group
+
+    def _audio_emitters(self, block: Any) -> list:
+        """AudioEmitter nodes for a KHR_audio_emitter block on a node or scene.
+
+        A sound's ``uri`` is relative to the document, so it goes through the
+        same resolver every other external reference does -- which is also what
+        keeps it inside the document's own origin.
+        """
+        if not isinstance(block, dict):
+            return []
+        return audionodes.emitters_from_document(
+            self.audio_document, block.get('emitters') or (),
+            resolve=self.resolver.resolve)
 
     def run(self) -> GLTFScene:
         g = self.g
@@ -504,8 +533,13 @@ class _SceneBuilder:
         # renderable container (GLTFScene.group); the SceneGraph is its parent and
         # carries the DEF registry for by-name lookup.
         root = Transform()
+        root_children = [self.build(ni, np.eye(4)) for ni in _scene_root_indices(g)]
+        # Scene-level emitters are global by definition -- music and ambience --
+        # so they hang off the root, where no transform reaches them.
+        if self.audio_document.emitters:
+            root_children.extend(self._audio_emitters(_scene_extension(g, audiomodel.EXTENSION)))
         # children is a VRML ChildrenTypedField descriptor that coerces a node list.
-        root.children = [self.build(ni, np.eye(4)) for ni in _scene_root_indices(g)]  # type: ignore[assignment]
+        root.children = root_children  # type: ignore[assignment]
         self.scene_graph.children = [root]
 
         if not np.isfinite(self.world_min).all():

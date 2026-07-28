@@ -58,6 +58,8 @@ REPORT_PATH = TESTS_DIR / "report.html"
 # Scripts that use randomization and shouldn't expect visual match
 # These will still capture images but won't fail on visual differences
 RANDOMIZED_SCRIPTS = [
+    'audio_spatial.py',  # An emitter orbits on a wall clock
+    'particles_effects.py',  # Emitters run on a wall clock
     'particles_simple.py',  # Random particle positions
     'starfield.py',  # Random star positions
     'teapot_ceramic.py',  # Auto-rotates by wall clock; captured angle varies
@@ -260,6 +262,12 @@ def _subprocess_env(auto_exit_frames: int = AUTO_EXIT_FRAMES) -> dict:
     env['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
     # Disable distance-LOD so tessellation stays at full detail (stable references)
     env['OPENGLCONTEXT_LOD'] = '0'
+    # No sound. A suite run launches every demo in turn, and a developer running
+    # it should not have tones played at them for its duration -- nor should a
+    # build machine contend for an audio device it may share. The audio nodes
+    # and their scene traversal still run; only the device is not opened
+    # (OpenGLContext.audio.scene), so the capture is of exactly the same frame.
+    env['OPENGLCONTEXT_AUDIO'] = '0'
     return env
 
 

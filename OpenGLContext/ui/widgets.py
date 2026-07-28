@@ -27,11 +27,14 @@ from vrml import field, node
 from OpenGLContext.hud import GUINode
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.skin import DANGER, PRIMARY, SECONDARY, skin_for
+from OpenGLContext.ui.skin import (
+    DANGER, PRIMARY, SECONDARY, default_skin, skin_for,
+)
 
 __all__ = [
-    'Widget', 'BoundWidget', 'Label', 'Button', 'Toggle', 'Select', 'Slider',
-    'TextField', 'NumberField', 'KeyCapture', 'Spacer', 'Separator',
+    'Widget', 'RootWidget', 'BoundWidget', 'Label', 'Button', 'Toggle',
+    'Select', 'Slider', 'TextField', 'NumberField', 'KeyCapture', 'Spacer',
+    'Separator',
     'key_label',
     'PRIMARY', 'SECONDARY', 'DANGER',
 ]
@@ -249,6 +252,88 @@ class Widget(GUINode, node.Node):
         notify = getattr(self.root(), 'valueChanged', None)
         if notify is not None:
             notify(self)
+
+
+class RootWidget(Widget):
+    """The outermost widget of a tree: what everything in it finds its skin on.
+
+    A tree of widgets is laid out against one window and painted with one
+    skin, and the root is where both of those live -- a panel over the world,
+    a HUD layer under it.  It owns the children, the authored skin and the
+    copy of it scaled for the window the tree was last laid out in, so a
+    widget deep in the tree reads a measurement in real pixels without knowing
+    that a scale exists.
+    """
+
+    PROTO = 'UIRootWidget'
+    children = field.newField('children', 'MFNode', 1, list)
+    #: The artwork and colours this tree paints with; the default flat skin
+    #: when NULL.
+    skin = field.newField('skin', 'SFNode', 1, node.NULL)
+
+    #: This tree's skin at the current interface scale, and what it was made
+    #: from, so it is rebuilt only when one of the two changes.
+    _scaledSkin: Optional[Any] = None
+    _scaledFrom: Optional[Any] = None
+    #: This tree's own copy of the default skin; see :meth:`baseSkin`.
+    _defaultSkin: Optional[Any] = None
+    _scaledBy: float = 1.0
+
+    def layoutChildren(self) -> List[Widget]:
+        return [child for child in self.children
+                if getattr(child, 'visible', True)]
+
+    def activeSkin(self) -> Any:
+        """The skin every widget in this tree paints with.
+
+        Scaled for the window the tree was last laid out in, so a measurement
+        read from it is in real pixels and no widget has to know the scale
+        exists.
+        """
+        if self._scaledSkin is not None:
+            return self._scaledSkin
+        return self.baseSkin()
+
+    def baseSkin(self) -> Any:
+        """The skin this tree is authored with, before any scaling.
+
+        Its **own copy** of the default when it names none: a ``Skin`` is
+        authored data with every field writable, and a game adjusting one
+        screen's colours should not adjust every screen in the process.
+        """
+        if self.skin:
+            return self.skin
+        if self._defaultSkin is None:
+            self._defaultSkin = default_skin()
+        return self._defaultSkin
+
+    def scaleSkin(self, metrics: FontMetrics) -> Any:
+        """Settle the skin for one interface scale, and hand it back."""
+        base = self.baseSkin()
+        factor = float(getattr(metrics, 'scale', 1.0))
+        if self._scaledSkin is None or self._scaledFrom is not base \
+                or self._scaledBy != factor:
+            self._scaledFrom = base
+            self._scaledBy = factor
+            self._scaledSkin = base.scaled(factor)
+        return self._scaledSkin
+
+    def link(self) -> None:
+        """Point every widget in the tree at its container, top down.
+
+        Before measuring rather than while arranging, because a widget finds
+        its skin -- and therefore its padding, its switch size, everything it
+        measures against -- by walking up to the root.  Measurement runs
+        before anything is placed, so a tree linked only as it is arranged
+        would size its first pass against the unscaled default and paint the
+        result at the real scale.
+        """
+        stack: List[Any] = [self]
+        while stack:
+            current = stack.pop()
+            for child in current.layoutChildren():
+                child.parent = current
+                stack.append(child)
 
 
 class BoundWidget(Widget):

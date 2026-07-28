@@ -93,6 +93,7 @@ def settings_panel(context: Any, session: Optional[SettingsSession] = None,
         + _modeSection(context, session)
         + _section(_('Interface'), generate.page_for(
             draft, include=_declared(draft, 'INTERFACE_FIELDS')))
+        + _audioSection(session)
         + _section(_('Diagnostics'), generate.page_for(
             draft, include=_declared(draft, 'DIAGNOSTIC_FIELDS')))
     ))
@@ -216,6 +217,20 @@ def _declared(node: Any, attribute: str) -> Optional[Sequence[str]]:
 def _section(heading: str, page: Any) -> List[Any]:
     return [Label(text=heading, name='%s.heading' % (heading.lower(),),
                   top=8), page]
+
+
+def _audioSection(session: SettingsSession) -> List[Any]:
+    """The player's sound settings, from the definition's ``audio`` sub-node.
+
+    Edited in place on the draft's own sub-node, so Cancel reverts it with
+    everything else rather than needing a session of its own.  A definition with
+    no audio node -- an older saved profile, say -- simply shows no section.
+    """
+    audio = getattr(session.draft, 'audio', None)
+    if audio is None:
+        return []
+    return _section(_('Sound'), generate.page_for(
+        audio, include=[name for name in _declared(audio, 'FIELDS')]))
 
 
 def _modeSection(context: Any, session: SettingsSession) -> List[Any]:

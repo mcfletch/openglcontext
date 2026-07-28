@@ -9,6 +9,10 @@ overlaid top-right so a rendering can be compared against the reference.
     n / Page Down   next model
     p / Page Up     previous model
     F2              save a screenshot (iso-dated PNG in the current directory)
+    Alt + s         the engine's own screenshot key, named for the program and
+                    written to the current directory too
+    Alt + f         the developer overlay -- frame rate, renderer features and
+                    what the frame cost (see docs/hud.html)
 
 (The arrow keys are left free for camera navigation.)
 

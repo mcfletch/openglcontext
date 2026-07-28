@@ -26,6 +26,10 @@ widget toolkit &mdash; there is no window management, no docking, no rich text
 world, and it needs no artwork to work at all.</p>
 <p>Try it: <code>oglc-ui</code> (add <code>--skin</code> for the same screens
 painted with nine-slice artwork). The keys it binds are printed when it starts.</p>
+<p>Screen furniture that must <em>not</em> take the input &mdash; a reticule, a
+health bar, the developer overlay &mdash; is a HUD layer rather than a panel, and
+is drawn underneath these: see <a href="hud.html">HUD &amp; developer
+overlay</a>.</p>
 </section>
 
 <section id="quickstart">
@@ -525,6 +529,10 @@ panel = Panel(title='Movement', modal=True, preferredColumns=48, children=[
       <td>One screen: focus, accelerators, modality, commands.</td></tr>
     <tr><td><code>ui.overlay</code></td>
       <td>The stack and the context mix-in.</td></tr>
+    <tr><td><code>ui.screen</code>, <code>ui.hudwidgets</code>,
+      <code>ui.debugoverlay</code></td>
+      <td>The <a href="hud.html">HUD layers</a> drawn under these panels, and
+        the developer overlay.</td></tr>
     <tr><td><code>ui.draw</code></td>
       <td>The GL renderer: one program, one batched vertex buffer.</td></tr>
     <tr><td><code>ui.skin</code></td><td>Colours, insets and nine-slice art.</td></tr>

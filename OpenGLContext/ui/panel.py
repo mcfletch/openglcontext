@@ -20,26 +20,25 @@ the way out of one, and is therefore the one key that cannot be bound.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from vrml import field, node
+from vrml import field
 
 from OpenGLContext.hud import distribute
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.skin import PRIMARY, Skin, default_skin
-from OpenGLContext.ui.widgets import Widget
+from OpenGLContext.ui.skin import PRIMARY
+from OpenGLContext.ui.widgets import RootWidget, Widget
 
 __all__ = ['Panel']
 
 
-class Panel(Widget):
+class Panel(RootWidget):
     """A screen drawn over the frame, with its own focus and modality."""
 
     PROTO = 'Panel'
     #: Drawn along the top of the panel; empty for none.
     title = field.newField('title', 'SFString', 1, '')
-    children = field.newField('children', 'MFNode', 1, list)
     #: While up, nothing below this panel hears anything -- not the world, not
     #: a parent panel.
     modal = field.newField('modal', 'SFBool', 1, True)
@@ -61,9 +60,6 @@ class Panel(Widget):
     #: 4K display rather than a line of controls a metre apart.  In characters
     #: rather than pixels so it holds at every interface scale.
     preferredColumns = field.newField('preferredColumns', 'SFInt32', 1, 0)
-    #: The artwork and colours this screen paints with; the default flat skin
-    #: when NULL.
-    skin = field.newField('skin', 'SFNode', 1, node.NULL)
 
     interactive = True
 
@@ -81,13 +77,6 @@ class Panel(Widget):
     focusVisible: bool = False
     #: Room the title takes, settled at layout time; 0 for an untitled panel.
     _title_height: int = 0
-    #: This panel's skin at the current interface scale, and what it was made
-    #: from, so it is rebuilt only when one of the two changes.
-    _scaledSkin: Optional[Skin] = None
-    _scaledFrom: Optional[Skin] = None
-    #: This panel's own copy of the default skin; see :meth:`baseSkin`.
-    _defaultSkin: Optional[Skin] = None
-    _scaledBy: float = 1.0
     _focused: Optional[Widget] = None
     _armed: Optional[Widget] = None
     _hovered: Optional[Widget] = None
@@ -110,45 +99,6 @@ class Panel(Widget):
         self.closeListeners: List[Callable[['Panel'], None]] = []
 
     # -- layout -----------------------------------------------------------
-    def layoutChildren(self) -> Sequence[Widget]:
-        return [child for child in self.children
-                if getattr(child, 'visible', True)]
-
-    def activeSkin(self) -> Skin:
-        """The skin every widget on this screen paints with.
-
-        Scaled for the window the panel was last laid out in, so a measurement
-        read from it is in real pixels and no widget has to know the scale
-        exists.
-        """
-        if self._scaledSkin is not None:
-            return self._scaledSkin
-        return self.baseSkin()
-
-    def baseSkin(self) -> Skin:
-        """The skin this screen is authored with, before any scaling.
-
-        Its **own copy** of the default when it names none: a ``Skin`` is
-        authored data with every field writable, and a game adjusting one
-        screen's colours should not adjust every screen in the process.
-        """
-        if self.skin:
-            return self.skin      # type: ignore[no-any-return]  # SFNode
-        if self._defaultSkin is None:
-            self._defaultSkin = default_skin()
-        return self._defaultSkin
-
-    def scaleSkin(self, metrics: FontMetrics) -> Skin:
-        """Settle the skin for one interface scale, and hand it back."""
-        base = self.baseSkin()
-        factor = float(getattr(metrics, 'scale', 1.0))
-        if self._scaledSkin is None or self._scaledFrom is not base \
-                or self._scaledBy != factor:
-            self._scaledFrom = base
-            self._scaledBy = factor
-            self._scaledSkin = base.scaled(factor)
-        return self._scaledSkin
-
     def contentRect(self) -> Rect:
         """Where the children go: inside the padding, below any title."""
         skin = self.activeSkin()
@@ -206,23 +156,6 @@ class Panel(Widget):
             return 0
         return (int(self.preferredColumns) * metrics.char_width
                 + int(self.activeSkin().panelPadding) * 2)
-
-    def link(self) -> None:
-        """Point every widget in the tree at its container, top down.
-
-        Before measuring rather than while arranging, because a widget finds
-        its skin -- and therefore its padding, its switch size, everything it
-        measures against -- by walking up to the panel.  Measurement runs
-        before anything is placed, so a tree linked only as it is arranged
-        would size its first pass against the unscaled default and paint the
-        result at the real scale.
-        """
-        stack: List[Any] = [self]
-        while stack:
-            current = stack.pop()
-            for child in current.layoutChildren():
-                child.parent = current
-                stack.append(child)
 
     def _preferredWidth(self, metrics: FontMetrics,
                         limit: int) -> Optional[int]:

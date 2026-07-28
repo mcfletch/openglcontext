@@ -3,6 +3,7 @@ import os
 from vrml import node, field
 
 from OpenGLContext import renderoptions
+from OpenGLContext.audio import settings as audiosettings
 
 
 # The three helpers below are passed to ``newField`` **uncalled**, so each is
@@ -180,6 +181,12 @@ class ContextDefinition( node.Node ):
     #: frame rate and lets a benchmark measure it (env: OPENGLCONTEXT_NO_VSYNC).
     vsync = field.newField( "vsync", "SFBool", 1,
                             lambda: not renderoptions.env_flag('OPENGLCONTEXT_NO_VSYNC', False))
+    #: Sound, as the player controls it: whether it plays, how loud, and how
+    #: many voices.  A sub-node rather than loose fields because sound has more
+    #: than one knob and they belong together -- the same reasoning as
+    #: ``movementModes``.  See :mod:`OpenGLContext.audio.settings`.
+    audio = field.newField( "audio", "SFNode", 1, audiosettings.AudioSettings )
+
     #: How large the overlay interface is drawn, on top of the size the window's
     #: height already asks for: 1 leaves it alone, 2 doubles it.  A player with
     #: a 4K display already gets a larger interface without touching this; this
@@ -246,6 +253,10 @@ class ContextDefinition( node.Node ):
     INTERFACE_FIELDS = (
         'uiScale',
     )
+    #: Fields of the ``audio`` sub-node a settings screen shows under "Sound".
+    #: Its own section rather than a corner of "Rendering": a player looking for
+    #: the volume looks for a heading that says sound.
+    AUDIO_FIELDS = audiosettings.AudioSettings.FIELDS
     #: Fields a settings screen shows under "Diagnostics".
     DIAGNOSTIC_FIELDS = (
         'pickEnabled', 'pickAsync', 'debugBBox', 'debugSelection', 'debug',

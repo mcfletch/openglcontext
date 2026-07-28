@@ -317,7 +317,7 @@ class TestEveryHintReachesTheScreen:
     def _sections(self):
         definition = ContextDefinition
         return set(definition.RENDERING_FIELDS + definition.INTERFACE_FIELDS
-                   + definition.DIAGNOSTIC_FIELDS)
+                   + definition.AUDIO_FIELDS + definition.DIAGNOSTIC_FIELDS)
 
     def test_every_hint_names_a_field_a_section_shows(self):
         unreachable = set(ContextDefinition.UI_HINTS) - self._sections()

@@ -1,21 +1,13 @@
-"""Simple node holding Frame-counting values"""
-from vrml import node, field
-from OpenGL.GL import *
+"""How long the last frames took, measured but never drawn.
 
-# Prefer the texture-atlas (shader) font for on-screen display: it renders in
-# both core and compatibility profiles and needs no GLUT display. The GLUT
-# bitmap font is only safe on a GLUT context (its routines segfault otherwise),
-# so it is used solely as a fallback and only when the context provides GLUT.
-try:
-    from OpenGLContext.scenegraph.text import shaderfont as _shaderfont
-    if not _shaderfont.is_available():
-        _shaderfont = None
-except ImportError:
-    _shaderfont = None
-try:
-    from OpenGLContext.scenegraph.text import glutfont as _glutfont
-except ImportError:
-    _glutfont = None
+This node records frame durations; **showing** them is the developer overlay's
+job (:mod:`OpenGLContext.ui.debugoverlay`), which reads this through a
+registered provider.  Keeping the measurement here and the drawing there is
+what lets a core-profile context report its frame rate at all: the display this
+node used to do went through fixed-function calls that a core profile does not
+have.
+"""
+from vrml import node, field
 
 
 class FrameCounter( node.Node ):
@@ -28,8 +20,6 @@ class FrameCounter( node.Node ):
     count = field.newField( 'count', 'SFInt32', 1, 0)
     totalTime = field.newField( 'totalTime', 'SFFloat', 1, 0.0)
     lastTime = field.newField( 'lastTime', 'SFFloat', 1, 0.0)
-    display = field.newField( 'display', 'SFBool', 1, True)
-    _font = None
     # Window of recent frame durations for the displayed rate. A *cumulative*
     # average (count/totalTime) bakes in one-off stalls forever -- a synchronous
     # model load (network + decode) or the first-frame shader compile lands in a
@@ -37,16 +27,6 @@ class FrameCounter( node.Node ):
     # reflects current rendering speed and shrugs off those outliers.
     _recent = None
     _RECENT_WINDOW = 90
-
-    def font( self, context ):
-        if self._font is None:
-            from OpenGLContext.scenegraph.basenodes import FontStyle
-            style = FontStyle(size=1.0)
-            if _shaderfont is not None:
-                self._font = _shaderfont.ShaderBitmapFont(style, size=16)
-            elif _glutfont is not None and getattr(context, 'providesGLUT', False):
-                self._font = _glutfont.GLUTBitmapFont(style)
-        return self._font
 
     def addFrame( self, duration ):
         """Add the duration of a single frame to the counter
@@ -92,35 +72,3 @@ class FrameCounter( node.Node ):
                 self.lastTime
             )
         return (0,0,0)
-    
-    def Render( self, context ):
-        """Render the frame-counter to the screen"""
-        font = self.font(context)
-        if font is None:
-            return  # No font available
-        margin = 30
-        tx,ty = context.getViewPort()
-        if tx and ty:
-            glPushAttrib( GL_ALL_ATTRIB_BITS )
-            try:
-                glDisable( GL_DEPTH_TEST )
-                glDisable( GL_LIGHTING )
-                glMatrixMode( GL_PROJECTION )
-                glLoadIdentity()
-                glOrtho( 0, tx, 0, ty, -1, 1 )
-                glMatrixMode( GL_MODELVIEW )
-                glLoadIdentity()
-                glColor4f( 1.0,1.0,1.0, 1.0)
-                try:
-                    glTranslated( 10,margin*2,0.0 )
-                    count,_avg,last = self.summary()
-                    avg = self.recentFps()
-                    last *= 1000
-                    font.render(
-                        'fps avg:%0.1f\ncurr ms: %0.0f'%(avg,last)
-                    )
-                finally:
-                    glEnable( GL_DEPTH_TEST )
-                    glLoadIdentity()
-            finally:
-                glPopAttrib()

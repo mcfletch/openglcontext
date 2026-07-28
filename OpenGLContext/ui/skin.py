@@ -129,6 +129,38 @@ class Skin(node.Node):
     rowHover = field.newField('rowHover', 'SFVec4f', 1, (1, 1, 1, 0.06))
     rowFocus = field.newField('rowFocus', 'SFVec4f', 1, (0.35, 0.6, 0.9, 0.14))
 
+    # -- HUD --------------------------------------------------------------
+    # A HUD is read at a glance, over a world whose colours nobody controls, so
+    # these are brighter and more opaque than the panel colours above.
+    #: Text and its backing plate on a game HUD.
+    hudText = field.newField('hudText', 'SFVec4f', 1, (0.92, 0.95, 1.0, 1))
+    hudFill = field.newField('hudFill', 'SFVec4f', 1, (0, 0, 0, 0.45))
+    #: Drawn a pixel behind HUD text and around the reticule.  This is what
+    #: makes a light-coloured HUD readable against a white wall, and it is
+    #: cheaper and steadier than a plate behind everything: the alternative --
+    #: sizing the HUD's colours for the world -- is impossible, because the
+    #: world is a map somebody else made.  Alpha 0 turns it off.
+    hudShadow = field.newField('hudShadow', 'SFVec4f', 1, (0, 0, 0, 0.7))
+    #: A meter reading normally, low, and about to matter.  Three colours
+    #: rather than a gradient: a player reads a state, not a number.
+    hudGood = field.newField('hudGood', 'SFVec4f', 1, (0.45, 0.85, 0.55, 1))
+    hudWarn = field.newField('hudWarn', 'SFVec4f', 1, (1.0, 0.78, 0.35, 1))
+    hudCritical = field.newField('hudCritical', 'SFVec4f', 1, (1.0, 0.4, 0.35, 1))
+    #: Behind the filled part of a meter, so an empty bar is still a bar.
+    hudTrack = field.newField('hudTrack', 'SFVec4f', 1, (1, 1, 1, 0.15))
+    #: The aiming reticule, and the mark that says a shot connected.
+    crosshair = field.newField('crosshair', 'SFVec4f', 1, (0.9, 0.95, 1.0, 0.85))
+    crosshairHit = field.newField('crosshairHit', 'SFVec4f', 1, (1.0, 0.35, 0.3, 0.95))
+
+    # -- debug overlay ----------------------------------------------------
+    #: The developer overlay: its plate, its section headings and its rows.
+    #: Deliberately unlike the HUD's colours -- the two must never be mistaken
+    #: for each other.
+    debugFill = field.newField('debugFill', 'SFVec4f', 1, (0.02, 0.03, 0.05, 0.8))
+    debugTitle = field.newField('debugTitle', 'SFVec4f', 1, (0.55, 0.9, 0.6, 1))
+    debugLabel = field.newField('debugLabel', 'SFVec4f', 1, (0.7, 0.74, 0.8, 1))
+    debugValue = field.newField('debugValue', 'SFVec4f', 1, (0.95, 0.97, 1.0, 1))
+
     # -- console ----------------------------------------------------------
     consoleFill = field.newField('consoleFill', 'SFVec4f', 1, (0.02, 0.03, 0.04, 0.92))
     consoleText = field.newField('consoleText', 'SFVec4f', 1, (0.82, 0.86, 0.9, 1))
@@ -172,6 +204,10 @@ class Skin(node.Node):
     focusWidth = field.newField('focusWidth', 'SFFloat', 1, 2.0)
     #: Border drawn around a panel; 0 for none.
     borderWidth = field.newField('borderWidth', 'SFFloat', 1, 1.0)
+    #: Pixels between a HUD element's edge and its contents, and between one
+    #: element of a HUD group and the next.
+    hudPadding = field.newField('hudPadding', 'SFFloat', 1, 6.0)
+    hudSpacing = field.newField('hudSpacing', 'SFFloat', 1, 4.0)
 
     #: The fields above that are pixels and are therefore multiplied by the
     #: interface scale.  Colours are not measurements, and ``buttonPaddingX``
@@ -180,7 +216,7 @@ class Skin(node.Node):
         'panelPadding', 'rowSpacing', 'rowPadding', 'columnSpacing',
         'buttonPaddingY', 'fieldPadding', 'trackThickness', 'thumbWidth',
         'scrollbarWidth', 'switchWidth', 'switchHeight', 'switchInset',
-        'focusMargin', 'focusWidth', 'borderWidth',
+        'focusMargin', 'focusWidth', 'borderWidth', 'hudPadding', 'hudSpacing',
     )
 
     # -- artwork ----------------------------------------------------------

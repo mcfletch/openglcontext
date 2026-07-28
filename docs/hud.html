@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>HUD &amp; developer overlay &mdash; screen furniture over a live world</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>HUD &amp; developer overlay</h1>
+</header>
+
+<section>
+<p class="introduction">A <strong>HUD layer</strong> draws over a live world and
+never takes an event: a reticule, a health bar, an ammunition count, a line of
+text that fades. The <strong>developer overlay</strong> is one of these, fed by
+registered providers, and it is where the frame rate is now drawn. Both are
+drawn beneath any <a href="overlayui.html">overlay panel</a> that is open, by
+the same batched renderer, in the same handful of draw calls.</p>
+</section>
+
+<section id="difference">
+  <h2>A HUD is not a panel</h2>
+  <p>The <a href="overlayui.html#input">overlay stack</a> is modal: while a panel
+    is up, nothing under it hears anything. That is exactly right for a settings
+    screen and exactly wrong for a health bar. So the two are different things:</p>
+  <table>
+    <tr><th></th><th>HUD layer</th><th>Overlay panel</th></tr>
+    <tr><td>Input</td><td>Never receives any</td>
+      <td>The top one takes it; a modal one stops the world hearing it</td></tr>
+    <tr><td>Focus</td><td>None &mdash; nothing in it is focusable</td>
+      <td>Tab order, accelerators, an Enter default</td></tr>
+    <tr><td>Drawn</td><td>Every frame, under the panels</td>
+      <td>When something is open, over the HUD</td></tr>
+    <tr><td>Laid out</td><td>Every frame, because its values change</td>
+      <td>When it opens or the window resizes</td></tr>
+    <tr><td>Placed</td><td>By anchor: a corner, an edge, the middle</td>
+      <td>Centred in the window</td></tr>
+  </table>
+  <p>Every context has HUD layers, because every context has a developer
+    overlay. A context gains panels by mixing in
+    <code>OpenGLContext.ui.overlay.OverlayMixin</code>.</p>
+</section>
+
+<section id="quickstart">
+  <h2>Putting a HUD on the frame</h2>
+  <p>A layer is a tree of widgets, each carrying the corner it belongs in.
+    Add it to the context and it is drawn from the next frame on:</p>
+  <pre>from OpenGLContext.ui.hudwidgets import (
+    BarMeter, Crosshair, HUDGroup, HUDLayer, MessageQueue, Readout,
+)
+
+self.health = BarMeter(label='HEALTH', value=100, maximum=100)
+self.ammo = Readout(label='AMMO', value='50', anchor='bottom-right')
+self.messages = MessageQueue(anchor='top', duration=4.0)
+
+self.hud = HUDLayer(children=[
+    Crosshair(shape='cross', gap=5, length=7),        # anchored 'center'
+    HUDGroup(anchor='bottom-left', spacing=4, children=[self.health]),
+    self.ammo,
+    self.messages,
+])
+self.addHUDLayer(self.hud)</pre>
+  <p>After that it is data: write <code>self.health.value = 40</code> and the
+    meter turns amber, <code>self.messages.post('PICKED UP A SHOTGUN')</code> and
+    a line appears and fades. Nothing has to be redrawn by hand, because the
+    layer is measured and painted afresh each frame.</p>
+</section>
+
+<section id="anchors">
+  <h2>Placement is by anchor</h2>
+  <p>Health in one corner, ammunition in another, the reticule in the middle:
+    no row-and-column arithmetic describes that as well as naming the corner
+    does. Every HUD widget carries two fields:</p>
+  <table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td><code>anchor</code></td>
+      <td>One of <code>top-left</code>, <code>top</code>, <code>top-right</code>,
+        <code>left</code>, <code>center</code>, <code>right</code>,
+        <code>bottom-left</code>, <code>bottom</code>,
+        <code>bottom-right</code>. Anything else is read as
+        <code>center</code>, so a typo puts the element somewhere visible.</td></tr>
+    <tr><td><code>offset</code></td>
+      <td>Pixels away from that anchor, <strong>+x right and +y up</strong>, so
+        an offset always moves an element away from the corner it is anchored
+        to whichever corner that is.</td></tr>
+  </table>
+  <p><code>HUDLayer.margin</code> keeps everything clear of the window edge.
+    A child with no <code>anchor</code> at all &mdash; an ordinary
+    <code>Row</code> or <code>Column</code> &mdash; is given the whole layer and
+    lays itself out as it always would, so the existing layout containers are
+    still usable inside a HUD.</p>
+  <p>Every pixel measurement here &mdash; margins, offsets, a reticule's gap, a
+    meter's height &mdash; is <strong>at the reference font size</strong> and is
+    multiplied by the interface scale, exactly as the skin's are. A HUD authored
+    on a 1080p display is the same size in the eye at 4K. See
+    <a href="overlayui.html#scale">Everything scales with the window</a>.</p>
+</section>
+
+<section id="widgets">
+  <h2>The widgets</h2>
+  <h3>Crosshair &mdash; the reticule</h3>
+  <p><strong>The reticule belongs to the weapon, not to the game.</strong>
+    Everything about it is a field, so a table of weapons names one of these
+    each and switching weapon is switching this node rather than branching in
+    the drawing code.</p>
+  <table>
+    <tr><th>Field</th><th>Units</th><th>Default</th><th>Meaning</th></tr>
+    <tr><td><code>shape</code></td><td></td><td><code>cross</code></td>
+      <td><code>cross</code>, <code>dot</code>, <code>cross-dot</code>,
+        <code>circle</code> or <code>none</code>. <code>none</code> is a real
+        choice: some weapons aim down their own sights.</td></tr>
+    <tr><td><code>gap</code></td><td>px</td><td>5</td>
+      <td>Clear space in the middle. The gap is the point of a crosshair: it
+        leaves what is being aimed at visible.</td></tr>
+    <tr><td><code>length</code></td><td>px</td><td>7</td><td>One arm.</td></tr>
+    <tr><td><code>thickness</code></td><td>px</td><td>2</td><td>Arm width.</td></tr>
+    <tr><td><code>dotSize</code></td><td>px</td><td>2</td>
+      <td>The centre dot, for the shapes that have one.</td></tr>
+    <tr><td><code>spread</code></td><td>px</td><td>0</td>
+      <td>Extra gap from the weapon's current accuracy. Widens the reticule
+        rather than moving it, so what the player sees is the size of the area
+        a shot might land in.</td></tr>
+    <tr><td><code>hitDuration</code></td><td>s</td><td>0.35</td>
+      <td>How long the hit mark stays up after
+        <code>crosshair.hit()</code>.</td></tr>
+    <tr><td><code>hitSize</code></td><td>px</td><td>4</td><td>How big it is.</td></tr>
+  </table>
+  <p>The shape is drawn from axis-aligned rectangles &mdash; four arms, or four
+    arcs for a circle &mdash; because that is what the overlay renderer draws,
+    and at the few pixels a reticule occupies the difference is invisible while
+    the batch stays one draw call.</p>
+
+  <h3>BarMeter &mdash; health, armour, a charge</h3>
+  <p>A value against a maximum, coloured by where it sits against two
+    thresholds: <code>warnFraction</code> (0.5) and <code>criticalFraction</code>
+    (0.25) pick the skin's <code>hudGood</code>, <code>hudWarn</code> and
+    <code>hudCritical</code>. Three colours rather than a gradient, because what
+    a player reads off a meter at speed is a state &mdash; fine, low, about to
+    matter &mdash; and a continuous ramp says none of those clearly. Setting
+    <code>color</code> overrides the thresholds entirely.</p>
+  <p><code>barWidth</code>/<code>barHeight</code> are its natural size; the track
+    stretches to whatever room the meter is given, so a meter in a stretched
+    group stretches with it. A <code>label</code> is drawn to its left and takes
+    room from the track; <code>showValue</code> draws the number over it.</p>
+
+  <h3>Readout &mdash; an icon and a number</h3>
+  <p><code>label</code>, <code>value</code> and an optional <code>icon</code>
+    (a <code>NineSlice</code>, drawn at <code>iconSize</code>).
+    <code>critical</code> is the game saying &ldquo;this one matters now&rdquo;
+    &mdash; the last few rounds, the last seconds &mdash; and it is a flag rather
+    than a colour so the skin still decides what that looks like.</p>
+
+  <h3>MessageQueue &mdash; pickups, frags, warnings</h3>
+  <p>Newest first, each line carrying its own clock, so a warning posted with a
+    long life is not cut short by a pickup posted after it:</p>
+  <pre>queue.post('YOU HAVE THE FLAG', duration=6.0)
+queue.post('PICKED UP A SHOTGUN')          # the queue's own duration</pre>
+  <p><code>duration</code> is how long a line is shown and <code>fade</code> is
+    how much of the end of that is spent fading out; the fade arrives in the
+    colour's alpha, so nothing downstream has to know about time.
+    <code>capacity</code> is how many are shown at once &mdash; older ones are
+    dropped when a new one arrives, because a HUD that scrolls is a HUD nobody
+    reads.</p>
+</section>
+
+<section id="clock">
+  <h2>The clock</h2>
+  <p>Anything that fades, expires or flashes is driven by
+    <code>HUDLayer.tick(now)</code>, which the context calls once a frame before
+    drawing. Passing the time in rather than reading a clock inside each widget
+    is what makes all of this testable &mdash; and what lets a game drive its HUD
+    from its own simulation clock rather than from the wall.</p>
+  <pre>queue.post('PICKED UP A SHOTGUN', now=100.0)
+layer.tick(101.0);  assert queue.entries(101.0)      # still up
+layer.tick(105.0);  assert not queue.entries(105.0)  # gone</pre>
+</section>
+
+<section id="debug">
+  <h2>The developer overlay</h2>
+  <p>One panel holding everything a developer wants to see and a player never
+    should, so that a game's HUD can be built out of game information only. It
+    is a HUD layer, so it can be left up while playing: it takes no input and
+    blocks nothing.</p>
+  <p><strong>It is fed by registered providers.</strong> A provider is a callable
+    returning name/value pairs and knowing nothing about drawing, so a new
+    subsystem appears in the overlay by registering rather than by anyone editing
+    the overlay:</p>
+  <pre>context.debugOverlay.register('Map', lambda: [
+    ('name', loaded.name),
+    ('family', loaded.family),
+    ('position', tuple(camera.position[:3])),
+], order=40)</pre>
+  <p>Values are formatted by the overlay, so a provider hands over whatever it
+    has: a float becomes <code>0.33</code> (and <code>60</code> rather than
+    <code>60.00</code>), a bool becomes <code>yes</code>/<code>no</code>, a
+    vector becomes its components, <code>None</code> becomes <code>-</code>.
+    <code>order</code> sorts the sections, low first; equal orders keep the order
+    they registered in. Registering a title twice replaces it, so a reloaded
+    subsystem does not grow a second copy of its section.</p>
+  <p><strong>A provider that raises becomes an <code>error</code> row</strong>
+    rather than taking the frame down, and a provider with nothing to say is left
+    out entirely rather than drawn as an empty heading. This is diagnostic
+    equipment: a diagnostic that breaks the thing it is measuring is worse than
+    none.</p>
+
+  <h3>What ships with it</h3>
+  <table>
+    <tr><th>Section</th><th>Rows</th></tr>
+    <tr><td>Frame</td>
+      <td>Frame rate (the <em>windowed median</em>, not the lifetime average),
+        frame time in milliseconds, frames drawn, the viewport.</td></tr>
+    <tr><td>Render</td>
+      <td>Profile, and whether shadows, IBL, bloom, transmission, instancing
+        and vsync are on; then what the last frame cost &mdash; shapes gathered,
+        draw calls issued, and how many shapes collapsed into how many instanced
+        groups.</td></tr>
+    <tr><td>View</td>
+      <td>Camera position, and a character controller's grounded state,
+        velocity and mode when there is one.</td></tr>
+  </table>
+  <p><code>physics_provider(lambda: world)</code> is also supplied, for body and
+    contact counts; it takes a callable rather than a world because a world is
+    replaced when the next level loads, and a provider holding the first would
+    report on it forever.</p>
+  <p><strong>Triangle counts are deliberately absent.</strong> The render pass
+    does not know them &mdash; a geometry node does &mdash; and instrumenting
+    every <code>render()</code> in the system to find out would cost more than
+    the answer is worth. A number that is not counted is not reported rather
+    than guessed at. See
+    <code>OpenGLContext/passes/renderstats.py</code>.</p>
+
+  <h3>Showing and hiding it</h3>
+  <p><kbd>Alt</kbd>+<kbd>f</kbd> toggles it on every context;
+    <code>context.toggleDebugOverlay()</code> does the same in code, and can be
+    bound to any key a game prefers.</p>
+  <p><code>OPENGLCONTEXT_DISABLE_FPS_DISPLAY</code> means what it always meant
+    &mdash; no numbers over my screenshot &mdash; and now means it here: the
+    overlay <strong>starts hidden</strong>. The key still brings it up, because
+    a capture run is not the only thing that sets the variable.</p>
+  <p class="technical">This replaces the frame-rate display that
+    <code>FrameCounter</code> used to draw through
+    <code>glOrtho</code>/<code>glPushAttrib</code>, which mean nothing in a core
+    profile. <code>FrameCounter</code> still measures; it no longer draws, and
+    the provider reads it.</p>
+</section>
+
+<section id="viewpinned">
+  <h2>Things pinned to the view</h2>
+  <p>A first-person weapon is <em>not</em> HUD: it is geometry, it wants the
+    scene&rsquo;s lighting and it should be occluded by the world. What it shares
+    with the HUD is that it must not move on screen. Put it on a transform, and
+    write that transform&rsquo;s pose from the camera in
+    <code>placeViewAttachments</code>:</p>
+  <pre>class Game(OverlayMixin, Context):
+    def placeViewAttachments(self, pass_):
+        "Called once the camera is settled, before any geometry is gathered."
+        aim_at_camera(self.hand, self.getViewPlatform())</pre>
+  <p><strong>The timing is the whole feature.</strong> The render pass calls this
+    from <code>__call__</code>, after the view platform is settled and before the
+    scene is gathered &mdash; the only moment both are true. Posed from an idle
+    callback or an event handler instead, the transform carries the
+    <em>previous</em> frame&rsquo;s camera: the weapon hangs back as the player
+    walks and then slides forward to catch up, which is the most distracting
+    thing a held model can do.</p>
+  <p><strong>Written there it is pinned exactly, not approximately.</strong>
+    The renderer draws a node with <code>modelview = view &times; model</code>. A
+    node placed at the camera&rsquo;s own pose carries
+    <code>model = cameraPose &times; local</code>, and the view matrix
+    <em>is</em> that pose inverted &mdash; so the two cancel and what is left is
+    <code>local</code>, whatever the camera is doing. The object is fixed in view
+    space by construction rather than by keeping up.</p>
+  <p>The hook is optional and costs nothing: a context that does not define it is
+    never asked.</p>
+</section>
+
+<section id="skinning">
+  <h2>Colours</h2>
+  <p>A HUD is read at a glance over a world whose colours nobody controls, so
+    its skin fields are brighter and more opaque than the panel ones. They live
+    on the same <a href="overlayui.html#skinning"><code>Skin</code></a> node:</p>
+  <table>
+    <tr><th>Field</th><th>What it colours</th></tr>
+    <tr><td><code>hudText</code>, <code>hudFill</code></td>
+      <td>HUD text and the plate behind it.</td></tr>
+    <tr><td><code>hudGood</code>, <code>hudWarn</code>, <code>hudCritical</code></td>
+      <td>A meter reading normally, low, and about to matter.</td></tr>
+    <tr><td><code>hudTrack</code></td>
+      <td>Behind the filled part of a meter, so an empty bar is still a bar.</td></tr>
+    <tr><td><code>crosshair</code>, <code>crosshairHit</code></td>
+      <td>The reticule, and the mark that says a shot connected.</td></tr>
+    <tr><td><code>debugFill</code>, <code>debugTitle</code>,
+        <code>debugLabel</code>, <code>debugValue</code></td>
+      <td>The developer overlay. Deliberately unlike the HUD's colours &mdash;
+        the two must never be mistaken for each other.</td></tr>
+    <tr><td><code>hudPadding</code>, <code>hudSpacing</code></td>
+      <td>Pixels inside a HUD element, and between one and the next.</td></tr>
+  </table>
+</section>
+
+<section id="modules">
+  <h2>Where things are</h2>
+  <table>
+    <tr><th>Module</th><th>What is in it</th></tr>
+    <tr><td><code>ui.hudwidgets</code></td>
+      <td><code>HUDLayer</code>, <code>HUDGroup</code>, <code>Crosshair</code>,
+        <code>BarMeter</code>, <code>Readout</code>,
+        <code>MessageQueue</code>, and <code>place()</code>.</td></tr>
+    <tr><td><code>ui.debugoverlay</code></td>
+      <td>The overlay, the provider registry, value formatting and the
+        providers shipped with it.</td></tr>
+    <tr><td><code>ui.screen</code></td>
+      <td>The context mix-in: <code>hudLayers</code>,
+        <code>debugOverlay</code>, and the one drawing hook both kinds of
+        layer go through.</td></tr>
+    <tr><td><code>ui.widgets</code></td>
+      <td><code>RootWidget</code>, which a HUD layer and a panel are both
+        kinds of: the children, the skin and the scaled copy of it.</td></tr>
+    <tr><td><code>passes.renderstats</code></td>
+      <td>What one frame cost, counted where the pass knows the answer.</td></tr>
+    <tr><td><code>passes._flat</code></td>
+      <td><code>placeViewAttachments</code>: the one window in a frame where
+        something can be pinned to the camera.</td></tr>
+  </table>
+  <p>The design and its reasoning are in
+    <code>plans/HUD-DEBUG-OVERLAY.md</code>.</p>
+</section>
+
+</body></html>

@@ -38,6 +38,7 @@ import weakref, os, time, sys, logging
 log = logging.getLogger(__name__)
 from OpenGL._bytes import bytes, unicode
 from OpenGLContext.contextconfig import ContextConfigMixin
+from OpenGLContext.ui.screen import ScreenMixin
 
 
 class LockingError(Exception):
@@ -67,7 +68,7 @@ def inContextThread():
     return 1
 
 
-class Context(ContextConfigMixin):
+class Context(ScreenMixin, ContextConfigMixin):
     """Abstract base class on which all Rendering Contexts are based
 
     The Context object represents a single rendering context
@@ -380,18 +381,28 @@ class Context(ContextConfigMixin):
         implementation somewhere in that overridden method.
         """
         self.addEventHandler("keyboard", name="<escape>", function=self.OnQuit)
+        # On ``keyboard`` rather than ``keypress``: a keypress *is* character
+        # input, raised from the backend's character callback, and Alt + a
+        # letter produces no character on any of the platforms here -- so a
+        # keypress binding for one is accepted, registered, and then never
+        # fires.  Alt, because plain `f` is flying or the next font in half
+        # the demos.
         self.addEventHandler(
-            "keypress",
+            "keyboard",
             name="f",
+            state=1,
             modifiers=(False, False, True),  # ALT
             function=self.OnFrameRate,
         )
         self.addEventHandler(
             "keyboard", name="<pagedown>", function=self.OnNextViewpoint
         )
+        # Alt+S saves a screenshot, and is a key-down for the same reason
+        # Alt+F is.
         self.addEventHandler(
-            "keypress",
+            "keyboard",
             name="s",
+            state=1,
             modifiers=(False, False, True),
             function=self.OnSaveImage,
         )
@@ -405,10 +416,8 @@ class Context(ContextConfigMixin):
         # sys.exit(0)
 
     def OnFrameRate(self, event=None):
-        """Print the current frame-rate values"""
-        if self.frameCounter:
-            self.frameCounter.display = not (self.frameCounter.display)
-            print("%sfps" % (self.frameCounter.summary()[1],))
+        """Show or hide the developer overlay, where the frame rate is drawn"""
+        self.toggleDebugOverlay()
 
     def OnNextViewpoint(self, event=None):
         """Go to the next viewpoint for the scenegraph"""
@@ -423,12 +432,31 @@ class Context(ContextConfigMixin):
     def OnSaveImage(
         self,
         event=None,
-        template="%(script)s-screen-%(count)04i.png",
+        template="%(name)s-screen-%(count)04i.png",
         script=None,
         date=None,
         overwrite=False,
     ):
-        """Save our current screen to disk (if possible)"""
+        """Save our current screen to disk (if possible)
+
+        The file lands in the **working directory**, named after the program
+        that took it: ``oglc-gltf-screen-0001.png``.  The working directory is
+        the only place the person pressing the key can be assumed to have
+        meant -- naming it after ``sys.argv[0]``, as this once did, wrote the
+        screenshot next to the *launcher*, which for a console script is inside
+        the virtualenv's ``bin`` and on a system install is not writable at all.
+
+        ``%(name)s`` is that program's name with no directory and no extension,
+        falling back to the application name when ``sys.argv[0]`` is not a
+        filename (``python -c`` reports ``-c``).  ``%(script)s`` is still the
+        raw ``sys.argv[0]`` for a caller that passes its own ``template`` and
+        wants it.
+
+        A caller may pass an absolute ``template`` and be obeyed; the working
+        directory is only supplied for a relative one.  ``%(count)04i`` counts
+        up until it finds a name nothing is using, so pressing the key twice
+        keeps both shots.
+        """
         from OpenGLContext.capture import ensure_pillow, read_back_buffer, save_png
         if ensure_pillow() is None:
             return (0, 0)
@@ -441,6 +469,7 @@ class Context(ContextConfigMixin):
             import sys
 
             script = sys.argv[0]
+        name = self._screenshotName(script)
         if date is None:
             import datetime
 
@@ -450,6 +479,8 @@ class Context(ContextConfigMixin):
         while (not saved) and count <= 9999:
             count += 1
             test = template % locals()
+            if not os.path.isabs(test):
+                test = os.path.join(os.getcwd(), test)
             if overwrite or (not os.path.exists(test)):
                 log.warning("Saving to file: %s", test)
                 if save_png(test, pixels):
@@ -458,6 +489,19 @@ class Context(ContextConfigMixin):
             else:
                 log.info("Existing file: %s", test)
         return (0, 0)
+
+    def _screenshotName(self, script):
+        """A filename-safe name for the running program.
+
+        The basename of ``sys.argv[0]`` without its extension, which is what
+        tells one screenshot from another when several viewers are open.  An
+        argv[0] that is not a path at all -- ``-c``, or empty -- falls back to
+        the application name, because the point is a name a file can have.
+        """
+        base = os.path.splitext(os.path.basename(script or ''))[0]
+        if not base or base.startswith('-'):
+            return self.getApplicationName()
+        return base
 
     def setupThreading(self):
         """Setup primitives (locks, events) for threading"""
@@ -478,8 +522,10 @@ class Context(ContextConfigMixin):
         Updates to the framecounter are performed by OnDraw
         iff there is a visible change processed.
 
-        If OPENGLCONTEXT_DISABLE_FPS_DISPLAY environment variable is set,
-        the FPS display will be hidden (useful for automated testing).
+        The rate is *displayed* by the developer overlay
+        (OpenGLContext.ui.debugoverlay), which reads this node through a
+        provider; OPENGLCONTEXT_DISABLE_FPS_DISPLAY decides whether that
+        overlay starts on screen.
 
         Note:
             If you override this method, you need to either use
@@ -490,9 +536,6 @@ class Context(ContextConfigMixin):
         from OpenGLContext import framecounter
 
         self.frameCounter = framecounter.FrameCounter()
-        # Disable FPS display for automated testing if requested
-        if os.environ.get('OPENGLCONTEXT_DISABLE_FPS_DISPLAY'):
-            self.frameCounter.display = False
 
     def initializeEventManagers(self, managerClasses=()):
         """Customisation point for initialising event manager objects

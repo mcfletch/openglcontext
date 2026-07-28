@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Particle Effects, Explained</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <style>
+    figure { margin: 1.5em 0; }
+    figure svg { max-width: 100%; height: auto; display: block; }
+    figcaption { font-size: 0.9em; opacity: 0.8; margin-top: 0.5em; }
+    .diagram { font-family: sans-serif; font-size: 13px; }
+    .diagram .box { fill: #f4f4f4; stroke: #666; stroke-width: 1.2; }
+    .diagram .cpu { fill: #e8f0fb; stroke: #37629c; stroke-width: 1.2; }
+    .diagram .gpu { fill: #e9f4ea; stroke: #3d7c46; stroke-width: 1.2; }
+    .diagram .lbl { fill: #111; }
+    .diagram .sub { fill: #444; font-size: 11px; }
+    .diagram .flow { stroke: #666; stroke-width: 1.4; fill: none;
+                     marker-end: url(#parrow); }
+    .diagram .zone { fill: none; stroke: #999; stroke-dasharray: 5 4; }
+    @media (prefers-color-scheme: dark) {
+      .diagram .box { fill: #2a2a2a; stroke: #999; }
+      .diagram .cpu { fill: #1e2b3d; stroke: #7ba7dd; }
+      .diagram .gpu { fill: #1e3222; stroke: #7fc48c; }
+      .diagram .lbl { fill: #eee; }
+      .diagram .sub { fill: #bbb; }
+      .diagram .flow { stroke: #aaa; }
+    }
+  </style>
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Particle Effects, Explained</h1>
+</header>
+
+<section>
+<p class="introduction">Fire, smoke, sparks, explosions, impacts and trails,
+drawn as camera-facing quads &mdash; one instanced draw call for a whole system,
+however many particles are in it. The simulation is numpy arrays stepped as
+whole arrays; the renderer is about a hundred lines of core-profile GL. The two
+are kept strictly apart, which is why the interesting half can be tested with no
+window at all. The indented <span class="technical">technical notes</span> point
+at the code.</p>
+</section>
+
+<section id="quickstart">
+  <h2>The shortest thing that catches fire</h2>
+  <pre>from OpenGLContext.scenegraph import particles
+from OpenGLContext.scenegraph.basenodes import Transform
+
+torch = Transform(translation=(0, 1, -3), children=[
+    particles.preset('fire'),
+])</pre>
+  <p>That is a complete effect. A <code>ParticleEmitter</code> is a rendering
+    node in its own right, not a geometry inside a <code>Shape</code>: an effect
+    has no material and no surface, and pretending it does would mean an
+    <code>Appearance</code> whose every field is ignored.</p>
+  <p>Six presets ship &mdash; <code>fire</code>, <code>smoke</code>,
+    <code>sparks</code>, <code>explosion</code>, <code>trail</code>,
+    <code>impact</code> &mdash; and each is nothing but a set of field values, so
+    anything a preset does can be done by hand. They exist because an explosion
+    should be one line, and because seeing what the numbers for a real one look
+    like is the fastest way to learn the fields.</p>
+  <pre>burst = particles.preset('explosion', maxParticles=512, color=(0.6, 0.8, 1.0))
+burst.fire()          # again, later</pre>
+</section>
+
+<section id="dataflow">
+  <h2>What happens each frame</h2>
+  <figure>
+    <svg viewBox="0 0 840 340" class="diagram" role="img"
+         aria-label="Per-frame flow: emit, step, compact, upload, one instanced draw">
+      <defs>
+        <marker id="parrow" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#666"/>
+        </marker>
+      </defs>
+
+      <rect class="zone" x="8" y="8" width="546" height="324" rx="8"/>
+      <text class="sub" x="20" y="28">CPU &mdash; numpy, once per frame</text>
+      <rect class="zone" x="570" y="8" width="262" height="324" rx="8"/>
+      <text class="sub" x="582" y="28">GPU &mdash; one draw call</text>
+
+      <rect class="cpu" x="28" y="46" width="222" height="62" rx="5"/>
+      <text class="lbl" x="40" y="66">emit()</text>
+      <text class="sub" x="40" y="84">rate &times; dt, accumulated;</text>
+      <text class="sub" x="40" y="98">writes at the end of the live prefix</text>
+
+      <rect class="cpu" x="28" y="130" width="222" height="76" rx="5"/>
+      <text class="lbl" x="40" y="150">step(dt)</text>
+      <text class="sub" x="40" y="168">v *= exp(-drag dt)</text>
+      <text class="sub" x="40" y="184">v += gravity dt</text>
+      <text class="sub" x="40" y="200">p += v dt;  age += dt</text>
+
+      <rect class="cpu" x="28" y="228" width="222" height="76" rx="5"/>
+      <text class="lbl" x="40" y="248">compact</text>
+      <text class="sub" x="40" y="266">keep = age &lt; lifetime</text>
+      <text class="sub" x="40" y="282">survivors move down over</text>
+      <text class="sub" x="40" y="298">the gaps; live shrinks</text>
+
+      <rect class="cpu" x="290" y="130" width="240" height="120" rx="5"/>
+      <text class="lbl" x="302" y="150">instances()</text>
+      <text class="sub" x="302" y="170">one row per living particle:</text>
+      <text class="sub" x="302" y="188">x  y  z   size</text>
+      <text class="sub" x="302" y="204">rotation   life   random</text>
+      <text class="sub" x="302" y="228">7 floats -- a view of the pool's</text>
+      <text class="sub" x="302" y="242">own array, rewritten in place</text>
+
+      <rect class="cpu" x="290" y="268" width="240" height="46" rx="5"/>
+      <text class="lbl" x="302" y="288">InstanceBuffer.upload()</text>
+      <text class="sub" x="302" y="306">grow, or glBufferSubData</text>
+
+      <rect class="gpu" x="588" y="60" width="228" height="82" rx="5"/>
+      <text class="lbl" x="600" y="80">vertex shader</text>
+      <text class="sub" x="600" y="98">centre to eye space,</text>
+      <text class="sub" x="600" y="114">quad corner added to x,y</text>
+      <text class="sub" x="600" y="130">colour and size from life</text>
+
+      <rect class="gpu" x="588" y="164" width="228" height="66" rx="5"/>
+      <text class="lbl" x="600" y="184">fragment shader</text>
+      <text class="sub" x="600" y="202">sprite texture, or a soft</text>
+      <text class="sub" x="600" y="218">round dot computed here</text>
+
+      <rect class="gpu" x="588" y="252" width="228" height="62" rx="5"/>
+      <text class="lbl" x="600" y="272">glDrawArraysInstanced</text>
+      <text class="sub" x="600" y="290">4 vertices, N instances,</text>
+      <text class="sub" x="600" y="306">additive or alpha blend</text>
+
+      <path class="flow" d="M 139 108 L 139 130"/>
+      <path class="flow" d="M 139 206 L 139 228"/>
+      <path class="flow" d="M 250 266 L 270 266 L 270 190 L 290 190"/>
+      <path class="flow" d="M 410 250 L 410 268"/>
+      <path class="flow" d="M 530 290 L 560 290 L 560 100 L 588 100"/>
+      <path class="flow" d="M 702 142 L 702 164"/>
+      <path class="flow" d="M 702 230 L 702 252"/>
+    </svg>
+    <figcaption>The whole per-frame cost is a handful of numpy passes over
+      contiguous arrays and one buffer upload. Nothing loops in Python over
+      particles, and nothing allocates per particle.</figcaption>
+  </figure>
+</section>
+
+<section id="pool">
+  <h2>The pool: why the living are packed at the front</h2>
+  <p>Particles die out of order &mdash; that is what lifetime variation means
+    &mdash; so a naive pool ends up as live particles with holes between them,
+    and every consumer of it has to carry a mask.</p>
+  <p>Instead, when particles die the survivors are <strong>compacted down over
+    the gaps</strong>. The living set is therefore always
+    <code>arrays[0:live]</code>. That single invariant is what makes the GPU
+    upload one contiguous slice, the draw one call, and every step a whole-array
+    operation with no masking anywhere.</p>
+  <pre>keep = age[:live] &lt; lifetime[:live]
+index = np.flatnonzero(keep)
+for array in (position, velocity, age, ...):
+    array[:survivors] = array[index]
+live = survivors</pre>
+  <p>Emission writes at the end of that prefix. A full pool emits nothing more,
+    and <strong>that is not an error and is not reported</strong>: a pool is a
+    budget, and the budget being reached is the system working. Size
+    <code>maxParticles</code> from <code>rate &times; lifetime</code>, which is
+    how many can be alive at once.</p>
+  <p class="technical"><code>OpenGLContext/scenegraph/particles.py</code>,
+    <code>ParticlePool._bury</code>. Everything in the class is testable with no
+    GL; <code>tests/unit/test_particles.py</code> does exactly that.</p>
+
+  <h3>Two details that are easy to get wrong</h3>
+  <ul>
+    <li><strong>Drag is exponential, not linear.</strong>
+      <code>v -= v * drag * dt</code> overshoots into a <em>reversal</em> on a
+      long frame, so particles suddenly fly backwards when the frame rate drops.
+      <code>v *= exp(-drag * dt)</code> cannot, at any step size.</li>
+    <li><strong>The frame time is clamped</strong> to
+      <code>MAX_STEP</code> (0.1&nbsp;s). A window drag or a stalled texture
+      upload gives a frame of seconds; integrating it honestly throws every
+      particle out of sight. Losing the time is the lesser artefact, and it is
+      the same clamp a fixed-timestep physics loop applies for the same
+      reason.</li>
+    <li><strong>Emission accumulates fractions.</strong> At 10 particles a
+      second and a 60&nbsp;Hz frame, <code>int(rate * dt)</code> is zero every
+      single frame, for ever. The remainder is carried.</li>
+    <li><strong>Starting angles are random.</strong> Emitting every particle at
+      rotation zero makes a cloud of sprites all pointing the same way, which
+      reads as a grid rather than as smoke.</li>
+    <li><strong>The emission cone samples the spherical cap uniformly</strong>,
+      not the angle. Sampling the angle crowds particles towards the axis and
+      gives a jet with a bright core and a thin skirt &mdash; distinctive, and
+      wrong.</li>
+  </ul>
+</section>
+
+<section id="split">
+  <h2>What is per particle, and what is per system</h2>
+  <p>A particle carries only what genuinely varies between particles:</p>
+  <table>
+    <tr><th>Per particle (in the pool)</th><th>Per system (a uniform)</th></tr>
+    <tr><td>position, velocity</td><td>gravity, drag</td></tr>
+    <tr><td>age, lifetime</td><td>&mdash;</td></tr>
+    <tr><td>size <em>factor</em> (mean 1.0)</td>
+        <td>size at birth and at death</td></tr>
+    <tr><td>rotation, spin</td><td>&mdash;</td></tr>
+    <tr><td>one random number</td><td>colour and alpha at birth and at death</td></tr>
+  </table>
+  <p>That split is why per-instance data is <strong>seven floats</strong> rather
+    than twenty, and why colour and size over life cost two uniforms rather than
+    a gradient texture and a texture unit. It has a second, less obvious payoff:
+    because the absolute size is a uniform rather than baked into each particle,
+    editing <code>size</code> on a live emitter resizes the particles
+    <em>already in the air</em> &mdash; which is what makes a settings screen
+    slider feel connected to what is on screen.</p>
+  <p>The per-particle random number exists so a shader can vary particles
+    without the simulation having to store what it varied.</p>
+</section>
+
+<section id="fields">
+  <h2>The fields</h2>
+  <table>
+    <tr><th>Group</th><th>Fields</th><th>Notes</th></tr>
+    <tr><td>How many, how often</td>
+        <td><code>rate</code>, <code>burst</code>, <code>maxParticles</code>,
+            <code>lifetime</code>, <code>lifetimeVariation</code>,
+            <code>enabled</code></td>
+        <td>A burst with <code>rate=0</code> is a one-shot; call
+            <code>fire()</code> for another.</td></tr>
+    <tr><td>Which way, how fast</td>
+        <td><code>direction</code>, <code>speed</code>,
+            <code>speedVariation</code>, <code>spread</code>,
+            <code>gravity</code>, <code>drag</code></td>
+        <td><code>spread</code> is a cone half-angle in radians: 0 is a laser,
+            &pi; is a sphere. Positive <code>gravity</code> Y is what makes
+            smoke rise.</td></tr>
+    <tr><td>What it looks like</td>
+        <td><code>size</code>, <code>endSize</code>, <code>sizeVariation</code>,
+            <code>spin</code>, <code>color</code>, <code>endColor</code>,
+            <code>alpha</code>, <code>endAlpha</code>, <code>texture</code>,
+            <code>blending</code></td>
+        <td>Without a <code>texture</code> a particle is a soft round dot
+            computed in the fragment shader &mdash; enough for sparks, embers and
+            explosions, and no asset at all.</td></tr>
+    <tr><td>Frame of reference</td>
+        <td><code>worldSpace</code></td>
+        <td>True leaves particles behind when the emitter moves &mdash; a rocket
+            trail. False carries them with it &mdash; a torch flame.</td></tr>
+    <tr><td>Reproducibility</td><td><code>seed</code></td>
+        <td>&minus;1 for a fresh sequence; a fixed value for a reference
+            image.</td></tr>
+  </table>
+  <p>Every one of them is a declared VRML field with a
+    <code>UI_HINTS</code> entry, so an emitter can be written into a scene file,
+    carried in an <code>MFNode</code>, watched for change, and presented by the
+    generated settings machinery with no UI code.</p>
+</section>
+
+<section id="rendering">
+  <h2>The renderer</h2>
+  <p><strong>Billboarding happens in eye space.</strong> The particle's centre
+    goes through the model-view, and the quad's corner is then added to its
+    <code>x</code> and <code>y</code>. Offsetting <em>after</em> the view
+    transform is what makes the quad face the camera exactly, at any camera
+    orientation, with no per-particle matrix and no work on the CPU.</p>
+  <pre>vec4 centre = uModelView * vec4(aParticle.xyz, 1.0);
+centre.xy += rotate(aCorner, aParams.x) * size;
+gl_Position = uProjection * centre;</pre>
+  <p><strong>One matrix, chosen by the node.</strong> A world-space system's
+    particles are already in world coordinates, so it is sent the <em>view</em>
+    matrix; a local-space system's are in the emitter's frame, so it is sent the
+    full <em>model-view</em>. Choosing on the CPU keeps the shader free of a
+    branch it would otherwise take once per vertex.</p>
+  <p><strong>Depth tested, depth writes off.</strong> Particles disappear behind
+    walls because they are tested against the depth buffer, and never occlude
+    each other because they do not write to it &mdash; which is what makes a
+    cloud read as a cloud instead of as a pile of squares. They draw in the
+    transparent pass, after opaque geometry, and never enter a shadow map.</p>
+  <p><strong>Additive by default</strong>, because most effects are light &mdash;
+    fire, sparks, explosions, muzzle flashes &mdash; and light adds. Choose
+    <code>blending='alpha'</code> for the things that block light instead: smoke,
+    dust, steam.</p>
+  <p class="technical">Shaders are
+    <code>OpenGLContext/shaders/particle.vert</code> and
+    <code>particle.frag</code>; the GL helpers (<code>InstanceBuffer</code>,
+    <code>ensure_gl</code>, <code>save_draw_state</code>) are shared with the
+    terrain and vegetation nodes in
+    <code>scenegraph/instancedgl.py</code>. A shader compile or driver failure
+    disables the node with one logged warning rather than taking down the frame:
+    the effect goes missing, the scene does not.</p>
+
+  <h3>Bounding volume</h3>
+  <p>A particle system's true extent changes every frame and would have to be
+    recomputed from the pool to be tight. Instead the node reports a box sized
+    from how far its fastest particle could travel in its lifetime. That costs
+    nothing and is never wrong in the direction that matters &mdash; culling away
+    an effect that is actually on screen.</p>
+</section>
+
+<section id="stepping">
+  <h2>When the simulation runs</h2>
+  <p>Particles are stepped <strong>from the draw</strong>, because the draw is
+    the only per-frame hook a scenegraph node has. Two consequences worth
+    knowing:</p>
+  <ul>
+    <li>A scene rendered twice in one frame &mdash; a shadow pass, a selection
+      pass &mdash; steps by nearly zero the second time rather than twice, because
+      the step is measured from a wall clock rather than counted.</li>
+    <li>A still frame is a stopped simulation. An application showing effects has
+      to keep asking for frames; the demo does it in <code>OnIdle</code>.</li>
+  </ul>
+  <p>To drive the simulation yourself &mdash; a fixed-tick game loop, or a test
+    &mdash; call <code>emitter.simulate(dt, origin=...)</code> directly. It is the
+    same method the draw uses.</p>
+</section>
+
+<section id="testing">
+  <h2>Testing an effect without looking at it</h2>
+  <p>The pool is the interesting half and it is pure numpy, so it is asserted
+    about directly:</p>
+  <pre>pool = particles.ParticlePool(capacity=16)
+pool.emit(1, velocity=(1, 0, 0), spread=0.0, speed_variation=0.0)
+pool.step(0.5)
+assert np.allclose(pool.position[0], (0.5, 0, 0))</pre>
+  <p>The suite covers birth, motion under gravity and drag, ageing, death,
+    compaction keeping the survivors' state intact, the budget, the fractional
+    emission accumulator, the long-frame clamp, reproducibility from a seed, and
+    that a full pool stepped thirty times allocates essentially nothing.
+    Rendering is covered by the demo's reference image.</p>
+</section>
+
+<section id="demos">
+  <h2>Demo</h2>
+  <p><code>tests/particles_effects.py</code> puts all five continuous and burst
+    presets side by side over a floor, so what each effect is made of can be read
+    off against what it looks like. Space re-fires the bursts, <code>p</code>
+    pauses emission without freezing what is already in the air.</p>
+  <pre>python tests/particles_effects.py</pre>
+</section>
+
+</body></html>

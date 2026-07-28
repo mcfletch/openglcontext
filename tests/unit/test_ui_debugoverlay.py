@@ -1,0 +1,271 @@
+"""The developer overlay: what registers into it, and how its rows lay out.
+
+A provider is a callable and a section is a list of pairs, so the whole of this
+is testable by handing in a fake provider and reading the laid-out rows back.
+"""
+
+import pytest
+
+from OpenGLContext.ui.debugoverlay import (
+    DebugOverlay, DebugSection, format_value,
+)
+from OpenGLContext.ui.metrics import FontMetrics
+
+
+@pytest.fixture
+def metrics():
+    return FontMetrics(char_width=8, char_height=16, line_gap=2)
+
+
+@pytest.fixture
+def overlay():
+    return DebugOverlay(margin=0)
+
+
+class TestFormatValue:
+    def test_a_flag_reads_as_a_word(self):
+        assert format_value(True) == 'yes'
+        assert format_value(False) == 'no'
+
+    def test_a_float_is_cut_to_something_readable(self):
+        assert format_value(1.0 / 3.0) == '0.33'
+
+    def test_a_whole_float_keeps_no_pointless_decimals(self):
+        assert format_value(60.0) == '60'
+
+    def test_an_integer_is_itself(self):
+        assert format_value(4096) == '4096'
+
+    def test_a_vector_is_its_components(self):
+        assert format_value((1.5, -2.0, 0.25)) == '1.5, -2, 0.25'
+
+    def test_nothing_reads_as_a_dash(self):
+        assert format_value(None) == '-'
+
+    def test_anything_else_is_its_own_text(self):
+        assert format_value('core') == 'core'
+
+
+class TestRegistration:
+    def test_a_registered_provider_becomes_a_section(self, overlay):
+        overlay.register('Map', lambda: [('name', 'q3dm17')])
+        assert [section.title for section in overlay.sections()] == ['Map']
+
+    def test_the_rows_are_what_the_provider_returned(self, overlay):
+        overlay.register('Map', lambda: [('name', 'q3dm17'), ('family', 'q3')])
+        assert overlay.sections()[0].rows == [('name', 'q3dm17'),
+                                              ('family', 'q3')]
+
+    def test_a_provider_may_answer_with_a_mapping(self, overlay):
+        overlay.register('Map', lambda: {'name': 'q3dm17'})
+        assert overlay.sections()[0].rows == [('name', 'q3dm17')]
+
+    def test_values_are_formatted_on_the_way_out(self, overlay):
+        overlay.register('Frame', lambda: [('rate', 59.94), ('vsync', True)])
+        assert overlay.sections()[0].rows == [('rate', '59.94'),
+                                              ('vsync', 'yes')]
+
+    def test_sections_come_out_in_the_order_they_asked_for(self, overlay):
+        overlay.register('Last', lambda: [('a', 1)], order=90)
+        overlay.register('First', lambda: [('b', 2)], order=10)
+        assert [section.title for section in overlay.sections()] \
+            == ['First', 'Last']
+
+    def test_equal_orders_keep_the_order_they_registered_in(self, overlay):
+        overlay.register('One', lambda: [('a', 1)])
+        overlay.register('Two', lambda: [('b', 2)])
+        assert [section.title for section in overlay.sections()] \
+            == ['One', 'Two']
+
+    def test_a_section_can_be_taken_away_again(self, overlay):
+        overlay.register('Map', lambda: [('name', 'q3dm17')])
+        overlay.unregister('Map')
+        assert overlay.sections() == []
+
+    def test_registering_the_same_title_twice_replaces_it(self, overlay):
+        overlay.register('Map', lambda: [('name', 'first')])
+        overlay.register('Map', lambda: [('name', 'second')])
+        assert overlay.sections() == [DebugSection('Map', [('name', 'second')])]
+
+    def test_a_provider_that_raises_says_so_instead_of_taking_the_frame(
+            self, overlay):
+        def broken():
+            raise RuntimeError('no physics world yet')
+        overlay.register('Physics', broken)
+        section = overlay.sections()[0]
+        assert section.rows[0][0] == 'error'
+        assert 'no physics world' in section.rows[0][1]
+
+    def test_a_provider_with_nothing_to_say_is_left_out(self, overlay):
+        """An empty heading is noise; a subsystem with no numbers has none."""
+        overlay.register('Physics', lambda: [])
+        assert overlay.sections() == []
+
+
+class TestLayout:
+    def rows(self, overlay, metrics):
+        overlay.refresh()
+        overlay.layout((800, 600), metrics)
+        return overlay.panel.laidOutRows(metrics)
+
+    def test_a_heading_and_its_rows_are_laid_out_in_order(self, overlay,
+                                                          metrics):
+        overlay.register('Frame', lambda: [('fps', 60), ('ms', 16)])
+        laid = self.rows(overlay, metrics)
+        assert [(row.label, row.heading) for row in laid] \
+            == [('Frame', True), ('fps', False), ('ms', False)]
+
+    def test_rows_run_down_the_plate(self, overlay, metrics):
+        overlay.register('Frame', lambda: [('fps', 60), ('ms', 16)])
+        laid = self.rows(overlay, metrics)
+        assert laid[0].rect.y > laid[1].rect.y > laid[2].rect.y
+
+    def test_the_plate_holds_every_row(self, overlay, metrics):
+        overlay.register('Frame', lambda: [('fps', 60), ('ms', 16)])
+        laid = self.rows(overlay, metrics)
+        plate = overlay.panel.rect
+        for row in laid:
+            assert plate.contains(row.rect.x, row.rect.y)
+
+    def test_it_grows_to_fit_the_widest_value(self, overlay, metrics):
+        overlay.register('Map', lambda: [('name', 'short')])
+        overlay.refresh()
+        narrow = overlay.panel.natural_size(metrics)[0]
+        overlay.unregister('Map')
+        overlay.register('Map', lambda: [('name', 'a very much longer name')])
+        overlay.refresh()
+        assert overlay.panel.natural_size(metrics)[0] > narrow
+
+    def test_two_sections_are_taller_than_one(self, overlay, metrics):
+        overlay.register('One', lambda: [('a', 1)])
+        overlay.refresh()
+        single = overlay.panel.natural_size(metrics)[1]
+        overlay.register('Two', lambda: [('b', 2)])
+        overlay.refresh()
+        assert overlay.panel.natural_size(metrics)[1] > single
+
+    def test_an_empty_overlay_takes_no_room(self, overlay, metrics):
+        overlay.refresh()
+        assert overlay.panel.natural_size(metrics) == (0, 0)
+
+    def test_ticking_refreshes_what_the_providers_say(self, overlay, metrics):
+        readings = iter([[('fps', 30)], [('fps', 60)]])
+        overlay.register('Frame', lambda: next(readings))
+        overlay.tick(1.0)
+        assert overlay.panel.sections[0].rows == [('fps', '30')]
+        overlay.tick(2.0)
+        assert overlay.panel.sections[0].rows == [('fps', '60')]
+
+
+class TestVisibility:
+    def test_it_starts_hidden_when_the_fps_display_is_disabled(self,
+                                                              monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
+        assert DebugOverlay.startsVisible() is False
+
+    def test_it_starts_visible_otherwise(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', raising=False)
+        assert DebugOverlay.startsVisible() is True
+
+    def test_toggling_turns_it_on_and_off(self, overlay):
+        overlay.visible = False
+        assert overlay.toggle() is True
+        assert overlay.visible
+        assert overlay.toggle() is False
+        assert not overlay.visible
+
+
+class TestBuiltInProviders:
+    """The providers shipped with the overlay, against stand-in contexts."""
+
+    def test_the_frame_provider_reports_the_windowed_rate(self):
+        from OpenGLContext.framecounter import FrameCounter
+        from OpenGLContext.ui.debugoverlay import frame_provider
+
+        counter = FrameCounter()
+        for _index in range(10):
+            counter.addFrame(1 / 60.0)
+
+        class Context:
+            frameCounter = counter
+
+            def getViewPort(self):
+                return (800, 600)
+
+        rows = dict(frame_provider(Context())())
+        assert rows['fps'] == pytest.approx(60.0, rel=0.05)
+        assert rows['viewport'] == '800x600'
+
+    def test_the_frame_provider_survives_a_context_with_no_counter(self):
+        from OpenGLContext.ui.debugoverlay import frame_provider
+
+        class Context:
+            frameCounter = None
+
+            def getViewPort(self):
+                return (0, 0)
+
+        assert dict(frame_provider(Context())())['fps'] == 0
+
+    def test_the_render_provider_reports_the_features_in_use(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.ui.debugoverlay import render_provider
+
+        class Context:
+            contextDefinition = ContextDefinition(shadows=True, bloom=False)
+            coreProfile = True
+
+        rows = dict(render_provider(Context())())
+        assert rows['profile'] == 'core'
+        assert rows['shadows'] is True
+        assert rows['bloom'] is False
+
+    def test_the_render_provider_counts_what_the_pass_drew(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.passes.renderstats import RenderStats
+        from OpenGLContext.ui.debugoverlay import render_provider
+
+        stats = RenderStats()
+        stats.shapes = 120
+        stats.instanceGroups = 3
+        stats.instances = 90
+        stats.draws = 33
+
+        class Context:
+            contextDefinition = ContextDefinition()
+            coreProfile = True
+            renderStats = stats
+
+        rows = dict(render_provider(Context())())
+        assert rows['shapes'] == 120
+        assert rows['draws'] == 33
+        assert rows['instanced'] == '90 in 3 groups'
+
+    def test_the_platform_provider_reports_where_the_camera_is(self):
+        from OpenGLContext.ui.debugoverlay import platform_provider
+
+        class Platform:
+            position = (1.0, 2.0, 3.0)
+
+        class Context:
+            def getViewPlatform(self):
+                return Platform()
+
+        rows = dict(platform_provider(Context())())
+        assert rows['position'] == (1.0, 2.0, 3.0)
+
+    def test_the_physics_provider_counts_bodies_and_contacts(self):
+        from OpenGLContext.ui.debugoverlay import physics_provider
+
+        class World:
+            bodies = [object(), object()]
+            contacts = [object()]
+
+        rows = dict(physics_provider(lambda: World())())
+        assert rows['bodies'] == 2
+        assert rows['contacts'] == 1
+
+    def test_the_physics_provider_says_nothing_with_no_world(self):
+        from OpenGLContext.ui.debugoverlay import physics_provider
+
+        assert physics_provider(lambda: None)() == []

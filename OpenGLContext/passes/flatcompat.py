@@ -3,7 +3,6 @@ from . import _flat
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot, allclose
-from OpenGLContext import frustum
 from OpenGLContext.debug.logs import getTraceback
 from vrml.vrml97 import nodetypes
 from vrml import olist
@@ -43,6 +42,11 @@ class FlatPass( _flat.FlatPass ):
     selectForced = False
 
     cache = None
+
+    #: Bloom composites the scene with a shader; this pass has no shader path
+    #: to composite with, so it draws straight to the framebuffer.
+    supports_bloom = False
+
     
     def Render( self, context, mode ):
         """Render the geometry attached to this flat-renderer's scenegraph"""
@@ -98,9 +102,6 @@ class FlatPass( _flat.FlatPass ):
 
             self.renderOpaque( toRender )
             self.renderTransparent( toRender )
-
-            if context.frameCounter and context.frameCounter.display:
-                context.frameCounter.Render( context )
         context.SwapBuffers()
         self.matrix = matrix
 
@@ -215,32 +216,7 @@ class FlatPass( _flat.FlatPass ):
             setup_fixed_function=True, require_pick_enabled=True)
 
     MAX_LIGHTS = -1
-    def __call__( self, context ):
-        """Overall rendering pass interface for the context client"""
-        vp = context.getViewPlatform()
-        self.setViewPlatform( vp )
-        # These values are temporarily stored locally, we are
-        # in the context lock, so we're not causing conflicts
-        if self.MAX_LIGHTS == -1:
-            self.MAX_LIGHTS = 8 #glGetIntegerv( GL_MAX_LIGHTS )
-        self.context = context
-        self.cache = context.cache
-        self.viewport = (0,0) + context.getViewPort()
-        
-        self.calculateFrustum()
 
-        self.Render( context, self )
-        return True # flip yes, for now we always flip...
-
-    def calculateFrustum( self ):
-        """Construct our Frustum instance (currently by extracting from mv matrix)"""
-        # TODO: calculate from view platform instead
-        self.frustum = frustum.Frustum.fromViewingMatrix(
-            self.modelproj,
-            normalize = 1
-        )
-        return self.frustum
-    
     def getProjection (self):
         """Retrieve the projection matrix for the rendering pass"""
         return self.projection

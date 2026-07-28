@@ -32,6 +32,7 @@ import logging
 log = logging.getLogger( __name__ )
 
 if TYPE_CHECKING:
+    from OpenGLContext.passes.renderstats import RenderStats
     from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
 __all__ = (
@@ -324,6 +325,22 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
     cache = None
 
+    #: What the frame being drawn cost, in shapes and draw calls.  Read
+    #: through the developer overlay; see OpenGLContext.passes.renderstats.
+    _stats: Optional['RenderStats'] = None
+
+    @property
+    def stats(self) -> 'RenderStats':
+        """This pass's frame counts, made on first use and then reused.
+
+        One object for the life of the pass rather than one per frame, so a
+        context that took a reference to it keeps reading live numbers.
+        """
+        if self._stats is None:
+            from OpenGLContext.passes.renderstats import RenderStats
+            self._stats = RenderStats()
+        return self._stats
+
     # Shader-based rendering support
     use_shaders: bool = False
     shader_mode: bool = False  # Set True during shader render passes
@@ -552,8 +569,14 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 except Exception as err:
                     log.error("Failure in instanced group render: %s",
                               getTraceback(err))
+                else:
+                    self.stats.instanceGroups += 1
+                    self.stats.instances += len(group)
+                    self.stats.draws += 1
             singles = [(None, rec) for rec in single_recs]
 
+        self.stats.opaque += len(singles)
+        self.stats.draws += len(singles)
         for obj_index, (key, mvmatrix, tmatrix, bvolume, path) in singles:
             self.matrix = mvmatrix
             self.renderPath = path
@@ -597,6 +620,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         transparent = [(i, rec) for i, rec in enumerate(toRender) if rec[0][0]]
         if not transparent:
             return
+        self.stats.transparent += len(transparent)
+        self.stats.draws += len(transparent)
         # Eye looks down -z, so farthest-first is ascending eye-space origin z.
         transparent.sort(key=lambda ir: ir[1][1][3][2])
 
@@ -655,57 +680,6 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             glDepthFunc(GL_LEQUAL)
             glEnable(GL_DEPTH_TEST)
 
-    def shaderRenderFrameCounter(self, context) -> None:
-        """Render the frame counter using shader-based text rendering.
-
-        Uses the DejaVu Sans Mono texture atlas for core-profile compatible
-        text rendering. Displays green text on a dark semi-transparent background
-        for visibility on any scene.
-        """
-        if not context.frameCounter:
-            return
-
-        try:
-            from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
-
-            # Get viewport dimensions
-            tx, ty = context.getViewPort()
-            if not tx or not ty:
-                return
-
-            # Get frame counter data. Show the windowed median rate, not the
-            # cumulative lifetime average -- the latter bakes in one-off model
-            # loads / first-frame compiles and reads far below the live rate.
-            count, _avg, last = context.frameCounter.summary()
-            avg = context.frameCounter.recentFps()
-            last *= 1000  # Convert to milliseconds
-
-            # Format the text
-            text = f'fps:{avg:.1f}\ncurr ms: {last:.0f}'
-
-            # Get a text renderer (use 14px font for frame counter)
-            text_renderer = get_text_renderer(14)
-
-            # Render at bottom-left corner with margin
-            margin = 10
-            y_pos = margin + text_renderer.char_height * 2  # Room for 2 lines
-
-            # Use green text on dark opaque background for visibility
-            text_renderer.render_text(
-                text,
-                x=margin,
-                y=y_pos,
-                shader_program=self.shader_program,
-                viewport_width=tx,
-                viewport_height=ty,
-                color=(0.0, 1.0, 0.0, 1.0),  # Bright green text
-                background_color=(0.1, 0.1, 0.1, 1.0),  # Dark opaque background
-                scale=1.0
-            )
-        except Exception as e:
-            log.debug("Failed to render frame counter: %s", e)
-
-
     INTERESTING_TYPES = [
         nodetypes.Rendering,
         nodetypes.Bindable,
@@ -716,6 +690,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         nodetypes.Fog,
         nodetypes.Viewpoint,
         nodetypes.NavigationInfo,
+        nodetypes.Auditory,
     ]
     def currentBackground( self ):
         """Find our current background node"""
@@ -819,6 +794,32 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             self._sel_id_map = {}
         return self._sel_id_map
 
+    def renderAudio( self, context ):
+        """Keep the scene's sounds in step with the camera, for this frame.
+
+        Delegates to :func:`OpenGLContext.audio.scene.update`; everything the
+        engine needs -- the listener pose, the emitters' world positions, which
+        voices start and stop -- is worked out there.  Returns how many nodes
+        were driven, which is what the developer overlay reports.
+
+        **A scene with nothing audible in it costs nothing**: no device is
+        opened and no audio thread starts until a frame is drawn containing an
+        ``Auditory`` node.  And a failure here is a warning, never a lost
+        frame: a sound card that disappears mid-session must not take the
+        window with it.
+        """
+        paths = self.paths.get( nodetypes.Auditory, () )
+        if not paths:
+            return 0
+        try:
+            from OpenGLContext.audio import scene as audioscene
+            return audioscene.update( context, paths )
+        except Exception as err:
+            log.warning(
+                "Failure updating scene audio: %s", getTraceback( err ),
+            )
+            return 0
+
     def renderSet( self, matrix ):
         """Calculate ordered rendering set to display"""
         # ordered set of things to work with...
@@ -898,6 +899,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 log.debug("GL_FRAMEBUFFER_SRGB not available to disable: %s", err)
 
         # Reset per-frame caches
+        self.stats.reset()
+        context.renderStats = self.stats
         self._has_mousemove_handlers = None
         # Deferred runtime-transparent shapes are collected fresh each frame
         #; drained by renderTransparent.
@@ -908,6 +911,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         self.matrix = matrix
 
         toRender = self.renderSet( matrix )
+        self.stats.shapes = len(toRender)
         maxDepth = self.maxDepth = self.greatestDepth( toRender )
         vp = context.getViewPlatform()
         if maxDepth:
@@ -1062,14 +1066,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                         self.submitAsyncPicks(mode, events, id_map)
                     context.pickEvents.clear()
 
-                # Render frame counter to screen (not to MRT buffer)
-                if context.frameCounter and context.frameCounter.display:
-                    self.shaderRenderFrameCounter(context)
-
-                # Optional application overlay (game HUD, etc.): a context may
-                # define ``renderShaderOverlay(flatpass)`` to draw screen-space
-                # content over the finished frame, using this pass's shader
-                # program and the shader text renderer.
+                # The HUD, the developer overlay and any screen that is open,
+                # drawn over the finished frame rather than into the MRT
+                # buffer.  See OpenGLContext.ui.screen.ScreenMixin.
                 overlay = getattr(context, 'renderShaderOverlay', None)
                 if overlay is not None:
                     overlay(self)
@@ -1079,10 +1078,6 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 self.legacyLightRender( matrix )
                 self.renderOpaque( toRender )
                 self.renderTransparent( toRender )
-
-                # Render frame counter if enabled
-                if context.frameCounter and context.frameCounter.display:
-                    context.frameCounter.Render(context)
 
         context.SwapBuffers()
         self.matrix = matrix
@@ -1256,6 +1251,21 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         self.viewport = (0,0) + context.getViewPort()
         
         self.calculateFrustum()
+
+        # Anything the application pins to the camera -- a first-person weapon,
+        # a held tool -- is placed here, in the one window where the view
+        # platform is settled and no geometry has been gathered yet. Written
+        # any earlier (an idle callback, an event handler) it is posed from the
+        # *previous* frame's camera, and the pinned object visibly lags and
+        # then catches up as the player moves.
+        attach = getattr( context, 'placeViewAttachments', None )
+        if attach is not None:
+            attach( self )
+
+        # Here rather than in Render(): every concrete pass overrides Render()
+        # and one of them would eventually forget, leaving a default install
+        # silent while a sound played directly through the engine still worked.
+        self.renderAudio( context )
 
         if self._begin_bloom():
             try:
