@@ -159,6 +159,14 @@ def render_scene(monkeypatch):
     # window and hard-reset glfw so no state from the full context survives into the
     # next test.
     import gc
+
+    from OpenGLContext.passes import renderpass
+
+    # `renderpass.FLAT` is a module global holding the pass that last rendered,
+    # and it outlives the window it belongs to.  Left set, it hands the next
+    # test a shader program whose GL context is gone -- which reads as "there
+    # is a pass" to anything that asks, on a machine where there is not.
+    renderpass.FLAT = None
     contexts.clear()
     gc.collect()                       # run GL finalizers against the live context
     for win in windows:

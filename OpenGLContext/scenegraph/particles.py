@@ -342,6 +342,12 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
     #: A disabled emitter emits nothing but still ages what is already out, so
     #: switching it off lets the smoke clear rather than freezing it.
     enabled = field.newField('enabled', 'SFBool', 1, True)
+    #: Whether the first :attr:`burst` is released as soon as the emitter is
+    #: drawn.  True is what a firework or a one-shot puff in an authored scene
+    #: wants.  **False is what an emitter that exists to be fired later wants**:
+    #: an explosion put in a scene and driven by events would otherwise go off
+    #: at its own origin the moment the level was first drawn.
+    burstOnStart = field.newField('burstOnStart', 'SFBool', 1, True)
     #: Fixes the sequence of an emitter, for a reproducible reference image.
     seed = field.newField('seed', 'SFInt32', 1, -1)
 
@@ -363,12 +369,13 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
         'blending': {'label': 'Blending', 'options': ('additive', 'alpha'),
                      'optionLabels': ('Light (additive)', 'Smoke (alpha)')},
         'enabled': {'label': 'Emitting'},
+        'burstOnStart': {'label': 'Burst on start'},
     }
 
     def __init__(self, **named: Any) -> None:
         super(ParticleEmitter, self).__init__(**named)
         self._pool: Optional[ParticlePool] = None
-        self._pending = float(self.burst)
+        self._pending = float(self.burst) if self.burstOnStart else 0.0
         self._stepped: Optional[float] = None
         self._gl: Any = None
         self._disabled = False
@@ -394,6 +401,58 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
         """Release another burst on the next step.  An explosion, a muzzle flash."""
         self._pending += float(self.burst)
 
+    def burst_at(self, position: Vector, direction: Optional[Vector] = None,
+                 count: Optional[int] = None) -> int:
+        """Release a burst at a point, without moving the emitter.  Returns how many.
+
+        **One emitter, many places.**  A shotgun's eight pellets land eight
+        metres apart and each wants its own puff; :meth:`fire` would give all
+        eight the emitter's single position, and a node per impact would mean
+        allocating scenegraph nodes in a firefight.  So the styling — colour,
+        size, life, gravity, drag — stays with this one emitter and the *place*
+        arrives per burst.
+
+        ``position`` is in the frame the particles live in: world space for a
+        ``worldSpace`` emitter, and the emitter's own space otherwise.
+        ``direction`` is what the particles are thrown along, which for an
+        impact is the surface normal; without one the emitter's own
+        :attr:`direction` is used.  ``count`` overrides :attr:`burst`.
+
+        A disabled emitter bursts nothing, so an effects setting that switches
+        a kind off switches it off however it is asked.
+        """
+        if not self.enabled:
+            return 0
+        wanted = int(self.burst if count is None else count)
+        if wanted <= 0:
+            return 0
+        return self._emit(wanted, position, direction)
+
+    def _emit(self, count: int, position: Vector,
+              direction: Optional[Vector]) -> int:
+        """Bring ``count`` particles into being, styled by this emitter.
+
+        The one place the node's fields are read into a pool emission, so
+        :meth:`simulate` and :meth:`burst_at` cannot drift apart about what a
+        particle of this emitter looks like when it is born.
+        """
+        return self.pool.emit(
+            count,
+            position=position,
+            velocity=np.asarray(
+                direction if direction is not None else self.direction,
+                dtype=np.float64)[:3] * self.speed,
+            spread=self.spread, speed_variation=self.speedVariation,
+            lifetime=self.lifetime,
+            lifetime_variation=self.lifetimeVariation,
+            # A particle's own size is the *deviation* from the emitter's,
+            # mean 1.0.  The absolute size, and how it changes over a life,
+            # are the emitter's two uniforms -- so editing `size` on a live
+            # emitter resizes the particles already in the air rather than
+            # only the next ones.
+            size=1.0, size_variation=self.sizeVariation,
+            spin=self.spin, spin_variation=self.spinVariation)
+
     def simulate(self, dt: float, origin: Vector = (0.0, 0.0, 0.0),
                  direction: Optional[Vector] = None) -> None:
         """Emit, then advance, by ``dt`` seconds.
@@ -412,22 +471,9 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
             count = int(self._pending)
             if count > 0:
                 self._pending -= count
-                pool.emit(
-                    count,
-                    position=origin if self.worldSpace else (0.0, 0.0, 0.0),
-                    velocity=np.asarray(
-                        direction if direction is not None else self.direction,
-                        dtype=np.float64)[:3] * self.speed,
-                    spread=self.spread, speed_variation=self.speedVariation,
-                    lifetime=self.lifetime,
-                    lifetime_variation=self.lifetimeVariation,
-                    # A particle's own size is the *deviation* from the
-                    # emitter's, mean 1.0.  The absolute size, and how it
-                    # changes over a life, are the emitter's two uniforms -- so
-                    # editing `size` on a live emitter resizes the particles
-                    # already in the air rather than only the next ones.
-                    size=1.0, size_variation=self.sizeVariation,
-                    spin=self.spin, spin_variation=self.spinVariation)
+                self._emit(count,
+                           origin if self.worldSpace else (0.0, 0.0, 0.0),
+                           direction)
         pool.step(dt, gravity=self.gravity, drag=self.drag)
 
     def _advance(self, origin: Vector,
@@ -502,19 +548,37 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
         return (True, [], 0.0, None)
 
     def boundingVolume(self, mode: Any) -> Any:
-        """A generous box.
+        """A box covering both this emitter's reach and its living particles.
 
-        A particle system's true extent changes every frame and would have to be
-        recomputed from the pool to be tight.  A box sized from how far the
-        fastest particle could travel in its lifetime costs nothing and is never
-        wrong in the direction that matters -- culling away an effect that is
-        actually on screen.
+        **Where the particles are, not where the node is.**  An emitter driven
+        by :meth:`burst_at` never moves -- the styling stays on one node and
+        the *place* arrives per burst -- so a bound around the node is a bound
+        around wherever that node happens to sit, and the frustum filter throws
+        the whole system away whenever that point is off screen.  In a level
+        that is almost always, and the effect is then born, never stepped and
+        never drawn.
+
+        The emitter's own reach is always included, so an emitter with a
+        ``rate`` and an empty pool is still visited and still starts emitting.
+        Beyond that the box is the living particles' own extent, which is one
+        pass of numpy over a packed array and shrinks again as they die.
         """
         reach = float(self.speed) * float(self.lifetime) * (1.0 + self.speedVariation)
         reach += float(np.linalg.norm(self.gravity)) * self.lifetime ** 2 * 0.5
         reach = max(reach, float(self.size)) + float(self.size)
-        return boundingvolume.AABoundingBox(size=(2 * reach,) * 3,
-                                            center=(0, 0, 0))
+        low = np.full(3, -reach)
+        high = np.full(3, reach)
+        pool = self.pool
+        if pool.live:
+            # The particles' own size counts: a sprite is drawn about its
+            # centre, so a burst exactly on the frustum edge is still visible.
+            margin = max(float(self.size), float(self.endSize))
+            live = pool.position[:pool.live]
+            low = np.minimum(low, live.min(axis=0) - margin)
+            high = np.maximum(high, live.max(axis=0) + margin)
+        return boundingvolume.AABoundingBox(
+            size=tuple(float(value) for value in (high - low)),
+            center=tuple(float(value) for value in (low + high) * 0.5))
 
     def Render(self, mode: Any = None) -> int:
         """Nothing: an effect is blended, so it is drawn in the transparent pass."""

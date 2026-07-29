@@ -22,6 +22,7 @@ from OpenGL.GL import (
 
 from OpenGLContext import renderoptions
 from OpenGLContext.debug.logs import getTraceback
+from OpenGLContext.scenegraph import fog as fognode
 
 if TYPE_CHECKING:
     from OpenGLContext.passes.bloom import BloomPass
@@ -49,6 +50,8 @@ class _FlatEffectsMixin:
                           id_map: Optional[Dict]) -> Any: ...
 
         def _restoreShapeId(self, masked: Any) -> None: ...
+
+        def currentFog(self) -> Any: ...
 
     # Transmission (KHR_materials_transmission). Filled on the first frame from the
     # GL renderer string; 'full' captures an opaque backdrop, 'blend' fakes it.
@@ -126,19 +129,29 @@ class _FlatEffectsMixin:
         if hasattr(shader, 'set_exposure'):
             shader.set_exposure(
                 float(getattr(getattr(self, 'context', None), 'gltf_exposure', 1.0)))
-        # Aerial-perspective fog. A context sets gltf_fog = (density, (r,g,b)); the
-        # default (0.0) leaves every other scene pixel-identical.
+        # Fog, from the bound Fog node the pass has already collected. A scene
+        # with none is left pixel-identical, which is nearly every scene.
         if hasattr(shader, 'set_fog'):
-            fog = getattr(getattr(self, 'context', None), 'gltf_fog', None)
-            if fog:
-                shader.set_fog(fog[0], fog[1])
-            else:
-                shader.set_fog(0.0)
+            self.applyFog(shader)
         # Bloom: the scene renders into a linear HDR target, so the PBR shader emits
         # linear HDR (tone-mapping moves to the bloom composite). Off by default.
         if hasattr(shader, 'set_hdr_output'):
             shader.set_hdr_output(bool(getattr(self, '_bloom_active', False)))
         return mode
+
+    def applyFog(self, shader: Any) -> None:
+        """Hand the shader the fog the camera is standing in, or none.
+
+        The node's own accumulated matrix decides the scale of its
+        ``visibilityRange``, so a fog authored for a model carries its range
+        with it when the model is placed at a different size.
+        """
+        path = self.currentFog()
+        if path is None:
+            shader.set_fog(0.0, mode=fognode.FOG_NONE)
+            return
+        mode, density, color = path[-1].fogParameters(path.transformMatrix())
+        shader.set_fog(density, color, mode=mode)
 
     # -- transmission (KHR_materials_transmission) --------------------------
     def transmissionMode(self) -> str:

@@ -4,12 +4,15 @@ All of it is arithmetic over a viewport and a font, so none of it needs a
 window: a layer is laid out, and what comes back is rectangles.
 """
 
+import math
+
 import pytest
 
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.hudwidgets import (
     CIRCLE, CROSS, CROSS_DOT, DOT, NONE,
-    BarMeter, Crosshair, HUDGroup, HUDLayer, MessageQueue, Readout, place,
+    BarMeter, Crosshair, DamageIndicator, HUDGroup, HUDLayer, MessageQueue,
+    Readout, place,
 )
 from OpenGLContext.ui.metrics import FontMetrics
 
@@ -186,6 +189,137 @@ class TestCrosshair:
         assert cross.hitMarks(metrics) == []
 
 
+class TestDamageIndicator:
+    """Which way the hit came from, drawn at the edge the player must turn to.
+
+    The direction is the load-bearing part: a wash that said only *how much*
+    would tell a player something they can already read off the health meter,
+    while the thing they cannot see is where the shooter is standing.
+    """
+
+    def marked(self, **named):
+        indicator = DamageIndicator(**named)
+        indicator.arrange(Rect(0, 0, 400, 300), metrics_at(8, 16))
+        return indicator
+
+    def test_nothing_is_drawn_until_something_lands(self, metrics):
+        assert self.marked().bands(metrics) == []
+
+    def test_a_hit_from_the_left_marks_the_left_edge(self, metrics):
+        indicator = self.marked()
+        indicator.hurt(bearing=-math.pi / 2, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        assert self.strongest_edge(indicator, metrics) == 'left'
+
+    def test_a_hit_from_the_right_marks_the_right_edge(self, metrics):
+        indicator = self.marked()
+        indicator.hurt(bearing=math.pi / 2, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        assert self.strongest_edge(indicator, metrics) == 'right'
+
+    def test_a_hit_from_in_front_marks_the_top(self, metrics):
+        indicator = self.marked()
+        indicator.hurt(bearing=0.0, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        assert self.strongest_edge(indicator, metrics) == 'top'
+
+    def test_a_hit_from_behind_marks_the_bottom(self, metrics):
+        """The one a player most needs telling about, and cannot see."""
+        indicator = self.marked()
+        indicator.hurt(bearing=math.pi, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        assert self.strongest_edge(indicator, metrics) == 'bottom'
+
+    def test_a_hit_from_the_side_and_behind_lights_both_edges(self, metrics):
+        """It blends rather than snapping, or a shooter circling a player flickers."""
+        indicator = self.marked()
+        indicator.hurt(bearing=math.pi * 0.75, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        lit = {edge for edge, _rect, _colour in indicator.edges(metrics)}
+        assert lit == {'right', 'bottom'}
+
+    def test_a_harder_hit_is_stronger(self, metrics):
+        soft, hard = self.marked(), self.marked()
+        for indicator, intensity in ((soft, 0.2), (hard, 0.9)):
+            indicator.hurt(bearing=0.0, intensity=intensity, now=0.0)
+            indicator.tick(0.0)
+        assert self.peak(hard, metrics) > self.peak(soft, metrics)
+
+    def test_it_fades_to_nothing(self, metrics):
+        indicator = self.marked(duration=0.8)
+        indicator.hurt(bearing=0.0, intensity=1.0, now=10.0)
+        indicator.tick(10.4)
+        faded = self.peak(indicator, metrics)
+        indicator.tick(10.7)
+        assert 0.0 < self.peak(indicator, metrics) < faded
+        indicator.tick(10.9)
+        assert indicator.bands(metrics) == []
+
+    def test_two_hits_from_different_sides_are_both_shown(self, metrics):
+        indicator = self.marked()
+        indicator.hurt(bearing=-math.pi / 2, intensity=1.0, now=0.0)
+        indicator.hurt(bearing=math.pi / 2, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        lit = {edge for edge, _rect, _colour in indicator.edges(metrics)}
+        assert lit == {'left', 'right'}
+
+    def test_an_intensity_of_nothing_shows_nothing(self, metrics):
+        """A hit absorbed entirely by armour is not a hit to flash about."""
+        indicator = self.marked()
+        indicator.hurt(bearing=0.0, intensity=0.0, now=0.0)
+        indicator.tick(0.0)
+        assert indicator.bands(metrics) == []
+
+    def test_spent_marks_do_not_pile_up(self, metrics):
+        """A firefight asks for dozens; none of them may outlive its fade."""
+        indicator = self.marked(duration=0.5)
+        for index in range(50):
+            indicator.hurt(bearing=0.0, intensity=1.0, now=index * 1.0)
+        indicator.tick(50.0)
+        assert len(indicator.marks) <= 1
+
+    def test_even_the_worst_hit_leaves_the_world_visible(self, metrics):
+        """It is a warning over a game, not a curtain across it.
+
+        A wash a player cannot see the room through takes away the thing they
+        are being warned to look at.
+        """
+        indicator = self.marked()
+        for bearing in (0.0, math.pi / 2, math.pi, -math.pi / 2):
+            indicator.hurt(bearing=bearing, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        assert self.peak(indicator, metrics) <= 0.5
+
+    def test_it_reaches_less_than_a_third_of_the_way_across(self, metrics):
+        indicator = self.marked()
+        indicator.hurt(bearing=-math.pi / 2, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        widest = max(rect.width for rect, _colour in indicator.bands(metrics))
+        assert widest < indicator.rect.width / 3
+
+    def test_the_wash_is_a_gradient_rather_than_a_bar(self, metrics):
+        """A hard-edged block over the world reads as a rendering fault."""
+        indicator = self.marked(steps=4)
+        indicator.hurt(bearing=0.0, intensity=1.0, now=0.0)
+        indicator.tick(0.0)
+        alphas = [colour[3] for _rect, colour in indicator.bands(metrics)]
+        assert len(alphas) == 4
+        assert alphas == sorted(alphas, reverse=True)
+
+    # -- helpers ---------------------------------------------------------
+    def strongest_edge(self, indicator, metrics):
+        return max(indicator.edges(metrics),
+                   key=lambda lit: lit[2][3])[0]
+
+    def peak(self, indicator, metrics):
+        return max([colour[3] for _rect, colour in indicator.bands(metrics)]
+                   or [0.0])
+
+
+def metrics_at(width, height):
+    return FontMetrics(char_width=width, char_height=height, line_gap=2)
+
+
 class TestBarMeter:
     def test_the_fill_is_the_fraction_of_the_track(self, metrics):
         bar = BarMeter(value=50, maximum=200, barWidth=100, barHeight=10)
@@ -238,6 +372,50 @@ class TestBarMeter:
                             label='ARMOUR')
         assert (labelled.natural_size(metrics)[0]
                 > bare.natural_size(metrics)[0])
+
+
+class TestAMeterReacting:
+    """A value that changed silently in the corner is not feedback.
+
+    The flash is what carries "that just happened" for a number a player is
+    not looking at, which is every number on a HUD during a fight.
+    """
+
+    def lit(self, metrics):
+        meter = BarMeter(value=100, maximum=100, flashDuration=0.4)
+        meter.arrange(Rect(0, 0, 200, 20), metrics)
+        return meter
+
+    def test_a_meter_at_rest_has_nothing_over_it(self, metrics):
+        meter = self.lit(metrics)
+        meter.tick(0.0)
+        assert meter.flashRect(metrics) is None
+
+    def test_a_flash_covers_the_track(self, metrics):
+        meter = self.lit(metrics)
+        meter.flash(now=1.0)
+        meter.tick(1.0)
+        assert meter.flashRect(metrics) == meter.barRect(metrics)
+
+    def test_the_flash_fades_and_then_stops(self, metrics):
+        meter = self.lit(metrics)
+        meter.flash(now=1.0)
+        meter.tick(1.1)
+        early = meter.flashColour()[3]
+        meter.tick(1.3)
+        assert 0.0 < meter.flashColour()[3] < early
+        meter.tick(1.5)
+        assert meter.flashRect(metrics) is None
+
+    def test_a_second_hit_restarts_it(self, metrics):
+        """Two hits in a second are two flashes, not one that got no brighter."""
+        meter = self.lit(metrics)
+        meter.flash(now=1.0)
+        meter.tick(1.3)
+        faded = meter.flashColour()[3]
+        meter.flash(now=1.3)
+        meter.tick(1.3)
+        assert meter.flashColour()[3] > faded
 
 
 class TestReadout:

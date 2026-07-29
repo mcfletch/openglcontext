@@ -54,6 +54,40 @@ class PhysicsViewPlatform:
         d = self._world_dir(forward, strafe) + np.array([0.0, up, 0.0])
         self.character.set_fly_move(d)
 
+    def _gaze_dir(self, forward: float, strafe: float) -> np.ndarray:
+        """The move basis for swimming: forward follows the **pitch** too.
+
+        Walking flattens the move to the ground plane, and rightly — leaning
+        forward should not push a player into the floor.  Under water that is
+        exactly wrong: it would leave the surface and the bottom reachable
+        only by the dedicated keys, which is walking with the gravity turned
+        off rather than swimming.
+
+        Strafing stays level whatever the gaze, because sidling should not
+        sink you; it is the one axis a swimmer expects to stay flat.
+        """
+        # `pitch` is positive *downward* (see `look`), so the gaze's vertical
+        # component is its negative sine.
+        cos_pitch = np.cos(self.pitch)
+        c, s = np.cos(self.yaw), np.sin(self.yaw)
+        gaze = np.array([s * cos_pitch, -np.sin(self.pitch), -c * cos_pitch])
+        right = np.array([c, 0.0, s])
+        return gaze * forward + right * strafe
+
+    def set_swim_move(self, forward: float = 0.0, strafe: float = 0.0,
+                      up: float = 0.0) -> None:
+        """Swim along the gaze, plus whatever the up/down keys ask for.
+
+        Normalised, because the character takes a *direction* and scales it by
+        its own swim speed; looking down and holding forward must not swim
+        more slowly than looking level does.
+        """
+        direction = self._gaze_dir(forward, strafe) + np.array([0.0, up, 0.0])
+        length = float(np.linalg.norm(direction))
+        if length > 1e-9:
+            direction = direction / length
+        self.character.set_fly_move(direction)
+
     def turn(self, d_yaw: float) -> None:
         """Swing the gaze about the vertical axis.  **Positive turns right.**
 
@@ -98,6 +132,9 @@ class PhysicsViewPlatform:
 
     def set_fly(self, flying: bool) -> Any:
         return self.character.set_fly(flying)
+
+    def set_swim(self, swimming: bool, buoyancy: float = 0.9) -> Any:
+        return self.character.set_swim(swimming, buoyancy=buoyancy)
 
     @property
     def blocked(self) -> bool:

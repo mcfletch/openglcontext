@@ -19,9 +19,16 @@ def test_returns_deterministic_cache_path_and_fetches_once(monkeypatch, tmp_path
                         lambda cache_dir=None: CATALOG)
 
     class _Resp:
+        """Serves its body once and is then exhausted, as a real one is."""
+
+        def __init__(self):
+            self._left = b'\x89PNG'
+
         def read(self, n=-1):
-            reads.append(1)
-            return b'\x89PNG'
+            if self._left:
+                reads.append(1)
+            data, self._left = self._left, b''
+            return data
 
         def close(self):
             pass

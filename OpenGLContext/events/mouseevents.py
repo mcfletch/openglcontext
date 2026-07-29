@@ -11,6 +11,21 @@ import itertools
 #: state a drag is tracked with, and a backend that hears about scrolling some
 #: other way translates it to these (see :mod:`OpenGLContext.events.glfwevents`).
 WHEEL_UP, WHEEL_DOWN = 3, 4
+
+#: How a mouse button is spelled when it is named as an *input* rather than
+#: reported as an event.  Held keys, one-shot presses and bindings all address
+#: an input by name (:class:`~OpenGLContext.events.inputstate.InputState`), and
+#: a mouse button is an input like any other: in a first-person game the left
+#: button is the trigger and everywhere else it is a click, but both are "a
+#: thing that is down right now".  Giving it a name in the same vocabulary is
+#: what lets a binding list it, a settings page present it and a movement mode
+#: read it, with no second path for the mouse.
+BUTTON_NAME = '<mouse-%d>'
+
+
+def button_name(button):
+    """The input name of a mouse button, as :data:`BUTTON_NAME` spells it."""
+    return BUTTON_NAME % (int(button),)
 #: Both of them, for membership tests.
 WHEEL_BUTTONS = (WHEEL_UP, WHEEL_DOWN)
 
@@ -169,6 +184,16 @@ class MouseButtonEvent (MouseEvent):
     state = 0 # the new state of the button, 0 or 1
     #: Numbers successive wheel notches; see getPickKey.
     _notchCounter = itertools.count()
+
+    @property
+    def name(self):
+        """This button's input name; see :func:`button_name`.
+
+        Named ``name`` because that is what every other held input calls it:
+        the sampler reads ``event.name`` and does not care whether a finger or
+        a thumb produced it.
+        """
+        return button_name(self.button)
     def getKey (self):
         """Get the event key used to lookup a handler for this event"""
         return (self.button, self.state, self.getModifiers(),)

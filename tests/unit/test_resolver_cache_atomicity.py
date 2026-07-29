@@ -16,17 +16,30 @@ from OpenGLContext.loaders import resolver
 
 
 class _SlowResponse:
-    """A fake urlopen response whose body arrives in slow chunks."""
+    """A fake urlopen response whose body arrives in slow chunks.
 
-    def __init__(self, data, delay=0.02):
+    Its body is served once and then exhausted, as a real response's is: a
+    reader that asks again after the end gets ``b''``.  That matters because
+    the fetcher reads in a loop until the body runs out, and a fake that kept
+    handing over the same bytes would never let it stop.
+    """
+
+    def __init__(self, data, delay=0.02, chunk=64 * 1024):
         self._data = data
         self._delay = delay
+        self._chunk = chunk
+        self._offset = 0
+        self.headers = {'Content-Length': str(len(data))}
 
     def read(self, n=-1):
         # Simulate transfer latency so a concurrent reader would catch a partial
         # in-place write if the writer were not atomic.
         time.sleep(self._delay)
-        return self._data
+        if n is None or n < 0:
+            n = len(self._data) - self._offset
+        piece = self._data[self._offset:self._offset + min(n, self._chunk)]
+        self._offset += len(piece)
+        return piece
 
     def close(self):
         pass

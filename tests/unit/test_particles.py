@@ -386,6 +386,120 @@ class TestEmitterNode:
         assert emitter.particleCount == emitter.pool.live
 
 
+class TestGoingOffWhenTheSceneLoads:
+    """A burst emitter fires once on start, and sometimes must not.
+
+    An explosion put in a scene to be *fired later* would otherwise go off at
+    the emitter's own origin the moment the scene is first drawn — one stray
+    detonation at the middle of the world, every time a level loads.
+    """
+
+    def test_a_burst_emitter_goes_off_on_its_own_by_default(self):
+        """What a firework or a one-shot puff in an authored scene wants."""
+        emitter = particles.ParticleEmitter(rate=0.0, burst=8, maxParticles=64,
+                                            lifetime=10.0)
+        emitter.simulate(0.1)
+        assert emitter.pool.live == 8
+
+    def test_it_can_be_told_to_wait_to_be_asked(self):
+        emitter = particles.ParticleEmitter(rate=0.0, burst=8, maxParticles=64,
+                                            lifetime=10.0, burstOnStart=False)
+        emitter.simulate(0.1)
+        assert emitter.pool.live == 0
+
+    def test_one_that_waits_still_fires_when_it_is_asked(self):
+        emitter = particles.ParticleEmitter(rate=0.0, burst=8, maxParticles=64,
+                                            lifetime=10.0, burstOnStart=False)
+        emitter.simulate(0.1)
+        emitter.fire()
+        emitter.simulate(0.1)
+        assert emitter.pool.live == 8
+
+    def test_one_that_waits_still_bursts_where_it_is_told(self):
+        emitter = particles.ParticleEmitter(rate=0.0, burst=3, maxParticles=64,
+                                            lifetime=10.0, burstOnStart=False,
+                                            worldSpace=True)
+        assert emitter.burst_at((4.0, 0.0, 0.0)) == 3
+
+
+class TestBurstingSomewhereElse:
+    """One emitter, many places: what a shotgun's eight impacts need.
+
+    Each burst is styled by this emitter, so a kind of effect is one node
+    however many of it are on screen; the alternative is a node per impact,
+    and a firefight asks for a dozen a second.
+    """
+
+    def emitter(self, **named):
+        fields = dict(rate=0.0, burst=6, maxParticles=64, lifetime=10.0,
+                      speed=0.0, spread=0.0, worldSpace=True)
+        fields.update(named)
+        return particles.ParticleEmitter(**fields)
+
+    def test_a_burst_appears_where_it_was_asked_for(self):
+        emitter = self.emitter()
+        emitter.burst_at((5.0, 1.0, -2.0))
+        assert np.allclose(emitter.pool.position[0], (5.0, 1.0, -2.0))
+
+    def test_two_bursts_in_one_frame_land_in_two_places(self):
+        """Eight pellets from one point would throw the shot's spread away."""
+        emitter = self.emitter(burst=2)
+        emitter.burst_at((1.0, 0.0, 0.0))
+        emitter.burst_at((9.0, 0.0, 0.0))
+        assert emitter.pool.live == 4
+        assert np.allclose(emitter.pool.position[0], (1.0, 0.0, 0.0))
+        assert np.allclose(emitter.pool.position[2], (9.0, 0.0, 0.0))
+
+    def test_it_throws_particles_the_way_it_is_told(self):
+        """An impact is oriented by the surface normal it happened on."""
+        emitter = self.emitter(speed=3.0, speedVariation=0.0)
+        emitter.burst_at((0.0, 0.0, 0.0), direction=(1.0, 0.0, 0.0))
+        assert emitter.pool.velocity[0][0] == pytest.approx(3.0)
+
+    def test_without_a_direction_it_uses_its_own(self):
+        emitter = self.emitter(speed=2.0, speedVariation=0.0,
+                               direction=(0.0, 0.0, 1.0))
+        emitter.burst_at((0.0, 0.0, 0.0))
+        assert emitter.pool.velocity[0][2] == pytest.approx(2.0)
+
+    def test_the_count_can_be_overridden(self):
+        emitter = self.emitter(burst=6)
+        emitter.burst_at((0.0, 0.0, 0.0), count=2)
+        assert emitter.pool.live == 2
+
+    def test_a_burst_of_nothing_emits_nothing(self):
+        emitter = self.emitter()
+        emitter.burst_at((0.0, 0.0, 0.0), count=0)
+        assert emitter.pool.live == 0
+
+    def test_a_disabled_emitter_bursts_nothing(self):
+        """The intensity setting switches an effect off; it must stay off."""
+        emitter = self.emitter(enabled=False)
+        emitter.burst_at((0.0, 0.0, 0.0))
+        assert emitter.pool.live == 0
+
+    def test_it_does_not_disturb_the_continuous_emission(self):
+        """An impact burst must not eat the fractional rate a flame is keeping."""
+        emitter = self.emitter(rate=10.0, burst=0)
+        emitter.simulate(0.05)                  # half a particle owed
+        assert emitter.pool.live == 0
+        emitter.burst_at((0.0, 0.0, 0.0), count=1)
+        emitter.simulate(0.05)
+        assert emitter.pool.live == 2           # the burst, and the owed one
+
+    def test_a_full_pool_refuses_rather_than_growing(self):
+        emitter = self.emitter(burst=10, maxParticles=12)
+        emitter.burst_at((0.0, 0.0, 0.0))
+        emitter.burst_at((0.0, 0.0, 0.0))
+        assert emitter.pool.live == 12
+
+    def test_a_local_space_emitter_bursts_where_it_is_told_anyway(self):
+        """The point is a point in the frame the particles live in."""
+        emitter = self.emitter(worldSpace=False)
+        emitter.burst_at((5.0, 0.0, 0.0))
+        assert np.allclose(emitter.pool.position[0], (5.0, 0.0, 0.0))
+
+
 class TestWorldSpace:
     """Whether particles follow the emitter once they have left it."""
 
@@ -497,3 +611,61 @@ class TestSizeIsAMultiplier:
         emitter.size = 4.0
         assert emitter.lifeUniforms()['sizeRange'][0] == pytest.approx(4.0)
         assert np.allclose(emitter.pool.size[:4], 1.0)
+
+
+class TestWhereTheParticlesActuallyAre:
+    """The bound has to cover the particles, not the node they came from.
+
+    An emitter driven by ``burst_at`` never moves: the styling stays on one
+    node and the *place* arrives per burst. A bound centred on that node is
+    therefore a bound around the world origin, and the frustum filter culls
+    the whole system whenever the origin is off screen — which in a level is
+    almost always. The effect is then born, never stepped and never drawn.
+    """
+
+    def emitter(self, **named):
+        fields = dict(rate=0.0, burst=4, maxParticles=64, lifetime=10.0,
+                      speed=0.0, spread=0.0, worldSpace=True,
+                      burstOnStart=False)
+        fields.update(named)
+        return particles.ParticleEmitter(**fields)
+
+    def covers(self, volume, point):
+        """Whether an axis-aligned bound contains a point."""
+        centre = np.asarray(volume.center, dtype='d')[:3]
+        half = np.asarray(volume.size, dtype='d')[:3] / 2.0
+        return bool((np.abs(np.asarray(point, dtype='d') - centre)
+                     <= half + 1e-6).all())
+
+    def test_an_empty_emitter_is_bounded_around_itself(self):
+        volume = self.emitter().boundingVolume(None)
+        assert self.covers(volume, (0.0, 0.0, 0.0))
+
+    def test_a_burst_far_away_is_inside_the_bound(self):
+        emitter = self.emitter()
+        emitter.burst_at((120.0, -8.0, -45.0))
+        assert self.covers(emitter.boundingVolume(None), (120.0, -8.0, -45.0))
+
+    def test_bursts_in_two_places_are_both_inside_it(self):
+        emitter = self.emitter()
+        emitter.burst_at((100.0, 0.0, 0.0))
+        emitter.burst_at((-100.0, 0.0, 0.0))
+        volume = emitter.boundingVolume(None)
+        assert self.covers(volume, (100.0, 0.0, 0.0))
+        assert self.covers(volume, (-100.0, 0.0, 0.0))
+
+    def test_the_emitters_own_reach_is_still_covered(self):
+        """A rate emitter must keep being visited even with an empty pool."""
+        emitter = self.emitter(rate=50.0, speed=3.0, lifetime=2.0)
+        assert self.covers(emitter.boundingVolume(None), (0.0, 0.0, 0.0))
+
+    def test_particles_that_have_died_stop_widening_it(self):
+        emitter = self.emitter(lifetime=0.5, lifetimeVariation=0.0)
+        emitter.burst_at((200.0, 0.0, 0.0))
+        wide = emitter.boundingVolume(None)
+        # A frame is clamped to MAX_STEP, so this is several of them.
+        for _frame in range(10):
+            emitter.simulate(0.1)
+        assert emitter.pool.live == 0
+        assert float(np.asarray(emitter.boundingVolume(None).size)[0]) \
+            < float(np.asarray(wide.size)[0])

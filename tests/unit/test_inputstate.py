@@ -215,3 +215,184 @@ class TestModifiedBindingsFollowTheModifier:
         inputs.process(_Key('<control>', 0, (0, 0, 0)))
         assert mode.active(inputs, 'forward')
         assert not mode.active(inputs, 'lookup')
+
+
+class TestAMouseButtonIsAnInputLikeAnyOther:
+    """A held mouse button has to be sampleable, or nothing can bind to one.
+
+    In a first-person game the left mouse button is the trigger; everywhere
+    else it is a click. Both are "an input that is down right now", so a mouse
+    button carries a **name** in the same vocabulary keys use and goes through
+    the same sampler — which is what lets a binding list it, a settings page
+    present it and a movement mode read it, with no second path for the mouse.
+    """
+
+    def button(self, index, state=1):
+        from OpenGLContext.events.mouseevents import MouseButtonEvent
+        event = MouseButtonEvent()
+        event.button = index
+        event.state = state
+        return event
+
+    def test_a_button_has_a_name(self):
+        from OpenGLContext.events import mouseevents
+        assert self.button(0).name == mouseevents.button_name(0)
+
+    def test_the_names_of_two_buttons_differ(self):
+        assert self.button(0).name != self.button(1).name
+
+    def test_a_button_down_is_held_until_it_comes_up(self):
+        state = InputState()
+        state.process(self.button(0, 1))
+        assert state.held(self.button(0).name)
+        state.process(self.button(0, 0))
+        assert not state.held(self.button(0).name)
+
+    def test_a_button_press_is_a_one_shot_like_a_key_press(self):
+        state = InputState()
+        state.process(self.button(1, 1))
+        assert state.pressed(self.button(1).name)
+        assert not state.pressed(self.button(1).name)
+
+    def test_one_button_does_not_hold_another(self):
+        state = InputState()
+        state.process(self.button(0, 1))
+        assert not state.held(self.button(2).name)
+
+    def test_a_button_and_a_key_are_held_together(self):
+        """Firing while walking is the ordinary case, not an edge one."""
+        state = InputState()
+        state.process(_Event('w', 1))
+        state.process(self.button(0, 1))
+        assert state.held('w') and state.held(self.button(0).name)
+
+    def test_the_name_reads_as_what_it_is(self):
+        from OpenGLContext.events import mouseevents
+        assert mouseevents.button_name(0) == '<mouse-0>'
+
+
+class TestTheSamplerIsFedTheMouseToo:
+    """A named button is no use if nothing puts one into the sampler.
+
+    The mix-in that feeds the sampler is where an input becomes *sampled*
+    state, and it fed keyboard events only — so a binding naming a mouse
+    button matched nothing, silently, for ever.
+    """
+
+    def mixin(self):
+        from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+
+        class _Fed(ViewPlatformMixin):
+            def __init__(self):
+                self._state = InputState()
+
+            def getInputState(self):
+                return self._state
+
+        return _Fed()
+
+    def button(self, index, state=1):
+        from OpenGLContext.events.mouseevents import MouseButtonEvent
+        event = MouseButtonEvent()
+        event.button = index
+        event.state = state
+        return event
+
+    def test_a_button_press_reaches_the_sampler(self):
+        from OpenGLContext.events import mouseevents
+        fed = self.mixin()
+        fed._recordInput(self.button(0, 1))
+        assert fed.getInputState().held(mouseevents.button_name(0))
+
+    def test_and_its_release_reaches_it_as_well(self):
+        from OpenGLContext.events import mouseevents
+        fed = self.mixin()
+        fed._recordInput(self.button(0, 1))
+        fed._recordInput(self.button(0, 0))
+        assert not fed.getInputState().held(mouseevents.button_name(0))
+
+    def test_the_ordinary_dispatch_records_it(self):
+        """Through ProcessEvent, which is what actually runs in a frame.
+
+        `_recordInput` handling a button is no use if the dispatch never hands
+        it one, and that seam is invisible from either side alone.
+        """
+        from OpenGLContext.events import mouseevents
+        from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+
+        class _Dispatched(ViewPlatformMixin):
+            def __init__(self):
+                self._state = InputState()
+
+            def getInputState(self):
+                return self._state
+
+            def ProcessEvent(self, event):
+                return ViewPlatformMixin.ProcessEvent(self, event)
+
+        # The mix-in's ProcessEvent chains to its super's; with nothing else in
+        # the way that is object's, so the chain is stubbed rather than run.
+        dispatched = _Dispatched()
+        try:
+            dispatched.ProcessEvent(self.button(0, 1))
+        except AttributeError:
+            pass                        # no next handler in this bare chain
+        assert dispatched.getInputState().held(mouseevents.button_name(0))
+
+    def test_a_wheel_notch_is_never_held(self):
+        """A wheel is not a button anybody can hold down, and must not stick."""
+        from OpenGLContext.events import mouseevents
+        fed = self.mixin()
+        fed._recordInput(self.button(mouseevents.WHEEL_UP, 1))
+        assert not fed.getInputState().held(
+            mouseevents.button_name(mouseevents.WHEEL_UP))
+
+
+class TestAClickOnAScreenIsNotAnInput:
+    """A button the overlay took must not reach the sampler.
+
+    Once a mouse button can be bound to a command — a trigger, say — a click
+    on a menu button would otherwise fire the weapon behind it, and a click
+    that *dismissed* a panel would leave the button held for as long as it was
+    never released into the world.
+    """
+
+    def context(self, sinks):
+        from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+        from OpenGLContext.ui.overlay import OverlayMixin
+
+        class _Guarded(OverlayMixin, ViewPlatformMixin):
+            def __init__(self):
+                self._state = InputState()
+
+            def getInputState(self):
+                return self._state
+
+            def overlaySinks(self, event):
+                return sinks
+
+        return _Guarded()
+
+    def button(self, index=0, state=1):
+        from OpenGLContext.events.mouseevents import MouseButtonEvent
+        event = MouseButtonEvent()
+        event.button = index
+        event.state = state
+        return event
+
+    def held(self, guarded):
+        from OpenGLContext.events import mouseevents
+        return guarded.getInputState().held(mouseevents.button_name(0))
+
+    def test_a_click_the_overlay_took_is_not_recorded(self):
+        guarded = self.context(sinks=True)
+        assert guarded.ProcessEvent(self.button()) is None
+        assert not self.held(guarded)
+
+    def test_a_click_the_overlay_did_not_want_is_recorded(self):
+        guarded = self.context(sinks=False)
+        try:
+            guarded.ProcessEvent(self.button())
+        except AttributeError:
+            pass                        # no next handler in this bare chain
+        assert self.held(guarded)

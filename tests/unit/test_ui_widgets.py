@@ -572,6 +572,24 @@ class TestKeyNames:
         assert key_label('w') == 'w'
         assert key_label('<up>') == '<up>'
 
+    def test_a_mouse_button_is_named_rather_than_numbered(self):
+        """A binding page is read by a player, not by whoever wrote the event.
+
+        Once a command can be bound to a mouse button, its raw spelling turns
+        up on the page beside `w` and `<space>`, and `<mouse-0>` tells nobody
+        which button that is.
+        """
+        from OpenGLContext.events.mouseevents import button_name
+        from OpenGLContext.ui.widgets import key_label
+        assert key_label(button_name(0)) == 'Left mouse'
+        assert key_label(button_name(1)) == 'Right mouse'
+        assert key_label(button_name(2)) == 'Middle mouse'
+
+    def test_a_button_nobody_has_named_still_says_it_is_the_mouse(self):
+        from OpenGLContext.events.mouseevents import button_name
+        from OpenGLContext.ui.widgets import key_label
+        assert key_label(button_name(7)) == 'Mouse 7'
+
     def test_a_key_capture_shows_a_captured_space_by_name(self):
         capture = KeyCapture()
         capture.key(' ', (0, 0, 0))

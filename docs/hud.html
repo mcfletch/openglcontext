@@ -150,6 +150,58 @@ self.addHUDLayer(self.hud)</pre>
     stretches to whatever room the meter is given, so a meter in a stretched
     group stretches with it. A <code>label</code> is drawn to its left and takes
     room from the track; <code>showValue</code> draws the number over it.</p>
+  <p><strong>A meter can react rather than merely update.</strong>
+    <code>meter.flash(now)</code> lights the whole track and fades over
+    <code>flashDuration</code> (0.35&nbsp;s) from <code>flashStrength</code>
+    (0.75). A number that changed silently in a corner nobody is looking at is
+    not feedback, and the flash is what makes the change something a player
+    notices out of the corner of an eye. <em>Whether</em> a change is worth
+    flashing about is the game's rule and not the meter's &mdash; health lost
+    matters and health gained from a pickup may not &mdash; so the game asks:</p>
+  <pre>if value &lt; float(meter.value):    # a drop, not a pickup
+    meter.flash(now)
+meter.value = value</pre>
+  <p>The whole track lights, not the filled part, so a meter that has just been
+    emptied still flashes: the moment health reaches nothing is the one a player
+    most needs to see.</p>
+
+  <h3>DamageIndicator &mdash; which way the hit came from</h3>
+  <p><strong>The direction is the whole point.</strong> How much health was lost
+    is already on the meter and in the number beside it; what a player cannot
+    see, and must act on within about a second, is <em>where the shooter is
+    standing</em>. So a hit is washed onto the screen edge the player would turn
+    towards to face it.</p>
+  <pre>indicator.hurt(bearing=-math.pi / 2, intensity=0.6, now=now)   # from the left</pre>
+  <p>A bearing is radians from straight ahead, positive to the right, so
+    <code>+pi/2</code> is directly to the right and <code>pi</code> is directly
+    behind &mdash; which is the bottom of the screen, because that is where a
+    player looks for what they cannot see. Each of the four edges takes the
+    share of a hit that faces it, so the wash <em>slides</em> from one edge to
+    the next as an opponent circles rather than snapping between them; a flicker
+    at the corner would read as a fault in the game and not as a shooter
+    moving.</p>
+  <table>
+    <tr><th>Field</th><th>Units</th><th>Default</th><th>Meaning</th></tr>
+    <tr><td><code>duration</code></td><td>s</td><td>1.1</td>
+      <td>How long one hit takes to fade to nothing. Long enough to be seen
+        through the flinch of being shot, short enough that it is not still up
+        when the player has already turned.</td></tr>
+    <tr><td><code>thickness</code></td><td>px</td><td>56</td>
+      <td>How far in from the edge the wash reaches at full strength.</td></tr>
+    <tr><td><code>steps</code></td><td></td><td>4</td>
+      <td>How many strips the wash is drawn from. It is a gradient rather than
+        a band because a hard-edged block over the world reads as a rendering
+        fault.</td></tr>
+    <tr><td><code>capacity</code></td><td></td><td>8</td>
+      <td>The most shown at once. A firefight can ask for dozens and the ones
+        underneath contribute nothing a player can see.</td></tr>
+  </table>
+  <p><code>intensity</code> is 0 to 1 and an intensity of nothing draws nothing
+    &mdash; a hit an armour absorbed entirely is not a hit to flash about.
+    Several hits are shown at once and each fades on its own clock, so being
+    caught in a crossfire looks like being caught in a crossfire.
+    <code>clear()</code> drops them all, which is what a respawn wants: a fresh
+    body is not still bleeding from the last one's wounds.</p>
 
   <h3>Readout &mdash; an icon and a number</h3>
   <p><code>label</code>, <code>value</code> and an optional <code>icon</code>
@@ -178,6 +230,16 @@ queue.post('PICKED UP A SHOTGUN')          # the queue's own duration</pre>
     drawing. Passing the time in rather than reading a clock inside each widget
     is what makes all of this testable &mdash; and what lets a game drive its HUD
     from its own simulation clock rather than from the wall.</p>
+  <p><strong>One clock, and it must be the layer's.</strong> The context ticks
+    with <code>time.monotonic()</code>, so a game that marks a hit with
+    <code>time.time()</code> and lets the layer expire it computes every fade
+    from the difference between two clocks &mdash; about fifty years. On screen
+    that is a hit mark and a damage wash that never go away, and an alpha of a
+    hundred million. Give the widgets the same clock the layer gets, and give
+    it from one place:</p>
+  <pre>def now():
+    """The clock every reading on this HUD is taken against."""
+    return time.monotonic()</pre>
   <pre>queue.post('PICKED UP A SHOTGUN', now=100.0)
 layer.tick(101.0);  assert queue.entries(101.0)      # still up
 layer.tick(105.0);  assert not queue.entries(105.0)  # gone</pre>

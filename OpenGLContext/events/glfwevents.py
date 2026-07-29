@@ -6,6 +6,7 @@ from OpenGLContext.events.mouseevents import (
 )
 import glfw
 import math
+import os
 import time
 import logging
 
@@ -14,6 +15,26 @@ log = logging.getLogger(__name__)
 #: How near a whole wheel notch counts as one, for a touchpad reporting
 #: fractions whose sum lands a rounding error short.
 WHEEL_TOLERANCE = 1e-3
+
+#: What one click of a wheel is assumed to report until a report says
+#: otherwise.  **It is not the same everywhere**: GLFW gives a continuous
+#: offset and no count of detents, X11 reports 1.0 for one click, and the
+#: Wayland backend divides the protocol's 15.0 by ten and reports 1.5.
+WHEEL_DETENT = 1.0
+
+#: Below this an offset is a touchpad reporting *part* of a click rather than a
+#: wheel reporting a whole one, and is summed instead.  A fraction that small
+#: is also no evidence about how big a click is on this platform.
+WHEEL_DETENT_MINIMUM = 0.5
+
+#: Set this to have every scroll callback say what it was given and what it
+#: made of it.  **Backends and compositors disagree about how a wheel reaches
+#: an application**, and a compositor that reports one physical detent twice is
+#: indistinguishable from a quick flick of the wheel unless somebody can see
+#: the offsets themselves -- so this is what turns "the wheel skips a step"
+#: into a number.  Off unless asked for: a line per notch would be a line per
+#: notch for ever.
+WHEEL_DEBUG_ENV = 'OPENGLCONTEXT_DEBUG_WHEEL'
 
 
 class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
@@ -126,21 +147,64 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         becomes a press and a release here.  Only the vertical offset is used:
         nothing in the interface scrolls sideways.
         """
-        for button in self._wheelNotches(yoffset):
+        notches = self._wheelNotches(yoffset)
+        if os.environ.get(WHEEL_DEBUG_ENV):
+            log.info('wheel: reported %+.4f, carrying %+.4f, sending %d notch(es)',
+                     float(yoffset), getattr(self, '_wheelRemainder', 0.0),
+                     len(notches))
+        for button in notches:
             self._emitWheel(window, button)
 
     def _wheelNotches(self, offset):
-        """The whole notches in an offset, carrying the remainder to the next.
+        """The notches in one report: a wheel's clicks, or a touchpad's sum.
 
-        A wheel detent arrives as a whole notch, but a touchpad reports a
-        fraction of one at a time -- summed here, so a slow drag scrolls once it
-        has asked for a whole notch and a fast one scrolls no further than it was
-        pushed.  Turning back drops what was carried rather than letting a jitter
-        over the pad accumulate into a notch the way it is not moving.
+        **The two are different devices and are counted differently.**  A wheel
+        reports a whole click at a time, in whatever units this platform
+        measures a click in; a touchpad reports a stream of parts of one, which
+        are summed so that a slow drag scrolls once it has asked for a whole
+        notch and a fast one scrolls no further than it was pushed.  What
+        separates them is :data:`WHEEL_DETENT_MINIMUM`.
+
+        Assuming a click is 1.0 is what made every *other* click of a Wayland
+        wheel scroll twice: 1.5 is one notch with half of one carried, and the
+        next 1.5 makes 2.0 and fires two.  So the size of a click is
+        :meth:`_wheelDetentSize`'s to learn.
         """
         offset = float(offset)
         if not offset:
             return []
+        button = WHEEL_UP if offset > 0.0 else WHEEL_DOWN
+        if abs(offset) >= WHEEL_DETENT_MINIMUM:
+            return [button] * self._wheelClicks(abs(offset))
+        return [button] * self._padNotches(offset)
+
+    def _wheelClicks(self, size: float) -> int:
+        """How many clicks of the wheel one report of ``size`` is.
+
+        The size of a click is **learned from what arrives**, because GLFW
+        offers no count of detents and the platforms disagree.  A report that
+        is not a whole number of the click we assumed is itself the evidence
+        that the assumption was wrong, and is one click of a smaller size.
+
+        A wheel does not inherit a touchpad's carried fraction: they are two
+        devices, and half a drag over a pad must not turn the next click of the
+        wheel into two.
+        """
+        detent = getattr(self, '_wheelDetent', WHEEL_DETENT)
+        clicks = size / detent
+        whole = int(round(clicks))
+        if whole < 1 or abs(clicks - whole) > WHEEL_TOLERANCE:
+            self._wheelDetent = size
+            whole = 1
+        self._wheelRemainder = 0.0
+        return whole
+
+    def _padNotches(self, offset: float) -> int:
+        """The whole notches in a touchpad's fraction, carrying the remainder.
+
+        Turning back drops what was carried rather than letting a jitter over
+        the pad accumulate into a notch the way it is not moving.
+        """
         carried = getattr(self, '_wheelRemainder', 0.0)
         if (carried > 0.0) != (offset > 0.0):
             carried = 0.0
@@ -151,7 +215,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         # the user can see.
         notches = int(total + math.copysign(WHEEL_TOLERANCE, total))
         self._wheelRemainder = total - notches
-        return [WHEEL_UP if offset > 0.0 else WHEEL_DOWN] * abs(notches)
+        return abs(notches)
 
     def _emitWheel(self, window, button):
         """One notch, as the press and release of a button that is never held."""

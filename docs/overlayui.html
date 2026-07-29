@@ -352,16 +352,47 @@ session.revert()         # throw the draft away</pre>
       event says which of the two it is through
       <code>Event.getPickKey</code>, and the wheel's is distinct per notch, so a
       flick that lands three notches in one frame scrolls three.</li>
-    <li><strong>Scrolling arrives in fractions.</strong> A wheel reports whole
-      detents, but a touchpad reports a stream of parts of one. The GLFW
-      backend sums them and emits a notch per whole unit, keeping the remainder
-      for the next report and dropping it when the direction reverses, so a slow
-      drag still scrolls and a jitter over the pad does not scroll backwards.</li>
+    <li><strong>Scrolling arrives in fractions, and a wheel's click is not
+      always 1.0.</strong> A touchpad reports a stream of parts of a notch;
+      those are summed, the remainder kept for the next report and dropped when
+      the direction reverses, so a slow drag still scrolls and a jitter over the
+      pad does not scroll backwards. A <em>wheel</em> reports a whole click at
+      a time &mdash; but in whatever units the platform measures one in: X11
+      says 1.0 and GLFW's Wayland backend says <strong>1.5</strong>, because it
+      divides the protocol's 15.0 by ten. GLFW offers no count of detents, so
+      the size of a click is <em>learned</em>: a report that is not a whole
+      number of the click we assumed is itself the evidence that the assumption
+      was wrong, and is one click of a smaller size. Taking 1.0 for granted made
+      every other click of such a wheel scroll twice &mdash; 1.5 is one notch
+      with half of one carried, and the next 1.5 makes 2.0 and fires two.</li>
   </ul>
+  <p><strong>When a notch appears to count twice, look at what arrived.</strong>
+    Backends and compositors disagree about how a wheel reaches an application
+    &mdash; a Wayland compositor may report one physical detent both as a legacy
+    axis and as a discrete one &mdash; and a detent delivered twice is
+    indistinguishable from a quick flick of the wheel unless the offsets
+    themselves can be seen. Set <code>OPENGLCONTEXT_DEBUG_WHEEL=1</code> and
+    every scroll callback says what it was given, what it is carrying and how
+    many notches it made of it:</p>
+  <pre>OPENGLCONTEXT_DEBUG_WHEEL=1 twitch-viewer some-map.bsp
+INFO wheel: reported +1.0000, carrying +0.0000, sending 1 notch(es)</pre>
+  <p>Two lines for one movement of the finger say the wheel is being reported
+    twice; one line saying <code>2 notch(es)</code> says the offset itself
+    arrived doubled. They want different answers, which is why the diagnostic
+    prints both halves.</p>
 </section>
 
 <section id="bindings">
   <h2>Key bindings</h2>
+  <p><strong>A mouse button is an input with a name, like a key.</strong> Held
+    buttons go through the same sampler held keys do, under a name in the same
+    vocabulary (<code>&lt;mouse-0&gt;</code>, from
+    <code>mouseevents.button_name</code>), so a binding can list one, a
+    movement mode can read one and this page can show one &mdash; as
+    &ldquo;Left mouse&rdquo;, because the raw spelling tells a player nothing.
+    That is what lets a first-person game put its trigger where every player
+    expects it. A click the overlay takes never reaches the sampler, so
+    clicking a button on a screen does not also fire what is behind it.</p>
   <p>The binding page lists every command of every declared movement mode.
     Clicking a row opens a capturing dialog; capture a key already bound in the
     <em>same</em> mode and a confirmation is raised over that dialog asking

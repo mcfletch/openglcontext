@@ -74,6 +74,49 @@ MyContext.ContextMainLoop(definition=definition)</pre>
     cycle &mdash; switching into swimming while standing on dry land is not a
     thing a player wants &mdash; and it takes precedence while its condition
     holds, handing the mode back afterwards.</p>
+
+  <h3>A mode also sets the state its movement assumes</h3>
+  <p>Whether the avatar falls, floats or swims is a property of the
+    <em>body</em> and not of the velocity it is given, so a mode that only set
+    a velocity would fly into the floor. <code>applyTo(platform)</code> is
+    where a mode puts the body into the state it needs, and it is called when
+    the mode takes over:</p>
+  <table>
+    <tr><th>Mode</th><th>Puts the body into</th></tr>
+    <tr><td><code>WalkMode</code>, <code>FPSMode</code></td>
+        <td>on its feet &mdash; gravity, ground contact, jumping</td></tr>
+    <tr><td><code>FlyMode</code></td>
+        <td>noclip: no gravity and no collision at all</td></tr>
+    <tr><td><code>SwimMode</code></td>
+        <td>swimming: <em>collides</em>, and is pulled by whatever fraction of
+            gravity its <code>buoyancy</code> leaves</td></tr>
+  </table>
+
+  <h3>Swimming steers with the pointer, and moves where you look</h3>
+  <p><strong>Entering water must not change how a player points
+    themselves.</strong> A scheme that fell back to the turn keys the moment
+    someone's feet left the floor would take their aim away in the one place
+    they most need it, so <code>SwimMode</code> captures the pointer and uses
+    the same mouse-look every other mode does &mdash;
+    <code>MovementMode._mouseLook</code>, shared, so a player's sensitivity and
+    their inverted-look setting mean the same thing walking and swimming.</p>
+  <p>And <em>forward</em> means where you are looking, up and down included,
+    through <code>PhysicsViewPlatform.set_swim_move</code>. Walking flattens
+    the move to the ground plane and rightly so &mdash; leaning forward should
+    not push you into the floor &mdash; but under water that flattening leaves
+    the surface and the bottom reachable only by the dedicated keys, which is
+    walking with the gravity turned off rather than swimming. Strafing stays
+    level whatever the gaze, because sidling should not sink you, and the
+    up/down keys remain for holding depth while looking somewhere else.</p>
+  <p><strong>Swimming is not flying</strong>, and conflating them is the easy
+    mistake: a swim implemented as noclip lets a player leave a pool through
+    its wall. <code>SwimMode.buoyancy</code> is the fraction of gravity that
+    pushes back up &mdash; 1.0 hangs where it is, 0.0 sinks like a stone, above
+    1.0 rises &mdash; and it reaches the physics through
+    <code>set_swim(True, buoyancy=...)</code>.</p>
+  <p>Every platform is asked and none is required to answer: most are a plain
+    camera with no body under them at all, and a mode has to work against one
+    of those unchanged.</p>
 </section>
 
 <section id="input">

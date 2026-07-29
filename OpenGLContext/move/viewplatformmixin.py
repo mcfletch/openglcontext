@@ -2,6 +2,7 @@
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 from OpenGLContext import context
+from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.move import viewplatform
 class ViewPlatformMixin(object):
     """Mix-in for Context classes providing ViewPlatform support
@@ -234,6 +235,14 @@ class ViewPlatformMixin(object):
         kind = getattr( event, 'type', None )
         if kind in ( 'keyboard', 'keypress' ):
             self.getInputState().process( event )
+        elif kind == 'mousebutton':
+            # A held mouse button is an input like a held key -- in a
+            # first-person game the left button is the trigger -- so it goes
+            # through the same sampler under the same kind of name.  The wheel
+            # is left out: its "buttons" are a spelling for a notch that is
+            # never held, and one recorded here would stay down for ever.
+            if getattr( event, 'button', -1 ) not in ( WHEEL_UP, WHEEL_DOWN ):
+                self.getInputState().process( event )
         elif kind == 'mousemove' and not self._directPointerMotion:
             point = event.getPickPoint()
             if point:

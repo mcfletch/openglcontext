@@ -296,9 +296,11 @@ uniform mat4 eyeToWorld;
 
 uniform float exposure;           // camera exposure multiplier (default 1.0)
 
-// Aerial perspective: blend distant fragments toward the atmospheric in-scatter
-// colour. fogDensity 0 (default) disables it, so non-terrain scenes are unaffected.
-uniform float fogDensity;         // exp fog density per eye-space unit (0 = off)
+// Fog: aerial perspective over terrain, or a VRML97 Fog node the camera is
+// standing inside.  fogMode 0 (default) disables it, so a scene with no fog in
+// it is unaffected.  See OpenGLContext/scenegraph/fog.py for the modes.
+uniform int fogMode;              // 0 off, 1 density, 2 VRML97 LINEAR, 3 EXPONENTIAL
+uniform float fogDensity;         // mode 1: per eye-space unit.  2/3: 1/visibilityRange
 uniform vec3 fogColor;            // linear-space horizon/atmosphere colour
 
 uniform uint objectId;
@@ -868,10 +870,27 @@ void main() {
     // job a real camera's aperture/ISO does. See gltf_view exposure handling.
     color *= exposure;
 
-    // Aerial perspective in linear HDR (before tone map): distant terrain fades into
-    // the atmospheric colour, adding depth and dissolving the far edge of a patch.
-    if (fogDensity > 0.0) {
-        float fog = 1.0 - exp(-fogDensity * length(vPosition));
+    // Fog in linear HDR (before tone map): distant geometry fades into the fog
+    // colour, which dissolves the far edge of a terrain patch and is what being
+    // under water looks like from inside it.
+    if (fogMode > 0 && fogDensity > 0.0) {
+        // How far through the fog this fragment lies: eye distance over the
+        // visible range for the VRML97 curves, or distance times density for
+        // the aerial-perspective one.  One number, read three ways.
+        float reach = fogDensity * length(vPosition);
+        float fog;
+        if (fogMode == 1) {
+            fog = 1.0 - exp(-reach);                    // aerial perspective
+        } else if (fogMode == 2) {
+            fog = reach;                                // VRML97 LINEAR
+        } else {
+            // VRML97 EXPONENTIAL: hangs back, then closes in, and reaches
+            // total obscurity exactly at the visible range rather than only
+            // tending toward it.  Past the range the divisor would go
+            // negative, so it is clamped to fully fogged.
+            float clear = 1.0 - reach;
+            fog = clear > 0.0 ? 1.0 - exp(-reach / clear) : 1.0;
+        }
         color = mix(color, fogColor, clamp(fog, 0.0, 1.0));
     }
 

@@ -704,6 +704,16 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             return current
         return None
 
+    def currentFog( self ):
+        """The bound Fog node's path, or None.
+
+        Bindable like the background: the first node that says it is bound
+        wins, and with none bound the first found is bound and used, so a scene
+        that simply contains a fog gets it without anyone sending `set_bind`.
+        """
+        from OpenGLContext.scenegraph.fog import bound_fog
+        return bound_fog( self.paths.get( nodetypes.Fog, () ) )
+
     # Persistent object-id <-> path map for MRT picking. Stable per-path ids
     # (stashed on the NodePath) mean the {id: path} map is only mutated when the
     # scene structure changes, not rebuilt every warm frame -- the O(N) build

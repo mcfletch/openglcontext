@@ -160,6 +160,55 @@ class MovementMode(node.Node):
         """
         return False
 
+    def applyTo(self, platform: Any) -> None:
+        """Put the body into the state this mode's movement assumes.
+
+        Called when a mode takes over, and separate from :meth:`update`
+        because it is a change of *state* rather than of velocity: whether the
+        avatar falls, floats or swims is a property of the body, so a mode that
+        only set a velocity would fly into the floor or swim through a wall.
+
+        Every platform is asked and none is required to answer.  Most are a
+        plain camera with no body under them at all, and a mode must work
+        against one of those unchanged.
+        """
+        self._set(platform, 'set_fly', False)
+        self._set(platform, 'set_swim', False)
+
+    @staticmethod
+    def _set(platform: Any, name: str, *args: Any, **named: Any) -> None:
+        """Call one of the platform's body methods if it has one."""
+        method = getattr(platform, name, None)
+        if method is not None:
+            method(*args, **named)
+
+    #: Radians of turn per pixel of pointer motion, for the modes that steer
+    #: with it.  Declared on the base because two modes want it and a player
+    #: setting their sensitivity means it everywhere, not per mode.
+    sensitivity = field.newField('sensitivity', 'SFFloat', 1, 0.003)
+    #: Whether pushing the pointer forward looks down (flight-sim style).
+    invertLook = field.newField('invertLook', 'SFBool', 1, False)
+
+    def _mouseLook(self, inputs: Any, platform: Any) -> None:
+        """Steer the gaze from this frame's pointer motion.
+
+        Shared by every mode that takes the pointer, so a player's
+        sensitivity and their inverted-look setting mean the same thing
+        walking and swimming.  Duplicating it is how the two drift apart.
+        """
+        dx, dy = inputs.mouse_delta()
+        if dx:
+            # Positive turn swings right, and a rightward mouse gives a
+            # positive dx, so this one passes straight through.
+            platform.turn(dx * self.sensitivity)
+        if dy:
+            # The delta arrives in the pick point's origin -- y counting
+            # *upward* -- so pushing the mouse forward gives a positive dy,
+            # and positive look() tips the gaze *down*.  An un-inverted mouse
+            # therefore subtracts: forward looks up.
+            platform.look(-dy * self.sensitivity
+                          * (-1.0 if self.invertLook else 1.0))
+
     def update(self, dt: float, inputs: Any, platform: Any) -> None:
         """Advance one frame from sampled input.  Overridden by each mode."""
 
@@ -305,6 +354,10 @@ class FlyMode(_GroundMode):
             KeyBinding(command='down', label=_('Sink'), keys=['c']),
         ]
 
+    def applyTo(self, platform: Any) -> None:
+        self._set(platform, 'set_fly', True)
+        self._set(platform, 'set_swim', False)
+
     def update(self, dt: float, inputs: Any, platform: Any) -> None:
         forward, strafe = self._movement(inputs)
         self._turn(dt, inputs, platform, self.turnRate)
@@ -322,6 +375,8 @@ class SwimMode(_GroundMode):
 
     PROTO = 'SwimMode'
     swimSpeed = field.newField('swimSpeed', 'SFFloat', 1, 2.0)
+    #: Steered with the pointer, like the mode a player was in a moment ago.
+    capturePointer = field.newField('capturePointer', 'SFBool', 1, True)
     buoyancy = field.newField('buoyancy', 'SFFloat', 1, 0.9)
 
     UI_HINTS = {
@@ -342,12 +397,39 @@ class SwimMode(_GroundMode):
         """Submerged, so the world has put the avatar in this mode."""
         return bool(self.enabled and getattr(platform, 'submerged', False))
 
+    def applyTo(self, platform: Any) -> None:
+        """Into the water, and **not** into the air.
+
+        Flying is noclip and free of gravity; swimming collides with the pool
+        it is in and is pulled by whatever fraction of gravity
+        :attr:`buoyancy` leaves.  A swim implemented as a fly is a player who
+        can leave a pool through its wall.
+        """
+        self._set(platform, 'set_fly', False)
+        self._set(platform, 'set_swim', True, buoyancy=self.buoyancy)
+
     def update(self, dt: float, inputs: Any, platform: Any) -> None:
+        """Swim, steering with the pointer and moving along the gaze.
+
+        **Two things make this different from walking with the gravity off.**
+        The pointer still steers, because a control scheme that changed the
+        moment your feet left the floor would leave a player unable to aim in
+        the one place they most need to; and *forward* means where you are
+        looking, up and down included, because that is what swimming is. The
+        dedicated up and down keys stay, for holding depth while looking
+        somewhere else.
+        """
         forward, strafe = self._movement(inputs)
         self._turn(dt, inputs, platform, self.turnRate)
         self._look(dt, inputs, platform)
-        platform.set_fly_move(forward=forward, strafe=strafe,
-                              up=self._axis(inputs, 'up', 'down'))
+        self._mouseLook(inputs, platform)
+        up = self._axis(inputs, 'up', 'down')
+        swim = getattr(platform, 'set_swim_move', None)
+        if swim is None:
+            # A plain camera has no swim move; it still has to go somewhere.
+            platform.set_fly_move(forward=forward, strafe=strafe, up=up)
+            return
+        swim(forward=forward, strafe=strafe, up=up)
 
 
 class FPSMode(WalkMode):
@@ -357,10 +439,7 @@ class FPSMode(WalkMode):
     """
 
     PROTO = 'FPSMode'
-    sensitivity = field.newField('sensitivity', 'SFFloat', 1, 0.003)
     capturePointer = field.newField('capturePointer', 'SFBool', 1, True)
-    #: Whether pushing the mouse forward looks down (flight-sim style).
-    invertLook = field.newField('invertLook', 'SFBool', 1, False)
 
     UI_HINTS = {
         'sensitivity': {'label': 'Mouse sensitivity', 'minimum': 0.0005,
@@ -370,14 +449,4 @@ class FPSMode(WalkMode):
 
     def update(self, dt: float, inputs: Any, platform: Any) -> None:
         super(FPSMode, self).update(dt, inputs, platform)
-        dx, dy = inputs.mouse_delta()
-        if dx:
-            # Positive turn swings right, and a rightward mouse gives a
-            # positive dx, so this one passes straight through.
-            platform.turn(dx * self.sensitivity)
-        if dy:
-            # The delta arrives in the pick point's origin -- y counting
-            # *upward* -- so pushing the mouse forward gives a positive dy,
-            # and positive look() tips the gaze *down*.  An un-inverted mouse
-            # therefore subtracts: forward looks up.
-            platform.look(-dy * self.sensitivity * (-1.0 if self.invertLook else 1.0))
+        self._mouseLook(inputs, platform)

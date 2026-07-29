@@ -426,6 +426,62 @@ platform, never per material. Material factors are packed into a std140 uniform
 buffer, built once per material and reused across frames.</p>
 </section>
 
+<section id="fog">
+<h2>Fog: the medium the camera is standing in</h2>
+<p>Put a <code>Fog</code> node in the scene and the view fades into its colour
+with distance. That is the whole of the interface &mdash; the pass finds the
+bound node while it is gathering the frame, exactly as it finds the
+background:</p>
+<pre>from OpenGLContext.scenegraph.basenodes import Fog
+
+Fog(color=(0.06, 0.20, 0.32),     # linear RGB
+    visibilityRange=18.0,          # metres to total obscurity; 0 is off
+    fogType='EXPONENTIAL')         # or 'LINEAR', the default</pre>
+<p>It is VRML97's own node
+(<a href="https://www.web3d.org/documents/specifications/14772/V2.0/part1/nodesRef.html#Fog">ISO/IEC
+14772-1 6.19</a>), declared for twenty-odd years and unrendered until now.
+Being a node rather than a number on the context is the point: fog is a
+property of a <em>place</em>, so it binds and stacks like a viewpoint, and
+being under water, inside a smoke-filled room and out in clear air are three
+fogs in one scene with one in force.</p>
+
+<h3>Why there are two curves</h3>
+<p>They reach total obscurity at the same range and fade differently on the way,
+so choosing between them is choosing the shape and not the extent:</p>
+<table>
+  <tr><th><code>fogType</code></th><th>Fades</th><th>Suits</th></tr>
+  <tr><td><code>LINEAR</code></td>
+      <td>in proportion to distance, from the very first metre</td>
+      <td>haze, aerial perspective, dissolving the far edge of a terrain
+          patch</td></tr>
+  <tr><td><code>EXPONENTIAL</code></td>
+      <td>hangs back, then closes in</td>
+      <td>a <em>medium</em> &mdash; water, smoke &mdash; where what is right in
+          front of you is clear and the far wall is not</td></tr>
+</table>
+<p>That difference matters more than it sounds. A linear fade tints the weapon
+in the player's hands as much as it tints the wall behind it, which reads as a
+coloured pane of glass laid over the screen rather than as being <em>inside</em>
+something. This is also why an underwater view should be a fog and not a
+full-screen overlay: an overlay has no depth in it at all.</p>
+
+<h3>Where it lands in the pipeline</h3>
+<p>The blend happens <strong>in linear HDR, before tone mapping</strong>, which
+is what keeps a fogged scene from posterising in the highlights. One uniform
+carries the scale for every mode: the reciprocal of the visible range, which
+the shader multiplies by the fragment's distance. A scene with no
+<code>Fog</code> in it &mdash; nearly every scene &mdash; is left
+pixel-identical, because the mode uniform stays at zero.</p>
+<p>A transform above a <code>Fog</code> scales its <code>visibilityRange</code>,
+since the specification puts the range in the node's local coordinates; a model
+authored with its own fog therefore carries it when placed at a different
+size.</p>
+<p class="technical"><code>OpenGLContext/scenegraph/fog.py</code> holds the node
+and the mode codes; the pass reads it in
+<code>flateffects._FlatEffectsMixin.applyFog</code> and it reaches the shader
+through <code>PBRShaderProgram.set_fog(density, color, mode)</code>.</p>
+</section>
+
 <section id="animated-surfaces">
 <h2>Surfaces that move</h2>
 <p>Three things can move a PBR surface at run time, and they cost very different

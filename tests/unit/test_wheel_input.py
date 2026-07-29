@@ -390,3 +390,98 @@ class TestTheWheelScrollsThePanelUnderIt:
         context.pushOverlay(Panel(fill=True, children=[button]))
         context.glfwOnScroll(object(), 0.0, -1.0)
         assert pressed == []
+
+
+class TestSayingWhatTheWheelReported:
+    """A notch that arrives twice cannot be diagnosed without seeing it.
+
+    Backends disagree about how a wheel reaches an application, and a
+    compositor that reports one physical detent twice is indistinguishable
+    from a fast flick *unless* somebody can see the offsets themselves. So the
+    translation can be asked to say what it was given, which is what turns "the
+    wheel skips a weapon" into a number.
+    """
+
+    def recorder(self, monkeypatch):
+        mock_glfw(monkeypatch)
+        return GLFWRecorder()
+
+    def test_it_is_silent_unless_it_is_asked(self, monkeypatch, caplog):
+        monkeypatch.delenv(glfwevents.WHEEL_DEBUG_ENV, raising=False)
+        made = self.recorder(monkeypatch)
+        with caplog.at_level('INFO', logger=glfwevents.log.name):
+            made.glfwOnScroll(object(), 0.0, 1.0)
+        assert not [r for r in caplog.records if 'wheel' in r.getMessage()]
+
+    def test_asked_it_reports_the_offset_and_the_notches(self, monkeypatch,
+                                                          caplog):
+        monkeypatch.setenv(glfwevents.WHEEL_DEBUG_ENV, '1')
+        made = self.recorder(monkeypatch)
+        with caplog.at_level('INFO', logger=glfwevents.log.name):
+            made.glfwOnScroll(object(), 0.0, 1.0)
+        said = ' '.join(r.getMessage() for r in caplog.records)
+        assert 'wheel' in said and '1.0' in said
+
+    def test_it_reports_a_notch_that_produced_nothing_too(self, monkeypatch,
+                                                           caplog):
+        """A fraction of a detent is the other half of the story."""
+        monkeypatch.setenv(glfwevents.WHEEL_DEBUG_ENV, '1')
+        made = self.recorder(monkeypatch)
+        with caplog.at_level('INFO', logger=glfwevents.log.name):
+            made.glfwOnScroll(object(), 0.0, 0.25)
+        assert [r for r in caplog.records if 'wheel' in r.getMessage()]
+
+
+class TestADetentIsNotAlwaysOne:
+    """How much a wheel reports for one physical click is the platform's business.
+
+    GLFW reports scrolling as a continuous offset and gives no count of
+    detents, and what one detent comes to differs: X11 reports 1.0, while
+    GLFW's Wayland backend divides the protocol's 15.0 by ten and reports
+    **1.5**. Code that took 1.0 for a detent turned every other click of such
+    a wheel into two notches -- 1.5 is one notch and half a one carried, then
+    1.5 more makes 2.0 and fires twice -- which is a menu that skips every
+    other entry and a weapon wheel that jumps two.
+    """
+
+    def test_a_detent_of_one_and_a_half_is_one_notch(self, recorder):
+        recorder.glfwOnScroll(object(), 0.0, 1.5)
+        assert recorder.buttons() == [(WHEEL_UP, 1), (WHEEL_UP, 0)]
+
+    def test_and_the_next_one_is_one_notch_too(self, recorder):
+        """The bug in one line: the second click used to send two."""
+        for _ in range(4):
+            recorder.glfwOnScroll(object(), 0.0, 1.5)
+        assert recorder.buttons().count((WHEEL_UP, 1)) == 4
+
+    def test_two_detents_in_one_report_are_two_notches(self, recorder):
+        recorder.glfwOnScroll(object(), 0.0, 1.5)
+        recorder.buttons().clear()
+        recorder.picked.clear()
+        recorder.glfwOnScroll(object(), 0.0, 3.0)
+        assert recorder.buttons().count((WHEEL_UP, 1)) == 2
+
+    def test_a_platform_whose_detent_is_one_is_unchanged(self, recorder):
+        for _ in range(3):
+            recorder.glfwOnScroll(object(), 0.0, 1.0)
+        assert recorder.buttons().count((WHEEL_UP, 1)) == 3
+
+    def test_a_burst_of_three_on_such_a_platform_is_still_three(self, recorder):
+        recorder.glfwOnScroll(object(), 0.0, 3.0)
+        assert recorder.buttons().count((WHEEL_UP, 1)) == 3
+
+    def test_the_size_is_learned_in_either_direction(self, recorder):
+        recorder.glfwOnScroll(object(), 0.0, -1.5)
+        assert recorder.buttons() == [(WHEEL_DOWN, 1), (WHEEL_DOWN, 0)]
+
+    def test_a_touchpad_is_still_summed(self, recorder):
+        """A fraction of a detent is not evidence about the detent's size."""
+        for _ in range(4):
+            recorder.glfwOnScroll(object(), 0.0, 0.3)
+        assert recorder.buttons() == [(WHEEL_UP, 1), (WHEEL_UP, 0)]
+
+    def test_a_wheel_does_not_inherit_a_touchpad_remainder(self, recorder):
+        """Half a drag over a pad must not turn the next click into two."""
+        recorder.glfwOnScroll(object(), 0.0, 0.3)
+        recorder.glfwOnScroll(object(), 0.0, 1.5)
+        assert recorder.buttons().count((WHEEL_UP, 1)) == 1

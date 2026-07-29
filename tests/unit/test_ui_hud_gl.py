@@ -15,7 +15,7 @@ glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.ui.debugoverlay import DebugOverlay              # noqa: E402
 from OpenGLContext.ui.hudwidgets import (                           # noqa: E402
-    BarMeter, Crosshair, HUDLayer, MessageQueue,
+    BarMeter, Crosshair, DamageIndicator, HUDLayer, MessageQueue,
 )
 from OpenGLContext.ui.panel import Panel                            # noqa: E402
 
@@ -139,3 +139,50 @@ def test_a_panel_is_drawn_over_the_hud(renderer):
     with_panel = draw(renderer, layer, panel)
     middle = (HEIGHT // 2, WIDTH // 2)
     assert not np.array_equal(hud_only[middle], with_panel[middle])
+
+
+def test_a_damage_indicator_washes_the_edge_it_came_from(renderer):
+    """The whole of what it is for: a player looks where the screen is lit."""
+    import math
+
+    indicator = DamageIndicator(duration=1.0, thickness=40)
+    layer = HUDLayer(margin=0, children=[indicator])
+    indicator.hurt(bearing=-math.pi / 2, intensity=1.0, now=0.0)
+    indicator.tick(0.0)
+    pixels = draw(renderer, layer)
+    left = pixels[HEIGHT // 2, 2:10].max()
+    right = pixels[HEIGHT // 2, WIDTH - 10:WIDTH - 2].max()
+    assert left > 20, "nothing was drawn at the edge the hit came from"
+    assert left > right
+
+
+def test_a_damage_indicator_at_rest_draws_nothing(renderer):
+    layer = HUDLayer(margin=0, children=[DamageIndicator()])
+    assert draw(renderer, layer).max() == 0
+
+
+def test_a_damage_indicator_fades_out_of_the_frame(renderer):
+    import math
+
+    indicator = DamageIndicator(duration=0.5, thickness=40)
+    layer = HUDLayer(margin=0, children=[indicator])
+    indicator.hurt(bearing=math.pi, intensity=1.0, now=0.0)
+    indicator.tick(0.1)
+    lit = draw(renderer, layer).sum()
+    indicator.tick(0.4)
+    assert 0 < draw(renderer, layer).sum() < lit
+    indicator.tick(0.9)
+    assert draw(renderer, layer).max() == 0
+
+
+def test_a_meter_flash_brightens_it(renderer):
+    """A number that changed silently in the corner is not feedback."""
+    meter = BarMeter(value=40, maximum=100, barWidth=200, barHeight=40,
+                     showValue=False, anchor='bottom-left',
+                     flashDuration=0.4)
+    layer = HUDLayer(margin=0, children=[meter])
+    meter.tick(0.0)
+    calm = draw(renderer, layer).sum()
+    meter.flash(now=1.0)
+    meter.tick(1.0)
+    assert draw(renderer, layer).sum() > calm

@@ -33,6 +33,10 @@ What the widgets are for:
 * :class:`Readout` -- an icon and a number: ammunition, a count, a timer.
 * :class:`MessageQueue` -- pickups, frags and warnings, newest first, each
   fading out on its own clock.
+* :class:`DamageIndicator` -- **which way** a hit came from, washed onto the
+  screen edge the player would have to turn towards.  How much was lost is
+  already on the meter; where it came from is the part a player cannot see and
+  can act on.
 
 Everything here is arithmetic over a viewport and a font, so a HUD's layout is
 testable with no window at all: hand a layer a viewport and read the
@@ -41,8 +45,9 @@ rectangles back.
 
 from __future__ import annotations
 
+import math
 import time
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from vrml import field, node
 
@@ -53,8 +58,9 @@ from OpenGLContext.ui.widgets import RootWidget, Widget
 
 __all__ = [
     'HUDLayer', 'HUDWidget', 'HUDGroup', 'Crosshair', 'BarMeter', 'Readout',
-    'Message', 'MessageQueue', 'place', 'hud_text',
-    'CROSS', 'DOT', 'CROSS_DOT', 'CIRCLE', 'NONE', 'ANCHORS',
+    'Message', 'MessageQueue', 'DamageIndicator', 'DamageMark',
+    'place', 'hud_text',
+    'CROSS', 'DOT', 'CROSS_DOT', 'CIRCLE', 'NONE', 'ANCHORS', 'EDGES',
 ]
 
 #: Reticule shapes.  ``cross`` is four arms around a gap, ``dot`` a single
@@ -215,8 +221,12 @@ class HUDLayer(RootWidget):
                 child.arrange(content, metrics)
                 continue
             offset = child.anchorOffset(metrics)
-            child.arrange(place(content, child.natural_size(metrics),
-                                str(anchor), offset), metrics)
+            # The layer's own width is passed on, so a child that *can* fit
+            # itself into less room is told how much there is: a bar of five
+            # weapons wants its titles on a desktop and its number keys alone
+            # in a small window, and neither is a property of the weapons.
+            wanted = child.natural_size(metrics, content.width)
+            child.arrange(place(content, wanted, str(anchor), offset), metrics)
 
     # -- the clock --------------------------------------------------------
     def tick(self, now: Optional[float] = None) -> None:
@@ -408,6 +418,18 @@ class BarMeter(HUDWidget):
     #: Fractions of the maximum below which the meter reads low, then critical.
     warnFraction = field.newField('warnFraction', 'SFFloat', 1, 0.5)
     criticalFraction = field.newField('criticalFraction', 'SFFloat', 1, 0.25)
+    #: Seconds a :meth:`flash` lasts, and how strong it is at its brightest.
+    #: A meter whose number changes silently in the corner is not feedback:
+    #: nobody is looking at it, and the flash is what makes the change
+    #: something a player notices out of the corner of an eye.
+    flashDuration = field.newField('flashDuration', 'SFFloat', 1, 0.35)
+    flashStrength = field.newField('flashStrength', 'SFFloat', 1, 0.75)
+
+    #: When the last flash was asked for, on the clock :meth:`tick` is fed,
+    #: or None.  Not a field: it is transient and worth neither saving nor
+    #: sending.
+    _flash_at: Optional[float] = None
+    _now: float = 0.0
 
     @property
     def fraction(self) -> float:
@@ -458,6 +480,44 @@ class BarMeter(HUDWidget):
         return Rect(track.x, track.y, int(track.width * self.fraction),
                     track.height)
 
+    # -- reacting ---------------------------------------------------------
+    def flash(self, now: Optional[float] = None) -> None:
+        """Light the whole track briefly: this number just moved.
+
+        Asked for by whoever wrote the value, because *what* is worth
+        flashing about is the game's rule and not the meter's: health lost
+        matters and health gained from a pickup may not.
+        """
+        self._flash_at = self._now = (time.monotonic() if now is None else now)
+
+    def tick(self, now: float) -> None:
+        self._now = now
+
+    def flashAlpha(self) -> float:
+        """How strong the flash is right now, from its strength down to nothing."""
+        if self._flash_at is None:
+            return 0.0
+        duration = float(self.flashDuration)
+        if duration <= 0.0:
+            return 0.0
+        left = 1.0 - (self._now - self._flash_at) / duration
+        return float(self.flashStrength) * left if left > 0.0 else 0.0
+
+    def flashColour(self) -> Tuple[float, float, float, float]:
+        """White at the flash's current strength."""
+        return (1.0, 1.0, 1.0, self.flashAlpha())
+
+    def flashRect(self, metrics: FontMetrics) -> Optional[Rect]:
+        """The track while a flash is up, or None.
+
+        The whole track rather than the filled part, so a meter that has just
+        been emptied still flashes: the moment health reaches nothing is the
+        one a player most needs to see.
+        """
+        if self.flashAlpha() <= 0.0:
+            return None
+        return self.barRect(metrics)
+
     # -- drawing ----------------------------------------------------------
     def paint(self, renderer: Any) -> None:
         metrics = renderer.metrics
@@ -469,6 +529,9 @@ class BarMeter(HUDWidget):
         track = self.barRect(metrics)
         renderer.rect(track, skin.hudTrack)
         renderer.rect(self.fillRect(metrics), self.stateColour(skin))
+        lit = self.flashRect(metrics)
+        if lit is not None:
+            renderer.rect(lit, self.flashColour())
         if self.showValue:
             hud_text(renderer, track, '%d' % (int(self.value),), skin.hudText,
                      align='center')
@@ -651,3 +714,222 @@ class MessageQueue(HUDWidget):
                      Rect(self.rect.x, top - index * metrics.line_height,
                           self.rect.width, metrics.char_height),
                      text, colour, align=str(self.align))
+
+
+#: The screen edges a :class:`DamageIndicator` washes, and the bearing each
+#: one stands for: straight ahead, to the right, behind, to the left.  Behind
+#: is the bottom of the screen because that is where a player looks for what
+#: they cannot see, and it is the reading every game in the genre has taught.
+EDGES: Tuple[Tuple[str, float], ...] = (
+    ('top', 0.0),
+    ('right', math.pi / 2.0),
+    ('bottom', math.pi),
+    ('left', -math.pi / 2.0),
+)
+
+
+class DamageMark(object):
+    """One hit being shown by a :class:`DamageIndicator`."""
+
+    __slots__ = ('bearing', 'intensity', 'at')
+
+    def __init__(self, bearing: float, intensity: float, at: float) -> None:
+        #: Radians from straight ahead, positive to the right, so ``pi`` is
+        #: directly behind and ``-pi/2`` is directly to the left.
+        self.bearing = float(bearing)
+        #: How hard it was, 0 to 1.  What the wash's strength is scaled by.
+        self.intensity = float(intensity)
+        #: When it landed, on the clock :meth:`DamageIndicator.tick` is fed.
+        self.at = float(at)
+
+    def strength(self, now: float, duration: float) -> float:
+        """How much of this mark is left, from its intensity down to nothing."""
+        if duration <= 0.0:
+            return 0.0
+        left = 1.0 - (now - self.at) / duration
+        return self.intensity * left if left > 0.0 else 0.0
+
+    def spent(self, now: float, duration: float) -> bool:
+        return self.strength(now, duration) <= 0.0
+
+
+class DamageIndicator(HUDWidget):
+    """Which way a hit came from, washed onto the edge it came from.
+
+    **The direction is the whole point.**  How much health was lost is already
+    on the meter and in the number beside it; what a player cannot see, and
+    what they must act on within about a second, is *where the shooter is
+    standing*.  So a hit is drawn at the screen edge the player would turn
+    towards to face it.
+
+    A bearing is radians from straight ahead, positive to the right, so
+    ``+pi/2`` is directly to the right and ``pi`` is directly behind.  Each of
+    the four edges takes the share of a hit that faces it, which makes the
+    wash slide from one edge to the next as an opponent circles rather than
+    snapping between them -- a flicker at the corner would read as a fault in
+    the game, not as a shooter moving.
+
+    Several hits are shown at once and each fades on its own clock, so being
+    caught in a crossfire looks like being caught in a crossfire.
+    """
+
+    PROTO = 'DamageIndicator'
+    #: It is drawn over the whole viewport rather than in a corner.
+    anchor = field.newField('anchor', 'SFString', 1, 'center')
+    #: Seconds one hit takes to fade to nothing.  Long enough to be seen
+    #: through the flinch of being shot, short enough that it is not still up
+    #: when the player has already turned.
+    duration = field.newField('duration', 'SFFloat', 1, 1.1)
+    #: How far in from the edge the wash reaches at full strength, in pixels
+    #: at the reference font size.
+    thickness = field.newField('thickness', 'SFFloat', 1, 48.0)
+    #: How solid the wash is at its strongest, 0 to 1.  Well below opaque on
+    #: purpose: **it is a warning over a game, not a curtain across it**, and a
+    #: wash a player cannot see the room through takes away the very thing they
+    #: are being told to look at.
+    strength = field.newField('strength', 'SFFloat', 1, 0.34)
+    #: How many strips the wash is drawn from.  It is a gradient rather than a
+    #: band because a hard-edged block over the world reads as a rendering
+    #: fault; four is enough that the step is invisible at speed.
+    steps = field.newField('steps', 'SFInt32', 1, 4)
+    #: The most that are shown at once.  A firefight can ask for dozens and
+    #: the ones underneath contribute nothing a player can see.
+    capacity = field.newField('capacity', 'SFInt32', 1, 8)
+
+    #: The clock :meth:`tick` was last given, which is what :meth:`paint`
+    #: draws against so a fade is the same on screen as in a test.
+    _now: float = 0.0
+
+    def __init__(self, **named: Any) -> None:
+        super(DamageIndicator, self).__init__(**named)
+        #: What is being shown right now.  Not a field: it is transient and
+        #: worth neither saving nor sending.
+        self.marks: List[DamageMark] = []
+
+    # -- taking a hit -----------------------------------------------------
+    def hurt(self, bearing: float, intensity: float = 1.0,
+             now: Optional[float] = None) -> Optional[DamageMark]:
+        """Show a hit from ``bearing``, or nothing if it did no damage.
+
+        A hit an armour absorbed entirely is not a hit to flash about, so an
+        intensity of zero is dropped here rather than drawn invisibly.
+        """
+        intensity = max(0.0, min(1.0, float(intensity)))
+        if intensity <= 0.0:
+            return None
+        mark = DamageMark(bearing, intensity,
+                          time.monotonic() if now is None else now)
+        self.marks.append(mark)
+        del self.marks[:-int(self.capacity)]
+        return mark
+
+    def clear(self) -> None:
+        """Drop everything -- a respawn, a new match."""
+        self.marks = []
+
+    def tick(self, now: float) -> None:
+        """Take the clock, and let go of whatever has faded out."""
+        self._now = now
+        duration = float(self.duration)
+        self.marks = [mark for mark in self.marks
+                      if not mark.spent(now, duration)]
+
+    # -- what is on screen ------------------------------------------------
+    def shares(self) -> Dict[str, float]:
+        """How strongly each edge is lit, by name, leaving out the dark ones.
+
+        A hit contributes to an edge in proportion to how much it faces it --
+        the cosine of the angle between them, and nothing at all behind.  The
+        two edges either side of a bearing therefore share it, which is what
+        makes an opponent circling the player slide the wash around the screen
+        instead of stepping it.
+        """
+        duration = float(self.duration)
+        lit: Dict[str, float] = {}
+        for mark in self.marks:
+            strength = mark.strength(self._now, duration)
+            if strength <= 0.0:
+                continue
+            for name, facing in EDGES:
+                share = math.cos(mark.bearing - facing) * strength
+                if share > 1e-6:
+                    lit[name] = max(lit.get(name, 0.0), share)
+        return lit
+
+    def edges(self, metrics: FontMetrics
+              ) -> List[Tuple[str, Rect, Tuple[float, float, float, float]]]:
+        """Each lit edge, the band it occupies, and the colour at its outside.
+
+        The band is the whole strip; :meth:`bands` is what actually gets
+        drawn, and divides each one into the strips of the gradient.
+        """
+        if self.rect.empty:
+            return []
+        reach = min(metrics.pixels(self.thickness),
+                    # Never more than a slice of the screen, whatever the
+                    # authored thickness and however small the window: four
+                    # thick bands on a small viewport meet in the middle.
+                    max(1, int(min(self.rect.width, self.rect.height) * 0.22)))
+        colour = self.tinted(self.activeSkin().crosshairHit)
+        peak = float(colour[3]) * float(self.strength)
+        found = []
+        for name, share in sorted(self.shares().items()):
+            found.append((name, self._band(name, reach),
+                          (float(colour[0]), float(colour[1]),
+                           float(colour[2]), peak * share)))
+        return found
+
+    def bands(self, metrics: FontMetrics
+              ) -> List[Tuple[Rect, Tuple[float, float, float, float]]]:
+        """The strips to draw and the colour of each, strongest first.
+
+        Every strip sits inside the one before it and is fainter, which is a
+        gradient drawn with the flat rectangles the overlay renderer has.
+        """
+        steps = max(1, int(self.steps))
+        drawn = []
+        for _name, band, colour in self.edges(metrics):
+            for index in range(steps):
+                strip = self._strip(band, index, steps)
+                if strip.empty:
+                    continue
+                fade = (steps - index) / float(steps)
+                drawn.append((strip, (colour[0], colour[1], colour[2],
+                                      colour[3] * fade * fade)))
+        return drawn
+
+    def _band(self, name: str, reach: int) -> Rect:
+        """The strip of screen one edge's wash occupies."""
+        area = self.rect
+        if name == 'left':
+            return Rect(area.x, area.y, reach, area.height)
+        if name == 'right':
+            return Rect(area.right - reach, area.y, reach, area.height)
+        if name == 'top':
+            return Rect(area.x, area.top - reach, area.width, reach)
+        return Rect(area.x, area.y, area.width, reach)
+
+    def _strip(self, band: Rect, index: int, steps: int) -> Rect:
+        """One slice of a band, counted inwards from the screen edge."""
+        if band.width >= band.height:               # a top or bottom band
+            height = max(1, band.height // steps)
+            outside = band.y if band.y == self.rect.y else band.top - height
+            step = height if band.y == self.rect.y else -height
+            return Rect(band.x, outside + step * index, band.width, height)
+        width = max(1, band.width // steps)
+        outside = band.x if band.x == self.rect.x else band.right - width
+        step = width if band.x == self.rect.x else -width
+        return Rect(outside + step * index, band.y, width, band.height)
+
+    def content_size(self, metrics: FontMetrics,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        """The whole layer: a wash is at the edges of the screen, not in a box."""
+        parent = getattr(self, 'parent', None)
+        area = getattr(parent, 'rect', None)
+        if area is None:
+            return (0, 0)
+        return (area.width, area.height)
+
+    def paint(self, renderer: Any) -> None:
+        for strip, colour in self.bands(renderer.metrics):
+            renderer.rect(strip, colour)

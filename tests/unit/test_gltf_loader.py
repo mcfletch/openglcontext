@@ -742,8 +742,14 @@ class TestCacheDir:
         monkeypatch.setattr(resolver, '_default_cache_dir', lambda: str(tmp_path / 'c'))
 
         class _Resp:
+            """Serves its body once and is then exhausted, as a real one is."""
+
+            def __init__(self):
+                self._left = b'glTFdummy'
+
             def read(self, n=-1):
-                return b'glTFdummy'
+                data, self._left = self._left, b''
+                return data
 
             def close(self):
                 pass
@@ -787,8 +793,14 @@ class TestCachePurge:
         monkeypatch.setattr(resolver, '_default_cache_dir', lambda: str(cache))
 
         class _Resp:
+            """Serves its body once and is then exhausted, as a real one is."""
+
+            def __init__(self):
+                self._left = b'glTFx'
+
             def read(self, n=-1):
-                return b'glTFx'
+                data, self._left = self._left, b''
+                return data
 
             def close(self):
                 pass

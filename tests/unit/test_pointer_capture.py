@@ -66,12 +66,22 @@ def test_a_mode_that_steers_with_the_mouse_wants_the_pointer():
 
 
 @pytest.mark.parametrize('mode', [modes.WalkMode(name='walk'),
-                                  modes.FlyMode(name='fly'),
-                                  modes.SwimMode(name='swim')])
+                                  modes.FlyMode(name='fly')])
 def test_a_mode_steered_by_keys_leaves_the_pointer_alone(mode):
     """Taking the pointer from a mode that has no use for it makes the window
     impossible to leave for no gain."""
     assert not mode.capturePointer
+
+
+def test_swimming_takes_the_pointer_because_it_steers_with_it():
+    """Water must not change how a player points themselves.
+
+    Swimming used to steer with the turn keys like walking does, which meant
+    that entering water took a mouse-look player's aim away at the moment they
+    could least afford it.  It steers with the pointer now, so it wants the
+    pointer.
+    """
+    assert modes.SwimMode(name='swim').capturePointer
 
 
 def test_entering_a_mouse_look_mode_captures_the_pointer():

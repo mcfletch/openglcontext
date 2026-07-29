@@ -69,6 +69,29 @@ torch = Transform(translation=(0, 1, -3), children=[
     like is the fastest way to learn the fields.</p>
   <pre>burst = particles.preset('explosion', maxParticles=512, color=(0.6, 0.8, 1.0))
 burst.fire()          # again, later</pre>
+
+  <h3>One emitter, many places</h3>
+  <p><code>fire()</code> releases a burst where the emitter <em>is</em>. When
+    the same kind of effect has to happen in a dozen places &mdash; a shotgun's
+    eight impacts, a firefight's worth of sparks &mdash;
+    <code>burst_at()</code> is the one to reach for instead: the styling stays
+    on this one node and the <em>place</em> arrives per burst.</p>
+  <pre>sparks = particles.preset('sparks', burstOnStart=False, worldSpace=True)
+for hit in shot.impacts:
+    sparks.burst_at(hit.point, direction=hit.normal)     # count=... to override</pre>
+  <p>A node per effect would mean editing the scenegraph at the rate things
+    happen, and everything the render pass had gathered would be thrown away
+    with it. <code>position</code> is in the frame the particles live in &mdash;
+    world space for a <code>worldSpace</code> emitter, the emitter's own space
+    otherwise &mdash; and <code>direction</code> is what the particles are thrown
+    along, which for an impact is the surface normal. A disabled emitter bursts
+    nothing, so an effects setting that switches a kind off switches it off
+    however it is asked.</p>
+  <p><strong><code>burstOnStart=False</code> matters here.</strong> An emitter
+    with a <code>burst</code> releases its first one as soon as it is drawn,
+    which is what a firework in an authored scene wants and is exactly wrong for
+    one that exists to be fired later: left on, every such emitter goes off at
+    its own origin the moment the level is first drawn.</p>
 </section>
 
 <section id="dataflow">
@@ -226,9 +249,11 @@ live = survivors</pre>
     <tr><td>How many, how often</td>
         <td><code>rate</code>, <code>burst</code>, <code>maxParticles</code>,
             <code>lifetime</code>, <code>lifetimeVariation</code>,
-            <code>enabled</code></td>
+            <code>enabled</code>, <code>burstOnStart</code></td>
         <td>A burst with <code>rate=0</code> is a one-shot; call
-            <code>fire()</code> for another.</td></tr>
+            <code>fire()</code> for another, or <code>burst_at()</code> to put
+            one somewhere else. <code>burstOnStart=False</code> stops the first
+            burst going off the moment the emitter is drawn.</td></tr>
     <tr><td>Which way, how fast</td>
         <td><code>direction</code>, <code>speed</code>,
             <code>speedVariation</code>, <code>spread</code>,

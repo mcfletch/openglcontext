@@ -585,9 +585,17 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1f('exposure', float(exposure), self.program)
 
     def set_fog(self, density: float = 0.0,
-                color: Sequence[float] = (0.6, 0.7, 0.85)) -> None:
-        """Set aerial-perspective fog: exp density per eye-space unit + linear colour.
-        Density 0 (default) disables it, leaving non-terrain scenes unchanged."""
+                color: Sequence[float] = (0.6, 0.7, 0.85),
+                mode: int = 1) -> None:
+        """Set the frame's fog: a curve, its scale, and its colour.
+
+        ``mode`` is one of the codes in :mod:`OpenGLContext.scenegraph.fog` --
+        aerial-perspective density, or either of VRML97's two curves, which are
+        different fades to the same range and not approximations of each other.
+        Density 0 (the default) disables it whatever the mode, leaving a scene
+        with no fog in it unchanged.
+        """
+        self._set_uniform1i('fogMode', int(mode), self.program)
         self._set_uniform1f('fogDensity', float(density), self.program)
         self._set_uniform3f('fogColor', (color[0], color[1], color[2]), self.program)
 

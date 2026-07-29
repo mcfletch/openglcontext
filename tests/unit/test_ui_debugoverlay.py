@@ -178,6 +178,51 @@ class TestVisibility:
 class TestBuiltInProviders:
     """The providers shipped with the overlay, against stand-in contexts."""
 
+    def test_the_frame_rate_keeps_its_decimals_so_it_does_not_jump(self):
+        """A number that changes width every frame is a number that twitches.
+
+        `_number` drops trailing zeros, which is right for a position — 512.00
+        is three characters of nothing on a crowded line — and wrong for
+        anything that updates sixty times a second, where 60, 59.97 and 60.1
+        are three different widths in three consecutive frames.
+        """
+        from OpenGLContext.framecounter import FrameCounter
+        from OpenGLContext.ui.debugoverlay import format_value, frame_provider
+
+        counter = FrameCounter()
+        for _index in range(10):
+            counter.addFrame(1 / 60.0)
+
+        class Context:
+            frameCounter = counter
+
+            def getViewPort(self):
+                return (800, 600)
+
+        rows = dict(frame_provider(Context())())
+        for name in ('fps', 'frame ms'):
+            drawn = format_value(rows[name])
+            assert drawn.count('.') == 1, name
+            assert len(drawn.split('.')[1]) == 2, name
+
+    def test_a_whole_frame_rate_still_shows_its_decimals(self):
+        """Exactly 60 fps must read 60.00, not 60."""
+        from OpenGLContext.ui.debugoverlay import Fixed, format_value
+
+        assert format_value(Fixed(60.0)) == '60.00'
+
+    def test_a_fixed_number_can_ask_for_more_or_fewer_decimals(self):
+        from OpenGLContext.ui.debugoverlay import Fixed, format_value
+
+        assert format_value(Fixed(1.23456, decimals=3)) == '1.235'
+        assert format_value(Fixed(1.6, decimals=0)) == '2'
+
+    def test_an_ordinary_number_still_drops_its_trailing_zeros(self):
+        """The position rows are not being changed; they are not twitching."""
+        from OpenGLContext.ui.debugoverlay import format_value
+
+        assert format_value(512.0) == '512'
+
     def test_the_frame_provider_reports_the_windowed_rate(self):
         from OpenGLContext.framecounter import FrameCounter
         from OpenGLContext.ui.debugoverlay import frame_provider
@@ -193,7 +238,7 @@ class TestBuiltInProviders:
                 return (800, 600)
 
         rows = dict(frame_provider(Context())())
-        assert rows['fps'] == pytest.approx(60.0, rel=0.05)
+        assert rows['fps'].value == pytest.approx(60.0, rel=0.05)
         assert rows['viewport'] == '800x600'
 
     def test_the_frame_provider_survives_a_context_with_no_counter(self):
@@ -269,3 +314,67 @@ class TestBuiltInProviders:
         from OpenGLContext.ui.debugoverlay import physics_provider
 
         assert physics_provider(lambda: None)() == []
+
+    def test_the_audio_provider_reports_what_the_engine_is_doing(self):
+        """The one subsystem you cannot see, so the overlay is where it shows.
+
+        A sound that is not audible has four possible causes -- audio off, no
+        device, no voice, or a gain of nothing -- and they are indistinguishable
+        by listening.
+        """
+        from OpenGLContext.audio import scene as audioscene
+        from OpenGLContext.audio.device import NullDevice
+        from OpenGLContext.audio.engine import AudioEngine
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.ui.debugoverlay import audio_provider
+
+        class Context:
+            contextDefinition = ContextDefinition()
+
+        context = Context()
+        engine = AudioEngine(device=NullDevice(sample_rate=8000), voices=4)
+        try:
+            audioscene._engines[context] = engine
+            rows = dict(audio_provider(context)())
+            assert rows['voices'] == 0
+            assert rows['audio']
+        finally:
+            audioscene.close(context)
+
+    def test_the_audio_provider_says_a_context_with_no_engine_is_idle(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.ui.debugoverlay import audio_provider
+
+        class Context:
+            contextDefinition = ContextDefinition()
+
+        assert dict(audio_provider(Context())())['audio'] == 'idle'
+
+    def test_the_audio_provider_survives_a_context_with_no_definition(self):
+        from OpenGLContext.ui.debugoverlay import audio_provider
+
+        class Context:
+            pass
+
+        assert audio_provider(Context())() == []
+
+    def test_the_default_sections_include_audio(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.ui.debugoverlay import (
+            DebugOverlay, install_default_providers,
+        )
+
+        class Context:
+            contextDefinition = ContextDefinition()
+            coreProfile = True
+            frameCounter = None
+
+            def getViewPort(self):
+                return (0, 0)
+
+            def getViewPlatform(self):
+                return None
+
+        overlay = DebugOverlay()
+        install_default_providers(overlay, Context())
+        assert 'Audio' in [section.title for section in overlay.sections()]

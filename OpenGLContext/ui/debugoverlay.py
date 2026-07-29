@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from typing import (
     Any, Callable, Dict, Iterable, List, NamedTuple, Optional, Tuple,
 )
@@ -44,9 +45,9 @@ from OpenGLContext.ui.metrics import FontMetrics
 log = logging.getLogger(__name__)
 
 __all__ = [
-    'DebugOverlay', 'DebugPanel', 'DebugSection', 'LaidOutRow',
-    'format_value', 'frame_provider', 'render_provider', 'platform_provider',
-    'physics_provider', 'install_default_providers',
+    'DebugOverlay', 'DebugPanel', 'DebugSection', 'Fixed', 'LaidOutRow',
+    'audio_provider', 'format_value', 'frame_provider', 'render_provider',
+    'platform_provider', 'physics_provider', 'install_default_providers',
 ]
 
 #: What a provider returns: pairs of name and value, or a mapping of the same.
@@ -70,6 +71,24 @@ class LaidOutRow(NamedTuple):
     heading: bool
 
 
+@dataclass(frozen=True)
+class Fixed:
+    """A number that keeps its decimals however round it happens to be.
+
+    For the rows that change every frame.  :func:`_number` drops trailing
+    zeros, which is right for a position — ``512.00`` is three characters of
+    nothing on a crowded line — and wrong for a frame rate: 60, 59.97 and 60.1
+    are three different widths in three consecutive frames, and a number that
+    changes width sixty times a second is a number nobody can read.
+    """
+
+    value: float
+    decimals: int = 2
+
+    def __str__(self) -> str:
+        return '%.*f' % (self.decimals, self.value)
+
+
 def format_value(value: Any) -> str:
     """A provider's value as the one line that will be drawn for it.
 
@@ -80,6 +99,8 @@ def format_value(value: Any) -> str:
     """
     if value is None:
         return '-'
+    if isinstance(value, Fixed):
+        return str(value)
     if isinstance(value, bool):
         return 'yes' if value else 'no'
     if isinstance(value, float):
@@ -309,8 +330,10 @@ def frame_provider(context: Any) -> Provider:
             return [('fps', 0), ('viewport', '%dx%d' % (width, height))]
         count, _average, last = counter.summary()
         return [
-            ('fps', counter.recentFps()),
-            ('frame ms', last * 1000.0),
+            # Fixed decimals: these two change every frame, and a value that
+            # changes *width* every frame twitches on the screen.
+            ('fps', Fixed(counter.recentFps())),
+            ('frame ms', Fixed(last * 1000.0)),
             ('frames', count),
             ('viewport', '%dx%d' % (width, height)),
         ]
@@ -387,8 +410,29 @@ def physics_provider(world: Callable[[], Any]) -> Provider:
     return rows
 
 
+def audio_provider(context: Any) -> Provider:
+    """What this context's sound is doing, and whether it is doing it at all.
+
+    The one subsystem whose state cannot be seen, which is exactly why it wants
+    a place on the overlay: a sound that is not audible may be off, may have no
+    device, may have lost its voice to a louder one, or may simply be too far
+    away, and no amount of listening tells those four apart.
+
+    Reported even when there is no engine, because "audio: idle" -- nothing in
+    this scene has asked to make a noise -- is itself the answer to the most
+    common question.
+    """
+    def rows() -> Rows:
+        from OpenGLContext.audio import scene as audioscene
+        if getattr(context, 'contextDefinition', None) is None:
+            return []
+        return list(audioscene.describe(context).items())
+    return rows
+
+
 def install_default_providers(overlay: DebugOverlay, context: Any) -> None:
     """Register the sections every context can answer for itself."""
     overlay.register('Frame', frame_provider(context), order=10)
     overlay.register('Render', render_provider(context), order=20)
     overlay.register('View', platform_provider(context), order=30)
+    overlay.register('Audio', audio_provider(context), order=35)

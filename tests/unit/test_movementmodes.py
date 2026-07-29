@@ -165,6 +165,74 @@ def test_flying_adds_a_vertical_axis_that_walking_has_not():
     assert platform.moved[-1][2] != 0.0          # `up` component is driven
 
 
+class _Swimmer(_Platform):
+    """A platform that also records a swim move and carries a gaze."""
+
+    def __init__(self):
+        super().__init__()
+        self.swum = []
+        self.flying = None
+        self.swimming = None
+        self.buoyancy = None
+
+    def set_swim_move(self, forward=0.0, strafe=0.0, up=0.0):
+        self.swum.append((forward, strafe, up))
+
+    def set_fly(self, flying):
+        self.flying = bool(flying)
+        return True
+
+    def set_swim(self, swimming, buoyancy=0.9):
+        self.swimming = bool(swimming)
+        self.buoyancy = float(buoyancy)
+
+
+def test_swimming_steers_with_the_mouse_like_walking_does():
+    """Entering water must not change how you point yourself.
+
+    The controls cannot fall back to keyboard turning the moment your feet
+    leave the floor: a player who steers with the mouse everywhere else is
+    suddenly unable to aim, which reads as the game having broken.
+    """
+    swim, platform = modes.SwimMode(), _Swimmer()
+    state = InputState()
+    state.mouse_moved(20, 10)
+    swim.update(0.016, state, platform)
+    assert platform.yaw != 0.0
+    assert platform.pitch != 0.0
+
+
+def test_swimming_takes_the_pointer_as_walking_does():
+    """The same grab, so the view keeps turning past the edge of the screen."""
+    assert modes.SwimMode().capturePointer
+
+
+def test_swimming_moves_where_you_are_looking_rather_than_along_the_floor():
+    """The point of being in water: forward can mean up or down.
+
+    A swim that flattened the move to the horizon would make the surface and
+    the bottom reachable only by the dedicated up and down keys, which is not
+    swimming — it is walking with the gravity turned off.
+    """
+    swim, platform = modes.SwimMode(), _Swimmer()
+    swim.update(0.016, press(InputState(), 'w'), platform)
+    assert platform.swum
+    assert platform.swum[-1][0] != 0.0
+
+
+def test_swimming_still_has_its_own_up_and_down():
+    swim, platform = modes.SwimMode(), _Swimmer()
+    swim.update(0.016, press(InputState(), ' '), platform)
+    assert platform.swum[-1][2] > 0.0
+
+
+def test_a_platform_that_cannot_swim_is_still_driven():
+    """A plain camera has no swim move; it must still go somewhere."""
+    swim, platform = modes.SwimMode(), _Platform()
+    swim.update(0.016, press(InputState(), 'w'), platform)
+    assert platform.moved
+
+
 def test_swimming_moves_at_its_own_speed_setting():
     swim, platform = modes.SwimMode(swimSpeed=7.0), _Platform()
     swim.update(0.016, press(InputState(), 'w'), platform)
@@ -221,6 +289,60 @@ def test_a_disabled_mode_never_claims_the_avatar():
     swim, platform = modes.SwimMode(enabled=False), _Platform()
     platform.submerged = True
     assert not swim.enter_when(platform)
+
+
+# -- the body state a mode's movement assumes ---------------------------------
+
+class _Body(_Platform):
+    """A platform that also records what state the mode put the body into."""
+
+    def __init__(self):
+        super().__init__()
+        self.flying = None
+        self.swimming = None
+        self.buoyancy = None
+
+    def set_fly(self, flying):
+        self.flying = bool(flying)
+        return True
+
+    def set_swim(self, swimming, buoyancy=0.9):
+        self.swimming = bool(swimming)
+        self.buoyancy = float(buoyancy)
+
+
+def test_walking_puts_the_body_on_its_feet():
+    """A mode that only set a velocity would walk with fly still switched on."""
+    body = _Body()
+    modes.WalkMode().applyTo(body)
+    assert (body.flying, body.swimming) == (False, False)
+
+
+def test_flying_takes_the_body_out_of_the_falling_solver():
+    body = _Body()
+    modes.FlyMode().applyTo(body)
+    assert (body.flying, body.swimming) == (True, False)
+
+
+def test_swimming_puts_the_body_in_the_water_rather_than_in_the_air():
+    """Swimming is not flying: a swimmer collides with the pool it is in."""
+    body = _Body()
+    modes.SwimMode().applyTo(body)
+    assert (body.flying, body.swimming) == (False, True)
+
+
+def test_the_swim_mode_carries_its_own_buoyancy_to_the_body():
+    """The field is the tuning knob, so it has to reach the physics."""
+    body = _Body()
+    modes.SwimMode(buoyancy=0.25).applyTo(body)
+    assert body.buoyancy == pytest.approx(0.25)
+
+
+def test_applying_a_mode_to_a_plain_camera_is_harmless():
+    """Most platforms are a camera with no body at all."""
+    modes.SwimMode().applyTo(_Platform())
+    modes.FlyMode().applyTo(_Platform())
+    modes.WalkMode().applyTo(None)
 
 
 # -- bindings that want a modifier held ---------------------------------------

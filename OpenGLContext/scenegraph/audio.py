@@ -29,6 +29,7 @@ machine with none.
 from __future__ import annotations
 
 import math
+import random
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -93,6 +94,18 @@ class AudioSource(node.Node):
     #: the most important.  ``KHR_audio_emitter`` has no such field, so this is
     #: an addition, named as VRML97's ``Sound.priority`` is.
     priority = field.newField('priority', 'SFFloat', 1, 0.0)
+    #: Seconds of quiet before a one-shot plays again; 0 means it plays once.
+    #: The other way a sound recurs, and it is not :attr:`loop`: a distant
+    #: rumble every half minute is a one-shot on a timer, and looping it would
+    #: give a continuous noise where the author wrote an occasional one.  A
+    #: second addition beyond ``KHR_audio_emitter``, for the same reason
+    #: :attr:`priority` is: ambience wants it and the extension has nowhere to
+    #: say it.  Ignored while :attr:`loop` is set -- a loop has no gaps to time.
+    repeatInterval = field.newField('repeatInterval', 'SFFloat', 1, 0.0)
+    #: Seconds of spread on :attr:`repeatInterval`, so that two speakers of the
+    #: same sound drift apart instead of beating together for ever.  The spread
+    #: is symmetric and the wait is never negative.
+    repeatVariance = field.newField('repeatVariance', 'SFFloat', 1, 0.0)
 
     UI_HINTS = {
         'gain': {'label': 'Volume', 'minimum': 0.0, 'maximum': 2.0, 'step': 0.05},
@@ -101,6 +114,10 @@ class AudioSource(node.Node):
         'loop': {'label': 'Repeat'},
         'priority': {'label': 'Priority', 'minimum': 0.0, 'maximum': 1.0,
                      'step': 0.05},
+        'repeatInterval': {'label': 'Repeat every (s)', 'minimum': 0.0,
+                           'maximum': 600.0, 'step': 1.0},
+        'repeatVariance': {'label': 'Repeat spread (s)', 'minimum': 0.0,
+                           'maximum': 120.0, 'step': 1.0},
     }
 
     def __init__(self, **named: Any) -> None:
@@ -204,6 +221,13 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         super(AudioEmitter, self).__init__(**named)
         self._record = model.AudioEmitter()
         self._playing: Dict[int, Any] = {}
+        #: When each finished one-shot may sound again, by source, for the
+        #: sources that have a :attr:`AudioSource.repeatInterval`.
+        self._repeats: Dict[int, float] = {}
+        # Ambient timing is presentation and not simulation -- nothing reads a
+        # repeat back -- so an ordinary generator is enough, and one per
+        # emitter keeps two speakers of the same clip from drifting together.
+        self._jitter = random.Random()
 
     def record(self) -> model.AudioEmitter:
         """This node's fields as the ``KHR_audio_emitter`` record.
@@ -235,20 +259,32 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         record = self.record()
         position, forward = pose_from_matrix(matrix)
         for source in self.sources:
-            self._updateSource(engine, source, record, position, forward)
+            self._updateSource(engine, source, record, position, forward, now)
+
+    def repeatsAt(self, source: Any) -> Optional[float]:
+        """When ``source`` next sounds, or None if it is not waiting to.
+
+        Reported so a debug overlay and a test can see the timer; nothing in
+        the playing path reads it back.
+        """
+        return self._repeats.get(id(source))
 
     def _updateSource(self, engine: Any, source: Any, record: model.AudioEmitter,
-                      position: np.ndarray, forward: np.ndarray) -> None:
+                      position: np.ndarray, forward: np.ndarray,
+                      now: float = 0.0) -> None:
         """Keep one source of this emitter in step with the world."""
         handle = self._playing.get(id(source))
-        if handle is not None and handle.playing:
-            engine.aim(handle, record, position, forward, gain=source.gain)
-            return
-        # A one-shot that has finished stays finished: restarting it here would
-        # make every non-looping sound in the scene a machine gun.
         if handle is not None:
+            if handle.playing:
+                engine.aim(handle, record, position, forward, gain=source.gain)
+                return
+            if not source.loop and self._stillFinished(source, now):
+                return
+            # Either a loop that lost its voice to stealing -- nothing else
+            # ends one, so it may take another when one frees -- or a one-shot
+            # whose repeat has come round.  Both start again from here.
             self._playing.pop(id(source), None)
-            return
+            self._repeats.pop(id(source), None)
         if not source.autoplay:
             return
         clip = source.clip(engine)
@@ -261,11 +297,37 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         if started is not None:
             self._playing[id(source)] = started
 
+    def _stillFinished(self, source: Any, now: float) -> bool:
+        """Whether a one-shot that has ended should stay silent.
+
+        A one-shot with no :attr:`AudioSource.repeatInterval` stays finished
+        for ever, which is the ordinary case.  One with an interval is silent
+        until that interval has passed, timed from the frame its clip was
+        noticed to have ended -- so a long clip and a short one leave the same
+        gap of quiet, which is what an author setting a repeat means by it.
+        """
+        interval = float(source.repeatInterval)
+        if interval <= 0.0:
+            return True
+        due = self._repeats.get(id(source))
+        if due is None:
+            self._repeats[id(source)] = now + self._wait(source, interval)
+            return True
+        return now < due
+
+    def _wait(self, source: Any, interval: float) -> float:
+        """One interval, moved within its spread and never negative."""
+        variance = float(source.repeatVariance)
+        if variance <= 0.0:
+            return interval
+        return max(0.0, interval + self._jitter.uniform(-variance, variance))
+
     def stopAudio(self) -> None:
-        """Silence everything this emitter started."""
+        """Silence everything this emitter started, and forget its timers."""
         for handle in self._playing.values():
             handle.stop()
         self._playing.clear()
+        self._repeats.clear()
 
 
 class Sound(basenodes.Sound):

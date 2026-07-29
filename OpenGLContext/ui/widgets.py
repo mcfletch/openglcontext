@@ -45,6 +45,10 @@ _EDIT_KEYS = ('<backspace>', '<delete>', '<left>', '<right>', '<home>', '<end>')
 #: Keys whose own spelling is invisible or unreadable on a button.
 _KEY_LABELS = {' ': '<space>', '\t': '<tab>', '\n': '<return>'}
 
+#: What the first few mouse buttons are called on a page a player reads.  The
+#: numbering is the event system's; the names are what is on the mouse.
+_BUTTON_LABELS = {0: 'Left mouse', 1: 'Right mouse', 2: 'Middle mouse'}
+
 #: Text that is a number, or is on the way to being one.  Matching the
 #: *partial* forms is what lets someone type a minus sign before a digit.
 _NUMBER_TEXT = re.compile(r'^-?\d*\.?\d*$')
@@ -56,9 +60,30 @@ def key_label(name: str) -> str:
 
     The event system spells the space bar ``' '``, and a button showing that
     looks unbound -- which is exactly the wrong thing to tell someone about the
-    key their jump is on.
+    key their jump is on.  A mouse button is spelled by its number, and
+    ``<mouse-0>`` on a page beside ``w`` tells nobody which button that is.
     """
-    return _KEY_LABELS.get(name, name)
+    if name in _KEY_LABELS:
+        return _KEY_LABELS[name]
+    button = _mouse_button(name)
+    if button is not None:
+        return _BUTTON_LABELS.get(button, 'Mouse %d' % (button,))
+    return name
+
+
+def _mouse_button(name: str) -> Optional[int]:
+    """The button a mouse-button input name refers to, or None.
+
+    Read back from the spelling rather than kept in a second table, so a name
+    and its label cannot fall out of step.
+    """
+    from OpenGLContext.events.mouseevents import BUTTON_NAME
+
+    head, _, tail = BUTTON_NAME.partition('%d')
+    if not (name.startswith(head) and name.endswith(tail)):
+        return None
+    middle = name[len(head):len(name) - len(tail)] if tail else name[len(head):]
+    return int(middle) if middle.isdigit() else None
 
 
 class Widget(GUINode, node.Node):

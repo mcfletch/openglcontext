@@ -21,12 +21,15 @@ fetch/decode primitives; :class:`Resolver` ties them to one document's origin.
 """
 
 import base64
+import logging
 import os
 import threading
 import urllib.parse
 import urllib.request
 import urllib.error
-from typing import Any, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
+
+log = logging.getLogger(__name__)
 
 
 def safe_url(url: str) -> str:
@@ -50,6 +53,27 @@ def safe_url(url: str) -> str:
 # Ceiling on a single fetched/decoded external resource; override per-load via the
 # ``max_resource_bytes`` argument on the load entry points.
 DEFAULT_MAX_RESOURCE_BYTES = 256 * 1024 * 1024   # 256 MiB
+
+#: How much of a download is read at a time.  Small enough that a progress bar
+#: moves and a cancel is acted on promptly, large enough that a big transfer is
+#: not one syscall per screenful.
+DOWNLOAD_CHUNK_BYTES = 256 * 1024
+
+#: What a caller is told as a download runs: bytes so far, and the total the
+#: server declared -- or None, since plenty of servers declare none and a bar
+#: with no total should show motion rather than a false 100%.
+Progress = Callable[[int, Optional[int]], None]
+
+#: Asked between chunks; returning true abandons the download.
+Cancel = Callable[[], bool]
+
+
+class FetchCancelled(Exception):
+    """A download was abandoned because its caller asked for it to be.
+
+    Distinct from a failure: nothing went wrong, so a caller that asked for the
+    cancellation should not report an error about it.
+    """
 _ALLOWED_URL_SCHEMES = ('http', 'https')
 
 
@@ -330,7 +354,9 @@ def _release_download_slot(path: str) -> None:
 
 
 def _fetch_url(url: str, cache_dir: Optional[str] = None,
-               max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES) -> bytes:
+               max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
+               progress: Optional[Progress] = None,
+               cancel: Optional[Cancel] = None) -> bytes:
     """Fetch ``url`` into the on-disk cache (keyed by URL hash) and return its bytes.
 
     A cache hit is touched so its mtime tracks last-use, letting
@@ -338,12 +364,16 @@ def _fetch_url(url: str, cache_dir: Optional[str] = None,
     in-process fetches of the same asset are coalesced: only the first downloads,
     the rest wait and then read the cached file. The fetch itself is origin-locked
     (:func:`_urlopen_same_origin`) and size-capped.
+
+    ``progress`` and ``cancel`` are for an asset large enough to be worth
+    watching -- see :func:`fetch_to_cache`.
     """
     cache_dir = cache_dir or _default_cache_dir()
     os.makedirs(cache_dir, mode=0o700, exist_ok=True)
     path = cached_path(url, cache_dir)
     data = _read_cached(path)
     if data is not None:
+        _report(progress, len(data), len(data))
         return data
     # Serialize concurrent fetches of this exact asset on a per-key lock; a second
     # caller waits here rather than launching a duplicate download.
@@ -352,6 +382,7 @@ def _fetch_url(url: str, cache_dir: Optional[str] = None,
         with lock:
             data = _read_cached(path)      # the winner may have finished while we waited
             if data is not None:
+                _report(progress, len(data), len(data))
                 return data
             # The top-level document fetch is user-initiated, but a redirect that
             # leaves the requested URL's origin is still refused (defence in depth)
@@ -359,13 +390,75 @@ def _fetch_url(url: str, cache_dir: Optional[str] = None,
             # endpoint.
             resp = _urlopen_same_origin(url, url, timeout=30)
             try:
-                data = _read_capped(resp, max_bytes)
+                data = _stream(resp, max_bytes, progress, cancel)
             finally:
                 resp.close()
             _atomic_write(path, data, cache_dir)
             return data
     finally:
         _release_download_slot(path)
+
+
+def _content_length(response: Any) -> Optional[int]:
+    """How many bytes the server says are coming, or None if it did not say."""
+    headers = getattr(response, 'headers', None)
+    if headers is None:
+        return None
+    getter = getattr(headers, 'get', None)
+    raw = getter('Content-Length') if getter is not None else None
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _report(progress: Optional[Progress], done: int,
+            total: Optional[int]) -> None:
+    """Tell a watcher how far along we are, and survive it if it falls over.
+
+    Reporting is the caller's business: a progress bar that raises is a broken
+    progress bar, not a failed download, and losing a 450 MB fetch to one would
+    be an absurd trade.
+    """
+    if progress is None:
+        return
+    try:
+        progress(done, total)
+    except Exception:                           # noqa: BLE001 - never lose a fetch
+        log.warning('a download progress callback raised', exc_info=True)
+
+
+def _stream(response: Any, max_bytes: Optional[int],
+            progress: Optional[Progress] = None,
+            cancel: Optional[Cancel] = None) -> bytes:
+    """Read a response a chunk at a time, watching the cap, the caller and the size.
+
+    Chunked rather than one ``read()`` for three reasons that arrive together:
+    a content pack is hundreds of megabytes and reading one whole holds all of
+    it in memory before a byte reaches the disk; a caller cannot draw a
+    progress bar for a call that reports nothing until it returns; and a
+    download that has begun cannot otherwise be abandoned.
+
+    Nothing is written to the cache from here -- the caller writes the finished
+    bytes atomically -- so a cancelled or over-size fetch leaves no partial
+    file behind.
+    """
+    total = _content_length(response)
+    chunks: List[bytes] = []
+    read = 0
+    while True:
+        if cancel is not None and cancel():
+            raise FetchCancelled('the download was cancelled after %d bytes' % (read,))
+        chunk = response.read(DOWNLOAD_CHUNK_BYTES)
+        if not chunk:
+            break
+        read += len(chunk)
+        _check_size(read, max_bytes, 'remote resource')
+        chunks.append(chunk)
+        _report(progress, read, total)
+    if not chunks:
+        _report(progress, 0, total)
+    return b''.join(chunks)
 
 
 def _atomic_write(path: str, data: bytes, cache_dir: str) -> None:
@@ -392,13 +485,22 @@ def _atomic_write(path: str, data: bytes, cache_dir: str) -> None:
 
 
 def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
-                   max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES) -> str:
+                   max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
+                   progress: Optional[Progress] = None,
+                   cancel: Optional[Cancel] = None) -> str:
     """Fetch ``url`` into the cache (once) and return its local file path.
 
     The path variant of :func:`_fetch_url`, for callers that want the cached file
     on disk (e.g. an image to embed) rather than its bytes.
+
+    ``progress(done, total)`` is called as the bytes arrive, with ``total``
+    None where the server declared no length; it is also called once on a cache
+    hit, so a caller drawing a bar sees it finish whether or not anything was
+    downloaded.  ``cancel()`` is asked between chunks and abandons the fetch
+    with :class:`FetchCancelled` when it returns true.  Neither leaves a
+    partial file in the cache.
     """
-    _fetch_url(url, cache_dir, max_bytes)
+    _fetch_url(url, cache_dir, max_bytes, progress=progress, cancel=cancel)
     return cached_path(url, cache_dir)
 
 

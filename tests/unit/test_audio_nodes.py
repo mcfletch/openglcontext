@@ -194,6 +194,95 @@ class TestAudioEmitterNode:
         emitter.updateAudio(engine, translation(), 1.0)
         assert engine.active_voices == 0
 
+    def test_a_finished_one_shot_stays_finished_over_many_frames(self, engine):
+        """The frame that notices it ended must not be the only one that does.
+
+        A scene is updated sixty times a second forever, so "finished" has to
+        be a state the emitter keeps rather than something observed once.
+        """
+        emitter = self.make(sources=[audionodes.AudioSource(url=['blip'])])
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.mixer.mix(512)                               # runs the clip out
+        for frame in range(5):
+            emitter.updateAudio(engine, translation(), 1.0 + frame)
+            engine.mixer.mix(8)
+        assert engine.active_voices == 0
+
+    def test_a_looping_source_takes_a_voice_again_after_losing_one(self, engine):
+        """Nothing ends a loop but voice stealing, so it may come back.
+
+        This is the one case where restarting is right, and it is what
+        separates a loop from a one-shot: ambience silenced by a moment of
+        voice pressure should return when the pressure passes, while a one-shot
+        silenced the same way has simply been and gone.
+        """
+        emitter = self.make()                               # a looping source
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.stop_all()
+        emitter.updateAudio(engine, translation(), 1.0)
+        assert engine.active_voices == 1
+
+    def test_a_repeating_one_shot_is_silent_until_its_interval_has_passed(self, engine):
+        emitter = self.make(sources=[audionodes.AudioSource(url=['blip'],
+                                                            repeatInterval=5.0)])
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.mixer.mix(512)                               # runs the clip out
+        emitter.updateAudio(engine, translation(), 3.0)
+        assert engine.active_voices == 0
+
+    def test_a_repeating_one_shot_plays_again_once_its_interval_has_passed(self, engine):
+        """A map's occasional distant noise: a one-shot on a slow timer.
+
+        The interval is measured from the frame the clip was noticed to have
+        ended, not from when it started, so a long clip and a short one both
+        leave the same gap of quiet.
+        """
+        emitter = self.make(sources=[audionodes.AudioSource(url=['blip'],
+                                                            repeatInterval=5.0)])
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.mixer.mix(512)
+        emitter.updateAudio(engine, translation(), 1.0)     # notices it ended
+        emitter.updateAudio(engine, translation(), 6.5)
+        assert engine.active_voices == 1
+
+    def test_the_variance_moves_the_next_repeat_within_its_spread(self, engine):
+        """Two speakers of the same sound must not stay in lockstep for ever."""
+        source = audionodes.AudioSource(url=['blip'], repeatInterval=10.0,
+                                        repeatVariance=4.0)
+        emitter = self.make(sources=[source])
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.mixer.mix(512)
+        emitter.updateAudio(engine, translation(), 1.0)
+        assert 6.0 <= emitter.repeatsAt(source) - 1.0 <= 14.0
+
+    def test_a_source_with_no_interval_never_repeats(self, engine):
+        source = audionodes.AudioSource(url=['blip'])
+        emitter = self.make(sources=[source])
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.mixer.mix(512)
+        emitter.updateAudio(engine, translation(), 1.0)
+        assert emitter.repeatsAt(source) is None
+
+    def test_a_looping_source_ignores_the_repeat_interval(self, engine):
+        """A loop has no gaps to fill, so a timer on one means nothing."""
+        source = audionodes.AudioSource(url=['beep'], loop=True,
+                                        repeatInterval=1.0)
+        emitter = self.make(sources=[source])
+        emitter.updateAudio(engine, translation(), 0.0)
+        for frame in range(5):
+            emitter.updateAudio(engine, translation(), frame)
+        assert engine.active_voices == 1
+
+    def test_stopping_an_emitter_clears_its_repeat_timers(self, engine):
+        """A scene put away and brought back is not mid-interval."""
+        source = audionodes.AudioSource(url=['blip'], repeatInterval=5.0)
+        emitter = self.make(sources=[source])
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.mixer.mix(512)
+        emitter.updateAudio(engine, translation(), 1.0)
+        emitter.stopAudio()
+        assert emitter.repeatsAt(source) is None
+
     def test_an_emitter_with_no_sources_is_harmless(self, engine):
         audionodes.AudioEmitter(sources=[]).updateAudio(engine, translation(), 0.0)
         assert engine.active_voices == 0
