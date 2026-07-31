@@ -13,7 +13,7 @@ getting it wrong makes a volume control appear not to work:
     The **player's** volume -- what the slider on the settings screen moves, what
     a volume key should write, and what is saved with the rest of the player's
     settings.  The engine reads it every frame, so moving it is heard at once.
-:attr:`~OpenGLContext.audio.engine.AudioEngine.master_gain`
+:attr:`~omi_audio.engine.AudioEngine.master_gain`
     The **application's** mix level -- how loud this scene was authored to be.
     An application sets it once and the player never sees it.
 

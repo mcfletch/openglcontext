@@ -7,10 +7,11 @@ paths and a context; everything else is here.
 import numpy as np
 import pytest
 
+from omi_audio import synth
+from omi_audio.device import NullDevice
+
 from OpenGLContext.audio import scene as audioscene
-from OpenGLContext.audio import synth
 from OpenGLContext.audio.settings import AudioSettings
-from OpenGLContext.audio.device import NullDevice
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import viewplatform
 from OpenGLContext.scenegraph import audio as audionodes

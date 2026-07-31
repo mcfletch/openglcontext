@@ -41,6 +41,7 @@ classifiers = [
 
 dependencies = [
     "numpy>=2.0",
+    "omi_audio>=0.1.0a1",
     "omi_physics>=0.2.2",
     "pillow",
     "PyOpenGL>=4.0.0a1",
@@ -58,15 +59,16 @@ pygame = ["pygame>=2.0"]
 glfw = ["glfw>=2.0"]
 gltf = ["pygltflib>=1.16"]
 draco = ["DracoPy>=1.4"]
-# Sound. Optional for one concrete reason rather than a general preference:
-# miniaudio publishes no manylinux aarch64 wheel, so a Raspberry Pi, an ARM
-# server or a linux/arm64 container would have to build the sdist and would want
-# a compiler for it. Without it a scene with sounds in it still builds, still
-# runs and stays silent (OpenGLContext.audio.device). Re-check when a wheel
-# appears; this is a response to a packaging gap and should not outlive it. The
-# package and every decoder it bundles are MIT/public-domain, which is why it is
-# the only audio dependency this project takes.
-audio = ["miniaudio>=1.59"]
+# Sound that is actually heard. omi_audio itself is a core dependency -- the
+# scenegraph's audio nodes are built on its model -- and it mixes happily with
+# no backend at all; this extra adds the one that reaches a sound card. Optional
+# for a concrete reason rather than a general preference: miniaudio publishes no
+# manylinux aarch64 wheel, so a Raspberry Pi, an ARM server or a linux/arm64
+# container would have to build the sdist and would want a compiler for it.
+# Without it a scene with sounds in it still builds, still runs and stays silent
+# (omi_audio.device). Re-check when a wheel appears; this is a response to a
+# packaging gap and should not outlive it.
+audio = ["omi_audio[playback]"]
 # accelerate is now part of the core install; kept as an empty set so external
 # setups that still request OpenGLContext[accelerate] don't break.
 accelerate = []

@@ -16,8 +16,9 @@ import os
 import numpy as np
 import pytest
 
+from omi_audio.device import NullDevice
+
 from OpenGLContext.audio import scene as audioscene
-from OpenGLContext.audio.device import NullDevice
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import viewplatform
 from OpenGLContext.scenegraph import audio as audionodes

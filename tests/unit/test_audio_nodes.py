@@ -10,10 +10,11 @@ import math
 import numpy as np
 import pytest
 
-from OpenGLContext.audio import synth
-from OpenGLContext.audio.device import NullDevice
-from OpenGLContext.audio.engine import AudioEngine
-from OpenGLContext.audio.spatial import Listener
+from omi_audio import synth
+from omi_audio.device import NullDevice
+from omi_audio.engine import AudioEngine
+from omi_audio.spatial import Listener
+
 from OpenGLContext.scenegraph import audio as audionodes
 from OpenGLContext.scenegraph import basenodes
 
@@ -349,6 +350,45 @@ class TestVRML97Sound:
         ahead2.updateAudio(engine, translation(0.0, 0.0, -20.0), 0.0)
         assert behind_listener > level(engine)
 
+    def test_a_moving_sound_is_re_aimed_rather_than_restarted(self, engine):
+        """The voice follows the node without ever being started again --
+        restarting it would retrigger the clip's attack every frame."""
+        sound = self.make(minFront=1.0, minBack=1.0, maxFront=100.0, maxBack=100.0)
+        sound.updateAudio(engine, translation(0.0, 0.0, -2.0), 0.0)
+        near = level(engine)
+        sound.updateAudio(engine, translation(0.0, 0.0, -60.0), 0.1)
+        assert engine.active_voices == 1, 'the sound was restarted, not re-aimed'
+        assert level(engine) < near
+
+    def test_stopping_a_sound_silences_it(self, engine):
+        sound = self.make()
+        sound.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        sound.stopAudio()
+        assert engine.active_voices == 0
+
+    def test_stopping_a_sound_that_never_started_is_harmless(self, engine):
+        audionodes.Sound().stopAudio()
+
+    def test_a_sound_with_no_direction_is_heard_from_every_side(self, engine):
+        """A zero ``direction`` has no front to tell from its back, so the
+        ``front`` distances are what reach in every direction."""
+        sound = self.make(direction=(0, 0, 0), minFront=1.0, minBack=1.0,
+                          maxFront=20.0, maxBack=2.0)
+        sound.updateAudio(engine, translation(0.0, 0.0, -10.0), 0.0)
+        ahead = level(engine)
+        engine.stop_all()
+        behind = self.make(direction=(0, 0, 0), minFront=1.0, minBack=1.0,
+                           maxFront=20.0, maxBack=2.0)
+        behind.updateAudio(engine, translation(0.0, 0.0, 10.0), 0.0)
+        assert ahead == pytest.approx(level(engine), rel=0.02)
+        assert ahead > 0.0
+
+    def test_a_sound_the_listener_is_standing_on_is_at_full_intensity(self, engine):
+        """No offset means no angle to measure; the listener is inside it."""
+        sound = self.make(minFront=1.0, minBack=1.0, maxFront=10.0, maxBack=10.0)
+        sound.updateAudio(engine, translation(0.0, 0.0, 0.0), 0.0)
+        assert level(engine) == pytest.approx(1.0, rel=0.02)
+
     def test_intensity_scales_the_level(self, engine):
         quiet = self.make(intensity=0.25, minFront=50.0, minBack=50.0)
         quiet.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
@@ -449,3 +489,60 @@ class TestListenerFollowsTheCamera:
         engine.mixer.mix(64)
         block = engine.mixer.mix(64)
         assert float(np.abs(block[:, 0]).max()) == pytest.approx(right_ear, rel=0.05)
+
+
+class TestBuildingEmittersFromADocument:
+    """``emitters_from_document`` on its own, without a glTF file around it.
+
+    The loader always passes every argument; these are the defaults a direct
+    caller gets, and the shapes a malformed document produces.
+    """
+
+    def document(self, **audio):
+        return audionodes.model.AudioDocument(
+            audio=[audionodes.model.Audio(**audio)],
+            sources=[audionodes.model.AudioSource(audio=0, gain=0.5)],
+            emitters=[audionodes.model.AudioEmitter(name='One', sources=[0])])
+
+    def test_it_builds_every_emitter_when_told_of_none_in_particular(self):
+        nodes = audionodes.emitters_from_document(self.document(uri='a.wav'))
+        assert len(nodes) == 1
+        assert nodes[0].sources[0].gain == pytest.approx(0.5)
+
+    def test_a_source_naming_no_audio_is_skipped(self):
+        """It could never sound, and a node that cannot sound is noise."""
+        document = audionodes.model.AudioDocument(
+            sources=[audionodes.model.AudioSource()],
+            emitters=[audionodes.model.AudioEmitter(sources=[0])])
+        assert audionodes.emitters_from_document(document)[0].sources == []
+
+    def test_without_a_library_a_source_falls_back_to_its_url(self, engine):
+        """A hand-built document, or a VRML scene, has no library behind it."""
+        source = audionodes.emitters_from_document(
+            self.document(uri='beep'))[0].sources[0]
+        assert source.url == ['beep']
+        assert source.clip(engine) is not None
+
+    def test_audio_inside_the_document_has_no_url_to_record(self):
+        """A bufferView is not a location, so there is nothing honest to put here."""
+        source = audionodes.emitters_from_document(
+            self.document(bufferView=0, mimeType='audio/wav'))[0].sources[0]
+        assert source.url == []
+
+    def test_a_data_uri_is_content_rather_than_a_location(self):
+        source = audionodes.emitters_from_document(
+            self.document(uri='data:audio/wav;base64,AAAA'))[0].sources[0]
+        assert source.url == []
+
+    def test_a_uri_the_resolver_refuses_is_reported_and_dropped(self, caplog):
+        """An out-of-bounds reference costs the sound, not the scene."""
+        def refusing(uri):
+            raise OSError('outside the document origin')
+
+        with caplog.at_level('WARNING'):
+            source = audionodes.emitters_from_document(
+                self.document(uri='http://evil.example/x.mp3'),
+                resolve=refusing)[0].sources[0]
+        assert source.url == []
+        assert any('evil.example' in record.getMessage()
+                   for record in caplog.records)

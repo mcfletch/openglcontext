@@ -117,7 +117,9 @@ uv pip install -e ".[glfw,gltf]"</pre>
             scene on glTF's <code>KHR_audio_emitter</code> model: distance
             curves, directional cones, equal-power panning, a fixed voice pool
             with priority stealing, an underwater muffle, and silence as a
-            first-class backend</li>
+            first-class backend. The engine is the standalone
+            <code>omi_audio</code> package; OpenGLContext supplies the
+            scenegraph nodes and the per-context engine</li>
           <li><a href="terrain.html">Terrain &amp; Landscapes</a> -- Streamed OGC
             3D&nbsp;Tiles terrain with screen-space-error LOD, frustum-culled paging,
             per-tile walkable colliders, procedural &amp; DEM heightmaps, caves/overhangs,

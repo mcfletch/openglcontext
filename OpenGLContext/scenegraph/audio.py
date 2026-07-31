@@ -28,6 +28,7 @@ machine with none.
 
 from __future__ import annotations
 
+import logging
 import math
 import random
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
@@ -36,7 +37,9 @@ import numpy as np
 from vrml import field, node
 from vrml.vrml97 import basenodes, nodetypes
 
-from OpenGLContext.audio import model, spatial
+from omi_audio import model, spatial
+
+log = logging.getLogger(__name__)
 
 #: A glTF emitter faces its own ``-Z``, as glTF cameras and
 #: ``KHR_lights_punctual`` do.
@@ -124,23 +127,52 @@ class AudioSource(node.Node):
         super(AudioSource, self).__init__(**named)
         self._clip: Any = None
         self._resolved = False
+        self._library: Any = None
+        self._audioIndex: Optional[int] = None
         self._record = model.AudioSource()
 
-    def clip(self, engine: Any) -> Any:
-        """The first of :attr:`url` that decodes, or None if none does.
+    def useLibrary(self, library: Any, index: Optional[int]) -> None:
+        """Take this source's clip from a glTF document's audio library.
 
-        Resolution walks a list and may touch a disk, so the answer is kept.  A
-        url that resolves to nothing is remembered as nothing: a missing sound
-        must not be looked for again every frame.
+        A document names its audio by index rather than by anything this node
+        could open -- a ``bufferView`` has no name at all -- so
+        :class:`omi_audio.library.AudioLibrary` holds the loader's own resolver
+        and hands back samples.  Used instead of walking :attr:`url`, which for
+        a document-backed source records where the audio is rather than how it
+        is fetched.
+        """
+        self._library = library
+        self._audioIndex = index
+        self._resolved = False
+
+    def clip(self, engine: Any) -> Any:
+        """The clip this source plays, or None if it will not resolve.
+
+        Resolution may touch a disk or a network, so the answer is kept.  A
+        source that resolves to nothing is remembered as nothing: a missing
+        sound must not be looked for again every frame.
         """
         if not self._resolved:
             self._resolved = True
-            for name in self.url:
-                found = engine.clip(name)
-                if found is not None:
-                    self._clip = found
-                    break
+            self._clip = (self._fromLibrary(engine) if self._library is not None
+                          else self._fromUrl(engine))
         return self._clip
+
+    def _fromLibrary(self, engine: Any) -> Any:
+        """The clip the document's own audio library resolves for this source."""
+        # The library is built while the document loads, before there is an
+        # engine to ask, and the engine's clip cache is what fixes the rate
+        # everything is decoded and mixed at.  Hand it over once one exists.
+        self._library.cache = engine.clips
+        return self._library.clip(self._audioIndex)
+
+    def _fromUrl(self, engine: Any) -> Any:
+        """The first of :attr:`url` that decodes, most-preferred first."""
+        for name in self.url:
+            found = engine.clip(name)
+            if found is not None:
+                return found
+        return None
 
     def record(self) -> model.AudioSource:
         """This node's fields as the ``KHR_audio_emitter`` record.
@@ -336,8 +368,9 @@ class Sound(basenodes.Sound):
     Its geometry is not the glTF one and cannot be expressed as one: two
     ellipsoids sharing a focus at ``location``, with a ramp between them that is
     linear in decibels.  So it works out its own level with
-    :func:`~OpenGLContext.audio.spatial.ellipsoid_gain` and hands the engine a
-    finished number to pan, which is the one thing the two models share.
+    :func:`~omi_audio.spatial.ellipsoid_gain_at`, which takes the sound's world
+    location and direction and the listener's position, and hands the engine a
+    finished number to pan -- which is the one thing the two models share.
 
     Of VRML97's time-dependent behaviour it honours what can be seen from
     outside: ``startTime`` and ``stopTime`` bound when the clip sounds,
@@ -370,7 +403,10 @@ class Sound(basenodes.Sound):
             return
         location = point_to_world(self.location, matrix)
         direction = direction_to_world(self.direction, matrix)
-        level = self.intensity * self._ellipsoidGain(engine, location, direction)
+        level = self.intensity * spatial.ellipsoid_gain_at(
+            location, direction, engine.listener.position,
+            min_front=self.minFront, min_back=self.minBack,
+            max_front=self.maxFront, max_back=self.maxBack)
         if not self._scheduled(source, now):
             self._stop(source)
             return
@@ -387,20 +423,6 @@ class Sound(basenodes.Sound):
         """Silence this sound."""
         source = self.source
         self._stop(source if isinstance(source, basenodes.AudioClip) else None)
-
-    def _ellipsoidGain(self, engine: Any, location: np.ndarray,
-                       direction: np.ndarray) -> float:
-        """How loud this sound is at the listener, by VRML97's own geometry."""
-        listener = engine.listener
-        offset = listener.position - location
-        distance = float(np.linalg.norm(offset))
-        length = float(np.linalg.norm(direction))
-        cos_theta = 1.0
-        if distance > 0.0 and length > 0.0:
-            cos_theta = float(np.dot(direction / length, offset / distance))
-        return spatial.ellipsoid_gain(
-            distance, cos_theta, min_front=self.minFront, min_back=self.minBack,
-            max_front=self.maxFront, max_back=self.maxBack)
 
     def _scheduled(self, source: Any, now: float) -> bool:
         """Whether the clip's ``startTime``/``stopTime`` allow it to sound.
@@ -493,37 +515,67 @@ def stop_scene_audio(paths: Sequence[Any]) -> None:
             stop()
 
 
+def audio_location(audio: model.Audio,
+                   resolve: Optional[Callable[[str], str]] = None) -> List[str]:
+    """Where a piece of a document's audio is, as something a reader can act on.
+
+    Empty where there is no location to give: a ``bufferView`` lives inside the
+    document, and a ``data:`` URI *is* the content rather than a place to find
+    it.  Empty too where ``resolve`` refuses the reference -- a uri pointing
+    outside what the document may reach costs the sound, not the scene.
+    """
+    if not audio.uri or audio.uri.startswith('data:'):
+        return []
+    if resolve is None:
+        return [audio.uri]
+    try:
+        return [resolve(audio.uri)]
+    except (OSError, ValueError) as error:
+        log.warning('audio %r is not a reference this document may make: %s',
+                    audio.uri, error)
+        return []
+
+
 def emitters_from_document(document: model.AudioDocument,
-                           indices: Optional[Sequence[int]] = None,
+                           emitters: Optional[Sequence[model.AudioEmitter]] = None,
+                           library: Optional[Any] = None,
                            resolve: Optional[Callable[[str], str]] = None
                            ) -> List[AudioEmitter]:
-    """Scenegraph nodes for the emitters a parsed glTF document declares.
+    """Scenegraph nodes for emitters a parsed glTF document declares.
 
-    ``indices`` selects which of the document's emitters to build -- a glTF node
-    or scene names the ones it carries -- and defaults to all of them.  An index
-    that names no emitter is skipped rather than raising: content is not always
-    well formed, and a bad index should cost a sound, not a scene.
+    ``emitters`` is what a glTF node or scene names, already resolved --
+    :meth:`~omi_audio.model.AudioDocument.emitters_for_node` and
+    :meth:`~omi_audio.model.AudioDocument.emitters_for_scene` turn a reference
+    into records, skip an index that points at nothing, and enforce the rule
+    that a scene carries only global emitters.  Defaults to every emitter the
+    document declares.
 
-    ``resolve`` turns an audio ``uri`` into something openable.  The extension
-    states that a uri is relative to the document, and only the loader knows
-    where that was, so the loader supplies this.
+    ``library`` is where a source's samples come from.  A document names its
+    audio by index, and :class:`omi_audio.library.AudioLibrary` is what turns
+    one into a clip using the loader's own resolver -- so audio embedded in the
+    document plays exactly as audio beside it does.  Without one, sources fall
+    back to opening :attr:`AudioSource.url`, which embedded audio does not have.
+
+    ``resolve`` turns an audio ``uri`` into the absolute one to record in
+    :attr:`AudioSource.url`.  The extension states that a uri is relative to the
+    document, and only the loader knows where that was.
     """
-    if indices is None:
-        indices = range(len(document.emitters))
+    if emitters is None:
+        emitters = document.emitters
     nodes = []
-    for index in indices:
-        if not (0 <= index < len(document.emitters)):
-            continue
-        emitter = document.emitters[index]
+    for emitter in emitters:
         sources = []
         for source in document.sources_for(emitter):
             audio = document.audio_for(source)
-            if audio is None or not audio.uri:
+            if audio is None:
                 continue
-            uri = resolve(audio.uri) if resolve is not None else audio.uri
-            sources.append(AudioSource(
-                url=[uri], gain=source.gain, playbackRate=source.playbackRate,
-                loop=source.loop, autoplay=source.autoplay))
+            built = AudioSource(
+                url=audio_location(audio, resolve), gain=source.gain,
+                playbackRate=source.playbackRate, loop=source.loop,
+                autoplay=source.autoplay)
+            if library is not None:
+                built.useLibrary(library, source.audio)
+            sources.append(built)
         named: Dict[str, Any] = {'type': emitter.type, 'gain': emitter.gain,
                                  'sources': sources}
         if emitter.positional is not None:

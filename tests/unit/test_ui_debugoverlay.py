@@ -322,9 +322,10 @@ class TestBuiltInProviders:
         device, no voice, or a gain of nothing -- and they are indistinguishable
         by listening.
         """
+        from omi_audio.device import NullDevice
+        from omi_audio.engine import AudioEngine
+
         from OpenGLContext.audio import scene as audioscene
-        from OpenGLContext.audio.device import NullDevice
-        from OpenGLContext.audio.engine import AudioEngine
         from OpenGLContext.contextdefinition import ContextDefinition
         from OpenGLContext.ui.debugoverlay import audio_provider
 

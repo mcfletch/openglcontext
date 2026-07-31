@@ -51,6 +51,16 @@ layer. VRML97's own <code>Sound</code> node is implemented too, on the same
 machinery. The mixing is ours, in numpy, so nothing here depends on a copyleft
 audio library, and every gain curve is a testable function of geometry. The
 indented <span class="technical">technical notes</span> point at the code.</p>
+<p><strong>The engine itself is a separate package,
+<a href="https://github.com/mcfletch/omi_audio"><code>omi_audio</code></a></strong>,
+which OpenGLContext depends on the way it depends on <code>omi_physics</code>.
+It holds the data model, every gain curve, the clip cache, the mixer, the device
+seam and the engine, and it knows nothing about a scenegraph. What is in
+OpenGLContext is the two integrations: the <code>AudioEmitter</code>,
+<code>AudioSource</code> and <code>Sound</code> nodes, and the per-context engine
+the render pass drives. The split means a project with no renderer &mdash; or a
+different one &mdash; can use the sound without taking OpenGLContext, and the
+mixer can be tested without one.</p>
 </section>
 
 <section id="quickstart">
@@ -215,45 +225,54 @@ fountain = Transform(translation=(3, 0, -5), children=[
     playing sound</strong>. A moving emitter is not restarted, re-resolved or
     re-decoded; its voice's target gains are overwritten, and the mixer ramps to
     them across the next block.</p>
-  <p class="technical"><code>audio/engine.py</code> owns the left-hand side,
-    <code>audio/mixer.py</code> the right. The mixer imports no path, no matrix
-    and no listener &mdash; grep it and see.</p>
+  <p class="technical"><code>omi_audio/engine.py</code> owns the left-hand side,
+    <code>omi_audio/mixer.py</code> the right. The mixer imports no path, no
+    matrix and no listener &mdash; grep it and see.</p>
 </section>
 
 <section id="pipeline">
   <h2>The module chain</h2>
+  <p>Everything above the line is the <code>omi_audio</code> package and has no
+    idea a scenegraph exists; everything below it is OpenGLContext's own, and is
+    the whole of what makes the two meet.</p>
   <table>
     <tr><th>Module</th><th>Answers</th><th>Depends on</th></tr>
-    <tr><td><code>audio/model.py</code></td>
+    <tr><td><code>omi_audio/model.py</code></td>
         <td><code>KHR_audio_emitter</code> as typed records, with the
             extension's own field names and defaults; glTF round-trips through
             <code>from_gltf</code>/<code>to_gltf</code></td>
         <td><code>spatial</code></td></tr>
-    <tr><td><code>audio/spatial.py</code></td>
+    <tr><td><code>omi_audio/spatial.py</code></td>
         <td>Every gain curve, and where the listener is</td>
         <td>numpy</td></tr>
-    <tr><td><code>audio/clip.py</code></td>
+    <tr><td><code>omi_audio/clip.py</code></td>
         <td>Files &rarr; mono float32 samples, decoded once</td>
         <td><code>miniaudio</code> (optional)</td></tr>
-    <tr><td><code>audio/synth.py</code></td>
+    <tr><td><code>omi_audio/synth.py</code></td>
         <td>Tones, noise, chirps and impacts made out of arithmetic</td>
         <td><code>clip</code></td></tr>
-    <tr><td><code>audio/mixer.py</code></td>
+    <tr><td><code>omi_audio/mixer.py</code></td>
         <td>The voice pool and the block mixing</td>
         <td><code>clip</code>, <code>spatial</code></td></tr>
-    <tr><td><code>audio/device.py</code></td>
+    <tr><td><code>omi_audio/device.py</code></td>
         <td>Where blocks go, and what to do when nowhere</td>
         <td><code>miniaudio</code> (optional)</td></tr>
-    <tr><td><code>audio/engine.py</code></td>
+    <tr><td><code>omi_audio/engine.py</code></td>
         <td>The one object an application holds</td>
         <td>all of the above</td></tr>
-    <tr><td><code>audio/scene.py</code></td>
+    <tr><td colspan="3" style="text-align:center"><em>&mdash; the package
+        boundary &mdash;</em></td></tr>
+    <tr><td><code>OpenGLContext/audio/scene.py</code></td>
         <td>Attaching an engine to a context and driving a frame</td>
-        <td><code>engine</code></td></tr>
-    <tr><td><code>scenegraph/audio.py</code></td>
+        <td><code>omi_audio.engine</code></td></tr>
+    <tr><td><code>OpenGLContext/audio/settings.py</code></td>
+        <td>The player's switch, volume and voice budget, as a
+            <code>ContextDefinition</code> sub-node</td>
+        <td>the field system</td></tr>
+    <tr><td><code>OpenGLContext/scenegraph/audio.py</code></td>
         <td>The <code>AudioEmitter</code>, <code>AudioSource</code> and
             <code>Sound</code> nodes</td>
-        <td><code>engine</code></td></tr>
+        <td><code>omi_audio.model</code>, <code>omi_audio.spatial</code></td></tr>
   </table>
 </section>
 
@@ -418,7 +437,9 @@ handle.stop()               # likewise; no caller ever has to test first</pre>
   <p>Sound can be unavailable two ways, and both end in the same place:</p>
   <ul>
     <li><strong>The package is absent.</strong> <code>miniaudio</code> is an
-      optional dependency (<code>pip install OpenGLContext[audio]</code>).</li>
+      optional dependency of <code>omi_audio</code>, pulled in by
+      <code>pip install OpenGLContext[audio]</code> (or
+      <code>pip install omi_audio[playback]</code> on its own).</li>
     <li><strong>No device opens.</strong> A container with no ALSA or
       PulseAudio, a machine with no sound card, a device something else holds
       exclusively &mdash; or the backend falling back to its <em>own</em> null
@@ -432,9 +453,10 @@ handle.stop()               # likewise; no caller ever has to test first</pre>
   <p>That makes the fallback real code that has to keep working, so it is tested
     directly &mdash; including a test that forces the import to fail &mdash;
     rather than being assumed.</p>
-  <p class="technical"><code>tests/unit/test_audio_device.py</code> covers the
-    absent-package path, the will-not-open path and the backend's-own-null path;
-    <code>test_audio_clip.py</code> covers decoding with the backend forced
+  <p class="technical">In <code>omi_audio</code>,
+    <code>tests/test_device.py</code> covers the absent-package path, the
+    will-not-open path and the backend's-own-null path;
+    <code>tests/test_clip.py</code> covers decoding with the backend forced
     away.</p>
 </section>
 
@@ -503,23 +525,34 @@ handle.stop()               # likewise; no caller ever has to test first</pre>
     rather than a decode followed by two conversions. It is MIT-licensed, as is
     every decoder it bundles &mdash; nothing in the chain is copyleft, which is
     the reason it is the only audio package this project takes.</p>
-  <p><code>ClipCache</code> is keyed by resolved path, so a sound fired sixty
-    times a second decodes once and two spellings of one file are one entry. A
-    name that fails to decode is remembered as a failure: a missing file warns
-    once, not once per shot, and yields a silence rather than an exception.</p>
+  <p><code>ClipCache</code> is keyed by name, so a sound fired sixty times a
+    second decodes once. A name that fails to decode is remembered as a failure:
+    a missing file warns once, not once per shot, and yields a silence rather
+    than an exception. The cache does not normalise a name or test it against
+    the filesystem &mdash; whatever a name means is settled before it gets
+    there, which for a glTF document is the job of the resolver.</p>
   <p><code>AudioSource.url</code> is a <em>list</em>, most preferred first, and
     the first entry that decodes wins. That is how the glTF codec extensions
     (<code>OMI_audio_ogg_vorbis</code>, <code>OMI_audio_opus</code>) are meant to
     be read: offer the better format, fall back to the one everything can
     play.</p>
+  <p>A source built from a glTF document takes its samples from that document's
+    <code>omi_audio.AudioLibrary</code> instead, through
+    <code>AudioSource.useLibrary()</code>. A document names its audio by index
+    rather than by anything a node could open &mdash; audio inside a
+    <code>.glb</code> has no name at all &mdash; so <code>url</code> there
+    records <em>where the sound is</em>, for anything that displays it, while
+    the library is what produces the bytes. It is empty for audio that has no
+    location: a <code>bufferView</code>, a <code>data:</code> URI, or a
+    reference the resolver refuses.</p>
 
   <h3>Sounds with no files</h3>
-  <p><code>OpenGLContext.audio.synth</code> makes clips out of arithmetic
+  <p><code>omi_audio.synth</code> makes clips out of arithmetic
     &mdash; a tone, a swept chirp, white noise, a percussive impact. They cost
     nothing to redistribute, which is why the demo below ships no assets, and
     they are genuinely useful as placeholders: a game with a synthesised gunshot
     is a game that can be played and tuned.</p>
-  <pre>from OpenGLContext.audio import synth
+  <pre>from omi_audio import synth
 engine.clips.put('ping', synth.impact(0.4, seed=1))
 engine.play('ping', priority=1.0)</pre>
 </section>
@@ -533,14 +566,35 @@ engine.play('ping', priority=1.0)</pre>
     &mdash; hang off the root, where no transform reaches them.</p>
   <pre>from OpenGLContext.loaders.gltf import loader
 scene = loader.load_gltf('room.gltf')   # its emitters are already in there</pre>
-  <p>Audio URIs go through the same security-hardened resolver every other
-    external reference does, so a sound is confined to the document's own origin
-    exactly as a texture is.</p>
-  <p class="technical"><code>loaders/gltf/scene.py</code>, method
-    <code>_audio_emitters</code>; the model reader is
-    <code>audio.model.from_gltf</code>, and
-    <code>audio.model.to_gltf</code> writes it back out, omitting every field
-    still at its default.</p>
+  <p>Audio arrives the three ways glTF allows, and all three work: a
+    <code>uri</code> beside the document, a <code>data:</code> URI inline, and a
+    <code>bufferView</code> inside the file &mdash; which is what a
+    <code>.glb</code>, the dominant shipping format, uses.</p>
+
+  <h3>Who decides what a <code>uri</code> means</h3>
+  <p><strong>This does.</strong> <code>omi_audio</code> never resolves, opens or
+    interprets a document's <code>uri</code>: a scene file comes from a third
+    party, and a reference in one may be relative, absolute, percent-encoded, a
+    <code>data:</code> URI, an <code>http:</code> URL or a deliberate attempt to
+    escape the content directory. Only the loader knows where the document was
+    and what it may reach.</p>
+  <p>So audio goes through the same security-hardened
+    <code>Resolver</code> every other external reference does &mdash; same-origin
+    http(s) only, or confined to the base directory, size-capped &mdash; and the
+    bytes are handed to <code>omi_audio.AudioLibrary</code>, which decodes them
+    and holds the result for the document. A sound is confined to the document's
+    own origin exactly as a texture is, and a reference the resolver refuses
+    costs that sound rather than the scene.</p>
+  <p class="technical"><code>loaders/gltf/scene.py</code>: <code>audio_library</code>
+    builds the <code>AudioLibrary</code> with <code>_fetch_audio</code> as its
+    fetch callback, and <code>_audio_emitters</code> resolves a node's or
+    scene's references through
+    <code>omi_audio.model.AudioDocument.emitters_for_node</code> /
+    <code>emitters_for_scene</code> &mdash; the latter enforcing the extension's
+    rule that a scene, which has no transform, carries only <code>global</code>
+    emitters. The model reader is <code>omi_audio.model.from_gltf</code>, and
+    <code>omi_audio.model.to_gltf</code> writes it back out, omitting every
+    field still at its default.</p>
 </section>
 
 <section id="vrml">
@@ -561,6 +615,14 @@ scene = loader.load_gltf('room.gltf')   # its emitters are already in there</pre
     clip whose <code>startTime</code> has passed begins at its start.
     <code>spatialize=FALSE</code> still fades with distance but sits in the
     middle of the stereo field, which is what the specification says.</p>
+  <p class="technical">The geometry is
+    <code>omi_audio.spatial.ellipsoid_gain_at(location, direction,
+    listener_position, ...)</code>, which takes three world-space vectors and
+    works the distance and the angle out for itself. All the node does is put
+    its <code>location</code> and <code>direction</code> into world space,
+    multiply by <code>intensity</code>, and pan &mdash; a sound with a zero
+    <code>direction</code> has no front to tell from its back, so its
+    <code>front</code> distances reach in every direction.</p>
 </section>
 
 <section id="api">
@@ -572,7 +634,7 @@ scene = loader.load_gltf('room.gltf')   # its emitters are already in there</pre
 engine = audioscene.engine_for(self)          # None if audio is switched off
 if engine is not None:
     engine.play('weapon/rocket_fire.wav',
-                emitter=emitter_record,        # an audio.model.AudioEmitter
+                emitter=emitter_record,        # an omi_audio.model.AudioEmitter
                 position=muzzle_world_position,
                 gain=1.0, priority=0.8)</pre>
   <table>
@@ -607,19 +669,24 @@ if engine is not None:
   <h2>Testing sound without a sound card</h2>
   <p>Nearly all of this is arithmetic over arrays, and an array can be asserted
     about. Build an engine on a <code>NullDevice</code> and read the mix:</p>
-  <pre>from OpenGLContext.audio.device import NullDevice
-from OpenGLContext.audio.engine import AudioEngine
-from OpenGLContext.audio import synth
+  <pre>from omi_audio.device import NullDevice
+from omi_audio.engine import AudioEngine
+from omi_audio import synth
 
 engine = AudioEngine(device=NullDevice(sample_rate=8000), voices=8)
-engine.play(synth.tone(440.0, 1.0, sample_rate=8000), pan=1.0)
+engine.mixer.play(synth.tone(440.0, 1.0, sample_rate=8000), pan=1.0)
 block = engine.mixer.mix(64)          # (64, 2) float32
-assert block[:, 0].max() == 0.0       # nothing in the left ear</pre>
-  <p>The suite covers the curves at known distances and angles, panning either
-    side of the listener, voice stealing under pressure, the ramp, the muffle's
-    frequency response, the glTF round-trip, and both silent paths. One test
-    asserts that mixing a full pool for twenty blocks allocates nothing
-    measurable, which is the property the whole design rests on.</p>
+assert block[:, 0].max() &lt; 1e-9       # nothing in the left ear
+assert block[:, 1].max() &gt; 0.1        # and plenty in the right</pre>
+  <p><code>omi_audio</code>'s own suite covers the curves at known distances and
+    angles, panning either side of the listener, voice stealing under pressure,
+    the ramp, the muffle's frequency response, the glTF round-trip, both silent
+    paths, and the level in dBFS at the device boundary for a source at a stated
+    position. One test asserts that mixing a full pool for twenty blocks
+    allocates nothing measurable, which is the property the whole design rests
+    on. OpenGLContext's own <code>tests/unit/test_audio_*.py</code> cover what it
+    adds: the nodes, the per-context engine, the pass wiring and the glTF
+    import.</p>
 </section>
 
 <section id="demos">

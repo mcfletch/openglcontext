@@ -1,9 +1,9 @@
 """Giving a context an ear, and driving the scene's sounds once a frame.
 
-This is the whole of the seam between the render loop and
-:mod:`OpenGLContext.audio`.  The render pass already collects every
-:class:`~vrml.vrml97.nodetypes.Auditory` node path and already knows where the
-camera is; :func:`update` turns those two facts into sound.
+This is the whole of the seam between the render loop and :mod:`omi_audio`.  The
+render pass already collects every :class:`~vrml.vrml97.nodetypes.Auditory` node
+path and already knows where the camera is; :func:`update` turns those two facts
+into sound.
 
 **Silence costs nothing.**  A context gets no engine, and therefore opens no
 device and starts no audio thread, until a frame is drawn with something audible
@@ -22,8 +22,9 @@ import time
 import weakref
 from typing import Any, Dict, Optional, Sequence
 
-from OpenGLContext.audio.device import open_device
-from OpenGLContext.audio.engine import AudioEngine
+from omi_audio.device import open_device
+from omi_audio.engine import AudioEngine
+
 from OpenGLContext.audio.settings import settings_for
 from OpenGLContext.scenegraph.audio import stop_scene_audio, update_scene_audio
 

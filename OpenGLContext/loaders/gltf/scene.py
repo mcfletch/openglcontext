@@ -20,10 +20,11 @@ import re
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union
 
 import numpy as np
+from omi_audio import model as audiomodel
+from omi_audio.library import AudioLibrary
 
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
 from OpenGLContext.scenegraph import audio as audionodes
-from OpenGLContext.audio import model as audiomodel
 from OpenGLContext.loaders.resolver import Resolver
 
 if TYPE_CHECKING:
@@ -39,7 +40,9 @@ else:
     from OpenGLContext.scenegraph.basenodes import (
         Transform, Viewpoint, DirectionalLight, PointLight, SpotLight,
     )
-from OpenGLContext.loaders.gltf.accessors import _read_normalized
+from OpenGLContext.loaders.gltf.accessors import (
+    _buffer_bytes, _decode_data_uri, _read_normalized, _resolver_max,
+)
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _expand_bounds, look_orientation, _quat_to_xyzr,
@@ -128,12 +131,18 @@ class GLTFScene(object):
                       skins=self.skins, compute_worlds=compute_worlds)
 
 
-def _scene_extension(g: "pygltflib.GLTF2", name: str) -> Any:
-    """The named extension block on the document's active scene, if any."""
-    if not g.scenes:
-        return None
-    extensions = getattr(g.scenes[g.scene or 0], 'extensions', None) or {}
-    return extensions.get(name) if isinstance(extensions, dict) else None
+def _active_scene(g: "pygltflib.GLTF2") -> Any:
+    """The scene being built, or None where the document declares none."""
+    return g.scenes[g.scene or 0] if g.scenes else None
+
+
+def _extension_holder(holder: Any) -> dict:
+    """A glTF node or scene in the plain shape the extension is specified against.
+
+    ``pygltflib`` hands back objects; :mod:`omi_audio.model` reads the JSON, so
+    the loader is what converts between the two.
+    """
+    return {'extensions': getattr(holder, 'extensions', None) or {}}
 
 
 def _scene_root_indices(g: "pygltflib.GLTF2") -> list:
@@ -389,7 +398,8 @@ class _SceneBuilder:
         self.resolver = resolver
         self.mat_cache: dict = {}
         self.tex_cache: dict = {}
-        self.mesh_cache: dict = {}   # decoded mesh shapes + local bounds per mesh index
+        # decoded mesh shapes + local bounds, per mesh index
+        self.mesh_cache: dict[int, list] = {}
         # SceneGraph holds the DEF registry; every node's Transform is registered
         # under a DEF so a caller can grab it by name (see _def_name).
         self.scene_graph = SceneGraph()
@@ -414,6 +424,7 @@ class _SceneBuilder:
         # into the native model so nodes and scenes can name emitters by index.
         self.audio_document = audiomodel.from_gltf(
             (top_ext.get(audiomodel.EXTENSION) or {}) if isinstance(top_ext, dict) else {})
+        self._audio_library: Optional[AudioLibrary] = None
 
     def mesh_shapes(self, mesh_index: int) -> list:
         if mesh_index in self.mesh_cache:
@@ -507,24 +518,70 @@ class _SceneBuilder:
                     wpos = (None if isinstance(light, DirectionalLight) else
                             tuple(float(v) for v in (np.array([0, 0, 0, 1.0]) @ world)[:3]))
                     self.light_meter.append((light, wpos))
-        if isinstance(node_ext, dict) and self.audio_document.emitters:
-            children.extend(self._audio_emitters(node_ext.get(audiomodel.EXTENSION)))
+        if self.audio_document.emitters:
+            children.extend(self._audio_emitters(node))
         for child in (node.children or []):
             children.append(self.build(child, world, ancestry, node_visible))
         group.children = children  # type: ignore[assignment]
         return group
 
-    def _audio_emitters(self, block: Any) -> list:
-        """AudioEmitter nodes for a KHR_audio_emitter block on a node or scene.
+    @property
+    def audio_library(self) -> AudioLibrary:
+        """What this document's audio references resolve to, made once.
 
-        A sound's ``uri`` is relative to the document, so it goes through the
-        same resolver every other external reference does -- which is also what
-        keeps it inside the document's own origin.
+        `omi_audio` never interprets a ``uri``; the policy about what a document
+        may reach lives in :class:`~OpenGLContext.loaders.resolver.Resolver`,
+        alongside the one every texture and buffer goes through.
         """
-        if not isinstance(block, dict):
+        if self._audio_library is None:
+            self._audio_library = AudioLibrary(self.audio_document,
+                                               fetch=self._fetch_audio)
+        return self._audio_library
+
+    def _audio_bytes(self, audio: audiomodel.Audio) -> Optional[bytes]:
+        """The encoded bytes of one audio entry, from wherever glTF put them."""
+        if audio.bufferView is not None:
+            views = self.g.bufferViews or []
+            if not (0 <= audio.bufferView < len(views)):
+                return None
+            view = views[audio.bufferView]
+            data = _buffer_bytes(self.g, view.buffer, self.resolver)
+            start = view.byteOffset or 0
+            return data[start:start + view.byteLength]
+        if not audio.uri:
+            return None
+        if audio.uri.startswith('data:'):
+            return _decode_data_uri(audio.uri, _resolver_max(self.resolver))
+        return self.resolver.fetch(audio.uri)
+
+    def _fetch_audio(self, library: AudioLibrary, index: int,
+                     audio: audiomodel.Audio) -> None:
+        """Hand the audio library the bytes for one entry, or say why not."""
+        try:
+            data = self._audio_bytes(audio)
+        except (OSError, ValueError) as error:
+            library.fail(index, str(error))
+            return
+        if data is None:
+            library.fail(index, 'the document gives it no uri and no bufferView')
+        else:
+            library.supply_bytes(index, data)
+
+    def _audio_emitters(self, holder: Any, scene: bool = False) -> list:
+        """AudioEmitter nodes for the emitters a glTF node or scene names.
+
+        Resolving the reference is the audio model's job, and so is the rule
+        that a scene -- which has no transform for a sound to come from -- may
+        carry only global emitters.
+        """
+        document = self.audio_document
+        container = _extension_holder(holder)
+        emitters = (document.emitters_for_scene(container) if scene
+                    else document.emitters_for_node(container))
+        if not emitters:
             return []
         return audionodes.emitters_from_document(
-            self.audio_document, block.get('emitters') or (),
+            document, emitters, library=self.audio_library,
             resolve=self.resolver.resolve)
 
     def run(self) -> GLTFScene:
@@ -536,8 +593,9 @@ class _SceneBuilder:
         root_children = [self.build(ni, np.eye(4)) for ni in _scene_root_indices(g)]
         # Scene-level emitters are global by definition -- music and ambience --
         # so they hang off the root, where no transform reaches them.
-        if self.audio_document.emitters:
-            root_children.extend(self._audio_emitters(_scene_extension(g, audiomodel.EXTENSION)))
+        active = _active_scene(g)
+        if self.audio_document.emitters and active is not None:
+            root_children.extend(self._audio_emitters(active, scene=True))
         # children is a VRML ChildrenTypedField descriptor that coerces a node list.
         root.children = root_children  # type: ignore[assignment]
         self.scene_graph.children = [root]
