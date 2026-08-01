@@ -37,6 +37,10 @@ What the widgets are for:
   screen edge the player would have to turn towards.  How much was lost is
   already on the meter; where it came from is the part a player cannot see and
   can act on.
+* :class:`ScreenWash` -- a colour over the whole viewport, for the states
+  where the *view* has changed rather than where something has happened in it:
+  being dead, being under water, a fade.  It has no direction to give, which
+  is exactly what distinguishes it from the one above.
 
 Everything here is arithmetic over a viewport and a font, so a HUD's layout is
 testable with no window at all: hand a layer a viewport and read the
@@ -58,7 +62,7 @@ from OpenGLContext.ui.widgets import RootWidget, Widget
 
 __all__ = [
     'HUDLayer', 'HUDWidget', 'HUDGroup', 'Crosshair', 'BarMeter', 'Readout',
-    'Message', 'MessageQueue', 'DamageIndicator', 'DamageMark',
+    'Message', 'MessageQueue', 'DamageIndicator', 'DamageMark', 'ScreenWash',
     'place', 'hud_text',
     'CROSS', 'DOT', 'CROSS_DOT', 'CIRCLE', 'NONE', 'ANCHORS', 'EDGES',
 ]
@@ -599,6 +603,59 @@ class Readout(HUDWidget):
                                 max(0, self.rect.right - left),
                                 self.rect.height),
                  text, self.valueColour(skin), align=str(self.align))
+
+
+class ScreenWash(HUDWidget):
+    """A colour over the whole viewport: the world seen through something.
+
+    The counterpart to :class:`DamageIndicator`, which washes the *edge* a hit
+    came from because direction is what a player has to act on.  This one has
+    no direction to give, and is for the states where the view itself has
+    changed rather than where something has happened in it -- being dead,
+    being under water, the moment a screen fades.
+
+    ``strength`` is how solid it is and is the whole of the design decision.
+    A wash a player can still read the room through is information; one they
+    cannot is a curtain, and the only state that earns a curtain is one where
+    there is nothing left to read.
+    """
+
+    PROTO = 'ScreenWash'
+    anchor = field.newField('anchor', 'SFString', 1, 'center')
+    #: What colour, and how solid, 0 to 1.  Visible is a separate field on the
+    #: widget itself, so switching one on and off does not disturb its colour.
+    colour = field.newField('colour', 'SFColor', 1, (1.0, 0.0, 0.0))
+    strength = field.newField('strength', 'SFFloat', 1, 0.0)
+
+    interactive = False
+
+    def wash(self) -> Optional[Tuple[Rect, Tuple[float, float, float, float]]]:
+        """The rectangle to fill and its colour, or None when it is invisible.
+
+        None rather than a transparent rectangle, so a wash that is switched
+        off costs a comparison rather than a draw -- this is over the whole
+        screen and it is up on most frames of most games at zero strength.
+        """
+        alpha = max(0.0, min(1.0, float(self.strength)))
+        if alpha <= 0.0 or self.rect.empty:
+            return None
+        colour = self.colour
+        return (self.rect, (float(colour[0]), float(colour[1]),
+                            float(colour[2]), alpha))
+
+    def content_size(self, metrics: FontMetrics,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        """The whole layer: a wash is the screen, not a box on it."""
+        parent = getattr(self, 'parent', None)
+        area = getattr(parent, 'rect', None)
+        if area is None:
+            return (0, 0)
+        return (area.width, area.height)
+
+    def paint(self, renderer: Any) -> None:
+        found = self.wash()
+        if found is not None:
+            renderer.rect(*found)
 
 
 class Message(object):

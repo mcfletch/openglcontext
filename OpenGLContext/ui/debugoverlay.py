@@ -46,8 +46,9 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     'DebugOverlay', 'DebugPanel', 'DebugSection', 'Fixed', 'LaidOutRow',
-    'audio_provider', 'format_value', 'frame_provider', 'render_provider',
-    'platform_provider', 'physics_provider', 'install_default_providers',
+    'audio_provider', 'format_value', 'frame_provider', 'loop_provider',
+    'render_provider', 'platform_provider', 'physics_provider',
+    'simulation_provider', 'install_default_providers',
 ]
 
 #: What a provider returns: pairs of name and value, or a mapping of the same.
@@ -340,6 +341,50 @@ def frame_provider(context: Any) -> Provider:
     return rows
 
 
+def loop_provider(context: Any) -> Provider:
+    """What the whole main loop costs, and which part of it costs that.
+
+    The section to read when the Frame section looks healthy and the game does
+    not.  ``fps`` above measures the inside of ``OnDraw`` and only for frames
+    that changed something; ``loop fps`` here measures iterations of wall
+    clock, which is the rate a player's hands feel.  The two disagreeing is the
+    diagnosis: the renderer is keeping up and something outside it is not.
+
+    ``loop ms`` beside ``worst ms`` says the same thing about a single hitch
+    that a median cannot -- a healthy median next to a worst ten times larger
+    is a loop that stutters -- and the phase rows below say where the worst one
+    went.  Phases divide the iteration rather than overlapping it, so they add
+    up to ``loop ms`` and the largest is the culprit by construction.
+
+    Left out entirely by a backend that runs its own loop and never opens an
+    iteration: rows of zeroes would read as a loop doing nothing at all, which
+    is a worse answer than no rows.
+    """
+    def rows() -> Rows:
+        trace = getattr(context, 'loopTrace', None)
+        if trace is None:
+            return []
+        summary = trace.summary()
+        if not summary['iterations']:
+            return []
+        found: List[Tuple[str, Any]] = [
+            ('loop fps', Fixed(summary['rate'])),
+            ('loop ms', Fixed(summary['median_ms'])),
+            ('worst ms', Fixed(summary['worst_ms'])),
+            ('stalls', summary['stalls']),
+        ]
+        culprit = trace.worst_phase()
+        if culprit is not None:
+            found.append(('last stall', '%s %.0fms' % culprit))
+        # Worst first, which `phases_ms` already orders them by: a panel that
+        # reads top-down as most-to-least expensive answers "where did it go"
+        # without the reader comparing every row against every other.
+        found.extend((name, Fixed(milliseconds))
+                     for name, milliseconds in trace.phases_ms().items())
+        return found
+    return rows
+
+
 def render_provider(context: Any) -> Provider:
     """Which renderer features are on, and what the last frame cost in draws."""
     def rows() -> Rows:
@@ -410,6 +455,38 @@ def physics_provider(world: Callable[[], Any]) -> Provider:
     return rows
 
 
+def simulation_provider(simulation: Callable[[], Any]) -> Provider:
+    """Whether a background physics thread is getting the turns it asked for.
+
+    The companion to :func:`physics_provider`, which reports on the *world*;
+    this reports on the thread stepping it.  A simulation that falls behind
+    resets its schedule rather than running the missed ticks back to back --
+    the only alternative is a spiral -- so being starved costs simulated time
+    silently, and everything in the world moves slowly.  That is
+    indistinguishable from wrong gravity, wrong units or a wrong timestep until
+    ``sim hz`` is on the panel beside the rate that was asked for.
+
+    Takes a callable for the same reason :func:`physics_provider` does: a
+    simulation is built when a level loads and replaced when the next one does.
+    """
+    def rows() -> Rows:
+        found_sim = simulation()
+        if found_sim is None:
+            return []
+        found: List[Tuple[str, Any]] = [
+            ('sim hz', Fixed(found_sim.rate())),
+            ('asked', Fixed(found_sim.sim_hz)),
+            ('steps', found_sim.steps),
+        ]
+        # Zero is the healthy answer and a healthy row is a row not worth the
+        # space; a non-zero one is the whole reason the section exists.
+        dropped = found_sim.dropped
+        if dropped:
+            found.append(('dropped', dropped))
+        return found
+    return rows
+
+
 def audio_provider(context: Any) -> Provider:
     """What this context's sound is doing, and whether it is doing it at all.
 
@@ -433,6 +510,10 @@ def audio_provider(context: Any) -> Provider:
 def install_default_providers(overlay: DebugOverlay, context: Any) -> None:
     """Register the sections every context can answer for itself."""
     overlay.register('Frame', frame_provider(context), order=10)
+    # Directly under Frame, because the two are read against each other: a
+    # healthy `fps` over a poor `loop fps` is the whole diagnosis, and a reader
+    # who has to hunt down the panel for the second number will not compare it.
+    overlay.register('Loop', loop_provider(context), order=15)
     overlay.register('Render', render_provider(context), order=20)
     overlay.register('View', platform_provider(context), order=30)
     overlay.register('Audio', audio_provider(context), order=35)

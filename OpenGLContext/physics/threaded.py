@@ -45,6 +45,26 @@ class ThreadedPhysicsManager(PhysicsManager):
         """Total simulation ticks executed since the thread started."""
         return self._sim.steps
 
+    @property
+    def dropped(self) -> int:
+        """Ticks abandoned because the previous one overran its budget."""
+        return self._sim.dropped
+
+    @property
+    def sim_hz(self) -> float:
+        """The tick rate asked for, to be read against :meth:`rate`."""
+        return float(self._sim.sim_hz)
+
+    def rate(self) -> float:
+        """Ticks per second the thread is actually achieving.
+
+        Well below :attr:`sim_hz` means the simulation is not getting the turns
+        it asked for, which on screen is a world that moves in slow motion --
+        indistinguishable from wrong physics until this number is on the panel
+        next to it. Pair with :func:`OpenGLContext.ui.debugoverlay.simulation_provider`.
+        """
+        return self._sim.rate()
+
     # -- render thread ---------------------------------------------------
     def advance(self, real_dt: float) -> float:
         """Render-thread entry point: publish the latest poses (no stepping here)."""

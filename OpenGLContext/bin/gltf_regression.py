@@ -37,6 +37,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, cast
 
+from OpenGLContext import renderoptions
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders import gltf_demos
@@ -253,11 +254,16 @@ def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out:
     if spec.anim_time is not None:
         args += ['--anim-time', repr(float(spec.anim_time))]
 
-    env = dict(os.environ, OPENGLCONTEXT_HIDDEN='1', OPENGLCONTEXT_NO_VSYNC='1',
-               OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_BACKEND='glfw',
-               OPENGLCONTEXT_SHADOW_CASCADES='3',
-               OPENGLCONTEXT_BLOOM='1' if getattr(spec, 'bloom', False) else '0',
-               OPENGLCONTEXT_DISABLE_FPS_DISPLAY='1')
+    # Started from a *clean* rendering environment rather than from whatever
+    # this process happens to be carrying: a baseline comparison whose result
+    # depends on which variables were set before it is not a baseline.  See
+    # `renderoptions.clean_environment`.
+    env = renderoptions.clean_environment(
+        OPENGLCONTEXT_HIDDEN='1', OPENGLCONTEXT_NO_VSYNC='1',
+        OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_BACKEND='glfw',
+        OPENGLCONTEXT_SHADOW_CASCADES='3',
+        OPENGLCONTEXT_BLOOM='1' if getattr(spec, 'bloom', False) else '0',
+        OPENGLCONTEXT_DISABLE_FPS_DISPLAY='1')
     try:
         proc = subprocess.run(
             [sys.executable, '-m', 'OpenGLContext.bin.gltf_view'] + args,

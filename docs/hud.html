@@ -203,6 +203,33 @@ meter.value = value</pre>
     <code>clear()</code> drops them all, which is what a respawn wants: a fresh
     body is not still bleeding from the last one's wounds.</p>
 
+  <h3>ScreenWash &mdash; a colour over the whole viewport</h3>
+  <p>The counterpart to <code>DamageIndicator</code>, and the difference between
+    them is the whole reason there are two. That one has a <em>direction</em> to
+    give and washes the edge a player must turn towards. This one has none: it
+    is for the states where the <em>view itself</em> has changed rather than
+    where something has happened in it &mdash; being dead, being under water,
+    the moment a screen fades.</p>
+  <pre>wash = ScreenWash(colour=(0.65, 0.04, 0.04))
+wash.strength = 0.42        # driven per frame; 0 draws nothing at all</pre>
+  <table>
+    <tr><th>Field</th><th>Units</th><th>Default</th><th>Meaning</th></tr>
+    <tr><td><code>colour</code></td><td>rgb</td><td>(1, 0, 0)</td>
+      <td>What colour the world is seen through.</td></tr>
+    <tr><td><code>strength</code></td><td>0&ndash;1</td><td>0.0</td>
+      <td>How solid it is, and the whole of the design decision. A wash a player
+        can still read the room through is information; one they cannot is a
+        curtain, and the only state that earns a curtain is one where there is
+        nothing left to read.</td></tr>
+  </table>
+  <p>A strength of nothing draws nothing rather than a transparent rectangle:
+    this covers the whole screen and is up on most frames of most games at zero,
+    so being switched off has to cost a comparison and not a draw. Drive
+    <code>strength</code> per frame rather than switching it on at the event, so
+    it can rise with whatever it accompanies &mdash; a wash that snapped on
+    ahead of the camera movement it belongs to reads as a screen effect rather
+    than as the thing that happened.</p>
+
   <h3>Readout &mdash; an icon and a number</h3>
   <p><code>label</code>, <code>value</code> and an optional <code>icon</code>
     (a <code>NineSlice</code>, drawn at <code>iconSize</code>).
@@ -279,6 +306,10 @@ layer.tick(105.0);  assert not queue.entries(105.0)  # gone</pre>
     <tr><td>Frame</td>
       <td>Frame rate (the <em>windowed median</em>, not the lifetime average),
         frame time in milliseconds, frames drawn, the viewport.</td></tr>
+    <tr><td>Loop</td>
+      <td>Wall-clock cost of the whole main loop, and where it went &mdash; see
+        <a href="#loop">below</a>. Left out by backends that run their own loop
+        and never open an iteration.</td></tr>
     <tr><td>Render</td>
       <td>Profile, and whether shadows, IBL, bloom, transmission, instancing
         and vsync are on; then what the last frame cost &mdash; shapes gathered,
@@ -289,15 +320,178 @@ layer.tick(105.0);  assert not queue.entries(105.0)  # gone</pre>
         velocity and mode when there is one.</td></tr>
   </table>
   <p><code>physics_provider(lambda: world)</code> is also supplied, for body and
-    contact counts; it takes a callable rather than a world because a world is
+    contact counts, and <code>simulation_provider(lambda: manager)</code> for a
+    background physics thread
+    (<code>OpenGLContext.physics.threaded.ThreadedPhysicsManager</code>) &mdash;
+    the rate it is achieving against the rate it asked for, its total ticks, and
+    any it had to drop. A thread that is not getting the turns it asked for
+    produces a world moving in slow motion, which is indistinguishable from
+    wrong gravity or a wrong timestep until those two numbers are side by side.
+    Both take a callable rather than the object because a world is
     replaced when the next level loads, and a provider holding the first would
-    report on it forever.</p>
+    report on it forever. Neither is registered by default: a context does not
+    necessarily have either.</p>
   <p><strong>Triangle counts are deliberately absent.</strong> The render pass
     does not know them &mdash; a geometry node does &mdash; and instrumenting
     every <code>render()</code> in the system to find out would cost more than
     the answer is worth. A number that is not counted is not reported rather
     than guessed at. See
     <code>OpenGLContext/passes/renderstats.py</code>.</p>
+
+  <h3 id="loop">When the frame rate says everything is fine and it is not</h3>
+  <p><strong>The frame rate answers a narrower question than it looks like it
+    answers.</strong> <code>FrameCounter</code> times the inside of
+    <code>OnDraw</code>, it is only told about frames that produced a visible
+    change, and the rate it publishes is a <em>median</em> over a window &mdash;
+    deliberately outlier-proof, so that a first-frame shader compile or a
+    synchronous model load does not drag the number down for ever. Each of those
+    is right for &ldquo;how fast is the renderer&rdquo;, and each of them hides a
+    stutter.</p>
+  <p>A backend&rsquo;s loop does more than draw. It pumps the window
+    system&rsquo;s events, it runs <code>OnIdle</code> &mdash; which is where an
+    application&rsquo;s whole simulation usually lives &mdash; and it waits for a
+    redraw request. None of that is inside the frame counter&rsquo;s stopwatch,
+    so an application can crawl visibly at a few updates a second while the
+    overlay reports sixty, with no number on the screen contradicting the
+    other.</p>
+  <p><code>OpenGLContext.looptrace.LoopTrace</code> measures the other thing:
+    <strong>wall-clock time per loop iteration</strong>, divided among named
+    phases. Every context has one as <code>context.loopTrace</code>; the GLFW
+    backend drives it from <code>MainLoop</code> and <code>OnDraw</code> divides
+    its share further. The Loop section reports:</p>
+  <table>
+    <tr><th>Row</th><th>What it says</th></tr>
+    <tr><td><code>loop fps</code></td>
+      <td>Iterations per second of wall clock &mdash; the rate the player&rsquo;s
+        hands feel. <strong>This disagreeing with <code>fps</code> above is the
+        diagnosis</strong>: the renderer is keeping up and something outside it
+        is not.</td></tr>
+    <tr><td><code>loop ms</code>, <code>worst ms</code></td>
+      <td>Median and worst iteration in the window. A healthy median beside a
+        worst ten times larger is a loop that stutters, which is what the median
+        alone can never say.</td></tr>
+    <tr><td><code>stalls</code></td>
+      <td>How many iterations crossed the stall threshold, counted since the
+        loop started so it outlives the window it happened in.</td></tr>
+    <tr><td><code>last stall</code></td>
+      <td>The phase that ate the most recent one, as
+        <code>idle 812ms</code>.</td></tr>
+    <tr><td><code>poll</code>, <code>repeats</code>, <code>idle</code>,
+        <code>wait</code>, <code>draw</code>, <code>cascade</code>,
+        <code>render</code></td>
+      <td>Mean milliseconds per iteration in each phase, worst first.</td></tr>
+  </table>
+  <p><strong>Phases divide the iteration; they do not overlap it.</strong> A
+    phase is charged only its own time and the time inside a nested phase
+    belongs to the child, so every phase of an iteration adds up to that
+    iteration&rsquo;s wall clock and the largest is the culprit by construction.
+    <code>wait</code> is bounded by <code>drawPollTimeout</code>, so a large
+    <code>wait</code> is a quiet loop and never a stalled one.</p>
+  <p><strong>An application should subdivide <code>idle</code>.</strong> The
+    engine&rsquo;s phases can only ever name it, because <code>OnIdle</code> is
+    where an application&rsquo;s frame goes &mdash; true, and useless.
+    <code>context.tracePhase(name)</code> opens a phase from anywhere, nests
+    inside whatever is already open, and answers a do-nothing context manager
+    when nothing is measuring, so the caller writes the <code>with</code> and
+    not the branch:</p>
+  <pre>def OnIdle(self):
+    with self.tracePhase('character'):
+        self.player.update(dt)
+    with self.tracePhase('match'):
+        self.arena.step(dt)</pre>
+  <p>Those divide <code>idle</code> rather than adding to it, so
+    <code>idle</code>&rsquo;s own row falls to whatever is left over. A phase
+    that is always under a millisecond costs one clock read and earns its place
+    the first time it is not.</p>
+  <p><strong>Counting is always on</strong> and costs a few clock reads per
+    iteration. Reporting is opt-in:</p>
+  <table>
+    <tr><th>Variable</th><th>Effect</th></tr>
+    <tr><td><code>OPENGLCONTEXT_STALL_MS</code></td>
+      <td>What counts as a stall, in milliseconds; the default is <code>50</code>
+        (twenty frames a second). Setting it also switches logging on &mdash;
+        asking for a threshold is asking to be told when it is crossed. A value
+        that is not a number is a warning and the default, never a
+        failure to start.</td></tr>
+    <tr><td><code>OPENGLCONTEXT_TRACE_STALLS</code></td>
+      <td>Log every stall&rsquo;s phase breakdown at <code>WARNING</code>,
+        keeping the default threshold.</td></tr>
+  </table>
+  <pre>OPENGLCONTEXT_STALL_MS=40 python -m twitchoglc
+WARNING OpenGLContext.looptrace: main loop stalled 912ms: idle 901ms, render 9ms, poll 1ms</pre>
+  <p>Neither variable changes what a frame looks like, so both are inherited by
+    a subprocess capture rather than cleared with the rendering variables &mdash;
+    a diagnostic a subprocess silently dropped would be no diagnostic.</p>
+
+  <h3 id="stalltrace">Recording a slow period, and reading it back</h3>
+  <p>The phase breakdown names a <em>subsystem</em>. It cannot name the code
+    inside it, and it never will: by the time the iteration closes, the stack
+    that would have said has already unwound. The overlay has the same limit
+    from the other end &mdash; it shows the present, and a stutter is something
+    you want to look at <em>afterwards</em>, from a recording.</p>
+  <p><code>OPENGLCONTEXT_STALL_TRACE=&lt;path&gt;</code> records one.
+    <code>OpenGLContext.stalltrace</code> puts a watcher thread on the main
+    thread&rsquo;s Python stack, sampling it <strong>only while an iteration is
+    already overrunning</strong> &mdash; a profiler that runs during the frames
+    that are fine would be spending the one currency the question is about
+    &mdash; and writes a JSON-lines file:</p>
+  <pre>OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl python -m twitchoglc
+python -m OpenGLContext.stalltrace /tmp/stalls.jsonl</pre>
+  <p><strong>The unit is an <em>episode</em>, not a frame.</strong> Consecutive
+    slow iterations are gathered into one record, because &ldquo;the game went
+    unplayable for four seconds&rdquo; is one thing that happened, not two
+    hundred, and a file with a line per frame is a log rather than a diagnosis.
+    A run of slow frames with the odd good one in it stays a single episode.</p>
+  <table>
+    <tr><th>In each record</th><th>What it says</th></tr>
+    <tr><td><code>at</code>, <code>seconds</code>, <code>iterations</code>,
+        <code>stalled</code></td>
+      <td>When the slow period began, how long it lasted, and how much of it
+        was actually slow.</td></tr>
+    <tr><td><code>worst_ms</code>, <code>mean_ms</code>,
+        <code>baseline_ms</code></td>
+      <td>The worst and mean iteration, and <strong>what the loop had been
+        managing before it went wrong</strong> &mdash; without which
+        &ldquo;slow&rdquo; has nothing to be slow compared to.</td></tr>
+    <tr><td><code>phases_ms</code></td><td>The breakdown, averaged over the
+        episode.</td></tr>
+    <tr><td><code>functions</code></td>
+      <td><strong>The answer.</strong> Per function, the share of samples where
+        it was running (<code>self</code>) and the share where it was anywhere
+        on the stack (<code>cumulative</code>).</td></tr>
+    <tr><td><code>hot</code></td>
+      <td>The whole stacks that held the most samples &mdash; the evidence, and
+        the route by which the expensive function was reached.</td></tr>
+    <tr><td><code>context</code></td>
+      <td>Every section of the developer overlay at the moment the episode
+        opened, so the trace records the map, the player, the renderer&rsquo;s
+        counts and whatever the game registered, without anyone writing a
+        second description that can drift from the first.</td></tr>
+    <tr><td><code>samples</code></td>
+      <td>How many were taken, and <code>incomplete</code> when the start of
+        the episode fell out of the sampler&rsquo;s buffer. A truncated record
+        that does not admit it reads as the whole story.</td></tr>
+  </table>
+  <p><strong>Report per function, not per stack.</strong> One expensive
+    function is usually reached by a dozen routes and from a dozen lines;
+    grouping only by whole stack splits it across all of them, so something
+    holding sixty per cent of a stall reads as a dozen entries at five per cent
+    and the trace looks like it found nothing. <code>functions</code> undoes
+    that fragmentation, and <code>hot</code> keeps the routes as evidence:</p>
+  <pre>  where 28 samples were, by function:
+        self    cum  function
+       53.6%  53.6%  collide.py _closest_point_on_triangle
+       10.7%  75.0%  collide.py capsule_triangle
+       10.7%  10.7%  collide.py _closest_segment_segment</pre>
+  <p><strong>An episode is written as it closes, and flushed</strong>, so a run
+    that ends in a <code>kill -9</code> keeps every episode before the last.
+    A slow period is also cut and written every few seconds even while it
+    continues (the next part is marked <code>continues</code>), because a
+    session that ends <em>while</em> it is struggling is the commonest way for
+    one to end &mdash; and that final episode is the one worth having.</p>
+  <p>A path that cannot be written is a warning and a disabled journal. This is
+    diagnostic equipment: it does not get to be the reason a game will not
+    start.</p>
 
   <h3>Showing and hiding it</h3>
   <p><kbd>Alt</kbd>+<kbd>f</kbd> toggles it on every context;
@@ -385,6 +579,16 @@ layer.tick(105.0);  assert not queue.entries(105.0)  # gone</pre>
     <tr><td><code>ui.widgets</code></td>
       <td><code>RootWidget</code>, which a HUD layer and a panel are both
         kinds of: the children, the skin and the scaled copy of it.</td></tr>
+    <tr><td><code>stalltrace</code></td>
+      <td>The recording: a stack sampler gated on the stall itself, the episode
+        journal it writes, and the report that reads the file back.</td></tr>
+    <tr><td><code>looptrace</code></td>
+      <td><code>LoopTrace</code>: wall-clock cost of a whole loop iteration,
+        divided among named phases, with the worst and the stall count a median
+        throws away.</td></tr>
+    <tr><td><code>framecounter</code></td>
+      <td><code>FrameCounter</code>: how long the frames inside
+        <code>OnDraw</code> took. Measures; does not draw.</td></tr>
     <tr><td><code>passes.renderstats</code></td>
       <td>What one frame cost, counted where the pass knows the answer.</td></tr>
     <tr><td><code>passes._flat</code></td>

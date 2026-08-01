@@ -16,18 +16,28 @@ pytest.importorskip("PIL")
 import numpy as np
 from PIL import Image
 
+from OpenGLContext import renderoptions
 from OpenGLContext.testing.paths import tests_root
 TESTS_DIR = str(tests_root(__file__))
 CAPTURE = os.path.join(TESTS_DIR, "helpers", "_shadow_capture.py")
 
 
 def _capture(mode: str, out_path: str, light: str = "spot", soft: bool = False) -> bool:
-    """Run the capture subprocess; return True if an image was produced."""
-    env = dict(os.environ)
-    env["OPENGLCONTEXT_PROFILE"] = "core"
-    env.setdefault("OPENGLCONTEXT_BACKEND", "glfw")
-    env["OPENGLCONTEXT_AUTO_EXIT_FRAMES"] = "8"
-    env["OPENGLCONTEXT_SHADOWS_SOFT"] = "1" if soft else "0"
+    """Run the capture subprocess; return True if an image was produced.
+
+    From a **clean** rendering environment: this compares two rendered images
+    and asserts the difference between them, so anything the parent process is
+    carrying -- a module that set `OPENGLCONTEXT_SHADOWS` before importing
+    OpenGL, a tool under test that wrote `OPENGLCONTEXT_IBL` into its own
+    process -- would change what both captures look like, and the assertion
+    would then depend on which tests ran first.  See
+    `renderoptions.clean_environment`.
+    """
+    env = renderoptions.clean_environment(
+        OPENGLCONTEXT_PROFILE="core",
+        OPENGLCONTEXT_BACKEND=os.environ.get("OPENGLCONTEXT_BACKEND", "glfw"),
+        OPENGLCONTEXT_AUTO_EXIT_FRAMES="8",
+        OPENGLCONTEXT_SHADOWS_SOFT="1" if soft else "0")
     try:
         subprocess.run(
             [sys.executable, CAPTURE, mode, out_path, light],

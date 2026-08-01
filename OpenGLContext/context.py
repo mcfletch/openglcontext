@@ -50,6 +50,7 @@ try:
 except ImportError:
     import queue as Queue
 import threading
+from contextlib import nullcontext
 
 perf = time.perf_counter if hasattr(time, "perf_counter") else time.clock
 contextLock = threading.RLock()
@@ -124,6 +125,14 @@ class Context(ScreenMixin, ContextConfigMixin):
             an addFrame method as seen in framecounter.FrameCounter,
             See setupFrameRateCounter
 
+        loopTrace -- looptrace.LoopTrace measuring the wall-clock cost
+            of a whole main-loop iteration, divided among named phases.
+            The frame counter times only the inside of OnDraw and only
+            for frames that changed something; a backend's loop also
+            polls events and runs OnIdle, so an application whose
+            simulation lives there can stutter while the frame rate
+            reads healthy. See setupLoopTrace.
+
         extensions -- extensionmanager.ExtensionManager instance
             with which to find and initialise extensions for this
             context.
@@ -156,6 +165,8 @@ class Context(ScreenMixin, ContextConfigMixin):
     allContexts = []
     renderPasses = renderpass.defaultRenderPasses
     frameCounter = None
+    loopTrace = None
+    stallJournal = None
     contextDefinition = None
 
     ### State flags/values
@@ -206,6 +217,7 @@ class Context(ScreenMixin, ContextConfigMixin):
             setupCache,
             setupFontProviders,
             setupFrameRateCounter,
+            setupLoopTrace,
             DoInit
         """
         self.setupLogging()
@@ -221,6 +233,7 @@ class Context(ScreenMixin, ContextConfigMixin):
         self.setupCache()
         self.setupFontProviders()
         self.setupFrameRateCounter()
+        self.setupLoopTrace()
         self.setupAutoExit()
         self.DoInit()
 
@@ -412,6 +425,15 @@ class Context(ScreenMixin, ContextConfigMixin):
         self.suppressRedraw()
         import sys
 
+        # Before the forcible exit, which runs no finally block and no atexit
+        # hook: a session quit in the middle of a stall is exactly the session
+        # whose record is worth having, and that episode is still open.
+        if self.stallJournal is not None:
+            try:
+                self.stallJournal.close()
+            except Exception:
+                log.debug('could not close the stall journal', exc_info=True)
+
         os._exit(0)
         # sys.exit(0)
 
@@ -536,6 +558,53 @@ class Context(ScreenMixin, ContextConfigMixin):
         from OpenGLContext import framecounter
 
         self.frameCounter = framecounter.FrameCounter()
+
+    def setupLoopTrace(self):
+        """Setup the main loop's wall-clock instrumentation
+
+        This sets self.loopTrace to a looptrace.LoopTrace, which
+        measures how long each pass of the backend's main loop takes
+        and where that time went. It is the counterpart to the frame
+        counter rather than a duplicate of it: the counter reports how
+        fast the renderer is, and this reports how fast the whole loop
+        is, which is what the user's hands feel.
+
+        A backend drives it from its own loop (see GLFWContext.MainLoop);
+        OnDraw divides its share into the event cascade and the render.
+        Backends that have not been taught to drive it simply leave the
+        iteration count at zero, and the developer overlay then omits
+        the section rather than reporting nothing as if it were idle.
+
+        Counting is unconditional and costs a few clock reads per
+        iteration. Reporting is opt-in through OPENGLCONTEXT_STALL_MS /
+        OPENGLCONTEXT_TRACE_STALLS.
+
+        OPENGLCONTEXT_STALL_TRACE=<path> additionally records each slow
+        period to a file, with the main thread's stack sampled while it
+        is happening -- which is the only way to learn *which code* was
+        running, since the stack has unwound by the time the iteration
+        closes. See OpenGLContext.stalltrace.
+        """
+        from OpenGLContext import looptrace, stalltrace
+
+        self.loopTrace = looptrace.LoopTrace()
+        self.stallJournal = stalltrace.install(self.loopTrace, context=self)
+
+    def tracePhase(self, name):
+        """Charge the wrapped block to a named phase of the loop iteration
+
+        Answers a do-nothing context manager when there is no trace, so
+        a caller writes `with self.tracePhase('render'):` without also
+        writing the branch that asks whether anyone is measuring.
+
+        A phase opened outside a main-loop iteration -- from drawPoll,
+        or from a test that calls OnDraw directly -- is measured and
+        discarded, so this is safe wherever OnDraw is safe.
+        """
+        trace = self.loopTrace
+        if trace is None:
+            return nullcontext()
+        return trace.phase(name)
 
     def initializeEventManagers(self, managerClasses=()):
         """Customisation point for initialising event manager objects
@@ -675,7 +744,8 @@ class Context(ScreenMixin, ContextConfigMixin):
 
         self.lockScenegraph()
         try:
-            changed = self.DoEventCascade()
+            with self.tracePhase('cascade'):
+                changed = self.DoEventCascade()
             if not force and not changed:
                 return 0
         finally:
@@ -686,7 +756,8 @@ class Context(ScreenMixin, ContextConfigMixin):
             self.redrawRequest.clear()
         try:
             try:
-                visibleChange = self.renderPasses(self)
+                with self.tracePhase('render'):
+                    visibleChange = self.renderPasses(self)
                 if visibleChange:
                     if self.frameCounter is not None:
                         self.frameCounter.addFrame(perf() - t)

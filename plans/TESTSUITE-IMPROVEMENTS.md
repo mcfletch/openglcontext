@@ -655,3 +655,73 @@ Add to test requirements:
 - Tutorial code (files with extensive docstrings) should not be modified
 - Existing interactive tests remain runnable for manual verification
 - Tests should work on Linux, macOS, and Windows
+
+## A rendered baseline must not inherit the parent's environment
+
+**Added 2026-07-29.** Several test modules set a rendering variable in
+`os.environ` at import time, because they need it before OpenGL is imported —
+six under `tests/unit/` set `OPENGLCONTEXT_RENDERER=pbr`, and others set
+`OPENGLCONTEXT_SHADOWS`. A capture subprocess started with `dict(os.environ)`
+therefore renders with whatever the run has accumulated, which makes a
+reference-image comparison depend on what was collected before it.
+
+The symptom is a full run that fails four to ten pixel comparisons —
+`test_shadow_rendering` and `test_gltf_conformance` — with a *different* set
+each time, every one of which passes in isolation on an idle machine.
+`OPENGLCONTEXT_RENDERER=pbr` alone reproduces five of them.
+
+`tests/unit/conftest.py` already restores `OPENGLCONTEXT_*` and `PYOPENGL_*`
+to their session values after every test, which handles the ordinary case; what
+it cannot cover is a variable set between the last teardown and a capture, or a
+capture started outside that directory.
+
+**The rule.** Anything that spawns a renderer and then compares its pixels
+builds its environment with `renderoptions.clean_environment`, which drops
+every variable in `renderoptions.ENVIRONMENT` and then sets what the render
+actually needs — so the result is reproducible from the call alone. The list is
+kept in `renderoptions` because that is the module which reads them, and a test
+asserts that every `OPENGLCONTEXT_*` name the package mentions is either in it
+or deliberately excluded: **the next variable added is exactly the one nobody
+would think to clear.**
+
+`OpenGLContext/bin/gltf_regression.py` and `tests/unit/test_shadow_rendering.py`
+are the two callers today.
+
+
+## The Parthenon conformance views fail intermittently in a full run
+
+**Open.** `test_gltf_conformance[Parthenon__camNN]` fails for a *varying* subset
+of its ten baked cameras, only ever in a full `tests/unit` run, and never when
+the file is run on its own.
+
+The measurements that bound it:
+
+| Run | Result |
+|---|---|
+| full `tests/unit` | 3 failed — `cam01`, `cam03`, `cam04` |
+| full `tests/unit`, identical code and command | 0 failed |
+| `test_gltf_conformance.py` alone | 312 passed |
+| an earlier full run (2026-07-29) | 2 failed — `cam08`, `cam09` |
+
+**A correct render is bit-identical to its baseline** — surviving artifacts from
+a passing run compare at 0.000% of pixels differing, for every camera including
+the ones that fail elsewhere. So this is not tolerance creep or anti-aliasing
+noise: a failing capture is a materially different frame.
+
+That rules out the model having moved, which an earlier version of this note
+gave as the cause. A stale baseline is a *constant* diff, and would fail the
+same cameras in isolation and in a full run, every time.
+
+What remains is capture readiness. `gltf_regression.render_view` captures after
+`--frames 8` plus `--capture-delay 0.5`, which is a floor rather than a signal
+that the scene finished loading; the Parthenon is by far the heaviest model in
+the roster, and a full run is the only context where the machine is busy enough
+for eight frames not to be enough. The environment-inheritance cause described
+in the section above is already fixed for this caller and is not it —
+`render_view` builds the child environment with `renderoptions.clean_environment`.
+
+**The fix is a readiness signal, not a longer delay.** A bigger
+`--capture-delay` moves the race rather than removing it; the viewer should
+report when the scene's resources are actually resident and the capture should
+wait for that. Until then a full-run failure here is a real red that has to be
+re-run to interpret, which is exactly the state a suite should not be in.

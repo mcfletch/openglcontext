@@ -563,3 +563,47 @@ class TestLegibility:
         renderer = self.renderer(layer, metrics)
         layer.layoutChildren()[0].paint(renderer)
         assert len(renderer.texts) == 4, 'label and value, each with a shadow'
+
+
+class TestScreenWash:
+    """A colour over the whole viewport, for a *state* rather than an event.
+
+    The counterpart to :class:`DamageIndicator`: that one has a direction to
+    give and washes the edge a player must turn towards, and this one has none
+    — the view itself has changed rather than something having happened in it.
+    """
+
+    def washed(self, **named):
+        from OpenGLContext.ui.hudwidgets import ScreenWash
+        wash = ScreenWash(**named)
+        wash.arrange(Rect(0, 0, 400, 300), metrics_at(8, 16))
+        return wash
+
+    def test_nothing_is_drawn_at_no_strength(self):
+        """It is up on most frames of most games at zero, so this is the
+        common case and it has to cost a comparison rather than a draw."""
+        assert self.washed().wash() is None
+
+    def test_it_covers_the_whole_viewport(self):
+        rect, _colour = self.washed(strength=0.5).wash()
+        assert (rect.width, rect.height) == (400, 300)
+
+    def test_the_colour_is_the_one_it_was_given(self):
+        _rect, found = self.washed(colour=(0.8, 0.1, 0.1), strength=0.5).wash()
+        assert found[:3] == pytest.approx((0.8, 0.1, 0.1))
+
+    def test_the_strength_is_the_alpha(self):
+        _rect, found = self.washed(strength=0.35).wash()
+        assert found[3] == pytest.approx(0.35)
+
+    def test_it_cannot_be_asked_for_more_than_opaque(self):
+        _rect, found = self.washed(strength=4.0).wash()
+        assert found[3] == pytest.approx(1.0)
+
+    def test_a_negative_strength_is_off_rather_than_inverted(self):
+        assert self.washed(strength=-1.0).wash() is None
+
+    def test_a_layer_that_was_never_arranged_draws_nothing(self):
+        from OpenGLContext.ui.hudwidgets import ScreenWash
+        assert ScreenWash(strength=1.0).wash() is None
+

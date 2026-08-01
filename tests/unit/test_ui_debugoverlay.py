@@ -315,6 +315,7 @@ class TestBuiltInProviders:
 
         assert physics_provider(lambda: None)() == []
 
+
     def test_the_audio_provider_reports_what_the_engine_is_doing(self):
         """The one subsystem you cannot see, so the overlay is where it shows.
 
@@ -379,3 +380,195 @@ class TestBuiltInProviders:
         overlay = DebugOverlay()
         install_default_providers(overlay, Context())
         assert 'Audio' in [section.title for section in overlay.sections()]
+
+
+class TestTheLoopProvider:
+    """The section that reports what the frame rate structurally cannot.
+
+    The frame counter times the inside of OnDraw; these rows time the whole
+    iteration and divide it among its phases, so a loop that spends most of a
+    second in its idle callback says so instead of reading as sixty healthy
+    frames.
+    """
+
+    @staticmethod
+    def _traced(iterations):
+        """A context whose loop trace has run ``iterations`` -- [(phase, s)...]."""
+        from OpenGLContext.looptrace import LoopTrace
+
+        clock = _FakeClock()
+        trace = LoopTrace(stall_ms=50.0, clock=clock)
+        for phases in iterations:
+            with trace.iteration():
+                for name, seconds in phases:
+                    with trace.phase(name):
+                        clock.advance(seconds)
+
+        class Context:
+            loopTrace = trace
+
+        return Context()
+
+    def test_the_rate_is_wall_clock_not_the_renderers_own(self):
+        from OpenGLContext.ui.debugoverlay import loop_provider
+
+        context = self._traced([[('draw', 0.100)]] * 10)
+        rows = dict(loop_provider(context)())
+        assert rows['loop fps'].value == pytest.approx(10.0)
+        assert rows['loop ms'].value == pytest.approx(100.0)
+
+    def test_the_worst_iteration_is_reported_beside_the_median(self):
+        from OpenGLContext.ui.debugoverlay import loop_provider
+
+        context = self._traced([[('draw', 0.020)]] * 30
+                               + [[('idle', 1.000)]]
+                               + [[('draw', 0.020)]] * 30)
+        rows = dict(loop_provider(context)())
+        assert rows['loop ms'].value == pytest.approx(20.0)
+        assert rows['worst ms'].value == pytest.approx(1000.0)
+
+    def test_stalls_are_counted(self):
+        from OpenGLContext.ui.debugoverlay import loop_provider
+
+        context = self._traced([[('draw', 0.020)]] * 5
+                               + [[('idle', 0.500)]] * 3)
+        assert dict(loop_provider(context)())['stalls'] == 3
+
+    def test_the_last_stall_names_the_phase_that_ate_it(self):
+        from OpenGLContext.ui.debugoverlay import loop_provider
+
+        context = self._traced([[('poll', 0.001), ('idle', 0.900),
+                                 ('draw', 0.010)]])
+        assert dict(loop_provider(context)())['last stall'] == 'idle 900ms'
+
+    def test_a_loop_that_has_never_stalled_says_nothing_about_stalls(self):
+        from OpenGLContext.ui.debugoverlay import loop_provider
+
+        context = self._traced([[('draw', 0.005)]] * 10)
+        rows = dict(loop_provider(context)())
+        assert rows['stalls'] == 0
+        assert 'last stall' not in rows
+
+    def test_every_phase_gets_its_own_row(self):
+        from OpenGLContext.ui.debugoverlay import loop_provider
+
+        context = self._traced([[('poll', 0.001), ('idle', 0.010),
+                                 ('draw', 0.005)]])
+        rows = dict(loop_provider(context)())
+        assert rows['idle'].value == pytest.approx(10.0)
+        assert rows['draw'].value == pytest.approx(5.0)
+        assert rows['poll'].value == pytest.approx(1.0)
+
+    def test_the_phases_come_out_worst_first(self):
+        """A crowded panel should read top-down as most-to-least expensive."""
+        from OpenGLContext.ui.debugoverlay import loop_provider
+
+        context = self._traced([[('poll', 0.001), ('idle', 0.010),
+                                 ('draw', 0.005)]])
+        names = [name for name, _value in loop_provider(context)()]
+        assert names[-3:] == ['idle', 'draw', 'poll']
+
+    def test_a_backend_that_does_not_drive_the_loop_gets_no_section(self):
+        """GLUT, pygame and wx run their own loops and never open an iteration.
+
+        Rows of zeroes would read as a loop that is doing nothing, which is a
+        worse answer than no rows at all.
+        """
+        from OpenGLContext.ui.debugoverlay import loop_provider
+
+        assert loop_provider(self._traced([])) () == []
+
+    def test_a_context_with_no_trace_at_all_is_not_an_error(self):
+        from OpenGLContext.ui.debugoverlay import loop_provider
+
+        class Context:
+            loopTrace = None
+
+        assert loop_provider(Context())() == []
+
+    def test_the_section_is_registered_by_default(self):
+        from OpenGLContext.ui.debugoverlay import (
+            DebugOverlay, install_default_providers,
+        )
+        from OpenGLContext.looptrace import LoopTrace
+
+        # A trace that has actually run, since a loop nobody drives is left out
+        # on purpose and would make this pass for the wrong reason.
+        trace = LoopTrace()
+        with trace.iteration():
+            with trace.phase('draw'):
+                pass
+
+        class Context:
+            loopTrace = trace
+            contextDefinition = None
+            frameCounter = None
+
+            def getViewPort(self):
+                return (800, 600)
+
+            def getViewPlatform(self):
+                return None
+
+        overlay = DebugOverlay(margin=0)
+        install_default_providers(overlay, Context())
+        titles = [section.title for section in overlay.sections()]
+        assert 'Frame' in titles
+        # Directly under Frame: the two are read together, and a reader who has
+        # to hunt down the panel to compare them will not compare them.
+        assert titles.index('Loop') == titles.index('Frame') + 1
+
+
+class TestTheSimulationProvider:
+    """Whether a background physics thread is getting the turns it asked for.
+
+    Registered by an application that runs one; the bodies-and-contacts section
+    reports on the world, and this reports on the thread stepping it.
+    """
+
+    class Simulation:
+        sim_hz = 120.0
+        steps = 4200
+        dropped = 0
+
+        def rate(self):
+            return 119.6
+
+    def test_the_achieved_rate_is_reported_against_the_one_asked_for(self):
+        from OpenGLContext.ui.debugoverlay import simulation_provider
+
+        rows = dict(simulation_provider(lambda: self.Simulation())())
+        assert rows['sim hz'].value == pytest.approx(119.6)
+        assert rows['asked'].value == pytest.approx(120.0)
+        assert rows['steps'] == 4200
+
+    def test_dropped_ticks_are_reported_only_when_there_are_some(self):
+        """Zero is the healthy answer, and a healthy row is a row not worth space."""
+        from OpenGLContext.ui.debugoverlay import simulation_provider
+
+        assert 'dropped' not in dict(simulation_provider(
+            lambda: self.Simulation())())
+
+        class Starved(self.Simulation):
+            dropped = 91
+
+        rows = dict(simulation_provider(lambda: Starved())())
+        assert rows['dropped'] == 91
+
+    def test_no_simulation_means_no_section(self):
+        from OpenGLContext.ui.debugoverlay import simulation_provider
+
+        assert simulation_provider(lambda: None)() == []
+
+
+class _FakeClock:
+    """A clock the test advances by hand, so timings are exact, not flaky."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds

@@ -76,8 +76,24 @@ def main():
     mat = PBRMaterial(baseColor=(0.4, 0.5, 0.8), metallic=0.0, roughness=0.5)
     cols = int(np.ceil(np.sqrt(SHAPES)))
     timings = []
+    drawn = []
 
     class C(Base):
+        def SwapBuffers(self):
+            """Stop the clock *before* the swap, with the GPU caught up.
+
+            A buffer swap blocks until the compositor is ready for another
+            frame, and a compositor may throttle it to the display whatever
+            `swap_interval(0)` asked for.  Timing across it measures the wait
+            and not the work: both modes then come out at the frame interval,
+            and the ratio between them is driven to 1 -- which is the wrong
+            answer for a measurement whose whole purpose is the ratio.
+            """
+            from OpenGL.GL import glFinish
+            glFinish()
+            drawn.append(time.perf_counter())
+            return super(C, self).SwapBuffers()
+
         def OnInit(self):
             kids = []
             for i in range(SHAPES):
@@ -96,14 +112,17 @@ def main():
         glfw.swap_interval(0)   # disable vsync so timing reflects real work
     except Exception:
         pass
-    from OpenGL.GL import glFinish
     for i in range(FRAMES):
         glfw.poll_events()
         counts['single'] = 0; counts['instanced'] = 0; counts['instances'] = 0
+        del drawn[:]
         t0 = time.perf_counter()
         inst.OnDraw(force=1)
-        glFinish()
-        dt = (time.perf_counter() - t0) * 1000.0
+        if not drawn:
+            # Nothing was swapped, so nothing was drawn: a frame with no
+            # visible change is not a measurement of drawing one.
+            continue
+        dt = (drawn[-1] - t0) * 1000.0
         if i >= 10:  # warm-up
             timings.append(dt)
 

@@ -48,6 +48,26 @@ def test_thread_advances_simulation_and_scene_tracks_it():
         t.translation[1], abs=0.05)
 
 
+def test_manager_reports_whether_the_thread_is_keeping_up():
+    """The two numbers that separate slow physics from starved physics.
+
+    A simulation getting fewer turns than it asked for looks, on screen, like a
+    world with the wrong gravity in it. The manager passes the thread's own
+    accounting through so an overlay can show it beside the frame rate.
+    """
+    mgr, _body, _t = _falling_manager(sim_hz=100.0)
+    assert mgr.dropped == 0
+    assert mgr.rate() == 0.0                   # nothing has ticked yet
+    mgr.start()
+    try:
+        _wait_for_steps(mgr, at_least=30, timeout=3.0)
+    finally:
+        mgr.stop()
+    assert mgr.steps >= 30
+    assert mgr.rate() == pytest.approx(100.0, rel=0.35)
+    assert mgr.dropped == 0                    # 100Hz of empty world is easy
+
+
 def test_stop_halts_stepping():
     """After stop() the tick counter no longer advances."""
     mgr, _body, _t = _falling_manager()

@@ -333,3 +333,61 @@ class TestEveryHintReachesTheScreen:
         """Settled when the window is made; a screen cannot change it."""
         assert 'profile' not in self._sections()
         assert 'profile' not in ContextDefinition.UI_HINTS
+
+
+class TestACleanRenderingEnvironment:
+    """A capture that inherits the parent's rendering settings is not a baseline.
+
+    Six test modules in this suite set `OPENGLCONTEXT_RENDERER` in `os.environ`
+    at import time, because they need it before OpenGL is imported. It stays
+    there for the rest of the run, so every capture subprocess started
+    afterwards renders with a renderer nobody asked it for — which is a
+    reference-image comparison whose answer depends on what ran before it.
+    """
+
+    def test_a_rendering_variable_is_dropped(self):
+        found = renderoptions.clean_environment(
+            {'OPENGLCONTEXT_RENDERER': 'pbr', 'PATH': '/usr/bin'})
+        assert 'OPENGLCONTEXT_RENDERER' not in found
+
+    def test_everything_else_is_kept(self):
+        found = renderoptions.clean_environment({'PATH': '/usr/bin',
+                                                 'HOME': '/home/somebody'})
+        assert found == {'PATH': '/usr/bin', 'HOME': '/home/somebody'}
+
+    def test_what_the_caller_pins_survives(self):
+        found = renderoptions.clean_environment(
+            {'OPENGLCONTEXT_PROFILE': 'compatibility'},
+            OPENGLCONTEXT_PROFILE='core')
+        assert found['OPENGLCONTEXT_PROFILE'] == 'core'
+
+    def test_a_pinned_value_need_not_be_a_string(self):
+        assert renderoptions.clean_environment(
+            {}, OPENGLCONTEXT_AUTO_EXIT_FRAMES=8
+        )['OPENGLCONTEXT_AUTO_EXIT_FRAMES'] == '8'
+
+    def test_it_reads_the_process_environment_by_default(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'pbr')
+        monkeypatch.setenv('OPENGLCONTEXT_CLEAN_ENV_MARKER', 'kept')
+        found = renderoptions.clean_environment()
+        assert 'OPENGLCONTEXT_RENDERER' not in found
+        assert found['OPENGLCONTEXT_CLEAN_ENV_MARKER'] == 'kept'
+
+    def test_every_variable_the_package_reads_is_listed(self):
+        """The next one added is exactly the one nobody would think to clear."""
+        import pathlib
+        import re
+        root = pathlib.Path(renderoptions.__file__).parent
+        seen = set()
+        for path in root.rglob('*.py'):
+            seen.update(re.findall(r'OPENGLCONTEXT_[A-Z_]+', path.read_text()))
+        # The ones that are not about what a frame looks like or how it is
+        # produced, and so are deliberately inherited.  The two stall switches
+        # decide when a log line is written and what counts as a stall; a
+        # capture renders the same pixels either way, and a diagnostic that a
+        # subprocess silently dropped would be no diagnostic at all.
+        allowed = {'OPENGLCONTEXT_AUDIO', 'OPENGLCONTEXT_AUDIO_VOLUME',
+                   'OPENGLCONTEXT_DEBUG_WHEEL', 'OPENGLCONTEXT_PHYSICS',
+                   'OPENGLCONTEXT_STALL_MS', 'OPENGLCONTEXT_TRACE_STALLS',
+                   'OPENGLCONTEXT_STALL_TRACE'}
+        assert not (seen - set(renderoptions.ENVIRONMENT) - allowed)

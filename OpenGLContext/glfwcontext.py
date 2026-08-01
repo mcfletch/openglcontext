@@ -15,6 +15,7 @@ from OpenGL.GL import *
 from OpenGLContext.context import Context
 from OpenGLContext.events import glfwevents
 from OpenGLContext import contextdefinition
+from OpenGLContext.looptrace import LoopTrace
 import logging
 
 log = logging.getLogger(__name__)
@@ -282,6 +283,53 @@ class GLFWContext(
         """
         return 0
 
+    def _loopIteration(self, trace, renderedFirst):
+        """One pass of the main loop, timed phase by phase.
+
+        Answers the new renderedFirst, which is the only state an iteration
+        carries into the next one.
+
+        The phases exist because the frame counter can only see the render. An
+        application whose simulation lives in OnIdle stutters without the
+        counter ever dipping, and the phase that names the culprit is the
+        difference between a rendering problem and a simulation one. See
+        OpenGLContext.looptrace.
+        """
+        with trace.iteration():
+            # Dispatch queued GLFW callbacks; with deferRedraw set these only
+            # flag a redraw and coalesce pick events (keyed by buttons/modifiers)
+            # down to the latest position.
+            with trace.phase('poll'):
+                glfw.poll_events()
+
+            # Synthesise key-repeat where the platform doesn't deliver it (the
+            # GLFW Wayland backend in a nested compositor). No-op otherwise.
+            pump = getattr(self, 'pumpKeyRepeats', None)
+            if pump is not None:
+                with trace.phase('repeats'):
+                    pump()
+
+            # Animation hook (overridden by animating demos to triggerRedraw).
+            with trace.phase('idle'):
+                self.OnIdle()
+
+            # Wait briefly so input and time events accumulate before rendering.
+            # Bounded by drawPollTimeout, so this phase can go up but never far
+            # up: a large 'wait' is a quiet loop, never a stalled one.
+            with trace.phase('wait'):
+                self.redrawRequest.wait(self.drawPollTimeout)
+
+            # One OnDraw per iteration. force=1 when a redraw is pending; force=0
+            # still runs DoEventCascade so time events (animations) are processed
+            # and only renders if they produced a visible change.
+            with trace.phase('draw'):
+                if self.redrawRequest.isSet() or not renderedFirst:
+                    renderedFirst = True
+                    self.OnDraw(force=1)
+                else:
+                    self.OnDraw(force=0)
+        return renderedFirst
+
     def MainLoop(self):
         """Run the main event loop"""
         # We drive rendering ourselves, so suppress the synchronous in-callback
@@ -291,33 +339,21 @@ class GLFWContext(
         # lagging behind the cursor.
         self.deferRedraw = True
         renderedFirst = False
+        # A private trace when a subclass has cleared setupLoopTrace's: a
+        # diagnostic must never be the reason a loop will not run, and nothing
+        # reads a trace that no provider can reach.
+        trace = self.loopTrace or LoopTrace()
 
-        while self.window and not glfw.window_should_close(self.window):
-            # Dispatch queued GLFW callbacks; with deferRedraw set these only
-            # flag a redraw and coalesce pick events (keyed by buttons/modifiers)
-            # down to the latest position.
-            glfw.poll_events()
-
-            # Synthesise key-repeat where the platform doesn't deliver it (the
-            # GLFW Wayland backend in a nested compositor). No-op otherwise.
-            pump = getattr(self, 'pumpKeyRepeats', None)
-            if pump is not None:
-                pump()
-
-            # Animation hook (overridden by animating demos to triggerRedraw).
-            self.OnIdle()
-
-            # Wait briefly so input and time events accumulate before rendering.
-            self.redrawRequest.wait(self.drawPollTimeout)
-
-            # One OnDraw per iteration. force=1 when a redraw is pending; force=0
-            # still runs DoEventCascade so time events (animations) are processed
-            # and only renders if they produced a visible change.
-            if self.redrawRequest.isSet() or not renderedFirst:
-                renderedFirst = True
-                self.OnDraw(force=1)
-            else:
-                self.OnDraw(force=0)
+        try:
+            while self.window and not glfw.window_should_close(self.window):
+                renderedFirst = self._loopIteration(trace, renderedFirst)
+        finally:
+            # A loop left while it was still slow -- a closed window, a Ctrl-C
+            # -- holds an episode nobody has written. Writing it is the
+            # difference between a trace of the session and a trace of all but
+            # its last, and worst, few seconds.
+            if self.stallJournal is not None:
+                self.stallJournal.close()
 
         # Cleanup.  The cached text renderers own GL objects in this context,
         # so they have to be let go before it is destroyed rather than left for

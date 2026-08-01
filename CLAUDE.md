@@ -288,6 +288,47 @@ export OPENGLCONTEXT_BACKEND=glfw
 
 **Note:** When using `OPENGLCONTEXT_PROFILE=core`, the backend should typically be set to `glfw` as it properly supports core profile context creation.
 
+### OPENGLCONTEXT_STALL_MS / OPENGLCONTEXT_TRACE_STALLS
+
+Diagnostics for a loop that stutters while the frame rate reads healthy. The
+frame counter times only the inside of `OnDraw`, only for frames that changed
+something, and publishes a *median* — so an application whose simulation lives
+in `OnIdle` can crawl at a few updates a second with no number contradicting
+another. `OpenGLContext.looptrace` measures wall-clock time per **loop
+iteration**, divided among phases that sum to it (`poll`, `repeats`, `idle`,
+`wait`, `draw`, and `cascade`/`render` inside the draw).
+
+`OPENGLCONTEXT_STALL_MS` sets what counts as a stall (default 50) *and*
+switches logging on; `OPENGLCONTEXT_TRACE_STALLS` logs at the default
+threshold. Counting is always on and costs a few clock reads per iteration.
+
+```bash
+OPENGLCONTEXT_STALL_MS=40 /workspaces/OpenGL-dev/.venv/bin/python -m twitchoglc
+# WARNING OpenGLContext.looptrace: main loop stalled 912ms: idle 901ms, render 9ms, poll 1ms
+```
+
+Unlike the variables above, these change nothing about what a frame looks like,
+so they are **not** in `renderoptions.ENVIRONMENT` and a subprocess capture
+inherits them. See [docs/hud.html](docs/hud.html) and
+[plans/LOOP-INSTRUMENTATION.md](plans/LOOP-INSTRUMENTATION.md).
+
+### OPENGLCONTEXT_STALL_TRACE
+
+Records each slow period to a JSON-lines file, with the main thread's Python
+stack **sampled while the stall is happening** — the only way to learn which
+code was running, since the stack has unwound by the time the iteration closes.
+Sampling is gated on the stall itself, so healthy frames are never profiled.
+
+```bash
+OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl /workspaces/OpenGL-dev/.venv/bin/twitch-viewer ...
+/workspaces/OpenGL-dev/.venv/bin/python -m OpenGLContext.stalltrace /tmp/stalls.jsonl
+```
+
+The file is not meant to be read by eye — always go through the reader. Each
+record is one *episode* (a whole slow period, not a frame) and leads with a
+per-function `self`/`cumulative` tally; the whole stacks under it are the
+evidence for that tally, not the answer. `OpenGLContext.stalltrace`.
+
 ## Code Conventions
 
 ### Writing Style
@@ -443,9 +484,16 @@ done:
 
 ### Workspace-wide rules also apply
 
-[../CLAUDE.md](../CLAUDE.md) binds every project here. Two of its requirements
+[../CLAUDE.md](../CLAUDE.md) binds every project here. Three of its requirements
 are easy to skip and must not be:
 
+- **Never destroy work to run an experiment.** Do not revert, restore over or
+  delete files you did not create this session — no `git checkout HEAD --`, no
+  `git clean`, no archive-extract over the working tree — to get a baseline or
+  test a hypothesis. Experiment in a `git worktree` or a scratchpad copy, use
+  absolute paths for anything that writes files, and remember that untracked
+  files (`plans/`, design notes) have no undo. A red test is to be **fixed, not
+  attributed**, so the blame experiment that tempts this is never needed.
 - **Documentation ships with the change.** New feature, new option, changed
   default, changed public API — update `docs/` (and `plans/` where a design note
   exists) in the same piece of work, and say in your report what you changed.

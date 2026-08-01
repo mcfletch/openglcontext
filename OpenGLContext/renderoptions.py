@@ -34,7 +34,52 @@ log = logging.getLogger(__name__)
 
 __all__ = ['definition', 'flag', 'choice', 'number', 'env_flag', 'env_choice',
            'env_number', 'env_flag_once', 'env_number_once', 'reset_env_cache',
-           'CHOICES', 'LABELS']
+           'clean_environment', 'CHOICES', 'LABELS', 'ENVIRONMENT']
+
+#: Every environment variable that changes what a frame looks like or how it is
+#: produced.  Named here because this module is what reads them, and because
+#: anything spawning a renderer to compare its pixels needs the *list* rather
+#: than the readers: see :func:`clean_environment`.
+ENVIRONMENT: Tuple[str, ...] = (
+    'OPENGLCONTEXT_PROFILE', 'OPENGLCONTEXT_BACKEND', 'OPENGLCONTEXT_RENDERER',
+    'OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_SHADOWS_SOFT',
+    'OPENGLCONTEXT_SHADOW_CASCADES', 'OPENGLCONTEXT_MAXIMUM_LIGHTS',
+    'OPENGLCONTEXT_BLOOM', 'OPENGLCONTEXT_IBL', 'OPENGLCONTEXT_IBL_INTENSITY',
+    'OPENGLCONTEXT_ENV_HDR', 'OPENGLCONTEXT_ENV_CUBEMAP',
+    'OPENGLCONTEXT_TRANSMISSION', 'OPENGLCONTEXT_INSTANCING',
+    'OPENGLCONTEXT_INSTANCE_MIN', 'OPENGLCONTEXT_INSTANCE_COLLAPSE',
+    'OPENGLCONTEXT_INSTANCE_CLUSTER_CULL', 'OPENGLCONTEXT_LOD',
+    'OPENGLCONTEXT_UI_SCALE', 'OPENGLCONTEXT_PICKING',
+    'OPENGLCONTEXT_AUTO_EXIT_FRAMES', 'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR',
+    'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME', 'OPENGLCONTEXT_CAPTURE_DELAY',
+    'OPENGLCONTEXT_DISABLE_FPS_DISPLAY', 'OPENGLCONTEXT_HIDDEN',
+    'OPENGLCONTEXT_NO_VSYNC', 'OPENGLCONTEXT_GLTF_BASELINE',
+)
+
+
+def clean_environment(base: Optional[Dict[str, str]] = None,
+                      **pinned: str) -> Dict[str, str]:
+    """``base`` with every rendering variable dropped, then ``pinned`` set.
+
+    For anything that **spawns a renderer and then compares its pixels**: a
+    reference image whose content depends on which variables the parent
+    process happens to be carrying is not a reference for anything.  A test
+    module that sets ``OPENGLCONTEXT_SHADOWS`` before importing OpenGL, or a
+    tool under test that writes ``OPENGLCONTEXT_IBL`` into its own process,
+    leaves it in ``os.environ`` for the rest of the run, and every capture
+    started afterwards inherits it -- so the same command renders differently
+    depending on what ran before it.
+
+    Dropping the whole family rather than the few a caller remembers is the
+    point: the next variable to be added is exactly the one nobody would think
+    to clear.  Pass what the render actually needs as ``pinned``, and the
+    result is reproducible from the call alone.
+    """
+    found = dict(os.environ if base is None else base)
+    for name in ENVIRONMENT:
+        found.pop(name, None)
+    found.update({name: str(value) for name, value in pinned.items()})
+    return found
 
 #: The values each three-valued option accepts, in the order a settings screen
 #: cycles them.  ``auto`` is first because it is the default.
