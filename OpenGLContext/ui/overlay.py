@@ -248,16 +248,42 @@ class OverlayMixin(ScreenMixin):
         """Take or hand back the things a panel needs while it is up.
 
         The pointer, because an overlay is clicked with the same pointer a
-        mouse-look mode has grabbed; and the input sampler, because whatever
-        was held at the moment the panel opened would otherwise stay held for
-        as long as it is up.
+        mouse-look mode has grabbed; the input sampler, because whatever was
+        held at the moment the panel opened would otherwise stay held for as
+        long as it is up; and the pictures, once nothing is on screen to want
+        them.
         """
         active = stack.visible
         if active != self._overlayActive:
             self._overlayActive = active
             self.suspendPointerCapture(active)
             self.getInputState().clear()
+            if not active:
+                self.releaseOverlayPictures()
         self.triggerRedraw(1)
+
+    def releaseOverlayPictures(self) -> None:
+        """Give the overlay's picture textures back to the card.
+
+        Called when the last panel closes.  A gallery of a few hundred models
+        is a few hundred screenshots, and the cache's budget is only enforced
+        while *more* are arriving -- so with no panel left to load any, whatever
+        was browsed would stay resident for the rest of the session.
+
+        What goes is the decoded texture, not the file: an ``http(s)`` picture
+        stays in the on-disk resolver cache and a local one was never anywhere
+        else, so reopening decodes from disk rather than fetching again.  The
+        worker pool is left running, which is what separates this from
+        :meth:`~OpenGLContext.ui.pictures.PictureCache.close`; the cache is
+        ready for the next panel.
+
+        Runs on whichever thread closed the panel, which is the thread that
+        handles events and therefore the one holding the GL context -- the same
+        assumption every other overlay teardown here makes.
+        """
+        renderer = getattr(self, '_overlayRenderer', None)
+        if renderer is not None:
+            renderer.pictures.clear()
 
     # -- input -------------------------------------------------------------
     def ProcessEvent(self, event: Any) -> Any:

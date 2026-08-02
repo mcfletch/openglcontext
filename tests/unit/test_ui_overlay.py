@@ -472,3 +472,106 @@ class TestAClosedPanelCannotTrapTheStack:
             stack.push(panel)
         stack.clear()
         assert len(closed) == 3
+
+
+class _FakeGL:
+    """The two GL calls a picture cache makes, without a window."""
+
+    def __init__(self):
+        self.deleted = []
+        self._next = 0
+
+    def upload(self, width, height, data):
+        self._next += 1
+        return self._next
+
+    def delete(self, texture):
+        self.deleted.append(texture)
+
+
+class _FakeRenderer:
+    """Stands in for OverlayRenderer: only the picture cache is read."""
+
+    def __init__(self, cacheDirectory):
+        from OpenGLContext.ui.pictures import PictureCache
+        self.gl = _FakeGL()
+        self.pictures = PictureCache(upload=self.gl.upload,
+                                     delete=self.gl.delete, workers=0,
+                                     cacheDirectory=cacheDirectory)
+
+
+@pytest.fixture
+def png(tmp_path):
+    """A real PNG on disk, so the cache has something to decode."""
+    from PIL import Image
+
+    def make(name):
+        path = tmp_path / name
+        Image.new('RGBA', (4, 2), (10, 20, 30, 255)).save(path)
+        return str(path)
+    return make
+
+
+@pytest.fixture
+def context(tmp_path):
+    """A context whose overlay renderer has a real, window-free cache."""
+    made = FakeContext()
+    made._overlayRenderer = _FakeRenderer(str(tmp_path / 'cache'))
+    return made
+
+
+class TestPictureLifetime:
+    """A gallery's textures are given back when the overlay goes away.
+
+    A library of a few hundred models is a few hundred screenshots, and the
+    budget that bounds them is only reached by loading *more*: nothing evicts
+    once the panel that was browsing them has gone, so the card would hold the
+    lot for the rest of the session.
+    """
+
+    def test_closing_the_last_panel_gives_the_textures_back(self, context, png):
+        cache = context._overlayRenderer.pictures
+        for name in ('a.png', 'b.png'):
+            assert cache.get(png(name), blocking=True) is not None
+        assert cache.resident == 2
+
+        panel = dialog()
+        context.pushOverlay(panel)
+        panel.close()
+
+        assert cache.resident == 0
+        assert len(context._overlayRenderer.gl.deleted) == 2
+
+    def test_a_panel_closing_over_another_keeps_them(self, context, png):
+        """Moving between screens must not throw away what is still on show."""
+        cache = context._overlayRenderer.pictures
+        assert cache.get(png('a.png'), blocking=True) is not None
+
+        under = dialog()
+        context.pushOverlay(under)
+        over = dialog()
+        context.pushOverlay(over)
+        over.close()
+
+        assert cache.resident == 1
+        assert context._overlayRenderer.gl.deleted == []
+
+    def test_the_cache_still_works_afterwards(self, context, png):
+        """Reopening reloads from disk rather than finding a dead cache."""
+        cache = context._overlayRenderer.pictures
+        path = png('a.png')
+        assert cache.get(path, blocking=True) is not None
+
+        panel = dialog()
+        context.pushOverlay(panel)
+        panel.close()
+
+        assert cache.get(path, blocking=True) is not None
+        assert cache.resident == 1
+
+    def test_a_context_that_never_drew_an_overlay_is_unbothered(self, png):
+        """No renderer means no cache to give back, not an error."""
+        bare = FakeContext()
+        panel = dialog()
+        bare.pushOverlay(panel)
+        panel.close()          # must not raise

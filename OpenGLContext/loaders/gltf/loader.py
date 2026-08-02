@@ -6,8 +6,9 @@ hands it to the scene builder; :func:`load_gltf_url` fetches a document over the
 security-hardened :mod:`resolver` first, then loads it. Both return a
 :class:`~OpenGLContext.loaders.gltf.scene.GLTFScene`.
 
-``pygltflib`` is an optional dependency; :func:`_require_pygltflib` imports it
-lazily with a clear error so importing the package does not require it.
+``pygltflib`` is a core dependency; :func:`_require_pygltflib` still imports it
+lazily, so an install missing it fails at the point of loading with a message
+naming what to install rather than at import time.
 """
 from __future__ import annotations
 
