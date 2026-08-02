@@ -4,7 +4,89 @@ Requires Python 3.10+. (Python 2 is no longer supported; older changelog
 entries below mention 2.x-era Python and the Numeric array package, both long
 superseded by Python 3 and NumPy.)
 
+
+Supported GUI backends
+----------------------
+
+These five are first-class targets.  A change that breaks one of them is a
+regression, not a cleanup, and none of them is a candidate for removal:
+
+	glfw		OpenGLContext.glfwcontext.GLFWContext
+			Recommended for core-profile and PBR rendering; the
+			backend the test suite and the visual-regression
+			captures run against.
+
+	glut		OpenGLContext.glutcontext.GLUTContext
+			Also supplies the GLUT bitmap fonts used by the
+			scenegraph Text node (see providesGLUT on Context).
+
+	pygame		OpenGLContext.pygamecontext.PyGameContext
+
+	wxPython	OpenGLContext.wxcontext.wxContext
+			The backend that embeds a GL canvas inside a larger
+			application's window rather than owning the whole
+			window; see tests/wx_with_controls.py.
+
+	Qt/PySide	provided by the separate OpenGLContext_qt project,
+			imported opportunistically by OpenGLContext/__init__.py.
+			Supported, but versioned and released on its own.
+
+All five request an OpenGL core profile when asked to (profile="core" on the
+ContextDefinition, or OPENGLCONTEXT_PROFILE=core), and all five can create a
+compatibility-profile context for the fixed-function tutorials and for the
+display-list-backed font providers.
+
+Platform-specific pieces are supported on the platform they target, whether or
+not this machine can run them -- OpenGLContext.scenegraph.text.wglfont is
+Windows font support and is expected to work on Windows.
+
+Backends are registered by name through the plug-in framework in
+OpenGLContext/__init__.py; third parties can register their own the same way.
+
+
 Changelog:
+
+2.3.0 (in progress)
+
+	Removed code that nothing reached any more.  None of the supported GUI
+	backends is affected; see "Supported GUI backends" above.
+
+		browser sub-package -- the unfinished wxPython "browser" shell and
+		the VPython-compatible `visual` API (never finished past prototype,
+		see the 2.0.0c1 note below).  The one piece anything outside it
+		used, appdatadirectory(), is now OpenGLContext.userpaths.
+		The `oglc-visual` script goes with it.
+
+		shadow sub-package -- stencil shadow volumes, which required the
+		fixed-function pipeline and an infinite-perspective projection.
+		Dynamic shadows are shadow maps (see docs/shadows.html); the
+		`vrml_view_shadow` script goes with it.
+
+		scenegraph.tree -- the volumetric/space-colonization tree.  Shipped
+		vegetation is instanced glTF with impostors.
+
+		The visitor-based multi-pass renderer -- RenderPass,
+		VisitingRenderPass, Opaque/Transparent/SelectRenderPass, OverallPass,
+		PassSet and RenderVisitor.  Rendering has gone through the flat pass
+		(passes/_flat.py) for some time; these were reachable only from the
+		two sub-packages removed above.  renderpass.py now just selects a
+		flat pass, rendervisitor.py just binds the active Viewpoint, and
+		visitor.py is the find() traversal.  docs/renderprocess.html, which
+		documented the removed system, is withdrawn.
+
+		DisplayListCompiler / DisplayListRenderer -- unreachable: the
+		compiler-selection weighting always preferred ArrayGeometryCompiler
+		(1.0 over 0.9), so no IndexedFaceSet has compiled to a display list
+		in a long time.  Display lists themselves remain, for the bitmap
+		font providers that use them.
+
+		scenegraph.nurbsshader (superseded by nurbstess, which is the one
+		wired into nurbs.py), move.fps (superseded by move.modes.FPSMode),
+		passes.flat, events.tkevents and events.fxevents (no Tk or FOX
+		context exists to reach them).
+
+	DisplayList.__del__ no longer reports an error when its context has
+	already gone away; there is nothing to release in that case.
 
 2.0.0c1 -> 2.1.0a1
 

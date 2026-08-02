@@ -84,9 +84,9 @@ class Context(ScreenMixin, ContextConfigMixin):
             most aspects of the rendering process.
             See: getSceneGraph
 
-        renderPasses -- callable object, normally an instance of
-            OpenGLContext.passes.renderpass.PassSet which implements the
-            rendering algorithm for the Context
+        renderPasses -- callable object, normally
+            OpenGLContext.passes.renderpass.defaultRenderPasses, which selects
+            and caches the FlatPass that renders this Context
 
         alreadyDrawn -- flag which is set/checked to determine
             whether the context needs to be redrawn, see:

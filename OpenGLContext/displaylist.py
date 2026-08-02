@@ -43,7 +43,16 @@ class DisplayList( object ):
         """
         glCallList( self.list )
     def __del__( self, glDeleteLists = glDeleteLists ):
-        """Clean up the OpenGL display-list resources
+        """Release the display-list, if there is still a context holding it.
+
+        A display list outlives its context whenever the window closes before the
+        garbage collector runs -- at interpreter shutdown, or in a test that
+        renders into a context it then destroys. ``glDeleteLists`` against a dead
+        or absent context raises ``GL_INVALID_OPERATION``, and an exception from
+        ``__del__`` cannot propagate: Python prints it to stderr and continues.
+        There is nothing to release in that case (the context took its lists with
+        it), so the error is genuinely nothing to report -- but it must be caught
+        here rather than left to surface as unraisable noise.
 
         See:
             glDeleteLists
@@ -52,8 +61,9 @@ class DisplayList( object ):
             if self.list is not None:
                 glDeleteLists( self.list, 1 )
             self.list = None
-        except AttributeError as err:
+        except AttributeError:
+            # Interpreter shutdown has already torn the module's globals down.
             pass
-
-    
-        
+        except Exception:
+            # No current context, or one that no longer knows this list.
+            self.list = None

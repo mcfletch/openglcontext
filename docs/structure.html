@@ -40,17 +40,35 @@ entry_points in the setup.py script. &nbsp;You can register context
 classes for your GUI library and produce a .egg file which will plug
 into OpenGLContext. </p>
 
-<p>Each Context class has a list of associated <a href="../pydoc/OpenGLContext.rendermode.html">
-RenderMode</a> objects, which implement the various rendering mode
-algorithms common in OpenGL.&nbsp; Currently there are Timer, Opaque,
-Transparent, and Select modes available, and all default Contexts
-include all four.</p>
+<h3>Which backends are supported</h3>
 
-<p>These RenderMode objects are the original design. Current rendering runs
-through the <strong>passes</strong> package described in <a href="#passes">Rendering
-Passes</a> below -- a single "flat" pass that observes the scenegraph and draws it
-in a fixed sequence -- which the default contexts use in place of the legacy
-per-mode traversal. See <a href="flat.html">Flat Rendering</a> for the overview.</p>
+<p><strong>GLFW, GLUT, Pygame, wxPython and Qt/PySide are all first-class
+targets.</strong> Breaking one of them is a regression, not a cleanup, and none
+of them is a candidate for removal. GLFW is what the test suite and the
+visual-regression captures run against, and it is the recommended backend for
+core-profile and PBR rendering; wxPython is the one that embeds a GL canvas
+inside a larger application's window rather than owning the whole window (see
+<code>tests/wx_with_controls.py</code>); Qt/PySide is supported through the
+separate <a href="../pydoc/OpenGLContext_qt.html">OpenGLContext_qt</a> project,
+which OpenGLContext imports opportunistically. All of them can request a core
+profile, and all of them can create a compatibility-profile context for the
+fixed-function tutorials and for the display-list-backed font providers.</p>
+
+<p>Code that targets one platform is supported on that platform whether or not
+the machine you are reading this on can run it -- for instance
+<code>scenegraph/text/wglfont.py</code> is Windows font support, and is expected
+to work on Windows.</p>
+
+<p>Rendering runs through the <strong>passes</strong> package described in
+<a href="#passes">Rendering Passes</a> below: a single "flat" pass that observes
+the scenegraph's structure and draws it in a fixed sequence (background, opaque,
+transparent, selection, overlay). See <a href="flat.html">Flat Rendering</a> for
+the overview.</p>
+
+<p class="technical">Earlier versions instead gave each Context a list of
+RenderMode objects (Timer, Opaque, Transparent, Select) driven by a
+visitor-pattern traversal. That system was removed once the flat pass replaced
+it; <code>Context.renderPasses</code> now names the flat-pass dispatcher.</p>
 
 <h3>OpenGL Core Profile Support</h3>
 
@@ -75,11 +93,6 @@ to use EGL for proper context tracking:</p>
 before wxcontext, you may need to set it manually. Symptoms of missing EGL configuration
 include errors like "Attempt to retrieve context when no valid context" during shader
 rendering. Legacy (fixed-function) rendering typically works without this setting.</p>
-
-<p>On each visible rendering pass, the Opaque RenderMode creates a <a href="../pydoc/OpenGLContext.renderpass.html">
-RenderPass</a> object which stores pass-specific information such as the
-events needing selection processing and the "default" matrices for
-projections.</p>
 
 <p>The <a href="../pydoc/OpenGLContext.viewplatform.html">
 ViewPlatform</a> and <a href="../pydoc/OpenGLContext.viewplatformmixin.html">
@@ -147,9 +160,10 @@ time). Built on top of this are:</p>
   <li><code>transmission.py</code> -- the backdrop capture for glass
     (<code>KHR_materials_transmission</code>).</li>
   <li><code>selection.py</code> -- colour/object-id picking.</li>
-  <li><code>renderpass.py</code>, <code>rendervisitor.py</code> -- the original
-    visitor-based multi-pass system, kept for the legacy path (see
-    <a href="renderprocess.html">Legacy Rendering</a>).</li>
+  <li><code>renderpass.py</code> -- picks which <code>FlatPass</code> subclass
+    renders a context (profile + renderer) and caches it across frames;
+    <code>rendervisitor.py</code> binds the scene's active Viewpoint into the
+    view platform for the core-profile path.</li>
 </ul>
 </section>
 <section>
@@ -166,7 +180,7 @@ scenegraph:</p>
 <p>The <strong>bin</strong> package provides console commands, registered as
 scripts when the package is installed: <code>oglc-gltf</code> (glTF viewer),
 <code>oglc-vrml</code> (VRML97 viewer), <code>oglc-test</code>,
-<code>oglc-lorentz</code>, <code>oglc-profile</code> and <code>oglc-visual</code>.</p>
+<code>oglc-lorentz</code> and <code>oglc-profile</code>.</p>
 </section>
 <section>
 <h2>Scenegraph Rendering</h2>

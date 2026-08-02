@@ -35,7 +35,6 @@ class ViewPlatform(object):
 
     See:
         OpenGLContext.viewplatformmixin.ViewPlatformMixIn
-        OpenGLContext.shadow.shadowcontext.InfViewPlatform
 
     Attributes:
         frustum -- OpenGL-friendly storage of frustum values,
@@ -149,9 +148,6 @@ class ViewPlatform(object):
 
         See:
             gluPerspective
-            OpenGLContext.shadow.shadowcontext.InfViewPlatform
-            OpenGLContext.shadow.pinfperspective -- alternate
-            gluPerspective implementation for shadowing contexts
         """
         # setup camera
         glMatrixMode(GL_PROJECTION)

@@ -259,9 +259,6 @@ class ViewPlatformMixin(object):
         self.initialPosition and orientation equal to
         self.initialOrientation.
 
-        See:
-            OpenGLContext.shadow.shadowcontext for
-            example where this method is overridden
         """
         if not self.platform:
             width,height = self.getViewPort()

@@ -632,8 +632,6 @@ SLOW_SCRIPTS = {
     'shader_instanced.py': SLOW_TIMEOUT,
     'shader_instanced_mapped.py': SLOW_TIMEOUT,
     'shader_instanced_modern.py': SLOW_TIMEOUT,
-    'volumetric_tree.py': VERY_SLOW_TIMEOUT,
-    'volumetric_forest.py': VERY_SLOW_TIMEOUT,
     'teapot_comparison.py': SLOW_TIMEOUT,
     'test_shader_comprehensive.py': SLOW_TIMEOUT,
 }
@@ -896,13 +894,6 @@ SCRIPT_CATEGORIES = {
             'shader_instanced.py',
             'shader_instanced_mapped.py',
             'shader_instanced_modern.py',
-        ],
-    },
-    'volumetric': {
-        "slow": True,
-        "scripts": [
-            'volumetric_tree.py',
-            'volumetric_forest.py',
         ],
     },
     'misc': {

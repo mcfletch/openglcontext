@@ -730,10 +730,10 @@ class TestCacheDir:
     shared world-writable system temp root."""
 
     def test_cache_dir_is_user_scoped(self):
-        from OpenGLContext.browser import homedirectory
+        from OpenGLContext import userpaths
         d = resolver._default_cache_dir()
         assert 'cache' in os.path.basename(d).lower()
-        base = homedirectory.appdatadirectory()
+        base = userpaths.appdatadirectory()
         assert os.path.commonpath([os.path.normpath(d), os.path.normpath(base)]) \
             == os.path.normpath(base)
 

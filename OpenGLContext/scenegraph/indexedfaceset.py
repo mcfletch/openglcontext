@@ -58,7 +58,6 @@ XXX This node needs some serious optimization.  Possible approaches:
 """
 
 import numpy as np
-from OpenGLContext import displaylist
 from OpenGLContext.scenegraph import coordinatebounded
 from vrml.vrml97 import basenodes
 from vrml import protofunctions
@@ -69,12 +68,10 @@ from vrml import protofunctions
 from OpenGLContext.scenegraph.ifscompiler import (
     DummyRender,
     DUMMY_RENDER,
-    DisplayListRenderer,
     COMPILER_CLASSES,
     IFSCompiler,
     ArrayGeometryCompiler,
     IndexedPolygonsCompiler,
-    DisplayListCompiler,
     IndexedValueSource,
     getXNull,
     build_normalPerVertex,
@@ -146,33 +143,13 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
             renderer = self.compile(visible, lit, textured, transparent, mode=mode)
         if not renderer:
             return 0
-        if isinstance(renderer, displaylist.DisplayList):
-            if transparent:
-                # used twice, one instance is transparent, other isn't...
-                renderer = self.compile(visible, lit, textured, transparent, mode=mode)
-                return renderer.render(
-                    visible,
-                    lit,
-                    textured,
-                    transparent,
-                    mode=mode,
-                )
-            renderer.render(
-                visible,
-                lit,
-                textured,
-                transparent,
-                mode=mode,
-            )
-            return 1
-        else:
-            return renderer.render(
-                visible,
-                lit,
-                textured,
-                transparent,
-                mode=mode,
-            )
+        return renderer.render(
+            visible,
+            lit,
+            textured,
+            transparent,
+            mode=mode,
+        )
 
     def compile(
         self,

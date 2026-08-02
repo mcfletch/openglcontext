@@ -44,12 +44,12 @@ def test_fetch_returns_cached_bytes_without_reresolving(tmp_path):
 # --- _default_cache_dir app-data fallback -------------------------------------
 
 def test_default_cache_dir_falls_back_to_tempdir_on_oserror(monkeypatch):
-    from OpenGLContext.browser import homedirectory
+    from OpenGLContext import userpaths
 
     def boom():
         raise OSError("no home")
 
-    monkeypatch.setattr(homedirectory, "appdatadirectory", boom)
+    monkeypatch.setattr(userpaths, "appdatadirectory", boom)
     import tempfile
     path = resolver._default_cache_dir()
     assert path.startswith(tempfile.gettempdir())

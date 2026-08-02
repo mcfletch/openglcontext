@@ -82,7 +82,6 @@ used to maintain and extend PyOpenGL.
                 'oglc-lorentz=OpenGLContext.bin.lorentz:main',
                 'oglc-vrml=OpenGLContext.bin.vrml_view:main',
                 'oglc-profile=OpenGLContext.bin.profile_view:main',
-                'oglc-visual=OpenGLContext.bin.visualshell:main',
                 'oglc-gltf=OpenGLContext.bin.gltf_view:main',
                 'oglc-terrain=OpenGLContext.bin.terrain_view:main',
                 'oglc-tiles=OpenGLContext.bin.tiles_view:main',

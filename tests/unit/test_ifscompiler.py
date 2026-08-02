@@ -1,7 +1,7 @@
 """IndexedFaceSet compile pipeline (mostly pure-CPU, no GL).
 
 Exercises the compiler registry contract in :mod:`ifscompiler`: the three
-compilers (ArrayGeometry / IndexedPolygons / DisplayList), the shared
+compilers (ArrayGeometry / IndexedPolygons), the shared
 tessellation + polygon walk, per-face vs per-vertex normal generation, the
 crease-angle smoothing in :func:`build_normalPerVertex`, and the indexed-value
 lookup edge cases in :class:`IndexedValueSource`. The display-list path needs a
@@ -17,8 +17,6 @@ from OpenGLContext.scenegraph import basenodes as b
 from OpenGLContext.scenegraph import vertex as vertex_mod
 from OpenGLContext.scenegraph.ifscompiler import (
     ArrayGeometryCompiler,
-    DisplayListCompiler,
-    DisplayListRenderer,
     DUMMY_RENDER,
     DummyRender,
     IFSCompiler,
@@ -46,12 +44,6 @@ def _mode():
 class TestTrivialRenderers:
     def test_dummy_render_is_a_noop(self):
         assert DummyRender().render(1, 2, key=3) is None
-
-    def test_display_list_renderer_calls_its_list(self):
-        calls = []
-        r = DisplayListRenderer(lambda: calls.append(True))
-        r.render(1, foo='bar')
-        assert calls == [True]
 
 
 class TestBaseCompiler:
@@ -191,9 +183,6 @@ class TestCompilerWeights:
         # shared corner vertex 0/2 dedupes: 6 index refs, 4 unique coords.
         assert len(ip.index) == 6
         assert len(ip.coord.point) == 4
-
-    def test_display_list_weight_is_low(self):
-        assert DisplayListCompiler.weight(_quad()) == 0.9
 
 
 class TestBuildNormalPerVertex:
@@ -347,54 +336,6 @@ def gl():
     finally:
         glfw.destroy_window(win)
         glfw.terminate()
-
-
-class TestDisplayListCompilerGL:
-    def test_compile_generated_normals_path(self, gl):
-        # No explicit normals -> tessellate + generate, emitting a display list.
-        ifs = _quad(
-            color=b.Color(color=[(1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0)]),
-            texCoord=b.TextureCoordinate(point=[(0, 0), (1, 0), (1, 1), (0, 1)]))
-        r = DisplayListCompiler(ifs).compile(mode=_mode())
-        assert isinstance(r, DisplayListRenderer)
-
-    def test_compile_per_face_normals_path(self, gl):
-        ifs = _quad(normalPerVertex=0)
-        r = DisplayListCompiler(ifs).compile(mode=_mode())
-        assert isinstance(r, DisplayListRenderer)
-
-    def test_compile_with_explicit_normals_uses_polygons(self, gl):
-        # Explicit normals -> no-tessellation polygon walk. Cover every arm:
-        # a triangle, a degenerate (<3) polygon that is skipped, and a pentagon
-        # (>4 -> GL_POLYGON), all carrying colour and texcoords.
-        pts = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (2, 2, 0)]
-        ci = [0, 1, 2, -1,          # triangle
-              0, 1, 2, 3, -1,       # quad
-              0, 1, -1,             # degenerate, skipped
-              0, 1, 2, 3, 4, -1]    # pentagon
-        n = len(ci)
-        ifs = b.IndexedFaceSet(
-            coord=b.Coordinate(point=pts), coordIndex=ci,
-            normal=b.Normal(vector=[(0, 0, 1)] * 5), normalIndex=ci,
-            color=b.Color(color=[(1, 0, 0)] * 5), colorIndex=ci,
-            texCoord=b.TextureCoordinate(
-                point=[(0, 0), (1, 0), (1, 1), (0, 1), (2, 2)]), texCoordIndex=ci)
-        assert n  # silence lint on the descriptive local
-        r = DisplayListCompiler(ifs).compile(mode=_mode())
-        assert isinstance(r, DisplayListRenderer)
-
-    def test_compile_empty_tessellation_returns_none(self, gl):
-        # coordIndex is only a terminator: no polygon accumulates any vertices,
-        # so tessellation is empty and the generated-normal path returns None.
-        ifs = b.IndexedFaceSet(
-            coord=b.Coordinate(point=[(0, 0, 0), (1, 0, 0)]), coordIndex=[-1])
-        assert DisplayListCompiler(ifs).compile(mode=_mode()) is None
-
-    def test_debug_draw_normals_branch(self, gl):
-        ifs = _quad()
-        ifs.DEBUG_DRAW_NORMALS = 1
-        r = DisplayListCompiler(ifs).compile(mode=_mode())
-        assert isinstance(r, DisplayListRenderer)
 
 
 if __name__ == '__main__':

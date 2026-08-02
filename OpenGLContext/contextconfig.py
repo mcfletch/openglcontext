@@ -39,9 +39,9 @@ class ContextConfigMixin:
         user's (system-specific) "application data" directory
         named
         """
-        from OpenGLContext.browser import homedirectory
+        from OpenGLContext import userpaths
 
-        base = homedirectory.appdatadirectory()
+        base = userpaths.appdatadirectory()
         if sys.platform == "win32":
             name = cls.getApplicationName()
         else:

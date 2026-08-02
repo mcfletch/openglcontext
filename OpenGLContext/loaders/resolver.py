@@ -286,9 +286,9 @@ def _default_cache_dir() -> str:
     account can pre-seed a cache entry this user then loads. Falls back to system
     temp only when the app-data location can't be determined.
     """
-    from OpenGLContext.browser import homedirectory
+    from OpenGLContext import userpaths
     try:
-        base = homedirectory.appdatadirectory()
+        base = userpaths.appdatadirectory()
     except OSError:
         import tempfile
         base = tempfile.gettempdir()

@@ -20,12 +20,9 @@ from itertools import zip_longest
 from typing import Any, Iterator, Optional
 
 from numpy import add, arccos, array, divide, dot, ones, repeat
-from OpenGL.GL import (
-    GL_LINES, GL_POLYGON, GL_QUADS, GL_TRIANGLES, glBegin, glColor3dv, glColor3f, glEnd,
-    glNormal3dv, glTexCoord2dv, glVertex3dv,
-)
+from OpenGL.GL import GL_TRIANGLES
 
-from OpenGLContext import triangleutilities, displaylist
+from OpenGLContext import triangleutilities
 from OpenGLContext.debug.logs import getTraceback
 from OpenGLContext.scenegraph import arraygeometry
 from OpenGLContext.scenegraph import (
@@ -45,14 +42,6 @@ class DummyRender(object):
 
 
 DUMMY_RENDER = DummyRender()
-
-
-class DisplayListRenderer(object):
-    def __init__(self, dl: Any) -> None:
-        self.dl = dl
-
-    def render(self, *args: Any, **named: Any) -> None:
-        self.dl()
 
 
 COMPILER_CLASSES: list[type["IFSCompiler"]] = []
@@ -464,110 +453,6 @@ class IndexedPolygonsCompiler(IFSCompiler):
 
 
 COMPILER_CLASSES.append(IndexedPolygonsCompiler)
-
-
-class DisplayListCompiler(IFSCompiler):
-    """Compiles to a display-list for static geometry
-
-    Note that this implementation is basically without real purpose,
-    the arraygeometry version should be much faster on all modern
-    hardware, particularly if VBO support is available.
-
-    Also note that display lists are deprecated in OpenGL 3.x
-    """
-
-    @classmethod
-    def weight(cls, target: Any) -> float:
-        """Determine weighting for the target for this style of compilation"""
-        return 0.9
-
-    def compile(
-        self,
-        visible: int = 1,
-        lit: int = 1,
-        textured: int = 1,
-        transparent: int = 0,
-        mode: Any = None,
-    ) -> Any:
-        """Compile to an opaque textured display-list"""
-        dl = displaylist.DisplayList()
-        dl.start()
-        try:
-            if (not self.target.normal) or (
-                self.target.normal and not len(self.target.normal.vector)
-            ):
-                # need to generate per-face or per-vertex-use vectors,
-                # require tessellation!
-                vertices = self.tessellate()
-                if not vertices:
-                    return None
-                if self.target.normalPerVertex:
-                    normalArray = build_normalPerVertex(vertices, self.target.creaseAngle)
-                    normalStep = 1
-                else:
-                    vertexArray = array([vertex.point for vertex in vertices], "f")
-                    normalArray = triangleutilities.normalPerFace(vertexArray)
-                    normalArray = repeat(normalArray, [3] * len(normalArray), 0)
-                    normalStep = 3
-                glBegin(GL_TRIANGLES)
-                if self.target.DEBUG_DRAW_NORMALS:
-                    normalValues = []
-                try:
-                    normalIndex = -1
-                    for vIndex in range(len(vertices)):
-                        vertex = vertices[vIndex]
-                        if vIndex % normalStep == 0:
-                            normalIndex += 1
-                        glNormal3dv(normalArray[normalIndex])
-                        if vertex.color is not None:
-                            glColor3dv(vertex.color)
-                        if vertex.textureCoordinate is not None:
-                            glTexCoord2dv(vertex.textureCoordinate)
-                        glVertex3dv(vertex.point)
-                        if self.target.DEBUG_DRAW_NORMALS:
-                            normalValues.append(
-                                (vertex.point, vertex.point + normalArray[normalIndex])
-                            )
-                finally:
-                    glEnd()
-                if self.target.DEBUG_DRAW_NORMALS:
-                    glBegin(GL_LINES)
-                    try:
-                        for v, n in normalValues:
-                            glColor3f(1, 0, 0)
-                            glVertex3dv(v)
-                            glColor3f(0, 1, 0)
-                            glVertex3dv(n)
-                    finally:
-                        glEnd()
-            else:
-                # already has normals, can render without tessellation
-                for polygon in self.polygons():
-                    if len(polygon) == 3:
-                        glBegin(GL_TRIANGLES)
-                    elif len(polygon) == 4:
-                        glBegin(GL_QUADS)
-                    elif len(polygon) < 3:
-                        continue
-                    else:
-                        glBegin(GL_POLYGON)
-                    try:
-                        for vertex in polygon:
-                            if vertex.normal is not None:
-                                glNormal3dv(vertex.normal)
-                            if vertex.color is not None:
-                                glColor3dv(vertex.color)
-                            if vertex.textureCoordinate is not None:
-                                glTexCoord2dv(vertex.textureCoordinate)
-                            glVertex3dv(vertex.point)
-                    finally:
-                        glEnd()
-            return DisplayListRenderer(dl)
-        finally:
-            dl.end()
-
-
-COMPILER_CLASSES.append(DisplayListCompiler)
 
 
 def getXNull(node: Any, attr: str) -> Any:

@@ -21,7 +21,7 @@
 "flat" rendering process. &nbsp;This process uses client-side (not
 GL-side) calculations to produce composed transformation matrices which
 are directly loaded before rendering geometry. &nbsp;The rendering
-process is considerably less involved than the <a href="renderprocess.html">original set</a> of separate "RenderPass" objects which would traverse the scenegraph for each pass.</p>
+process is considerably less involved than the original design, in which a set of separate "RenderPass" objects each traversed the whole scenegraph; that system has since been removed.</p>
 <p class="technical">The flat pass carries two implementations: a legacy
 fixed-function path (the compatibility profile) and a shader path (the core
 profile). For how the shader path works -- its passes, shader programs and the
@@ -116,72 +116,38 @@ specifying whether there was a visible change (flat *always* returns True here)<
   
   </ol>
 
-  <li><span style="font-weight: bold;">PassSet.__call__</span></li>
+  <li><span style="font-weight: bold;">defaultRenderPasses.__call__</span></li>
 
-  
   <ol>
 
-    <li><span style="font-weight: bold;"></span>instantiates a new
-OverallPass object with pointers to the three sub-passes as an argument</li>
+    <li>picks the FlatPass class for the Context's profile and renderer --
+the compatibility pass, the core pass, or the PBR pass -- and caches it,
+rebuilding only when the scenegraph itself is replaced</li>
 
-    <li>returns the result of calling the new OverallPass with the
-passed Context object</li>
+    <li>for the core profile, binds the scene's active Viewpoint into the view
+platform (the compatibility path does this inside its own traversal)</li>
 
-  
+    <li>returns the result of calling that FlatPass with the Context</li>
+
   </ol>
 
-  <li style="font-weight: bold;">OverallPass.__init__</li>
+  <li style="font-weight: bold;">FlatPass.Render</li>
 
-  
   <ol>
 
-    <li>stores various matrices</li>
+    <li>walks the paths it has observed on the scenegraph, sorting them into
+background, opaque, transparent and (when there are pick events) selection
+work</li>
 
-    <li>sets up global structures (see above)</li>
+    <li>draws each group in turn, then swaps buffers</li>
 
-    <li>instantiates each sub-pass (with a pointer to the OverallPass,
-and the passCount for the given sub-pass)</li>
-
-  
-  </ol>
-
-  <li style="font-weight: bold;">OverallPass.__call__</li>
-
-  
-  <ol>
-
-    <li>iterates through the list of sub-pass instances calling each
-one in turn and tracking whether it reports a visible change</li>
-
-    <li>returns the sum of all the "changed" values (which is in turn
-returned by the PassSet to the Context's OnDraw method)</li>
-
-  
-  </ol>
-
-  <li>(Visiting)<span style="font-weight: bold;">RenderPass.__call__</span></li>
-
-  
-  <ol>
-
-    <li>generally checks whether the pass should be rendered or not
-(shouldDraw method)</li>
-
-    <li>if not, returns false (no visible change)</li>
-
-    <li>otherwise performs the pass-specific rendering and returns it's
-"visible" flag</li>
-
-  
   </ol>
 
 </ol>
 
-<p>So, at this point, the RenderPass has been called, we are within the
-Context thread (with the lock held), and the OverallPass is initialised.
-&nbsp;Each RenderPass defines it's own __call__ method, but the ones
-likely of the most interest are the ones derived from
-VisitingRenderPass.</p>
+<p class="technical">Earlier versions instead built an OverallPass holding a set
+of sub-passes, each of which traversed the whole scenegraph in turn. That
+system was removed once the flat pass replaced it.</p>
 
 </section>
 
