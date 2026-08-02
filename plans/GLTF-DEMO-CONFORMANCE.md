@@ -221,6 +221,35 @@ clamps them without the glow the reference shows. This is the one item that rero
 `vrml97_lighting.frag`), so it must be built + validated against the whole visual
 suite behind `OPENGLCONTEXT_BLOOM`, not bolted on quickly.
 
+## Browser backdrop roster derived from the table (2026-08-02)
+
+**LightsPunctualLamp** browsed near-black on a black background: the model has no
+lit backdrop of its own, and a scene lit only by its own `KHR_lights_punctual`
+bulb goes through the loader's light meter, which read 345 lux at the scene centre
+(the 180 cd bulb sits ~0.7 units from it) and stopped the camera down to
+**exposure 0.017**. Everything the bulb does not reach went to black, and the
+glimpses of the lit shade interior as the turntable turned read as the bulb
+flashing through.
+
+The scene table already said this model needs an environment
+(`_studiobright('LightsPunctualLamp')`, "its own bulb only lights the shade, so
+render against the image-cube, not black") — the capture harness honoured it and
+the browser did not. The browser was reading a **hand-maintained** frozenset,
+`ENV_BACKGROUND_MODELS`, which had drifted from the table: 12 scenes asked for an
+environment and were missing from it (LightsPunctualLamp, StainedGlassLamp,
+DamagedHelmet, SimpleMaterial, LightVisibility, ScatteringSkull,
+IridescenceDielectricSpheres, CompareEmissiveStrength, NormalTangentTest,
+PrimitiveModeNormalsTest, BoomBoxWithAxes, AnimationPointerUVs).
+
+Fixed by **deriving** the roster from `DEMO_SCENES` instead of restating it:
+`SceneSpec.background` now defaults to `''` — *no opinion*, leaving each tool its
+own default (the sky for a capture via the new `capture_background`, black for the
+browser) — so a non-empty value is a deliberate statement that the materials need
+that backdrop, which is exactly what `needs_env_background` /
+`ENV_BACKGROUND_MODELS` now read. No capture-side value changes, so the blessed
+baselines are untouched. Tests:
+`test_gltf_demos_metadata.py::TestSharedDerivations`.
+
 ## Bloom / HDR (EmissiveStrengthTest) — IMPLEMENTED (gated)
 
 Done as blueprinted, behind `OPENGLCONTEXT_BLOOM` (default off, so the visual suite

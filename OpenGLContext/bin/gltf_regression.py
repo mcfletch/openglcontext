@@ -233,7 +233,7 @@ def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out:
     w, h = size
     common = ['--no-physics', '--no-shadows', '--capture', out,
               '--frames', str(frames), '--capture-delay', repr(delay),
-              '--size', '%dx%d' % (w, h), '--background', spec.background]
+              '--size', '%dx%d' % (w, h), '--background', spec.capture_background]
     if camera is None:
         args = [model, '--no-cameras', '--no-rotate',
                 '--yaw', repr(spec.yaw), '--elevation', repr(spec.elevation),
@@ -245,7 +245,7 @@ def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out:
     else:
         # Baked camera: adopt the authored pose, don't re-frame or spin.
         args = [model, '--camera', str(camera), '--no-rotate'] + common
-    if spec.background == 'cube':
+    if spec.capture_background == 'cube':
         env_arg, ibl = _environment_for(spec)
         if env_arg:
             args += ['--environment', env_arg, '--ibl-intensity', ibl]
@@ -385,7 +385,7 @@ def _view_metadata(spec: gltf_demos.SceneSpec, camera: int | None, url: str | No
     local cache path -- so the record reflects the real load context. ``stats``
     carries the viewer-reported load time / fps for this render."""
     env_arg = ibl = None
-    if spec.background == 'cube':
+    if spec.capture_background == 'cube':
         env_arg, ibl = _environment_for(spec)
     stats = stats or {}
     return {
@@ -396,7 +396,7 @@ def _view_metadata(spec: gltf_demos.SceneSpec, camera: int | None, url: str | No
         'load_context': 'url' if isinstance(url, str) and url.startswith(('http://', 'https://')) else 'local',
         'load_seconds': stats.get('load_seconds'),
         'fps': stats.get('fps'),
-        'background': spec.background,
+        'background': spec.capture_background,
         'environment': env_arg,
         'ibl_intensity': ibl,
         'framing': ({'eye': list(spec.eye), 'look_at': list(spec.look_at)}

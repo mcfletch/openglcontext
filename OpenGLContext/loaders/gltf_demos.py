@@ -9,9 +9,8 @@ truth shared by
 * the doc-image gallery (`scripts/generate_doc_images.py`), and
 * the regression-capture runner (`OpenGLContext.bin.gltf_regression`).
 
-Before this table the demo and the capture harness each kept their own parallel
-list; they drifted. Keep new per-scene tuning here so everything renders the
-model the same way.
+Keep new per-scene tuning here, and derive from it rather than restating it, so
+every tool renders the model the same way.
 
 The framing fields (`yaw`, `elevation`, `tilt`, `margin`) match the knobs the
 viewer's auto-fit exposes (`oglc-gltf --yaw/--elevation/--tilt/--margin`); their
@@ -36,7 +35,11 @@ class SceneSpec:
     elevation: float = 0.0          # camera height as a fraction of the model radius
     tilt: float = 0.0               # downward camera tilt (radians)
     margin: float = 1.05            # fit factor; SMALLER => the model fills MORE of the frame
-    background: str = 'sky'         # 'sky' (lit gradient) | 'cube' (env skybox) | 'none' (black)
+    # 'sky' (lit gradient) | 'cube' (env skybox) | 'none' (black); '' is no opinion,
+    # leaving each tool its own default -- the sky for a capture, black for the
+    # browser. Setting it says the *materials* need that backdrop, which is what
+    # `needs_lit_backdrop` reads, so say nothing rather than restating a default.
+    background: str = ''
     environment: Optional[str] = None  # cube-env face set: None => outdoor 'pimbackground';
                                        # 'studio' => the neutral studio set (bright grey
                                        # backdrop + softboxes) that the Khronos material
@@ -50,6 +53,22 @@ class SceneSpec:
                                        # deterministic capture; None => bind pose
     description: str = ''
 
+    @property
+    def capture_background(self) -> str:
+        """The backdrop a capture renders against: this scene's own choice, or the
+        lit gradient sky the gallery and the regression runner default to."""
+        return self.background or DEFAULT_CAPTURE_BACKGROUND
+
+    @property
+    def needs_lit_backdrop(self) -> bool:
+        """Whether this scene names a backdrop that lights it, rather than black.
+
+        Setting `background` to anything but 'none' is how a scene says its
+        materials cannot be read against a black frame; every tool decides from
+        this rather than from a roster of its own.
+        """
+        return bool(self.background) and self.background != 'none'
+
     def camera_ids(self) -> list[Optional[int]]:
         """The camera selectors to render: the baked indices, or a single None
         meaning 'auto-frame the model' (the `--no-cameras` path)."""
@@ -62,34 +81,8 @@ class SceneSpec:
         return '%s__cam%02d' % (self.name, camera)
 
 
-# Materials that only read correctly against a lit environment: metals reflect it
-# and transmissive glass refracts it (a black backdrop renders rough glass opaque).
-# The browser demo lights these with the cheap analytic 'sky'; the capture runner
-# uses the image 'cube' so the reflection/refraction matches the Khronos reference.
-# This set is the single roster both consult.
-ENV_BACKGROUND_MODELS = frozenset({
-    'ABeautifulGame', 'AnisotropyBarnLamp', 'AnisotropyDiscTest',
-    'AnisotropyRotationTest', 'AnisotropyStrengthTest', 'AttenuationTest',
-    'BoomBox', 'CarbonFibre', 'ChairDamaskPurplegold', 'ChronographWatch',
-    'ClearCoatCarPaint', 'ClearCoatTest', 'ClearcoatWicker',
-    'CommercialRefrigerator', 'CompareAnisotropy', 'CompareClearcoat',
-    'CompareDispersion', 'CompareIor', 'CompareIridescence',
-    'CompareMetallic', 'CompareSheen', 'CompareSpecular',
-    'CompareTransmission', 'CompareVolume', 'DiffuseTransmissionPlant',
-    'DiffuseTransmissionTeacup', 'DiffuseTransmissionTest',
-    'DispersionTest', 'DragonAttenuation', 'DragonDispersion',
-    'EnvironmentTest', 'GlamVelvetSofa', 'GlassBrokenWindow',
-    'GlassHurricaneCandleHolder', 'GlassVaseFlowers', 'IORTestGrid',
-    'IridescenceAbalone', 'IridescenceLamp', 'IridescenceMetallicSpheres',
-    'IridescenceSuzanne', 'IridescentDishWithOlives', 'MetalRoughSpheres',
-    'MetalRoughSpheresNoTextures', 'MosquitoInAmber', 'NegativeScaleTest',
-    'PotOfCoals', 'PotOfCoalsAnimationPointer', 'SheenChair',
-    'SheenTestGrid', 'SheenWoodLeatherSofa', 'SpecGlossVsMetalRough',
-    'SpecularSilkPouf', 'SpecularTest', 'SunglassesKhronos', 'ToyCar',
-    'TransmissionOrderTest', 'TransmissionRoughnessTest',
-    'TransmissionTest', 'TransmissionThinwallTestGrid',
-    'USDShaderBallForGltf', 'WaterBottle',
-})
+#: Backdrop a capture renders against when the scene expresses no preference.
+DEFAULT_CAPTURE_BACKGROUND = 'sky'
 
 # Local Parthenon build (sibling project). Resolved lazily so importing this
 # module never touches the filesystem; see `parthenon_source()`.
@@ -365,6 +358,17 @@ DEMO_SCENES = (
 
 _BY_NAME = {s.name: s for s in DEMO_SCENES}
 
+# Materials that only read correctly against a lit environment: metals reflect it
+# and transmissive glass refracts it (a black backdrop renders rough glass opaque),
+# and a scene lit only by its own KHR_lights_punctual bulb meters an exposure that
+# leaves the rest of the model black. A scene names that need by setting
+# `background`; the roster is derived from the table so the browser demo and the
+# capture runner cannot drift on which models must not be shown on black. The
+# browser lights them with the cheap analytic 'sky'; the capture runner honours the
+# scene's own choice, so the reflection/refraction matches the Khronos reference.
+ENV_BACKGROUND_MODELS = frozenset(
+    s.name for s in DEMO_SCENES if s.needs_lit_backdrop)
+
 
 def iter_scenes() -> Iterator[SceneSpec]:
     """Iterate the demo scenes in canonical order."""
@@ -383,7 +387,7 @@ def yaw_for(name: str) -> float:
 
 def needs_env_background(name: str) -> bool:
     """Whether the model's materials need a lit environment to read correctly."""
-    return name in ENV_BACKGROUND_MODELS
+    return scene_for(name).needs_lit_backdrop
 
 
 def find_parthenon(start: Optional[str] = None) -> Optional[str]:

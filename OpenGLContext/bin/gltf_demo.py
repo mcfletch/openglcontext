@@ -70,10 +70,12 @@ class ModelProfile:
 DEFAULT_PROFILE = ModelProfile()
 
 # Sub-demos whose materials need a lit environment to read correctly: transmissive
-# glass refracts the backdrop (a black one renders rough glass opaque) and metals
-# reflect it. The roster is shared with the capture/regression tools via
-# gltf_demos so the demo and the harness never drift on which models need an env;
-# the demo lights them with the cheap analytic 'sky' (see the loop below).
+# glass refracts the backdrop (a black one renders rough glass opaque), metals
+# reflect it, and a lamp lit only by its own bulb meters an exposure that leaves
+# everything the bulb does not reach black. The roster is derived from the shared
+# per-scene table (gltf_demos), so the demo and the capture harness cannot drift on
+# which models need one; the demo lights them with the cheap analytic 'sky' (see
+# the loop below).
 _ENV_BACKGROUND = tuple(sorted(gltf_demos.ENV_BACKGROUND_MODELS))
 
 # Emissive-heavy sub-demos whose reference shows a bloom/glow. Bloom is HDR + a

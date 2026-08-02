@@ -16,10 +16,18 @@ class TestSceneSpec:
     def test_unlisted_model_gets_default_framing(self):
         s = gltf_demos.scene_for('NoSuchModel')
         assert s.name == 'NoSuchModel'
-        assert s.margin == 1.05 and s.background == 'sky'
+        assert s.margin == 1.05 and s.capture_background == 'sky'
         # default camera is level and centred (no elevation/tilt)
         assert s.elevation == 0.0 and s.tilt == 0.0
         assert s.camera_ids() == [None]
+
+    def test_a_scene_with_no_lighting_opinion_captures_against_the_sky(self):
+        # An empty `background` is 'no opinion': a capture falls back to the lit
+        # gradient sky, while the browser (which defaults to black) leaves it black.
+        s = gltf_demos.scene_for('Duck')
+        assert s.background == ''
+        assert s.capture_background == 'sky'
+        assert gltf_demos.scene_for('LightsPunctualLamp').capture_background == 'cube'
 
     def test_flagged_models_frame_tighter_than_default(self):
         # the QA 'too small in frame' models get a margin below the 1.15 default
@@ -63,8 +71,25 @@ class TestSharedDerivations:
         cfg = gltf_demo.demo_config([])
         assert gltf_demo.resolve_background(cfg, 'MetalRoughSpheres') == 'sky'
 
+    def test_every_scene_that_names_a_backdrop_gets_a_lit_one_in_the_browser(self):
+        """The roster is derived from the table, so the browser and the capture
+        harness cannot disagree about which models must not be shown on black."""
+        for s in gltf_demos.iter_scenes():
+            if s.background and s.background != 'none':
+                assert gltf_demos.needs_env_background(s.name), s.name
+
+    def test_self_lit_lamp_is_browsed_against_a_lit_background(self):
+        # LightsPunctualLamp's own bulb lights only its shade: on black the light
+        # meter stops the camera down to near-nothing and the model disappears.
+        from OpenGLContext.bin import gltf_demo
+        cfg = gltf_demo.demo_config([])
+        assert gltf_demo.resolve_background(cfg, 'LightsPunctualLamp') == 'sky'
+        # a model with no lighting opinion of its own still browses on black
+        assert gltf_demo.resolve_background(cfg, 'Duck') == 'none'
+
     def test_doc_gallery_framing_comes_from_shared_module(self):
-        import importlib.util, os
+        import importlib.util
+        import os
         from OpenGLContext.testing.paths import tests_root
         path = os.path.join(str(tests_root(__file__).parent),
                             'scripts', 'generate_doc_images.py')
