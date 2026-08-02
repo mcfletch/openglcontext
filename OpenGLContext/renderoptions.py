@@ -32,7 +32,7 @@ from vrml import protofunctions
 
 log = logging.getLogger(__name__)
 
-__all__ = ['definition', 'flag', 'choice', 'number', 'env_flag', 'env_choice',
+__all__ = ['hidden_window','definition', 'flag', 'choice', 'number', 'env_flag', 'env_choice',
            'env_number', 'env_flag_once', 'env_number_once', 'reset_env_cache',
            'clean_environment', 'CHOICES', 'LABELS', 'ENVIRONMENT']
 
@@ -56,6 +56,16 @@ ENVIRONMENT: Tuple[str, ...] = (
     'OPENGLCONTEXT_NO_VSYNC', 'OPENGLCONTEXT_GLTF_BASELINE',
 )
 
+#: The two of those that say **how a render is presented** rather than what it
+#: contains.  Whether the window is mapped and whether the swap waits on a
+#: compositor change nothing about the pixels, so :func:`clean_environment`
+#: carries them across rather than dropping them: a caller that forgot to pin
+#: them opened a window on somebody's desktop, and a suite of several hundred
+#: GL tests opened several hundred.
+PRESENTATION: Tuple[str, ...] = (
+    'OPENGLCONTEXT_HIDDEN', 'OPENGLCONTEXT_NO_VSYNC',
+)
+
 
 def clean_environment(base: Optional[Dict[str, str]] = None,
                       **pinned: str) -> Dict[str, str]:
@@ -74,10 +84,20 @@ def clean_environment(base: Optional[Dict[str, str]] = None,
     point: the next variable to be added is exactly the one nobody would think
     to clear.  Pass what the render actually needs as ``pinned``, and the
     result is reproducible from the call alone.
+
+    :data:`PRESENTATION` is carried across rather than dropped.  Those two say
+    how a render is *shown*, not what it contains, so they cannot make a
+    reference image depend on what ran before -- and dropping them meant every
+    caller who forgot to pin them opened a window on somebody's desktop.
+    ``pinned`` still overrides them.
     """
-    found = dict(os.environ if base is None else base)
+    source = dict(os.environ if base is None else base)
+    found = dict(source)
     for name in ENVIRONMENT:
         found.pop(name, None)
+    for name in PRESENTATION:
+        if name in source:
+            found[name] = source[name]
     found.update({name: str(value) for name, value in pinned.items()})
     return found
 
@@ -198,6 +218,19 @@ def env_number_once(name: str, default: float, integer: bool = False) -> float:
     if name not in _ENV_CACHE:
         _ENV_CACHE[name] = env_number(name, default, integer=integer)
     return float(_ENV_CACHE[name])
+
+
+def hidden_window() -> bool:
+    """Whether a context should render without putting a window on the screen.
+
+    One reader, because every backend needs the answer and each was otherwise
+    free to spell the question differently -- or, as three of them did, not ask
+    it at all and map a window regardless.  A hidden window renders and reads
+    back identically, so a suite of several hundred GL tests costs nobody their
+    desktop, and on a compositor it is also the only arrangement in which a
+    buffer swap is guaranteed not to block waiting to be shown.
+    """
+    return env_flag('OPENGLCONTEXT_HIDDEN', False)
 
 
 def env_flag(name: str, default: bool) -> bool:

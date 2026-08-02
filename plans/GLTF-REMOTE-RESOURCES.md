@@ -5,12 +5,15 @@
 single `.gltf` file and loading it locally. A remote multi-file `.gltf` resolves
 its external `.bin`/image references against the document origin; a remote `.glb`
 still loads unchanged; off-origin references are rejected by the `Resolver`.
-Implemented in `bin/gltf_view.py`: `_resolve_source` keeps a URL intact,
-`_load_source` branches URL→`load_gltf_url` (disk-cached under the per-user
-app-data dir) / path→`load_gltf`, and the single-file `_download` helper is gone.
-Verified end-to-end against Khronos `BoxTextured/glTF/BoxTextured.gltf` (external
-`Box0.bin` geometry + PNG texture resolve). Tests:
-`tests/test_gltf_view_cli.py::TestRemoteSourceRouting`. Original plan below.
+Implemented in `OpenGLContext/viewer/source.py`: `resolve_source` keeps a URL
+intact, `load_gltf_source` branches URL→`load_sample_url`→`load_gltf_url`
+(disk-cached under the per-user app-data dir) / path→`load_gltf`, and the
+single-file download helper is gone. Verified end-to-end against Khronos
+`BoxTextured/glTF/BoxTextured.gltf` (external `Box0.bin` geometry + PNG texture
+resolve). Tests:
+`tests/unit/test_gltf_view_cli.py::TestRemoteSourceRouting`. Documented in
+[docs/gltf.html](../docs/gltf.html) and [docs/viewer.html](../docs/viewer.html).
+Original plan below.
 
 ---
 

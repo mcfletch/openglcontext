@@ -51,13 +51,15 @@ dependencies = [
     "pydispatcher",
     "TTFQuery>=2.0.1a1",
     "simpleparse>=3.0.0a3",
+    "pygltflib>=1.16",
 ]
 
 [project.optional-dependencies]
 wx = ["wxPython>=4.0"]
 pygame = ["pygame>=2.0"]
 glfw = ["glfw>=2.0"]
-gltf = ["pygltflib>=1.16"]
+# gltf is now pretty much core to OpenGLContext...
+gltf = []
 draco = ["DracoPy>=1.4"]
 # Sound that is actually heard. omi_audio itself is a core dependency -- the
 # scenegraph's audio nodes are built on its model -- and it mixes happily with
@@ -78,14 +80,15 @@ dev = ["OpenGLContext[all]","pytest", "pytest-cov", "pytest-html", "pytest-timeo
 [project.scripts]
 oglc-test = "OpenGLContext.bin.gltest:main"
 oglc-lorentz = "OpenGLContext.bin.lorentz:main"
+oglc-view = "OpenGLContext.bin.view:main"
+# Deprecated aliases for oglc-view; removed after one release cycle.
 oglc-vrml = "OpenGLContext.bin.vrml_view:main"
 oglc-gltf = "OpenGLContext.bin.gltf_view:main"
 oglc-terrain = "OpenGLContext.bin.terrain_view:main"
 oglc-tiles = "OpenGLContext.bin.tiles_view:main"
 oglc-gltf-demo = "OpenGLContext.bin.gltf_demo:main"
 oglc-gltf-regression = "OpenGLContext.bin.gltf_regression:main"
-oglc-profile = "OpenGLContext.bin.profile_view:main"
-oglc-ui = "OpenGLContext.bin.ui_demo:main"
+oglc-ui-demo = "OpenGLContext.bin.ui_demo:main"
 
 [project.urls]
 Homepage = "http://pyopengl.sourceforge.net/context/"

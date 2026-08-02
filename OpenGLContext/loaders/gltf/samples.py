@@ -101,22 +101,62 @@ def cache_reference_screenshot(name: str, cache_dir: Optional[str] = None) -> Op
     return fetch_to_cache(url, cache_dir)
 
 
+#: The variants a Khronos sample may publish, in the order to prefer them.  The
+#: self-contained binary first; then ``glTF``, whose buffers and textures are
+#: resolved over the network; then the embedded form.  **Not every sample ships
+#: all three** -- Sponza publishes no ``.glb`` at all -- which is why a caller
+#: holding one URL still has to be able to try the others.
+SAMPLE_VARIANTS = (
+    ('glTF-Binary', '.glb'),
+    ('glTF', '.gltf'),
+    ('glTF-Embedded', '.gltf'),
+)
+
+
+def sample_variant_urls(name: str) -> list:
+    """Every URL a Khronos sample of this name might be published at."""
+    return ['%s/%s/%s/%s%s' % (SAMPLE_MODELS_BASE, name, directory, name, suffix)
+            for directory, suffix in SAMPLE_VARIANTS]
+
+
+def sample_name_from_url(url: str) -> Optional[str]:
+    """The sample this URL names, or None if it is not a Khronos sample URL.
+
+    Answering None for anything else is the point: guessing at sibling paths on
+    somebody else's server would be inventing URLs they never published.
+    """
+    if not url.startswith(SAMPLE_MODELS_BASE + '/'):
+        return None
+    rest = url[len(SAMPLE_MODELS_BASE) + 1:].split('/')
+    return rest[0] if len(rest) >= 2 else None
+
+
+def load_sample_url(url: str, cache_dir: Optional[str] = None) -> "GLTFScene":
+    """Load a URL, trying the other variants if it names a Khronos sample.
+
+    A library entry carries a URL rather than a name, and
+    :func:`sample_model_url` names the ``.glb`` because that is the one to
+    prefer -- so a sample that publishes no ``.glb`` answered 404 and could not
+    be opened at all.  Anything that is not a sample URL is loaded exactly as
+    given and its failure is its own.
+    """
+    from OpenGLContext.loaders.gltf import load_gltf_url
+    name = sample_name_from_url(url)
+    candidates = [url] if name is None else (
+        [url] + [other for other in sample_variant_urls(name) if other != url])
+    last_error: Optional[BaseException] = None
+    for candidate in candidates:
+        try:
+            return load_gltf_url(candidate, cache_dir)
+        except Exception as err:
+            last_error = err
+    raise last_error if last_error else IOError("could not load %r" % url)
+
+
 def load_sample(name: str, cache_dir: Optional[str] = None) -> "GLTFScene":
     """Load a Khronos sample model by directory name, trying each glTF variant.
 
     Prefers the self-contained ``glTF-Binary`` (.glb); falls back to ``glTF``
     (external buffers/textures resolved over the network) and ``glTF-Embedded``.
     """
-    from OpenGLContext.loaders.gltf import load_gltf_url
-    candidates = [
-        '%s/%s/glTF-Binary/%s.glb' % (SAMPLE_MODELS_BASE, name, name),
-        '%s/%s/glTF/%s.gltf' % (SAMPLE_MODELS_BASE, name, name),
-        '%s/%s/glTF-Embedded/%s.gltf' % (SAMPLE_MODELS_BASE, name, name),
-    ]
-    last_error = None
-    for url in candidates:
-        try:
-            return load_gltf_url(url, cache_dir)
-        except Exception as err:
-            last_error = err
-    raise last_error if last_error else IOError("no glTF variant for %r" % name)
+    return load_sample_url(sample_model_url(name), cache_dir)

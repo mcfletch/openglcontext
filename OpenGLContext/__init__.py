@@ -23,7 +23,7 @@ __version__ = "2.3.0"
 __author__ = "Michael Colin Fletcher"
 __license__ = "BSD-Style, see license.txt for details and exceptions"
 
-from OpenGLContext.plugins import Context,InteractiveContext,VRMLContext,Loader,Node
+from OpenGLContext.plugins import Context,InteractiveContext,VRMLContext,Loader,Node,Adapter
 
 Context( 'pygame', 'OpenGLContext.pygamecontext.PyGameContext' )
 Context( 'wx', 'OpenGLContext.wxcontext.wxContext' )
@@ -45,6 +45,15 @@ except ImportError as err:
 
 Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml','.wrl.gz'] )
 Loader( 'obj', 'OpenGLContext.loaders.obj.defaultHandler', ['.obj'] )
+
+# What `oglc-view` can open, keyed by file suffix and content type. One viewer
+# serves every format; the adapter is chosen from the source itself.
+Adapter( 'gltf', 'OpenGLContext.viewer.adapters.gltf.GLTFAdapter', ['.gltf','.glb','model/gltf+json','model/gltf-binary'] )
+Adapter( 'vrml97', 'OpenGLContext.viewer.adapters.vrml.VRMLAdapter', ['.wrl','.wrz','.vrml','.wrl.gz','model/vrml','x-world/x-vrml'] )
+Adapter( 'obj', 'OpenGLContext.viewer.adapters.obj.OBJAdapter', ['.obj','.obj.gz','model/obj'] )
+# A tileset is any .json, so the registry only claims the conventional name; a
+# document under another name is recognised by its content (adapters._sniff).
+Adapter( 'tiles3d', 'OpenGLContext.viewer.adapters.tiles.TilesAdapter', ['tileset.json'] )
 
 Node( 'Anchor', 'vrml.vrml97.basenodes.Anchor' )
 Node( 'Appearance', 'OpenGLContext.scenegraph.appearance.Appearance' )

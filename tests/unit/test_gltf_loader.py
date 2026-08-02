@@ -858,10 +858,21 @@ class TestSameOriginFetch:
             r.fetch('http://169.254.169.254/latest/meta-data/')
         assert called['n'] == 0
 
-    def test_same_origin_reference_is_fetched(self, monkeypatch):
+    def test_same_origin_reference_is_fetched(self, monkeypatch, tmp_path):
         class _Resp:
+            """A file-like response: its payload once, then end of stream.
+
+            The fetch reads in chunks so it can cap the size as it goes, and a
+            ``read`` that hands the same bytes back for ever never reaches the
+            end -- it just grows until it trips the cap.
+            """
+
+            def __init__(self):
+                self._rest = b'OK'
+
             def read(self, n=-1):
-                return b'OK'
+                data, self._rest = self._rest, b''
+                return data
 
             def close(self):
                 pass
@@ -878,6 +889,10 @@ class TestSameOriginFetch:
         # opener rather than a bare urlopen.
         monkeypatch.setattr(resolver.urllib.request, 'build_opener',
                             lambda *a, **k: _Opener())
+        # A sub-resource is cached on disk now, so the shared cache would answer
+        # from a previous run of this test and no request would be made at all.
+        monkeypatch.setattr(resolver, '_default_cache_dir',
+                            lambda: str(tmp_path))
         r = resolver.Resolver(base_url='https://example.com/a/model.gltf')
         assert r.fetch('buf.bin') == b'OK'
         assert seen['url'].startswith('https://example.com/a/')
@@ -908,13 +923,6 @@ class TestLocalPathConfinement:
 
 class TestResourceSizeCap:
     """A single fetched/decoded resource is bounded."""
-
-    def test_read_capped_rejects_overflow(self):
-        class _Resp:
-            def read(self, n=-1):
-                return b'x' * n           # pretend the stream is huge
-        with pytest.raises(ValueError, match='limit'):
-            resolver._read_capped(_Resp(), 10)
 
     def test_data_uri_over_cap_rejected(self):
         uri = 'data:;base64,' + resolver.base64.b64encode(b'x' * 100).decode()

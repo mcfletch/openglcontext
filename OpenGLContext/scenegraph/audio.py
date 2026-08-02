@@ -37,7 +37,7 @@ import numpy as np
 from vrml import field, node
 from vrml.vrml97 import basenodes, nodetypes
 
-from omi_audio import model, spatial
+from omi_audio import formats, model, spatial
 
 log = logging.getLogger(__name__)
 
@@ -77,8 +77,11 @@ class AudioSource(node.Node):
     The fields are ``KHR_audio_emitter``'s, by name, so a source authored in
     Blender or Godot and one written by hand in VRML mean the same thing.
     ``url`` is a list because a scene may offer the same sound in several
-    formats; the first that decodes wins, which is how the glTF codec extensions
-    (``OMI_audio_ogg_vorbis``, ``OMI_audio_opus``) are meant to be read.
+    formats, most preferred first, and the first that decodes wins.  That is how
+    the glTF codec extensions (``OMI_audio_ogg_vorbis``, ``OMI_audio_opus``) are
+    read: :func:`emitters_from_document` puts every encoding a document offers
+    into ``url``, better before worse, ending with the MP3 the base extension
+    guarantees.
     """
 
     PROTO = 'AudioSource'
@@ -128,10 +131,10 @@ class AudioSource(node.Node):
         self._clip: Any = None
         self._resolved = False
         self._library: Any = None
-        self._audioIndex: Optional[int] = None
+        self._source: Optional[model.AudioSource] = None
         self._record = model.AudioSource()
 
-    def useLibrary(self, library: Any, index: Optional[int]) -> None:
+    def useLibrary(self, library: Any, source: model.AudioSource) -> None:
         """Take this source's clip from a glTF document's audio library.
 
         A document names its audio by index rather than by anything this node
@@ -140,9 +143,14 @@ class AudioSource(node.Node):
         and hands back samples.  Used instead of walking :attr:`url`, which for
         a document-backed source records where the audio is rather than how it
         is fetched.
+
+        ``source`` is the document's own record rather than an audio index,
+        because a source may name several encodings of one sound through the
+        codec extensions in :mod:`omi_audio.formats`, and choosing between them
+        is the library's job.
         """
         self._library = library
-        self._audioIndex = index
+        self._source = source
         self._resolved = False
 
     def clip(self, engine: Any) -> Any:
@@ -164,7 +172,7 @@ class AudioSource(node.Node):
         # engine to ask, and the engine's clip cache is what fixes the rate
         # everything is decoded and mixed at.  Hand it over once one exists.
         self._library.cache = engine.clips
-        return self._library.clip(self._audioIndex)
+        return self._library.clip_for(self._source)
 
     def _fromUrl(self, engine: Any) -> Any:
         """The first of :attr:`url` that decodes, most-preferred first."""
@@ -559,6 +567,13 @@ def emitters_from_document(document: model.AudioDocument,
     ``resolve`` turns an audio ``uri`` into the absolute one to record in
     :attr:`AudioSource.url`.  The extension states that a uri is relative to the
     document, and only the loader knows where that was.
+
+    Where a source offers its sound in several encodings -- the glTF codec
+    extensions, :mod:`omi_audio.formats` -- every one of them is recorded in
+    :attr:`AudioSource.url`, best first, including any this build cannot decode:
+    ``url`` says where the sound is, and the node already takes the first entry
+    that decodes.  Which one is actually *fetched* is the library's decision,
+    and it asks only for codecs it can read.
     """
     if emitters is None:
         emitters = document.emitters
@@ -566,15 +581,16 @@ def emitters_from_document(document: model.AudioDocument,
     for emitter in emitters:
         sources = []
         for source in document.sources_for(emitter):
-            audio = document.audio_for(source)
-            if audio is None:
+            options = document.audio_options(source, formats.ENCODINGS)
+            if not options:
                 continue
             built = AudioSource(
-                url=audio_location(audio, resolve), gain=source.gain,
-                playbackRate=source.playbackRate, loop=source.loop,
-                autoplay=source.autoplay)
+                url=[url for audio in options
+                     for url in audio_location(audio, resolve)],
+                gain=source.gain, playbackRate=source.playbackRate,
+                loop=source.loop, autoplay=source.autoplay)
             if library is not None:
-                built.useLibrary(library, source.audio)
+                built.useLibrary(library, source)
             sources.append(built)
         named: Dict[str, Any] = {'type': emitter.type, 'gain': emitter.gain,
                                  'sources': sources}

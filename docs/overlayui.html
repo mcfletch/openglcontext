@@ -445,7 +445,7 @@ context.pushOverlay(panel)</pre>
     <code>OpenGLContext</code>.</p>
   <p><strong>New output follows the end only for a reader who is at the end.</strong>
     Scroll up to read an earlier traceback and the lines the engine is still
-    logging no longer drag the view back down; scroll to the bottom again and it
+    logging leave the view where you put it; scroll to the bottom again and it
     resumes following.</p>
 </section>
 
@@ -557,7 +557,12 @@ panel = Panel(title='Movement', modal=True, preferredColumns=48, children=[
         KeyCapture.</td></tr>
     <tr><td><code>ui.scroll</code></td><td>The clipping viewport and its bar.</td></tr>
     <tr><td><code>ui.panel</code></td>
-      <td>One screen: focus, accelerators, modality, commands.</td></tr>
+      <td>One screen: focus, accelerators, modality, commands. Walked with
+        Tab/Shift-Tab or the up/down arrows, and the focused item is pressed
+        with Space or Return; Return with nothing focused presses the primary
+        action, and Escape leaves a screen that can be left. Left and right are
+        left to whatever is focused, since a <code>Select</code>, a
+        <code>Slider</code> and a <code>Carousel</code> all use them.</td></tr>
     <tr><td><code>ui.overlay</code></td>
       <td>The stack and the context mix-in.</td></tr>
     <tr><td><code>ui.screen</code>, <code>ui.hudwidgets</code>,
@@ -566,6 +571,18 @@ panel = Panel(title='Movement', modal=True, preferredColumns=48, children=[
         the developer overlay.</td></tr>
     <tr><td><code>ui.draw</code></td>
       <td>The GL renderer: one program, one batched vertex buffer.</td></tr>
+    <tr><td><code>ui.gallery</code></td>
+      <td><code>Carousel</code> and <code>Picture</code>: choosing by what a
+        thing looks like rather than by its name. An arrow <em>looks</em> and a
+        picture <em>chooses</em>, so a caller may open what was chosen without
+        opening something every time somebody presses an arrow.</td></tr>
+    <tr><td><code>ui.pictures</code></td>
+      <td>The picture cache behind both: fetches an http(s) URL through the
+        hardened resolver, decodes on a worker thread, uploads a couple per
+        frame on the render thread, and evicts the least recently used once a
+        texel budget is reached. A gallery of several hundred entries therefore
+        costs a bounded amount of card memory and never decodes inside a draw
+        call.</td></tr>
     <tr><td><code>ui.skin</code></td><td>Colours, insets and nine-slice art.</td></tr>
     <tr><td><code>ui.session</code></td><td>Editing on a copy.</td></tr>
     <tr><td><code>ui.generate</code></td><td>A page from a node's fields.</td></tr>

@@ -187,8 +187,10 @@ walk.bindings = list(walk.bindings) + [
     <tr><td><code>getNavigation()</code></td><td>the manager, or None when no
       modes are declared</td></tr>
     <tr><td><code>getNavigationPlatform()</code></td><td>what the modes drive.
-      The view platform by default; a game overrides it to return its character
-      controller, and the manager is rebuilt when the answer changes</td></tr>
+      Defined by <code>PhysicsWalkMixin</code>: the walking avatar when there is
+      one, the view platform otherwise. A game with a different controller
+      overrides it, and the manager is re-pointed when the answer changes &mdash;
+      see <a href="physics.html#walking">Walking any scene</a></td></tr>
     <tr><td><code>updateNavigation(dt)</code></td><td>one frame</td></tr>
     <tr><td><code>setPointerCapture(capture)</code></td><td>grab or release the
       pointer; returns False where the backend cannot</td></tr>
@@ -234,7 +236,7 @@ walk.bindings = list(walk.bindings) + [
   <h2>The shipped viewers</h2>
   <table>
     <tr><th>Viewer</th><th>Modes</th><th>Driven by them</th></tr>
-    <tr><td><code>oglc-gltf</code> (<code>bin/gltf_view</code>)</td>
+    <tr><td><code>oglc-view</code> (<code>OpenGLContext.viewer</code>)</td>
       <td>walk, fly</td><td>yes, in walk mode &mdash; the modes move the
       character controller and the camera follows</td></tr>
     <tr><td>twitch (BSP map viewer)</td><td>walk, fly, first-person, swim</td>
@@ -245,10 +247,15 @@ walk.bindings = list(walk.bindings) + [
       <td>walk, fly, first-person</td>
       <td>declared, so the overlay demo has modes to show</td></tr>
   </table>
-  <p>Each exposes <code>movement_modes(scale=1.0)</code>. The
-    <code>scale</code> parameter exists because a viewer frames models from a
-    bolt to a city and one walking speed cannot suit both; <code>oglc-gltf</code>
-    passes the same scale it sizes the avatar by, and twitch converts from map
+  <p>Walking and flying come from
+    <code>OpenGLContext.move.modes.walk_fly_modes(scale=1.0)</code>, which is
+    what <code>oglc-view</code> and anything else embedding the
+    <a href="gltf.html#embedding">viewing component</a> declare;
+    <code>bin/vrml_view</code> and <code>oglc-ui</code> still declare their own
+    <code>movement_modes()</code>. The <code>scale</code> parameter exists
+    because a viewer frames models from a bolt to a city and one walking speed
+    cannot suit both: a walking context passes the same scale it sizes its
+    avatar by (<code>physicsAvatarScale</code>), and twitch converts from map
     units. A viewer keeps the free-fly navigator for its non-walking mode, and
     the two never both drive the camera: the older manager is unbound while the
     modes are in charge.</p>

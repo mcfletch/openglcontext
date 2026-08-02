@@ -10,14 +10,17 @@ import pytest
 from OpenGLContext.loaders import resolver
 
 
-# --- _read_capped uncapped path -----------------------------------------------
+# --- is_url -------------------------------------------------------------------
 
-def test_read_capped_without_limit_reads_all():
-    class _Resp:
-        def read(self, *a):
-            return b"unbounded-body"
-
-    assert resolver._read_capped(_Resp(), None) == b"unbounded-body"
+def test_is_url_is_true_only_for_the_schemes_this_module_fetches():
+    assert resolver.is_url("https://host/model.glb")
+    assert resolver.is_url("HTTP://Host/model.glb")     # scheme is case-insensitive
+    assert not resolver.is_url("/local/model.glb")
+    assert not resolver.is_url("model.glb")
+    assert not resolver.is_url(None)
+    # A URI a caller must not hand to the network path is not a URL here.
+    assert not resolver.is_url("file:///etc/passwd")
+    assert not resolver.is_url("data:application/octet-stream;base64,AA==")
 
 
 # --- Resolver.resolve with no base --------------------------------------------
@@ -141,3 +144,77 @@ class TestUserAgent:
         assert seen['agent']
         assert 'OpenGLContext' in seen['agent']
         assert 'urllib' not in seen['agent'].lower()
+
+
+class TestSubResourcesAreCachedOnDisk:
+    """A model's textures are fetched once ever, not once per open.
+
+    ``Resolver`` memoised what it fetched -- but only in itself, and a fresh one
+    is built for every load.  So re-opening a multi-file ``.gltf`` re-downloaded
+    every buffer and every texture: Sponza is seventy-odd of them, and it made
+    opening a model from the library feel like it had no cache at all.
+    """
+
+    def _resolver(self, monkeypatch, calls):
+        from OpenGLContext.loaders import resolver
+
+        def fake(url, cache_dir=None, max_bytes=None, progress=None,
+                 cancel=None):
+            calls.append(url)
+            return b'BYTES'
+        monkeypatch.setattr(resolver, '_fetch_url', fake)
+        return resolver.Resolver(base_url='https://example.com/m/model.gltf')
+
+    def test_it_goes_through_the_disk_cache(self, monkeypatch):
+        calls = []
+        found = self._resolver(monkeypatch, calls)
+        assert found.fetch('t.png') == b'BYTES'
+        assert calls == ['https://example.com/m/t.png']
+
+    def test_a_second_resolver_does_not_download_again(self, monkeypatch):
+        """The cache is on disk, so it outlives the object that filled it."""
+        calls = []
+        self._resolver(monkeypatch, calls).fetch('t.png')
+        self._resolver(monkeypatch, calls).fetch('t.png')
+        # Both ask the cache; the cache is what makes the second one free.
+        assert all(url.endswith('/t.png') for url in calls)
+
+    def test_it_still_memoises_within_one_document(self, monkeypatch):
+        """Ten shapes sharing a texture must not ask ten times."""
+        calls = []
+        found = self._resolver(monkeypatch, calls)
+        for _ in range(5):
+            found.fetch('t.png')
+        assert len(calls) == 1
+
+    def test_the_size_cap_is_still_applied(self, monkeypatch):
+        from OpenGLContext.loaders import resolver
+        seen = {}
+
+        def fake(url, cache_dir=None, max_bytes=None, progress=None,
+                 cancel=None):
+            seen['max_bytes'] = max_bytes
+            return b''
+        monkeypatch.setattr(resolver, '_fetch_url', fake)
+        found = resolver.Resolver(base_url='https://example.com/m/model.gltf',
+                                  max_resource_bytes=1234)
+        found.fetch('t.png')
+        assert seen['max_bytes'] == 1234
+
+    def test_a_reference_off_the_origin_never_reaches_the_fetch(self, monkeypatch):
+        """The policy is enforced before anything is downloaded, as before."""
+        from OpenGLContext.loaders import resolver
+        calls = []
+        monkeypatch.setattr(
+            resolver, '_fetch_url',
+            lambda url, **named: calls.append(url) or b'')
+        found = resolver.Resolver(base_url='https://example.com/m/model.gltf')
+        with pytest.raises(IOError):
+            found.fetch('https://elsewhere.example/evil.png')
+        assert calls == []
+
+    def test_a_local_document_still_reads_from_disk(self, tmp_path):
+        from OpenGLContext.loaders import resolver
+        (tmp_path / 't.png').write_bytes(b'LOCAL')
+        found = resolver.Resolver(base_dir=str(tmp_path))
+        assert found.fetch('t.png') == b'LOCAL'

@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from OpenGLContext.bin import gltf_view
+from OpenGLContext.bin import view
 
 _ENV_VARS = ('OPENGLCONTEXT_ENV_HDR', 'OPENGLCONTEXT_ENV_CUBEMAP',
              'OPENGLCONTEXT_IBL')
@@ -39,16 +39,16 @@ def _clean_env():
 
 
 def test_is_hdr_environment():
-    assert gltf_view._is_hdr_environment('/x/sky.hdr')
-    assert gltf_view._is_hdr_environment('https://ex.com/a/sky.hdr?token=1')
-    assert gltf_view._is_hdr_environment('foo.pic')
-    assert not gltf_view._is_hdr_environment('/env/pimbackground_')
-    assert not gltf_view._is_hdr_environment('')
+    assert view._is_hdr_environment('/x/sky.hdr')
+    assert view._is_hdr_environment('https://ex.com/a/sky.hdr?token=1')
+    assert view._is_hdr_environment('foo.pic')
+    assert not view._is_hdr_environment('/env/pimbackground_')
+    assert not view._is_hdr_environment('')
 
 
 def test_hdr_url_routes_to_env_hdr(monkeypatch):
     url = 'https://dl.polyhaven.org/x/studio_small_03_1k.hdr'
-    gltf_view.apply_render_env(_Args(environment=url))
+    view.apply_render_env(_Args(environment=url))
     import os
     assert os.environ['OPENGLCONTEXT_ENV_HDR'] == url
     assert 'OPENGLCONTEXT_ENV_CUBEMAP' not in os.environ
@@ -56,7 +56,7 @@ def test_hdr_url_routes_to_env_hdr(monkeypatch):
 
 
 def test_catalogue_name_routes_to_env_hdr(monkeypatch):
-    gltf_view.apply_render_env(_Args(environment='studio_small_03'))
+    view.apply_render_env(_Args(environment='studio_small_03'))
     import os
     from OpenGLContext.loaders import hdri
     assert os.environ['OPENGLCONTEXT_ENV_HDR'] == hdri.CATALOG['studio_small_03'].url
@@ -64,7 +64,7 @@ def test_catalogue_name_routes_to_env_hdr(monkeypatch):
 
 
 def test_cubemap_prefix_still_routes_to_cubemap(monkeypatch):
-    gltf_view.apply_render_env(_Args(environment='/env/pimbackground_'))
+    view.apply_render_env(_Args(environment='/env/pimbackground_'))
     import os
     assert os.environ['OPENGLCONTEXT_ENV_CUBEMAP'] == '/env/pimbackground_'
     assert 'OPENGLCONTEXT_ENV_HDR' not in os.environ
@@ -73,7 +73,7 @@ def test_cubemap_prefix_still_routes_to_cubemap(monkeypatch):
 
 def test_background_none_with_hdr_keeps_ibl_on(monkeypatch):
     # A black backdrop but an HDR env must NOT force IBL off (metals still reflect it).
-    gltf_view.apply_render_env(_Args(environment='studio_small_03', background='none'))
+    view.apply_render_env(_Args(environment='studio_small_03', background='none'))
     import os
     assert os.environ.get('OPENGLCONTEXT_IBL') != 'off'
     assert 'OPENGLCONTEXT_ENV_HDR' in os.environ

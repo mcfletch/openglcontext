@@ -48,6 +48,14 @@ Changelog:
 
 2.3.0 (in progress)
 
+	glTF audio codec extensions.  A KHR_audio_emitter source may offer the
+	same sound in a better encoding through OMI_audio_ogg_vorbis or
+	OMI_audio_opus, keeping its own MP3 as the fallback.  Both are read and
+	written; the Ogg Vorbis one is decoded and preferred, Opus is not
+	decoded and its sources play the fallback.  Which OMI extensions are
+	supported at all is tabulated in docs/gltf.html; the codec rules are in
+	docs/audio.html.
+
 	Removed code that nothing reached any more.  None of the supported GUI
 	backends is affected; see "Supported GUI backends" above.
 

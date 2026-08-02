@@ -66,9 +66,11 @@ varyings to the fragment stage:</p>
 
 <h3>2. The material, as a std140 uniform buffer</h3>
 <p>Everything constant about a material for the frame is packed into one uniform
-buffer object, <code>MaterialBlock</code>, and bound with a single call per shape
-(instead of ~20 <code>glUniform</code> calls, which dominated CPU time on heavy
-glTF scenes). Its members -- read directly by name in the shader -- are:</p>
+buffer object, <code>MaterialBlock</code>, and bound with a single call per shape.
+That is what keeps a heavy glTF scene off the CPU: the same data sent field by
+field is around twenty <code>glUniform</code> calls per shape, and a scene with
+hundreds of shapes spends its frame in them. Its members -- read directly by name
+in the shader -- are:</p>
 <pre>vec3  baseColorFactor;      float metallicFactor;
 vec3  emissiveFactor;       float roughnessFactor;
 vec3  specularColorFactor;  float occlusionStrength;

@@ -54,7 +54,7 @@ the same batched renderer, in the same handful of draw calls.</p>
   <p>A layer is a tree of widgets, each carrying the corner it belongs in.
     Add it to the context and it is drawn from the next frame on:</p>
   <pre>from OpenGLContext.ui.hudwidgets import (
-    BarMeter, Crosshair, HUDGroup, HUDLayer, MessageQueue, Readout,
+    BarMeter, Crosshair, HUDGroup, HUDLayer, MessageQueue, Readout, TextBlock,
 )
 
 self.health = BarMeter(label='HEALTH', value=100, maximum=100)
@@ -95,8 +95,8 @@ self.addHUDLayer(self.hud)</pre>
   <p><code>HUDLayer.margin</code> keeps everything clear of the window edge.
     A child with no <code>anchor</code> at all &mdash; an ordinary
     <code>Row</code> or <code>Column</code> &mdash; is given the whole layer and
-    lays itself out as it always would, so the existing layout containers are
-    still usable inside a HUD.</p>
+    lays itself out normally, so the ordinary layout containers work inside a
+    HUD.</p>
   <p>Every pixel measurement here &mdash; margins, offsets, a reticule's gap, a
     meter's height &mdash; is <strong>at the reference font size</strong> and is
     multiplied by the interface scale, exactly as the skin's are. A HUD authored
@@ -236,6 +236,21 @@ wash.strength = 0.42        # driven per frame; 0 draws nothing at all</pre>
     <code>critical</code> is the game saying &ldquo;this one matters now&rdquo;
     &mdash; the last few rounds, the last seconds &mdash; and it is a flag rather
     than a colour so the skin still decides what that looks like.</p>
+
+  <h3>TextBlock &mdash; several lines in a corner</h3>
+  <p>The counterpart to <code>Readout</code>, which is one line built from a
+    label and a value. This is prose the application composed itself &mdash;
+    what is loaded and what the keys do &mdash; and the lines are a field rather
+    than one string with newlines in it, so a caller can rewrite one of them.
+    <code>critical</code> marks the whole block as saying something has gone
+    wrong.</p>
+  <pre>caption = TextBlock(anchor='bottom-right', align='right',
+                    lines=['model.glb', '[1/3] aerial'])</pre>
+  <p><a href="viewer.html"><code>oglc-view</code></a>'s caption is one of these:
+    see <code>OpenGLContext.viewer.caption</code>. Note the corner &mdash; the
+    developer overlay is anchored top-left and grows <em>down</em> the left
+    edge as sections are registered, so a status line anywhere along that side
+    is a status line written over it.</p>
 
   <h3>MessageQueue &mdash; pickups, frags, warnings</h3>
   <p>Newest first, each line carrying its own clock, so a warning posted with a
@@ -501,11 +516,11 @@ python -m OpenGLContext.stalltrace /tmp/stalls.jsonl</pre>
     &mdash; no numbers over my screenshot &mdash; and now means it here: the
     overlay <strong>starts hidden</strong>. The key still brings it up, because
     a capture run is not the only thing that sets the variable.</p>
-  <p class="technical">This replaces the frame-rate display that
-    <code>FrameCounter</code> used to draw through
+  <p class="technical"><code>FrameCounter</code> measures the frame rate and
+    does not draw it: the provider reads its number and the HUD puts it on
+    screen. Drawing it from there would mean
     <code>glOrtho</code>/<code>glPushAttrib</code>, which mean nothing in a core
-    profile. <code>FrameCounter</code> still measures; it no longer draws, and
-    the provider reads it.</p>
+    profile.</p>
 </section>
 
 <section id="viewpinned">
@@ -567,7 +582,7 @@ python -m OpenGLContext.stalltrace /tmp/stalls.jsonl</pre>
     <tr><th>Module</th><th>What is in it</th></tr>
     <tr><td><code>ui.hudwidgets</code></td>
       <td><code>HUDLayer</code>, <code>HUDGroup</code>, <code>Crosshair</code>,
-        <code>BarMeter</code>, <code>Readout</code>,
+        <code>BarMeter</code>, <code>Readout</code>, <code>TextBlock</code>,
         <code>MessageQueue</code>, and <code>place()</code>.</td></tr>
     <tr><td><code>ui.debugoverlay</code></td>
       <td>The overlay, the provider registry, value formatting and the

@@ -112,3 +112,15 @@ ul.menu li {
 .menu a[href] {
     color: #c0c0ff;
 }
+
+dl {
+    padding-left: 1em;
+}
+dt {
+    font-weight: bold;
+    margin-top: .75em;
+}
+dd {
+    margin-left: 1.5em;
+    margin-top: .2em;
+}

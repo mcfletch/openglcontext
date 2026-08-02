@@ -33,10 +33,34 @@ from OpenGLContext import texturecache, plugins
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node, cache
-import weakref, os, time, sys, logging
+import weakref
+import os
+import time
+import logging
 
 log = logging.getLogger(__name__)
-from OpenGL._bytes import bytes, unicode
+
+#: How far inside its own bounding sphere the camera has to be before an
+#: examine drag stops orbiting the scene's centre.  Standing well outside a
+#: model, its centre is what you mean; standing in the middle of a building,
+#: the far side of the room is not.
+EXAMINE_INSIDE_FRACTION = 0.25
+#: How far ahead of the camera to pivot when it *is* inside the scene, as a
+#: fraction of the scene's radius.
+EXAMINE_AHEAD_FRACTION = 0.5
+#: Distance ahead to pivot when there is no scene to measure at all.
+EXAMINE_PIVOT_FALLBACK = 10.0
+def _distanceBetween(first, second):
+    """Straight-line distance between two points, ignoring any fourth element."""
+    offset = [float(a) - float(b)
+              for a, b in zip(first[:3], second[:3], strict=True)]
+    return (offset[0] ** 2 + offset[1] ** 2 + offset[2] ** 2) ** 0.5
+
+
+#: How far outside the scene's bounding sphere a picked point may lie and still
+#: be treated as part of the scene, as a multiple of its radius.  Generous: what
+#: this is for is rejecting the far plane, which is an order of magnitude out.
+EXAMINE_PICK_REACH = 1.5
 from OpenGLContext.contextconfig import ContextConfigMixin
 from OpenGLContext.ui.screen import ScreenMixin
 
@@ -212,8 +236,8 @@ class Context(ScreenMixin, ContextConfigMixin):
             setupThreading,
             setupExtensionManager,
             initializeEventManagers,
-            setupCallbacks,
             setupDefaultEventCallbacks,
+            setupCallbacks,
             setupCache,
             setupFontProviders,
             setupFrameRateCounter,
@@ -225,8 +249,11 @@ class Context(ScreenMixin, ContextConfigMixin):
         self.setupThreading()
         self.setupExtensionManager()
         self.initializeEventManagers()
-        self.setupCallbacks()
+        # Defaults first: a key can have only one handler, and the second
+        # registration for it replaces the first.  ``setupCallbacks`` is where a
+        # context says what a key should do *here*, so it has to land on top.
         self.setupDefaultEventCallbacks()
+        self.setupCallbacks()
         self.allContexts.append(weakref.ref(self))
         self.pickEvents = {}
         self.eventCascadeQueue = Queue.Queue()
@@ -342,11 +369,20 @@ class Context(ScreenMixin, ContextConfigMixin):
         completed.  The default implementation here simply
         calls OnInit directly w/ appropriate setCurrent
         and unsetCurrent calls.
+
+        Redraws asked for while OnInit runs are **deferred**.  A forced
+        triggerRedraw() draws immediately when it can, and during OnInit it can
+        -- so a context that adds a HUD layer or reports its progress would
+        re-enter OnDraw against a scenegraph it has not built yet.  The request
+        itself is kept: the context is left needing a frame, and the first real
+        one satisfies it.
         """
         self.setCurrent()
+        self.deferRedraw = True
         try:
             self.OnInit()
         finally:
+            self.deferRedraw = False
             self.unsetCurrent()
 
     ### Customisation points
@@ -359,6 +395,11 @@ class Context(ScreenMixin, ContextConfigMixin):
         abstract callbacks (which translate the GUI library's
         native events into a common event framework for all
         interactivecontexts).
+
+        This runs **after** :meth:`setupDefaultEventCallbacks`, and a key can
+        have only one handler, so a binding made here wins over the default for
+        the same key.  Claiming a key the framework also binds is simply binding
+        it.
 
         The default implementation does nothing.
         """
@@ -392,8 +433,12 @@ class Context(ScreenMixin, ContextConfigMixin):
         context.  You might override it to provide other default
         callbacks, but you'll normally want to call the base-class
         implementation somewhere in that overridden method.
+
+        What a key does when nobody has said otherwise: this runs *before*
+        :meth:`setupCallbacks`, so anything an application binds for the same
+        key replaces what is bound here.
         """
-        self.addEventHandler("keyboard", name="<escape>", function=self.OnQuit)
+        self.addEventHandler("keyboard", name="<escape>", function=self.OnEscape)
         # On ``keyboard`` rather than ``keypress``: a keypress *is* character
         # input, raised from the backend's character callback, and Alt + a
         # letter produces no character on any of the platforms here -- so a
@@ -420,10 +465,24 @@ class Context(ScreenMixin, ContextConfigMixin):
             function=self.OnSaveImage,
         )
 
+    def OnEscape(self, event=None):
+        """What Escape means to this context.  Quitting, unless it says otherwise.
+
+        Escape used to be bound straight to :meth:`OnQuit`, which exits the
+        process forcibly.  For a demo that is right.  For anything holding state
+        -- a game part-way through a match, a viewer with a world loaded and a
+        camera somewhere -- it means a key pressed to back out of *something
+        else* throws the session away with no confirmation and no way back.
+
+        So a context that has somewhere to go instead overrides this: a game or
+        a viewer puts its menu up, where Resume and Quit are both a click away.
+        Every context that does not is unchanged.
+        """
+        return self.OnQuit(event)
+
     def OnQuit(self, event=None):
         """Quit the application (forcibly)"""
         self.suppressRedraw()
-        import sys
 
         # Before the forcible exit, which runs no finally block and no atexit
         # hook: a session quit in the middle of a stall is exactly the session
@@ -763,7 +822,7 @@ class Context(ScreenMixin, ContextConfigMixin):
                         self.frameCounter.addFrame(perf() - t)
                     return 1
                 return 0
-            except KeyboardInterrupt as err:
+            except KeyboardInterrupt:
                 self.OnQuit()
         finally:
             glFlush()
@@ -964,12 +1023,91 @@ class Context(ScreenMixin, ContextConfigMixin):
         when no handlers would receive the events. Asks each relevant event
         manager whether it has live receivers rather than walking the pydispatch
         registry here.
+
+        **A captured type counts.** ``captureEvents`` swaps a manager into the
+        slot instead of registering anything with the dispatcher, which is how
+        a drag receives its own events -- so the receiver test answers "no" for
+        precisely the interaction that exists to consume them. Right-drag to
+        examine started and then never saw a single movement, because every one
+        was filtered away before it arrived.
         """
         for event_type in ('mousemove', 'mousein', 'mouseout'):
+            if self.isCapturingEvents(event_type):
+                return True
             manager = self.getEventManager(event_type)
             if manager is not None and manager.hasReceivers():
                 return True
         return False
+
+    def sceneBounds(self):
+        """``(centre, radius)`` around this context's scene, or None.
+
+        What is on screen and how big it is -- for framing a camera on it, or
+        for choosing the point a drag should pivot about.
+        """
+        from OpenGLContext.scenegraph.boundingvolume import boundingSphere
+        sg = self.getSceneGraph()
+        if sg is None:
+            return None
+        return boundingSphere(getattr(sg, 'children', None) or ())
+
+    def examineCenter(self, event):
+        """The world point an examine drag should orbit about.
+
+        **What was clicked on, when the click landed on the scene.** Examining
+        the thing you touched is the whole gesture, and unprojecting the pick
+        gives exactly that.
+
+        A click that hit *nothing* still unprojects: a depth of 1.0 is a real,
+        usable-looking world point out at the far plane -- measured at 127 units
+        for a model three units across -- and orbiting that is orbiting the sky.
+        So a picked point is taken only where it is within reach of the scene.
+
+        A click that picked nothing -- empty sky, or a context whose selection
+        pass had nothing to report -- used to fall back to a point *ten units*
+        in front of the camera, a constant with no relation to what was on
+        screen. A model framed four units away then orbited about a pivot six
+        units behind itself and a small drag threw the camera right around it;
+        a model a kilometre across pivoted about a point inside its own surface.
+        So the fallback is the scene's own bounding sphere.
+
+        Standing **inside** those bounds -- walking a building -- orbiting the
+        far side of the room is not what the gesture means either, so the pivot
+        is a little way ahead of the camera instead, at a distance taken from
+        the scene rather than from a constant.
+        """
+        platform = self.getViewPlatform()
+        bounds = self.sceneBounds()
+        try:
+            picked = event.unproject()
+        except Exception:
+            picked = None           # nothing was under the cursor
+        if picked is not None and self._withinScene(picked, bounds):
+            return picked
+        ahead = EXAMINE_PIVOT_FALLBACK      # nothing to go on at all
+        if bounds is not None:
+            centre, radius = bounds
+            distance = _distanceBetween(centre, platform.position)
+            radius = max(float(radius), 1e-6)
+            if distance > radius * EXAMINE_INSIDE_FRACTION:
+                return centre
+            ahead = radius * EXAMINE_AHEAD_FRACTION
+        return platform.quaternion * [0, 0, -ahead, 0] + platform.position
+
+    @staticmethod
+    def _withinScene(point, bounds):
+        """Whether a picked point is near enough the scene to be part of it.
+
+        Generously: a bounding sphere already overstates a scene's extent, and
+        its surface is not a hard edge.  What this rejects is the far plane,
+        which is an order of magnitude out, not a point a little proud of the
+        model.
+        """
+        if bounds is None:
+            return True             # nothing to judge it against
+        centre, radius = bounds
+        return (_distanceBetween(point, centre)
+                <= max(float(radius), 1e-6) * EXAMINE_PICK_REACH)
 
     def getSceneGraph(self):
         """Get the scene graph for the context (or None)
@@ -1016,7 +1154,6 @@ class Context(ScreenMixin, ContextConfigMixin):
     def getTTFFiles(self):
         """Get TrueType font-file registry object"""
         if not self.ttfFileRegistry:
-            from ttfquery import ttffiles
 
             registryFile = os.path.join(
                 self.getUserAppDataDirectory(), "font_metadata.cache"
@@ -1054,7 +1191,6 @@ class Context(ScreenMixin, ContextConfigMixin):
     @staticmethod
     def fromConfig(cfg):
         """Given a ConfigParser instance, produce a configured sub-class"""
-        from OpenGLContext import plugins
         from OpenGLContext import contextdefinition
 
         type = gui = None

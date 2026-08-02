@@ -45,6 +45,17 @@ class Loader( plugins.Plugin ):
                 return plugin
         raise KeyError( """No %s plugin registered for any of %s"""%(cls.__name__, key,))
 
+class Adapter( plugins.Plugin ):
+    """A viewer scene adapter (e.g. gltf, vrml97 or tiles3d)
+
+    Registered against the file suffixes and content types it opens, so
+    ``oglc-view`` picks one from the source rather than from which command was
+    typed, and a third party adds a format without editing the viewer.  See
+    OpenGLContext.viewer.adapters.
+    """
+    registry = []
+    type_key = 'adapter'
+
 class Node( plugins.Plugin ):
     """A particular scenegraph node to be rendered"""
     registry = []

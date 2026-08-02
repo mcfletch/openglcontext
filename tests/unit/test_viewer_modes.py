@@ -1,82 +1,76 @@
-"""The shipped viewers declare their movement modes.
+"""Walking and flying are declared, not hand-rolled.
 
-Declared rather than hand-rolled means one settings screen can present the
-navigation of every viewer, and a game embedding any of them can retune the
-speeds by setting fields instead of subclassing.
+Declared modes mean one settings screen can present the navigation of every
+viewer, and a game embedding one retunes the speeds by setting fields instead of
+subclassing.  :func:`OpenGLContext.move.modes.walk_fly_modes` is the pair every
+viewer offers -- there is one such declaration now, where each viewer used to
+carry a copy of it (see ``plans/VIEWER-COMPONENT-EXTRACTION.md``).
 """
 
 import pytest
 
 from OpenGLContext.move import modes
+from OpenGLContext.move.modes import walk_fly_modes
 
 
 def _names(declared):
     return [mode.name for mode in declared]
 
 
-@pytest.mark.parametrize('module_name', [
-    'OpenGLContext.bin.vrml_view',
-    'OpenGLContext.bin.gltf_view',
-])
-def test_a_viewer_declares_walk_and_fly(module_name):
-    module = __import__(module_name, {}, {}, ['movement_modes'])
-    declared = module.movement_modes()
+def test_a_viewer_declares_walk_and_fly():
+    declared = walk_fly_modes()
     assert 'walk' in _names(declared)
     assert 'fly' in _names(declared)
 
 
-@pytest.mark.parametrize('module_name', [
-    'OpenGLContext.bin.vrml_view',
-    'OpenGLContext.bin.gltf_view',
-])
-def test_every_declared_mode_is_a_mode_node(module_name):
-    module = __import__(module_name, {}, {}, ['movement_modes'])
-    for mode in module.movement_modes():
+def test_every_declared_mode_is_a_mode_node():
+    for mode in walk_fly_modes():
         assert isinstance(mode, modes.MovementMode)
         assert mode.bindings
         assert all(binding.label for binding in mode.bindings)
 
 
-@pytest.mark.parametrize('module_name', [
-    'OpenGLContext.bin.vrml_view',
-    'OpenGLContext.bin.gltf_view',
-])
-def test_the_modes_can_be_scaled_to_the_thing_being_viewed(module_name):
+def test_the_modes_can_be_scaled_to_the_thing_being_viewed():
     """A viewer frames models of wildly different size, so the speeds are a
     parameter rather than a constant."""
-    module = __import__(module_name, {}, {}, ['movement_modes'])
-    small = [m for m in module.movement_modes(scale=1.0) if m.name == 'walk'][0]
-    large = [m for m in module.movement_modes(scale=10.0) if m.name == 'walk'][0]
+    small = [m for m in walk_fly_modes(scale=1.0) if m.name == 'walk'][0]
+    large = [m for m in walk_fly_modes(scale=10.0) if m.name == 'walk'][0]
     assert large.walkSpeed == pytest.approx(small.walkSpeed * 10.0)
 
 
-# -- the glTF viewer drives its walk through the declared modes ----------------
-
-def test_the_gltf_viewer_offers_an_accelerating_turn():
-    """`oglc-gltf` wants both a precise nudge and a quick spin in close
-    quarters, which one steady rate cannot give."""
-    from OpenGLContext.bin import gltf_view
-    walk = [m for m in gltf_view.movement_modes() if m.name == 'walk'][0]
+def test_the_modes_offer_an_accelerating_turn():
+    """A viewer wants both a precise nudge and a quick spin in close quarters,
+    which one steady rate cannot give."""
+    walk = [m for m in walk_fly_modes() if m.name == 'walk'][0]
     assert walk.turnAcceleration > 1.0
+
+
+def test_flying_scales_with_the_model_too():
+    """A model forty times the size needs speeds to match, and the avatar's own
+    scale is what supplies it."""
+    small = [m for m in walk_fly_modes(scale=0.5) if m.name == 'fly'][0]
+    large = [m for m in walk_fly_modes(scale=5.0) if m.name == 'fly'][0]
+    assert large.flySpeed == pytest.approx(small.flySpeed * 10.0)
+
+
+def test_the_modes_match_the_avatar_they_drive():
+    """A mode that asked for a speed the character cannot reach would be a lie."""
+    from OpenGLContext.move.physicswalk import PhysicsWalkMixin
+    capabilities = PhysicsWalkMixin().characterCapabilities(2.0)
+    walk, fly = walk_fly_modes(2.0)
+    assert walk.walkSpeed == pytest.approx(capabilities.walkSpeed)
+    assert walk.runSpeed == pytest.approx(capabilities.runSpeed)
+    assert fly.flySpeed == pytest.approx(capabilities.flySpeed)
 
 
 def test_the_gltf_viewer_names_what_its_modes_drive():
     """Its modes move the character controller; the camera is where the
     controller ends up."""
-    from OpenGLContext.bin import gltf_view
-    context = gltf_view.TestContext.__new__(gltf_view.TestContext)
-    context._physics_on = False
-    context._physics = 'the-controller'
+    from OpenGLContext.bin import view
+    context = view.TestContext.__new__(view.TestContext)
+    context.physicsWalking = False
+    context.physicsPlatform = 'the-controller'
     context.platform = 'the-camera'
     assert context.getNavigationPlatform() == 'the-camera'
-    context._physics_on = True
+    context.physicsWalking = True
     assert context.getNavigationPlatform() == 'the-controller'
-
-
-def test_the_gltf_viewer_declares_its_modes_scaled_to_the_model():
-    """A model forty times the size needs speeds to match, and the viewer
-    already computes that scale for its avatar."""
-    from OpenGLContext.bin import gltf_view
-    small = [m for m in gltf_view.movement_modes(scale=0.5) if m.name == 'fly'][0]
-    large = [m for m in gltf_view.movement_modes(scale=5.0) if m.name == 'fly'][0]
-    assert large.flySpeed == pytest.approx(small.flySpeed * 10.0)

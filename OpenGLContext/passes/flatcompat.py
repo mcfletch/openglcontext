@@ -102,6 +102,16 @@ class FlatPass( _flat.FlatPass ):
 
             self.renderOpaque( toRender )
             self.renderTransparent( toRender )
+
+        # The HUD, the developer overlay and any screen that is open, drawn over
+        # the finished frame.  The overlay renderer builds its own program and
+        # does not care that the world below it was drawn fixed-function, and a
+        # context whose menu could not be seen would be a program nobody can
+        # use.  See OpenGLContext.ui.screen.ScreenMixin.
+        overlay = getattr(context, 'renderShaderOverlay', None)
+        if overlay is not None:
+            overlay(self)
+
         context.SwapBuffers()
         self.matrix = matrix
 

@@ -227,14 +227,15 @@ fountain = Transform(translation=(3, 0, -5), children=[
     them across the next block.</p>
   <p class="technical"><code>omi_audio/engine.py</code> owns the left-hand side,
     <code>omi_audio/mixer.py</code> the right. The mixer imports no path, no
-    matrix and no listener &mdash; grep it and see.</p>
+    matrix and no listener: it is handed gains and produces blocks.</p>
 </section>
 
 <section id="pipeline">
   <h2>The module chain</h2>
-  <p>Everything above the line is the <code>omi_audio</code> package and has no
-    idea a scenegraph exists; everything below it is OpenGLContext's own, and is
-    the whole of what makes the two meet.</p>
+  <p>The table below is divided by a marked row, <em>the package boundary</em>.
+    Above it is the <code>omi_audio</code> package, which has no idea a
+    scenegraph exists; below it is OpenGLContext's own code, and that is the
+    whole of what makes the two meet.</p>
   <table>
     <tr><th>Module</th><th>Answers</th><th>Depends on</th></tr>
     <tr><td><code>omi_audio/model.py</code></td>
@@ -423,12 +424,30 @@ handle.stop()               # likewise; no caller ever has to test first</pre>
 
   <h3>Muffling</h3>
   <p><code>mixer.muffle</code> runs from 0 (clear) to 1 (underwater) and blends
-    the mix towards a low-passed copy of itself. The filter is a cascade of
-    two-tap averages &mdash; <code>y[n] = (x[n] + x[n&minus;1]) / 2</code>,
-    four times &mdash; which is the cheapest thing that is genuinely a low-pass
-    rather than merely quieter: about &minus;33&nbsp;dB near Nyquist and
-    essentially nothing at the bottom. It is a blend rather than a switch so an
-    application can fade it in as a listener submerges.</p>
+    the mix towards a low-passed copy of itself. Two cascaded moving averages,
+    each taken as the difference of a running sum, so a window of any length
+    costs one pass over the block.</p>
+  <p>The corner is <strong>a frequency</strong> &mdash; 450&nbsp;Hz &mdash; and
+    not a fraction of the sample rate, which matters more than it looks:
+    "muffled" is a judgement about the sound, so a corner set as a share of
+    Nyquist would sit in the middle of the register at 8&nbsp;kHz and above
+    everything audible at 44.1&nbsp;kHz. At 44.1&nbsp;kHz:</p>
+  <table>
+    <tr><th>Frequency</th><td>100&nbsp;Hz</td><td>330&nbsp;Hz</td>
+        <td>450&nbsp;Hz</td><td>660&nbsp;Hz</td><td>1&nbsp;kHz</td>
+        <td>2&nbsp;kHz</td><td>4&nbsp;kHz</td></tr>
+    <tr><th>Gain</th><td>&minus;0.1&nbsp;dB</td><td>&minus;1.6&nbsp;dB</td>
+        <td>&minus;3.0&nbsp;dB</td><td>&minus;6.7&nbsp;dB</td>
+        <td>&minus;17.6&nbsp;dB</td><td>&minus;26.5&nbsp;dB</td>
+        <td>&minus;59&nbsp;dB</td></tr>
+  </table>
+  <p>The bass comes through and the top goes, which is what makes it a
+    <em>timbre</em> change rather than a volume change. A pure sine has nothing
+    above its fundamental, so a low-pass can only alter how loud it is; anything
+    meant to show a filter off wants
+    <code>synth.tone(..., harmonics=N)</code>, which is what the demo below
+    uses. It is a blend rather than a switch so an application can fade it in as
+    a listener submerges.</p>
   <pre>engine.muffle = min(1.0, depth_below_surface / 0.5)</pre>
 </section>
 
@@ -532,19 +551,56 @@ handle.stop()               # likewise; no caller ever has to test first</pre>
     the filesystem &mdash; whatever a name means is settled before it gets
     there, which for a glTF document is the job of the resolver.</p>
   <p><code>AudioSource.url</code> is a <em>list</em>, most preferred first, and
-    the first entry that decodes wins. That is how the glTF codec extensions
-    (<code>OMI_audio_ogg_vorbis</code>, <code>OMI_audio_opus</code>) are meant to
-    be read: offer the better format, fall back to the one everything can
-    play.</p>
+    the first entry that decodes wins. That is how the glTF codec extensions are
+    read: offer the better format, fall back to the one everything can play.</p>
   <p>A source built from a glTF document takes its samples from that document's
     <code>omi_audio.AudioLibrary</code> instead, through
-    <code>AudioSource.useLibrary()</code>. A document names its audio by index
+    <code>AudioSource.useLibrary()</code>, which is handed the document's source
+    record rather than an audio index &mdash; choosing between the encodings a
+    source offers is the library's job. A document names its audio by index
     rather than by anything a node could open &mdash; audio inside a
     <code>.glb</code> has no name at all &mdash; so <code>url</code> there
     records <em>where the sound is</em>, for anything that displays it, while
     the library is what produces the bytes. It is empty for audio that has no
     location: a <code>bufferView</code>, a <code>data:</code> URI, or a
     reference the resolver refuses.</p>
+
+  <h3 id="codecs">Codec extensions</h3>
+  <p><code>KHR_audio_emitter</code> guarantees only MP3. A document that wants a
+    better encoding offers it through a codec extension on the <em>source</em>,
+    naming a second entry in the same <code>audio</code> array that holds the
+    same sound:</p>
+  <pre>{"audio": 0, "extensions": {"OMI_audio_ogg_vorbis": {"audio": 1}}}</pre>
+  <p>The source's own <code>audio</code> stays as the fallback, so one document
+    plays everywhere and sounds better where the codec is available. Both
+    extensions are read, kept and written back unchanged; only decoding
+    differs.</p>
+  <table>
+    <tr><th>Extension</th><th>Container / MIME</th><th>Suffix</th><th>Plays</th></tr>
+    <tr><td><code>OMI_audio_ogg_vorbis</code></td><td>Ogg,
+      <code>audio/ogg</code></td><td><code>.ogg</code></td><td><strong>yes</strong></td></tr>
+    <tr><td><code>OMI_audio_opus</code></td><td>Ogg or WebM,
+      <code>audio/opus</code>, <code>audio/webm</code></td>
+      <td><code>.opus</code>, <code>.webm</code></td><td>no &mdash; falls back to
+      the MP3</td></tr>
+  </table>
+  <p><code>omi_audio.formats.decodable()</code> asks the backend which formats it
+    reads rather than asserting a list, so this table follows the
+    <code>miniaudio</code> that is installed: it reads Vorbis and not Opus, and a
+    build that gained Opus would be used without any code changing. An Opus
+    source therefore plays its MP3 fallback, and a document that offers Opus with
+    <em>no</em> fallback says so by putting the extension in
+    <code>extensionsRequired</code>.</p>
+  <p>Every encoding a source offers goes into <code>url</code>, better first,
+    including one this build cannot decode &mdash; <code>url</code> says where
+    the sound is. Which one is actually fetched is
+    <code>AudioLibrary.clip_for()</code>, and it asks only for codecs it can
+    read. An encoding that will not resolve falls back to the MP3; one that is
+    merely still downloading is waited for, since falling through on "not here
+    yet" would play the worse encoding of every sound whose better one had not
+    landed. An application with its own decoder sets
+    <code>library.encodings</code> and the better encoding is asked for from then
+    on.</p>
 
   <h3>Sounds with no files</h3>
   <p><code>omi_audio.synth</code> makes clips out of arithmetic
@@ -599,8 +655,8 @@ scene = loader.load_gltf('room.gltf')   # its emitters are already in there</pre
 
 <section id="vrml">
   <h2>The VRML97 <code>Sound</code> node</h2>
-  <p>pyvrml97 has declared <code>Sound</code> and <code>AudioClip</code> for
-    twenty-odd years and nothing has ever played them. They work now:</p>
+  <p>VRML97's own <code>Sound</code> and <code>AudioClip</code> play, with the
+    fields pyvrml97 declares for them:</p>
   <pre>Sound(
     source=AudioClip(url=['ambience.wav'], loop=True, pitch=1.0),
     location=(0, 1, 0), direction=(0, 0, -1),

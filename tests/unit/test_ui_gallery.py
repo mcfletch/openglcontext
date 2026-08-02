@@ -244,6 +244,61 @@ class TestBeingClicked:
         assert band.value == 'map0'
 
 
+class TestChoosingIsNotTheSameAsLooking:
+    """An arrow moves the band; a picture is the choice.
+
+    Both used to fire ``on_activate``, so a caller that opened what was chosen
+    -- which is what a band of pictures is for -- opened something every time
+    somebody pressed an arrow to look at the next one.
+    """
+
+    def laid(self, band):
+        band.rect = Rect(0, 0, 600, 200)
+        return band
+
+    def click(self, band, rect):
+        band.press(rect.x + rect.width / 2, rect.y + rect.height / 2)
+        band.release(rect.x + rect.width / 2, rect.y + rect.height / 2)
+
+    def _watched(self, **named):
+        band = self.laid(carousel(**named))
+        chosen = []
+        band.on_activate = chosen.append
+        return band, chosen
+
+    def test_an_arrow_moves_without_choosing(self):
+        band, chosen = self._watched()
+        self.click(band, band.arrowRects()[1])
+        assert band.value == 'map1'
+        assert chosen == []
+
+    def test_the_other_arrow_too(self):
+        band, chosen = self._watched(value='map2')
+        self.click(band, band.arrowRects()[0])
+        assert chosen == []
+
+    def test_clicking_a_picture_is_a_choice(self):
+        band, chosen = self._watched(count=9, value='map4', visibleCount=5)
+        self.click(band, band.slotRects(FontMetrics(8, 16, 2))[-1])
+        assert band.value == 'map6'
+        assert chosen == [band]
+
+    def test_clicking_the_picture_already_chosen_is_still_a_choice(self):
+        """Opening what is already selected is the obvious second click."""
+        band, chosen = self._watched(count=9, value='map4', visibleCount=5)
+        slots = band.slotRects(FontMetrics(8, 16, 2))
+        self.click(band, slots[len(slots) // 2])
+        assert chosen == [band]
+
+    def test_an_arrow_still_reports_the_value_moving(self):
+        """Whatever follows the selection -- a note, a description -- updates."""
+        band, _chosen = self._watched()
+        moved = []
+        band.on_change = moved.append
+        self.click(band, band.arrowRects()[1])
+        assert moved == [band]
+
+
 class TestTheKeys:
 
     def test_the_arrow_keys_roll_it(self):

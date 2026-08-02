@@ -29,6 +29,7 @@ class Recorder:
     also what lets the test assert *which* method a key runs.
     """
 
+    OnEscape = Context.OnEscape
     OnQuit = Context.OnQuit
     OnFrameRate = Context.OnFrameRate
     OnNextViewpoint = Context.OnNextViewpoint
@@ -109,6 +110,7 @@ class Probe(EventHandlerMixin):
     TimeManagerClass = getattr(InteractiveContext, 'TimeManagerClass', None)
 
     setupDefaultEventCallbacks = Context.setupDefaultEventCallbacks
+    OnEscape = Context.OnEscape
     OnQuit = Context.OnQuit
     OnNextViewpoint = Context.OnNextViewpoint
     OnSaveImage = Context.OnSaveImage

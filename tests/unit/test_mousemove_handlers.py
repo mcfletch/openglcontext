@@ -46,6 +46,10 @@ class TestHasMouseMoveHandlersDelegates:
         class Fake:
             def getEventManager(self, t):
                 return managers.get(t)
+
+            def isCapturingEvents(self, t):
+                """A drag that took the type over registers no receivers."""
+                return False
         f = Fake()
         f.hasMouseMoveHandlers = Context.hasMouseMoveHandlers.__get__(f)
         return f

@@ -97,7 +97,7 @@ def image_rect(renderer: Any, rect: Rect, url: str) -> Optional[Rect]:
     the picture and hug it: a plate the size of the slot reads as a column,
     and the picture is letterboxed somewhere inside that.
     """
-    found = renderer.imageTexture(url) if url else None
+    found = renderer.imageTexture(url, blocking=False) if url else None
     if found is None:
         return None
     _texture, width, height = found
@@ -114,9 +114,11 @@ def paint_image(renderer: Any, rect: Rect, url: str,
     arrow was pressed.
 
     Returns whether an image was drawn.  When none was, ``fallback`` is filled
-    instead if it is given, so an empty slot is a plate rather than a hole.
+    instead if it is given, so an empty slot is a plate rather than a hole --
+    which is also what a picture still being decoded looks like, since a gallery
+    asks without waiting and the plate becomes the picture a frame or two later.
     """
-    found = renderer.imageTexture(url) if url else None
+    found = renderer.imageTexture(url, blocking=False) if url else None
     if found is None:
         if fallback is not None:
             renderer.rect(rect, fallback)
@@ -321,8 +323,14 @@ class Carousel(BoundWidget):
         if not (armed and self.enabled and self.rect.contains(x, y)):
             return False
         if pressed in (-1, 1):
+            # An arrow *looks*; it does not choose.  A caller that opens what
+            # was chosen -- which is what a band of pictures is for -- would
+            # otherwise open something every time somebody pressed an arrow to
+            # see the next one.  ``step`` still reports the value moving, so
+            # anything following the selection keeps up.
             self.step(pressed)
-        elif isinstance(pressed, str):
+            return True
+        if isinstance(pressed, str):
             # Clicking a picture you can already see is faster than arrowing
             # to it, and is what a band of pictures invites.
             self.select(pressed)

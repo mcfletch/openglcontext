@@ -83,7 +83,7 @@ the rendering parameters for the string value.<br>
 
 </p>
 
-<pre>oglc-vrml tests/wrls/text_simple.wrl</pre>
+<pre>oglc-view tests/wrls/text_simple.wrl</pre>
 
 <pre><img src="./images/text_simple.png" title="" alt="Screenshot of the VRML content" style="width: 400px; height: 400px;" align="right"></pre>
 
@@ -151,11 +151,13 @@ heavy<br>
   
   </ul>
 
-  <li>the "string" field of the Text node is encoded using UTF-8
-Unicode, which should allow for specifying content for non-English
-environments, but this has never been tested beyond the most rudimentary
-of sample content. &nbsp;There is no support for the left-to-right and
-top-to-bottom orientation reversals seen in the VRML97 specification.</li>
+  <li>the "string" field of the Text node is Unicode, so what a non-English
+string renders as is a question of the chosen font carrying the glyphs for it</li>
+
+  <li>FontStyle's <code>topToBottom</code> reverses the line order as VRML97
+specifies. &nbsp;<code>horizontal</code> and <code>leftToRight</code> are
+declared but not read, so text always runs horizontally and left to right,
+whatever they are set to</li>
 
   <li>rather than particular support for font colors and the like,
 OpenGLContext (following VRML97) simply applies the Shape node's

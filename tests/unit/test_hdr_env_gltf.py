@@ -47,7 +47,7 @@ def _capture(glb, out, environment, background):
             '--size', '256x256']
     if environment:
         args += ['--environment', environment]
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.gltf_view'] + args,
+    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
                    timeout=240, capture_output=True, text=True,
                    cwd=os.path.join(TESTS_DIR, '..'), env=env)
 

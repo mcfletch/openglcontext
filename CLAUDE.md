@@ -281,6 +281,10 @@ Selects the windowing backend:
 - `glfw` - Use GLFW (recommended for core profile)
 - `pygame` - Use Pygame
 - `wx` - Use wxPython
+- `qt` - Use Qt 6 / PySide6, from the separate `OpenGLContext-qt` distribution
+  (`openglcontext-qt/`). Needs a Qt platform plugin that gives a drawable GL
+  surface; the Wayland plugin does not in this container, so run Qt work with
+  `QT_QPA_PLATFORM=xcb`.
 
 ```bash
 export OPENGLCONTEXT_BACKEND=glfw
@@ -335,6 +339,65 @@ evidence for that tally, not the answer. `OpenGLContext.stalltrace`.
 
 Use simple, plain-spoken text. Omit needless adjectives and adverbs.
 
+**State facts; never dare the reader to check them.** A sentence that invites
+verification — "grep it and see", "count them yourself", "if you don't believe
+me", "check the code" — reads as anxiety about being believed, and it makes the
+claim *less* trustworthy, not more: nobody hedges a fact they are sure of. It
+also wastes the reader's attention on something trivial, which is the opposite
+of what documentation is for. Write the fact and move on. This applies to
+documentation, docstrings, comments, plans and commit messages alike.
+
+```text
+Bad:  The mixer imports no path, no matrix and no listener -- grep it and see.
+Good: The mixer imports no path, no matrix and no listener: it is handed gains
+      and produces blocks.
+
+Bad:  This really is O(1), honestly -- look at the loop.
+Good: This is O(1): the table is indexed, not scanned.
+```
+
+The same instinct shows up as defensive padding — "to be clear", "note that
+this genuinely does", "as you can verify" — and as needless self-justification
+in a report. Cut all of it. If a claim is load-bearing and hard to believe, the
+answer is to *state the mechanism* that makes it true, or point at the test that
+holds it, not to challenge the reader.
+
+A **pointer** is not a dare: "see `tests/unit/test_x.py` for the cases this
+covers" is useful, because it tells the reader where to go for more than the
+sentence can hold. The difference is whether the reader is being *offered*
+something or being *challenged* to prove you right.
+
+**Never write about this software as a failure or a confession.** It is our own
+code, described for someone deciding whether to use it. A feature is not
+"unrendered until now", "declared for twenty-odd years and never implemented",
+"barely tested", "crude", "naive", or "not really finished" — that is either
+history (see below) or an apology, and neither tells the reader anything they can
+act on. The tone matters as much as the content: a page that runs itself down
+reads as a warning, and the reader takes the warning.
+
+A **limit** is not an apology, and limits must still be stated. The difference is
+that a limit is a fact with a boundary the reader can work inside, while an
+apology is a judgement on the work:
+
+```text
+Bad:  UTF-8 should allow non-English content, but this has never been tested
+      beyond the most rudimentary sample content.
+Good: The string field is Unicode; what a non-English string renders as is a
+      question of the chosen font carrying the glyphs for it.
+
+Bad:  A crude, naive frustum test that really ought to be a proper BVH.
+Good: Culling is a per-object frustum test. Scenes of tens of thousands of
+      small objects spend measurable time in it; a spatial index would not.
+
+Bad:  Fog is VRML97's own node, declared for twenty-odd years and unrendered
+      until now.
+Good: Fog is VRML97's own node, with the fields that specification gives it.
+```
+
+The same instinct reversed — "blazingly fast", "state of the art", "the right
+way to do it" — is equally unwelcome. State what it does and what it costs, and
+let the reader judge.
+
 **Comments:** Leave off "what I'm doing" comments in non-tutorial code. Comments should explain a hidden idea, an underlying motivation, or an intention that isn't clear from the code itself.
 
 ```python
@@ -345,12 +408,39 @@ color = (1.0, 0.0, 0.0)
 color = (1.0, 0.0, 0.0)
 ```
 
-**Docstrings describe what is, never history.** A docstring is for a reader who
+**Describe what is, never history.** A docstring is for a reader who
 opens the file today with no memory of how it got here. Say why the module/class
 exists, what it does for the caller, and where and how it is used. Do **not**
 record how the code came to be — that provenance is dead the day it lands, git
 blame already keeps it, and it crowds out the description a reader actually needs.
-This applies to every docstring, comment, and module header.
+
+This applies to every docstring, comment and module header **and to the user
+documentation in `docs/`**. A user reading `docs/audio.html` has even less use
+for the backstory than a maintainer does: "nothing has ever played them, they
+work now" tells them nothing about how to play a sound, dates the page the moment
+it lands, and reads as the project congratulating itself. Write what the feature
+does and how to use it.
+
+```text
+Bad:  pyvrml97 has declared Sound and AudioClip for twenty-odd years and nothing
+      has ever played them. They work now:
+Good: VRML97's own Sound and AudioClip play, with the fields pyvrml97 declares
+      for them:
+
+Bad:  This replaces the frame-rate display FrameCounter used to draw through
+      glOrtho, which means nothing in a core profile. It no longer draws.
+Good: FrameCounter measures the frame rate and does not draw it: the provider
+      reads its number and the HUD puts it on screen. Drawing it from there would
+      mean glOrtho, which means nothing in a core profile.
+```
+
+Note what survives in each: the *reason* (glOrtho is meaningless in a core
+profile) is worth keeping, stated in the present tense as a fact about the code
+that is there. It is the narrative around it that goes.
+
+`plans/` is the exception, and the only one: a plan document records what was
+decided and what landed, so a status note, a dated entry or a "still open" list
+belongs there. Nowhere else.
 
 Phrasings that are always history, never description — if you write one, delete it:
 
@@ -572,11 +662,66 @@ fix the test if the test itself is wrong). "It passes in isolation" is not passi
 — if a test only fails in the full run, that is a real test-isolation bug to fix,
 not to wave away.
 
+### The suite renders offscreen
+
+`tests/conftest.py` sets `OPENGLCONTEXT_HIDDEN=1` and `OPENGLCONTEXT_NO_VSYNC=1`
+for the whole session, and both reach subprocess tests through `os.environ` and
+survive `renderoptions.clean_environment()` (see `renderoptions.PRESENTATION`).
+A hidden window renders and reads back identically, so nothing is traded away —
+and several hundred *mapped* windows flashing over whatever you are doing, and
+stealing focus while you type, is not something to inflict on anyone.
+
+It also stops swaps blocking: a compositor throttles the swap to its own frame
+callback, and a window nothing is showing never gets one.
+
+**Set `OPENGLCONTEXT_HIDDEN=0` to watch a test render** — which is how you find
+out why one looks wrong. A scratch script outside the suite has to set both
+itself.
+
 Order-dependent GL failures are almost always **context/state pollution** between
 tests. The fix is better isolation, not weaker assertions: prefer the test harness
 that creates a **fresh window/GL context per test** (and tears it down), so no test
 inherits another's GL state. Run the *whole* suite (not just the files you touched)
 before declaring done.
+
+### The known exceptions: the two load-sensitive timing tests
+
+Two tests measure against the *clock* rather than against a value, so a machine
+busy with the rest of the suite fails them and the same machine passes them alone.
+Both are **known-flaky in a full run** and neither is evidence of a regression:
+
+| Test | Why it is unstable |
+|---|---|
+| `test_gltf_conformance.py::test_view_matches_baseline[Parthenon__*]` | The render is **bimodal**: it comes out either pixel-identical to the baseline or ~10% different, never in between, and the difference is a uniform lighting shift over the whole model — the adaptive analytic-sky IBL landing in one of two converged states. Independent of frame rate: measured 6/10 differing at a healthy 220 fps. Some cameras (`cam08`, `cam09`) fail this way far more often than others. |
+| Other **sky-lit** conformance views, rarely | `CesiumMan` was seen to fail this way once (2026-08-02), then passed alone, passed in a conformance-only run of all 314 views, and passed in the next full run. Same lighting path as Parthenon, so most likely the same bimodality at a much lower rate. **Not confirmed** — one observation, never reproduced. Re-run the view before spending anything on it; do not assume it is nothing if it repeats. |
+| `test_instancing_performance.py::test_instancing_is_faster` | Compares wall-clock frame times with instancing on and off. Under load the margin between them closes. |
+
+**Do not re-investigate these, and do not treat either as a regression of whatever
+you were working on.**
+
+For the instancing test, running it alone is enough — it is purely load-sensitive:
+
+```bash
+/workspaces/OpenGL-dev/.venv/bin/python -m pytest tests/unit/test_instancing_performance.py -q
+```
+
+**Running a Parthenon view alone is *not* a sufficient check** — it fails alone
+too, roughly half the time. Measured 2026-08-02 by rendering `Parthenon__cam08`
+eight times through the current viewer and eight times through the viewer at
+`HEAD` (a `git worktree` at HEAD on `PYTHONPATH`, same model, same harness):
+**7/8 differed at HEAD and 8/8 with the current code** — i.e. it is pre-existing
+and not attributable to any recent change. If you need to know whether *your*
+change did something, repeat that A/B rather than reasoning from a single run.
+
+The exemption is **these two, on these failure modes, only**: every other failure
+in a full run is still a real failure to fix.
+
+Neither is fixed, and both have a real fix available: make the capture wait for
+the IBL to actually converge instead of for a wall-clock delay (which would make
+the Parthenon views deterministic rather than bimodal), and give the instancing
+test a marker that keeps it off a busy machine — the sibling `omi_physics`
+project solves exactly that with a `serial` marker and a documented two-pass run,
+see its `pyproject.toml`.
 
 Run tests from the project root:
 

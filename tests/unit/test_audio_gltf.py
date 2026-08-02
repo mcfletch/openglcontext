@@ -149,6 +149,86 @@ class TestNodeEmitters:
         assert emitters_in(scene) == []
 
 
+class TestCodecExtensions:
+    """``OMI_audio_ogg_vorbis``: the same sound, offered in a better encoding.
+
+    The extension names a second entry in the document's ``audio`` array and
+    leaves the source's own ``audio`` as the MP3 fallback, so what matters is
+    that the loader reaches the Ogg where it can decode one and the MP3 where it
+    cannot.
+    """
+
+    def coded(self, extension='OMI_audio_ogg_vorbis'):
+        """A document offering ``shot.mp3`` and, through ``extension``, an alternative."""
+        alternative = {'OMI_audio_ogg_vorbis': 'shot.ogg',
+                       'OMI_audio_opus': 'shot.opus'}[extension]
+        body = {
+            'extensionsUsed': ['KHR_audio_emitter', extension],
+            'nodes': [{'name': 'Speaker',
+                       'extensions': {'KHR_audio_emitter': {'emitters': [0]}}}],
+            'extensions': {'KHR_audio_emitter': {
+                'emitters': [{'name': 'Gun', 'type': 'positional', 'sources': [0]}],
+                'sources': [{'name': 'Shot', 'audio': 0,
+                             'extensions': {extension: {'audio': 1}}}],
+                'audio': [{'uri': 'shot.mp3'}, {'uri': alternative}],
+            }},
+        }
+        return document(**body)
+
+    def source_in(self, body):
+        scene = loader.load_gltf(body, base_url='http://example/assets/scene.gltf')
+        return emitters_in(scene)[0].sources[0]
+
+    def test_the_better_encoding_is_offered_first(self):
+        """`url` is most-preferred-first, and the first that decodes wins."""
+        source = self.source_in(self.coded())
+        assert source.url == ['http://example/assets/shot.ogg',
+                              'http://example/assets/shot.mp3']
+
+    def test_the_fallback_is_still_offered(self):
+        """A document with no fallback is the author's choice; this one has one."""
+        assert self.source_in(self.coded()).url[-1].endswith('shot.mp3')
+
+    def test_an_encoding_nothing_here_decodes_still_records_where_it_is(self):
+        """Opus is parsed and shown; only decoding it is beyond this build."""
+        source = self.source_in(self.coded('OMI_audio_opus'))
+        assert source.url == ['http://example/assets/shot.opus',
+                              'http://example/assets/shot.mp3']
+
+    def test_the_library_is_asked_for_the_encoding_this_build_can_decode(self):
+        from omi_audio import formats
+
+        scene = loader.load_gltf(self.coded(),
+                                 base_url='http://example/assets/scene.gltf')
+        source = emitters_in(scene)[0].sources[0]
+        library = source._library
+        wanted = library.document.audio_indices_for(source._source,
+                                                    library.encodings)
+        assert wanted[0] == (1 if formats.VORBIS in formats.decodable() else 0)
+
+    @needs_decoder
+    def test_the_sound_still_plays_when_only_the_fallback_resolves(self, engine):
+        """A missing or unreadable Ogg costs the better encoding, not the sound."""
+        wav = wav_bytes()
+        encoded = base64.b64encode(wav).decode('ascii')
+        body = document(**{
+            'extensionsUsed': ['KHR_audio_emitter', 'OMI_audio_ogg_vorbis'],
+            'nodes': [{'name': 'Speaker',
+                       'extensions': {'KHR_audio_emitter': {'emitters': [0]}}}],
+            'extensions': {'KHR_audio_emitter': {
+                'emitters': [{'name': 'Gun', 'type': 'positional', 'sources': [0]}],
+                'sources': [{'name': 'Shot', 'audio': 0,
+                             'extensions': {'OMI_audio_ogg_vorbis': {'audio': 1}}}],
+                'audio': [{'uri': 'data:audio/wav;base64,' + encoded},
+                          {'uri': 'shot.ogg'}],
+            }},
+        })
+        source = self.source_in(body)
+        clip = source.clip(engine)
+        assert clip is not None, 'the fallback should have played'
+        assert clip.frames > 0
+
+
 class TestSceneEmitters:
     def test_a_scene_level_global_emitter_lands_at_the_root(self):
         body = dict(EMITTERS)

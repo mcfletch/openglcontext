@@ -31,20 +31,19 @@ Start elsewhere:  oglc-gltf-demo --model DamagedHelmet  (or MODEL=DamagedHelmet)
 Every ``oglc-gltf`` command-line option applies (``--shadows/--no-shadows``,
 ``--lights``, ``--ibl-intensity``, ...); see ``oglc-gltf-demo -h``.
 """
-import argparse
 import os
 import sys
-import urllib.request
 from dataclasses import dataclass
 from typing import Any, Sequence
 
 os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
 
-from OpenGLContext.bin.gltf_view import (
-    TestContext as ViewerContext, apply_render_env, build_parser,
-)
+from OpenGLContext.bin.view import apply_render_env, build_parser
+from OpenGLContext.ui.gallery import Picture
+from OpenGLContext.ui.hudwidgets import HUDGroup, Readout
+from OpenGLContext.viewer.sceneviewer import ViewerContext
+from OpenGLContext.viewer import ViewerOptions
 from OpenGLContext.loaders import gltf
-from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders import gltf_demos
 
 
@@ -136,7 +135,7 @@ def resolve_bloom(name: str) -> bool:
     return profile_for(name).bloom
 
 
-def resolve_background(config: argparse.Namespace, name: str) -> Any:
+def resolve_background(config: ViewerOptions, name: str) -> Any:
     """Background spec for a model: explicit --background wins, else the per-model
     profile ('cube'/'sky'), else the demo default (black 'none').
 
@@ -156,6 +155,26 @@ def resolve_background(config: argparse.Namespace, name: str) -> Any:
     return getattr(config, '_background_default', config.background)
 
 
+def demos_first(catalogue: Sequence[Any]) -> list:
+    """The catalogue reordered so the conformance fixtures come last.
+
+    Most of the Khronos sample set exists to exercise one glTF feature -- a bare
+    triangle, a sparse accessor, forty ``Compare*`` grids -- and stepping
+    through those to reach something worth looking at is not browsing.  Which is
+    which comes from the shared table (:mod:`OpenGLContext.loaders.gltf_demos`),
+    so this and the viewer's shelf cannot disagree.
+
+    Nothing is dropped: the fixtures are still there, they are just not what
+    opens first.  Each half keeps the catalogue's own order.
+    """
+    entries = list(catalogue)
+    demos = [entry for entry in entries
+             if not gltf_demos.scene_for(entry['name']).feature_test]
+    fixtures = [entry for entry in entries
+                if gltf_demos.scene_for(entry['name']).feature_test]
+    return demos + fixtures
+
+
 def resolve_start_index(names: Sequence[str], start: str) -> int:
     """Catalogue index to open on for a ``--model``/``MODEL`` selector.
 
@@ -172,7 +191,7 @@ def resolve_start_index(names: Sequence[str], start: str) -> int:
     return names.index(start) if start in names else 0
 
 
-def resolve_view(config: argparse.Namespace, name: str) -> tuple[float, bool]:
+def resolve_view(config: ViewerOptions, name: str) -> tuple[float, bool]:
     """(yaw, turntable) for a model, honouring --no-rotate / explicit --turntable /
     explicit --yaw over the per-model profile."""
     prof = profile_for(name)
@@ -186,7 +205,7 @@ def resolve_view(config: argparse.Namespace, name: str) -> tuple[float, bool]:
     return yaw, turntable
 
 
-def resolve_physics(config: argparse.Namespace, name: str) -> tuple[bool, bool]:
+def resolve_physics(config: ViewerOptions, name: str) -> tuple[bool, bool]:
     """(physics, fly) for a model. A --capture run never walks (deterministic
     frame); an explicit --physics/--no-physics overrides the per-model profile."""
     prof = profile_for(name)
@@ -197,24 +216,63 @@ def resolve_physics(config: argparse.Namespace, name: str) -> tuple[bool, bool]:
     return prof.physics, prof.fly
 
 
+#: How big the reference thumbnail is, in pixels at the reference font size.
+REFERENCE_SIZE = (320, 240)
+
+
+class ReferencePicture(HUDGroup):
+    """The current model's own reference screenshot, labelled, in the corner.
+
+    What makes this a *comparison* rather than a gallery: the rendering and the
+    picture it should look like, on screen together.  It is an ordinary HUD
+    group, so the picture cache behind it fetches the URL, decodes it off the
+    render thread and evicts it when the browser has moved on.
+    """
+
+    PROTO = 'ReferencePicture'
+
+    def __init__(self, **named: Any) -> None:
+        picture = Picture(width=REFERENCE_SIZE[0], height=REFERENCE_SIZE[1])
+        named.setdefault('anchor', 'top-right')
+        named.setdefault('children', [picture, Readout(label='reference',
+                                                       align='center')])
+        super(ReferencePicture, self).__init__(**named)
+        self.picture = picture
+
+    @property
+    def url(self) -> str:
+        return str(self.picture.url)
+
+    @url.setter
+    def url(self, value: str) -> None:
+        self.picture.url = value or ''
+        # An entry with no reference of its own shows nothing rather than the
+        # last model's picture with the wrong label under it.
+        self.visible = bool(value)
+
+
 class TestContext(ViewerContext):
     """The viewer, browsing the sample catalogue instead of one file."""
 
-    def _prepare_source(self) -> None:
+    def hasSceneToShow(self) -> bool:
+        """Always: the catalogue is what this browser shows, not one file."""
+        return True
+
+    def prepareSource(self) -> None:
         self.source = None
-        self.overlay_error = False
-        self._ref_textures: dict[str, Any] = {}     # model name -> (Texture, aspect) or False
+        self.overlayError = False
         self._ref_current: Any = None
         try:
-            self.catalog: Any = gltf.fetch_sample_catalog()
+            self.catalog: Any = demos_first(gltf.fetch_sample_catalog())
         except Exception as err:
             print("Could not fetch the model catalogue: %s" % err)
-            self.catalog = [{'name': n, 'display': n, 'screenshot_url': None}
-                            for n in gltf.SAMPLE_MODELS]
-        start = getattr(self.config, 'model', None) or os.environ.get('MODEL', '')
+            self.catalog = demos_first(
+                [{'name': n, 'display': n, 'screenshot_url': None}
+                 for n in gltf.SAMPLE_MODELS])
+        start = getattr(self.options, 'model', None) or os.environ.get('MODEL', '')
         self.index = resolve_start_index([e['name'] for e in self.catalog], start)
 
-    def _load_scene(self) -> Any:
+    def loadScene(self) -> Any:
         entry = self.catalog[self.index]
         label = "[%d/%d] %s" % (self.index + 1, len(self.catalog), entry['display'])
         self._ref_current = entry['name']
@@ -223,15 +281,15 @@ class TestContext(ViewerContext):
             scene = gltf.load_sample(entry['name'])
         except Exception as err:
             self._label = "%s\nFAILED: %s" % (label, str(err).splitlines()[0][:50])
-            self.overlay_error = True
+            self.overlayError = True
             print("  " + self._label.replace("\n", "  "))
             return None
         self._label = label
-        self.overlay_error = False
+        self.overlayError = False
         return scene
 
     # -- async catalogue loading -----------------------------------------
-    def _request_initial_scene(self) -> None:
+    def requestInitialScene(self) -> None:
         """Pull the initial catalogue model in the background instead of a file."""
         self._request_current_model()
 
@@ -244,70 +302,70 @@ class TestContext(ViewerContext):
         self._pending_name = name
         self._pending_label = label
         print("Loading %s ..." % label)
-        self._request_scene(lambda: gltf.load_sample(name),
+        self.requestScene(lambda: gltf.load_sample(name),
                             label="Loading %s ..." % label)
 
-    def _apply_loaded(self, scene: Any) -> None:
-        # _build_scenegraph reads _ref_current for the per-model profile, so set the
+    def applyLoadedScene(self, scene: Any) -> None:
+        # buildScenegraph reads _ref_current for the per-model profile, so set the
         # newly loaded model's identity before building.
         self._ref_current = self._pending_name
         self._label = self._pending_label
-        self.overlay_error = False
-        self._build_scenegraph(scene)
-        self._on_scene_ready()
+        self.overlayError = False
+        self.buildScenegraph(scene)
+        self.onSceneReady()
 
-    def _apply_failed(self, error: BaseException | None) -> None:
+    def applyFailedLoad(self, error: BaseException | None) -> None:
         self._ref_current = self._pending_name
-        self.overlay_error = True
+        self.overlayError = True
         msg = str(error).splitlines()[0][:50] if error else 'load failed'
         self._label = "%s\nFAILED: %s" % (self._pending_label, msg)
-        self.overlay_text = self._label
+        self.overlayText = self._label
         print("  " + self._label.replace("\n", "  "))
 
-    def _on_scene_ready(self) -> None:
-        self._scene_loaded = True
+    def onSceneReady(self) -> None:
+        self.sceneLoaded = True
         self._apply_physics_profile()
 
-    def _build_scenegraph(self, scene: Any) -> None:
+    def buildScenegraph(self, scene: Any) -> None:
         # Apply the per-model facing/turntable/background BEFORE the base builds the
-        # scenegraph (it reads config.yaw/turntable and calls _make_background there).
-        self.config.yaw, self.config.turntable = resolve_view(
-            self.config, self._ref_current)
-        self.config.background = resolve_background(self.config, self._ref_current)
+        # scenegraph (it reads the framing options and builds the background there).
+        self.options.yaw, self.options.turntable = resolve_view(
+            self.options, self._ref_current)
+        self.options.background = resolve_background(self.options, self._ref_current)
         # Bloom is read per frame from the env var, so toggling it per model works.
         os.environ['OPENGLCONTEXT_BLOOM'] = '1' if resolve_bloom(self._ref_current) else '0'
-        ViewerContext._build_scenegraph(self, scene)
-        self.overlay_text = self._label
+        ViewerContext.buildScenegraph(self, scene)
+        self.overlayText = self._label
 
-    def _setup_physics(self) -> None:
+    def setupWalking(self) -> None:
         # Enable physics for the *initial* model only if its profile asks for it.
-        physics, fly = resolve_physics(self.config, getattr(self, '_ref_current', ''))
-        self.config.physics = physics
-        ViewerContext._setup_physics(self)
-        if physics and self._physics is not None:
+        physics, fly = resolve_physics(self.options, getattr(self, '_ref_current', ''))
+        self.options.physics = physics
+        ViewerContext.setupWalking(self)
+        if physics and self.physicsPlatform is not None:
             self._physics_scene = self.sg
             if fly:
-                self._physics.set_fly(True)
+                self.physicsPlatform.set_fly(True)
 
     def _apply_physics_profile(self) -> None:
         """Turn physics on/off for the newly loaded model per its profile.
 
-        Called on model *switch* (after `_setup_physics` has captured the free-fly
+        Called on model *switch* (after `setupWalking` has captured the free-fly
         manager). Rebuilds the collision world when the scene changed so a physics
         model gets its own world, and hands control back to free-fly otherwise.
         """
-        if getattr(self, 'sg', None) is None or self.config.capture:
+        if getattr(self, 'sg', None) is None or self.options.capture:
             return
-        physics, fly = resolve_physics(self.config, self._ref_current)
+        physics, fly = resolve_physics(self.options, self._ref_current)
         if physics:
             if getattr(self, '_physics_scene', None) is not self.sg:
-                self._physics = None          # force a rebuild for this scene
-            if self._set_physics(True):
+                self.physicsPlatform = None   # force a rebuild for this scene
+            if self.enablePhysics(True):
                 self._physics_scene = self.sg
-                if fly and self._physics is not None:
-                    self._physics.set_fly(True)
-        elif getattr(self, '_physics_on', False):
-            self._set_physics(False)
+                if fly and self.physicsPlatform is not None:
+                    self.physicsPlatform.set_fly(True)
+        elif self.physicsWalking:
+            self.enablePhysics(False)
 
     # Catalogue navigation keys. Deliberately NOT the arrow keys: those drive
     # free-fly camera movement, so binding them to next/prev model made walking
@@ -325,7 +383,7 @@ class TestContext(ViewerContext):
             self.addEventHandler('keyboard', name=key, function=self._next_model)
         for key in self.PREV_MODEL_KEYS:
             self.addEventHandler('keyboard', name=key, function=self._prev_model)
-        self.addEventHandler('keyboard', name='<F2>', function=self._request_screenshot)
+        self.addEventHandler('keyboard', name='<F2>', function=self.requestScreenshot)
 
     def _next_model(self, event: Any = None) -> None:
         self._go(1)
@@ -337,143 +395,30 @@ class TestContext(ViewerContext):
         self.index = (self.index + delta) % len(self.catalog)
         self._request_current_model()
 
-    # -- overlays --------------------------------------------------------
-    def _draw_overlay(self, shader: Any) -> None:  # pragma: no cover - GL text overlay draw
-        vp = self._viewport()
-        if vp is None or not self.overlay_text:
-            return
-        tw, th = vp
-        try:
-            from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
-            renderer = get_text_renderer(18)
-            color = (1.0, 0.25, 0.2, 1.0) if self.overlay_error else (1.0, 1.0, 1.0, 1.0)
-            renderer.render_text(
-                self.overlay_text, x=10, y=th - 8 - renderer.char_height,
-                shader_program=shader, viewport_width=tw, viewport_height=th,
-                color=color, background_color=(0.0, 0.0, 0.0, 0.55))
-        except Exception:
-            pass
+    # -- the reference thumbnail -----------------------------------------
+    def setupCaption(self):
+        """The caption, plus the reference screenshot beside it.
 
-    def _extra_overlay(self, shader: Any) -> None:  # pragma: no cover - GL thumbnail blit
-        """Draw the model's reference screenshot thumbnail, top-right."""
-        if self.overlay_error:
-            return
-        ref = self._reference_texture()
-        vp = self._viewport()
-        if ref is None or vp is None:
-            return
-        tex, aspect = ref
-        if not getattr(tex, 'texture', None):
-            return
-        tw, th = vp
-        margin = 0.03
-        x1, y1 = 1.0 - margin, 1.0 - margin
-        height = 0.55                                   # NDC height
-        view_aspect = tw / float(th or 1)
-        width = min(height * aspect / view_aspect, 0.6)
-        x0, y0 = x1 - width, y1 - height
-        try:
-            _blit_texture(shader, tex.texture, ndc_rect=(x0, y0, x1, y1))
-            from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
-            r = get_text_renderer(14)
-            lx = int((x0 + 1.0) * 0.5 * tw) + 2
-            ly = int((y0 + 1.0) * 0.5 * th) - r.char_height - 2
-            r.render_text("reference", x=lx, y=ly, shader_program=shader,
-                          viewport_width=tw, viewport_height=th, color=(1, 1, 1, 1),
-                          background_color=(0, 0, 0, 0.5))
-        except Exception:
-            pass
+        The reference is what makes this a comparison rather than a gallery, so
+        it is a picture in the same HUD layer as the caption -- one tree, one
+        batched draw, and the cache behind it downloads and evicts on its own.
+        """
+        layer = ViewerContext.setupCaption(self)
+        self.referencePicture = ReferencePicture()
+        layer.children = list(layer.children) + [self.referencePicture]
+        return layer
 
-    def _reference_texture(self) -> Any:
-        """Return (Texture, aspect) for the current model's reference image, or None."""
-        name = self._ref_current
-        if name in self._ref_textures:
-            return self._ref_textures[name] or None
-        entry = self.catalog[self.index]
-        url = entry.get('screenshot_url')
-        result: Any = False
-        if url:
-            try:
-                from io import BytesIO
-                from PIL import Image
-                from OpenGLContext import texture as texture_module
-                data = urllib.request.urlopen(resolver.safe_url(url), timeout=20).read()
-                img = Image.open(BytesIO(data)).convert('RGB')
-                aspect = img.size[0] / float(img.size[1] or 1)
-                result = (texture_module.Texture(image=img), aspect)
-            except Exception:
-                result = False
-        self._ref_textures[name] = result
-        return result or None
+    def referenceURL(self) -> str:
+        """Where the current model's reference screenshot is, or ''."""
+        entry = self.catalog[self.index] if self.catalog else {}
+        return (entry.get('screenshot_url') or '') if not self.overlayError else ''
+
+    def updateOverlay(self) -> None:
+        ViewerContext.updateOverlay(self)
+        self.referencePicture.url = self.referenceURL()
 
 
-def _blit_texture(shader: Any, texture_id: Any, ndc_rect: Any) -> None:  # pragma: no cover - raw GL quad blit
-    """Draw a textured quad in NDC space using the unlit program's texture mode."""
-    import ctypes
-    import numpy as np
-    from OpenGL.GL import (
-        glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
-        glGenBuffers, glBindBuffer, glBufferData, glDeleteBuffers,
-        GL_ARRAY_BUFFER, GL_DYNAMIC_DRAW, GL_FLOAT, GL_FALSE, GL_TRIANGLES,
-        glEnableVertexAttribArray, glDisableVertexAttribArray, glVertexAttribPointer,
-        glDrawArrays, glActiveTexture, glBindTexture, GL_TEXTURE0, GL_TEXTURE_2D,
-        glGetAttribLocation, glGetUniformLocation, glUniform1i,
-        glEnable, glDisable, GL_DEPTH_TEST,
-    )
-    x0, y0, x1, y1 = ndc_rect
-    # texcoords flipped vertically: Texture.fromPIL stores the image flipped
-    verts = np.array([
-        x0, y0, 0, 0.0, 1.0,  x1, y0, 0, 1.0, 1.0,  x1, y1, 0, 1.0, 0.0,
-        x0, y0, 0, 0.0, 1.0,  x1, y1, 0, 1.0, 0.0,  x0, y1, 0, 0.0, 0.0,
-    ], 'f')
-    prog = shader.unlit_program
-    shader.use(lit=False)
-    ident = np.identity(4, 'f')
-    shader.set_matrices(ident, ident, program=prog)
-    shader.set_text_mode(enabled=False)
-    glActiveTexture(GL_TEXTURE0)
-    glBindTexture(GL_TEXTURE_2D, texture_id)
-    loc = glGetUniformLocation(prog, 'diffuseTexture')
-    if loc >= 0:
-        glUniform1i(loc, 0)
-    loc = glGetUniformLocation(prog, 'useTexture')
-    if loc >= 0:
-        glUniform1i(loc, 1)
-    shader.set_solid_color((1, 1, 1, 1))
-
-    vao = glGenVertexArrays(1)
-    vbo = glGenBuffers(1)
-    glBindVertexArray(vao)
-    glBindBuffer(GL_ARRAY_BUFFER, vbo)
-    glBufferData(GL_ARRAY_BUFFER, verts.nbytes, verts, GL_DYNAMIC_DRAW)
-    pos = glGetAttribLocation(prog, 'aPosition')
-    tc = glGetAttribLocation(prog, 'aTexCoord')
-    stride = 5 * 4
-    if pos >= 0:
-        glEnableVertexAttribArray(pos)
-        glVertexAttribPointer(pos, 3, GL_FLOAT, GL_FALSE, stride, None)
-    if tc >= 0:
-        glEnableVertexAttribArray(tc)
-        glVertexAttribPointer(tc, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
-    glDisable(GL_DEPTH_TEST)
-    glDrawArrays(GL_TRIANGLES, 0, 6)
-    glEnable(GL_DEPTH_TEST)
-    if pos >= 0:
-        glDisableVertexAttribArray(pos)
-    if tc >= 0:
-        glDisableVertexAttribArray(tc)
-    loc = glGetUniformLocation(prog, 'useTexture')
-    if loc >= 0:
-        glUniform1i(loc, 0)
-    glBindTexture(GL_TEXTURE_2D, 0)
-    glBindBuffer(GL_ARRAY_BUFFER, 0)
-    glBindVertexArray(0)
-    glDeleteBuffers(1, [vbo])
-    glDeleteVertexArrays(1, [vao])
-    shader.use(lit=True)
-
-
-def demo_config(argv: list[str] | None = None) -> argparse.Namespace:
+def demo_config(argv: list[str] | None = None) -> ViewerOptions:
     """Parse + massage the browser's config (no GL). Separated so it is testable.
 
     The browser centres + turntables every model and ignores embedded cameras, so
@@ -487,7 +432,7 @@ def demo_config(argv: list[str] | None = None) -> argparse.Namespace:
                         help='catalogue model to open on, by sample name '
                              '(e.g. DamagedHelmet) or 0-based index; '
                              'default: the MODEL env var, else the first model')
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv, namespace=ViewerOptions())
     args.no_cameras = True
     args.turntable = True
     # Most models read cleanest on black; the per-model profile (resolve_background)
@@ -513,7 +458,7 @@ def demo_config(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def apply_environment(args: argparse.Namespace) -> None:
+def apply_environment(args: ViewerOptions) -> None:
     """Set the render env so metals reflect a real environment in the browser.
 
     Loads the bundled environment cubemap into the IBL probe and pins full IBL, so
@@ -527,7 +472,7 @@ def apply_environment(args: argparse.Namespace) -> None:
     # is owned entirely by apply_render_env; only fall back to the bundled cubemap
     # when the user named no environment of their own.
     env = default_env_prefix()
-    if env and not getattr(args, 'environment', None):
+    if env and not args.environment:
         os.environ.setdefault('OPENGLCONTEXT_ENV_CUBEMAP', env)
         os.environ.setdefault('OPENGLCONTEXT_IBL', 'full')
     if args.ibl_intensity is None:
@@ -538,7 +483,7 @@ def main(argv: list[str] | None = None) -> Any:
     args = demo_config(argv)
     apply_environment(args)
     apply_render_env(args)             # an explicit --ibl-intensity still wins here
-    TestContext.config = args
+    TestContext.options = args
     return TestContext.ContextMainLoop(size=args.size) if args.size \
         else TestContext.ContextMainLoop()
 

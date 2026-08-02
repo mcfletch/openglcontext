@@ -1,14 +1,13 @@
 """The viewer's auto-fit framing is parametrized by --margin/--elevation/--tilt so
 a per-scene metadata entry can pull the camera in on a model that under-fills the
-frame. These exercise the parsing and the _frame() arithmetic without a GL context."""
+frame. These exercise the parsing and the frameModel() arithmetic without a GL context."""
 import os
-import sys
 
 import pytest
 
 _orig = dict(os.environ)
 try:
-    from OpenGLContext.bin import gltf_view
+    from OpenGLContext.bin import view
 finally:
     for k in list(os.environ):
         if k not in _orig:
@@ -18,17 +17,17 @@ finally:
 
 class TestFramingArgs:
     def test_defaults_are_none_so_frame_uses_builtins(self):
-        a = gltf_view.parse_args(['m.glb'])
+        a = view.parse_args(['m.glb'])
         assert a.margin is None and a.elevation is None and a.tilt is None
 
     def test_values_parse(self):
-        a = gltf_view.parse_args(['m.glb', '--margin', '0.8', '--elevation', '0.4',
+        a = view.parse_args(['m.glb', '--margin', '0.8', '--elevation', '0.4',
                                   '--tilt', '-0.2'])
         assert a.margin == 0.8 and a.elevation == 0.4 and a.tilt == -0.2
 
 
 class _Recorder:
-    """Stand-in platform capturing what _frame would set."""
+    """Stand-in platform capturing what frameModel would set."""
     def __init__(self):
         self.frustum = self.position = self.orientation = None
 
@@ -43,11 +42,11 @@ class _Recorder:
 
 
 def _frame_with(margin=None, elevation=None, tilt=None, radius=10.0):
-    import argparse
-    stub = gltf_view.TestContext.__new__(gltf_view.TestContext)
-    stub.config = argparse.Namespace(margin=margin, elevation=elevation, tilt=tilt)
+    from OpenGLContext.viewer.options import ViewerOptions
+    stub = view.TestContext.__new__(view.TestContext)
+    stub.options = ViewerOptions(margin=margin, elevation=elevation, tilt=tilt)
     stub.platform = _Recorder()
-    gltf_view.TestContext._frame(stub, radius)
+    view.TestContext.frameModel(stub, radius)
     return stub.platform
 
 

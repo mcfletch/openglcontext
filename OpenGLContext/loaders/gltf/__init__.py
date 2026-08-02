@@ -28,6 +28,7 @@ Secure fetching of external assets is delegated to the shared
     draco                 KHR_draco_mesh_compression -> decoded attribute arrays
     meshes                primitive -> renderable Shape (normals/tangents/morph)
     animation             the animation runtime engine + its load-time parsing
+    environment_sky       OMI_environment_sky -> the Background node it describes
     scene                 walk the node graph -> GLTFScene (lights, cameras, skins)
     loader                load_gltf / load_gltf_url public entry points
     samples               Khronos glTF-Sample-Assets catalogue helpers
@@ -50,6 +51,7 @@ from OpenGLContext.loaders.gltf.samples import (
     reference_screenshot_url,
     cache_reference_screenshot,
     load_sample,
+    load_sample_url,
 )
 
 __all__ = [
@@ -65,4 +67,5 @@ __all__ = [
     "reference_screenshot_url",
     "cache_reference_screenshot",
     "load_sample",
+    "load_sample_url",
 ]

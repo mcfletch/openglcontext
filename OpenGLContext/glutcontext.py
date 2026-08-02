@@ -49,6 +49,13 @@ class GLUTContext(
         glutInitWindowSize(*[int(i) for i in definition.size])
         # create a new rendering window
         self.windowID = glutCreateWindow(definition.title or self.getApplicationName())
+        # GLUT has no "create it hidden" hint, so it is hidden the instant it
+        # exists.  See renderoptions.hidden_window: rendering and reading back
+        # are unaffected, and a suite of GL scripts should not take over the
+        # screen of whoever is running it.
+        from OpenGLContext import renderoptions
+        if renderoptions.hidden_window():
+            glutHideWindow()
         Context.__init__(self, definition)
 
     CONTEXT_DEFINITION_FLAG_MAPPING = (

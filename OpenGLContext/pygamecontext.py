@@ -82,10 +82,16 @@ class PygameContext(
                 set( pygame.GL_CONTEXT_MINOR_VERSION, int(version[1]) )
         elif profile == 'compatibility':
             set( pygame.GL_CONTEXT_PROFILE_MASK, pygame.GL_CONTEXT_PROFILE_COMPATIBILITY )
+        # SDL takes "do not map it" as a creation flag.  See
+        # renderoptions.hidden_window: rendering and reading back are
+        # unaffected, and a suite of GL scripts should not take over the
+        # screen of whoever is running it.
+        from OpenGLContext import renderoptions
+        hidden = pygame.HIDDEN if renderoptions.hidden_window() else 0
         if definition.doubleBuffer:
-            return DOUBLEBUF|RESIZABLE
+            return DOUBLEBUF|RESIZABLE|hidden
         else:
-            return RESIZABLE
+            return RESIZABLE|hidden
     pygameFlagsFromDefinition = classmethod( pygameFlagsFromDefinition )
     def pygameDisplayMode( self, definition=None ):
         if definition is None:

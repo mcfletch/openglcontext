@@ -450,3 +450,39 @@ class FPSMode(WalkMode):
     def update(self, dt: float, inputs: Any, platform: Any) -> None:
         super(FPSMode, self).update(dt, inputs, platform)
         self._mouseLook(inputs, platform)
+
+
+#: Speeds a walking avatar moves at, in scene units per second at scale 1.  The
+#: avatar's own :class:`~omi_physics.character.CharacterCapabilities` and the
+#: modes that drive it have to agree on these, or a mode asks for a speed the
+#: character cannot reach.
+WALK_SPEED = 3.0
+RUN_SPEED = 6.0
+FLY_SPEED = 8.0
+
+#: Radians per second a turn starts at, and the multiple a held turn ramps up
+#: to: a viewer needs both a precise nudge and a quick spin in close quarters.
+TURN_RATE = 0.9
+TURN_ACCELERATION = 3.0
+
+
+def walk_fly_modes(scale: float = 1.0) -> Sequence[MovementMode]:
+    """Walking and flying, as declared nodes, sized to what is being moved through.
+
+    Declared rather than hand-rolled so one settings screen can present the
+    navigation of every application, and an application retunes it by setting
+    fields rather than subclassing.
+
+    ``scale`` sizes the speeds to the world: a viewer frames models from a bolt
+    to a city, and a speed that suits one is useless for the other.  It is the
+    same scale the avatar is built at (see
+    :meth:`OpenGLContext.move.physicswalk.PhysicsWalkMixin.physicsAvatarScale`),
+    so the modes and the character agree.
+    """
+    return [
+        WalkMode(name='walk', walkSpeed=WALK_SPEED * scale,
+                 runSpeed=RUN_SPEED * scale,
+                 turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
+        FlyMode(name='fly', flySpeed=FLY_SPEED * scale,
+                turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
+    ]

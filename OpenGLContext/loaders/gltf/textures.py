@@ -67,10 +67,11 @@ def _texture_source(tex: "pygltflib.Texture") -> Optional[int]:
     is intentionally *not* consulted: it needs a GPU-block transcoder Pillow lacks.
     """
     if tex.source is not None:
-        return tex.source
+        return int(tex.source)
     webp = (getattr(tex, 'extensions', None) or {}).get('EXT_texture_webp')
     if webp is not None:
-        return webp.get('source')
+        source = webp.get('source')
+        return None if source is None else int(source)
     return None
 
 
@@ -89,8 +90,31 @@ def _pil_for_texinfo(g: "pygltflib.GLTF2", info: "Optional[_TexInfo]",
         return None
 
 
+def texture_image(g: "pygltflib.GLTF2", texture_index: Optional[int],
+                  resolver: Resolver) -> "Optional[Image.Image]":
+    """The decoded PIL image behind a ``textures`` index, or None.
+
+    For a consumer that wants the pixels rather than a
+    :class:`~OpenGLContext.scenegraph.pbrmaterial.PBRTexture` to upload -- the
+    ``OMI_environment_sky`` panorama, which becomes a skybox and an IBL
+    environment rather than a material channel.  Returns None for anything that
+    will not decode, since a missing sky is not a reason to lose the scene.
+    """
+    if texture_index is None or not (0 <= texture_index < len(g.textures or [])):
+        return None
+    src = _texture_source(g.textures[texture_index])
+    if src is None:
+        return None
+    try:
+        return _image_pil(g, src, resolver)
+    except Exception as err:
+        log.warning("glTF: failed to decode image %s: %s", src, err)
+        return None
+
+
 def _texture_holder(g: "pygltflib.GLTF2", texture_index: Optional[int], resolver: Resolver,
-                    srgb: bool, cache: dict) -> Optional[PBRTexture]:
+                    srgb: bool, cache: "dict[int, Optional[PBRTexture]]"
+                    ) -> Optional[PBRTexture]:
     if texture_index is None:
         return None
     if texture_index in cache:

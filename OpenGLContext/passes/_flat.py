@@ -1076,18 +1076,23 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                         self.submitAsyncPicks(mode, events, id_map)
                     context.pickEvents.clear()
 
-                # The HUD, the developer overlay and any screen that is open,
-                # drawn over the finished frame rather than into the MRT
-                # buffer.  See OpenGLContext.ui.screen.ScreenMixin.
-                overlay = getattr(context, 'renderShaderOverlay', None)
-                if overlay is not None:
-                    overlay(self)
             else:
                 # Legacy fixed-function rendering path
                 self.legacyBackgroundRender( vp,matrix )
                 self.legacyLightRender( matrix )
                 self.renderOpaque( toRender )
                 self.renderTransparent( toRender )
+
+            # The HUD, the developer overlay and any screen that is open, drawn
+            # over the finished frame rather than into the MRT buffer.  Outside
+            # the branch above because it belongs to the *frame* and not to
+            # either way of filling one: the overlay renderer builds its own
+            # program and does not care which path drew the world, and a
+            # compatibility-profile context whose menu could not be seen would
+            # be a program nobody can use.  See OpenGLContext.ui.screen.
+            overlay = getattr(context, 'renderShaderOverlay', None)
+            if overlay is not None:
+                overlay(self)
 
         context.SwapBuffers()
         self.matrix = matrix

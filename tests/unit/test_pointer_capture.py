@@ -296,3 +296,33 @@ def test_motion_still_steers_when_nothing_has_asked_for_the_pointer():
     context.recordPointerMotion(100, 100)
     context.recordPointerMotion(130, 100)
     assert context.getInputState().mouse_delta()[0] == 30.0
+
+
+# -- motion the backend made itself ------------------------------------------
+
+def test_a_pointer_the_backend_moved_is_not_motion_the_user_made():
+    """A backend that warps the pointer has to say so.
+
+    Warping back to the middle of the window is how a backend without an
+    unbounded-motion cursor keeps mouse-look turning past the edge of the
+    screen, and the warp comes back as an ordinary movement.  Counted, it is
+    exactly the reverse of the movement that provoked it, so the view never
+    turns at all.
+    """
+    context = _context(modes.FPSMode(name='fps'))
+    context.updateNavigation(0.016)
+    context.recordPointerMotion(400, 300)       # the middle of the window
+    context.recordPointerMotion(430, 300)       # the hand moves 30px right
+    context.forgetPointerOrigin()               # the backend warps back...
+    context.recordPointerMotion(400, 300)       # ...and hears about its own warp
+    assert context.getInputState().mouse_delta() == (30.0, 0.0)
+
+
+def test_the_move_after_a_warp_is_measured_from_where_the_pointer_was_put():
+    context = _context(modes.FPSMode(name='fps'))
+    context.updateNavigation(0.016)
+    context.recordPointerMotion(400, 300)
+    context.forgetPointerOrigin()
+    context.recordPointerMotion(400, 300)
+    context.recordPointerMotion(415, 300)
+    assert context.getInputState().mouse_delta() == (15.0, 0.0)

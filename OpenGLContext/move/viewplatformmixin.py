@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, Any, Optional, Tuple
 from OpenGLContext import context
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.move import viewplatform
-class ViewPlatformMixin(object):
+from OpenGLContext.move.physicswalk import PhysicsWalkMixin
+class ViewPlatformMixin(PhysicsWalkMixin):
     """Mix-in for Context classes providing ViewPlatform support
 
     The viewplatform module provides a ViewPlatform object
@@ -86,15 +87,6 @@ class ViewPlatformMixin(object):
             from OpenGLContext.events.inputstate import InputState
             self.inputState = InputState()
         return self.inputState
-
-    def getNavigationPlatform( self ) -> Any:
-        """What the declared movement modes drive.
-
-        The view platform by default, which is what a viewer wants.  A game
-        overrides this to return its character controller: there the camera is
-        where the controller ends up rather than the thing being moved.
-        """
-        return self.getViewPlatform()
 
     def getNavigation( self ) -> Any:
         """The navigation manager for this context's declared modes, or None.
@@ -222,6 +214,20 @@ class ViewPlatformMixin(object):
                 point[0] - self._lastPointer[0],
                 point[1] - self._lastPointer[1] )
         self._lastPointer = point
+
+    def forgetPointerOrigin( self ) -> None:
+        """Forget where the pointer was, so the next report is only a position.
+
+        For a backend that *moves* the pointer itself.  Warping it back to the
+        middle of the window is how a windowing system with no unbounded-motion
+        cursor keeps mouse-look turning past the edge of the screen, and the
+        warp arrives back as an ordinary movement -- one that is exactly the
+        reverse of the movement that provoked it, so counted it leaves the view
+        standing still.  A backend calls this the moment it recognises its own
+        warp, and the position that follows establishes where the pointer now
+        is without turning anything.
+        """
+        self._lastPointer = None
 
     def _recordInput( self, event: Any ) -> None:
         """Feed one event to the sampler.

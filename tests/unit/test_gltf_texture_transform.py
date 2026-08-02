@@ -212,7 +212,7 @@ def _capture(glb, out):
     args = [glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
             '--lights', 'on', '--background', '0,0,0', '--capture', out,
             '--frames', '6', '--capture-delay', '0.2', '--size', '200x200']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.gltf_view'] + args,
+    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
                    timeout=180, capture_output=True, text=True, cwd=TESTS_DIR + '/..')
 
 

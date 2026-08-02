@@ -1,5 +1,15 @@
 """Interaction mode for examining objects"""
+import math
+
 from OpenGLContext.events import eventmanager
+
+#: How far a drag from where it started to the edge of the window turns the
+#: view: **half a circle**.  The trackball's own default is a full one, which
+#: put the far side of the model half a window away and made a nudge a quarter
+#: turn -- with nothing that could be called examining in between.  Half a turn
+#: to the edge is what a VRML browser has always done, and it means the whole
+#: of an object is reachable in one drag while a small movement is a small look.
+EXAMINE_DRAG_ANGLE = math.pi
 
 class ExamineManager ( eventmanager.EventManager):
     """Interaction EventManager for "Examine" mode
@@ -64,6 +74,7 @@ class ExamineManager ( eventmanager.EventManager):
             center,
             event.getPickPoint()[0],event.getPickPoint()[1],
             width, height,
+            dragAngle = EXAMINE_DRAG_ANGLE,
         )
         
     def OnBind( self ):

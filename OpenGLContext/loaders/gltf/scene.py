@@ -43,9 +43,11 @@ else:
 from OpenGLContext.loaders.gltf.accessors import (
     _buffer_bytes, _decode_data_uri, _read_normalized, _resolver_max,
 )
+from OpenGLContext.loaders.gltf import environment_sky
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
 from OpenGLContext.loaders.gltf.transforms import (
-    _transform_for, _local_matrix_rv, _expand_bounds, look_orientation, _quat_to_xyzr,
+    _transform_for, _local_matrix_rv, _world_box, framing_bounds,
+    look_orientation, _quat_to_xyzr,
 )
 from OpenGLContext.loaders.gltf.animation import (
     Player, compute_world_matrices,
@@ -68,8 +70,14 @@ class GLTFScene(object):
                  animations: Optional[list] = None,
                  node_transforms: Optional[dict] = None) -> None:
         self.group = group
-        self.center = center      # (x, y, z) of the bounding box centre
+        self.center = center      # (x, y, z) of the framing box's centre
         self.radius = radius      # bounding-sphere radius (for camera framing)
+        # Parts the file stranded far outside the model, which the framing box
+        # above therefore leaves out, and how far the farthest of them reaches
+        # in radii of that box. Both are 0 for a model that is all in one place;
+        # they are what lets a viewer say why part of a file starts out of view.
+        self.strays = 0
+        self.stray_reach = 0.0
         # animations: list of Animation objects parsed from the file, in
         # order. node_transforms: glTF node index -> the Transform built for it, so
         # a Player can write interpolated TRS straight into the scenegraph.
@@ -78,6 +86,10 @@ class GLTFScene(object):
         # node_morph: node index -> [weight-setter callables], one per primitive of
         # the node's morphable mesh (populated by the loader when targets exist).
         self.node_morph: dict = {}
+        # sky: the OMI_environment_sky record the active scene selected, or None.
+        # The Background it describes is already in `group`; this is the record
+        # itself, so a caller can report a sky nothing here can draw yet.
+        self.sky: Any = None
         # skins: Skin objects; the loader also stashes the node
         # hierarchy (_skin_roots/_skin_children) for per-frame joint assembly.
         self.skins: list = []
@@ -404,8 +416,11 @@ class _SceneBuilder:
         # under a DEF so a caller can grab it by name (see _def_name).
         self.scene_graph = SceneGraph()
         self.used_defs: set = set()
-        self.world_min = np.array([np.inf] * 3)
-        self.world_max = np.array([-np.inf] * 3)
+        # One (world box minimum, maximum, vertex count) per drawn primitive.
+        # Kept apart rather than merged into a single box so the framing can
+        # tell the model from anything the file stranded outside it -- see
+        # :func:`~OpenGLContext.loaders.gltf.transforms.framing_bounds`.
+        self.parts: list[tuple[np.ndarray, np.ndarray, int]] = []
         self.cameras: list = []       # (world_matrix, camera_def)
         self.light_meter: list = []   # (light_node, world_position or None) for auto-exposure
         self.node_transforms: dict = {}   # node index -> the Transform built for it
@@ -425,6 +440,9 @@ class _SceneBuilder:
         self.audio_document = audiomodel.from_gltf(
             (top_ext.get(audiomodel.EXTENSION) or {}) if isinstance(top_ext, dict) else {})
         self._audio_library: Optional[AudioLibrary] = None
+        # OMI_environment_sky: the document's skies[], from which the active
+        # scene picks one. None where the document declares none.
+        self.skies: list = environment_sky.read_skies(top_ext)
 
     def mesh_shapes(self, mesh_index: int) -> list:
         if mesh_index in self.mesh_cache:
@@ -446,6 +464,14 @@ class _SceneBuilder:
         if not dynamic:
             self.mesh_cache[mesh_index] = shapes
         return shapes
+
+    def _record_part(self, world: np.ndarray, shape: Any,
+                     bounds: Tuple[np.ndarray, np.ndarray]) -> None:
+        """Note where one drawn primitive ended up, and how much of it there is."""
+        minimum, maximum = _world_box(world, bounds)
+        positions = getattr(shape.geometry, 'positions', None)
+        self.parts.append(
+            (minimum, maximum, 0 if positions is None else len(positions)))
 
     def build(self, node_index: int, parent_world: np.ndarray,
               ancestry: Tuple[int, ...] = (), parent_visible: bool = True) -> "Transform":
@@ -497,13 +523,13 @@ class _SceneBuilder:
                     inst_kids = list(inst_t.children)
                     for shape, bounds in shapes:
                         inst_kids.append(shape)
-                        _expand_bounds(inst_world, bounds, self.world_min, self.world_max)
+                        self._record_part(inst_world, shape, bounds)
                     inst_t.children = inst_kids
                     children.append(inst_t)
             else:
                 for shape, bounds in shapes:
                     children.append(shape)
-                    _expand_bounds(world, bounds, self.world_min, self.world_max)
+                    self._record_part(world, shape, bounds)
                 _register_morph(node, node_index, shapes, self.g, self.node_morph)
                 _register_skin(node, node_index, shapes, self.g, self.resolver, self.skins)
         if getattr(node, 'camera', None) is not None and self.g.cameras:
@@ -596,15 +622,24 @@ class _SceneBuilder:
         active = _active_scene(g)
         if self.audio_document.emitters and active is not None:
             root_children.extend(self._audio_emitters(active, scene=True))
+        # The scene's OMI_environment_sky, as a Background beside the model. The
+        # ordinary Background pass finds and binds it, and a viewer that adds a
+        # backdrop when a scene brought none leaves this one alone.
+        sky = None if active is None else environment_sky.scene_sky(
+            _extension_holder(active)['extensions'], self.skies)
+        backdrop = environment_sky.background_for(sky, g, self.resolver)
+        if backdrop is not None:
+            root_children.append(backdrop)
         # children is a VRML ChildrenTypedField descriptor that coerces a node list.
         root.children = root_children  # type: ignore[assignment]
         self.scene_graph.children = [root]
 
-        if not np.isfinite(self.world_min).all():
+        framed = framing_bounds(self.parts)
+        if framed is None:
             center, radius = (0.0, 0.0, 0.0), 1.0
         else:
-            center = tuple((self.world_min + self.world_max) / 2.0)
-            radius = float(np.linalg.norm(self.world_max - self.world_min) / 2.0) or 1.0
+            center = tuple((framed.minimum + framed.maximum) / 2.0)
+            radius = float(np.linalg.norm(framed.maximum - framed.minimum) / 2.0) or 1.0
         poses = _camera_poses(self.cameras)
         viewpoints = _viewpoints_for_poses(poses, self.scene_graph, self.used_defs)
         animations = _build_animations(
@@ -616,6 +651,9 @@ class _SceneBuilder:
         scene.node_morph = self.node_morph
         scene.exposure = _meter_exposure(self.light_meter, center)
         scene.skins = self.skins
+        scene.sky = sky
+        if framed is not None:
+            scene.strays, scene.stray_reach = framed.strays, framed.reach
         # Node hierarchy for per-frame joint world-matrix assembly.
         scene._skin_roots = _scene_root_indices(g)
         scene._skin_children = {i: list(getattr(n, 'children', None) or [])

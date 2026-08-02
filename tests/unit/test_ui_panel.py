@@ -290,3 +290,85 @@ class TestCommands:
         screen.layout((400, 200), metrics)
         toggle.activate()
         assert screen.dirty
+
+
+class TestArrowKeysMoveBetweenItems:
+    """A menu is walked with the arrow keys, not only with Tab.
+
+    Tab has always worked, and Space or Enter on the focused item has always
+    activated it -- but a menu is a list and arrows are what a list is walked
+    with, so pressing Down on one did nothing at all.
+
+    Only what the focused widget did not want: a Select, a Slider and a
+    Carousel all use arrows themselves, and taking them away would be worse
+    than never having offered them.
+    """
+
+    def menu(self):
+        from OpenGLContext.ui.layout import Column
+        from OpenGLContext.ui.widgets import Button
+        return Panel(children=[Column(children=[
+            Button(text='One', name='one'),
+            Button(text='Two', name='two'),
+            Button(text='Three', name='three'),
+        ])])
+
+    def press(self, panel, name):
+        return panel.key(name, (0, 0, 0))
+
+    def test_down_moves_to_the_next_item(self):
+        panel = self.menu()
+        panel.focus(panel.find('one'))
+        assert self.press(panel, '<down>')
+        assert panel.focused_widget is panel.find('two')
+
+    def test_up_moves_back(self):
+        panel = self.menu()
+        panel.focus(panel.find('two'))
+        self.press(panel, '<up>')
+        assert panel.focused_widget is panel.find('one')
+
+    def test_it_wraps_at_the_end(self):
+        panel = self.menu()
+        panel.focus(panel.find('three'))
+        self.press(panel, '<down>')
+        assert panel.focused_widget is panel.find('one')
+
+    def test_down_with_nothing_focused_takes_the_first(self):
+        """Pressing an arrow at a fresh screen should land somewhere."""
+        panel = self.menu()
+        self.press(panel, '<down>')
+        assert panel.focused_widget is panel.find('one')
+
+    def test_space_activates_what_is_focused(self):
+        panel = self.menu()
+        chosen = []
+        panel.find('two').on_activate = chosen.append
+        panel.focus(panel.find('two'))
+        self.press(panel, ' ')
+        assert chosen == [panel.find('two')]
+
+    def test_return_activates_what_is_focused(self):
+        panel = self.menu()
+        chosen = []
+        panel.find('two').on_activate = chosen.append
+        panel.focus(panel.find('two'))
+        self.press(panel, '<return>')
+        assert chosen == [panel.find('two')]
+
+    def test_a_widget_that_wants_the_arrow_keeps_it(self):
+        from OpenGLContext.ui.layout import Column
+        from OpenGLContext.ui.widgets import Button, Select
+        chooser = Select(name='pick', options=['a', 'b'], value='a')
+        panel = Panel(children=[Column(children=[
+            chooser, Button(text='Go', name='go')])])
+        panel.focus(chooser)
+        self.press(panel, '<right>')
+        assert str(chooser.value) == 'b'
+        assert panel.focused_widget is chooser, 'focus moved instead of choosing'
+
+    def test_the_focus_ring_is_shown_once_the_keyboard_is_in_use(self):
+        """Moving by arrow with no visible ring leaves you guessing where you are."""
+        panel = self.menu()
+        self.press(panel, '<down>')
+        assert panel.focusVisible

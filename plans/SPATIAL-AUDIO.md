@@ -123,10 +123,38 @@ desktop, and both are the kind nothing else would have caught:
   *band*: too quiet demonstrates nothing, too loud is startling and reaches the
   limiter. It has been wrong in both directions.
 
+## Codec extensions
+
+`KHR_audio_emitter` guarantees only MP3. `OMI_audio_ogg_vorbis` and
+`OMI_audio_opus` each hang off a **source** and name a second entry in the same
+`audio` array holding the same sound better encoded, leaving the source's own
+`audio` as the fallback — so a document plays everywhere and sounds better where
+the codec is there.
+
+`omi_audio.formats` holds both, `AudioLibrary.clip_for()` asks for the best it
+can decode and falls back when one will not resolve, and
+`emitters_from_document` puts every encoding into `AudioSource.url`, better
+first. Vorbis decodes; **Opus does not** — it is read, round-tripped and
+reported, and an Opus source plays its MP3 fallback. `formats.decodable()` asks
+the backend which formats it reads rather than asserting a list, so a
+`miniaudio` that gained Opus would be used with nothing here changing, and an
+application with its own decoder sets `library.encodings`.
+
+A fallback is taken only when the better encoding will not **resolve**. One that
+is still downloading is waited for: falling through on "not here yet" would play
+the worse encoding of every sound whose better one merely had not landed.
+
+Documented in [docs/audio.html](../docs/audio.html#codecs) and
+`omi_audio/docs/DATA-MODEL.md`; the roster of every OMI extension and its status
+is [OMI-EXTENSIONS.md](OMI-EXTENSIONS.md).
+
 ## Not done
 
 - No HRTF, no reverb, no occlusion. The muffle is a whole-mix low-pass, which is
   what a liquid volume needs and not what a wall needs.
+- **Opus is not decoded.** `miniaudio` does not read it, and adding it means a
+  second decoder plus WebM demuxing. libopus is BSD-3, so it is available if
+  something needs it; nothing does yet.
 - `alphaGen portal`-style listener-dependent generators have no equivalent here.
 - Music streams are decoded whole rather than streamed; clips are small, and
   nothing yet plays anything long enough for it to matter.

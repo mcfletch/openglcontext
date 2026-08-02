@@ -1,7 +1,7 @@
 # Codebase Consolidation — shrinking OpenGLContext
 
 **Status:** 🟡 Partially executed — Tier A, B1, B2, B3, B4 and B5a landed
-(2026-08-01). B5b declined by design; B6 and C1 still open.
+(2026-08-01) and B6 (2026-08-02). B5b declined by design; C1 still open.
 
 | Item | State |
 |---|---|
@@ -12,7 +12,7 @@
 | B4 — visiting render passes | ✅ Done; `docs/renderprocess.html` retired |
 | B5a — `DisplayListCompiler` | ✅ Done |
 | B5b — legacy scenegraph renderer | ⛔ Declined — supported backends reach their font providers through it |
-| B6 — `oglc-view` consolidation | 📋 Open |
+| B6 — `oglc-view` consolidation | ✅ Done — one viewer, four formats, a library and a menu ([ONE-VIEWER.md](ONE-VIEWER.md)); `oglc-terrain` still its own |
 | C1 — housekeeping | 📋 Open |
 
 **Measured result so far:** the package went from **75,045 to 68,923 lines
@@ -445,14 +445,25 @@ than an `if` chain**, and lets a third party add a format without touching the
 viewer.
 
 **Structure.**
-* `gltf_view.TestContext` becomes `OpenGLContext/viewer/context.py::ViewerContext` —
-  the reusable shell: navigation, overlay, capture, physics toggle, settings UI.
-* Per-format specifics (scene construction, animation binding, camera
-  enumeration, default lighting, framing radius) move behind a small
-  `SceneAdapter` protocol in `OpenGLContext/viewer/adapters/`.
-* `terrain_view`'s procedural world *baking* is content generation, not viewing —
-  split it out as `oglc-bake` (or `oglc-view --bake-terrain`), leaving the viewer
-  to open the tileset it produces.
+* ✅ **Done** — `gltf_view.TestContext` is now
+  `OpenGLContext/viewer/sceneviewer.py::ViewerContext`, the reusable shell:
+  async loading, overlay, screenshots, capture, framing, cameras, animation. The
+  physics toggle went further out still, to
+  `move/physicswalk.py::PhysicsWalkMixin` on *every* interactive context.
+  `bin/gltf_view.py` fell from 1,288 lines to ~270 of argument definitions.
+  Configuration is a `ViewerOptions` dataclass that `argparse` fills in, so the
+  library and the CLI share one set of defaults. See
+  [VIEWER-COMPONENT-EXTRACTION.md](VIEWER-COMPONENT-EXTRACTION.md).
+* ✅ **Done** — per-format specifics live behind `SceneAdapter` in
+  `OpenGLContext/viewer/adapters/`, registered under a new `plugins.Adapter`
+  keyed on suffix and content type, so the dispatch is data and a third party
+  adds a format without touching the viewer. glTF, VRML97, OBJ and 3D Tiles.
+  `bin/view.py` is `oglc-view`; `oglc-gltf`, `oglc-vrml` and `oglc-tiles` are
+  deprecating aliases. See [ONE-VIEWER.md](ONE-VIEWER.md).
+* **Still open:** `terrain_view`'s procedural world *baking* is content
+  generation, not viewing — split it out as `oglc-bake` (or
+  `oglc-view --bake-terrain`), leaving the viewer to open the tileset it
+  produces.
 
 **What would be lost.** No functionality — every format *gains* the features only
 glTF has today. What changes is CLI names. Keep `oglc-gltf`, `oglc-vrml`,

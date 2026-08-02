@@ -558,3 +558,32 @@ class TestSkinArtworkUrls:
             assert not renderer.ninepatch(Rect(0, 0, 32, 32), image)
         finally:
             renderer.end()
+
+
+class _Redrawable:
+    """The little of a context the renderer asks anything of."""
+
+    def __init__(self):
+        self.asked = []
+
+    def triggerRedraw(self, force=0):
+        self.asked.append(force)
+
+
+def test_a_picture_arriving_asks_the_context_for_a_frame(renderer):
+    """Otherwise it is drawn whenever something unrelated next causes one.
+
+    ``force=0`` because the decode finishes on a worker thread: it sets the
+    redraw flag and wakes the loop rather than drawing from the wrong thread.
+    """
+    from OpenGLContext.ui.draw import OverlayRenderer
+    context = _Redrawable()
+    made = OverlayRenderer.forContext(context, 16)
+    if made is None:
+        pytest.skip('no font atlas / program on this driver')
+    try:
+        assert made.pictures.onReady is not None
+        made.pictures.onReady()
+        assert context.asked == [0]
+    finally:
+        made.close()

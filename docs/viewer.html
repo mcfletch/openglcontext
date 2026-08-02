@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>oglc-view &mdash; one viewer for every format</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>The viewer</h1>
+</header>
+
+<section>
+<p class="introduction"><code>oglc-view</code> opens a 3D scene &mdash; a glTF
+model, a VRML97 world, a Wavefront OBJ, a streamed 3D&nbsp;Tiles dataset &mdash;
+renders it with the <a href="pbr.html">core-profile PBR renderer</a> and lets you
+look around it or walk through it. <strong>Which format a source is in is worked
+out from the source</strong>, not from which command you typed, so there is one
+viewer and every format gets everything it can do.</p>
+<p>Run it with nothing to open and it shows its menu: a
+<a href="#library">library</a> of sample models and worlds with pictures to
+browse, and a box to type an address into &mdash; a viewer launched from a
+desktop has no command line to pass a URL on.
+The same class is a reusable component &mdash; see
+<a href="#embedding">Embedding</a>.</p>
+</section>
+
+<section id="opening">
+<h2>Opening something</h2>
+<pre>oglc-view                       # the launch menu and the library
+oglc-view path/to/model.glb
+oglc-view path/to/world.wrl
+oglc-view path/to/model.obj
+oglc-view path/to/tileset.json
+oglc-view https://example.com/model.glb
+GLTF=path/to/model.gltf oglc-view</pre>
+<p>The viewer selects the core profile, the PBR renderer, the GLFW backend and
+shadows for you, so no environment variables are needed.</p>
+
+<h3>What it can open</h3>
+<table>
+<tr><th>Source</th><th>Adapter</th><th>What it is</th></tr>
+<tr><td><code>.gltf</code> <code>.glb</code></td><td><code>gltf</code></td>
+    <td>A glTF&nbsp;2.0 <em>model</em>: centred and framed, with its own cameras
+    and animations. See <a href="gltf.html">Loading glTF</a>.</td></tr>
+<tr><td><code>.wrl</code> <code>.wrz</code> <code>.vrml</code>
+        <code>.wrl.gz</code></td><td><code>vrml97</code></td>
+    <td>A VRML97 <em>world</em>: shown where it was authored, keeping its own
+    sky, its own lights and its own <code>Viewpoint</code> nodes.</td></tr>
+<tr><td><code>.obj</code></td><td><code>obj</code></td>
+    <td>A Wavefront model. It carries no lights, cameras or sky, so the viewer
+    supplies all three.</td></tr>
+<tr><td><code>tileset.json</code>, or any JSON with both <code>asset</code> and
+        <code>root</code></td><td><code>tiles3d</code></td>
+    <td>An OGC 3D&nbsp;Tiles dataset, streamed and refined as you move. See
+    <a href="terrain.html">Terrain &amp; 3D&nbsp;Tiles</a>.</td></tr>
+</table>
+<p>A source served from a path with no suffix &mdash; <code>/download?id=3</code>
+&mdash; can be named explicitly with <code>--format gltf</code>.</p>
+
+<p>A binary <code>.glb</code> is self-contained, so URLs to one work directly. A
+non-binary <code>.gltf</code> usually references external <code>.bin</code> and
+texture files, by URI relative to the document; a URL keeps the document's own
+location and resolves them against it, so a remote multi-file model opens with
+its geometry and textures intact. See
+<a href="gltf.html">Loading glTF</a>.</p>
+
+<p>A streamed dataset has knobs the other formats do not, and they are on the
+one command line: <code>--sse</code> (screen-space error target in pixels; lower
+is more detail), <code>--memory</code> (resident tile budget in MiB),
+<code>--no-recenter</code> and <code>--cache-dir</code>. A format that is read
+once ignores them.</p>
+
+<h3 id="framing">Framing a model, and parts left out of the frame</h3>
+<p>A model with no camera of its own is centred and framed automatically: the
+camera backs off far enough for the model's bounding sphere to fill the field of
+view, raised a little and tilted down so it is seen from slightly above.
+<code>--margin</code>, <code>--elevation</code> and <code>--tilt</code> adjust
+that fit, and <code>--eye X,Y,Z</code> with <code>--look-at X,Y,Z</code> replaces
+it outright.</p>
+<p>The sphere is fitted to <em>the model</em>, which is not always everything the
+file draws. Exported models quite often carry a part or two stranded far outside
+themselves &mdash; a decal left behind at a hundred times its scale, a duplicate
+forgotten at the far end of the file's coordinate space. Framing those too would
+stand the camera hundreds of model-widths back, and the model would be a speck in
+the middle of an empty frame. So a part is left out of the fit when both of two
+things are true: the file's whole extent is more than <strong>four times</strong>
+that of the nine-tenths of the model lying closest together, <em>and</em> the part
+sits beyond an empty shell &mdash; more than <strong>twice</strong> as far out as
+everything nearer than it. A model that merely thins out towards its edges fails
+the second test, and a scene that genuinely is two things far apart fails the
+first, so neither is cut.</p>
+<p>Nothing is hidden by this: a stray is still drawn, and walking or flying out
+to it reaches it as usual. It simply does not decide where the camera starts.
+When any part is left out the viewer says so on startup, with how many and how
+far out they are, so a file that looks incomplete can be recognised as one:</p>
+<pre>Framed on the model: 24 part(s) of this file sit up to 102 times its size
+away and start out of view.</pre>
+<p>The rule is
+<code>OpenGLContext.loaders.gltf.transforms.framing_bounds()</code>, and its three
+constants &mdash; <code>STRAY_RATIO</code>, <code>STRAY_CROWD</code> and
+<code>STRAY_GAP</code> &mdash; are the numbers quoted above. It applies to glTF
+sources; the other formats frame their whole extent.</p>
+
+<h3 id="commands">The old command names</h3>
+<p><code>oglc-gltf</code>, <code>oglc-vrml</code> and <code>oglc-tiles</code>
+still work: each runs <code>oglc-view</code> and prints a line saying so. They
+will be removed after one release cycle. Every option they took is still
+accepted.</p>
+<p><code>oglc-vrml</code>'s <code>--shaders</code> / <code>--no-shaders</code>
+switches are gone. They reached into the render pass from inside
+<code>Redraw</code> to turn shader rendering on; the viewer renders through
+the core-profile PBR pass as a matter of course. A world that genuinely wants
+the compatibility pipeline gets it where every other renderer switch lives:</p>
+<pre>OPENGLCONTEXT_PROFILE=compatibility oglc-view world.wrl</pre>
+</section>
+
+<section id="controls">
+<h2>Controls</h2>
+<h3>Moving</h3>
+<ul>
+  <li>Up / Down &mdash; walk forward / back; Left / Right &mdash; turn.</li>
+  <li>Ctrl+Up / Ctrl+Down &mdash; look up / down.</li>
+  <li>Alt+Up / Alt+Down &mdash; move up / down; Alt+Left / Alt+Right &mdash;
+      strafe.</li>
+  <li><code>-</code> levels the horizon; right-mouse drag orbits.</li>
+  <li><code>g</code> toggles walking (gravity and collision) against free-fly;
+      <code>f</code> toggles flying while walking; <code>m</code> steps through
+      the declared <a href="navigation.html">movement modes</a>.</li>
+</ul>
+<h3 id="orbit">What a right-drag orbits</h3>
+<p>The point you clicked on, when you clicked on the model: examining the thing
+you touched is the whole gesture. A click that hits <em>nothing</em> still
+resolves to a world point &mdash; the far plane, an order of magnitude further
+out than anything on screen &mdash; so a picked point is used only where it lies
+within reach of the scene's bounding sphere (one and a half times its radius,
+which is generous because a bounding sphere already overstates a model's
+extent).</p>
+<p>Otherwise the pivot comes from the scene itself. Looking at a model from
+outside, it is the middle of the model, whatever the model's size or where it
+sits; standing <em>inside</em> a scene &mdash; a building you are walking through
+&mdash; orbiting the far wall would swing you round the room, so the pivot is a
+point ahead of the camera instead, at half the scene's radius. A viewer with
+nothing loaded pivots a fixed distance ahead.</p>
+<p>A drag from one side of the window to the other is <strong>half a turn</strong>.
+The trackball measures a drag as the fraction of the way from where it started to
+the edge of the window, so a full turn per window made every small nudge a large
+swing; the distance to the pivot never changes, whatever the drag.</p>
+<h3>The scene</h3>
+<ul>
+  <li>PgUp / PgDn (or <code>p</code> / <code>n</code>) &mdash; the scene's own
+      cameras.</li>
+  <li>Ctrl + PgUp / PgDn &mdash; the previous / next entry in the
+      <a href="#library">library</a> category this one was opened from. Nothing
+      to step for a file named on the command line or an address typed in: those
+      are not part of a list.</li>
+  <li><code>k</code> pauses the animation; <code>[</code> and <code>]</code>
+      switch between animations.</li>
+  <li><code>t</code> starts and stops the turntable.</li>
+</ul>
+<p>Each of these does its thing once, on the key coming back up: a held key
+repeats around twenty times a second, which for these would be twenty models
+loaded or twenty cameras past the one wanted. They are declared as a table,
+<code>SceneViewerMixin.viewerKeys</code>, of
+<code>KeyBinding(name, method, description, modifiers, state)</code> &mdash; a
+subclass adding a key of its own extends that rather than overriding
+<code>setupCallbacks</code>, and the description says what the key does in a form
+fit to list. Modifiers are <code>(shift, control, alt)</code>, in that order; the
+<code>F6</code> controls screen rebinds the <a href="navigation.html">navigation</a>
+commands, which are a separate set.</p>
+<h3>Screens</h3>
+<table>
+<tr><th>Key</th><th>What it raises</th></tr>
+<tr><td><code>F1</code></td><td>The <a href="#library">library</a>: what there
+    is to open.</td></tr>
+<tr><td><code>F10</code></td><td><a href="overlayui.html">Settings</a> &mdash;
+    the same page every program here shows.</td></tr>
+<tr><td><code>F6</code></td><td>Controls: rebind any key.</td></tr>
+<tr><td><code>F2</code></td><td>Save a screenshot (a dated PNG in the working
+    directory).</td></tr>
+<tr><td><code>Escape</code></td><td>The menu, with <strong>Resume</strong>
+    first and Quit below it. Escape never ends the session by itself: it is the
+    key people press to back out of something, and a loaded world is too
+    expensive to throw away without being asked. Escape again resumes.</td></tr>
+<tr><td><code>Alt+F</code></td><td>The
+    <a href="hud.html#debug">developer overlay</a>. The viewer adds
+    a <strong>Scene</strong> section to it: the source, which adapter read it,
+    the radius the framing came from, which camera is bound, the animation and
+    how you are moving.</td></tr>
+</table>
+<p>These are the keys <code>twitch</code> uses, deliberately: someone who has
+used one of these programs knows the other.</p>
+<p>Every screen is usable from the keyboard alone: the up/down arrows or
+Tab/Shift-Tab move between items, Space or Return presses the one focused,
+Return alone presses the screen's primary action, and Escape leaves it.</p>
+</section>
+
+<section id="library">
+<h2>The library</h2>
+<p><code>oglc-view</code> with nothing named is not a usage message. It opens a
+menu, and from it a shelf of models and worlds shown by <strong>their own
+pictures</strong> &mdash; because what tells one sample from another is what it
+looks like, and a list of names like <code>MetalRoughSpheresNoTextures</code>
+makes you open each in turn to find out which is which.</p>
+<p>The shelf is <em>derived</em> from the demo roster the capture harness
+already uses (<code>OpenGLContext.loaders.gltf_demos</code>), so the library and
+the reference captures cannot drift on how a model has to be shown: the yaw it
+faces at, the backdrop its materials need, whether it is meant to be walked. It
+is grouped into <strong>Models</strong>, <strong>Materials</strong> (metals and
+glass, which need an environment), <strong>Scenes</strong> (authored cameras or
+an interior), <strong>Local builds</strong> and, last,
+<strong>Feature tests</strong>.</p>
+<p>This project ships no worlds of its own, so there is no
+<strong>Worlds</strong> shelf until an application adds one &mdash;
+<code>tests/wrls</code> is test data, not content. <code>world_entries()</code>
+turns a directory of them into entries for an application that has some.</p>
+<p>Preview pictures are the Khronos reference screenshots, fetched once and
+cached on disk. Being offline costs pictures and nothing else.</p>
+<p>The <strong>Feature tests</strong> shelf is last and holds the bulk of the
+Khronos set: entries that exist to exercise one glTF feature &mdash; a bare
+triangle, a sparse accessor, the <code>Compare*</code> grids &mdash; rather than
+to be looked at. Which is which is a field on the shared demo table, so this
+shelf and <code>oglc-gltf-demo</code>'s browsing order cannot disagree.</p>
+<p>The band's arrows <em>look</em>; clicking a picture is what opens it.</p>
+<p>Choosing something opens it <strong>into the running window</strong> &mdash;
+a new adapter, a new scenegraph, new framing &mdash; without tearing the context
+down. Loading happens in the background, and a load that a later one has
+overtaken is dropped, so clicking quickly through the shelf is safe.</p>
+
+<h3>Your own shelf</h3>
+<p>An application curates its own by overriding one method:</p>
+<pre>from OpenGLContext.viewer import ViewerContext
+from OpenGLContext.viewer.library import Entry, Library, default_library
+
+class MyViewer( ViewerContext ):
+    def viewerLibrary( self ):
+        return default_library().extend([
+            Entry(
+                name = 'Our product',
+                source = 'https://example.com/product.glb',
+                category = 'Ours',
+                preview = 'https://example.com/product.jpg',
+                note = 'the current revision',
+                options = {'physics': True, 'yaw': 0.4},
+            ),
+        ])</pre>
+<p>An entry's <code>options</code> are <code>ViewerOptions</code> field names,
+applied when it is opened and <em>not</em> carried over to the next one.</p>
+
+<h3>Hundreds of entries</h3>
+<p>The band shows five at a time out of however many there are, wrapping, so a
+shelf of several hundred lays out as fast as one of three; the
+<code>&lt;&lt;</code> and <code>&gt;&gt;</code> buttons move a bandful at a
+time. Pictures are decoded off the render thread and uploaded a couple per
+frame, and the least recently used are dropped once a texel budget is reached
+&mdash; see <code>OpenGLContext.ui.pictures</code>.</p>
+</section>
+
+<section id="capture">
+<h2>Capturing a frame</h2>
+<pre>oglc-view model.glb --capture shot.png --size 1100x680
+oglc-view model.glb --camera aerial --capture shot.png --capture-delay 0.5
+oglc-view model.glb --list-cameras</pre>
+<p><code>--capture</code> renders the scene, waits for it to settle &mdash; a
+wall-clock delay and a minimum frame count, so the adaptive analytic-sky IBL has
+converged &mdash; writes the PNG and exits. The captured frame carries no
+caption and no developer overlay.</p>
+<p>It also renders <strong>without mapping a window</strong> and with vsync off.
+A mapped surface throttles the buffer swap to the compositor's frame callback,
+and with nothing on screen consuming frames the swap never returns; a hidden
+window renders and reads back identically. Both are overridable
+(<code>OPENGLCONTEXT_HIDDEN=0</code>), since watching a capture happen is how you
+find out why it looks wrong.</p>
+</section>
+
+<section id="embedding">
+<h2>Embedding the viewer</h2>
+<p>Everything the command does &mdash; loading without freezing the window, the
+default light rig, auto-framing, the scene's own cameras and animations, the
+caption, screenshots, the library, walking &mdash; is the reusable
+<code>OpenGLContext.viewer</code> package, not the script. An application gets
+all of it by subclassing <code>ViewerContext</code> and saying what it wants
+with a <code>ViewerOptions</code>. There is no command line involved:</p>
+<pre>from OpenGLContext.viewer import ViewerContext, ViewerOptions
+
+class MyViewer( ViewerContext ):
+    options = ViewerOptions(
+        source = 'model.glb',       # a path, a URL, or None for the library
+        physics = True,             # walk it, rather than fly around it
+        background = 'sky',
+    )
+
+MyViewer.ContextMainLoop()</pre>
+<p><code>ViewerOptions</code> is a dataclass holding every knob the viewer has,
+and it is the <em>same</em> object the command line fills in &mdash;
+<code>argparse</code> populates one as its namespace &mdash; so the defaults are
+written once and a flag can never mean something different from the field. The
+fields are grouped as: the source and <code>format</code>; the cameras
+(<code>camera</code>, <code>no_cameras</code>); auto-framing (<code>yaw</code>,
+<code>margin</code>, <code>elevation</code>, <code>tilt</code>,
+<code>eye</code>, <code>look_at</code>); lighting and environment
+(<code>lights</code>, <code>shadows</code>, <code>ibl_intensity</code>,
+<code>environment</code>, <code>background</code>); animation
+(<code>animate</code>, <code>animation</code>, <code>anim_time</code>,
+<code>turntable</code>, <code>no_rotate</code>); <code>physics</code>; and the
+window and frame (<code>size</code>, <code>capture</code>,
+<code>capture_delay</code>, <code>frames</code>).</p>
+
+<h3>The seams worth overriding</h3>
+<table>
+<tr><th>Method</th><th>What it decides</th></tr>
+<tr><td><code>prepareSource()</code></td>
+    <td>Where the scene comes from. A browser with no single source overrides
+    this to do nothing.</td></tr>
+<tr><td><code>loadScene()</code></td>
+    <td>Produce the scene. <strong>Runs on a worker thread, so it must not touch
+    GL</strong> &mdash; that is what keeps the window drawing through a
+    download.</td></tr>
+<tr><td><code>requestInitialScene()</code></td>
+    <td>What to load first.</td></tr>
+<tr><td><code>buildScenegraph( scene )</code></td>
+    <td>Turn a loaded scene into <code>self.sg</code>. Called again for each new
+    scene, which is what makes swapping possible.</td></tr>
+<tr><td><code>onSceneReady()</code></td>
+    <td>Just after a scene is built, on the render thread.</td></tr>
+<tr><td><code>viewerLibrary()</code></td>
+    <td>What this viewer offers to open.</td></tr>
+<tr><td><code>buildPhysicsWorld()</code></td>
+    <td>Where the collision world comes from, if not from <code>self.sg</code>.
+    See <a href="physics.html#walking">Walking any scene</a>.</td></tr>
+</table>
+<p><code>openSource( source )</code> and <code>openEntry( entry )</code> swap the
+scene in a running viewer.</p>
+
+<h3>The parts, separately</h3>
+<table>
+<tr><th>Module</th><th>What it is</th></tr>
+<tr><td><code>viewer.adapters</code></td><td>What a source is and how to read
+    it, keyed by suffix and content type.</td></tr>
+<tr><td><code>viewer.options</code></td><td>Every knob, in one dataclass that
+    <code>argparse</code> also fills in.</td></tr>
+<tr><td><code>viewer.library</code></td><td>The shelf: entries, categories and
+    previews.</td></tr>
+<tr><td><code>viewer.menu</code></td><td>The launch menu and the browse screen,
+    as plain <a href="overlayui.html">panels</a>.</td></tr>
+<tr><td><code>viewer.screens</code></td><td>Which key raises which screen, and
+    what happens when one is answered.</td></tr>
+<tr><td><code>viewer.asyncscene</code></td><td>Loading off the render thread,
+    format-neutral.</td></tr>
+<tr><td><code>viewer.framing</code></td><td>Where to put a camera to see a
+    thing &mdash; pure arithmetic, no GL.</td></tr>
+<tr><td><code>viewer.environment</code></td><td>The sky, and the skybox its
+    metals reflect.</td></tr>
+<tr><td><code>viewer.caption</code></td><td>The line or two over the frame, as a
+    <a href="hud.html">HUD layer</a>.</td></tr>
+<tr><td><code>viewer.capture</code></td><td>One settled frame to a file.</td></tr>
+<tr><td><code>viewer.debug</code></td><td>The developer overlay's
+    <strong>Scene</strong> section.</td></tr>
+</table>
+<p>Walking is not in this package at all: it is a capability of <em>every</em>
+interactive context, in <code>OpenGLContext.move.physicswalk</code>.</p>
+</section>
+
+<section id="adapters">
+<h2>Adding a format</h2>
+<p>A format is an <em>adapter</em>: a class that reads one kind of source and
+answers the handful of questions asked of every scene. Nothing in the viewer
+changes.</p>
+<pre>from OpenGLContext.viewer.adapters.base import SceneAdapter, ViewerScene
+
+class STLAdapter( SceneAdapter ):
+    name = 'stl'
+    recentres = True         # a model may be moved to the middle of the frame
+
+    def load( self, source ):
+        # Runs on a worker thread: no GL here.
+        return ViewerScene( group = ..., center = ..., radius = ... )</pre>
+<p>Register it alongside the loader, context and node registries, against the
+suffixes and content types it handles:</p>
+<pre>from OpenGLContext.plugins import Adapter
+Adapter( 'stl', 'mypackage.stl.STLAdapter', ['.stl', 'model/stl'] )</pre>
+<p>What a <code>ViewerScene</code> answers: <code>group</code> (the renderable
+root), <code>center</code> and <code>radius</code> (the bounding sphere the
+camera is framed against), <code>strays</code> and <code>stray_reach</code> (how
+much the sphere leaves out and how far out it goes &mdash; see
+<a href="#framing">Framing a model</a>; both 0 for a loader that frames
+everything), <code>viewpoints</code> and <code>cameras</code>,
+<code>animations</code> and <code>player()</code>, and <code>exposure</code>.
+<code>scene_bounds()</code> in the same module works the bounding sphere out of
+a scenegraph for a format whose loader does not.</p>
+<p>Two flags are the whole of what the viewer asks <em>about</em> a format:</p>
+<ul>
+  <li><code>recentres</code> &mdash; whether a scene with no camera of its own
+  may be moved to the origin to be framed. A <em>model</em> may: its
+  coordinates are arbitrary. A <em>world</em> may not: its ground plane is at
+  y=0, its viewpoints are in its own space, and moving it would put the avatar
+  underground.</li>
+  <li><code>update( viewer )</code> &mdash; per-frame work for a source that is
+  still arriving. 3D Tiles pages itself in against the current camera here;
+  everything read once from a file wants nothing.</li>
+</ul>
+<p>A scene that brings its own <code>Background</code> does not get a second
+one &mdash; two of them is not two skies, it is a fight over which is bound
+&mdash; and one that brings its own lights is not re-lit. Both are detected from
+the scene rather than declared, so they are true of any format.</p>
+</section>
+
+<footer>
+<p>See also: <a href="gltf.html">Loading glTF</a>,
+<a href="pbr.html">the PBR renderer</a>,
+<a href="navigation.html">navigation and movement modes</a>,
+<a href="physics.html#walking">walking any scene</a>,
+<a href="overlayui.html">the overlay UI</a>,
+<a href="hud.html">the HUD and the developer overlay</a>.</p>
+</footer>
+</body></html>

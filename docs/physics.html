@@ -141,6 +141,95 @@ scene.advance(dt)                         # steps the world, writes back Transfo
     render mesh so you can see the fit.</p>
 </section>
 
+<section id="walking">
+  <h2>Walking any scene</h2>
+  <p>Walking is a capability of <strong>every interactive context</strong>, not
+    something a particular viewer implements.
+    <code>OpenGLContext.move.physicswalk.PhysicsWalkMixin</code> is mixed into
+    <code>ViewPlatformMixin</code>, so any context that has a camera can be asked
+    to hand it to an avatar instead. It costs nothing until it is asked for:
+    every physics import is inside a method, so a context that never enables it
+    never imports the physics package at all.</p>
+
+<pre>class MyWorld( BaseContext ):
+    def OnInit( self ):
+        self.sg = load_my_world()
+        self.setupPhysics( enable=True )    # binds 'g', and starts walking</pre>
+
+  <p>Two navigators want the camera and only one may have it. While walking, the
+    avatar owns <code>context.platform</code> and the free-fly movement manager
+    is unbound; switching back rebinds it where the avatar left the view
+    standing. If both ran at once the camera would snap back on every key
+    release.</p>
+
+  <p>It is a run-time toggle rather than a start-up choice on purpose: a
+    viewpoint that drops the avatar inside geometry must never be a trap. Press
+    <kbd>g</kbd> to fly out, and <kbd>g</kbd> again to resume walking from
+    wherever you got to.</p>
+
+  <table>
+  <tr><th>Method</th><th>What it does</th></tr>
+  <tr><td><code>setupPhysics( enable=False )</code></td>
+      <td>Make walking available; bind the toggle key; optionally start
+      walking. Returns whether it <em>is</em> walking &mdash; False when there
+      was nothing walkable, which is not an error.</td></tr>
+  <tr><td><code>enablePhysics( on )</code></td>
+      <td>Switch between walking and free-fly, leaving the camera where it
+      is.</td></tr>
+  <tr><td><code>stepPhysics( dt=None )</code></td>
+      <td>Advance the avatar one frame and put the camera where it ended up.
+      Call from <code>OnIdle</code>. <code>dt</code> defaults to wall-clock
+      since the last step, clamped &mdash; a stall is not a licence to teleport
+      through a wall.</td></tr>
+  <tr><td><code>buildPhysicsWorld()</code></td>
+      <td><strong>The seam.</strong> Returns <code>(world, (lo, hi))</code>, or
+      None if nothing is walkable. The default cooks one static collision mesh
+      from <code>self.sg</code>; a context with a world of its own &mdash; a
+      terrain heightfield, a level format that ships its collision &mdash;
+      overrides this and never touches <code>sg</code>.</td></tr>
+  <tr><td><code>characterCapabilities( scale )</code></td>
+      <td>The avatar's size and speeds. Override to make it something other
+      than roughly a person.</td></tr>
+  <tr><td><code>spawnAvatar( lo, hi, caps, viewpoints )</code></td>
+      <td>Stand the avatar somewhere it can walk out of &mdash; see below.</td></tr>
+  <tr><td><code>moveAvatarToViewpoint( vp )</code></td>
+      <td>Put the avatar where a <code>Viewpoint</code> looks from, facing where
+      it faces. Safe-bound, and it starts <em>flying</em> if the viewpoint is
+      aerial, since falling out of the shot is not what asking for that view
+      meant.</td></tr>
+  <tr><td><code>getNavigationPlatform()</code></td>
+      <td>What the declared movement modes drive: the avatar while walking, the
+      camera otherwise.</td></tr>
+  </table>
+
+  <h3>The avatar is sized to the world</h3>
+  <p>A viewer opens anything from a bolt to a city, and neither a stride nor
+    gravity means anything until they are in the same units as the model. The
+    avatar is built at <strong>1/40 of the world's longest side</strong>
+    (<code>physicsAvatarScale</code>), and the declared
+    <a href="navigation.html">movement modes</a> are re-declared at that same
+    scale by <code>applyMovementModes()</code>, so a mode never asks for a speed
+    the character cannot reach.</p>
+
+  <h3>Finding somewhere to stand</h3>
+  <p>The middle of a model is very often solid &mdash; a statue, thick walls, no
+    floor at all. <code>spawnAvatar()</code> therefore samples: authored camera
+    viewpoints first (they are curated open spots, and the first supplies the
+    heading), then the footprint centre, then rings outwards. Each candidate is
+    kept only if the avatar lands grounded and unstuck, and scored by how many of
+    the four horizontal directions it has room to move into, preferring the most
+    open and, among equals, the most central. A fully open spot is taken at once.
+    If nothing is walkable anywhere, the avatar goes to the centre regardless
+    &mdash; somewhere is better than nowhere, since flying out is one keypress
+    and an unplaced avatar has no pose for the camera to take at all.</p>
+  <p class="technical">The clearance probe places the whole capsule an arm's
+    length along each direction and depenetrates it, which catches a wall the
+    avatar's centre line would miss. It is a placement test and not a swept
+    move, so a barrier thinner than the capsule is transparent to it, and its
+    reach is a fixed margin rather than one scaled to the avatar &mdash; on a
+    small model it therefore reports "open" more readily than it should.</p>
+</section>
+
 <section id="character">
   <h2>The character controller &amp; safe binding</h2>
   <p>Navigation uses a kinematic capsule with move-and-slide: tiered speed

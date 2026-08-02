@@ -264,6 +264,12 @@ class TestResolveModelUrl:
         src, is_url = R.resolve_model_url(SceneSpec('Duck', source=None))
         assert src.endswith('/glTF/Duck.gltf') and is_url is True
 
+    def test_a_scene_named_by_url_is_handed_to_the_viewer_as_that_url(self, monkeypatch):
+        monkeypatch.setattr(R.gltf_demos, 'resolve_source',
+                            lambda spec, parth=None: ('https://x/s.glb', False))
+        src, is_url = R.resolve_model_url(SceneSpec('S', source='https://x/s.glb'))
+        assert src == 'https://x/s.glb' and is_url is True
+
 
 class TestResolveModel:
     def test_local_source_that_exists(self, monkeypatch, tmp_path):
@@ -296,6 +302,28 @@ class TestResolveModel:
         monkeypatch.setattr(R, '_dl', fake_dl)
         out = R.resolve_model(SceneSpec('Duck', source=None))
         assert out.endswith(os.path.join('Duck', 'Duck.gltf'))
+
+    def test_a_scene_named_by_url_is_fetched_from_that_url(self, monkeypatch):
+        asked = []
+        monkeypatch.setattr(R.gltf_demos, 'resolve_source',
+                            lambda spec, parth=None: ('https://x/s.glb', False))
+        monkeypatch.setattr(R, '_cached_url_path',
+                            lambda url, cache: asked.append(url) or '/cache/s.glb')
+        out = R.resolve_model(SceneSpec('S', source='https://x/s.glb'))
+        assert out == '/cache/s.glb'
+        assert asked == ['https://x/s.glb']
+
+    def test_an_unreachable_url_scene_resolves_to_none_without_mirroring(self, monkeypatch):
+        # The Khronos .gltf mirror is for catalogue samples; a URL scene names one
+        # file, so a failed fetch is the end of it rather than a second guess.
+        monkeypatch.setattr(R.gltf_demos, 'resolve_source',
+                            lambda spec, parth=None: ('https://x/s.glb', False))
+        def unreachable(url, cache):
+            raise RuntimeError('offline')
+        monkeypatch.setattr(R, '_cached_url_path', unreachable)
+        monkeypatch.setattr(R, '_dl', lambda url, dst: pytest.fail(
+            'mirrored a URL scene as if it were a Khronos sample'))
+        assert R.resolve_model(SceneSpec('S', source='https://x/s.glb')) is None
 
 
 class TestRenderScenes:

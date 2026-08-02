@@ -62,6 +62,7 @@ from OpenGLContext.ui.widgets import RootWidget, Widget
 
 __all__ = [
     'HUDLayer', 'HUDWidget', 'HUDGroup', 'Crosshair', 'BarMeter', 'Readout',
+    'TextBlock',
     'Message', 'MessageQueue', 'DamageIndicator', 'DamageMark', 'ScreenWash',
     'place', 'hud_text',
     'CROSS', 'DOT', 'CROSS_DOT', 'CIRCLE', 'NONE', 'ANCHORS', 'EDGES',
@@ -603,6 +604,66 @@ class Readout(HUDWidget):
                                 max(0, self.rect.right - left),
                                 self.rect.height),
                  text, self.valueColour(skin), align=str(self.align))
+
+
+class TextBlock(HUDWidget):
+    """Several lines of text in a corner: a caption, a legend, a hint.
+
+    The counterpart to :class:`Readout`, which is one line built from a label
+    and a value.  This is prose the application composed itself -- what is
+    loaded and what the keys do -- and the lines are a field rather than one
+    string with newlines in it so a caller can rewrite one of them.
+
+    ``critical`` marks the whole block as saying something has gone wrong; what
+    that looks like stays the skin's decision.
+    """
+
+    PROTO = 'TextBlock'
+    lines = field.newField('lines', 'MFString', 1, list)
+    #: Draw it in the skin's critical colour.
+    critical = field.newField('critical', 'SFBool', 1, False)
+    #: ``left``, ``center`` or ``right`` within whatever room it is given.
+    align = field.newField('align', 'SFString', 1, 'left')
+
+    def textColour(self, skin: Any) -> Any:
+        """The colour the lines are drawn in."""
+        if self.critical:
+            return skin.hudCritical
+        return self.tinted(skin.hudText)
+
+    def content_size(self, metrics: FontMetrics,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        lines = [str(line) for line in self.lines]
+        if not lines:
+            return (0, 0)
+        width = max(metrics.text_width(line) for line in lines)
+        # The gap *between* lines, so a one-line block is exactly one line tall
+        # and a block is never taller than the text in it.
+        height = len(lines) * metrics.line_height - metrics.line_gap
+        return (width, height)
+
+    def lineRects(self, metrics: FontMetrics) -> List[Rect]:
+        """Where each line goes, first at the top.
+
+        Text reads downwards and this coordinate system counts upwards, so the
+        first line is the one nearest ``rect.top``.
+        """
+        rects = []
+        top = self.rect.top
+        for _ in self.lines:
+            top -= metrics.char_height
+            rects.append(Rect(self.rect.x, top, self.rect.width,
+                              metrics.char_height))
+            top -= metrics.line_gap
+        return rects
+
+    def paint(self, renderer: Any) -> None:
+        colour = self.textColour(renderer.skin)
+        align = str(self.align)
+        for rect, line in zip(self.lineRects(renderer.metrics), self.lines,
+                              strict=True):
+            if line:
+                hud_text(renderer, rect, str(line), colour, align=align)
 
 
 class ScreenWash(HUDWidget):

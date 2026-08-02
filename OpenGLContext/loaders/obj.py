@@ -65,6 +65,7 @@ Note:
 import logging
 
 log = logging.getLogger(__name__)
+from OpenGL._bytes import as_str
 from OpenGLContext.loaders import base, loader
 from OpenGLContext.scenegraph import basenodes
 import urllib.parse
@@ -93,7 +94,12 @@ class OBJHandler(base.BaseHandler):
 
         This implementation simply creates VRML97 scenegraph nodes out
         of the .obj format data.
+
+        ``data`` arrives as the bytes the loader read; OBJ is a line-oriented
+        text format, so it is decoded once here rather than every keyword
+        being spelled twice.
         """
+        data = as_str(data)
         sg = basenodes.sceneGraph()
 
         # these three are shared among all shapes

@@ -52,3 +52,67 @@ class TestLoadSampleVariantFallback:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestOpeningASampleByURL:
+    """Not every sample ships a ``.glb``, and the shelf hands out URLs.
+
+    ``sample_model_url`` names the self-contained binary variant, which is the
+    one to prefer -- but Sponza and others only publish ``glTF/``, so opening
+    one from the library 404'd. The fallback ``load_sample`` already had has to
+    apply to a *URL* too, since that is what a library entry carries.
+    """
+
+    SPONZA = samples.sample_model_url('Sponza')
+
+    def test_a_sample_url_that_is_there_is_loaded_as_it_is(self, monkeypatch):
+        asked = []
+
+        def fake(url, cache_dir=None):
+            asked.append(url)
+            return 'SCENE'
+        monkeypatch.setattr('OpenGLContext.loaders.gltf.load_gltf_url', fake)
+        assert samples.load_sample_url(self.SPONZA) == 'SCENE'
+        assert asked == [self.SPONZA]
+
+    def test_a_missing_binary_variant_falls_back_to_the_gltf_one(self, monkeypatch):
+        asked = []
+
+        def fake(url, cache_dir=None):
+            asked.append(url)
+            if url.endswith('.glb'):
+                raise IOError('404')
+            return 'SCENE'
+        monkeypatch.setattr('OpenGLContext.loaders.gltf.load_gltf_url', fake)
+        assert samples.load_sample_url(self.SPONZA) == 'SCENE'
+        assert asked[-1].endswith('/glTF/Sponza.gltf')
+
+    def test_a_url_that_is_not_a_sample_is_left_alone(self, monkeypatch):
+        """No guessing at variants for somebody else's server."""
+        asked = []
+
+        def fake(url, cache_dir=None):
+            asked.append(url)
+            raise IOError('404')
+        monkeypatch.setattr('OpenGLContext.loaders.gltf.load_gltf_url', fake)
+        with pytest.raises(IOError):
+            samples.load_sample_url('https://example.com/mine.glb')
+        assert asked == ['https://example.com/mine.glb']
+
+    def test_the_error_it_raises_is_the_last_thing_that_went_wrong(self,
+                                                                  monkeypatch):
+        def fake(url, cache_dir=None):
+            raise IOError('no route to host')
+        monkeypatch.setattr('OpenGLContext.loaders.gltf.load_gltf_url', fake)
+        with pytest.raises(IOError, match='no route to host'):
+            samples.load_sample_url(self.SPONZA)
+
+    def test_load_sample_still_works_by_name(self, monkeypatch):
+        asked = []
+
+        def fake(url, cache_dir=None):
+            asked.append(url)
+            return 'SCENE'
+        monkeypatch.setattr('OpenGLContext.loaders.gltf.load_gltf_url', fake)
+        assert samples.load_sample('Sponza') == 'SCENE'
+        assert asked[0].endswith('.glb')

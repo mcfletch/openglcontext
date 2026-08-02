@@ -87,6 +87,17 @@ def _origin(url: str) -> Tuple[str, str]:
     return (parts.scheme.lower(), parts.netloc.lower())
 
 
+def is_url(source: Optional[str]) -> bool:
+    """Whether ``source`` names something to fetch rather than a path to open.
+
+    True only for the schemes this module will actually fetch, so a caller that
+    branches on it cannot hand a ``file:`` or ``data:`` URI to the network path.
+    """
+    if not source:
+        return False
+    return _origin(source)[0] in _ALLOWED_URL_SCHEMES
+
+
 def _same_origin(a: str, b: str) -> bool:
     return _origin(a) == _origin(b)
 
@@ -163,16 +174,6 @@ def _check_size(nbytes: int, max_bytes: Optional[int], what: str) -> None:
         raise ValueError(
             "resource %s is %d bytes, over the %d-byte limit"
             % (what, nbytes, max_bytes))
-
-
-def _read_capped(response: Any, max_bytes: Optional[int]) -> bytes:
-    """Read a URL response, rejecting a body larger than ``max_bytes``."""
-    if max_bytes is None:
-        return response.read()
-    data = response.read(max_bytes + 1)
-    if len(data) > max_bytes:
-        raise ValueError("remote resource exceeds the %d-byte limit" % max_bytes)
-    return data
 
 
 def _decode_data_uri(uri: str, max_bytes: Optional[int] = None) -> bytes:
@@ -257,16 +258,21 @@ class Resolver:
         only) or base directory (confined to it), size-caps the result, and
         memoises it. Raises ``IOError`` when the reference is out of bounds or no
         base was given, and ``ValueError`` when it exceeds the size cap.
+
+        A remote reference goes through the **on-disk** cache rather than
+        straight to the network.  This memo is per-``Resolver`` and a fresh one
+        is built for every load, so without it re-opening a multi-file ``.gltf``
+        re-downloaded every buffer and every texture -- seventy-odd of them for
+        a scene like Sponza, which is what made opening a model twice feel like
+        there was no cache at all.  :func:`resolve` has already refused anything
+        off the document's origin by this point, so locking the redirect chain
+        to the reference's own origin is the same policy it always was.
         """
         if uri in self._cache:
             return self._cache[uri]
         target = self.resolve(uri)
         if self.base_url is not None:
-            resp = _urlopen_same_origin(target, self.base_url, timeout=30)
-            try:
-                data = _read_capped(resp, self.max_resource_bytes)
-            finally:
-                resp.close()
+            data = _fetch_url(target, max_bytes=self.max_resource_bytes)
         else:
             # Size-check the file's size on disk before reading it, so a confined
             # but huge local sibling cannot be slurped past the cap into RAM first.

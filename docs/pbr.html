@@ -36,9 +36,9 @@ material.</p>
 <section>
 <h2>Turning It On</h2>
 <p>The easiest way to see the PBR renderer is the
-<a href="gltf.html"><code>oglc-gltf</code></a> viewer, which switches everything
+<a href="viewer.html"><code>oglc-view</code></a> viewer, which switches everything
 on for you:</p>
-<pre>oglc-gltf path/to/model.glb</pre>
+<pre>oglc-view path/to/model.glb</pre>
 <p>To use PBR for your own scene, set two environment variables on a
 core-profile context:</p>
 <pre>OPENGLCONTEXT_PROFILE=core OPENGLCONTEXT_RENDERER=pbr OPENGLCONTEXT_BACKEND=glfw \
@@ -132,11 +132,21 @@ role:</p>
 two dials, or a full set of maps, or anything between. Any property with a map
 still has a plain factor too, and the two multiply -- so a white base-colour map
 with a red base-colour factor gives a red surface.</p>
-<p class="technical">glTF lets each map reference a different UV set; the loader
-currently uses the first UV set (<code>TEXCOORD_0</code>) for every map, so all
-maps on a material share one set of texture coordinates. A single
-<code>KHR_texture_transform</code> (offset/scale/rotate of the coordinates) is
-honoured.</p>
+<p class="technical">Each map can name its own UV set. glTF gives every texture
+reference a <code>texCoord</code> of 0 or 1; the loader records which channels
+asked for the second set in the material's <code>texCoordMask</code>, and the
+shader samples each channel from the set it named. That is what lets a wall carry
+its brick pattern tiled many times over and its baked lighting stretched once
+across the whole surface. The mesh has to supply the second set
+(<code>TEXCOORD_1</code>) for the channels that ask for it; where it does not,
+those channels sample at the origin of their map and the surface comes out one
+flat colour.</p>
+<p class="technical"><code>KHR_texture_transform</code> (offset/scale/rotate of
+the coordinates) is honoured, including its own <code>texCoord</code> override.
+One transform is stored per material and applied to whichever channels carry the
+extension &mdash; see <a href="#animated-surfaces">Surfaces that move</a> for how
+to choose them. A material giving two of its textures <em>different</em>
+transforms gets the last one for both.</p>
 </section>
 
 <section>
@@ -437,9 +447,9 @@ background:</p>
 Fog(color=(0.06, 0.20, 0.32),     # linear RGB
     visibilityRange=18.0,          # metres to total obscurity; 0 is off
     fogType='EXPONENTIAL')         # or 'LINEAR', the default</pre>
-<p>It is VRML97's own node
+<p>It is VRML97's own node, with the fields that specification gives it
 (<a href="https://www.web3d.org/documents/specifications/14772/V2.0/part1/nodesRef.html#Fog">ISO/IEC
-14772-1 6.19</a>), declared for twenty-odd years and unrendered until now.
+14772-1 6.19</a>).
 Being a node rather than a number on the context is the point: fog is a
 property of a <em>place</em>, so it binds and stacks like a viewpoint, and
 being under water, inside a smoke-filled room and out in clear air are three

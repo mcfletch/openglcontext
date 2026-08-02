@@ -80,7 +80,7 @@ def _capture(glb, out, env_cubemap, background='none'):
             '--lights', 'on', '--ibl-intensity', '1.2', '--background', background,
             '--capture', out, '--frames', '8', '--capture-delay', '0.3',
             '--size', '200x200']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.gltf_view'] + args,
+    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
                    timeout=180, capture_output=True, text=True,
                    cwd=TESTS_DIR + '/..', env=env)
 
@@ -158,7 +158,7 @@ def _capture_env(glb, out, env_prefix, background='cube'):
             '--lights', 'on', '--ibl-intensity', '1.2', '--background', background,
             '--capture', out, '--frames', '6', '--capture-delay', '0.3',
             '--size', '256x256']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.gltf_view'] + args,
+    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
                    timeout=180, capture_output=True, text=True,
                    cwd=TESTS_DIR + '/..', env=env)
 

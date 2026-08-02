@@ -62,10 +62,11 @@ class MovementManager(object):
         """
         from OpenGLContext.move import examinemanager
 
-        try:
-            center = event.unproject()
-        except ValueError:
-            center = self.platform.quaternion * [0, 0, -10, 0] + self.platform.position
+        # The context decides: it is what knows how big the scene is and where
+        # the camera is standing in it.  A pivot chosen without that -- the
+        # fixed ten units ahead this used -- makes the drag swing wildly about
+        # a point that has nothing to do with what is on screen.
+        center = self.context.examineCenter(event)
         examinemanager.ExamineManager(
             self.context,
             self.platform,

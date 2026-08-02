@@ -37,6 +37,19 @@ from OpenGLContext.testing.event_injector import EventSender
 # glfwcontext; harmless on other backends.
 os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
 
+# Render offscreen for the whole run (inherited by GL subprocess tests via the
+# environment). A suite with hundreds of GL tests in it otherwise opens, maps
+# and destroys hundreds of windows, which flash over whatever the person running
+# it is doing and steal focus while they type. A hidden window renders and reads
+# back identically -- every capture and every glReadPixels sees the same pixels
+# -- and on Wayland it is also the only way a swap is guaranteed not to block on
+# a compositor that has nothing to show. Respected by glfwcontext; the Qt
+# backend says it cannot and opens one anyway.
+#
+# Set OPENGLCONTEXT_HIDDEN=0 to watch a test render, which is how you find out
+# why one looks wrong.
+os.environ.setdefault('OPENGLCONTEXT_HIDDEN', '1')
+
 # Timeout settings
 DEFAULT_TIMEOUT = 30  # Most tests
 SLOW_TEST_TIMEOUT = 120  # Heavy initialization (NURBS, large scenes)

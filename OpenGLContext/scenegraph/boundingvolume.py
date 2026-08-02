@@ -364,6 +364,57 @@ class AABoundingBox(BoundingBox):
         )
 
 
+class _Measure(object):
+    """The least a node needs in order to be asked how big it is.
+
+    Bounding volumes are computed against a *render mode* because some extents
+    genuinely depend on one -- a ``Text`` node's is the size of the glyphs the
+    context resolved a font for.  Measuring renders nothing, so all that is
+    really wanted from the mode is somewhere to memoise the answer, and a node
+    that needs more than that declines to measure rather than guessing.
+    """
+
+    def __init__(self):
+        self.cache = cache.CACHE
+
+
+def boundingSphere(nodes):
+    """``(centre, radius)`` around a run of nodes, or None if none can be measured.
+
+    Nodes with no extent -- a ``Background``, a light, a sensor -- are skipped
+    rather than making the whole answer unbounded, which is what asking a
+    grouping node for its volume would do.
+
+    What a caller wants when it needs to know **where a scene is and how big**:
+    framing a camera on it, or choosing the point an examine drag pivots about.
+    """
+    mode = _Measure()
+    volumes = []
+    for node in nodes:
+        measure = getattr(node, 'boundingVolume', None)
+        if measure is None:
+            continue
+        try:
+            volumes.append(measure(mode))
+        except Exception:           # unbounded, or wants a real render mode
+            continue
+    try:
+        volume = BoundingBox.union(volumes, None)
+    except Exception:
+        volume = None
+    center = getattr(volume, 'center', None)
+    size = getattr(volume, 'size', None)
+    if center is None or size is None:
+        return None
+    # An explicit accumulator: ``from OpenGLContext.arrays import *`` above
+    # shadows the builtin ``sum`` with numpy's, which refuses a generator.
+    squared = 0.0
+    for value in size:
+        half = float(value) / 2.0
+        squared += half * half
+    return tuple(float(v) for v in center), squared ** 0.5
+
+
 def volumeFromCoordinate(node):
     """Calculate a bounding volume for a coordinate node
 

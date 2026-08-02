@@ -24,10 +24,10 @@
 </header>
 <section>
 <p class="introduction">OpenGLContext can load glTF&nbsp;2.0 and binary GLB
-models and render them with the <a href="pbr.html">PBR renderer</a>. It ships an
-installed viewer command, <code>oglc-gltf</code>, that opens a local file or an
-http(s) URL and lets you walk around the model. This document covers the viewer,
-what the loader supports, and how to load models from your own code.</p>
+models and render them with the <a href="pbr.html">PBR renderer</a>. This
+document covers what the loader supports and how to load models from your own
+code; to <em>open</em> one, see <a href="viewer.html"><code>oglc-view</code></a>,
+the one viewer for every format this project reads.</p>
 <p>File parsing is handled by
 <a href="https://gitlab.com/dodgyville/pygltflib">pygltflib</a>; OpenGLContext
 maps the parsed glTF onto its own scenegraph and PBR materials. Install it with
@@ -36,28 +36,32 @@ the <code>gltf</code> extra (below), or directly from
 </section>
 
 <section>
-<h2>The <code>oglc-gltf</code> Viewer</h2>
-<p>Installing OpenGLContext with the <code>gltf</code> extra registers the
-<code>oglc-gltf</code> command (it pulls in <code>pygltflib</code>):</p>
+<h2>Opening a model</h2>
+<p>Installing OpenGLContext with the <code>gltf</code> extra pulls in
+<code>pygltflib</code> and registers the viewer command:</p>
 <pre>pip install "OpenGLContext[gltf]"</pre>
 <p>Then open a model -- a local file, a URL, or via the <code>GLTF</code>
 environment variable:</p>
-<pre>oglc-gltf path/to/model.glb
-oglc-gltf https://example.com/model.glb
-GLTF=path/to/model.gltf oglc-gltf</pre>
+<pre>oglc-view path/to/model.glb
+oglc-view https://example.com/model.glb
+GLTF=path/to/model.gltf oglc-view</pre>
+<p>Everything about the viewer itself -- what else it opens, its controls, its
+library of samples, capturing a frame, embedding it -- is in
+<a href="viewer.html">The viewer</a>. What follows here is glTF-specific.</p>
 <p>The viewer selects the core profile, the PBR renderer, the GLFW backend and
 shadows for you, so you do not need to set any environment variables. A binary
 <code>.glb</code> is self-contained, so URLs to a <code>.glb</code> work
 directly.</p>
 <p>A non-binary <code>.gltf</code> usually references external <code>.bin</code>
-and texture files. The loader's <code>load_gltf_url()</code> function (below)
-resolves those relative to the document's URL, but the <code>oglc-gltf</code>
-viewer currently downloads only the single file it is given, so a remote
-multi-file <code>.gltf</code> loses its external resources in the viewer. For
-now, download the whole model set locally to view it, or load it from code with
-<code>load_gltf_url()</code>. Routing the viewer through <code>load_gltf_url()</code>
-is tracked in the <a href="https://github.com/mcfletch/openglcontext/blob/main/plans/GLTF-REMOTE-RESOURCES.md">project
-plan</a>.</p>
+and texture files, by URI <em>relative to the document</em>. A URL therefore goes
+through <code>load_gltf_url()</code> (below), which keeps hold of where the
+document came from and resolves those references against it, so a remote
+multi-file <code>.gltf</code> opens with its geometry and textures intact.
+Fetching the document by itself could not: the base URL is gone by then and the
+relative references have nowhere to resolve from.</p>
+<p>External resources are fetched through the same hardened resolver the rest of
+the loader uses &mdash; same-origin, size-capped and disk-cached &mdash; so a
+document cannot pull in a reference from somewhere else.</p>
 <h3>Controls</h3>
 <p>These are OpenGLContext's default view-platform navigation keys:</p>
 <ul>
@@ -75,7 +79,7 @@ plan</a>.</p>
 the model is never in the dark.</p>
 </section>
 
-<section>
+<section id="gallery">
 <h2>Sample Gallery</h2>
 <p>These are Khronos glTF sample models rendered by the PBR pass. Each shows a
 different part of the material model.</p>
@@ -129,12 +133,22 @@ browses the whole sample set with side-by-side reference screenshots.</p>
     viewpoint you can cycle to with PageUp / PageDown.</li>
   <li><strong>Lights</strong>: <code>KHR_lights_punctual</code> directional,
     point and spot lights.</li>
+  <li><strong>Animation</strong>: keyframed node transforms, skinning and morph
+    targets, plus <code>KHR_animation_pointer</code> for animating material and
+    texture-transform properties, and <code>KHR_node_visibility</code>.</li>
+  <li><strong>Instancing</strong>: <code>EXT_mesh_gpu_instancing</code>, and
+    repeated meshes are batched into one instanced draw whether or not the file
+    says so &mdash; see <a href="instancing.html">Instanced rendering</a>.</li>
   <li><strong>Material extensions</strong>: <code>KHR_materials_clearcoat</code>,
     <code>KHR_materials_sheen</code>, <code>KHR_materials_transmission</code>,
     <code>KHR_materials_volume</code>, <code>KHR_materials_ior</code>,
     <code>KHR_materials_specular</code>, <code>KHR_materials_emissive_strength</code>,
-    <code>KHR_materials_unlit</code>, <code>KHR_texture_transform</code>, and the
-    legacy <code>KHR_materials_pbrSpecularGlossiness</code> (converted to
+    <code>KHR_materials_unlit</code>, <code>KHR_materials_iridescence</code>,
+    <code>KHR_materials_anisotropy</code>,
+    <code>KHR_materials_diffuse_transmission</code>,
+    <code>KHR_materials_dispersion</code>, <code>KHR_texture_transform</code>,
+    <code>EXT_texture_webp</code>, and the legacy
+    <code>KHR_materials_pbrSpecularGlossiness</code> (converted to
     metallic-roughness).</li>
   <li><strong>Geometry compression</strong>: <code>KHR_draco_mesh_compression</code>
     when the optional <code>DracoPy</code> package is installed
@@ -145,12 +159,104 @@ browses the whole sample set with side-by-side reference screenshots.</p>
 <p>glTF nodes become <code>Transform</code> nodes, meshes become
 <code>Shape</code> nodes with a PBR mesh geometry and a PBR material, so a loaded
 model is a normal OpenGLContext scenegraph you can inspect and modify.</p>
+
+<h3 id="omi">OMI Extensions</h3>
+<p>The <a href="https://github.com/omigroup/gltf-extensions">Open Metaverse
+Interoperability group</a> publishes the extensions that describe a
+<em>world</em> rather than a model &mdash; sound, physics, sky, and the things a
+player sits in or drives. Support is split across three projects: the loader
+here, <a href="audio.html"><code>omi_audio</code></a> and
+<a href="physics.html"><code>omi_physics</code></a>, both of which take the
+extension as their native data model rather than converting into one of their
+own.</p>
+<table>
+  <tr><th>Extension</th><th>Status</th><th>Where</th></tr>
+  <tr><td><code>KHR_audio_emitter</code></td><td>Full &mdash; audio, sources and
+    emitters; node and scene references; <code>bufferView</code>,
+    <code>data:</code> and <code>uri</code> audio; autoplay</td>
+    <td><code>omi_audio</code>, <a href="audio.html">docs</a></td></tr>
+  <tr><td><code>OMI_audio_ogg_vorbis</code></td><td>Full &mdash; the Ogg entry is
+    preferred over the MP3 fallback and decoded</td>
+    <td><a href="audio.html#codecs">Codec extensions</a></td></tr>
+  <tr><td><code>OMI_audio_opus</code></td><td>Read, preserved and reported;
+    <strong>not decoded</strong>, so the MP3 fallback plays</td>
+    <td><a href="audio.html#codecs">Codec extensions</a></td></tr>
+  <tr><td><code>OMI_physics_shape</code></td><td>Full, read and written</td>
+    <td><code>omi_physics</code>, <a href="physics.html">docs</a></td></tr>
+  <tr><td><code>OMI_physics_body</code></td><td>Full, read and written</td>
+    <td><code>omi_physics</code></td></tr>
+  <tr><td><code>OMI_physics_gravity</code></td><td>Full, read and written
+    &mdash; global and per-node gravity volumes</td>
+    <td><code>omi_physics</code></td></tr>
+  <tr><td><code>OMI_physics_joint</code></td><td>Full, read and written</td>
+    <td><code>omi_physics</code></td></tr>
+  <tr><td><code>OMI_environment_sky</code></td>
+    <td>Gradient, panorama (equirectangular and cubemap) and plain skies are
+    drawn; the <strong>physical</strong> (atmospheric-scattering) type is read
+    and reported but not yet rendered</td>
+    <td><a href="#sky">The scene's sky</a></td></tr>
+  <tr><td><code>OMI_seat</code></td><td>Future work</td><td>&mdash;</td></tr>
+  <tr><td><code>OMI_spawn_point</code></td><td>Future work</td><td>&mdash;</td></tr>
+  <tr><td><code>OMI_vehicle_body</code>, <code>OMI_vehicle_wheel</code>,
+    <code>OMI_vehicle_thruster</code>,
+    <code>OMI_vehicle_hover_thruster</code></td>
+    <td>Future work</td><td>&mdash;</td></tr>
+</table>
+<h3 id="sky">The scene's sky</h3>
+<p><code>OMI_environment_sky</code> does not ship a sky; it <em>describes</em>
+one, and three of its four descriptions are of a background OpenGLContext
+already draws. The loader reads the document's <code>skies[]</code>, resolves
+the index the active scene names, and puts the matching node in the scene, where
+the ordinary Background pass finds and binds it:</p>
+<table>
+  <tr><th>Sky type</th><th>What it becomes</th></tr>
+  <tr><td><code>gradient</code></td>
+    <td><code>Background</code> &mdash; the VRML97 gradient sphere. The three
+    colours and their curves are baked into colour stops.</td></tr>
+  <tr><td><code>panorama</code>, equirectangular</td>
+    <td><code>HDRBackground</code>, which also registers the panorama as the
+    <a href="pbr.html">IBL</a> environment, so metals reflect the sky drawn
+    behind them.</td></tr>
+  <tr><td><code>panorama</code>, cubemap</td>
+    <td><code>CubeBackground</code>, six faces in the extension's
+    <code>+X, -X, +Y, -Y, +Z, -Z</code> order.</td></tr>
+  <tr><td><code>plain</code></td><td><code>SimpleBackground</code>.</td></tr>
+  <tr><td><code>physical</code></td>
+    <td>Nothing yet &mdash; the one type that is a <em>renderer</em> rather than
+    a translation.</td></tr>
+</table>
+<p>A scene that brought its own sky this way keeps it: the viewer adds a backdrop
+only when a document has none, so <code>--background</code> is still how you
+override one. <code>GLTFScene.sky</code> is the record the scene selected,
+whether or not anything could draw it, so a caller can say <em>why</em> a sky is
+missing.</p>
+<p>Two parts of the extension are read and kept but not yet applied. The
+gradient sky's <strong>sun tint</strong> (<code>sunAngleMax</code>,
+<code>sunCurve</code>) is a disc around the scene's directional light and so
+varies with compass direction, which the gradient sphere's elevation-only colour
+stops cannot express. The <strong>ambient contribution</strong>
+(<code>ambientLightColor</code>, <code>ambientSkyContribution</code>) is not yet
+wired to the ambient term. The <strong>physical</strong> sky needs a genuinely
+new shader: an analytic Rayleigh/Mie scattering skydome driven by the scene's
+directional sun, in glTF's inverse-metre units.</p>
+<p class="technical">The extension projects an equirectangular panorama with the
+middle of the texture at <code>+Z</code> and <code>+X</code> to its left, while
+the skybox shader puts the middle at <code>+X</code>. The two differ by exactly
+a quarter of the width, so the loader rolls the columns once, at load &mdash;
+which keeps the single shared direction-to-UV mapping that stops the drawn sky
+and the reflections it drives from disagreeing.</p>
+
 <h3>Current Limitations</h3>
 <ul>
-  <li>No animation, skinning or morph targets (static meshes only).</li>
-  <li>Only the first texture-coordinate set (<code>TEXCOORD_0</code>).</li>
-  <li>Point and line primitives are skipped (triangles are triangulated as
-    needed).</li>
+  <li><code>KHR_texture_basisu</code> (KTX2 / Basis Universal) is deliberately
+    not read: there is no transcoder available under a licence this project can
+    take, and a texture in that format is skipped rather than guessed at.</li>
+  <li><code>KHR_draco_mesh_compression</code> needs the optional
+    <code>DracoPy</code> package; without it a Draco-compressed primitive is
+    skipped with a warning and the rest of the scene still loads.</li>
+  <li>Two of the harder material effects are approximations rather than the
+    reference result: volumetric subsurface scattering, and transmission through
+    nested transparent shells.</li>
 </ul>
 <p class="technical">The loader fetches remote resources with same-origin checks
 and blocks link-local / metadata addresses, and caps download sizes, so pointing
@@ -167,10 +273,121 @@ scene = gltf.load_gltf( "model.glb" )   # or gltf.load_gltf_url( url )
 group   = scene.group      # a scenegraph Group you can add to your own scene
 centre  = scene.center     # bounding-sphere centre, for framing
 radius  = scene.radius     # bounding-sphere radius
+strays  = scene.strays     # parts the file stranded outside that sphere
 cameras = scene.cameras    # list of baked camera poses</pre>
 <p>You can drop <code>scene.group</code> straight into a context's scenegraph, or
 use <code>scene.center</code> / <code>scene.radius</code> to frame the model, as
 the viewer does.</p>
+<p>That sphere is fitted to the <em>model</em>, not to the file's whole extent: a
+part the exporter stranded far outside the rest is left out of it, so that one
+forgotten duplicate cannot push the camera hundreds of model-widths back.
+<code>scene.strays</code> counts them and <code>scene.stray_reach</code> says how
+far the farthest goes in radii of the fitted sphere; both are 0 when the model is
+all in one place. The strays are still in <code>scene.group</code> and still
+drawn &mdash; this decides where to stand, not what to render. The rule, and the
+three constants that set it, are in
+<code>OpenGLContext.loaders.gltf.transforms.framing_bounds()</code>; the viewer's
+<a href="viewer.html#framing">Framing a model</a> covers it in full.</p>
+</section>
+
+<section id="embedding">
+<h2>Embedding the Viewer</h2>
+<p>Everything the viewer does &mdash; loading without freezing the window, the
+default light rig, auto-framing, the model's own cameras and animations, the
+caption, screenshots, the library, walking &mdash; is the reusable
+<code>OpenGLContext.viewer</code> package, not the script. An application gets
+all of it by subclassing <code>ViewerContext</code> and saying what it wants
+with a <code>ViewerOptions</code>. There is no command line involved
+(<a href="viewer.html#embedding">the full account is here</a>):</p>
+<pre>from OpenGLContext.viewer import ViewerContext, ViewerOptions
+
+class MyViewer( ViewerContext ):
+    options = ViewerOptions(
+        source = 'model.glb',       # a path or an http(s) URL
+        physics = True,             # walk it, rather than fly around it
+        background = 'sky',
+    )
+
+MyViewer.ContextMainLoop()</pre>
+
+<p><code>ViewerOptions</code> is a dataclass holding every knob the viewer has,
+and it is the <em>same</em> object the command line fills in &mdash;
+<code>argparse</code> populates one as its namespace &mdash; so the defaults are
+written once and a flag can never mean something different from the field. The
+fields are grouped as: the source; the cameras
+(<code>camera</code>, <code>no_cameras</code>); auto-framing (<code>yaw</code>,
+<code>margin</code>, <code>elevation</code>, <code>tilt</code>,
+<code>eye</code>, <code>look_at</code>); lighting and environment
+(<code>lights</code>, <code>shadows</code>, <code>ibl_intensity</code>,
+<code>environment</code>, <code>background</code>); animation
+(<code>animate</code>, <code>animation</code>, <code>anim_time</code>,
+<code>turntable</code>, <code>no_rotate</code>); <code>physics</code>; and the
+window and frame (<code>size</code>, <code>capture</code>,
+<code>capture_delay</code>, <code>frames</code>).</p>
+
+<h3>The seams worth overriding</h3>
+<p>A viewer that shows something other than one file overrides these. This is
+how <code>oglc-gltf-demo</code> browses a whole downloaded catalogue while
+sharing every other behaviour:</p>
+<table>
+<tr><th>Method</th><th>What it decides</th></tr>
+<tr><td><code>prepareSource()</code></td>
+    <td>Where the model comes from. A browser with no single source overrides
+    this to do nothing.</td></tr>
+<tr><td><code>loadScene()</code></td>
+    <td>Produce the scene. <strong>Runs on a worker thread, so it must not touch
+    GL</strong> &mdash; that is what keeps the window drawing through a
+    download.</td></tr>
+<tr><td><code>requestInitialScene()</code></td>
+    <td>What to load first.</td></tr>
+<tr><td><code>buildScenegraph( scene )</code></td>
+    <td>Turn a loaded scene into <code>self.sg</code>. Called again for each new
+    model, which is what makes swapping models possible.</td></tr>
+<tr><td><code>onSceneReady()</code></td>
+    <td>Just after a scene is built, on the render thread.</td></tr>
+<tr><td><code>drawExtraOverlay( shader )</code></td>
+    <td>Draw over the finished frame.</td></tr>
+<tr><td><code>buildPhysicsWorld()</code></td>
+    <td>Where the collision world comes from, if not cooked from
+    <code>self.sg</code> &mdash; see
+    <a href="physics.html#walking">walking</a>.</td></tr>
+</table>
+
+<h3>The parts, separately</h3>
+<p>The package is assembled from pieces that are useful on their own, so a
+context that is not a glTF viewer can still take the one it needs:</p>
+<table>
+<tr><th>Module</th><th>What it gives you</th></tr>
+<tr><td><code>viewer.options</code></td>
+    <td><code>ViewerOptions</code>: the configuration, shared with the CLI.</td></tr>
+<tr><td><code>viewer.asyncscene</code></td>
+    <td><code>AsyncSceneMixin</code>: load a scene off the render thread and
+    apply it on it. Format-neutral &mdash; it does not know what a scene is.</td></tr>
+<tr><td><code>viewer.framing</code></td>
+    <td><code>fit_sphere()</code> and <code>look_from()</code>: where to put a
+    camera to see a thing. Pure arithmetic, no GL.</td></tr>
+<tr><td><code>viewer.environment</code></td>
+    <td>The gradient sky, and the skybox matching whatever the IBL probe
+    loaded, so the visible backdrop and the reflections agree.</td></tr>
+<tr><td><code>viewer.caption</code></td>
+    <td><code>CaptionMixin</code> and <code>CaptionLayer</code>: what the viewer
+    says over the frame &mdash; a <a href="hud.html">HUD</a> layer like any
+    other, so it takes the skin and the interface scale for free.</td></tr>
+<tr><td><code>viewer.debug</code></td>
+    <td>The viewer's own section on the developer overlay
+    (<code>Alt+F</code>): which adapter read the source, how big it turned out,
+    which camera is bound. One overlay, not a second one.</td></tr>
+<tr><td><code>viewer.overlay</code></td>
+    <td><code>ScreenshotMixin</code> (F2 writes a PNG). The one part that is
+    about the <em>frame</em> rather than the interface, so it is not a HUD
+    layer: it reads the back buffer before it is swapped away.</td></tr>
+<tr><td><code>viewer.capture</code></td>
+    <td><code>SettleCaptureMixin</code>: render one settled frame to a file and
+    quit, which is what <code>--capture</code> is.</td></tr>
+</table>
+<p class="technical">Walking is deliberately <em>not</em> in this package: it is
+a capability of every interactive context. See
+<a href="physics.html#walking">Walking any scene</a>.</p>
 </section>
 
 <section>
@@ -179,7 +396,7 @@ the viewer does.</p>
 project</a> builds a metre-scale glTF model of the temple and bakes a set of
 cameras into it -- a walking tour from the eastern approach, up the steps,
 through the pronaos door and into the naos. Loading it in
-<code>oglc-gltf</code> and pressing PageDown steps through these cameras. The
+<code>oglc-view</code> and pressing PageDown steps through these cameras. The
 shots below are one per baked camera.</p>
 <div class="gallery">
   <figure><img src="images/parthenon/1-east-approach.jpg" alt="east approach"><figcaption>1 &mdash; east approach</figcaption></figure>

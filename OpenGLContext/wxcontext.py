@@ -114,7 +114,13 @@ class wxContext(
                 size = tuple(int(x) for x in definition.size), style=style, name=name,
                 attribList = self.wxFlagsFromDefinition(definition)
             )
-        self.Show( )
+        # Showing is a step of its own here, so hiding is not taking one.  See
+        # renderoptions.hidden_window: rendering and reading back are
+        # unaffected, and a suite of GL scripts should not take over the screen
+        # of whoever is running it.
+        from OpenGLContext import renderoptions
+        if not renderoptions.hidden_window():
+            self.Show( )
         context.Context.__init__ (self, definition)
     @classmethod
     def wxFlagsFromDefinition( cls, definition ):
@@ -383,7 +389,8 @@ class wxContext(
                     wx.Size(600,300)
                 )
                 self.SetTopWindow(frame)
-                frame.Show( True )
+                from OpenGLContext import renderoptions
+                frame.Show( not renderoptions.hidden_window() )
                 instance = cls( frame, *args, **named )
                 instance.SetFocus( )
                 frame.SetSize( instance.contextDefinition.size )

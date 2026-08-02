@@ -1,5 +1,36 @@
 # OMI_environment_sky Support
 
+**Status: partial** — Phases 1 and 2 have landed. `loaders/gltf/environment_sky.py`
+reads the document's `skies[]` and the active scene's `sky` index into typed
+records, and builds the background each describes: **gradient** → `Background`
+(the VRML97 gradient sphere), **panorama** → `HDRBackground` (equirectangular,
+which also registers the panorama with the IBL probe) or `CubeBackground`
+(cubemap, in the extension's `+X, -X, +Y, -Y, +Z, -Z` order), **plain** →
+`SimpleBackground`. The node hangs off the scene root, where the ordinary
+Background pass finds and binds it, and `GLTFScene.sky` carries the record
+whether or not anything could draw it.
+
+Two details worth knowing, both settled by test rather than by assertion:
+
+- **Gradient colour stops are spaced evenly in *colour*, not in angle**, with
+  the angle of each derived by inverting the curve. A `topCurve` of 0.15 moves
+  almost the whole way from horizon to zenith colour within a few degrees of the
+  horizon, and stops spread evenly up the dome draw that as a visible kink.
+- **The panorama is rolled a quarter of its width at load.** The extension puts
+  the middle of the texture at `+Z`; `dirToEquirect` puts it at `+X`. Converting
+  once here keeps the one shared direction-to-UV mapping that stops the drawn sky
+  and the reflections it drives from disagreeing.
+
+**Still open:** Phase 3 (the physical sky) in full; the gradient **sun tint**,
+which is azimuthal and so cannot go on the elevation-only colour stops; Phase 4
+(the ambient contribution), read and kept but not applied; and the
+`KHR_animation_pointer` wiring in Phase 5. Tests:
+`tests/unit/test_gltf_environment_sky.py` (loader, 100% of the module) and
+`tests/unit/test_gltf_environment_sky_render.py` (rendered frames). Documented in
+[docs/gltf.html](../docs/gltf.html#sky). Original plan below.
+
+---
+
 ## Goal
 
 Load the [`OMI_environment_sky`](https://github.com/omigroup/gltf-extensions/tree/main/extensions/2.0/OMI_environment_sky)

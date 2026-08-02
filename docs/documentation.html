@@ -37,11 +37,11 @@ documentation
         <li><code>OpenGLContext[glfw]</code> -- the GLFW backend (recommended for
           core-profile and PBR rendering)</li>
         <li><code>OpenGLContext[gltf]</code> -- the
-          <a href="gltf.html">glTF loader and <code>oglc-gltf</code> viewer</a>
-          (pulls in pygltflib)</li>
+          <a href="gltf.html">glTF loader</a> (pulls in pygltflib), which the
+          <a href="viewer.html"><code>oglc-view</code></a> viewer reads
+          <code>.gltf</code>/<code>.glb</code> with</li>
         <li><code>OpenGLContext[pygame]</code>, <code>OpenGLContext[wx]</code> --
           the PyGame and wxPython backends</li>
-        <li><code>OpenGLContext[accelerate]</code> -- optional C acceleration</li>
         <li><code>OpenGLContext[all]</code> -- every backend plus glTF and
           acceleration</li>
       </ul>
@@ -52,18 +52,59 @@ documentation
       <pre>uv venv
 uv pip install -e ".[glfw,gltf]"</pre>
       <p>or, to run a script without managing a virtual environment yourself:</p>
-      <pre>uv run --with "OpenGLContext[glfw,gltf]" oglc-gltf model.glb</pre>
-      <p class="technical">The console commands installed with the package are
-        <code>oglc-gltf</code> (glTF viewer), <code>oglc-vrml</code> (VRML97
-        viewer), <code>oglc-test</code>, <code>oglc-lorentz</code>,
-        and <code>oglc-profile</code>.</p>
+      <pre>uv run --with "OpenGLContext[glfw,gltf]" oglc-view model.glb</pre>
+      <h3>Console commands</h3>
+      <p>Installing the package puts these on your path:</p>
+      <dl class="commands">
+        <dt><code>oglc-view</code></dt>
+        <dd>The viewer &mdash; open and walk around a glTF, VRML97, OBJ or
+          3D&nbsp;Tiles scene. The format is chosen from the source, so one
+          command opens all four. See <a href="viewer.html">The viewer</a>.</dd>
+
+        <dt><code>oglc-terrain</code></dt>
+        <dd>Generate and walk a streamed terrain world: rolling hills, a river
+          canyon, a lake and snow-capped mountains, with gravity, collision
+          against the surface you can see, distance-LOD conifers and a
+          translucent water surface. Takes a real heightmap with
+          <code>--dem</code>, or an existing 3D&nbsp;Tiles tileset. See
+          <a href="terrain.html">Terrain &amp; 3D&nbsp;Tiles</a>.</dd>
+
+        <dt><code>oglc-gltf-demo</code></dt>
+        <dd>Browse the Khronos glTF sample models &mdash; a gallery of the
+          conformance roster, each shown by its own picture, over the same
+          viewer. See <a href="gltf.html#gallery">Sample Gallery</a>.</dd>
+
+        <dt><code>oglc-gltf-regression</code></dt>
+        <dd>Render every glTF demo and diff it against a verified baseline, for
+          checking that a rendering change moved only what it meant to.</dd>
+
+        <dt><code>oglc-ui-demo</code></dt>
+        <dd>The overlay UI, demonstrated: the settings screen, the key-binding
+          editor, the console and a skin. See
+          <a href="overlayui.html">The overlay UI</a>.</dd>
+
+        <dt><code>oglc-test</code></dt>
+        <dd>Run a context's automated tests &mdash; the test runner behind the
+          visual-regression suite.</dd>
+
+        <dt><code>oglc-lorentz</code></dt>
+        <dd>A Lorentz attractor drawn as a ten-thousand-point line set. A small
+          standing demonstration of animated line geometry.</dd>
+      </dl>
+      <p class="technical"><code>oglc-gltf</code>, <code>oglc-vrml</code> and
+        <code>oglc-tiles</code> are deprecated aliases for
+        <code>oglc-view</code>, kept for one release cycle; each prints a notice
+        and forwards. Use <code>oglc-view</code> in anything new.</p>
     </section>
     <section>
       <h2>OpenGLContext-Specific Documentation</h2>
-      <p>Start with the rendering-process documents if you want to understand
-        how a frame is drawn, or the VRML97 and glTF documents if you want to
-        load and display content. The NeHe tutorial translations are a good
-        starting point for beginning OpenGL programmers.</p>
+      <p>Start with the <strong>Rendering</strong> documents if you want to
+        understand how a frame is drawn, <strong>Supporting Features</strong>
+        for the systems that run beside the renderer &mdash; how the player
+        moves, what the world does, what it sounds like &mdash; and
+        <strong>Content</strong> for loading and displaying models and worlds.
+        The NeHe tutorial translations are a good starting point for beginning
+        OpenGL programmers.</p>
       <ul>
         <li><a href="tutorials/index.html">Tutorials</a> --
           Documentation for users unfamiliar with OpenGL</li>
@@ -89,10 +130,6 @@ uv pip install -e ".[glfw,gltf]"</pre>
           <li><a href="instancing.html">Instanced Geometry</a> -- Collapsing many
             copies of one shape into a single draw call: how grouping, per-instance
             data, picking, caching and cluster culling work</li>
-          <li><a href="navigation.html">Movement Modes &amp; Navigation</a> --
-            Walking, flying, swimming and mouse-look as declared nodes: sampled
-            input, key bindings a settings screen can rewrite, world-imposed
-            modes and pointer capture</li>
           <li><a href="overlayui.html">Overlay UI</a> -- Panels drawn over a
             live frame and driven by the pointer: a settings screen generated
             from the ContextDefinition's fields, key rebinding, dialogs, a
@@ -105,14 +142,27 @@ uv pip install -e ".[glfw,gltf]"</pre>
             from thresholds, an icon-and-number readout and a fading message
             queue -- plus the developer overlay, fed by registered providers,
             where the frame rate is now drawn</li>
-          <li><a href="physics.html">Physics &amp; Collision</a> -- Real-time
-            rigid-body physics built on the OMI glTF model: collision, gravity
-            zones, triggers, joints, shape cooking, a character controller with
-            safe viewpoint binding, and a motion debug overlay</li>
           <li><a href="particles.html">Particle Effects</a> -- Fire, smoke,
             sparks, explosions and trails as camera-facing quads in one
             instanced draw: a numpy pool with a packed live set, emitters as
             declared nodes, life curves as uniforms, and named presets</li>
+          <li><a href="terrain.html">Terrain &amp; Landscapes</a> -- Streamed OGC
+            3D&nbsp;Tiles terrain with screen-space-error LOD, frustum-culled paging,
+            per-tile walkable colliders, procedural &amp; DEM heightmaps, caves/overhangs,
+            and distance-LOD vegetation -- plus the <code>oglc-terrain</code> viewer</li>
+        </ul>
+        <li>Supporting Features</li>
+        <ul>
+          <li><a href="navigation.html">Movement Modes &amp; Navigation</a> --
+            Walking, flying, swimming and mouse-look as declared nodes: sampled
+            input, key bindings a settings screen can rewrite, world-imposed
+            modes and pointer capture</li>
+          <li><a href="physics.html">Physics &amp; Collision</a> -- Real-time
+            rigid-body physics built on the OMI glTF model: collision, gravity
+            zones, triggers, joints, shape cooking, a character controller with
+            safe viewpoint binding, a motion debug overlay, and
+            <a href="physics.html#walking">walking</a> as a capability of every
+            interactive context</li>
           <li><a href="audio.html">Spatial Audio</a> -- Sound placed in the
             scene on glTF's <code>KHR_audio_emitter</code> model: distance
             curves, directional cones, equal-power panning, a fixed voice pool
@@ -120,19 +170,20 @@ uv pip install -e ".[glfw,gltf]"</pre>
             first-class backend. The engine is the standalone
             <code>omi_audio</code> package; OpenGLContext supplies the
             scenegraph nodes and the per-context engine</li>
-          <li><a href="terrain.html">Terrain &amp; Landscapes</a> -- Streamed OGC
-            3D&nbsp;Tiles terrain with screen-space-error LOD, frustum-culled paging,
-            per-tile walkable colliders, procedural &amp; DEM heightmaps, caves/overhangs,
-            and distance-LOD vegetation -- plus the <code>oglc-terrain</code> viewer</li>
         </ul>
         <li>Content</li>
         <ul>
-          <li><a href="vrml97.html">Using VRML97</a> -- Using the (partial)
-            VRML97 loader and the nodes it creates</li>
-          <li><a href="gltf.html">Loading glTF</a> -- The glTF&nbsp;2.0 loader
-            and the <code>oglc-gltf</code> viewer command</li>
+          <li><a href="viewer.html">The viewer</a> -- <code>oglc-view</code>:
+            one command that opens a glTF model, a VRML97 world, an OBJ or a
+            streamed 3D&nbsp;Tiles dataset, its library of samples, its screens
+            and controls, <a href="viewer.html#embedding">embedding it</a> as a
+            component and <a href="viewer.html#adapters">adding a format</a></li>
+          <li><a href="gltf.html">Loading glTF</a> -- The glTF&nbsp;2.0 loader:
+            what it supports, and using it from your own code</li>
           <li><a href="text.html">Rendering Text</a> -- The Text and FontStyle
             nodes and the font providers</li>
+          <li><a href="vrml97.html">Using VRML97</a> -- Using the (partial)
+            VRML97 loader and the nodes it creates</li>
         </ul>
         <li><a href="eventmodel.html">Event Model</a> -- The event model which
           manages changes to the VRML97 scenegraph</li>
@@ -152,10 +203,10 @@ uv pip install -e ".[glfw,gltf]"</pre>
         <li><a href="text.html"> Rendering Text</a> -- Overview of the Text and
           FontStyle scenegraph nodes, general notes regarding support of text in
           OpenGLContext</li>
-        <li><a href="numeric_arrays.html">Using NumPy Arrays</a> -- Overview
-          of using array math within OpenGLContext (and PyOpenGL). The examples
-          predate NumPy and use the old Numeric API; the concepts carry over,
-          but use <code>numpy</code> in new code.</li>
+        <li><a href="numeric_arrays.html">Using NumPy Arrays</a> -- Array math
+          within OpenGLContext and PyOpenGL: creating arrays, the dtypes that
+          match each GL type, slicing, the vector utilities, and handing an
+          array to the driver as geometry</li>
       </ul>
     </section>
     <section>

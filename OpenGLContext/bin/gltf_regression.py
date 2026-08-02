@@ -189,14 +189,22 @@ def resolve_model(spec: gltf_demos.SceneSpec, parthenon: str | None = None) -> s
     ``.gltf`` (EnvironmentTest, IridescenceMetallicSpheres, TextureTransformTest)
     is mirrored -- the ``.gltf`` plus its external buffers/images -- into the
     cache so the viewer can load it. A local ``source`` (Parthenon) is used
-    as-is.
+    as-is, and a scene named by URL is fetched into the cache.
     """
     source, is_local = gltf_demos.resolve_source(spec, parthenon)
     if is_local:
         return source if source and os.path.exists(source) else None
+    cache_dir = resolver._default_cache_dir()
+    if resolver.is_url(source):
+        # One published file, so a failed fetch is the end of it: the .gltf
+        # mirror below only makes sense for the catalogue's directory layout.
+        try:
+            return _cached_url_path(cast(str, source), cache_dir)
+        except Exception as err:
+            print('  resolve FAILED %s: %s' % (spec.name, err))
+            return None
 
     name = cast(str, source)          # a non-local scene resolves to a sample name
-    cache_dir = resolver._default_cache_dir()
     glb_url = gltf.sample_model_url(name)
     try:
         return _cached_url_path(glb_url, cache_dir)
@@ -266,7 +274,7 @@ def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out:
         OPENGLCONTEXT_DISABLE_FPS_DISPLAY='1')
     try:
         proc = subprocess.run(
-            [sys.executable, '-m', 'OpenGLContext.bin.gltf_view'] + args,
+            [sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
             timeout=120, capture_output=True, text=True,
             cwd=_source_root() or REPO, env=env)
     except subprocess.TimeoutExpired:
@@ -429,12 +437,15 @@ def resolve_model_url(spec: gltf_demos.SceneSpec,
     the security-hardened resolver -- an untrusted remote resource, exactly as an
     end user would -- rather than as a trusted local file. The ``.glb`` variant is
     used when it exists (probed via the shared cache), else the multi-file ``.gltf``
-    URL, whose external buffers/images the resolver fetches same-origin. The local
-    Parthenon build stays a path. Returns ``(source, is_url)`` or ``(None, False)``.
+    URL, whose external buffers/images the resolver fetches same-origin. A scene
+    that names its own URL is handed over as it stands, and the local Parthenon
+    build stays a path. Returns ``(source, is_url)`` or ``(None, False)``.
     """
     source, is_local = gltf_demos.resolve_source(spec, parthenon)
     if is_local:
         return (source if source and os.path.exists(source) else None), False
+    if resolver.is_url(source):
+        return source, True
     name = cast(str, source)          # a non-local scene resolves to a sample name
     glb_url = gltf.sample_model_url(name)
     try:

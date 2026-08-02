@@ -25,7 +25,7 @@ os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 
 from OpenGL.GL import glFinish
 from OpenGLContext.passes import _flat as F, shadowmixin as SM
-from OpenGLContext.bin import gltf_view
+from OpenGLContext.bin import view
 
 win = {'render': [], 'present': [], 'cadence': [], 'pick': 0, 'frames': 0,
        'casc': 0, 'last': None, 'r': 0.0}
@@ -47,7 +47,7 @@ def ec(self):
     return win['casc']
 SM.ShadowMapMixin._effectiveCascades = ec
 
-Ctx = gltf_view.TestContext
+Ctx = view.TestContext
 o_swap = Ctx.SwapBuffers
 def SwapBuffers(self, *a, **k):
     t = time.perf_counter()
@@ -84,4 +84,4 @@ def _flush(ctx):
 
 model = sys.argv[1] if len(sys.argv) > 1 else '/workspaces/OpenGL-dev/parthenon/parthenon.glb'
 sys.argv = ['oglc-gltf', model] + sys.argv[2:]
-gltf_view.main()
+view.main()

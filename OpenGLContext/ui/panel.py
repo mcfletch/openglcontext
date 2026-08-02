@@ -257,7 +257,11 @@ class Panel(RootWidget):
         self.focusVisible = visible and widget is not None
 
     def focusNext(self, step: int = 1) -> bool:
-        """Move focus along the Tab order, wrapping at the ends."""
+        """Move focus along the Tab order, wrapping at the ends.
+
+        The ring is made visible: moving by keyboard with nothing to show for
+        it leaves you guessing which item Space would press.
+        """
         order = self.focusables()
         if not order:
             self.focus(None)
@@ -266,7 +270,7 @@ class Panel(RootWidget):
             index = order.index(self._focused)     # type: ignore[arg-type]
         except ValueError:
             index = -1 if step > 0 else 0
-        self.focus(order[(index + step) % len(order)])
+        self.focus(order[(index + step) % len(order)], visible=True)
         return True
 
     def _scrollIntoView(self, widget: Widget) -> None:
@@ -360,6 +364,13 @@ class Panel(RootWidget):
             return True
         if name == '<tab>':
             return self.focusNext(-1 if modifiers[0] else 1)
+        # Only what the focused widget did not want: a Select, a Slider and a
+        # Carousel all use the arrows themselves, and a menu is a list, which
+        # is walked with them.  Up and down only -- left and right belong to
+        # whatever is focused, and a row of controls read left to right is not
+        # a list of choices.
+        if name in ('<down>', '<up>'):
+            return self.focusNext(1 if name == '<down>' else -1)
         if name == '<return>':
             primary = self.primary()
             if primary is not None and primary.enabled:

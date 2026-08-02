@@ -131,6 +131,17 @@ class EventHandlerMixin(object):
             if previous:
                 del self.__uncaptureDict[eventType]
 
+    def isCapturingEvents(self, eventType):
+        """Whether a manager has taken this event type over for the moment.
+
+        A capture is how a drag receives its own events -- it swaps itself into
+        the slot rather than registering with the dispatcher -- so asking the
+        dispatcher whether anyone is listening answers "no" for exactly the
+        interaction that most needs the events.  Anything optimising delivery
+        away has to ask this as well.
+        """
+        return as_str(eventType) in self.__uncaptureDict
+
     ### Customisation points
     def ProcessEvent(self, event):
         """Primary dispatch point for events.

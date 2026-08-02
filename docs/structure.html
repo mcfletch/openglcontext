@@ -94,6 +94,34 @@ before wxcontext, you may need to set it manually. Symptoms of missing EGL confi
 include errors like "Attempt to retrieve context when no valid context" during shader
 rendering. Legacy (fixed-function) rendering typically works without this setting.</p>
 
+<h4>Qt/PySide and the platform plugin</h4>
+
+<p>The Qt backend lives in the separate <strong>OpenGLContext-qt</strong>
+distribution and registers itself under the name <code>qt</code>, so installing
+it is all that is needed for <code>OPENGLCONTEXT_BACKEND=qt</code> to select it.
+It is built on <code>QWindow</code> with a <code>QOpenGLContext</code> of its
+own rather than on <code>QOpenGLWidget</code>, so framebuffer 0 is the screen
+and every render path -- the bloom composite, the selection buffer's blit, the
+back-buffer read behind a screenshot -- behaves as it does under GLUT and GLFW.
+Both profiles are supported, and every <code>ContextDefinition</code> field that
+describes the window is mapped to the Qt surface format.</p>
+
+<pre>OPENGLCONTEXT_BACKEND=qt python your_script.py</pre>
+
+<p><strong>Which Qt platform plugin you get matters.</strong> Qt asks the
+platform integration for the context, and some of them hand back one that is
+current on no drawable surface at all: every GL call succeeds, nothing raises,
+and every frame is black. The backend detects that at start-up and says so,
+naming the plugin. Selecting another one usually fixes it:</p>
+
+<pre>QT_QPA_PLATFORM=xcb OPENGLCONTEXT_BACKEND=qt python your_script.py</pre>
+
+<p>Two limits are worth knowing. <code>accumulationBuffer</code> does not exist
+in Qt 6 and is reported rather than silently dropped, and
+<code>OPENGLCONTEXT_HIDDEN</code> is not supported -- Qt's offscreen surfaces
+have no default framebuffer on the common EGL platforms, so headless capture
+should use the <code>glfw</code> backend.</p>
+
 <p>The <a href="../pydoc/OpenGLContext.viewplatform.html">
 ViewPlatform</a> and <a href="../pydoc/OpenGLContext.viewplatformmixin.html">
 ViewPlatformMixin</a> classes provide   a simple navigation interface
@@ -177,10 +205,32 @@ scenegraph:</p>
     <a href="gltf.html">Loading glTF</a>).</li>
   <li>Wavefront OBJ.</li>
 </ul>
+<p>The <strong>viewer</strong> package is the reusable viewer itself &mdash;
+loading a scene without freezing the window, default lighting, auto-framing,
+cameras and animations, the caption, screenshots, a library of samples to open,
+and rendering one settled frame to a file. An application embeds
+<code>viewer.sceneviewer.ViewerContext</code> and configures it with a
+<code>ViewerOptions</code>, which is the same object the command line fills in
+(see <a href="viewer.html#embedding">Embedding the viewer</a>). Its parts
+&mdash; <code>adapters</code>, <code>asyncscene</code>, <code>framing</code>,
+<code>environment</code>, <code>caption</code>, <code>capture</code>,
+<code>library</code>, <code>menu</code> &mdash; are usable individually by a
+context that is not a viewer.</p>
+
+<p>What format a source is in is decided by an <strong>adapter</strong>
+registered under <code>plugins.Adapter</code>, alongside the loader, context and
+node registries, so the dispatch is data rather than a chain of tests and a
+third party adds a format without touching the viewer
+(<a href="viewer.html#adapters">Adding a format</a>).</p>
+
 <p>The <strong>bin</strong> package provides console commands, registered as
-scripts when the package is installed: <code>oglc-gltf</code> (glTF viewer),
-<code>oglc-vrml</code> (VRML97 viewer), <code>oglc-test</code>,
-<code>oglc-lorentz</code> and <code>oglc-profile</code>.</p>
+scripts when the package is installed: <code>oglc-view</code>
+(<a href="viewer.html">the viewer</a> plus a command line, for every format),
+<code>oglc-terrain</code>, <code>oglc-gltf-demo</code>,
+<code>oglc-gltf-regression</code>, <code>oglc-ui</code>, <code>oglc-test</code>,
+<code>oglc-lorentz</code> and <code>oglc-profile</code>. <code>oglc-gltf</code>,
+<code>oglc-vrml</code> and <code>oglc-tiles</code> are deprecated aliases for
+<code>oglc-view</code>.</p>
 </section>
 <section>
 <h2>Scenegraph Rendering</h2>
@@ -232,6 +282,28 @@ numbering), it is an increment rather than a state, and its pick key is
 distinct per notch so none is dropped. GLFW reports scrolling on a callback of
 its own in offsets and translates to those buttons; see
 <a href="overlayui.html#wheel">the overlay UI documentation</a>.</p>
+
+<h3 id="bindings">Which handler holds a key</h3>
+<p>One, and it is the last registered: a key is identified by
+<code>(name, state, modifiers)</code> and registering a second handler for the
+same triple replaces the first. So the two places a context binds keys run in a
+deliberate order, and <code>Context.__init__</code> runs them that way:</p>
+<ol>
+  <li><code>setupDefaultEventCallbacks</code> &mdash; what a key does when
+      nobody has said otherwise: Escape, the arrow-key navigation,
+      right-drag to examine, PageDown to cycle viewpoints.</li>
+  <li><code>setupCallbacks</code> &mdash; what a key does in <em>this</em>
+      context. It lands on top, so an application that wants a key the
+      framework also binds simply binds it.</li>
+</ol>
+<p>Modifiers are a three-tuple in the order
+<code>(shift, control, alt)</code>. A binding that asks for the wrong slot is
+not an error &mdash; it registers, and the key silently never fires.</p>
+
+<p>Handlers are held by <strong>weak</strong> reference, so the caller must keep
+the callback alive; a bound method of a live object is the normal choice, and one
+with no other reference is collected the moment the registration returns, leaving
+the key silently dead.</p>
 </section>
     <footer>
       <p class="footer">

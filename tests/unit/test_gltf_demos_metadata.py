@@ -63,6 +63,22 @@ class TestParthenon:
         assert is_local is False and src == 'Duck'
 
 
+class TestScenePublishedElsewhere:
+    """A scene named by URL: published outside the Khronos catalogue, and not a
+    file in this tree either, so it is fetched rather than opened."""
+
+    def test_resolve_source_keeps_a_url_for_the_caller_to_fetch(self):
+        s = gltf_demos.SceneSpec('Remote', source='https://example.invalid/s.glb')
+        src, is_local = gltf_demos.resolve_source(s)
+        assert is_local is False and src == 'https://example.invalid/s.glb'
+
+    def test_the_xr_publisher_scene_uses_its_own_camera_and_has_no_upstream(self):
+        s = gltf_demos.scene_for('XRPublisherExampleScene')
+        assert s.source and s.source.startswith('https://')
+        assert s.upstream is False           # no Khronos reference for it
+        assert s.camera_ids() == [0]         # framed by its own authored camera
+
+
 class TestSharedDerivations:
     def test_demo_env_background_roster_comes_from_shared_module(self):
         from OpenGLContext.bin import gltf_demo
@@ -98,3 +114,76 @@ class TestSharedDerivations:
         spec.loader.exec_module(mod)
         by_name = dict(mod.GLTF_DEMOS)
         assert by_name['DamagedHelmet'][0] == gltf_demos.scene_for('DamagedHelmet').yaw
+
+
+class TestFeatureTests:
+    """Which entries are *demos* and which are conformance fixtures.
+
+    Most of the Khronos roster exists to exercise one glTF feature -- a sparse
+    accessor, a texture-transform cell grid, a bare triangle.  They belong in a
+    conformance run and they are noise on a shelf somebody is browsing to find
+    something worth looking at, so the table says which is which and every tool
+    reads it from there.
+    """
+
+    def test_the_flag_is_on_the_spec(self):
+        assert gltf_demos.scene_for('Triangle').feature_test is True
+
+    def test_a_real_demo_is_not_one(self):
+        for name in ('DamagedHelmet', 'Sponza', 'BoomBox', 'FlightHelmet',
+                     'AntiqueCamera', 'BrainStem', 'ToyCar'):
+            assert gltf_demos.scene_for(name).feature_test is False, name
+
+    def test_the_named_fixtures_are_marked(self):
+        for name in ('Triangle', 'TriangleWithoutIndices', 'Box', 'BoxAnimated',
+                     'BoxTextured', 'BoxVertexColors', 'BoxInterleaved',
+                     'Cameras', 'Cube', 'CubeVisibility', 'AnimatedCube',
+                     'AnimatedTriangle', 'AnimatedColorsCube',
+                     'AnimatedMorphCube', 'AlphaBlendModeTest',
+                     'DirectionalLight', 'InterpolationTest',
+                     'MeshPrimitiveModes', 'MeshoptCubeTest',
+                     'MorphPrimitivesTest', 'MultiUVTest', 'MultipleScenes',
+                     'NodePerformanceTest', 'NormalTangentTest',
+                     'NormalTangentMirrorTest', 'OrientationTest',
+                     'PointLightIntensityTest', 'RiggedSimple', 'SimpleMeshes',
+                     'SimpleMorph', 'SimpleSkin', 'SimpleSparseAccessor',
+                     'SimpleTexture', 'TextureCoordinateTest',
+                     'TextureEncodingTest', 'TextureLinearInterpolationTest',
+                     'TextureSettingsTest', 'TextureTransformTest',
+                     'TextureTransformMultiTest', 'TwoSidedPlane', 'UnlitTest',
+                     'VertexColorTest', 'EmissiveStrengthTest',
+                     'XmpMetadataRoundedCube'):
+            assert gltf_demos.scene_for(name).feature_test is True, name
+
+    def test_the_swept_parameter_grids_are_ones_too(self):
+        """A ``*TestGrid`` is a reference to check a renderer against."""
+        grids = [s for s in gltf_demos.iter_scenes()
+                 if s.name.endswith('TestGrid')]
+        assert grids
+        for spec in grids:
+            assert spec.feature_test is True, spec.name
+
+    def test_the_smallest_case_of_a_thing_is_one(self):
+        for name in ('SimpleMaterial', 'SimpleInstancing', 'NegativeScaleTest',
+                     'PrimitiveModeNormalsTest', 'LightVisibility'):
+            assert gltf_demos.scene_for(name).feature_test is True, name
+
+    def test_every_comparison_grid_is_one(self):
+        """The Compare* set is a side-by-side reference, not a scene."""
+        compares = [s for s in gltf_demos.iter_scenes()
+                    if s.name.startswith('Compare')]
+        assert compares
+        for spec in compares:
+            assert spec.feature_test is True, spec.name
+
+    def test_the_split_leaves_a_shelf_worth_browsing(self):
+        demos = [s for s in gltf_demos.iter_scenes() if not s.feature_test]
+        assert len(demos) > 50, 'too many marked; the shelf would be bare'
+        tests = [s for s in gltf_demos.iter_scenes() if s.feature_test]
+        assert len(tests) > 60, 'too few marked; the shelf stays full of fixtures'
+
+    def test_the_roster_names_only_scenes_that_exist(self):
+        """A typo would silently mark nothing, for ever."""
+        known = {s.name for s in gltf_demos.iter_scenes()}
+        assert set(gltf_demos.FEATURE_TEST_NAMES) <= known, \
+            sorted(set(gltf_demos.FEATURE_TEST_NAMES) - known)

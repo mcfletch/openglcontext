@@ -23,12 +23,6 @@
         <li> perform common manipulations of NumPy arrays </li>
         <li> draw geometry using data from a NumPy array </li>
       </ul>
-      <p class="technical">A note on terminology: this document was written for
-"Numeric Python", the array package that preceded
-<a href="https://numpy.org/">NumPy</a>. OpenGLContext and PyOpenGL use NumPy
-today. The concepts and most of the array operations shown here carry over
-directly, but the import is <code>import numpy</code> and new code should use
-NumPy rather than the old <code>Numeric</code> module.</p>
       <p>Array math is used throughout the OpenGLContext project,
 and you will likely want to make use of it in your  own
 code.&nbsp; This document focuses primarily on the array package
@@ -36,20 +30,20 @@ itself, rather than on PyOpenGL.&nbsp; Mastering the features shown
 here will be useful when doing non-trivial programming in PyOpenGL,
 but it's not necessary to know this material before you start
 playing with OpenGLContext.</p>
-      <p>Numeric Python makes it easy to work with (potentially large)
-homogenous arrays of a given data type.&nbsp; It provides extended
-slicing         semantics for dealing with multidimensional arrays,
+      <p><a href="https://numpy.org/">NumPy</a> makes it easy to work with
+(potentially large) homogenous arrays of a given data type.&nbsp; It provides
+extended slicing semantics for dealing with multidimensional arrays,
 utility functions         for processing all elements of an array, and
 mechanisms for storing and         converting to/from arrays and native
 Python data structures. </p>
 </section>
 <section>
-    <h2>Creating Numeric Python Arrays</h2>
-      <p>Before it can be used, Numeric Python needs to be imported
-into your module.&nbsp; Depending on how many of the functions in the   
-module you'll be wanting to use, you may use either <code>from Numeric
-import *</code> or <code>import Numeric</code> to gain access.</p>
-      <p>Creating a Numeric array is done with one of a set of
+    <h2>Creating Arrays</h2>
+      <p>The house style is <code>import numpy as np</code>, so that a
+reader can see at a glance which names are the array package's.
+<code>OpenGLContext.arrays</code> re-exports the same names for the modules
+that use them unqualified.</p>
+      <p>Creating an array is done with one of a set of
 functions, each of which has a particular purpose (note, these are just
 the           commonly used functions):</p>
       <table border="0" width="100%">
@@ -59,7 +53,7 @@ the           commonly used functions):</p>
             <td valign="top">Generate an array filled with either 0 or
 1 values of a given size and data type.</td>
             <td valign="top">
-            <pre>zeros( (2,3), 'd')<br>ones( (2,3), 'f')</pre>
+            <pre>np.zeros((2, 3), 'd')<br>np.ones((2, 3), 'f')</pre>
             </td>
           </tr>
           <tr>
@@ -72,7 +66,7 @@ specified).
 an array of the appropriate type.</p>
             </td>
             <td width="39%" valign="top">
-            <pre>array( [[2,3,4],[5,6,7]],'i')<br>asarray( might_be_array, 'f')</pre>
+            <pre>np.array([[2, 3, 4], [5, 6, 7]], 'i')<br>np.asarray(might_be_array, 'f')</pre>
             </td>
           </tr>
           <tr>
@@ -80,7 +74,7 @@ an array of the appropriate type.</p>
             <td width="39%" valign="top">Generate an x by x integer
 identity matrix for the given x.</td>
             <td width="39%" valign="top">
-            <pre>identity ( 4 )</pre>
+            <pre>np.identity(4)</pre>
             </td>
           </tr>
           <tr>
@@ -90,64 +84,73 @@ standard Python range, allowing for floating point
 ranges as well as integer ranges, generating an array as the
 result.</td>
             <td width="39%" valign="top">
-            <pre>arange( 3.0, 0.0, -.1, 'd')</pre>
+            <pre>np.arange(3.0, 0.0, -0.1, 'd')</pre>
             </td>
           </tr>
         </tbody>
       </table>
-      <p>The Numeric type codes mentioned in the above table include a
-considerable number of exotic data types.&nbsp; For OpenGL work, here
-are the significant type codes and their equivalent OpenGL types:</p>
+      <p>A data type can be given as a NumPy dtype, as its character code, or as
+a Python type. For OpenGL work these are the ones that matter, with the GL type
+each corresponds to:</p>
       <table border="0" width="100%">
         <tbody>
+          <tr><th align="left">dtype</th><th align="left">Code</th>
+              <th align="left">OpenGL type</th></tr>
           <tr>
-            <th align="left">double</th>
-            <td valign="top">Python float</td>
-            <td valign="top">d</td>
+            <th align="left"><code>np.float64</code></th>
+            <td valign="top"><code>'d'</code></td>
             <td valign="top">GL_DOUBLE</td>
           </tr>
           <tr>
-            <th align="left">float</th>
-            <td valign="top">No native Python equivalent</td>
-            <td valign="top">f</td>
+            <th align="left"><code>np.float32</code></th>
+            <td valign="top"><code>'f'</code></td>
             <td valign="top">GL_FLOAT</td>
           </tr>
           <tr>
-            <th align="left">32-bit integer</th>
-            <td valign="top">Python integer</td>
-            <td valign="top">i</td>
+            <th align="left"><code>np.int32</code></th>
+            <td valign="top"><code>'i'</code></td>
             <td valign="top">GL_INT</td>
           </tr>
           <tr>
-            <th align="left">16-bit integer</th>
-            <td valign="top">No native Python equivalent</td>
-            <td valign="top">s</td>
+            <th align="left"><code>np.uint32</code></th>
+            <td valign="top"><code>'I'</code></td>
+            <td valign="top">GL_UNSIGNED_INT</td>
+          </tr>
+          <tr>
+            <th align="left"><code>np.int16</code></th>
+            <td valign="top"><code>'h'</code></td>
             <td valign="top">GL_SHORT</td>
           </tr>
           <tr>
-            <th align="left">unsigned byte</th>
-            <td valign="top">Python string</td>
-            <td valign="top">b (c)</td>
-            <td valign="top">GL_UNSIGNED_BYTE</td>
+            <th align="left"><code>np.uint16</code></th>
+            <td valign="top"><code>'H'</code></td>
+            <td valign="top">GL_UNSIGNED_SHORT</td>
           </tr>
           <tr>
-            <th align="left">signed byte</th>
-            <td valign="top">No native Python equivalent</td>
-            <td valign="top">1</td>
+            <th align="left"><code>np.int8</code></th>
+            <td valign="top"><code>'b'</code></td>
             <td valign="top">GL_BYTE</td>
+          </tr>
+          <tr>
+            <th align="left"><code>np.uint8</code></th>
+            <td valign="top"><code>'B'</code></td>
+            <td valign="top">GL_UNSIGNED_BYTE</td>
           </tr>
         </tbody>
       </table>
-      <p>Notably absent from the list above are the unsigned integer
-and unsigned short types.&nbsp; As of yet, there is no satisfactory
-representation of           these types in the Numeric module.</p>
+      <p class="technical">Prefer the explicitly sized names. <code>np.int_</code>
+and plain <code>int</code> are platform-width and are not the same type on every
+machine, which is exactly the kind of difference a buffer handed to the driver
+notices. Unsigned indices matter in particular: element-array buffers are
+<code>np.uint16</code> or <code>np.uint32</code>, never signed.</p>
       <p>Array dimensions are specified as tuples, in the order of
-indexing.&nbsp; The current shape of an array can be retrieved using
-the <code>shape( some_array )</code> function.&nbsp; You can use the <code>reshape</code>,<code>resize</code>,<code>transpose</code>,
-and <code>ravel</code> functions to get a copy of an array with
-different dimensions. Note: most Numeric functions allow for in-place
-copying through an optional extra argument specifying the destination
-for the operation.&nbsp; See the Numeric Python manual for details.&nbsp;</p>
+indexing.&nbsp; The current shape of an array is its <code>shape</code>
+attribute.&nbsp; You can use <code>reshape</code>, <code>resize</code>,
+<code>transpose</code> and <code>ravel</code> to get an array with different
+dimensions &mdash; usually a view onto the same memory rather than a copy, so
+writing through one changes the other. Most NumPy functions also take an
+<code>out=</code> argument naming where to put the result, which is how the
+inner loops in this project avoid allocating per frame.</p>
 </section>
 <section>
       <h3>Basic Mathematics</h3>
@@ -163,7 +166,7 @@ approach working for most basic math           operations.</p>
 </section>
 <section>
       <h3>Slicing</h3>
-      <p>Numeric Python uses an extended slicing notation, which allows
+      <p>NumPy uses an extended slicing notation, which allows
 for flexible and powerful manipulation of multidimensional arrays
 (though           at the price of making the slice specifications
 somewhat less           intuitive looking).</p>
@@ -197,43 +200,40 @@ through examples. Consider this interactive session:</p>
 used in           OpenGLContext. Element-wise multiplication was covered
 in Basic           Mathematics above.&nbsp; The other two common
 multiplication types are           dot product and cross product.&nbsp;
-Numeric Python provides a dot           product function:</p>
-      <pre>result = dot( first, second )</pre>
-      <p> Unfortunately, it doesn't seem to provide any cross product
-function, so         the OpenGLContext utility module provides its own
-cross product function         (currently implemented in Python,
-potentially implemented in C in the         future):</p>
-      <pre>from OpenGLContext.utilities import crossprod<br>result = crossprod( (ux, uy, uz, uw), (vx, vy, vz, vw) )</pre>
-      <p>When working with arrays of vectors, the triangleutilities
-function crossProduct should be used, as it will process the entire
-array of           vectors using Numeric Python mechanisms (instead of
-calling a Python           function for every vector).</p>
-      </td>
-    </tr>
-    <tr>
-      <th width="24%" valign="top">
-      <p>Array Processing Functions</p>
-      </th>
-      <td>
+NumPy provides both:</p>
+      <pre>result = np.dot(first, second)
+result = np.cross(first, second)</pre>
+      <p><code>np.cross</code> takes 3-item vectors, and takes whole arrays of
+them at once. OpenGLContext's own
+<code>OpenGLContext.utilities.crossProduct</code> is the 4-item homogeneous
+form, which is what the scenegraph's vectors are:</p>
+      <pre>from OpenGLContext.utilities import crossProduct<br>result = crossProduct((ux, uy, uz, uw), (vx, vy, vz, vw))</pre>
+      <p>When working with arrays of vectors, use
+<code>OpenGLContext.vectorutilities.crossProduct</code>, which processes the
+whole array at once rather than calling a Python function per vector.</p>
+</section>
+<section>
+      <h3>Array Processing Functions</h3>
       <p>The basic manipulations above are primarily useful for
 selecting a         particular subset of an array for processing, while
 the array processing         functions do the bulk of the calculations
-in most algorithms.&nbsp;         Because of the number of functions,
-you should use the Numeric Python         Handbook for descriptions of
-the functions.</p>
+in most algorithms.&nbsp; There are far too many to list; the groups below are
+the ones that come up in this project, and the
+<a href="https://numpy.org/doc/stable/reference/routines.html">NumPy routine
+reference</a> describes each in full.</p>
 </section>
 <section>
       <h3>Universal (Math) Functions</h3>
       <p>These function-like objects provide for extremely flexible
 application of common mathematical operations on arguments of varying
 type.</p>
-      <p><code>absolute,  add, arccos, arcsin, arctan,  arctan2,
-bitwise_and, bitwise_or, bitwise_xor,  ceil,  conjugate, cos, cosh, 
-divide,         divide_safe,  equal,  exp, fabs,  floor, fmod,
-greater, greater_equal,         hypot,  invert, left_shift,  less,
-less_equal, log,  log10, logical_and,         logical_not, logical_or,
-logical_xor, maximum,  minimum,  multiply,  negative, not_equal,
-power,  remainder, right_shift,  sin, sinh, sqrt, subtract,  tan,  tanh</code></p>
+      <p><code>absolute, add, arccos, arcsin, arctan, arctan2,
+bitwise_and, bitwise_or, bitwise_xor, ceil, conjugate, cos, cosh,
+divide, equal, exp, fabs, floor, fmod,
+greater, greater_equal, hypot, invert, left_shift, less,
+less_equal, log, log10, logical_and, logical_not, logical_or,
+logical_xor, maximum, minimum, multiply, negative, not_equal,
+power, remainder, right_shift, sin, sinh, sqrt, subtract, tan, tanh</code></p>
 </section>
 <section>
       <h3>Index(ed)-Array Functions</h3>
@@ -253,15 +253,14 @@ putmask, compress</code></p>
       <p>These functions deal with two "data arrays", combining
 their values in some way to create a new array.&nbsp; The most commonly 
 used function of this group is dot.</p>
-      <p><code>convolve, cross_correlate, dot, outerproduct,
-innerproduct, sum</code></p>
+      <p><code>convolve, correlate, dot, matmul, outer, inner, sum</code></p>
 </section>
 <section>
       <h3> Array Value</h3>
       <p>These functions produce single value outputs from an entire
 array, checking, for instance, that the entire array is true, or
 calculating         the sum of the entire array.</p>
-      <p><code>alltrue, cumproduct, cumsum, product, sometrue, trace</code></p>
+      <p><code>all, any, cumprod, cumsum, prod, trace</code></p>
 </section>
 <section>
       <h3>Altered Array Values</h3>
@@ -269,42 +268,34 @@ calculating         the sum of the entire array.</p>
 modified by the given function, or the array's ordering/contents
 modified as         dictated by the function's rules of operation.</p>
       <p><code>around, clip, sign, sort, compress</code></p>
-      </td>
-    </tr>
-    <tr>
-      <th width="24%" valign="top">
-      <p>The OpenGLContext Utility Modules</p>
-      </th>
-      <td> There are a number of functions not provided by Numeric
-Python which are         common and useful enough that they are included
-in the OpenGLContext         utility module.&nbsp; The cross product
-function was mentioned above,         also available are:
+</section>
+<section>
+      <h2>The OpenGLContext Utility Modules</h2>
+      <p>A few operations on the scenegraph's own vector conventions are common
+enough to be worth having by name. <code>OpenGLContext.utilities</code> works on
+one vector at a time:</p>
       <dl>
-        <dt>rotMatrix( (x,y,z,a) )</dt>
-        <dd>Given rotation as x,y,z,a (a in radians), return rotation
-matrix</dd>
-        <dt>normalise( vector)</dt>
-        <dd>Given a 3 or 4-item vector, return a 3-item unit vector</dd>
-        <dt>crossprod( (ux, uy, uz, uw), (vx, vy, vz, vw) )</dt>
-        <dd>Given 2 4-item vectors, return the cross product as a
-4-item vector</dd>
-        <dt>mag( vector )</dt>
-        <dd>Given a 3 or 4-item vector, return the vector's magnitude</dd>
+        <dt><code>rotMatrix((x, y, z, a))</code></dt>
+        <dd>Given a rotation as x, y, z, a (a in radians), return the rotation
+matrix.</dd>
+        <dt><code>normalise(vector)</code></dt>
+        <dd>Given a 3- or 4-item vector, return a 3-item unit vector.</dd>
+        <dt><code>crossProduct(first, second)</code></dt>
+        <dd>Given two 4-item vectors, return the cross product as a 4-item
+vector. <code>np.cross</code> is the 3-item form.</dd>
+        <dt><code>magnitude(vector)</code></dt>
+        <dd>Given a 3- or 4-item vector, return its magnitude.</dd>
       </dl>
-      <p>The vectorutilities module provides similar functions for
-operating on entire arrays of vectors (they can also work with
-individual vectors,         but are not generally convenient for such
-operation).</p>
-      <p>Note, the current set of utility modules is not ideal, it is
-likely that the "utility" module will largely go away with the explicit
-utility modules (vector, triangle) replacing its functionality. </p>
-      </td>
-    </tr>
-    <tr>
-      <th width="24%" valign="top">
-      <p>Array-based Geometry</p>
-      </th>
-      <td> OpenGL 1.1 introduced a number of geometry-specification
+      <p><code>OpenGLContext.vectorutilities</code> is the same operations over
+a whole <em>array</em> of vectors at once &mdash; <code>crossProduct</code>,
+<code>crossProduct4</code>, <code>normalise</code>, <code>magnitude</code>,
+<code>orientToXYZR</code>, <code>colinear</code>. Reach for these rather than
+looping: they do the work in one array operation instead of one Python call per
+vector, which is the whole reason the array package is here.</p>
+</section>
+<section>
+      <h2>Array-based Geometry</h2>
+      <p>OpenGL 1.1 introduced a number of geometry-specification
 mechanisms based on specifying pointers to arrays of data values.&nbsp;
 The OpenGL         implementation was passed the entire array of data,
 then would loop         through the array (normally at hardware speed)
@@ -322,9 +313,15 @@ such low level functions.</p>
 </section>
 <section>
       <h3>Approach</h3>
+      <p class="technical">What follows is the <em>compatibility-profile</em>
+client-array path, which is what the fixed-function tutorials use. A core
+profile has no client arrays: the same data goes into a vertex buffer object and
+is described to a vertex array object, and the array you build in NumPy is
+identical either way &mdash; only the call that hands it over differs. See
+<a href="renderpasses.html">Core-Profile Rendering</a>.</p>
       <p>The basic approach of the array-based geometry is to specify a
  pointer for a number of different array types: vertex, color, normal
-and textureCoordinate (potentially multiple coordinates if using        
+and textureCoordinate (potentially multiple coordinates if using
 multi-texturing).</p>
       <pre>glVertexPointerd( self.verticies )<br>glColorPointerd ( self.colours )<br>glNormalPointerd ( self.normals )<br>glTexCoordPointerd( self.textures )</pre>
       <p>This tells the OpenGL engine that these are the active arrays
@@ -334,8 +331,10 @@ multi-texturing is enabled (multi-texturing is an OpenGL extension not
 available on all platforms), you can specify one active texture        
 coordinate array for each texture engine.</p>
       <p>Once you have specified the active arrays, you enable or
-disable each         array type you wish to use for a given call.</p>
-      <pre>glEnable( GL_VERTEX_ARRAY )<br>glEnable( GL_COLOR_ARRAY )<br>glEnable( GL_NORMAL_ARRAY )<br>glEnable( GL_TEXTURE_COORD_ARRAY )</pre>
+disable each         array type you wish to use for a given call.
+Note <code>glEnableClientState</code>, not <code>glEnable</code>: the array
+switches are client state, and <code>glEnable</code> will not touch them.</p>
+      <pre>glEnableClientState( GL_VERTEX_ARRAY )<br>glEnableClientState( GL_COLOR_ARRAY )<br>glEnableClientState( GL_NORMAL_ARRAY )<br>glEnableClientState( GL_TEXTURE_COORD_ARRAY )</pre>
       <p>The array drawing calls such as glDrawArrays and
 glDrawElements are         called in place of a glBegin, glEnd construct
 (including the glVertex,         glColor, glNormal, glTexCoord, etc.

@@ -17,10 +17,11 @@ docs stay honest:
     python scripts/generate_doc_images.py --gltf-only
     python scripts/generate_doc_images.py --parthenon ../parthenon/parthenon.glb
 
-Each model is rendered in its own subprocess: one GL context per process is the
-robust way to render a batch. The script re-invokes itself with ``--worker`` to
-do the actual rendering; that path needs a display (or an offscreen GL platform,
-e.g. ``PYOPENGL_PLATFORM=egl``).
+Each model is rendered in its own subprocess by ``oglc-view --capture``: one GL
+context per process is the robust way to render a batch, and running the viewer
+itself is what keeps these images the same pictures a reader gets by opening the
+model. That path needs a display (or an offscreen GL platform, e.g.
+``PYOPENGL_PLATFORM=egl``).
 """
 import argparse
 import os
@@ -37,6 +38,12 @@ CACHE = os.path.join(tempfile.gettempdir(), 'oglc-gltf-samples')
 # Output width; renders are downscaled to this and saved as JPEG.
 WIDTH = 1100
 JPEG_QUALITY = 88
+# Frames to render before the capture, so the adaptive analytic-sky IBL has
+# settled into the same state it settles into live.
+FRAMES = 24
+# Fit factor: below 1 pulls the camera in, so the model fills more of the frame
+# than its bounding sphere alone would ask for.
+MARGIN = 0.92
 
 # Curated subset of the sample gallery for the docs. The framing (yaw, elevation,
 # tilt) comes from the shared per-scene metadata (OpenGLContext.loaders.gltf_demos)
@@ -62,112 +69,46 @@ DEMO_SCRIPTS = [
 
 
 # --------------------------------------------------------------------------- #
-# Worker: renders exactly one model in its own GL context.
+# Parent: builds the job list and spawns a viewer per model.
 # --------------------------------------------------------------------------- #
-def _run_worker(model, out, eye=None, cam=None):
-    os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    os.environ['OPENGLCONTEXT_RENDERER'] = 'pbr'
-    os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
-    os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
-    os.environ.setdefault('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '24')
-    os.environ.setdefault('OPENGLCONTEXT_SHADOW_CASCADES', '3')
-    os.environ.setdefault('OPENGLCONTEXT_IBL_INTENSITY', '0.4')
+def _spawn(model, out, framing=None, cam=None):
+    """Render one model with ``oglc-view --capture`` and save it as a JPEG.
 
-    from math import pi, sin
-    import numpy as np
+    The viewer already knows how to open a model, light it, frame it, let the
+    analytic-sky IBL settle and write one clean frame.  Running it is what keeps
+    these images the same pictures a reader gets by typing ``oglc-view`` at the
+    model themselves; all that is left here is the docs' own house style, which
+    is a fixed width and JPEG rather than PNG.
+    """
     from PIL import Image
-    from OpenGL.GL import (
-        glReadPixels, glGetIntegerv, glReadBuffer,
-        GL_VIEWPORT, GL_RGB, GL_UNSIGNED_BYTE, GL_BACK,
-    )
-    from OpenGLContext import testingcontext
-    from OpenGLContext.scenegraph.basenodes import sceneGraph, Transform
-    from OpenGLContext.loaders import gltf
-    from OpenGLContext.bin import gltf_view
-
-    BaseContext = testingcontext.getInteractive()
-
-    class CaptureContext(BaseContext):
-        def OnInit(self):
-            # scene.group is the model's root Transform (one child Transform per
-            # glTF node); scene.getDEF(name) reaches an individual node.
-            scene = gltf.load_gltf(model)
-            cx, cy, cz = scene.center
-            radius = scene.radius or 1.0
-            cams = list(getattr(scene, 'cameras', None) or [])
-            n_lights = gltf_view._count_lights(scene.group)
-            lights = [] if n_lights else self._default_lights(radius)
-
-            if cam is not None and cams:
-                node = Transform(children=[scene.group])
-                self.sg = sceneGraph(
-                    children=[gltf_view.TestContext._sky(), node] + lights)
-                pose = cams[cam % len(cams)]
-                near = pose.get('near') or radius * 0.02
-                far = pose.get('far') or radius * 20.0
-                self.platform.setFrustum(pose.get('fov') or (pi / 3.2), None,
-                                         near, far)
-                self.platform.setPosition(tuple(pose['position']))
-                self.platform.setOrientation(
-                    gltf_view._orientation(pose['forward'], pose['up']))
-                return
-
-            yaw, elev, tilt = eye if eye else (-0.6, 0.1, 0.05)
-            centred = Transform(translation=(-cx, -cy, -cz),
-                                children=[scene.group])
-            node = Transform(rotation=(0, 1, 0, yaw), children=[centred])
-            self.sg = sceneGraph(
-                children=[gltf_view.TestContext._sky(), node] + lights)
-            fov = pi / 3.2
-            distance = radius / max(1e-3, sin(fov / 2.0)) * 0.92
-            self.platform.setFrustum(fov, None, max(1e-4, radius * 0.02),
-                                     radius * 60.0)
-            self.platform.setPosition((0.0, radius * elev, distance))
-            self.platform.setOrientation((1, 0, 0, tilt))
-
-        _default_lights = gltf_view.TestContext._default_lights
-
-        def OnIdle(self, *a):
-            self.triggerRedraw(1)
-            return 1
-
-        def SwapBuffers(self):
-            # Save every frame (last write wins): the analytic-sky IBL settles
-            # over several frames, and auto-exit may not return cleanly.
-            try:
-                _x, _y, w, h = (int(v) for v in glGetIntegerv(GL_VIEWPORT))
-                glReadBuffer(GL_BACK)
-                px = glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE)
-                arr = np.flipud(
-                    np.frombuffer(px, dtype=np.uint8).reshape(h, w, 3)).copy()
-                im = Image.fromarray(arr, 'RGB')
-                if im.width > WIDTH:
-                    im = im.resize((WIDTH, round(im.height * WIDTH / im.width)))
-                im.save(out, quality=JPEG_QUALITY)
-            except Exception:
-                import traceback
-                traceback.print_exc()
-            return super().SwapBuffers()
-
-    CaptureContext.ContextMainLoop(size=(WIDTH, 680))
-
-
-# --------------------------------------------------------------------------- #
-# Parent: builds the job list and spawns a worker per model.
-# --------------------------------------------------------------------------- #
-def _spawn(model, out, eye=None, cam=None):
-    cmd = [sys.executable, os.path.abspath(__file__), '--worker', model, out]
+    cmd = [sys.executable, '-m', 'OpenGLContext.bin.view', model,
+           '--size', '%dx680' % WIDTH, '--frames', str(FRAMES),
+           '--background', 'sky']
     if cam is not None:
-        cmd += ['--cam', str(cam)]
-    elif eye is not None:
-        # '--eye=' form so a leading '-' in a framing value isn't parsed as a flag
-        cmd += ['--eye=%s,%s,%s' % eye]
+        cmd += ['--camera', str(cam)]
+    else:
+        yaw, elevation, tilt = framing if framing else (-0.6, 0.1, 0.05)
+        # '--yaw=' form, so a leading '-' in a framing value is not read as a flag
+        cmd += ['--no-cameras', '--margin', str(MARGIN), '--yaw=%s' % yaw,
+                '--elevation=%s' % elevation, '--tilt=%s' % tilt]
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    result = subprocess.run(cmd, timeout=300)
-    ok = result.returncode == 0 and os.path.exists(out)
+    ok = False
+    with tempfile.TemporaryDirectory() as scratch:
+        png = os.path.join(scratch, 'capture.png')
+        result = subprocess.run(cmd + ['--capture', png], timeout=300)
+        ok = result.returncode == 0 and os.path.exists(png)
+        if ok:
+            _save_jpeg(Image.open(png), out)
     print('  %s %s' % ('ok  ' if ok else 'FAIL', os.path.relpath(out, REPO)))
     return ok
+
+
+def _save_jpeg(image, out):
+    """Downscale to the docs' width and write ``out`` as a JPEG."""
+    image = image.convert('RGB')
+    if image.width > WIDTH:
+        image = image.resize((WIDTH, round(image.height * WIDTH / image.width)))
+    image.save(out, quality=JPEG_QUALITY)
 
 
 def _download_sample(name):
@@ -226,13 +167,13 @@ def _demo_gallery():
 def _gltf_gallery():
     print('glTF sample gallery -> docs/images/gltf/')
     out_dir = os.path.join(DOCS_IMAGES, 'gltf')
-    for name, eye in GLTF_DEMOS:
+    for name, framing in GLTF_DEMOS:
         try:
             model = _download_sample(name)
         except Exception as err:
             print('  FAIL download %s: %s' % (name, err))
             continue
-        _spawn(model, os.path.join(out_dir, '%s.jpg' % name), eye=eye)
+        _spawn(model, os.path.join(out_dir, '%s.jpg' % name), framing=framing)
 
 
 def _parthenon_gallery(model):
@@ -260,21 +201,12 @@ def _find_parthenon():
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--worker', nargs=2, metavar=('MODEL', 'OUT'),
-                        help=argparse.SUPPRESS)
-    parser.add_argument('--eye', help=argparse.SUPPRESS)
-    parser.add_argument('--cam', type=int, help=argparse.SUPPRESS)
     parser.add_argument('--gltf-only', action='store_true',
                         help='render only the glTF sample gallery')
     parser.add_argument('--parthenon', metavar='GLB',
                         help='path to a Parthenon .glb (default: auto-detect '
                              'the sibling project)')
     args = parser.parse_args()
-
-    if args.worker:
-        eye = tuple(float(v) for v in args.eye.split(',')) if args.eye else None
-        _run_worker(args.worker[0], args.worker[1], eye=eye, cam=args.cam)
-        return
 
     _gltf_gallery()
     if not args.gltf_only:

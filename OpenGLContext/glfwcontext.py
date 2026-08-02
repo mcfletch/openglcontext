@@ -176,9 +176,8 @@ class GLFWContext(
         # to-back capture subprocesses stall each other's SwapBuffers; a hidden
         # window renders + glReadPixels the same but never maps, so captures don't
         # contend. Pair with OPENGLCONTEXT_NO_VSYNC=1 (swap_interval 0).
-        import os as _os
-        if _os.environ.get('OPENGLCONTEXT_HIDDEN', '').strip().lower() in (
-                '1', 'true', 'yes', 'on'):
+        from OpenGLContext import renderoptions
+        if renderoptions.hidden_window():
             glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
 
     def setupCallbacks(self):

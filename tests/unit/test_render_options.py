@@ -391,3 +391,46 @@ class TestACleanRenderingEnvironment:
                    'OPENGLCONTEXT_STALL_MS', 'OPENGLCONTEXT_TRACE_STALLS',
                    'OPENGLCONTEXT_STALL_TRACE'}
         assert not (seen - set(renderoptions.ENVIRONMENT) - allowed)
+
+
+class TestWhatCleanMeans:
+    """Clean of things that change *what* is rendered, not *whether it is seen*.
+
+    Every rendering variable is dropped so a capture cannot depend on what the
+    parent process happened to be carrying.  Two are not rendering variables in
+    that sense: whether the window is mapped and whether the swap waits for a
+    compositor change nothing about the pixels, and dropping them meant every
+    caller that forgot to pin them opened a window on somebody's desktop.
+    """
+
+    def test_the_offscreen_setting_survives(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
+        assert renderoptions.clean_environment()['OPENGLCONTEXT_HIDDEN'] == '1'
+
+    def test_the_vsync_setting_survives(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_NO_VSYNC', '1')
+        assert renderoptions.clean_environment()['OPENGLCONTEXT_NO_VSYNC'] == '1'
+
+    def test_a_caller_can_still_say_otherwise(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
+        found = renderoptions.clean_environment(OPENGLCONTEXT_HIDDEN='0')
+        assert found['OPENGLCONTEXT_HIDDEN'] == '0'
+
+    def test_nothing_is_invented_when_it_was_not_set(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_HIDDEN', raising=False)
+        assert 'OPENGLCONTEXT_HIDDEN' not in renderoptions.clean_environment()
+
+    def test_it_carries_from_an_explicit_base_too(self):
+        found = renderoptions.clean_environment(
+            {'OPENGLCONTEXT_HIDDEN': '1', 'OPENGLCONTEXT_SHADOWS': '1'})
+        assert found['OPENGLCONTEXT_HIDDEN'] == '1'
+        assert 'OPENGLCONTEXT_SHADOWS' not in found
+
+    def test_everything_that_changes_the_picture_still_goes(self, monkeypatch):
+        for name in ('OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_IBL',
+                     'OPENGLCONTEXT_BLOOM', 'OPENGLCONTEXT_PROFILE'):
+            monkeypatch.setenv(name, 'something')
+        found = renderoptions.clean_environment()
+        for name in ('OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_IBL',
+                     'OPENGLCONTEXT_BLOOM', 'OPENGLCONTEXT_PROFILE'):
+            assert name not in found, name

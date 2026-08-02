@@ -20,13 +20,16 @@ frames sensibly and a listed model only moves for the fields it overrides.
 from dataclasses import dataclass
 from typing import Any, Iterator, Optional, Tuple
 
+from OpenGLContext.loaders import resolver
+
 
 @dataclass(frozen=True)
 class SceneSpec:
     """How to load and frame one demo scene for capture/comparison."""
 
     name: str                       # Khronos sample name, or a local id (Parthenon)
-    source: Optional[str] = None    # None => Khronos sample by name; else a local path
+    source: Optional[str] = None    # None => Khronos sample by name; else a local
+                                    # path or an http(s) URL to fetch
     yaw: float = 0.0                # facing rotation about +Y (radians)
     # Default to a level, straight-on camera centred on the model. A raised camera
     # with a small fixed tilt (the old 0.22/0.10) does NOT aim at the centre, so it
@@ -52,6 +55,12 @@ class SceneSpec:
     anim_time: Optional[float] = None  # pin animation to this time (s) for a posed,
                                        # deterministic capture; None => bind pose
     description: str = ''
+    # A conformance fixture rather than something worth looking at: a bare
+    # triangle, a sparse accessor, a grid of texture-transform cells. Set from
+    # FEATURE_TEST_NAMES below rather than row by row, so the decision is one
+    # readable list. A viewer shelves these separately; a capture run wants them
+    # all the same.
+    feature_test: bool = False
 
     @property
     def capture_background(self) -> str:
@@ -87,6 +96,15 @@ DEFAULT_CAPTURE_BACKGROUND = 'sky'
 # Local Parthenon build (sibling project). Resolved lazily so importing this
 # module never touches the filesystem; see `parthenon_source()`.
 PARTHENON_RELATIVE = ('../parthenon/parthenon.glb', '../../parthenon/parthenon.glb')
+
+#: An authored environment from the XR Publisher project: a valley with a village
+#: in it, carrying ``OMI_collider`` bodies and a document-level audio block under
+#: the pre-rename ``KHR_audio`` name (so its two positional emitters are not the
+#: ``KHR_audio_emitter`` the loader reads).  It is the roster's one scene that is
+#: neither a Khronos sample nor built here, so it is fetched from where it is
+#: published rather than vendored into a BSD tree.
+XR_PUBLISHER_EXAMPLE_SCENE = (
+    'https://xrpublisher.com/wp-content/uploads/2022/02/ExampleScene-26.glb')
 
 
 def _cube(name: str, **kw: Any) -> SceneSpec:
@@ -127,7 +145,7 @@ def _hdr(name: str, panorama: str, **kw: Any) -> SceneSpec:
 # dialed in during the conformance pass; everything else takes the viewer defaults.
 # The wide, flat test grids overestimate their bounding sphere, so a margin < 1
 # pulls the camera in until the model fills the frame instead of floating small.
-DEMO_SCENES = (
+DEMO_SCENES: Tuple[SceneSpec, ...] = (
     # -- conformance set: the models the QA pass flagged --------------------
     _studio('MetalRoughSpheres', margin=0.9,
           description='Metal/rough sphere grid; metals reflect the HDR studio.'),
@@ -350,11 +368,75 @@ DEMO_SCENES = (
     SceneSpec('TriangleWithoutIndices', margin=0.95,
               description='Single triangle, non-indexed.'),
     SceneSpec('TwoSidedPlane', margin=0.95, description='Double-sided plane.'),
+    # -- published elsewhere: fetched by URL, no upstream reference ---------
+    SceneSpec('XRPublisherExampleScene', source=XR_PUBLISHER_EXAMPLE_SCENE,
+              background='sky', upstream=False, cameras=(0,),
+              description='An authored environment: a village in a valley, with '
+                          'colliders and audio emitters. Shot from its own camera '
+                          'because the terrain is ~700 units across, so a fit of '
+                          'the whole model renders the village as a speck.'),
     # -- local Parthenon: every baked camera, no upstream reference --------
     SceneSpec('Parthenon', source='@parthenon', background='sky', upstream=False,
               cameras=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
               description='Local Parthenon build, one shot per baked camera.'),
 )
+
+#: The roster entries that exist to exercise **one glTF feature** rather than to
+#: be looked at.  They are the bulk of the Khronos sample set and they are noise
+#: on a shelf somebody is browsing, so the viewer gives them a section of their
+#: own and the capture harness treats them exactly as before.
+#:
+#: Written out in full rather than matched by pattern: `Box` is a fixture and
+#: `BoomBox` is a demo, `Cube` is a fixture and `AnimatedCube` is too but
+#: `CarConcept` is not, and a prefix that quietly caught one more model would be
+#: a model nobody could find again.
+FEATURE_TEST_NAMES = (
+    # Geometry and mesh basics
+    'Triangle', 'TriangleWithoutIndices', 'SimpleMeshes', 'SimpleTexture',
+    'SimpleMorph', 'SimpleSkin', 'SimpleSparseAccessor', 'MeshPrimitiveModes',
+    'MeshoptCubeTest', 'MorphPrimitivesTest', 'MultipleScenes',
+    'NodePerformanceTest', 'RiggedSimple',
+    # The box/cube family: the smallest possible case of each feature
+    'Box', 'Box With Spaces', 'BoxAnimated', 'BoxInterleaved', 'BoxTextured',
+    'BoxTexturedNonPowerOfTwo', 'BoxVertexColors', 'Cube', 'CubeVisibility',
+    'AnimatedCube', 'AnimatedTriangle', 'AnimatedColorsCube',
+    'AnimatedMorphCube',
+    # Texturing and colour
+    'TextureCoordinateTest', 'TextureEncodingTest',
+    'TextureLinearInterpolationTest', 'TextureSettingsTest',
+    'TextureTransformTest', 'TextureTransformMultiTest', 'MultiUVTest',
+    'NormalTangentTest', 'NormalTangentMirrorTest', 'VertexColorTest',
+    'TwoSidedPlane', 'UnlitTest',
+    # Lighting, cameras and orientation
+    'AlphaBlendModeTest', 'Cameras', 'DirectionalLight', 'EmissiveStrengthTest',
+    'InterpolationTest', 'OrientationTest', 'PointLightIntensityTest',
+    # Metadata and encoding
+    'XmpMetadataRoundedCube', 'Unicode❤♻Test',
+    # The smallest case of a material, an instancing set-up, a winding order
+    'SimpleMaterial', 'SimpleInstancing', 'NegativeScaleTest',
+    'PrimitiveModeNormalsTest', 'LightVisibility',
+)
+
+#: ``*TestGrid`` is a grid of one material parameter swept across cells -- a
+#: reference to check a renderer against, not a scene, exactly like ``Compare*``.
+_GRID_SUFFIX = 'TestGrid'
+
+#: Every ``Compare*`` entry is a side-by-side reference grid for one material
+#: parameter, so the whole family is marked without listing each one.
+_COMPARISON_PREFIX = 'Compare'
+
+
+def _marked(spec: SceneSpec) -> SceneSpec:
+    """``spec``, flagged if it is a conformance fixture rather than a demo."""
+    from dataclasses import replace
+    if (spec.name in FEATURE_TEST_NAMES
+            or spec.name.startswith(_COMPARISON_PREFIX)
+            or spec.name.endswith(_GRID_SUFFIX)):
+        return replace(spec, feature_test=True)
+    return spec
+
+
+DEMO_SCENES = tuple(_marked(spec) for spec in DEMO_SCENES)
 
 _BY_NAME = {s.name: s for s in DEMO_SCENES}
 
@@ -411,13 +493,19 @@ def find_parthenon(start: Optional[str] = None) -> Optional[str]:
 def resolve_source(spec: SceneSpec, parthenon: Optional[str] = None) -> Tuple[Optional[str], bool]:
     """Resolve a spec's model source to something loadable.
 
-    Returns (source, is_local). A Khronos sample (`source is None`) resolves to
-    ``(name, False)`` -- the caller downloads/caches by name. The Parthenon
-    sentinel `'@parthenon'` resolves to the local ``.glb`` path (or None if the
-    build is absent). Any other `source` is treated as a local path.
+    Returns (source, is_local), where `is_local` says the source is a path to
+    open and anything else is fetched. A Khronos sample (`source is None`)
+    resolves to ``(name, False)`` -- the caller downloads/caches by name. An
+    http(s) `source` is returned unchanged for the caller to fetch, which is how
+    a scene published outside the Khronos catalogue joins the roster without
+    being vendored into the tree. The Parthenon sentinel `'@parthenon'` resolves
+    to the local ``.glb`` path (or None if the build is absent), and any other
+    `source` is a local path.
     """
     if spec.source is None:
         return spec.name, False
     if spec.source == '@parthenon':
         return (parthenon or find_parthenon()), True
+    if resolver.is_url(spec.source):
+        return spec.source, False
     return spec.source, True

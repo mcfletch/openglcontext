@@ -7,14 +7,14 @@ see the sections below) **and the acceptance layer is now in place**:
 
 - **Full-catalogue regression test:** [tests/test_gltf_conformance.py](../../tests/test_gltf_conformance.py)
   gates **every** Khronos glTF-Sample-Assets model. The roster
-  ([gltf_demos.py](../OpenGLContext/loaders/gltf_demos.py)) was expanded from 122 to
-  **149 scenes** (all 148 catalogue models + local Parthenon → 158 rendered views) so
-  no known sample is untested. It reuses the existing machinery — `oglc-gltf-regression`'s
+  ([gltf_demos.py](../OpenGLContext/loaders/gltf_demos.py)) holds **150 scenes**
+  (all 148 catalogue models, the local Parthenon build and the XR Publisher example
+  scene → 159 rendered views) so no known sample is untested. It reuses the existing machinery — `oglc-gltf-regression`'s
   `render_view`/`compare`/`is_regression` and the shared `ComparisonResult` pixel gate —
   rather than a new framework: a fast no-GL test asserts every view is baselined-or-waived,
   and a `slow`+`visual` test renders each view and fails on any divergence from its blessed
   baseline (skips cleanly with no display / offline).
-- **Blessed baselines** for all 156 non-waived views live in the sibling
+- **Blessed baselines** for all 157 non-waived views live in the sibling
   `reference-images/gltf_baseline` repo (`oglc-gltf-regression --bless`).
 - **Two waived demos** (feature not yet implemented, `WAIVERS`): **ScatteringSkull**
   (full volumetric subsurface / `KHR_materials_volume` scatter) and **USDShaderBallForGltf**
@@ -249,6 +249,29 @@ that backdrop, which is exactly what `needs_env_background` /
 `ENV_BACKGROUND_MODELS` now read. No capture-side value changes, so the blessed
 baselines are untouched. Tests:
 `test_gltf_demos_metadata.py::TestSharedDerivations`.
+
+## A roster scene published outside the catalogue (2026-08-02)
+
+Until now a `SceneSpec.source` was either a Khronos sample name or a path in this
+tree, so an authored scene published on someone else's site could only join the
+roster by being copied in — which vendors a third-party asset of unknown licence
+into a BSD tree. A `source` may now be an `http(s)` URL, resolved the same way a
+Khronos sample is: `resolve_source` reports it as *not local*, and the runner
+fetches it through the security-hardened resolver's sha1-keyed cache, so it is
+downloaded once and loaded as the untrusted remote resource it is.
+
+First user: **XRPublisherExampleScene** — an authored valley with a village in it
+(terrain, corrugated buildings, `OMI_collider` bodies, and a document-level audio
+block with two positional emitters). It is framed by its own authored camera
+rather than by the auto-fit, because the terrain is ~700 units across and an
+on-axis fit of that sphere renders the built area as a speck. It has no upstream
+Khronos reference (`upstream=False`), so its baseline is ours alone; three
+consecutive renders were pixel-identical before it was blessed.
+
+Its audio block is written under the pre-rename extension name `KHR_audio`,
+while the loader reads `KHR_audio_emitter` (see `omi_audio.model.EXTENSION`), so
+the emitters are **not** picked up today. Reading the older name is a separate
+change to `omi_audio`, not to this roster.
 
 ## Bloom / HDR (EmissiveStrengthTest) — IMPLEMENTED (gated)
 

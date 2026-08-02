@@ -158,8 +158,15 @@ class TestContext(BaseContext):
         if engine is None:
             return
         engine.master_gain = MASTER_GAIN
-        engine.clips.put('orbit', synth.tone(660.0, 2.0, amplitude=0.45))
-        engine.clips.put('distant', synth.tone(330.0, 2.0, amplitude=0.6))
+        # Harmonics, not bare sines: the muffle is a low-pass, and a sine has
+        # nothing above its fundamental for a low-pass to take away -- it can
+        # only change how loud the sine is, never how it sounds. Partials are
+        # also what makes a sound easy to place by ear, which is the rest of
+        # what this demo is for.
+        engine.clips.put('orbit', synth.tone(660.0, 2.0, amplitude=0.45,
+                                             harmonics=8))
+        engine.clips.put('distant', synth.tone(330.0, 2.0, amplitude=0.6,
+                                               harmonics=10))
         engine.clips.put('cone', synth.chirp(700.0, 1100.0, 1.5, amplitude=0.45))
         engine.clips.put('ping', synth.impact(0.4, amplitude=0.7, seed=1))
 

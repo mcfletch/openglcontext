@@ -14,20 +14,21 @@ _ENV_KEYS = ('OPENGLCONTEXT_PROFILE', 'OPENGLCONTEXT_BACKEND', 'OPENGLCONTEXT_RE
              'OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_SHADOW_CASCADES',
              'OPENGLCONTEXT_IBL_INTENSITY')
 _ENV_SNAPSHOT = {k: os.environ.get(k) for k in _ENV_KEYS}
-from OpenGLContext.bin import gltf_view
+from OpenGLContext.bin import view  # noqa: E402
+from OpenGLContext.viewer import source  # noqa: E402
 for _k, _v in _ENV_SNAPSHOT.items():
     if _v is None:
         os.environ.pop(_k, None)
     else:
         os.environ[_k] = _v
 
-from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.testing.paths import tests_root  # noqa: E402
 TESTS_DIR = str(tests_root(__file__))
 
 
 class TestParseArgs:
     def test_defaults(self):
-        a = gltf_view.parse_args(['model.glb'])
+        a = view.parse_args(['model.glb'])
         assert a.source == 'model.glb'
         assert a.shadows is None            # unset -> renderer default (on)
         assert a.lights == 'auto'
@@ -36,11 +37,11 @@ class TestParseArgs:
         assert a.no_cameras is False and a.turntable is False
 
     def test_shadows_toggle(self):
-        assert gltf_view.parse_args(['m.glb', '--no-shadows']).shadows is False
-        assert gltf_view.parse_args(['m.glb', '--shadows']).shadows is True
+        assert view.parse_args(['m.glb', '--no-shadows']).shadows is False
+        assert view.parse_args(['m.glb', '--shadows']).shadows is True
 
     def test_camera_and_capture(self):
-        a = gltf_view.parse_args(['m.glb', '--camera', 'aerial', '--capture', 'o.png',
+        a = view.parse_args(['m.glb', '--camera', 'aerial', '--capture', 'o.png',
                                   '--capture-delay', '0.75', '--frames', '20'])
         assert a.camera == 'aerial'
         assert a.capture == 'o.png'
@@ -48,20 +49,22 @@ class TestParseArgs:
         assert a.frames == 20
 
     def test_size_parsing(self):
-        assert gltf_view.parse_args(['m.glb', '--size', '1280x720']).size == (1280, 720)
+        assert view.parse_args(['m.glb', '--size', '1280x720']).size == (1280, 720)
 
     def test_bad_size_rejected(self):
         with pytest.raises(SystemExit):
-            gltf_view.parse_args(['m.glb', '--size', 'wide'])
+            view.parse_args(['m.glb', '--size', 'wide'])
 
     def test_background_passthrough(self):
-        assert gltf_view.parse_args(['m.glb', '--background', '0.1,0.2,0.3']).background \
+        assert view.parse_args(['m.glb', '--background', '0.1,0.2,0.3']).background \
             == '0.1,0.2,0.3'
-        assert gltf_view.parse_args(['m.glb', '--background', 'none']).background == 'none'
+        assert view.parse_args(['m.glb', '--background', 'none']).background == 'none'
 
 
 _RENDER_ENV_KEYS = ('OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_IBL_INTENSITY',
-                    'OPENGLCONTEXT_DISABLE_FPS_DISPLAY', 'OPENGLCONTEXT_SHADOW_CASCADES')
+                    'OPENGLCONTEXT_DISABLE_FPS_DISPLAY',
+                    'OPENGLCONTEXT_SHADOW_CASCADES',
+                    'OPENGLCONTEXT_HIDDEN', 'OPENGLCONTEXT_NO_VSYNC')
 
 
 class TestApplyRenderEnv:
@@ -84,17 +87,17 @@ class TestApplyRenderEnv:
 
     def test_shadows_off_sets_env(self, monkeypatch):
         self._clean_env(monkeypatch)
-        gltf_view.apply_render_env(gltf_view.parse_args(['m.glb', '--no-shadows']))
+        view.apply_render_env(view.parse_args(['m.glb', '--no-shadows']))
         assert os.environ['OPENGLCONTEXT_SHADOWS'] == '0'
 
     def test_unset_shadows_leaves_env(self, monkeypatch):
         self._clean_env(monkeypatch)
-        gltf_view.apply_render_env(gltf_view.parse_args(['m.glb']))
+        view.apply_render_env(view.parse_args(['m.glb']))
         assert 'OPENGLCONTEXT_SHADOWS' not in os.environ
 
     def test_ibl_and_capture_env(self, monkeypatch):
         self._clean_env(monkeypatch)
-        gltf_view.apply_render_env(gltf_view.parse_args(
+        view.apply_render_env(view.parse_args(
             ['m.glb', '--ibl-intensity', '0.6', '--capture', 'o.png']))
         assert os.environ['OPENGLCONTEXT_IBL_INTENSITY'] == '0.6'
         assert os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] == '1'
@@ -104,20 +107,46 @@ class TestApplyRenderEnv:
         # controller sheds cascades under load (the dominant shadow-pass cost),
         # which a fixed pin would defeat.
         self._clean_env(monkeypatch)
-        gltf_view.apply_render_env(gltf_view.parse_args(['m.glb']))
+        view.apply_render_env(view.parse_args(['m.glb']))
         assert 'OPENGLCONTEXT_SHADOW_CASCADES' not in os.environ
 
     def test_capture_pins_cascades_for_determinism(self, monkeypatch):
         # A --capture render must be reproducible, so it pins the cascade count.
         self._clean_env(monkeypatch)
-        gltf_view.apply_render_env(gltf_view.parse_args(['m.glb', '--capture', 'o.png']))
+        view.apply_render_env(view.parse_args(['m.glb', '--capture', 'o.png']))
         assert os.environ['OPENGLCONTEXT_SHADOW_CASCADES'] == '3'
 
     def test_capture_respects_explicit_cascade_override(self, monkeypatch):
         self._clean_env(monkeypatch)
         monkeypatch.setenv('OPENGLCONTEXT_SHADOW_CASCADES', '1')
-        gltf_view.apply_render_env(gltf_view.parse_args(['m.glb', '--capture', 'o.png']))
+        view.apply_render_env(view.parse_args(['m.glb', '--capture', 'o.png']))
         assert os.environ['OPENGLCONTEXT_SHADOW_CASCADES'] == '1'
+
+    def test_capture_renders_without_a_mapped_window(self, monkeypatch):
+        """A capture wants no window and no vsync, and must say so itself.
+
+        A mapped surface serialises on the compositor's frame callback, so
+        ``SwapBuffers`` blocks forever with nothing consuming frames -- which is
+        what ``--capture`` on a headless or Wayland session is.  Every other
+        caller in the tree already set these two by hand before running a
+        capture; the viewer now sets them for whoever runs it.
+        """
+        self._clean_env(monkeypatch)
+        view.apply_render_env(view.parse_args(['m.glb', '--capture', 'o.png']))
+        assert os.environ['OPENGLCONTEXT_HIDDEN'] == '1'
+        assert os.environ['OPENGLCONTEXT_NO_VSYNC'] == '1'
+
+    def test_an_interactive_run_still_gets_a_window(self, monkeypatch):
+        self._clean_env(monkeypatch)
+        view.apply_render_env(view.parse_args(['m.glb']))
+        assert not os.environ.get('OPENGLCONTEXT_HIDDEN')
+
+    def test_a_visible_capture_can_still_be_asked_for(self, monkeypatch):
+        """Watching one happen is how you find out why it looks wrong."""
+        self._clean_env(monkeypatch)
+        monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '0')
+        view.apply_render_env(view.parse_args(['m.glb', '--capture', 'o.png']))
+        assert os.environ['OPENGLCONTEXT_HIDDEN'] == '0'
 
 
 # -- headless integration --------------------------------------------------
@@ -165,7 +194,7 @@ def camera_glb(tmp_path_factory):
 
 
 def _run(args, timeout=180):
-    return subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.gltf_view'] + args,
+    return subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
                           timeout=timeout, capture_output=True, text=True,
                           cwd=TESTS_DIR + '/..')
 
@@ -224,24 +253,23 @@ class TestRemoteSourceRouting:
     base URL, so its relative external references cannot resolve."""
 
     def test_is_url(self):
-        assert gltf_view._is_url('http://example.com/m.gltf')
-        assert gltf_view._is_url('https://example.com/m.gltf')
-        assert not gltf_view._is_url('/local/m.gltf')
-        assert not gltf_view._is_url('m.glb')
-        assert not gltf_view._is_url(None)
+        assert source.is_url('http://example.com/m.gltf')
+        assert source.is_url('https://example.com/m.gltf')
+        assert not source.is_url('/local/m.gltf')
+        assert not source.is_url('m.glb')
+        assert not source.is_url(None)
 
     def test_resolve_source_keeps_url(self):
         url = 'https://example.com/models/BoxTextured/glTF/BoxTextured.gltf'
-        assert gltf_view._resolve_source(url) == url
+        assert source.resolve_source(url) == url
 
-    def test_resolve_source_rejects_missing_file(self):
-        with pytest.raises(SystemExit):
-            gltf_view._resolve_source('/no/such/model.gltf')
+    def test_resolve_source_answers_none_for_a_missing_file(self):
+        assert source.resolve_source('/no/such/model.gltf') is None
 
     def test_resolve_source_accepts_existing_file(self, tmp_path):
         p = tmp_path / "m.gltf"
         p.write_text("{}")
-        assert gltf_view._resolve_source(str(p)) == str(p)
+        assert source.resolve_source(str(p)) == str(p)
 
     @staticmethod
     def _patch_loaders(monkeypatch, calls):
@@ -253,20 +281,20 @@ class TestRemoteSourceRouting:
             calls['file'] = s
             return 'FILESCENE'
 
-        monkeypatch.setattr(gltf_view.gltf, 'load_gltf_url', url_loader)
-        monkeypatch.setattr(gltf_view.gltf, 'load_gltf', file_loader)
+        monkeypatch.setattr(source.gltf, 'load_gltf_url', url_loader)
+        monkeypatch.setattr(source.gltf, 'load_gltf', file_loader)
 
     def test_url_routes_through_load_gltf_url(self, monkeypatch):
         calls = {}
         self._patch_loaders(monkeypatch, calls)
         url = 'https://example.com/m.gltf'
-        assert gltf_view._load_source(url) == 'URLSCENE'
+        assert source.load_gltf_source(url) == 'URLSCENE'
         assert calls == {'url': url}          # went to the URL path, not the file path
 
     def test_local_path_routes_through_load_gltf(self, monkeypatch):
         calls = {}
         self._patch_loaders(monkeypatch, calls)
-        assert gltf_view._load_source('/local/m.glb') == 'FILESCENE'
+        assert source.load_gltf_source('/local/m.glb') == 'FILESCENE'
         assert calls == {'file': '/local/m.glb'}
 
 
@@ -279,53 +307,56 @@ class TestPhysicsDefault:
 
     def test_defaults_to_free_fly(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_PHYSICS', raising=False)
-        assert gltf_view.parse_args(['m.glb']).physics is False
+        assert view.parse_args(['m.glb']).physics is False
 
     def test_physics_flag_opts_in(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_PHYSICS', raising=False)
-        assert gltf_view.parse_args(['m.glb', '--physics']).physics is True
+        assert view.parse_args(['m.glb', '--physics']).physics is True
 
     def test_env_var_opts_in(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_PHYSICS', '1')
-        assert gltf_view.parse_args(['m.glb']).physics is True
+        assert view.parse_args(['m.glb']).physics is True
 
     def test_no_physics_flag_overrides_env(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_PHYSICS', '1')
-        assert gltf_view.parse_args(['m.glb', '--no-physics']).physics is False
+        assert view.parse_args(['m.glb', '--no-physics']).physics is False
 
 
 class TestEyeLookAtCamera:
     """Explicit interior camera: --eye / --look-at bypass auto-framing (Sponza)."""
 
     def test_parse_vec3(self):
-        assert gltf_view._parse_vec3('12,0,2') == (12.0, 0.0, 2.0)
-        assert gltf_view._parse_vec3('-14.0,4,-3') == (-14.0, 4.0, -3.0)
+        assert view._parse_vec3('12,0,2') == (12.0, 0.0, 2.0)
+        assert view._parse_vec3('-14.0,4,-3') == (-14.0, 4.0, -3.0)
 
     def test_bad_vec3_rejected(self):
         import argparse
         with pytest.raises(argparse.ArgumentTypeError):
-            gltf_view._parse_vec3('1,2')
+            view._parse_vec3('1,2')
 
     def test_eye_lookat_args(self):
-        a = gltf_view.parse_args(['m.glb', '--eye=12,0,2', '--look-at=-14,4,-3'])
+        a = view.parse_args(['m.glb', '--eye=12,0,2', '--look-at=-14,4,-3'])
         assert a.eye == (12.0, 0.0, 2.0)
         assert a.look_at == (-14.0, 4.0, -3.0)
 
     def test_default_no_explicit_camera(self):
-        a = gltf_view.parse_args(['m.glb'])
+        a = view.parse_args(['m.glb'])
         assert a.eye is None and a.look_at is None
 
-    def test_frame_eye_lookat_sets_platform_pose(self):
-        # _frame_eye_lookat aims the platform from eye toward target without GL.
-        import numpy as np
-        inst = gltf_view.TestContext.__new__(gltf_view.TestContext)
+    def test_an_explicit_eye_and_target_aim_the_platform(self):
+        """--eye/--look-at bypasses auto-framing and points the camera itself."""
+        from OpenGLContext.viewer.options import ViewerOptions
+        inst = view.TestContext.__new__(view.TestContext)
 
         class _Platform:
             def setFrustum(self, *a): self.frustum = a
             def setPosition(self, p): self.position = p
+            def setOrientation(self, o): self.orientation = o
             quaternion = None
         inst.platform = _Platform()
-        inst._frame_eye_lookat((12.0, 0.0, 2.0), (-14.0, 4.0, -3.0), radius=18.0)
+        inst.options = ViewerOptions(eye=(12.0, 0.0, 2.0),
+                                     look_at=(-14.0, 4.0, -3.0))
+        inst.frameModel(18.0)
         # camera sits at the eye, and a look direction was turned into a rotation
         assert tuple(round(v, 3) for v in inst.platform.position) == (12.0, 0.0, 2.0)
         assert inst.platform.quaternion is not None

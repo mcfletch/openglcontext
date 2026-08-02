@@ -25,7 +25,7 @@ fixed-size image.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple
 
 import ctypes
 
@@ -48,6 +48,7 @@ from OpenGL.GL import shaders as GL_shaders
 import numpy as np
 
 from OpenGLContext.ui.geometry import Rect
+from OpenGLContext.ui.pictures import PictureCache
 
 log = logging.getLogger(__name__)
 
@@ -131,7 +132,8 @@ class OverlayRenderer:
         self._white: Any = None
         self._disc: Any = None
         self._text: Any = None
-        self._images: Dict[str, Any] = {}
+        self._pictures = PictureCache(upload=self._uploadTexture,
+                                      delete=self._deleteTexture)
         self._vertices: List[float] = []
         self._texture: Any = None
         self._mode: str = self.BLEND
@@ -153,6 +155,12 @@ class OverlayRenderer:
         renderer = getattr(context, '_overlayRenderer', None)
         if renderer is None:
             renderer = cls(font_size)
+            # A picture finishing on a worker thread is news: a context that
+            # only draws when something asks it to would otherwise show it
+            # whenever the next unrelated event happened to cause a frame.
+            # force=0, because this arrives off the render thread -- it sets
+            # the flag and wakes the loop rather than drawing from here.
+            renderer.pictures.onReady = lambda: context.triggerRedraw(0)
             context._overlayRenderer = renderer
         elif renderer.font_size != font_size:
             renderer.useFontSize(font_size)
@@ -230,10 +238,8 @@ class OverlayRenderer:
                                (glDeleteBuffers, self._vbo)):
             if value is not None:
                 deleter(1, [value])
-        # ``_images`` holds (texture, width, height), and () for a file that
-        # would not load, so the ids have to be picked out rather than passed
-        # as they are stored.
-        alive = [int(entry[0]) for entry in self._images.values() if entry]
+        self._pictures.close()
+        alive = []
         for generated in (self._white, self._disc):
             if generated is not None:
                 alive.append(int(generated))
@@ -241,7 +247,6 @@ class OverlayRenderer:
             glDeleteTextures(len(alive), alive)
         self._vao = self._vbo = self._white = self._program = None
         self._disc = None
-        self._images = {}
 
     @staticmethod
     def _uploadTexture(width: int, height: int, data: bytes) -> Any:
@@ -258,33 +263,32 @@ class OverlayRenderer:
         glBindTexture(GL_TEXTURE_2D, 0)
         return texture
 
-    def imageTexture(self, url: str) -> Optional[Tuple[Any, int, int]]:
-        """A skin image's texture, size included, loaded once and kept.
+    def imageTexture(self, url: str,
+                     blocking: bool = True) -> Optional[Tuple[Any, int, int]]:
+        """A picture's texture, size included, through the picture cache.
 
-        ``url`` is a filesystem path or a ``file:`` URL, resolved through
-        :func:`OpenGLContext.loaders.loader.local_path` so it means the same
-        thing here as it does for every other asset in the system.
+        ``url`` is a filesystem path, a ``file:`` URL or an ``http(s)`` URL.
 
-        Returns None when the file cannot be read, so a missing skin asset
+        ``blocking`` is the default because the caller that has always used
+        this is a **skin**, whose artwork is a handful of small local files the
+        frame asking for them cannot do without.  A gallery passes
+        ``blocking=False`` and gets None until the picture has been decoded off
+        the render thread -- see :mod:`OpenGLContext.ui.pictures`.
+
+        Returns None when the picture cannot be read, so a missing asset
         degrades to the flat fill rather than taking the frame down.
         """
-        cached = self._images.get(url)
-        if cached is not None:
-            return cached if cached != () else None
-        try:
-            from PIL import Image
-            from OpenGLContext.loaders.loader import local_path
-            image = Image.open(local_path(url)).convert('RGBA')
-            width, height = image.size
-            entry = (self._uploadTexture(width, height, image.tobytes()),
-                     width, height)
-        except Exception:
-            log.warning("could not load overlay skin image %s", url,
-                        exc_info=True)
-            self._images[url] = ()              # remembered, so we try once
-            return None
-        self._images[url] = entry
-        return entry
+        return self._pictures.get(url, blocking=blocking)
+
+    @property
+    def pictures(self) -> PictureCache:
+        """The cache behind :meth:`imageTexture`, for a caller that wants to
+        tune the budget or ask what is resident."""
+        return self._pictures
+
+    @staticmethod
+    def _deleteTexture(texture: Any) -> None:
+        glDeleteTextures(1, [int(texture)])
 
     # -- the batch --------------------------------------------------------
     def _state(self, texture: Any, mode: str) -> None:
@@ -593,6 +597,9 @@ class OverlayRenderer:
         is what keeps a whole HUD plus the screen over it down to a handful of
         draw calls.
         """
+        # Pictures decoded since the last frame become textures here, on the
+        # render thread and before anything asks to draw one.
+        self._pictures.pump()
         if not self.begin(viewport):
             return
         width, height = self._viewport

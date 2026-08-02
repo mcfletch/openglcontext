@@ -1,140 +1,42 @@
 #! /usr/bin/env python
-"""VRML97 load-and-view demonstration/test
+"""``oglc-vrml`` -- the former VRML97-only viewer, now an alias for ``oglc-view``.
 
-Usage:
-    vrml_view.py [--shaders] myscene.wrl
+There is one viewer, and it works out the format from the source, so the command
+that opens a ``.wrl`` is the command that opens a ``.glb``.  A VRML world opened
+this way gains everything that was previously only in the glTF viewer: framing,
+loading in the background, camera cycling over the world's own ``Viewpoint``
+nodes, a caption, screenshots, ``--capture``, and walking with gravity and
+collision.  See :mod:`OpenGLContext.bin.view`.
 
-Options:
-    --shaders    Use shader-based rendering (core-profile compatible)
-                 instead of legacy fixed-function pipeline
+The old ``--shaders`` / ``--no-shaders`` switches are gone: they reached into the
+render pass from inside ``Redraw`` to turn on shader rendering, and the viewer
+now renders through the core-profile PBR pass as a matter of course.  A world
+that genuinely wants the compatibility pipeline gets it from the environment,
+which is where every other renderer switch lives::
 
-A very limited VRML97 viewer.
+    OPENGLCONTEXT_PROFILE=compatibility oglc-view world.wrl
 
-Environment:
-    OPENGLCONTEXT_PROFILE=core    Automatically enables shader rendering
+This name is kept for one release cycle so existing scripts and documentation
+keep working, and prints where to go instead.  It will then be removed.
 """
-import argparse
-import os
-import OpenGL
-#OpenGL.FULL_LOGGING = True
-OpenGL.ERROR_CHECKING = False
-#OpenGL.ERROR_ON_COPY = True
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-from OpenGLContext import vrmlcontext
+import sys
+from typing import Any, Optional
 
-# Global flag for shader mode - default based on profile
-USE_SHADERS = os.environ.get('OPENGLCONTEXT_PROFILE', 'compatibility') == 'core'
+from OpenGLContext.bin.view import main as view_main
+
+#: What to type now.  Named here so the notice and the replacement cannot drift.
+REPLACEMENT = 'oglc-view'
 
 
-#: Movement speeds a viewer offers, in scene units per second at scale 1.
-WALK_SPEED = 3.0
-RUN_SPEED = 6.0
-FLY_SPEED = 8.0
+def main(argv: Optional[list] = None) -> Any:
+    """Run ``oglc-view``, having said that is what this now is."""
+    sys.stderr.write(
+        "oglc-vrml is deprecated and will be removed; use %s instead "
+        "(it opens every format, and a world gets the full viewer).\n"
+        % REPLACEMENT)
+    sys.stderr.flush()
+    return view_main(argv, prog='oglc-vrml')
 
 
-def movement_modes(scale: float = 1.0):
-    """The ways of moving this viewer offers, as declared nodes.
-
-    Declared rather than hand-rolled: one settings screen can present the
-    navigation of every viewer, and a game embedding this one retunes it by
-    setting fields rather than subclassing.
-
-    ``scale`` sizes the speeds to the thing being viewed — a viewer frames
-    models from a bolt to a city, and a speed that suits one is useless for the
-    other, so it is a parameter rather than a constant.
-    """
-    from OpenGLContext.move import modes as _modes
-    return [
-        _modes.WalkMode(name='walk', walkSpeed=WALK_SPEED * scale,
-                        runSpeed=RUN_SPEED * scale),
-        _modes.FlyMode(name='fly', flySpeed=FLY_SPEED * scale),
-    ]
-
-
-class TestContext(
-    vrmlcontext.VRMLContext,
-    BaseContext
-):
-    """VRML97-loading Context testing class"""
-
-    _shader_mode_enabled = False
-
-    def OnInit(self):
-        """Load the image on initial load of the application"""
-        # Get filename from parsed args
-        filename = getattr(self, '_vrml_file', None)
-        if filename:
-            self.load(filename)
-        vrmlcontext.VRMLContext.OnInit(self)
-        BaseContext.OnInit(self)
-
-    def Redraw(self, *args, **kwargs):
-        """Override to enable shader mode on first render."""
-        # Enable shader mode on first redraw when FLAT exists
-        if USE_SHADERS and not TestContext._shader_mode_enabled:
-            self._enable_shader_mode()
-        return super().Redraw(*args, **kwargs)
-
-    def _enable_shader_mode(self):
-        """Enable shader-based rendering on the FlatPass."""
-        from OpenGLContext.passes import renderpass
-        if renderpass.FLAT is not None:
-            renderpass.FLAT.use_shaders = True
-            TestContext._shader_mode_enabled = True
-            print(f"Enabled shader mode on {renderpass.FLAT.__class__.__name__}")
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description='VRML97 load-and-view demonstration/test',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-    vrml_view.py scene.wrl           # Use legacy fixed-function rendering
-    vrml_view.py --shaders scene.wrl # Use shader-based rendering
-
-    # Or set environment variable for automatic shader mode:
-    OPENGLCONTEXT_PROFILE=core vrml_view.py scene.wrl
-        """
-    )
-    parser.add_argument(
-        '--shaders',
-        action='store_true',
-        default=None,
-        help='Use shader-based rendering (core-profile compatible). '
-             'Automatically enabled when OPENGLCONTEXT_PROFILE=core'
-    )
-    parser.add_argument(
-        '--no-shaders',
-        action='store_true',
-        help='Force legacy fixed-function rendering even with core profile'
-    )
-    parser.add_argument(
-        'file',
-        help='VRML97 file to load (.wrl)'
-    )
-
-    args = parser.parse_args()
-
-    global USE_SHADERS
-    # Priority: --no-shaders > --shaders > environment-based default
-    if args.no_shaders:
-        USE_SHADERS = False
-    elif args.shaders:
-        USE_SHADERS = True
-    # else: USE_SHADERS keeps its environment-based default
-
-    # Store filename for TestContext to access
-    TestContext._vrml_file = args.file
-
-    if USE_SHADERS:
-        print("Using shader-based rendering (GLSL 3.30)", flush=True)
-    else:
-        print("Using legacy fixed-function rendering", flush=True)
-
-    return TestContext.ContextMainLoop()
-
-
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
     main()
