@@ -52,12 +52,14 @@
           <li>GLUT</li>
           <li>Pygame</li>
           <li>wxPython</li>
-          <li>Qt (using the <a href="../pydoc/OpenGLContext_qt.html">OpenGLContext_qt</a>
-            project)</li>
+          <li>Qt (using the optional <a href="https://github.com/mcfletch/openglcontext-qt">OpenGLContext-qt</a> project)</li>
         </ul>
         <li>Provides Basic Interactivity</li>
         <ul>
           <li>3D Flying Mode</li>
+          <li>Examine Mode</li>
+          <li>Walking Mode (Physics Based)</li>
+          <li>FPS Mode (Physics Based with Mouse Look)</li>
           <li>Selection rendering based on unique-color buffers</li>
           <li>Timer mechanisms and simple event handling</li>
         </ul>
@@ -67,8 +69,16 @@
           <li>Lines</li>
           <li>Polygons</li>
           <li>Trimmed NURBs</li>
-          <li>Extruded Shapes (with GLE)</li>
-          <li>Spheres, Cylinders, Cones</li>
+          <li>Extruded Shapes, Lathes, Screws and Spirals (with GLE)</li>
+          <li>Boxes, Spheres, Cylinders, Cones, Nurbs Teapot</li>
+          <li><a href="text.html">Text</a> &mdash; TrueType, as a screen-space
+            texture atlas, 3-D polygonal solids, or 3-D outlines</li>
+          <li><a href="gltf.html">glTF meshes</a> &mdash; skinned, morph-target
+            and vertex-deformed, with <a href="pbr.html">PBR materials</a></li>
+          <li><a href="terrain.html">Terrain</a> &mdash; splat-textured height
+            fields, and streamed 3D&nbsp;Tiles datasets</li>
+          <li><a href="terrain.html#vegetation">Vegetation</a> &mdash; instanced
+            billboards, grass clumps and near-mesh LOD</li>
         </ul>
         <li>Textures (with Pillow), Materials, and
           <a href="pbr.html">physically based (PBR) materials</a></li>
@@ -97,6 +107,7 @@
         <li>Loaders</li>
         <ul>
           <li><a href="gltf.html">glTF&nbsp;2.0 / GLB loader and viewer</a></li>
+          <li>Tiles3D Loader (octree glTF terrain)</li>
           <li>VRML97 loader (SimpleParse is a required dependency)</li>
           <li>Wavefront OBJ loader</li>
           <li>BSP (Quake&nbsp;III file loader/viewer, with the Twitch project)</li>

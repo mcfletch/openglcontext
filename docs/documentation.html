@@ -29,21 +29,24 @@ documentation
     <section id="installation">
       <h2>Installation</h2>
       <p>OpenGLContext needs Python&nbsp;3.10 or newer. Install it and its core
-        dependencies (NumPy, PyOpenGL, PyVRML97, TTFQuery, SimpleParse and
-        PyDispatcher) from PyPI:</p>
+        dependencies (NumPy, PyOpenGL, Pillow, PyVRML97, TTFQuery, SimpleParse,
+        PyDispatcher, pygltflib, omi_audio and omi_physics) from PyPI:</p>
       <pre>pip install OpenGLContext</pre>
       <p>Optional extras pull in the pieces you need for particular features:</p>
       <ul>
         <li><code>OpenGLContext[glfw]</code> -- the GLFW backend (recommended for
           core-profile and PBR rendering)</li>
-        <li><code>OpenGLContext[gltf]</code> -- the
-          <a href="gltf.html">glTF loader</a> (pulls in pygltflib), which the
-          <a href="viewer.html"><code>oglc-view</code></a> viewer reads
-          <code>.gltf</code>/<code>.glb</code> with</li>
+        <li><code>OpenGLContext[draco]</code> -- Draco-compressed glTF geometry
+          (pulls in DracoPy). The <a href="gltf.html">glTF loader</a> itself is
+          core, so the <a href="viewer.html"><code>oglc-view</code></a> viewer
+          reads <code>.gltf</code>/<code>.glb</code> out of the base install</li>
+        <li><code>OpenGLContext[audio]</code> -- the playback backend that reaches
+          a sound card. <a href="audio.html">Audio</a> is core and mixes without
+          it; this is what makes it audible</li>
         <li><code>OpenGLContext[pygame]</code>, <code>OpenGLContext[wx]</code> --
           the PyGame and wxPython backends</li>
-        <li><code>OpenGLContext[all]</code> -- every backend plus glTF and
-          acceleration</li>
+        <li><code>OpenGLContext[all]</code> -- every backend, plus Draco and
+          audio playback</li>
       </ul>
       <h3>Using <code>uv</code></h3>
       <p><a href="https://docs.astral.sh/uv/">uv</a> resolves and installs the

@@ -29,17 +29,17 @@ document covers what the loader supports and how to load models from your own
 code; to <em>open</em> one, see <a href="viewer.html"><code>oglc-view</code></a>,
 the one viewer for every format this project reads.</p>
 <p>File parsing is handled by
-<a href="https://gitlab.com/dodgyville/pygltflib">pygltflib</a>; OpenGLContext
-maps the parsed glTF onto its own scenegraph and PBR materials. Install it with
-the <code>gltf</code> extra (below), or directly from
-<a href="https://pypi.org/project/pygltflib/">PyPI</a>.</p>
+<a href="https://gitlab.com/dodgyville/pygltflib">pygltflib</a>, a core
+dependency; OpenGLContext maps the parsed glTF onto its own scenegraph and PBR
+materials.</p>
 </section>
 
 <section>
 <h2>Opening a model</h2>
-<p>Installing OpenGLContext with the <code>gltf</code> extra pulls in
-<code>pygltflib</code> and registers the viewer command:</p>
-<pre>pip install "OpenGLContext[gltf]"</pre>
+<p>Reading glTF needs no extra: <code>pygltflib</code> is a core dependency and
+the viewer command is registered by the base install. The <code>glfw</code>
+extra is worth adding, because that is the backend the viewer asks for:</p>
+<pre>pip install "OpenGLContext[glfw]"</pre>
 <p>Then open a model -- a local file, a URL, or via the <code>GLTF</code>
 environment variable:</p>
 <pre>oglc-view path/to/model.glb
