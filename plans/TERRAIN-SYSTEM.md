@@ -611,6 +611,17 @@ visual-regression capture, `OPENGLCONTEXT_TERRAIN_TIER` pinned), and shippable.
 - **Runtime carving/destruction:** the SDF + compute-mesh path admits live edits and re-baked tiles; out
   of scope for v1 but the architecture leaves the door open.
 - **Geo-referenced DEM ingest:** GIS → 3D Tiles pipelines (QGIS, py3dtiles) for real-world terrain, if wanted.
+- **Any-area DEM → forested biome, as a pipeline** *(asked for 2026-08-03; not started)*. Today the
+  forest demo ships one baked heightmap of one place. Wanted: name an area, have the elevation
+  fetched from an online service in blocks (~200 m each) and chained into a 4 km × 4 km world or
+  larger, then scatter a biome onto it — the species mix, the ground splat and the grass the demo
+  already derives from slope, elevation and a control map, applied to whatever came back. The
+  scatter, the splat and the walking are done and are area-independent
+  (`openglcontext_forest_demo.scene.build_forest_scene` takes a `ForestConfig` and a height field);
+  what is missing is the fetch, the block chaining and seamless edges between blocks, and a control
+  map derived from the data rather than authored. Overlaps the 3D-Tiles DEM baker (`loaders/tiles3d/dem.py`),
+  which already tiles a heightmap — the open question is whether an area this size wants the streamed
+  tile path or stays one `HeightField` per block.
 - **Water:** a **dedicated water shader on a normal transparent surface**, not OIT — Gerstner/FFT
   waves, planar or screen-space reflection, depth-buffer refraction + absorption/fog, shoreline foam
   against terrain height (ties into the "Procedural backgrounds / environment" item). Ordinary
@@ -630,7 +641,10 @@ got a 4K performance pass. Two levers **shipped**: grass-clump ribbon **decimati
 default 1560→520 tris/clump) and **tree-impostor view-cone culling** (`run.py:_stream_impostors`
 keeps a forward cone + near disc, dropping ~78% of impostor cards that fall behind/beside the
 camera), plus **idle event-driven redraw** (`TerrainWalkMixin.OnIdle` redraws only when the
-view pose changes, so a parked camera stops spinning the GPU). Measured at the dev container's
+view pose changes, so a parked camera stops spinning the GPU). *(2026-08-03: the pose gate now
+covers the free-fly camera only. With `setupPhysics` enabled the avatar is a simulation — gravity
+moves it whether or not anyone touched a key — so a walking context is stepped and drawn every
+frame, as twitch and `oglc-view` are.)* Measured at the dev container's
 compositor-clamped 435² (true 4K fill is not measurable in-container — the PBR scene FBO follows
 the real framebuffer, not a forced viewport): median 13.8→12.3 ms, p95 19.4→16.3 ms while
 walking. On real hardware the user measures **~45–50 fps at 4K** (fill-bound), below the

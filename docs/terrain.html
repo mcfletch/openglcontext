@@ -30,6 +30,9 @@ and real heightmaps (DEMs) load through the same path. Vegetation scatters on th
 surface with distance level-of-detail. The indented
 <span class="technical">technical notes</span> point at the code, all under
 <code>OpenGLContext/loaders/tiles3d/</code>.</p>
+<p>There is a second, simpler path for a landscape that fits in memory whole:
+a <a href="#heightfield">height field with a splat-textured surface</a>, walked
+by the same avatar and the same movement modes with no tiles and no baking.</p>
 
   <h2>Quick start &mdash; walk a world</h2>
   <p>The viewer is the <code>oglc-terrain</code> command (installed with the package)
@@ -263,6 +266,77 @@ trees = build_vegetation_lod(pos, idx.reshape(-1, 3), near_mesh, far_billboard,
   <p class="technical"><code>sample.build_overhang_tileset</code> bakes an elevated slab
   over ground (genuine solid-air-solid) that streams, renders and yields a walkable
   collider &mdash; the pattern a procedural voxel/Transvoxel cave baker would follow.</p>
+
+  <h2 id="heightfield">Height-field terrain, walked</h2>
+  <p>A landscape that fits in memory whole needs none of the streaming above.
+  <code>OpenGLContext.scenegraph.terrain</code> holds it as a
+  <strong><code>HeightField</code></strong> &mdash; an elevation grid over a
+  centred world square, sampled bilinearly &mdash; drawn by
+  <strong><code>SplatTerrain</code></strong>, which blends several ground
+  materials per fragment from a control image. A 4&nbsp;km square at 513&sup2;
+  samples is one mesh and one draw, and the height under any point is arithmetic
+  rather than a ray cast.</p>
+
+  <p><code>OpenGLContext.move.terrainwalk.TerrainWalkMixin</code> is what walks
+  it. It is the terrain form of
+  <a href="physics.html#heightfield"><code>PhysicsWalkMixin</code></a>: the same
+  avatar, the same declared
+  <a href="navigation.html">movement modes</a> and the same keys as a glTF model
+  or an arena map, with the ground taken from the height field and the obstacles
+  from a field of cylinders &mdash; tree trunks, rocks &mdash; resolved
+  analytically.</p>
+
+  <pre><code>class Forest( OverlayMixin, TerrainWalkMixin, BaseContext ):
+    def OnInit( self ):
+        self.sg = my_scene                          # with the SplatTerrain in it
+        self.eye_height = 1.7                       # metres; sizes the avatar
+        self.platform.setPosition( where_to_start )
+        self.init_walk( height_field, trunk_positions, trunk_radii )
+        self.setupPhysics( enable=True )            # binds 'g', starts walking
+        self.add_stream( 10.0, refresh_grass )      # follow the walker</code></pre>
+
+  <table>
+    <tr><th>Method</th><th>What it does</th></tr>
+    <tr><td><code>init_walk( field, positions, radii )</code></td>
+      <td>Bind the ground and the cylinders. The radii have
+      <code>player_radius</code> added, and the cylinders are bucketed into a
+      hash grid, so a collision test looks at a handful of neighbours rather
+      than at a whole forest.</td></tr>
+    <tr><td><code>setupPhysics( enable=True )</code></td>
+      <td>Stand the avatar up and give it the camera. From
+      <code>PhysicsWalkMixin</code>, unchanged &mdash; <kbd>g</kbd> hands the
+      camera back to the free-fly navigator, <kbd>f</kbd> flies.</td></tr>
+    <tr><td><code>add_stream( step, fn, turn=None )</code></td>
+      <td>Call <code>fn(x, z)</code> once the walker has moved <code>step</code>
+      world units, or turned <code>turn</code> radians. What refreshes the grass
+      and the near-mesh trees that follow the camera; use <code>turn</code> for a
+      field that depends on the <em>facing</em>, such as a view-cone cull.</td></tr>
+    <tr><td><code>eye_height</code>, <code>player_radius</code></td>
+      <td>The camera height and the body radius the scene was written against.
+      They size the avatar, rather than the physics defaults.</td></tr>
+  </table>
+
+  <p>The surface is a <strong>floor</strong>, not a rail: the avatar is lifted to
+  it from at or below and left alone above, so a jump rises, an arrival from the
+  air falls, and flying over the canopy works. Trunks stop a walker and not a
+  flier. Without <code>setupPhysics</code> the mix-in still holds a free-fly
+  camera down on the terrain, which is the older behaviour and is what the
+  offscreen capture and benchmark tools use.</p>
+
+  <p><code>oglc-forest</code> &mdash; the
+  <a href="https://pypi.org/project/openglcontext-forest-demo/">forest demo</a>,
+  a separate distribution &mdash; is this path at full size: real Great Smoky
+  Mountains elevation, a four-layer splat ground, 230k GPU-instanced trees with
+  impostor LOD, two layers of camera-following grass, and the overlay
+  <a href="overlayui.html">settings and key-binding screens</a> on the same keys
+  every other program here uses.</p>
+  <p class="technical"><code>scenegraph/terrain/</code> (<code>heightfield.py</code>,
+  <code>splat.py</code>), <code>scenegraph/vegetation/</code> (instanced clumps,
+  billboards and near meshes) and <code>move/terrainwalk.py</code>. The behaviour
+  is pinned by <code>tests/unit/test_terrainwalk_avatar.py</code> (where the
+  walker ends up, on a slope, against a trunk, mid-jump and in the air),
+  <code>test_terrainwalk_broadphase.py</code> and
+  <code>test_terrain_vegetation.py</code>.</p>
 
   <h2>Demos &amp; validation</h2>
   <ul>

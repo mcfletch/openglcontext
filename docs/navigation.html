@@ -63,6 +63,18 @@ MyContext.ContextMainLoop(definition=definition)</pre>
     free-form settings mapping: one game's swim speed is 3 and another's is 10,
     and both are an <code>SFFloat</code> on <code>SwimMode</code>. That buys
     validation, defaults and serialisation from the field system.</p>
+  <p><strong>The speed travels with the move.</strong> What actually scales a
+    step is the <em>character controller's</em> capability, so a mode passes its
+    own figure down with every frame's
+    <code>set_move</code>&nbsp;/&nbsp;<code>set_fly_move</code>&nbsp;/&nbsp;<code>set_swim_move</code>
+    and the body moves at what the mode says. That is what makes the number on
+    the <a href="overlayui.html">settings screen</a> real: it is written onto the
+    live mode node, and the next step is taken at the new speed &mdash; no
+    restart, and nothing to keep in step by hand. A caller driving a platform
+    directly, without a mode, passes no speed and the body keeps whatever it was
+    built with. Crouching is the exception: it is a property of the body rather
+    than of the way you are moving, so <code>crouchSpeed</code> outranks the
+    tier the mode asked for.</p>
 
   <h3>Chosen modes and imposed modes</h3>
   <p>Two kinds of mode share the base class. <strong>User-selected</strong>
@@ -246,6 +258,10 @@ walk.bindings = list(walk.bindings) + [
     <tr><td><code>oglc-ui</code> (<code>bin/ui_demo</code>)</td>
       <td>walk, fly, first-person</td>
       <td>declared, so the overlay demo has modes to show</td></tr>
+    <tr><td><code>oglc-forest</code> (the forest demo)</td>
+      <td>first-person, walk, fly</td>
+      <td>yes &mdash; the modes move an avatar standing on a height field, see
+      <a href="terrain.html#heightfield">Terrain</a></td></tr>
   </table>
   <p>Walking and flying come from
     <code>OpenGLContext.move.modes.walk_fly_modes(scale=1.0)</code>, which is
@@ -259,6 +275,13 @@ walk.bindings = list(walk.bindings) + [
     units. A viewer keeps the free-fly navigator for its non-walking mode, and
     the two never both drive the camera: the older manager is unbound while the
     modes are in charge.</p>
+  <p><code>walk_fly_modes(scale, first_person=True)</code> puts
+    <code>FPSMode</code> in front of the pair, which is what makes mouse-look the
+    mode a session <em>starts</em> in: the manager takes the first selectable
+    mode. That is the right default for a world someone is inside &mdash; a
+    landscape, an arena &mdash; where steering with the pointer is what anyone
+    arriving expects to find; <kbd>m</kbd> cycles to the <kbd>q</kbd>/<kbd>e</kbd>
+    walk for anyone who would rather keep the pointer.</p>
   <p><strong>A mouse-look mode needs two things from the context beyond the
     mode itself</strong>, and both are provided by
     <code>ViewPlatformMixin</code> rather than by the mode: the pointer is

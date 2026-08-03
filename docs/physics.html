@@ -188,8 +188,12 @@ scene.advance(dt)                         # steps the world, writes back Transfo
       terrain heightfield, a level format that ships its collision &mdash;
       overrides this and never touches <code>sg</code>.</td></tr>
   <tr><td><code>characterCapabilities( scale )</code></td>
-      <td>The avatar's size and speeds. Override to make it something other
-      than roughly a person.</td></tr>
+      <td>The avatar's size, and the speeds it starts with. Override to make it
+      something other than roughly a person. The
+      <a href="navigation.html">movement mode</a> in force retunes the walk, run,
+      fly and swim speeds as it drives, so those are what the mode says rather
+      than what was set here; the proportions, the jump and the crouch stay the
+      body's.</td></tr>
   <tr><td><code>spawnAvatar( lo, hi, caps, viewpoints )</code></td>
       <td>Stand the avatar somewhere it can walk out of &mdash; see below.</td></tr>
   <tr><td><code>moveAvatarToViewpoint( vp )</code></td>
@@ -197,10 +201,36 @@ scene.advance(dt)                         # steps the world, writes back Transfo
       it faces. Safe-bound, and it starts <em>flying</em> if the viewpoint is
       aerial, since falling out of the shot is not what asking for that view
       meant.</td></tr>
+  <tr><td><code>resolvePhysicsStep()</code></td>
+      <td>Correct the avatar's pose once the character has solved its own step,
+      and before the camera is taken from it &mdash; where a host whose ground
+      is not in the collision world puts it back on the ground. Empty by
+      default.</td></tr>
   <tr><td><code>getNavigationPlatform()</code></td>
       <td>What the declared movement modes drive: the avatar while walking, the
       camera otherwise.</td></tr>
   </table>
+
+  <h3 id="heightfield">Ground that is not in the collision world</h3>
+  <p>A landscape is the case the seams above exist for.
+    <code>OpenGLContext.move.terrainwalk.TerrainWalkMixin</code> is the same
+    capability with a different ground: the avatar, the declared modes and the
+    keys are the ones every other program here uses, but the surface is a
+    <a href="terrain.html#heightfield"><code>HeightField</code></a> and the
+    obstacles are a field of cylinders &mdash; both answered analytically. A
+    four-kilometre landscape would be millions of triangles as a collision mesh,
+    and asking a height field how high the ground is costs the same wherever you
+    stand.</p>
+  <p>It fills in three of the seams and adds nothing to the frame loop:
+    <code>buildPhysicsWorld()</code> hands the character a world with nothing in
+    it, <code>spawnAvatar()</code> stands it on the ground under the camera the
+    scene placed (every point of a height field is standable, so there is
+    nothing to search for), and <code>resolvePhysicsStep()</code> lifts it to
+    the surface and pushes it out of the trunks after each step. The surface is
+    a <em>floor</em> rather than a rail, so a jump rises and an arrival from the
+    air falls; trunks stop a walker and not a flier, since flying is noclip.
+    <code>oglc-forest</code> is this, and so is anything else built on
+    <code>scenegraph.terrain</code>.</p>
 
   <h3>The avatar is sized to the world</h3>
   <p>A viewer opens anything from a bolt to a city, and neither a stride nor
@@ -208,8 +238,8 @@ scene.advance(dt)                         # steps the world, writes back Transfo
     avatar is built at <strong>1/40 of the world's longest side</strong>
     (<code>physicsAvatarScale</code>), and the declared
     <a href="navigation.html">movement modes</a> are re-declared at that same
-    scale by <code>applyMovementModes()</code>, so a mode never asks for a speed
-    the character cannot reach.</p>
+    scale by <code>applyMovementModes()</code>, so a stride is in the same units
+    as the model it is taken through.</p>
 
   <h3>Finding somewhere to stand</h3>
   <p>The middle of a model is very often solid &mdash; a statue, thick walls, no
