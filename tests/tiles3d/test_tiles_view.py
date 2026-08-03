@@ -1,9 +1,13 @@
-"""The oglc-tiles viewer's framing helpers and CLI.
+"""Framing a streamed dataset, and what ``oglc-tiles`` is now.
 
-These cover the non-GL logic: descending an external/grouping tree to the first
-content tile for auto-framing, deriving a world-space look direction from a view
-platform's orientation quaternion, and argument parsing. The GL render path is
-exercised by the tiles3d runtime tests and manual captures.
+The framing helpers belong to the 3D-Tiles *adapter*, since which tile to aim at
+is a fact about the format rather than about a command: descending an
+external/grouping tree to the first tile that carries content, and deriving a
+world-space look direction from a view platform's orientation.  ``oglc-tiles``
+itself is a deprecation alias for ``oglc-view``, which opens every format, so
+what is left to check of it is that it says so and delegates.
+
+The GL render path is exercised by the tiles3d runtime tests and manual captures.
 """
 import math
 
@@ -14,6 +18,7 @@ from OpenGLContext import quaternion
 from OpenGLContext.bin import tiles_view
 from OpenGLContext.loaders.tiles3d.tileset import RuntimeTile
 from OpenGLContext.loaders.tiles3d.boundingvolume import SphereBV
+from OpenGLContext.viewer.adapters import tiles as tilesadapter
 
 _IDENTITY = np.identity(4, dtype="d")
 
@@ -29,40 +34,56 @@ def _tile(content_uri, children=()):
 
 def test_leaf_tile_returns_self_when_it_has_content():
     t = _tile("model.b3dm")
-    assert tiles_view._leaf_tile(t) is t
+    assert tilesadapter.leaf_tile(t) is t
 
 
 def test_leaf_tile_descends_past_contentless_grouping_tiles():
     leaf = _tile("detail.b3dm")
     mid = _tile(None, children=[leaf])
     root = _tile(None, children=[mid])   # e.g. root -> external tileset -> content
-    assert tiles_view._leaf_tile(root) is leaf
+    assert tilesadapter.leaf_tile(root) is leaf
 
 
 def test_forward_is_negative_z_for_identity_orientation():
-    fwd = tiles_view._forward(quaternion.fromXYZR(0, 1, 0, 0.0))
+    fwd = tilesadapter._forward(quaternion.fromXYZR(0, 1, 0, 0.0))
     assert np.allclose(fwd, [0, 0, -1], atol=1e-9)
 
 
 def test_forward_yaws_with_orientation():
     # A +90-degree yaw about +Y turns the look direction toward -X.
-    fwd = tiles_view._forward(quaternion.fromXYZR(0, 1, 0, math.pi / 2))
+    fwd = tilesadapter._forward(quaternion.fromXYZR(0, 1, 0, math.pi / 2))
     assert np.allclose(fwd, [-1, 0, 0], atol=1e-6)
 
 
-def test_parser_defaults_and_overrides():
-    args = tiles_view.build_parser().parse_args(["scene/tileset.json"])
-    assert args.source == "scene/tileset.json"
-    assert args.sse == 16.0 and args.memory == 512 and not args.no_recenter
-    assert args.cache_dir is None
+class TestTheDeprecatedCommand:
+    """``oglc-tiles`` runs ``oglc-view``, having said that is what it now is."""
 
-    args = tiles_view.build_parser().parse_args(
-        ["t.json", "--sse", "4", "--memory", "1024", "--no-recenter",
-         "--capture", "out.png"])
-    assert args.sse == 4.0 and args.memory == 1024 and args.no_recenter
-    assert args.capture == "out.png"
+    def _run(self, monkeypatch, argv):
+        seen = {}
+
+        def fake_main(passed, prog=None):
+            seen['argv'] = passed
+            seen['prog'] = prog
+            return 0
+        monkeypatch.setattr(tiles_view, 'view_main', fake_main)
+        return seen, tiles_view.main(argv)
+
+    def test_it_delegates_to_the_one_viewer(self, monkeypatch):
+        seen, result = self._run(monkeypatch, ['scene/tileset.json', '--sse', '4'])
+        assert result == 0
+        assert seen['argv'] == ['scene/tileset.json', '--sse', '4']
+
+    def test_it_keeps_its_own_name_in_the_usage_message(self, monkeypatch):
+        """Someone who typed ``oglc-tiles --help`` must not be shown another
+        command's usage line."""
+        seen, _result = self._run(monkeypatch, [])
+        assert seen['prog'] == 'oglc-tiles'
+
+    def test_it_says_what_to_type_instead(self, monkeypatch, capsys):
+        self._run(monkeypatch, [])
+        assert tiles_view.REPLACEMENT in capsys.readouterr().err
 
 
-def test_parser_requires_a_source():
-    with pytest.raises(SystemExit):
-        tiles_view.build_parser().parse_args([])
+if __name__ == '__main__':
+    import sys
+    sys.exit(pytest.main([__file__, '-v']))

@@ -111,6 +111,66 @@ def test_walking_forward_moves_the_camera_along_facing():
     assert abs(pos[0]) < 1e-6
 
 
+class TestTheSpeedTheModeAsksFor:
+    """The mode in force decides how fast the body moves, frame by frame.
+
+    A mode carries its own speeds, a settings screen edits them, and the body
+    is what a move is scaled by -- so the speed has to travel with the move or
+    the number on the settings page is decoration.
+    """
+
+    def test_walking_takes_the_speed_it_is_given(self):
+        plat = _platform()
+        plat.set_move(forward=1.0, mode='walk', speed=7.5)
+        assert plat.character.caps.walkSpeed == pytest.approx(7.5)
+        assert plat.character.speed() == pytest.approx(7.5)
+
+    def test_running_takes_its_own_tier(self):
+        plat = _platform()
+        walking = plat.character.caps.walkSpeed
+        plat.set_move(forward=1.0, mode='run', speed=11.0)
+        assert plat.character.caps.runSpeed == pytest.approx(11.0)
+        assert plat.character.caps.walkSpeed == pytest.approx(walking)
+
+    def test_saying_nothing_leaves_the_body_alone(self):
+        """A caller with no opinion -- a game driving the platform directly --
+        keeps whatever the character was built with."""
+        plat = _platform()
+        before = plat.character.caps.walkSpeed
+        plat.set_move(forward=1.0, mode='walk')
+        assert plat.character.caps.walkSpeed == pytest.approx(before)
+
+    def test_flying_and_swimming_take_theirs(self):
+        plat = _platform()
+        plat.set_fly_move(forward=1.0, speed=42.0)
+        assert plat.character.caps.flySpeed == pytest.approx(42.0)
+        plat.set_swim_move(forward=1.0, speed=1.25)
+        assert plat.character.caps.swimSpeed == pytest.approx(1.25)
+
+    def test_a_faster_walk_covers_more_ground(self):
+        """The point of all of it: the number moves the avatar."""
+        def walked(speed):
+            plat = _platform()
+            plat.bind((0, 1.0, 0))
+            for _ in range(20):
+                plat.update(1 / 60)              # settle onto the floor
+            start = plat.character.position[2]
+            for _ in range(60):
+                plat.set_move(forward=1.0, mode='walk', speed=speed)
+                plat.update(1 / 60)
+            return abs(float(plat.character.position[2] - start))
+        assert walked(6.0) == pytest.approx(2 * walked(3.0), rel=0.05)
+
+    def test_a_crouch_is_still_the_body_s_own_speed(self):
+        """Crouching is a property of the body, not of the way you are moving,
+        so it outranks the tier the mode asked for."""
+        plat = _platform()
+        plat.set_crouch(True)
+        plat.set_move(forward=1.0, mode='walk', speed=9.0)
+        assert plat.character.speed() == pytest.approx(
+            plat.character.caps.crouchSpeed)
+
+
 def test_fly_move_lifts_the_camera_when_flying():
     """set_fly enables noclip flight; set_fly_move(up) raises the eye."""
     plat = _platform()

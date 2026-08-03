@@ -327,8 +327,13 @@ class WalkMode(_GroundMode):
         self._turn(dt, inputs, platform, self.turnRate)
         self._look(dt, inputs, platform)
         running = inputs.held(*self.keys_for('run'))
+        # The speed goes with the move, every frame.  A body has its own idea of
+        # how fast it walks, and a mode that named a speed but never passed it
+        # would leave that number decorative -- including on the settings screen
+        # that edits it.
         platform.set_move(forward=forward, strafe=strafe,
-                          mode='run' if running else 'walk')
+                          mode='run' if running else 'walk',
+                          speed=float(self.runSpeed if running else self.walkSpeed))
         # `pressed` rather than `held`: a jump is one launch per press, however
         # long the key stays down.
         if inputs.pressed(*self.keys_for('jump')):
@@ -363,7 +368,8 @@ class FlyMode(_GroundMode):
         self._turn(dt, inputs, platform, self.turnRate)
         self._look(dt, inputs, platform)
         platform.set_fly_move(forward=forward, strafe=strafe,
-                              up=self._axis(inputs, 'up', 'down'))
+                              up=self._axis(inputs, 'up', 'down'),
+                              speed=float(self.flySpeed))
 
 
 class SwimMode(_GroundMode):
@@ -426,10 +432,12 @@ class SwimMode(_GroundMode):
         up = self._axis(inputs, 'up', 'down')
         swim = getattr(platform, 'set_swim_move', None)
         if swim is None:
-            # A plain camera has no swim move; it still has to go somewhere.
-            platform.set_fly_move(forward=forward, strafe=strafe, up=up)
+            # A plain camera has no swim move; it still has to go somewhere,
+            # and at this mode's speed rather than at a flier's.
+            platform.set_fly_move(forward=forward, strafe=strafe, up=up,
+                                  speed=float(self.swimSpeed))
             return
-        swim(forward=forward, strafe=strafe, up=up)
+        swim(forward=forward, strafe=strafe, up=up, speed=float(self.swimSpeed))
 
 
 class FPSMode(WalkMode):
@@ -466,7 +474,8 @@ TURN_RATE = 0.9
 TURN_ACCELERATION = 3.0
 
 
-def walk_fly_modes(scale: float = 1.0) -> Sequence[MovementMode]:
+def walk_fly_modes(scale: float = 1.0,
+                   first_person: bool = False) -> Sequence[MovementMode]:
     """Walking and flying, as declared nodes, sized to what is being moved through.
 
     Declared rather than hand-rolled so one settings screen can present the
@@ -478,11 +487,24 @@ def walk_fly_modes(scale: float = 1.0) -> Sequence[MovementMode]:
     same scale the avatar is built at (see
     :meth:`OpenGLContext.move.physicswalk.PhysicsWalkMixin.physicsAvatarScale`),
     so the modes and the character agree.
+
+    ``first_person`` puts :class:`FPSMode` in front of the others, which is
+    what makes it the mode a session starts in: the navigation manager takes
+    the first selectable mode.  For a world someone is *inside* -- a landscape,
+    an arena -- steering with the pointer is what a player expects to find, and
+    ``q``/``e`` walking stays one mode-cycle away for anyone who would rather
+    keep the pointer.
     """
-    return [
+    walking: Sequence[MovementMode] = [
         WalkMode(name='walk', walkSpeed=WALK_SPEED * scale,
                  runSpeed=RUN_SPEED * scale,
                  turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
         FlyMode(name='fly', flySpeed=FLY_SPEED * scale,
                 turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
     ]
+    if not first_person:
+        return walking
+    return [FPSMode(name='fps', walkSpeed=WALK_SPEED * scale,
+                    runSpeed=RUN_SPEED * scale,
+                    turnRate=TURN_RATE,
+                    turnAcceleration=TURN_ACCELERATION)] + list(walking)

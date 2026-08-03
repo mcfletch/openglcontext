@@ -15,10 +15,10 @@ from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 class _Platform:
     submerged = False
 
-    def set_move(self, forward=0.0, strafe=0.0, mode='walk'):
+    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):
         pass
 
-    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0):
+    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):
         pass
 
     def jump(self):

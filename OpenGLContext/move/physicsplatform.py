@@ -6,6 +6,13 @@ navigation input into desired velocity / jump, then drives a context's camera
 from the solved capsule pose.  It also runs **safe viewpoint binding**
 (depenetration + ground snap) on bind, so a camera placed low or inside geometry
 never leaves the user stuck (see ``plans/PHYSICS-COLLISION.md`` §Phase 5).
+
+How fast a move goes is the caller's to say.  Each of the ``set_*_move``
+methods takes the speed with the move, and a
+:class:`~OpenGLContext.move.modes.MovementMode` passes its own declared figure
+every frame -- so the mode is what a player is moving at, and editing it on the
+settings screen is felt on the next step.  A caller with no opinion passes none
+and the body keeps whatever it was built with.
 """
 from typing import Any, Optional, Tuple
 
@@ -47,10 +54,35 @@ class PhysicsViewPlatform:
         right = np.array([c, 0.0, s])
         return fwd * forward + right * strafe
 
-    def set_move(self, forward: float = 0.0, strafe: float = 0.0, mode: str = 'walk') -> None:
+    #: Which of the body's speeds each move tier is measured by.  Unknown tiers
+    #: fall through to walking, as :meth:`CharacterController.speed` does.
+    TIER_SPEEDS = {'walk': 'walkSpeed', 'run': 'runSpeed',
+                   'sprint': 'sprintSpeed', 'crouch': 'crouchSpeed'}
+
+    def _moveAt(self, capability: str, speed: Optional[float]) -> None:
+        """Put the speed the caller asked for onto the body that will move at it.
+
+        A move is scaled by the *character's* capability, so a
+        :class:`~OpenGLContext.move.modes.MovementMode` declaring a walking
+        speed can only mean it if the figure reaches the body.  It arrives with
+        the move, once a frame, which is what makes the number on the settings
+        screen take effect on the next step rather than on the next launch.
+
+        ``None`` means the caller has no opinion -- a game driving this platform
+        directly, rather than through a mode -- and the body keeps whatever it
+        was built with.
+        """
+        if speed is not None:
+            setattr(self.character.caps, capability, float(speed))
+
+    def set_move(self, forward: float = 0.0, strafe: float = 0.0, mode: str = 'walk',
+                 speed: Optional[float] = None) -> None:
+        self._moveAt(self.TIER_SPEEDS.get(mode, 'walkSpeed'), speed)
         self.character.set_move(self._world_dir(forward, strafe), mode=mode)
 
-    def set_fly_move(self, forward: float = 0.0, strafe: float = 0.0, up: float = 0.0) -> None:
+    def set_fly_move(self, forward: float = 0.0, strafe: float = 0.0, up: float = 0.0,
+                     speed: Optional[float] = None) -> None:
+        self._moveAt('flySpeed', speed)
         d = self._world_dir(forward, strafe) + np.array([0.0, up, 0.0])
         self.character.set_fly_move(d)
 
@@ -75,13 +107,14 @@ class PhysicsViewPlatform:
         return gaze * forward + right * strafe
 
     def set_swim_move(self, forward: float = 0.0, strafe: float = 0.0,
-                      up: float = 0.0) -> None:
+                      up: float = 0.0, speed: Optional[float] = None) -> None:
         """Swim along the gaze, plus whatever the up/down keys ask for.
 
         Normalised, because the character takes a *direction* and scales it by
         its own swim speed; looking down and holding forward must not swim
         more slowly than looking level does.
         """
+        self._moveAt('swimSpeed', speed)
         direction = self._gaze_dir(forward, strafe) + np.array([0.0, up, 0.0])
         length = float(np.linalg.norm(direction))
         if length > 1e-9:

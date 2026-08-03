@@ -246,8 +246,14 @@ class TerrainContext(BaseContext):
             self._refresh_grass((sx, sy, sz))
             self._refresh_detail((sx, sy, sz))
 
-        caps = CharacterCapabilities(walkSpeed=16.0, runSpeed=34.0, sprintSpeed=90.0,
-                                     flySpeed=90.0, eyeHeight=1.7, stepHeight=0.7)
+        # Kept as well as given to the character, because the `-`/`=` multiplier
+        # scales *these*: reading the body's current speed and scaling that would
+        # compound, since the scaled figure is what the body then holds.
+        self._speeds = dict(walk=16.0, sprint=90.0, fly=90.0)
+        caps = CharacterCapabilities(walkSpeed=self._speeds['walk'], runSpeed=34.0,
+                                     sprintSpeed=self._speeds['sprint'],
+                                     flySpeed=self._speeds['fly'],
+                                     eyeHeight=1.7, stepHeight=0.7)
         self.avatar = PhysicsViewPlatform(self.world, caps,
                                           position=(sx, sy + 6, sz), yaw=0.6)
         self.avatar.bind((sx, sy + 6, sz))
@@ -305,6 +311,19 @@ class TerrainContext(BaseContext):
     def _toggle_fly(self, event: Any) -> None:
         self._flying = not self._flying
         self.avatar.set_fly(self._flying)
+
+    def _moveSpeed(self, tier: str) -> float:
+        """How fast ``tier`` goes right now, with the `-`/`=` multiplier on it.
+
+        The multiplier belongs on the *speed* and not on the move direction: a
+        move is a unit direction scaled by the body's speed, so a scaled
+        direction is normalised straight back to where it started.
+
+        Scaled from the figures the avatar was built with rather than from what
+        the body is moving at now, because the body holds whatever was last
+        asked for -- scaling that would double the speed again every frame.
+        """
+        return float(self._speeds[tier]) * self._mult
 
     def _faster(self, event: Any) -> None:
         self._mult = min(self._mult * 1.5, 8.0)
@@ -499,10 +518,10 @@ class TerrainContext(BaseContext):
             nav.turn(1.8 * dt)
         if self._flying:
             up = (1.0 if held("r") else 0.0) - (1.0 if held("f") else 0.0)
-            nav.set_fly_move(fwd * self._mult, strafe * self._mult, up * self._mult)
+            nav.set_fly_move(fwd, strafe, up, speed=self._moveSpeed("fly"))
         else:
             mode = "sprint" if self._sprint else "walk"
-            nav.set_move(fwd, strafe, mode=mode)
+            nav.set_move(fwd, strafe, mode=mode, speed=self._moveSpeed(mode))
         nav.update(dt)
         self._ground_clamp()
         if not self._flying:

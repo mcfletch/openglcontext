@@ -408,8 +408,20 @@ class PhysicsWalkMixin(object):
         self._physicsLast = now
         self.updateNavigation(dt)
         platform.update(dt)
+        self.resolvePhysicsStep()
         platform.apply(self)
         self.triggerRedraw(1)
+
+    def resolvePhysicsStep(self) -> None:
+        """Correct the avatar's pose once the character has solved its own step.
+
+        Between the step and the camera, which is the only moment a correction
+        can be made without the view showing the uncorrected pose for a frame.
+        A hook, and empty here: a host whose ground or obstacles are not in the
+        collision world -- a height field, an analytic surface -- resolves them
+        from here.  See
+        :meth:`OpenGLContext.move.terrainwalk.TerrainWalkMixin.resolveTerrain`.
+        """
 
     @staticmethod
     def physicsNow() -> float:

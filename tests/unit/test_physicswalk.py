@@ -390,6 +390,32 @@ class TestStepPhysics:
         host.stepPhysics(0.016)
         assert host.physicsPlatform is None
 
+    def test_a_correction_hook_runs_before_the_camera_is_taken(self):
+        """A host whose ground is not in the collision world corrects it here.
+
+        Before the camera, so the view never shows the uncorrected pose: a
+        height field walker lifted after ``apply`` would sink for one frame
+        every frame.  See
+        :meth:`OpenGLContext.move.terrainwalk.TerrainWalkMixin.resolveTerrain`.
+        """
+        host = _started()
+        host.enablePhysics(True)
+        lifted = float(host.physicsPlatform.character.position[1]) + 5.0
+
+        def resolve():
+            host.physicsPlatform.character.position[1] = lifted
+        host.resolvePhysicsStep = resolve
+        host.stepPhysics(0.016)
+        assert float(host.physicsPlatform.character.position[1]) \
+            == pytest.approx(lifted)
+        eye = np.asarray(host.physicsPlatform.character.eye(), dtype='d')
+        assert np.allclose(np.asarray(host.platform.position[:3], dtype='d'), eye)
+
+    def test_the_correction_hook_does_nothing_by_default(self):
+        host = _started()
+        host.enablePhysics(True)
+        assert host.resolvePhysicsStep() is None
+
 
 # -- what the declared movement modes drive ---------------------------------
 

@@ -34,10 +34,10 @@ class _Platform:
         self.moved = []
         self.jumped = 0
 
-    def set_move(self, forward=0.0, strafe=0.0, mode='walk'):
+    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):
         self.moved.append((forward, strafe, mode))
 
-    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0):
+    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):
         self.moved.append((forward, strafe, up))
 
     def jump(self):

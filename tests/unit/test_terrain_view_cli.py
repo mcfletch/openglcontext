@@ -178,6 +178,25 @@ class TestInputHandlers:
             inst._slower(None)
         assert inst._mult == pytest.approx(0.25)       # clamped low
 
+    def test_the_multiplier_scales_the_speed_of_each_tier(self):
+        inst = _inst()
+        inst._speeds = dict(walk=16.0, sprint=90.0, fly=90.0)
+        inst._mult = 2.0
+        assert inst._moveSpeed('walk') == pytest.approx(32.0)
+        assert inst._moveSpeed('fly') == pytest.approx(180.0)
+
+    def test_the_multiplier_does_not_compound_frame_on_frame(self):
+        """Scaled from what the avatar was built with, not from what it is
+        moving at: the body holds whatever was last asked for, so scaling that
+        would double the speed every frame the key stayed as it was."""
+        inst = _inst()
+        inst._speeds = dict(walk=16.0, sprint=90.0, fly=90.0)
+        inst._mult = 2.0
+        first = inst._moveSpeed('walk')
+        for _ in range(10):
+            inst._moveSpeed('walk')
+        assert inst._moveSpeed('walk') == pytest.approx(first)
+
 
 class TestSceneMutation:
     def test_swap_child_replaces_the_existing_node(self):

@@ -54,13 +54,32 @@ def test_flying_scales_with_the_model_too():
 
 
 def test_the_modes_match_the_avatar_they_drive():
-    """A mode that asked for a speed the character cannot reach would be a lie."""
+    """The body starts at the figures it is about to be driven at.
+
+    A mode hands its speed down with every move, so the two cannot drift once
+    walking has begun -- but the avatar exists before the first mode has
+    stepped, and it should not spend that frame at some other speed."""
     from OpenGLContext.move.physicswalk import PhysicsWalkMixin
     capabilities = PhysicsWalkMixin().characterCapabilities(2.0)
     walk, fly = walk_fly_modes(2.0)
     assert walk.walkSpeed == pytest.approx(capabilities.walkSpeed)
     assert walk.runSpeed == pytest.approx(capabilities.runSpeed)
     assert fly.flySpeed == pytest.approx(capabilities.flySpeed)
+
+
+def test_a_world_you_are_inside_can_start_in_mouse_look():
+    """The manager takes the first selectable mode, so first is what it starts in."""
+    declared = walk_fly_modes(first_person=True)
+    assert _names(declared) == ['fps', 'walk', 'fly']
+    assert declared[0].capturePointer
+    assert not walk_fly_modes()[0].capturePointer
+
+
+def test_mouse_look_walks_at_the_same_speed_as_walking_does():
+    """Taking the pointer changes how you steer, not how fast you go."""
+    fps, walk, _fly = walk_fly_modes(3.0, first_person=True)
+    assert fps.walkSpeed == pytest.approx(walk.walkSpeed)
+    assert fps.runSpeed == pytest.approx(walk.runSpeed)
 
 
 def test_the_gltf_viewer_names_what_its_modes_drive():

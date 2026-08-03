@@ -16,12 +16,16 @@ class _Platform:
         self.yaw = 0.0
         self.pitch = 0.0
         self.submerged = False
+        #: The speed the last move was asked for at, or None for "your own".
+        self.speed = None
 
-    def set_move(self, forward=0.0, strafe=0.0, mode='walk'):
+    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):
         self.moved.append((forward, strafe, mode))
+        self.speed = speed
 
-    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0):
+    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):
         self.moved.append((forward, strafe, up))
+        self.speed = speed
 
     def jump(self):
         self.jumped += 1
@@ -149,6 +153,31 @@ def test_walking_uses_the_run_tier_when_the_run_key_is_held():
     assert platform.moved[-1][2] == 'run'
 
 
+def test_walking_tells_the_platform_the_speed_it_declares():
+    """A mode's speeds are the ones a settings screen edits, so they have to be
+    the ones the body moves at -- and they travel with the move, once a frame,
+    so an edit takes effect on the next step rather than on the next launch."""
+    walk, platform = modes.WalkMode(walkSpeed=2.5, runSpeed=9.0), _Platform()
+    walk.update(0.016, press(InputState(), 'w'), platform)
+    assert platform.speed == pytest.approx(2.5)
+    walk.update(0.016, press(InputState(), 'w', '<shift>'), platform)
+    assert platform.speed == pytest.approx(9.0)
+
+
+def test_retuning_a_mode_is_felt_on_the_next_frame():
+    walk, platform = modes.WalkMode(walkSpeed=2.5), _Platform()
+    walk.update(0.016, press(InputState(), 'w'), platform)
+    walk.walkSpeed = 12.0                        # what the settings page writes
+    walk.update(0.016, press(InputState(), 'w'), platform)
+    assert platform.speed == pytest.approx(12.0)
+
+
+def test_flying_tells_the_platform_its_own_speed():
+    fly, platform = modes.FlyMode(flySpeed=25.0), _Platform()
+    fly.update(0.016, press(InputState(), 'w'), platform)
+    assert platform.speed == pytest.approx(25.0)
+
+
 def test_turning_left_and_right_are_opposite():
     walk, platform = modes.WalkMode(), _Platform()
     walk.update(0.1, press(InputState(), 'q'), platform)
@@ -175,8 +204,9 @@ class _Swimmer(_Platform):
         self.swimming = None
         self.buoyancy = None
 
-    def set_swim_move(self, forward=0.0, strafe=0.0, up=0.0):
+    def set_swim_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):
         self.swum.append((forward, strafe, up))
+        self.speed = speed
 
     def set_fly(self, flying):
         self.flying = bool(flying)
@@ -234,9 +264,10 @@ def test_a_platform_that_cannot_swim_is_still_driven():
 
 
 def test_swimming_moves_at_its_own_speed_setting():
-    swim, platform = modes.SwimMode(swimSpeed=7.0), _Platform()
+    swim, platform = modes.SwimMode(swimSpeed=7.0), _Swimmer()
     swim.update(0.016, press(InputState(), 'w'), platform)
-    assert platform.moved
+    assert platform.swum
+    assert platform.speed == pytest.approx(7.0)
 
 
 def test_mouse_look_turns_and_pitches_from_relative_motion():
@@ -448,7 +479,7 @@ class _Recorder:
     def __init__(self):
         self.looked = 0.0
 
-    def set_move(self, forward=0.0, strafe=0.0, mode='walk'):
+    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):
         self.forward = forward
 
     def turn(self, delta):
@@ -479,10 +510,10 @@ class _Turner:
     def __init__(self):
         self.turned = 0.0
 
-    def set_move(self, forward=0.0, strafe=0.0, mode='walk'):
+    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):
         pass
 
-    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0):
+    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):
         pass
 
     def turn(self, delta):
