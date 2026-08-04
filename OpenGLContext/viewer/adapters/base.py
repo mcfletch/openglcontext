@@ -63,6 +63,14 @@ class ViewerScene(object):
         Whatever :meth:`player` can play, or empty.
     ``exposure``
         Camera exposure the source's own lighting asks for; 1.0 is neutral.
+    ``metric``
+        True when the scene's units are metres, which a geospatial dataset
+        knows and a model does not. It is what tells a viewer how big a person
+        is in this world rather than guessing from its extent.
+    ``pose``
+        Where to open the camera, when the adapter knows better than a fit of
+        the bounding sphere -- a streamed dataset opens *inside* itself. None
+        leaves the viewer to frame the whole scene as it always has.
     """
 
     def __init__(self, group: Any,
@@ -72,7 +80,9 @@ class ViewerScene(object):
                  cameras: Optional[list] = None,
                  animations: Optional[list] = None,
                  exposure: float = 1.0,
-                 sceneGraph: Any = None) -> None:
+                 sceneGraph: Any = None,
+                 pose: Any = None,
+                 metric: bool = False) -> None:
         self.group = group
         self.center: Tuple[float, ...] = tuple(float(v) for v in center)
         self.radius = float(radius)
@@ -82,6 +92,8 @@ class ViewerScene(object):
         self.cameras = cameras if cameras is not None else []
         self.animations = animations if animations is not None else []
         self.exposure = exposure
+        self.pose = pose
+        self.metric = metric
         #: The loaded document's own root, when it has one, for its DEF registry.
         self.sceneGraph = sceneGraph
 

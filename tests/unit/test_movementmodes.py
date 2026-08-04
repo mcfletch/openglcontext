@@ -740,3 +740,22 @@ class TestTurningBelongsToEveryMode:
         for _ in range(20):
             mode._turn(0.1, inputs, platform)
         assert platform.yaw / 20 > first, "the ramp did not build up"
+
+
+def test_flying_has_a_boost_the_way_walking_has_a_run():
+    """Holding shift crosses a big world without retuning anything.
+
+    A dataset the size of a city is minutes across at a speed that suits its
+    streets, and the same key that runs on the ground is where a player looks
+    for the answer.
+    """
+    fly, platform = modes.FlyMode(flySpeed=25.0, boostSpeed=100.0), _Platform()
+    fly.update(0.016, press(InputState(), 'w'), platform)
+    assert platform.speed == pytest.approx(25.0)
+    fly.update(0.016, press(InputState(), 'w', '<shift>'), platform)
+    assert platform.speed == pytest.approx(100.0)
+
+
+def test_the_fly_boost_is_a_multiple_of_the_flying_speed_by_default():
+    fly = modes.FlyMode()
+    assert fly.boostSpeed > fly.flySpeed

@@ -228,12 +228,14 @@ class GLTileUploader:
     def upload(self, tile: "RuntimeTile",
                payload: "tuple[_Scene, int]") -> "tuple[Any, int]":
         scene, nbytes = payload
-        m = tile.world_transform
+        # content_transform, not world_transform: it carries the rotation from the
+        # content's own up axis into the tile's Z-up frame as well as the placement.
+        m = tile.content_transform
         drawable: Any
         if np.allclose(m, np.identity(4)):
             drawable = scene.group
         else:
-            # world_transform is column-vector (M·p); MatrixTransform is row-vector (p·M).
+            # content_transform is column-vector (M·p); MatrixTransform is row-vector (p·M).
             drawable = MatrixTransform(localMatrix=m.T, children=[scene.group])
         drawable.dispose = _make_dispose(drawable)
         return drawable, nbytes

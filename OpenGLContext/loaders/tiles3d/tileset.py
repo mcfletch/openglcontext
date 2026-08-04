@@ -16,12 +16,43 @@ import numpy as np
 
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.loaders.tiles3d.boundingvolume import (
-    SphereBV, BoxBV, RegionBV,
+    SphereBV, BoxBV, RegionBV, WGS84_A, WGS84_B,
 )
 
 BoundingVolume = Union[SphereBV, BoxBV, RegionBV]
 
 _IDENTITY = np.identity(4, dtype="d")
+
+#: Rotations from a glTF up axis into the tile's Z-up frame, keyed by the axis
+#: `asset.gltfUpAxis` names. glTF models are Y-up and 3D Tiles frames are Z-up, so
+#: content is rotated a quarter turn about +X unless the tileset says otherwise;
+#: "Z" content is already in the tile's frame, and "X" turns about +Z first.
+_UP_AXIS_TO_Z_UP: dict[str, np.ndarray] = {
+    "X": np.array([[0.0, -1.0, 0.0, 0.0],
+                   [0.0, 0.0, 1.0, 0.0],
+                   [-1.0, 0.0, 0.0, 0.0],
+                   [0.0, 0.0, 0.0, 1.0]], dtype="d"),
+    "Y": np.array([[1.0, 0.0, 0.0, 0.0],
+                   [0.0, 0.0, -1.0, 0.0],
+                   [0.0, 1.0, 0.0, 0.0],
+                   [0.0, 0.0, 0.0, 1.0]], dtype="d"),
+    "Z": _IDENTITY,
+}
+
+#: What a tileset means when it does not say (3D Tiles 1.0 and 1.1 both default
+#: glTF content to Y-up).
+DEFAULT_GLTF_UP_AXIS = "Y"
+
+
+def gltf_up_axis_matrix(asset: Optional[dict[str, Any]]) -> np.ndarray:
+    """The rotation taking a tileset's glTF content into its tiles' Z-up frame.
+
+    `asset` is a tileset document's `asset` object, whose optional `gltfUpAxis`
+    names the axis the content treats as up. An unknown value falls back to the
+    default rather than refusing the dataset.
+    """
+    axis = str((asset or {}).get("gltfUpAxis", DEFAULT_GLTF_UP_AXIS)).upper()
+    return _UP_AXIS_TO_Z_UP.get(axis, _UP_AXIS_TO_Z_UP[DEFAULT_GLTF_UP_AXIS])
 
 
 class RuntimeTile:
@@ -31,6 +62,12 @@ class RuntimeTile:
     allows a `contents` array (e.g. buildings and trees as separate glTF in one tile).
     `content_uris` holds them all; `content_uri` returns the first for single-content
     callers.
+
+    Two transforms, because a tile's frame and its content's are not the same one.
+    `world_transform` places the tile: bounding volumes are expressed in the tile's
+    Z-up frame and use it as it stands. `content_transform` places the glTF inside
+    the tile, and carries the extra rotation from the content's up axis (Y for
+    everything that does not say otherwise) into that Z-up frame.
     """
 
     def __init__(
@@ -41,12 +78,14 @@ class RuntimeTile:
         content_uris: Optional[Iterable[str]],
         world_transform: np.ndarray,
         children: "list[RuntimeTile]",
+        up_axis_matrix: np.ndarray = _IDENTITY,
     ) -> None:
         self.bounding_volume = bounding_volume
         self.geometric_error = float(geometric_error)
         self.refine = refine
         self.content_uris = list(content_uris) if content_uris else []
         self.world_transform = world_transform
+        self.content_transform = world_transform @ up_axis_matrix
         self.children = children
         self.parent: Optional[RuntimeTile] = None
         for child in children:
@@ -74,14 +113,22 @@ class RuntimeTile:
 
 
 class RuntimeTileset:
-    """A parsed tileset: its root tile plus top-level metadata."""
+    """A parsed tileset: its root tile plus top-level metadata.
+
+    `geospatial` is whether the dataset is placed on the globe -- an
+    Earth-centred root transform or a `region` volume. Such a dataset is in
+    metres by specification, which is how a viewer knows how big a person is in
+    it without being told.
+    """
 
     def __init__(
-        self, root: RuntimeTile, root_geometric_error: float, asset: dict[str, Any]
+        self, root: RuntimeTile, root_geometric_error: float, asset: dict[str, Any],
+        geospatial: bool = False,
     ) -> None:
         self.root = root
         self.root_geometric_error = root_geometric_error
         self.asset = asset
+        self.geospatial = geospatial
 
     def iter_tiles(self) -> Iterator[RuntimeTile]:
         return self.root.iter_tiles()
@@ -103,7 +150,8 @@ def _transform_vector(matrix: np.ndarray, vector: np.ndarray) -> np.ndarray:
 
 
 def _world_bounding_volume(
-    bv_dict: dict[str, Any], matrix: np.ndarray, recenter_offset: np.ndarray
+    bv_dict: dict[str, Any], matrix: np.ndarray, recenter_offset: np.ndarray,
+    recenter_rotation: Optional[np.ndarray] = None,
 ) -> BoundingVolume:
     if "box" in bv_dict:
         b = np.asarray(bv_dict["box"], dtype="d")
@@ -121,7 +169,8 @@ def _world_bounding_volume(
     if "region" in bv_dict:
         # Regions are fixed to the WGS 84 datum and ignore the tile transform; only
         # the recenter offset (a pure ECEF translation) applies.
-        return RegionBV(bv_dict["region"], offset=recenter_offset)
+        return RegionBV(bv_dict["region"], offset=recenter_offset,
+                        rotation=recenter_rotation)
     raise NotImplementedError(
         "Only box, sphere and region bounding volumes are supported (got %s)"
         % ", ".join(bv_dict)
@@ -162,15 +211,17 @@ def _build_tile(
     recenter_offset: np.ndarray,
     resolve_external: "Optional[Callable[[str], dict[str, Any]]]",
     depth: int,
+    up_axis_matrix: np.ndarray = _IDENTITY,
+    recenter_rotation: Optional[np.ndarray] = None,
 ) -> RuntimeTile:
     local = tile_dict.get("transform")
     matrix = parent_transform @ _matrix_from_list(local) if local else parent_transform
     refine = tile_dict.get("refine", parent_refine).upper()
     bv = _world_bounding_volume(tile_dict["boundingVolume"], matrix,
-                                recenter_offset)
+                                recenter_offset, recenter_rotation)
     children = [
         _build_tile(child, base_uri, matrix, refine, recenter_offset,
-                    resolve_external, depth)
+                    resolve_external, depth, up_axis_matrix, recenter_rotation)
         for child in tile_dict.get("children", [])
     ]
 
@@ -188,9 +239,11 @@ def _build_tile(
                     "external tileset nesting exceeds %d levels (cyclic reference?)"
                     % _MAX_EXTERNAL_DEPTH)
             sub_doc = resolve_external(resolved)
+            # An external tileset describes its own content, up axis included.
             sub_root = _build_tile(
                 sub_doc["root"], _dir_of(resolved), matrix, refine,
-                recenter_offset, resolve_external, depth + 1)
+                recenter_offset, resolve_external, depth + 1,
+                gltf_up_axis_matrix(sub_doc.get("asset")), recenter_rotation)
             children.append(sub_root)
         else:
             content_uris.append(resolved)
@@ -202,11 +255,37 @@ def _build_tile(
         content_uris=content_uris,
         world_transform=matrix,
         children=children,
+        up_axis_matrix=up_axis_matrix,
     )
 
 
 def _dir_of(uri: Optional[str]) -> str:
     return fetch.dir_of(uri) if uri else ""
+
+
+def level_matrix(origin: np.ndarray) -> np.ndarray:
+    """The rotation taking the ECEF frame to a Y-up frame level at `origin`.
+
+    An earth-centred dataset has its up direction wherever the globe puts it,
+    which in a Y-up viewer leaves the ground as a tilted slab. This maps the
+    ellipsoid normal at `origin` onto +Y, east onto +X and north onto -Z, so the
+    dataset arrives the way a scene authored for the viewer would be.
+    """
+    up = np.array([origin[0] / WGS84_A ** 2, origin[1] / WGS84_A ** 2,
+                   origin[2] / WGS84_B ** 2], dtype="d")
+    norm = np.linalg.norm(up)
+    if not norm:                     # pragma: no cover - the geocentre itself
+        return np.identity(4, dtype="d")
+    up /= norm
+    east = np.cross([0.0, 0.0, 1.0], up)
+    east_norm = np.linalg.norm(east)
+    # Directly under a pole every direction is east; pick one rather than divide
+    # by zero.
+    east = east / east_norm if east_norm > 1e-12 else np.array([1.0, 0.0, 0.0])
+    north = np.cross(up, east)
+    matrix = np.identity(4, dtype="d")
+    matrix[0, :3], matrix[1, :3], matrix[2, :3] = east, up, -north
+    return matrix
 
 
 def _recenter_offset(root_dict: dict[str, Any]) -> np.ndarray:
@@ -251,6 +330,11 @@ def build_runtime_tileset(
     fetch remote tilesets. The external subtree is re-rooted under the referring
     tile's transform and grafted in as a child to refine into.
 
+    Each tile also gets a `content_transform`, which is its `world_transform` with
+    the rotation from the content's up axis (`asset.gltfUpAxis`, Y unless the
+    document says otherwise) applied first, so glTF content stands up in the tile's
+    Z-up frame. An external tileset's own `asset` governs the content it names.
+
     `recenter` subtracts a large ECEF offset from every tile, so an Earth-Centered
     geospatial tileset renders near the origin instead of ~6.4M metres out (where
     32-bit float precision would shatter it). The offset is the root transform's
@@ -263,16 +347,23 @@ def build_runtime_tileset(
     root_dict = tileset_dict["root"]
     initial = _IDENTITY
     recenter_offset = np.zeros(3, dtype="d")
+    recenter_rotation = None
     if recenter:
         recenter_offset = _recenter_offset(root_dict)
         if np.any(recenter_offset):
+            recenter_rotation = level_matrix(recenter_offset)
             initial = np.identity(4, dtype="d")
             initial[:3, 3] = -recenter_offset
+            initial = recenter_rotation @ initial
     root = _build_tile(root_dict, base_uri, initial, parent_refine="REPLACE",
                        recenter_offset=recenter_offset,
-                       resolve_external=resolve_external, depth=0)
+                       resolve_external=resolve_external, depth=0,
+                       up_axis_matrix=gltf_up_axis_matrix(
+                           tileset_dict.get("asset")),
+                       recenter_rotation=recenter_rotation)
     return RuntimeTileset(
         root=root,
         root_geometric_error=float(tileset_dict.get("geometricError", 0.0)),
         asset=tileset_dict.get("asset", {}),
+        geospatial=bool(np.any(_recenter_offset(root_dict))),
     )

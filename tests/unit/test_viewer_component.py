@@ -191,6 +191,8 @@ class TestTheMixinsComposeCleanly:
         'onPhysicsModeChanged',         # the caption names the mode in force
         'physicsSpawnViewpoints',       # the model's cameras are curated spawns
         'options',                      # the component's own configuration
+        'setMovementManager',           # sizes free-fly stepping to the scene
+        'physicsAvatarScale',           # a metric world gets a person, not a giant
     }
 
     def _declared(self, klass):

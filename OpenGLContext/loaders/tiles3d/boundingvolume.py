@@ -86,10 +86,14 @@ class RegionBV:
     transform, so we convert it straight to ECEF here. We enclose the region in a
     sphere sampled over its boundary — conservative but cheap, which is all the
     screen-space-error distance needs. `offset` (an ECEF point) is subtracted so a
-    recentred tileset renders near the origin instead of ~6.4 million metres out.
+    recentred tileset renders near the origin instead of ~6.4 million metres out,
+    and `rotation` (a 3x3 or 4x4 matrix) then turns the result into the viewer's
+    frame, so a region volume follows the same datum handling as the tiles around
+    it rather than staying behind in ECEF.
     """
 
-    def __init__(self, region: Sequence[float], offset: Optional[Any] = None) -> None:
+    def __init__(self, region: Sequence[float], offset: Optional[Any] = None,
+                 rotation: Optional[Any] = None) -> None:
         west, south, east, north, min_h, max_h = (float(v) for v in region)
         offset = np.zeros(3, dtype="d") if offset is None else np.asarray(offset, "d")
         lons = np.linspace(west, east, 3)
@@ -99,6 +103,8 @@ class RegionBV:
             for lon in lons for lat in lats for h in (min_h, max_h)
         ]
         pts = np.asarray(corners, dtype="d")
+        if rotation is not None:
+            pts = pts @ np.asarray(rotation, dtype="d")[:3, :3].T
         self.center = pts.mean(axis=0)
         self.radius = float(np.linalg.norm(pts - self.center, axis=1).max())
 

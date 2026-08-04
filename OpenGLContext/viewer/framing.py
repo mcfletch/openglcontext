@@ -80,9 +80,18 @@ def look_from(eye: Sequence[float], target: Sequence[float], radius: float,
     None when the two coincide, which names no direction at all -- the caller
     leaves the camera where it was rather than aiming it at nothing.
 
-    The aim is a yaw about +Y then a pitch about the yawed X, because a camera
-    at identity looks down -Z; it comes back as a quaternion since composing
-    two rotations is not an axis/angle.
+    The aim is a yaw about +Y and a pitch about X, because a camera at identity
+    looks down -Z; it comes back as a quaternion since composing two rotations
+    is not an axis/angle.
+
+    A view platform holds the rotation that takes the *world* into the camera's
+    frame, which is the inverse of the camera's own: the pitch turns the other
+    way, and it is applied before the yaw rather than after. Composed the
+    intuitive way round, an aim below the horizon renders as the same angle
+    above it -- which is why
+    :meth:`tests.unit.test_viewer_framing.TestLookFromAimsWhereItSays` checks
+    the direction the platform's matrix really faces rather than the angles
+    that went in.
     """
     from OpenGLContext import quaternion
     origin = np.asarray(eye, dtype='d')
@@ -93,8 +102,8 @@ def look_from(eye: Sequence[float], target: Sequence[float], radius: float,
     forward = forward / length
     yaw = atan2(forward[0], -forward[2])                    # 0 looks down -Z
     pitch = asin(max(-1.0, min(1.0, forward[1])))           # + looks up
-    aim = (quaternion.fromXYZR(0, 1, 0, yaw)
-           * quaternion.fromXYZR(1, 0, 0, pitch))
+    aim = (quaternion.fromXYZR(1, 0, 0, -pitch)
+           * quaternion.fromXYZR(0, 1, 0, yaw))
     return CameraPose(
         position=(float(origin[0]), float(origin[1]), float(origin[2])),
         orientation=None,

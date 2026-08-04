@@ -84,6 +84,14 @@ TURNTABLE_RATE = 0.5
 #: Longest animation step taken from wall time, so a stall does not jump the pose.
 MAX_ANIMATION_STEP = 0.1
 
+#: The framed radius the default movement speeds are meant for.  Speeds are in
+#: scene units a second, so a scene very much larger than this is crossed at a
+#: crawl until they grow with it -- a city-sized 3D Tiles dataset at the default
+#: eight units a second takes half an hour to fly across, which is slower than
+#: anything streaming in can be noticed happening.  Scenes at or below this size
+#: keep the speeds they have always had.
+MOVEMENT_REFERENCE_RADIUS = 80.0
+
 #: Modifier states, in the order a keyboard event reports them.  Naming them is
 #: worth it: the two that are not shift are one position apart and a binding that
 #: asks for the wrong one is silent rather than wrong.
@@ -398,6 +406,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
         """
         self.scene = scene
         self.radius = scene.radius or 1.0
+        # How big the world is is only known once a scene has been framed, and
+        # the speeds it is moved through follow from that.
+        self.declareMovementModes()
+        self.scaleMovementSpeeds()
         self._applyExposure(scene)
         self._cameraNames = [(camera.get('name') or 'camera')
                              for camera in scene.cameras]
@@ -532,10 +544,23 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
         An explicit eye and target replace the fit entirely, which is how an
         interior shot -- standing inside a building looking along it -- is
         expressed, since no on-axis fit can say that.
+
+        A scene may also name where it should be opened, and does when standing
+        outside its bounding sphere would be the wrong place to arrive: a
+        streamed dataset is somewhere to be rather than an object to look at,
+        and fitting a city into the frame puts the camera kilometres away from
+        anything. Asking for a fit -- ``--margin``, ``--elevation``, ``--tilt``
+        -- says frame the whole thing after all, and gets the fit.
         """
         eye, target = self.options.eye, self.options.look_at
+        fit_requested = any(value is not None for value in
+                            (self.options.margin, self.options.elevation,
+                             self.options.tilt))
+        scene_pose = getattr(getattr(self, 'scene', None), 'pose', None)
         if eye is not None and target is not None:
             pose = framing.look_from(eye, target, radius)
+        elif scene_pose is not None and not fit_requested:
+            pose = scene_pose
         else:
             pose = framing.fit_sphere(radius, self.options.margin,
                                       self.options.elevation, self.options.tilt)
@@ -646,6 +671,114 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
             return
         from OpenGLContext.move.modes import walk_fly_modes
         definition.movementModes = walk_fly_modes(1.0)
+        self._declaredMovementModes = True
+
+    def movementScale(self) -> float:
+        """How fast this scene should be moved through, against the defaults.
+
+        The framed radius says how big the world is; a scene no larger than
+        :data:`MOVEMENT_REFERENCE_RADIUS` moves at the speeds a model always
+        has, and beyond that the speeds grow with it, so a traverse of any
+        dataset takes a comparable handful of seconds.
+        """
+        return max(1.0, (getattr(self, 'radius', 1.0) or 1.0)
+                   / MOVEMENT_REFERENCE_RADIUS)
+
+    def scaleMovementSpeeds(self) -> None:
+        """Retune our own movement modes to the size of the scene just framed.
+
+        The mode *objects* are kept and their speeds rewritten, so the mode the
+        player is in, the keys they have bound and anything watching
+        ``movementMode`` all survive a scene being swapped for a bigger one.
+
+        Modes a host declared itself are left alone: those are speeds somebody
+        chose, and there is no scale at which to re-derive them.
+        """
+        if not getattr(self, '_declaredMovementModes', False):
+            return
+        from OpenGLContext.move.modes import (
+            BOOST_SPEED, FLY_SPEED, RUN_SPEED, WALK_SPEED)
+        scale = self.movementScale()
+        speeds = (('walkSpeed', WALK_SPEED), ('runSpeed', RUN_SPEED),
+                  ('flySpeed', FLY_SPEED), ('boostSpeed', BOOST_SPEED),
+                  ('swimSpeed', WALK_SPEED))
+        definition = getattr(self, 'contextDefinition', None)
+        for mode in (getattr(definition, 'movementModes', None) or ()):
+            for name, base in speeds:
+                if hasattr(mode, name):
+                    setattr(mode, name, base * scale)
+            if scale != 1.0:
+                self._scaleSpeedHints(mode, scale, [name for name, _ in speeds])
+        self.scaleFreeFlyStep(scale)
+
+    def physicsAvatarScale(self, low: Any, high: Any) -> float:
+        """How big a person is in the world this viewer opened.
+
+        A model arrives in units nobody declared, so the avatar is sized against
+        it -- the inherited rule, a fortieth of the longest side, which gives a
+        bolt and a cathedral each someone who can walk around them.
+
+        A scene that says it is in metres is not like that: 3D Tiles places its
+        content in metres however many kilometres across the dataset is, so the
+        person is a person. Sized off the extent, walking a city spawns a
+        300-metre giant standing above the rooftops, and there is no dropping
+        down into the streets from there.
+        """
+        if getattr(getattr(self, 'scene', None), 'metric', False):
+            return 1.0
+        return super(SceneViewerMixin, self).physicsAvatarScale(low, high)
+
+    def setMovementManager(self, manager: Any) -> None:
+        """Bind a movement manager, sized to the scene if one is already up.
+
+        The manager and the scene arrive in either order -- a viewer binds one
+        at startup, and a scene that loads in the background is framed later --
+        so the sizing is applied from both ends.
+        """
+        super(SceneViewerMixin, self).setMovementManager(manager)
+        self.scaleFreeFlyStep(self.movementScale())
+
+    def scaleFreeFlyStep(self, scale: float) -> None:
+        """Size the free-fly manager's step to the scene as well.
+
+        Free-fly does not go through the movement modes: a plain view platform
+        has no body to give a speed to, so the older manager steps a fixed
+        distance per key press instead. Left alone that is a quarter of a metre
+        at a time however fast the settings screen says the flying is, which in
+        a city is standing still.
+
+        Scaled from the class default rather than from the live value, so
+        framing one scene after another does not compound.
+        """
+        manager = getattr(self, 'movementManager', None)
+        if manager is None:
+            return
+        default = getattr(type(manager), 'STEPDISTANCE', None)
+        if default is not None:
+            manager.STEPDISTANCE = default * scale
+
+    @staticmethod
+    def _scaleSpeedHints(mode: Any, scale: float, names: Sequence[str]) -> None:
+        """Widen a mode's speed sliders to the range its speeds now occupy.
+
+        The ranges in :attr:`MovementMode.UI_HINTS` suit a model-sized world, so
+        at city scale the settings screen would offer a slider whose maximum is
+        below the speed the viewer is actually flying at -- and touching it
+        would slow the session to a crawl.  The scaled ranges go on the mode
+        itself, leaving the class defaults for everyone else.
+        """
+        hints = getattr(mode, 'UI_HINTS', None)
+        if not hints:
+            return
+        scaled = {key: dict(value) for key, value in hints.items()}
+        for name in names:
+            hint = scaled.get(name)
+            if hint is None:
+                continue
+            for bound in ('minimum', 'maximum', 'step'):
+                if bound in hint:
+                    hint[bound] = float(hint[bound]) * scale
+        mode.UI_HINTS = scaled
 
     def cycleMovementMode(self, event: Any = None) -> Any:
         """Step to the next declared movement mode, as ``m`` does in twig-bb.

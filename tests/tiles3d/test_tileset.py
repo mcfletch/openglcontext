@@ -4,6 +4,8 @@ Covers geometric error, refine inheritance, content-URI resolution, both box and
 sphere bounding volumes (sphere is unsupported by py3dtiles, so we parse the tree
 ourselves), and transform composition down the hierarchy into world space.
 """
+import os
+
 import numpy as np
 import pytest
 
@@ -71,8 +73,10 @@ def test_external_tileset_is_grafted_as_child_subtree():
         },
     }
 
+    base = os.path.realpath("tiles") + os.sep
+
     def resolver(uri):
-        assert uri == "sub/other.json"
+        assert uri == os.path.join(base, "sub", "other.json")
         return external
 
     ts = build_runtime_tileset(_tileset({
@@ -80,14 +84,14 @@ def test_external_tileset_is_grafted_as_child_subtree():
         "geometricError": 100.0,
         "refine": "REPLACE",
         "content": {"uri": "sub/other.json"},
-    }), resolve_external=resolver)
+    }), base_uri=base, resolve_external=resolver)
 
     # The referring tile drops the .json as content and gains the external root.
     assert ts.root.content_uri is None
     assert len(ts.root.children) == 1
     grafted = ts.root.children[0]
     # Its content resolves relative to the external tileset's own directory.
-    assert grafted.content_uri == "sub/detail.b3dm"
+    assert grafted.content_uri == os.path.join(base, "sub", "detail.b3dm")
 
 
 def test_external_tileset_content_uri_resolves_against_base_uri():
@@ -118,12 +122,13 @@ def test_plural_contents_collected_on_tile():
             {"uri": "tree-a.glb"},
             {"uri": "tree-b.glb"},
         ],
-    }), base_uri="scene/")
+    }), base_uri=os.path.realpath("scene") + os.sep)
+    scene = os.path.realpath("scene")
     assert ts.root.has_content
-    assert ts.root.content_uris == [
-        "scene/house.glb", "scene/tree-a.glb", "scene/tree-b.glb"]
+    assert ts.root.content_uris == [os.path.join(scene, name) for name in
+                                    ("house.glb", "tree-a.glb", "tree-b.glb")]
     # content_uri (singular) stays available for one-content callers.
-    assert ts.root.content_uri == "scene/house.glb"
+    assert ts.root.content_uri == os.path.join(scene, "house.glb")
 
 
 def test_single_and_plural_content_combine():
@@ -318,3 +323,130 @@ def test_iter_visits_every_tile():
         ],
     }))
     assert sum(1 for _ in ts.iter_tiles()) == 4
+
+
+# -- glTF up axis -----------------------------------------------------------
+
+def test_content_transform_turns_gltf_y_up_into_the_tiles_z_up_frame():
+    """glTF content is Y-up; a tile's frame is Z-up, and content_transform bridges.
+
+    A building modelled with its height along +Y has to stand along the tile
+    frame's +Z, or every dataset that follows the specification lies on its side.
+    """
+    ts = build_runtime_tileset(_tileset({
+        "boundingVolume": _box(),
+        "geometricError": 10.0,
+        "content": {"uri": "a.b3dm"},
+    }))
+    up = ts.root.content_transform[:3, :3] @ np.array([0.0, 1.0, 0.0])
+    assert np.allclose(up, [0.0, 0.0, 1.0])
+    # The tile transform itself is untouched: bounding volumes are already Z-up.
+    assert np.allclose(ts.root.world_transform, np.identity(4))
+
+
+def test_content_transform_composes_with_the_tile_transform():
+    """The conversion sits between the content and the tile's own placement."""
+    ts = build_runtime_tileset(_tileset({
+        "boundingVolume": _box(),
+        "geometricError": 10.0,
+        # A quarter turn about +Z, so the frame's +Z is unchanged.
+        "transform": [0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 7, 0, 0, 1],
+        "content": {"uri": "a.b3dm"},
+    }))
+    point = ts.root.content_transform @ np.array([0.0, 2.0, 0.0, 1.0])
+    assert np.allclose(point[:3], [7.0, 0.0, 2.0])
+
+
+def test_gltf_up_axis_z_leaves_content_unrotated():
+    """`asset.gltfUpAxis: "Z"` says the content is already in the tile's frame."""
+    tileset = _tileset({
+        "boundingVolume": _box(),
+        "geometricError": 10.0,
+        "content": {"uri": "a.b3dm"},
+    })
+    tileset["asset"]["gltfUpAxis"] = "Z"
+    ts = build_runtime_tileset(tileset)
+    assert np.allclose(ts.root.content_transform, np.identity(4))
+
+
+def test_external_tileset_keeps_its_own_up_axis():
+    """A sub-tileset declares the axis convention of the content it names."""
+    external = {
+        "asset": {"version": "1.1", "gltfUpAxis": "Z"},
+        "geometricError": 5.0,
+        "root": {"boundingVolume": _box(), "geometricError": 5.0,
+                 "content": {"uri": "leaf.b3dm"}},
+    }
+    ts = build_runtime_tileset(_tileset({
+        "boundingVolume": _box(),
+        "geometricError": 100.0,
+        "content": {"uri": "child.json"},
+    }), resolve_external=lambda uri: external)
+    grafted = ts.root.children[0]
+    assert np.allclose(grafted.content_transform, np.identity(4))
+
+
+# -- levelling a geospatial dataset -----------------------------------------
+
+def _enu_tileset(longitude=-1.3856, latitude=0.7617):
+    """A tileset mounted the way a geospatial exporter writes one.
+
+    The root transform is an east/north/up frame at the given point, which is how
+    b3dm content is placed on the globe, and the content is a metre above it.
+    """
+    from OpenGLContext.loaders.tiles3d.boundingvolume import (
+        geodetic_to_ecef, WGS84_A, WGS84_B)
+    origin = geodetic_to_ecef(longitude, latitude, 0.0)
+    # Up is the ellipsoid normal, which is what an east/north/up frame means and
+    # is a fifth of a degree off the direction back to the geocentre.
+    up = np.array([origin[0] / WGS84_A ** 2, origin[1] / WGS84_A ** 2,
+                   origin[2] / WGS84_B ** 2])
+    up /= np.linalg.norm(up)
+    east = np.cross([0.0, 0.0, 1.0], up)
+    east /= np.linalg.norm(east)
+    north = np.cross(up, east)
+    matrix = np.identity(4)
+    matrix[:3, 0], matrix[:3, 1], matrix[:3, 2] = east, north, up
+    matrix[:3, 3] = origin
+    return _tileset({
+        "boundingVolume": {"box": [0, 0, 50, 500, 0, 0, 0, 500, 0, 0, 0, 50]},
+        "geometricError": 100.0,
+        "transform": list(matrix.T.reshape(-1)),
+        "content": {"uri": "tile.b3dm"},
+    }), origin
+
+
+def test_recentred_geospatial_dataset_is_levelled_into_the_viewers_frame():
+    """Content modelled upright stands upright, with the ground at the origin.
+
+    A Y-up viewer has no globe to stand on, so an earth-centred dataset arrives
+    levelled: the reference point's local up becomes +Y and its north -Z.
+    """
+    document, origin = _enu_tileset()
+    ts = build_runtime_tileset(document, recenter=True)
+    up = ts.root.content_transform[:3, :3] @ np.array([0.0, 1.0, 0.0])
+    assert np.allclose(up, [0.0, 1.0, 0.0], atol=1e-9)
+    centre, _radius = ts.root.bounding_volume.bounding_sphere()
+    assert np.linalg.norm(centre) < 1.0e3      # brought home from 6400 km out
+    assert centre[1] == pytest.approx(50.0)    # 50 m up, not 50 m north
+
+
+def test_levelling_keeps_distances_and_needs_recentring():
+    """Levelling is a rotation, so the dataset keeps its size; without
+    `recenter` the dataset stays in its earth-centred frame."""
+    document, origin = _enu_tileset()
+    levelled = build_runtime_tileset(document, recenter=True).root.bounding_volume
+    raw = build_runtime_tileset(document, recenter=False).root.bounding_volume
+    assert levelled.bounding_sphere()[1] == pytest.approx(raw.bounding_sphere()[1])
+    assert np.linalg.norm(raw.bounding_sphere()[0]) == pytest.approx(
+        np.linalg.norm(origin), rel=1e-3)
+
+
+def test_local_dataset_is_left_in_the_frame_it_was_authored_in():
+    """A tileset that is not earth-centred has nothing to level against."""
+    ts = build_runtime_tileset(_tileset({
+        "boundingVolume": _box(),
+        "geometricError": 10.0,
+        "content": {"uri": "a.b3dm"},
+    }), recenter=True)
+    assert np.allclose(ts.root.world_transform, np.identity(4))

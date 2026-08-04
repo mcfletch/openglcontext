@@ -345,18 +345,24 @@ class FlyMode(_GroundMode):
 
     PROTO = 'FlyMode'
     flySpeed = field.newField('flySpeed', 'SFFloat', 1, 8.0)
+    #: Speed while the boost is held -- crossing distance rather than looking
+    #: around, which in a streamed dataset is most of the flying there is.
+    boostSpeed = field.newField('boostSpeed', 'SFFloat', 1, 32.0)
 
     UI_HINTS = {
         'flySpeed': {'label': 'Flying speed', 'minimum': 0.5, 'maximum': 60.0,
                      'step': 0.5, 'suffix': ' m/s'},
+        'boostSpeed': {'label': 'Boosted flying speed', 'minimum': 1.0,
+                       'maximum': 240.0, 'step': 1.0, 'suffix': ' m/s'},
     }
 
-    commands: Sequence[str] = tuple(_GroundMode.commands) + ('up', 'down')
+    commands: Sequence[str] = tuple(_GroundMode.commands) + ('up', 'down', 'boost')
 
     def defaultBindings(self) -> Sequence[KeyBinding]:
         return list(super(FlyMode, self).defaultBindings()) + [
             KeyBinding(command='up', label=_('Rise'), keys=[' ']),
             KeyBinding(command='down', label=_('Sink'), keys=['c']),
+            KeyBinding(command='boost', label=_('Fly faster'), keys=['<shift>']),
         ]
 
     def applyTo(self, platform: Any) -> None:
@@ -367,9 +373,11 @@ class FlyMode(_GroundMode):
         forward, strafe = self._movement(inputs)
         self._turn(dt, inputs, platform, self.turnRate)
         self._look(dt, inputs, platform)
+        boosting = inputs.held(*self.keys_for('boost'))
         platform.set_fly_move(forward=forward, strafe=strafe,
                               up=self._axis(inputs, 'up', 'down'),
-                              speed=float(self.flySpeed))
+                              speed=float(self.boostSpeed if boosting
+                                          else self.flySpeed))
 
 
 class SwimMode(_GroundMode):
@@ -467,6 +475,9 @@ class FPSMode(WalkMode):
 WALK_SPEED = 3.0
 RUN_SPEED = 6.0
 FLY_SPEED = 8.0
+#: Flying speed while the boost key is held.  Four times the cruise, which is
+#: the difference between looking at a thing and getting across a world.
+BOOST_SPEED = 32.0
 
 #: Radians per second a turn starts at, and the multiple a held turn ramps up
 #: to: a viewer needs both a precise nudge and a quick spin in close quarters.
@@ -500,6 +511,7 @@ def walk_fly_modes(scale: float = 1.0,
                  runSpeed=RUN_SPEED * scale,
                  turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
         FlyMode(name='fly', flySpeed=FLY_SPEED * scale,
+                boostSpeed=BOOST_SPEED * scale,
                 turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
     ]
     if not first_person:

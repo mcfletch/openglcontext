@@ -81,14 +81,19 @@ class TestLookFrom:
     """
 
     def _expected(self, eye, target):
-        """Yaw to the bearing, then pitch about the yawed right."""
+        """The bearing and elevation of the line, in the platform's frame.
+
+        A platform holds the world-into-camera rotation, so the pitch is
+        negated and applied before the yaw; composed the other way round the
+        camera aims as far above the target as it should be below it.
+        """
         from OpenGLContext import quaternion
         direction = np.asarray(target, dtype='d') - np.asarray(eye, dtype='d')
         direction = direction / np.linalg.norm(direction)
         yaw = atan2(direction[0], -direction[2])
         pitch = asin(direction[1])
-        return (quaternion.fromXYZR(0, 1, 0, yaw)
-                * quaternion.fromXYZR(1, 0, 0, pitch))
+        return (quaternion.fromXYZR(1, 0, 0, -pitch)
+                * quaternion.fromXYZR(0, 1, 0, yaw))
 
     def test_the_aim_is_the_bearing_then_the_elevation_of_the_line(self):
         for eye, target in (((0, 0, 0), (0, 0, -1)), ((0, 0, 0), (5, 0, 0)),
@@ -147,3 +152,38 @@ def test_the_fit_and_the_aim_agree_about_a_centred_model():
     assert aimed.position == pose.position
     assert np.allclose(np.asarray(aimed.quaternion * [0.0, 0.0, -1.0, 0.0])[:3],
                        (0.0, 0.0, -1.0), atol=1e-12), 'straight down -Z'
+
+
+class TestLookFromAimsWhereItSays:
+    """The pose is checked through the view platform that renders it, not
+    against the quaternion it happens to build: an aim that is right in the
+    arithmetic and mirrored in the matrix is the bug this catches."""
+
+    @staticmethod
+    def rendered_direction(pose):
+        import numpy as np
+        from OpenGLContext.move.viewplatform import ViewPlatform
+        platform = ViewPlatform()
+        platform.setPosition(pose.position)
+        if pose.quaternion is not None:
+            platform.quaternion = pose.quaternion
+        else:
+            platform.setOrientation(pose.orientation)
+        rotation = np.asarray(platform.modelMatrix())[:3, :3]
+        return np.array([0.0, 0.0, -1.0]) @ np.linalg.inv(rotation)
+
+    @pytest.mark.parametrize('target', [
+        (0.0, 0.0, -10.0),          # straight ahead
+        (10.0, 0.0, 0.0),           # a quarter turn right
+        (0.0, -10.0, 0.0),          # straight down
+        (0.0, -400.0, -900.0),      # down and ahead: standing over a dataset
+        (300.0, -400.0, -900.0),    # and turned as well
+    ])
+    def test_the_camera_faces_the_target(self, target):
+        import numpy as np
+        from OpenGLContext.viewer import framing
+        eye = (0.0, 400.0, 900.0)
+        wanted = np.asarray(target, dtype='d') - np.asarray(eye, dtype='d')
+        wanted = wanted / np.linalg.norm(wanted)
+        pose = framing.look_from(eye, target, 1000.0)
+        assert self.rendered_direction(pose) == pytest.approx(wanted, abs=1e-6)

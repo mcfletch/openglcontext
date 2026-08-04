@@ -154,7 +154,7 @@ def test_upload_applies_non_identity_transform():
     up = GLTileUploader()
     m = np.identity(4)
     m[0, 3] = 5.0        # translate +5 in x -> non-identity world transform
-    tile = types.SimpleNamespace(world_transform=m)
+    tile = types.SimpleNamespace(world_transform=m, content_transform=m)
     group = Group()
     scene = types.SimpleNamespace(group=group)
     drawable, nbytes = up.upload(tile, (scene, 17))

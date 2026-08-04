@@ -344,7 +344,11 @@ def build_terrain_tileset(
 
     root = build(0, 0.0, 0.0, extent)
     root["geometricError"] = extent / tile_res * 1.5
-    tileset = {"asset": {"version": "1.1"},
+    # These tiles are meshed in the viewer's own frame -- height along +Y, ground
+    # in XZ -- and their bounding boxes are measured from those same vertices.
+    # `gltfUpAxis` says so, so a client places the content as it stands instead of
+    # rotating it a quarter turn into the Z-up frame a geospatial export uses.
+    tileset = {"asset": {"version": "1.1", "gltfUpAxis": "Z"},
                "geometricError": extent / tile_res * 3.0, "root": root}
     path = os.path.join(directory, "tileset.json")
     with open(path, "w") as fh:

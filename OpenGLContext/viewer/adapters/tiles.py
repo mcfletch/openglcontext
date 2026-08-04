@@ -21,7 +21,15 @@ import numpy as np
 
 from OpenGLContext.viewer.adapters.base import SceneAdapter, ViewerScene
 
-__all__ = ['TilesAdapter']
+__all__ = ['TilesAdapter', 'opening_pose']
+
+#: Where the camera opens over a dataset, as fractions of its framed radius: how
+#: high above the content it hovers, and how far back from the aim point it
+#: stands.  A dataset is somewhere to be rather than an object to look at, and
+#: fitting the whole bounding sphere puts a city kilometres away, where it is a
+#: smudge and every tile is at its coarsest.
+OPENING_HEIGHT = 0.05
+OPENING_DISTANCE = 0.12
 
 #: Vertical field of view the streamer measures screen-space error against.  It
 #: has to agree with what is actually rendered, or the dataset refines to a
@@ -51,6 +59,51 @@ def leaf_tile(tile: Any) -> Any:
     while tile.content_uri is None and tile.children:
         tile = tile.children[0]
     return tile
+
+
+def opening_aim(root: Any) -> np.ndarray:
+    """The point over the dataset to open the camera above.
+
+    The content tile nearest the middle of the extent, which in a city is the
+    middle of the city.  Aiming at the *first* content tile instead lands
+    wherever the tree happens to start -- a corner, and the corner of a city is
+    a park.  A tileset with no content at all leaves the extent's own centre,
+    since there is nothing better to say.
+    """
+    center = np.asarray(root.bounding_volume.bounding_sphere()[0], dtype='d')
+    nearest, best = None, None
+    for tile in root.iter_tiles():
+        if not tile.has_content:
+            continue
+        position = np.asarray(tile.bounding_volume.center, dtype='d')
+        # Horizontally nearest: a tall tile is no further away for being tall.
+        distance = float(np.linalg.norm((position - center)[[0, 2]]))
+        if best is None or distance < best:
+            nearest, best = position, distance
+    return center if nearest is None else nearest
+
+
+def opening_pose(center: Any, radius: float) -> Any:
+    """Where to stand to arrive *in* a dataset rather than outside it.
+
+    Hovers :data:`OPENING_HEIGHT` of the framed radius above the aim point and
+    :data:`OPENING_DISTANCE` back from it, looking at the content — so the first
+    frame is geometry at a detail level worth streaming, and flying forward goes
+    further into the dataset rather than up to it.
+
+    The near plane comes from the height rather than from the whole dataset, or
+    a camera a few hundred metres up over a city would clip away everything
+    below it.
+    """
+    from OpenGLContext.viewer import framing
+    center = np.asarray(center, dtype='d')
+    height = max(radius * OPENING_HEIGHT, 1e-3)
+    eye = center + np.array([0.0, height, radius * OPENING_DISTANCE])
+    pose = framing.look_from(eye, center, radius)
+    if pose is None:                    # pragma: no cover - height is never 0
+        return None
+    return pose._replace(near=max(0.05, height * 0.005), far=max(radius * 8.0,
+                                                                height * 100.0))
 
 
 def _forward(quaternion: Any) -> np.ndarray:
@@ -83,6 +136,8 @@ class TilesAdapter(SceneAdapter):
         self.cacheDirectory = cacheDirectory
         self.radius = 1.0
         self.center = np.zeros(3)
+        #: Where over the dataset the camera opens; see :func:`opening_aim`.
+        self.aim = np.zeros(3)
 
     def configure(self, options: Any) -> None:
         """Take the streaming knobs from the viewer's options.
@@ -113,9 +168,21 @@ class TilesAdapter(SceneAdapter):
             memory_budget=self.memory, recenter=self.recenter,
             cache_dir=self.cacheDirectory)
         self.center, self.radius = self._bounds()
+        self.aim = opening_aim(self.terrain.tileset.root)
         self._prime()
-        return ViewerScene(group=self.terrain, center=tuple(self.center),
-                           radius=self.radius)
+        return self.sceneFor(self.terrain)
+
+    def sceneFor(self, group: Any) -> ViewerScene:
+        """The loaded scene, opening over its content rather than outside it."""
+        return ViewerScene(group=group, center=tuple(self.center),
+                           radius=self.radius,
+                           pose=opening_pose(self.aim, self.radius),
+                           metric=self.isGeospatial())
+
+    def isGeospatial(self) -> bool:
+        """Whether the loaded dataset is placed on the globe, and so in metres."""
+        tileset = getattr(self.terrain, 'tileset', None)
+        return bool(getattr(tileset, 'geospatial', False))
 
     def update(self, viewer: Any) -> bool:
         """Page tiles in for wherever the camera now is.  Once a frame."""
@@ -159,7 +226,7 @@ class TilesAdapter(SceneAdapter):
         try:
             leaf = leaf_tile(root)
             scene, _ = load_tile(leaf)
-            aim = (leaf.world_transform
+            aim = (leaf.content_transform
                    @ np.append(np.asarray(scene.center, 'd'), 1.0))[:3]
             if np.linalg.norm(aim - center) <= radius:
                 center = aim
@@ -169,9 +236,8 @@ class TilesAdapter(SceneAdapter):
 
     def _prime(self) -> None:
         """Stream against the pose the viewer will take, before the first frame."""
-        eye = tuple(self.center + np.array(
-            [0.0, self.radius * 0.22,
-             self.radius / max(1e-3, math.sin(self.fov / 2.0)) * 1.15]))
+        pose = opening_pose(self.aim, self.radius)
+        eye = tuple(float(v) for v in pose.position)
         for _ in range(PRIME_ROUNDS):
             self.terrain.update_for_camera(eye, 700)
             self.terrain.wait_for_loads(timeout=PRIME_TIMEOUT)

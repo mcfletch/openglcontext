@@ -70,3 +70,61 @@ def test_terrain_populates_physics_world(tmp_path):
         assert len(world.bodies) >= 1
     finally:
         terrain.shutdown()
+
+
+def test_the_node_pages_tiles_in_and_out_as_the_camera_travels(tmp_path):
+    """Streaming is on-demand in both directions: the node loads what the camera
+    reaches, and releases what it leaves behind once the budget is spent.
+
+    This is the path the viewer mounts, so it is the one that has to keep paging:
+    a dataset larger than the memory budget must not simply accumulate.
+    """
+    import numpy as np
+    from OpenGLContext.loaders.tiles3d import procedural
+    from OpenGLContext.loaders.tiles3d.frustum import view_projection
+    from OpenGLContext.loaders.tiles3d.gltf_uploader import GLTileUploader
+
+    counts = {"uploaded": 0, "released": 0}
+
+    class Counting(GLTileUploader):
+        def upload(self, tile, payload):
+            counts["uploaded"] += 1
+            return super().upload(tile, payload)
+
+        def release(self, drawable):
+            counts["released"] += 1
+            return super().release(drawable)
+
+    # 85 tiles over 2 km, with a budget that holds a moving window of them.
+    budget = 700 * 1024
+    path = procedural.build_terrain_tileset(str(tmp_path), extent=2048, levels=4,
+                                            tile_res=17)
+    terrain = TilesTerrain(path, fovy=math.radians(50.0), workers=4, max_sse=10.0,
+                           memory_budget=budget)
+    terrain.runtime.uploader = Counting()
+    try:
+        for z in np.linspace(-820, 820, 12):
+            surface = max(float(procedural.terrain_height(
+                np.array([0.0]), np.array([z]))[0]), procedural.WATER_LEVEL)
+            eye = (0.0, surface + 55.0, float(z))
+            # The viewer hands the runtime a view projection every frame; without
+            # one every tile counts as wanted, and wanted tiles are never evicted.
+            vp = view_projection(eye, (0.0, surface, float(z) + 200.0), up=(0, 1, 0),
+                                 fovy=math.radians(50.0), aspect=1.4,
+                                 near=1.0, far=1400.0)
+            for _ in range(3):
+                terrain.update_for_camera(eye, 800, view_projection=vp)
+                terrain.wait_for_loads(timeout=8.0)
+        resident = terrain.runtime.residency.resident_bytes
+    finally:
+        terrain.shutdown()
+
+    total = sum(1 for _ in terrain.tileset.iter_tiles())
+    assert counts["uploaded"] > 0, "nothing streamed in"
+    assert counts["released"] > 0, "nothing was ever unloaded"
+    # More tiles passed through than the budget could ever hold at once.
+    assert counts["uploaded"] > counts["released"]
+    assert counts["uploaded"] <= total * 2
+    # The budget is a target rather than a wall -- tiles the current view wants are
+    # never evicted -- so allow headroom while still ruling out "kept everything".
+    assert resident <= budget * 3, resident

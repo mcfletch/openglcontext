@@ -179,7 +179,7 @@ class TestAimingAtRealGeometry:
         import types
         return types.SimpleNamespace(
             content_uri='leaf.glb', children=[],
-            world_transform=np.eye(4),
+            world_transform=np.eye(4), content_transform=np.eye(4),
             _scene=types.SimpleNamespace(center=center))
 
     def test_it_descends_to_the_first_tile_with_content(self):

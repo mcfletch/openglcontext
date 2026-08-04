@@ -286,6 +286,20 @@ walk.bindings = list(walk.bindings) + [
     units. A viewer keeps the free-fly navigator for its non-walking mode, and
     the two never both drive the camera: the older manager is unbound while the
     modes are in charge.</p>
+  <p><strong>The viewer sizes the speeds to the scene it framed.</strong> Speeds
+    are scene units a second, so the eight-a-second flight that suits a model is
+    a crawl across a city-sized 3D&nbsp;Tiles dataset &mdash; fifteen kilometres
+    at that rate is half an hour, and nothing streaming in as you move can be
+    seen happening. On mounting a scene the viewer scales its own modes by the
+    framed radius over
+    <code>sceneviewer.MOVEMENT_REFERENCE_RADIUS</code> (80&nbsp;units), never
+    below 1, so a traverse of any dataset takes about twenty seconds and scenes
+    at model scale keep the speeds they have always had. The mode objects are
+    kept and their speeds rewritten, so the mode in force, the bound keys and
+    anything watching <code>movementMode</code> survive; the speed sliders on the
+    settings screen widen with them, and modes a host declared itself are left
+    alone. Flying the 41&nbsp;MB Toronto tileset (framed radius 7.9&nbsp;km) this
+    way is 785&nbsp;units a second.</p>
   <p><code>walk_fly_modes(scale, first_person=True)</code> puts
     <code>FPSMode</code> in front of the pair, which is what makes mouse-look the
     mode a session <em>starts</em> in: the manager takes the first selectable

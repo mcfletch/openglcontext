@@ -147,7 +147,8 @@ class _FakeGroup:
 
 def _upload_group(group):
     up = GLTileUploader()
-    tile = types.SimpleNamespace(world_transform=np.identity(4))
+    tile = types.SimpleNamespace(world_transform=np.identity(4),
+                                 content_transform=np.identity(4))
     scene = types.SimpleNamespace(group=group)
     drawable, nbytes = up.upload(tile, (scene, 42))
     return up, drawable, nbytes
