@@ -80,18 +80,30 @@ oglc-terrain --size 1280x720 --sse 12 --memory 512    # window + quality/budget<
   full-mesh-near / single-cone-far LOD, in two camera-following fields (frequent grass,
   occasional trees). Water is a translucent plane at the water level.</p>
 
-  <h2>Viewing real 3D Tiles datasets &mdash; <code>oglc-tiles</code></h2>
+  <h2 id="tiles3d">Viewing real 3D Tiles datasets <span class="technical">(experimental)</span></h2>
+  <figure>
+    <img src="images/toronto-3dtiles.jpg" width="640px"
+         alt="Toronto's downtown streamed as 3D Tiles: the harbour, the CN Tower and
+              the SkyDome above a map-textured ground" />
+    <figcaption>Open Street Map Tiles view of Toronto Harbour, the CN Tower and the
+    SkyDome</figcaption>
+  </figure>
+  <p class="technical"><strong>3D&nbsp;Tiles support is experimental.</strong> A
+  city-sized dataset loads, streams and is walkable, and the known faults are
+  recorded in <code>plans/TILES3D-CITY-VIEWING.md</code>: tiles whose geometry
+  floats above its ground, an initial load that fetches far more of the dataset at
+  once than the view needs, and a frame rate around 30&nbsp;fps at city scale. The
+  APIs here may change while those are dealt with.</p>
   <p><code>oglc-terrain</code> above is the procedural/DEM playground. To load and
   stream a <strong>real, third-party OGC&nbsp;3D&nbsp;Tiles dataset</strong> &mdash; a
-  photogrammetry capture, a city model, a GIS terrain &mdash; use the dedicated
-  <code>oglc-tiles</code> viewer (or <code>python -m OpenGLContext.bin.tiles_view</code>).
-  It is the interactive front end for the <code>loaders/tiles3d</code> runtime and is
-  built for the parts real data actually uses:</p>
-  <pre><code>oglc-tiles path/to/tileset.json          # a local tileset
-oglc-tiles https://host/path/tileset.json    # stream a tileset straight from the web
-oglc-tiles tileset.json --sse 8          # more detail (lower screen-space error)
-oglc-tiles tileset.json --memory 1024    # bigger tile memory budget (MiB)
-oglc-tiles tileset.json --capture shot.png   # render one offscreen still, then exit</code></pre>
+  photogrammetry capture, a city model, a GIS terrain &mdash; open it with
+  <code>oglc-view</code>. It is the interactive front end for the <code>loaders/tiles3d</code> runtime and is built for
+  the parts real data actually uses:</p>
+  <pre><code>oglc-view path/to/tileset.json           # a local tileset
+oglc-view https://host/path/tileset.json     # stream a tileset straight from the web
+oglc-view tileset.json --sse 8           # more detail (lower screen-space error)
+oglc-view tileset.json --memory 1024     # bigger tile memory budget (MiB)
+oglc-view tileset.json --capture shot.png    # render one offscreen still, then exit</code></pre>
   <p>The <code>source</code> is a local path <em>or</em> an <code>http(s)://</code> URL;
   with a URL the root, its tile content, and any external tilesets are fetched over the
   network and cached on disk (under <code>~/.cache/openglcontext/tiles3d</code>, or
@@ -115,10 +127,19 @@ oglc-tiles tileset.json --capture shot.png   # render one offscreen still, then 
       pass <code>max_bytes</code> to <code>read_bytes</code> for a dataset that
       genuinely ships larger tiles).</li>
   </ul>
-  <p>The tileset <em>you</em> name on the command line is not restricted &mdash; that
-  URI came from you, not from a document. A dataset split across two hosts needs its
-  own resolver passed to <code>build_runtime_tileset</code>. The policy itself lives in
+  <p><strong>What is unrestricted is which URI you may <em>name</em>, not what the
+  document at it may do.</strong> Naming a URL is a decision only you can make &mdash;
+  the viewer fetches what you point it at, as <code>curl</code> would &mdash; and from
+  there the file is untrusted like any other: the payload is size-capped, redirects on
+  that first fetch are locked to the origin you named (so a server cannot bounce it to
+  a link-local address), and every URI the document goes on to name is confined by the
+  rules above. A dataset split across two hosts needs its own resolver passed to
+  <code>build_runtime_tileset</code>. The policy itself lives in
   <code>loaders/resolver.py</code>, which is the one place it is written down.</p>
+  <p class="technical">Not yet bounded: the <em>number</em> of tiles a tileset may
+  name. Each payload is capped and the resident set is held to the memory budget, but
+  a hostile tileset can still name unboundedly many tiles and fill the on-disk fetch
+  cache. Recorded in <code>plans/TILES3D-CITY-VIEWING.md</code>.</p>
   <ul>
     <li><strong>local files and <code>http(s)://</code> URLs</strong> for the root, tile
       content and nested tilesets, with an on-disk fetch cache.</li>
@@ -158,14 +179,14 @@ oglc-tiles tileset.json --capture shot.png   # render one offscreen still, then 
   authentication &mdash; so you can stream them <strong>straight from the URL, no download
   step</strong>. These are verified to load:</p>
   <pre><code># Cesium "dragon" — b3dm, an ECEF transform and a low/medium/high LOD chain
-oglc-tiles https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.0/TilesetWithDiscreteLOD/tileset.json
+oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.0/TilesetWithDiscreteLOD/tileset.json
 #   add --sse 0.02 to pull the finest LOD over the network
 
 # 1.1 glTF-native scene — houses and trees, several glTF contents per tile
-oglc-tiles https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MetadataGranularities/tileset.json
+oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MetadataGranularities/tileset.json
 
 # 1.1 multiple-contents plane
-oglc-tiles https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MultipleContents/tileset.json</code></pre>
+oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MultipleContents/tileset.json</code></pre>
   <p>Each tile is cached under <code>~/.cache/openglcontext/tiles3d</code> on first fetch,
   so re-runs are offline and instant. Prefer a local copy? Clone the repo
   (<code>git clone https://github.com/CesiumGS/3d-tiles-samples</code>) and pass a path to
@@ -474,7 +495,7 @@ trees = build_vegetation_lod(pos, idx.reshape(-1, 3), near_mesh, far_billboard,
   <h2>Demos &amp; validation</h2>
   <ul>
     <li><code>oglc-terrain</code> &mdash; the procedural/DEM interactive viewer (above).</li>
-    <li><code>oglc-tiles</code> &mdash; stream and fly a real OGC 3D Tiles
+    <li><code>oglc-view</code> &mdash; stream and fly a real OGC 3D Tiles
       <code>tileset.json</code> (b3dm, region volumes, external + ECEF tilesets).</li>
     <li><code>tests/tiles_landscape.py</code> &mdash; aerial showcase (terrain + vegetation).</li>
     <li><code>tests/tiles_walk.py</code> &mdash; first-person walk/fly.</li>
