@@ -43,6 +43,15 @@ _UP_AXIS_TO_Z_UP: dict[str, np.ndarray] = {
 #: glTF content to Y-up).
 DEFAULT_GLTF_UP_AXIS = "Y"
 
+#: A quarter turn about -X: the rotation from the Z-up frame 3D Tiles places
+#: tiles in to the Y-up world this renderer draws them in.  A dataset that is
+#: not on the globe has no reference point to level against, so this is what
+#: stands it up instead.
+Z_UP_TO_Y_UP = np.array([[1.0, 0.0, 0.0, 0.0],
+                         [0.0, 0.0, 1.0, 0.0],
+                         [0.0, -1.0, 0.0, 0.0],
+                         [0.0, 0.0, 0.0, 1.0]], dtype="d")
+
 
 def gltf_up_axis_matrix(asset: Optional[dict[str, Any]]) -> np.ndarray:
     """The rotation taking a tileset's glTF content into its tiles' Z-up frame.
@@ -335,6 +344,13 @@ def build_runtime_tileset(
     document says otherwise) applied first, so glTF content stands up in the tile's
     Z-up frame. An external tileset's own `asset` governs the content it names.
 
+    `recenter` is what adapts a dataset to the frame this renderer draws in, and
+    covers both halves of that. A tileset on the globe is brought home to the
+    origin and levelled at its reference point; one that is not is turned from
+    the Z-up frame 3D Tiles places tiles in to the viewer's Y-up world, which is
+    a rotation and nothing else. Switched off, a dataset arrives exactly as it
+    was written.
+
     `recenter` subtracts a large ECEF offset from every tile, so an Earth-Centered
     geospatial tileset renders near the origin instead of ~6.4M metres out (where
     32-bit float precision would shatter it). The offset is the root transform's
@@ -355,6 +371,11 @@ def build_runtime_tileset(
             initial = np.identity(4, dtype="d")
             initial[:3, 3] = -recenter_offset
             initial = recenter_rotation @ initial
+        else:
+            # Not on the globe, so there is no local up to level against: the
+            # dataset's own Z-up frame becomes the viewer's Y-up world.
+            recenter_rotation = Z_UP_TO_Y_UP
+            initial = Z_UP_TO_Y_UP
     root = _build_tile(root_dict, base_uri, initial, parent_refine="REPLACE",
                        recenter_offset=recenter_offset,
                        resolve_external=resolve_external, depth=0,

@@ -31,6 +31,13 @@ __all__ = ['TilesAdapter', 'opening_pose']
 OPENING_HEIGHT = 0.05
 OPENING_DISTANCE = 0.12
 
+#: How far back the opening view stands from the tile it aims at, as a multiple
+#: of that tile's own radius.  A city is spread over its whole extent, so a
+#: fraction of the dataset lands over streets; a dataset that is one object in a
+#: wide bounding volume is *all* at the aim point, and the same fraction lands
+#: inside it.  Taking whichever is further keeps both in view.
+OPENING_TILE_DISTANCE = 2.5
+
 #: Vertical field of view the streamer measures screen-space error against.  It
 #: has to agree with what is actually rendered, or the dataset refines to a
 #: detail level the frame does not show.
@@ -61,7 +68,7 @@ def leaf_tile(tile: Any) -> Any:
     return tile
 
 
-def opening_aim(root: Any) -> np.ndarray:
+def opening_aim(root: Any) -> "tuple[np.ndarray, float]":
     """The point over the dataset to open the camera above.
 
     The content tile nearest the middle of the extent, which in a city is the
@@ -69,21 +76,26 @@ def opening_aim(root: Any) -> np.ndarray:
     wherever the tree happens to start -- a corner, and the corner of a city is
     a park.  A tileset with no content at all leaves the extent's own centre,
     since there is nothing better to say.
+
+    Its radius comes back too, because how far to stand off depends on the size
+    of what is being looked at rather than on the size of the dataset.
     """
-    center = np.asarray(root.bounding_volume.bounding_sphere()[0], dtype='d')
-    nearest, best = None, None
+    center, radius = root.bounding_volume.bounding_sphere()
+    center = np.asarray(center, dtype='d')
+    nearest, best, extent = None, None, float(radius or 0.0)
     for tile in root.iter_tiles():
         if not tile.has_content:
             continue
-        position = np.asarray(tile.bounding_volume.center, dtype='d')
+        position, tile_radius = tile.bounding_volume.bounding_sphere()
+        position = np.asarray(position, dtype='d')
         # Horizontally nearest: a tall tile is no further away for being tall.
         distance = float(np.linalg.norm((position - center)[[0, 2]]))
         if best is None or distance < best:
-            nearest, best = position, distance
-    return center if nearest is None else nearest
+            nearest, best, extent = position, distance, float(tile_radius or 0.0)
+    return (center if nearest is None else nearest), extent
 
 
-def opening_pose(center: Any, radius: float) -> Any:
+def opening_pose(center: Any, radius: float, tile_radius: float = 0.0) -> Any:
     """Where to stand to arrive *in* a dataset rather than outside it.
 
     Hovers :data:`OPENING_HEIGHT` of the framed radius above the aim point and
@@ -91,14 +103,20 @@ def opening_pose(center: Any, radius: float) -> Any:
     frame is geometry at a detail level worth streaming, and flying forward goes
     further into the dataset rather than up to it.
 
+    ``tile_radius`` is how big the tile aimed at is, and holds the camera
+    :data:`OPENING_TILE_DISTANCE` times that far off when a fraction of the
+    dataset would be closer -- a dataset that is one object inside a wide
+    bounding volume is otherwise opened from inside it.
+
     The near plane comes from the height rather than from the whole dataset, or
     a camera a few hundred metres up over a city would clip away everything
     below it.
     """
     from OpenGLContext.viewer import framing
     center = np.asarray(center, dtype='d')
-    height = max(radius * OPENING_HEIGHT, 1e-3)
-    eye = center + np.array([0.0, height, radius * OPENING_DISTANCE])
+    stand_off = max(radius * OPENING_DISTANCE, tile_radius * OPENING_TILE_DISTANCE)
+    height = max(radius * OPENING_HEIGHT, tile_radius * OPENING_HEIGHT * 8.0, 1e-3)
+    eye = center + np.array([0.0, height, stand_off])
     pose = framing.look_from(eye, center, radius)
     if pose is None:                    # pragma: no cover - height is never 0
         return None
@@ -136,8 +154,10 @@ class TilesAdapter(SceneAdapter):
         self.cacheDirectory = cacheDirectory
         self.radius = 1.0
         self.center = np.zeros(3)
-        #: Where over the dataset the camera opens; see :func:`opening_aim`.
+        #: Where over the dataset the camera opens, and how big the tile it
+        #: aims at is; see :func:`opening_aim`.
         self.aim = np.zeros(3)
+        self.aimRadius = 0.0
 
     def configure(self, options: Any) -> None:
         """Take the streaming knobs from the viewer's options.
@@ -168,15 +188,19 @@ class TilesAdapter(SceneAdapter):
             memory_budget=self.memory, recenter=self.recenter,
             cache_dir=self.cacheDirectory)
         self.center, self.radius = self._bounds()
-        self.aim = opening_aim(self.terrain.tileset.root)
+        self.aim, self.aimRadius = opening_aim(self.terrain.tileset.root)
         self._prime()
         return self.sceneFor(self.terrain)
 
     def sceneFor(self, group: Any) -> ViewerScene:
-        """The loaded scene, opening over its content rather than outside it."""
+        """The loaded scene, opening over its content when it is big enough.
+
+        The stand-off follows the tile aimed at, so a dataset that is one
+        object is seen whole rather than from inside it.
+        """
+        pose = opening_pose(self.aim, self.radius, self.aimRadius)
         return ViewerScene(group=group, center=tuple(self.center),
-                           radius=self.radius,
-                           pose=opening_pose(self.aim, self.radius),
+                           radius=self.radius, pose=pose,
                            metric=self.isGeospatial())
 
     def isGeospatial(self) -> bool:
@@ -236,7 +260,7 @@ class TilesAdapter(SceneAdapter):
 
     def _prime(self) -> None:
         """Stream against the pose the viewer will take, before the first frame."""
-        pose = opening_pose(self.aim, self.radius)
+        pose = opening_pose(self.aim, self.radius, self.aimRadius)
         eye = tuple(float(v) for v in pose.position)
         for _ in range(PRIME_ROUNDS):
             self.terrain.update_for_camera(eye, 700)

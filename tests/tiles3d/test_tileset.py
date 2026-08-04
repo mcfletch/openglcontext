@@ -442,11 +442,67 @@ def test_levelling_keeps_distances_and_needs_recentring():
         np.linalg.norm(origin), rel=1e-3)
 
 
-def test_local_dataset_is_left_in_the_frame_it_was_authored_in():
-    """A tileset that is not earth-centred has nothing to level against."""
+def test_a_local_dataset_is_turned_rather_than_levelled():
+    """A tileset that is not earth-centred has no local up to level against, so
+    its own Z-up frame is turned into the viewer's Y-up world instead."""
+    from OpenGLContext.loaders.tiles3d.tileset import Z_UP_TO_Y_UP
     ts = build_runtime_tileset(_tileset({
         "boundingVolume": _box(),
         "geometricError": 10.0,
         "content": {"uri": "a.b3dm"},
     }), recenter=True)
-    assert np.allclose(ts.root.world_transform, np.identity(4))
+    assert np.allclose(ts.root.world_transform, Z_UP_TO_Y_UP)
+
+
+# -- a local dataset in the viewer's frame -----------------------------------
+
+def _content_up(tileset):
+    """Where a tile's content sends its own up axis, in world space."""
+    tile = next(t for t in tileset.iter_tiles() if t.has_content)
+    up = tile.content_transform[:3, :3] @ np.array([0.0, 1.0, 0.0])
+    return up / np.linalg.norm(up)
+
+
+def test_a_local_dataset_arrives_up_the_viewers_way():
+    """3D Tiles frames are Z-up and this viewer's world is Y-up.
+
+    Converting the content into its tile's frame and stopping there leaves the
+    whole dataset on its side -- which is what the Cesium local samples did once
+    the conversion was honoured and nothing turned the dataset itself.
+    """
+    ts = build_runtime_tileset(_tileset({
+        "boundingVolume": {"box": [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10]},
+        "geometricError": 10.0,
+        "content": {"uri": "a.glb"},
+    }), recenter=True)
+    assert np.allclose(_content_up(ts), [0.0, 1.0, 0.0], atol=1e-9)
+
+
+def test_a_geospatial_dataset_is_levelled_rather_than_turned():
+    """Both roads end up Y-up; the globe's is the reference point's own up."""
+    document, _origin = _enu_tileset()
+    ts = build_runtime_tileset(document, recenter=True)
+    assert np.allclose(_content_up(ts), [0.0, 1.0, 0.0], atol=1e-9)
+
+
+def test_the_raw_frame_is_still_available():
+    """`--no-recenter` asks for the dataset as it was written."""
+    ts = build_runtime_tileset(_tileset({
+        "boundingVolume": {"box": [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10]},
+        "geometricError": 10.0,
+        "content": {"uri": "a.glb"},
+    }), recenter=False)
+    assert np.allclose(_content_up(ts), [0.0, 0.0, 1.0], atol=1e-9)
+
+
+def test_a_local_datasets_bounding_volume_turns_with_it():
+    """Content and bounds have to move together, or culling drops what is drawn."""
+    ts = build_runtime_tileset(_tileset({
+        # A slab 100 wide and 4 high in its own Z-up frame.
+        "boundingVolume": {"box": [0, 0, 2, 100, 0, 0, 0, 100, 0, 0, 0, 2]},
+        "geometricError": 10.0,
+        "content": {"uri": "a.glb"},
+    }), recenter=True)
+    centre, _radius = ts.root.bounding_volume.bounding_sphere()
+    assert centre[1] == pytest.approx(2.0)     # the height is up, not north
+    assert abs(centre[2]) < 1e-9

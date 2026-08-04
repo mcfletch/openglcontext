@@ -28,7 +28,19 @@ Each with tests, red first.
 | `FlyMode.boostSpeed`, held with shift | Crossing a world is not the same activity as looking at a thing |
 | A streamed dataset opens over its content (`adapters/tiles.opening_pose`, `opening_aim`) | Fitting the bounding sphere put the camera 19 km out, where the city is a smudge and every tile is at its coarsest |
 | A metric dataset gets a human avatar (`ViewerScene.metric`, `SceneViewerMixin.physicsAvatarScale`) | The avatar was a fortieth of the longest side — a 320 m giant standing above the rooftops, which is what "`g` does nothing" looked like |
-| `g` drops in from the camera (`spawnAvatar(preferred=…)`, `enablePhysics` syncing every time) | The spawn searched from the centre of the world bounds — several kilometres away, over the lake |
+| A dataset is turned into the viewer's frame (`tileset.Z_UP_TO_Y_UP`), and the bakers (`procedural`, `sample`) write conformant Z-up bounding volumes | Honouring `gltfUpAxis` without also turning the *dataset* left every local tileset on its side — caught on the Cesium 1.1 samples, which had rendered correctly before. A geospatial dataset is levelled at its reference point; a local one has no reference point, so its Z-up frame is turned to Y-up |
+| `g` drops in from the camera in a *world* (`PhysicsWalkMixin.physicsDropIn`, set by the viewer for any dataset it may not re-centre) | The spawn searched from the centre of the world bounds — several kilometres away, over the lake. A *model* keeps the search: its camera is outside the thing, over nothing |
+| The opening stand-off follows the tile aimed at (`OPENING_TILE_DISTANCE`) | A fraction of the dataset radius is right for a city spread over its extent and inside the geometry for a dataset that is one object in a wide bounding volume — the Cesium dragon opened within its own neck |
+
+### Caught on the way
+
+The up-axis conversion, landed first, put every *local* tileset on its side —
+the Cesium 1.1 samples included, which had rendered correctly before. Honouring
+`gltfUpAxis` is only half of it: the dataset's own Z-up frame has to be turned
+into the viewer's Y-up world as well, which for a geospatial dataset is the
+levelling and for a local one is a quarter turn. The bakers here
+(`procedural`, `sample`) now write conformant Z-up bounding volumes to match,
+which leaves their terrain exactly where it was.
 
 ## Open faults
 

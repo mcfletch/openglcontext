@@ -150,11 +150,14 @@ oglc-view tileset.json --capture shot.png    # render one offscreen still, then 
       Photorealistic / most GIS tilesets).</li>
     <li><strong>external (nested) tilesets</strong> &mdash; a tile whose content is another
       <code>.json</code> is loaded and grafted into the tree.</li>
-    <li><strong>Earth-Centered (ECEF) tilesets</strong>, recentred to the origin so
-      32-bit float precision holds, and <strong>levelled</strong> at that same point so
-      the ground lies in the viewer's XZ plane with up along +Y rather than tilting off
-      toward the globe's centre (both disable with <code>--no-recenter</code>).
-      Non-identity tile transforms are honoured.</li>
+    <li><strong>The dataset's own frame, brought into the viewer's.</strong> 3D Tiles
+      places tiles in a Z-up frame and this renderer draws a Y-up world, so a dataset
+      is turned to match: an <strong>Earth-centred</strong> one is recentred to the
+      origin (32-bit float precision) and <strong>levelled</strong> at that reference
+      point, so the ground lies in the XZ plane instead of tilting off toward the
+      globe's centre; a <strong>local</strong> one is turned the same quarter turn its
+      content is. Both are what <code>--no-recenter</code> switches off, which gives
+      the dataset exactly as written. Non-identity tile transforms are honoured.</li>
     <li><strong>The glTF up-axis convention</strong>: 3D Tiles frames are Z-up while
       glTF content is Y-up, so content is rotated a quarter turn into its tile's frame,
       as <code>asset.gltfUpAxis</code> asks (<code>Y</code> when a tileset does not say;

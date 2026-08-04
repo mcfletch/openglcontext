@@ -47,7 +47,9 @@ def _runtime(tmp_path, budget):
     path = P.build_terrain_tileset(str(tmp_path), extent=2048, levels=4, tile_res=17)
     with open(path) as fh:
         doc = json.load(fh)
-    ts = build_runtime_tileset(doc, base_uri=str(tmp_path) + os.sep)
+    # As the viewer builds it: a dataset is turned into the frame it is drawn
+    # in, and the camera path below is in that frame.
+    ts = build_runtime_tileset(doc, base_uri=str(tmp_path) + os.sep, recenter=True)
     up = CountingUploader()
     rt = TilesetRuntime(ts, file_tile_loader, up, memory_budget=budget,
                         fovy=math.radians(50.0), max_sse=10.0, workers=4,

@@ -255,10 +255,13 @@ def _bounding_box(pos: np.ndarray) -> list[float]:
     maxs = pos.max(0)
     center = (mins + maxs) / 2.0
     half = np.maximum((maxs - mins) / 2.0, 1e-3)
-    return [float(center[0]), float(center[1]), float(center[2]),
+    # The mesh is Y-up, as glTF is; a tile's own frame is Z-up, as 3D Tiles is.
+    # So the box is stated in that frame -- the mesh's height becomes the box's
+    # Z extent -- and a client turns the content the same quarter turn to match.
+    return [float(center[0]), float(-center[2]), float(center[1]),
             float(half[0]), 0.0, 0.0,
-            0.0, float(half[1]), 0.0,
-            0.0, 0.0, float(half[2])]
+            0.0, float(half[2]), 0.0,
+            0.0, 0.0, float(half[1])]
 
 
 def _glb(
@@ -344,11 +347,7 @@ def build_terrain_tileset(
 
     root = build(0, 0.0, 0.0, extent)
     root["geometricError"] = extent / tile_res * 1.5
-    # These tiles are meshed in the viewer's own frame -- height along +Y, ground
-    # in XZ -- and their bounding boxes are measured from those same vertices.
-    # `gltfUpAxis` says so, so a client places the content as it stands instead of
-    # rotating it a quarter turn into the Z-up frame a geospatial export uses.
-    tileset = {"asset": {"version": "1.1", "gltfUpAxis": "Z"},
+    tileset = {"asset": {"version": "1.1"},
                "geometricError": extent / tile_res * 3.0, "root": root}
     path = os.path.join(directory, "tileset.json")
     with open(path, "w") as fh:

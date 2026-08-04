@@ -72,6 +72,33 @@ The 3.0.0 release of OpenGLContext makes use of Large Language models
 during the development process. A few of the stand-in models for weapons
 were also generated via LLMs.
 
+## Releasing
+
+[.github/workflows/release.yml](.github/workflows/release.yml) runs on every push
+to `main`. It compares `__version__` in
+[OpenGLContext/\_\_init\_\_.py](OpenGLContext/__init__.py) against PyPI: if that
+version is already published the run stops there, and if it is new the sdist and
+wheel are built, checked and uploaded. **Bumping the version is what cuts a
+release**; a push that leaves it alone does nothing.
+
+Three checks stand between the build and the upload — `twine check --strict` on
+the metadata, `scripts/check_release_artifact.py` on both artifacts, and a
+comparison of the built filenames against the version that was looked up.
+
+The test suite is not among them. It renders real frames and wants a live GL
+context, which a stock runner does not have, so **run it locally and confirm it
+is green before bumping the version**:
+
+```bash
+python -m pytest tests/
+python scripts/check_release_artifact.py --source-root . dist/*.whl dist/*.tar.gz
+```
+
+Uploading uses PyPI trusted publishing, so no API token is stored anywhere. It
+needs a publisher registered on the PyPI project for this repository with
+workflow `release.yml` and **the environment field left blank**: the OIDC claim
+carries no environment, and a publisher that names one will not match.
+
 ## Changelog
 
 ### 3.0.0a1

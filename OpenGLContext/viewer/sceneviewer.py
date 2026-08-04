@@ -406,6 +406,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
         """
         self.scene = scene
         self.radius = scene.radius or 1.0
+        # A dataset the viewer may not re-centre is a world -- its coordinates
+        # are the world's and the camera flies about inside it -- so walking
+        # drops in from wherever the camera got to.
+        self.physicsDropIn = not self.adapter.recentres
         # How big the world is is only known once a scene has been framed, and
         # the speeds it is moved through follow from that.
         self.declareMovementModes()

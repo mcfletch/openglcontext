@@ -54,6 +54,7 @@ class TestTheViewerUsesIt:
     def test_the_scene_carries_the_pose_for_the_viewer_to_apply(self):
         adapter = TilesAdapter()
         adapter.center, adapter.radius = np.asarray(CENTRE), RADIUS
+        adapter.aim, adapter.aimRadius = np.asarray(CENTRE), 430.0
         scene = adapter.sceneFor(object())
         assert scene.pose is not None
         assert scene.pose.position[1] > CENTRE[1]
@@ -139,7 +140,7 @@ class TestWhereOverTheDatasetItOpens:
 
     def test_the_aim_is_the_content_tile_nearest_the_middle(self):
         from OpenGLContext.viewer.adapters.tiles import opening_aim
-        aim = opening_aim(self._tileset())
+        aim, _radius = opening_aim(self._tileset())
         assert aim[0] == pytest.approx(0.0)
         assert aim[2] == pytest.approx(0.0)
         assert aim[1] == pytest.approx(150.0)   # at the content, not below it
@@ -153,4 +154,26 @@ class TestWhereOverTheDatasetItOpens:
                                       has_content=False)
         empty.iter_tiles = lambda: iter([empty])
         from OpenGLContext.viewer.adapters.tiles import opening_aim
-        assert opening_aim(empty) == pytest.approx((5.0, 6.0, 7.0))
+        aim, radius = opening_aim(empty)
+        assert aim == pytest.approx((5.0, 6.0, 7.0))
+        assert radius == pytest.approx(10.0)
+
+
+class TestTheStandOffFollowsWhatIsBeingLookedAt:
+    """A city is spread over its extent, so a fraction of it lands over
+    streets. A dataset that is one object inside a wide bounding volume is all
+    at the aim point, and the same fraction lands inside the object."""
+
+    def test_one_big_object_is_seen_whole(self):
+        from OpenGLContext.viewer.adapters.tiles import opening_pose
+        pose = opening_pose((0.0, 0.0, 0.0), 925.0, tile_radius=925.0)
+        distance = np.linalg.norm(np.asarray(pose.position))
+        assert distance > 925.0, distance
+
+    def test_a_city_still_opens_low_over_its_streets(self):
+        from OpenGLContext.viewer.adapters.tiles import opening_pose
+        # A city tile is a fraction of the dataset, so the dataset sets the
+        # distance and the view stays down among the buildings.
+        pose = opening_pose(CENTRE, RADIUS, tile_radius=430.0)
+        distance = np.linalg.norm(np.asarray(pose.position) - np.asarray(CENTRE))
+        assert distance < RADIUS / 2, distance

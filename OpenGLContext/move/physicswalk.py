@@ -110,6 +110,13 @@ class PhysicsWalkMixin(object):
     physicsToggleKey: str = 'g'
     #: Key that switches the walking avatar between the ground and the air.
     physicsFlyKey: str = 'f'
+    #: Whether switching to walking drops in from the camera rather than
+    #: spawning where :meth:`spawnAvatar` found room.  True for a *world* --
+    #: somewhere you are inside, where the camera is over ground and dropping in
+    #: is what "walk from here" means.  False for a *model*, which is looked at
+    #: from outside: the camera there is off in space over nothing, and the
+    #: spawn's search for a floor is the only sensible answer.
+    physicsDropIn: bool = False
 
     #: The navigator that owns the camera while walking is off, remembered by
     #: :meth:`setupPhysics` so it can be handed the camera back.
@@ -213,11 +220,7 @@ class PhysicsWalkMixin(object):
             world, capabilities, yaw=self.physicsYaw,
             gravity=self.physicsGravity * scale)
         self.applyMovementModes(scale)
-        # Where the camera is, so switching to walking drops in here rather than
-        # teleporting to the middle of the world.
-        camera = getattr(getattr(self, 'platform', None), 'position', None)
-        self.spawnAvatar(lo, hi, capabilities, self.physicsSpawnViewpoints(),
-                         preferred=None if camera is None else camera[:3])
+        self.spawnAvatar(lo, hi, capabilities, self.physicsSpawnViewpoints())
         self._physicsLast = self.physicsNow()
         self.physicsPlatform.apply(self)
         return True
@@ -231,13 +234,23 @@ class PhysicsWalkMixin(object):
         """
         if on:
             first = self.physicsPlatform is None
+            # Read before the world is built: spawning an avatar moves the
+            # camera to it, so afterwards the camera no longer says where the
+            # user was.
+            camera = getattr(getattr(self, 'platform', None), 'position', None)
+            eye = None if camera is None else tuple(float(v) for v in camera[:3])
             if first and not self.ensurePhysicsWorld():
                 return False
-            # Always from where the camera is -- the first time as much as the
-            # tenth.  Walking is entered by dropping in, so gravity takes it
-            # down to whatever is underneath rather than leaving it hovering.
-            self.syncAvatarToCamera()
-            self.physicsPlatform.set_fly(False)
+            # Coming back from a flight always resumes where the camera got to.
+            # Entering for the first time does too in a world one is inside
+            # (`physicsDropIn`), where dropping in is what walking from here
+            # means; in a model, the spawn's search for a floor stands, since
+            # the camera is outside the thing looking in.  The *heading* is the
+            # spawn's on that first entry, because a viewpoint or a host that
+            # pinned one meant it.
+            if not first or self.physicsDropIn:
+                self.syncAvatarToCamera(heading=not first, eye=eye)
+                self.physicsPlatform.set_fly(False)
             manager = getattr(self, 'movementManager', None)
             if manager is not None and self._freeManager is not None:
                 self._freeManager.unbind(self)
@@ -322,22 +335,19 @@ class PhysicsWalkMixin(object):
         return ()
 
     def spawnAvatar(self, lo: Any, hi: Any, capabilities: 'CharacterCapabilities',
-                    viewpoints: Sequence[Any] = (),
-                    preferred: Optional[Sequence[float]] = None) -> None:
+                    viewpoints: Sequence[Any] = ()) -> None:
         """Stand the avatar somewhere it can actually walk out of.
 
-        ``preferred`` is where the camera already is, and is taken as soon as
-        there is ground under it: switching to walking means dropping in where
-        you are looking.  The middle of a *model* is a reasonable place to
-        start, which is what the search below falls back to; the middle of a
-        city is kilometres from wherever you flew to, and often over water.
+        Where the *camera* is does not come into it: :meth:`enablePhysics` seats
+        the avatar there itself once this has built one, so this only has to
+        find a legal place to stand in the meantime.
 
-        Failing that, the middle of a world is often solid -- a statue, thick
-        walls -- so several footprint positions are tried and scored by how open
-        they are, preferring the most open and, among equals, the most central.
-        Authored viewpoints are tried first, projected straight down to the
-        floor: they are elevated as often as not, so only their *heading* is
-        borrowed (:meth:`moveAvatarToViewpoint` is how you actually go to one).
+        The middle of a world is often solid -- a statue, thick walls -- so
+        several footprint positions are tried and scored by how open they are,
+        preferring the most open and, among equals, the most central.  Authored
+        viewpoints are tried first, projected straight down to the floor: they
+        are elevated as often as not, so only their *heading* is borrowed
+        (:meth:`moveAvatarToViewpoint` is how you actually go to one).
         """
         platform = self.physicsPlatform
         if platform is None:
@@ -345,16 +355,6 @@ class PhysicsWalkMixin(object):
         if viewpoints:
             platform.yaw = yaw_from_orientation(viewpoints[0].orientation)
         cx, cz = (lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2
-        if preferred is not None and (
-                lo[0] <= preferred[0] <= hi[0] and lo[2] <= preferred[2] <= hi[2]):
-            # Taken as it stands, with whatever is under it left to gravity: a
-            # flat ground has no inside to test against, so "is there floor
-            # below" cannot be asked here, and falling to it is the answer
-            # anyway.  Outside the world there is nothing to fall to, so that
-            # case goes to the search below instead.
-            platform.bind_eye(tuple(float(v) for v in preferred[:3]))
-            if not platform.character.stuck:
-                return
         candidates: list[Tuple[float, float]] = []
         for viewpoint in viewpoints:
             position = viewpoint.position
@@ -400,19 +400,29 @@ class PhysicsWalkMixin(object):
         platform.bind_eye(tuple(viewpoint.position))
         platform.set_fly(not platform.character.grounded)
 
-    def syncAvatarToCamera(self) -> None:
+    def syncAvatarToCamera(self, heading: bool = True,
+                           eye: Optional[Sequence[float]] = None) -> None:
         """Seat the avatar at the current free-fly camera pose, safe-bound.
 
         Flying is left on when there is nothing underfoot, so a camera in mid
         air does not drop the moment the avatar takes over; a caller that means
         "drop in from here" turns it off (:meth:`enablePhysics` does).
+
+        ``heading`` takes the camera's bearing as well as its position. A caller
+        that has just spawned the avatar passes False, leaving the heading the
+        spawn chose -- an authored viewpoint's, or one the host pinned.
+
+        ``eye`` seats the avatar there rather than at the camera's current
+        position, for a caller that read the camera before something moved it.
         """
         platform = self.physicsPlatform
         if platform is None:
             return
-        platform.yaw = self.yawFromPlatform()
+        if heading:
+            platform.yaw = self.yawFromPlatform()
         platform.pitch = 0.0
-        platform.bind_eye(tuple(self.platform.position[:3]))
+        platform.bind_eye(tuple(self.platform.position[:3]) if eye is None
+                          else tuple(eye))
         platform.set_fly(not platform.character.grounded)
         self._physicsLast = self.physicsNow()
 
