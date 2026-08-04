@@ -1,0 +1,149 @@
+name: release
+
+# Every push to main compares the version in OpenGLContext/__init__.py against
+# PyPI; if it is not already there, the sdist and wheel are built, checked, and
+# published by trusted publishing.
+#
+# So a push that does not bump the version does nothing, and bumping the version
+# is what cuts a release.
+#
+# The test suite is **not** a gate here. It renders real frames and wants a live
+# GL context, and the generated parts of the site need the sibling `directdocs`
+# tool as well; neither is available on a stock runner, which is the same reason
+# `pages.yml` publishes docs built locally. Whoever bumps the version is the one
+# vouching that the suite was green -- see "Releasing" in README.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.check.outputs.publish }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - id: check
+        name: Is this version already on PyPI?
+        run: |
+          VERSION=$(python - <<'EOF'
+          import pathlib, re, sys
+          text = pathlib.Path('OpenGLContext/__init__.py').read_text(encoding='utf-8')
+          found = re.search(r'''^__version__\s*=\s*['"]([^'"]+)['"]''', text, re.M)
+          if not found:
+              sys.exit('no __version__ in OpenGLContext/__init__.py')
+          print(found.group(1))
+          EOF
+          )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Only 200 and 404 are answers. Anything else -- a 5xx, a timeout, DNS
+          # failure -- means PyPI did not tell us, and guessing "not published"
+          # would turn an outage into a failed upload against an immutable
+          # version. Fail loudly instead and let a re-run settle it.
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 \
+                 "https://pypi.org/pypi/OpenGLContext/$VERSION/json" || echo 000)
+          case "$CODE" in
+            200)
+              echo "OpenGLContext $VERSION is already on PyPI; nothing to publish."
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "OpenGLContext $VERSION is not on PyPI; it will be published."
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "PyPI answered HTTP $CODE for OpenGLContext $VERSION; refusing to guess."
+              exit 1
+              ;;
+          esac
+
+  build:
+    name: build
+    needs: version
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Pure Python: one sdist and one `py3-none-any` wheel is the whole release.
+      # The shaders and environment cube-map faces travel inside them as package
+      # data, and there is nothing compiled to build per platform.
+      - name: Build the sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: Check the metadata renders on PyPI
+        run: python -m twine check --strict dist/*
+
+      # setuptools stages a build under build/lib and copies that into the wheel
+      # without ever pruning it, so a module deleted from the tree is published
+      # anyway and no import-level test can see it. A fresh checkout has no
+      # staging directory to go stale, which makes this cheap here and the last
+      # place it can be caught before an immutable upload.
+      - name: Refuse an artifact carrying files the tree no longer has
+        run: python scripts/check_release_artifact.py --source-root . dist/*.whl dist/*.tar.gz
+
+      # The version the check job read and the version actually built have to be
+      # the same thing, or the skip-if-published test was about a different
+      # release than the one about to be uploaded. The filenames carry the
+      # normalised project name, which is lower-case.
+      - name: Confirm the artifacts carry the version that was checked
+        env:
+          EXPECTED: ${{ needs.version.outputs.version }}
+        run: |
+          ls -l dist/
+          for artifact in dist/*; do
+            case "$(basename "$artifact")" in
+              openglcontext-"$EXPECTED".tar.gz|openglcontext-"$EXPECTED"-py3-none-any.whl) ;;
+              *) echo "unexpected artifact for version $EXPECTED: $artifact"; exit 1 ;;
+            esac
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distribution
+          path: dist/*
+
+  publish:
+    name: publish to PyPI
+    needs: [version, build]
+    # The `needs:` gate already requires both; stating the results as well keeps
+    # the guarantee if someone later edits this workflow -- adding `always()` to
+    # one job would otherwise let a failed build reach PyPI.
+    if: >-
+      needs.version.outputs.publish == 'true' &&
+      needs.build.result == 'success'
+    runs-on: ubuntu-latest
+
+    # Trusted publishing (OIDC): on PyPI, add a publisher for this repository
+    # with workflow `release.yml` and the environment field left **blank**. The
+    # OIDC claim carries no environment, so a publisher that names one will not
+    # match and the upload is rejected. No API token is stored anywhere.
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: distribution
+          path: dist
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A second net under the version check: a re-run of an already-published
+          # commit is a no-op rather than a failure. The check job is what makes
+          # the ordinary path skip early; this is what makes a race harmless.
+          skip-existing: true
