@@ -1,10 +1,12 @@
-"""Findings 4.27 / 4.28: packaging hygiene.
+"""Packaging hygiene: what the distribution must and must not carry.
 
-4.27: AI-workflow docs (top-level CLAUDE.md + plans/) must not ship in the sdist.
-4.28: the classifiers must include 3.14 (a fix targets it) and the Python floor
-must align with the numpy floor (numpy 2.1 dropped 3.9, so >=3.10).
+AI-workflow docs (top-level CLAUDE.md and plans/) stay out of the sdist. The
+classifiers advertise the Python versions actually supported, and the Python
+floor aligns with the numpy floor (numpy 2.1 dropped 3.9, so >=3.10). Data the
+package reads at runtime -- shaders, and the environment cube maps the demo
+backgrounds use -- has to be declared as package data, or a pip install has the
+modules and none of the files they open.
 """
-import pathlib
 import tomllib
 
 import pytest
@@ -51,7 +53,8 @@ class TestBuildSystemAndReadme:
 
     def test_readme_is_the_readme_not_the_license(self):
         # The long-description must be the readme, not license.txt
-        assert _pyproject()['project']['readme'] == 'readme.txt'
+        assert _pyproject()['project']['readme'] == 'README.md'
+        assert (ROOT / 'README.md').exists()
 
     def test_license_file_named_explicitly(self):
         # The lowercase license.txt doesn't match setuptools'
@@ -60,6 +63,35 @@ class TestBuildSystemAndReadme:
         project = _pyproject()['project']
         assert project.get('license-files') == ['license.txt']
         assert (ROOT / 'license.txt').exists()
+
+
+class TestRuntimeDataIsDeclaredAsPackageData:
+    """Files the package opens by path have to be listed, or they do not ship."""
+
+    def _patterns(self):
+        return _pyproject()['tool']['setuptools']['package-data']['OpenGLContext']
+
+    def test_the_shaders_are_declared(self):
+        for pattern in ('shaders/*.vert', 'shaders/*.frag', 'shaders/*.glsl'):
+            assert pattern in self._patterns()
+
+    def test_the_environment_cubemaps_are_declared(self):
+        # bin/gltf_demo.default_env_prefix opens these by path for the `cube`
+        # background; undeclared, every install silently takes the None branch.
+        assert 'resources/environment/*.jpg' in self._patterns()
+
+    def test_every_declared_pattern_matches_something(self):
+        import glob
+        package = ROOT / 'OpenGLContext'
+        for pattern in self._patterns():
+            assert glob.glob(str(package / pattern)), pattern
+
+    def test_the_cubemap_face_sets_are_complete(self):
+        # A face set is six faces; five renders a cube with a hole in it.
+        d = ROOT / 'OpenGLContext' / 'resources' / 'environment'
+        for prefix in ('pimbackground_', 'studio_', 'studiobright_'):
+            for face in ('RT', 'LF', 'UP', 'DN', 'FR', 'BK'):
+                assert (d / (prefix + face + '.jpg')).exists(), prefix + face
 
 
 class TestGeneratedArtifactsPruned:

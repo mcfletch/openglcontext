@@ -432,7 +432,7 @@ layer.tick(105.0);  assert not queue.entries(105.0)  # gone</pre>
       <td>Log every stall&rsquo;s phase breakdown at <code>WARNING</code>,
         keeping the default threshold.</td></tr>
   </table>
-  <pre>OPENGLCONTEXT_STALL_MS=40 python -m twitchoglc
+  <pre>OPENGLCONTEXT_STALL_MS=40 python -m twig_bb
 WARNING OpenGLContext.looptrace: main loop stalled 912ms: idle 901ms, render 9ms, poll 1ms</pre>
   <p>Neither variable changes what a frame looks like, so both are inherited by
     a subprocess capture rather than cleared with the rendering variables &mdash;
@@ -450,7 +450,7 @@ WARNING OpenGLContext.looptrace: main loop stalled 912ms: idle 901ms, render 9ms
     already overrunning</strong> &mdash; a profiler that runs during the frames
     that are fine would be spending the one currency the question is about
     &mdash; and writes a JSON-lines file:</p>
-  <pre>OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl python -m twitchoglc
+  <pre>OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl python -m twig_bb
 python -m OpenGLContext.stalltrace /tmp/stalls.jsonl</pre>
   <p><strong>The unit is an <em>episode</em>, not a frame.</strong> Consecutive
     slow iterations are gathered into one record, because &ldquo;the game went

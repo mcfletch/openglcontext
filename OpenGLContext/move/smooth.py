@@ -1,5 +1,4 @@
 """First-person-shooter like movement control"""
-from gettext import gettext as _
 from OpenGLContext.move import direct
 from OpenGLContext import arrays
 from OpenGLContext.events import timer 

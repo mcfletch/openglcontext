@@ -1,8 +1,6 @@
 """Interactions for navigating the context"""
 from gettext import gettext as _
 from OpenGLContext.move import movementmanager
-from OpenGLContext import quaternion
-from OpenGLContext.events import timer
 import math
 
 class Direct( movementmanager.MovementManager ):

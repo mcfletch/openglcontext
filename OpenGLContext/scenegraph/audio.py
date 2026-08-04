@@ -10,9 +10,9 @@ Three nodes, and the split between them is the same split glTF's
     Where the sound comes from, and how it fades with distance and direction.
     Put it under a ``Transform`` and the sound is wherever that transform is.
 :class:`Sound`
-    VRML97's own node, which pyvrml97 has always declared and nothing has ever
-    played.  It attenuates differently -- two ellipsoids rather than a distance
-    curve -- so it computes its own gain and shares everything else.
+    VRML97's own node, with the fields that specification gives it.  It
+    attenuates differently -- two ellipsoids rather than a distance curve -- so
+    it computes its own gain and shares everything else.
 
 Every node has the same job once per frame: **be told where it is, and keep its
 sounds in step with that**.  The render pass calls :meth:`AudioEmitter.updateAudio`
@@ -30,14 +30,16 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import random
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
-from vrml import field, node
+from vrml import field, node, protofunctions
 from vrml.vrml97 import basenodes, nodetypes
 
 from omi_audio import formats, model, spatial
+from OpenGLContext.loaders import resolver
 
 log = logging.getLogger(__name__)
 
@@ -174,9 +176,38 @@ class AudioSource(node.Node):
         self._library.cache = engine.clips
         return self._library.clip_for(self._source)
 
+    def _documentResolver(self) -> Optional[Any]:
+        """The resolver confining this source to its own document, if it has one.
+
+        A source read out of a scene file may only reach what that document's
+        own location permits -- audio under its directory, or same-origin audio
+        for a document fetched over http(s) -- because the ``url`` came from the
+        file rather than from the application.  A source built in code has no
+        document behind it and is not confined.
+        """
+        root = protofunctions.root(self)
+        base = getattr(root, 'baseURI', None) if root is not None else None
+        if not base:
+            return None
+        if resolver.is_url(base):
+            return resolver.Resolver(base_url=base)
+        return resolver.Resolver(base_dir=os.path.dirname(os.path.abspath(base)))
+
     def _fromUrl(self, engine: Any) -> Any:
-        """The first of :attr:`url` that decodes, most-preferred first."""
+        """The first of :attr:`url` that decodes, most-preferred first.
+
+        Each entry is resolved against the document first, so a name the
+        document is not allowed to reach is skipped rather than opened.
+        """
+        confine = self._documentResolver()
         for name in self.url:
+            if confine is not None:
+                try:
+                    name = confine.resolve(name)
+                except IOError:
+                    log.warning(
+                        'AudioSource url %r is outside its document; ignored', name)
+                    continue
             found = engine.clip(name)
             if found is not None:
                 return found

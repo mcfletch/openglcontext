@@ -84,9 +84,9 @@ contextThread = None
 def inContextThread():
     """Return true if the current thread is the context thread"""
     if threading:
-        if threading.currentThread() == contextThread:
+        if threading.current_thread() == contextThread:
             return 1
-        elif threading.currentThread().getName() == contextThread.getName():
+        elif threading.current_thread().name == contextThread.name:
             return 1
         else:
             return 0
@@ -468,15 +468,14 @@ class Context(ScreenMixin, ContextConfigMixin):
     def OnEscape(self, event=None):
         """What Escape means to this context.  Quitting, unless it says otherwise.
 
-        Escape used to be bound straight to :meth:`OnQuit`, which exits the
-        process forcibly.  For a demo that is right.  For anything holding state
-        -- a game part-way through a match, a viewer with a world loaded and a
-        camera somewhere -- it means a key pressed to back out of *something
-        else* throws the session away with no confirmation and no way back.
+        The default is :meth:`OnQuit`, which exits the process forcibly.  For a
+        demo that is right.  For anything holding state -- a game part-way
+        through a match, a viewer with a world loaded and a camera somewhere --
+        a key pressed to back out of *something else* would throw the session
+        away with no confirmation and no way back.
 
         So a context that has somewhere to go instead overrides this: a game or
         a viewer puts its menu up, where Resume and Quit are both a click away.
-        Every context that does not is unchanged.
         """
         return self.OnQuit(event)
 
@@ -588,8 +587,8 @@ class Context(ScreenMixin, ContextConfigMixin):
         """Setup primitives (locks, events) for threading"""
         global contextThread
         if threading:
-            contextThread = threading.currentThread()
-            contextThread.setName("GUIThread")
+            contextThread = threading.current_thread()
+            contextThread.name = "GUIThread"
         self.setupScenegraphLock()
         self.setupRedrawRequest()
 
@@ -706,7 +705,7 @@ class Context(ScreenMixin, ContextConfigMixin):
         """Set the OpenGL focus to this context"""
         assert inContextThread(), (
             """setCurrent called from outside of the context/GUI thread! %s"""
-            % (threading.currentThread())
+            % (threading.current_thread())
         )
         if not contextLock.acquire(blocking):
             raise LockingError("""Cannot acquire without blocking""")
@@ -717,7 +716,7 @@ class Context(ScreenMixin, ContextConfigMixin):
         """Give up the OpenGL focus from this context"""
         assert inContextThread(), (
             """unsetCurrent called from outside of the context/GUI thread! %s"""
-            % (threading.currentThread())
+            % (threading.current_thread())
         )
         self.unlockScenegraph()
         Context.currentContext = None
@@ -785,7 +784,7 @@ class Context(ScreenMixin, ContextConfigMixin):
         """
         assert inContextThread(), (
             """OnDraw called from outside of the context/GUI thread! %s"""
-            % (threading.currentThread())
+            % (threading.current_thread())
         )
         # could use if self.frameCounter, but that introduces a
         # potential race condition, so eat the extra call...
@@ -962,7 +961,7 @@ class Context(ScreenMixin, ContextConfigMixin):
         """
         assert inContextThread(), (
             """ViewPort called from outside of the context/GUI thread! %s"""
-            % (threading.currentThread())
+            % (threading.current_thread())
         )
         self.setCurrent()
         try:

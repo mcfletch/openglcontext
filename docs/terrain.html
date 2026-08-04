@@ -58,8 +58,10 @@ oglc-terrain --size 1280x720 --sse 12 --memory 512    # window + quality/budget<
   camera-following <strong>textured patch</strong> (photographic CC0 material) rather
   than the coarse streamed tiles, so it can carry real detail; the streamed tiles are
   used only to view a raw <code>tileset.json</code>. Materials come from
-  <strong>ambientCG</strong> (CC0, cached under the user cache dir with a provenance
-  manifest) via <code>loaders/tiles3d/cc0.py</code>, with a procedural fallback offline.
+  <strong>ambientCG</strong> (CC0, cached under the per-user app-data directory with a
+  provenance manifest) via <code>loaders/cc0.py</code>, with a procedural fallback
+  offline. The download and each map taken out of its archive are size-capped
+  (<code>cc0.MAX_ARCHIVE_BYTES</code>, <code>cc0.MAX_MEMBER_BYTES</code>).
   Foliage textures and textured glTF prototypes are in
   <code>loaders/tiles3d/foliage.py</code> (grass/bark/needle generators, CC0-bark
   option, alpha-MASK cards, instanced); shadows are the engine's cascaded shadow maps
@@ -96,6 +98,27 @@ oglc-tiles tileset.json --capture shot.png   # render one offscreen still, then 
   <code>--cache-dir</code>), so each tile downloads once. It auto-frames the whole tileset
   at startup and lets you <strong>free-fly</strong> with the mouse and <code>W A S D</code>/
   arrow keys; tiles stream in and out by screen-space error as you move. Supported today:</p>
+
+  <h3>What a tileset is allowed to reach</h3>
+  <p>A <code>tileset.json</code> names its own tile payloads and nested tilesets, so
+  for a tileset from anywhere but this machine those URIs are chosen by whoever wrote
+  it. They are held to the same rules as a glTF document's external references:</p>
+  <ul>
+    <li>a tileset served over <code>http(s)</code> may reference only the
+      <strong>same origin</strong> &mdash; the scheme, host and port it was fetched
+      from &mdash; re-checked on every redirect, so a tile URI cannot name another
+      host or an address on the local network;</li>
+    <li>a tileset loaded from disk may read only files <strong>under its own
+      directory</strong>; and</li>
+    <li>every payload is <strong>size-capped</strong>
+      (<code>tiles3d.fetch.DEFAULT_MAX_TILE_BYTES</code>, 256&nbsp;MiB by default;
+      pass <code>max_bytes</code> to <code>read_bytes</code> for a dataset that
+      genuinely ships larger tiles).</li>
+  </ul>
+  <p>The tileset <em>you</em> name on the command line is not restricted &mdash; that
+  URI came from you, not from a document. A dataset split across two hosts needs its
+  own resolver passed to <code>build_runtime_tileset</code>. The policy itself lives in
+  <code>loaders/resolver.py</code>, which is the one place it is written down.</p>
   <ul>
     <li><strong>local files and <code>http(s)://</code> URLs</strong> for the root, tile
       content and nested tilesets, with an on-disk fetch cache.</li>

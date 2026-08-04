@@ -1,11 +1,13 @@
 """Secure resolution and fetching of untrusted external assets for loaders.
 
 Shared by OpenGLContext's asset loaders: any loader that follows external
-references (glTF buffers/images, and other formats' sub-resources) constructs a
-:class:`Resolver` with the document's base URL or directory and asks it to
-resolve each referenced URI. Those references are attacker-controlled for any
-document from an untrusted source, so this is the containment core, kept in one
-auditable place. It enforces:
+references constructs a :class:`Resolver` with the document's base URL or
+directory and asks it to resolve each referenced URI. That is glTF's buffers,
+images and audio (:mod:`OpenGLContext.loaders.gltf`) and a 3D Tiles tileset's
+content and nested tilesets (:mod:`OpenGLContext.loaders.tiles3d.fetch`, which
+resolves through here rather than keeping a policy of its own). Those references
+are attacker-controlled for any document from an untrusted source, so this is the
+containment core, kept in one auditable place. It enforces:
 
 * a document fetched over HTTP(S) may only pull same-origin http(s) URIs
   (blocks ``file://`` reads and ``169.254.169.254`` metadata SSRF), re-checked on

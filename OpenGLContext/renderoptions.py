@@ -3,10 +3,9 @@
 Every switchable feature -- shadows, bloom, image-based lighting, transmission,
 instancing, level of detail -- is a **field on the**
 :class:`~OpenGLContext.contextdefinition.ContextDefinition`, whose default comes
-from the environment variable that used to be the only way to set it.  That
-means one source of truth: a shell variable still pins a feature for a script or
-a CI run, while a settings screen can show it, change it and have the change
-take effect on the next frame.
+from the matching environment variable.  That means one source of truth: a shell
+variable pins a feature for a script or a CI run, while a settings screen can
+show it, change it and have the change take effect on the next frame.
 
 A render pass asks through here rather than reading the environment itself,
 because a pass knows its context and the context knows its definition::

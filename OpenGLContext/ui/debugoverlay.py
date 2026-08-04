@@ -20,10 +20,10 @@ provider that raises turns into an ``error`` row rather than taking the frame
 down with it: this is diagnostic equipment, and a diagnostic that breaks the
 thing it is measuring is worse than none.
 
-It replaces the frame-rate counter that used to be drawn by
-:class:`~OpenGLContext.framecounter.FrameCounter` through fixed-function calls
-that mean nothing in a core-profile context.  ``OPENGLCONTEXT_DISABLE_FPS_DISPLAY``
-still means what it always did, and now means it here: the overlay starts
+This is where the frame rate is drawn.
+:class:`~OpenGLContext.framecounter.FrameCounter` measures it and does not draw
+it: doing that would mean fixed-function calls, which mean nothing in a
+core-profile context.  ``OPENGLCONTEXT_DISABLE_FPS_DISPLAY`` starts the overlay
 hidden, so a captured frame has nothing over it.
 """
 

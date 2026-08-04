@@ -8,7 +8,7 @@ other program here shows.  This is the part that belongs to the *context*: which
 key raises which, what happens when one is answered, and what a viewer with
 nothing to show does instead of exiting.
 
-The keys are deliberately the ones twitch uses, so someone who has used one of
+The keys are deliberately the ones twig-bb uses, so someone who has used one of
 these programs knows the other::
 
     F1    the library: what there is to open

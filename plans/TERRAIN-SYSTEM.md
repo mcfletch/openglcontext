@@ -644,7 +644,7 @@ camera), plus **idle event-driven redraw** (`TerrainWalkMixin.OnIdle` redraws on
 view pose changes, so a parked camera stops spinning the GPU). *(2026-08-03: the pose gate now
 covers the free-fly camera only. With `setupPhysics` enabled the avatar is a simulation — gravity
 moves it whether or not anyone touched a key — so a walking context is stepped and drawn every
-frame, as twitch and `oglc-view` are.)* Measured at the dev container's
+frame, as twig-bb and `oglc-view` are.)* Measured at the dev container's
 compositor-clamped 435² (true 4K fill is not measurable in-container — the PBR scene FBO follows
 the real framebuffer, not a forced viewport): median 13.8→12.3 ms, p95 19.4→16.3 ms while
 walking. On real hardware the user measures **~45–50 fps at 4K** (fill-bound), below the

@@ -1,6 +1,6 @@
 include MANIFEST.in
 include license.txt
-include readme.txt
+include README.md
 
 recursive-include tests *.jpg *.bmp *.png *.wrl *.jpeg
 exclude tests/axis.wrl
@@ -10,7 +10,6 @@ exclude tests/wrls/logo_installer.bmp
 exclude tests/wrls/pyopenglchapel.wrl
 include tests/*.py
 include tests/*.vert
-include tests/*.frag
 include tests/resources/*.txt
 
 recursive-include docs *.css *.png *.gif
@@ -18,17 +17,14 @@ include docs/*.html
 include docs/images/*
 include docs/style/*
 include OpenGLContext/resources/*.txt
-include OpenGLContext/tests/resources/*.txt
 include OpenGLContext/loaders/*
-include OpenGLContext/browser/*.wrl
-include pydoc/*.py
 exclude docs/tutorials/*.xhtml
 exclude docs/tutorials/*.png
 exclude tests/test-results/*.png
 exclude tests/test-results/*.html
 
 # AI-workflow / internal planning docs are not user-facing; keep them out of the
-# published sdist (finding 4.27).
+# published sdist.
 exclude CLAUDE.md
 prune plans
 

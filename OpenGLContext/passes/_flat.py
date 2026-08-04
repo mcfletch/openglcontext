@@ -7,7 +7,6 @@ shader-based rendering using the VRML97 lighting model.
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
-import numpy as np
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
@@ -19,14 +18,12 @@ from OpenGL.GL import (
 )
 # numpy names re-exported dynamically through OpenGLContext.arrays; mypy cannot
 # see them, so the attr-defined here is a false positive.
-from OpenGLContext.arrays import array, dot, allclose, concatenate, ones  # type: ignore[attr-defined]
+from OpenGLContext.arrays import array, dot  # type: ignore[attr-defined]
 from OpenGLContext import frustum
 from OpenGLContext.debug.logs import getTraceback
 from vrml.vrml97 import nodetypes
 from vrml import olist
 from OpenGLContext.scenegraph import shaders
-import os
-import sys
 from pydispatch.dispatcher import connect
 import logging
 log = logging.getLogger( __name__ )
@@ -47,7 +44,7 @@ __all__ = (
 
 
 from OpenGLContext.passes.selection import (
-    SelectionFBO, SelectionBufferFBO, SelectionMixin,
+    SelectionMixin,
 )
 from OpenGLContext.passes.flateffects import _FlatEffectsMixin
 

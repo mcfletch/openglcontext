@@ -307,7 +307,7 @@ switches logging on; `OPENGLCONTEXT_TRACE_STALLS` logs at the default
 threshold. Counting is always on and costs a few clock reads per iteration.
 
 ```bash
-OPENGLCONTEXT_STALL_MS=40 /workspaces/OpenGL-dev/.venv/bin/python -m twitchoglc
+OPENGLCONTEXT_STALL_MS=40 /workspaces/OpenGL-dev/.venv/bin/python -m twig_bb
 # WARNING OpenGLContext.looptrace: main loop stalled 912ms: idle 901ms, render 9ms, poll 1ms
 ```
 
@@ -324,7 +324,7 @@ code was running, since the stack has unwound by the time the iteration closes.
 Sampling is gated on the stall itself, so healthy frames are never profiled.
 
 ```bash
-OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl /workspaces/OpenGL-dev/.venv/bin/twitch-viewer ...
+OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl /workspaces/OpenGL-dev/.venv/bin/twig-bb ...
 /workspaces/OpenGL-dev/.venv/bin/python -m OpenGLContext.stalltrace /tmp/stalls.jsonl
 ```
 

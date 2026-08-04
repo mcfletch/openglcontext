@@ -13,6 +13,13 @@ import pytest
 from OpenGLContext.loaders import cc0
 
 
+@pytest.fixture(autouse=True)
+def cache_under_tmp(tmp_path, monkeypatch):
+    """Keep every test's downloads out of the real per-user cache."""
+    from OpenGLContext import userpaths
+    monkeypatch.setattr(userpaths, "appdatadirectory", lambda: str(tmp_path))
+
+
 def _fake_zip():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
@@ -38,11 +45,21 @@ def _api_json(with_jpg=True):
 
 
 class _Resp:
-    def __init__(self, data):
-        self._data = data
+    """A stand-in for an http response, read in chunks as the real one is."""
 
-    def read(self, *a):
-        return self._data
+    def __init__(self, data):
+        self._rest = data
+        self.headers = {"Content-Length": str(len(data))}
+
+    def read(self, size=None):
+        if size is None:
+            chunk, self._rest = self._rest, b""
+            return chunk
+        chunk, self._rest = self._rest[:size], self._rest[size:]
+        return chunk
+
+    def close(self):
+        pass
 
     def __enter__(self):
         return self
@@ -62,7 +79,6 @@ def _install_fake_net(monkeypatch, api_json, zip_bytes=None):
 
 
 def test_material_downloads_extracts_and_caches(tmp_path, monkeypatch):
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     _install_fake_net(monkeypatch, _api_json())
 
     maps = cc0.material("bark")            # "bark" -> asset Bark012
@@ -77,7 +93,6 @@ def test_material_downloads_extracts_and_caches(tmp_path, monkeypatch):
 
 
 def test_material_reuses_cache_without_redownloading(tmp_path, monkeypatch):
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     _install_fake_net(monkeypatch, _api_json())
     cc0.material("bark")                    # first call populates the cache
 
@@ -90,7 +105,6 @@ def test_material_reuses_cache_without_redownloading(tmp_path, monkeypatch):
 
 
 def test_manifest_not_duplicated_on_second_material(tmp_path, monkeypatch):
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     _install_fake_net(monkeypatch, _api_json())
     cc0._write_manifest("Rock030", "1K")
     cc0._write_manifest("Rock030", "1K")   # identical line -> not appended twice
@@ -101,7 +115,6 @@ def test_manifest_not_duplicated_on_second_material(tmp_path, monkeypatch):
 
 def test_write_manifest_swallows_os_error(tmp_path, monkeypatch):
     import os
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     # A directory where the CREDITS file should be makes open() raise OSError,
     # which _write_manifest must swallow rather than propagate.
     os.mkdir(os.path.join(cc0.cache_dir(), "CREDITS.txt"))
@@ -109,14 +122,12 @@ def test_write_manifest_swallows_os_error(tmp_path, monkeypatch):
 
 
 def test_download_without_matching_jpg_raises(tmp_path, monkeypatch):
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     _install_fake_net(monkeypatch, _api_json(with_jpg=False))
     with pytest.raises(RuntimeError):
         cc0._download("Bark012")
 
 
 def test_try_material_returns_none_on_failure(tmp_path, monkeypatch):
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))   # empty cache -> forces fetch
 
     def boom(*a, **k):
         raise OSError("offline")
@@ -125,7 +136,10 @@ def test_try_material_returns_none_on_failure(tmp_path, monkeypatch):
     assert cc0.try_material("bark") is None
 
 
-def test_cache_dir_under_xdg(tmp_path, monkeypatch):
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+def test_cache_dir_is_under_the_per_user_app_data_directory(tmp_path, monkeypatch):
+    # Shared with the rest of OpenGLContext's downloaded assets, so no other
+    # account can pre-seed a texture this user then loads.
     import os
-    assert cc0.cache_dir() == os.path.join(str(tmp_path), "openglcontext", "cc0")
+    from OpenGLContext import userpaths
+    monkeypatch.setattr(userpaths, "appdatadirectory", lambda: str(tmp_path))
+    assert cc0.cache_dir() == os.path.join(str(tmp_path), "OpenGLContext", "cc0")

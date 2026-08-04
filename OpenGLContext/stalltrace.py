@@ -30,7 +30,7 @@ wrong is one predicate per interval on a thread that is otherwise asleep.
 
 Switched on by naming a file::
 
-    OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl python -m twitchoglc
+    OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl python -m twig_bb
 
 and read back with::
 

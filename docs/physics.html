@@ -54,8 +54,8 @@ and your scenes round-trip back out to glTF. The indented
         <td><code>model.Joint</code>, <code>joints.*</code></td></tr>
   </table>
   <p class="technical">The structures live in
-    <code>OpenGLContext/physics/model.py</code> with the OMI spec defaults. The
-    reader/writer is <code>omi_gltf.py</code>; <code>load_document()</code> parses
+    <code>omi_physics/model.py</code> with the OMI spec defaults. The
+    reader/writer is <code>omi_physics/omi_gltf.py</code>; <code>load_document()</code> parses
     a glTF's extension blocks into these structures and <code>export_extensions()</code>
     writes them back &mdash; a near-identity round-trip. A future
     <code>KHR_physics_rigid_bodies</code> reader drops onto the <em>same</em>

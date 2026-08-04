@@ -132,7 +132,7 @@ class PhysicsViewPlatform:
         ``v @ M`` or ``M @ v``.  Whichever you assume, assume the other one.
 
         The sense above is *measured*, through
-        :func:`twitchoglc.viewer.gaze` -- the orientation applied to the
+        :func:`twig_bb.viewer.gaze` -- the orientation applied to the
         viewing axis -- and it is measured again in
         ``tests/unit/test_movementmodes.py``, which asserts on where the gaze
         ends up rather than on the sign of a number.  A test that restated the
@@ -179,6 +179,17 @@ class PhysicsViewPlatform:
 
     def camera_position(self) -> Tuple[float, ...]:
         return tuple(self.character.eye())
+
+    def feet_position(self) -> Tuple[float, ...]:
+        """Where the body ends, which is not where it looks from.
+
+        A game asking whether the avatar is standing in something -- water, a
+        trigger volume, a patch of mud -- is asking about the body, and the eye
+        is the one part of it that is regularly outside whatever the feet are
+        in.  Both readings are published so a caller can use each where it
+        belongs.
+        """
+        return tuple(self.character.base())
 
     def camera_orientation(self) -> Any:
         # pitch * yaw (not yaw * pitch): this keeps pitch about the *local* right

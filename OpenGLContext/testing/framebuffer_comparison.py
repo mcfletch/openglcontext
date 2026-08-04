@@ -768,7 +768,6 @@ class ProfileComparisonTest:
         Returns:
             Report data dict
         """
-        import subprocess
 
         # Record reference if needed
         if not self._regression.has_reference:

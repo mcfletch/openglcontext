@@ -142,7 +142,7 @@ def eye(host):
 
 class TestDeclaredModes:
     def test_walking_terrain_is_first_person(self):
-        """Mouse-look is the mode a landscape starts in, as it is in twitch."""
+        """Mouse-look is the mode a landscape starts in, as it is in twig-bb."""
         host = walking()
         declared = list(host.contextDefinition.movementModes)
         assert isinstance(declared[0], movemodes.FPSMode)

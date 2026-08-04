@@ -8,7 +8,7 @@ external buffers and images. Sparse accessors are handled, as is
 (without it, a Draco primitive is skipped with a warning rather than crashing the
 load). The entry points return a :class:`~.scene.GLTFScene` whose ``group`` is a
 renderable ``Transform`` the caller mounts and whose ``getDEF(name)`` addresses one
-imported node.
+imported node::
 
     from OpenGLContext.loaders.gltf import load_gltf, load_gltf_url
     scene = load_gltf('model.glb')          # bytes, a path, or (with base_url) refs
@@ -18,7 +18,7 @@ imported node.
 
 The package is layered bottom-up; each module depends only on those above it.
 Secure fetching of external assets is delegated to the shared
-:mod:`OpenGLContext.loaders.resolver`, not owned here.
+:mod:`OpenGLContext.loaders.resolver`, not owned here::
 
     accessors             buffers/bufferViews/accessors -> numpy arrays
     textures              images + samplers -> PBRTexture holders

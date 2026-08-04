@@ -648,7 +648,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
         definition.movementModes = walk_fly_modes(1.0)
 
     def cycleMovementMode(self, event: Any = None) -> Any:
-        """Step to the next declared movement mode, as ``m`` does in twitch.
+        """Step to the next declared movement mode, as ``m`` does in twig-bb.
 
         The modes are declared nodes on the context definition, so the settings
         screen presents this viewer's navigation the same way it presents any

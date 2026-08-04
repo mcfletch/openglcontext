@@ -87,6 +87,17 @@ MyContext.ContextMainLoop(definition=definition)</pre>
     thing a player wants &mdash; and it takes precedence while its condition
     holds, handing the mode back afterwards.</p>
 
+  <p><strong>The condition is the game's to set.</strong>
+    <code>platform.submerged</code> says the avatar is in a liquid; which
+    liquids a world has, and which part of the body has to be in one, is
+    something only the game knows. <code>PhysicsViewPlatform</code> publishes
+    both readings a decision like that needs:
+    <code>camera_position()</code> for where the avatar looks from, and
+    <code>feet_position()</code> for where its body ends. They differ by an eye
+    height, and for entering and leaving a volume that difference is the whole
+    question &mdash; the eye is the part of a body that is regularly outside
+    whatever the feet are standing in.</p>
+
   <h3>A mode also sets the state its movement assumes</h3>
   <p>Whether the avatar falls, floats or swims is a property of the
     <em>body</em> and not of the velocity it is given, so a mode that only set
@@ -251,7 +262,7 @@ walk.bindings = list(walk.bindings) + [
     <tr><td><code>oglc-view</code> (<code>OpenGLContext.viewer</code>)</td>
       <td>walk, fly</td><td>yes, in walk mode &mdash; the modes move the
       character controller and the camera follows</td></tr>
-    <tr><td>twitch (BSP map viewer)</td><td>walk, fly, first-person, swim</td>
+    <tr><td>twig-bb (BSP map viewer)</td><td>walk, fly, first-person, swim</td>
       <td>yes</td></tr>
     <tr><td><code>bin/vrml_view</code></td><td>walk, fly</td>
       <td>declared only; its camera is still the older navigator</td></tr>
@@ -271,7 +282,7 @@ walk.bindings = list(walk.bindings) + [
     <code>movement_modes()</code>. The <code>scale</code> parameter exists
     because a viewer frames models from a bolt to a city and one walking speed
     cannot suit both: a walking context passes the same scale it sizes its
-    avatar by (<code>physicsAvatarScale</code>), and twitch converts from map
+    avatar by (<code>physicsAvatarScale</code>), and twig-bb converts from map
     units. A viewer keeps the free-fly navigator for its non-walking mode, and
     the two never both drive the camera: the older manager is unbound while the
     modes are in charge.</p>

@@ -3,11 +3,16 @@
 ambientCG (https://ambientcg.com) publishes public-domain (CC0) photographic PBR
 materials — bark, ground, rock, grass, forest floor — each a set of Color / Normal /
 Roughness / AO maps. This downloads a named material once, caches the extracted maps
-under the user cache dir, and returns local file paths. Everything is CC0, so it can be
-redistributed; a manifest records provenance.
+under the per-user app-data directory, and returns local file paths. Everything is
+CC0, so it can be redistributed; a manifest records provenance.
 
 Offline or on failure the caller falls back to the procedural textures in
-`foliage.py`; nothing here is required for the engine to run.
+`tiles3d/foliage.py`; nothing here is required for the engine to run.
+
+Both the download and the archive it expands are bounded. An archive is
+compressed, so the bytes that arrive do not limit what extracting them writes:
+:data:`MAX_ARCHIVE_BYTES` caps the download and :data:`MAX_MEMBER_BYTES` caps each
+map taken out of it.
 """
 import io
 import json
@@ -17,9 +22,18 @@ import urllib.request
 import zipfile
 from typing import Optional
 
-_UA = {"User-Agent": "Mozilla/5.0 (OpenGLContext terrain)"}
+from OpenGLContext import userpaths
+from OpenGLContext.loaders import resolver
+
+_UA = {"User-Agent": resolver._user_agent()}
 _CTX = ssl.create_default_context()
 _API = "https://ambientcg.com/api/v2/full_json?id=%s&type=Material&include=downloadData"
+
+#: Ceiling on one downloaded material archive. A 1K four-map set is a few MB.
+MAX_ARCHIVE_BYTES = 256 * 1024 * 1024      # 256 MiB
+
+#: Ceiling on one map extracted from an archive, applied before it is written.
+MAX_MEMBER_BYTES = 64 * 1024 * 1024        # 64 MiB
 
 # Curated CC0 materials (ambientCG asset ids) for a coniferous-forest floor + trunks.
 CATALOG = {
@@ -34,36 +48,47 @@ CATALOG = {
 
 
 def cache_dir() -> str:
-    base = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
-    d = os.path.join(base, "openglcontext", "cc0")
-    os.makedirs(d, exist_ok=True)
+    """Where extracted maps are kept, per user rather than in shared temp.
+
+    The same location the rest of OpenGLContext uses for downloaded assets, so no
+    other account can pre-seed a texture this user then loads.
+    """
+    d = os.path.join(userpaths.appdatadirectory(), "OpenGLContext", "cc0")
+    os.makedirs(d, mode=0o700, exist_ok=True)
     return d
 
 
-def _download(asset: str, resolution: str = "1K") -> zipfile.ZipFile:
+def _read_capped(url: str, max_bytes: int) -> bytes:
+    """Read a URL, refusing a body over ``max_bytes`` as it arrives."""
+    request = urllib.request.Request(url, headers=_UA)
+    with urllib.request.urlopen(request, timeout=60, context=_CTX) as response:
+        return resolver._stream(response, max_bytes)
+
+
+def _api_download_link(asset: str, resolution: str) -> str:
+    """The JPG download URL ambientCG offers for ``asset`` at ``resolution``."""
     req = urllib.request.Request(_API % asset, headers=_UA)
     data = json.load(urllib.request.urlopen(req, timeout=25, context=_CTX))
     folders = (data["foundAssets"][0]["downloadFolders"]["default"]
                ["downloadFiletypeCategories"])
-    link = None
     for cat in folders.values():
         for f in cat["downloads"]:
             if f.get("attribute", "").startswith(resolution) and "JPG" in f["attribute"]:
-                link = f["downloadLink"]
-                break
-        if link:
-            break
-    if not link:
-        raise RuntimeError("no %s JPG download for %s" % (resolution, asset))
-    blob = urllib.request.urlopen(urllib.request.Request(link, headers=_UA),
-                                  timeout=60, context=_CTX).read()
-    return zipfile.ZipFile(io.BytesIO(blob))
+                return str(f["downloadLink"])
+    raise RuntimeError("no %s JPG download for %s" % (resolution, asset))
 
 
-def material(name: str, resolution: str = "1K") -> dict[str, str]:
+def _download(asset: str, resolution: str = "1K") -> zipfile.ZipFile:
+    link = _api_download_link(asset, resolution)
+    return zipfile.ZipFile(io.BytesIO(_read_capped(link, MAX_ARCHIVE_BYTES)))
+
+
+def material(name: str, resolution: str = "1K",
+             max_member_bytes: int = MAX_MEMBER_BYTES) -> dict[str, str]:
     """Return {'color','normal','roughness','ao'} local map paths for a CATALOG name.
 
-    Downloads + caches on first use. Raises on network failure (caller falls back).
+    Downloads + caches on first use. Raises on network failure (caller falls back),
+    and on a member larger than ``max_member_bytes``.
     """
     asset = CATALOG.get(name, name)
     out = os.path.join(cache_dir(), "%s_%s" % (asset, resolution))
@@ -79,6 +104,9 @@ def material(name: str, resolution: str = "1K") -> dict[str, str]:
     for kind, marker in kinds.items():
         for n in z.namelist():
             if marker in n and n.lower().endswith((".jpg", ".png")):
+                # The declared size is checked before extracting, so a bomb is
+                # refused rather than expanded onto the disk and measured after.
+                resolver._check_size(z.getinfo(n).file_size, max_member_bytes, n)
                 with open(paths[kind], "wb") as fh:
                     fh.write(z.read(n))
                 written[kind] = paths[kind]
@@ -100,9 +128,10 @@ def _write_manifest(asset: str, resolution: str) -> None:
         pass
 
 
-def try_material(name: str, resolution: str = "1K") -> Optional[dict[str, str]]:
+def try_material(name: str, resolution: str = "1K",
+                 max_member_bytes: int = MAX_MEMBER_BYTES) -> Optional[dict[str, str]]:
     """Like `material` but returns None on any failure (offline-safe)."""
     try:
-        return material(name, resolution)
+        return material(name, resolution, max_member_bytes)
     except Exception:
         return None

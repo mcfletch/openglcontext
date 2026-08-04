@@ -553,6 +553,16 @@ handle.stop()               # likewise; no caller ever has to test first</pre>
   <p><code>AudioSource.url</code> is a <em>list</em>, most preferred first, and
     the first entry that decodes wins. That is how the glTF codec extensions are
     read: offer the better format, fall back to the one everything can play.</p>
+  <p>Each entry is resolved against the document the source was read from, and is
+    held to what that document may reach: a scene loaded from disk may play audio
+    <strong>under its own directory</strong>, and one fetched over
+    <code>http(s)</code> may play <strong>same-origin</strong> audio. An entry
+    outside those bounds is skipped with a warning and the next one is tried, so
+    a scene that also offers a clip it is allowed to reach still plays. A source
+    built in application code has no document behind it and is not confined
+    &mdash; that name came from the application. The rules are the same ones
+    every other external reference follows; see
+    <code>loaders/resolver.py</code>.</p>
   <p>A source built from a glTF document takes its samples from that document's
     <code>omi_audio.AudioLibrary</code> instead, through
     <code>AudioSource.useLibrary()</code>, which is handed the document's source

@@ -1,7 +1,6 @@
 """Interactions for navigating the context"""
 
 from gettext import gettext as _
-from OpenGLContext import quaternion
 import logging
 
 log = logging.getLogger(__name__)

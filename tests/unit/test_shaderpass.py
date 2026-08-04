@@ -346,38 +346,6 @@ class TestFramebufferComparison(unittest.TestCase):
         self.assertFalse(result.is_match())
 
 
-@unittest.skip("shadershape module has broken import - pending implementation")
-class TestShaderShape(unittest.TestCase):
-    """Test shader shape module
-
-    NOTE: This test is skipped because the shadershape module references
-    create_shader_geometry which doesn't exist in shadergeometry yet.
-    """
-
-    def test_import_module(self) -> None:
-        """Module should import without errors"""
-        from OpenGLContext.scenegraph import shadershape
-        self.assertIsNotNone(shadershape)
-
-    def test_import_classes(self) -> None:
-        """Key classes should be importable"""
-        from OpenGLContext.scenegraph.shadershape import (
-            ShaderShape,
-            ShaderShapeMixin,
-            enable_shader_rendering,
-        )
-        self.assertIsNotNone(ShaderShape)
-        self.assertIsNotNone(ShaderShapeMixin)
-        self.assertIsNotNone(enable_shader_rendering)
-
-    def test_shader_shape_is_shape(self) -> None:
-        """ShaderShape should inherit from Shape"""
-        from OpenGLContext.scenegraph.shadershape import ShaderShape
-        from OpenGLContext.scenegraph.shape import Shape
-
-        self.assertTrue(issubclass(ShaderShape, Shape))
-
-
 class TestNormalMatrix(unittest.TestCase):
     """normal_matrix must equal inv(M[:3,:3]).T without a per-shape LAPACK call."""
 

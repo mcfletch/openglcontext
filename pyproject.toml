@@ -1,6 +1,6 @@
 [build-system]
 # setuptools >= 77 is required for the PEP 639 SPDX `license` expression below
-# (61-76 reject the string form) -- finding 3.30.
+# (61-76 reject the string form).
 requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
@@ -8,14 +8,14 @@ build-backend = "setuptools.build_meta"
 name = "OpenGLContext"
 dynamic = ["version"]
 description = "Demonstration and testing contexts for PyOpenGL/OpenGL-ctypes"
-readme = "readme.txt"
+readme = "README.md"
 license = "BSD-3-Clause"
 # The license file is lowercase, so it does NOT match setuptools' case-sensitive
 # default LICEN[CS]E* glob and would be dropped from the wheel/sdist metadata.
-# Name it explicitly so PEP 639 packaging carries it through (finding 4.26).
+# Name it explicitly so PEP 639 packaging carries it through.
 license-files = ["license.txt"]
 # numpy>=2.0 resolves to 2.1+ on new installs, which dropped Python 3.9, so the
-# effective floor is 3.10 -- align requires-python with it (finding 4.28).
+# effective floor is 3.10 -- align requires-python with it.
 requires-python = ">=3.10"
 authors = [
     { name = "Mike C. Fletcher", email = "mcfletch@vrplumber.com" }
@@ -81,14 +81,15 @@ dev = ["OpenGLContext[all]","pytest", "pytest-cov", "pytest-html", "pytest-timeo
 oglc-test = "OpenGLContext.bin.gltest:main"
 oglc-lorentz = "OpenGLContext.bin.lorentz:main"
 oglc-view = "OpenGLContext.bin.view:main"
-# Deprecated aliases for oglc-view; removed after one release cycle.
-oglc-vrml = "OpenGLContext.bin.vrml_view:main"
-oglc-gltf = "OpenGLContext.bin.gltf_view:main"
 oglc-terrain = "OpenGLContext.bin.terrain_view:main"
-oglc-tiles = "OpenGLContext.bin.tiles_view:main"
 oglc-gltf-demo = "OpenGLContext.bin.gltf_demo:main"
 oglc-gltf-regression = "OpenGLContext.bin.gltf_regression:main"
 oglc-ui-demo = "OpenGLContext.bin.ui_demo:main"
+# Deprecated aliases for oglc-view, which reads all four formats; each of these
+# three is now a thin wrapper around it. Removed after one release cycle.
+oglc-vrml = "OpenGLContext.bin.vrml_view:main"
+oglc-gltf = "OpenGLContext.bin.gltf_view:main"
+oglc-tiles = "OpenGLContext.bin.tiles_view:main"
 
 [project.urls]
 Homepage = "http://pyopengl.sourceforge.net/context/"
@@ -103,7 +104,13 @@ where = ["."]
 include = ["OpenGLContext*"]
 
 [tool.setuptools.package-data]
-OpenGLContext = ["shaders/*.vert", "shaders/*.frag", "shaders/*.glsl"]
+# Anything the package opens by path at runtime. The icons, font atlases and
+# `resources/*.txt` shaders are generated Python modules instead, so they travel
+# as code; the cube-map faces are read as files by the demo `cube` background.
+OpenGLContext = [
+    "shaders/*.vert", "shaders/*.frag", "shaders/*.glsl",
+    "resources/environment/*.jpg",
+]
 
 [tool.ruff]
 line-length = 100

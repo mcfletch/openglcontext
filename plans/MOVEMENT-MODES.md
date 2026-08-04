@@ -56,10 +56,10 @@ mouse-look needs motion that does not stop at the screen edge.
 | Application | Modes | Driven by them |
 |---|---|---|
 | `OpenGLContext.bin.gltf_view` | walk, fly, scaled to the model | yes, in walk mode |
-| twitch (BSP map viewer) | walk, fly, first-person, swim | yes |
+| twig-bb (BSP map viewer) | walk, fly, first-person, swim | yes |
 | `OpenGLContext.bin.vrml_view` | walk, fly, scaled to the model | declared only |
 
-twitch is the load-bearing case: it replaced its own key bookkeeping with the
+twig-bb is the load-bearing case: it replaced its own key bookkeeping with the
 declared modes, which is what made running-and-jumping and mouse-look work, and
 its swim mode is imposed by the map's liquid volumes. `gltf_view` followed, and
 its turn acceleration — a nudge on first press ramping to 3x while held — moved

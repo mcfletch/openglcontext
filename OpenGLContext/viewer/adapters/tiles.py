@@ -10,10 +10,9 @@ scene rather than being a singleton -- and does its real work in
 The tiles themselves are glTF, so what finally reaches the card is what the
 glTF adapter would have produced; what differs is only *when*.
 
-This is what ``oglc-tiles`` used to be; that command is now an alias for
-``oglc-view``, and everything it did beyond streaming -- framing on the mesh
+Everything a tileset needs beyond streaming lives here: framing on the mesh
 rather than on a bounding-volume centre, the priming rounds before the first
-frame, the per-frame view projection -- lives here.
+frame, and the per-frame view projection.
 """
 import math
 from typing import Any, Optional, Tuple

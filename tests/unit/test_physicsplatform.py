@@ -39,6 +39,20 @@ def test_bind_eye_places_the_camera_eye_at_the_requested_height():
     assert (eye[0], eye[2]) == pytest.approx((0.0, 0.0), abs=1e-6)
 
 
+def test_the_feet_are_reported_as_well_as_the_eye():
+    """Where the body *ends* is a separate question from where it looks from.
+
+    A game deciding whether the avatar is standing in something -- water, a
+    trigger volume -- asks about the body, and the eye is the one part of it
+    that is regularly outside whatever the feet are in.
+    """
+    plat = _platform()
+    plat.bind((0, 3.0, 0))
+    feet, eye = plat.feet_position(), plat.camera_position()
+    assert feet == pytest.approx(tuple(plat.character.base()), abs=1e-9)
+    assert eye[1] - feet[1] == pytest.approx(plat.character.caps.eyeHeight)
+
+
 def test_look_clamps_pitch_to_its_limits():
     """look() accumulates pitch but never past +/-1.4 radians."""
     plat = _platform()

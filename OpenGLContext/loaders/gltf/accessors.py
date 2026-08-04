@@ -196,7 +196,7 @@ def _normalize_array(arr: np.ndarray, dtype: Optional[Any] = None) -> np.ndarray
     info = np.iinfo(dtype if dtype is not None else arr.dtype)
     out = arr.astype(np.float32) / float(info.max)
     if info.min < 0:
-        np.maximum(out, -1.0, out)
+        np.maximum(out, -1.0, out=out)
     return out
 
 

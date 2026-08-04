@@ -223,7 +223,7 @@ class TestWhereAScreenshotGoes:
         assert 'oglc-gltf' in os.path.basename(saver.written[0])
 
     def test_a_module_run_is_named_for_the_module(self, saver, monkeypatch):
-        monkeypatch.setattr(sys, 'argv', ['/src/twitchoglc/viewer.py'])
+        monkeypatch.setattr(sys, 'argv', ['/src/twig_bb/viewer.py'])
         saver.OnSaveImage()
         assert 'viewer' in os.path.basename(saver.written[0])
         assert '.py' not in os.path.basename(saver.written[0])

@@ -11,7 +11,7 @@ cascades, the light limit, bloom, IBL and its intensity, transmission,
 instancing, distance LOD, vsync — is now a **field on `ContextDefinition`** read
 through `OpenGLContext.renderoptions`, with the environment variable as the
 field's default; the settings screen is generated from those fields. And
-`twitchoglc.confirm` is gone: the download prompt is a `dialogs.confirm` panel,
+`twig_bb.confirm` is gone: the download prompt is a `dialogs.confirm` panel,
 so the prototype has been replaced rather than left beside its successor.
 
 ## What this is for
@@ -29,7 +29,7 @@ hit-tested, not text with a keyboard trap), and
 pointer while an overlay wants it.
 
 There is already a working proof that the overlay path itself is sound.
-`twitchoglc.confirm.ConfirmPrompt` plus `FlatPass`'s `renderShaderOverlay` hook
+`twig_bb.confirm.ConfirmPrompt` plus `FlatPass`'s `renderShaderOverlay` hook
 draws a translucent panel over a live frame at full frame rate, with **Yes and
 No as real clickable buttons** — measured rectangles, hover highlighting, hit
 tested against the pick point — and the keys kept as accelerators. Layout and
@@ -311,7 +311,7 @@ bound to something else, and raise a confirmation *over the capture dialog* to a
 whether to steal it.
 
 **This reverses a rule the prototype stated deliberately.**
-`twitchoglc.confirm.ConfirmPrompt.key()` documented that an unrecognised key was
+`twig_bb.confirm.ConfirmPrompt.key()` documented that an unrecognised key was
 *not* consumed "so walking and looking keep working while the prompt is up".
 Under modality that is wrong: the prototype and the test that pinned it are gone,
 and `Panel.key` is a lid.
@@ -335,7 +335,7 @@ be the wrong direction.
 2. **Widgets and focus** — `ui/widgets.py`, `ui/panel.py`, `ui/overlay.py`,
    `ui/draw.py`. Delivered: the prompt as a modal `Panel` whose Download is the
    primary/Enter default, drawn by one batched GL program;
-   `twitchoglc.confirm` deleted.
+   `twig_bb.confirm` deleted.
 3. **Model binding** — `ui/session.py`, `ui/generate.py`, `ui/settings.py`.
    Delivered: a rendering-settings page generated from `ContextDefinition`'s
    fields, opening a movement sub-page whose Cancel is real at both levels.
