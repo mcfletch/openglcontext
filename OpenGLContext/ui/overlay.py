@@ -31,7 +31,6 @@ import logging
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.panel import Panel
-from OpenGLContext.ui.screen import ScreenMixin
 
 log = logging.getLogger(__name__)
 
@@ -207,12 +206,16 @@ class OverlayStack:
         return bool(top is not None and top.wheel(delta, x, y))
 
 
-class OverlayMixin(ScreenMixin):
+class OverlayMixin:
     """Gives a context an overlay stack, its input routing and its drawing.
 
     The HUD half -- the layers under these panels, and the drawing both go
     through -- is :class:`~OpenGLContext.ui.screen.ScreenMixin`, which every
     context has.  This is the half that takes input.
+
+    This mixin expects to be combined with a class that already inherits from
+    :class:`~OpenGLContext.ui.screen.ScreenMixin` (every ``Context`` does), so
+    it does not inherit from ``ScreenMixin`` itself.
     """
 
     # Supplied by the context this is mixed into (annotations only, so the

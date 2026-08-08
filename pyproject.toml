@@ -41,8 +41,8 @@ classifiers = [
 
 dependencies = [
     "numpy>=2.0",
-    "omi_audio>=0.1.0a1",
-    "omi_physics>=0.2.2",
+    "omi_audio>=0.2.0a1",
+    "omi_physics>=0.3.0",
     "pillow",
     "PyOpenGL>=4.0.0a1",
     "PyOpenGL-accelerate>=4.0.0a1",
