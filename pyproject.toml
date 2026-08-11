@@ -55,8 +55,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-wx = ["wxPython>=4.0"]
-pygame = ["pygame>=2.0"]
+# pygame-ce, not pygame: the two are rival distributions of the same `pygame`
+# import, so a stack that installs both gets a broken one. PyOpenGL's own test
+# backend uses pygame-ce, so the whole stack standardizes on it.
+pygame = ["pygame-ce>=2.1.3"]
 glfw = ["glfw>=2.0"]
 # gltf is now pretty much core to OpenGLContext...
 gltf = []
@@ -74,7 +76,7 @@ audio = ["omi_audio[playback]"]
 # accelerate is now part of the core install; kept as an empty set so external
 # setups that still request OpenGLContext[accelerate] don't break.
 accelerate = []
-all = ["OpenGLContext[wx,pygame,glfw,gltf,draco,audio,accelerate]"]
+all = ["OpenGLContext[pygame,glfw,gltf,draco,audio,accelerate]"]
 dev = ["OpenGLContext[all]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
 
 [project.scripts]
@@ -145,6 +147,19 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "OpenGLContext.physics.*"
 warn_return_any = false
+
+[tool.tox]
+env_list = ["py310", "py311", "py312", "py313", "py314"]
+
+[tool.tox.env_run_base]
+extras = ["dev"]
+# The core dependencies (PyOpenGL 4.0.0a, PyVRML97 2.3.4b, TTFQuery 2.0.1a,
+# simpleparse 3.0.0a, omi_audio 0.2.0a) are published only as pre-releases,
+# which uv/pip skip by default; without this the resolver reports them "not
+# available" and the env fails to build. pip_pre is honoured by both the pip and
+# the uv installers.
+pip_pre = true
+commands = [["pytest", { replace = "posargs", extend = true }]]
 
 [tool.pytest.ini_options]
 testpaths = ["OpenGLContext/tests", "tests"]
