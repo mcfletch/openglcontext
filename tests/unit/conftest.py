@@ -71,3 +71,26 @@ def restore_environment() -> Iterator[None]:
         if name not in _PRISTINE_ENV:
             del os.environ[name]
     os.environ.update(_PRISTINE_ENV)
+
+
+# ``glfw.terminate()`` segfaults on this Wayland/EGL stack: tearing the library
+# down after the last hidden window is destroyed crashes inside the driver and
+# kills the whole test process on its way out -- after every assertion in the
+# file has already passed. A bare init -> hidden core window -> destroy ->
+# terminate reproduces it with no OpenGLContext in the loop, so it is glfw's own
+# teardown, not ours. A SIGSEGV cannot be caught, so the per-test GL fixtures
+# under tests/unit that call ``glfw.terminate()`` in teardown would each take the
+# run down with them.
+#
+# A test process has no need to terminate glfw at all: the OS reclaims the
+# contexts at exit, ``glfw.init()`` returns immediately when the library is
+# already initialised, and each fixture still destroys its own window -- so
+# nothing leaks between tests. Neutralise ``terminate`` for the session (patched
+# here at conftest import, before any test fixture runs) so those teardowns stop
+# crashing. Remove this once the driver's ``glfwTerminate`` no longer faults.
+try:
+    import glfw as _glfw
+except Exception:
+    pass
+else:
+    _glfw.terminate = lambda: None

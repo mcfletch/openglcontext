@@ -49,7 +49,7 @@ class Screen(ScreenMixin, Window):
     pass
 
 
-class Game(OverlayMixin, Window):
+class Game(OverlayMixin, ScreenMixin, Window):
     """A context with both a HUD and screens over it."""
 
     def __init__(self):

@@ -208,6 +208,7 @@ class TestTheContextChoosesTheSize:
     def context(self):
         from OpenGLContext.contextdefinition import ContextDefinition
         from OpenGLContext.ui.overlay import OverlayMixin
+        from OpenGLContext.ui.screen import ScreenMixin
 
         class World:
             viewport = (1920, 1080)
@@ -218,7 +219,7 @@ class TestTheContextChoosesTheSize:
             def getViewPort(self):
                 return self.viewport
 
-        class Context(OverlayMixin, World):
+        class Context(OverlayMixin, ScreenMixin, World):
             pass
 
         return Context()
