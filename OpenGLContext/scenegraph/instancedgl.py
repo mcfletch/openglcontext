@@ -36,13 +36,25 @@ SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 
 
 def load_program(vert_name: str, frag_name: str) -> int:
-    """Compile a program from two shader files under :data:`SHADER_DIR`."""
+    """Compile a program from two shader files under :data:`SHADER_DIR`.
+
+    ``validate=False`` suppresses ``compileProgram``'s link-time
+    ``glValidateProgram``. Validation reports whether the program can run against
+    the *current* GL state, and every sampler uniform reads unit 0 until a draw
+    assigns it: a program that mixes sampler types -- the terrain's
+    ``sampler2DArray`` layers alongside its ``sampler2D`` control and shadow maps
+    -- then trips "active samplers with a different type refer to the same texture
+    image unit" and the whole node disables itself. The real units are set per
+    draw with ``glUniform1i``, so validation only means anything right before a
+    draw, not at link; a genuine link failure is still raised on ``GL_LINK_STATUS``.
+    """
     with open(os.path.join(SHADER_DIR, vert_name)) as f:
         vs = f.read()
     with open(os.path.join(SHADER_DIR, frag_name)) as f:
         fs = f.read()
     return compileProgram(compileShader(vs, GL_VERTEX_SHADER),
-                          compileShader(fs, GL_FRAGMENT_SHADER))
+                          compileShader(fs, GL_FRAGMENT_SHADER),
+                          validate=False)
 
 
 def texture_rgba(source: Any, clamp: bool = True, mipmap: bool = True) -> int:
