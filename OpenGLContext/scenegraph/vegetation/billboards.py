@@ -19,9 +19,9 @@ from typing import Any
 
 import numpy as np
 from OpenGL.GL import (
-    GL_ARRAY_BUFFER, GL_CULL_FACE, GL_DEPTH_TEST, GL_FALSE, GL_FLOAT, GL_STATIC_DRAW,
+    GL_ARRAY_BUFFER, GL_DEPTH_TEST, GL_FALSE, GL_FLOAT, GL_STATIC_DRAW,
     GL_TEXTURE0, GL_TEXTURE_2D, GL_TRIANGLES, glActiveTexture, glBindBuffer,
-    glBindTexture, glBindVertexArray, glBufferData, glDisable, glDrawArraysInstanced,
+    glBindTexture, glBindVertexArray, glBufferData, glDrawArraysInstanced,
     glEnable, glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays,
     glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
 )
@@ -139,7 +139,6 @@ class InstancedBillboards(InstancedVegBase):
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_2D, self._tex)
         glEnable(GL_DEPTH_TEST)
-        glDisable(GL_CULL_FACE)
         glBindVertexArray(self._vao)
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, self._ibuf.count)
         glBindVertexArray(0)

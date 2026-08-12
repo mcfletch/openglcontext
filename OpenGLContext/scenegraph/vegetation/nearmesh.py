@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 import numpy as np
 from OpenGL.GL import (
-    GL_ARRAY_BUFFER, GL_BLEND, GL_CULL_FACE, GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER,
+    GL_ARRAY_BUFFER, GL_BLEND, GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER,
     GL_FALSE, GL_FLOAT, GL_STATIC_DRAW, GL_TEXTURE0, GL_TEXTURE_2D, GL_TRIANGLES,
     GL_TRUE, GL_UNSIGNED_INT, glActiveTexture, glBindBuffer, glBindTexture,
     glBindVertexArray, glBufferData, glDepthMask, glDisable, glDrawElementsInstanced,
@@ -180,7 +180,6 @@ class InstancedMeshLOD(InstancedVegBase):
         # single alpha-cutout pass, depth-write on, no blend -> depth-correct, no bleed
         glActiveTexture(GL_TEXTURE0)
         glEnable(GL_DEPTH_TEST)
-        glDisable(GL_CULL_FACE)
         glDisable(GL_BLEND)
         glDepthMask(GL_TRUE)
         for s in self._sp:

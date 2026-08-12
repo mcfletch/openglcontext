@@ -20,7 +20,7 @@ from typing import Any, Optional
 import numpy as np
 from PIL import Image
 from OpenGL.GL import (
-    GL_ARRAY_BUFFER, GL_BLEND, GL_CULL_FACE, GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER,
+    GL_ARRAY_BUFFER, GL_BLEND, GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER,
     GL_FALSE, GL_FLOAT, GL_STATIC_DRAW, GL_TEXTURE0, GL_TEXTURE_2D, GL_TRIANGLES,
     GL_TRUE, GL_UNSIGNED_INT, glActiveTexture, glBindBuffer, glBindTexture,
     glBindVertexArray, glBufferData, glDepthMask, glDisable, glDrawElementsInstanced,
@@ -171,6 +171,7 @@ class InstancedClumps(InstancedVegBase):
                  texture: "str | Image.Image",
                  sun: "tuple[float, float, float]" = (-0.5, -1.0, -0.35),
                  fade_start: float = 1.0e9, fade_end: float = 1.0e9,
+                 cut_start: float = 0.0, cut_end: float = 0.0,
                  bounds: "tuple[float, float, float]" = _BIG) -> None:
         super(InstancedClumps, self).__init__()
         self.P = np.ascontiguousarray(P, np.float32)
@@ -184,6 +185,11 @@ class InstancedClumps(InstancedVegBase):
         #: over). Defaults far away = no fade; set to match the scatter radius.
         self.fade_start = float(fade_start)
         self.fade_end = float(fade_end)
+        #: inner eye-distance window over which a coarse-mesh far-clump node dithers IN
+        #: (complementary to a full-detail near node's outer fade over the same window),
+        #: for a seamless geometry-LOD handoff. cut_end <= 0 disables it (the near node).
+        self.cut_start = float(cut_start)
+        self.cut_end = float(cut_end)
         self.bounds = bounds
         self._gl: Any = None
         self._pending: "Optional[np.ndarray]" = None
@@ -219,7 +225,7 @@ class InstancedClumps(InstancedVegBase):
         self.U = {x: glGetUniformLocation(self._prog, x) for x in
                   ("uModelView", "uProjection", "atlas", "sunDirEye", "sunColor",
                    "skyAmbient", "groundAmbient", "fogDensity", "fogColor",
-                   "uFadeStart", "uFadeEnd", "uUpEye")}
+                   "uFadeStart", "uFadeEnd", "uCutStart", "uCutEnd", "uUpEye")}
         self._commit_constants()
         self._gl = self._prog
 
@@ -233,6 +239,8 @@ class InstancedClumps(InstancedVegBase):
         glUniform3f(U["fogColor"], 0.46, 0.58, 0.76)
         glUniform1f(U["uFadeStart"], self.fade_start)
         glUniform1f(U["uFadeEnd"], self.fade_end)
+        glUniform1f(U["uCutStart"], self.cut_start)
+        glUniform1f(U["uCutEnd"], self.cut_end)
 
     def dispose(self) -> None:
         """Free this node's GL objects (VAO, buffers, texture, program). GL thread."""
@@ -252,7 +260,6 @@ class InstancedClumps(InstancedVegBase):
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_2D, self._tex)
         glEnable(GL_DEPTH_TEST)
-        glDisable(GL_CULL_FACE)
         glDisable(GL_BLEND)
         glDepthMask(GL_TRUE)
         glBindVertexArray(self._vao)

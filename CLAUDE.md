@@ -551,11 +551,14 @@ inside their own `render()` — their own program, VAO, per-instance buffer and
 `glDraw*Instanced` — bypassing the VRML97/Shape path entirely. They restream
 per-frame instance data (camera-following fields) via the shared helpers in
 `scenegraph/instancedgl.py`: `InstanceBuffer` (grow-or-`glBufferSubData`, no
-per-frame realloc), `setup_instance_attribs`, `ensure_gl` (disable-on-failure so a
-driver quirk drops the layer instead of crashing the frame), and
-`save_draw_state`/`restore_draw_state` (compose with the PBR pass's cached GL
-state). Reach for this only when the standard batcher can't express the node
-(dynamic instance sets, array textures, custom shaders).
+per-frame realloc), `setup_instance_attribs`, and `ensure_gl` (disable-on-failure so
+a driver quirk drops the layer instead of crashing the frame). To compose with the
+driving pass's GL state they use the pass's own CPU state memo, not a `glGet`
+snapshot: they restore the pass's bound program with `mode.current_program()` and
+route face-cull through `passes.instancing.set_cull_state(mode, ...)` (the same memo
+`PBRMesh._apply_draw_state` uses), which the pass resets once per frame. Reach for
+this path only when the standard batcher can't express the node (dynamic instance
+sets, array textures, custom shaders).
 
 ### Shape/Geometry Interaction
 

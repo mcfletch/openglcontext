@@ -15,13 +15,12 @@ from typing import Any, Optional
 
 import numpy as np
 from OpenGL.GL import (
-    GL_CURRENT_PROGRAM, GL_FALSE, glGetIntegerv, glUniform3f, glUniformMatrix4fv,
-    glUseProgram,
+    GL_CCW, GL_CURRENT_PROGRAM, GL_FALSE, glGetIntegerv, glUniform3f,
+    glUniformMatrix4fv, glUseProgram,
 )
 from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.scenegraph import boundingvolume
-from OpenGLContext.scenegraph.instancedgl import (
-    ensure_gl, save_draw_state, restore_draw_state)
+from OpenGLContext.scenegraph.instancedgl import ensure_gl
 
 #: node AABB kept large so a camera-following field is never frustum-culled whole.
 _BIG = (1.0e6, 1.0e6, 1.0e6)
@@ -75,8 +74,11 @@ class InstancedVegBase(vnodes.PointSet):
             return 1
         if not self._stream():
             return 1
+        # Import here (not at module load) to avoid a passes<->scenegraph import cycle;
+        # this is the same deferral PBRMesh._apply_draw_state uses.
+        from OpenGLContext.passes.instancing import set_cull_state
         U = self.U
-        prev = int(glGetIntegerv(GL_CURRENT_PROGRAM))
+        prev = mode.current_program() if hasattr(mode, "current_program") else 0
         glUseProgram(self._prog)
         glUniformMatrix4fv(U["uModelView"], 1, GL_FALSE, np.ascontiguousarray(mode.matrix, np.float32))
         glUniformMatrix4fv(U["uProjection"], 1, GL_FALSE, np.ascontiguousarray(mode.projection, np.float32))
@@ -89,8 +91,11 @@ class InstancedVegBase(vnodes.PointSet):
             ue = nm @ _UP_WORLD
             ue /= np.linalg.norm(ue)
             glUniform3f(U["uUpEye"], *ue.astype(np.float32))
-        saved = save_draw_state()
+        # Foliage draws double-sided. Cull goes through the pass's CPU state memo so
+        # the pass re-issues its own winding on its next mesh, instead of this node
+        # snapshotting live GL with glGet and restoring it. The pass restores the
+        # program the node borrowed via current_program().
+        set_cull_state(mode, False, GL_CCW)
         self._draw(mode)
         glUseProgram(prev)
-        restore_draw_state(saved)
         return 1

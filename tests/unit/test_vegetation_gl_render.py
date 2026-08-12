@@ -2,9 +2,9 @@
 
 These nodes are streamed every frame by the forest demo but are otherwise only
 exercised through it, so this drives their render()/dispose() against a real
-core-profile context to cover: the compile-failure disable guard, the local
-GL-state save/restore (so they compose with the PBR pass without poking its
-cache), in-memory clump textures, and resource teardown.
+core-profile context to cover: the compile-failure disable guard, composition with
+the pass's CPU cull memo and bound program (so they need no glGet snapshot of live
+GL state), in-memory clump textures, and resource teardown.
 """
 import types
 
@@ -77,21 +77,27 @@ def _tex_png(tmp_path):
     return str(p)
 
 
-def test_billboards_render_restores_gl_state_and_disposes(gl, tmp_path):
+def test_billboards_render_composes_with_cull_memo_and_disposes(gl, tmp_path):
     pos = np.array([[0, 0, 0], [1, 0, 1], [-1, 0, 2]], 'f4')
     node = InstancedBillboards(pos, np.zeros(3, 'f4'), np.ones(3, 'f4'), _tex_png(tmp_path))
+    mode = _mode()
 
-    # Arrange a distinctive incoming GL state; the node must leave it untouched.
+    # Incoming state the node does not depend on: it composes with the pass's CPU
+    # state memo, not with whatever GL happened to be set before it.
     glEnable(GL_CULL_FACE); glCullFace(GL_FRONT); glFrontFace(GL_CW)
     glDepthMask(GL_FALSE); glEnable(GL_BLEND)
     assert glGetError() == GL_NO_ERROR
 
-    node.render(_mode())
+    node.render(mode)
     assert glGetError() == GL_NO_ERROR
 
-    assert glIsEnabled(GL_CULL_FACE)
-    assert int(glGetIntegerv(GL_CULL_FACE_MODE)) == GL_FRONT
-    assert int(glGetIntegerv(GL_FRONT_FACE)) == GL_CW
+    # Foliage draws double-sided: the node disables cull and records that on the
+    # pass's cull memo, so the pass re-issues its own winding on its next mesh
+    # (and resets to the GL default once per frame) -- no glGet snapshot/restore.
+    assert not glIsEnabled(GL_CULL_FACE)
+    assert mode._cull_enabled is False
+    assert int(mode._cull_front_face) == GL_CCW
+    # State it never touches is left exactly as it found it.
     mask = glGetBooleanv(GL_DEPTH_WRITEMASK)
     assert not bool(mask[0] if hasattr(mask, '__len__') else mask)
     assert glIsEnabled(GL_BLEND)
@@ -128,6 +134,24 @@ def test_clumps_render_with_in_memory_texture_and_dispose(gl):
     node.dispose()
     assert node._gl is None
     node.dispose()                                # idempotent: no GL objects left to free
+
+
+def test_far_clump_renders_with_inner_cut_window(gl):
+    """A coarse far-clump node carries the inner fade-in window (uCutStart/uCutEnd)
+    that dithers it IN at the geometry-LOD boundary; it compiles and draws clean."""
+    P = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], 'f4')
+    N = np.tile(np.array([0, 0, 1], 'f4'), (3, 1))
+    UV = np.array([[0, 0], [1, 0], [0, 1]], 'f4')
+    idx = np.array([0, 1, 2], np.uint32)
+    img = Image.new("RGBA", (4, 4), (30, 90, 30, 255))
+    node = InstancedClumps(P, N, UV, idx, img,
+                           cut_start=8.0, cut_end=13.0, fade_start=24.0, fade_end=30.0)
+    node.update_instances(np.array([[0, 0, 0]], 'f4'), np.zeros(1, 'f4'), np.ones(1, 'f4'))
+    node.render(_mode())
+    assert glGetError() == GL_NO_ERROR
+    assert node.U["uCutStart"] != -1 and node.U["uCutEnd"] != -1   # uniforms are live
+    assert (node.cut_start, node.cut_end) == (8.0, 13.0)
+    node.dispose()
 
 
 def test_meshlod_skips_species_with_no_near_instances(gl, tmp_path):

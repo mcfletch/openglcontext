@@ -8,8 +8,10 @@ tree-canopy term is sampled for static shading. This is the crisp,
 close-up-capable ground under the instanced vegetation.
 
 The node drives raw core-profile GL in :meth:`render` (its own program, VAO and
-textures), saving and restoring the active program so it composes with whatever
-render pass is driving the scenegraph.
+textures). It composes with whatever render pass is driving the scenegraph by
+restoring the pass's program (``mode.current_program()``) after its own draw and
+routing its face-cull through the pass's CPU state memo (``set_cull_state``), so it
+needs no ``glGet`` round-trip to snapshot live GL state.
 """
 import ctypes
 from typing import TYPE_CHECKING, Any, Callable, Optional
@@ -17,24 +19,21 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import numpy as np
 from PIL import Image
 from OpenGL.GL import (
-    GL_ARRAY_BUFFER, GL_BACK, GL_CCW, GL_CLAMP_TO_EDGE, GL_CULL_FACE, GL_CURRENT_PROGRAM,
-    GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER, GL_FALSE, GL_FLOAT, GL_LINEAR,
+    GL_ARRAY_BUFFER, GL_BACK, GL_CCW, GL_CLAMP_TO_EDGE, GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER, GL_FALSE, GL_FLOAT, GL_LINEAR,
     GL_LINEAR_MIPMAP_LINEAR, GL_R8, GL_RED, GL_REPEAT, GL_RGBA, GL_RGBA8, GL_STATIC_DRAW,
     GL_TEXTURE0, GL_TEXTURE1, GL_TEXTURE2, GL_TEXTURE3, GL_TEXTURE4, GL_TEXTURE_2D,
     GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_S,
     GL_TEXTURE_WRAP_T, GL_TRIANGLES, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT, glActiveTexture,
     glBindBuffer, glBindTexture, glBindVertexArray, glBufferData, glCullFace,
-    glDrawElements, glEnable, glEnableVertexAttribArray, glFrontFace, glGenBuffers,
-    glGenTextures, glGenVertexArrays, glGenerateMipmap, glGetIntegerv,
-    glGetUniformLocation, glTexImage2D, glTexImage3D, glTexParameteri, glTexSubImage3D,
+    glDrawElements, glEnable, glEnableVertexAttribArray, glGenBuffers,
+    glGenTextures, glGenVertexArrays, glGenerateMipmap, glGetUniformLocation, glTexImage2D, glTexImage3D, glTexParameteri, glTexSubImage3D,
     glUniform1f, glUniform1i, glUniform2f, glUniform3f, glUniformMatrix3fv,
     glUniformMatrix4fv, glUseProgram, glVertexAttribPointer,
 )
 from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
-    load_program, texture_rgba, ensure_gl, save_draw_state, restore_draw_state,
-    delete_gl)
+    load_program, texture_rgba, ensure_gl, delete_gl)
 
 if TYPE_CHECKING:
     from OpenGLContext.scenegraph.terrain.heightfield import HeightField
@@ -173,7 +172,8 @@ class SplatTerrain(vnodes.PointSet):
         g = self._gl
         U = g["U"]
         E = self.hf.extent
-        prev_prog = int(glGetIntegerv(GL_CURRENT_PROGRAM))
+        from OpenGLContext.passes.instancing import set_cull_state
+        prev_prog = mode.current_program() if hasattr(mode, "current_program") else 0
         glUseProgram(g["prog"])
         glUniformMatrix4fv(U["uModelView"], 1, GL_FALSE, np.ascontiguousarray(mode.matrix, np.float32))
         glUniformMatrix4fv(U["uProjection"], 1, GL_FALSE, np.ascontiguousarray(mode.projection, np.float32))
@@ -211,14 +211,13 @@ class SplatTerrain(vnodes.PointSet):
         glActiveTexture(GL_TEXTURE4)
         glBindTexture(GL_TEXTURE_2D, g["tex"]["sun"])
         glActiveTexture(GL_TEXTURE0)
-        saved = save_draw_state()
         glEnable(GL_DEPTH_TEST)
-        glEnable(GL_CULL_FACE)
+        # Back-face cull the ground; through the pass's cull memo so the next mesh
+        # re-issues its own winding, with no glGet snapshot/restore of live state.
+        set_cull_state(mode, True, GL_CCW)
         glCullFace(GL_BACK)
-        glFrontFace(GL_CCW)
         glBindVertexArray(g["vao"])
         glDrawElements(GL_TRIANGLES, g["ncount"], GL_UNSIGNED_INT, None)
         glBindVertexArray(0)
         glUseProgram(prev_prog)
-        restore_draw_state(saved)
         return 1

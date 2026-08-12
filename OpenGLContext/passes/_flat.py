@@ -424,6 +424,20 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             self._shader_program_instance = VRML97ShaderProgram()
         return self._shader_program_instance
 
+    def current_program(self) -> int:
+        """The GL program this pass currently expects bound during its geometry loop.
+
+        A raw-GL geometry node (vegetation, terrain, particles) that binds its own
+        program to draw restores to this afterwards, so the pass's meshes keep the
+        program the pass bound for them -- without a ``glGetIntegerv(GL_CURRENT_PROGRAM)``
+        round-trip per node. Both the VRML97 and PBR passes track the live program on
+        their ``shader_program`` (the PBR pass's is a ``PBRShaderProgram`` subclass),
+        so one implementation serves both."""
+        sp = self._shader_program_instance
+        if sp is None:
+            return 0
+        return int(getattr(sp, '_active_program', 0) or getattr(sp, 'program', 0) or 0)
+
     def setupShaderLights(self, matrix: Any) -> None:
         """Set up lights for shader-based rendering.
 

@@ -310,7 +310,7 @@ gl_Position = uProjection * centre;</pre>
   <p class="technical">Shaders are
     <code>OpenGLContext/shaders/particle.vert</code> and
     <code>particle.frag</code>; the GL helpers (<code>InstanceBuffer</code>,
-    <code>ensure_gl</code>, <code>save_draw_state</code>) are shared with the
+    <code>ensure_gl</code>) are shared with the
     terrain and vegetation nodes in
     <code>scenegraph/instancedgl.py</code>. A shader compile or driver failure
     disables the node with one logged warning rather than taking down the frame:

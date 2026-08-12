@@ -15,16 +15,12 @@ from typing import Any
 import numpy as np
 from PIL import Image
 from OpenGL.GL import (
-    GL_ARRAY_BUFFER, GL_BLEND, GL_CLAMP_TO_EDGE, GL_CULL_FACE, GL_CULL_FACE_MODE,
-    GL_DEPTH_TEST, GL_DEPTH_WRITEMASK, GL_DYNAMIC_DRAW, GL_FALSE, GL_FLOAT,
-    GL_FRAGMENT_SHADER, GL_FRONT_FACE, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT,
+    GL_ARRAY_BUFFER, GL_CLAMP_TO_EDGE, GL_DYNAMIC_DRAW, GL_FALSE, GL_FLOAT,
+    GL_FRAGMENT_SHADER, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT,
     GL_RGBA, GL_RGBA8, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER,
-    GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TRUE, GL_UNSIGNED_BYTE, GL_VERTEX_SHADER,
-    glBindBuffer, glBindTexture, glBufferData, glBufferSubData, glCullFace,
-    glDeleteBuffers, glDeleteProgram, glDeleteTextures, glDeleteVertexArrays,
-    glDepthMask, glDisable, glEnable, glEnableVertexAttribArray, glFrontFace,
-    glGenBuffers, glGenTextures, glGenerateMipmap, glGetBooleanv, glGetIntegerv,
-    glIsEnabled, glTexImage2D, glTexParameteri, glVertexAttribDivisor,
+    GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_UNSIGNED_BYTE, GL_VERTEX_SHADER,
+    glBindBuffer, glBindTexture, glBufferData, glBufferSubData, glDeleteBuffers, glDeleteProgram, glDeleteTextures, glDeleteVertexArrays,
+    glEnableVertexAttribArray, glGenBuffers, glGenTextures, glGenerateMipmap, glTexImage2D, glTexParameteri, glVertexAttribDivisor,
     glVertexAttribPointer,
 )
 from OpenGL.GL.shaders import compileProgram, compileShader
@@ -142,36 +138,6 @@ def ensure_gl(node: Any) -> bool:
             log.warning("%s disabled: GL init failed: %s", type(node).__name__, err)
             return False
     return True
-
-
-def save_draw_state() -> tuple[bool, int, int, bool, bool, bool]:
-    """Snapshot the cull/depth/blend GL state the instanced veg/terrain nodes mutate.
-
-    A node draws with its own setup and restores this snapshot afterwards, so it
-    composes with the PBR pass's cached draw state
-    (``pbrmesh._apply_draw_state``/``reset_draw_state``) instead of invalidating
-    that cache by hand. Cull *mode* and *front face* are captured too: the terrain
-    sets them explicitly, and leaving them changed would desync the PBR cache."""
-    mask = glGetBooleanv(GL_DEPTH_WRITEMASK)
-    return (
-        bool(glIsEnabled(GL_CULL_FACE)),
-        int(glGetIntegerv(GL_CULL_FACE_MODE)),
-        int(glGetIntegerv(GL_FRONT_FACE)),
-        bool(glIsEnabled(GL_DEPTH_TEST)),
-        bool(mask[0]) if hasattr(mask, '__len__') else bool(mask),
-        bool(glIsEnabled(GL_BLEND)),
-    )
-
-
-def restore_draw_state(state: tuple[bool, int, int, bool, bool, bool]) -> None:
-    """Restore a :func:`save_draw_state` snapshot."""
-    cull, cull_mode, front_face, depth, depth_mask, blend = state
-    (glEnable if cull else glDisable)(GL_CULL_FACE)
-    glCullFace(cull_mode)
-    glFrontFace(front_face)
-    (glEnable if depth else glDisable)(GL_DEPTH_TEST)
-    glDepthMask(GL_TRUE if depth_mask else GL_FALSE)
-    (glEnable if blend else glDisable)(GL_BLEND)
 
 
 def delete_gl(vaos: Iterable[int] = (), buffers: Iterable[int] = (),

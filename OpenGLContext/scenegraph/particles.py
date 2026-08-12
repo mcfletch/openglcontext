@@ -42,11 +42,10 @@ import numpy as np
 from OpenGL.GL import (
     GL_ARRAY_BUFFER, GL_BLEND, GL_DEPTH_TEST, GL_FALSE, GL_FLOAT, GL_ONE,
     GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_STATIC_DRAW, GL_TEXTURE0,
-    GL_TEXTURE_2D, GL_TRIANGLE_STRIP, GL_CURRENT_PROGRAM,
+    GL_TEXTURE_2D, GL_TRIANGLE_STRIP, GL_CCW,
     glActiveTexture, glBindBuffer, glBindTexture, glBindVertexArray, glBlendFunc,
-    glBufferData, glDepthMask, glDisable, glDrawArraysInstanced, glEnable,
-    glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays, glGetIntegerv,
-    glGetUniformLocation, glUniform1i, glUniform2f, glUniform4f,
+    glBufferData, glDepthMask, glDrawArraysInstanced, glEnable,
+    glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays, glGetUniformLocation, glUniform1i, glUniform2f, glUniform4f,
     glUniformMatrix4fv, glUseProgram, glVertexAttribDivisor, glVertexAttribPointer,
 )
 from vrml import field, node
@@ -54,8 +53,7 @@ from vrml.vrml97 import nodetypes
 
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
-    InstanceBuffer, delete_gl, ensure_gl, load_program, restore_draw_state,
-    save_draw_state, texture_rgba,
+    InstanceBuffer, delete_gl, ensure_gl, load_program, texture_rgba,
 )
 
 log = logging.getLogger(__name__)
@@ -660,7 +658,8 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
         gl = self._gl
         uniforms = gl['uniforms']
         rows = self.pool.instances()
-        previous = int(glGetIntegerv(GL_CURRENT_PROGRAM))
+        from OpenGLContext.passes.instancing import set_cull_state
+        previous = mode.current_program() if hasattr(mode, "current_program") else 0
         glUseProgram(gl['program'])
         glBindVertexArray(gl['vao'])
         gl['instances'].upload(rows)
@@ -684,19 +683,20 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
             glBindTexture(GL_TEXTURE_2D, gl['texture'])
             glUniform1i(uniforms['uTexture'], 0)
 
-        saved = save_draw_state()
         glEnable(GL_BLEND)
         glBlendFunc(*self.blendMode())
         glEnable(GL_DEPTH_TEST)
         # Depth *tested* so particles disappear behind walls, depth *writes* off
         # so they never occlude each other -- which is what makes a cloud read as
-        # a cloud instead of as a pile of squares.
+        # a cloud instead of as a pile of squares. Blend and depth-write are the
+        # transparent pass's own phase state, restored by it at phase end; only the
+        # cull disable is ours, so it goes through the pass's cull memo (a quad has
+        # no back face) rather than a glGet snapshot.
         glDepthMask(GL_FALSE)
-        glDisable(0x0B44)                       # GL_CULL_FACE: a quad has no back
+        set_cull_state(mode, False, GL_CCW)
         glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, gl['instances'].count)
         glBindVertexArray(0)
         glUseProgram(previous)
-        restore_draw_state(saved)
 
     def delete(self) -> None:
         """Release the GL objects this emitter owns."""

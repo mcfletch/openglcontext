@@ -4,17 +4,23 @@ uniform sampler2D atlas;
 uniform vec3 sunDirEye, sunColor, skyAmbient, groundAmbient;
 uniform float fogDensity; uniform vec3 fogColor;
 uniform float uFadeStart, uFadeEnd;   // dither-dissolve the clump out across this eye-distance window
+uniform float uCutStart, uCutEnd;     // dither the clump IN across this inner window (uCutEnd<=0 disables)
 uniform vec3 uUpEye;                  // world +Y in eye space: hemisphere-ambient split axis
 out vec4 fragColor;
 vec3 aces(vec3 x){const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.,1.);}
 void main(){
     vec4 t=texture(atlas,vUV);
     if(t.a<0.33) discard;   // alpha CUTOUT (not blend) -> depth-correct, no foliage bleed
+    float d = length(vEyePos);
+    float dth=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
+    // inner LOD boundary: a coarse far-clump node dithers IN across [uCutStart, uCutEnd]
+    // on exactly the pixels a full-detail near-clump node (same window as its outer
+    // fade) dithers OUT, so the geometry-LOD handoff shows no seam or double-draw.
+    if(uCutEnd>0.0 && (1.0-smoothstep(uCutStart,uCutEnd,d))>=dth) discard;
     // dithered outer dissolve toward the follow-disc edge: real-geometry clumps fade
     // out across [uFadeStart, uFadeEnd] while the impostor billboards dither IN on the
     // complementary pixels, so there's no hard pop as the disc recentres on the walker.
-    float keep = 1.0 - smoothstep(uFadeStart, uFadeEnd, length(vEyePos));
-    float dth=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
+    float keep = 1.0 - smoothstep(uFadeStart, uFadeEnd, d);
     if(keep<dth) discard;
     vec3 alb=pow(t.rgb,vec3(2.2));
     vec3 N=normalize(vEyeN); if(!gl_FrontFacing) N=-N;
