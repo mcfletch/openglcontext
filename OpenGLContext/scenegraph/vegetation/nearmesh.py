@@ -68,15 +68,25 @@ class InstancedMeshLOD(InstancedVegBase):
         self._pending: "Optional[dict[int, np.ndarray]]" = None
         self._disabled = False
 
-    def update(self, cx: float, cz: float, radius: float = 42.0) -> None:
-        """Select trees within ``radius`` of ``(cx, cz)`` and stage their instance data."""
+    def compute_pending(self, cx: float, cz: float,
+                        radius: float = 42.0) -> "dict[int, np.ndarray]":
+        """Per-species ``(x,y,z,yaw,scale)`` arrays for trees within ``radius`` of ``(cx, cz)``.
+
+        Reads only the immutable ``all_*`` tables and returns fresh arrays, touching
+        no GL and no node state, so a background streaming thread can build the next
+        near-set off the render thread. The caller assigns the result to
+        :attr:`_pending` on the GL thread; :meth:`_stream` uploads it there."""
         d2 = (self.all_pos[:, 0] - cx) ** 2 + (self.all_pos[:, 2] - cz) ** 2
         near = d2 < radius * radius
-        self._pending = {
+        return {
             s: np.concatenate([self.all_pos[near & (self.all_sp == s)],
                                self.all_yaw[near & (self.all_sp == s), None],
                                self.all_scale[near & (self.all_sp == s), None]], 1).astype(np.float32)
             for s in range(len(self.species))}
+
+    def update(self, cx: float, cz: float, radius: float = 42.0) -> None:
+        """Select trees within ``radius`` of ``(cx, cz)`` and stage their instance data."""
+        self._pending = self.compute_pending(cx, cz, radius)
 
     def _mkvao(self, P: np.ndarray, N: np.ndarray, U: np.ndarray, I: np.ndarray,
                ibuf: InstanceBuffer) -> "tuple[Any, int]":
