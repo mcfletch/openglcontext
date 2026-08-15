@@ -289,6 +289,7 @@ def test_the_context_hook_lays_out_and_draws(gl_context):
     from OpenGL.GL import glViewport
     from OpenGLContext.events.inputstate import InputState
     from OpenGLContext.ui.overlay import OverlayMixin
+    from OpenGLContext.ui.screen import ScreenMixin
 
     class World:
         def __init__(self):
@@ -310,7 +311,7 @@ def test_the_context_hook_lays_out_and_draws(gl_context):
         def hasMouseMoveHandlers(self):
             return False
 
-    class Context(OverlayMixin, World):
+    class Context(OverlayMixin, ScreenMixin, World):
         pass
 
     glViewport(0, 0, WIDTH, HEIGHT)
@@ -329,8 +330,9 @@ def test_the_context_hook_lays_out_and_draws(gl_context):
 
 def test_the_hook_does_nothing_with_no_overlay(gl_context):
     from OpenGLContext.ui.overlay import OverlayMixin
+    from OpenGLContext.ui.screen import ScreenMixin
 
-    class Context(OverlayMixin):
+    class Context(OverlayMixin, ScreenMixin):
         def getViewPort(self):
             return (WIDTH, HEIGHT)
 
@@ -392,9 +394,10 @@ class TestTheContextDrawsItsOwnOverlay:
     def context(self, gl_context):
         from OpenGL.GL import glViewport
         from OpenGLContext.ui.overlay import OverlayMixin
+        from OpenGLContext.ui.screen import ScreenMixin
         glViewport(0, 0, WIDTH, HEIGHT)
 
-        class Context(OverlayMixin):
+        class Context(OverlayMixin, ScreenMixin):
             contextDefinition = None
             captured = False
 

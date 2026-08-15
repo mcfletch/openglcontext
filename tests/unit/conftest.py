@@ -73,24 +73,36 @@ def restore_environment() -> Iterator[None]:
     os.environ.update(_PRISTINE_ENV)
 
 
-# ``glfw.terminate()`` segfaults on this Wayland/EGL stack: tearing the library
-# down after the last hidden window is destroyed crashes inside the driver and
-# kills the whole test process on its way out -- after every assertion in the
-# file has already passed. A bare init -> hidden core window -> destroy ->
-# terminate reproduces it with no OpenGLContext in the loop, so it is glfw's own
-# teardown, not ours. A SIGSEGV cannot be caught, so the per-test GL fixtures
-# under tests/unit that call ``glfw.terminate()`` in teardown would each take the
-# run down with them.
+# Tearing down a GLFW context on this Wayland/EGL stack corrupts the heap. A
+# hidden core window built and then destroyed reproduces it with no OpenGLContext
+# in the loop, and gdb puts the fault squarely in the driver, not in us:
 #
-# A test process has no need to terminate glfw at all: the OS reclaims the
-# contexts at exit, ``glfw.init()`` returns immediately when the library is
-# already initialised, and each fixture still destroys its own window -- so
-# nothing leaks between tests. Neutralise ``terminate`` for the session (patched
-# here at conftest import, before any test fixture runs) so those teardowns stop
-# crashing. Remove this once the driver's ``glfwTerminate`` no longer faults.
+#     free(): invalid size   -> abort
+#       __libc_free
+#       libgallium-25.2.8 (Mesa)          <- invalid free
+#       libEGL_mesa.so.0
+#       destroyContextEGL
+#       _glfwDestroyWindowWayland
+#       glfwDestroyWindow                 (and the same path under glfwTerminate)
+#
+# So both ``glfwDestroyWindow`` and ``glfwTerminate`` free an EGL context through
+# Mesa's Gallium driver, which frees a bad pointer and aborts.  The abort lands
+# in whatever runs next -- often a later test's ``glfw.poll_events`` or its own
+# teardown -- long after the assertions that "caused" it have passed, which is
+# why it reads as flaky cross-test pollution rather than one broken test.  A
+# SIGABRT cannot be caught, so a single teardown takes the whole run down.
+#
+# A test process has no need to hand these back at all: ``glfw.init()`` returns
+# immediately when the library is already initialised, and the OS reclaims every
+# context and window when the process exits.  Neutralise both teardown calls for
+# the session (patched here at conftest import, before any fixture runs) so the
+# driver's broken free is never reached.  The hidden windows a run leaks cost a
+# little memory until it ends and nothing more.  Remove this once the Mesa/GLFW
+# Wayland-EGL context teardown no longer faults.
 try:
     import glfw as _glfw
 except Exception:
     pass
 else:
     _glfw.terminate = lambda: None
+    _glfw.destroy_window = lambda window: None

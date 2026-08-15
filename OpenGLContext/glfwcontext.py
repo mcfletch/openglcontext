@@ -179,6 +179,10 @@ class GLFWContext(
         from OpenGLContext import renderoptions
         if renderoptions.hidden_window():
             glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
+        
+        # If on EGL allow for specifying the EGLDisplay
+        # only practical on EGL environments...
+
 
     def setupCallbacks(self):
         """Register GLFW callbacks"""
