@@ -193,7 +193,7 @@ needs changing. Everything else here is additive.
     `RenderVisitor`. Rendering has gone through the flat pass
     (`passes/_flat.py`) for some time; these were reachable only from the two
     sub-packages removed above. `renderpass.py` now just selects a flat pass,
-    `rendervisitor.py` just binds the active `Viewpoint`, and `visitor.py` is
+    `viewpointbinding.py` just binds the active `Viewpoint`, and `visitor.py` is
     the `find()` traversal. `docs/renderprocess.html`, which documented the
     removed system, is withdrawn.
 

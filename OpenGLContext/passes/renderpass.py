@@ -8,7 +8,7 @@ The pass itself does the work -- ``_flat.FlatPass`` observes the scenegraph's
 structure and renders from the paths it knows are active. This module only picks
 one and hands the context to it.
 """
-from OpenGLContext.passes import rendervisitor
+from OpenGLContext.passes import viewpointbinding
 import logging
 log = logging.getLogger( __name__ )
 
@@ -74,6 +74,6 @@ class _defaultRenderPasses( object ):
             # The core FlatPass takes its camera from the view platform only, so
             # bind the scene's active Viewpoint into the platform here (the legacy
             # path does this inside its scenegraph traversal instead).
-            rendervisitor.bind_scene_viewpoint( context )
+            viewpointbinding.bind_scene_viewpoint( context )
         return FLAT( context )
 defaultRenderPasses = _defaultRenderPasses()

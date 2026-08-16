@@ -9,8 +9,8 @@ class KeyboardEvent (event.Event):
 
     attributes:
         type -- "keyboard"
-        renderingPass -- pointer to the OpenGLContext.renderpass.RenderPass
-            object associated with this event
+        renderingPass -- the FlatPass (passes/_flat.py) rendering this
+            frame, or None outside a render pass
         modifiers -- three-tuple of booleans: (shift, control, alt)
         name -- the "key name" see KeyboardEventManager.registerCallback
             for discussion of possible values.
@@ -41,8 +41,8 @@ class KeypressEvent( event.Event ):
 
     attributes:
         type -- "keypress"
-        renderingPass -- pointer to the OpenGLContext.renderpass.RenderPass
-            object associated with this event
+        renderingPass -- the FlatPass (passes/_flat.py) rendering this
+            frame, or None outside a render pass
         modifiers -- three-tuple of booleans: (shift, control, alt)
         name -- the "key name" see KeypressEventManager.registerCallback
             for discussion of possible values.

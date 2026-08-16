@@ -9,8 +9,8 @@ class Event(object):
     Attributes:
         type -- string value representing type of event REQUIRED!
             Examples: "mousebutton", "mousemove", "keyboard", "keypress"
-        renderingPass -- pointer to the OpenGLContext.renderpass.RenderPass
-            object associated with this event
+        renderingPass -- the FlatPass (passes/_flat.py) rendering this
+            frame, or None outside a render pass
         modifiers -- three-tuple of booleans: (shift, control, alt)
         context -- pointer to the rendering context
     """

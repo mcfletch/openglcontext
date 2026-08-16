@@ -6,7 +6,7 @@ logic is exercised directly without a render context.
 import pytest
 
 from OpenGLContext.scenegraph.basenodes import Viewpoint, sceneGraph
-from OpenGLContext.passes import rendervisitor
+from OpenGLContext.passes import viewpointbinding
 
 
 class FakePlatform:
@@ -83,39 +83,39 @@ class TestCoreViewpointBridge:
 
     def test_binds_first_by_default(self, monkeypatch):
         sg, vps = self._scene()
-        monkeypatch.setattr(rendervisitor.visitor, 'find',
+        monkeypatch.setattr(viewpointbinding.visitor, 'find',
                             lambda ctx, types: [_Path(vp) for vp in vps])
         ctx = FakeContext(sg)
-        rendervisitor.bind_scene_viewpoint(ctx)
+        viewpointbinding.bind_scene_viewpoint(ctx)
         assert sg.boundViewpoint is vps[0]
         assert ctx.platform.position == (0.0, 0.0, 0.0, 1.0)
 
     def test_binds_preselected_isbound(self, monkeypatch):
         sg, vps = self._scene()
         vps[2].isBound = True
-        monkeypatch.setattr(rendervisitor.visitor, 'find',
+        monkeypatch.setattr(viewpointbinding.visitor, 'find',
                             lambda ctx, types: [_Path(vp) for vp in vps])
         ctx = FakeContext(sg)
-        rendervisitor.bind_scene_viewpoint(ctx)
+        viewpointbinding.bind_scene_viewpoint(ctx)
         assert sg.boundViewpoint is vps[2]
         assert ctx.platform.position == (2.0, 0.0, 0.0, 1.0)
 
     def test_cycles_to_next_when_unbound(self, monkeypatch):
         sg, vps = self._scene()
-        monkeypatch.setattr(rendervisitor.visitor, 'find',
+        monkeypatch.setattr(viewpointbinding.visitor, 'find',
                             lambda ctx, types: [_Path(vp) for vp in vps])
         ctx = FakeContext(sg)
-        rendervisitor.bind_scene_viewpoint(ctx)          # binds cam0
+        viewpointbinding.bind_scene_viewpoint(ctx)          # binds cam0
         # emulate OnNextViewpoint: unbind current
         sg.boundViewpoint.isBound = False
-        rendervisitor.bind_scene_viewpoint(ctx)          # advances to cam1
+        viewpointbinding.bind_scene_viewpoint(ctx)          # advances to cam1
         assert sg.boundViewpoint is vps[1]
 
     def test_no_viewpoints_is_noop(self, monkeypatch):
         sg = sceneGraph(children=[])
-        monkeypatch.setattr(rendervisitor.visitor, 'find', lambda ctx, types: [])
+        monkeypatch.setattr(viewpointbinding.visitor, 'find', lambda ctx, types: [])
         ctx = FakeContext(sg)
-        rendervisitor.bind_scene_viewpoint(ctx)
+        viewpointbinding.bind_scene_viewpoint(ctx)
         assert getattr(sg, 'boundViewpoint', None) in (None, [])
         assert ctx.platform.position is None             # platform untouched
 

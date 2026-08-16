@@ -9,9 +9,9 @@ to see how they can implement similar functionality in their own
 systems.  There is little optimization in the nodes provided.
 
 Note that much of the work of rendering is accomplished by the
-rendervisitor module, rather than individual nodes.  The node-
-classes merely have the node-specific customisations needed to
-support their individualised operation.
+FlatPass (the passes sub-package), rather than individual nodes.
+The node-classes merely have the node-specific customisations
+needed to support their individualised operation.
 
 References:
     VRML 97 International Standard

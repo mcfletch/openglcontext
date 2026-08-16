@@ -17,8 +17,7 @@ def bind_scene_viewpoint(context):
     """Move ``context``'s platform to the scene's currently-bound Viewpoint.
 
     The core-profile FlatPass drives the camera purely from the view platform and
-    does not itself walk the scenegraph to process Viewpoint bindables (that only
-    happens on the legacy path, in :meth:`RenderVisitor.SceneGraphCamera`). This
+    does not itself walk the scenegraph to process Viewpoint bindables. This
     bridges the standard VRML97 viewpoint-binding mechanism -- ``isBound`` /
     ``SceneGraph.boundViewpoint``, cycled by ``Context.OnNextViewpoint`` -- into the
     core profile, so any Viewpoint (from a VRML world or synthesised for a glTF

@@ -23,10 +23,11 @@ and render-traversal mechanisms, which allow you to
 largely ignore the Context objects.
 
 The bulk of the actual rendering work is done by the
-Visitor and RenderVisitor classes (or their shadow-
-enabled equivalents from shadow.passes), and it is
-these classes which define the rendering callbacks
-which are available from the Context class.
+FlatPass (``passes/_flat.py`` and its profile subclasses
+``flatcore``/``flatcompat``), which the Context selects
+through ``passes.renderpass.defaultRenderPasses``. The pass
+observes the scenegraph and drives the rendering callbacks
+the Context exposes.
 """
 from OpenGL.GL import *
 from OpenGLContext import texturecache, plugins
@@ -762,21 +763,19 @@ class Context(ScreenMixin, ContextConfigMixin):
             * calls self.unlockScenegraph()
             * calls self.setCurrent()
             * calls self.renderPasses( self )
-                See: passes sub-package
-                See: visitor.py, rendervisitor.py, renderpass.py,
-                shadow/passes.py for examples of render-pass-sets
-                which can be triggered.
-                See: flat.py for standard second-generation renderer
+                See: the passes sub-package. renderPasses defaults to
+                passes.renderpass.defaultRenderPasses, which selects and
+                caches the FlatPass (passes/_flat.py, profile subclasses
+                flatcore/flatcompat) that renders the context.
 
-                The RenderPasses define the core of the rendering
-                mechanism.  The default rendering passes will defer
-                most rendering options to the scenegraph returned by
-                self.getSceneGraph().  If that value is None (default)
-                then the pass will use the Context's callbacks.
+                The default pass defers most rendering options to the
+                scenegraph returned by self.getSceneGraph().  If that value
+                is None (default) then the pass renders the Context's
+                callbacks.
 
-                You can define new RenderPasses to replace the
-                rendering algorithm, override the Context's various
-                callbacks to write raw OpenGL code, or work by
+                You can assign a different callable to self.renderPasses to
+                replace the rendering algorithm, override the Context's
+                various callbacks to write raw OpenGL code, or work by
                 customizing the scene graph library.
             * if there was a visible change (which is the return value
                 from the render-pass-set), calls self.SwapBuffers()
@@ -860,9 +859,8 @@ class Context(ScreenMixin, ContextConfigMixin):
         The default implementation merely ensures that matrix mode
         is currently model view.
 
-        See: visitor.py, rendervisitor.py, renderpass.py,
-        shadow/passes.py for definitions of the properties of the
-        mode.
+        See: passes/_flat.py for the pass that defines the properties of
+        the mode.
         """
         ### Put your rendering code here
 

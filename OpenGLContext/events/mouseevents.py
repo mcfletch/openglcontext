@@ -167,8 +167,8 @@ class MouseButtonEvent (MouseEvent):
     """Mouse event representing a change of state for a mouse button
     attributes:
         type -- "mousebutton"
-        renderingPass -- pointer to the OpenGLContext.renderpass.RenderPass
-            object associated with this event
+        renderingPass -- the FlatPass (passes/_flat.py) rendering this
+            frame, or None outside a render pass
         modifiers -- three-tuple of booleans: (shift, control, alt)
         button -- the "button ID" which changed state
             Valid Values:
@@ -268,8 +268,8 @@ class MouseMoveEvent( MouseEvent ):
 
     attributes:
         type -- "mousemove"
-        renderingPass -- pointer to the OpenGLContext.renderpass.RenderPass
-            object associated with this event
+        renderingPass -- the FlatPass (passes/_flat.py) rendering this
+            frame, or None outside a render pass
         modifiers -- three-tuple of booleans: (shift, control, alt)
         buttons -- tuple of active buttons (in ascending order)
             Valid Values:
