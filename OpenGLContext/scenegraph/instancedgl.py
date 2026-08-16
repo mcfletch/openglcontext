@@ -18,10 +18,13 @@ from OpenGL.GL import (
     GL_ARRAY_BUFFER, GL_CLAMP_TO_EDGE, GL_DYNAMIC_DRAW, GL_FALSE, GL_FLOAT,
     GL_FRAGMENT_SHADER, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT,
     GL_RGBA, GL_RGBA8, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER,
-    GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_UNSIGNED_BYTE, GL_VERTEX_SHADER,
-    glBindBuffer, glBindTexture, glBufferData, glBufferSubData, glDeleteBuffers, glDeleteProgram, glDeleteTextures, glDeleteVertexArrays,
-    glEnableVertexAttribArray, glGenBuffers, glGenTextures, glGenerateMipmap, glTexImage2D, glTexParameteri, glVertexAttribDivisor,
-    glVertexAttribPointer,
+    GL_SRGB8_ALPHA8, GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_UNSIGNED_BYTE,
+    GL_VERTEX_SHADER,
+    glBindBuffer, glBindTexture, glBufferData, glBufferSubData,
+    glDeleteBuffers, glDeleteProgram, glDeleteTextures, glDeleteVertexArrays,
+    glEnableVertexAttribArray, glGenBuffers, glGenTextures,
+    glGenerateMipmap, glTexImage2D, glTexParameteri,
+    glVertexAttribDivisor, glVertexAttribPointer,
 )
 from OpenGL.GL.shaders import compileProgram, compileShader
 
@@ -53,17 +56,21 @@ def load_program(vert_name: str, frag_name: str) -> int:
                           validate=False)
 
 
-def texture_rgba(source: Any, clamp: bool = True, mipmap: bool = True) -> int:
+def texture_rgba(source: Any, clamp: bool = True, mipmap: bool = True,
+                 srgb: bool = False) -> int:
     """Upload an RGBA texture; mipmapped + trilinear by default.
 
     ``source`` is a filesystem path or an already-decoded ``PIL.Image``. Accepting
     an in-memory image lets a texture embedded in an asset (e.g. a GLB's baked-in
     PNG) upload without first writing a file beside the asset -- a write that fails
-    on a read-only install."""
+    on a read-only install. ``srgb`` stores an albedo/colour texture as
+    ``GL_SRGB8_ALPHA8`` so the hardware decodes it to linear on sample (and filters
+    and mip-averages in linear), letting the shader drop its ``pow(rgb, 2.2)``; leave
+    it False for data textures (control/normal/roughness maps) that are already linear."""
     im = (source if isinstance(source, Image.Image) else Image.open(source)).convert("RGBA")
     tid = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, tid)
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, im.width, im.height, 0,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8 if srgb else GL_RGBA8, im.width, im.height, 0,
                  GL_RGBA, GL_UNSIGNED_BYTE, np.asarray(im))
     wrap = GL_CLAMP_TO_EDGE if clamp else GL_REPEAT
     if mipmap:
@@ -96,11 +103,16 @@ class InstanceBuffer:
     """A GL array buffer that restreams per-instance data without per-frame reallocation.
 
     A camera-following field restreams its instances every frame. Reallocating the
-    store (``glBufferData``) each time churns driver memory; instead the buffer is
-    grown only when a frame's instance count exceeds the current capacity, and
-    otherwise the live prefix is rewritten in place with ``glBufferSubData``.
-    :attr:`id` is stable so it can be wired into a VAO once at setup, and
-    :attr:`count` is the live instance count to pass to the instanced draw."""
+    store to a new size each time churns driver memory, so the store grows only when a
+    frame's instance count exceeds capacity; otherwise the live prefix is rewritten.
+
+    A buffer rewritten every frame is also read by the previous frame's still-in-flight
+    draw, so a plain ``glBufferSubData`` into it blocks until that draw drains (an
+    implicit sync — visible as a per-frame stall). The rewrite therefore *orphans*
+    first: ``glBufferData(capacity, None)`` hands back fresh storage for the new frame
+    and lets the driver retire the old storage when the draw reading it finishes, so
+    the write never waits. :attr:`id` is stable so it can be wired into a VAO once at
+    setup, and :attr:`count` is the live instance count for the instanced draw."""
     def __init__(self) -> None:
         self.id = int(glGenBuffers(1))
         self.capacity = 0   # allocated bytes
@@ -115,6 +127,7 @@ class InstanceBuffer:
             glBufferData(GL_ARRAY_BUFFER, rows.nbytes, rows, GL_DYNAMIC_DRAW)
             self.capacity = rows.nbytes
         elif rows.nbytes:
+            glBufferData(GL_ARRAY_BUFFER, self.capacity, None, GL_DYNAMIC_DRAW)  # orphan
             glBufferSubData(GL_ARRAY_BUFFER, 0, rows.nbytes, rows)
 
     def delete(self) -> None:

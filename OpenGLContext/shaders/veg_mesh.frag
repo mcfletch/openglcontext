@@ -13,9 +13,9 @@ void main(){
     // dithered LOD cross-fade: the near-mesh dithers OUT with distance while the
     // impostor dithers IN on the complementary pixels (no blended ghosting).
     float lodf=smoothstep(uLodStart,uLodEnd,length(vEyePos));
-    float dth=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
+    float dth=fract(gl_FragCoord.x*0.7548776662+gl_FragCoord.y*0.5698402909);  // R2 dither, no sin()
     if(lodf>dth) discard;
-    vec3 alb=pow(t.rgb,vec3(2.2));
+    vec3 alb=t.rgb;   // sRGB texture: hardware already decoded to linear (no pow)
     vec3 N=normalize(vEyeN); if(!gl_FrontFacing) N=-N;
     float ndl=max(dot(N,-sunDirEye),0.0);
     vec3 amb=mix(groundAmbient,skyAmbient,clamp(dot(N,uUpEye)*0.5+0.5,0.,1.));

@@ -124,7 +124,7 @@ class InstancedMeshLOD(InstancedVegBase):
 
         def tex(path: str) -> Any:
             if path not in tc:
-                tc[path] = texture_rgba(path, clamp=False)
+                tc[path] = texture_rgba(path, clamp=False, srgb=True)
                 self._textures.append(tc[path])
             return tc[path]
         self._sp: "list[dict[str, Any]]" = []

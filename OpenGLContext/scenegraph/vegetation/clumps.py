@@ -205,7 +205,7 @@ class InstancedClumps(InstancedVegBase):
 
     def _init_gl(self) -> None:
         self._prog = load_program("veg_mesh.vert", "veg_clump.frag")
-        self._tex = texture_rgba(self.texture_src, clamp=False)
+        self._tex = texture_rgba(self.texture_src, clamp=False, srgb=True)
         mesh = np.concatenate([self.P, self.N, self.UV], 1).astype(np.float32)
         self._vao = glGenVertexArrays(1)
         glBindVertexArray(self._vao)

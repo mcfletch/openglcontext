@@ -10,7 +10,7 @@ vec3 aces(vec3 x){const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;return clamp((x
 void main(){
     vec4 t = texture(pine, vUV);
     if(t.a < 0.4) discard;
-    float dth=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
+    float dth=fract(gl_FragCoord.x*0.7548776662+gl_FragCoord.y*0.5698402909);  // R2 dither, no sin()
     if(uNearFade>0.5){   // tree impostor: dithered cross-fade with the near-mesh.
         // Near the camera it is fully dithered OUT (no translucent card in front of
         // the near-mesh); it dithers IN as the near-mesh dithers out with distance.
@@ -26,7 +26,7 @@ void main(){
         float fin=(uNearCut>0.5)?smoothstep(uNearCut*0.6, uNearCut, dd):1.0;
         if(min(fin,fout)<dth) discard;
     }
-    vec3 lin = pow(t.rgb, vec3(2.2));
+    vec3 lin = t.rgb;   // sRGB texture: hardware already decoded to linear (no pow)
     vec3 amb = mix(groundAmbient, skyAmbient, clamp(vH,0.,1.));
     vec3 col = lin * (amb + sunColor*uSunLevel);
     if(fogDensity>0.0){ float f=1.-exp(-fogDensity*length(vEyePos)); col=mix(col,fogColor,clamp(f,0.,1.)); }

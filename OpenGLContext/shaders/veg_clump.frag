@@ -12,7 +12,7 @@ void main(){
     vec4 t=texture(atlas,vUV);
     if(t.a<0.33) discard;   // alpha CUTOUT (not blend) -> depth-correct, no foliage bleed
     float d = length(vEyePos);
-    float dth=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
+    float dth=fract(gl_FragCoord.x*0.7548776662+gl_FragCoord.y*0.5698402909);  // R2 dither, no sin()
     // inner LOD boundary: a coarse far-clump node dithers IN across [uCutStart, uCutEnd]
     // on exactly the pixels a full-detail near-clump node (same window as its outer
     // fade) dithers OUT, so the geometry-LOD handoff shows no seam or double-draw.
@@ -22,7 +22,7 @@ void main(){
     // complementary pixels, so there's no hard pop as the disc recentres on the walker.
     float keep = 1.0 - smoothstep(uFadeStart, uFadeEnd, d);
     if(keep<dth) discard;
-    vec3 alb=pow(t.rgb,vec3(2.2));
+    vec3 alb=t.rgb;   // sRGB texture: hardware already decoded to linear (no pow)
     vec3 N=normalize(vEyeN); if(!gl_FrontFacing) N=-N;
     float ndl=max(dot(N,-sunDirEye),0.0);
     vec3 amb=mix(groundAmbient,skyAmbient,clamp(dot(N,uUpEye)*0.5+0.5,0.,1.));

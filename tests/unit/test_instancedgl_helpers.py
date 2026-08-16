@@ -76,27 +76,32 @@ def test_setup_instance_attribs_advances_per_instance(monkeypatch):
 
 
 def test_instance_buffer_grows_only_when_capacity_exceeded(monkeypatch):
-    """Grow reallocates; a same-or-smaller restream reuses the store via glBufferSubData."""
+    """Grow enlarges the store; a same-or-smaller restream keeps capacity but orphans
+    it (``glBufferData`` with no data) before the ``glBufferSubData`` rewrite, so a
+    frame's write never waits on the previous frame's still-drawing store."""
     events = []
     monkeypatch.setattr(ig, 'glGenBuffers', lambda n: 5)
     monkeypatch.setattr(ig, 'glBindBuffer', lambda *a: None)
     monkeypatch.setattr(ig, 'glBufferData',
-                        lambda tgt, size, data, usage: events.append(('data', size)))
+                        lambda tgt, size, data, usage: events.append(('data', size, data is None)))
     monkeypatch.setattr(ig, 'glBufferSubData',
                         lambda tgt, off, size, data: events.append(('sub', size)))
 
     buf = ig.InstanceBuffer()
     assert buf.id == 5 and buf.capacity == 0
-    buf.upload(np.zeros((3, 5), 'f4'))       # first fill -> allocate
+    buf.upload(np.zeros((3, 5), 'f4'))       # first fill -> allocate with data
     grew = buf.capacity
-    buf.upload(np.zeros((2, 5), 'f4'))       # shrink -> in-place
+    buf.upload(np.zeros((2, 5), 'f4'))       # shrink -> orphan (data=None) + sub, same capacity
     assert buf.count == 2 and buf.capacity == grew
-    buf.upload(np.zeros((10, 5), 'f4'))      # exceed capacity -> reallocate
+    buf.upload(np.zeros((10, 5), 'f4'))      # exceed capacity -> reallocate with data
     assert buf.count == 10 and buf.capacity > grew
     buf.upload(np.zeros((0, 5), 'f4'))       # empty -> no GL call, nothing to draw
     assert buf.count == 0
 
-    assert [e[0] for e in events] == ['data', 'sub', 'data']
+    assert [e[0] for e in events] == ['data', 'data', 'sub', 'data']
+    assert events[0][2] is False              # first fill uploads data
+    assert events[1] == ('data', grew, True)  # rewrite orphans full capacity, no data
+    assert events[3][2] is False              # grow uploads data
 
 
 def test_instance_buffer_delete_frees_its_store(monkeypatch):

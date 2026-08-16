@@ -89,7 +89,7 @@ class InstancedBillboards(InstancedVegBase):
         setup_instance_attribs(2, 3)
         self._ibuf.upload(self._instance_rows())
         glBindVertexArray(0)
-        self._tex = texture_rgba(self.texture)
+        self._tex = texture_rgba(self.texture, srgb=True)
         self.U = {n: glGetUniformLocation(self._prog, n) for n in
                   ("uModelView", "uProjection", "pine", "uWidth", "uNearFade", "uFarFade",
                    "uNearCut", "uSunLevel", "uLodStart", "uLodEnd", "sunColor",
