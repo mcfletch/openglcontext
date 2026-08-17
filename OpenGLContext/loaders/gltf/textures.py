@@ -12,11 +12,22 @@ as it needs a GPU-block transcoder Pillow lacks.
 extensions, giving them the ``.index`` / ``.texCoord`` / ``.extensions`` attribute
 shape the rest of the loader expects. Pillow is an optional dependency, imported
 lazily where a texture is actually decoded.
+
+**One image, loaded twice, is one texture.** A streamed world is hundreds of
+files and the tree in one tile is the same tree as the tree in the next: the
+same bark, byte for byte, embedded in every tile that has a tree in it. A
+texture each would be a hundred copies of one image in video memory -- and,
+worse, a hundred *different* textures, which is a hundred draws where there
+should be one, since a single draw can bind only one. So textures are keyed on
+what is in them, across documents, and held weakly: one nothing is drawing is
+one the world has finished with.
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
+import weakref
 from typing import TYPE_CHECKING, Optional
 
 from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
@@ -29,25 +40,51 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+#: Textures already loaded, by what is in them and how it is read. Weak, so a
+#: world that streams tiles for an hour does not accumulate every image it has
+#: ever seen; see :func:`_shared_texture`.
+_SHARED: "weakref.WeakValueDictionary[tuple, PBRTexture]" = \
+    weakref.WeakValueDictionary()
 
-def _image_pil(g: "pygltflib.GLTF2", image_index: int,
-               resolver: Resolver) -> "Optional[Image.Image]":
-    from PIL import Image
+
+def forget_shared_textures() -> None:
+    """Drop the shared-texture table. For a test that wants a clean start."""
+    _SHARED.clear()
+
+
+def shared_texture_count() -> int:
+    """How many distinct images are being held."""
+    return len(_SHARED)
+
+
+def _image_bytes(g: "pygltflib.GLTF2", image_index: int,
+                 resolver: Resolver) -> Optional[bytes]:
+    """The encoded bytes of an image, however the file supplies them."""
     img = g.images[image_index]
-    raw = None
     if getattr(img, 'bufferView', None) is not None:
         bv = g.bufferViews[img.bufferView]
         data = _buffer_bytes(g, bv.buffer, resolver)
         start = bv.byteOffset or 0
-        raw = data[start:start + bv.byteLength]
-    else:
-        uri = getattr(img, 'uri', None)
-        if uri and uri.startswith('data:'):
-            raw = _decode_data_uri(uri, _resolver_max(resolver))
-        elif uri:
-            raw = resolver.fetch(uri)
+        return bytes(data[start:start + bv.byteLength])
+    uri = getattr(img, 'uri', None)
+    if uri and uri.startswith('data:'):
+        return _decode_data_uri(uri, _resolver_max(resolver))
+    if uri:
+        fetched = resolver.fetch(uri)
+        return None if fetched is None else bytes(fetched)
+    return None
+
+
+def _image_pil(g: "pygltflib.GLTF2", image_index: int,
+               resolver: Resolver) -> "Optional[Image.Image]":
+    raw = _image_bytes(g, image_index, resolver)
     if raw is None:
         return None
+    return _decode(raw)
+
+
+def _decode(raw: bytes) -> "Optional[Image.Image]":
+    from PIL import Image
     pim: "Image.Image" = Image.open(io.BytesIO(raw))
     # Normalise to RGBA so grayscale (L) and luminance-alpha (LA) images expand
     # to (L,L,L,A) -- otherwise an LA texture samples as (lum, alpha, 0) and a
@@ -113,33 +150,63 @@ def texture_image(g: "pygltflib.GLTF2", texture_index: Optional[int],
 
 
 def _texture_holder(g: "pygltflib.GLTF2", texture_index: Optional[int], resolver: Resolver,
-                    srgb: bool, cache: "dict[int, Optional[PBRTexture]]"
+                    srgb: bool, cache: "dict[tuple, Optional[PBRTexture]]"
                     ) -> Optional[PBRTexture]:
+    """The texture at an index, read as sRGB or as linear.
+
+    Remembered per document by index *and* colour space: one image serving as
+    both a base colour and a roughness map is two textures, because a base
+    colour is sRGB and a roughness map is not, and whichever was asked for
+    first would otherwise answer for both.
+    """
     if texture_index is None:
         return None
-    if texture_index in cache:
-        return cache[texture_index]
+    remembered = (texture_index, bool(srgb))
+    if remembered in cache:
+        return cache[remembered]
     tex = g.textures[texture_index]
     src = _texture_source(tex)
     if src is None:
-        return None
-    try:
-        image = _image_pil(g, src, resolver)
-    except Exception as err:
-        log.warning("glTF: failed to decode image %s: %s", src, err)
         return None
     # glTF sampler wrap/filter enums are GL enums; pass them straight through.
     sampler = None
     if getattr(tex, 'sampler', None) is not None and g.samplers:
         sampler = g.samplers[tex.sampler]
-    holder = PBRTexture(
-        image, srgb=srgb,
-        wrap_s=getattr(sampler, 'wrapS', None),
-        wrap_t=getattr(sampler, 'wrapT', None),
-        min_filter=getattr(sampler, 'minFilter', None),
-        mag_filter=getattr(sampler, 'magFilter', None),
-    ) if image is not None else None
-    cache[texture_index] = holder
+    settings = (srgb,
+                getattr(sampler, 'wrapS', None), getattr(sampler, 'wrapT', None),
+                getattr(sampler, 'minFilter', None),
+                getattr(sampler, 'magFilter', None))
+    try:
+        holder = _shared_texture(_image_bytes(g, src, resolver), settings)
+    except Exception as err:
+        log.warning("glTF: failed to decode image %s: %s", src, err)
+        return None
+    cache[remembered] = holder
+    return holder
+
+
+def _shared_texture(raw: Optional[bytes], settings: tuple) -> Optional[PBRTexture]:
+    """The texture for these bytes read this way, decoding it only if new.
+
+    Two documents holding the same image get the same texture, which is what
+    lets everything drawn with it collapse into one instanced draw. The key is
+    the image and *how it is read* -- the same file as a base colour and as a
+    roughness map is two textures, because one is sRGB and the other is not,
+    and one wrapped and one clamped are two for the same sort of reason.
+    """
+    if raw is None:
+        return None
+    key = (hashlib.sha256(raw).digest(),) + settings
+    found = _SHARED.get(key)
+    if found is not None:
+        return found
+    image = _decode(raw)
+    if image is None:
+        return None
+    srgb, wrap_s, wrap_t, min_filter, mag_filter = settings
+    holder = PBRTexture(image, srgb=srgb, wrap_s=wrap_s, wrap_t=wrap_t,
+                        min_filter=min_filter, mag_filter=mag_filter)
+    _SHARED[key] = holder
     return holder
 
 
