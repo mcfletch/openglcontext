@@ -267,41 +267,20 @@ def _bounding_box(pos: np.ndarray) -> list[float]:
 def _glb(
     pos: np.ndarray, nrm: np.ndarray, col: np.ndarray, idx: np.ndarray
 ) -> bytes:
-    from pygltflib import (
-        GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,
-        Buffer, Material, PbrMetallicRoughness,
-    )
-    arrays = [pos.astype("<f4"), nrm.astype("<f4"),
-              col.astype("<f4"), idx.astype("<u4")]
-    blob, spans = b"", []
-    for arr in arrays:
-        raw = np.ascontiguousarray(arr).tobytes()
-        blob += b"\x00" * ((-len(blob)) % 4)
-        spans.append((len(blob), len(raw)))
-        blob += raw
-    views = [BufferView(buffer=0, byteOffset=o, byteLength=l) for o, l in spans]
-    acc = [
-        Accessor(bufferView=0, componentType=5126, count=len(pos), type="VEC3",
-                 min=pos.min(0).tolist(), max=pos.max(0).tolist()),
-        Accessor(bufferView=1, componentType=5126, count=len(nrm), type="VEC3"),
-        Accessor(bufferView=2, componentType=5126, count=len(col), type="VEC3"),
-        Accessor(bufferView=3, componentType=5125, count=len(idx), type="SCALAR"),
-    ]
-    g = GLTF2()
-    g.scene = 0
-    g.scenes = [Scene(nodes=[0])]
-    g.nodes = [Node(mesh=0)]
-    g.meshes = [Mesh(primitives=[Primitive(
-        attributes=Attributes(POSITION=0, NORMAL=1, COLOR_0=2),
-        indices=3, material=0)])]
-    g.materials = [Material(pbrMetallicRoughness=PbrMetallicRoughness(
-        baseColorFactor=[1, 1, 1, 1], metallicFactor=0.0, roughnessFactor=1.0),
-        doubleSided=True)]
-    g.bufferViews = views
-    g.accessors = acc
-    g.buffers = [Buffer(byteLength=len(blob))]
-    g.set_binary_blob(blob)
-    return b"".join(g.save_to_bytes())
+    """One tile's mesh as binary glTF: vertex-coloured, unlit-white, two-sided.
+
+    Two-sided because a tile's skirt is seen from inside the terrain as often as
+    from outside it.
+    """
+    from OpenGLContext.loaders.gltf.writer import write_glb
+    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+    mesh = PBRMesh(
+        positions=np.asarray(pos, "f"), normals=np.asarray(nrm, "f"),
+        colors=np.asarray(col, "f"), indices=np.asarray(idx, np.uint32),
+        material=PBRMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
+                             roughness=1.0, doubleSided=True))
+    return write_glb(mesh)
 
 
 def build_terrain_tileset(

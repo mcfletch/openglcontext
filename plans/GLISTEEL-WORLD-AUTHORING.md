@@ -829,3 +829,10 @@ them; §E decides per species.
   `OpenGLContext_editor` sibling; own glTF + 3D Tiles writer; 60 fps bar is the discrete
   GPU. Grounded in an audit of the existing tiles3d/terrain/vegetation/UI/picking
   subsystems (§3) and the forest-demo performance findings. No code started.
+- **2026-08-17** — First vertical slice (§7) started; task breakdown and the reader
+  contract the writers must satisfy are in
+  [GLISTEEL-SLICE-A-HANDOFF.md](GLISTEEL-SLICE-A-HANDOFF.md). Task 1 done: the sibling is
+  bootstrapped at `/workspaces/OpenGL-dev/openglcontext-editor` — distribution
+  `OpenGLContext-editor`, package `OpenGLContext_editor`, `src/` layout, `specs/` with the
+  clean-room procedure, and an editable workspace member of the root `pyproject.toml` and
+  `requirements-dev.txt`. Nothing bakes yet; §A's glTF writer is next.

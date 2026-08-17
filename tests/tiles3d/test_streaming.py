@@ -43,18 +43,25 @@ class CountingUploader(GLTileUploader):
         return super().release(drawable)
 
 
-def _runtime(tmp_path, budget):
+def _runtime(tmp_path, tiles_resident):
+    """A runtime over an 85-tile world, budgeted to hold `tiles_resident` of them.
+
+    The budget is derived from the tiles as baked rather than written down as a
+    byte count: what a tile weighs is the writer's business, and a literal here
+    would silently stop forcing eviction the next time the encoder improves.
+    """
     path = P.build_terrain_tileset(str(tmp_path), extent=2048, levels=4, tile_res=17)
     with open(path) as fh:
         doc = json.load(fh)
     # As the viewer builds it: a dataset is turned into the frame it is drawn
     # in, and the camera path below is in that frame.
     ts = build_runtime_tileset(doc, base_uri=str(tmp_path) + os.sep, recenter=True)
+    budget = int(_tile_bytes(ts) * tiles_resident)
     up = CountingUploader()
     rt = TilesetRuntime(ts, file_tile_loader, up, memory_budget=budget,
                         fovy=math.radians(50.0), max_sse=10.0, workers=4,
                         max_uploads_per_update=8, prefetch_factor=1.5)
-    return rt, up, ts
+    return rt, up, ts, budget
 
 
 def _tile_bytes(ts):
@@ -74,9 +81,10 @@ def _low_path(n):
 
 
 def test_flythrough_streams_within_budget_and_evicts(tmp_path):
-    # 85 tiles (1+4+16+64); budget holds a moving window, not the whole world.
-    budget = 900 * 1024
-    rt, up, ts = _runtime(tmp_path, budget)
+    # 85 tiles (1+4+16+64); the budget holds a moving window, not the whole world.
+    # 34 is a little above the ~31 tiles the flight has in view at once, which are
+    # the ones eviction cannot touch, and well under the 50 the flight visits.
+    rt, up, ts, budget = _runtime(tmp_path, tiles_resident=34)
     biggest = _tile_bytes(ts)
     total_tiles = sum(1 for _ in ts.iter_tiles())
     try:
@@ -108,7 +116,7 @@ def test_flythrough_streams_within_budget_and_evicts(tmp_path):
 
 
 def test_resident_tiles_are_near_the_camera(tmp_path):
-    rt, up, ts = _runtime(tmp_path, budget=400 * 1024)
+    rt, up, ts, _budget = _runtime(tmp_path, tiles_resident=8)
     try:
         cam = (600.0, 120.0, 600.0)
         vp = _vp(cam, (0.0, 0.0, 0.0))          # look toward the world centre

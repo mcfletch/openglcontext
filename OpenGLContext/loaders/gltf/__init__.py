@@ -16,6 +16,11 @@ imported node::
     root = scene.group                       # mount this in your scenegraph
     player = scene.player()                  # animate: player.evaluate(t) per frame
 
+Writing is the mirror image, through :mod:`~.writer`::
+
+    from OpenGLContext.loaders.gltf import write_glb
+    write_glb(mesh, path='tile.glb')         # a mesh, a list, or SceneNodes
+
 The package is layered bottom-up; each module depends only on those above it.
 Secure fetching of external assets is delegated to the shared
 :mod:`OpenGLContext.loaders.resolver`, not owned here::
@@ -31,6 +36,7 @@ Secure fetching of external assets is delegated to the shared
     environment_sky       OMI_environment_sky -> the Background node it describes
     scene                 walk the node graph -> GLTFScene (lights, cameras, skins)
     loader                load_gltf / load_gltf_url public entry points
+    writer                meshes/materials -> a written .glb
     samples               Khronos glTF-Sample-Assets catalogue helpers
 
 This module is the package's public API. It re-exports the entry points and the
@@ -42,6 +48,9 @@ from __future__ import annotations
 from OpenGLContext.loaders.gltf.loader import load_gltf, load_gltf_url
 from OpenGLContext.loaders.gltf.scene import GLTFScene
 from OpenGLContext.loaders.gltf.transforms import look_orientation
+from OpenGLContext.loaders.gltf.writer import (
+    GLTFWriter, InstanceSet, SceneNode, write_glb,
+)
 from OpenGLContext.loaders.gltf.samples import (
     SAMPLE_MODELS_BASE,
     SAMPLE_MODELS,
@@ -57,6 +66,10 @@ from OpenGLContext.loaders.gltf.samples import (
 __all__ = [
     "load_gltf",
     "load_gltf_url",
+    "write_glb",
+    "GLTFWriter",
+    "SceneNode",
+    "InstanceSet",
     "GLTFScene",
     "look_orientation",
     "SAMPLE_MODELS_BASE",
