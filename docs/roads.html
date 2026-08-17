@@ -66,6 +66,26 @@ you give are the points swept.</p>
 add up to. <code>texture_length</code> is what sets the length of the centre-line
 dashes, since the dashes are in the texture.</p>
 
+<h3>The alignment: where a road can go</h3>
+<p>A polyline drawn over a landscape is not yet a road. Two limits make it one,
+and the second is the one that is easy to forget:</p>
+<ul>
+  <li><strong>A grade limit</strong> — how steeply it may climb. One in
+  thirteen (0.075) is a fast road; one in eight is a mountain pass.</li>
+  <li><strong>A design speed</strong> — how fast it is meant to be driven, which
+  says how sharply the grade may <em>change</em>. A road that climbs at its
+  limit and descends at its limit a few metres later obeys the grade limit
+  perfectly and is a ramp: a car arriving at speed leaves the ground, because
+  there is nothing under it. A crest taken at speed <code>v</code> over a
+  vertical curve of radius <code>R</code> lifts <code>v²/(gR)</code> of the
+  car's weight off its wheels, so the design speed fixes the shortest curve the
+  alignment may use.</li>
+</ul>
+<p>Both are applied by <code>OpenGLContext_editor</code>'s
+<code>follow_terrain</code>, which is where an alignment is settled; see the
+<a href="https://github.com/mcfletch/openglcontext-editor">editor's README</a>.
+The runtime here takes the finished centreline.</p>
+
 <h3>How it is swept</h3>
 <p>Each centreline point gets a <strong>frame</strong>: the tangent along the
 line, the right vector across it, and the up vector their cross product gives.
