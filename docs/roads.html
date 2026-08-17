@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Roads in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Roads</h1>
+</header>
+<section>
+<p class="introduction">A road is a 3D polyline plus a <em>profile</em>: the
+shape of a cut across it, from the crown of the carriageway out through the
+shoulder to the verge that meets the ground. Sweep the one along the other and
+you have a surface a car can drive on.</p>
+<p><code>OpenGLContext.scenegraph.road</code> is the runtime half — geometry and
+material, no decisions. Where a road <em>goes</em>, whether a valley wants a
+bridge or a causeway, and how the ground is reshaped to meet the shoulder are
+authoring questions, and they live in <a
+href="https://github.com/mcfletch/openglcontext-editor"><code>OpenGLContext-editor</code></a>.
+A game generating a road at runtime, or an editor drawing one under the cursor,
+needs only what is here.</p>
+</section>
+
+<section>
+<h2>One road</h2>
+<pre>from OpenGLContext.scenegraph.road import road_mesh, RoadProfile
+
+mesh = road_mesh(
+    [(0, 12, 0), (60, 14, 20), (140, 13, 10), (220, 9, -40)],
+    RoadProfile(lanes=2),
+    spacing=5.0,
+)</pre>
+<p>The result is a <a href="pbr.html"><code>PBRMesh</code></a> with positions,
+normals, tangents and texture coordinates, and a road material on it. Put it in
+a <code>Shape</code> and it draws; hand it to the baker and it becomes tile
+content.</p>
+<p><code>spacing</code> is in metres, and it is <strong>the whole of a road's
+level of detail</strong>: the centreline is re-sampled to that interval before
+the sweep, one vertex ring per point, so the same route at
+<code>spacing=40</code> is the road a distant tile carries. Left out, the points
+you give are the points swept.</p>
+
+<h3>The profile</h3>
+<p><code>RoadProfile</code> is measured out from the crown, in metres:</p>
+<table>
+<tr><th>Field</th><th>Default</th><th>Is</th></tr>
+<tr><td><code>lane_width</code></td><td>3.7</td><td>one lane across</td></tr>
+<tr><td><code>lanes</code></td><td>2</td><td>how many of them</td></tr>
+<tr><td><code>shoulder_width</code></td><td>1.5</td><td>the sealed strip outside the carriageway</td></tr>
+<tr><td><code>shoulder_drop</code></td><td>0.10</td><td>how far it sits below the carriageway edge</td></tr>
+<tr><td><code>verge_width</code></td><td>3.0</td><td>the grassed batter out to the ground</td></tr>
+<tr><td><code>verge_drop</code></td><td>1.2</td><td>how far the verge falls over that width</td></tr>
+<tr><td><code>crossfall</code></td><td>0.02</td><td>the camber that drains the carriageway, as a fraction</td></tr>
+<tr><td><code>texture_length</code></td><td>25.0</td><td>metres of road one texture repeat covers</td></tr>
+</table>
+<p><code>carriageway_width</code> and <code>total_width</code> report what those
+add up to. <code>texture_length</code> is what sets the length of the centre-line
+dashes, since the dashes are in the texture.</p>
+
+<h3>How it is swept</h3>
+<p>Each centreline point gets a <strong>frame</strong>: the tangent along the
+line, the right vector across it, and the up vector their cross product gives.
+The profile is placed in that frame, so the carriageway banks with a climb and
+holds its width through a bend. Up is world up rather than anything carried
+along the line — a road banks, it does not roll over.</p>
+</section>
+
+<section>
+<h2>The surface</h2>
+<p><code>tarmac_material(wetness, seed)</code> builds the PBR material, and
+<code>road_texture(size, seed)</code> the image behind it: asphalt, the gravel
+shoulder, the grass verge and the lane markings, laid out across the same
+section the profile sweeps.</p>
+<p><strong>Wetness runs 0 to 1</strong> and does two things at once, because
+that is what water does: it darkens the albedo (to 45% at fully wet) and drops
+the roughness from 0.72 to 0.12. A wet road is near-mirror, so the reflection
+comes from the environment — <a href="pbr.html">image-based lighting</a> — with
+no reflection pass involved. A game can move it with the weather.</p>
+<pre>from OpenGLContext.scenegraph.road import road_mesh, tarmac_material
+mesh = road_mesh(route, spacing=5.0,
+                 material=tarmac_material(wetness=0.8, seed=3))</pre>
+<p><code>seed</code> varies the surface noise, so two roads in one scene do not
+share a pattern. Pass an <code>image</code> to use artwork of your own instead
+of the generated one.</p>
+
+<h3>Working with the arrays</h3>
+<p><code>road_surface(points, profile)</code> returns
+<code>(positions, normals, texcoords, indices)</code> without wrapping them in a
+node — for a caller writing its own geometry, computing a collider, or feeding a
+tile writer. <code>resample_polyline(points, spacing)</code> is the resampler on
+its own.</p>
+</section>
+
+<section>
+<h2>Baked roads</h2>
+<p>A road baked into a tileset (see <a href="baking.html">Baking a world</a>)
+arrives as ordinary glTF content: the game streams a road without knowing it is
+one. What a game usually <em>does</em> need is the centreline — to place a car on
+the grid, time a lap, or drive an opponent — and geometry does not carry it.</p>
+<p>So the editor's road layer writes the centrelines into the tileset's
+<code>extras</code>, under a <code>roads</code> key — a list of routes, each
+with its <code>name</code>, its <code>centreline</code> points, its
+<code>carriagewayWidth</code> and <code>totalWidth</code>, its
+<code>length</code>, and whether it is <code>closed</code> into a circuit:</p>
+<pre>import json
+tileset = json.load(open('/tmp/world/tileset.json'))
+for road in tileset['extras']['roads']:
+    print(road['name'], road['length'], len(road['centreline']))</pre>
+<p>The centreline is written as a shape rather than at full density; a game
+re-samples it for whatever it is doing.</p>
+<p>The <a href="physics.html">physics colliders</a> that page with a tile cover
+the road exactly as they cover the ground — it is the same triangles, so a car
+drives on what it can see.</p>
+</section>
+
+<section>
+<h2>Limits</h2>
+<ul>
+  <li><strong>The four generation operations are one and a half.</strong> A road
+  that follows the ground, and one carried above a low area on a causeway, are
+  generated. A deck on piers over a narrow gap, and a portal through a hillside,
+  are not: a route that wants either is currently carried over or laid on the
+  ground.</li>
+  <li><strong>Junctions are not modelled.</strong> Two roads that cross produce
+  two surfaces at the crossing point rather than an intersection.</li>
+  <li><strong>The profile is constant along a route.</strong> A road that
+  widens for a climbing lane is two routes.</li>
+</ul>
+</section>
+
+<footer>
+<p>See also: <a href="baking.html">Baking a world</a> for putting a road into a
+streamable tileset, <a href="terrain.html">Terrain &amp; 3D&nbsp;Tiles</a> for
+the runtime that streams it, and <a href="pbr.html">PBR materials</a> for what
+<code>tarmac_material</code> builds.</p>
+</footer>
+</body>
+</html>

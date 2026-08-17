@@ -23,18 +23,24 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def reset_environment_memos() -> Iterator[None]:
-    """Clear the cached environment reads before and after every test.
+    """Clear the cached environment and driver reads before and after each test.
 
     Both ends, not just one: before, so a test sees the variables it set rather
     than a value some earlier test settled; after, so a test that deliberately
     pokes a memo does not leave it holding its answer.
+
+    The driver's shadow capabilities are memoised for the same reason the
+    environment reads are -- they cannot change while a context lives -- and a
+    test that fakes a failing GL query has to reach the query to see it fail.
     """
     from OpenGLContext import renderoptions
-    from OpenGLContext.passes import pbrpass
+    from OpenGLContext.passes import pbrpass, shadersource, shadowcaps
 
     def clear() -> None:
         pbrpass.reset_renderer_cache()
         renderoptions.reset_env_cache()
+        shadowcaps.reset_detected()
+        shadersource.reset_shadow_config()
 
     clear()
     yield

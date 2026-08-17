@@ -1,15 +1,14 @@
 """Per-tile static collision for streamed terrain.
 
-Turns each resident terrain tile into a static `trimesh` collider in a physics world,
-so a character controller walks the surface (and, later, through caves). Wire it into
-`TilesetRuntime`/`TilesTerrain` via the `on_renderable`/`on_evicted` hooks.
+Turns each resident terrain tile into a static `trimesh` collider in a physics
+world, so a character walks the surface and a car drives on it. Wire it into
+`TilesetRuntime`/`TilesTerrain` through the `on_renderable`/`on_evicted` hooks.
 
-Eviction removes a tile's collider through `PhysicsWorld.remove_body` when that
-call exists. It does not today, so an evicted tile's static body stays in the world
-and we simply drop our handle to it (logging once). We do NOT queue those handles:
-a per-frame stream evicts without bound, and a list of handles we can never act on
-would grow forever. Resident terrain is bounded, so the live collider set stays
-finite even though evicted bodies are not yet reclaimed.
+**A tile that is evicted takes its collider with it.** The set of colliders is
+the set of resident tiles and nothing else, so a session that drives across a
+map for an hour costs what one view of it costs. `PhysicsWorld.remove_body`
+frees the slot for the next tile to arrive in; a world without that call keeps
+the body and is told so, once.
 """
 import logging
 from typing import TYPE_CHECKING, Any
@@ -30,8 +29,8 @@ class TerrainColliders:
         self.world = world
         self.min_hull_size = min_hull_size
         self._bodies: dict[int, int] = {}   # id(tile) -> body index
-        # Kept for API compatibility; stays empty because we never accumulate
-        # unremovable handles (see the module docstring).
+        # Kept for API compatibility; stays empty because unremovable handles
+        # are dropped rather than queued (see :meth:`on_evicted`).
         self.pending_removals: list[Any] = []
         self._warned_no_removal = False
 
@@ -52,12 +51,12 @@ class TerrainColliders:
         self._bodies[id(tile)] = body
 
     def on_evicted(self, tile: Any, drawable: Any) -> None:
-        """Forget the evicted tile's collider.
+        """Take the evicted tile's collider out of the physics world.
 
-        Removes the body from the world when `PhysicsWorld.remove_body` is
-        available; otherwise drops the handle and logs once that eviction-removal
-        is unimplemented, rather than growing an unbounded list of handles it can
-        never act on.
+        A world whose `PhysicsWorld` has no `remove_body` keeps the body; the
+        handle is dropped rather than queued, and the fact is logged once. A
+        list of handles that could never be acted on would grow for as long as
+        the stream ran.
         """
         body = self._bodies.pop(id(tile), None)
         if body is None:

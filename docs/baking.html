@@ -175,9 +175,27 @@ print(result.summary())</pre>
   <dd>meshes at fixed positions -- a building, a bridge deck, a prop. Its
   <code>maximum_error</code> holds content back from tiles too coarse to be worth
   the bandwidth.</dd>
+  <dt><code>RoadLayer</code></dt>
+  <dd>a route through the world as a drivable surface (<a
+  href="roads.html">Roads</a>), cut into the ground it crosses, split so each
+  tile owns the length of road inside it and re-sampled coarser as the tiles
+  coarsen.</dd>
 </dl>
 <p>A layer is anything with <code>bounds()</code> and
-<code>content(region, error)</code>, so a world can add its own kind.</p>
+<code>content(region, error)</code>, so a world can add its own kind. Two
+further methods are optional:</p>
+<dl>
+  <dt><code>assets()</code></dt>
+  <dd><code>{filename: bytes}</code> written once beside the tileset, for
+  anything the content refers to rather than embeds. A road's surface texture is
+  440&nbsp;KB, and a road crosses a great many tiles; written once and referred
+  to by name, it is loaded once too.</dd>
+  <dt><code>metadata()</code></dt>
+  <dd>a dictionary merged into the tileset's <code>extras</code>, for what a
+  consumer needs to know about the world that its geometry cannot say. A road
+  puts its centreline here, because a game cannot find a track in a pile of
+  triangles.</dd>
+</dl>
 <h3>Bringing in authored assets</h3>
 <p><code>meshes_from_gltf</code> reads a designer's <code>.glb</code> and hands
 back its meshes flattened into one frame -- transforms already applied -- ready

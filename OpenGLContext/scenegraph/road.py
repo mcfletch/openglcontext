@@ -113,9 +113,9 @@ class RoadProfile:
         shoulder and the carriageway markings as bands and no seam falls
         between them.
         """
-        lateral = self.section()[:, 0]
-        span = lateral[-1] - lateral[0]
-        return (lateral - lateral[0]) / span
+        lateral: np.ndarray = self.section()[:, 0]
+        left = float(lateral[0])
+        return (lateral - left) / (float(lateral[-1]) - left)
 
 
 def resample_polyline(points: Any, spacing: float) -> np.ndarray:
@@ -214,9 +214,18 @@ def _strip_indices(rows: int, ring: int) -> np.ndarray:
 
 
 def road_mesh(points: Any, profile: Optional[RoadProfile] = None,
-              material: Optional[PBRMaterial] = None) -> PBRMesh:
-    """A road's surface as a renderable mesh, with tangents for its normal map."""
+              material: Optional[PBRMaterial] = None,
+              spacing: Optional[float] = None) -> PBRMesh:
+    """A road's surface as a renderable mesh, with tangents for its normal map.
+
+    ``spacing`` re-samples the centreline to that interval in metres first,
+    which is the whole of a road's level of detail: the same route at a coarser
+    spacing is the road a distant tile carries. Left out, the points given are
+    the points swept.
+    """
     profile = profile or RoadProfile()
+    if spacing is not None:
+        points = resample_polyline(points, spacing)
     positions, normals, texcoords, indices = road_surface(points, profile)
     tangents = estimate_tangents(positions, normals, texcoords, indices)
     return PBRMesh(positions=positions, normals=normals, texcoords=texcoords,

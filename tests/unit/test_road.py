@@ -192,6 +192,23 @@ class TestTheMeshItGenerates:
         mesh = road_mesh(_straight(), RoadProfile())
         assert mesh.tangents is not None and mesh.tangents.shape[1] == 4
 
+    def test_a_spacing_sets_how_finely_it_is_built(self) -> None:
+        """Re-sampling the centreline is the whole of a road's level of detail,
+        so the caller that wants a coarse one says so here."""
+        profile = RoadProfile()
+        ring = len(profile.section())
+        route = [(0.0, 0.0, 0.0), (100.0, 0.0, 0.0)]
+        fine = road_mesh(route, profile, spacing=5.0)
+        coarse = road_mesh(route, profile, spacing=25.0)
+        assert len(fine.positions) == 21 * ring
+        assert len(coarse.positions) == 5 * ring
+
+    def test_without_one_the_points_given_are_the_points_used(self) -> None:
+        profile = RoadProfile()
+        route = [(0.0, 0.0, 0.0), (100.0, 0.0, 0.0)]
+        mesh = road_mesh(route, profile)
+        assert len(mesh.positions) == 2 * len(profile.section())
+
 
 class TestTheRoadMaterial:
     def test_dry_tarmac_is_rough(self) -> None:

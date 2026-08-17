@@ -18,6 +18,7 @@ from OpenGLContext.loaders.tiles3d.gltf_uploader import (
 )
 from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
 from omi_physics.world import PhysicsWorld
+import numpy
 from omi_physics import model
 import json
 
@@ -63,18 +64,44 @@ class _Tile:
     """Minimal stand-in for a tile (identity is by id())."""
 
 
+class _WorldWithoutRemoval:
+    """A physics world of the shape this module supports the least: one that
+    cannot take a body out again."""
+
+
 def test_on_evicted_does_not_grow_unbounded_without_removal_api():
     """A world with no remove_body must not leave on_evicted accumulating a handle
     per eviction; the handle is dropped, and the list stays bounded."""
-    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
-    colliders = TerrainColliders(world)
-    assert not hasattr(world, "remove_body")
+    colliders = TerrainColliders(_WorldWithoutRemoval())
+    assert not hasattr(colliders.world, "remove_body")
     for i in range(2000):
         tile = _Tile()
         colliders._bodies[id(tile)] = i     # pretend a collider was added
         colliders.on_evicted(tile, None)
     assert colliders.collider_count == 0
     assert len(colliders.pending_removals) == 0
+
+
+def test_an_evicted_tile_stops_costing_the_simulation_anything():
+    """The point of removal: a session that pages a hundred tiles through the
+    same physics world holds the resident ones and no more."""
+    world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
+    colliders = TerrainColliders(world)
+    points = numpy.array([(0, 0, 0), (8, 0, 0), (0, 0, 8), (8, 0, 8)], "d")
+    faces = numpy.array([(0, 1, 2), (1, 3, 2)], "i")
+    resident = []
+    for step in range(40):
+        tile = _Tile()
+        shape = world.add_shape(model.Shape.trimesh(
+            points + numpy.array([step * 8.0, 0, 0]), faces))
+        colliders._bodies[id(tile)] = world.add_body(
+            model.Motion(type=model.STATIC),
+            collider=model.Collider(shape=shape))
+        resident.append(tile)
+        if len(resident) > 4:
+            colliders.on_evicted(resident.pop(0), None)
+    assert colliders.collider_count == 4        # the resident window
+    assert world.body_count <= 5
 
 
 def test_on_evicted_uses_remove_body_when_available():

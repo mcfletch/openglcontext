@@ -18,6 +18,37 @@ from typing import Any, Optional, Set, Tuple
 log = logging.getLogger(__name__)
 
 
+#: What each GL context turned out to be able to do, keyed by the context
+#: itself. See :meth:`ShadowCapabilities.detect`.
+_DETECTED: "dict[Any, ShadowCapabilities]" = {}
+
+
+def _current_gl_context() -> Any:
+    """The GL context these capabilities would be about, or None if there is
+    none current.
+
+    The answer describes the driver and the context, not the
+    :class:`~OpenGLContext.context.Context` object that happens to be asking --
+    and the caller with the most reason to ask, a shader compile, has no object
+    to offer, only the knowledge that a context is current.
+    """
+    try:
+        from OpenGL import platform
+        return platform.GetCurrentContext() or None
+    except Exception:
+        return None
+
+
+def reset_detected() -> None:
+    """Forget every context's capabilities, so the next ask reaches the driver.
+
+    A memo that lives as long as the process decides the answer for whatever
+    runs after it; a test suite that switches GL contexts under one process
+    calls this between tests.
+    """
+    _DETECTED.clear()
+
+
 class ShadowCapabilities:
     """Feature set and chosen techniques for shadow rendering."""
 
@@ -36,6 +67,7 @@ class ShadowCapabilities:
         has_depth_clamp: bool = False,
         max_texture_units: int = 16,
         total_vram_mb: int = 0,
+        detected: bool = False,
     ) -> None:
         self.gl_version = gl_version
         self.has_texture_gather = has_texture_gather   # shadowmixin: PCSS gather hint
@@ -44,6 +76,9 @@ class ShadowCapabilities:
         self.has_depth_clamp = has_depth_clamp         # shadowmixin: depth-pass clamp
         self.max_texture_units = max_texture_units     # max_shadow_lights budget
         self.total_vram_mb = total_vram_mb  # 0 = unknown (no NVX/ATI meminfo); cascade cap
+        #: Whether this came from a real GL context rather than the fallback.
+        #: Only a real answer is worth remembering; see :meth:`detect`.
+        self.detected = detected
 
     # -- chosen techniques -------------------------------------------------
     @property
@@ -91,11 +126,35 @@ class ShadowCapabilities:
 
     @classmethod
     def detect(cls, context: Optional[object] = None) -> 'ShadowCapabilities':
-        """Detect capabilities from the current GL context.
+        """What the current GL context can do, asked once and remembered.
 
         Falls back to a conservative 3.3 baseline if querying fails (e.g. no
-        current context).
+        current context) -- and that answer is *not* remembered, so a caller
+        that asks before there is a context gets the real answer once there is.
+
+        The question is worth memoising because reading it means pulling the
+        driver's whole extension string and building a set from it, and a
+        caller that asks per shader compile asks a great many times: it was
+        measured at a tenth of a frame in a scene that streams new materials as
+        it goes.
+
+        What is remembered is keyed on the *GL* context, so a second window on
+        a different driver tier gets its own answer even though ``context`` is
+        the same object -- or, as from a shader compile, no object at all.
         """
+        key = _current_gl_context()
+        if key is not None:
+            cached = _DETECTED.get(key)
+            if cached is not None:
+                return cached
+        caps = cls._detect(context)
+        if caps.detected and key is not None:
+            _DETECTED[key] = caps
+        return caps
+
+    @classmethod
+    def _detect(cls, context: Optional[object] = None) -> 'ShadowCapabilities':
+        """The actual query; see :meth:`detect`."""
         try:
             from OpenGL.GL import (
                 glGetString, glGetIntegerv, GL_VERSION,
@@ -111,6 +170,7 @@ class ShadowCapabilities:
                 units = 16
             caps = cls.from_features(extensions, version, units)
             caps.total_vram_mb = cls._query_vram_mb(extensions)
+            caps.detected = True
             log.info(
                 "Shadow capabilities: GL %s, gather=%s cube=%s cube_array=%s "
                 "depth_clamp=%s units=%s",

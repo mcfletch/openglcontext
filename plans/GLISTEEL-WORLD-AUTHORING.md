@@ -4,7 +4,8 @@
 missing · 📋 **Planned** — designed here, not yet built · ⬜ **Todo** — wanted, not yet
 designed · 🛑 **Shelved** — deliberately not done.
 
-§A is built and its status log is §9; §B onwards are designed here and not yet built.
+§A, a minimal §C and §H are built; their status log is §9. §B, §D–§G are designed
+here and not yet built.
 Everything the plan *leans on* was already built, and that is the point of §3.
 
 ## What this is
@@ -212,13 +213,13 @@ appears.
 |---|---|---|---|---|
 | §A | The writer & baker — glTF + 3D Tiles + octree, proven by baking a world | OpenGLContext (writer) + editor (baker) | ✅ | — |
 | §B | Terrain authoring — georef DEM, multi-block, procedural control map | editor (+ engine ingest) | 📋 | §A |
-| §C | Roads — spec, cross-sections, the four ops, render node, reflections | engine (render) + editor (gen) | 📋 | §A, §B |
+| §C | Roads — spec, cross-sections, the four ops, render node, reflections | engine (render) + editor (gen) | 🟡 highway-on-dirt + causeway; bridge, tunnel, reflection bake, control-map paint outstanding | §A, §B |
 | §D | Water — rivers, lakes, surface render, shorelines, whitewater, beaches | engine (render) + editor (gen) | 📋 | §A, §B |
 | §E | Road-aware refinement & octree LOD | editor | 📋 | §A, §B, §C |
 | §F | Editor toolkit — tool-modes, menus, picking, gizmos, ortho map | engine (picking/ortho) + editor (toolkit) | 📋 | §F.0 independent; rest after §C/§D |
 | §G | `glisteel-editor` — the race-track editor app | new repo | 📋 | §B–§F |
-| §H | `glisteel` — the car game demo | new repo | 📋 | §A runtime, §E output |
-| §I | Performance to 60 fps on the discrete-GPU target | engine + game | 📋 | §H to measure |
+| §H | `glisteel` — the car game demo | new repo | ✅ streams, drives, times a lap | §A runtime, §E output |
+| §I | Performance to 60 fps on the discrete-GPU target | engine + game | 🟡 measured; the per-instance record cost is the first lever | §H to measure |
 
 ---
 
@@ -415,7 +416,7 @@ generation; the DEM/data provenance and licences are recorded where the fetch li
 
 ---
 
-### §C — Roads 📋
+### §C — Roads 🟡
 
 **Goal.** A designer's 3D polyline becomes a road that sits on the land — with shoulders,
 grassy embankments and the structures a route needs to cross real terrain — and the
@@ -641,7 +642,7 @@ bake.
 
 ---
 
-### §H — `glisteel`, the car game demo 📋
+### §H — `glisteel`, the car game demo ✅
 
 **Goal.** Prove the runtime: stream a baked world at speed and drive it.
 
@@ -663,12 +664,36 @@ page). Driving it is the GL smoke test.
 
 ---
 
-### §I — Performance to 60 fps 📋
+### §I — Performance to 60 fps 🟡
 
 **Goal.** 60 fps at 1080p on the discrete-GPU target, streaming a world heavier than the
 forest demo, with a racing camera.
 
-**The levers, and why a racing game has ones the forest demo lacked.**
+**Where it stands.** Measured 2026-08-17 in this container, driving `glisteel` on the
+autopilot at 1000×560 over a 2048 m world:
+
+| Tree instances per tile | Depth | Average |
+|---|---|---|
+| 0 | 3 | 148 fps |
+| 40 | 3 | 33 fps |
+| 24 | 4 | 16 fps |
+| 200 | 4 | 5 fps |
+
+The frame rate tracks the baked instance count and nothing else: with the trees out it is
+four times the target. Each instance costs 0.06–0.2 ms of CPU, because the glTF loader
+expands an `EXT_mesh_gpu_instancing` node into one `Transform` per instance and the pass
+builds a record — matrix concatenation, bounding volume, frustum test — for every one of
+them before `build_instance_groups` collapses them into a single draw. The GPU work is
+batched; the CPU work that decides it is not. `tests/unit/test_gltf_gpu_instancing.py`
+pins the current expansion, so changing it is a deliberate change to what the loader
+produces rather than an internal detail.
+
+**The first lever, therefore:** an instanced node produces **one** render record carrying
+its instance transforms, and the pass frustum-tests the set rather than each member. That
+is the fix for every consumer of the format — the forest demo bakes the same way — and it
+belongs in the engine.
+
+**The other levers, and why a racing game has ones the forest demo lacked.**
 
 - **Racing favours far LODs.** The forest demo walks through dense near-field grass at eye
   level; a car sees mostly the road and the middle distance, and §E already holds
@@ -853,3 +878,44 @@ them; §E decides per species.
   `OpenGLContext-editor`, package `OpenGLContext_editor`, `src/` layout, `specs/` with the
   clean-room procedure, and an editable workspace member of the root `pyproject.toml` and
   `requirements-dev.txt`. Nothing bakes yet; §A's glTF writer is next.
+- **2026-08-17** — **The first vertical slice closes: a car drives a baked world.** The
+  autopilot completed a lap of the baked 4.6 km circuit in **1:52.550**, never more than
+  6.1 m off the centreline, on a world that streamed in around it and became collision as
+  it arrived.
+
+  **§C, minimal (highway-on-dirt and causeway).** `OpenGLContext.scenegraph.road` extrudes
+  a cross-section profile along a resampled polyline and builds the tarmac material;
+  `OpenGLContext_editor.world.road` conforms the ground to it and bakes the runs into the
+  octree, one run to exactly one tile by half-open bounds. Three things had to be true
+  before a road was visible on the *meshed* ground rather than on the heightfield it was
+  cut into, and each is now a test on the mesh: the cut is widened to at least the ground's
+  sample spacing, or it falls between two vertices; the carve is sagged by that widening
+  times the path's grade limit, or a climbing road crosses its own earthwork between
+  samples; and the centreline is held a freeboard above the water, or a circuit routed
+  round an ellipse spends a third of a lap under a lake. The grade limiter wraps for a
+  closed circuit. Roads travel in the tileset's `extras`, so a game gets the centreline
+  with the world.
+
+  **§H.** [`glisteel`](../../glisteel/) — world, car, camera, autopilot, lap timing, HUD
+  and the window that runs them. The car is `omi_physics`' `RaycastVehicle`; the controls
+  are sampled inside the fixed 120 Hz step, because a steering loop at the frame rate
+  holds full lock for a quarter of a second on a slow frame and puts the car on its roof.
+
+  **Engine defects found by driving, fixed where they belong.** Three were invisible to a
+  static camera and appear the moment something moves:
+
+  - *pyvrml97:* the C accelerator's `__set__` called a `cdef` setter, so no Python `fset`
+    override ever ran. `node.children = [...]` detached the list from the scenegraph, and
+    a tileset streamer's tiles stopped reaching the render pass — the ground never drew.
+  - *omi_physics:* a streamed world stepped at 3.4 Hz. Static mesh proxies were rebuilt
+    every step, AABBs were measured by building a proxy, raycasts walked every body in
+    Python, and a box against terrain ran GJK/EPA per candidate triangle. Now 256 Hz.
+  - *OpenGLContext:* the near plane came from the dataset radius and clipped 14 m of road
+    ahead of the car; it is now taken from what the camera is looking at. Shadow
+    capabilities are memoised per GL context rather than re-read per shader compile.
+
+  **§I measured, not started.** See the table above: 148 fps with no trees, 33 fps at 40
+  instances a tile. The per-instance render record is the lever.
+
+  **Deferred, recorded:** `github.com/mcfletch/openglcontext-editor` and the `glisteel`
+  remote both need creating by a networked shell before either can be a submodule here.

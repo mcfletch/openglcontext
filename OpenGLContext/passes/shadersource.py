@@ -91,6 +91,18 @@ def shadow_defines(max_shadow_lights: int, cube_array: bool) -> list:
     return defines
 
 
+#: The answer, once a real context has given one. A shader compile asks for it
+#: and a scene that streams new materials compiles as it goes, so asking the
+#: driver each time is a measurable part of the frame.
+_SHADOW_CONFIG: "Optional[Tuple[int, bool]]" = None
+
+
+def reset_shadow_config() -> None:
+    """Forget the resolved budget, so the next ask reaches the driver again."""
+    global _SHADOW_CONFIG
+    _SHADOW_CONFIG = None
+
+
 def resolve_shadow_config() -> Tuple[int, bool]:
     """(max_shadow_lights, use_cube_array) for the current GL context.
 
@@ -98,11 +110,17 @@ def resolve_shadow_config() -> Tuple[int, bool]:
     program never over-subscribes fragment texture units. Falls back to a
     conservative baseline if no context / detection fails.
     """
+    global _SHADOW_CONFIG
+    if _SHADOW_CONFIG is not None:
+        return _SHADOW_CONFIG
     try:
         from OpenGLContext.passes.shadowcaps import ShadowCapabilities
         caps = ShadowCapabilities.detect(None)
         n = max(1, min(HARD_MAX_SHADOW_LIGHTS, caps.max_shadow_lights()))
-        return n, bool(caps.has_cube_array)
+        config = (n, bool(caps.has_cube_array))
+        if caps.detected:
+            _SHADOW_CONFIG = config
+        return config
     except Exception as err:
         log.warning("Shadow config detection failed (%s); using baseline", err)
         return 1, False
