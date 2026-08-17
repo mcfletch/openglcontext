@@ -258,6 +258,25 @@ a world baked from assets that require attribution must carry it: pass the
 attributions to <code>bake_world</code>'s <code>credits</code>, which writes them
 into the tileset's copyright and its <code>CREDITS.txt</code>.</p>
 
+<h3 id="cover">Ground cover as a recipe</h3>
+<p>What grows on the ground <em>between</em> the trees goes the other way. There
+is far too much ground to write a blade of grass for every square metre of it,
+and none of those blades is a decision anybody made, so what travels is the
+recipe:</p>
+<pre>from OpenGLContext.scenegraph.vegetation import CoverSpecies
+
+forest = VegetationLayer(..., cover=CoverSpecies(
+                             name='grass', card='grass_imp.png',
+                             clump='clump.glb', density=1.6, height=0.5),
+                         cover_on=['grass', 'forest_floor'])</pre>
+<p>Its files are copied in like a species' are, and <code>cover_on</code> names
+the ground layers it grows on. Where each clump stands is settled by the viewer
+as the camera moves &mdash; see
+<a href="terrain.html#groundcover">what grows between the trees</a>. Because the
+mask is the splat control map, <strong>the control map has to be fine enough to
+resolve the road</strong>: a corridor thinner than one of its pixels is a
+corridor the grass grows over. <code>FieldTerrainLayer(control_size=…)</code>.</p>
+
 <h3>Bringing in authored assets</h3>
 <p><code>meshes_from_gltf</code> reads a designer's <code>.glb</code> and hands
 back its meshes flattened into one frame -- transforms already applied -- ready

@@ -84,19 +84,54 @@ def texture_rgba(source: Any, clamp: bool = True, mipmap: bool = True,
     return tid
 
 
-def setup_instance_attribs(loc_xform: int, loc_scale: int) -> None:
-    """Configure the per-instance transform attributes on the currently bound VAO.
+#: How many floats one instance carries, and where each part of it starts. The
+#: instanced vegetation nodes all pack the same row -- a ``vec4`` transform
+#: (x, y, z, yaw), a ``float`` height scale, and a ``float`` shade -- so one
+#: layout serves the cards, the clumps and the near meshes alike, and anything
+#: that can place a plant can also say how much sun reaches it.
+INSTANCE_FLOATS = 6
+INSTANCE_STRIDE = INSTANCE_FLOATS * 4
 
-    The instanced veg nodes all pack instance data identically: a ``vec4`` transform
-    (x, y, z, yaw) at offset 0 and a ``float`` height scale at offset 16, stride 20,
-    advancing once per instance (divisor 1). Reads from the buffer currently bound to
-    ``GL_ARRAY_BUFFER``; the caller binds its instance buffer first."""
-    glVertexAttribPointer(loc_xform, 4, GL_FLOAT, GL_FALSE, 20, ctypes.c_void_p(0))
-    glEnableVertexAttribArray(loc_xform)
-    glVertexAttribDivisor(loc_xform, 1)
-    glVertexAttribPointer(loc_scale, 1, GL_FLOAT, GL_FALSE, 20, ctypes.c_void_p(16))
-    glEnableVertexAttribArray(loc_scale)
-    glVertexAttribDivisor(loc_scale, 1)
+
+def setup_instance_attribs(loc_xform: int, loc_scale: int,
+                           loc_shade: int) -> None:
+    """Configure the per-instance attributes on the currently bound VAO.
+
+    Reads from the buffer currently bound to ``GL_ARRAY_BUFFER``; the caller
+    binds its instance buffer first. Each attribute advances once per instance
+    (divisor 1). See :data:`INSTANCE_FLOATS` for the row."""
+    for location, size, offset in ((loc_xform, 4, 0), (loc_scale, 1, 16),
+                                   (loc_shade, 1, 20)):
+        glVertexAttribPointer(location, size, GL_FLOAT, GL_FALSE,
+                              INSTANCE_STRIDE, ctypes.c_void_p(offset))
+        glEnableVertexAttribArray(location)
+        glVertexAttribDivisor(location, 1)
+
+
+def instance_rows(positions: Any, yaws: Any, scales: Any,
+                  shades: Any = None) -> "np.ndarray":
+    """One instanced field's per-instance data, in the shared layout.
+
+    ``shades`` is how much of the sun reaches each instance, in [0, 1]; left
+    out, every instance is in full sun, which is what a caller with nothing to
+    say about the light means.
+    """
+    points = np.asarray(positions, np.float32).reshape(-1, 3)
+    count = len(points)
+    if not count:
+        return np.zeros((0, INSTANCE_FLOATS), np.float32)
+    parts = [points,
+             np.asarray(yaws, np.float32).reshape(count, 1),
+             np.asarray(scales, np.float32).reshape(count, 1)]
+    if shades is None:
+        parts.append(np.ones((count, 1), np.float32))
+    else:
+        lit = np.asarray(shades, np.float32).reshape(-1)
+        if len(lit) != count:
+            raise ValueError(
+                "%d instances need %d shades, not %d" % (count, count, len(lit)))
+        parts.append(lit[:, None])
+    return np.concatenate(parts, 1).astype(np.float32)
 
 
 class InstanceBuffer:

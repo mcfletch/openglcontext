@@ -131,11 +131,18 @@ class SGObserver( object ):
             self.nodePaths[id(node)] = current = []
         return current
     def onSwitchChange( self, sender, value ):
+        """A Switch has chosen a different child, or none at all.
+
+        `value` is None for a Switch drawing nothing -- `whichChoice` of -1,
+        which is how VRML97 hides a subtree. Then there is only the old path to
+        break, and nothing to walk in its place.
+        """
         for path in self.npFor( sender ):
             for childPath in path.iterchildren():
                 if childPath[-1] is not value:
                     childPath.invalidate()
-            self.integrate( value, path )
+            if value is not None:
+                self.integrate( value, path )
         self.purge()
     def onChildAdd( self, sender, value ):
         """Sender has a new child named value"""

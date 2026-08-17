@@ -1090,3 +1090,53 @@ them; §E decides per species.
   Each of those is a defect in the engine underneath rather than a knob on the game, and
   each was fixed there. The quality ladder and dynamic resolution remain unbuilt and are
   now worth less than they looked.
+- **2026-08-17** — **The circuit reads as a road through a wood.** Three things
+  were asked for and all three are in the engine rather than in the game.
+
+  **The forest is a forest.** Candidate density 0.12 → 0.5 trees/m² and the
+  poisson spacing cut to `0.55 + 0.085·height`, so what decides the stand is the
+  spacing rather than the scatter running out of candidates: 379k trees → 575k,
+  fifteen metres tall, with the cleared corridor narrowed to 0.8 m beyond the
+  road's own half-width. A first-person **cockpit camera** is the default view,
+  which is most of why it did not read as deep enough before — and the player's
+  own car is not drawn for it, because the eye is inside its shell.
+
+  **A causeway is a structure, not a shape of the land.** `Op.CAUSEWAY` joined
+  `CARRIED`; `roadworks.causeway_meshes` sweeps a retained fill at the width of
+  the road it carries, with a low wall a seated driver sees over. Built as
+  earthworks, a road three metres over a lake margin dragged the terrain up with
+  it and battered out a hundred metres either side.
+
+  **It is dark under the trees, and everything standing there agrees.**
+  `HeightField.canopy_shadow` now spreads a tree over its *crown* and normalises
+  so that one tree per crown-area is a closed canopy — the figure then means the
+  same thing at any grid resolution and any planting density, which the old
+  trunk-count-times-sixty did not. `SplatTerrain.shading`/`shade` make that
+  public, and the shared instance layout every vegetation node uses carries a
+  per-instance shade: the ground, the trees, the grass and the road's own vertex
+  colours all read one answer. `TilesTerrain` wires it, because it is the one
+  place that knows both where the ground is and where the trees on it are.
+
+  **Grass, as clumps and cards.** `scenegraph.vegetation.cover` scatters a
+  `CoverSpecies` on a world-anchored disc around the camera, masked by the splat
+  control map — which already has the road's corridor painted out of it, so
+  nothing else has to know about roads. It travels in a baked world as a recipe
+  rather than a table: sixteen million blades is not a thing to write down.
+
+  **Two defects found on the way, fixed where they belong.** A `Switch` set to
+  `whichChoice = -1` crashed the flat pass, which integrated the *absent* child
+  into a node path — so nothing in the scenegraph could be hidden. And the
+  shipped world's splat control map was 512 pixels over four kilometres, eight
+  metres a pixel, which cannot resolve a twelve-metre road corridor: the grass
+  grew over the carriageway. 2048 now, and the docs say to size the map to the
+  smallest thing it has to say.
+
+  **Measured:** 62–80 fps at 1080p (from 106 with 379k trees and bare ground),
+  an autopilot lap of **3:32.296** over 8.3 km, worst 2.6 m off the line, no
+  recoveries.
+
+  **Documentation:** [docs/terrain.html](../docs/terrain.html) gained *what grows
+  between the trees* and *how dark it is under the trees* and a note on sizing a
+  control map; [docs/roads.html](../docs/roads.html) gained the causeway and *the
+  shade a road runs through*; [docs/baking.html](../docs/baking.html) gained
+  *ground cover as a recipe*; both READMEs updated.

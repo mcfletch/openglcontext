@@ -354,3 +354,48 @@ class TestTheEdgeOfTheViewIsNeverSeen:
         far = drawn[np.hypot(drawn[:, 0], drawn[:, 2]) > 600.0]
         assert len(far)
         assert float(far[:, 2].min()) > -100.0
+
+
+class TestTheForestStandsInItsOwnShade:
+    """A tree in the middle of a stand is not lit like one on the edge of it.
+
+    The terrain already carries the canopy's shade; a forest drawn at full sun
+    over ground darkened to a fifth reads as trees standing on a photograph.
+    """
+
+    def _shade(self):
+        def at(x, z):
+            return np.where(np.asarray(x, 'd') < 0.0, 0.2, 1.0)
+        return at
+
+    def _field(self, **named):
+        count = 40
+        points = np.stack([np.linspace(-200.0, 200.0, count),
+                           np.zeros(count), np.zeros(count)], axis=-1)
+        return VegetationField(points, np.zeros(count), np.full(count, 12.0),
+                               [_species()], **named)
+
+    def test_without_one_the_forest_is_in_full_sun(self) -> None:
+        field = self._field()
+        assert field.shades is None
+
+    def test_with_one_each_tree_carries_its_own(self) -> None:
+        field = self._field(shade=self._shade())
+        assert len(field.shades) == field.tree_count
+
+    def test_the_shaded_side_is_darker(self) -> None:
+        field = self._field(shade=self._shade())
+        west = field.shades[field.positions[:, 0] < -10.0]
+        east = field.shades[field.positions[:, 0] > 10.0]
+        assert float(west.mean()) < 0.3 < float(east.mean())
+
+    def test_the_near_geometry_carries_it(self) -> None:
+        field = self._field(shade=self._shade())
+        field.update((-200.0, 0.0, 0.0))
+        rows = np.concatenate(list(field.near._pending.values()))
+        assert float(rows[:, 5].min()) < 0.3
+
+    def test_the_cards_carry_it(self) -> None:
+        field = self._field(shade=self._shade())
+        field.update((-200.0, 0.0, 0.0))
+        assert field.impostors[0].shades is not None

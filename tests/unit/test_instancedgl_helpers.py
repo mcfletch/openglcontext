@@ -61,7 +61,7 @@ def test_texture_rgba_accepts_in_memory_image(monkeypatch):
 
 
 def test_setup_instance_attribs_advances_per_instance(monkeypatch):
-    """The shared divisor block: vec4 xform @0 + float scale @16, stride 20, divisor 1."""
+    """The shared divisor block: vec4 xform @0, float scale @16, float shade @20."""
     ptrs = []
     divs = []
     monkeypatch.setattr(ig, 'glVertexAttribPointer',
@@ -69,10 +69,11 @@ def test_setup_instance_attribs_advances_per_instance(monkeypatch):
     monkeypatch.setattr(ig, 'glEnableVertexAttribArray', lambda loc: None)
     monkeypatch.setattr(ig, 'glVertexAttribDivisor', lambda loc, d: divs.append((loc, d)))
 
-    ig.setup_instance_attribs(3, 4)
-    assert (3, 4, 20) in ptrs                # xform: vec4, stride 20
-    assert (4, 1, 20) in ptrs                # scale: float, stride 20
-    assert divs == [(3, 1), (4, 1)]          # both advance once per instance
+    ig.setup_instance_attribs(3, 4, 5)
+    assert (3, 4, 24) in ptrs                # xform: vec4, stride 24
+    assert (4, 1, 24) in ptrs                # scale: float
+    assert (5, 1, 24) in ptrs                # shade: float
+    assert divs == [(3, 1), (4, 1), (5, 1)]  # all advance once per instance
 
 
 def test_instance_buffer_grows_only_when_capacity_exceeded(monkeypatch):

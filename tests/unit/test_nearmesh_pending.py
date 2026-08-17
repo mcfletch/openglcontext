@@ -24,8 +24,8 @@ def _node():
 def test_compute_pending_selects_within_radius_by_species():
     d = _node().compute_pending(0.0, 0.0, radius=10.0)
     assert set(d) == {0, 1}
-    assert d[0].shape == (1, 5)      # only the origin tree is species 0 within radius
-    assert d[1].shape == (2, 5)      # the two nearby species-1 trees
+    assert d[0].shape == (1, 6)      # only the origin tree is species 0 within radius
+    assert d[1].shape == (2, 6)      # the two nearby species-1 trees
     assert d[0][0, 3] == np.float32(0.1)   # row layout is (x, y, z, yaw, scale)
     assert d[0][0, 4] == np.float32(1.0)
 
@@ -33,8 +33,8 @@ def test_compute_pending_selects_within_radius_by_species():
 def test_compute_pending_excludes_trees_outside_radius():
     # Radius 1.5 keeps only the origin (0) and the (1,0,0) tree (species 0 and 1).
     d = _node().compute_pending(0.0, 0.0, radius=1.5)
-    assert d[0].shape == (1, 5)
-    assert d[1].shape == (1, 5)
+    assert d[0].shape == (1, 6)
+    assert d[1].shape == (1, 6)
 
 
 def test_compute_pending_does_not_mutate_node_state():

@@ -40,6 +40,21 @@ if TYPE_CHECKING:
 
 DEFAULT_SUN = (-0.5, -0.72, -0.48)
 
+#: How dark it is under a canopy. ``CANOPY_SHADE`` is how hard a closed canopy
+#: darkens the light and ``CANOPY_DEEPEST`` the most of it that may go, so what
+#: is left where the canopy opens is the sun breaking through. A forest floor is
+#: dark; the ground beside it is not, and the difference between them is most of
+#: what makes a wood read as a wood rather than as trees on a lawn.
+#:
+#: ``CANOPY_CROWN`` is how wide a tree's crown is, in metres, which is the ground
+#: one tree shades: a stand is closed when its crowns meet, not when its trunks
+#: do. ``CANOPY_SPREAD`` offsets the shadow towards the sun, because a tree casts
+#: along the light rather than straight down.
+CANOPY_SHADE = 1.3
+CANOPY_DEEPEST = 0.78
+CANOPY_CROWN = 7.0
+CANOPY_SPREAD = 12.0
+
 # Detail-material tiling: DETAIL_SCALE repeats per world unit (crisp close-up),
 # MACRO_SCALE a second, larger tiling mixed in to break the visible repeat.
 DETAIL_SCALE = 0.35
@@ -94,11 +109,23 @@ class SplatTerrain(vnodes.PointSet):
         defaults to the cc0/ambientCG material fetcher.
     :param canopy: optional (N, 3) trunk positions; when set the baked shadow is
         darkened under tree cover for dappled shade. Set before first render.
+    :param canopy_shade: how hard the canopy darkens what is under it, and
+        :param canopy_deepest: the most it may, as a fraction of the light. A
+        forest floor is *dark*; the light default reads as an orchard. What is
+        left where the density is low is the sun breaking through.
+    :param canopy_crown: how wide a tree's crown is in metres, which is the
+        ground one tree shades.
+    :param canopy_spread: how far the canopy's shadow is offset towards the sun,
+        in metres -- trees cast along the light, not straight down.
     """
     def __init__(self, height_field: "HeightField", layers: "list[str]", control: Any,
                  sun: "tuple[float, float, float]" = DEFAULT_SUN,
                  material_fn: "Optional[Callable[..., dict[str, Any]]]" = None,
-                 canopy: Optional[np.ndarray] = None) -> None:
+                 canopy: Optional[np.ndarray] = None,
+                 canopy_shade: float = CANOPY_SHADE,
+                 canopy_deepest: float = CANOPY_DEEPEST,
+                 canopy_crown: float = CANOPY_CROWN,
+                 canopy_spread: float = CANOPY_SPREAD) -> None:
         super(SplatTerrain, self).__init__()
         self.hf = height_field
         self.layers = layers
@@ -110,8 +137,48 @@ class SplatTerrain(vnodes.PointSet):
         self.sun = np.asarray(sun, 'd')
         self.sun /= np.linalg.norm(self.sun)
         self.canopy = canopy
+        self.canopy_shade = float(canopy_shade)
+        self.canopy_deepest = float(canopy_deepest)
+        self.canopy_crown = float(canopy_crown)
+        self.canopy_spread = float(canopy_spread)
         self._gl: Any = None
+        self._shading: Any = None
         self._disabled = False
+
+    @property
+    def shading(self) -> np.ndarray:
+        """How much of the sun reaches each cell of the ground, in [0, 1].
+
+        The hillside's own shadow with the canopy's over it, on the height
+        field's grid. It is what the terrain is drawn with, and it is public
+        because everything else standing on this ground has to agree with it:
+        grass lit like an open field under a closed canopy is a lamp on the
+        forest floor. See :meth:`shade`.
+        """
+        if self._shading is None:
+            lit = self.hf.sun_shadow(self.sun)
+            if self.canopy is not None and len(self.canopy):
+                lit = self.hf.canopy_shadow(lit, self.canopy, self.sun,
+                                            spread=self.canopy_spread,
+                                            crown=self.canopy_crown,
+                                            darken=self.canopy_shade,
+                                            cap=self.canopy_deepest)
+            self._shading = lit
+        return self._shading
+
+    def shade(self, x: Any, z: Any) -> Any:
+        """How much of the sun reaches these world positions, in [0, 1].
+
+        Arrays in, array out, for a caller placing a great many things at once.
+        """
+        lit = self.shading
+        size = lit.shape[0]
+        extent = self.hf.extent
+        u = np.clip((np.asarray(x, 'd') + extent / 2.0) / extent * (size - 1),
+                    0, size - 1).astype(int)
+        v = np.clip((np.asarray(z, 'd') + extent / 2.0) / extent * (size - 1),
+                    0, size - 1).astype(int)
+        return lit[v, u]
 
     def _init_gl(self) -> None:
         prog = load_program("terrain_splat.vert", "terrain_splat.frag")
@@ -133,9 +200,7 @@ class SplatTerrain(vnodes.PointSet):
                    nrm=_array_texture("normal", self.layers, self.material_fn),
                    rgh=_array_texture("roughness", self.layers, self.material_fn),
                    ctl=texture_rgba(self.control, clamp=True, mipmap=False))
-        lit = self.hf.sun_shadow(self.sun)
-        if self.canopy is not None and len(self.canopy):
-            lit = self.hf.canopy_shadow(lit, self.canopy, self.sun)
+        lit = self.shading
         st = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, st)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, lit.shape[1], lit.shape[0], 0,

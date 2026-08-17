@@ -274,7 +274,7 @@ def _strip_indices(rows: int, ring: int) -> np.ndarray:
 def road_mesh(points: Any, profile: Optional[RoadProfile] = None,
               material: Optional[PBRMaterial] = None,
               spacing: Optional[float] = None,
-              sections: Any = None) -> PBRMesh:
+              sections: Any = None, shade: Any = None) -> PBRMesh:
     """A road's surface as a renderable mesh, with tangents for its normal map.
 
     ``spacing`` re-samples the centreline to that interval in metres first,
@@ -285,6 +285,14 @@ def road_mesh(points: Any, profile: Optional[RoadProfile] = None,
 
     ``sections`` is the per-point cross-section described in
     :func:`road_surface`.
+
+    ``shade`` is how much of the sun reaches each point of the centreline, in
+    [0, 1], written into the surface's vertex colours -- so a road through a
+    wood carries the wood's shade rather than being a lit strip laid across it.
+    It may be an array as long as the *written* points, or a callable taking
+    them, which is what a caller re-sampling with ``spacing`` needs since it
+    does not know in advance how many points there will be. The whole cut at one
+    point takes one figure: a road is one place as far as a canopy is concerned.
     """
     profile = profile or RoadProfile()
     if spacing is not None:
@@ -294,7 +302,25 @@ def road_mesh(points: Any, profile: Optional[RoadProfile] = None,
     tangents = estimate_tangents(positions, normals, texcoords, indices)
     return PBRMesh(positions=positions, normals=normals, texcoords=texcoords,
                    tangents=tangents, indices=indices,
+                   colors=_road_colors(points, positions, shade),
                    material=material if material is not None else tarmac_material())
+
+
+def _road_colors(points: Any, positions: Any, shade: Any) -> Any:
+    """A surface's vertex colours, from a shade along its centreline."""
+    if shade is None:
+        return None
+    written = np.asarray(points, dtype='d').reshape(-1, 3)
+    lit = np.asarray(shade(written) if callable(shade) else shade,
+                     dtype='f').reshape(-1)
+    if len(lit) != len(written):
+        raise ValueError(
+            "a road of %d points needs %d shades, not %d"
+            % (len(written), len(written), len(lit)))
+    ring = len(positions) // len(written)
+    colors = np.ones((len(positions), 4), dtype='f')
+    colors[:, :3] = np.repeat(lit, ring)[:, None]
+    return colors
 
 
 def road_texture(size: int = 512, seed: int = 0) -> Any:

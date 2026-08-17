@@ -160,6 +160,10 @@ class VegetationField(Group):
     also the instance's scale. ``species_id`` says which kind each tree is, and
     defaults to dealing them round-robin.
 
+    ``shade(x, z) -> sun`` says how much of the sun reaches each tree, in
+    [0, 1] -- the terrain's own canopy shading, so a tree in the middle of a
+    stand is not lit like one on the edge of it.
+
     ``near_radius`` is how far real geometry reaches and ``far_radius`` how far
     the cards do. ``cone_degrees`` is the half-angle of the cone the cards are
     chosen in: submitting every card in a four-kilometre forest every frame is
@@ -169,6 +173,7 @@ class VegetationField(Group):
     def __init__(self, positions: Any, yaws: Any, heights: Any,
                  species: Sequence[TreeSpecies],
                  species_id: Any = None,
+                 shade: Any = None,
                  near_radius: float = NEAR_RADIUS,
                  far_radius: float = FAR_RADIUS,
                  cone_degrees: float = CONE_DEGREES,
@@ -188,6 +193,8 @@ class VegetationField(Group):
             species_id = np.arange(len(self.positions)) % len(species)
         self.species = list(species)
         self.species_id = np.asarray(species_id, int).reshape(-1)
+        #: How much of the sun reaches each tree, or None for full sun.
+        self.shades: Optional[np.ndarray] = None
         self.near_radius = float(near_radius)
         self.far_radius = max(float(far_radius), float(near_radius))
         self.cone_cosine = math.cos(math.radians(float(cone_degrees)))
@@ -205,7 +212,7 @@ class VegetationField(Group):
         #: One card node per species that has trees, and the tables they choose
         #: from. A species with none would be an instanced draw of nothing.
         self.impostors: list[InstancedBillboards] = []
-        self._card_tables: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
+        self._card_tables: list[tuple[np.ndarray, ...]] = []
         for index, entry in enumerate(self.species):
             mine = self.species_id == index
             if not mine.any():
@@ -214,9 +221,24 @@ class VegetationField(Group):
                 self.positions[mine], self.yaws[mine], self.heights[mine],
                 entry.impostor, width=entry.card_width, near_fade=True))
             self._card_tables.append((self.positions[mine], self.yaws[mine],
-                                      self.heights[mine]))
+                                      self.heights[mine], mine))
         self.children = ([_drawn(self.near)]                # type: ignore[assignment]
                          + [_drawn(node) for node in self.impostors])
+        if shade is not None:
+            self.lit_by(shade)
+
+    def lit_by(self, shade: Any) -> None:
+        """Say how much of the sun reaches each tree: ``shade(x, z) -> sun``.
+
+        Separate from the constructor because the answer usually depends on the
+        forest itself -- a terrain's canopy shading is worked out *from* these
+        trunks -- so the field has to exist before it can be told.
+        """
+        self.shades = np.asarray(
+            shade(self.positions[:, 0], self.positions[:, 2]),
+            np.float32).reshape(-1)
+        self.near.all_shade = self.shades
+        self._chosen_at = None
 
     @property
     def tree_count(self) -> int:
@@ -252,10 +274,12 @@ class VegetationField(Group):
         self._chosen_facing = None if way is None else way.copy()
         self._chosen_planes = None if planes is None else planes.copy()
         self.near.update(float(at[0]), float(at[2]), radius=self.near_radius)
-        for node, (points, yaws, heights) in zip(self.impostors,
-                                                 self._card_tables, strict=True):
+        for node, (points, yaws, heights, mine) in zip(self.impostors,
+                                                       self._card_tables,
+                                                       strict=True):
             keep = self._cards_in_view(points, at, way, planes)
-            node.update_instances(points[keep], yaws[keep], heights[keep])
+            lit = None if self.shades is None else self.shades[mine][keep]
+            node.update_instances(points[keep], yaws[keep], heights[keep], lit)
 
     def _settled(self, at: np.ndarray, way: Optional[np.ndarray],
                  planes: Optional[np.ndarray]) -> bool:

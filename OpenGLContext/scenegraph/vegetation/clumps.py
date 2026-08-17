@@ -28,7 +28,8 @@ from OpenGL.GL import (
     glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
 )
 from OpenGLContext.scenegraph.instancedgl import (
-    load_program, texture_rgba, delete_gl, setup_instance_attribs, InstanceBuffer)
+    load_program, texture_rgba, delete_gl, setup_instance_attribs,
+    instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import InstancedVegBase, _BIG
 
 _CT = {5120: 'b', 5121: 'B', 5122: 'h', 5123: 'H', 5125: 'I', 5126: 'f'}
@@ -196,12 +197,19 @@ class InstancedClumps(InstancedVegBase):
         self._disabled = False
 
     def update_instances(self, positions: np.ndarray, yaws: np.ndarray,
-                         scales: np.ndarray) -> None:
-        """Stage a new instance set ``(x,y,z, yaw, scale)`` for the next render."""
-        p = np.asarray(positions, np.float32)
-        y = np.asarray(yaws, np.float32)
-        s = np.asarray(scales, np.float32)
-        self._pending = np.concatenate([p, y[:, None], s[:, None]], 1).astype(np.float32)
+                         scales: np.ndarray,
+                         shades: "Optional[np.ndarray]" = None) -> None:
+        """Stage a new instance set for the next render.
+
+        ``shades`` is how much of the sun reaches each clump, in [0, 1]; left
+        out, the whole set is in full sun.
+        """
+        self._pending = instance_rows(positions, yaws, scales, shades)
+
+    def _instance_rows(self) -> np.ndarray:
+        """The staged set, for a caller checking what will be drawn."""
+        return (self._pending if self._pending is not None
+                else instance_rows(np.zeros((0, 3)), (), ()))
 
     def _init_gl(self) -> None:
         self._prog = load_program("veg_mesh.vert", "veg_clump.frag")
@@ -220,7 +228,7 @@ class InstancedClumps(InstancedVegBase):
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, self.idx.nbytes, self.idx, GL_STATIC_DRAW)
         self._ibuf = InstanceBuffer()
         glBindBuffer(GL_ARRAY_BUFFER, self._ibuf.id)
-        setup_instance_attribs(3, 4)
+        setup_instance_attribs(3, 4, 5)
         glBindVertexArray(0)
         self.U = {x: glGetUniformLocation(self._prog, x) for x in
                   ("uModelView", "uProjection", "atlas", "sunDirEye", "sunColor",

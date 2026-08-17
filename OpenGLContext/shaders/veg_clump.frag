@@ -1,5 +1,5 @@
 #version 330 core
-in vec2 vUV; in vec3 vEyePos; in vec3 vEyeN;
+in vec2 vUV; in vec3 vEyePos; in vec3 vEyeN; in float vShade;
 uniform sampler2D atlas;
 uniform vec3 sunDirEye, sunColor, skyAmbient, groundAmbient;
 uniform float fogDensity; uniform vec3 fogColor;
@@ -26,7 +26,9 @@ void main(){
     vec3 N=normalize(vEyeN); if(!gl_FrontFacing) N=-N;
     float ndl=max(dot(N,-sunDirEye),0.0);
     vec3 amb=mix(groundAmbient,skyAmbient,clamp(dot(N,uUpEye)*0.5+0.5,0.,1.));
-    vec3 col=alb*(amb+sunColor*ndl);
+    // vShade is how much of the sun this instance stands in: the canopy
+    // takes the key light, and leaves the ambient it does not block.
+    vec3 col=alb*(amb*mix(0.55,1.0,vShade)+sunColor*ndl*vShade);
     if(fogDensity>0.0){float f=1.-exp(-fogDensity*length(vEyePos));col=mix(col,fogColor,clamp(f,0.,1.));}
     col=aces(col);
     fragColor=vec4(pow(col,vec3(1.0/2.2)),1.0);

@@ -128,7 +128,7 @@ road, because a road is built on a formation and surfaced on top of it — and
 because two surfaces at exactly the same height fight over which one is drawn,
 which shows as the ground flickering through the tarmac.</p>
 
-<h3>Bridges and tunnels: where the earthwork stops</h3>
+<h3>Bridges, causeways and tunnels: where the earthwork stops</h3>
 <p>Past a point the ground cannot absorb the road. An embankment fourteen metres
 tall already needs fill growing as the square of its height, and a cutting
 eighteen metres deep has to put its spoil somewhere and hold its faces; past
@@ -151,17 +151,22 @@ reaches out down its approaches — up to a hundred and twenty metres — until 
 road is within an abutment's height of the ground, so a deck lands on something
 and a bore opens at a portal rather than either stopping in the air. A designer
 overrides any stretch with an <code>overrides</code> triple.</p>
-<p>A <strong>causeway</strong> is not a structure in that sense: it is fill, and
-the ground is what it is made of. It is named separately because a road on an
-embankment across drowned ground is worth knowing about — the alignment is held
-above the waterline with freeboard and its approaches climb to meet it.</p>
+<p>A <strong>causeway</strong> is the middle case: a few metres over low ground
+— a lake margin, a shallow draw — where a deck is more structure than the
+crossing needs and an embankment battered out to the angle earth stands at is a
+hillside the width of a field. It is fill <em>retained</em> at the width of the
+road it carries, with a low wall at each edge, and the ground either side is left
+where it was found. The alignment is held above the waterline with freeboard and
+its approaches climb to meet it.</p>
 
 <h3>How a structure is built</h3>
 <p><code>OpenGLContext.scenegraph.roadworks</code> sweeps them along the same
 centreline and with the same frame the carriageway uses, so they stay in register
 with it through a bend and a climb:</p>
-<pre>from OpenGLContext.scenegraph.roadworks import bridge_meshes, tunnel_meshes
+<pre>from OpenGLContext.scenegraph.roadworks import (
+    bridge_meshes, causeway_meshes, tunnel_meshes)
 deck = bridge_meshes(run, profile, ground)      # deck, parapet, piers
+fill = causeway_meshes(run, profile, ground)    # body, wall
 bore = tunnel_meshes(run, profile)              # bore, portals</pre>
 <p>Each returns its parts as <code>{name: mesh}</code> rather than one merged
 mesh, so a caller can light, cull or write them separately.</p>
@@ -172,6 +177,14 @@ because that is where the deck is carried onto the land — and <strong>nothing 
 all is built where the ground has come up past the soffit</strong>, because a
 deck running into a hillside is carried by the hill and the alternative is a
 block of concrete standing across the carriageway.</p>
+<p><code>CausewayProfile</code> sets the wall standing on each edge and how far
+the fill leans out per metre of its depth. <strong>The wall is deliberately
+low</strong> — below a seated driver's eye: a causeway is built to cross
+something worth seeing, and one walled to windscreen height turns the crossing
+into a corridor. The batter is near-vertical, because a causeway is a retained
+structure rather than a heap of earth. The body is built down to whatever the
+land is doing beneath each point, with a lip where the road meets it so the wall
+always has something under it.</p>
 <p><code>TunnelProfile</code> sets the crown's clearance over the carriageway,
 how far below it the arch's feet sit, and how far the portal's face stands out
 around the arch. A bore is a <strong>closed tube</strong>: the ground it runs
@@ -181,10 +194,11 @@ for a wheel to drop into. It also carries <strong>its own shade</strong> on its
 vertices — full daylight at the portals, falling to a tenth of it fifty metres
 in — so a driver goes into the dark and comes out the far end with no light
 source involved, and a bore shorter than twice that never goes fully dark.</p>
-<p>Structure is <code>concrete_material()</code>; a parapet is
-<code>barrier_material()</code>, which is darker. A parapet is the thing closest
-to the camera for the whole length of a viaduct, and in fresh-concrete white it
-reads as a wall beside the road rather than as a barrier on it.</p>
+<p>Structure is <code>concrete_material()</code>; a parapet or a causeway's wall
+is <code>barrier_material()</code>, which is darker. It is the thing closest to
+the camera for the whole length of a crossing, and in structural concrete under a
+strong sun it comes out white — the most conspicuous object in the
+scene.</p>
 <p>Over a structure the carriageway takes the road's <strong>on-structure
 cut</strong>: the verge neither falls nor stays. There is no ground beside a deck
 for it to fall to, and a strip of grass inside a bore is grass inside a bore, so
@@ -222,6 +236,21 @@ mesh = road_mesh(route, spacing=5.0,
 <p><code>seed</code> varies the surface noise, so two roads in one scene do not
 share a pattern. Pass an <code>image</code> to use artwork of your own instead
 of the generated one.</p>
+
+<h3 id="roadshade">The shade a road runs through</h3>
+<p>A forest road drawn at full sun with everything beside it in deep shade reads
+as a lit strip laid over a photograph of a wood. <code>shade</code> is how much
+of the sun reaches each point of the centreline, in [0, 1], written into the
+surface's vertex colours:</p>
+<pre>mesh = road_mesh(route, profile, spacing=5.0,
+                 shade=lambda points: terrain.shade(points[:, 0], points[:, 2]))</pre>
+<p>It may be an array as long as the points that are actually written, or a
+callable taking them — which is what a caller re-sampling with
+<code>spacing</code> needs, since it does not know in advance how many points
+there will be. The whole cut at one point takes one figure: a road is one place
+as far as a canopy is concerned. Baked rather than lit per frame, because the
+trees do not move and neither does the sun; see
+<a href="terrain.html#canopyshade">how dark it is under the trees</a>.</p>
 
 <h3>Working with the arrays</h3>
 <p><code>road_surface(points, profile)</code> returns

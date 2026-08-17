@@ -1,19 +1,21 @@
-"""Bridges and tunnels: what carries a road where the ground does not.
+"""Bridges, causeways and tunnels: what carries a road where the ground does not.
 
 A road settled for grade and speed does not lie on the land everywhere it goes.
 Where it runs high above the ground it is carried on a **deck** standing on
-piers; where it runs inside the ground it passes through a **bore** with a
-portal at each end. Both are built the way the carriageway is -- a cross-section
-swept along the centreline, using the same per-point frame
+piers; where it runs a few metres over low ground it rides a **causeway**, which
+is fill only as wide as the road with a low wall at each edge; where it runs
+inside the ground it passes through a **bore** with a portal at each end. All
+three are built the way the carriageway is -- a cross-section swept along the
+centreline, using the same per-point frame
 (:mod:`OpenGLContext.scenegraph.road`) -- so a structure stays under or over its
 road through a bend and a climb instead of drifting off it.
 
-Give :func:`bridge_meshes` or :func:`tunnel_meshes` the stretch of centreline the
-structure covers and the road profile it carries, and each returns its parts as
-``{name: mesh}`` -- ``deck``, ``parapet`` and ``piers`` for a bridge, ``bore``
-and ``portals`` for a tunnel. Naming the parts rather than merging them lets a
-caller light, cull or write them separately; merging them is a concatenation
-away.
+Give :func:`bridge_meshes`, :func:`causeway_meshes` or :func:`tunnel_meshes` the
+stretch of centreline the structure covers and the road profile it carries, and
+each returns its parts as ``{name: mesh}`` -- ``deck``, ``parapet`` and ``piers``
+for a bridge, ``body`` and ``wall`` for a causeway, ``bore`` and ``portals`` for
+a tunnel. Naming the parts rather than merging them lets a caller light, cull or
+write them separately; merging them is a concatenation away.
 
 This is the runtime half, and it decides nothing. *Where* a bridge or a tunnel
 belongs -- which is a question about the terrain the road crosses -- is
@@ -32,9 +34,9 @@ from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
 
 __all__ = [
-    'BridgeProfile', 'TunnelProfile',
-    'bridge_meshes', 'tunnel_meshes', 'concrete_material',
-    'barrier_material',
+    'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
+    'bridge_meshes', 'causeway_meshes', 'tunnel_meshes',
+    'concrete_material', 'barrier_material',
 ]
 
 #: Structural concrete: grey, entirely rough, and not a metal. Weathered rather
@@ -78,6 +80,33 @@ class BridgeProfile:
     pier_length: float = 2.2
     abutment_width: float = 2.0
     minimum_pier: float = 2.5
+
+
+@dataclass
+class CausewayProfile:
+    """The shape of an embankment carried at the width of its road, in metres.
+
+    ``wall_height`` is the wall standing on each edge and ``wall_width`` how
+    thick it is. The wall is deliberately low: a causeway is built to cross
+    something worth seeing, and one walled to windscreen height turns the
+    crossing into a corridor.
+
+    ``batter`` is how far the fill leans out per metre of its depth. A real
+    embankment is battered to the angle its material stands at, which for
+    anything deep is a slope the width of a field; a causeway is a *retained*
+    structure and stands very nearly vertical, so the ground either side is left
+    as it was found.
+
+    ``lip`` is how deep the fill is where the road meets the land, so the wall
+    always has something under it, and ``embedment`` how far the foot is sunk
+    into the ground so no seam of daylight shows along the bottom.
+    """
+
+    wall_height: float = 0.8
+    wall_width: float = 0.3
+    batter: float = 0.09
+    lip: float = 0.35
+    embedment: float = 0.3
 
 
 @dataclass
@@ -172,17 +201,51 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
     parts['deck'] = _swept(line, right, up, material,
                            [(-half, edge), (-half, soffit),
                             (half, soffit), (half, edge)], closed_ends=True)
-    inner = half - bridge.parapet_width
-    rail = edge + bridge.parapet_height
-    parts['parapet'] = _merge([
-        _swept(line, right, up, rail_material,
-               [(side * half, edge), (side * half, rail),
-                (side * inner, rail), (side * inner, edge)], closed_ends=True)
-        for side in (-1.0, 1.0)], rail_material)
+    parts['parapet'] = _parapet(line, right, up, rail_material, half, edge,
+                                bridge.parapet_height, bridge.parapet_width)
     if ground is not None:
         piers = _piers(line, right, up, ground, bridge, half, soffit, material)
         if piers is not None:
             parts['piers'] = piers
+    return parts
+
+
+def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
+                    ground: Optional[HeightFn] = None,
+                    causeway: Optional[CausewayProfile] = None,
+                    material: Optional[PBRMaterial] = None,
+                    barrier: Optional[PBRMaterial] = None,
+                    ) -> Dict[str, PBRMesh]:
+    """The fill under a causeway and the low wall along each edge.
+
+    ``points`` is (N,3) at the height the road surface runs at. ``ground`` is
+    the land the fill stands on, and is what the body is built down to; without
+    it there is nothing to build a body against and only the wall is returned,
+    which is what a caller drawing the crossing over its own terrain wants.
+
+    The body is the width of the road *as carried* -- the same cut a deck gets,
+    so the verge does not hang over the edge -- leaning out by the profile's
+    batter as it goes down. It is open at the top, where the carriageway
+    closes it.
+    """
+    line = _line(points, "a causeway")
+    profile = profile or RoadProfile()
+    causeway = causeway or CausewayProfile()
+    rail_material = (barrier if barrier is not None
+                     else material if material is not None
+                     else barrier_material())
+    material = material if material is not None else concrete_material()
+    right, up = sweep_frames(line)
+    carried = profile.on_structure()
+    half = carried.total_width / 2.0
+    edge = float(carried.section()[0, 1])
+
+    parts: Dict[str, PBRMesh] = {
+        'wall': _parapet(line, right, up, rail_material, half, edge,
+                         causeway.wall_height, causeway.wall_width)}
+    if ground is not None:
+        parts['body'] = _fill(line, right, up, ground, causeway, half, edge,
+                              material)
     return parts
 
 
@@ -220,6 +283,47 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
                       for at, facing in ((0, -1.0), (len(line) - 1, 1.0))],
                      material)
     return {'bore': bore, 'portals': portals}
+
+
+def _parapet(line: np.ndarray, right: np.ndarray, up: np.ndarray,
+             material: PBRMaterial, half: float, edge: float,
+             height: float, width: float) -> PBRMesh:
+    """A wall standing on each edge of the road, along its whole length."""
+    inner = half - width
+    top = edge + height
+    return _merge([
+        _swept(line, right, up, material,
+               [(side * half, edge), (side * half, top),
+                (side * inner, top), (side * inner, edge)], closed_ends=True)
+        for side in (-1.0, 1.0)], material)
+
+
+def _fill(line: np.ndarray, right: np.ndarray, up: np.ndarray,
+          ground: HeightFn, causeway: CausewayProfile, half: float,
+          edge: float, material: PBRMaterial) -> PBRMesh:
+    """The body of a causeway: down one face, under the road, up the other.
+
+    The section is not constant, because the depth is not: each point is taken
+    down to whatever the land is doing beneath it, and leans out with that
+    depth. So the sweep is built row by row rather than from one profile.
+    """
+    depth = np.maximum(
+        line[:, 1] + edge + causeway.embedment
+        - np.asarray(ground(line[:, 0], line[:, 2]), dtype='d').ravel(),
+        causeway.lip)
+    out = half + causeway.batter * depth
+    #: Left top, left foot, right foot, right top -- open where the road closes it.
+    lateral = np.stack([np.full(len(line), -half), -out, out,
+                        np.full(len(line), half)], axis=-1)
+    vertical = np.stack([np.full(len(line), edge), edge - depth,
+                         edge - depth, np.full(len(line), edge)], axis=-1)
+    positions = (line[:, None, :] + right[:, None, :] * lateral[:, :, None]
+                 + up[:, None, :] * vertical[:, :, None]).reshape(-1, 3)
+    indices = np.concatenate([
+        _strip(len(line), 4),
+        _cap(np.arange(4), flip=True),
+        _cap(np.arange(4) + (len(line) - 1) * 4, flip=False)])
+    return _mesh(positions, indices, material)
 
 
 def _line(points: Any, what: str) -> np.ndarray:

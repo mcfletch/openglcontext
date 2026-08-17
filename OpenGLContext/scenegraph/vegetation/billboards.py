@@ -11,8 +11,9 @@ distance-fade modes so the same node serves both roles in an LOD scheme:
   walking camera, and an optional inner ``near_cut`` fades a coarse far layer in
   exactly where a fine near layer fades out.
 
-Per-instance data (position, yaw, scale) can be replaced each frame with
-:meth:`update_instances` for a camera-following field.
+Per-instance data (position, yaw, scale, and how much of the sun reaches it)
+can be replaced each frame with :meth:`update_instances` for a
+camera-following field.
 """
 import ctypes
 from typing import Any
@@ -26,7 +27,8 @@ from OpenGL.GL import (
     glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
 )
 from OpenGLContext.scenegraph.instancedgl import (
-    load_program, texture_rgba, delete_gl, setup_instance_attribs, InstanceBuffer)
+    load_program, texture_rgba, delete_gl, setup_instance_attribs,
+    instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import (
     InstancedVegBase, _BIG, LOD_NEAR, LOD_FAR)
 
@@ -37,6 +39,7 @@ class InstancedBillboards(InstancedVegBase):
     :param positions: (N, 3) world positions of the instance bases.
     :param yaws: (N,) yaw radians per instance.
     :param scales: (N,) height scale per instance (world units).
+    :param shades: optional (N,) sun reaching each instance, in [0, 1].
     :param texture: path to the RGBA billboard texture.
     :param width: quad width as a fraction of its height.
     :param near_fade: enable the impostor dithered near/far cross-fade.
@@ -53,6 +56,7 @@ class InstancedBillboards(InstancedVegBase):
         self.pos = np.asarray(positions, np.float32)
         self.yaws = np.asarray(yaws, np.float32)
         self.scales = np.asarray(scales, np.float32)
+        self.shades: "np.ndarray | None" = None
         self.texture = texture
         self.width = width
         self.near_fade = near_fade
@@ -65,9 +69,7 @@ class InstancedBillboards(InstancedVegBase):
         self._disabled = False
 
     def _instance_rows(self) -> np.ndarray:
-        if not len(self.pos):
-            return np.zeros((0, 5), np.float32)
-        return np.concatenate([self.pos, self.yaws[:, None], self.scales[:, None]], 1).astype(np.float32)
+        return instance_rows(self.pos, self.yaws, self.scales, self.shades)
 
     def _init_gl(self) -> None:
         self._prog = load_program("veg_billboard.vert", "veg_billboard.frag")
@@ -86,7 +88,7 @@ class InstancedBillboards(InstancedVegBase):
         glEnableVertexAttribArray(1)
         self._ibuf = InstanceBuffer()
         glBindBuffer(GL_ARRAY_BUFFER, self._ibuf.id)
-        setup_instance_attribs(2, 3)
+        setup_instance_attribs(2, 3, 4)
         self._ibuf.upload(self._instance_rows())
         glBindVertexArray(0)
         self._tex = texture_rgba(self.texture, srgb=True)
@@ -122,11 +124,18 @@ class InstancedBillboards(InstancedVegBase):
         self._gl = None
 
     def update_instances(self, positions: np.ndarray, yaws: np.ndarray,
-                         scales: np.ndarray) -> None:
-        """Stage new per-instance data; uploaded on the GL thread in :meth:`render`."""
+                         scales: np.ndarray,
+                         shades: "np.ndarray | None" = None) -> None:
+        """Stage new per-instance data; uploaded on the GL thread in :meth:`render`.
+
+        ``shades`` is how much of the sun reaches each instance, in [0, 1]; left
+        out, the whole set is in full sun.
+        """
         self.pos = np.asarray(positions, np.float32)
         self.yaws = np.asarray(yaws, np.float32)
         self.scales = np.asarray(scales, np.float32)
+        self.shades = None if shades is None else np.asarray(shades, np.float32)
+        self._instance_rows()                    # report a mismatch to the caller
         self._pending = True
 
     def _stream(self) -> bool:

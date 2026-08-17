@@ -51,6 +51,28 @@ def _world(directory, vegetation=True, **named):
     return path
 
 
+def _landscape(directory, **named):
+    """A world with a field terrain *and* a forest standing on it."""
+    from OpenGLContext.scenegraph.terrain import (
+        HeightField, LayerRule, control_map,
+    )
+    path = _world(directory, **named)
+    document = json.load(open(path))
+    document.setdefault('extras', {})
+    field = HeightField.from_function(
+        lambda x, z: np.zeros(np.shape(np.asarray(x))), res=33, extent=2048.0)
+    field.save_image(os.path.join(str(directory), 'g-height.png'))
+    control_map(field, [LayerRule()], size=32).save(
+        os.path.join(str(directory), 'g-control.png'))
+    document['extras']['terrain'] = {
+        'height': 'g-height.png', 'control': 'g-control.png',
+        'extent': 2048.0, 'base': field.base, 'relief': max(field.relief, 1.0),
+        'resolution': 33, 'layers': ['grass'],
+    }
+    json.dump(document, open(path, 'w'))
+    return path
+
+
 class TestMountingTheForest:
     def test_a_world_that_carries_one_gets_it(self, tmp_path) -> None:
         terrain = TilesTerrain(_world(tmp_path), workers=1)
@@ -173,3 +195,168 @@ class TestWhichWayTheCameraLooks:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestTheForestShadesTheGroundUnderIt:
+    """A splat terrain bakes a canopy term into its static shading, and a world
+    that carries both a landscape and a forest knows where the trees are. Left
+    unwired the ground under a wood is lit like an open field, which is most of
+    why a forest reads as trees standing on a lawn."""
+
+    def _both(self, directory, **named):
+        return _landscape(directory, **named)
+
+    def test_the_ground_is_told_where_the_trees_are(self, tmp_path) -> None:
+        terrain = TilesTerrain(self._both(tmp_path), workers=1)
+        try:
+            assert terrain.ground.canopy is not None
+            assert len(terrain.ground.canopy) == COUNT
+        finally:
+            terrain.shutdown()
+
+    def test_it_is_the_forest_s_own_trunks(self, tmp_path) -> None:
+        terrain = TilesTerrain(self._both(tmp_path), workers=1)
+        try:
+            assert np.allclose(terrain.ground.canopy,
+                               terrain.vegetation.positions)
+        finally:
+            terrain.shutdown()
+
+    def test_a_world_with_no_forest_shades_nothing(self, tmp_path) -> None:
+        terrain = TilesTerrain(self._both(tmp_path, vegetation=False), workers=1)
+        try:
+            assert terrain.ground is not None
+            assert terrain.ground.canopy is None
+        finally:
+            terrain.shutdown()
+
+    def test_a_world_with_no_landscape_is_not_an_error(self, tmp_path) -> None:
+        terrain = TilesTerrain(_world(tmp_path), workers=1)
+        try:
+            assert terrain.ground is None
+            assert terrain.vegetation is not None
+        finally:
+            terrain.shutdown()
+
+
+class TestTheGroundCoverAWorldCarries:
+    """A world that names ground cover gets it, growing where its own splat
+    control map says the grass is -- which is also where the road is not."""
+
+    def _covered(self, directory, cover=True, **named):
+        import json
+
+        from OpenGLContext.scenegraph.terrain import (
+            HeightField, LayerRule, control_map,
+        )
+        path = _world(directory, **named)
+        document = json.load(open(path))
+        document.setdefault('extras', {})
+        field = HeightField.from_function(
+            lambda x, z: np.zeros(np.shape(np.asarray(x))), res=33,
+            extent=2048.0)
+        field.save_image(os.path.join(str(directory), 'g-height.png'))
+        control_map(field, [LayerRule(), LayerRule(weight=0.0)], size=32).save(
+            os.path.join(str(directory), 'g-control.png'))
+        document['extras']['terrain'] = {
+            'height': 'g-height.png', 'control': 'g-control.png',
+            'extent': 2048.0, 'base': field.base, 'relief': max(field.relief, 1.0),
+            'resolution': 33, 'layers': ['grass', 'dirt'],
+        }
+        if cover:
+            document['extras']['vegetation']['cover'] = {
+                'name': 'grass', 'card': 'blade.png', 'clump': None,
+                'density': 1.5, 'height': 0.5, 'on': ['grass'],
+            }
+        json.dump(document, open(path, 'w'))
+        return path
+
+    def test_a_world_that_names_it_gets_it(self, tmp_path) -> None:
+        terrain = TilesTerrain(self._covered(tmp_path), workers=1)
+        try:
+            assert terrain.cover is not None
+            assert terrain.cover.species.card.endswith('blade.png')
+        finally:
+            terrain.shutdown()
+
+    def test_a_world_that_does_not_has_none(self, tmp_path) -> None:
+        terrain = TilesTerrain(self._covered(tmp_path, cover=False), workers=1)
+        try:
+            assert terrain.cover is None
+        finally:
+            terrain.shutdown()
+
+    def test_it_needs_a_landscape_to_grow_on(self, tmp_path) -> None:
+        """Cover sits on a height field; a world whose ground is tiles has
+        none to sit on."""
+        import json
+        path = _world(tmp_path)
+        document = json.load(open(path))
+        document['extras']['vegetation']['cover'] = {
+            'name': 'grass', 'card': 'blade.png'}
+        json.dump(document, open(path, 'w'))
+        terrain = TilesTerrain(path, workers=1)
+        try:
+            assert terrain.cover is None
+        finally:
+            terrain.shutdown()
+
+    def test_it_grows_where_the_control_map_says_grass(self, tmp_path) -> None:
+        terrain = TilesTerrain(self._covered(tmp_path), workers=1)
+        try:
+            assert terrain.cover.mask is not None
+            assert float(terrain.cover.mask(np.array([0.0]),
+                                            np.array([0.0]))[0]) > 0.9
+        finally:
+            terrain.shutdown()
+
+    def test_streaming_moves_it_with_the_camera(self, tmp_path) -> None:
+        terrain = TilesTerrain(self._covered(tmp_path), workers=1)
+        try:
+            terrain.update_for_camera(np.array([0.0, 2.0, 0.0]), 720.0)
+            chosen = terrain.cover.selections
+            terrain.update_for_camera(np.array([300.0, 2.0, 0.0]), 720.0)
+            assert terrain.cover.selections > chosen
+        finally:
+            terrain.shutdown()
+
+    def test_it_is_drawn(self, tmp_path) -> None:
+        terrain = TilesTerrain(self._covered(tmp_path), workers=1)
+        try:
+            assert terrain.cover in list(terrain.children)
+        finally:
+            terrain.shutdown()
+
+
+class TestTheForestIsLitByTheGroundItStandsOn:
+    """One world, one answer about where the light is.
+
+    The terrain works out the canopy's shade from the trunks it is given; the
+    trees, the grass and the ground then all read that same figure, so a
+    clearing and a forest floor differ for every one of them at once.
+    """
+
+    def test_the_trees_are_told_how_much_sun_they_stand_in(self, tmp_path) -> None:
+        terrain = TilesTerrain(_landscape(tmp_path), workers=1)
+        try:
+            assert terrain.vegetation.shades is not None
+            assert len(terrain.vegetation.shades) == COUNT
+        finally:
+            terrain.shutdown()
+
+    def test_it_is_the_ground_s_own_answer(self, tmp_path) -> None:
+        terrain = TilesTerrain(_landscape(tmp_path), workers=1)
+        try:
+            trees = terrain.vegetation.positions
+            assert np.allclose(
+                terrain.vegetation.shades,
+                terrain.ground.shade(trees[:, 0], trees[:, 2]), atol=1e-6)
+        finally:
+            terrain.shutdown()
+
+    def test_a_forest_with_no_landscape_stands_in_full_sun(self, tmp_path) -> None:
+        terrain = TilesTerrain(_world(tmp_path), workers=1)
+        try:
+            assert terrain.vegetation.shades is None
+        finally:
+            terrain.shutdown()

@@ -24,7 +24,8 @@ from OpenGL.GL import (
     glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
 )
 from OpenGLContext.scenegraph.instancedgl import (
-    load_program, texture_rgba, delete_gl, setup_instance_attribs, InstanceBuffer)
+    load_program, texture_rgba, delete_gl, setup_instance_attribs,
+    instance_rows, InstanceBuffer)
 from OpenGLContext.scenegraph.vegetation.base import (
     InstancedVegBase, _BIG, LOD_NEAR, LOD_FAR)
 from OpenGLContext.scenegraph.terrain.splat import DEFAULT_SUN
@@ -60,6 +61,8 @@ class InstancedMeshLOD(InstancedVegBase):
         if species_id is None:
             species_id = np.arange(len(self.all_pos)) % n
         self.all_sp = np.asarray(species_id, int)
+        #: Optional (N,) sun reaching each instance, in [0, 1].
+        self.all_shade: "Optional[np.ndarray]" = None
         self.species = species
         self.sun = np.asarray(sun, 'd')
         self.sun /= np.linalg.norm(self.sun)
@@ -79,9 +82,11 @@ class InstancedMeshLOD(InstancedVegBase):
         d2 = (self.all_pos[:, 0] - cx) ** 2 + (self.all_pos[:, 2] - cz) ** 2
         near = d2 < radius * radius
         return {
-            s: np.concatenate([self.all_pos[near & (self.all_sp == s)],
-                               self.all_yaw[near & (self.all_sp == s), None],
-                               self.all_scale[near & (self.all_sp == s), None]], 1).astype(np.float32)
+            s: instance_rows(self.all_pos[near & (self.all_sp == s)],
+                             self.all_yaw[near & (self.all_sp == s)],
+                             self.all_scale[near & (self.all_sp == s)],
+                             None if self.all_shade is None
+                             else self.all_shade[near & (self.all_sp == s)])
             for s in range(len(self.species))}
 
     def update(self, cx: float, cz: float, radius: float = 42.0) -> None:
@@ -107,7 +112,7 @@ class InstancedMeshLOD(InstancedVegBase):
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.nbytes, idx, GL_STATIC_DRAW)
         glBindBuffer(GL_ARRAY_BUFFER, ibuf.id)
-        setup_instance_attribs(3, 4)
+        setup_instance_attribs(3, 4, 5)
         glBindVertexArray(0)
         self._vaos.append(vao)
         self._buffers += [mvb, ib]

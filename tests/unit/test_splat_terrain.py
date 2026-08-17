@@ -109,3 +109,41 @@ def test_canopy_shadow_is_baked_into_the_sun_texture(gl, tmp_path):
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestHowDeepTheShadeIs:
+    """A forest floor is *dark*, and the default dappling is a light one. The
+    depth of the canopy term is the world's to choose, because how much light
+    reaches the ground is what makes a wood read as a wood."""
+
+    def _hf(self):
+        grid = np.zeros((32, 32))
+        return HeightField(grid, 400.0, 10.0)
+
+    def _lit(self, **named):
+        field = self._hf()
+        trees = np.stack([np.linspace(-150, 150, 400), np.zeros(400),
+                          np.zeros(400)], axis=-1)
+        node = SplatTerrain(field, ['grass'], 'control.png', **named)
+        node.canopy = trees
+        lit = field.sun_shadow(node.sun)
+        return field.canopy_shadow(lit, trees, node.sun,
+                                   spread=node.canopy_spread,
+                                   darken=node.canopy_shade,
+                                   cap=node.canopy_deepest)
+
+    def test_the_ground_under_the_trees_is_darker(self) -> None:
+        assert float(self._lit().min()) < 0.9
+
+    def test_a_deeper_setting_is_darker(self) -> None:
+        assert float(self._lit(canopy_deepest=0.9).min()) \
+            < float(self._lit(canopy_deepest=0.2).min())
+
+    def test_the_default_is_a_forest_rather_than_an_orchard(self) -> None:
+        node = SplatTerrain(self._hf(), ['grass'], 'control.png')
+        assert node.canopy_deepest >= 0.6
+
+    def test_the_shadow_falls_away_from_the_sun(self) -> None:
+        """Trees cast towards the ground, not straight down."""
+        node = SplatTerrain(self._hf(), ['grass'], 'control.png')
+        assert node.canopy_spread > 0.0

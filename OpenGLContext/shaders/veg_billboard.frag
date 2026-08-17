@@ -1,5 +1,5 @@
 #version 330 core
-in vec2 vUV; in vec3 vEyePos; in float vH;
+in vec2 vUV; in vec3 vEyePos; in float vH; in float vShade;
 uniform sampler2D pine;
 uniform vec3 sunColor, skyAmbient, groundAmbient;
 uniform float fogDensity; uniform vec3 fogColor; uniform float uNearFade; uniform float uFarFade; uniform float uNearCut;
@@ -28,7 +28,9 @@ void main(){
     }
     vec3 lin = t.rgb;   // sRGB texture: hardware already decoded to linear (no pow)
     vec3 amb = mix(groundAmbient, skyAmbient, clamp(vH,0.,1.));
-    vec3 col = lin * (amb + sunColor*uSunLevel);
+    // vShade is how much of the sun this instance stands in: the canopy
+    // takes the key light, and leaves the ambient it does not block.
+    vec3 col = lin * (amb*mix(0.55,1.0,vShade) + sunColor*uSunLevel*vShade);
     if(fogDensity>0.0){ float f=1.-exp(-fogDensity*length(vEyePos)); col=mix(col,fogColor,clamp(f,0.,1.)); }
     col = aces(col);
     fragColor = vec4(pow(col, vec3(1.0/2.2)), 1.0);

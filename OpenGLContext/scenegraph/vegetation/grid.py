@@ -76,7 +76,11 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
     :param density: instances per square world unit (grid spacing = 1/sqrt(density)).
     :param height_field: a :class:`HeightField` used to sit instances on the ground.
     :param scale_mul: multiplies the per-instance height scale.
-    :param jitter: fraction of a cell an instance may be displaced from its centre.
+    :param jitter: how far an instance may be displaced from its cell's centre, as a
+        fraction of the cell. Above 1 an instance may land in a neighbour's ground,
+        which is what breaks the lattice: at or below 1 no two instances can approach
+        each other closely and the set reads as diagonals of evenly spaced tufts from
+        a few tens of metres away. Clumps and gaps are what real cover looks like.
     :param mask: optional ``mask(px, pz) -> weight`` in [0, 1] (arrays in, array out),
         e.g. a terrain grass-layer weight. Each cell is kept with probability equal to
         its weight, decided by the cell's own deterministic hash — so grass thins where
@@ -85,10 +89,13 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
     :returns: ``(positions Nx3 float32, yaws N float32, scales N float32)``.
     """
     s = 1.0 / math.sqrt(density)
-    i0 = int(math.floor((cx - radius) / s))
-    i1 = int(math.ceil((cx + radius) / s))
-    j0 = int(math.floor((cz - radius) / s))
-    j1 = int(math.ceil((cz + radius) / s))
+    # A cell outside the disc can still place its instance inside it, by up to
+    # half a cell of jitter, so the sweep is widened by that much.
+    reach = radius + s * max(jitter, 1.0) / 2.0
+    i0 = int(math.floor((cx - reach) / s))
+    i1 = int(math.ceil((cx + reach) / s))
+    j0 = int(math.floor((cz - reach) / s))
+    j1 = int(math.ceil((cz + reach) / s))
     I, J = np.meshgrid(np.arange(i0, i1 + 1, dtype=np.int64),
                        np.arange(j0, j1 + 1, dtype=np.int64))
     I = I.ravel()

@@ -102,9 +102,23 @@ class TilesTerrain(Group):
         #: The forest, when this world carries one; None when it has no trees or
         #: bakes them into its tiles.
         self.vegetation: Any = None
+        #: What grows on the ground between the trees, when a world names it.
+        self.cover: Any = None
         if vegetation and extras.get('vegetation'):
             self._mount_vegetation(extras['vegetation'], base_uri, cache_dir)
-        self._mounted = [node for node in (self._field_node, self.vegetation)
+        if self.ground is not None and self.vegetation is not None:
+            # A splat terrain bakes a canopy term into its static shading, and
+            # this is the one place that knows both where the ground is and
+            # where the trees on it are. Unwired, the floor of a wood is lit
+            # like an open field -- and so is everything standing on it, which
+            # is why the forest is then told the same figure.
+            self.ground.canopy = self.vegetation.positions
+            self.vegetation.lit_by(self.ground.shade)
+        if vegetation and extras.get('vegetation'):
+            self._mount_cover(extras['vegetation'].get('cover'), base_uri,
+                              extras.get('terrain'))
+        self._mounted = [node for node in (self._field_node, self.cover,
+                                           self.vegetation)
                          if node is not None]
         self.children = list(self._mounted)     # type: ignore[assignment]
 
@@ -154,6 +168,30 @@ class TilesTerrain(Group):
             table['positions'], table['yaws'], table['heights'], species,
             species_id=table['species'])
 
+    def _mount_cover(self, record: Any, base_uri: str,
+                     terrain: Any) -> None:
+        """Build the ground cover this world names, if it has ground for it.
+
+        Cover sits on a height field and grows where the splat control map says
+        its layers are -- which is also, without anything here knowing about
+        roads, where the road's corridor is not. It is lit by the same shading
+        the terrain under it carries, so a clearing and a forest floor are as
+        different for the grass as they are for the ground.
+        """
+        if not record or self.field is None or self.ground is None:
+            return
+        from OpenGLContext.scenegraph.vegetation.cover import (
+            CoverSpecies, GroundCover, control_weight,
+        )
+        beside = base_uri if fetch.is_url(base_uri) else base_uri.rstrip(os.sep)
+        species = CoverSpecies.from_json(record).beside(beside)
+        wanted = list(record.get('on') or ())
+        mask = (control_weight(self.ground.control, wanted,
+                               self.ground.layers, self.field.extent)
+                if wanted else None)
+        self.cover = GroundCover(self.field, species, mask=mask,
+                                 shade=self.ground.shade)
+
     def update_for_camera(self, camera: Any, viewport_height: float,
                           max_sse: Optional[float] = None,
                           view_projection: Any = None) -> Any:
@@ -173,6 +211,8 @@ class TilesTerrain(Group):
         if self.vegetation is not None:
             self.vegetation.update(camera, view=view_projection,
                                    facing=_facing(view_projection))
+        if self.cover is not None:
+            self.cover.update(camera)
         # Preserve node identity for the pass's add/remove observers: only rewrite
         # `children` when the visible set actually changes.
         if list(self.children) != drawables:

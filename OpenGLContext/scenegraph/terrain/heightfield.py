@@ -11,7 +11,7 @@ import math
 from typing import Any, Callable, Optional
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image
 
 
 class HeightField:
@@ -204,21 +204,59 @@ class HeightField:
 
     def canopy_shadow(self, lit: np.ndarray, tree_pos: np.ndarray,
                       sun: "np.ndarray | tuple[float, float, float]",
-                      spread: float = 7.0, blur: float = 2.0,
+                      spread: float = 7.0, crown: float = 8.0,
                       darken: float = 0.85, cap: float = 0.55) -> np.ndarray:
-        """Darken ``lit`` under tree cover (density offset toward the sun) for dappled
-        shade. ``tree_pos`` is an (N, 3) array of trunk world positions."""
+        """Darken ``lit`` under tree cover, for the dappled shade of a wood.
+
+        ``tree_pos`` is an (N, 3) array of trunk world positions, offset toward
+        the sun by ``spread`` because a tree shades along the light rather than
+        straight down.
+
+        A tree shades the ground its *crown* covers, not the cell its trunk
+        stands in, so each one is spread over ``crown`` metres and the total is
+        scaled so that one tree per crown-area is a closed canopy. That is what
+        makes the figure mean something at any grid resolution and any planting
+        density: ``darken`` is then how hard a closed canopy darkens the ground
+        and ``cap`` the most of the light it may take.
+        """
         SR = lit.shape[0]
         ts = -np.asarray(sun, float)
         hn = math.hypot(ts[0], ts[2])
         off = (-ts[[0, 2]] / max(hn, 1e-3)) * spread
         E = self.extent
-        sx = tree_pos[:, 0] + off[0]
-        sz = tree_pos[:, 2] + off[1]
+        sx = np.asarray(tree_pos, float)[:, 0] + off[0]
+        sz = np.asarray(tree_pos, float)[:, 2] + off[1]
         gx = np.clip((sx + E / 2) / E * (SR - 1), 0, SR - 1).astype(int)
         gz = np.clip((sz + E / 2) / E * (SR - 1), 0, SR - 1).astype(int)
         dens = np.zeros((SR, SR), np.float32)
         np.add.at(dens, (gz, gx), 1.0)
-        d = np.asarray(Image.fromarray(np.clip(dens * 60, 0, 255).astype(np.uint8))
-                       .filter(ImageFilter.GaussianBlur(blur))).astype(np.float32) / 255
-        return (lit * (1.0 - np.clip(d * darken, 0, cap))).astype(np.float32)
+        # Blurred as floats. Through an 8-bit image the count is clipped before
+        # it is spread, which flattens exactly the peaks the shade is made of.
+        radius = max(crown / 2.0 / (E / (SR - 1)), 0.5)
+        dens = _blurred(dens, radius) * (2.0 * math.pi * radius * radius)
+        shaded: np.ndarray = (
+            lit * (1.0 - np.clip(dens * darken, 0, cap))).astype(np.float32)
+        return shaded
+
+
+def _blurred(field: np.ndarray, radius: float) -> np.ndarray:
+    """A Gaussian blur of a float field, separably, in place of an image filter.
+
+    An image filter would take the field through eight bits first, and a density
+    is clipped by that before it is spread -- which flattens exactly the peaks
+    the shade is made of. The kernel sums to one on each axis, so a single unit
+    at one cell comes out with a peak of about ``1 / (2*pi*radius**2)``.
+    """
+    reach = int(max(1, round(radius * 3.0)))
+    offsets = np.arange(-reach, reach + 1, dtype='f4')
+    kernel = np.exp(-0.5 * (offsets / max(radius, 1e-6)) ** 2)
+    kernel /= kernel.sum()
+    out = np.zeros_like(field, dtype=np.float32)
+    padded = np.pad(field.astype('f4'), ((0, 0), (reach, reach)), mode='edge')
+    for index, weight in enumerate(kernel):
+        out += padded[:, index:index + field.shape[1]] * weight
+    padded = np.pad(out, ((reach, reach), (0, 0)), mode='edge')
+    out = np.zeros_like(field, dtype=np.float32)
+    for index, weight in enumerate(kernel):
+        out += padded[index:index + field.shape[0], :] * weight
+    return out
