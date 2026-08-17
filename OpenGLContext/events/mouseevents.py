@@ -125,7 +125,9 @@ class MouseEvent( event.Event ):
                 x,y,z = self.viewCoordinate
         else:
             x,y,z = viewCoordinate
-            if isinstance( z, (int,long)):
+            if isinstance( z, int):
+                # A raw depth-buffer value, as the name-stack reports it,
+                # rather than the [0,1] the projection wants.
                 z = z / (2.0**32-1.0)
         viewport = self.viewport
         if viewport is not None:

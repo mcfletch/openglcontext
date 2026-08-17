@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Building an editor on OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Building an editor</h1>
+</header>
+<section>
+<p class="introduction">A track editor, a level editor and a scene inspector
+all want the same things of the engine: a pointer that does a different job in
+each tool, a view from straight above to draw on, the point on the world under
+the cursor, and a way to drag it. None of that is about tracks, levels or
+scenes, so it lives in <code>OpenGLContext.edit</code> and the second editor
+does not have to write it again.</p>
+<p>Nothing here is needed to <em>play</em> a world, so a shipped game imports
+none of it.</p>
+</section>
+
+<section>
+<h2>Tool modes: what the pointer does</h2>
+<p>An editor's pointer does a different thing in each tool — placing a point,
+dragging one, measuring, painting — and the camera wants the same pointer. The
+rule is that <strong>the tool in force is asked first and the camera gets
+whatever the tool did not want</strong>, so a tool that only cares about the
+left button leaves the right one orbiting.</p>
+<pre>from OpenGLContext.edit.tools import Pointer, ToolManager, ToolMode
+
+class PlacePoint(ToolMode):
+    def on_press(self, pointer):
+        if pointer.button or not pointer.on_surface:
+            return False          # not ours: let the camera have it
+        self.route.append(pointer.world)
+        return True
+
+tools = ToolManager([PlacePoint(name='place'), DragPoint(name='drag')])</pre>
+<p>Every hook — <code>on_press</code>, <code>on_drag</code>,
+<code>on_release</code>, <code>on_move</code>, <code>on_key</code> — returns
+whether the tool used what it was given, and the base class uses nothing. So a
+subclass that overrides one hook leaves the rest of the pointer alone rather
+than swallowing it.</p>
+<p>A tool that takes a press <strong>keeps the pointer until the release</strong>.
+A drag that wanders off whatever started it still ends where it should, and the
+tool cannot be switched out from under a gesture it is half-way through:
+<code>select()</code> answers False while one is going on. Escape abandons a
+gesture (<code>ToolMode.cancel</code>) and is left for the camera when there is
+nothing to abandon.</p>
+<p><code>enter</code> and <code>leave</code> bracket the time a tool is in
+force, which is where a preview goes on screen and comes off again.</p>
+
+<h3>The pointer a tool is handed</h3>
+<p>A <code>Pointer</code> is where the cursor is on the screen
+(<code>x</code>, <code>y</code>) <em>and in the world</em>: <code>world</code>
+is the point on whatever surface is under it, or <code>None</code> over the
+sky. <code>on_surface</code>, <code>shifted</code>, <code>controlled</code> and
+<code>alted</code> save a tool from unpacking a modifier triple.</p>
+</section>
+
+<section>
+<h2>The point under the cursor</h2>
+<p>Where the user clicked on the world is <strong>already read back by the
+pick</strong>. The selection pass writes depth as well as an object id, so a
+mouse event arrives knowing how far away what it hit was; unprojecting that
+gives the point on the surface. It is exact, it costs nothing extra, and it
+works for streamed terrain because terrain writes depth like any other
+geometry.</p>
+<pre>from OpenGLContext.edit.surface import pointer_from
+pointer = pointer_from(event)      # pointer.world is where they clicked</pre>
+<p>Dragging cannot use that depth, because once something is being dragged the
+depth under the cursor <em>is</em> the thing being dragged. A drag runs against
+a plane instead — usually the level plane through where it began, so a point
+moves across the ground without climbing whatever it passes over:</p>
+<pre>from OpenGLContext.edit.surface import horizon_plane, ray_from, ray_plane
+
+origin, direction = ray_from(event)
+moved_to = ray_plane(origin, direction, *horizon_plane(started_at[1]))</pre>
+<p>The ray is taken from the near and far planes rather than from the camera's
+position, so it is right under any projection: an orthographic map view has no
+eye point for rays to come from, and its rays are parallel.</p>
+<p>The ground's <em>slope</em> comes from neither. Picking gives a point, not a
+normal; the normal is the gradient of the height function, which an editor has:
+<code>surface_normal(height_fn, x, z)</code>.</p>
+</section>
+
+<section>
+<h2>The plan view</h2>
+<p>A route is drawn on a <strong>map</strong>. The camera looks straight down
+and the projection is orthographic, so a metre is the same number of pixels
+wherever it is on the screen and a click at the far end of a straight means the
+same thing as a click at the near end. A perspective view cannot promise
+that.</p>
+<pre>from OpenGLContext.edit.mapview import MapView, MapViewPlatform
+
+view = MapView(centre=(0.0, 0.0), span=1200.0)   # 1200 m down the window
+context.platform = MapViewPlatform(view)</pre>
+<p><code>span</code> is how many metres fit down the window's <em>height</em>,
+so a wider window shows more world rather than the same world stretched. North
+(<code>-z</code>) is up the screen and east (<code>+x</code>) is right, as a map
+has it.</p>
+<table>
+<tr><th>Call</th><th>Answers</th></tr>
+<tr><td><code>world_from_screen(x, y, viewport)</code></td>
+  <td>the world <code>(x, z)</code> under a window pixel — where the pointer
+  is</td></tr>
+<tr><td><code>screen_from_world(point, viewport)</code></td>
+  <td>where to draw a marker for a world point</td></tr>
+<tr><td><code>metres_per_pixel(viewport)</code></td><td>the scale it is drawn at</td></tr>
+<tr><td><code>pan(dx, dy, viewport)</code></td>
+  <td>drag the map by a pointer movement; the world goes with the pointer</td></tr>
+<tr><td><code>zoom(factor, at=..., viewport=...)</code></td>
+  <td>scale it, holding the world point under <code>at</code> still</td></tr>
+<tr><td><code>frame(minimum, maximum, viewport)</code></td>
+  <td>put a region on screen, wholly inside the window</td></tr>
+</table>
+<p><code>MapViewPlatform</code> reads the view rather than copying it, so
+panning or zooming the map is what moves the camera and there is no second copy
+of where the editor is looking to fall out of step with the first.</p>
+</section>
+
+<section>
+<h2>What is not here yet</h2>
+<ul>
+  <li><strong>Gizmos.</strong> Translate and height handles with their own
+  object ids, so the pick hit-tests them like any other geometry and the chosen
+  handle drives an axis-constrained drag. A point on the map is dragged with
+  the tools and the plan view as they are; a handle in a perspective view wants
+  these.</li>
+  <li><strong>Picking what is behind a hill.</strong> The depth buffer answers
+  for what is drawn, so a point the camera cannot see cannot be picked without
+  moving the camera. A CPU ray against the terrain would answer it; see
+  <code>plans/RAYCAST-PICKING.md</code>.</li>
+</ul>
+</section>
+
+<footer>
+<p>See also: <a href="overlayui.html">Overlay UI</a> for the menus and panels an
+editor's interface is made of, <a href="baking.html">Baking a world</a> for
+what an editor writes out, and <a href="roads.html">Roads</a> for one thing it
+can draw.</p>
+</footer>
+</body>
+</html>

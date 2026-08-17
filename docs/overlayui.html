@@ -97,6 +97,58 @@ class Game(OverlayMixin, GLFWInteractiveContext):
     them, not the only way in.</p>
 </section>
 
+<section id="menus">
+  <h2>Menus</h2>
+  <p>A screen is what an application shows when it wants an answer. A
+    <strong>menu</strong> is what it shows when there are more things to do than
+    there is room for buttons: a bar of titles along the top of the window, a
+    list under each of them, and the same list at the pointer on a
+    right-click.</p>
+  <pre>from OpenGLContext.ui.menu import Menu, MenuBar, MenuItem
+from OpenGLContext.ui.widgets import Separator
+
+bar = MenuBar(menus=[
+    ('File', [MenuItem(text='Open', shortcut='&lt;ctrl-o&gt;', on_activate=open_),
+              Separator(),
+              MenuItem(text='Quit', on_activate=quit_)]),
+    ('View', [MenuItem(text='Wireframe', checkable=True, on_activate=wire),
+              MenuItem(text='Recent', submenu=[MenuItem(text='a.wrl')])]),
+], stack=context.overlays)
+context.addHUDLayer(bar)</pre>
+  <p>A menu is a <code>Panel</code>, so it already has the focus, the skin, the
+    accelerators and the Escape that closes a screen. What it adds is where it
+    opens and how it leaves:</p>
+  <ul>
+    <li><strong>It opens where it is asked to.</strong> <code>Menu(anchor=(x,
+      y))</code> puts its top-left corner there, in window pixels. It moves left
+      to stay on screen, and one that would run off the bottom opens
+      <em>upwards</em> rather than sliding up over whatever was clicked. For a
+      right-click menu the anchor is the pick point.</li>
+    <li><strong>Choosing puts it away</strong> &mdash; a menu still up after the
+      thing was done is in the way &mdash; and so does clicking anywhere else.
+      That click is spent on dismissing the menu and does not also press what
+      was behind it.</li>
+    <li><strong>Up and down walk the list</strong>, Enter chooses, Escape
+      leaves. A <code>shortcut</code> runs its item from anywhere in the menu
+      and is drawn on the right of the row, which is how the reader learns
+      it.</li>
+    <li><strong><code>checkable</code> makes an item a setting</strong> rather
+      than an action: it draws its state and flips it when chosen.</li>
+    <li><strong><code>submenu</code> makes it a way in.</strong> It opens
+      another menu beside itself; choosing something in <em>that</em> closes the
+      whole chain.</li>
+  </ul>
+  <p>A <code>MenuBar</code> is <strong>not modal and not a wall</strong>: a
+    click that misses it is offered to whatever is under it, so the world
+    carries on being usable while the bar is on screen. Add it with
+    <code>addHUDLayer</code> and give it the overlay stack the menus should open
+    on.</p>
+  <p class="technical">Both are in <code>OpenGLContext/ui/menu.py</code>. An
+    editor built on them wants <a href="editing.html">the editor
+    toolkit</a> as well: tool modes, a plan view, and the point under the
+    cursor.</p>
+</section>
+
 <section id="settings">
   <h2>The settings screen</h2>
   <p>Most of what the renderer does is decided for the player and is invisible:
