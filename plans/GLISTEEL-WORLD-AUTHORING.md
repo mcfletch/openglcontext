@@ -210,7 +210,7 @@ appears.
 
 | # | Phase | Home | Status | Depends on |
 |---|---|---|---|---|
-| §A | The writer & baker — glTF + 3D Tiles + octree, proven by baking the forest demo | OpenGLContext (writer) + editor (baker) | 📋 | — |
+| §A | The writer & baker — glTF + 3D Tiles + octree, proven by baking a world | OpenGLContext (writer) + editor (baker) | ✅ | — |
 | §B | Terrain authoring — georef DEM, multi-block, procedural control map | editor (+ engine ingest) | 📋 | §A |
 | §C | Roads — spec, cross-sections, the four ops, render node, reflections | engine (render) + editor (gen) | 📋 | §A, §B |
 | §D | Water — rivers, lakes, surface render, shorelines, whitewater, beaches | engine (render) + editor (gen) | 📋 | §A, §B |
@@ -222,7 +222,7 @@ appears.
 
 ---
 
-### §A — The writer and the baker 📋
+### §A — The writer and the baker ✅
 
 **Goal.** Turn an in-memory authored world — terrain mesh, splat control map, road and
 water geometry, scattered vegetation, impostors — into a **baked, streamable 3D Tiles
@@ -829,6 +829,23 @@ them; §E decides per species.
   `OpenGLContext_editor` sibling; own glTF + 3D Tiles writer; 60 fps bar is the discrete
   GPU. Grounded in an audit of the existing tiles3d/terrain/vegetation/UI/picking
   subsystems (§3) and the forest-demo performance findings. No code started.
+- **2026-08-17** — **§A landed.** `OpenGLContext.loaders.gltf.writer` writes meshes,
+  materials, textures, node hierarchies and `EXT_mesh_gpu_instancing`, round-tripped
+  through the loader and cross-read by pygltflib; the engine's procedural tileset baker
+  now writes through it, so the bake path owns its glTF. The baker
+  (`OpenGLContext_editor.bake`) partitions a world, asks each layer for content at the
+  node's error, and emits a 1.1 tileset with the traversal's invariants checked as it is
+  built. `oglc-bake` bakes the shipped procedural world and `oglc-view` streams it.
+  Equivalence check 1 passes — measured against the height function itself, the new
+  surface is no worse than `build_terrain_tileset`'s at 400 off-grid sample points, with
+  equal footprint and at least as fine a leaf level. Check 2 passes as a GL smoke test:
+  the baked world renders through `oglc-view` with ground, sky and trees where they
+  belong. Documentation: [docs/baking.html](../docs/baking.html), indexed from
+  `documentation.html`; the editor's README gained the quick start.
+  **Deferred, recorded:** content is written in world coordinates with no per-tile
+  transform, which is fine within a few kilometres of the origin and is §B's problem
+  when placement goes georeferenced; `sample.py` and `foliage.py` still build glTF
+  through pygltflib and want converting to the owned writer.
 - **2026-08-17** — First vertical slice (§7) started; task breakdown and the reader
   contract the writers must satisfy are in
   [GLISTEEL-SLICE-A-HANDOFF.md](GLISTEEL-SLICE-A-HANDOFF.md). Task 1 done: the sibling is

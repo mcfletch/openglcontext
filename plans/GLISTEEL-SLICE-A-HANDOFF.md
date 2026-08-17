@@ -29,10 +29,15 @@ user documentation.
 1. ✅ **Bootstrap `OpenGLContext_editor`** sibling — `src/` layout, `pyproject.toml`
    depending on `OpenGLContext`, `specs/`, its own `CLEAN-ROOM.md`; workspace
    member so `uv sync` wires it. Landed 2026-08-17, see below.
-2. **§A glTF 2.0 writer** — `OpenGLContext/loaders/gltf/writer.py`. Red round-trip
-   test first. Blocks 3, 4.
-3. **§A 3D Tiles 1.1 writer + octree baker** — in the editor. Blocked by 1, 2.
-4. **§A bake driver + two equivalence checks** — `oglc-forest-bake`. Blocked by 2, 3.
+2. ✅ **§A glTF 2.0 writer** — `OpenGLContext/loaders/gltf/writer.py`.
+3. ✅ **§A 3D Tiles 1.1 writer + octree baker** — `OpenGLContext_editor.bake`.
+4. ✅ **§A bake driver + two equivalence checks** — `oglc-bake`, with the checks in
+   the editor's `tests/test_bake_equivalence.py` and `tests/test_bake_renders.py`.
+   Built against the *procedural* world rather than the forest demo's: the demo's
+   scene assembly is GL-bound (it builds scenegraph nodes, not layers), and the
+   procedural world exercises the same spine — heightfield, instanced trees with an
+   impostor ladder — against a reference baker that is already in the engine. Baking
+   the forest demo's own assets is now a content task rather than a spine task.
 5. **Minimal §C road** (highway-on-dirt) + collider, baked into the octree. Blocked by 4.
 6. **Minimal §H `glisteel`** — stream + drive. Blocked by 4, 5.
 

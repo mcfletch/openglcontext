@@ -16,6 +16,9 @@ from typing import Any, Optional
 import numpy as np
 
 HeightFn = Callable[[np.ndarray, np.ndarray], np.ndarray]
+#: Per-vertex colour from a patch's positions and normals -- (N,3)/(N,3) in,
+#: (N,3) float RGB out.
+ColorFn = Callable[[np.ndarray, np.ndarray], np.ndarray]
 
 WATER_LEVEL = 0.0
 
@@ -167,21 +170,31 @@ def terrain_patch(
     res: int,
     height_fn: Optional[HeightFn] = None,
     skirt_depth: float = 0.0,
+    water_level: Optional[float] = WATER_LEVEL,
+    color_fn: Optional[ColorFn] = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Mesh a sub-region as (positions, normals, colors, indices), water clamped.
+    """Mesh a sub-region as (positions, normals, colors, indices).
 
     `height_fn(x, z)` supplies heights (arbitrary numpy shapes); defaults to the
     built-in procedural field. A DEM loader passes an image-sampling function here.
     `skirt_depth` > 0 drops a vertical skirt around the tile edge so seams between
     adjacent LOD tiles show no gaps.
+
+    `water_level` clamps the surface up to a flat sheet at that height and gives
+    it an up normal; `None` meshes the height field as it is, which is what a
+    world whose water is its own geometry wants. `color_fn(positions, normals)`
+    supplies per-vertex colour, defaulting to the procedural landscape palette.
     """
     if height_fn is None:
         height_fn = terrain_height
+    if color_fn is None:
+        color_fn = terrain_colors
     xs = np.linspace(x0, x1, res)
     zs = np.linspace(z0, z1, res)
     gx, gz = np.meshgrid(xs, zs, indexing="ij")
     gy = height_fn(gx, gz)
-    gy = np.maximum(gy, WATER_LEVEL)                # flat water surface
+    if water_level is not None:
+        gy = np.maximum(gy, water_level)            # flat water surface
     pos = np.stack([gx, gy, gz], axis=-1).reshape(-1, 3).astype(np.float32)
 
     # Normals from central differences of the height field.
@@ -190,12 +203,13 @@ def terrain_patch(
     hz = height_fn(gx, gz + eps) - height_fn(gx, gz - eps)
     nrm = np.stack([-hx, np.full_like(hx, 2.0 * eps), -hz], axis=-1)
     nrm = (nrm / np.linalg.norm(nrm, axis=-1, keepdims=True)).reshape(-1, 3)
-    # Water areas get an up normal (flat surface).
-    is_water = (gy <= WATER_LEVEL + 1e-4).reshape(-1)
-    nrm[is_water] = (0.0, 1.0, 0.0)
+    if water_level is not None:
+        # Water areas get an up normal (flat surface).
+        is_water = (gy <= water_level + 1e-4).reshape(-1)
+        nrm[is_water] = (0.0, 1.0, 0.0)
     nrm = nrm.astype(np.float32)
 
-    col = terrain_colors(pos, nrm)
+    col = color_fn(pos, nrm)
 
     idx_list: list[int] = []
     for i in range(res - 1):

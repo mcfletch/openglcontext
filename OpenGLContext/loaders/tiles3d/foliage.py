@@ -752,11 +752,20 @@ def tree_texture(size: int = 128, seed: int = 0) -> np.ndarray:
     return img[::-1]
 
 
-def tree_billboard(width: float = 6.0, height: float = 10.0, seed: int = 0) -> Any:
-    """A cheap 2-plane conifer billboard for distant trees (no shadow-casting)."""
+def tree_billboard_glb(width: float = 6.0, height: float = 10.0,
+                       seed: int = 0) -> bytes:
+    """A cheap 2-plane conifer billboard for distant trees, as glTF bytes.
+
+    The far rung of a tree's detail ladder: two crossed alpha-masked cards for
+    the cost of four triangles, where the real conifer is hundreds.
+    """
     V, UV, IDX = _crossed_quads(width, height, planes=2)
-    node = gltf.load_gltf(_textured_glb(V, UV, IDX, tree_texture(seed=seed),
-                                        alpha_mode="MASK")).group
+    return _textured_glb(V, UV, IDX, tree_texture(seed=seed), alpha_mode="MASK")
+
+
+def tree_billboard(width: float = 6.0, height: float = 10.0, seed: int = 0) -> Any:
+    """A loaded 2-plane conifer billboard for distant trees (no shadow-casting)."""
+    node = gltf.load_gltf(tree_billboard_glb(width, height, seed)).group
     return no_shadow(node)
 
 

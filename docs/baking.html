@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Baking a world in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Baking a world</h1>
+</header>
+<section>
+<p class="introduction">A world larger than memory is not loaded, it is
+<em>streamed</em>: partitioned into a tree of tiles, each holding the detail
+that suits the distance it is seen from, and paged in as the camera approaches.
+OpenGLContext streams such a world already (<a href="terrain.html">Terrain &amp;
+3D&nbsp;Tiles</a>). This page is about producing one.</p>
+<p>Two halves, in two packages. The <strong>glTF writer</strong> is in the engine,
+because writing a model is engine machinery and a game's build step may well
+call it. The <strong>baker</strong> -- the spatial partition, the per-tile level
+of detail, the tileset -- is in <a
+href="https://github.com/mcfletch/openglcontext-editor"><code>OpenGLContext-editor</code></a>,
+a separate install, because no shipped game needs it in its dependency tree.</p>
+</section>
+
+<section>
+<h2>Bake one now</h2>
+<p><code>oglc-bake</code> comes with the editor package and bakes the world it
+ships with -- hills, a river canyon, a lake and a conifer forest -- into a
+directory you can open with the viewer:</p>
+<pre>pip install OpenGLContext-editor
+oglc-bake --output /tmp/world
+oglc-view /tmp/world/tileset.json</pre>
+<p><code>oglc-bake --view</code> runs both steps. The world's size, its tile
+detail and how deep the tree refines are all on the command line:</p>
+<pre>oglc-bake --output /tmp/world --extent 8192 --depth 5 --resolution 65</pre>
+<dl>
+  <dt><code>--extent</code></dt>
+  <dd>how many metres across the world is, centred on the origin.</dd>
+  <dt><code>--depth</code></dt>
+  <dd>how many times the tree subdivides. Each level is four times the tiles and
+  twice the ground detail, so depth is the main lever on both quality and bake
+  time.</dd>
+  <dt><code>--resolution</code></dt>
+  <dd>ground samples across each tile: the vertex budget one tile spends.
+  Detail is this divided by the tile's size, so raising it is an alternative to
+  raising <code>--depth</code> that costs bigger tiles rather than more of
+  them.</dd>
+  <dt><code>--tree-density</code>, <code>--max-instances</code>, <code>--seed</code></dt>
+  <dd>trees per square metre, the cap on instances written into any one tile,
+  and the seed that makes a world reproducible.</dd>
+</dl>
+</section>
+
+<section>
+<h2>Writing glTF from your own code</h2>
+<p><code>OpenGLContext.loaders.gltf.writer</code> is the mirror of the loader: it
+takes the same <code>PBRMesh</code> geometry and <code>PBRMaterial</code>
+materials the loader produces, and writes a binary <code>.glb</code>. A mesh
+written is the mesh that loads back.</p>
+<pre>from OpenGLContext.loaders.gltf import write_glb
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+
+write_glb(PBRMesh(positions=points, normals=normals, indices=indices),
+          path='tile.glb')</pre>
+<p><code>write_glb</code> takes a mesh, a list of meshes, or
+<code>SceneNode</code>s that add a name, a local transform and children. What is
+written is the subset the PBR renderer reads: position, normal, UV, tangent and
+colour attributes; metallic-roughness materials with their five texture channels
+and the <code>KHR_materials_*</code> factors; embedded images with their
+samplers. Index buffers narrow to 16 bits where the vertex count allows.
+Skinning, animation and morph targets are not written.</p>
+<h3>Many copies of one mesh</h3>
+<p>An <code>InstanceSet</code> on a node writes the standard
+<code>EXT_mesh_gpu_instancing</code> extension, so thousands of placements of one
+mesh ride in a single document and arrive as one instanced draw:</p>
+<pre>from OpenGLContext.loaders.gltf import InstanceSet, SceneNode, write_glb
+
+write_glb(SceneNode(mesh=tree, instances=InstanceSet(
+    translations=positions,        # (N,3)
+    rotations=quaternions,         # (N,4) xyzw, optional
+    scales=scales)),               # (N,3), optional
+    path='trees.glb')</pre>
+<h3>Textures</h3>
+<p>A material's <code>textures</code> dict is written channel by channel, its PIL
+images embedded as PNG. A map that is already a JPEG stays one -- re-encoding a
+photographic texture as PNG multiplies a tile's weight for no visible gain:</p>
+<pre>from OpenGLContext.loaders.gltf.writer import EncodedImage
+
+material.textures['baseColor'] = EncodedImage.from_path('bark.jpg', srgb=True)</pre>
+</section>
+
+<section>
+<h2>What the baker produces</h2>
+<p>A directory holding one <code>tileset.json</code>, a <code>.glb</code> per
+tile, and a <code>CREDITS.txt</code> naming the sources the world was made from.
+The tileset is OGC 3D&nbsp;Tiles 1.1, written so a 1.0 reader can load it too,
+and it is exactly what <code>OpenGLContext.loaders.tiles3d</code> streams.</p>
+<h3>The partition</h3>
+<p>The tree subdivides <strong>in X and Z</strong> by default. A world whose
+content sits on a surface has one ground per column, and splitting the empty air
+above it buys nothing but nodes. A world that is genuinely volumetric -- a city
+with levels, a road tunnelling under a hillside -- passes
+<code>split_axes=VOLUME_AXES</code> and gets the eight octants.</p>
+<p>A tile's bounding volume is the box of what that tile actually wrote, unioned
+with its children's, rather than the partition cell it came from. That keeps the
+volume tight enough for the screen-space-error test to mean something, and it
+guarantees what the traversal rests on: a parent culled from the frustum has
+culled every descendant with it.</p>
+<h3>Level of detail</h3>
+<p>Refinement is <code>REPLACE</code>: a tile's content stands in for its whole
+subtree, so each level must be a coarser <em>version</em> of the same ground
+rather than a different part of it. Two mechanisms carry that:</p>
+<ul>
+  <li><strong>Terrain is re-sampled per tile.</strong> Every tile is meshed at
+  the same vertex count over its own footprint, so a child covers a quarter of
+  the ground at the same budget and the ground gets four times finer per
+  level.</li>
+  <li><strong>Instances are thinned to a budget.</strong> A tile writes at most
+  <code>max_instances</code> placements, chosen by an even stride so a coarse
+  tile carries a sparse, evenly spread stand-in and the tiles beneath it fill
+  the forest in. The stride is deterministic, so a re-bake produces the same
+  world.</li>
+</ul>
+<p>Each layer also picks its mesh by the tile's error: a detail ladder of
+<code>(error, mesh)</code> pairs lets distant tiles carry a billboard impostor
+where near ones carry the real tree.</p>
+<h3>Geometric error</h3>
+<p>The root's error defaults to its width over the terrain's sampling rate --
+the scale at which drawing the root instead of its children is visibly wrong --
+and halves at every level. Leaves claim zero, which is how a tileset says
+nothing finer exists. The writer refuses a tree in which a child claims a larger
+error than its parent, or sits outside its parent's bounds.</p>
+</section>
+
+<section>
+<h2>Describing a world of your own</h2>
+<p>A world is a list of <em>layers</em>. A layer answers one question -- what is
+in this region, at this error? -- and the baker asks every layer at every node:</p>
+<pre>from OpenGLContext_editor.bake.bounds import BoundingBox
+from OpenGLContext_editor.bake.driver import bake_world
+from OpenGLContext_editor.bake.layers import HeightfieldLayer, InstanceLayer
+from OpenGLContext_editor.world.scatter import scatter_on_heightfield, yaw_quaternions
+
+ground = BoundingBox((-2048, 0, -2048), (2048, 0, 2048))
+terrain = HeightfieldLayer(height_fn=my_heights, extent=ground, resolution=33,
+                           color_fn=my_colours, water_level=0.0)
+
+trees = scatter_on_heightfield(my_heights, ground, density=0.004, seed=11,
+                               slope_limit=38.0, height_range=(2.0, 130.0))
+forest = InstanceLayer(positions=trees.positions,
+                       rotations=yaw_quaternions(trees.yaws),
+                       scales=trees.scales,
+                       lods=[(0.0, conifer), (8.0, impostor)])
+
+result = bake_world([terrain, forest], '/tmp/world', depth=4,
+                    credits=['Elevation: SRTM, public domain'])
+print(result.summary())</pre>
+<dl>
+  <dt><code>HeightfieldLayer</code></dt>
+  <dd>ground meshed from a height function, with a per-vertex colour function, an
+  optional flat water level, and a skirt (in vertex spacings) that hides the seam
+  between a coarse tile and the finer ones beside it.</dd>
+  <dt><code>InstanceLayer</code></dt>
+  <dd>one mesh placed many times, with the detail ladder and the per-tile
+  instance budget described above.</dd>
+  <dt><code>MeshLayer</code></dt>
+  <dd>meshes at fixed positions -- a building, a bridge deck, a prop. Its
+  <code>maximum_error</code> holds content back from tiles too coarse to be worth
+  the bandwidth.</dd>
+</dl>
+<p>A layer is anything with <code>bounds()</code> and
+<code>content(region, error)</code>, so a world can add its own kind.</p>
+<h3>Bringing in authored assets</h3>
+<p><code>meshes_from_gltf</code> reads a designer's <code>.glb</code> and hands
+back its meshes flattened into one frame -- transforms already applied -- ready
+to place. <code>combined_mesh</code> merges them into one, so a whole prototype
+rides a single instanced node:</p>
+<pre>from OpenGLContext_editor.bake.assets import combined_mesh, meshes_from_gltf
+
+conifer = combined_mesh(meshes_from_gltf('assets/conifer.glb', scale=1.2))</pre>
+</section>
+
+<section>
+<h2>Limits</h2>
+<ul>
+  <li><strong>Content is written in world coordinates</strong>, with no per-tile
+  transform. Positions are 32-bit floats, so a world within a few kilometres of
+  the origin holds sub-millimetre precision; a world placed at its true position
+  on the globe would not. Georeferenced placement is the terrain pipeline's next
+  piece of work.</li>
+  <li><strong>Dense near-field grass is not baked.</strong> Grass at the density
+  the eye expects, across a whole map, is orders of magnitude more geometry than
+  a tileset can hold; it belongs to the runtime's camera-following vegetation
+  field, which populates a radius around the player and reads baked 2D masks for
+  its density. What the baker writes for grass is those masks.</li>
+  <li><strong>A layer decides its own vertical extent.</strong> The region a bake
+  partitions defaults to everything the layers cover, height included. Passing an
+  explicit <code>bounds</code> with no vertical extent partitions a slab of zero
+  height and prunes almost everything.</li>
+</ul>
+</section>
+
+<footer>
+<p>See also: <a href="terrain.html">Terrain &amp; 3D&nbsp;Tiles</a> for the
+streaming runtime that reads what this writes, <a href="gltf.html">Loading
+glTF</a> for the reader the writer mirrors, and <a href="instancing.html">Instanced
+Geometry</a> for how baked instances reach the card.</p>
+</footer>
+</body>
+</html>

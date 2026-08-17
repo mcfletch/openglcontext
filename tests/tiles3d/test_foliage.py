@@ -107,3 +107,24 @@ def test_ground_patch_blended_builds():
     mats = [F.procedural_ground_maps(1)["color"], F.procedural_ground_maps(2)["color"]]
     assert F.ground_patch_blended((0, 0, 0), 60.0, hf, mats, res=16,
                                   tex_size=256) is not None
+
+
+def test_the_billboard_is_available_as_bytes():
+    """The far rung of a tree's detail ladder, for a baker to place directly."""
+    data = F.tree_billboard_glb(width=4.0, height=7.0, seed=2)
+    assert data[:4] == b'glTF'
+    from OpenGLContext.loaders import gltf
+    scene = gltf.load_gltf(data)
+    assert scene.group is not None
+
+
+def test_the_loaded_billboard_casts_no_shadow():
+    node = F.tree_billboard()
+    shapes = []
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        if type(current).__name__ == 'Shape':
+            shapes.append(current)
+        stack.extend(getattr(current, 'children', None) or [])
+    assert shapes and all(s.castsShadow is False for s in shapes)
