@@ -119,6 +119,40 @@ implements each piece.</p>
       &ldquo;same crate&rdquo; nodes into one draw for free.</li>
   </ul>
 
+  <h3 id="instancedshape">A declared set is one node</h3>
+  <p>The draw is one call either way. What is <em>not</em> the same either way is
+    the work before it: a thousand copies modelled as a thousand nodes is a
+    thousand world matrices, a thousand bounding volumes, a thousand frustum
+    tests, a thousand batch keys and a thousand shadow-caster records &mdash;
+    every frame, to reach a draw the file already told you about. On a streamed
+    world that per-object cost, not the draw, is the frame rate.</p>
+  <p>So a set that arrives <em>declared</em> stays one object:
+    <code>InstancedShape</code> is a <code>Shape</code> plus
+    <code>placements</code>, an <code>(N,4,4)</code> array of local matrices. The
+    pass does its per-object work once for the set and expands the placements
+    only at the draw. A glTF <code>EXT_mesh_gpu_instancing</code> node loads as
+    one of these; so does anything you build yourself:</p>
+  <pre>from OpenGLContext.scenegraph.instancedshape import (
+    InstancedShape, placement_matrices,
+)
+
+forest = InstancedShape(
+    geometry=tree_mesh,
+    appearance=bark,
+    placements=placement_matrices(translations=positions,
+                                  rotations=yaws, scales=sizes),
+)</pre>
+  <p>A placement is the matrix a <code>Transform</code> around the shape would
+    have contributed, in the row-vector convention the rest of the scenegraph
+    uses. Sets of the same geometry batch <em>together</em>, so a hundred tiles
+    of one forest are still one draw. The set is culled, picked and depth-sorted
+    as a whole: it is one object.</p>
+  <p class="technical">The node is
+    <code>scenegraph/instancedshape.py</code>. Anything that walks a scenegraph
+    for geometry has to expand the placements to see what is really there
+    &mdash; <code>physics/gltf_world.py</code>'s collision extraction does, so a
+    car cannot drive through a tree it can see.</p>
+
   <h3>Content collapse: matching identical-but-separate meshes</h3>
   <p>Node identity (&ldquo;is this literally the same object in memory?&rdquo;) catches
     the explicit cases cheaply. To catch the opportunistic ones, a geometry can supply a
@@ -162,6 +196,10 @@ implements each piece.</p>
     a single instanced draw. It works because the id is just another per-instance value
     (location&nbsp;9): every copy writes its own stable id, so the hidden buffer ends up
     with a thousand distinct ids exactly as if they had been drawn separately.</p>
+  <p>The exception is a <a href="#instancedshape">declared placement set</a>,
+    which is one node: its placements share its id, so a click names the set
+    rather than the copy. Where each copy has to answer for itself, place them
+    as separate shapes and let the opportunistic path batch them.</p>
   <p class="technical">Ids come from <code>_objectIdFor(path)</code>, stable per scene
     path across frames. A shape marked <code>pickable=False</code> is handled by
     <em>masking</em> the id attachment (<code>glColorMaski</code>) so it writes no id and
@@ -289,6 +327,13 @@ implements each piece.</p>
       baked vertex colours.</li>
     <li><strong>Material-count cap per group</strong> (~90&ndash;370 distinct materials,
       driver-dependent); larger groups are split into a few draws.</li>
+    <li><strong>A declared set is one object.</strong> An
+      <a href="#instancedshape"><code>InstancedShape</code></a> is culled as a
+      whole (its bounding box covers every placement), picks as a whole (one id
+      for the set), and sorts by its own origin. Where each copy needs its own
+      answer to one of those &mdash; a click that must name the individual tree
+      &mdash; place them as separate shapes and let the opportunistic path batch
+      them.</li>
   </ul>
 </section>
 

@@ -1,20 +1,22 @@
-"""Stage 4: the glTF loader expands EXT_mesh_gpu_instancing into per-instance
-Transforms sharing one mesh (headless; no GL).
+"""The glTF loader reads EXT_mesh_gpu_instancing as one node (headless; no GL).
 
-Builds a minimal in-memory glTF (a triangle mesh + a node carrying three instance
-TRANSLATIONs via the extension), loads it, and asserts the scene contains three
-instance transforms that all reference the SAME shared mesh shape at the three
-translations -- exactly what the instancing draw path then collapses.
+A thousand instances read as a thousand nodes is a thousand of everything the
+render pass does per object before the batcher collapses them into the one draw
+the extension is asking for. The loader builds an
+:class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape` instead: one
+node carrying every placement.
+
+Builds a minimal in-memory glTF -- a triangle mesh, and a node carrying three
+instance TRANSLATIONs through the extension -- and asserts what comes back.
 """
 import base64
 import json
-import struct
 
 import numpy as np
-import pytest
 
 from OpenGLContext.loaders import gltf
-from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.scenegraph.instancedshape import InstancedShape
+from OpenGLContext.scenegraph.shape import Shape
 
 
 def _b64(data: bytes) -> str:
@@ -55,38 +57,79 @@ def _flatten(node, out):
         _flatten(c, out)
 
 
-def test_ext_mesh_gpu_instancing_expands_to_instances(tmp_path):
-    translations = [(-2, 0, 0), (0, 0, 0), (2, 0, 0)]
-    path = tmp_path / 'inst.gltf'
+def _loaded(tmp_path, translations, name='inst.gltf'):
+    path = tmp_path / name
     path.write_text(json.dumps(_minimal_instanced_gltf(translations)))
-
     scene = gltf.load_gltf(str(path))
-
     nodes = []
     _flatten(scene.group, nodes)
-    # Collect the shapes and the transforms that directly parent a shape.
-    from OpenGLContext.scenegraph.shape import Shape
-    shapes = [n for n in nodes if isinstance(n, Shape)]
-    # One shared mesh shape, referenced by three instance transforms.
-    assert len(shapes) >= 1
-    instance_transforms = [
-        n for n in nodes
-        if isinstance(n, Transform)
-        and any(isinstance(c, Shape) for c in (getattr(n, 'children', None) or []))
-    ]
-    assert len(instance_transforms) == 3, (
-        'expected 3 instance transforms, got %d' % len(instance_transforms))
+    return nodes
 
-    # The three instances carry the three translations (order-independent).
-    got = sorted(tuple(round(float(v), 3) for v in t.translation)
-                 for t in instance_transforms)
-    assert got == sorted(tuple(float(v) for v in tr) for tr in translations)
 
-    # All instances share ONE mesh shape object (mesh_cache), so the instancing
-    # path can collapse them.
-    shared = set()
-    for t in instance_transforms:
-        for c in t.children:
-            if isinstance(c, Shape):
-                shared.add(id(c))
-    assert len(shared) == 1, 'instances must share one mesh shape, saw %d' % len(shared)
+TRANSLATIONS = [(-2, 0, 0), (0, 0, 0), (2, 0, 0)]
+
+
+class TestWhatTheLoaderBuilds:
+    def test_the_instances_are_one_node(self, tmp_path) -> None:
+        nodes = _loaded(tmp_path, TRANSLATIONS)
+        placed = [n for n in nodes if isinstance(n, InstancedShape)]
+        assert len(placed) == 1
+
+    def test_no_other_shape_is_left_behind(self, tmp_path) -> None:
+        """The mesh draws through the placements, not beside them."""
+        nodes = _loaded(tmp_path, TRANSLATIONS)
+        assert [n for n in nodes if isinstance(n, Shape)
+                and not isinstance(n, InstancedShape)] == []
+
+    def test_it_holds_every_instance(self, tmp_path) -> None:
+        nodes = _loaded(tmp_path, TRANSLATIONS)
+        placed = [n for n in nodes if isinstance(n, InstancedShape)][0]
+        assert len(placed.instancePlacements()) == 3
+
+    def test_the_placements_are_the_translations(self, tmp_path) -> None:
+        nodes = _loaded(tmp_path, TRANSLATIONS)
+        placed = [n for n in nodes if isinstance(n, InstancedShape)][0]
+        got = sorted(tuple(round(float(v), 3) for v in matrix[3, :3])
+                     for matrix in placed.instancePlacements())
+        assert got == sorted(tuple(float(v) for v in t) for t in TRANSLATIONS)
+
+    def test_it_carries_the_mesh_geometry(self, tmp_path) -> None:
+        nodes = _loaded(tmp_path, TRANSLATIONS)
+        placed = [n for n in nodes if isinstance(n, InstancedShape)][0]
+        assert placed.geometry is not None
+        assert len(placed.geometry.positions) == 3
+
+    def test_two_such_nodes_share_one_geometry(self, tmp_path) -> None:
+        """What lets tiles of the same forest batch into one draw."""
+        first = _loaded(tmp_path, TRANSLATIONS, 'a.gltf')
+        second = _loaded(tmp_path, TRANSLATIONS, 'b.gltf')
+        from OpenGLContext.passes.instancing import geometry_content_key
+        keys = [geometry_content_key([n]) for nodes in (first, second)
+                for n in nodes if isinstance(n, InstancedShape)]
+        assert keys[0][0] == keys[1][0]
+
+    def test_the_bounds_cover_the_whole_set(self, tmp_path) -> None:
+        nodes = _loaded(tmp_path, TRANSLATIONS)
+        placed = [n for n in nodes if isinstance(n, InstancedShape)][0]
+        points = np.asarray(placed.boundingVolume(None).getPoints())
+        assert points[:, 0].min() <= -2.0
+        assert points[:, 0].max() >= 2.0
+
+    def test_the_scene_is_framed_around_all_of_them(self, tmp_path) -> None:
+        """The framing radius is what a viewer opens on."""
+        path = tmp_path / 'framed.gltf'
+        path.write_text(json.dumps(_minimal_instanced_gltf(TRANSLATIONS)))
+        scene = gltf.load_gltf(str(path))
+        assert scene.radius >= 2.0
+        assert abs(float(scene.center[0])) < 1.0
+
+
+def test_an_extension_naming_no_attributes_draws_the_mesh_once(tmp_path) -> None:
+    doc = _minimal_instanced_gltf(TRANSLATIONS)
+    doc['nodes'][0]['extensions']['EXT_mesh_gpu_instancing'] = {}
+    path = tmp_path / 'empty.gltf'
+    path.write_text(json.dumps(doc))
+    nodes = []
+    _flatten(gltf.load_gltf(str(path)).group, nodes)
+    assert [n for n in nodes if isinstance(n, InstancedShape)] == []
+    assert len([n for n in nodes if isinstance(n, Shape)]) == 1

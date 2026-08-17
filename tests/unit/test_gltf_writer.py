@@ -368,15 +368,13 @@ class TestTheNodeGraph:
         assert len(doc['meshes']) == 1
         assert len(doc['nodes']) == 2
 
-    def test_gpu_instances_expand_to_one_transform_each(self):
+    def test_gpu_instances_come_back_as_one_placement_set(self):
         translations = np.array([(-2, 0, 0), (0, 0, 0), (2, 0, 0)], 'f')
         node = SceneNode(mesh=_quad(), instances=InstanceSet(translations=translations))
-        scene = _round_trip(node)
-        instances = [n for n in _flatten(scene.group)
-                     if isinstance(n, Transform)
-                     and any(isinstance(c, Shape) for c in (n.children or []))]
-        assert len(instances) == 3
-        got = sorted(tuple(round(float(v), 3) for v in t.translation) for t in instances)
+        placed = _placement_sets(_round_trip(node))
+        assert len(placed) == 1
+        got = sorted(tuple(round(float(v), 3) for v in matrix[3, :3])
+                     for matrix in placed[0].instancePlacements())
         assert got == [(-2.0, 0.0, 0.0), (0.0, 0.0, 0.0), (2.0, 0.0, 0.0)]
 
     def test_gpu_instances_carry_rotation_and_scale(self):
@@ -384,12 +382,13 @@ class TestTheNodeGraph:
             translations=np.zeros((2, 3), 'f'),
             rotations=np.array([(0, 0, 0, 1), (0, 0.7071068, 0, 0.7071068)], 'f'),
             scales=np.array([(1, 1, 1), (2, 3, 4)], 'f')))
-        scene = _round_trip(node)
-        instances = [n for n in _flatten(scene.group)
-                     if isinstance(n, Transform)
-                     and any(isinstance(c, Shape) for c in (n.children or []))]
-        scales = sorted(tuple(round(float(v), 3) for v in t.scale) for t in instances)
-        assert scales == [(1.0, 1.0, 1.0), (2.0, 3.0, 4.0)]
+        placements = _placement_sets(_round_trip(node))[0].instancePlacements()
+        # +X through the first placement is a unit step along +X; through the
+        # second it is three times as long (the y scale) and turned onto -Z.
+        first = np.array([1.0, 0, 0, 1.0]) @ placements[0]
+        second = np.array([1.0, 0, 0, 1.0]) @ placements[1]
+        assert np.allclose(first[:3], (1, 0, 0), atol=1e-4)
+        assert np.allclose(second[:3], (0, 0, -2), atol=1e-4)
 
     def test_instancing_declares_its_extension(self):
         node = SceneNode(mesh=_quad(),
@@ -402,6 +401,12 @@ class TestTheNodeGraph:
             translations=np.zeros((3, 3), 'f'), scales=np.zeros((2, 3), 'f')))
         with pytest.raises(ValueError, match='instance'):
             write_glb(node)
+
+
+def _placement_sets(scene):
+    """The InstancedShape nodes a loaded scene holds."""
+    from OpenGLContext.scenegraph.instancedshape import InstancedShape
+    return [n for n in _flatten(scene.group) if isinstance(n, InstancedShape)]
 
 
 def _flatten(node, out=None):

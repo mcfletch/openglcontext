@@ -73,17 +73,16 @@ class TestGpuInstanceTransforms:
         ]
         g.buffers = [Buffer(byteLength=len(blob))]
         ext = {'attributes': {'TRANSLATION': 0, 'ROTATION': 1, 'SCALE': 2}}
-        out = gs.gpu_instance_transforms(g, ext, _R(blob))
-        assert len(out) == 2
-        assert np.allclose(out[0].translation, [1, 2, 3])
-        assert np.allclose(out[1].scale, [0.5, 0.5, 0.5])
-        # a 90deg rotation about +Y: axis is +Y, angle ~pi/2
-        axis = out[0].rotation
-        assert abs(abs(axis[1]) - 1.0) < 1e-4
-        assert abs(axis[3] - np.pi / 2) < 1e-4
+        out = gs.gpu_instance_placements(g, ext, _R(blob))
+        assert out.shape == (2, 4, 4)
+        assert np.allclose(out[0][3, :3], [1, 2, 3])
+        # the second instance is scaled by a half and turned a quarter turn
+        # about +Y, which takes +X to -Z
+        point = np.array([1.0, 0, 0, 1.0]) @ out[1]
+        assert np.allclose(point[:3], [4, 5, 5.5], atol=1e-4)
 
-    def test_no_attributes_yields_empty(self):
-        assert gs.gpu_instance_transforms(pygltflib.GLTF2(), {}, _R(b'')) == []
+    def test_no_attributes_yields_nothing(self):
+        assert gs.gpu_instance_placements(pygltflib.GLTF2(), {}, _R(b'')) is None
 
 
 class TestCameraPoseHelper:

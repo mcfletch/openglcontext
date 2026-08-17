@@ -122,3 +122,64 @@ class TestGrouping:
             records, min_instances=2, instanceable=instanceable)
         grouped = sum(len(gr.members) for gr in groups)
         assert grouped + len(singles) == len(records)
+
+
+class TestOneShapeIsKeyedOnce:
+    """A baked forest is one Shape placed a few dozen times per tile, and every
+    placement is its own record. The batch key reads nothing but the Shape, so
+    asking it of each placement asks the same question a few dozen times -- and
+    a content key hashes vertex data to answer it."""
+
+    def test_the_key_is_asked_once_per_shape(self):
+        g = FakeGeometry('g')
+        m = object()
+        shape = FakeShape(g, m)
+        asked = []
+
+        def counting(path):
+            asked.append(path[-1])
+            return geometry_instance_key(path)
+
+        records = [rec(shape) for _ in range(24)]
+        build_instance_groups(records, min_instances=2, key=counting,
+                              instanceable=instanceable)
+        assert len(asked) == 1
+
+    def test_distinct_shapes_are_each_asked(self):
+        g = FakeGeometry('g')
+        m = object()
+        asked = []
+
+        def counting(path):
+            asked.append(path[-1])
+            return geometry_instance_key(path)
+
+        records = [rec(FakeShape(g, m)) for _ in range(5)]
+        build_instance_groups(records, min_instances=2, key=counting,
+                              instanceable=instanceable)
+        assert len(asked) == 5
+
+    def test_the_grouping_is_the_same_either_way(self):
+        g1, g2 = FakeGeometry('a'), FakeGeometry('b')
+        m1, m2 = object(), object()
+        one, two = FakeShape(g1, m1), FakeShape(g2, m2)
+        records = ([rec(one) for _ in range(3)] + [rec(two) for _ in range(4)]
+                   + [rec(one)])
+        groups, singles = build_instance_groups(
+            records, min_instances=2, instanceable=instanceable)
+        assert sorted(len(gr.members) for gr in groups) == [4, 4]
+        assert singles == []
+
+    def test_a_shape_that_cannot_be_instanced_is_asked_about_once_too(self):
+        shape = FakeShape(FakeGeometry('g', instanceable=False), object())
+        asked = []
+
+        def counting(path):
+            asked.append(path[-1])
+            return geometry_instance_key(path)
+
+        records = [rec(shape) for _ in range(6)]
+        groups, singles = build_instance_groups(
+            records, min_instances=2, key=counting, instanceable=instanceable)
+        assert groups == [] and len(singles) == 6
+        assert len(asked) == 1

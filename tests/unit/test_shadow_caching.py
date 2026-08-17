@@ -31,32 +31,38 @@ def _unit_box(scale=1.0):
             for y in (-scale, scale) for z in (-scale, scale)]
 
 
-def _record(tmatrix, volume):
-    return (None, None, np.asarray(tmatrix, dtype='d'), volume, None)
+def _record(tmatrix, volume, shape=None):
+    """A caster record: (sortKey, mvmatrix, tmatrix, bvolume, path)."""
+    path = [object() if shape is None else shape]
+    return (None, None, np.asarray(tmatrix, dtype='d'), volume, path)
+
+
+def _moved(x=0.0, z=0.0):
+    """A row-vector translation matrix, as ``transformMatrix()`` returns."""
+    matrix = np.eye(4)
+    matrix[3, 0] = x
+    matrix[3, 2] = z
+    return matrix
 
 
 class TestCasterDataCache:
-    """R1: _worldPointsFromRecords / _casterWorldAABBCorners are camera-independent
-    and must be reused across frames while no caster has moved, then recomputed
-    when a caster's transform (or bounding volume) changes."""
+    """R1: a caster's world points and AABB are camera-independent, and depend
+    only on that caster's bounding volume and world transform. They are computed
+    once per caster and kept until *that* caster moves -- the scene a game
+    actually renders has one car moving through several hundred still trees, and
+    recomputing the still ones because the car moved is the whole cost."""
 
     def _mixin(self, records):
-        m = ShadowMapMixin()
+        self.calls = calls = []
+
+        class Counting(ShadowMapMixin):
+            @staticmethod
+            def _casterGeometry(tmatrix, bvolume):
+                calls.append(id(bvolume))
+                return ShadowMapMixin._casterGeometry(tmatrix, bvolume)
+
+        m = Counting()
         m._shadowCasterRecords = lambda: list(records)
-        self.calls = {'points': 0, 'aabb': 0}
-        real_points = m._worldPointsFromRecords
-        real_aabb = m._casterWorldAABBCorners
-
-        def points(recs):
-            self.calls['points'] += 1
-            return real_points(recs)
-
-        def aabb(recs):
-            self.calls['aabb'] += 1
-            return real_aabb(recs)
-
-        m._worldPointsFromRecords = points
-        m._casterWorldAABBCorners = aabb
         return m
 
     def test_static_scene_computes_world_geometry_once(self):
@@ -65,8 +71,7 @@ class TestCasterDataCache:
         m._refreshCasterData()
         m._refreshCasterData()
         m._refreshCasterData()
-        assert self.calls['points'] == 1
-        assert self.calls['aabb'] == 1
+        assert len(self.calls) == 1
 
     def test_cached_values_are_exposed(self):
         recs = [_record(np.eye(4), FakeVolume(_unit_box()))]
@@ -87,17 +92,47 @@ class TestCasterDataCache:
         moved[3, 0] = 5.0
         records[0] = _record(moved, vol)
         m._refreshCasterData()
-        assert self.calls['points'] == 2
-        assert self.calls['aabb'] == 2
+        assert len(self.calls) == 2
 
-    def test_adding_a_caster_recomputes(self):
+    def test_only_the_caster_that_moved_is_recomputed(self):
+        """One car among the trees: the trees keep what they had."""
+        still = [_record(np.eye(4), FakeVolume(_unit_box(s))) for s in (1, 2, 3)]
+        moving_volume = FakeVolume(_unit_box())
+        records = still + [_record(np.eye(4), moving_volume)]
+        m = self._mixin(records)
+        m._refreshCasterData()
+        assert len(self.calls) == 4
+        for step in range(1, 4):
+            moved = np.eye(4)
+            moved[3, 0] = float(step)
+            records[-1] = _record(moved, moving_volume)
+            m._refreshCasterData()
+        assert len(self.calls) == 7
+        assert all(call == id(moving_volume) for call in self.calls[4:])
+
+    def test_a_caster_that_leaves_and_returns_is_recomputed(self):
+        """What is kept is this frame's casters, so a scene paging a landscape in
+        and out does not accumulate every tile it has ever held."""
+        vol = FakeVolume(_unit_box())
+        rec = _record(np.eye(4), vol)
+        other = _record(np.eye(4), FakeVolume(_unit_box(2.0)))
+        records = [rec, other]
+        m = self._mixin(records)
+        m._refreshCasterData()
+        records[:] = [other]
+        m._refreshCasterData()
+        records[:] = [rec, other]
+        m._refreshCasterData()
+        assert len(self.calls) == 3
+
+    def test_adding_a_caster_costs_only_the_new_one(self):
         vol = FakeVolume(_unit_box())
         records = [_record(np.eye(4), vol)]
         m = self._mixin(records)
         m._refreshCasterData()
         records.append(_record(np.eye(4), FakeVolume(_unit_box(2.0))))
         m._refreshCasterData()
-        assert self.calls['points'] == 2
+        assert len(self.calls) == 2
 
     def test_cached_points_match_fresh_computation(self):
         recs = [_record(np.eye(4), FakeVolume(_unit_box())),
@@ -107,6 +142,43 @@ class TestCasterDataCache:
         cached = m._caster_points
         fresh = ShadowMapMixin._worldPointsFromRecords(recs)
         assert np.allclose(np.sort(cached, axis=0), np.sort(fresh, axis=0))
+
+    def test_cached_boxes_match_fresh_computation(self):
+        recs = [_record(np.eye(4), FakeVolume(_unit_box())),
+                _record(_moved(7.0, -3.0), FakeVolume(_unit_box(3.0)))]
+        m = self._mixin(recs)
+        m._refreshCasterData()
+        fresh = ShadowMapMixin._casterWorldAABBCorners(recs)
+        assert np.allclose(m._caster_aabb, fresh)
+
+    def test_a_caster_with_no_volume_contributes_nothing(self):
+        recs = [_record(np.eye(4), None),
+                _record(np.eye(4), FakeVolume(_unit_box()))]
+        m = self._mixin(recs)
+        m._refreshCasterData()
+        assert m._caster_aabb.shape == (1, 8, 3)
+
+    def test_no_casters_at_all_leaves_nothing_to_fit(self):
+        m = self._mixin([])
+        m._refreshCasterData()
+        assert m._caster_points is None and m._caster_aabb is None
+
+    def test_the_camera_visible_fit_shares_the_same_work(self):
+        """The cascades are fitted to what the camera can see, and the caster
+        pool is the whole scene -- the first set is a subset of the second, so
+        deriving it twice in one frame derives most of the scene twice."""
+        recs = [_record(np.eye(4), FakeVolume(_unit_box(s))) for s in (1, 2, 3)]
+        m = self._mixin(recs)
+        m._occluderPoints(recs[:2])          # what the camera sees
+        m._refreshCasterData()               # the whole caster pool
+        assert len(self.calls) == 3
+
+    def test_the_camera_visible_fit_is_still_right(self):
+        recs = [_record(_moved(4.0), FakeVolume(_unit_box())),
+                _record(np.eye(4), FakeVolume(_unit_box(2.0)))]
+        m = self._mixin(recs)
+        fresh = ShadowMapMixin._worldPointsFromRecords(recs)
+        assert np.allclose(m._occluderPoints(recs), fresh)
 
 
 class _FakeDirPath(list):
@@ -392,7 +464,8 @@ class TestSpotMapReuse:
         m = self._mixin()
         path = _StableSpotPath(np.eye(4))
         m._renderSpot(path, path[0], 0, 0, np.eye(4))
-        moved = np.eye(4); moved[3, 0] = 3.0
+        moved = np.eye(4)
+        moved[3, 0] = 3.0
         path.move(moved)
         m._renderSpot(path, path[0], 0, 0, np.eye(4))
         assert self.depths == 2
@@ -611,13 +684,13 @@ class TestCasterSignatureIdentityContract:
         transform, path = _real_transform_shape_path()
         m = self._mixin_with_path(path)
         calls = {'n': 0}
-        real_points = m._worldPointsFromRecords
+        real = ShadowMapMixin._casterGeometry
 
-        def counting(recs):
+        def counting(tmatrix, bvolume):
             calls['n'] += 1
-            return real_points(recs)
+            return real(tmatrix, bvolume)
 
-        m._worldPointsFromRecords = counting
+        m._casterGeometry = staticmethod(counting)
         m._refreshCasterData()
         m._refreshCasterData()
         assert calls['n'] == 1              # unmoved -> world geometry cached

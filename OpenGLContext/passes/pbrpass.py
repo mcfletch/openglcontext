@@ -761,7 +761,8 @@ class PBRPass(flatcore.FlatPass):
         distinct pick id via ``_objectIdFor``; a non-pickable instance packs 0.
         """
         from OpenGLContext.passes.instancing import (
-            draw_instanced_mesh, group_material_table,
+            draw_instanced_mesh, group_material_table, instance_counts,
+            instance_matrices, per_instance,
         )
         geom = group.geometry
         materials, indices = group_material_table(group)
@@ -782,14 +783,20 @@ class PBRPass(flatcore.FlatPass):
         try:
             for members, chunk_mats, chunk_idx in self._material_chunks(
                     group.members, materials, indices, self.MAX_INSTANCE_MATERIALS):
-                modelviews = [rec[1] for rec in members]
+                # A member standing for a whole placement set expands to one
+                # instance per placement; its pick id and its material go to all
+                # of them, since they are one node.
+                modelviews = instance_matrices(members)
+                counts = instance_counts(members)
                 if id_map is not None:
                     oids = [self._objectIdFor(rec[4]) if self._shapePickable(rec[4])
                             else 0 for rec in members]
                 else:
                     oids = [0] * len(members)
                 self._bind_material_array(chunk_mats)
-                draw_instanced_mesh(gpu, modelviews, oids, material_indices=chunk_idx)
+                draw_instanced_mesh(gpu, modelviews,
+                                    per_instance(oids, counts),
+                                    material_indices=per_instance(chunk_idx, counts))
         finally:
             shader.set_instancing(False, program=prog)
             # The transient array UBO replaced the single-material binding; force

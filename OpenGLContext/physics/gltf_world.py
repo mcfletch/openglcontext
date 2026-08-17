@@ -91,6 +91,43 @@ def _aabb_box(lo: np.ndarray, hi: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return corners, _BOX_TRIS
 
 
+def _placed_worlds(node: Any, world: np.ndarray) -> List[np.ndarray]:
+    """The world matrices a node's mesh is drawn at: one, or one per placement.
+
+    An empty placement set draws nothing, so it collides with nothing.
+    """
+    placements = getattr(node, 'instancePlacements', None)
+    if placements is None:
+        return [world]
+    found = placements()
+    if found is None:
+        return []
+    return [placement @ world for placement in found]
+
+
+def _append_mesh(world_points: np.ndarray, tri: Any, points: List[np.ndarray],
+                 tris: List[np.ndarray], state: Dict[str, int],
+                 min_hull_size: float) -> None:
+    """Add one placed mesh's world verts/tris, re-basing its indices."""
+    wp = world_points[:, :3]
+    # A small static sub-component contributes its AABB box (12 tris) rather
+    # than its full triangle mesh: cheaper to extract and to test against, and
+    # imperceptible to a walking character. Off by default (min_hull_size == 0
+    # keeps exact geometry).
+    if min_hull_size > 0 and len(wp):
+        lo, hi = wp.min(axis=0), wp.max(axis=0)
+        if float(np.linalg.norm(hi - lo)) <= min_hull_size:
+            wp, tri = _aabb_box(lo, hi)
+    # Running vertex offset (state['n']); summing len() over every prior array
+    # per mesh made extraction O(meshes^2) -- seconds on big CAD assemblies with
+    # thousands of sub-meshes.
+    base = state['n']
+    points.append(wp)
+    state['n'] += len(wp)
+    if len(tri):
+        tris.append(np.asarray(tri) + base)
+
+
 def _collect(node: Any, world_matrix: np.ndarray, points: List[np.ndarray],
              tris: List[np.ndarray], ancestry: Tuple[int, ...],
              state: Dict[str, int], min_hull_size: float) -> None:
@@ -115,23 +152,12 @@ def _collect(node: Any, world_matrix: np.ndarray, points: List[np.ndarray],
         if mi is not None:
             pos, tri = mi
             homog = np.column_stack([pos, np.ones(len(pos))])
-            wp = (homog @ world)[:, :3]
-            # A small static sub-component contributes its AABB box (12 tris)
-            # rather than its full triangle mesh: cheaper to extract and to test
-            # against, and imperceptible to a walking character. Off by default
-            # (min_hull_size == 0 keeps exact geometry).
-            if min_hull_size > 0 and len(wp):
-                lo, hi = wp.min(axis=0), wp.max(axis=0)
-                if float(np.linalg.norm(hi - lo)) <= min_hull_size:
-                    wp, tri = _aabb_box(lo, hi)
-            # Running vertex offset (state['n']); summing len() over every prior
-            # array per mesh made extraction O(meshes^2) -- seconds on big CAD
-            # assemblies with thousands of sub-meshes.
-            base = state['n']
-            points.append(wp)
-            state['n'] += len(wp)
-            if len(tri):
-                tris.append(np.asarray(tri) + base)
+            # A node holding a set of placements is that mesh once per placement,
+            # so collision has to be too -- a car must not drive through a tree
+            # it can see.
+            for placed in _placed_worlds(node, world):
+                _append_mesh(homog @ placed, tri, points, tris, state,
+                             min_hull_size)
     for child in getattr(node, 'children', None) or ():
         _collect(child, world, points, tris, ancestry, state, min_hull_size)
 

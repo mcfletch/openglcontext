@@ -148,19 +148,25 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         and object ids to the instanced draw. Each instance keeps a distinct pick
         id; a non-pickable instance packs 0.
         """
-        from OpenGLContext.passes.instancing import draw_instanced_mesh
+        from OpenGLContext.passes.instancing import (
+            draw_instanced_mesh, instance_counts, instance_matrices, per_instance,
+        )
         from OpenGLContext.passes.shaderpass import configure_material_from_node
         from OpenGL.GL import GL_LINES
         members = group.members
         geom = group.geometry
         self.renderPath = members[0][4]
         self.matrix = members[0][1]
-        modelviews = [rec[1] for rec in members]
+        # A member standing for a whole placement set expands to one instance per
+        # placement, all sharing that node's pick id.
+        modelviews = instance_matrices(members)
+        counts = instance_counts(members)
         if id_map is not None:
             oids = [self._objectIdFor(rec[4]) if self._shapePickable(rec[4]) else 0
                     for rec in members]
         else:
             oids = [0] * len(members)
+        oids = per_instance(oids, counts)
         gpu = geom.instanceGPU(self)
 
         # Line geometry (debug proxy wireframes) draws through the unlit line

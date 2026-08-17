@@ -31,6 +31,10 @@ __all__ = (
     'build_mesh_gpu',
     'group_material_table',
     'build_instance_groups',
+    'record_placements',
+    'instance_counts',
+    'instance_matrices',
+    'per_instance',
     'morton_order',
     'Cluster',
     'build_clusters',
@@ -447,7 +451,13 @@ class InstanceGroup:
         key       -- the shared instance key (see ``geometry_instance_key``).
         geometry  -- the shared geometry node (drawn once, instanced N times).
         appearance-- a representative appearance (material/texture) for the group.
-        members   -- the render records, in scene order; one instance each.
+        members   -- the render records, in scene order. One instance each,
+                     except for a record standing for a whole placement set (see
+                     :func:`record_placements`), which is as many as it holds.
+
+    ``len(group)`` is the number of *instances* -- what the draw costs and what
+    the batch threshold is about -- which is not the number of members when a
+    placement set is among them.
     """
 
     __slots__ = ('key', 'geometry', 'appearance', 'members')
@@ -460,10 +470,65 @@ class InstanceGroup:
         self.members = members
 
     def __len__(self) -> int:
-        return len(self.members)
+        return sum(instance_counts(self.members))
 
     def __repr__(self) -> str:
-        return 'InstanceGroup(%d instances of %r)' % (len(self.members), self.geometry)
+        return 'InstanceGroup(%d instances of %r)' % (len(self), self.geometry)
+
+
+def record_placements(record: tuple) -> Optional[Any]:
+    """The ``(N,4,4)`` local matrices a record draws at, or ``None`` for one.
+
+    A record whose shape is an
+    :class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape` stands for
+    every placement that shape holds; every other record stands for itself.
+    """
+    shape = record[-1][-1]
+    placements = getattr(shape, 'instancePlacements', None)
+    return placements() if placements is not None else None
+
+
+def instance_counts(records: List[tuple]) -> List[int]:
+    """How many instances each record draws, in order."""
+    return [1 if (p := record_placements(r)) is None else len(p)
+            for r in records]
+
+
+def per_instance(values: List[Any], counts: List[int]) -> List[Any]:
+    """One entry per instance from one entry per record.
+
+    A record that stands for many placements gives its pick id and its material
+    to all of them: they are one node, so they are one object to pick and one
+    material to shade with.
+    """
+    out: List[Any] = []
+    for value, count in zip(values, counts, strict=True):
+        out.extend([value] * count)
+    return out
+
+
+def instance_matrices(records: List[tuple], index: int = 1,
+                      after: Any = None) -> np.ndarray:
+    """Every instance's matrix for a set of records, as an ``(N,4,4)`` f32 array.
+
+    ``index`` picks which of the record's own matrices to place within -- 1 for
+    the modelview the colour pass draws with, 2 for the world transform the
+    depth pass starts from. ``after`` multiplies on the right of the result,
+    which is how the depth pass reaches light space. A record carrying
+    placements contributes one matrix per placement, each placed inside its
+    record's own; every other record contributes its own.
+    """
+    rows: List[np.ndarray] = []
+    for record in records:
+        matrix = np.asarray(record[index], dtype='f')
+        placements = record_placements(record)
+        rows.append(matrix[None, :, :] if placements is None
+                    else np.matmul(placements, matrix))
+    out = (np.concatenate(rows, axis=0) if rows
+           else np.zeros((0, 4, 4), dtype='f'))
+    if after is not None:
+        out = np.matmul(out, np.asarray(after, dtype='f'))
+    return out
 
 
 def _winding_sign(mv: Any) -> int:
@@ -507,11 +572,24 @@ def build_instance_groups(
     buckets: "Dict[Any, List[tuple]]" = {}
     order: List[Any] = []
     singles: List[tuple] = []
+    # A batched scene is many records over few distinct shapes -- a baked forest
+    # is one Shape placed a few dozen times per tile -- and the key and the
+    # instanceable test read nothing but the shape. Ask each of them once. The
+    # memo lasts only this call, so nothing here has to reason about when a
+    # material changed.
+    asked: "Dict[int, Tuple[Any, bool]]" = {}
 
     for record in records:
         path = record[-1]
-        k = key(path)
-        if k is None or (instanceable is not None and not instanceable(path)):
+        shape = path[-1]
+        answer = asked.get(id(shape))
+        if answer is None:
+            k = key(path)
+            answer = (k, k is not None
+                      and (instanceable is None or bool(instanceable(path))))
+            asked[id(shape)] = answer
+        k, batchable = answer
+        if not batchable:
             singles.append(record)
             continue
         # A batch is drawn with ONE front-face winding, so instances of opposite
@@ -529,7 +607,9 @@ def build_instance_groups(
     groups: List[InstanceGroup] = []
     for k in order:
         members = buckets[k]
-        if len(members) < min_instances:
+        # The threshold is about the draws, not the nodes: one node holding a
+        # placement set is already a batch worth making.
+        if sum(instance_counts(members)) < min_instances:
             singles.extend(members)
             continue
         shape = members[0][-1][-1]

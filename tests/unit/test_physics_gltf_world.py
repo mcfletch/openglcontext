@@ -151,3 +151,43 @@ def test_local_matrix_falls_back_to_identity_on_bad_pose():
 if __name__ == '__main__':
     import sys
     sys.exit(pytest.main([__file__, '-v']))
+
+
+class TestAPlacementSetIsCollectedAtEveryPlacement:
+    """An :class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape` means
+    the mesh is there once per placement. Collision has to agree with what is
+    drawn, or a car drives through a tree it can see."""
+
+    def _forest(self, spacing=20.0, count=3):
+        from OpenGLContext.scenegraph.instancedshape import (
+            InstancedShape, placement_matrices,
+        )
+        return InstancedShape(
+            geometry=_quad_ifs(),
+            placements=placement_matrices(
+                translations=[(i * spacing, 0, 0) for i in range(count)]))
+
+    def test_every_placement_contributes_its_triangles(self) -> None:
+        points, tris = extract_trimesh(basenodes.Group(children=[self._forest()]))
+        assert len(points) == 12          # three quads, fan-triangulated
+        assert len(tris) == 6
+
+    def test_they_land_where_the_placements_put_them(self) -> None:
+        points, _tris = extract_trimesh(basenodes.Group(children=[self._forest()]))
+        assert points[:, 0].min() == pytest.approx(-1.0)
+        assert points[:, 0].max() == pytest.approx(41.0)
+
+    def test_the_indices_stay_within_their_own_placement(self) -> None:
+        _points, tris = extract_trimesh(basenodes.Group(children=[self._forest()]))
+        assert tris.max() == 11
+        assert sorted(set(tris.ravel().tolist())) == list(range(12))
+
+    def test_the_parent_transform_still_applies(self) -> None:
+        root = Transform(translation=(100, 0, 0), children=[self._forest()])
+        points, _tris = extract_trimesh(root)
+        assert points[:, 0].min() == pytest.approx(99.0)
+
+    def test_a_set_with_no_placements_contributes_nothing(self) -> None:
+        from OpenGLContext.scenegraph.instancedshape import InstancedShape
+        empty = InstancedShape(geometry=_quad_ifs())
+        assert extract_trimesh(basenodes.Group(children=[empty])) is None

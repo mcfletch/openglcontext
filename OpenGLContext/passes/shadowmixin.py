@@ -14,7 +14,7 @@ during the pass via the ``mode.shadow_pass`` flag.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -128,6 +128,11 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     _caster_sig: Optional[tuple] = None
     _caster_points_raw: Optional[np.ndarray] = None
     _caster_aabb: Optional[np.ndarray] = None
+    #: What each individual caster's geometry came out as, so that one thing
+    #: moving does not re-derive the rest. Two frames' worth, turned over by
+    #: :meth:`_turnOverCasterGeometry`. See :meth:`_casterWorldGeometry`.
+    _caster_geometry_cache: Optional[Dict[tuple, tuple]] = None
+    _caster_geometry_previous: Optional[Dict[tuple, tuple]] = None
 
     # Per-light depth-map reuse (R2). Maps id(light_node) -> the key describing
     # what the light's cached depth map was last rendered from. A spot/point map
@@ -573,11 +578,12 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     @staticmethod
     def _world_point(local: Any, tmatrix: np.ndarray) -> np.ndarray:
         p = np.array([local[0], local[1], local[2], 1.0])
-        return (p @ tmatrix)[:3]
+        world: np.ndarray = p @ tmatrix
+        return world[:3]
 
     @staticmethod
     def _world_dir(local: Any, tmatrix: np.ndarray) -> Optional[np.ndarray]:
-        d = np.array([local[0], local[1], local[2]]) @ tmatrix[:3, :3]
+        d: np.ndarray = np.array([local[0], local[1], local[2]]) @ tmatrix[:3, :3]
         if float(np.dot(d, d)) < 1e-12:
             return None
         return d
@@ -661,14 +667,18 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         (per-caster world AABB corners) for the rest of the shadow pass.
         """
         records = self._shadowCasterRecords()
+        self._turnOverCasterGeometry()
         # Reuse hinges on _casterSignature's identity contract: an unmoved caster
         # yields the same signature (skip the rebuild), a moved one a fresh
-        # signature (rebuild). See _casterSignature for what breaks it.
+        # signature (rebuild). See _casterSignature for what breaks it. The
+        # signature still gates the *depth maps*, which are per caster set; the
+        # world geometry is kept per caster, so one thing moving costs one
+        # thing's work rather than the scene's.
         sig = self._casterSignature(records)
         if sig != self._caster_sig:
             self._caster_sig = sig
-            self._caster_points_raw = self._worldPointsFromRecords(records)
-            self._caster_aabb = self._casterWorldAABBCorners(records)
+            self._caster_points_raw, self._caster_aabb = \
+                self._casterWorldGeometry(records)
         self._toRender_cache = records
         # Spot/point near-far fitting reads _caster_points; expose the cached
         # value each frame (renderShadowMaps applies the camera-visible fallback
@@ -712,82 +722,130 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                                             self._caster_sig)
 
     def _occluderPoints(self, toRender: List) -> Optional[np.ndarray]:
+        """World points of the camera-visible set, for fitting the cascades.
+
+        Shares the frame's per-caster memo with :meth:`_casterWorldGeometry`:
+        this set is a subset of the caster pool, so deriving it separately would
+        derive most of the scene twice a frame.
+        """
         self._toRender_cache = toRender
-        return self._worldPointsFromRecords(toRender)
+        return self._casterWorldGeometry(toRender)[0]
 
     @staticmethod
-    def _worldPointsFromRecords(records: List) -> Optional[np.ndarray]:
+    def _casterGeometry(tmatrix: Any, bvolume: Any
+                        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """One caster's world points and the eight corners of their AABB.
+
+        Returns ``None`` for a caster that has no bounding volume, or whose
+        volume yields no points -- it contributes nothing to a shadow fit.
+        """
+        if bvolume is None:
+            return None
+        try:
+            pts = bvolume.getPoints()
+        except Exception:
+            return None
+        if pts is None or len(pts) == 0:
+            return None
+        pts = np.asarray(pts, dtype='d')
+        if pts.shape[1] == 3:
+            pts = np.concatenate([pts, np.ones((pts.shape[0], 1))], axis=1)
+        world = (pts @ np.asarray(tmatrix, dtype='d'))[:, :3]
+        lo = world.min(axis=0)
+        hi = world.max(axis=0)
+        corners = np.asarray([[x, y, z] for x in (lo[0], hi[0])
+                              for y in (lo[1], hi[1])
+                              for z in (lo[2], hi[2])], dtype='d')
+        return world, corners
+
+    @classmethod
+    def _worldPointsFromRecords(cls, records: List) -> Optional[np.ndarray]:
         """World-space bounding points of a set of render/caster records.
 
         Each record is a ``(sortKey, mvmatrix, tmatrix, bvolume, path)`` tuple;
         only ``tmatrix`` and ``bvolume`` are read here.
         """
-        if not records:
-            return None
-        chunks = []
-        for record in records:
-            bvolume = record[3]
-            tmatrix = record[2]
-            if bvolume is None:
-                continue
-            try:
-                pts = bvolume.getPoints()
-            except Exception:
-                continue
-            if pts is None or len(pts) == 0:
-                continue
-            pts = np.asarray(pts, dtype='d')
-            if pts.shape[1] == 3:
-                pts = np.concatenate([pts, np.ones((pts.shape[0], 1))], axis=1)
-            world = pts @ np.asarray(tmatrix, dtype='d')
-            chunks.append(world[:, :3])
+        chunks = [found[0] for found in
+                  (cls._casterGeometry(r[2], r[3]) for r in records)
+                  if found is not None]
         if not chunks:
             return None
         return np.concatenate(chunks, axis=0)
 
-    @staticmethod
-    def _casterWorldAABBCorners(records: List) -> Optional[np.ndarray]:
+    @classmethod
+    def _casterWorldAABBCorners(cls, records: List) -> Optional[np.ndarray]:
         """Per-caster world-space AABB corners as a (K,8,3) array.
 
         One axis-aligned box per caster (not a merged point cloud) so
         :func:`shadowmath._extend_near_for_casters` can test each caster's box
         against a cascade footprint independently.
         """
-        if not records:
-            return None
-        boxes = []
-        for record in records:
-            bvolume = record[3]
-            tmatrix = record[2]
-            if bvolume is None:
-                continue
-            try:
-                pts = bvolume.getPoints()
-            except Exception:
-                continue
-            if pts is None or len(pts) == 0:
-                continue
-            pts = np.asarray(pts, dtype='d')
-            if pts.shape[1] == 3:
-                pts = np.concatenate([pts, np.ones((pts.shape[0], 1))], axis=1)
-            world = (pts @ np.asarray(tmatrix, dtype='d'))[:, :3]
-            lo = world.min(axis=0)
-            hi = world.max(axis=0)
-            boxes.append([[x, y, z] for x in (lo[0], hi[0])
-                          for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
+        boxes = [found[1] for found in
+                 (cls._casterGeometry(r[2], r[3]) for r in records)
+                 if found is not None]
         if not boxes:
             return None
         return np.asarray(boxes, dtype='d')
 
+    def _casterWorldGeometry(self, records: List
+                             ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        """``(world points, per-caster AABB corners)``, computed once per caster.
+
+        A caster's world geometry depends on its bounding volume and its world
+        transform and on nothing else, and the scenegraph hands both back as the
+        *same objects* while that caster is unmoved (the identity contract
+        :meth:`_casterSignature` describes). So the answer is kept per caster
+        rather than per caster *set*: a game has one car moving through several
+        hundred still trees, and re-deriving the trees because the car moved is
+        the whole cost of the pass.
+
+        What is kept is this frame's casters and the frame before's -- each entry
+        holds the transform and volume it was derived from, so nothing is reused
+        for an object that has since been collected and had its address handed to
+        another, and a world paging tiles in and out does not accumulate every
+        tile it has ever held. :meth:`_refreshCasterData` turns the frame over.
+        """
+        current = self._caster_geometry_cache
+        if current is None:
+            current = self._caster_geometry_cache = {}
+        previous = self._caster_geometry_previous or {}
+        points: List[np.ndarray] = []
+        boxes: List[np.ndarray] = []
+        for record in records:
+            tmatrix, bvolume = record[2], record[3]
+            key = (id(tmatrix), id(bvolume))
+            entry = current.get(key) or previous.get(key)
+            if entry is None:
+                found = self._casterGeometry(tmatrix, bvolume)
+                if found is None:
+                    continue
+                entry = (tmatrix, bvolume, found[0], found[1])
+            current[key] = entry
+            points.append(entry[2])
+            boxes.append(entry[3])
+        return (np.concatenate(points, axis=0) if points else None,
+                np.asarray(boxes, dtype='d') if boxes else None)
+
+    def _turnOverCasterGeometry(self) -> None:
+        """Start a fresh frame's memo, keeping the last one as the fallback.
+
+        Two frames' worth is what makes the memo a cache rather than a leak: a
+        caster that is still here is copied forward as it is asked for, and one
+        that has gone is dropped a frame later.
+        """
+        self._caster_geometry_previous = self._caster_geometry_cache
+        self._caster_geometry_cache = {}
+
     @staticmethod
     def _lightSpaceModelviews(members: List, light_view: np.ndarray) -> np.ndarray:
-        """Per-member light-space modelviews (tmatrix * light_view) as (N,4,4) f32.
+        """Per-instance light-space modelviews (tmatrix * light_view), (N,4,4) f32.
 
         One batched matmul instead of a Python loop of per-member dots, which
-        dominated the instanced depth pass on large groups.
+        dominated the instanced depth pass on large groups. A member standing for
+        a whole placement set contributes one matrix per placement.
         """
-        tmatrices = np.array([rec[2] for rec in members], dtype='f')
-        return np.matmul(tmatrices, np.asarray(light_view, dtype='f'))
+        from OpenGLContext.passes.instancing import instance_matrices
+        return instance_matrices(members, index=2, after=light_view)
 
     def _renderDepthGroup(self, group: Any, shader: Any, depth_prog: Any,
                           light_view: np.ndarray) -> None:
@@ -798,15 +856,16 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         are irrelevant to a depth pass, so they pack 0.
         """
         from OpenGLContext.passes.instancing import draw_instanced_mesh
-        members = group.members
-        modelviews = self._lightSpaceModelviews(members, light_view)
+        modelviews = self._lightSpaceModelviews(group.members, light_view)
+        if not len(modelviews):
+            return
         # projectionMatrix (light proj) is consumed; modelViewMatrix is ignored
         # under instancing but set for completeness.
         shader.set_matrices(modelviews[0], self.projection, program=depth_prog)
         shader.set_instancing(True, program=depth_prog)
         try:
             draw_instanced_mesh(group.geometry.instanceGPU(self), modelviews,
-                                [0] * len(members))
+                                [0] * len(modelviews))
         finally:
             shader.set_instancing(False, program=depth_prog)
 
@@ -829,7 +888,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         cache = self._depth_grouping_cache
         if cache is None:
             cache = self._depth_grouping_cache = {}
-        hit = cache.get(key)
+        hit: Optional[Tuple[List, List]] = cache.get(key)
         if hit is not None:
             return hit
         from OpenGLContext.passes.instancing import build_instance_groups

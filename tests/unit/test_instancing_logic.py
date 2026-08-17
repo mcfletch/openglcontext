@@ -181,8 +181,9 @@ class TestContentInstanceKey:
 class TestInstanceGroupValue:
     def test_len_and_repr(self):
         geo = Geom(content_key=('g',))
+        members = [(None, None, None, None, path(Shape(geo))) for _ in range(3)]
         grp = InstanceGroup(key='k', geometry=geo, appearance=None,
-                            members=[1, 2, 3])
+                            members=members)
         assert len(grp) == 3
         assert 'InstanceGroup(3 instances' in repr(grp)
 

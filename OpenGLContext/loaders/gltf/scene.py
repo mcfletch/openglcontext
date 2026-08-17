@@ -6,9 +6,10 @@ DEF registry, animations and skins a caller needs. :class:`_SceneBuilder` does t
 recursive walk: each glTF node becomes its own ``Transform`` (registered under a
 DEF name so it is addressable), its mesh primitives are decoded through
 :mod:`meshes`, its KHR_lights_punctual light and camera are placed in world space,
-world-space bounds accumulate for framing, and EXT_mesh_gpu_instancing nodes fan
-out into per-instance Transforms. Cycles in the node graph are rejected with a
-located error rather than overflowing the stack.
+world-space bounds accumulate for framing, and an EXT_mesh_gpu_instancing node
+becomes one :class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape`
+holding every placement. Cycles in the node graph are rejected with a located
+error rather than overflowing the stack.
 
 The builder leans on the lower layers -- :mod:`meshes`, :mod:`transforms`,
 :mod:`animation`, :mod:`accessors` -- and hands the assembled ``GLTFScene`` back to
@@ -25,6 +26,9 @@ from omi_audio.library import AudioLibrary
 
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
 from OpenGLContext.scenegraph import audio as audionodes
+from OpenGLContext.scenegraph.instancedshape import (
+    InstancedShape, placement_matrices,
+)
 from OpenGLContext.loaders.resolver import Resolver
 
 if TYPE_CHECKING:
@@ -47,7 +51,7 @@ from OpenGLContext.loaders.gltf import environment_sky
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _world_box, framing_bounds,
-    look_orientation, _quat_to_xyzr,
+    look_orientation,
 )
 from OpenGLContext.loaders.gltf.animation import (
     Player, compute_world_matrices,
@@ -210,45 +214,31 @@ def _unique_def(base: str, used: set) -> str:
     return name
 
 
-def gpu_instance_transforms(g: "pygltflib.GLTF2", ext_dict: Optional[dict],
-                            resolver: Resolver) -> list:
-    """Per-instance Transforms for an EXT_mesh_gpu_instancing node.
+def gpu_instance_placements(g: "pygltflib.GLTF2", ext_dict: Optional[dict],
+                            resolver: Resolver) -> Optional[np.ndarray]:
+    """The ``(N,4,4)`` placements an ``EXT_mesh_gpu_instancing`` node names.
 
-    The extension carries optional TRANSLATION (VEC3), ROTATION (VEC4 quaternion)
-    and SCALE (VEC3) accessors, one entry per instance, all the same length. Each
-    instance becomes a Transform; wrapping the node's (shared) mesh shapes in these
-    lets the normal instancing path collapse them into one draw. Returns [] when
-    the extension names no attributes.
+    The extension carries optional TRANSLATION (VEC3), ROTATION (VEC4
+    quaternion) and SCALE (VEC3) accessors, one entry per instance, all the same
+    length. They become one
+    :class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape` holding the
+    lot, so the whole set is one object to the render pass and one instanced
+    draw to the card. Returns ``None`` when the extension names no attributes.
+
+    ``_read_normalized`` honours ``accessor.normalized``, so a quantized
+    (normalized byte/short) ROTATION quaternion is dequantized to [-1,1] rather
+    than read as raw integers; float accessors pass straight through.
     """
     attrs = (ext_dict or {}).get('attributes') or {}
-    ti, ri, si = attrs.get('TRANSLATION'), attrs.get('ROTATION'), attrs.get('SCALE')
-    T: Optional[np.ndarray] = None
-    R: Optional[np.ndarray] = None
-    S: Optional[np.ndarray] = None
-    count = 0
-    # _read_normalized honours accessor.normalized, so a quantized (normalized byte/
-    # short) ROTATION quaternion is dequantized to [-1,1] instead of read as raw ints
-    # (which produced garbage rotations); float accessors pass straight through.
-    if ti is not None:
-        T = _read_normalized(g, ti, resolver)
-        count = len(T)
-    if ri is not None:
-        R = _read_normalized(g, ri, resolver)
-        count = max(count, len(R))
-    if si is not None:
-        S = _read_normalized(g, si, resolver)
-        count = max(count, len(S))
-    out: list = []
-    for i in range(count):
-        t = Transform()
-        if T is not None:
-            t.translation = tuple(float(x) for x in T[i])
-        if S is not None:
-            t.scale = tuple(float(x) for x in S[i])
-        if R is not None:
-            t.rotation = _quat_to_xyzr([float(x) for x in R[i]])
-        out.append(t)
-    return out
+    read = {name: _read_normalized(g, index, resolver)
+            for name, index in (('translations', attrs.get('TRANSLATION')),
+                                ('rotations', attrs.get('ROTATION')),
+                                ('scales', attrs.get('SCALE')))
+            if index is not None}
+    if not read:
+        return None
+    placements = placement_matrices(**read)
+    return placements if len(placements) else None
 
 
 def _one_camera_pose(world: np.ndarray, cam: "pygltflib.Camera") -> dict:
@@ -505,27 +495,30 @@ class _SceneBuilder:
         # so the flag threads down the recursion as `parent_visible`. The authored
         # initial flag may itself be a KHR_animation_pointer target baked in above.
         node_visible = parent_visible
-        gpu_inst: Optional[list] = None
+        placements: Optional[np.ndarray] = None
         if isinstance(node_ext, dict):
             nv = node_ext.get('KHR_node_visibility')
             if isinstance(nv, dict):
                 node_visible = node_visible and bool(nv.get('visible', True))
             gi_ext = node_ext.get('EXT_mesh_gpu_instancing')
             if gi_ext:
-                gpu_inst = gpu_instance_transforms(self.g, gi_ext, self.resolver)
+                placements = gpu_instance_placements(
+                    self.g, gi_ext, self.resolver)
         if node.mesh is not None and node_visible:
             shapes = self.mesh_shapes(node.mesh)
-            if gpu_inst:
-                # One Transform per instance, all wrapping the SAME shared mesh
-                # shapes -> the instancing path draws them in one call.
-                for inst_t in gpu_inst:
-                    inst_world = _local_matrix_rv(inst_t) @ world
-                    inst_kids = list(inst_t.children)
-                    for shape, bounds in shapes:
-                        inst_kids.append(shape)
-                        self._record_part(inst_world, shape, bounds)
-                    inst_t.children = inst_kids
-                    children.append(inst_t)
+            if placements is not None:
+                # One node per mesh primitive holding every placement, sharing
+                # the mesh's geometry and appearance -> one render record, and
+                # one instanced draw that other tiles' copies batch into.
+                for shape, bounds in shapes:
+                    children.append(InstancedShape(
+                        geometry=shape.geometry,
+                        appearance=shape.appearance,
+                        pickable=shape.pickable,
+                        placements=placements,
+                    ))
+                    for placement in placements:
+                        self._record_part(placement @ world, shape, bounds)
             else:
                 for shape, bounds in shapes:
                     children.append(shape)
