@@ -114,7 +114,7 @@ bar = MenuBar(menus=[
     ('View', [MenuItem(text='Wireframe', checkable=True, on_activate=wire),
               MenuItem(text='Recent', submenu=[MenuItem(text='a.wrl')])]),
 ], stack=context.overlays)
-context.addHUDLayer(bar)</pre>
+context.overlays.push(bar)</pre>
   <p>A menu is a <code>Panel</code>, so it already has the focus, the skin, the
     accelerators and the Escape that closes a screen. What it adds is where it
     opens and how it leaves:</p>
@@ -140,9 +140,10 @@ context.addHUDLayer(bar)</pre>
   </ul>
   <p>A <code>MenuBar</code> is <strong>not modal and not a wall</strong>: a
     click that misses it is offered to whatever is under it, so the world
-    carries on being usable while the bar is on screen. Add it with
-    <code>addHUDLayer</code> and give it the overlay stack the menus should open
-    on.</p>
+    carries on being usable while the bar is on screen. It lives at the bottom
+    of the overlay stack &mdash; push it once and leave it &mdash; and the menus
+    it opens go above it, where they are modal and take everything until one is
+    chosen.</p>
   <p class="technical">Both are in <code>OpenGLContext/ui/menu.py</code>. An
     editor built on them wants <a href="editing.html">the editor
     toolkit</a> as well: tool modes, a plan view, and the point under the
