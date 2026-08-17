@@ -670,28 +670,39 @@ page). Driving it is the GL smoke test.
 forest demo, with a racing camera.
 
 **Where it stands.** Measured 2026-08-17 in this container, driving `glisteel` on the
-autopilot at 1000×560 over a 2048 m world:
+autopilot at 1000×560 over a 2048 m world, twenty seconds each:
 
-| Tree instances per tile | Depth | Average |
-|---|---|---|
-| 0 | 3 | 148 fps |
-| 40 | 3 | 33 fps |
-| 24 | 4 | 16 fps |
-| 200 | 4 | 5 fps |
+| Tree instances per tile | Depth | Before | After |
+|---|---|---|---|
+| 0 | 3 | 125.6 fps | 132.5 fps |
+| 40 | 3 | 25.8 fps | 77.0 fps |
+| 24 | 4 | 16.5 fps | 42.7 fps |
+| 240 | 4 | 5.3 fps | 38.9 fps |
 
-The frame rate tracks the baked instance count and nothing else: with the trees out it is
-four times the target. Each instance costs 0.06–0.2 ms of CPU, because the glTF loader
-expands an `EXT_mesh_gpu_instancing` node into one `Transform` per instance and the pass
-builds a record — matrix concatenation, bounding volume, frustum test — for every one of
-them before `build_instance_groups` collapses them into a single draw. The GPU work is
-batched; the CPU work that decides it is not. `tests/unit/test_gltf_gpu_instancing.py`
-pins the current expansion, so changing it is a deliberate change to what the loader
-produces rather than an internal detail.
+The frame rate tracked the baked instance count and nothing else: with the trees out it
+was four times the target, and each instance cost 0.06–0.2 ms of CPU. The draw was always
+one call; the work before it was not. The loader expanded an `EXT_mesh_gpu_instancing`
+node into one `Transform` per instance, and the pass then built a record — matrix
+concatenation, bounding volume, frustum test, batch key, shadow-caster record — for every
+one of them, to reach a draw the file had already declared.
 
-**The first lever, therefore:** an instanced node produces **one** render record carrying
-its instance transforms, and the pass frustum-tests the set rather than each member. That
-is the fix for every consumer of the format — the forest demo bakes the same way — and it
-belongs in the engine.
+**What landed.** `OpenGLContext.scenegraph.instancedshape.InstancedShape` is a `Shape`
+plus an `(N,4,4)` array of placements; the pass does its per-object work once for the set
+and expands the placements at the draw, and sets of the same geometry still batch
+together, so a hundred tiles of one forest remain one call. A glTF instancing node loads
+as one of these. Anything that reads the scenegraph for geometry has to expand the
+placements to see what is really there — the collision extraction in
+`physics/gltf_world.py` does, so a car cannot drive through a tree it can see. What being
+one object costs is in [docs/instancing.html](../docs/instancing.html): one bounding box,
+one pick id, one sort key for the set.
+
+Two things beside it were re-deriving a scene's worth of work because one thing moved.
+The shadow pass kept its casters' world geometry per caster *set*, so the car moving
+invalidated the trees; it is now kept per caster. The batcher asked its key and its
+instanceable test of every record, where both read nothing but the shape.
+
+**Still to do for 60 fps at 1080p:** the 240-instance world is at 39 fps at 1000×560, and
+1080p is 3.7× the pixels. The levers below are next, dynamic resolution first.
 
 **The other levers, and why a racing game has ones the forest demo lacked.**
 
