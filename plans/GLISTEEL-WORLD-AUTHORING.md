@@ -1140,3 +1140,37 @@ them; §E decides per species.
   control map; [docs/roads.html](../docs/roads.html) gained the causeway and *the
   shade a road runs through*; [docs/baking.html](../docs/baking.html) gained
   *ground cover as a recipe*; both READMEs updated.
+- **2026-08-17** — **§J, signs.** A road that is generated already knows what it
+  is about to do, so which sign belongs where is derived rather than authored:
+  `OpenGLContext_editor.world.signs.warn_of` reads the alignment's own
+  curvature, its grade reversals and its bores, and places each warning a
+  stopping distance before what it is about. The shipped circuit signs itself
+  with 21 plates over 8.3 km — one every four hundred metres, a mix of bends,
+  double bends, a dip and its two tunnels.
+
+  Three things were worth getting right rather than approximating. A **dip is a
+  turning point, not a curvature**: named by local curvature, one dip becomes
+  three signs, because the brows either side of it curve the other way and are
+  as real as the bottom. A **long constant bend is one bend**, so a radius that
+  wobbles over the limit and back is closed up first. And a **double bend means
+  the road turns one way and then the other** — two corners the same hand in a
+  row are one corner to drive, and the reversal has to be found *inside* a run
+  of tight radius, because a left running straight into a right never leaves it.
+
+  `OpenGLContext.scenegraph.roadsigns` is the object: a post, a triangular plate
+  and a painted face, built at the origin so a world's tens of signs are one
+  instanced prototype per kind with the picture written once beside the tileset.
+
+  **A defect the user found first.** Trees grew through the side of the
+  causeway. On the ground a crown over the carriageway is the point of a forest
+  road; where the road is *carried*, a tree at the same distance is rooted metres
+  below the surface and its crown goes through the structure. The clearance is
+  now the corridor on the land and the corridor plus a crown above it.
+
+  **And one that turned out not to be.** A capture showed the road running into
+  the dirt and stopping. It was a four-second static capture with the tiles
+  still arriving, but "does the road disappear" is not a question to settle by
+  eye: `RoadLayer.segments_in` now says which stretches of the centreline a tile
+  is responsible for, and `tests/test_world_road_coverage.py` holds that the
+  tiles at every level of the tree write each segment exactly once — never none,
+  which vanishes under refinement, and never two, which flickers.

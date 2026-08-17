@@ -237,6 +237,34 @@ mesh = road_mesh(route, spacing=5.0,
 share a pattern. Pass an <code>image</code> to use artwork of your own instead
 of the generated one.</p>
 
+<h3 id="signs">What a road warns about</h3>
+<p>A generated road already knows what it is about to do: the alignment carries
+its own curvature and its own grade, and its structures are written down. So
+which sign belongs where is <em>derivable</em> rather than authored, which is
+most of the point of generating a road instead of drawing one.
+<code>OpenGLContext_editor.world.signs.warn_of</code> reads a road and returns
+the warnings it wants; <code>OpenGLContext.scenegraph.roadsigns</code> is the
+object they are drawn as.</p>
+<pre>from OpenGLContext.scenegraph.roadsigns import sign_meshes, sign_texture
+parts = sign_meshes('bend-left')       # post, plate -- at the origin, facing -Z
+plate = sign_texture('dip')            # the face, painted rather than shipped</pre>
+<p>A sign is one prototype placed many times, so <code>sign_meshes</code> builds
+it at the origin facing -Z and a placement turns it to meet the traffic. The
+plate is a triangle wearing a painted picture -- red border, white face, a black
+symbol -- so a world needs no sign artwork of its own; the symbol is clipped to
+the face it is painted on, because a triangle narrows towards its point and a
+symbol sized to look right across the bottom runs off the sides at the top.</p>
+<p>A warning stands a <strong>stopping distance</strong> before what it is about:
+far enough to act on, near enough to be about this hazard and not the next.
+What counts as a hazard is measured against the design speed, because there is
+always some speed at which any corner is too tight. Two hazards close enough
+together are one sign -- a left and a right become a double bend, which is what
+that sign means, and anything else keeps whichever matters more.</p>
+<p>A sign stands inside the corridor the road was cleared through, which the
+world knows and the sign does not: <code>SignProfile.offset</code> is how far
+outside the road's own edge the post goes, and a world with trees up to the verge
+sets it to less than that clearance.</p>
+
 <h3 id="roadshade">The shade a road runs through</h3>
 <p>A forest road drawn at full sun with everything beside it in deep shade reads
 as a lit strip laid over a photograph of a wood. <code>shade</code> is how much
