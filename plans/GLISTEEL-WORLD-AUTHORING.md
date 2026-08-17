@@ -674,10 +674,14 @@ autopilot at 1000×560 over a 2048 m world, twenty seconds each:
 
 | Tree instances per tile | Depth | Before | After |
 |---|---|---|---|
-| 0 | 3 | 125.6 fps | 132.5 fps |
-| 40 | 3 | 25.8 fps | 77.0 fps |
-| 24 | 4 | 16.5 fps | 42.7 fps |
-| 240 | 4 | 5.3 fps | 38.9 fps |
+| 0 | 3 | 125.6 fps | 147.3 fps |
+| 40 | 3 | 25.8 fps | 110.8 fps |
+| 24 | 4 | 16.5 fps | 73.9 fps |
+| 240 | 4 | 5.3 fps | 61.4 fps |
+
+At **1920×1080**, the target resolution, the 24-instance world went from 37.2 fps to
+**57.5 fps**. A frame there is about 10 ms of drawing, 5 ms of physics and 3 ms of
+everything else.
 
 The frame rate tracked the baked instance count and nothing else: with the trees out it
 was four times the target, and each instance cost 0.06–0.2 ms of CPU. The draw was always
@@ -701,8 +705,27 @@ The shadow pass kept its casters' world geometry per caster *set*, so the car mo
 invalidated the trees; it is now kept per caster. The batcher asked its key and its
 instanceable test of every record, where both read nothing but the shape.
 
-**Still to do for 60 fps at 1080p:** the 240-instance world is at 39 fps at 1000×560, and
-1080p is 3.7× the pixels. The levers below are next, dynamic resolution first.
+**Three more things, each a defect rather than a tuning.**
+
+- **The same image, loaded by every tile, was a texture each.** A streamed world is
+  hundreds of files and the tree in one tile is the same tree as in the next — the same
+  bark, byte for byte, embedded in every tile that has a tree in it. That was a hundred
+  copies of one image in video memory and, worse, a hundred *different* textures, so
+  every tile's trees were their own instanced draw. The loader keys textures on what is
+  in them now, held weakly.
+- **A car's four wheels were cast into the world one at a time.** They look at very
+  nearly the same piece of it, so `omi_physics.raycast_many` decides which bodies matter
+  once and asks a landscape's mesh once for the triangles near all four. 1.05 ms → 0.02 ms
+  per step.
+- **Every body was asked each step whether it had moved.** A streamed landscape is dozens
+  that never do, and once the answer is always no, the asking is the cost. 0.5 ms → 0.11 ms
+  per step.
+
+**Still to do for 60 fps at 1080p:** 57.5 fps against 60, so the remaining gap is about
+1 ms a frame. What is left is diffuse — per-record work in the render pass, the fixed
+cost of a 120 Hz physics step — rather than one thing. Dynamic resolution, the lever this
+plan named first, turns out **not** to be the one: at 1000×560 the same world runs at 74
+fps against 57 at 1080p, so the frame is CPU-bound and fewer pixels buy little.
 
 **The other levers, and why a racing game has ones the forest demo lacked.**
 
@@ -971,3 +994,17 @@ them; §E decides per species.
   browser rather than the path on the command line, undo, and more than one
   route per project. §B would give the editor real elevation to draw on and §D
   the water to drop into it.
+- **2026-08-17** — **§I, most of the way.** The 24-instance world at 1920×1080 went from
+  37.2 fps to 57.5, and at 1000×560 from 16.5 to 73.9; the heaviest world measured (240
+  instances a tile) from 5.3 to 61.4. The table in §I has the rest.
+
+  None of it was the lever this plan expected. **Dynamic resolution would buy almost
+  nothing**: at 1000×560 the same world runs at 74 fps against 57 at 1080p, so the frame
+  is CPU-bound and fewer pixels are not what is wanted. What it was, in order of size:
+  one render record per declared instance set rather than one per instance; one texture
+  per image rather than one per tile that embeds it; a car's four wheels cast together;
+  and a landscape's bodies not asked every step whether they have moved.
+
+  Each of those is a defect in the engine underneath rather than a knob on the game, and
+  each was fixed there. The quality ladder and dynamic resolution remain unbuilt and are
+  now worth less than they looked.
