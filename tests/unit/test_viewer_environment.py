@@ -11,7 +11,8 @@ import pytest
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.light import DirectionalLight, PointLight
 from OpenGLContext.viewer.environment import (
-    background_for, count_lights, cube_background, hdr_background, sky_background,
+    background_for, count_lights, cube_background, hdr_background,
+    horizon_background, sky_background,
 )
 
 
@@ -75,6 +76,36 @@ class TestTheGradientSky:
         colours = sky_background().skyColor
         zenith, horizon = colours[0], colours[-1]
         assert zenith[2] - zenith[0] > horizon[2] - horizon[0]
+
+
+class TestTheHorizonSky:
+    """A world of finite extent runs out, and what a camera at ground level
+    sees past the last of it is the background's lower half."""
+
+    def test_it_keeps_the_sky_it_was_given(self):
+        assert (list(map(tuple, horizon_background().skyColor))
+                == list(map(tuple, sky_background().skyColor)))
+
+    def test_its_ground_is_the_haze_and_not_the_earth(self):
+        """Ground-coloured, the edge of the world is a wall of earth."""
+        earth = sky_background().groundColor[0]
+        haze = horizon_background().groundColor[0]
+        assert haze[2] > haze[0]                    # bluer than it is red
+        assert haze[2] > earth[2]
+
+    def test_the_haze_carries_on_from_the_horizon(self):
+        """The join has to be invisible: the band below the horizon is the same
+        colour as the band above it."""
+        sky = horizon_background()
+        assert tuple(sky.groundColor[0]) == pytest.approx(tuple(sky.skyColor[-1]))
+
+    def test_the_colour_can_be_chosen(self):
+        sky = horizon_background(haze=(0.2, 0.3, 0.4))
+        assert tuple(sky.groundColor[0]) == pytest.approx((0.2, 0.3, 0.4))
+        assert tuple(sky.skyColor[-1]) == pytest.approx((0.2, 0.3, 0.4))
+
+    def test_it_is_a_background_like_any_other(self):
+        assert isinstance(horizon_background(), Background)
 
 
 class TestWhichBackdrop:

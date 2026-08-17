@@ -86,6 +86,18 @@ and the second is the one that is easy to forget:</p>
 <a href="https://github.com/mcfletch/openglcontext-editor">editor's README</a>.
 The runtime here takes the finished centreline.</p>
 
+<h3>The earthwork: what the land does about it</h3>
+<p>An alignment that is not on the ground is on an <em>earthwork</em>. Fill runs
+down from the shoulder to where it meets the land; a cutting runs up to it. How
+far out that is depends on how far the road is from the ground and on nothing
+else — a road already on the land disturbs almost nothing, and one carried forty
+metres over a valley builds an embankment as wide as it needs. A batter of about
+one in one and two-thirds is near the steepest earth stands at unheld.</p>
+<p>The ground under the carriageway is set a hand's breadth <em>below</em> the
+road, because a road is built on a formation and surfaced on top of it — and
+because two surfaces at exactly the same height fight over which one is drawn,
+which shows as the ground flickering through the tarmac.</p>
+
 <h3>How it is swept</h3>
 <p>Each centreline point gets a <strong>frame</strong>: the tangent along the
 line, the right vector across it, and the up vector their cross product gives.
@@ -145,11 +157,12 @@ drives on what it can see.</p>
 <section>
 <h2>Limits</h2>
 <ul>
-  <li><strong>The four generation operations are one and a half.</strong> A road
+  <li><strong>The four generation operations are two of four.</strong> A road
   that follows the ground, and one carried above a low area on a causeway, are
-  generated. A deck on piers over a narrow gap, and a portal through a hillside,
-  are not: a route that wants either is currently carried over or laid on the
-  ground.</li>
+  generated, each with the earthwork it needs. A deck on piers over a narrow
+  gap, and a portal through a hillside, are not: a route that wants either gets
+  an embankment or a cutting instead, up to the width the machine will go to,
+  and beyond that the land is left as it is.</li>
   <li><strong>Junctions are not modelled.</strong> Two roads that cross produce
   two surfaces at the crossing point rather than an intersection.</li>
   <li><strong>The profile is constant along a route.</strong> A road that

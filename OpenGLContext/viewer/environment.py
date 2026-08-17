@@ -73,6 +73,35 @@ def sky_background() -> Background:
     )
 
 
+#: The colour the sky reaches at eye level in :func:`sky_background`, and so
+#: the colour a distance fades into.
+HORIZON_HAZE = (0.88, 0.93, 0.98)
+
+
+def horizon_background(haze: Any = HORIZON_HAZE) -> Background:
+    """The same sky over a horizon that fades rather than ends.
+
+    A world of finite extent runs out, and what a camera at ground level sees
+    past the last of it is the background's lower half. Ground-coloured, that
+    is a wall of earth standing at the edge of the world; haze-coloured, it is
+    the distance. Pair it with a
+    :class:`~OpenGLContext.scenegraph.fog.Fog` of the same colour and the
+    terrain fades into the air the background is already made of.
+
+    ``haze`` defaults to the colour the sky reaches at eye level, so the band
+    below the horizon carries on from the band above it and the join is not
+    there to see.
+    """
+    sky = sky_background()
+    colours = [tuple(colour) for colour in sky.skyColor[:-1]] + [tuple(haze)]
+    return Background(
+        skyColor=colours,
+        skyAngle=list(sky.skyAngle),
+        groundColor=[tuple(haze)],
+        groundAngle=[1.5708],
+    )
+
+
 def hdr_background() -> Any:
     """The Radiance panorama the IBL probe is using, as a skybox, or None."""
     source = os.environ.get('OPENGLCONTEXT_ENV_HDR', '').strip()
