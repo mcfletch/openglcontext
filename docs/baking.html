@@ -178,8 +178,12 @@ print(result.summary())</pre>
   <dt><code>RoadLayer</code></dt>
   <dd>a route through the world as a drivable surface (<a
   href="roads.html">Roads</a>), on the embankments and in the cuttings it
-  needs, split so each tile owns the length of road inside it and re-sampled
-  coarser as the tiles coarsen.</dd>
+  needs, with a deck or a bore where neither will do, split so each tile owns
+  the length of road inside it and re-sampled coarser as the tiles coarsen.</dd>
+  <dt><code>FieldTerrainLayer</code></dt>
+  <dd>the ground as one field rather than a tree of tiles &mdash; see below.</dd>
+  <dt><code>VegetationLayer</code></dt>
+  <dd>the whole forest as one table beside the tileset &mdash; see below.</dd>
 </dl>
 <p>A layer is anything with <code>bounds()</code> and
 <code>content(region, error)</code>, so a world can add its own kind. Two
@@ -196,6 +200,64 @@ further methods are optional:</p>
   puts its centreline here, because a game cannot find a track in a pile of
   triangles.</dd>
 </dl>
+<h3 id="field">Ground as a field, not as tiles</h3>
+<p>A tiled ground gets finer as the tree refines, which is what a world larger
+than memory needs. A world of a few kilometres does not need it: the whole
+landscape fits in one height field, and drawing it as a
+<a href="terrain.html#heightfield">splat terrain</a> &mdash; one mesh, one draw,
+detail materials blended per pixel &mdash; costs less than a tree of
+vertex-coloured patches and carries crisp ground right up to the camera. So a
+world chooses:</p>
+<pre>from OpenGLContext_editor.bake.field import FieldTerrainLayer
+
+ground = FieldTerrainLayer(height_fn=conformed, height_fn_at=conformed_at,
+                           extent=footprint, resolution=1025,
+                           layers=['grass', 'forest_floor', 'rock', 'dirt'],
+                           rules=my_rules, road=circuit, road_layer=3)</pre>
+<p>It puts geometry in no tile at all. What it writes beside the tileset is a
+16-bit height image and an RGBA
+<a href="terrain.html#controlmap">splat control map</a>, and what it puts in
+<code>extras.terrain</code> is the four numbers needed to read them back:
+<code>extent</code>, <code>base</code>, <code>relief</code> and
+<code>resolution</code>, with the material names.
+<code>TilesTerrain</code> mounts the field from that and exposes it as
+<code>.field</code>, so a game builds its
+<a href="terrain.html#fieldphysics">colliders</a> from the same landscape it is
+looking at.</p>
+<p><strong><code>height_fn_at(spacing)</code></strong> is the same ground as a
+function of how far apart it will be sampled, and is what a world with a road in
+it should give. A cutting narrower than the grid is stepped straight over,
+however deep the height function says it is at its centre; told the spacing, the
+function holds a shelf that wide at the verge so a sample lands inside the
+corridor. <code>conform_terrain_at</code> produces one.</p>
+
+<h3 id="vegetation">A forest as a table, not as tile content</h3>
+<p>Trees written into tiles arrive and leave with the tile they stand in, which
+puts the level of detail in the tile's hands. A forest does not work that way:
+what a tree is drawn as depends on how far it is from the <em>camera</em>, and
+the tree a hundred metres ahead is the same tree whichever tile it happens to be
+over. Baked per tile it also carries its bark and its leaves in every copy of
+every tile it appears in.</p>
+<pre>from OpenGLContext.scenegraph.vegetation import TreeSpecies
+from OpenGLContext_editor.bake.vegetation import VegetationLayer
+
+forest = VegetationLayer(positions=trees.positions, yaws=trees.yaws,
+                         heights=heights, species=my_species,
+                         species_id=which_kind)</pre>
+<p>It writes the table as one compressed array file, copies each species' own
+files into the world under <code>trees/</code>, and names them from
+<code>extras.vegetation</code>. A baked world is self-contained: it refers to no
+path on the machine that made it. <code>TilesTerrain</code> builds a
+<a href="terrain.html#vegetationfield"><code>VegetationField</code></a> from it
+and feeds it the camera each tick.</p>
+<p>The scatter is still decided at bake time. Where the trees stand, how tall
+they are and which kind each is are decisions about the world, made once with the
+road's corridor kept clear &mdash; not something a runtime should be re-rolling.</p>
+<p><strong>Tree art carries its own licence.</strong> The toolkit ships none, and
+a world baked from assets that require attribution must carry it: pass the
+attributions to <code>bake_world</code>'s <code>credits</code>, which writes them
+into the tileset's copyright and its <code>CREDITS.txt</code>.</p>
+
 <h3>Bringing in authored assets</h3>
 <p><code>meshes_from_gltf</code> reads a designer's <code>.glb</code> and hands
 back its meshes flattened into one frame -- transforms already applied -- ready
@@ -203,7 +265,14 @@ to place. <code>combined_mesh</code> merges them into one, so a whole prototype
 rides a single instanced node:</p>
 <pre>from OpenGLContext_editor.bake.assets import combined_mesh, meshes_from_gltf
 
-conifer = combined_mesh(meshes_from_gltf('assets/conifer.glb', scale=1.2))</pre>
+parts = meshes_from_gltf('assets/conifer.glb', scale=1.2)   # bark, needles
+crate = combined_mesh(meshes_from_gltf('assets/crate.glb'))  # one material</pre>
+<p><code>combined_mesh</code> refuses meshes that disagree on their material,
+because the result can only wear one: a tree is a bark trunk and alpha-masked
+needles, and merging them paints the needles in bark. Keep them apart &mdash; a
+rung of an <code>InstanceLayer</code>'s ladder is however many meshes the
+prototype takes, written as a node each over the same placements &mdash; or say
+which material the result wears.</p>
 </section>
 
 <section>

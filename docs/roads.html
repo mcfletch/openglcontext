@@ -66,6 +66,36 @@ you give are the points swept.</p>
 add up to. <code>texture_length</code> is what sets the length of the centre-line
 dashes, since the dashes are in the texture.</p>
 
+<h3 id="route">The plan: where a road can go at all</h3>
+<p>A line drawn across a landscape without regard for it climbs and drops
+wherever the landscape does. Held afterwards to a grade a car can drive, the
+alignment then departs from the ground by whatever the difference was — and over
+real relief that is a viaduct or a bore for most of its length. On the shipped
+landscape an ellipse comes out <strong>72% carried</strong>, and no grade limit
+changes that, because no drivable grade follows five hundred metres of relief in
+four kilometres.</p>
+<p>The answer is to move the line. <code>ease_route</code> slides each point
+along its own contour, towards the height its neighbours are at, which finds the
+route through the same country that the ground supports: round the shoulder of a
+hill instead of over it. It keeps the shape a designer drew — no point moves
+further than <code>reach</code> from where it was put — and an open route keeps
+its ends exactly.</p>
+<pre><code>from OpenGLContext_editor.world.route import cornering_radius, ease_route
+plan = ease_route(drawn, natural_ground, closed=True, spacing=6.0,
+                  minimum_radius=cornering_radius(42.0))</code></pre>
+<p>Sliding a line onto easier ground puts <em>corners</em> into it, and a corner
+tighter than the grip available at the speed the road is for is a corner a car
+leaves. <code>minimum_radius</code> holds them: it is applied between rounds
+rather than at the end, because a corner opened out once is a corner the next
+round can close again, and the two are projections onto sets that both contain
+the drawn line. <code>spacing</code> matters as much: a plan of points tens of
+metres apart is a polygon, and the road along it turns through the whole of each
+corner at one vertex however gentle the polygon looks from a distance.</p>
+<p>A summit exactly on the line has no downhill side — the ground across the
+route is level there — so a route eased from a place like that stays where it
+is. That is a limit of sliding rather than searching, and it is the honest
+behaviour: the alternative is picking a side at random.</p>
+
 <h3>The alignment: where a road can go</h3>
 <p>A polyline drawn over a landscape is not yet a road. Two limits make it one,
 and the second is the one that is easy to forget:</p>
@@ -134,21 +164,38 @@ with it through a bend and a climb:</p>
 deck = bridge_meshes(run, profile, ground)      # deck, parapet, piers
 bore = tunnel_meshes(run, profile)              # bore, portals</pre>
 <p>Each returns its parts as <code>{name: mesh}</code> rather than one merged
-mesh, so a caller can light, cull or write them separately.
-<code>BridgeProfile</code> sets the structural depth of the deck, the parapets
-standing on its edges, and how far apart the piers are; a pier is dropped to
-whatever the ground is doing beneath it, and the two ends are always built,
-because that is where the deck is carried onto the land. <code>TunnelProfile</code>
-sets the crown's clearance over the carriageway and how far the portal's face
-stands out around the arch. Both are built from <code>concrete_material()</code>.</p>
+mesh, so a caller can light, cull or write them separately.</p>
+<p><code>BridgeProfile</code> sets the structural depth of the deck, the parapets
+standing on its edges, and how far apart the piers are. A pier is dropped to
+whatever the ground is doing beneath it; the two ends are abutments, wider,
+because that is where the deck is carried onto the land — and <strong>nothing at
+all is built where the ground has come up past the soffit</strong>, because a
+deck running into a hillside is carried by the hill and the alternative is a
+block of concrete standing across the carriageway.</p>
+<p><code>TunnelProfile</code> sets the crown's clearance over the carriageway,
+how far below it the arch's feet sit, and how far the portal's face stands out
+around the arch. A bore is a <strong>closed tube</strong>: the ground it runs
+through has to be cut away for the road to pass, so the lining is all there is
+under the road, and one open underneath leaves a trench beside the carriageway
+for a wheel to drop into. It also carries <strong>its own shade</strong> on its
+vertices — full daylight at the portals, falling to a tenth of it fifty metres
+in — so a driver goes into the dark and comes out the far end with no light
+source involved, and a bore shorter than twice that never goes fully dark.</p>
+<p>Structure is <code>concrete_material()</code>; a parapet is
+<code>barrier_material()</code>, which is darker. A parapet is the thing closest
+to the camera for the whole length of a viaduct, and in fresh-concrete white it
+reads as a wall beside the road rather than as a barrier on it.</p>
 <p>Over a structure the carriageway takes the road's <strong>on-structure
-cut</strong>: the verge does not fall away, because there is nothing under it to
-fall to — on a deck it is the edge beam the parapet stands on, and in a bore it is
-the walkway beside the carriageway. The change is a taper rather than a step. The
-sweep takes a section per point for it, which is what
+cut</strong>: the verge neither falls nor stays. There is no ground beside a deck
+for it to fall to, and a strip of grass inside a bore is grass inside a bore, so
+what is left is an <em>edge beam</em> — the kerb a parapet stands on, or the
+walkway beside a carriageway in a tunnel. The road narrows onto the structure
+over a taper rather than stepping onto it, and the structures are built to the
+narrowed section rather than to the road's grass.</p>
+<p>The sweep takes a section per point for it, which is what
 <code>morphed_sections(profile, other, blend)</code> builds and
 <code>road_surface(points, profile, sections=…)</code> accepts; the same
-mechanism widens a road for a lay-by or narrows one into a bore.</p>
+mechanism widens a road for a lay-by.</p>
 
 <h3>How it is swept</h3>
 <p>Each centreline point gets a <strong>frame</strong>: the tangent along the
@@ -204,9 +251,14 @@ for road in tileset['extras']['roads']:
     print(road['name'], road['length'], len(road['centreline']))</pre>
 <p>The centreline is written as a shape rather than at full density; a game
 re-samples it for whatever it is doing.</p>
-<p>The <a href="physics.html">physics colliders</a> that page with a tile cover
-the road exactly as they cover the ground — it is the same triangles, so a car
-drives on what it can see.</p>
+<p><strong>What a fast vehicle drives on is not the tile.</strong> Tile geometry
+is level-of-detail geometry: two resolutions of one curve are the better part of
+a metre apart, and the surface steps under the wheels every time the streamer
+refines. A game builds the carriageway's collider from the centreline and the
+cross-section instead — which is why the section is in the ``extras`` — and gets
+one surface at one resolution everywhere. See
+<a href="physics.html#roadcolliders">colliding with a world that streams</a>.
+A walker, which is slow and forgiving, can go on using the tiles.</p>
 </section>
 
 <section>

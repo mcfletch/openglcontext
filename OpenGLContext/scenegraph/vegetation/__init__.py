@@ -6,6 +6,9 @@
   high-detail LOD; impostor billboards take over at distance).
 - :func:`world_grid_scatter` — world-anchored jittered scatter for pop-free
   camera-following grass fields.
+- :class:`VegetationField` and :class:`TreeSpecies` — a whole forest as one
+  node: the table of trees, the species they are drawn from, and the selection
+  that keeps the near geometry and the far cards fed as the camera moves.
 
 :data:`LOD_NEAR`/:data:`LOD_FAR` are the shared mesh-to-impostor cross-fade window,
 driving both the near-mesh and impostor shaders so their handoff stays seamless.
@@ -14,7 +17,9 @@ from OpenGLContext.scenegraph.vegetation.base import LOD_NEAR, LOD_FAR
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.nearmesh import InstancedMeshLOD
 from OpenGLContext.scenegraph.vegetation.clumps import InstancedClumps, load_clump_glb
+from OpenGLContext.scenegraph.vegetation.field import TreeSpecies, VegetationField
 from OpenGLContext.scenegraph.vegetation.grid import world_grid_scatter
 
 __all__ = ["InstancedBillboards", "InstancedMeshLOD", "InstancedClumps",
-           "load_clump_glb", "world_grid_scatter", "LOD_NEAR", "LOD_FAR"]
+           "load_clump_glb", "world_grid_scatter", "LOD_NEAR", "LOD_FAR",
+           "TreeSpecies", "VegetationField"]

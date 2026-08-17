@@ -49,6 +49,10 @@ GRAVEL_ALBEDO = (0.42, 0.40, 0.36)
 VERGE_ALBEDO = (0.24, 0.27, 0.14)
 LINE_ALBEDO = (0.86, 0.86, 0.82)
 
+#: How wide the kerb is where a road runs over a structure, in metres -- what
+#: the verge becomes when there is no ground beside the road to fall to.
+EDGE_BEAM = 0.4
+
 #: Wet, asphalt darkens and turns near-mirror; the environment then does the
 #: work a reflection pass would otherwise have to.
 DRY_ROUGHNESS = 0.72
@@ -110,13 +114,18 @@ class RoadProfile:
     def on_structure(self) -> 'RoadProfile':
         """The same road as it runs over a bridge or through a tunnel.
 
-        The verge does not fall away, because there is nothing under it to fall
-        to: on a deck it is the edge beam the parapet stands on, and in a bore
-        it is the walkway beside the carriageway. Everything else about the
-        section is unchanged, so the surface texture and the markings are the
-        same across the join and the two stretches meet without a step.
+        The verge neither falls nor stays: there is no ground beside a deck for
+        it to fall to, and a strip of grass inside a bore is grass inside a
+        bore. What is left is an *edge beam* -- the kerb a parapet stands on, or
+        the walkway beside a carriageway in a tunnel.
+
+        The section keeps the same points, so the two can be blended and the
+        road narrows onto the structure over a taper rather than stepping onto
+        it. The carriageway itself is untouched, so the markings run through
+        unchanged.
         """
-        return replace(self, verge_drop=0.0)
+        return replace(self, verge_drop=0.0,
+                       verge_width=(EDGE_BEAM if self.verge_width > 0 else 0.0))
 
     def section_u(self) -> np.ndarray:
         """The texture coordinate across the section, 0 at the left verge to 1.

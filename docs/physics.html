@@ -141,6 +141,38 @@ scene.advance(dt)                         # steps the world, writes back Transfo
     render mesh so you can see the fit.</p>
 </section>
 
+<section id="streamed">
+  <h2 id="roadcolliders">Colliding with a world that streams</h2>
+  <p>A streamed world's geometry is <em>level-of-detail</em> geometry: the same
+  ground at whatever resolution the streamer picked for the distance it is at,
+  and that resolution changes as a camera moves. Turning it into colliders is
+  fine for a walker and wrong for anything fast, because two resolutions of one
+  curve are the better part of a metre apart and the surface <em>steps</em> under
+  the wheels every time the streamer refines — which at racing speed is
+  indistinguishable from hitting a wall in the middle of an open road.</p>
+  <p>Two things follow, and both are about building the collider from
+  <em>the thing</em> rather than from a drawing of it.</p>
+  <p><strong>The set of colliders is the set of drawn tiles.</strong> A streamer
+  keeps tiles it is not drawing — a coarse parent so it can be shown again the
+  moment the camera pulls back, siblings until the budget wants their space — and
+  left in the physics world they are a second surface under everything.
+  <code>TerrainColliders.on_drawn</code> is wired to the runtime's
+  <code>on_drawn</code> hook and holds exactly what is on screen.</p>
+  <p><strong>What a vehicle drives on is built from the road, not the tile.</strong>
+  A road is a centreline and a cross-section, and a baked world carries both in
+  its <a href="roads.html">tileset extras</a>.
+  <code>OpenGLContext.physics.road.RoadColliders</code> sweeps them into one
+  surface at one resolution, cut into chunks and held near the car:</p>
+  <pre><code>from OpenGLContext.physics.road import RoadColliders
+road = RoadColliders(physics_world, course.centreline, course.road_profile(),
+                     closed=True)
+road.update(car_position)                # once a frame</code></pre>
+  <p>Its sibling
+  <a href="terrain.html#fieldphysics"><code>HeightFieldColliders</code></a> does
+  the same for ground carried as a field. Between them a game can turn tile
+  colliders off entirely, which is what <code>glisteel</code> does.</p>
+</section>
+
 <section id="walking">
   <h2>Walking any scene</h2>
   <p>Walking is a capability of <strong>every interactive context</strong>, not

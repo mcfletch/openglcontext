@@ -88,13 +88,14 @@ class SplatTerrain(vnodes.PointSet):
 
     :param height_field: the :class:`HeightField` to render and shade.
     :param layers: up to four material names, blended by the control map's RGBA.
-    :param control: path to the RGBA splat control map.
+    :param control: the RGBA splat control map -- a path, an open image, or the
+        bytes of one.
     :param material_fn: ``material_fn(name, res)`` resolving a layer's texture paths;
         defaults to the cc0/ambientCG material fetcher.
     :param canopy: optional (N, 3) trunk positions; when set the baked shadow is
         darkened under tree cover for dappled shade. Set before first render.
     """
-    def __init__(self, height_field: "HeightField", layers: "list[str]", control: str,
+    def __init__(self, height_field: "HeightField", layers: "list[str]", control: Any,
                  sun: "tuple[float, float, float]" = DEFAULT_SUN,
                  material_fn: "Optional[Callable[..., dict[str, Any]]]" = None,
                  canopy: Optional[np.ndarray] = None) -> None:
@@ -162,7 +163,8 @@ class SplatTerrain(vnodes.PointSet):
     def boundingVolume(self, mode: Any) -> "boundingvolume.AABoundingBox":
         E = self.hf.extent
         H = self.hf.relief * 3
-        return boundingvolume.AABoundingBox(size=(E, H, E), center=(0, 0, 0))
+        return boundingvolume.AABoundingBox(
+            size=(E, H, E), center=(0, self.hf.base + self.hf.relief / 2.0, 0))
 
     def render(self, mode: Any = None, **kw: Any) -> int:
         if getattr(mode, 'shadow_pass', False) or not getattr(mode, 'visible', True):

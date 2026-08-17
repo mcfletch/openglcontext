@@ -34,12 +34,21 @@ from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
 __all__ = [
     'BridgeProfile', 'TunnelProfile',
     'bridge_meshes', 'tunnel_meshes', 'concrete_material',
+    'barrier_material',
 ]
 
-#: Structural concrete: pale, entirely rough, and not a metal. Weathered rather
-#: than fresh, because a bridge in a landscape has been there a while.
-CONCRETE_ALBEDO = (0.46, 0.45, 0.43)
+#: Structural concrete: grey, entirely rough, and not a metal. Weathered rather
+#: than fresh -- a bridge in a landscape has been there a while, and fresh
+#: concrete under a strong sun reads as a whitewashed wall rather than as
+#: structure.
+CONCRETE_ALBEDO = (0.30, 0.295, 0.285)
 CONCRETE_ROUGHNESS = 0.85
+
+#: A parapet is the thing closest to the camera for the whole length of a
+#: viaduct, so it is a *barrier* rather than more structure: darker, and a
+#: little glossier, the way galvanised steel and traffic-stained concrete are.
+BARRIER_ALBEDO = (0.17, 0.175, 0.18)
+BARRIER_ROUGHNESS = 0.6
 
 HeightFn = Callable[[Any, Any], Any]
 
@@ -55,14 +64,15 @@ class BridgeProfile:
     it, so a pier is a blade standing square to the deck. ``abutment_width``
     widens the end supports, which carry the deck onto the ground.
 
-    A pier shorter than ``minimum_pier`` is left out: near an abutment the
-    ground is already at the soffit, and a stub of concrete there reads as a
-    fault rather than as structure.
+    A pier shorter than ``minimum_pier`` is left out, and so is one the ground
+    has risen past: a deck running into a hillside meets the ground before the
+    soffit does, and a support built there is a block of concrete standing
+    across the carriageway.
     """
 
     deck_depth: float = 1.8
-    parapet_height: float = 1.1
-    parapet_width: float = 0.45
+    parapet_height: float = 0.95
+    parapet_width: float = 0.28
     pier_spacing: float = 45.0
     pier_width: float = 4.5
     pier_length: float = 2.2
@@ -79,14 +89,32 @@ class TunnelProfile:
     together give the arch its radius. ``segments`` is how many facets the arch
     is drawn with.
 
+    ``springing`` is how far below the carriageway the arch's feet sit, and
+    ``floor`` closes the lining across the bottom. Both are about what is *not*
+    there: the ground a bore runs through has to be cut away for the carriageway
+    to pass, so the lining is all there is under the road. An arch springing at
+    the crown of the road leaves a slot beside the shoulders to look out
+    through, and one open underneath leaves a trench beside it for a wheel to
+    drop into.
+
     ``portal_border`` is how far the portal's face stands out around the arch
     where the bore meets the hillside.
+
+    ``daylight`` is how far into the bore the light from a portal reaches, in
+    metres, and ``gloom`` how much of the lining's colour is left past that. A
+    bore lit like an open hillside is a concrete tube in daylight; the shade is
+    carried on the lining's own vertices, so no light source is involved and a
+    driver goes into the dark and comes out the far end.
     """
 
     clearance: float = 7.5
-    margin: float = 1.0
+    margin: float = 0.35
+    springing: float = 0.6
+    floor: bool = True
     segments: int = 14
     portal_border: float = 1.6
+    daylight: float = 55.0
+    gloom: float = 0.14
 
 
 def concrete_material() -> PBRMaterial:
@@ -95,10 +123,17 @@ def concrete_material() -> PBRMaterial:
                        roughness=CONCRETE_ROUGHNESS, doubleSided=False)
 
 
+def barrier_material() -> PBRMaterial:
+    """What a parapet is made of: darker than the deck it stands on."""
+    return PBRMaterial(baseColor=BARRIER_ALBEDO, metallic=0.0,
+                       roughness=BARRIER_ROUGHNESS, doubleSided=False)
+
+
 def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
                   ground: Optional[HeightFn] = None,
                   bridge: Optional[BridgeProfile] = None,
                   material: Optional[PBRMaterial] = None,
+                  barrier: Optional[PBRMaterial] = None,
                   ) -> Dict[str, PBRMesh]:
     """A deck, its parapets and its piers, along a stretch of centreline.
 
@@ -108,18 +143,27 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
     undisturbed land, which is where the piers stop; without it the piers are
     left out and only the deck is built, which is what a caller wants when the
     land under the span is not its business.
+
+    ``material`` is the structure and ``barrier`` the parapets, which are a
+    different thing standing on it; giving only ``material`` puts everything in
+    it, which is what a caller with one material of its own means.
     """
     line = _line(points, "a bridge")
     profile = profile or RoadProfile()
     bridge = bridge or BridgeProfile()
+    rail_material = (barrier if barrier is not None
+                     else material if material is not None
+                     else barrier_material())
     material = material if material is not None else concrete_material()
     right, up = sweep_frames(line)
-    half = profile.total_width / 2.0
-    # A deck's top is a plane, so it is measured against the road as it runs
-    # over a structure -- an edge beam rather than a verge falling away to
-    # ground that is not there. The carriageway over the deck is swept with the
-    # same section, and the two then meet along their whole length.
-    edge = float(profile.on_structure().section()[0, 1])
+    # Built to the road as it runs *over* a deck rather than as it runs on the
+    # ground: an edge beam rather than a verge falling away to ground that is
+    # not there. The carriageway over the deck is swept with the same section,
+    # so the two meet along their whole length and the deck is the width of the
+    # road on it rather than the width of its grass.
+    carried = profile.on_structure()
+    half = carried.total_width / 2.0
+    edge = float(carried.section()[0, 1])
 
     parts: Dict[str, PBRMesh] = {}
     # The deck: down the near fascia, along the soffit, up the far one. Left
@@ -131,10 +175,10 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
     inner = half - bridge.parapet_width
     rail = edge + bridge.parapet_height
     parts['parapet'] = _merge([
-        _swept(line, right, up, material,
+        _swept(line, right, up, rail_material,
                [(side * half, edge), (side * half, rail),
                 (side * inner, rail), (side * inner, edge)], closed_ends=True)
-        for side in (-1.0, 1.0)], material)
+        for side in (-1.0, 1.0)], rail_material)
     if ground is not None:
         piers = _piers(line, right, up, ground, bridge, half, soffit, material)
         if piers is not None:
@@ -157,14 +201,20 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
     tunnel = tunnel or TunnelProfile()
     material = material if material is not None else concrete_material()
     right, up = sweep_frames(line)
-    arch = _arch(profile.total_width / 2.0 + tunnel.margin, tunnel.clearance,
-                 tunnel.segments)
-    outer = _arch(profile.total_width / 2.0 + tunnel.margin
-                  + tunnel.portal_border,
-                  tunnel.clearance + tunnel.portal_border, tunnel.segments)
+    # Built to the road as it runs *through* a bore rather than as it runs on
+    # the ground: the grass verge is an edge beam in there, and a bore sized for
+    # the verge would be metres wider than anything needs.
+    half = profile.on_structure().total_width / 2.0 + tunnel.margin
+    arch = _arch(half, tunnel.clearance, tunnel.segments,
+                 foot=tunnel.springing, floor=tunnel.floor)
+    outer = _arch(half + tunnel.portal_border,
+                  tunnel.clearance + tunnel.portal_border, tunnel.segments,
+                  foot=tunnel.springing + tunnel.portal_border,
+                  floor=tunnel.floor)
     # Reversed, so the sweep's triangles wind the other way and the lining is
     # lit and drawn from the carriageway side.
-    bore = _swept(line, right, up, material, list(reversed(arch)))
+    bore = _swept(line, right, up, material, list(reversed(arch)),
+                  shade=_gloom(line, tunnel, len(arch)))
     portals = _merge([_ring(line[at], right[at], up[at], arch, outer, material,
                             outwards=facing)
                       for at, facing in ((0, -1.0), (len(line) - 1, 1.0))],
@@ -181,8 +231,13 @@ def _line(points: Any, what: str) -> np.ndarray:
 
 def _swept(line: np.ndarray, right: np.ndarray, up: np.ndarray,
            material: PBRMaterial, section: Any,
-           closed_ends: bool = False) -> PBRMesh:
-    """Sweep a (K,2) lateral/vertical section along a framed centreline."""
+           closed_ends: bool = False,
+           shade: Optional[np.ndarray] = None) -> PBRMesh:
+    """Sweep a (K,2) lateral/vertical section along a framed centreline.
+
+    ``shade`` is an optional per-point brightness the whole ring takes, which is
+    how a bore carries its own darkness.
+    """
     section = np.asarray(section, dtype='d').reshape(-1, 2)
     ring = len(section)
     lateral = section[:, 0][None, :, None]
@@ -195,7 +250,11 @@ def _swept(line: np.ndarray, right: np.ndarray, up: np.ndarray,
             indices,
             _cap(np.arange(ring), flip=True),
             _cap(np.arange(ring) + (len(line) - 1) * ring, flip=False)])
-    return _mesh(positions, indices, material)
+    colors = None
+    if shade is not None:
+        colors = np.ones((len(line) * ring, 4), dtype='f')
+        colors[:, :3] = np.repeat(shade, ring)[:, None]
+    return _mesh(positions, indices, material, colors=colors)
 
 
 def _strip(rows: int, ring: int) -> np.ndarray:
@@ -219,16 +278,25 @@ def _cap(loop: np.ndarray, flip: bool) -> np.ndarray:
     return fan.ravel().astype(np.uint32)
 
 
-def _arch(half_width: float, clearance: float, segments: int) -> list:
-    """A horseshoe section: up one springing, over the crown, down the other.
+def _arch(half_width: float, clearance: float, segments: int,
+          foot: float = 0.0, floor: bool = False) -> list:
+    """A bore's section: up one springing, over the crown, down the other.
 
     A half-ellipse of ``half_width`` by ``clearance``, which gives a bore that
     is as wide as it needs at the road and as tall as it needs at the crown
-    without either dimension driving the other.
+    without either dimension driving the other, with ``foot`` of straight wall
+    under each springing so the lining meets the carriageway rather than
+    stopping at it, and ``floor`` closing it across the bottom.
     """
     angle = np.linspace(np.pi, 0.0, max(int(segments), 3) + 1)
-    return [(float(half_width * np.cos(t)), float(clearance * np.sin(t)))
-            for t in angle]
+    curve = [(float(half_width * np.cos(t)), float(clearance * np.sin(t)))
+             for t in angle]
+    if foot <= 0.0:
+        return curve
+    walled = [(-half_width, -foot)] + curve + [(half_width, -foot)]
+    # Closed by returning to where it started, which makes the sweep a tube
+    # rather than a vault.
+    return walled + [walled[0]] if floor else walled
 
 
 def _ring(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
@@ -261,10 +329,15 @@ def _piers(line: np.ndarray, right: np.ndarray, up: np.ndarray,
            soffit: float, material: PBRMaterial) -> Optional[PBRMesh]:
     """A blade of concrete every ``pier_spacing`` from the soffit to the ground.
 
-    The two ends are abutments -- wider, and always built, because that is where
-    the deck is carried onto the land. Between them a pier is placed at each
-    interval and dropped to whatever the ground is doing beneath it, so a span
-    over a sloping valley has piers of the lengths that valley calls for.
+    The two ends are abutments -- wider, because that is where the deck is
+    carried onto the land, and kept however short they are. Between them a pier
+    is placed at each interval and dropped to whatever the ground is doing
+    beneath it, so a span over a sloping valley has piers of the lengths that
+    valley calls for.
+
+    Nothing at all is built where the ground has come up past the soffit: a deck
+    landing into a hillside is carried by the hill, and the alternative is a
+    block standing in the road.
     """
     steps = np.linalg.norm(np.diff(line, axis=0), axis=1)
     station = np.concatenate([[0.0], np.cumsum(steps)])
@@ -280,12 +353,13 @@ def _piers(line: np.ndarray, right: np.ndarray, up: np.ndarray,
         top = float(line[index, 1] + soffit)
         floor = float(np.asarray(ground(np.array([line[index, 0]]),
                                         np.array([line[index, 2]]))).ravel()[0])
-        if not ends and top - floor < bridge.minimum_pier:
+        standing = top - floor
+        if standing <= 0.0 or (not ends and standing < bridge.minimum_pier):
             continue
         blades.append(_blade(line[index], right[index], up[index],
                              min(width, half * 2.0), bridge.pier_length,
                              top, floor, material))
-    if not blades:                               # pragma: no cover - all too short
+    if not blades:
         return None
     return _merge(blades, material)
 
@@ -326,8 +400,23 @@ def _merge(meshes: list, material: PBRMaterial) -> PBRMesh:
                  np.concatenate(indices).astype(np.uint32), material)
 
 
+def _gloom(line: np.ndarray, tunnel: TunnelProfile, ring: int) -> np.ndarray:
+    """How bright the lining is at each point along a bore.
+
+    Full daylight at either portal, falling to ``gloom`` ``daylight`` metres in.
+    A bore shorter than twice that never goes fully dark, because the light from
+    each end meets in the middle -- which is what a short one looks like.
+    """
+    steps = np.linalg.norm(np.diff(line, axis=0), axis=1)
+    station = np.concatenate([[0.0], np.cumsum(steps)])
+    from_end = np.minimum(station, station[-1] - station)
+    reach = max(float(tunnel.daylight), 1e-6)
+    lit = np.clip(1.0 - from_end / reach, 0.0, 1.0)
+    return np.asarray(tunnel.gloom + (1.0 - tunnel.gloom) * lit, dtype='d')
+
+
 def _mesh(positions: np.ndarray, indices: np.ndarray,
-          material: PBRMaterial) -> PBRMesh:
+          material: PBRMaterial, colors: Optional[np.ndarray] = None) -> PBRMesh:
     points = np.ascontiguousarray(positions, dtype='f')
     return PBRMesh(positions=points, normals=estimate_normals(points, indices),
-                   indices=indices, material=material)
+                   indices=indices, material=material, colors=colors)

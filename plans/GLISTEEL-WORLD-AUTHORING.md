@@ -213,13 +213,14 @@ appears.
 |---|---|---|---|---|
 | §A | The writer & baker — glTF + 3D Tiles + octree, proven by baking a world | OpenGLContext (writer) + editor (baker) | ✅ | — |
 | §B | Terrain authoring — georef DEM, multi-block, procedural control map | editor (+ engine ingest) | 📋 | §A |
-| §C | Roads — spec, cross-sections, the four ops, render node, reflections | engine (render) + editor (gen) | 🟡 highway-on-dirt + causeway; bridge, tunnel, reflection bake, control-map paint outstanding | §A, §B |
+| §C | Roads — spec, cross-sections, the four ops, render node, reflections | engine (render) + editor (gen) | 🟡 all four ops, the plan-easing that keeps a route on the ground, and the control-map paint landed; the reflection bake outstanding | §A, §B |
 | §D | Water — rivers, lakes, surface render, shorelines, whitewater, beaches | engine (render) + editor (gen) | 📋 | §A, §B |
 | §E | Road-aware refinement & octree LOD | editor | 📋 | §A, §B, §C |
 | §F | Editor toolkit — tool-modes, menus, picking, gizmos, ortho map | engine (picking/ortho) + editor (toolkit) | 🟡 tool modes, menus, surface picking and the plan view landed; gizmos and occluded picking outstanding | §F.0 independent; rest after §C/§D |
 | §G | `glisteel-editor` — the race-track editor app | new repo | 🟡 draws a circuit on the shipped landscape and bakes a world to drive; water and real elevation wait on §D/§B | §B–§F |
 | §H | `glisteel` — the car game demo | new repo | ✅ streams, drives, times a lap | §A runtime, §E output |
-| §I | Performance to 60 fps on the discrete-GPU target | engine + game | 🟡 measured; the per-instance record cost is the first lever | §H to measure |
+| §I | Performance to 60 fps on the discrete-GPU target | engine + game | ✅ 106 fps at 1080p driving the shipped world | §H to measure |
+| §J | Furniture — signs, obstacles, junctions | engine (render) + editor (gen) | 📋 | §C |
 
 ---
 
@@ -469,6 +470,37 @@ render node and the reflection bake are the GL smoke tests.
 **Docs.** `OpenGLContext_editor` docs gain the road spec and the four ops; OpenGLContext
 docs gain the road render node and material; the spec is cited from the code.
 
+**What landed (2026-08-17).** All four operations, and the two things that turned out to
+matter more than any of them.
+
+- **The four ops.** `OpenGLContext_editor.world.structures.choose_structures` partitions a
+  settled alignment into `DIRT`, `CAUSEWAY`, `BRIDGE` and `TUNNEL` by reading the finished
+  line against the undisturbed ground, with minimum lengths, approach reach-out, and a
+  merge that gives a short stretch between two structures to the first of them (a deck
+  lands on the portal it runs into rather than leaving ten metres of embankment inside a
+  hillside). `OpenGLContext.scenegraph.roadworks` builds the geometry: a deck with
+  parapets on blade piers dropped to the ground, and a bore — a closed tube with a floor,
+  its own shade carried on its vertices, and a portal at each end.
+- **The road narrows onto a structure.** `RoadProfile.on_structure()` turns the verge into
+  an edge beam, and `road_surface(sections=…)` sweeps a section per point so the change is
+  a taper rather than a step. The same mechanism would widen a road for a lay-by.
+- **`conform_terrain` leaves the ground alone under a structure**, and reshapes a segment
+  with *either* end on the land — stopping one segment short leaves a lip of hillside
+  across the road at the place a car arrives at speed.
+- **The route is slid onto ground a road can follow** (`world.route.ease_route`). This was
+  the surprise: an ellipse drawn across five hundred metres of relief is viaduct and bore
+  for **72%** of its length whatever the grade limit says, because no drivable grade
+  follows that landscape. Sliding each point along its own contour, and holding the
+  corners to the radius the design speed allows (`hold_radius`, `cornering_radius`),
+  brings the shipped circuit to **75% laid on the ground** — which is what makes it a road
+  through a landscape rather than a road over one.
+- **The landscape's relief is a world knob.** `ProceduralWorld.relief` scales the shipped
+  terrain; at 1 no road can follow it, at 0.5 the same shapes are hill country a road can
+  be built through with a handful of crossings where it still cannot.
+
+**Still open.** The reflection bake (wet tarmac reflecting the baked environment);
+junctions (§J); a bridge is one structural form and a tunnel one bore.
+
 ---
 
 ### §D — Water 📋
@@ -664,7 +696,31 @@ page). Driving it is the GL smoke test.
 
 ---
 
-### §I — Performance to 60 fps 🟡
+### §J — Furniture: signs, obstacles and junctions 📋
+
+**Goal.** A road with things on it and beside it, and roads that meet.
+
+- **Signs.** Warning of what the alignment already knows about itself: a dip, a crest, a
+  bend tighter than the ones before it, a tunnel ahead. The alignment carries the
+  curvature and the grade, so the *placement* is derivable rather than authored — which is
+  the point of generating a road rather than drawing one. A sign is a post and a plate
+  with a symbol, placed at a stopping distance before what it warns of.
+- **Obstacles.** Parked and moving cars, rocks, deer, foxes. Two different problems: a
+  *placed* obstacle is a `MeshLayer` entry with a collider, and a *moving* one is an actor
+  the game steps. Both want a shared notion of "a thing in the world with a body", which
+  the baker has no concept of yet.
+- **Junctions.** Two roads that cross currently produce two surfaces at the crossing
+  point. A junction is its own generation operation: the two cross-sections are merged
+  over the intersection, the markings change, and the terrain is conformed to the union.
+  It is the largest single piece of road work left and it changes `RoadPath` from a line
+  into a graph.
+
+**Testable without GL.** Where a sign is placed for a given alignment; what a junction's
+surface is for two known centrelines; that an obstacle's collider is where its mesh is.
+
+---
+
+### §I — Performance to 60 fps ✅
 
 **Goal.** 60 fps at 1080p on the discrete-GPU target, streaming a world heavier than the
 forest demo, with a racing camera.
@@ -721,11 +777,37 @@ instanceable test of every record, where both read nothing but the shape.
   that never do, and once the answer is always no, the asking is the cost. 0.5 ms → 0.11 ms
   per step.
 
-**Still to do for 60 fps at 1080p:** 57.5 fps against 60, so the remaining gap is about
-1 ms a frame. What is left is diffuse — per-record work in the render pass, the fixed
-cost of a 120 Hz physics step — rather than one thing. Dynamic resolution, the lever this
-plan named first, turns out **not** to be the one: at 1000×560 the same world runs at 74
-fps against 57 at 1080p, so the frame is CPU-bound and fewer pixels buy little.
+**Reached, and then passed, by changing what a world is made of** (2026-08-17). The
+shipped world now runs at **106 fps at 1080p** driving on the autopilot — a frame of
+4.7 ms drawing, 2.2 ms physics and 2.5 ms of everything else — against 57.5 before. None
+of it came from making the old frame faster:
+
+| | before | after |
+|---|---|---|
+| frame, 1080p | 57.5 fps | 106 fps |
+| draw | 10.9 ms | 4.7 ms |
+| of which shadows | 5.5 ms | 1.9 ms |
+| shapes the pass gathered | 148 | 29 |
+| trees in the world | 45k, in tiles | 379k, in a field |
+
+The three changes, all of them "put this somewhere else":
+
+- **The ground stopped being tiles.** One
+  [splat terrain](../docs/terrain.html#heightfield) over a 1025² height field is one draw
+  and casts no shadow, where a tree of vertex-coloured patches was a hundred shapes that
+  did. It also looks incomparably better, which was the reason for doing it.
+- **The forest stopped being tile content.** 379k trees in a
+  [`VegetationField`](../docs/terrain.html#vegetationfield) are two instanced draws per
+  species over a table, re-chosen when the camera moves eight metres, against 45k trees
+  that were per-tile geometry rasterised into three shadow cascades as well as the frame.
+- **Physics stopped reading the drawn geometry.** The ground is
+  [chunks of the height field](../docs/terrain.html#fieldphysics) and the carriageway is
+  [swept from the course](../docs/physics.html#roadcolliders), so nothing streams under
+  the car.
+
+Dynamic resolution, the lever this plan named first, is still **not** the one: at 1280×720
+the same world runs at the same rate as at 1080p, so the frame is CPU-bound and fewer
+pixels buy nothing.
 
 **The other levers, and why a racing game has ones the forest demo lacked.**
 

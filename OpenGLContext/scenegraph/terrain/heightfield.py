@@ -8,6 +8,8 @@ clamped with :meth:`sample` sits on the surface the player sees, not above or
 below it. Also bakes the two static shadow terms used by the splat shader.
 """
 import math
+from typing import Any, Callable, Optional
+
 import numpy as np
 from PIL import Image, ImageFilter
 
@@ -19,16 +21,66 @@ class HeightField:
     :param extent: side length of the terrain in world units (centred on origin,
         so world XZ spans [-extent/2, extent/2]).
     :param relief: world height of a full 0->1 change in the grid.
+    :param base: world height the grid's zero stands at. A landscape's lowest
+        point is rarely sea level -- a lake bed is below the datum and a valley
+        floor a long way above it -- and the grid says nothing about where it
+        sits, only how far it rises.
     """
-    def __init__(self, grid: np.ndarray, extent: float, relief: float) -> None:
+    def __init__(self, grid: np.ndarray, extent: float, relief: float,
+                 base: float = 0.0) -> None:
         self.grid = np.asarray(grid, 'd')
         self.res = self.grid.shape[0]
         self.extent = float(extent)
         self.relief = float(relief)
+        self.base = float(base)
 
     @classmethod
-    def from_image(cls, path: str, res: int, extent: float, relief: float) -> "HeightField":
+    def from_function(cls, height_fn: "Callable[[Any, Any], Any]", res: int,
+                      extent: float, base: "Optional[float]" = None,
+                      relief: "Optional[float]" = None) -> "HeightField":
+        """Sample a height function over the world square into a grid.
+
+        A landscape is *authored* as a function of ``(x, z)`` -- procedural
+        noise, a DEM reader, terrain with a road's earthworks cut into it -- and
+        rendered and collided against as a grid. This is the step between.
+
+        ``base`` and ``relief`` default to what the function actually does over
+        the square, which spends the grid's whole 0..1 range on the ground that
+        is there. Give them explicitly when two fields of one landscape have to
+        agree -- they meet in a step otherwise -- and ground outside the range
+        is held at its edge.
+        """
+        axis = np.linspace(-extent / 2.0, extent / 2.0, int(res))
+        x, z = np.meshgrid(axis, axis)
+        heights = np.asarray(height_fn(x, z), dtype='d').reshape(int(res), int(res))
+        if base is None:
+            base = float(heights.min())
+        if relief is None:
+            relief = float(heights.max()) - base
+        # Level ground has no relief to divide by, and a flat grid of zeros at
+        # the datum is exactly right for it.
+        span = relief if relief > 0 else 1.0
+        grid = np.clip((heights - base) / span, 0.0, 1.0)
+        return cls(grid, extent, relief, base=base)
+
+    def save_image(self, path: "Any", format: "Optional[str]" = None) -> None:
+        """Write the grid as a 16-bit greyscale PNG.
+
+        Sixteen bits because eight over five hundred metres of relief is
+        two-metre steps, which a car drives over as a staircase. The datum and
+        the relief are not in the image -- they are two numbers, and belong
+        wherever the image is referenced from.
+        """
+        quantised = np.clip(np.rint(self.grid * 65535.0), 0, 65535).astype('<u2')
+        Image.fromarray(quantised).save(path, format=format or 'PNG')
+
+    @classmethod
+    def from_image(cls, path: Any, res: int, extent: float, relief: float,
+                   base: float = 0.0) -> "HeightField":
         """Load a heightmap image, resampled to ``res`` x ``res``.
+
+        ``path`` is anything PIL opens: a filename, or the bytes of one that
+        came off the network rather than off disk.
 
         The grid feeds :meth:`sample`/:meth:`mesh` as a single 0..1 channel, so
         the divisor tracks the image's real bit depth instead of assuming 16-bit:
@@ -54,7 +106,7 @@ class HeightField:
         if grid.ndim != 2:
             raise ValueError('Heightmap must reduce to a single 2-D channel, got '
                              'shape %r' % (grid.shape,))
-        return cls(grid, extent, relief)
+        return cls(grid, extent, relief, base=base)
 
     def sample(self, x: "float | np.ndarray", z: "float | np.ndarray") -> np.ndarray:
         """Bilinear world-height at ``(x, z)`` (scalars or arrays), matching the mesh."""
@@ -75,7 +127,7 @@ class HeightField:
         h10 = h[v1, u0]
         h11 = h[v1, u1]
         return ((h00 * (1 - fu) + h01 * fu) * (1 - fv) +
-                (h10 * (1 - fu) + h11 * fu) * fv) * self.relief
+                (h10 * (1 - fu) + h11 * fu) * fv) * self.relief + self.base
 
     def height_at(self, x: float, z: float) -> float:
         """Scalar world-height at ``(x, z)``."""
@@ -107,7 +159,7 @@ class HeightField:
             grid over the world square with per-vertex normals from the gradient.
         """
         E, R = self.extent, self.res
-        z = self.grid * self.relief
+        z = self.grid * self.relief + self.base
         xs = np.linspace(-E / 2, E / 2, R)
         X, Y = np.meshgrid(xs, xs)
         d = E / (R - 1)

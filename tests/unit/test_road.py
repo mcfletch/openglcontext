@@ -335,3 +335,41 @@ class TestASectionThatChangesAlongTheRoad:
         with pytest.raises(ValueError):
             morphed_sections(RoadProfile(), RoadProfile(verge_width=0.0),
                              np.zeros(4))
+
+
+class TestTheCutOverAStructure:
+    """A deck and a bore have no ground beside them for a verge to fall to, and
+    a grass verge inside a tunnel is grass inside a tunnel."""
+
+    def test_the_verge_does_not_fall(self) -> None:
+        assert RoadProfile().on_structure().verge_drop == 0.0
+
+    def test_it_is_an_edge_beam_rather_than_a_verge(self) -> None:
+        profile = RoadProfile()
+        assert profile.on_structure().verge_width < profile.verge_width / 2.0
+
+    def test_the_carriageway_is_untouched(self) -> None:
+        profile = RoadProfile()
+        assert profile.on_structure().carriageway_width \
+            == profile.carriageway_width
+
+    def test_the_road_narrows_onto_it(self) -> None:
+        profile = RoadProfile()
+        assert profile.on_structure().total_width < profile.total_width
+
+    def test_the_two_sections_have_the_same_points(self) -> None:
+        """Or they cannot be blended, and the change is a step."""
+        profile = RoadProfile()
+        assert profile.section().shape == profile.on_structure().section().shape
+
+    def test_a_road_with_no_verge_still_has_one_on_a_structure(self) -> None:
+        profile = RoadProfile(verge_width=0.0)
+        assert profile.section().shape \
+            == profile.on_structure().section().shape
+
+    def test_blending_the_two_narrows_the_road(self) -> None:
+        from OpenGLContext.scenegraph.road import morphed_sections
+        profile = RoadProfile()
+        blend = morphed_sections(profile, profile.on_structure(),
+                                 np.array([0.0, 1.0]))
+        assert abs(blend[1, 0, 0]) < abs(blend[0, 0, 0])

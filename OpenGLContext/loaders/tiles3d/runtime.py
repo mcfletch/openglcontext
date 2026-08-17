@@ -52,6 +52,7 @@ class TilesetRuntime:
         hysteresis: float = 0.0,
         on_renderable: "Optional[Callable[[RuntimeTile, Any], None]]" = None,
         on_evicted: "Optional[Callable[[RuntimeTile, Any], None]]" = None,
+        on_drawn: "Optional[Callable[[list], None]]" = None,
     ) -> None:
         self.tileset = tileset
         self.uploader = uploader
@@ -61,6 +62,10 @@ class TilesetRuntime:
         # (e.g. physics colliders) can track the resident set. Both take (tile, drawable).
         self.on_renderable = on_renderable
         self.on_evicted = on_evicted
+        #: Called once per update with the ``(tile, drawable)`` pairs about to
+        #: be drawn. What a consumer wanting the *visible* set rather than the
+        #: resident one hangs off -- physics colliders, most of all.
+        self.on_drawn = on_drawn
         self.residency = Residency(memory_budget)
         self.loadmgr = LoadManager(loader_fn, workers=workers)
         self.fovy = fovy
@@ -70,6 +75,8 @@ class TilesetRuntime:
         self._drawables: dict[int, Any] = {}   # id(tile) -> drawable
         # id(tile) -> (tile, payload) awaiting upload
         self._ready_payloads: "dict[int, tuple[RuntimeTile, Any]]" = {}
+        #: What the last update decided to draw, as (tile, drawable) pairs.
+        self._drawn: "list[tuple[RuntimeTile, Any]]" = []
 
     def update(
         self,
@@ -97,6 +104,10 @@ class TilesetRuntime:
         self._upload_ready()
         draw, pinned = self._build_draw_list(selection.render)
         self._evict(selection.want, pinned)
+        # After eviction, so a consumer is never handed a tile that is about to
+        # be released out from under it.
+        if self.on_drawn is not None:
+            self.on_drawn(list(self._drawn))
         return draw
 
     def wait_for_loads(self, timeout: float = 5.0) -> bool:
@@ -146,13 +157,16 @@ class TilesetRuntime:
     ) -> "tuple[list[Any], list[RuntimeTile]]":
         draw: "list[Any]" = []
         pinned: "list[RuntimeTile]" = []
+        self._drawn = []
         seen: set[int] = set()
         for tile in render:
             resolved = self._renderable_or_ancestor(tile)
             if resolved is None or id(resolved) in seen:
                 continue
             seen.add(id(resolved))
-            draw.append(self._drawables[id(resolved)])
+            drawable = self._drawables[id(resolved)]
+            draw.append(drawable)
+            self._drawn.append((resolved, drawable))
             if resolved is not tile:
                 pinned.append(resolved)
         return draw, pinned

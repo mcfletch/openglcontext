@@ -376,6 +376,47 @@ terrain.update_for_camera(eye_xyz, viewport_height, view_projection=vp_matrix)</
   show no gaps.</p>
 
   <h2 id="vegetation">Vegetation</h2>
+  <p>There are two paths, and which one a world wants depends on how big it is.</p>
+
+  <h3 id="vegetationfield">A forest as one node</h3>
+  <p>A quarter of a million trees is not a quarter of a million objects in a
+  scenegraph. It is a table of positions, one instanced draw per species for the
+  cards that stand for the far field, and one more for the real geometry within a
+  hundred metres, with both re-chosen from the table whenever the camera moves far
+  enough to change them.
+  <strong><code>OpenGLContext.scenegraph.vegetation.VegetationField</code></strong>
+  owns that:</p>
+  <pre><code>from OpenGLContext.scenegraph.vegetation import TreeSpecies, VegetationField
+forest = VegetationField(positions, yaws, heights,
+                         [TreeSpecies(name='fir', mesh='fir.npz',
+                                      solid_texture='fir_bark.png',
+                                      foliage_texture='fir_branch.png',
+                                      impostor='fir_imp.png')],
+                         species_id=kind)
+forest.update(camera_position, facing=where_it_looks)   # once a frame</code></pre>
+  <p>A <strong><code>TreeSpecies</code></strong> is what one kind of tree is drawn
+  from: a <code>.npz</code> of named arrays holding a <em>solid</em> part (trunk
+  and branches, opaque) and a <em>foliage</em> part (alpha-masked cards), a texture
+  for each, and the single card the tree becomes at a distance. The near mesh and
+  the cards cross-fade in their own shaders over a window they share, so a tree
+  turns from a card into branches without a step.</p>
+  <p><strong>What is drawn far off is chosen against the view</strong>, which is
+  most of what a four-kilometre forest costs. Give <code>update</code> the
+  camera's <code>view</code> matrix and the cards are chosen against the frustum
+  itself; give it a <code>facing</code> and they are chosen in a cone about it,
+  which is the fallback and is the wrong shape — a camera pitched down at a
+  valley has the trees near it inside the cone and the ones along its own view
+  outside, which draws a hard edge across the forest. Give neither and they are
+  chosen by distance alone, which is what an orbiting view wants.</p>
+  <p>The slack outside the view grows with distance, because a frustum plane
+  meets the ground in a straight line and a card set cut exactly at the view has
+  a ruled edge across the forest the moment anything disagrees about where the
+  view is. Selection is skipped altogether while the camera is nearly still.</p>
+  <p>A baked world can carry its forest this way: see
+  <a href="baking.html#vegetation">Baking a world</a>. The toolkit ships no tree
+  art &mdash; art is the caller's.</p>
+
+  <h3>Vegetation in a tile</h3>
   <p>Vegetation scatters deterministically on the tile surface, area-weighted, and
   filtered to sensible places (grass elevations, not water or peaks). Every instance
   shares one prototype so the instancing engine collapses them to a single draw. Trees
@@ -434,6 +475,63 @@ trees = build_vegetation_lod(pos, idx.reshape(-1, 3), near_mesh, far_billboard,
   samples is one mesh and one draw, and the height under any point is arithmetic
   rather than a ray cast.</p>
 
+  <h3 id="fromfunction">Where a height field comes from</h3>
+  <p>A landscape is <em>authored</em> as a function of <code>(x, z)</code> &mdash;
+  procedural noise, a DEM reader, terrain with a road's earthworks cut into it
+  &mdash; and rendered and collided against as a grid.
+  <code>HeightField.from_function(fn, res, extent)</code> is the step between: it
+  samples the function over the square and takes the datum and the relief from
+  what the function actually does there, so the grid's whole 0&ndash;1 range is
+  spent on the ground that is present.</p>
+  <pre><code>from OpenGLContext.scenegraph.terrain import HeightField, LayerRule, control_map
+field = HeightField.from_function(my_ground, res=1025, extent=4096.0)
+field.save_image('terrain-height.png')            # 16-bit, no datum in it
+HeightField.from_image('terrain-height.png', 1025, 4096.0,
+                       field.relief, base=field.base)</code></pre>
+  <p><strong><code>base</code> is the world height the grid's zero stands at.</strong>
+  A landscape's lowest point is rarely sea level, and the grid says only how far
+  the ground rises, not where it sits; the two numbers travel with the image.
+  Give <code>base</code> and <code>relief</code> explicitly when two fields of one
+  landscape have to agree, or they meet in a step.</p>
+
+  <h3 id="controlmap">Which ground material shows where</h3>
+  <p>The splat's control map is an RGBA image: red is how much of the first
+  material shows at that spot, green the second, and so on. Painting one is how a
+  landscape artist works; deriving one from the land is how a generated world gets
+  its ground. A <strong><code>LayerRule</code></strong> is an elevation band, a
+  slope band and a weight, and <code>control_map</code> turns a height field and a
+  list of them into the image:</p>
+  <pre><code>control_map(field, [
+    LayerRule(),                                   # grass: the fallback
+    LayerRule(slope=(0.16, 0.55), weight=1.5),     # needle litter on the slopes
+    LayerRule(slope=(0.5, 1e9), weight=3.0),       # rock where soil will not stay
+    LayerRule(weight=0.0),                         # dirt: painted, not derived
+], size=512, painted=[(3, road_corridor)])</code></pre>
+  <p>The first layer is the fallback: ground no rule wants is made of it. Bands
+  feather at their edges, because a hard edge between two ground materials reads
+  as a painted line. <code>painted</code> forces a layer where the rules cannot
+  know to &mdash; a road's corridor, a lake bed, a clearing &mdash; taking that
+  fraction of the pixel away from everything else, so the weights still add to
+  one.</p>
+
+  <h3 id="fieldphysics">Standing on one</h3>
+  <p>A field is a surface, so a vehicle needs triangles.
+  <code>OpenGLContext.physics.heightfield.HeightFieldColliders</code> cuts it into
+  square chunks and keeps the ones near whatever is moving in the physics world:</p>
+  <pre><code>from OpenGLContext.physics.heightfield import HeightFieldColliders
+ground = HeightFieldColliders(physics_world, field, reach=320.0)
+ground.update(car_position)                        # once a frame</code></pre>
+  <p>A four-kilometre field at four-metre spacing is two million triangles and a
+  car touches four of them at a time, so what is out of reach is removed again:
+  an hour of driving costs what one view of the world costs. Chunks are cut on the
+  field's own grid lines and share their edge rows, so two neighbours agree
+  exactly where they meet.</p>
+  <p><strong><code>holes</code></strong> is how something that passes <em>through</em>
+  the ground says so. A tunnel's bore runs inside the hill and the hill's surface
+  is still drawn over it; left in the physics world that surface is a wall across
+  the road. <code>holes(x, z) -&gt; mask</code> cuts the collider wherever it is
+  set, and the bore's own lining is what the vehicle then drives through.</p>
+
   <p><code>OpenGLContext.move.terrainwalk.TerrainWalkMixin</code> is what walks
   it. It is the terrain form of
   <a href="physics.html#heightfield"><code>PhysicsWalkMixin</code></a>: the same
@@ -488,12 +586,16 @@ trees = build_vegetation_lod(pos, idx.reshape(-1, 3), near_mesh, far_billboard,
   <a href="overlayui.html">settings and key-binding screens</a> on the same keys
   every other program here uses.</p>
   <p class="technical"><code>scenegraph/terrain/</code> (<code>heightfield.py</code>,
-  <code>splat.py</code>), <code>scenegraph/vegetation/</code> (instanced clumps,
-  billboards and near meshes) and <code>move/terrainwalk.py</code>. The behaviour
-  is pinned by <code>tests/unit/test_terrainwalk_avatar.py</code> (where the
-  walker ends up, on a slope, against a trunk, mid-jump and in the air),
-  <code>test_terrainwalk_broadphase.py</code> and
-  <code>test_terrain_vegetation.py</code>.</p>
+  <code>splat.py</code>, <code>control.py</code>),
+  <code>scenegraph/vegetation/</code> (instanced clumps, billboards, near meshes
+  and <code>field.py</code>), <code>physics/heightfield.py</code> and
+  <code>move/terrainwalk.py</code>. The behaviour is pinned by
+  <code>tests/unit/test_terrainwalk_avatar.py</code> (where the walker ends up, on
+  a slope, against a trunk, mid-jump and in the air),
+  <code>test_terrainwalk_broadphase.py</code>, <code>test_terrain_vegetation.py</code>,
+  <code>test_heightfield_datum.py</code>, <code>test_terrain_control.py</code>,
+  <code>test_heightfield_colliders.py</code> and
+  <code>test_vegetation_field.py</code>.</p>
 
   <h2>Demos &amp; validation</h2>
   <ul>
