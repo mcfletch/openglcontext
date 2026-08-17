@@ -607,3 +607,44 @@ class TestScreenWash:
         from OpenGLContext.ui.hudwidgets import ScreenWash
         assert ScreenWash(strength=1.0).wash() is None
 
+
+
+class TestRoomTakenBySomethingElse:
+    """A HUD shares the window. An application with a menu bar along the top,
+    or a tool palette down one side, has a smaller rectangle to put its
+    read-outs in, and a read-out drawn under a menu bar is unreadable.
+    """
+
+    def _layer(self, **named):
+        from OpenGLContext.ui.hudwidgets import HUDLayer, Readout
+        from OpenGLContext.ui.metrics import REFERENCE_METRICS
+        readout = Readout(anchor='top-left', value='here')
+        layer = HUDLayer(children=[readout], **named)
+        layer.layout((800, 600), REFERENCE_METRICS)
+        return layer, readout
+
+    def test_by_default_it_takes_the_whole_window(self) -> None:
+        plain, readout = self._layer()
+        assert readout.rect.top > 600 - plain.margin - 1
+
+    def test_room_reserved_along_the_top_is_left_clear(self) -> None:
+        _layer, readout = self._layer(reserved=(40.0, 0.0, 0.0, 0.0))
+        assert readout.rect.top <= 600 - 40
+
+    def test_room_reserved_down_the_left_is_left_clear(self) -> None:
+        _layer, readout = self._layer(reserved=(0.0, 0.0, 0.0, 60.0))
+        assert readout.rect.x >= 60
+
+    def test_the_bottom_and_the_right_can_be_reserved_too(self) -> None:
+        from OpenGLContext.ui.hudwidgets import HUDLayer, Readout
+        from OpenGLContext.ui.metrics import REFERENCE_METRICS
+        corner = Readout(anchor='bottom-right', value='there')
+        layer = HUDLayer(children=[corner], reserved=(0.0, 50.0, 30.0, 0.0))
+        layer.layout((800, 600), REFERENCE_METRICS)
+        assert corner.rect.right <= 800 - 50
+        assert corner.rect.y >= 30
+
+    def test_it_is_on_top_of_the_margin_not_instead_of_it(self) -> None:
+        plain, plain_readout = self._layer()
+        _layer, reserved = self._layer(reserved=(40.0, 0.0, 0.0, 0.0))
+        assert reserved.rect.top == plain_readout.rect.top - 40

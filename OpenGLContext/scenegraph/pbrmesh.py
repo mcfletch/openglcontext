@@ -214,7 +214,7 @@ class PBRMesh(node.Node):
         self.texcoords = self._farray(texcoords, 2)
         self.texcoords1 = self._farray(texcoords1, 2)
         self.tangents = self._farray(tangents, 4)
-        self.colors = self._farray(colors, 4)
+        self.colors = self._rgba(colors)
         self.indices = None if indices is None else np.asarray(indices, dtype=np.uint32).ravel()
         self._volume: Any = None
         self._init_deform(morph_targets, skin_joints, skin_weights)
@@ -227,6 +227,22 @@ class PBRMesh(node.Node):
         if a.ndim == 1:
             a = a.reshape(-1, width)
         return np.ascontiguousarray(a, dtype=np.float32)
+
+    @classmethod
+    def _rgba(cls, colors: Any) -> Optional[np.ndarray]:
+        """Vertex colours as RGBA, widening RGB to it.
+
+        glTF's COLOR_0 is VEC3 or VEC4, and a mesher with no transparency to
+        express writes three. The attribute the shader reads is four wide
+        either way, so a three-wide array is given an opaque alpha rather than
+        handed over to be read past the end of.
+        """
+        widened = cls._farray(colors, 4)
+        if widened is None or widened.shape[-1] == 4:
+            return widened
+        opaque = np.ones((len(widened), 4), dtype=np.float32)
+        opaque[:, :widened.shape[-1]] = widened
+        return opaque
 
     # -- deformation (morph targets + linear-blend skinning) ----------------
     def _init_deform(self, morph_targets: Any, skin_joints: Any, skin_weights: Any) -> None:
@@ -438,7 +454,8 @@ class PBRMesh(node.Node):
                 getattr(gpu, '_uploaded_morph_version', 0) != self._deform_version:
             gpu.update_dynamic(self)
             gpu._uploaded_morph_version = self._deform_version
-        return gpu
+        built: _MeshGPU = gpu
+        return built
 
     # Per-context queue of VAO ids whose owning mesh has been collected. The
     # finalizer can't touch GL, so it appends here and the pass
@@ -538,7 +555,7 @@ class PBRMesh(node.Node):
 
     def _front_face(self, mv: Any) -> int:
         if mv is None:
-            return GL_CCW
+            return int(GL_CCW)
         try:
             a = mv.tolist() if hasattr(mv, 'tolist') else mv
             # Sign of the modelview upper-3x3 determinant (a direct 3x3 solve, not
@@ -547,8 +564,8 @@ class PBRMesh(node.Node):
                    - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
                    + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]))
         except Exception:
-            return GL_CCW
-        return GL_CW if det < 0 else GL_CCW
+            return int(GL_CCW)
+        return int(GL_CW) if det < 0 else int(GL_CCW)
 
     def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         # Report transparency from the attached material so a mesh placed without a

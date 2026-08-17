@@ -139,12 +139,15 @@ class TestAMeshRoundTrips:
         assert _only_shape(written).geometry.indices is None
 
     def test_three_component_colours_survive(self):
-        """COLOR_0 may be VEC3; the loader pads it to RGBA with alpha 1."""
+        """A mesher with no transparency to express writes RGB; what comes back
+        is the same colours, opaque."""
+        rgb = np.array([(1, 0, 0), (0, 1, 0), (0, 0, 1)], 'f')
         written = PBRMesh(
             positions=np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], 'f'),
-            colors=np.array([(1, 0, 0), (0, 1, 0), (0, 0, 1)], 'f'))
+            colors=rgb)
         colors = _only_shape(written).geometry.colors
-        assert np.allclose(colors[:, :3], written.colors, atol=1e-6)
+        assert np.allclose(colors[:, :3], rgb, atol=1e-6)
+        assert np.allclose(colors[:, 3], 1.0)
 
     def test_small_meshes_use_short_indices(self):
         """A tile of a few thousand vertices should not pay 32-bit indices."""

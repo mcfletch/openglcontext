@@ -112,8 +112,20 @@ class Widget(GUINode, node.Node):
     focused: bool = False
     armed: bool = False
     #: Called with this widget when it is activated / when its value changes.
+    #: Not fields -- a callable is not something to serialise -- but taken by
+    #: the constructor anyway, so a tree can be written as one expression
+    #: instead of built and then walked back through to wire up.
     on_activate: Optional[Callable[['Widget'], None]] = None
     on_change: Optional[Callable[['Widget'], None]] = None
+
+    def __init__(self, on_activate: Optional[Callable[['Widget'], None]] = None,
+                 on_change: Optional[Callable[['Widget'], None]] = None,
+                 **named: Any) -> None:
+        super(Widget, self).__init__(**named)
+        if on_activate is not None:
+            self.on_activate = on_activate
+        if on_change is not None:
+            self.on_change = on_change
 
     # -- the tree ---------------------------------------------------------
     def widget_at(self, x: float, y: float) -> Optional['Widget']:

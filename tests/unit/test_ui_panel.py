@@ -372,3 +372,32 @@ class TestArrowKeysMoveBetweenItems:
         panel = self.menu()
         self.press(panel, '<down>')
         assert panel.focusVisible
+
+
+class TestWhatAWidgetIsToldToDo:
+    """``on_activate`` and ``on_change`` are how a widget is wired to the code
+    behind it, and a caller who cannot pass them to the constructor has to
+    build the tree and then walk back through it setting them."""
+
+    def test_a_button_can_be_given_its_action(self) -> None:
+        from OpenGLContext.ui.widgets import Button
+        pressed = []
+        button = Button(text='Yes', on_activate=lambda widget: pressed.append(1))
+        button.activate()
+        assert pressed == [1]
+
+    def test_a_toggle_can_be_given_what_to_do_when_it_moves(self) -> None:
+        from OpenGLContext.ui.widgets import Toggle
+        seen = []
+        toggle = Toggle(on_change=lambda widget: seen.append(widget.value))
+        toggle.write(True)
+        assert seen == [True]
+
+    def test_the_fields_still_come_through(self) -> None:
+        from OpenGLContext.ui.widgets import Button
+        button = Button(text='Yes', name='yes', on_activate=lambda w: None)
+        assert button.text == 'Yes' and button.name == 'yes'
+
+    def test_a_widget_given_neither_has_neither(self) -> None:
+        from OpenGLContext.ui.widgets import Button
+        assert Button(text='Yes').on_activate is None

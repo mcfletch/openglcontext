@@ -195,6 +195,13 @@ class HUDLayer(RootWidget):
     #: Pixels kept clear between the layer's contents and the window edge, at
     #: the reference font size.
     margin = field.newField('margin', 'SFFloat', 1, 16.0)
+    #: Further room to keep clear on each side -- ``(top, right, bottom,
+    #: left)``, in reference pixels -- because something else is using it. A
+    #: HUD shares the window: an application with a menu bar along the top or a
+    #: tool palette down one side has a smaller rectangle to put its read-outs
+    #: in, and a read-out drawn under a menu bar is unreadable. On top of the
+    #: margin rather than instead of it, so the gap to the edge is still there.
+    reserved = field.newField('reserved', 'SFVec4f', 1, (0.0, 0.0, 0.0, 0.0))
 
     interactive = False
 
@@ -212,8 +219,16 @@ class HUDLayer(RootWidget):
         self.arrange_content(metrics)
 
     def contentRect(self, metrics: FontMetrics) -> Rect:
-        """The rectangle children are placed in: the window inside the margin."""
-        return self.rect.inset(metrics.pixels(self.margin))
+        """The rectangle children are placed in: the window inside the margin,
+        less whatever room something else has reserved."""
+        inner = self.rect.inset(metrics.pixels(self.margin))
+        top, right, bottom, left = (metrics.pixels(value)
+                                    for value in self.reserved)
+        if not (top or right or bottom or left):
+            return inner
+        return Rect(inner.x + left, inner.y + bottom,
+                    max(0, inner.width - left - right),
+                    max(0, inner.height - top - bottom))
 
     def arrange_content(self, metrics: FontMetrics) -> None:
         content = self.contentRect(metrics)
