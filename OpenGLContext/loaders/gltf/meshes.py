@@ -155,7 +155,7 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
     if normals is None:
         # Face-normal estimation only makes sense for triangles; points/lines get a
         # constant up-normal so the lit shader still shades them predictably.
-        normals = (_estimate_normals(positions, indices)
+        normals = (estimate_normals(positions, indices)
                    if draw_mode == PrimitiveMode.TRIANGLES
                    else np.tile(np.array([0, 0, 1], 'f'), (nverts, 1)))
 
@@ -221,7 +221,15 @@ def _read_morph_targets(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
     return out
 
 
-def _estimate_normals(positions: np.ndarray, indices: Optional[np.ndarray]) -> np.ndarray:
+def estimate_normals(positions: np.ndarray, indices: Optional[np.ndarray]) -> np.ndarray:
+    """Per-vertex normals from the triangles that share each vertex.
+
+    What a mesh with no NORMAL attribute is shaded by, and what any generated
+    surface -- a road, an extrusion, a lofted shape -- gets its normals from:
+    each triangle's face normal is accumulated onto its three vertices and the
+    sum normalised, which smooths across a shared edge and keeps a hard one
+    hard where the vertices are split.
+    """
     normals = np.zeros_like(positions)
     if indices is None:
         idx = np.arange(len(positions), dtype=np.uint32)

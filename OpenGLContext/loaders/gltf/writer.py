@@ -121,6 +121,28 @@ class EncodedImage:
 
 
 @dataclass
+class ExternalImage:
+    """A texture stored beside the document rather than inside it.
+
+    Written as an image ``uri``, which the loader resolves relative to the
+    document. This is how a texture is shared: a tileset whose thousand tiles
+    all use one road surface embeds it a thousand times if each document
+    carries its own copy, and names it a thousand times if they point at one
+    file. ``uri`` is relative to the written document unless it is absolute.
+
+    Nothing here writes the file -- whatever produces the tiles is responsible
+    for putting the image where the ``uri`` says it is.
+    """
+
+    uri: str
+    srgb: bool = False
+    wrap_s: Optional[int] = None
+    wrap_t: Optional[int] = None
+    min_filter: Optional[int] = None
+    mag_filter: Optional[int] = None
+
+
+@dataclass
 class SceneNode:
     """One node of the written hierarchy: a placed mesh, or a parent of nodes.
 
@@ -558,6 +580,12 @@ class GLTFWriter:
 
     def _add_image(self, holder: Any) -> int:
         """Embed a holder's pixels as a bufferView, PIL images encoded as PNG."""
+        if isinstance(holder, ExternalImage):
+            cached = self._image_index.get(holder)
+            if cached is not None:
+                return cached
+            self._images.append({'uri': holder.uri})
+            return self._image_index.set(holder, len(self._images) - 1)
         if isinstance(holder, EncodedImage):
             cached = self._image_index.get(holder)
             if cached is not None:

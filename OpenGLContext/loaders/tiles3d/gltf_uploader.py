@@ -84,7 +84,13 @@ def make_tile_loader(cache_dir: Optional[str] = None) -> _LoaderFn:
         for uri in tile.content_uris:
             data = fetch.read_bytes(uri, cache_dir=cache_dir)
             nbytes += len(data)
-            scenes.append(gltf.load_gltf(_strip_b3dm(data)))
+            # Where the tile came from, so a texture named beside the tileset
+            # rather than embedded in every tile still resolves.
+            base = fetch.dir_of(uri)
+            scenes.append(gltf.load_gltf(
+                _strip_b3dm(data),
+                base_url=base if fetch.is_url(uri) else None,
+                base_dir=None if fetch.is_url(uri) else base))
         scene: _Scene = scenes[0] if len(scenes) == 1 else _CombinedScene(scenes)
         return scene, nbytes
     return load

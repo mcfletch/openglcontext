@@ -73,6 +73,14 @@ def fit_sphere(radius: float, margin: Optional[float] = None,
         fov=fov, near=max(1e-4, radius * 0.02), far=radius * 60.0)
 
 
+#: The near plane of a placed camera, as a fraction of how far away it is
+#: looking, and the closest it is ever put. A thousandth of the aim distance
+#: leaves a 24-bit depth buffer its precision while letting a driver see the
+#: bonnet of the car.
+NEAR_PLANE_OF_AIM = 0.001
+NEAREST_NEAR_PLANE = 0.05
+
+
 def look_from(eye: Sequence[float], target: Sequence[float], radius: float,
               fov: float = DEFAULT_FOV) -> Optional[CameraPose]:
     """Stand at ``eye`` and look at ``target``, both in world space.
@@ -92,6 +100,15 @@ def look_from(eye: Sequence[float], target: Sequence[float], radius: float,
     :meth:`tests.unit.test_viewer_framing.TestLookFromAimsWhereItSays` checks
     the direction the platform's matrix really faces rather than the angles
     that went in.
+
+    **The near plane follows how far away the aim point is, not how big the
+    world is.** Placing the camera is a statement about standing somewhere
+    inside the scene, and a near plane scaled to a four-kilometre dataset would
+    clip away the ten metres of road in front of a car. Looking a hundred metres
+    up that road clips at a tenth of a metre; looking two kilometres across a
+    valley clips at two, where nothing is that close anyway. The far plane still
+    comes from the radius, because whatever you are looking at, the rest of the
+    world is still out there.
     """
     from OpenGLContext import quaternion
     origin = np.asarray(eye, dtype='d')
@@ -107,5 +124,5 @@ def look_from(eye: Sequence[float], target: Sequence[float], radius: float,
     return CameraPose(
         position=(float(origin[0]), float(origin[1]), float(origin[2])),
         orientation=None,
-        fov=fov, near=max(1e-3, radius * 0.01), far=radius * 8.0,
-        quaternion=aim)
+        fov=fov, near=max(NEAREST_NEAR_PLANE, length * NEAR_PLANE_OF_AIM),
+        far=max(radius * 8.0, length * 4.0), quaternion=aim)

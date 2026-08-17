@@ -136,6 +136,26 @@ class TestLookFrom:
         assert inside.near < outside.near
         assert inside.far < outside.far
 
+    def test_the_near_plane_follows_the_aim_not_the_world(self):
+        """Standing on a road in a four-kilometre world and looking a hundred
+        metres up it must not clip away the first ten."""
+        pose = look_from((0, 1.5, 0), (0, 1.2, -100.0), radius=2000.0)
+        assert pose.near <= 0.2
+
+    def test_a_long_view_still_gets_depth_precision(self):
+        """Aiming two kilometres off, nothing is a handspan from the lens."""
+        pose = look_from((0, 400, 0), (0, 0, -2000.0), radius=2000.0)
+        assert pose.near >= 1.0
+
+    def test_the_near_plane_has_a_floor(self):
+        pose = look_from((0, 0, 0), (0, 0, -0.001), radius=1.0)
+        assert pose.near >= 0.049
+
+    def test_the_far_plane_reaches_what_is_aimed_at(self):
+        """A camera looking further than the dataset's own radius still sees it."""
+        pose = look_from((0, 0, 0), (0, 0, -5000.0), radius=10.0)
+        assert pose.far > 5000.0
+
 
 def test_a_pose_reads_like_a_tuple_and_by_name():
     pose = fit_sphere(1.0)

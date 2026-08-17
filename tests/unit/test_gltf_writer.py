@@ -456,3 +456,72 @@ class TestTheWriterObject:
     def test_the_generator_string_is_the_engine_and_its_version(self):
         from OpenGLContext import __version__
         assert __version__ in gltf_writer.GENERATOR
+
+
+class TestSharedTextures:
+    """A texture used by many documents is named, not copied into each."""
+
+    def test_an_external_image_is_written_as_a_uri(self):
+        material = PBRMaterial()
+        material.textures = {'baseColor': gltf_writer.ExternalImage(
+            'road-surface.png', srgb=True)}
+        doc = json.loads(_json_chunk(write_glb(_quad_with(material))))
+        assert doc['images'] == [{'uri': 'road-surface.png'}]
+        assert 'bufferView' not in doc['images'][0]
+
+    def test_it_costs_the_document_nothing(self):
+        material = PBRMaterial()
+        material.textures = {'baseColor': gltf_writer.ExternalImage('t.png')}
+        plain = len(write_glb(_quad()))
+        assert len(write_glb(_quad_with(material))) < plain + 512
+
+    def test_the_loader_reads_it_back_from_beside_the_document(self, tmp_path):
+        _image((12, 34, 56, 255), size=(4, 4)).save(str(tmp_path / 'surface.png'))
+        material = PBRMaterial()
+        material.textures = {'baseColor': gltf_writer.ExternalImage(
+            'surface.png', srgb=True)}
+        write_glb(_quad_with(material), path=str(tmp_path / 'tile.glb'))
+        loaded = gltf.load_gltf(str(tmp_path / 'tile.glb'))
+        shape = _find_shapes(loaded.group)[0]
+        assert shape.appearance.material.textures['baseColor'].image.getpixel(
+            (0, 0)) == (12, 34, 56, 255)
+
+    def test_one_external_image_is_named_once_however_many_channels_use_it(self):
+        shared = gltf_writer.ExternalImage('maps.png')
+        material = PBRMaterial()
+        material.textures = {'metallicRoughness': shared, 'occlusion': shared}
+        doc = json.loads(_json_chunk(write_glb(_quad_with(material))))
+        assert len(doc['images']) == 1
+
+    def test_its_sampler_survives(self, tmp_path):
+        _image().save(str(tmp_path / 's.png'))
+        material = PBRMaterial()
+        material.textures = {'baseColor': gltf_writer.ExternalImage(
+            's.png', srgb=True, wrap_s=33071, wrap_t=33071)}
+        write_glb(_quad_with(material), path=str(tmp_path / 'tile.glb'))
+        holder = _find_shapes(gltf.load_gltf(str(tmp_path / 'tile.glb')).group)[0] \
+            .appearance.material.textures['baseColor']
+        assert int(holder.wrap_s) == 33071
+
+
+class TestABytesDocumentCanSayWhereItCameFrom:
+    """A tile is read into memory before it is parsed, and its texture is
+    beside the tileset rather than inside it."""
+
+    def test_bytes_with_a_base_directory_resolve_their_images(self, tmp_path):
+        _image((200, 30, 40, 255), size=(4, 4)).save(str(tmp_path / 'shared.png'))
+        material = PBRMaterial()
+        material.textures = {'baseColor': gltf_writer.ExternalImage(
+            'shared.png', srgb=True)}
+        data = write_glb(_quad_with(material))
+        scene = gltf.load_gltf(data, base_dir=str(tmp_path))
+        holder = _find_shapes(scene.group)[0].appearance.material.textures['baseColor']
+        assert holder.image.getpixel((0, 0)) == (200, 30, 40, 255)
+
+    def test_without_one_the_reference_is_simply_not_found(self, tmp_path):
+        """No base, no directory to look in -- the material loads untextured
+        rather than reaching somewhere it was not pointed."""
+        material = PBRMaterial()
+        material.textures = {'baseColor': gltf_writer.ExternalImage('shared.png')}
+        scene = gltf.load_gltf(write_glb(_quad_with(material)))
+        assert 'baseColor' not in _find_shapes(scene.group)[0].appearance.material.textures

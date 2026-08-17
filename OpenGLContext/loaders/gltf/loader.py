@@ -36,13 +36,20 @@ def _require_pygltflib() -> "type[pygltflib.GLTF2]":
 
 def load_gltf(source: Union[bytes, bytearray, str], base_url: Optional[str] = None,
               max_resource_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
-              pointer_time: Optional[float] = None) -> GLTFScene:
+              pointer_time: Optional[float] = None,
+              base_dir: Optional[str] = None) -> GLTFScene:
     """Load a glTF/GLB from bytes, a file path, or (with base_url) relative refs.
+
+    ``base_dir`` says where a document handed over as *bytes* came from, so its
+    relative references -- an external image, an external buffer -- resolve
+    against that directory. A path source works this out for itself; a caller
+    that has already read the bytes has to say. This is how a tile whose texture
+    is shared with the rest of its tileset finds it: the image is named once
+    beside the tileset rather than copied into every tile.
 
     ``pointer_time`` bakes KHR_animation_pointer channels at that animation time
     (seconds) into the static scene (None => the bind/initial state)."""
     GLTF2 = _require_pygltflib()
-    base_dir = None
     if isinstance(source, (bytes, bytearray)):
         data = bytes(source)
         # Cap the primary document too: max_resource_bytes only

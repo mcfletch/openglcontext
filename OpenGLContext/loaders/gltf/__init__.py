@@ -49,7 +49,7 @@ from OpenGLContext.loaders.gltf.loader import load_gltf, load_gltf_url
 from OpenGLContext.loaders.gltf.scene import GLTFScene
 from OpenGLContext.loaders.gltf.transforms import look_orientation
 from OpenGLContext.loaders.gltf.writer import (
-    GLTFWriter, InstanceSet, SceneNode, write_glb,
+    EncodedImage, ExternalImage, GLTFWriter, InstanceSet, SceneNode, write_glb,
 )
 from OpenGLContext.loaders.gltf.samples import (
     SAMPLE_MODELS_BASE,
@@ -70,6 +70,8 @@ __all__ = [
     "GLTFWriter",
     "SceneNode",
     "InstanceSet",
+    "EncodedImage",
+    "ExternalImage",
     "GLTFScene",
     "look_orientation",
     "SAMPLE_MODELS_BASE",

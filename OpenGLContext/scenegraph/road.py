@@ -1,0 +1,300 @@
+"""Roads: a centreline and a cross-section become a drivable surface.
+
+A road is a 3D polyline through the world plus a *profile* -- the shape of a cut
+across it, from the crown of the carriageway out through the shoulder to the
+verge that meets the ground. :func:`road_surface` sweeps the profile along the
+line and returns the arrays; :func:`road_mesh` wraps them in a
+:class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh` with a road material on it,
+ready to render or to write into a tile.
+
+This is the runtime half. Nothing here decides *where* a road goes, whether a
+valley wants a bridge or a causeway, or how the ground is reshaped to meet the
+shoulder -- that is authoring, and it lives in ``OpenGLContext_editor``. A game
+that generates a road at runtime, or an editor drawing one under the cursor,
+uses what is here and needs nothing else.
+
+The road surface is generated with a **frame per centreline point**: the
+tangent along the line, the right vector across it, and the up vector their
+cross product gives, so the carriageway banks with a climb and stays the width
+it is told through a bend.
+"""
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from typing import Any, Optional, Tuple
+
+import numpy as np
+
+from OpenGLContext.loaders.gltf.meshes import estimate_normals, estimate_tangents
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+
+__all__ = [
+    'RoadProfile', 'resample_polyline', 'road_surface', 'road_mesh',
+    'road_texture', 'tarmac_material', 'estimate_normals',
+]
+
+#: Which way is up when a road has no other opinion. A road banks with its
+#: grade but does not roll over, so the frame is built against world up.
+WORLD_UP = np.array([0.0, 1.0, 0.0])
+
+#: Albedo of the three surfaces the road texture carries. Asphalt is one of the
+#: darkest surfaces outdoors; gravel and the grass verge beside it are several
+#: times brighter, which is most of what makes a road read as a road from a
+#: distance.
+TARMAC_ALBEDO = (0.055, 0.055, 0.058)
+GRAVEL_ALBEDO = (0.42, 0.40, 0.36)
+VERGE_ALBEDO = (0.24, 0.27, 0.14)
+LINE_ALBEDO = (0.86, 0.86, 0.82)
+
+#: Wet, asphalt darkens and turns near-mirror; the environment then does the
+#: work a reflection pass would otherwise have to.
+DRY_ROUGHNESS = 0.72
+WET_ROUGHNESS = 0.12
+WET_DARKENING = 0.45
+
+
+@dataclass
+class RoadProfile:
+    """The shape of a cut across a road, in metres.
+
+    Measured out from the crown: ``lanes`` lanes of ``lane_width`` make the
+    carriageway, a shoulder of ``shoulder_width`` sits ``shoulder_drop`` below
+    its edge, and a verge of ``verge_width`` falls a further ``verge_drop`` to
+    meet the ground. ``crossfall`` is the camber that drains the carriageway,
+    as a fraction -- 2% is the usual figure for a straight road.
+
+    ``texture_length`` is how many metres of road one repeat of the surface
+    texture covers, which is what sets the length of the centre-line dashes.
+    """
+
+    lane_width: float = 3.7
+    lanes: int = 2
+    shoulder_width: float = 1.5
+    shoulder_drop: float = 0.10
+    verge_width: float = 3.0
+    verge_drop: float = 1.2
+    crossfall: float = 0.02
+    texture_length: float = 25.0
+
+    @property
+    def carriageway_width(self) -> float:
+        return float(self.lane_width * self.lanes)
+
+    @property
+    def total_width(self) -> float:
+        """Across everything the road occupies, verge to verge."""
+        return self.carriageway_width + 2.0 * (self.shoulder_width + self.verge_width)
+
+    def section(self) -> np.ndarray:
+        """The cross-section as (K,2) points: lateral offset, vertical offset.
+
+        Left to right, crown at zero. Vertical offsets are at or below zero,
+        so the crown is the highest point of the road and everything drains
+        away from it.
+        """
+        half = self.carriageway_width / 2.0
+        edge_drop = -self.crossfall * half
+        shoulder = half + self.shoulder_width
+        verge = shoulder + self.verge_width
+        right: list[tuple[float, float]] = [(0.0, 0.0), (half, edge_drop)]
+        if self.shoulder_width > 0:
+            right.append((shoulder, edge_drop - self.shoulder_drop))
+        if self.verge_width > 0:
+            right.append((verge, edge_drop - self.shoulder_drop - self.verge_drop))
+        left = [(-lateral, vertical) for lateral, vertical in reversed(right[1:])]
+        return np.array(left + right, dtype='d')
+
+    def section_u(self) -> np.ndarray:
+        """The texture coordinate across the section, 0 at the left verge to 1.
+
+        One texture spans the whole cut, so the image carries the verge, the
+        shoulder and the carriageway markings as bands and no seam falls
+        between them.
+        """
+        lateral = self.section()[:, 0]
+        span = lateral[-1] - lateral[0]
+        return (lateral - lateral[0]) / span
+
+
+def resample_polyline(points: Any, spacing: float) -> np.ndarray:
+    """A polyline re-sampled to even spacing along its own length.
+
+    The ends are kept exactly and the interval is shrunk to divide the length
+    evenly, so a road never finishes with a stub segment. Coarsening a road for
+    a distant tile is this function with a bigger ``spacing``.
+    """
+    line = np.asarray(points, dtype='d').reshape(-1, 3)
+    if len(line) < 2:
+        raise ValueError("a polyline needs at least two points")
+    steps = np.linalg.norm(np.diff(line, axis=0), axis=1)
+    distance = np.concatenate([[0.0], np.cumsum(steps)])
+    length = float(distance[-1])
+    if length <= 0:                              # pragma: no cover - all points equal
+        return line[:1]
+    count = max(int(math.ceil(length / float(spacing))), 1) + 1
+    wanted = np.linspace(0.0, length, count)
+    return np.stack([np.interp(wanted, distance, line[:, axis])
+                     for axis in range(3)], axis=-1)
+
+
+def _frames(line: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Per-point (right, up) vectors for a centreline.
+
+    The tangent at a point is the average of the segments meeting there, so the
+    frame turns smoothly through a bend instead of stepping at each vertex.
+    """
+    segments = np.diff(line, axis=0)
+    lengths = np.linalg.norm(segments, axis=1, keepdims=True)
+    lengths[lengths == 0] = 1.0
+    directions = segments / lengths
+    tangents = np.empty_like(line)
+    tangents[0] = directions[0]
+    tangents[-1] = directions[-1]
+    if len(line) > 2:
+        tangents[1:-1] = directions[:-1] + directions[1:]
+    norms = np.linalg.norm(tangents, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    tangents = tangents / norms
+    right = np.cross(tangents, WORLD_UP)
+    norms = np.linalg.norm(right, axis=1, keepdims=True)
+    # A perfectly vertical tangent leaves no right vector; a road never climbs
+    # that steeply, but the fallback keeps the frame defined rather than NaN.
+    vertical = norms[:, 0] < 1e-9
+    right[vertical] = (1.0, 0.0, 0.0)
+    norms[vertical] = 1.0
+    right = right / norms
+    up = np.cross(right, tangents)
+    return right, up
+
+
+def road_surface(points: Any, profile: RoadProfile
+                 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Sweep a profile along a centreline: positions, normals, UVs, indices.
+
+    ``points`` is the centreline as (N,3) world positions, already at the height
+    the road runs at. The mesh has one vertex ring of ``len(profile.section())``
+    per point, so re-sampling the centreline is the whole of the road's level of
+    detail.
+    """
+    line = np.asarray(points, dtype='d').reshape(-1, 3)
+    if len(line) < 2:
+        raise ValueError("a road needs a centreline of at least two points")
+    section = profile.section()
+    right, up = _frames(line)
+    ring = len(section)
+
+    lateral = section[:, 0][None, :, None]
+    vertical = section[:, 1][None, :, None]
+    positions = (line[:, None, :] + right[:, None, :] * lateral
+                 + up[:, None, :] * vertical).reshape(-1, 3)
+
+    steps = np.linalg.norm(np.diff(line, axis=0), axis=1)
+    along = np.concatenate([[0.0], np.cumsum(steps)]) / profile.texture_length
+    u = np.tile(profile.section_u(), len(line))
+    v = np.repeat(along, ring)
+    texcoords = np.stack([u, v], axis=-1)
+
+    indices = _strip_indices(len(line), ring)
+    normals = estimate_normals(positions.astype('f'), indices)
+    return (positions.astype('f'), normals, texcoords.astype('f'), indices)
+
+
+def _strip_indices(rows: int, ring: int) -> np.ndarray:
+    """Triangles joining consecutive vertex rings, wound counter-clockwise
+    seen from above so the surface faces the sky."""
+    row = np.arange(rows - 1)[:, None] * ring
+    column = np.arange(ring - 1)[None, :]
+    a = (row + column).ravel()
+    b = a + 1
+    c = a + ring
+    d = c + 1
+    return np.stack([a, b, c, b, d, c], axis=-1).ravel().astype(np.uint32)
+
+
+def road_mesh(points: Any, profile: Optional[RoadProfile] = None,
+              material: Optional[PBRMaterial] = None) -> PBRMesh:
+    """A road's surface as a renderable mesh, with tangents for its normal map."""
+    profile = profile or RoadProfile()
+    positions, normals, texcoords, indices = road_surface(points, profile)
+    tangents = estimate_tangents(positions, normals, texcoords, indices)
+    return PBRMesh(positions=positions, normals=normals, texcoords=texcoords,
+                   tangents=tangents, indices=indices,
+                   material=material if material is not None else tarmac_material())
+
+
+def road_texture(size: int = 512, seed: int = 0) -> Any:
+    """The road surface across its whole section, as one image.
+
+    Bands from the left edge: verge, shoulder, carriageway with its edge lines
+    and dashed centre line, shoulder, verge. One image for the whole cut means
+    no seam where the materials meet, and the markings arrive with the surface
+    rather than as decals on top of it.
+
+    The image is the *width* of the section and repeats along the road, so the
+    dashes are as long as the profile's ``texture_length`` makes them.
+    """
+    from PIL import Image
+    rng = np.random.default_rng(seed)
+    pixels = np.zeros((size, size, 3), dtype='d')
+    across = np.linspace(0.0, 1.0, size)[None, :]
+
+    # The bands, as fractions of the section. These follow the default profile's
+    # proportions; a road with an unusual section still reads correctly because
+    # the markings stay inside the carriageway band.
+    verge = 0.18
+    shoulder = 0.10
+    grass = np.array(VERGE_ALBEDO)
+    gravel = np.array(GRAVEL_ALBEDO)
+    tarmac = np.array(TARMAC_ALBEDO)
+
+    band = np.zeros((1, size, 3))
+    band += grass * (across < verge)[..., None]
+    band += gravel * ((across >= verge) & (across < verge + shoulder))[..., None]
+    band += tarmac * ((across >= verge + shoulder)
+                      & (across <= 1.0 - verge - shoulder))[..., None]
+    band += gravel * ((across > 1.0 - verge - shoulder) & (across <= 1.0 - verge))[..., None]
+    band += grass * (across > 1.0 - verge)[..., None]
+    pixels += band
+
+    # Aggregate speckle, in proportion to how bright each band is, so the
+    # carriageway keeps its darkness instead of being greyed by noise.
+    grain = (rng.random((size, size, 1)) - 0.5) * 0.35
+    pixels = np.clip(pixels * (1.0 + grain), 0.0, 1.0)
+
+    paint = np.array(LINE_ALBEDO)
+    edge = 0.012
+    for centre in (verge + shoulder + edge * 1.5, 1.0 - verge - shoulder - edge * 1.5):
+        stripe = np.abs(across - centre) < edge
+        pixels[:, stripe[0]] = paint
+
+    # The centre line is dashed: three parts painted to five parts gap, the
+    # proportion a road marking uses so a dash reads at speed.
+    dash = (np.arange(size) % size) < int(size * 0.375)
+    middle = np.abs(across - 0.5) < edge
+    pixels[np.ix_(dash, middle[0])] = paint
+    return Image.fromarray((pixels * 255.0).astype('u1'), 'RGB')
+
+
+def tarmac_material(wetness: float = 0.0, seed: int = 0,
+                    texture_size: int = 512, image: Any = None) -> PBRMaterial:
+    """The road surface as a PBR material.
+
+    The colour is the texture's, because one image spans tarmac, gravel and the
+    grass verge and no single factor describes all three; the material's own
+    base colour is the tint on top of it. ``wetness`` runs from dry asphalt to
+    standing water: the surface darkens through that tint and its roughness
+    collapses, so a wet road picks up the sky and the scenery beside it through
+    the environment path rather than through any reflection pass of its own.
+    """
+    wetness = float(np.clip(wetness, 0.0, 1.0))
+    tint = 1.0 - WET_DARKENING * wetness
+    return PBRMaterial(
+        baseColor=(tint, tint, tint),
+        metallic=0.0,
+        roughness=DRY_ROUGHNESS + (WET_ROUGHNESS - DRY_ROUGHNESS) * wetness,
+        doubleSided=False,
+        textures={'baseColor': image if image is not None
+                  else PBRTexture(road_texture(texture_size, seed), srgb=True)},
+    )

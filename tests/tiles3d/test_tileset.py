@@ -506,3 +506,37 @@ def test_a_local_datasets_bounding_volume_turns_with_it():
     centre, _radius = ts.root.bounding_volume.bounding_sphere()
     assert centre[1] == pytest.approx(2.0)     # the height is up, not north
     assert abs(centre[2]) < 1e-9
+
+
+def test_a_tile_finds_a_texture_named_beside_its_tileset(tmp_path):
+    """3D Tiles content is read as bytes, so the loader has to be told where the
+    tile came from or a shared texture cannot be found."""
+    import numpy as np
+    from PIL import Image
+
+    from OpenGLContext.loaders.gltf.writer import ExternalImage, write_glb
+    from OpenGLContext.loaders.tiles3d.gltf_uploader import file_tile_loader
+    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+
+    Image.new('RGBA', (4, 4), (7, 200, 9, 255)).save(str(tmp_path / 'shared.png'))
+    material = PBRMaterial()
+    material.textures = {'baseColor': ExternalImage('shared.png', srgb=True)}
+    mesh = PBRMesh(positions=np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], 'f'),
+                   material=material)
+    write_glb(mesh, path=str(tmp_path / 'tile.glb'))
+
+    class _Tile:
+        content_uris = [str(tmp_path / 'tile.glb')]
+
+    scene, nbytes = file_tile_loader(_Tile())
+    assert nbytes > 0
+    found = []
+    stack = [scene.group]
+    while stack:
+        node = stack.pop()
+        appearance = getattr(node, 'appearance', None)
+        if appearance is not None and appearance.material is not None:
+            found.append(appearance.material)
+        stack.extend(getattr(node, 'children', None) or [])
+    assert any('baseColor' in m.textures for m in found)
