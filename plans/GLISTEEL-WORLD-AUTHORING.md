@@ -4,8 +4,8 @@
 missing · 📋 **Planned** — designed here, not yet built · ⬜ **Todo** — wanted, not yet
 designed · 🛑 **Shelved** — deliberately not done.
 
-§A, a minimal §C and §H are built; their status log is §9. §B, §D–§G are designed
-here and not yet built.
+§A, a minimal §C, §F, §G and §H are built; their status log is §9. §B, §D and
+§E are designed here and not yet built.
 Everything the plan *leans on* was already built, and that is the point of §3.
 
 ## What this is
@@ -216,8 +216,8 @@ appears.
 | §C | Roads — spec, cross-sections, the four ops, render node, reflections | engine (render) + editor (gen) | 🟡 highway-on-dirt + causeway; bridge, tunnel, reflection bake, control-map paint outstanding | §A, §B |
 | §D | Water — rivers, lakes, surface render, shorelines, whitewater, beaches | engine (render) + editor (gen) | 📋 | §A, §B |
 | §E | Road-aware refinement & octree LOD | editor | 📋 | §A, §B, §C |
-| §F | Editor toolkit — tool-modes, menus, picking, gizmos, ortho map | engine (picking/ortho) + editor (toolkit) | 📋 | §F.0 independent; rest after §C/§D |
-| §G | `glisteel-editor` — the race-track editor app | new repo | 📋 | §B–§F |
+| §F | Editor toolkit — tool-modes, menus, picking, gizmos, ortho map | engine (picking/ortho) + editor (toolkit) | 🟡 tool modes, menus, surface picking and the plan view landed; gizmos and occluded picking outstanding | §F.0 independent; rest after §C/§D |
+| §G | `glisteel-editor` — the race-track editor app | new repo | 🟡 draws a circuit on the shipped landscape and bakes a world to drive; water and real elevation wait on §D/§B | §B–§F |
 | §H | `glisteel` — the car game demo | new repo | ✅ streams, drives, times a lap | §A runtime, §E output |
 | §I | Performance to 60 fps on the discrete-GPU target | engine + game | 🟡 measured; the per-instance record cost is the first lever | §H to measure |
 
@@ -556,7 +556,7 @@ width, target density, LOD tiers).
 
 ---
 
-### §F — Editor toolkit 📋
+### §F — Editor toolkit 🟡
 
 **Goal.** The interactive machinery a *second* editor would want identically: a tool-mode
 framework, real menus, picking a point on the terrain and dragging it, gizmos, and a
@@ -614,7 +614,7 @@ tests; rendering is the GL smoke test.
 
 ---
 
-### §G — `glisteel-editor`, the race-track editor 📋
+### §G — `glisteel-editor`, the race-track editor 🟡
 
 **Goal.** The application that drives §B–§F: load an area, draw a track, drop water, bake
 a world.
@@ -930,3 +930,44 @@ them; §E decides per species.
 
   **Deferred, recorded:** `github.com/mcfletch/openglcontext-editor` and the `glisteel`
   remote both need creating by a networked shell before either can be a submodule here.
+- **2026-08-17** — **The editor draws a track and bakes a world to drive it**
+  (§F and §G, as far as a procedural landscape takes them).
+
+  **§F, the toolkit.** `OpenGLContext.edit` holds the parts of an editor that
+  are not about one editor: `tools` (the tool in force is asked before the
+  camera, and a tool that takes a press keeps the pointer until the release),
+  `surface` (the point under the cursor from the depth the pick already reads
+  back, and the plane arithmetic a drag needs instead), and `mapview` (an
+  orthographic plan view, so a metre is the same number of pixels wherever it is
+  and the line drawn on it is the line the world gets). `OpenGLContext.ui.menu`
+  adds the one interactive primitive the overlay toolkit did not have: a bar of
+  titles, a list under each, submenus, checkable items, shortcuts. Documented in
+  [docs/editing.html](../docs/editing.html) and the menus section of
+  [docs/overlayui.html](../docs/overlayui.html).
+
+  **§G, the application.** [`glisteel-editor`](../../glisteel-editor/): a
+  landscape from above, a route drawn by clicking, the road settling onto the
+  ground when the pointer is let go, and `File → Bake a world` writing the
+  tileset the game streams. What is drawn is the ground *with its earthworks*.
+  Its `tests/test_baking.py` draws a circuit, bakes it, and reads the track back
+  out of the tileset through the game's own reader.
+
+  **Engine defects the editor found**, each fixed where it belongs: `PBRMesh`
+  declared its colour attribute four wide and handed a three-wide array to the
+  card, which read past the end of every vertex (glTF's COLOR_0 is VEC3 or
+  VEC4); `MouseEvent.unproject` named `long` on the path an editor unprojects a
+  ray through; a widget could not be given its callbacks in the constructor; a
+  HUD layer had no way to be told that a menu bar was using the top of the
+  window.
+
+  **The road generator got an index.** Every ground sample asks how far it is
+  from the road, and the earthwork's reach is hundreds of metres, so conforming
+  a landscape was comparing every sample against every segment. Grouped by cell:
+  1.26 s to 0.29 s for the editor's view of a 4.6 km circuit.
+
+  **Still outstanding for §F/§G:** gizmos (translate and height handles with
+  their own pick ids), picking a point behind a hill (the depth buffer answers
+  only for what is drawn — see [RAYCAST-PICKING.md](RAYCAST-PICKING.md)), a file
+  browser rather than the path on the command line, undo, and more than one
+  route per project. §B would give the editor real elevation to draw on and §D
+  the water to drop into it.
