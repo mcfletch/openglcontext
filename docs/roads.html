@@ -98,6 +98,58 @@ road, because a road is built on a formation and surfaced on top of it — and
 because two surfaces at exactly the same height fight over which one is drawn,
 which shows as the ground flickering through the tarmac.</p>
 
+<h3>Bridges and tunnels: where the earthwork stops</h3>
+<p>Past a point the ground cannot absorb the road. An embankment fourteen metres
+tall already needs fill growing as the square of its height, and a cutting
+eighteen metres deep has to put its spoil somewhere and hold its faces; past
+those the road is <strong>carried</strong> instead — a deck on piers over the low
+ground, a bore through the high ground — and the terrain beneath or above is left
+exactly as it was found.</p>
+<p>Which is which is chosen from the finished alignment against the undisturbed
+land, by
+<code>OpenGLContext_editor.world.structures.choose_structures</code>. It returns
+a partition of the road into <code>Op.DIRT</code>, <code>Op.CAUSEWAY</code>,
+<code>Op.BRIDGE</code> and <code>Op.TUNNEL</code> — every point in exactly one
+stretch, so the sequence of operations is the whole story of how the road is
+built:</p>
+<pre>from OpenGLContext_editor.world.structures import choose_structures
+for run in choose_structures(alignment, natural_ground, closed=True):
+    print(run.kind, run.length(alignment))</pre>
+<p>A departure has to <em>last</em> as well as be large: sixty metres for a
+tunnel, forty for a span, or it is dug out or filled instead. Each structure then
+reaches out down its approaches — up to a hundred and twenty metres — until the
+road is within an abutment's height of the ground, so a deck lands on something
+and a bore opens at a portal rather than either stopping in the air. A designer
+overrides any stretch with an <code>overrides</code> triple.</p>
+<p>A <strong>causeway</strong> is not a structure in that sense: it is fill, and
+the ground is what it is made of. It is named separately because a road on an
+embankment across drowned ground is worth knowing about — the alignment is held
+above the waterline with freeboard and its approaches climb to meet it.</p>
+
+<h3>How a structure is built</h3>
+<p><code>OpenGLContext.scenegraph.roadworks</code> sweeps them along the same
+centreline and with the same frame the carriageway uses, so they stay in register
+with it through a bend and a climb:</p>
+<pre>from OpenGLContext.scenegraph.roadworks import bridge_meshes, tunnel_meshes
+deck = bridge_meshes(run, profile, ground)      # deck, parapet, piers
+bore = tunnel_meshes(run, profile)              # bore, portals</pre>
+<p>Each returns its parts as <code>{name: mesh}</code> rather than one merged
+mesh, so a caller can light, cull or write them separately.
+<code>BridgeProfile</code> sets the structural depth of the deck, the parapets
+standing on its edges, and how far apart the piers are; a pier is dropped to
+whatever the ground is doing beneath it, and the two ends are always built,
+because that is where the deck is carried onto the land. <code>TunnelProfile</code>
+sets the crown's clearance over the carriageway and how far the portal's face
+stands out around the arch. Both are built from <code>concrete_material()</code>.</p>
+<p>Over a structure the carriageway takes the road's <strong>on-structure
+cut</strong>: the verge does not fall away, because there is nothing under it to
+fall to — on a deck it is the edge beam the parapet stands on, and in a bore it is
+the walkway beside the carriageway. The change is a taper rather than a step. The
+sweep takes a section per point for it, which is what
+<code>morphed_sections(profile, other, blend)</code> builds and
+<code>road_surface(points, profile, sections=…)</code> accepts; the same
+mechanism widens a road for a lay-by or narrows one into a bore.</p>
+
 <h3>How it is swept</h3>
 <p>Each centreline point gets a <strong>frame</strong>: the tangent along the
 line, the right vector across it, and the up vector their cross product gives.
@@ -142,7 +194,10 @@ the grid, time a lap, or drive an opponent — and geometry does not carry it.</
 <code>extras</code>, under a <code>roads</code> key — a list of routes, each
 with its <code>name</code>, its <code>centreline</code> points, its
 <code>carriagewayWidth</code> and <code>totalWidth</code>, its
-<code>length</code>, and whether it is <code>closed</code> into a circuit:</p>
+<code>length</code>, whether it is <code>closed</code> into a circuit, and its
+<code>structures</code> — each a <code>kind</code> and the distances
+<code>from</code> and <code>to</code> along the centreline, so a game knows the
+car is on a bridge without asking the geometry:</p>
 <pre>import json
 tileset = json.load(open('/tmp/world/tileset.json'))
 for road in tileset['extras']['roads']:
@@ -157,16 +212,18 @@ drives on what it can see.</p>
 <section>
 <h2>Limits</h2>
 <ul>
-  <li><strong>The four generation operations are two of four.</strong> A road
-  that follows the ground, and one carried above a low area on a causeway, are
-  generated, each with the earthwork it needs. A deck on piers over a narrow
-  gap, and a portal through a hillside, are not: a route that wants either gets
-  an embankment or a cutting instead, up to the width the machine will go to,
-  and beyond that the land is left as it is.</li>
   <li><strong>Junctions are not modelled.</strong> Two roads that cross produce
   two surfaces at the crossing point rather than an intersection.</li>
-  <li><strong>The profile is constant along a route.</strong> A road that
-  widens for a climbing lane is two routes.</li>
+  <li><strong>A bridge is a deck on blade piers.</strong> One structural form,
+  whatever the span; an arch, a truss or a cable-stayed crossing is not
+  generated.</li>
+  <li><strong>A tunnel is a single bore.</strong> Twin bores, cross-passages and
+  lighting inside it are not generated, and the carriageway through a bore is lit
+  by the same sun as the road outside it.</li>
+  <li><strong>The profile is chosen per stretch, not per point.</strong> A road
+  takes its ordinary cut or its on-structure cut, tapering between them; a
+  climbing lane that widens the carriageway is a section array a caller builds
+  itself and passes to <code>road_surface</code>.</li>
 </ul>
 </section>
 

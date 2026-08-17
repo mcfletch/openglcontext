@@ -262,3 +262,76 @@ class TestSharedGeometryHelpers:
         indices = np.array([0, 1, 2], np.uint32)
         normals = road_module.estimate_normals(positions, indices)
         assert np.allclose(np.abs(normals[0]), (0, 1, 0), atol=1e-5)
+
+
+class TestASectionThatChangesAlongTheRoad:
+    """A road does not keep one cut from end to end: the verge flattens where
+    it runs onto a bridge deck and the shoulder narrows into a bore. The sweep
+    takes a section per point so the change is a taper rather than a step."""
+
+    def _line(self, count=21, spacing=10.0):
+        x = np.arange(count) * spacing
+        return np.stack([x, np.zeros(count), np.zeros(count)], axis=-1)
+
+    def test_a_road_with_one_section_is_unchanged(self) -> None:
+        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
+        line = self._line()
+        profile = RoadProfile()
+        plain = road_surface(line, profile)[0]
+        held = road_surface(line, profile, sections=morphed_sections(
+            profile, profile, np.zeros(len(line))))[0]
+        assert np.allclose(plain, held)
+
+    def test_a_full_blend_gives_the_other_section(self) -> None:
+        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
+        line = self._line()
+        profile = RoadProfile()
+        deck = profile.on_structure()
+        blended = road_surface(line, profile, sections=morphed_sections(
+            profile, deck, np.ones(len(line))))[0]
+        assert np.allclose(blended, road_surface(line, deck)[0])
+
+    def test_a_taper_runs_between_the_two(self) -> None:
+        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
+        line = self._line()
+        profile = RoadProfile()
+        blend = np.linspace(0.0, 1.0, len(line))
+        positions = road_surface(line, profile, sections=morphed_sections(
+            profile, profile.on_structure(), blend))[0]
+        ring = len(profile.section())
+        verge = positions.reshape(len(line), ring, 3)[:, 0, 1]
+        assert verge[0] < verge[-1]
+        assert np.all(np.diff(verge) >= -1e-6)
+
+    def test_the_road_is_still_one_surface(self) -> None:
+        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
+        line = self._line()
+        profile = RoadProfile()
+        blend = np.concatenate([np.zeros(8), np.linspace(0, 1, 5), np.ones(8)])
+        _positions, _normals, _uv, indices = road_surface(
+            line, profile, sections=morphed_sections(
+                profile, profile.on_structure(), blend))
+        ring = len(profile.section())
+        assert len(indices) == (len(line) - 1) * (ring - 1) * 6
+
+    def test_a_section_per_point_is_required(self) -> None:
+        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
+        line = self._line()
+        profile = RoadProfile()
+        with pytest.raises(ValueError):
+            road_surface(line, profile, sections=morphed_sections(
+                profile, profile, np.zeros(3)))
+
+    def test_a_mesh_takes_them_too(self) -> None:
+        from OpenGLContext.scenegraph.road import morphed_sections, road_mesh
+        line = self._line()
+        profile = RoadProfile()
+        mesh = road_mesh(line, profile, sections=morphed_sections(
+            profile, profile.on_structure(), np.linspace(0, 1, len(line))))
+        assert len(mesh.positions) == len(line) * len(profile.section())
+
+    def test_two_profiles_of_different_shape_cannot_be_blended(self) -> None:
+        from OpenGLContext.scenegraph.road import morphed_sections
+        with pytest.raises(ValueError):
+            morphed_sections(RoadProfile(), RoadProfile(verge_width=0.0),
+                             np.zeros(4))

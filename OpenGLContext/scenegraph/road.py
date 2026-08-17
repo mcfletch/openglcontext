@@ -21,7 +21,7 @@ it is told through a bend.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Optional, Tuple
 
 import numpy as np
@@ -31,8 +31,9 @@ from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 __all__ = [
-    'RoadProfile', 'resample_polyline', 'road_surface', 'road_mesh',
-    'road_texture', 'tarmac_material', 'estimate_normals',
+    'RoadProfile', 'resample_polyline', 'sweep_frames', 'morphed_sections',
+    'road_surface', 'road_mesh', 'road_texture', 'tarmac_material',
+    'estimate_normals',
 ]
 
 #: Which way is up when a road has no other opinion. A road banks with its
@@ -106,6 +107,17 @@ class RoadProfile:
         left = [(-lateral, vertical) for lateral, vertical in reversed(right[1:])]
         return np.array(left + right, dtype='d')
 
+    def on_structure(self) -> 'RoadProfile':
+        """The same road as it runs over a bridge or through a tunnel.
+
+        The verge does not fall away, because there is nothing under it to fall
+        to: on a deck it is the edge beam the parapet stands on, and in a bore
+        it is the walkway beside the carriageway. Everything else about the
+        section is unchanged, so the surface texture and the markings are the
+        same across the join and the two stretches meet without a step.
+        """
+        return replace(self, verge_drop=0.0)
+
     def section_u(self) -> np.ndarray:
         """The texture coordinate across the section, 0 at the left verge to 1.
 
@@ -139,11 +151,14 @@ def resample_polyline(points: Any, spacing: float) -> np.ndarray:
                      for axis in range(3)], axis=-1)
 
 
-def _frames(line: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def sweep_frames(line: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Per-point (right, up) vectors for a centreline.
 
     The tangent at a point is the average of the segments meeting there, so the
     frame turns smoothly through a bend instead of stepping at each vertex.
+    Anything swept along a road -- the carriageway, a bridge deck, a tunnel
+    bore -- is placed with this, which is what keeps them in register with each
+    other through a bend and a climb.
     """
     segments = np.diff(line, axis=0)
     lengths = np.linalg.norm(segments, axis=1, keepdims=True)
@@ -169,7 +184,26 @@ def _frames(line: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return right, up
 
 
-def road_surface(points: Any, profile: RoadProfile
+def morphed_sections(profile: RoadProfile, other: RoadProfile,
+                     blend: Any) -> np.ndarray:
+    """A cross-section per centreline point, part way between two profiles.
+
+    ``blend`` is (N,) from 0 (all ``profile``) to 1 (all ``other``), so a road
+    changes its cut over as many metres as the blend takes to travel rather
+    than stepping from one to the next at a vertex. Both profiles must give
+    sections of the same shape, which is what
+    :meth:`RoadProfile.on_structure` guarantees.
+    """
+    here, there = profile.section(), other.section()
+    if here.shape != there.shape:
+        raise ValueError(
+            "profiles with %d and %d section points cannot be blended"
+            % (len(here), len(there)))
+    weight = np.asarray(blend, dtype='d').reshape(-1, 1, 1)
+    return here[None] * (1.0 - weight) + there[None] * weight
+
+
+def road_surface(points: Any, profile: RoadProfile, sections: Any = None
                  ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Sweep a profile along a centreline: positions, normals, UVs, indices.
 
@@ -177,16 +211,31 @@ def road_surface(points: Any, profile: RoadProfile
     the road runs at. The mesh has one vertex ring of ``len(profile.section())``
     per point, so re-sampling the centreline is the whole of the road's level of
     detail.
+
+    ``sections`` is an optional (N,K,2) array giving the cut at each point, for
+    a road whose shape changes along its length -- a verge that flattens onto a
+    bridge deck, a shoulder that narrows into a bore. Build one with
+    :func:`morphed_sections`. ``profile`` still supplies the texture coordinates
+    across the cut, so the markings stay where they belong through the change.
     """
     line = np.asarray(points, dtype='d').reshape(-1, 3)
     if len(line) < 2:
         raise ValueError("a road needs a centreline of at least two points")
     section = profile.section()
-    right, up = _frames(line)
+    right, up = sweep_frames(line)
     ring = len(section)
 
-    lateral = section[:, 0][None, :, None]
-    vertical = section[:, 1][None, :, None]
+    if sections is None:
+        lateral = section[:, 0][None, :, None]
+        vertical = section[:, 1][None, :, None]
+    else:
+        cuts = np.asarray(sections, dtype='d')
+        if cuts.shape != (len(line), ring, 2):
+            raise ValueError(
+                "a road of %d points needs sections of shape (%d, %d, 2), not %r"
+                % (len(line), len(line), ring, (cuts.shape,)))
+        lateral = cuts[:, :, 0][:, :, None]
+        vertical = cuts[:, :, 1][:, :, None]
     positions = (line[:, None, :] + right[:, None, :] * lateral
                  + up[:, None, :] * vertical).reshape(-1, 3)
 
@@ -215,18 +264,24 @@ def _strip_indices(rows: int, ring: int) -> np.ndarray:
 
 def road_mesh(points: Any, profile: Optional[RoadProfile] = None,
               material: Optional[PBRMaterial] = None,
-              spacing: Optional[float] = None) -> PBRMesh:
+              spacing: Optional[float] = None,
+              sections: Any = None) -> PBRMesh:
     """A road's surface as a renderable mesh, with tangents for its normal map.
 
     ``spacing`` re-samples the centreline to that interval in metres first,
     which is the whole of a road's level of detail: the same route at a coarser
     spacing is the road a distant tile carries. Left out, the points given are
-    the points swept.
+    the points swept -- which is what a caller passing ``sections`` wants, since
+    a cut per point has to match the points it is swept over.
+
+    ``sections`` is the per-point cross-section described in
+    :func:`road_surface`.
     """
     profile = profile or RoadProfile()
     if spacing is not None:
         points = resample_polyline(points, spacing)
-    positions, normals, texcoords, indices = road_surface(points, profile)
+    positions, normals, texcoords, indices = road_surface(points, profile,
+                                                          sections=sections)
     tangents = estimate_tangents(positions, normals, texcoords, indices)
     return PBRMesh(positions=positions, normals=normals, texcoords=texcoords,
                    tangents=tangents, indices=indices,
