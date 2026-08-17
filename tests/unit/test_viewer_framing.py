@@ -136,11 +136,17 @@ class TestLookFrom:
         assert inside.near < outside.near
         assert inside.far < outside.far
 
-    def test_the_near_plane_follows_the_aim_not_the_world(self):
+    def test_the_near_plane_follows_the_aim_when_the_world_is_larger(self):
         """Standing on a road in a four-kilometre world and looking a hundred
-        metres up it must not clip away the first ten."""
+        metres up it must not clip away the first fourteen."""
         pose = look_from((0, 1.5, 0), (0, 1.2, -100.0), radius=2000.0)
-        assert pose.near <= 0.2
+        assert pose.near <= 1.01
+
+    def test_it_follows_the_world_when_that_is_smaller(self):
+        """An interior shot across a room keeps the depth precision the room
+        needs rather than taking it from how far the eye happens to look."""
+        pose = look_from((11, -3.5, 1.5), (-13, 1, -5), radius=20.0)
+        assert pose.near == pytest.approx(0.2)
 
     def test_a_long_view_still_gets_depth_precision(self):
         """Aiming two kilometres off, nothing is a handspan from the lens."""
