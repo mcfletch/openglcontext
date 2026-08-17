@@ -4,8 +4,8 @@
 missing · 📋 **Planned** — designed here, not yet built · ⬜ **Todo** — wanted, not yet
 designed · 🛑 **Shelved** — deliberately not done.
 
-Nothing in this document is built yet. Everything it *leans on* is built, and that is
-the point of §3.
+§A is built and its status log is §9; §B onwards are designed here and not yet built.
+Everything the plan *leans on* was already built, and that is the point of §3.
 
 ## What this is
 
