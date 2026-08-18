@@ -10,8 +10,8 @@ without either having to look at the other's copy.
 
 What each one *looks like* is art, and the toolkit ships none. The exception is
 the kind a landscape supplies for free: :func:`rock_mesh` grows a boulder out of
-a subdivided icosahedron, so a world can be strewn with stone without an asset
-pipeline.
+a subdivided icosahedron and weathers it in its vertex colours, so a world can
+be strewn with mossy stone without an asset pipeline.
 
 Where a prop belongs is authoring, and lives in
 ``OpenGLContext_editor.bake.props``; standing them up in a physics world is
@@ -31,27 +31,42 @@ from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 __all__ = ['Prop', 'RockProfile', 'rock_mesh', 'rock_material']
 
-#: Weathered granite: grey, faintly warm, entirely rough, and not a metal.
-#: Dark, because a boulder is: a stone quoted at the reflectance of a paving slab
-#: comes out white in sun and reads as a polystyrene prop.
-ROCK_ALBEDO = (0.14, 0.135, 0.125)
+#: Weathered granite at its lightest: grey, faintly warm, entirely rough, and
+#: not a metal. Dark, because a boulder is -- a stone quoted at the reflectance
+#: of a paving slab is the brightest thing in a landscape and reads as a
+#: polystyrene prop. The per-vertex colours :func:`rock_mesh` writes take the
+#: rest of the stone down from here.
+ROCK_ALBEDO = (0.085, 0.082, 0.076)
 ROCK_ROUGHNESS = 0.92
+
+#: What moss leaves of the stone under it, per channel. Written as a multiplier
+#: rather than a colour because vertex colours scale the material's base colour:
+#: moss is darker than the rock it grows on, and much greener.
+MOSS_TINT = (0.34, 0.92, 0.26)
 
 
 @dataclass
 class RockProfile:
-    """The shape of a boulder.
+    """The shape and weathering of a boulder.
 
     ``roughness`` is how far a vertex may move from the sphere it started as,
     as a fraction of the radius; ``facets`` how many times the icosahedron is
     subdivided. ``settled`` is how much of the bottom is pressed into the
     ground: a boulder that has been lying there for a few thousand years is not
     a ball resting on a point.
+
+    ``mottle`` is how far the stone's own colour varies over one boulder, as a
+    fraction of it. ``moss`` is how thickly moss has taken hold where it grows,
+    from bare stone at 0 to full cover at 1; where it grows comes off the rock's
+    own shape, so a low figure is a wash of green over the same patches rather
+    than a different pattern.
     """
 
     roughness: float = 0.32
     facets: int = 2
     settled: float = 0.34
+    mottle: float = 0.34
+    moss: float = 0.7
 
 
 def rock_material() -> PBRMaterial:
@@ -69,6 +84,11 @@ def rock_mesh(radius: float = 1.0, seed: int = 0,
     function of where it is, then squashed and lifted so it sits on the ground
     rather than floating over it. ``seed`` picks which boulder; the same seed
     is always the same rock, so a world re-bakes to itself.
+
+    It comes weathered: the vertex colours mottle the stone and grow moss over
+    what faces the weather, so one boulder is not one flat grey. They multiply
+    whatever ``material`` carries as its base colour, so a caller supplying its
+    own stone gets its own colour weathered rather than overruled.
     """
     profile = profile or RockProfile()
     points, faces = _icosphere(max(int(profile.facets), 0))
@@ -76,8 +96,8 @@ def rock_mesh(radius: float = 1.0, seed: int = 0,
     points[:, 1] *= 1.0 - min(max(profile.settled, 0.0), 0.9)
     points *= float(radius)
     points[:, 1] -= float(points[:, 1].min())
-    return _mesh(points, faces, material if material is not None
-                 else rock_material())
+    return _mesh(points, faces, seed, profile,
+                 material if material is not None else rock_material())
 
 
 @dataclass(frozen=True)
@@ -184,34 +204,79 @@ def _between(points: list, middles: Dict[Tuple[int, int], int],
     return middles[key]
 
 
-def _lumps(points: np.ndarray, seed: int, roughness: float) -> np.ndarray:
-    """A smooth per-vertex multiplier on the radius, in (1-r, 1+r).
+def _noise(directions: np.ndarray, seed: int, octaves: int = 3,
+           frequency: float = 2.1) -> np.ndarray:
+    """A smooth field over a direction, in (-1, 1).
 
-    A sum of a few sinusoids in the vertex's own direction: neighbouring
-    vertices move together, so the result is a lumpy stone rather than a ball
-    of noise, and it depends on the direction alone, so the seams of the
-    subdivision close.
+    A sum of a few sinusoids in the direction itself: neighbouring points move
+    together, so the result is lumps rather than speckle, and it depends on the
+    direction alone, so the seams of the subdivision close.
     """
     rng = np.random.default_rng(seed)
-    total = np.zeros(len(points))
+    total = np.zeros(len(directions))
     weight = 0.0
-    for octave in range(3):
-        frequency = 1.7 ** octave * 2.1
+    for octave in range(octaves):
         axis = rng.normal(size=3)
         axis /= np.linalg.norm(axis)
         phase = rng.random() * 2.0 * np.pi
         share = 0.55 ** octave
-        total += np.sin(points @ axis * frequency + phase) * share
+        total += np.sin(directions @ axis * (1.7 ** octave * frequency)
+                        + phase) * share
         weight += share
-    return (1.0 + total / max(weight, 1e-9) * roughness)[:, None]
+    return total / max(weight, 1e-9)
 
 
-def _mesh(points: np.ndarray, faces: np.ndarray,
-          material: PBRMaterial) -> PBRMesh:
+def _lumps(points: np.ndarray, seed: int, roughness: float) -> np.ndarray:
+    """A per-vertex multiplier on the radius, in (1-r, 1+r)."""
+    return (1.0 + _noise(points, seed) * roughness)[:, None]
+
+
+def _weathering(corners: np.ndarray, normals: np.ndarray, seed: int,
+                profile: RockProfile) -> np.ndarray:
+    """Per-vertex multipliers on the stone's colour: mottling, then moss.
+
+    Mottling is a smooth field over the boulder, so one facet weathers lighter
+    than the next without the whole rock going speckled. Moss is the same kind
+    of field gated on where moss lives -- what faces up and takes the rain, and
+    the damp foot of the rock, never an overhang -- so it arrives in patches
+    over the crown and the shoulders with bare stone between them.
+    """
+    reach = max(float(corners[:, 1].max()), 1e-6)
+    centre = np.array([0.0, reach / 2.0, 0.0])
+    away = corners - centre
+    away /= np.maximum(np.linalg.norm(away, axis=1, keepdims=True), 1e-9)
+
+    lightness = 1.0 - _clamp(profile.mottle) * (
+        0.5 - 0.5 * _noise(away, seed + 7919))
+
+    foot = 1.0 - np.clip(corners[:, 1] / reach, 0.0, 1.0)
+    weather = np.clip(normals[:, 1], 0.0, 1.0) * (0.7 + 0.5 * foot)
+    patch = 0.5 + 0.5 * _noise(away, seed + 104729, octaves=2, frequency=3.4)
+    cover = _clamp(profile.moss) * _smoothstep(0.12, 0.42, weather * patch)
+
+    tint = np.asarray(MOSS_TINT, dtype='d')
+    stone = (1.0 - cover)[:, None] + tint * cover[:, None]
+    return np.ascontiguousarray(lightness[:, None] * stone, dtype='f')
+
+
+def _clamp(value: float) -> float:
+    """``value`` brought into [0, 1], where a share of something belongs."""
+    return min(max(float(value), 0.0), 1.0)
+
+
+def _smoothstep(low: float, high: float, value: np.ndarray) -> np.ndarray:
+    """The usual smooth 0-to-1 ramp between two thresholds."""
+    step = np.clip((value - low) / max(high - low, 1e-9), 0.0, 1.0)
+    return step * step * (3.0 - 2.0 * step)
+
+
+def _mesh(points: np.ndarray, faces: np.ndarray, seed: int,
+          profile: RockProfile, material: PBRMaterial) -> PBRMesh:
     #: Flat-shaded: a boulder is facets, and smoothing them makes it a balloon.
     corners = np.ascontiguousarray(points[faces.ravel()], dtype='f')
     indices = np.arange(len(corners), dtype=np.uint32)
-    return PBRMesh(positions=corners,
-                   normals=estimate_normals(corners, indices),
-                   indices=indices, material=material)
+    normals = estimate_normals(corners, indices)
+    return PBRMesh(positions=corners, normals=normals, indices=indices,
+                   colors=_weathering(corners, normals, seed, profile),
+                   material=material)
 

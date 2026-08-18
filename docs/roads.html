@@ -339,9 +339,28 @@ for every one it holds.</p>
 the kind a landscape supplies for free: <code>rock_mesh</code> grows a boulder
 out of a subdivided icosahedron, pushed in and out by a smooth function of
 direction and settled into the ground, so a world can be strewn with stone
-without an asset pipeline. Its colour is chosen for how it renders rather than
-from a reflectance table: a stone quoted at the albedo of a paving slab comes
-out white in sun and reads as a polystyrene prop.</p>
+without an asset pipeline. It comes weathered — the mesh carries vertex colours
+that mottle the stone facet to facet and grow moss over what faces up and takes
+the rain, so a verge of boulders is not a row of one flat grey. The colours
+multiply whatever the material carries as its base colour, so a caller handing
+<code>rock_mesh</code> its own stone gets that stone weathered rather than
+overruled.</p>
+<pre>from OpenGLContext.scenegraph.props import RockProfile, rock_mesh
+
+bare = rock_mesh(radius=1.4, seed=3, profile=RockProfile(moss=0.0))
+deep = rock_mesh(radius=1.4, seed=3, profile=RockProfile(moss=1.0, mottle=0.5))</pre>
+<p><code>RockProfile</code> holds both the shape and the weathering.
+<code>roughness</code> is how far a vertex may move from the sphere it started
+as, as a fraction of the radius (0.32); <code>facets</code> how many times the
+icosahedron is subdivided (2); <code>settled</code> how much of the bottom is
+pressed into the ground (0.34). <code>mottle</code> is how far the stone's own
+colour varies over one boulder, as a fraction of it (0.34), and
+<code>moss</code> how thickly moss has taken hold where it grows, from bare
+stone at 0 to full cover at 1 (0.7) — where that is comes off the rock's own
+shape, so a low figure is a wash of green over the same patches rather than a
+different pattern. The stone is dark: a boulder quoted at the reflectance of a
+paving slab is the brightest thing in a landscape and reads as a polystyrene
+prop.</p>
 
 <h3 id="roadshade">The shade a road runs through</h3>
 <p>A forest road drawn at full sun with everything beside it in deep shade reads

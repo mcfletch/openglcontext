@@ -59,8 +59,52 @@ class TestARock:
         assert lumpiness(RockProfile(roughness=0.05)) \
             < lumpiness(RockProfile(roughness=0.5))
 
+
+class TestWhatARockIsMadeOf:
     def test_it_is_stone_rather_than_a_mirror(self) -> None:
         assert rock_material().metallic == 0.0
+
+    def test_it_is_dark(self) -> None:
+        """A landscape's brightest object is the sky, not a stone in the grass."""
+        assert max(rock_material().baseColor) < 0.1
+
+    def test_it_is_not_one_flat_colour(self) -> None:
+        colours = rock_mesh(seed=7).colors
+        assert colours is not None
+        assert float(colours[:, :3].std()) > 0.02
+
+    def test_moss_grows_on_top_rather_than_underneath(self) -> None:
+        mesh = rock_mesh(seed=7)
+        assert mesh.colors is not None
+        green = mesh.colors[:, 1] - mesh.colors[:, 0]
+        assert float(green[mesh.normals[:, 1] > 0.6].mean()) \
+            > float(green[mesh.normals[:, 1] < -0.6].mean()) + 0.05
+
+    def test_more_moss_covers_more_of_it(self) -> None:
+        def covered(share):
+            mesh = rock_mesh(seed=8, profile=RockProfile(moss=share))
+            assert mesh.colors is not None
+            return float((mesh.colors[:, 1] > mesh.colors[:, 0] + 0.05).mean())
+        assert covered(0.7) > covered(0.3) > 0.0
+
+    def test_a_bare_boulder_has_none(self) -> None:
+        mesh = rock_mesh(seed=8, profile=RockProfile(moss=0.0))
+        assert mesh.colors is not None
+        assert float((mesh.colors[:, 1] - mesh.colors[:, 0]).max()) \
+            == pytest.approx(0.0, abs=1e-6)
+
+    def test_a_smoother_stone_is_more_evenly_coloured(self) -> None:
+        def spread(mottle):
+            mesh = rock_mesh(seed=9, profile=RockProfile(mottle=mottle, moss=0.0))
+            assert mesh.colors is not None
+            return float(mesh.colors[:, 0].std())
+        assert spread(0.05) < spread(0.5)
+
+    def test_the_colours_only_ever_darken_the_stone(self) -> None:
+        """glTF multiplies COLOR_0 into the base colour, so over 1 is not a colour."""
+        colours = rock_mesh(seed=10).colors
+        assert colours is not None
+        assert float(colours.min()) >= 0.0 and float(colours.max()) <= 1.0
 
 
 class TestWhatAPropCarries:
