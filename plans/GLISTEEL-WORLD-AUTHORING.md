@@ -760,9 +760,17 @@ is the driving and the reading of it.
 
 - **The lap timer** is already there (current, last and best). What it wants is
   to be legible at speed and to say where the time went.
-- **A visible start/finish** — a gantry, a line across the road, something a
-  driver sees coming rather than a lap counter that ticks over for no visible
-  reason.
+- **A visible start/finish** ✅ — a chequered banner on a beam over the
+  carriageway with a chequered line painted under it, so the lap turning over
+  has something a driver saw coming. `OpenGLContext.scenegraph.gantry` is the
+  object, `world.gantry.start_finish` decides where it goes from the road's own
+  alignment, and `bake.gantry.GantryLayer` writes it. The frame and the line are
+  one mesh reading one picture, so the marker costs a world one draw; the two
+  legs go into the world's props, so a car that hits one hits it whatever the
+  streamer is doing. The line's chequer is *geometry*: seen from a driving seat
+  the paint is nearly edge-on, and a texture nine times wider than it is deep
+  loses its pattern to the mip level that grazing angle asks for, so it read as
+  a plain white bar from the one place anybody looks at it.
 - **A map** of the whole circuit with the car on it, so a driver knows what is
   round the next bend and how much of the lap is left.
 
@@ -1312,3 +1320,41 @@ them; §E decides per species.
   41 and 6.70. Baked into place rather than instanced, because instancing is for
   thousands of copies and a per-instance *texture offset* is a fair amount of
   engine for a few hundred triangles a tile.
+
+- **2026-08-18** — **The lap has a line.** A start/finish gantry stands where
+  the centreline begins: two legs off either shoulder, a beam over the
+  carriageway with a chequered banner on it, and a chequered line painted across
+  the tarmac beneath. `OpenGLContext.scenegraph.gantry` is the object,
+  `OpenGLContext_editor.world.gantry.start_finish` reads its place off the
+  road's own alignment, and `bake.gantry.GantryLayer` writes it. Nothing in
+  `glisteel` changed: the marker arrives as tile geometry and the legs arrive in
+  the props the game already stands up.
+
+  **Three things worth keeping.**
+
+  *The chequer on the road had to be geometry.* Painted as a texture it read as
+  a plain white bar from the driving seat — a 9:1 image on a surface seen nearly
+  edge-on picks a mip level off its short axis and blurs the long one to its own
+  average. Each square is now its own quad reading a flat colour out of the
+  atlas, which is a chequer at any angle and costs 72 triangles once per world.
+  The banner keeps its picture, because it is seen face-on.
+
+  *A leg needs its own ground.* The two sides of a road are rarely level with
+  it, so `start_finish` measures the height under each foot and the mesh takes a
+  drop per leg; each is also sunk a `FOOTING` below what it measured, because
+  the drop is taken against the design height and a terrain tile a hundred
+  metres off is a coarser surface than that.
+
+  *Two layers can now fill one channel.* The gantry's legs and the landscape's
+  boulders are both the world's props, and the bake driver used to `update()`
+  one dict over another, so whichever layer was listed later silently won.
+  Lists join; anything else arriving twice stops the bake, because "where does
+  the lap begin" has one answer and picking a winner from two writes a world
+  whose timing belongs to whoever was last.
+
+  **Shared out of the signs, not duplicated.**
+  `OpenGLContext.scenegraph.atlasmesh` now owns packing pictures into one image
+  and concatenating geometry into one mesh, and
+  `OpenGLContext_editor.bake.placing` owns standing a prototype somewhere and
+  gathering the results; the sign path was moved onto both. Bake of the shipped
+  world, measured on a quiet machine: 27.5 s.

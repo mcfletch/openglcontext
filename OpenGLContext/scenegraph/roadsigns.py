@@ -26,7 +26,13 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
-from OpenGLContext.loaders.gltf.meshes import estimate_normals
+from OpenGLContext.scenegraph.atlasmesh import (
+    cell_centre,
+    flat_patch,
+    merged_mesh,
+    pack_cells,
+    textured_mesh,
+)
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
@@ -144,26 +150,14 @@ def sign_atlas(kinds: "Sequence[str]" = WARNINGS, cell: int = 256
     Laid out on the smallest square grid that holds them, in the order given, so
     the same kinds always make the same atlas and a world re-bakes to itself.
     """
-    from PIL import Image
     wanted = list(kinds)
     for kind in wanted:
         if kind not in WARNINGS:
             raise ValueError("no warning sign says %r; the kinds are %s"
                              % (kind, ", ".join(WARNINGS)))
-    names = wanted + ["post"]
-    columns = int(math.ceil(math.sqrt(len(names))))
-    rows = int(math.ceil(len(names) / columns))
-    image = Image.new("RGBA", (columns * cell, rows * cell), PLATE_CLEAR)
-    boxes = {}
-    for index, name in enumerate(names):
-        column, row = index % columns, index // columns
-        patch = (Image.new("RGBA", (cell, cell), _srgb(POST_ALBEDO))
-                 if name == "post" else sign_texture(name, cell))
-        image.paste(patch, (column * cell, row * cell))
-        boxes[name] = (column * cell / image.width, row * cell / image.height,
-                       (column + 1) * cell / image.width,
-                       (row + 1) * cell / image.height)
-    return image, boxes
+    patches = {kind: sign_texture(kind, cell) for kind in wanted}
+    patches["post"] = flat_patch(POST_ALBEDO, cell)
+    return pack_cells(patches, cell)
 
 
 def atlas_material(image: Any = None, kinds: "Sequence[str]" = WARNINGS,
@@ -201,36 +195,9 @@ def sign_mesh(kind: str, profile: Optional[SignProfile] = None,
             material = atlas_material(kinds=(kind,))
     if material is None:
         material = atlas_material()
-    return _merged([_post(profile, material, uv=_middle(cells["post"])),
-                    _plate(profile, material, box=cells[kind])], material)
-
-
-def _srgb(colour: "Tuple[float, float, float]") -> tuple:
-    """A linear albedo as the bytes an sRGB texture has to hold for it."""
-    def encoded(value: float) -> int:
-        low = value * 12.92
-        high = 1.055 * (value ** (1.0 / 2.4)) - 0.055
-        return int(round(255.0 * (low if value <= 0.0031308 else high)))
-    return tuple(encoded(float(v)) for v in colour) + (255,)
-
-
-def _middle(box: Any) -> "Tuple[float, float]":
-    """The centre of an atlas cell, for geometry that wants one flat colour."""
-    u0, v0, u1, v1 = box
-    return ((u0 + u1) / 2.0, (v0 + v1) / 2.0)
-
-
-def _merged(meshes: list, material: PBRMaterial) -> PBRMesh:
-    """Several meshes of one material as a single mesh."""
-    positions, texcoords, indices, offset = [], [], [], 0
-    for mesh in meshes:
-        positions.append(np.asarray(mesh.positions))
-        texcoords.append(np.asarray(mesh.texcoords))
-        indices.append(np.asarray(mesh.indices) + offset)
-        offset += len(mesh.positions)
-    return _mesh(np.concatenate(positions),
-                 np.concatenate(indices).astype(np.uint32), material,
-                 texcoords=np.concatenate(texcoords).astype("f"))
+    return merged_mesh(
+        [_post(profile, material, uv=cell_centre(cells["post"])),
+         _plate(profile, material, box=cells[kind])], material)
 
 
 def sign_meshes(kind: str, profile: Optional[SignProfile] = None,
@@ -341,8 +308,8 @@ def _post(profile: SignProfile, material: PBRMaterial,
         faces += [sides, sides + index + 1, sides + index]
     texcoords = (None if uv is None
                  else np.tile(np.asarray(uv, dtype='f'), (len(positions), 1)))
-    return _mesh(positions, np.asarray(faces, dtype=np.uint32), material,
-                 texcoords=texcoords)
+    return textured_mesh(positions, np.asarray(faces, dtype=np.uint32),
+                         material, texcoords)
 
 
 def _plate(profile: SignProfile, material: PBRMaterial,
@@ -369,17 +336,10 @@ def _plate(profile: SignProfile, material: PBRMaterial,
     for index in range(3):
         step = (index + 1) % 3
         faces += [index, step, index + 3, step, step + 3, index + 3]
-    return _mesh(np.asarray(positions, dtype='d'),
-                 np.asarray(faces, dtype=np.uint32), material,
-                 texcoords=np.asarray(texcoords, dtype='f'))
+    return textured_mesh(np.asarray(positions, dtype='d'),
+                         np.asarray(faces, dtype=np.uint32), material,
+                         np.asarray(texcoords, dtype='f'))
 
 
 #: How tall an equilateral triangle is against its own width.
 _PLATE_RISE = math.sqrt(3.0) / 2.0
-
-
-def _mesh(positions: np.ndarray, indices: np.ndarray, material: PBRMaterial,
-          texcoords: Optional[np.ndarray] = None) -> PBRMesh:
-    points = np.ascontiguousarray(positions, dtype='f')
-    return PBRMesh(positions=points, normals=estimate_normals(points, indices),
-                   indices=indices, material=material, texcoords=texcoords)

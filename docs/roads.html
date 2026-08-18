@@ -265,6 +265,55 @@ world knows and the sign does not: <code>SignProfile.offset</code> is how far
 outside the road's own edge the post goes, and a world with trees up to the verge
 sets it to less than that clearance.</p>
 
+<h3 id="gantry">The start/finish line</h3>
+<p>A lap has to be visible from the driving seat. Timing already knows where the
+line is — it is where the centreline begins — but a driver cannot see a number,
+so a circuit marks it: a chequered banner on a beam spanning the carriageway,
+with a chequered line across the tarmac beneath it. Coming the other way it
+reads the same, because the banner is a board with two faces.</p>
+<pre>from OpenGLContext.scenegraph.gantry import GantryProfile, gantry_mesh, start_line_mesh
+
+frame = gantry_mesh(span=12.0, drops=(0.2, 2.6))   # at the origin, road along Z
+paint = start_line_mesh(width=7.4, crossfall=0.02) # under it, on the road's camber</pre>
+<p><code>span</code> is the distance between the leg centres and
+<code>drops</code> how far below the road surface each leg's own ground lies,
+left leg first — the two sides of a road are rarely level with it, and a leg
+that stops at the tarmac's height hangs in the air on the low side.
+<code>GantryProfile</code> holds the rest in metres:
+<code>clearance</code> (5.4) from the road surface to the underside of the beam,
+<code>beam_depth</code> and <code>beam_width</code>, <code>banner_height</code>
+and <code>banner_depth</code>, <code>leg_radius</code>, and
+<code>margin</code> (0.9) for how far outside the running surface the legs
+stand.</p>
+<p>The painted line follows the road's <strong>camber</strong> rather than lying
+flat on it: a flat strip across a cambered road stands proud at the crown and
+sinks into the tarmac at both edges. <code>line_width</code> is how far it
+reaches along the road and <code>line_lift</code> (0.04) how far above the
+surface it is drawn — paint in the surface z-fights with it, and paint well
+above it is a plank. Its squares are sized off the row depth so that they come
+out square, and there is an even number of them, so the crown falls on a joint
+and the two halves of the line mirror each other.</p>
+<p><strong>The line's chequer is geometry; the banner's is a picture.</strong>
+From a driving seat the line is nearly edge-on, and a texture stretched nine
+times wider than it is deep loses its pattern to the mip level that grazing
+angle asks for — it reads as a plain white bar from the one place anybody looks
+at it. So each square on the road is its own quad reading a flat colour, and it
+stays a chequer at any angle and any distance. The banner is seen face-on and
+carries its chequer in the image, which is cheaper.</p>
+<p><strong>The whole marker is one draw.</strong> Steel, banner and the two road
+paints are four corners of one image (<code>gantry_atlas</code>), so the frame
+and its line wear a single material and a tile writes them as a single mesh.
+That machinery is <code>OpenGLContext.scenegraph.atlasmesh</code>, and the
+warning signs are built on it too.</p>
+<p>The legs are solid. <code>gantry_legs</code> reports where each stands and how
+much room it takes, which is what a physics world needs to put a body there
+without being handed the geometry; the baker writes them into the world's
+<a href="#props">props</a>, so a car hits a gantry leg whatever the streamer is
+doing. Where the gantry belongs is
+<code>OpenGLContext_editor.world.gantry.start_finish</code>, which reads it off
+the road: the crown at the line, the span from the carriageway and its
+shoulders, and a drop per leg from the ground each stands on.</p>
+
 <h3 id="props">Things in the way</h3>
 <p>A boulder on the verge, a car that broke down, a fence: what they have in
 common is that they are <em>placed</em> — a mesh and a body at one spot, neither
