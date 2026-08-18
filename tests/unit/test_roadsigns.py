@@ -150,3 +150,22 @@ def _ink(image) -> np.ndarray:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestThePlateCostsWhatAPlateCosts:
+    """The plate is a triangle, so the picture's transparent corners fall
+    outside the geometry and never reach a fragment. Declared as a cutout
+    anyway, every sign in a world joins the sorted alpha pass -- which is what a
+    warning sign is not: three hundred triangles of opaque painted metal."""
+
+    def test_it_is_opaque(self) -> None:
+        assert sign_material('dip').alphaMode == 'OPAQUE'
+
+    def test_it_is_not_double_sided(self) -> None:
+        """It has a back of its own; drawing both faces of both is waste."""
+        assert not sign_material('dip').doubleSided
+
+    def test_the_geometry_is_a_triangle_rather_than_a_quad(self) -> None:
+        plate = sign_meshes('dip')['plate']
+        front = plate.positions[plate.positions[:, 2] < 0]
+        assert len(front) == 3

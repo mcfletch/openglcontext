@@ -171,6 +171,21 @@ road.update(car_position)                # once a frame</code></pre>
   <a href="terrain.html#fieldphysics"><code>HeightFieldColliders</code></a> does
   the same for ground carried as a field. Between them a game can turn tile
   colliders off entirely, which is what <code>glisteel</code> does.</p>
+  <p><strong>And so is everything else standing in the world.</strong> A boulder
+  on the verge is drawn from a tile and must not be <em>collided</em> from one,
+  or it is a rock the car drives through at the moment the tile behind it swaps.
+  <code>OpenGLContext.physics.props.PropColliders</code> reads the
+  <a href="roads.html#props">prop records</a> a baked world carries and stands
+  up the ones within reach, taking down the ones behind &mdash; a world's
+  boulders are hundreds of bodies and the broadphase pays for every one it
+  holds:</p>
+  <pre><code>from OpenGLContext.physics.props import PropColliders
+obstacles = PropColliders(physics_world, world.props)
+obstacles.update(car_position)           # once a frame</code></pre>
+  <p>A prop's body is an upright box the size the prop says it takes up, rather
+  than the mesh it is drawn as. What a car needs from a boulder is that it stops
+  there, and a triangle soup per rock costs the broadphase and the narrow phase
+  both for a difference nobody driving past at forty metres a second can see.</p>
 </section>
 
 <section id="walking">

@@ -47,9 +47,9 @@ BORDER_FRACTION = 0.13
 #: A galvanised post: half a metal, not quite smooth, and darker than it looks
 #: like it should be -- under a strong sun a mid grey comes out white, and a
 #: white pole beside a forest road is the most conspicuous object in the scene.
-POST_ALBEDO = (0.30, 0.31, 0.33)
-POST_METALLIC = 0.55
-POST_ROUGHNESS = 0.45
+POST_ALBEDO = (0.19, 0.196, 0.207)
+POST_METALLIC = 0.15
+POST_ROUGHNESS = 0.5
 
 
 @dataclass
@@ -117,9 +117,13 @@ def sign_material(kind: str, size: int = 256, image: Any = None) -> PBRMaterial:
     """
     face = image if image is not None else PBRTexture(sign_texture(kind, size),
                                                       srgb=True)
+    # Opaque, and one-sided. The plate is a triangular prism with a back of its
+    # own, so the picture's transparent corners fall outside the geometry and
+    # never reach a fragment. Declared as a cutout instead, every sign in a
+    # world joins the sorted alpha pass, which is what a sheet of painted metal
+    # is not.
     return PBRMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0, roughness=0.55,
-                       textures={'baseColor': face}, alphaMode='MASK',
-                       alphaCutoff=0.5, doubleSided=True)
+                       textures={'baseColor': face}, doubleSided=False)
 
 
 def sign_meshes(kind: str, profile: Optional[SignProfile] = None,

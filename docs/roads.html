@@ -265,6 +265,35 @@ world knows and the sign does not: <code>SignProfile.offset</code> is how far
 outside the road's own edge the post goes, and a world with trees up to the verge
 sets it to less than that clearance.</p>
 
+<h3 id="props">Things in the way</h3>
+<p>A boulder on the verge, a car that broke down, a fence: what they have in
+common is that they are <em>placed</em> — a mesh and a body at one spot, neither
+of which moves — and that is what
+<code>OpenGLContext.scenegraph.props.Prop</code> is. What kind of thing it is,
+where it stands, which way it faces, and how much room it takes up, so a viewer
+can draw it and a physics world can collide with it without either looking at
+the other's copy.</p>
+<pre>from OpenGLContext.scenegraph.props import Prop, rock_mesh
+from OpenGLContext.physics.props import PropColliders
+
+boulder = Prop.of(rock_mesh(radius=1.4, seed=3), kind='rock', position=here)
+obstacles = PropColliders(physics_world, world.props)
+obstacles.update(car_position)                   # once a frame</pre>
+<p><strong>The body does not come out of the tiles.</strong> Tile geometry is
+level-of-detail geometry that arrives and leaves as the camera moves, and a
+collider built from it would be a rock the car drives through at the moment the
+tile behind it swaps. So the props travel in the tileset's <code>extras</code>,
+the same way the road does, and the game stands them up itself — the ones within
+reach, because a world's boulders are hundreds of bodies and the broadphase pays
+for every one it holds.</p>
+<p>What each one looks like is art, and the toolkit ships none. The exception is
+the kind a landscape supplies for free: <code>rock_mesh</code> grows a boulder
+out of a subdivided icosahedron, pushed in and out by a smooth function of
+direction and settled into the ground, so a world can be strewn with stone
+without an asset pipeline. Its colour is chosen for how it renders rather than
+from a reflectance table: a stone quoted at the albedo of a paving slab comes
+out white in sun and reads as a polystyrene prop.</p>
+
 <h3 id="roadshade">The shade a road runs through</h3>
 <p>A forest road drawn at full sun with everything beside it in deep shade reads
 as a lit strip laid over a photograph of a wood. <code>shade</code> is how much

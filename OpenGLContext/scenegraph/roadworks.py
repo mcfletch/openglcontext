@@ -43,13 +43,13 @@ __all__ = [
 #: than fresh -- a bridge in a landscape has been there a while, and fresh
 #: concrete under a strong sun reads as a whitewashed wall rather than as
 #: structure.
-CONCRETE_ALBEDO = (0.30, 0.295, 0.285)
+CONCRETE_ALBEDO = (0.19, 0.187, 0.180)
 CONCRETE_ROUGHNESS = 0.85
 
 #: A parapet is the thing closest to the camera for the whole length of a
 #: viaduct, so it is a *barrier* rather than more structure: darker, and a
 #: little glossier, the way galvanised steel and traffic-stained concrete are.
-BARRIER_ALBEDO = (0.17, 0.175, 0.18)
+BARRIER_ALBEDO = (0.10, 0.105, 0.112)
 BARRIER_ROUGHNESS = 0.6
 
 HeightFn = Callable[[Any, Any], Any]

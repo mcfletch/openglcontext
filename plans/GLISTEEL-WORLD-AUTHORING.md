@@ -1174,3 +1174,45 @@ them; §E decides per species.
   is responsible for, and `tests/test_world_road_coverage.py` holds that the
   tiles at every level of the tree write each segment exactly once — never none,
   which vanishes under refinement, and never two, which flickers.
+- **2026-08-18** — **§J, obstacles; and a bake that can be iterated.**
+
+  **Obstacles.** `OpenGLContext.scenegraph.props.Prop` is the thing the baker had
+  no concept of: a *placed* thing, a mesh and a body at one spot, with the
+  measurements a physics world needs to stand it up without being handed the
+  geometry. `PropColliders` holds the ones within reach and lets go of the rest;
+  the records travel in the tileset's `extras`, because a collider built from
+  tile geometry is a rock the car drives through at the moment the tile behind
+  it swaps. The shipped world strews 107 boulders along its verges, clear of the
+  carriageway by their own size, and `rock_mesh` grows them from a subdivided
+  icosahedron so no art is needed. Parked cars, deer and foxes are the same
+  mechanism waiting for art.
+
+  **A defect measured rather than argued.** Concrete, barrier, rock and sign post
+  all rendered white. A swatch of six known albedos through the real PBR pass
+  settled it in one render: the ramp is right and the numbers were simply at the
+  bright end of it. They are chosen by eye now, and say so.
+
+  **The bake: 4m36s → 25s.** Profiled by phase, 91.5% of it was the tree scatter,
+  and nearly all of that was questions about ground the answer did not depend on.
+
+  - *Ask for a spacing, not a density.* Uniform random candidates thinned to a
+    minimum separation is dart-throwing: eight million candidates for half a
+    million trees. A jittered grid at the spacing gives the same forest from two
+    and a half million. 286 s → 31 s.
+  - *Filter cheapest-first, each on what the last one left,* and let a caller
+    that has already sampled the ground answer "how steep is it" with a lookup
+    (`slope_fn`) instead of four evaluations of a conformed height function.
+    31 s → 16 s, and the tree layer's own slopes 2.7 s → 0.07 s.
+  - *Do not iterate over cells the road never reaches.* The query index grouped
+    a 2048-pixel control map into most of a million cells and walked every one.
+    One vectorised rejection against the road's own occupancy first:
+    `bake_world` 11.4 s → 4.1 s, painting the corridor 8.0 s → under one.
+
+  `RoadPath.index_cells` is the measurement that made the last one visible —
+  `comparisons` counts the work the index saves and says nothing about the
+  iterations it costs.
+
+  **Still open:** signs cost 21 fps of the 73 the world drove at before them
+  (measured across four bakes: no signs 73.3, signs 51.8, signs and props 45.9).
+  The plate's material is no longer an alpha cutout, which was one reason; the
+  rest is a node per kind per part per tile and is not yet measured.

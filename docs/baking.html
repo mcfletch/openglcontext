@@ -153,8 +153,9 @@ ground = BoundingBox((-2048, 0, -2048), (2048, 0, 2048))
 terrain = HeightfieldLayer(height_fn=my_heights, extent=ground, resolution=33,
                            color_fn=my_colours, water_level=0.0)
 
-trees = scatter_on_heightfield(my_heights, ground, density=0.004, seed=11,
-                               slope_limit=38.0, height_range=(2.0, 130.0))
+trees = scatter_on_heightfield(my_heights, ground, spacing=2.6, seed=11,
+                               slope_limit=38.0, height_range=(2.0, 130.0),
+                               slope_fn=terrain.field().slope)
 forest = InstanceLayer(positions=trees.positions,
                        rotations=yaw_quaternions(trees.yaws),
                        scales=trees.scales,
@@ -163,6 +164,23 @@ forest = InstanceLayer(positions=trees.positions,
 result = bake_world([terrain, forest], '/tmp/world', depth=4,
                     credits=['Elevation: SRTM, public domain'])
 print(result.summary())</pre>
+<p><strong>Say how far apart, not how many, for anything you will thin
+afterwards.</strong> Uniform random candidates later cut down to a minimum
+separation is dart-throwing: to saturate the packing it has to be handed several
+times the number of instances it will keep, and every one costs a height lookup,
+a distance-to-road query and four more lookups for the slope. A jittered grid at
+the spacing asks for the answer directly. On the shipped four-kilometre world
+that was eight million candidates for half a million trees and most of what a
+bake spent; at a spacing it is two and a half million, and the same forest.</p>
+<p>Two more things make the difference in a bake that asks about millions of
+points. The filters run <strong>cheapest first, each on what the last one
+left</strong>. And <code>slope_fn</code> lets a caller that has already sampled
+the ground &mdash; a bake builds a height field for the terrain before it
+scatters anything on it &mdash; answer "how steep is it here" with a lookup
+instead of four evaluations of a conformed height function. It answers better,
+too: a central difference over a metre reads every wrinkle of an earthwork as a
+cliff, and a tree cares about the hillside.</p>
+
 <dl>
   <dt><code>HeightfieldLayer</code></dt>
   <dd>ground meshed from a height function, with a per-vertex colour function, an
@@ -276,6 +294,22 @@ as the camera moves &mdash; see
 mask is the splat control map, <strong>the control map has to be fine enough to
 resolve the road</strong>: a corridor thinner than one of its pixels is a
 corridor the grass grows over. <code>FieldTerrainLayer(control_size=…)</code>.</p>
+
+<h3 id="props">Obstacles</h3>
+<p><code>OpenGLContext_editor.bake.props.PropLayer</code> writes a world's
+obstacles twice: as one instanced node per kind into the tiles that hold them,
+and as a list in the tileset's <code>extras</code>. Both, because the geometry
+comes and goes with a tile and the body must not &mdash; see
+<a href="roads.html#props">things in the way</a>.</p>
+<pre>from OpenGLContext.scenegraph.props import Prop, rock_mesh
+from OpenGLContext_editor.bake.props import PropLayer
+
+PropLayer(props=[Prop.of(stone, kind='rock', position=at, scale=1.3)],
+          prototypes={'rock': stone})</pre>
+<p><code>prototypes</code> is the mesh each kind is drawn as, at the origin with
+its base at y=0; the placement scales and turns it. A prop measured with
+<code>Prop.of</code> takes its radius and height from that mesh, which is what
+a physics world needs to stand a body up without being handed the geometry.</p>
 
 <h3>Bringing in authored assets</h3>
 <p><code>meshes_from_gltf</code> reads a designer's <code>.glb</code> and hands
