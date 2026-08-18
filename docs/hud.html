@@ -54,7 +54,8 @@ the same batched renderer, in the same handful of draw calls.</p>
   <p>A layer is a tree of widgets, each carrying the corner it belongs in.
     Add it to the context and it is drawn from the next frame on:</p>
   <pre>from OpenGLContext.ui.hudwidgets import (
-    BarMeter, Crosshair, HUDGroup, HUDLayer, MessageQueue, Readout, TextBlock,
+    BarMeter, Crosshair, HUDGroup, HUDLayer, MessageQueue, MiniMap, Readout,
+    TextBlock,
 )
 
 self.health = BarMeter(label='HEALTH', value=100, maximum=100)
@@ -251,6 +252,29 @@ wash.strength = 0.42        # driven per frame; 0 draws nothing at all</pre>
     developer overlay is anchored top-left and grows <em>down</em> the left
     edge as sections are registered, so a status line anywhere along that side
     is a status line written over it.</p>
+
+  <h3 id="minimap">MiniMap &mdash; a route, and what is on it</h3>
+  <p>A driver on an eight-kilometre circuit cannot see round the next bend and
+    has no idea how much of the lap is left. A map answers both, and it is the
+    same widget whether the route is a race circuit, a rally stage or a delivery
+    round: it takes a polyline in world XZ and a list of marks, and knows
+    nothing about either.</p>
+  <pre>self.map = MiniMap(anchor='bottom-left', size=150)
+self.map.route = course.centreline            # (N,2) or (N,3): XZ is read
+self.map.marks = [(car.x, car.z, 'crosshair')]   # each names a skin colour</pre>
+  <p><strong>The fitting is the whole of it.</strong> The route is scaled to the
+    box by whichever axis needs it more and centred in the other, so it keeps
+    its shape: a map that stretches the circuit to fill its box is a map of a
+    different circuit. A mark outside the route's extent is clamped to the edge
+    rather than dropped, because a car that has left the road is somewhere and
+    where it went off is worth seeing.</p>
+  <p>A long route is thinned to <code>detail</code> segments. A circuit written
+    down every six metres is two thousand quads for a line nobody can see the
+    corners of.</p>
+  <p>It is the one widget that draws something that is not axis-aligned, which
+    is what <code>Renderer.segment(start, end, width, colour)</code> is for: a
+    thick line as a single turned quad, in the same batch as everything else.
+    A compass rose, a trajectory or a radar sweep wants the same primitive.</p>
 
   <h3>MessageQueue &mdash; pickups, frags, warnings</h3>
   <p>Newest first, each line carrying its own clock, so a warning posted with a

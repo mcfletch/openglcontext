@@ -37,6 +37,9 @@ What the widgets are for:
   screen edge the player would have to turn towards.  How much was lost is
   already on the meter; where it came from is the part a player cannot see and
   can act on.
+* :class:`MiniMap` -- a route seen from above with the player on it. It takes a
+  polyline and some marks and knows nothing about either, so it is the same
+  widget for a race circuit, a rally stage or a delivery round.
 * :class:`ScreenWash` -- a colour over the whole viewport, for the states
   where the *view* has changed rather than where something has happened in it:
   being dead, being under water, a fade.  It has no direction to give, which
@@ -53,6 +56,8 @@ import math
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
+
 from vrml import field, node
 
 from OpenGLContext.hud import COLUMN, GUIBox
@@ -62,7 +67,7 @@ from OpenGLContext.ui.widgets import RootWidget, Widget
 
 __all__ = [
     'HUDLayer', 'HUDWidget', 'HUDGroup', 'Crosshair', 'BarMeter', 'Readout',
-    'TextBlock',
+    'TextBlock', 'MiniMap',
     'Message', 'MessageQueue', 'DamageIndicator', 'DamageMark', 'ScreenWash',
     'place', 'hud_text',
     'CROSS', 'DOT', 'CROSS_DOT', 'CIRCLE', 'NONE', 'ANCHORS', 'EDGES',
@@ -1066,3 +1071,129 @@ class DamageIndicator(HUDWidget):
     def paint(self, renderer: Any) -> None:
         for strip, colour in self.bands(renderer.metrics):
             renderer.rect(strip, colour)
+
+
+class MiniMap(HUDWidget):
+    """A route seen from above, with whatever is on it marked.
+
+    A driver on an eight-kilometre circuit cannot see round the next bend and
+    has no idea how much of the lap is left; a map answers both. It takes a
+    polyline in world XZ and a list of marks, and knows nothing about either --
+    the same widget serves a race circuit, a rally stage or a delivery round.
+
+    The **fitting is the whole of it**: the route is scaled to the box by
+    whichever axis needs it more and centred in the other, so it keeps its
+    shape. A map that stretches the circuit to fill its box is a map of a
+    different circuit.
+    """
+
+    PROTO = 'MiniMap'
+    anchor = field.newField('anchor', 'SFString', 1, 'bottom-left')
+    #: The side of the square the map is drawn in, in reference pixels.
+    size = field.newField('size', 'SFFloat', 1, 150.0)
+    #: Pixels kept clear inside that, so a route does not touch the edge.
+    inset = field.newField('inset', 'SFFloat', 1, 6.0)
+    #: How thick the route is drawn, and how big a mark on it is.
+    lineWidth = field.newField('lineWidth', 'SFFloat', 1, 2.0)
+    markSize = field.newField('markSize', 'SFFloat', 1, 5.0)
+    #: The most segments drawn, however many points the route has. A circuit
+    #: written down every six metres is two thousand quads for a line nobody
+    #: can see the corners of.
+    detail = field.newField('detail', 'SFInt32', 1, 150)
+    #: Whether a closed route is joined up.
+    closed = field.newField('closed', 'SFBool', 1, True)
+
+    #: The route, as an (N,2) array of world XZ. Data rather than a field: it
+    #: is a world's shape, not a setting, and it is set once.
+    route: Any = None
+    #: What is on it, as ``(x, z, kind)``. ``kind`` names a skin colour.
+    marks: Sequence[Any] = ()
+
+    def content_size(self, metrics: FontMetrics,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        side = max(1, metrics.pixels(self.size))
+        return (side, side)
+
+    # -- the fitting ------------------------------------------------------
+    def bounds(self) -> Optional[Tuple[float, float, float, float]]:
+        """The route's own extent in world XZ, or None for no route."""
+        points = _points(self.route)
+        if points is None:
+            return None
+        return (float(points[:, 0].min()), float(points[:, 1].min()),
+                float(points[:, 0].max()), float(points[:, 1].max()))
+
+    def at(self, x: float, z: float) -> Tuple[float, float]:
+        """Where a world position lands on the map, in window pixels.
+
+        Clamped to the box: a car that has left the road is somewhere, and
+        where it is off the edge is worth seeing.
+        """
+        box = self.rect
+        inset = float(self.inset)
+        found = self.bounds()
+        middle = (box.x + box.width / 2.0, box.y + box.height / 2.0)
+        if found is None:
+            return middle
+        low_x, low_z, high_x, high_z = found
+        span = max(high_x - low_x, high_z - low_z)
+        room = max(min(box.width, box.height) - inset * 2.0, 1.0)
+        scale = room / span if span > 1e-9 else 0.0
+        # Z runs into the screen and the map's Y runs up it, so the map is seen
+        # from above with north at the top rather than mirrored.
+        place = (middle[0] + (x - (low_x + high_x) / 2.0) * scale,
+                 middle[1] - (z - (low_z + high_z) / 2.0) * scale)
+        return (min(max(place[0], box.x), float(box.right)),
+                min(max(place[1], box.y), float(box.top)))
+
+    def strokes(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+        """The route as pairs of points on the map, thinned to :attr:`detail`."""
+        points = _points(self.route)
+        if points is None or len(points) < 2:
+            return []
+        stride = max(1, int(np.ceil(len(points) / max(int(self.detail), 2))))
+        drawn = list(points[::stride])
+        if not np.allclose(drawn[-1], points[-1]):
+            drawn.append(points[-1])
+        if self.closed and not np.allclose(drawn[0], drawn[-1]):
+            drawn.append(drawn[0])
+        placed = [self.at(float(x), float(z)) for x, z in drawn]
+        return list(zip(placed[:-1], placed[1:], strict=True))
+
+    def marked(self) -> List[Tuple[Tuple[float, float], str]]:
+        """Each mark's place on the map, and what kind it is."""
+        return [(self.at(float(x), float(z)), str(kind))
+                for x, z, kind in self.marks]
+
+    def paint(self, renderer: Any) -> None:
+        metrics = renderer.metrics
+        skin = renderer.skin
+        width = float(max(1, metrics.pixels(self.lineWidth)))
+        renderer.rect(self.rect, skin.hudTrack)
+        for start, end in self.strokes():
+            renderer.segment(start, end, width, skin.hudText)
+        reach = max(2, metrics.pixels(self.markSize))
+        for (x, y), kind in self.marked():
+            renderer.disc(Rect(int(x - reach / 2), int(y - reach / 2),
+                               reach, reach), self.colour(skin, kind))
+
+    def colour(self, skin: Any, kind: str) -> Any:
+        """The skin colour a mark of this kind is drawn in.
+
+        Asked by name rather than taken as one, so a caller marks "the player"
+        and the skin decides what that looks like. A skin's colours are arrays,
+        so the fallback tests for *absence* rather than for falsehood: a vector
+        has no answer to a yes-or-no question.
+        """
+        found = getattr(skin, kind, None)
+        return skin.crosshair if found is None else found
+
+
+def _points(route: Any) -> Optional[Any]:
+    """A route as an (N,2) array, or None if there is not one."""
+    if route is None:
+        return None
+    found = np.asarray(route, dtype='d')
+    if found.ndim != 2 or len(found) < 1:
+        return None
+    return found[:, :2] if found.shape[1] == 2 else found[:, [0, 2]]

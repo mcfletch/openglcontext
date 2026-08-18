@@ -25,6 +25,7 @@ fixed-size image.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, List, Optional, Sequence, Tuple
 
 import ctypes
@@ -348,6 +349,33 @@ class OverlayRenderer:
     def rect(self, rect: Rect, colour: Any) -> None:
         """A flat translucent rectangle."""
         self.quad(rect, colour)
+
+    def segment(self, start: Any, end: Any, width: float, colour: Any) -> None:
+        """A thick line between two points, as one quad.
+
+        The only primitive here that is not axis-aligned, and the reason a HUD
+        can draw a *route* -- a track map, a compass rose, a trajectory. The
+        batch takes raw corners, so a turned quad costs exactly what a straight
+        one does.
+        """
+        red, green, blue, alpha = _rgba(colour)
+        if alpha <= 0 or width <= 0:
+            return
+        x0, y0 = float(start[0]), float(start[1])
+        x1, y1 = float(end[0]), float(end[1])
+        run, rise = x1 - x0, y1 - y0
+        length = math.hypot(run, rise)
+        if length < 1e-6:
+            return
+        # Half a width, across the line: the two sides of the quad.
+        across_x = -rise / length * width / 2.0
+        across_y = run / length * width / 2.0
+        self._state(self._white, self.BLEND)
+        corners = ((x0 - across_x, y0 - across_y), (x1 - across_x, y1 - across_y),
+                   (x1 + across_x, y1 + across_y), (x0 - across_x, y0 - across_y),
+                   (x1 + across_x, y1 + across_y), (x0 + across_x, y0 + across_y))
+        for x, y in corners:
+            self._vertices.extend((x, y, 0.0, 0.0, red, green, blue, alpha, 0.0))
 
     def glow(self, rect: Rect, colour: Any) -> None:
         """The focus ring: additive, and outside the widget's own rectangle."""
