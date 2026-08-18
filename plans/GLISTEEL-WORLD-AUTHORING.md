@@ -220,7 +220,8 @@ appears.
 | §G | `glisteel-editor` — the race-track editor app | new repo | 🟡 draws a circuit on the shipped landscape and bakes a world to drive; water and real elevation wait on §D/§B | §B–§F |
 | §H | `glisteel` — the car game demo | new repo | ✅ streams, drives, times a lap | §A runtime, §E output |
 | §I | Performance to 60 fps on the discrete-GPU target | engine + game | ✅ 106 fps at 1080p driving the shipped world | §H to measure |
-| §J | Furniture — signs, obstacles, junctions | engine (render) + editor (gen) | 📋 | §C |
+| §J | Furniture — signs, obstacles, junctions | engine (render) + editor (gen) | 🔨 | §C |
+| §K | The game a player plays — controls, feel, traffic, and what is on screen | game (glisteel) | 📋 | §H, §J |
 
 ---
 
@@ -720,6 +721,57 @@ surface is for two known centrelines; that an obstacle's collider is where its m
 
 ---
 
+### §K — The game a player plays 📋
+
+**Goal.** Everything between "the world is right" and "this is a game somebody
+would play". Signs, obstacles and traffic (§J) made the road *inhabited*; this
+is the driving and the reading of it.
+
+**Controls.**
+
+- **A game controller,** for steering above all: the current input is three
+  states — full left, straight, full right — and no amount of tuning makes that
+  feel like a car. Analogue steering, throttle and brake axes, with a dead zone
+  and a shaping curve. `driver_input()` returns three floats and `Car.control`
+  passes them through, so there is one clean insertion point.
+- **Mouse drive,** before that and for anyone without a pad: the pointer's
+  sideways movement steers proportionally, the way mouse-look turns a head.
+  Wants the same pointer capture a look-around mode uses, and a sensitivity.
+
+**Feel.**
+
+- **An EV power curve.** The car applies a constant `engine_force` at every
+  speed, so it pulls as hard at 160 km/h as at 30 and its top speed is set by
+  rolling resistance because there is no aerodynamic drag at all. What a motor
+  actually gives is constant torque to a base speed and constant *power* above
+  it. Regenerative braking is deliberately out of scope for now.
+
+**Traffic that reacts to the player** (§J gave it traffic that reacts to
+*itself*: it follows the car in front and will not drive through it).
+
+- **A player stopped in the road** is something to get round or to queue behind
+  and lean on the horn about, decided per driver.
+- **A player on the wrong side of the road** is a decision for the oncoming
+  driver: swerve if there is room and time, and if there is not, hit them --
+  and sound the horn either way. The severity rule already exists
+  (`race.Collisions`); what is missing is the other driver's judgement.
+
+**What is on screen.**
+
+- **The lap timer** is already there (current, last and best). What it wants is
+  to be legible at speed and to say where the time went.
+- **A visible start/finish** — a gantry, a line across the road, something a
+  driver sees coming rather than a lap counter that ticks over for no visible
+  reason.
+- **A map** of the whole circuit with the car on it, so a driver knows what is
+  round the next bend and how much of the lap is left.
+
+**Testable without GL.** Where the mouse's movement puts the steering; what the
+power curve gives at each speed; what an oncoming driver decides for a given
+closing speed and gap; where a car is on the map for a given position.
+
+---
+
 ### §I — Performance to 60 fps ✅
 
 **Goal.** 60 fps at 1080p on the discrete-GPU target, streaming a world heavier than the
@@ -1216,3 +1268,47 @@ them; §E decides per species.
   (measured across four bakes: no signs 73.3, signs 51.8, signs and props 45.9).
   The plate's material is no longer an alpha cutout, which was one reason; the
   rest is a node per kind per part per tile and is not yet measured.
+- **2026-08-18** — **§J, traffic; and one geometry for every sign.**
+
+  **Traffic.** `glisteel.traffic` puts other cars on the road in both
+  directions, driven by *station* rather than simulated as vehicles: a
+  kinematic body and a transform apiece rather than four raycasts a step, which
+  is what lets there be eight of them for nothing measurable. They keep to their
+  own side, drive at the limit, and decide for themselves — a car brakes for
+  something its driver can see and the player cannot, or pulls off the road
+  altogether — from a seed, so the same world drives the same way twice.
+
+  Getting them not to drive *through* each other took the rule rather than a
+  number. A following window with a distance in it is a driver who notices the
+  queue too late to join it if the window is shorter than the braking distance,
+  and one who crawls behind nothing if it is longer; the speed a car may go is
+  `sqrt(2 a s)` in the room it has plus whatever the car in front is doing, and
+  the step it takes is clamped so however badly that is judged, nobody drives
+  through anybody.
+
+  **The player is part of the traffic.** A car on the grid is a car in the road,
+  and the road behind it has to notice — which is what made the whole thing work
+  at all: before it, the first car along shoved the stationary player into the
+  trees inside five seconds.
+
+  **A road with two directions is a road you keep a side of.** `Course.across`,
+  `Course.lane_point` and `Course.driving_lane` are that side, in the frame
+  everything swept along a road already uses, and the grid and the autopilot
+  take it when there is traffic. On an empty circuit the line is still the
+  centreline, because that is the racing line.
+
+  **Two defects on the way.** `Course.across` on a closed course asked for the
+  direction of the segment between the last point and the first — which are the
+  same point, so it fell back to a fixed vector with the wrong sign, and
+  everything that keeps a side of the road swapped sides for the length of a
+  tile. And a sign's plate was declared an alpha cutout although it is a
+  triangular prism whose picture never reaches a transparent fragment, which put
+  every sign in the world into the sorted transparent pass.
+
+  **Signs are one geometry and one picture now.** `sign_atlas` puts every
+  plate — and a flat patch of the post's own colour — in one image, so a sign is
+  one material whatever it says and a tile's signs are one mesh and one draw.
+  Measured at 1080p on the shipped world: 51 shapes and 8.35 ms of draw became
+  41 and 6.70. Baked into place rather than instanced, because instancing is for
+  thousands of copies and a per-instance *texture offset* is a fair amount of
+  engine for a few hundred triangles a tile.

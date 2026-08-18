@@ -7,16 +7,22 @@ than authored -- which is most of the point of generating a road instead of
 drawing one. Deciding that is authoring and lives in
 ``OpenGLContext_editor.world.signs``; what is here is the object itself.
 
-:func:`sign_meshes` builds one at the origin, facing -Z, because a world has
-tens of signs and they are placed by instancing a prototype rather than by
-building a mesh each. :func:`sign_texture` paints the face, so a world needs no
-sign artwork to ship with it.
+:func:`sign_mesh` builds one at the origin, facing -Z, because a world has tens
+of signs and they are placed rather than modelled one at a time.
+:func:`sign_texture` paints the face, so a world needs no sign artwork to ship
+with it.
+
+**Every kind reads out of one image.** Seven kinds of plate as seven textures is
+seven materials and seven draws for what is one object with a different picture
+on it, so :func:`sign_atlas` puts them -- and the post's own colour -- in a
+single image and says where each one lives. A sign is then one mesh with one
+material whatever it says, and a world's signs are one draw a tile.
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -24,8 +30,9 @@ from OpenGLContext.loaders.gltf.meshes import estimate_normals
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
-__all__ = ['WARNINGS', 'SignProfile', 'sign_meshes', 'sign_texture',
-           'sign_material', 'post_material']
+__all__ = ['WARNINGS', 'SignProfile', 'sign_mesh', 'sign_meshes',
+           'sign_texture', 'sign_atlas', 'sign_material', 'atlas_material',
+           'post_material']
 
 #: What a sign can warn of. Each is a symbol on the same triangular plate, which
 #: is what a warning sign is nearly everywhere: the shape says "take care" and
@@ -126,6 +133,106 @@ def sign_material(kind: str, size: int = 256, image: Any = None) -> PBRMaterial:
                        textures={'baseColor': face}, doubleSided=False)
 
 
+def sign_atlas(kinds: "Sequence[str]" = WARNINGS, cell: int = 256
+               ) -> "Tuple[Any, Dict[str, Tuple[float, float, float, float]]]":
+    """Every plate, and the post's colour, in one image.
+
+    Returns the image and ``{name: (u0, v0, u1, v1)}`` -- a box per kind, and
+    one called ``post`` holding a flat patch of the post's own colour so the
+    whole sign reads out of one texture and is one material.
+
+    Laid out on the smallest square grid that holds them, in the order given, so
+    the same kinds always make the same atlas and a world re-bakes to itself.
+    """
+    from PIL import Image
+    wanted = list(kinds)
+    for kind in wanted:
+        if kind not in WARNINGS:
+            raise ValueError("no warning sign says %r; the kinds are %s"
+                             % (kind, ", ".join(WARNINGS)))
+    names = wanted + ["post"]
+    columns = int(math.ceil(math.sqrt(len(names))))
+    rows = int(math.ceil(len(names) / columns))
+    image = Image.new("RGBA", (columns * cell, rows * cell), PLATE_CLEAR)
+    boxes = {}
+    for index, name in enumerate(names):
+        column, row = index % columns, index // columns
+        patch = (Image.new("RGBA", (cell, cell), _srgb(POST_ALBEDO))
+                 if name == "post" else sign_texture(name, cell))
+        image.paste(patch, (column * cell, row * cell))
+        boxes[name] = (column * cell / image.width, row * cell / image.height,
+                       (column + 1) * cell / image.width,
+                       (row + 1) * cell / image.height)
+    return image, boxes
+
+
+def atlas_material(image: Any = None, kinds: "Sequence[str]" = WARNINGS,
+                   cell: int = 256) -> PBRMaterial:
+    """The one material a sign built against :func:`sign_atlas` wears.
+
+    ``image`` overrides the painted atlas -- an
+    :class:`~OpenGLContext.loaders.gltf.writer.ExternalImage` for a baked world,
+    which writes the picture once beside the tileset rather than into every tile
+    that carries a sign.
+    """
+    face = image if image is not None else PBRTexture(
+        sign_atlas(kinds, cell)[0], srgb=True)
+    return PBRMaterial(baseColor=(1.0, 1.0, 1.0), metallic=0.0,
+                       roughness=POST_ROUGHNESS, textures={"baseColor": face},
+                       doubleSided=False)
+
+
+def sign_mesh(kind: str, profile: Optional[SignProfile] = None,
+              material: Optional[PBRMaterial] = None,
+              cells: Optional[Dict[str, Any]] = None) -> PBRMesh:
+    """One whole sign at the origin, facing -Z, as a single mesh.
+
+    Post and plate together, reading out of one atlas, so a sign is one material
+    however many kinds a world has. ``cells`` is :func:`sign_atlas`\'s box map;
+    left out, an atlas of this one kind is made for it.
+    """
+    if kind not in WARNINGS:
+        raise ValueError("no warning sign says %r; the kinds are %s"
+                         % (kind, ", ".join(WARNINGS)))
+    profile = profile or SignProfile()
+    if cells is None:
+        _image, cells = sign_atlas((kind,))
+        if material is None:
+            material = atlas_material(kinds=(kind,))
+    if material is None:
+        material = atlas_material()
+    return _merged([_post(profile, material, uv=_middle(cells["post"])),
+                    _plate(profile, material, box=cells[kind])], material)
+
+
+def _srgb(colour: "Tuple[float, float, float]") -> tuple:
+    """A linear albedo as the bytes an sRGB texture has to hold for it."""
+    def encoded(value: float) -> int:
+        low = value * 12.92
+        high = 1.055 * (value ** (1.0 / 2.4)) - 0.055
+        return int(round(255.0 * (low if value <= 0.0031308 else high)))
+    return tuple(encoded(float(v)) for v in colour) + (255,)
+
+
+def _middle(box: Any) -> "Tuple[float, float]":
+    """The centre of an atlas cell, for geometry that wants one flat colour."""
+    u0, v0, u1, v1 = box
+    return ((u0 + u1) / 2.0, (v0 + v1) / 2.0)
+
+
+def _merged(meshes: list, material: PBRMaterial) -> PBRMesh:
+    """Several meshes of one material as a single mesh."""
+    positions, texcoords, indices, offset = [], [], [], 0
+    for mesh in meshes:
+        positions.append(np.asarray(mesh.positions))
+        texcoords.append(np.asarray(mesh.texcoords))
+        indices.append(np.asarray(mesh.indices) + offset)
+        offset += len(mesh.positions)
+    return _mesh(np.concatenate(positions),
+                 np.concatenate(indices).astype(np.uint32), material,
+                 texcoords=np.concatenate(texcoords).astype("f"))
+
+
 def sign_meshes(kind: str, profile: Optional[SignProfile] = None,
                 material: Optional[PBRMaterial] = None,
                 post: Optional[PBRMaterial] = None) -> Dict[str, PBRMesh]:
@@ -211,8 +318,13 @@ def _arrow(draw: Any, tail: tuple, head: tuple, size: int) -> None:
     draw.polygon(points, fill=PLATE_SYMBOL)
 
 
-def _post(profile: SignProfile, material: PBRMaterial) -> PBRMesh:
-    """The post: a low-sided tube from the ground to the plate's bottom edge."""
+def _post(profile: SignProfile, material: PBRMaterial,
+          uv: "Optional[Tuple[float, float]]" = None) -> PBRMesh:
+    """The post: a low-sided tube from the ground to the plate's bottom edge.
+
+    ``uv`` is the one place in an atlas every vertex of it reads, so post and
+    plate share a texture and a sign is one material.
+    """
     sides = max(int(profile.post_sides), 3)
     angle = np.linspace(0.0, 2.0 * np.pi, sides, endpoint=False)
     ring = np.stack([np.cos(angle), np.sin(angle)], axis=-1) * profile.post_radius
@@ -227,16 +339,25 @@ def _post(profile: SignProfile, material: PBRMaterial) -> PBRMesh:
         faces += [index, step, index + sides, step, step + sides, index + sides]
     for index in range(1, sides - 1):
         faces += [sides, sides + index + 1, sides + index]
-    return _mesh(positions, np.asarray(faces, dtype=np.uint32), material)
+    texcoords = (None if uv is None
+                 else np.tile(np.asarray(uv, dtype='f'), (len(positions), 1)))
+    return _mesh(positions, np.asarray(faces, dtype=np.uint32), material,
+                 texcoords=texcoords)
 
 
-def _plate(profile: SignProfile, material: PBRMaterial) -> PBRMesh:
-    """The plate: a thin triangular prism, point up, facing -Z."""
+def _plate(profile: SignProfile, material: PBRMaterial,
+           box: "Optional[Tuple[float, float, float, float]]" = None) -> PBRMesh:
+    """The plate: a thin triangular prism, point up, facing -Z.
+
+    ``box`` is the corner of an atlas its face reads out of; without one it
+    reads the whole image, which is what a plate with a texture of its own does.
+    """
+    u0, v0, u1, v1 = box if box is not None else (0.0, 0.0, 1.0, 1.0)
     half = profile.plate_size / 2.0
     rise = profile.plate_size * _PLATE_RISE
     foot = profile.post_height
     corners = [(0.0, foot + rise), (half, foot), (-half, foot)]
-    uv = [(0.5, 0.0), (1.0, 1.0), (0.0, 1.0)]
+    uv = [((u0 + u1) / 2.0, v0), (u1, v1), (u0, v1)]
     depth = profile.plate_depth / 2.0
     positions, texcoords, faces = [], [], []
     for sign in (-1.0, 1.0):                     # the face, then the back

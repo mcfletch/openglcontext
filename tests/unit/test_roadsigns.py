@@ -15,7 +15,9 @@ import pytest
 from OpenGLContext.scenegraph.roadsigns import (
     WARNINGS,
     SignProfile,
+    sign_atlas,
     sign_material,
+    sign_mesh,
     sign_meshes,
     sign_texture,
 )
@@ -169,3 +171,82 @@ class TestThePlateCostsWhatAPlateCosts:
         plate = sign_meshes('dip')['plate']
         front = plate.positions[plate.positions[:, 2] < 0]
         assert len(front) == 3
+
+
+class TestOneTextureForEveryKind:
+    """Seven kinds of plate is seven textures, seven materials and seven draws
+    for what is one object with a different picture on it. An atlas makes it one
+    of each: the post and every plate live in one image, and which sign a piece
+    of geometry is comes out of where it reads."""
+
+    def test_the_atlas_holds_every_kind_it_was_asked_for(self) -> None:
+        image, cells = sign_atlas(('dip', 'crest'))
+        assert set(cells) >= {'dip', 'crest'}
+        assert image.size[0] >= 256
+
+    def test_each_kind_has_its_own_corner(self) -> None:
+        _image, cells = sign_atlas(WARNINGS)
+        boxes = [tuple(cells[kind]) for kind in WARNINGS]
+        assert len(set(boxes)) == len(WARNINGS)
+
+    def test_the_corners_are_inside_the_image(self) -> None:
+        _image, cells = sign_atlas(WARNINGS)
+        for box in cells.values():
+            assert 0.0 <= min(box) and max(box) <= 1.0
+
+    def test_the_post_reads_from_it_too(self) -> None:
+        """One material for the whole sign, so it is one draw."""
+        _image, cells = sign_atlas(('dip',))
+        assert 'post' in cells
+
+    def test_the_post_s_patch_is_a_flat_colour(self) -> None:
+        import numpy as np
+        image, cells = sign_atlas(('dip',))
+        u0, v0, u1, v1 = cells['post']
+        found = np.asarray(image.convert('RGB'), 'd')
+        patch = found[int(v0 * image.height) + 2:int(v1 * image.height) - 2,
+                      int(u0 * image.width) + 2:int(u1 * image.width) - 2]
+        assert float(patch.reshape(-1, 3).std(axis=0).max()) < 2.0
+
+    def test_the_same_kinds_make_the_same_atlas(self) -> None:
+        first, _ = sign_atlas(WARNINGS)
+        second, _ = sign_atlas(WARNINGS)
+        assert first.tobytes() == second.tobytes()
+
+    def test_a_kind_nobody_has_heard_of_is_reported(self) -> None:
+        with pytest.raises(ValueError):
+            sign_atlas(('unicorn-crossing',))
+
+
+class TestASignAsOneMesh:
+    def test_it_is_a_single_mesh(self) -> None:
+        _image, cells = sign_atlas(('dip',))
+        mesh = sign_mesh('dip', cells=cells)
+        assert len(mesh.positions) and mesh.texcoords is not None
+
+    def test_the_post_is_still_under_the_plate(self) -> None:
+        _image, cells = sign_atlas(('dip',))
+        mesh = sign_mesh('dip', cells=cells)
+        assert float(mesh.positions[:, 1].min()) == pytest.approx(0.0, abs=1e-5)
+        assert float(mesh.positions[:, 1].max()) > 2.0
+
+    def test_the_plate_reads_its_own_corner_of_the_atlas(self) -> None:
+        _image, cells = sign_atlas(WARNINGS)
+        u0, v0, u1, v1 = cells['crest']
+        found = np.asarray(sign_mesh('crest', cells=cells).texcoords)
+        plate = found[(found[:, 0] >= u0 - 1e-6) & (found[:, 0] <= u1 + 1e-6)
+                      & (found[:, 1] >= v0 - 1e-6) & (found[:, 1] <= v1 + 1e-6)]
+        assert len(plate) >= 6
+
+    def test_two_kinds_differ_only_in_where_they_read(self) -> None:
+        """Which is what makes them one geometry with a different picture."""
+        _image, cells = sign_atlas(WARNINGS)
+        first = sign_mesh('dip', cells=cells)
+        second = sign_mesh('crest', cells=cells)
+        assert np.allclose(first.positions, second.positions)
+        assert not np.allclose(first.texcoords, second.texcoords)
+
+    def test_given_no_atlas_it_makes_one_for_the_kind_it_is(self) -> None:
+        found = np.asarray(sign_mesh('dip').texcoords)
+        assert 0.0 <= found.min() and found.max() <= 1.0
+        assert len(np.unique(np.round(found, 4), axis=0)) > 1
