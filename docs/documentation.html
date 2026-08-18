@@ -43,6 +43,9 @@ documentation
         <li><code>OpenGLContext[audio]</code> -- the playback backend that reaches
           a sound card. <a href="audio.html">Audio</a> is core and mixes without
           it; this is what makes it audible</li>
+        <li><code>OpenGLContext[video]</code> -- <a href="recording.html">recording
+          what the engine draws</a> to an H.264 file, using the video encoder in
+          the graphics driver</li>
         <li><code>OpenGLContext[pygame]</code>, <code>OpenGLContext[wx]</code> --
           the PyGame and wxPython backends</li>
         <li><code>OpenGLContext[all]</code> -- every backend, plus Draco and
@@ -145,6 +148,9 @@ uv pip install -e ".[glfw,gltf]"</pre>
             from thresholds, an icon-and-number readout and a fading message
             queue -- plus the developer overlay, fed by registered providers,
             where the frame rate is now drawn</li>
+          <li><a href="recording.html">Recording Video</a> -- Writing the frames
+            a context draws to an H.264 file, straight from the framebuffer to
+            the GPU's video encoder, on a clock that counts frames</li>
           <li><a href="particles.html">Particle Effects</a> -- Fire, smoke,
             sparks, explosions and trails as camera-facing quads in one
             instanced draw: a numpy pool with a packed live set, emitters as

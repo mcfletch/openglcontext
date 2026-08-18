@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Recording video &mdash; the frames the engine draws, straight to a file</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Recording video</h1>
+</header>
+
+<section>
+<p class="introduction">A <strong>recorder</strong> writes the frames a context
+draws to an H.264 video file. The frame goes from the framebuffer into a texture
+the GPU's video encoder reads in place, so nothing but the compressed result
+crosses the bus, and the world is advanced by exactly one frame of time per
+frame written &mdash; a recording is smooth however long each frame took to
+draw, and the same run records the same way twice.</p>
+</section>
+
+<section id="installing">
+  <h2>What it needs</h2>
+  <p>Recording needs the <code>video</code> extra, which brings in
+    <a href="https://github.com/mcfletch/pyopengl-video">pyopengl-video</a>, the
+    bindings that reach the encoder in the graphics driver:</p>
+  <pre>pip install OpenGLContext[video]</pre>
+  <p>The encoder itself ships with the driver, so there is nothing else to
+    install. Today that means an NVIDIA card on Linux; a machine without one
+    runs exactly as before, and asking it to record reports what is missing
+    rather than failing part-way through. Without the extra, nothing changes at
+    all: the recorder is only imported when a recording is asked for.</p>
+</section>
+
+<section id="recording">
+  <h2>Recording from a context</h2>
+  <p><code>RecordingMixin</code> gives a context the mode. Set the recording up,
+    tick it from <code>SwapBuffers</code>, and it closes the file when it has run
+    its length:</p>
+  <pre>from OpenGLContext.video.recorder import RecordingMixin
+
+class MyContext(RecordingMixin, BaseContext):
+    def OnInit(self):
+        self.setupRecording('run.mp4', fps=60, seconds=20)
+
+    def SwapBuffers(self):
+        self.tickRecording()          # before the swap
+        return super().SwapBuffers()</pre>
+  <p><strong>Tick it before the swap.</strong> The back buffer holds the frame
+    just drawn only until it is swapped away, which is the same rule the
+    <a href="#stills">still capture</a> follows.</p>
+  <p>The recorder can also be driven directly, for a context that would rather
+    own it:</p>
+  <pre>from OpenGLContext.video.recorder import VideoRecorder
+
+recorder = VideoRecorder('run.mp4', fps=60, seconds=20)
+...
+recorder.capture()          # in SwapBuffers, before the swap
+...
+recorder.close()</pre>
+  <p><code>capture()</code> answers whether it kept the frame, and
+    <code>recorder.recording</code> whether it still wants more. Those are
+    different questions: a recorder waiting for the scene to arrive keeps no
+    frame and is not finished.</p>
+</section>
+
+<section id="settings">
+  <h2>What a recording takes</h2>
+  <table>
+    <tr><th>Argument</th><th>Default</th><th>Meaning</th></tr>
+    <tr><td><code>fps</code></td><td>60</td>
+        <td>Frames a second, as a number or an exact
+          <code>(numerator, denominator)</code> pair. The pair is what keeps a
+          long recording at 29.97 from drifting.</td></tr>
+    <tr><td><code>size</code></td><td>the viewport</td>
+        <td>The recording keeps the size it starts at; a window resized later is
+          scaled into it.</td></tr>
+    <tr><td><code>seconds</code> / <code>frames</code></td><td>until closed</td>
+        <td>How long to record.</td></tr>
+    <tr><td><code>start_after</code></td><td>0</td>
+        <td>Seconds of real time to let pass first. A world that streams its
+          content in arrives over the first few seconds, and a recording that
+          starts immediately is a recording of it arriving.</td></tr>
+    <tr><td><code>fixed_step</code></td><td>True</td>
+        <td>Advance the engine's clock a frame at a time. See below.</td></tr>
+    <tr><td>anything else</td><td></td>
+        <td>Passed to the encoder: <code>bitrate</code>, <code>preset</code>,
+          <code>tuning</code>, <code>gop</code>, <code>bframes</code>.</td></tr>
+  </table>
+</section>
+
+<section id="clock">
+  <h2>The clock a recording runs on</h2>
+  <p>Rendering a frame takes as long as it takes. A scene advanced against the
+    wall clock while it is being recorded plays back unevenly &mdash; a frame
+    that took 40&nbsp;ms to draw is 40&nbsp;ms of movement shown for 16&nbsp;ms
+    &mdash; and a scene that streams its content in stutters exactly where the
+    streaming happened.</p>
+  <p>So a recorder installs a <code>FixedStepClock</code> and advances it one
+    frame per frame recorded. Everything time-driven follows, because everything
+    reads one clock:
+    <code>OpenGLContext.events.systemtime.systemTime()</code> is what a
+    <code>Timer</code> polls, and so what every <code>TimeSensor</code> and every
+    animation they drive is advanced against.</p>
+  <pre>from OpenGLContext.video.clock import FixedStepClock
+
+with FixedStepClock(fps=60) as clock:
+    while recording:
+        render()
+        clock.advance()</pre>
+  <p><strong>Code that reads <code>time.time()</code> directly does not
+    follow.</strong> An application with its own clock reads
+    <code>systemTime()</code> instead, and its motion is then recorded as evenly
+    as the scenegraph's.</p>
+  <p>What a fixed step costs is real time: the run is no longer live, because a
+    heavy frame takes as long as it takes and the world waits for it. That is
+    the right trade for a recording and the wrong one for a game someone is
+    playing, which is why <code>fixed_step=False</code> is there &mdash; a
+    recording of an interactive session, stalls and all, wants the wall clock.</p>
+</section>
+
+<section id="orientation">
+  <h2>The frame is turned over on the way</h2>
+  <p>OpenGL's framebuffer starts at the bottom left, and a video encoder reads a
+    texture from its first row and calls that the top of the picture. The copy
+    into the capture texture therefore reverses its destination Y coordinates,
+    which turns the frame over inside the blit at no cost. That is
+    <code>copy_frame()</code>, and it is public: an application encoding through
+    some other path wants exactly the same copy.</p>
+  <pre>from OpenGLContext.video.recorder import CaptureTarget, copy_frame
+
+target = CaptureTarget(width, height)
+copy_frame(target.framebuffer, (width, height))   # target.texture now holds the frame</pre>
+</section>
+
+<section id="stills">
+  <h2>Stills</h2>
+  <p>A single frame is a different job with a different answer:
+    <code>OpenGLContext.capture</code> reads the back buffer and writes a PNG,
+    and <code>SettleCapture</code> waits for a scene to converge before it takes
+    one. Recording is for motion; those are for pictures.</p>
+</section>
+
+<section id="limits">
+  <h2>Limits</h2>
+  <ul>
+    <li><strong>H.264</strong>, up to 4096&times;4096, in an MP4 file.</li>
+    <li><strong>NVIDIA on Linux</strong>, which is where the encoder can be fed
+      from an OpenGL texture. Intel and AMD are planned.</li>
+    <li><strong>No audio.</strong> The file has a video track.</li>
+    <li>The recording belongs to the OpenGL context that started it, and every
+      frame must come from that context's thread.</li>
+  </ul>
+</section>
+
+</body></html>

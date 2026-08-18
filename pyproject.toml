@@ -60,6 +60,9 @@ dependencies = [
 # backend uses pygame-ce, so the whole stack standardizes on it.
 pygame = ["pygame-ce>=2.1.3"]
 glfw = ["glfw>=2.0"]
+# Recording what the engine draws to an H.264 video file. The encoder is the
+# one in the graphics driver; this brings in the bindings that reach it.
+video = ["pyopengl-video>=0.1.0a1"]
 # gltf is now pretty much core to OpenGLContext...
 gltf = []
 draco = ["DracoPy>=1.4"]
