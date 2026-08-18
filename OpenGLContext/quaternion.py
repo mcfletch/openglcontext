@@ -37,6 +37,44 @@ def fromEuler( x=0,y=0,z=0 ):
     else:
         return fromXYZR( 0,0,1,z)
 
+def fromMatrix( matrix ):
+    """Create a new quaternion from a rotation matrix.
+
+    The inverse of :meth:`Quaternion.matrix`, and in the same row-vector
+    convention: a point is ``point @ matrix``.  A 3x3 or a 4x4 is accepted; a
+    4x4's translation is ignored, since a rotation is all a quaternion holds.
+
+    What it is for: a rotation that arrives as a matrix -- a node's composed
+    world transform, a basis built out of two directions -- and has to be
+    written into a VRML ``rotation`` field, which is axis-angle.  Going
+    through the quaternion rather than reading an axis straight off the matrix
+    is what keeps it stable at a half turn, where the axis terms vanish.
+    """
+    m = asarray( matrix, 'd' )[:3,:3]
+    trace = m[0][0] + m[1][1] + m[2][2]
+    if trace > 0:
+        # The common case.  s is 4w, and w is furthest from zero here.
+        s = sqrt( trace + 1.0 ) * 2
+        w, x, y, z = (s/4.0, (m[1][2]-m[2][1])/s,
+                      (m[2][0]-m[0][2])/s, (m[0][1]-m[1][0])/s)
+    else:
+        # At a half turn w vanishes and dividing by it loses the axis, so the
+        # largest diagonal term picks which of x, y and z to build from.
+        largest = 0
+        for index in (1,2):
+            if m[index][index] > m[largest][largest]:
+                largest = index
+        other, third = (largest+1) % 3, (largest+2) % 3
+        s = sqrt( 1.0 + m[largest][largest]
+                  - m[other][other] - m[third][third] ) * 2
+        axis = [0.0,0.0,0.0]
+        axis[largest] = s/4.0
+        axis[other] = (m[largest][other] + m[other][largest])/s
+        axis[third] = (m[largest][third] + m[third][largest])/s
+        w = (m[other][third] - m[third][other])/s
+        x, y, z = axis
+    return Quaternion( array( [w,x,y,z], 'd' ) )
+
 class Quaternion(object):
     """Quaternion object implementing those methods required
     to be useful for OpenGL rendering (and not many others)"""

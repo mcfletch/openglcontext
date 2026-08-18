@@ -5,6 +5,13 @@ the same one, or a chrome sphere reflects a room the viewer is not in.  These
 build the ``Background`` node for whichever environment the IBL probe has loaded
 -- an equirectangular Radiance panorama, a six-face cubemap, or neither, in
 which case an analytic gradient sky stands in.
+
+:func:`apply_render_env` is the other half, and a caller building a viewer
+without a command line needs it: several of the options a viewer takes are
+read once by the render passes at start-up rather than per frame, so they are
+put into the environment before a context exists. A ``ViewerOptions`` that is
+never passed through it is a viewer whose shadows, exposure and environment
+settings say nothing.
 """
 import os
 from typing import Any, Optional, Set
@@ -13,9 +20,43 @@ from vrml.vrml97 import nodetypes
 
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.light import Light
+from OpenGLContext.viewer.options import ViewerOptions
 
 __all__ = ['count_nodes', 'count_lights', 'count_backgrounds', 'sky_background',
-           'hdr_background', 'cube_background', 'background_for']
+           'hdr_background', 'cube_background', 'background_for',
+           'apply_render_env', 'viewer_defaults', 'VIEWER_DEFAULTS']
+
+
+#: What a viewer needs the renderer set to before anything imports it, and what
+#: a program that shows a model through :class:`ViewerContext` must therefore
+#: apply first: the core profile and the metallic/roughness pass, because a PBR
+#: material has nothing to say to any other one, and a warm sky held back far
+#: enough that the sun's shadows read against it.
+VIEWER_DEFAULTS = {
+    'OPENGLCONTEXT_PROFILE': 'core',
+    'OPENGLCONTEXT_BACKEND': 'glfw',
+    'OPENGLCONTEXT_RENDERER': 'pbr',
+    'OPENGLCONTEXT_SHADOWS': '1',
+    # The directional-shadow cascade count is left fps-adaptive for interactive
+    # use: each extra cascade is a full depth pass over the whole scene (the
+    # dominant shadow-pass cost), so the controller sheds cascades when the
+    # frame rate sags. It is pinned only for a capture (see
+    # :func:`apply_render_env`), where a reproducible frame matters more than
+    # the frame rate.
+    'OPENGLCONTEXT_IBL_INTENSITY': '0.4',
+}
+
+
+def viewer_defaults() -> None:
+    """Put the viewer's renderer settings into the environment, once.
+
+    Call it **before importing anything that renders**: the passes read these
+    at import, so a setting made afterwards is a setting nobody sees. Anything
+    already set is left alone, so a caller or a shell that has chosen
+    differently keeps its choice.
+    """
+    for name, value in VIEWER_DEFAULTS.items():
+        os.environ.setdefault(name, value)
 
 #: Which ``CubeBackground`` field each of the loader's face suffixes fills.
 _CUBE_FIELDS = {'RT': 'rightUrl', 'LF': 'leftUrl', 'UP': 'topUrl',
@@ -158,3 +199,68 @@ def background_for(spec: Optional[str], report: Any = None) -> Any:
             report("bad background %r; using sky.\n" % spec)
         return sky_background()
     return Background(skyColor=[rgb])
+
+
+def _is_hdr_environment(spec: Optional[str]) -> bool:
+    """Whether ``--environment SPEC`` names a Radiance ``.hdr`` panorama.
+
+    An equirectangular ``.hdr``/``.pic`` (local path or http(s) URL) is treated as
+    an HDR IBL source + skybox; anything else is a six-face cubemap prefix. The
+    query string of a URL is ignored so a CDN link with parameters still matches.
+    """
+    if not spec:
+        return False
+    path = spec.split('?', 1)[0].split('#', 1)[0]
+    return path.lower().endswith(('.hdr', '.pic'))
+
+
+def apply_render_env(args: ViewerOptions) -> None:
+    """Translate render-affecting options into the variables the renderer reads.
+
+    These are start-up switches read once by the passes (see
+    :mod:`OpenGLContext.renderoptions`), so they are set before a context exists
+    rather than carried on the options object.
+    """
+    if args.shadows is not None:
+        os.environ['OPENGLCONTEXT_SHADOWS'] = '1' if args.shadows else '0'
+    if args.ibl_intensity is not None:
+        os.environ['OPENGLCONTEXT_IBL_INTENSITY'] = str(args.ibl_intensity)
+    if args.environment:
+        from OpenGLContext.loaders import hdri
+        try:
+            args.environment = hdri.resolve(args.environment)   # catalogue name -> URL
+        except KeyError:
+            pass    # not a catalogue name; treat as a cubemap prefix / path
+        environment: str = args.environment
+        if _is_hdr_environment(environment):
+            # An equirectangular Radiance .hdr (local path or URL): drives the IBL
+            # probe and the HDR skybox. The probe loads it via OPENGLCONTEXT_ENV_HDR.
+            os.environ['OPENGLCONTEXT_ENV_HDR'] = environment
+        else:
+            os.environ['OPENGLCONTEXT_ENV_CUBEMAP'] = environment
+        os.environ.setdefault('OPENGLCONTEXT_IBL', 'full')   # env probe needs full IBL
+    elif (args.background == 'none'
+          and not os.environ.get('OPENGLCONTEXT_ENV_CUBEMAP')
+          and not os.environ.get('OPENGLCONTEXT_ENV_HDR')):
+        # A self-lit scene (its own KHR_lights_punctual, black backdrop, NO env probe)
+        # must get no analytic-sky IBL, or the ambient sky washes it pale grey instead
+        # of the dark scene its lights make. But only when there is genuinely no
+        # environment: the browser demo defaults --background 'none' yet loads an env
+        # cubemap probe for metals to reflect, so forcing IBL off there rendered every
+        # metal black. Honour an explicit env cubemap or HDR panorama.
+        os.environ['OPENGLCONTEXT_IBL'] = 'off'
+    if args.capture:
+        # a --capture run wants a clean frame, not the fps overlay
+        os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
+        # A capture must be reproducible: pin the otherwise fps-adaptive cascade
+        # count so the shadows don't vary with the frame rate between runs. An
+        # explicit user setting still wins.
+        os.environ.setdefault('OPENGLCONTEXT_SHADOW_CASCADES', '3')
+        # Nobody is watching a capture, and a *mapped* surface is what makes it
+        # hang: a compositor throttles the swap to its own frame callback, and
+        # with no window on screen consuming frames the swap never returns. A
+        # hidden window renders and reads back identically. Both stay
+        # overridable, since watching a capture happen is how you find out why
+        # it looks wrong.
+        os.environ.setdefault('OPENGLCONTEXT_HIDDEN', '1')
+        os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')

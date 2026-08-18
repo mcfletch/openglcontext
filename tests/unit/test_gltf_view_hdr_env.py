@@ -9,6 +9,7 @@ import os
 import pytest
 
 from OpenGLContext.bin import view
+from OpenGLContext.viewer import environment
 
 _ENV_VARS = ('OPENGLCONTEXT_ENV_HDR', 'OPENGLCONTEXT_ENV_CUBEMAP',
              'OPENGLCONTEXT_IBL')
@@ -39,11 +40,11 @@ def _clean_env():
 
 
 def test_is_hdr_environment():
-    assert view._is_hdr_environment('/x/sky.hdr')
-    assert view._is_hdr_environment('https://ex.com/a/sky.hdr?token=1')
-    assert view._is_hdr_environment('foo.pic')
-    assert not view._is_hdr_environment('/env/pimbackground_')
-    assert not view._is_hdr_environment('')
+    assert environment._is_hdr_environment('/x/sky.hdr')
+    assert environment._is_hdr_environment('https://ex.com/a/sky.hdr?token=1')
+    assert environment._is_hdr_environment('foo.pic')
+    assert not environment._is_hdr_environment('/env/pimbackground_')
+    assert not environment._is_hdr_environment('')
 
 
 def test_hdr_url_routes_to_env_hdr(monkeypatch):

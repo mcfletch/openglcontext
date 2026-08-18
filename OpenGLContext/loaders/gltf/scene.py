@@ -94,11 +94,23 @@ class GLTFScene(object):
         # The Background it describes is already in `group`; this is the record
         # itself, so a caller can report a sky nothing here can draw yet.
         self.sky: Any = None
-        # skins: Skin objects; the loader also stashes the node
-        # hierarchy (_skin_roots/_skin_children) for per-frame joint assembly.
+        # skins: Skin objects, one per skinned mesh node.
         self.skins: list = []
-        self._skin_roots: list = []
-        self._skin_children: dict = {}
+        # The document's node hierarchy, by node index: the scene's root nodes
+        # and every node's child list. Per-frame joint assembly walks it, and so
+        # does anything that needs a subtree -- the bone mask of an animation
+        # layer, the descendants of an attachment point.
+        self.node_roots: list = []
+        self.node_children: dict = {}
+        # node index -> the ``name`` the document gave it, for the nodes that
+        # carry one. Joint and attachment-point lookup is by name, and a DEF is
+        # not the same string: it is sanitised for VRML and made unique.
+        self.node_names: dict = {}
+        # The document-level ``extensions`` object, as parsed JSON. What the
+        # loader itself consumes is already applied; this is what lets a
+        # consumer read an extension the loader does not -- an avatar's
+        # humanoid bone map, say.
+        self.extensions: dict = {}
         # camera: None, or a dict with position/forward/up/fov/near/far taken from
         # the first camera the glTF defines (so a viewer can adopt its viewpoint).
         self.camera = camera
@@ -109,6 +121,11 @@ class GLTFScene(object):
         # DEF-registered by camera name. Mount these in the rendered scenegraph to
         # switch cameras through OpenGLContext's standard bindable mechanism.
         self.viewpoints = viewpoints if viewpoints is not None else []
+        # materials: the document's name -> the PBRMaterial built for it, for the
+        # materials the scene's geometry actually uses. Repainting one of these
+        # repaints the model, since the Shape, its mesh and this index all hold
+        # the one material object.
+        self.materials: dict = {}
         # sceneGraph: a vrml SceneGraph whose defNames registry maps each glTF
         # node's DEF (its name, or ``node<index>`` when unnamed) to the Transform
         # created for it, so a caller can grab and manipulate one node by name.
@@ -117,6 +134,20 @@ class GLTFScene(object):
         # scene carries absolute-unit KHR_lights_punctual lights; a viewer forwards
         # it to the PBR pass so the frame doesn't clip to white.
         self.exposure = 1.0
+
+    def player_named(self, name: str, loop: bool = True) -> "Optional[Player]":
+        """A :class:`~OpenGLContext.loaders.gltf.animation.Player` bound to the
+        animation the document names ``name``, or None where no clip carries it.
+
+        The clip an asset means is named rather than numbered: a car's rim turns
+        on ``steer`` wherever that clip sits in the file. A document naming two
+        clips alike binds the first. ``loop=False`` clamps at the ends, which is
+        what posing a clip at a fraction of its length wants.
+        """
+        for index, animation in enumerate(self.animations):
+            if animation.name == name:
+                return self.player(index, loop=loop)
+        return None
 
     def getDEF(self, name: str) -> Any:
         """Return the Transform node imported from the glTF node with this DEF
@@ -137,7 +168,7 @@ class GLTFScene(object):
             return None
         compute_worlds = None
         if self.skins:
-            roots, children, nts = (self._skin_roots, self._skin_children,
+            roots, children, nts = (self.node_roots, self.node_children,
                                     self.node_transforms)
 
             def compute_worlds() -> dict[int, np.ndarray]:
@@ -603,6 +634,36 @@ class _SceneBuilder:
             document, emitters, library=self.audio_library,
             resolve=self.resolver.resolve)
 
+    def _name_materials(self) -> dict:
+        """Name every material the scene uses, and index it by that name.
+
+        Two namespaces meet here. glTF names nodes and materials separately, so
+        a vehicle may have a node called ``glass`` made of a material called
+        ``glass``; VRML has one DEF namespace and a material is a node in it. So
+        the index keeps the document's own name, and the DEF stamped on the
+        material yields to the names the scene's nodes have taken --
+        ``glass_001`` for the material where ``glass`` is a node -- so that a
+        material cannot displace a node in the registry of whatever scenegraph
+        it ends up in. The node stays addressable through
+        :meth:`GLTFScene.getDEF` and the material through
+        :attr:`GLTFScene.materials`.
+
+        A repeated name indexes the first material carrying it, in document
+        order; a material the document left unnamed is drawn and not indexed.
+        """
+        found: dict = {}
+        declared = getattr(self.g, 'materials', None) or []
+        for index in sorted(key for key in self.mat_cache if key is not None):
+            if not 0 <= index < len(declared):      # pragma: no cover - malformed
+                continue
+            name = getattr(declared[index], 'name', None)
+            if not name:
+                continue
+            material = self.mat_cache[index]
+            material.DEF = _unique_def(_def_name(name, index), self.used_defs)
+            found.setdefault(name, material)
+        return found
+
     def run(self) -> GLTFScene:
         g = self.g
         # SceneGraph -> Transform -> [glTF root nodes]. The Transform is the single
@@ -648,13 +709,18 @@ class _SceneBuilder:
         if framed is not None:
             scene.strays, scene.stray_reach = framed.strays, framed.reach
         # Node hierarchy for per-frame joint world-matrix assembly.
-        scene._skin_roots = _scene_root_indices(g)
-        scene._skin_children = {i: list(getattr(n, 'children', None) or [])
-                                for i, n in enumerate(g.nodes or [])}
+        scene.node_roots = _scene_root_indices(g)
+        scene.node_children = {i: list(getattr(n, 'children', None) or [])
+                               for i, n in enumerate(g.nodes or [])}
+        scene.node_names = {i: n.name for i, n in enumerate(g.nodes or [])
+                            if getattr(n, 'name', None)}
+        scene.materials = self._name_materials()
+        top = getattr(g, 'extensions', None) or {}
+        scene.extensions = top if isinstance(top, dict) else {}
         if self.skins:
             # Deform to the rest/bind pose once so a static (unanimated) skinned
             # model renders posed, not in raw undeformed vertices.
-            worlds = compute_world_matrices(scene._skin_roots, scene._skin_children,
+            worlds = compute_world_matrices(scene.node_roots, scene.node_children,
                                             self.node_transforms)
             for skin in self.skins:
                 skin.apply(worlds)

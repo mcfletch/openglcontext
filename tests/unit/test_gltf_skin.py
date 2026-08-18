@@ -183,3 +183,25 @@ class TestLoaderSkin:
         # jointB (node 2) rotated 90deg about Z; vertex 1 bound to it -> (0,1,0)
         assert np.allclose(mesh.positions[1], [0, 1, 0], atol=1e-4)
         assert np.allclose(mesh.positions[0], [0, 0, 0], atol=1e-5)   # vertex 0 at jointA
+
+
+class TestSceneNodeAccess:
+    """What a consumer needs to read a document's own structure back.
+
+    The hierarchy, the names and the document extensions: everything the
+    character layer resolves a skeleton and an attachment point from.
+    """
+
+    def test_hierarchy_and_names(self):
+        scene = gltf.load_gltf(_skinned_glb())
+        assert scene.node_roots == [0, 1]
+        assert scene.node_children[1] == [2]
+        assert scene.node_names[2] == 'jointB'
+
+    def test_a_document_with_no_extensions(self):
+        scene = gltf.load_gltf(_skinned_glb())
+        assert scene.extensions == {}
+
+    def test_unnamed_nodes_are_simply_absent(self):
+        scene = gltf.load_gltf(_skinned_glb())
+        assert set(scene.node_names) == {0, 1, 2}

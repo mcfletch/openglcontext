@@ -90,6 +90,7 @@ oglc-terrain = "OpenGLContext.bin.terrain_view:main"
 oglc-gltf-demo = "OpenGLContext.bin.gltf_demo:main"
 oglc-gltf-regression = "OpenGLContext.bin.gltf_regression:main"
 oglc-ui-demo = "OpenGLContext.bin.ui_demo:main"
+oglc-character-sheet = "OpenGLContext.bin.character_sheet:main"
 # Deprecated aliases for oglc-view, which reads all four formats; each of these
 # three is now a thin wrapper around it. Removed after one release cycle.
 oglc-vrml = "OpenGLContext.bin.vrml_view:main"

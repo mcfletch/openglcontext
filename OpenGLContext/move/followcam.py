@@ -21,6 +21,8 @@ from typing import Any, Optional, Tuple
 
 import numpy as np
 
+from OpenGLContext import quaternion
+
 
 def _normalize(v: Any) -> np.ndarray:
     v = np.asarray(v, dtype='d')
@@ -52,28 +54,14 @@ def look_at_orientation(eye: Any, target: Any,
 
 
 def _matrix_to_axis_angle(R: np.ndarray) -> Tuple[float, float, float, float]:
-    """Convert a 3×3 rotation matrix to VRML axis-angle ``(x, y, z, radians)``."""
-    trace = np.trace(R)
-    cos_angle = np.clip((trace - 1.0) / 2.0, -1.0, 1.0)
-    angle = np.arccos(cos_angle)
-    if angle < 1e-9:
-        return (0.0, 1.0, 0.0, 0.0)
-    if angle > np.pi - 1e-6:
-        # Near 180°: axis from the largest diagonal term, sign-recovered off-diagonal.
-        d = np.array([R[0, 0], R[1, 1], R[2, 2]])
-        k = int(np.argmax(d))
-        axis = np.zeros(3)
-        axis[k] = np.sqrt(max((R[k, k] + 1.0) / 2.0, 0.0))
-        other = [(k + 1) % 3, (k + 2) % 3]
-        for j in other:
-            axis[j] = R[k, j] / (2.0 * axis[k]) if axis[k] > 1e-9 else 0.0
-        axis = _normalize(axis)
-        return (float(axis[0]), float(axis[1]), float(axis[2]), float(angle))
-    axis = np.array([R[2, 1] - R[1, 2],
-                     R[0, 2] - R[2, 0],
-                     R[1, 0] - R[0, 1]])
-    axis = _normalize(axis)
-    return (float(axis[0]), float(axis[1]), float(axis[2]), float(angle))
+    """A 3x3 rotation matrix as VRML axis-angle ``(x, y, z, radians)``.
+
+    ``R``'s columns are where the rotated frame's axes land, which is the
+    column-vector convention; :func:`quaternion.fromMatrix` reads the
+    row-vector one the rest of the engine composes in, so it is handed the
+    transpose.
+    """
+    return quaternion.fromMatrix(np.asarray(R, 'd').T).XYZR()
 
 
 class FollowCamera:

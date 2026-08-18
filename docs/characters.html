@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Rigged characters in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Rigged characters</h1>
+</header>
+<section>
+<p class="introduction">A <a href="gltf.html">glTF</a> file carries a skeleton
+and a set of animation clips. <code>OpenGLContext.character</code> is what a
+game needs on top of that: which joint is which bone, more than one clip
+playing at once, and somewhere to hang a weapon.</p>
+<pre><code>from OpenGLContext.character import CharacterModel
+
+model = CharacterModel.load('marine.glb')
+model.attach('grip', load_gltf('handgun.glb').group)
+model.play('run', fade=0.2)
+model.layer('upper', mask=model.mask('spine')).play('fire', loop=False)
+...
+model.update(dt)                  # once a frame
+scene.children = [model.group]    # the renderable root</code></pre>
+<p>Each of the three pieces is usable on its own; the model is the three of
+them over one loaded document, which is what most callers want.</p>
+</section>
+
+<section>
+<h2>Which joint is which bone</h2>
+<p><code>OpenGLContext.character.humanoid</code> maps a document's nodes onto
+the humanoid bone vocabulary of <a
+href="https://github.com/vrm-c/vrm-specification">VRM&nbsp;1.0</a> — the
+fifty-five names in <code>VRMC_vrm.humanoid.humanBones</code>, their required
+subset and their fixed parent chain. A vocabulary an avatar toolchain already
+knows is a vocabulary an asset can arrive carrying.</p>
+<p>Three sources are consulted, in order:</p>
+<ol>
+<li><code>VRMC_vrm</code>, where the file states its own bone map. Nothing
+guesses over an answer the file gives.</li>
+<li><code>VRMC_vrm_animation</code>, the same map in a clip-only document
+(<code>.vrma</code>).</li>
+<li>The joint names, which is what most content is. The naming conventions in
+circulation are read rather than one of them: a side may lead or trail and may
+be spelled out or abbreviated, a chain position may be a number or a word, and
+exporter prefixes are ignored. <code>mixamorig:LeftForeArm</code>,
+<code>forearm.R</code>, <code>lowerarm_r</code> and <code>arm_joint_L_2</code>
+all resolve.</li>
+</ol>
+<p><strong>Where one name alone is ambiguous, the rig is recognised instead.</strong>
+Unreal's mannequin numbers its spine from one, so <code>spine_01</code> is the
+first segment; Mixamo numbers from zero, so <code>Spine1</code> is the
+<em>second</em>. Nothing about either name says which, and a rig read the wrong
+way puts its chest where its waist belongs. A skeleton is therefore matched
+against the families in <code>humanoid.FAMILIES</code> first — a set of names a
+rig carries all of, such as <code>pelvis</code> with <code>clavicle_l</code>
+beside it — and read from that family's own table where it matches. A model
+from a family nobody has written down still resolves name by name.</p>
+<pre><code>from OpenGLContext.character import Humanoid
+
+human = Humanoid.from_scene(scene)     # None if no bone resolves at all
+human.complete                         # every required bone is here
+human.missing                          # the ones that are not
+human.transform('rightHand')           # the scenegraph node for a joint
+human.position('head')                 # where it is, as posed now
+human.mask('spine')                    # the upper body, as node indices
+human.mask('hips', exclude=('spine',)) # the rest</code></pre>
+<p>A name that needs a side and carries none — a bare <code>UpperArm</code> —
+is not a bone, because guessing which arm it is would be guessing.</p>
+</section>
+
+<section>
+<h2>More than one clip at once</h2>
+<p>glTF stores clips and says nothing about playing two of them together.
+<code>OpenGLContext.character.mixer</code> is that: cross-fades, layers masked
+to part of the body, and additive layers. None of it is specific to a humanoid
+— it blends node transforms and morph weights, whatever the model is.</p>
+<h3>Layers, in order</h3>
+<p>A layer is a channel of animation with a <em>mask</em> (the node indices it
+may move) and a weight. Layers apply in the order they were created, each
+blended over the pose built so far, so a base layer walks the whole body and an
+<code>upper</code> layer masked to the arms writes over it for those joints
+only.</p>
+<h3>Tracks cross-fade within a layer</h3>
+<p>Playing a clip fades the layer's previous clip out over the same interval.
+Where a layer's weights do not add up to one — a clip fading in with nothing to
+fade out of — the shortfall is taken from the pose underneath, so a layer eases
+in from the layer below rather than from nothing.</p>
+<h3>Additive layers add a difference</h3>
+<p>An additive layer measures its clip against a reference frame of that clip
+(frame zero by default) and adds what the difference comes to. A 20-degree
+recoil authored once reads as 20 degrees on top of any aim.</p>
+<pre><code>mixer = AnimationMixer.from_scene(scene)
+mixer.play('run', fade=0.25)                       # the base layer
+mixer.layer('upper', mask=human.mask('spine')).play('fire', loop=False)
+mixer.layer('recoil', additive=True).play('kick', loop=False)
+mixer.update(dt)                                   # once a frame
+mixer.playing                                      # what is contributing</code></pre>
+<p>Playing the clip that is already playing keeps its clock, so asking for the
+same clip every frame — which is what a state machine does — costs nothing and
+does not stutter. <code>restart=True</code> rewinds it instead. A looping track
+wraps; a one-shot holds its last frame and reports
+<code>track.finished</code>.</p>
+<p>The arithmetic is per node and per animated path, so a mask, a layer weight
+and a cross-fade compose without any of them knowing about the others.
+<code>mixer.apply()</code> poses the model without advancing time, which is what
+a capture or a paused game wants.</p>
+</section>
+
+<section>
+<h2>Attachment points</h2>
+<p>glTF needs no extension for holding things. A node parented to a joint
+already inherits that joint's animated transform, so an empty node under the
+joint, named for what it holds, is an attachment point in the format's own
+terms — it survives every exporter, importer and validator, because it is
+nothing but a node.</p>
+<p><code>OpenGLContext.character.attachment</code> reads the convention of a
+name prefix, <code>socket_</code> by default: a node called
+<code>socket_grip</code> under the right hand is the point called
+<code>grip</code>.</p>
+<pre><code>model.point('grip')            # the Transform to mount on
+model.attach('grip', weapon)   # None if the model has no such point
+model.detach('grip', weapon)</code></pre>
+<p><code>point()</code> looks for a declared attachment point first and falls
+back to a humanoid bone of that name, so <code>attach('rightHand', weapon)</code>
+works on a model that was authored without a grip point — at the joint rather
+than at a grip an artist placed, which is the difference the named point
+buys.</p>
+<p>Which way a mounted model faces is the <em>model's</em> convention, not
+something this decides: the point is a node with an orientation, and what hangs
+on it arrives in that node's space.</p>
+
+<h3>The other half: a model that says where it is held</h3>
+<p>A rig's <code>socket_grip</code> says <em>where a thing goes</em>. A node of
+the same name inside the thing says <em>where it is held</em> — the grip its own
+artist put on it, rather than wherever its origin happens to sit.
+<code>mounted()</code> lines the two up:</p>
+<pre><code>from OpenGLContext.character.attachment import mounted, sockets
+
+weapon = load_gltf('sniper-rifle.glb')
+attach(sockets(scene)['grip'], mounted(weapon, 'grip'))</code></pre>
+<p>Without it, a rifle whose origin is at its balance point hangs off a fist by
+that point, fifteen centimetres from the hand, and every game that loads it
+needs a table of per-model offsets to put it right. With it the fact lives in
+the model, stated once, and a re-modelled weapon does not move the hand that
+holds it.</p>
+<p>A model may declare several — <code>socket_grip</code> for the hand,
+<code>socket_back</code> for how it stows — and the one that is read is the
+point it is going on, so one file hangs correctly in both places. A model that
+declares none is mounted by its own origin, which is what everything did before
+it could say otherwise.</p>
+<p>Both halves are ordinary named nodes. <strong>glTF has no extension for
+attachment points</strong>: the Khronos registry has none ratified, in progress
+or vendor-supplied, and neither has OMI's set, whose <code>OMI_seat</code> is
+the nearest thing and is about seating an avatar. There is nothing to adopt and
+nothing to invent — a node in the hierarchy is what the format already offers,
+and it survives every exporter, importer and validator because nothing about it
+is an extension.</p>
+</section>
+
+<section>
+<h2>Looking at every clip at once</h2>
+<p><code>oglc-character-sheet</code> renders a model's clips as contact sheets —
+one sheet per clip, a row for each of four views, a column for each moment of
+the clip, the last column its end. A bad silhouette, a foot through the floor
+or an arm through the ribs is obvious on a page and invisible while scrubbing
+one clip at a time.</p>
+<pre><code>oglc-character-sheet marine.glb --out sheets/
+oglc-character-sheet marine.glb --out sheets/ --clips walk,run --phases 8
+oglc-character-sheet marine.glb --out sheets/ --hold grip=handgun.glb</code></pre>
+<p><code>--hold</code> mounts a model on an attachment point, so a firing
+animation is reviewed with the weapon in it. An <code>overview</code> sheet and
+an <code>index.html</code> come with the rest, so the whole set reads down one
+page.</p>
+<p>Everything is drawn through the ordinary PBR pass into a hidden window, so
+what lands on the sheet is what a game gets.</p>
+</section>
+
+<section>
+<h2>What a model should carry</h2>
+<p>Nothing here requires a particular clip vocabulary — the names a game asks
+for are the game's own. What a model does need is a skeleton whose joints
+resolve (§ <a href="#">Which joint is which bone</a>), clips whose loops close
+and whose one-shots end in the pose the game will hold, and an attachment point
+for anything it is meant to carry.</p>
+<p>twig-bb's <code>CHARACTER-RIG.md</code> is a worked example of such a
+contract, and <code>grass-clumps/character.py</code> in the same workspace is a
+generator that satisfies it.</p>
+</section>
+
+<footer>
+<p><a href="documentation.html">Back to the documentation index</a></p>
+</footer>
+</body></html>

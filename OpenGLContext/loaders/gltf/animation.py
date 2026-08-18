@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -70,6 +70,30 @@ def quat_slerp(q0: np.ndarray, q1: np.ndarray, u: float) -> np.ndarray:
     s0 = math.sin(theta0 - theta) / sin0
     s1 = math.sin(theta) / sin0
     return quat_normalize(s0 * q0 + s1 * q1)
+
+
+def quat_multiply(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Compose two [x,y,z,w] quaternions: the rotation ``b`` then the rotation ``a``."""
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return np.array([
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    ])
+
+
+def vrml_to_quat_xyzw(rotation: Sequence[float]) -> np.ndarray:
+    """VRML97 axis-angle (x, y, z, radians) -> glTF quaternion [x,y,z,w]."""
+    x, y, z, angle = (float(v) for v in rotation)
+    axis = np.array([x, y, z], dtype='d')
+    length = float(np.linalg.norm(axis))
+    if length < 1e-12:
+        return np.array([0.0, 0.0, 0.0, 1.0])
+    axis = axis / length
+    half = angle / 2.0
+    return np.concatenate([axis * math.sin(half), [math.cos(half)]])
 
 
 def quat_xyzw_to_vrml(q: np.ndarray) -> Tuple[float, float, float, float]:

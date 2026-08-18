@@ -73,25 +73,16 @@ import os
 import sys
 from typing import Any, Optional
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
-os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
-# The directional-shadow cascade count is left fps-adaptive for interactive use:
-# each extra cascade is a full depth pass over the whole scene (the dominant
-# shadow-pass cost), so the controller sheds cascades when the frame rate sags.
-# It is pinned only for --capture (see apply_render_env), where a reproducible
-# frame matters more than the frame rate.
-# Keep the warm analytic sky, but at reduced strength so the sun's cast shadows
-# read clearly instead of being washed out by full-strength ambient.
-os.environ.setdefault('OPENGLCONTEXT_IBL_INTENSITY', '0.4')
+from OpenGLContext.viewer.environment import apply_render_env, viewer_defaults
 
-from OpenGLContext.viewer.adapters import (
+viewer_defaults()   # before anything that renders is imported
+
+from OpenGLContext.viewer.adapters import (  # noqa: E402
     UnknownSourceType, adapter_for, adapter_named, known_sources,
 )
-from OpenGLContext.viewer.sceneviewer import ViewerContext
-from OpenGLContext.viewer.options import ViewerOptions
-from OpenGLContext.viewer.source import resolve_source
+from OpenGLContext.viewer.sceneviewer import ViewerContext  # noqa: E402
+from OpenGLContext.viewer.options import ViewerOptions  # noqa: E402
+from OpenGLContext.viewer.source import resolve_source  # noqa: E402
 
 
 # -- command line ---------------------------------------------------------
@@ -232,71 +223,6 @@ def parse_args(argv: list[str] | None = None, prog: str = 'oglc-view',
     """
     return build_parser(prog).parse_args(
         argv, namespace=options if options is not None else ViewerOptions())
-
-
-def _is_hdr_environment(spec: str | None) -> bool:
-    """Whether ``--environment SPEC`` names a Radiance ``.hdr`` panorama.
-
-    An equirectangular ``.hdr``/``.pic`` (local path or http(s) URL) is treated as
-    an HDR IBL source + skybox; anything else is a six-face cubemap prefix. The
-    query string of a URL is ignored so a CDN link with parameters still matches.
-    """
-    if not spec:
-        return False
-    path = spec.split('?', 1)[0].split('#', 1)[0]
-    return path.lower().endswith(('.hdr', '.pic'))
-
-
-def apply_render_env(args: ViewerOptions) -> None:
-    """Translate render-affecting options into the variables the renderer reads.
-
-    These are start-up switches read once by the passes (see
-    :mod:`OpenGLContext.renderoptions`), so they are set before a context exists
-    rather than carried on the options object.
-    """
-    if args.shadows is not None:
-        os.environ['OPENGLCONTEXT_SHADOWS'] = '1' if args.shadows else '0'
-    if args.ibl_intensity is not None:
-        os.environ['OPENGLCONTEXT_IBL_INTENSITY'] = str(args.ibl_intensity)
-    if args.environment:
-        from OpenGLContext.loaders import hdri
-        try:
-            args.environment = hdri.resolve(args.environment)   # catalogue name -> URL
-        except KeyError:
-            pass    # not a catalogue name; treat as a cubemap prefix / path
-        environment: str = args.environment
-        if _is_hdr_environment(environment):
-            # An equirectangular Radiance .hdr (local path or URL): drives the IBL
-            # probe and the HDR skybox. The probe loads it via OPENGLCONTEXT_ENV_HDR.
-            os.environ['OPENGLCONTEXT_ENV_HDR'] = environment
-        else:
-            os.environ['OPENGLCONTEXT_ENV_CUBEMAP'] = environment
-        os.environ.setdefault('OPENGLCONTEXT_IBL', 'full')   # env probe needs full IBL
-    elif (args.background == 'none'
-          and not os.environ.get('OPENGLCONTEXT_ENV_CUBEMAP')
-          and not os.environ.get('OPENGLCONTEXT_ENV_HDR')):
-        # A self-lit scene (its own KHR_lights_punctual, black backdrop, NO env probe)
-        # must get no analytic-sky IBL, or the ambient sky washes it pale grey instead
-        # of the dark scene its lights make. But only when there is genuinely no
-        # environment: the browser demo defaults --background 'none' yet loads an env
-        # cubemap probe for metals to reflect, so forcing IBL off there rendered every
-        # metal black. Honour an explicit env cubemap or HDR panorama.
-        os.environ['OPENGLCONTEXT_IBL'] = 'off'
-    if args.capture:
-        # a --capture run wants a clean frame, not the fps overlay
-        os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
-        # A capture must be reproducible: pin the otherwise fps-adaptive cascade
-        # count so the shadows don't vary with the frame rate between runs. An
-        # explicit user setting still wins.
-        os.environ.setdefault('OPENGLCONTEXT_SHADOW_CASCADES', '3')
-        # Nobody is watching a capture, and a *mapped* surface is what makes it
-        # hang: a compositor throttles the swap to its own frame callback, and
-        # with no window on screen consuming frames the swap never returns. A
-        # hidden window renders and reads back identically. Both stay
-        # overridable, since watching a capture happen is how you find out why
-        # it looks wrong.
-        os.environ.setdefault('OPENGLCONTEXT_HIDDEN', '1')
-        os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
 
 
 class TestContext(ViewerContext):
