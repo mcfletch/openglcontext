@@ -403,3 +403,45 @@ class TestEdges:
             mixer.update(0.0)
             mixer.update(0.0)
         assert sum('baked matrix' in r.message for r in caplog.records) == 1
+
+
+class TestStartingOver:
+    """What a respawn needs: everything stopped, and the rest pose back."""
+
+    def _mixer(self):
+        return _mixer(_still('walk', 1, 'translation', [10, 0, 0]),
+                      _still('wave', 2, 'translation', [0, 4, 0]))
+
+    def test_nothing_is_playing_afterwards(self):
+        mixer, _nodes = self._mixer()
+        mixer.play('walk')
+        mixer.update(0.1)
+        mixer.reset()
+        assert mixer.playing == ()
+
+    def test_the_pose_goes_back_to_the_rest_one(self):
+        mixer, nodes = self._mixer()
+        rest = tuple(nodes[1].translation)
+        mixer.play('walk')
+        mixer.update(0.5)
+        assert not np.allclose(nodes[1].translation, rest)
+        mixer.reset()
+        assert np.allclose(nodes[1].translation, rest)
+
+    def test_it_does_not_fade(self):
+        """A body that comes back alive must not ease out of dying."""
+        mixer, _nodes = self._mixer()
+        mixer.play('walk')
+        mixer.update(0.2)
+        mixer.reset()
+        mixer.update(0.0)
+        assert mixer.playing == ()
+
+    def test_every_layer_goes_not_only_the_base(self):
+        mixer, nodes = self._mixer()
+        mixer.play('walk')
+        mixer.play('wave', layer='upper')
+        mixer.update(0.1)
+        mixer.reset()
+        assert mixer.playing == ()
+        assert np.allclose(nodes[2].translation, (0, 0, 0))

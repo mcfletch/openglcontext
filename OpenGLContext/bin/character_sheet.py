@@ -41,7 +41,8 @@ from OpenGLContext.viewer.environment import apply_render_env, viewer_defaults
 
 viewer_defaults()   # before anything that renders is imported
 
-from OpenGLContext.capture import ensure_pillow, read_back_buffer  # noqa: E402
+from OpenGLContext import contactsheet                              # noqa: E402
+from OpenGLContext.capture import read_back_buffer                  # noqa: E402
 from OpenGLContext.character import CharacterModel  # noqa: E402
 from OpenGLContext.viewer.options import ViewerOptions  # noqa: E402
 from OpenGLContext.viewer.sceneviewer import ViewerContext  # noqa: E402
@@ -57,10 +58,9 @@ VIEWS: Tuple[Tuple[str, float], ...] = (
     ('back', 180.0),
 )
 
-#: How big one cell is, and how much room the labels get.
+#: How big one cell is.  How much room the labels get, and the space between
+#: cells, is the contact sheet's own business.
 CELL = (240, 340)
-LABEL = 18
-MARGIN = 8
 
 #: What the figure stands against. A flat mid-dark ground rather than the sky
 #: gradient, so a cell reads the same wherever the figure is in the frame.
@@ -224,116 +224,30 @@ class SheetContext(ViewerContext):
             rows = [(name, [next(cells) for _ in range(sheet.phases)])
                     for name, _ in sheet.views]
             path = os.path.join(sheet.out, '%s-%s.png' % (base, clip))
-            _write(path, '%s -- %s' % (base, clip), rows,
-                   ['%d%%' % round(100 * sheet.phase(index))
-                    for index in range(sheet.phases)])
+            contactsheet.tile(path, '%s -- %s' % (base, clip), rows,
+                              ['%d%%' % round(100 * sheet.phase(index))
+                               for index in range(sheet.phases)])
             self.written.append(path)
             sys.stdout.write('wrote %s\n' % path)
         overview = [(clip, [next(cells) for _ in sheet.views])
                     for clip in sheet.clips_of(self.model)]
         path = os.path.join(sheet.out, '%s-overview.png' % base)
-        _write(path, '%s -- every clip, a third of the way in' % base, overview,
-               [name for name, _ in sheet.views])
+        contactsheet.tile(path, '%s -- every clip, a third of the way in' % base,
+                          overview, [name for name, _ in sheet.views])
         self.written.insert(0, path)
         sys.stdout.write('wrote %s\n' % path)
         page = _index(sheet.out, base)
         sys.stdout.write('wrote %s\n' % page)
 
 
-def _write(path: str, title: str, rows: Sequence[Tuple[str, Sequence[np.ndarray]]],
-           columns: Sequence[str]) -> None:
-    """Tile the cells into one labelled sheet."""
-    image_module = ensure_pillow()
-    if image_module is None:
-        raise SystemExit('a contact sheet needs Pillow: pip install pillow')
-    from PIL import ImageDraw, ImageFont
-    font = ImageFont.load_default(size=13)
-    cells: List[np.ndarray] = [cell for _, cells in rows for cell in cells]
-    if not cells:
-        raise SystemExit('nothing to draw')
-    height, width = cells[0].shape[:2]
-    gutter = 64
-    sheet = image_module.new(
-        'RGB',
-        (gutter + len(columns) * (width + MARGIN) + MARGIN,
-         LABEL * 2 + len(rows) * (height + LABEL + MARGIN) + MARGIN),
-        (24, 25, 28))
-    draw = ImageDraw.Draw(sheet)
-    draw.text((MARGIN, MARGIN), title, fill=(235, 235, 240), font=font)
-    for column, label in enumerate(columns):
-        draw.text((gutter + column * (width + MARGIN), LABEL + MARGIN),
-                  str(label), fill=(150, 152, 160), font=font)
-    top = LABEL * 2 + MARGIN
-    for name, row in rows:
-        draw.text((MARGIN, top + height // 2), str(name), fill=(200, 202, 210),
-                  font=font)
-        for column, cell in enumerate(row):
-            sheet.paste(image_module.fromarray(cell, 'RGB'),
-                        (gutter + column * (width + MARGIN), top))
-        top += height + LABEL + MARGIN
-    sheet.save(path)
-
-
-#: The page the sheets are read from. Deliberately one file with no assets of
-#: its own: it is opened from a filesystem, mailed to somebody, or looked at
-#: over a share, and a review page that needs a web server to work is a review
-#: page nobody opens.
-_INDEX = """<!doctype html>
-<meta charset="utf-8">
-<title>%(title)s</title>
-<style>
- body { background:#17181b; color:#e6e7ea; margin:0 auto; padding:2rem;
-        max-width:1500px; font:16px/1.5 system-ui, sans-serif; }
- h1 { font-size:1.4rem; font-weight:600; margin:2.5rem 0 .4rem; }
- p  { color:#a0a2aa; margin:0 0 2rem; }
- h2 { font-size:1.05rem; font-weight:600; margin:2.5rem 0 .6rem;
-      color:#c9cbd2; border-bottom:1px solid #2c2e34; padding-bottom:.4rem; }
- img { width:100%%; height:auto; display:block; border-radius:4px; }
- nav { position:sticky; top:0; background:#17181b; padding:.6rem 0 1rem;
-       border-bottom:1px solid #2c2e34; margin-bottom:1rem; }
- nav a { color:#8fb8ff; text-decoration:none; margin-right:1rem;
-         font-size:.9rem; white-space:nowrap; }
- nav a:hover { text-decoration:underline; }
-</style>
-<p>Each sheet is one clip: a row per view, a column per moment, the last column
-   the clip's end.</p>
-<nav>%(links)s</nav>
-%(sheets)s
-"""
-
-
 def _index(out: str, base: str) -> str:
-    """Write the page that shows every sheet in ``out``, and return its path.
-
-    Every sheet in the directory, not only the run's own: a review usually
-    wants both figures beside each other, and each run rewrites the page so it
-    covers whatever is there by the time the last one finishes.
-    """
-    sheets: Dict[str, List[str]] = {}
-    for name in sorted(os.listdir(out)):
-        if name.endswith('.png'):
-            sheets.setdefault(name.split('-', 1)[0], []).append(name)
-    body, links = [], []
-    for model in sorted(sheets):
-        names = sorted(sheets[model],
-                       key=lambda name: (not name.endswith('-overview.png'), name))
-        links.append('<b>%s</b>' % model.replace('_', ' '))
-        body.append('<h1>%s</h1>' % model.replace('_', ' '))
-        for name in names:
-            title = os.path.splitext(name)[0][len(model) + 1:]
-            anchor = '%s-%s' % (model, title)
-            links.append('<a href="#%s">%s</a>' % (anchor, title))
-            body.append('<h2 id="%s">%s</h2>\n<img src="%s" alt="%s">'
-                        % (anchor, title, name, title))
-    path = os.path.join(out, 'index.html')
-    with open(path, 'w') as page:
-        page.write(_INDEX % {
-            'title': '%s -- character sheets' % os.path.basename(
-                os.path.abspath(out)),
-            'links': ' '.join(links),
-            'sheets': '\n'.join(body),
-        })
-    return path
+    """The page every sheet in ``out`` is read from, overview first."""
+    return contactsheet.index(
+        out, title='%s -- character sheets' % os.path.basename(
+            os.path.abspath(out)),
+        caption='Each sheet is one clip: a row per view, a column per moment, '
+                'the last column the clip\'s end.',
+        order=('overview',))
 
 
 def build_parser(prog: str = 'oglc-character-sheet') -> argparse.ArgumentParser:

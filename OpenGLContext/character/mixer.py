@@ -315,6 +315,20 @@ class AnimationMixer:
         """Fade one layer out -- see :meth:`Layer.stop`."""
         self.layer(layer).stop(fade=fade)
 
+    def reset(self) -> None:
+        """Stop everything at once and put the model back in its rest pose.
+
+        A respawn, a scene change, a review tool starting the next take: any
+        moment where what a body was doing has no bearing on what it is about
+        to do. Fading would be wrong for all of them -- a body that comes back
+        alive should not ease out of dying -- so every track goes now, and the
+        pose is written from the rest values rather than left where the last
+        frame put it.
+        """
+        for layer in self.layers:
+            layer.tracks = []
+        self.apply()
+
     @property
     def playing(self) -> tuple:
         """The names of every clip contributing to the pose, in layer order."""

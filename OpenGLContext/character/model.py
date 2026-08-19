@@ -73,6 +73,10 @@ class CharacterModel:
         """One animation layer -- see :meth:`~.mixer.AnimationMixer.layer`."""
         return self.mixer.layer(name, **named)
 
+    def reset(self) -> None:
+        """Stop every clip and return to the rest pose -- see the mixer's own."""
+        self.mixer.reset()
+
     def update(self, dt: float) -> None:
         """Advance the animation by ``dt`` seconds and pose the model."""
         self.mixer.update(dt)

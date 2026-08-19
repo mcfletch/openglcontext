@@ -17,7 +17,10 @@ on its own, and a fourth that is the three of them over one document:
 
 `OpenGLContext/bin/character_sheet.py` (`oglc-character-sheet`) is the review
 tool: every clip of a model, from four sides, as contact sheets with an index
-page.
+page. The laying-out half of it is `OpenGLContext.contactsheet` -- `tile` for
+one sheet and `index` for the page over a directory of them -- which is not
+about characters at all and is used by anything that wants to look at a lot of
+frames at once, a game's own review tools included.
 
 User documentation is [docs/characters.html](../docs/characters.html).
 
@@ -102,6 +105,11 @@ three modules need and which nothing else could reach:
 
 `quat_multiply` and `vrml_to_quat_xyzw` joined the quaternion helpers in
 `loaders/gltf/animation.py`.
+
+`AnimationMixer.reset` (and `CharacterModel.reset`) stops every layer at once
+and writes the rest pose back. What needs it is a respawn: death is a state a
+body is *held* in, so something has to say it is over -- and a fade would blend
+out of dying into the next thing, which is a body easing back to its feet.
 
 `OpenGLContext.quaternion.fromMatrix` reads a rotation back out of a matrix,
 which is the inverse of `Quaternion.matrix` and what `mounted()` needs to turn

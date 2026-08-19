@@ -11,6 +11,7 @@ import pytest
 
 pytest.importorskip("pygltflib")
 
+from OpenGLContext import contactsheet
 from OpenGLContext.bin import character_sheet as sheet_tool
 
 from ._character_assets import character_glb
@@ -73,8 +74,8 @@ class TestIndexPage:
     def _sheets(self, directory, names):
         for name in names:
             path = os.path.join(directory, name)
-            sheet_tool._write(path, name, [('front', [np.zeros((4, 4, 3), 'u1')])],
-                              ['0%'])
+            contactsheet.tile(path, name,
+                              [('front', [np.zeros((4, 4, 3), 'u1')])], ['0%'])
         return directory
 
     def test_lists_every_model_in_the_directory(self, tmp_path):
