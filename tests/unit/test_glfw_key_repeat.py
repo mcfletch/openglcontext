@@ -102,6 +102,32 @@ def test_focus_loss_clears_held_keys(ctx):
     assert ctx.counts['down'] == down_before
 
 
+def test_focus_loss_lets_go_of_the_key(ctx):
+    """Losing focus has to *release* what was held, not only forget it.
+
+    No RELEASE arrives from the platform while the window is unfocused, so an
+    application that tracks held keys itself -- a movement mode, a game's
+    steering -- never learns the key came up and holds it down for ever. What
+    that looks like to a player is a wheel wound to full lock that will not
+    come back.
+    """
+    _press(ctx)
+    ctx.clearHeldKeys()
+    assert ctx.counts['up'] == 1
+
+
+def test_letting_go_twice_only_releases_once(ctx):
+    _press(ctx)
+    ctx.clearHeldKeys()
+    ctx.clearHeldKeys()
+    assert ctx.counts['up'] == 1
+
+
+def test_losing_focus_with_nothing_held_releases_nothing(ctx):
+    ctx.clearHeldKeys()
+    assert ctx.counts['up'] == 0
+
+
 def test_pump_is_noop_when_no_key_held(ctx):
     for _ in range(5):
         ctx.pumpKeyRepeats()

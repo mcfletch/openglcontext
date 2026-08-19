@@ -12,6 +12,7 @@ import pytest
 
 from OpenGLContext.scenegraph.road import RoadProfile
 from OpenGLContext.scenegraph.roadworks import (
+    BarrierProfile,
     BridgeProfile,
     TunnelProfile,
     bridge_meshes,
@@ -69,7 +70,7 @@ class TestABridge:
         meshes = bridge_meshes(_straight(height=40.0), ROAD, _valley, bridge)
         rails = meshes['parapet']
         assert float(rails.positions[:, 1].max()) == pytest.approx(
-            40.0 + bridge.parapet_height, abs=0.5)
+            40.0 + bridge.parapet.height, abs=0.5)
         # One each side, out at the deck's edge.
         deck = ROAD.on_structure().total_width / 2.0
         assert float(rails.positions[:, 2].min()) < -deck + 1.0
@@ -502,3 +503,101 @@ class TestTheBarrierIsNotTheStructure:
         meshes = bridge_meshes(_straight(), ROAD, _valley, barrier=mine)
         assert meshes['parapet'].material is mine
         assert meshes['deck'].material is not mine
+
+
+class TestWhatADriverCanSeePastTheBarrier:
+    """A deck is built over a valley because of what is under it. A barrier
+    that hides the valley hides the reason the structure exists."""
+
+    #: Where a driver's eye sits above the carriageway, in metres, and how far
+    #: the barrier stands to the side of them: a low car in the near lane.
+    EYE = 1.31
+    OFFSET = 3.6
+
+    def test_a_kerb_and_a_railing_can_be_seen_down_past(self) -> None:
+        assert BarrierProfile().sightline(self.EYE, self.OFFSET) > 12.0
+
+    def test_a_wall_at_eye_height_cannot_be(self) -> None:
+        wall = BarrierProfile(height=0.95, kerb=0.95)
+        assert wall.sightline(self.EYE, self.OFFSET) < 6.0
+
+    def test_a_wall_above_eye_height_shows_nothing_at_all(self) -> None:
+        wall = BarrierProfile(height=1.6, kerb=1.6)
+        assert wall.sightline(self.EYE, self.OFFSET) == 0.0
+
+    def test_the_railing_above_the_kerb_costs_no_sightline(self) -> None:
+        """It is looked through, so how tall it is does not enter into it."""
+        low = BarrierProfile(height=1.1, kerb=0.35)
+        tall = BarrierProfile(height=1.6, kerb=0.35)
+        assert low.sightline(self.EYE, self.OFFSET) == \
+            tall.sightline(self.EYE, self.OFFSET)
+
+    def test_standing_further_out_lets_less_be_seen_down_past(self) -> None:
+        barrier = BarrierProfile()
+        assert barrier.sightline(self.EYE, 8.0) < barrier.sightline(self.EYE, 3.6)
+
+    def test_a_barrier_at_no_offset_at_all_is_looked_straight_down(self) -> None:
+        assert BarrierProfile().sightline(self.EYE, 0.0) == 90.0
+
+    def test_a_kerb_as_tall_as_the_barrier_is_a_wall(self) -> None:
+        assert BarrierProfile(height=0.8, kerb=0.8).solid
+
+    def test_and_one_below_it_is_not(self) -> None:
+        assert not BarrierProfile().solid
+
+
+class TestTheRailingOnADeck:
+    def test_a_deck_gets_a_railing_by_default(self) -> None:
+        """Standing over a valley, which is what a deck is for."""
+        assert not BridgeProfile().parapet.solid
+
+    def test_it_reaches_the_height_the_barrier_is_built_to(self) -> None:
+        bridge = BridgeProfile()
+        meshes = bridge_meshes(_straight(height=40.0), ROAD, _valley, bridge)
+        assert float(meshes['parapet'].positions[:, 1].max()) == pytest.approx(
+            40.0 + bridge.parapet.height, abs=0.2)
+
+    def test_the_bars_run_between_the_kerb_and_the_top(self) -> None:
+        barrier = BarrierProfile(height=1.1, kerb=0.35, rails=2)
+        from OpenGLContext.scenegraph.roadworks import _rail_heights
+        assert _rail_heights(barrier) == pytest.approx([0.725, 1.1])
+
+    def test_the_topmost_bar_is_the_top_of_the_barrier(self) -> None:
+        from OpenGLContext.scenegraph.roadworks import _rail_heights
+        for count in (1, 2, 3, 5):
+            barrier = BarrierProfile(rails=count)
+            assert _rail_heights(barrier)[-1] == pytest.approx(barrier.height)
+
+    def test_a_railing_is_mostly_holes(self) -> None:
+        """Which is the whole of why it is one: a wall of the same height over
+        the same length is a great deal more surface."""
+        line = _straight(length=200.0, height=40.0)
+        railing = bridge_meshes(line, ROAD, _valley, BridgeProfile())['parapet']
+        wall = bridge_meshes(line, ROAD, _valley, BridgeProfile(
+            parapet=BarrierProfile(height=1.1, kerb=1.1)))['parapet']
+        assert _face_area(railing) < _face_area(wall) * 0.75
+
+    def test_a_solid_barrier_builds_no_railing(self) -> None:
+        line = _straight(length=200.0, height=40.0)
+        wall = bridge_meshes(line, ROAD, _valley, BridgeProfile(
+            parapet=BarrierProfile(height=1.1, kerb=1.1)))['parapet']
+        plain = bridge_meshes(line, ROAD, _valley, BridgeProfile(
+            parapet=BarrierProfile(height=1.1, kerb=1.1, rails=0)))['parapet']
+        assert len(wall.positions) == len(plain.positions)
+
+    def test_a_railing_with_no_posts_still_has_its_bars(self) -> None:
+        line = _straight(length=200.0, height=40.0)
+        meshes = bridge_meshes(line, ROAD, _valley, BridgeProfile(
+            parapet=BarrierProfile(post_spacing=0.0)))
+        assert float(meshes['parapet'].positions[:, 1].max()) == pytest.approx(
+            40.0 + BarrierProfile().height, abs=0.2)
+
+    def test_every_mesh_is_still_well_formed(self) -> None:
+        _fits(bridge_meshes(_straight(), ROAD, _valley))
+
+
+def _face_area(mesh):
+    """The total area of a mesh's triangles."""
+    corners = mesh.positions[mesh.indices.reshape(-1, 3)]
+    cross = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    return float(np.linalg.norm(cross, axis=1).sum() / 2.0)

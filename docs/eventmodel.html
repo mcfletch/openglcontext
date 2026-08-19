@@ -175,6 +175,22 @@ handler = lambda event: self.step( +1 )
 self.handlers.append( handler )
 self.addEventHandler( 'keyboard', name='w', state=1, function=handler )</pre>
 
+<h3>A held key always comes back up</h3>
+
+<p>A control that acts for as long as a key is down &mdash; a throttle, a
+steering input, a movement mode &mdash; is written as a pair of
+<code>keyboard</code> handlers, <code>state=1</code> to take the key and
+<code>state=0</code> to let go of it, with the application keeping the set of
+keys currently held.</p>
+
+<p>The window losing focus is the case that pair has to survive: the platform
+stops delivering key transitions to an unfocused window, so the release for a
+key that was down when focus went away never arrives from it.  OpenGLContext
+sends that release itself as focus is lost, one <code>state=0</code> event per
+key it was holding, so the set an application keeps is emptied the same way an
+ordinary release empties it.  Nothing special has to be written for the case:
+what reaches the handler is a release like any other.</p>
+
 <p>&nbsp;Timer objects are also based on the same mechanism (with some
 significant extra machinery).<br>
 

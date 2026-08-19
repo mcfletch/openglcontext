@@ -91,8 +91,16 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
                 info[1] = now + self.keyRepeatInterval
 
     def clearHeldKeys(self):
-        """Drop held-key state (e.g. on focus loss, where RELEASE may not come)."""
-        self.__dict__.pop('_heldKeysMap', None)
+        """Let go of every held key, as though each had been released.
+
+        For focus loss, where no RELEASE arrives from the platform: an
+        application that tracks held keys itself -- a movement mode, a game's
+        steering -- only ever learns a key came up from the event, so dropping
+        this map without sending one leaves the key down for ever on its side.
+        """
+        held = self.__dict__.pop('_heldKeysMap', None) or {}
+        for key, info in held.items():
+            self._emitKey(key, 0, info[0])
 
     def glfwOnCharacter(self, window, codepoint):
         """Convert character input to context event"""

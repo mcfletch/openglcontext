@@ -170,13 +170,34 @@ fill = causeway_meshes(run, profile, ground)    # body, wall
 bore = tunnel_meshes(run, profile)              # bore, portals</pre>
 <p>Each returns its parts as <code>{name: mesh}</code> rather than one merged
 mesh, so a caller can light, cull or write them separately.</p>
-<p><code>BridgeProfile</code> sets the structural depth of the deck, the parapets
-standing on its edges, and how far apart the piers are. A pier is dropped to
+<p><code>BridgeProfile</code> sets the structural depth of the deck, the barrier
+standing on its edges (<code>parapet</code>, a <code>BarrierProfile</code>), and
+how far apart the piers are. A pier is dropped to
 whatever the ground is doing beneath it; the two ends are abutments, wider,
 because that is where the deck is carried onto the land — and <strong>nothing at
 all is built where the ground has come up past the soffit</strong>, because a
 deck running into a hillside is carried by the hill and the alternative is a
 block of concrete standing across the carriageway.</p>
+<p><strong><code>BarrierProfile</code> is what stands on the edge of a
+structure to keep a car on it</strong>, and it has to be tall enough to hold one
+and low enough to see past. Those pull opposite ways, and what settles it is
+that they apply to different parts of it: a solid <code>kerb</code> (0.35&nbsp;m)
+is what a wheel meets, and an open railing above it — <code>rails</code> bars on
+posts at <code>post_spacing</code> — takes the barrier to its full
+<code>height</code> (1.1&nbsp;m) while being almost entirely holes.</p>
+<p><strong>What a driver can see down past is the kerb</strong>, because the
+railing is looked through, and that is the whole reason for the shape. A deck
+forty metres over a valley is built there <em>because</em> of what is under it.
+<code>sightline(eye, offset)</code> is that as a number — how steeply a driver
+whose eye is <code>eye</code> above the carriageway can look down past a barrier
+standing <code>offset</code> to the side:</p>
+<pre>BarrierProfile().sightline(1.31, 3.6)                        # 14.9 degrees
+BarrierProfile(height=0.95, kerb=0.95).sightline(1.31, 3.6)  #  5.7 degrees</pre>
+<p>From a deck forty metres up those are the nearest ground visible at 150&nbsp;m
+and at 402&nbsp;m: with a wall, the valley floor is never seen at all. A
+<code>kerb</code> at or above <code>height</code> <em>is</em> a wall and no
+railing is built, which is what a causeway a metre over a marsh wants, since
+there is nothing under it to see.</p>
 <p><code>CausewayProfile</code> sets the wall standing on each edge and how far
 the fill leans out per metre of its depth. <strong>The wall is deliberately
 low</strong> — below a seated driver's eye: a causeway is built to cross

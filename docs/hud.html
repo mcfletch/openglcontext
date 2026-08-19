@@ -54,7 +54,8 @@ the same batched renderer, in the same handful of draw calls.</p>
   <p>A layer is a tree of widgets, each carrying the corner it belongs in.
     Add it to the context and it is drawn from the next frame on:</p>
   <pre>from OpenGLContext.ui.hudwidgets import (
-    BarMeter, Crosshair, HUDGroup, HUDLayer, MessageQueue, MiniMap, Readout,
+    BarMeter, Crosshair, HUDGroup, HUDLayer, LampRow, MessageQueue, MiniMap,
+    Readout,
     TextBlock,
 )
 
@@ -165,6 +166,30 @@ meter.value = value</pre>
   <p>The whole track lights, not the filled part, so a meter that has just been
     emptied still flashes: the moment health reaches nothing is the one a player
     most needs to see.</p>
+
+  <h3 id="lamprow">LampRow &mdash; a count that is seen rather than read</h3>
+  <p>A row of lamps, <code>lit</code> of <code>count</code> of them burning from
+    the left. <code>BarMeter</code> and <code>Readout</code> both answer
+    <em>how much</em> and a player has to read them to find out; some counts
+    cannot afford that. A racing start rig is the case that names this widget
+    &mdash; five lamps filling one a second, holding, and going out &mdash;
+    because a driver reads it with their eyes on the road, and a numeral
+    counting down would take them off it. A round counter, a life count and a
+    lap tally are the same shape of question.</p>
+  <pre>self.lights = LampRow(anchor='top-center', offset=(0, -40))
+...
+self.lights.count, self.lights.lit = 5, burning
+self.lights.visible = starting</pre>
+  <p><code>lit</code> is clamped rather than checked, so a game may hand it
+    whatever it is counting without first working out whether the number fits.
+    Every lamp is drawn in a housing whether it burns or not, so a rig with
+    nothing lit still reads as a rig rather than as empty screen; a burning one
+    gets a halo, kept inside the spacing so two lit lamps stay two.</p>
+  <p><code>lampSize</code> (26) and <code>gap</code> (12) are its natural size.
+    <code>color</code> recolours the burning lamps and leaves the dark ones to
+    the skin, which is what makes the same widget a start rig here and a fuel
+    warning elsewhere; without it a burning lamp takes the skin's
+    <code>hudCritical</code>, which is red everywhere a start rig exists.</p>
 
   <h3>DamageIndicator &mdash; which way the hit came from</h3>
   <p><strong>The direction is the whole point.</strong> How much health was lost
@@ -606,8 +631,9 @@ python -m OpenGLContext.stalltrace /tmp/stalls.jsonl</pre>
     <tr><th>Module</th><th>What is in it</th></tr>
     <tr><td><code>ui.hudwidgets</code></td>
       <td><code>HUDLayer</code>, <code>HUDGroup</code>, <code>Crosshair</code>,
-        <code>BarMeter</code>, <code>Readout</code>, <code>TextBlock</code>,
-        <code>MessageQueue</code>, and <code>place()</code>.</td></tr>
+        <code>BarMeter</code>, <code>LampRow</code>, <code>Readout</code>,
+        <code>TextBlock</code>, <code>MessageQueue</code>, <code>MiniMap</code>,
+        and <code>place()</code>.</td></tr>
     <tr><td><code>ui.debugoverlay</code></td>
       <td>The overlay, the provider registry, value formatting and the
         providers shipped with it.</td></tr>

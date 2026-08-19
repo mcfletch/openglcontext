@@ -66,8 +66,8 @@ from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.widgets import RootWidget, Widget
 
 __all__ = [
-    'HUDLayer', 'HUDWidget', 'HUDGroup', 'Crosshair', 'BarMeter', 'Readout',
-    'TextBlock', 'MiniMap',
+    'HUDLayer', 'HUDWidget', 'HUDGroup', 'Crosshair', 'BarMeter', 'LampRow',
+    'Readout', 'TextBlock', 'MiniMap',
     'Message', 'MessageQueue', 'DamageIndicator', 'DamageMark', 'ScreenWash',
     'place', 'hud_text',
     'CROSS', 'DOT', 'CROSS_DOT', 'CIRCLE', 'NONE', 'ANCHORS', 'EDGES',
@@ -624,6 +624,122 @@ class Readout(HUDWidget):
                                 max(0, self.rect.right - left),
                                 self.rect.height),
                  text, self.valueColour(skin), align=str(self.align))
+
+
+class LampRow(HUDWidget):
+    """A row of lamps, some of them burning: a count that is seen, not read.
+
+    :class:`Readout` and :class:`BarMeter` both answer *how much*, and a player
+    has to read them to find out.  Some counts cannot afford that.  A racing
+    start rig is the case that names this widget -- five lamps filling one at a
+    time, holding, and going out -- because a driver reads it with their eyes on
+    the road and a numeral counting down would take them off it.  A round
+    counter, a life count and a lap tally are the same shape of question.
+
+    ``count`` is how many lamps there are and ``lit`` how many of them burn,
+    from the left.  ``lit`` is clamped rather than checked, so a caller may hand
+    it whatever it is counting without first working out whether the number
+    fits.
+
+    ``color`` recolours the burning lamps and leaves the dark ones to the skin,
+    which is what makes this a start rig here and a fuel warning elsewhere.
+    """
+
+    PROTO = 'LampRow'
+    #: How many lamps stand in the row.
+    count = field.newField('count', 'SFInt32', 1, 5)
+    #: How many of them burn, counted from the left.
+    lit = field.newField('lit', 'SFInt32', 1, 0)
+    #: How big one lamp is across, in reference pixels, and how far apart they
+    #: stand.  Large: a rig too small to read at a glance is a numeral with
+    #: extra steps.
+    lampSize = field.newField('lampSize', 'SFFloat', 1, 26.0)
+    gap = field.newField('gap', 'SFFloat', 1, 12.0)
+    #: Whether a burning lamp is given a halo.  What makes a lamp read as *lit*
+    #: rather than as a coloured circle is that it spills light around itself.
+    halo = field.newField('halo', 'SFBool', 1, True)
+    #: How far the housing and the halo stand out past the lamp, each as a
+    #: fraction of it.  The housing is what makes a rig with nothing lit still
+    #: read as a rig rather than as empty screen; the halo is kept inside the
+    #: spacing so two burning lamps stay two.
+    housingEdge = field.newField('housingEdge', 'SFFloat', 1, 0.16)
+    haloEdge = field.newField('haloEdge', 'SFFloat', 1, 0.2)
+    #: How much of a burning lamp's colour its halo carries.
+    haloStrength = field.newField('haloStrength', 'SFFloat', 1, 0.32)
+
+    #: A start rig belongs across the top of the view, where it does not cover
+    #: the road and is still inside the eye's reach of it.
+    anchor = field.newField('anchor', 'SFString', 1, 'top-center')
+
+    # -- what is burning --------------------------------------------------
+    def burning(self, at: int) -> bool:
+        """Whether the lamp at that place in the row is lit."""
+        return bool(0 <= at < int(self.count) and at < int(self.lit))
+
+    def visibleLamps(self) -> List[int]:
+        """Every lamp's place in the row, left to right."""
+        return list(range(max(0, int(self.count))))
+
+    def lampColour(self, at: int, skin: Any) -> Any:
+        """What that lamp is drawn in: the game's colour, or the skin's."""
+        if self.burning(at):
+            return self.tinted(skin.hudCritical)
+        return skin.hudTrack
+
+    # -- geometry ---------------------------------------------------------
+    def content_size(self, metrics: FontMetrics,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        lamps = max(0, int(self.count))
+        if not lamps:
+            return (0, 0)
+        side = metrics.pixels(self.lampSize)
+        return (lamps * side + (lamps - 1) * metrics.pixels(self.gap), side)
+
+    def lampRect(self, at: int, metrics: FontMetrics) -> Rect:
+        """Where one lamp is drawn, in window pixels."""
+        side = metrics.pixels(self.lampSize)
+        step = side + metrics.pixels(self.gap)
+        return Rect(self.rect.x + at * step, self.rect.y, side, side)
+
+    def housingRect(self, at: int, metrics: FontMetrics) -> Rect:
+        """The dark surround a lamp sits in, lit or not."""
+        return _grown(self.lampRect(at, metrics),
+                      metrics.pixels(float(self.lampSize) * self.housingEdge))
+
+    def haloRect(self, at: int, metrics: FontMetrics) -> Rect:
+        """What a burning lamp spills light into."""
+        return _grown(self.lampRect(at, metrics),
+                      metrics.pixels(float(self.lampSize) * self.haloEdge))
+
+    def haloColour(self, at: int, skin: Any) -> Tuple[float, float, float, float]:
+        """The lamp's own colour, carried at the halo's strength."""
+        red, green, blue, alpha = _rgba(self.lampColour(at, skin))
+        return (red, green, blue, alpha * float(self.haloStrength))
+
+    # -- drawing ----------------------------------------------------------
+    def paint(self, renderer: Any) -> None:
+        skin = renderer.skin
+        metrics = renderer.metrics
+        for at in self.visibleLamps():
+            renderer.disc(self.housingRect(at, metrics), skin.hudFill)
+            if self.halo and self.burning(at):
+                renderer.disc(self.haloRect(at, metrics),
+                              self.haloColour(at, skin))
+            renderer.disc(self.lampRect(at, metrics), self.lampColour(at, skin))
+
+
+def _grown(rect: Rect, side: int) -> Rect:
+    """A rectangle with room around it, for a housing or a halo."""
+    return Rect(rect.x - side, rect.y - side,
+                rect.width + 2 * side, rect.height + 2 * side)
+
+
+def _rgba(colour: Any) -> Tuple[float, float, float, float]:
+    """A colour as four floats, whatever sequence it arrived as."""
+    values = [float(part) for part in colour]
+    while len(values) < 4:
+        values.append(1.0)
+    return (values[0], values[1], values[2], values[3])
 
 
 class TextBlock(HUDWidget):

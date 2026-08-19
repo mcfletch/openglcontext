@@ -23,7 +23,9 @@ authoring, and lives in ``OpenGLContext_editor.world.structures``.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import Any, Callable, Dict, Optional
 
 import numpy as np
@@ -34,7 +36,7 @@ from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
 
 __all__ = [
-    'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
+    'BarrierProfile', 'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
     'bridge_meshes', 'causeway_meshes', 'tunnel_meshes',
     'concrete_material', 'barrier_material',
 ]
@@ -56,12 +58,61 @@ HeightFn = Callable[[Any, Any], Any]
 
 
 @dataclass
+class BarrierProfile:
+    """What stands on the edge of a structure to keep a car on it, in metres.
+
+    A barrier has to be tall enough to hold a car and low enough to see past,
+    and those pull opposite ways. What settles it is that they apply to
+    different parts of it: a solid ``kerb`` is what a wheel meets, and an open
+    railing above it takes the barrier to its full ``height`` while being almost
+    entirely holes.
+
+    **What a driver can see down past is the kerb**, because the railing is
+    looked through. That is the whole reason for the shape. A deck forty metres
+    over a valley is built there *because* of what is under it, and a solid wall
+    at eye height turns the crossing into a corridor and hides the only thing
+    the structure was for. :meth:`sightline` is that as a number.
+
+    ``rails`` is how many horizontal bars the railing has and ``rail_depth``
+    how thick one is; ``post_spacing`` and ``post_width`` are the uprights
+    carrying them. A ``kerb`` at or above ``height`` is a **wall**, and no
+    railing is built -- which is what a causeway a metre over a marsh wants,
+    since there is nothing under it to see.
+    """
+
+    height: float = 1.1
+    kerb: float = 0.35
+    width: float = 0.28
+    post_spacing: float = 2.5
+    post_width: float = 0.09
+    rails: int = 2
+    rail_depth: float = 0.07
+
+    @property
+    def solid(self) -> bool:
+        """Whether this is a wall rather than a kerb carrying a railing."""
+        return self.kerb >= self.height
+
+    def sightline(self, eye: float, offset: float) -> float:
+        """How steeply a driver can look down past this, in degrees.
+
+        ``eye`` is the driver's eye above the carriageway and ``offset`` how far
+        the barrier stands to the side of it. The solid part is what blocks the
+        view; an eye below the top of it sees nothing down at all.
+        """
+        if offset <= 0.0:
+            return 90.0
+        drop = float(eye) - min(float(self.kerb), float(self.height))
+        return math.degrees(math.atan2(drop, float(offset))) if drop > 0 else 0.0
+
+
+@dataclass
 class BridgeProfile:
     """The shape of a deck and what holds it up, in metres.
 
     ``deck_depth`` is how far the soffit hangs below the road it carries -- the
-    structural depth of the girder. ``parapet_height`` and ``parapet_width``
-    are the barrier standing on each edge. ``pier_spacing`` is how far apart the
+    structural depth of the girder. ``parapet`` is the barrier standing on each
+    edge (:class:`BarrierProfile`). ``pier_spacing`` is how far apart the
     supports are; ``pier_width`` is across the road and ``pier_length`` along
     it, so a pier is a blade standing square to the deck. ``abutment_width``
     widens the end supports, which carry the deck onto the ground.
@@ -73,8 +124,7 @@ class BridgeProfile:
     """
 
     deck_depth: float = 1.8
-    parapet_height: float = 0.95
-    parapet_width: float = 0.28
+    parapet: BarrierProfile = dataclass_field(default_factory=BarrierProfile)
     pier_spacing: float = 45.0
     pier_width: float = 4.5
     pier_length: float = 2.2
@@ -201,8 +251,8 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
     parts['deck'] = _swept(line, right, up, material,
                            [(-half, edge), (-half, soffit),
                             (half, soffit), (half, edge)], closed_ends=True)
-    parts['parapet'] = _parapet(line, right, up, rail_material, half, edge,
-                                bridge.parapet_height, bridge.parapet_width)
+    parts['parapet'] = _barrier(line, right, up, rail_material, half, edge,
+                                bridge.parapet)
     if ground is not None:
         piers = _piers(line, right, up, ground, bridge, half, soffit, material)
         if piers is not None:
@@ -296,6 +346,103 @@ def _parapet(line: np.ndarray, right: np.ndarray, up: np.ndarray,
                [(side * half, edge), (side * half, top),
                 (side * inner, top), (side * inner, edge)], closed_ends=True)
         for side in (-1.0, 1.0)], material)
+
+
+def _barrier(line: np.ndarray, right: np.ndarray, up: np.ndarray,
+             material: PBRMaterial, half: float, edge: float,
+             barrier: BarrierProfile) -> PBRMesh:
+    """A kerb along each edge, and the railing standing on it.
+
+    The kerb is swept the whole length; the railing is bars swept the same way
+    with posts at intervals holding them up. A solid barrier is the kerb alone.
+    """
+    parts = [_parapet(line, right, up, material, half, edge,
+                      barrier.kerb, barrier.width)]
+    if not barrier.solid:
+        parts.append(_rails(line, right, up, material, half, edge, barrier))
+        posts = _posts(line, right, up, material, half, edge, barrier)
+        if posts is not None:
+            parts.append(posts)
+    return _merge(parts, material)
+
+
+def _rail_heights(barrier: BarrierProfile) -> list:
+    """Where each bar of the railing runs, above the carriageway.
+
+    Evenly from just above the kerb to the top of the barrier, the topmost bar
+    landing exactly on the height the barrier is built to.
+    """
+    span = float(barrier.height) - float(barrier.kerb)
+    count = max(1, int(barrier.rails))
+    return [float(barrier.kerb) + span * (at + 1) / count for at in range(count)]
+
+
+def _rails(line: np.ndarray, right: np.ndarray, up: np.ndarray,
+           material: PBRMaterial, half: float, edge: float,
+           barrier: BarrierProfile) -> PBRMesh:
+    """The horizontal bars, swept along the line the way the kerb is."""
+    thick = float(barrier.rail_depth)
+    middle = half - float(barrier.width) / 2.0
+    bars = []
+    for height in _rail_heights(barrier):
+        low, high = edge + height - thick / 2.0, edge + height + thick / 2.0
+        for side in (-1.0, 1.0):
+            near, far = side * (middle - thick / 2.0), side * (middle + thick / 2.0)
+            bars.append(_swept(line, right, up, material,
+                               [(far, low), (far, high), (near, high), (near, low)],
+                               closed_ends=True))
+    return _merge(bars, material)
+
+
+def _posts(line: np.ndarray, right: np.ndarray, up: np.ndarray,
+           material: PBRMaterial, half: float, edge: float,
+           barrier: BarrierProfile) -> Optional[PBRMesh]:
+    """The uprights the bars are carried on, every ``post_spacing`` along."""
+    spacing = float(barrier.post_spacing)
+    if spacing <= 0.0:
+        return None
+    steps = np.linalg.norm(np.diff(line, axis=0), axis=1)
+    station = np.concatenate([[0.0], np.cumsum(steps)])
+    wanted = np.arange(0.0, float(station[-1]) + spacing, spacing)
+    at = np.unique(np.clip(np.searchsorted(station, wanted), 0, len(line) - 1))
+    middle = half - float(barrier.width) / 2.0
+    width = float(barrier.post_width)
+    standing = []
+    for index in at:
+        for side in (-1.0, 1.0):
+            standing.append(_upright(
+                line[index], right[index], up[index], side * middle, width,
+                edge + float(barrier.kerb), edge + float(barrier.height),
+                material))
+    if not standing:
+        return None
+    return _merge(standing, material)
+
+
+def _upright(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
+             lateral: float, width: float, low: float, high: float,
+             material: PBRMaterial) -> PBRMesh:
+    """One post: a small box standing on the kerb, square to the road.
+
+    Built in the road's own frame rather than against the world's axes, so a
+    post on a banked deck leans with the deck instead of standing out of it.
+    """
+    along = np.cross(right, up)
+    length = float(np.linalg.norm(along))
+    along = along / length if length > 1e-9 else np.array([0.0, 0.0, 1.0])
+    edge = width / 2.0
+    plan = [(-edge, -edge), (edge, -edge), (edge, edge), (-edge, edge)]
+    positions = np.asarray([
+        centre + right * (lateral + across) + along * ahead + up * height
+        for height in (high, low)
+        for across, ahead in plan])
+    sides = []
+    for i in range(4):
+        j = (i + 1) % 4
+        sides += [i, j, i + 4, j, j + 4, i + 4]
+    sides += [0, 2, 1, 0, 3, 2]                  # the cap
+    sides += [4, 5, 6, 4, 6, 7]                  # and the foot
+    return _mesh(positions, np.asarray(sides, dtype=np.uint32), material)
 
 
 def _fill(line: np.ndarray, right: np.ndarray, up: np.ndarray,
