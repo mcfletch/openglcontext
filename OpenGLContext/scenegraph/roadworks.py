@@ -38,7 +38,8 @@ from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
 __all__ = [
     'BarrierProfile', 'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
     'bridge_meshes', 'causeway_meshes', 'tunnel_meshes',
-    'concrete_material', 'barrier_material',
+    'bore_shade', 'tunnel_lamps',
+    'concrete_material', 'barrier_material', 'lamp_material',
 ]
 
 #: Structural concrete: grey, entirely rough, and not a metal. Weathered rather
@@ -184,6 +185,15 @@ class TunnelProfile:
     bore lit like an open hillside is a concrete tube in daylight; the shade is
     carried on the lining's own vertices, so no light source is involved and a
     driver goes into the dark and comes out the far end.
+
+    ``lamp_spacing`` is how far apart the luminaires hang along the crown and
+    ``lamp_drop`` how far below it they sit; zero spacing is an unlit bore.
+    ``lamp_glow`` is how far the pool under each one lifts the lining out of the
+    gloom and ``lamp_reach`` how far that pool spreads along the road. The pool
+    is **baked into the lining**, so a bore is lit however far away it is and at
+    whatever a renderer can afford: real lights are worth spending only on the
+    few fittings a driver is actually among, and :func:`tunnel_lamps` says where
+    those are.
     """
 
     clearance: float = 7.5
@@ -194,6 +204,26 @@ class TunnelProfile:
     portal_border: float = 1.6
     daylight: float = 55.0
     gloom: float = 0.14
+    lamp_spacing: float = 25.0
+    lamp_drop: float = 0.55
+    lamp_length: float = 1.5
+    lamp_width: float = 0.32
+    lamp_depth: float = 0.16
+    lamp_reach: float = 13.0
+    lamp_glow: float = 0.3
+
+
+#: A sodium luminaire: warm, and burning rather than lit -- inside a bore it is
+#: the light, and nothing else is going to illuminate it.
+LAMP_EMISSION = (1.0, 0.72, 0.36)
+LAMP_STRENGTH = 4.0
+
+
+def lamp_material() -> PBRMaterial:
+    """What a tunnel luminaire is made of: a warm light, not a lit surface."""
+    return PBRMaterial(baseColor=(0.05, 0.05, 0.05), metallic=0.0,
+                       roughness=0.4, emissiveColor=LAMP_EMISSION,
+                       emissiveStrength=LAMP_STRENGTH)
 
 
 def concrete_material() -> PBRMaterial:
@@ -327,12 +357,109 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
     # Reversed, so the sweep's triangles wind the other way and the lining is
     # lit and drawn from the carriageway side.
     bore = _swept(line, right, up, material, list(reversed(arch)),
-                  shade=_gloom(line, tunnel, len(arch)))
+                  shade=bore_shade(line, tunnel))
     portals = _merge([_ring(line[at], right[at], up[at], arch, outer, material,
                             outwards=facing)
                       for at, facing in ((0, -1.0), (len(line) - 1, 1.0))],
                      material)
-    return {'bore': bore, 'portals': portals}
+    parts = {'bore': bore, 'portals': portals}
+    lamps = _fittings(line, right, up, tunnel)
+    if lamps is not None:
+        parts['lamps'] = lamps
+    return parts
+
+
+def tunnel_lamps(points: Any, tunnel: Optional[TunnelProfile] = None) -> np.ndarray:
+    """Where the luminaires hang in a bore, as (N,3) world points.
+
+    The pool each throws is baked into the lining, so a bore is lit whatever a
+    renderer can afford. What that cannot do is light anything *in* the bore --
+    a car has no idea it is under a lamp -- so a game spends its few real lights
+    on the fittings the driver is among, and this is what says where they are.
+
+    Evenly along the bore with a half space at each end, so the first lamp is
+    inside the portal rather than on it, and a bore shorter than one spacing
+    still gets the one in the middle that makes it a lit bore.
+    """
+    line = _line(points, "a tunnel")
+    tunnel = tunnel or TunnelProfile()
+    spacing = float(tunnel.lamp_spacing)
+    if spacing <= 0.0:
+        return np.zeros((0, 3), dtype='d')
+    _right, up = sweep_frames(line)
+    station = _station(line)
+    length = float(station[-1])
+    count = max(1, int(round(length / spacing)))
+    wanted = (np.arange(count) + 0.5) * (length / count)
+    at = np.clip(np.searchsorted(station, wanted), 0, len(line) - 1)
+    height = float(tunnel.clearance) - float(tunnel.lamp_drop)
+    return line[at] + up[at] * height
+
+
+def bore_shade(points: Any, tunnel: Optional[TunnelProfile] = None) -> np.ndarray:
+    """How bright the lining is at each point along a bore, from 0 to 1.
+
+    Daylight at the portals, falling to :attr:`TunnelProfile.gloom` inside, and
+    lifted again under each luminaire. Baked onto the lining's vertices, so it
+    costs nothing to draw and is right at any distance -- which is what lets the
+    real lights be spent on the few fittings the driver is among.
+    """
+    line = _line(points, "a tunnel")
+    tunnel = tunnel or TunnelProfile()
+    station = _station(line)
+    daylight = _daylight(station, tunnel)
+    pool = _lamp_pool(line, station, tunnel)
+    return np.clip(daylight + float(tunnel.lamp_glow) * pool, 0.0, 1.0)
+
+
+def _station(line: np.ndarray) -> np.ndarray:
+    """How far along the line each of its points is, in metres."""
+    steps = np.linalg.norm(np.diff(line, axis=0), axis=1)
+    return np.concatenate([[0.0], np.cumsum(steps)])
+
+
+def _daylight(station: np.ndarray, tunnel: TunnelProfile) -> np.ndarray:
+    """What the portals reach: full at either end, the gloom in the middle."""
+    from_end = np.minimum(station, station[-1] - station)
+    reach = max(float(tunnel.daylight), 1e-6)
+    lit = np.clip(1.0 - from_end / reach, 0.0, 1.0)
+    return np.asarray(tunnel.gloom + (1.0 - tunnel.gloom) * lit, dtype='d')
+
+
+def _lamp_pool(line: np.ndarray, station: np.ndarray,
+               tunnel: TunnelProfile) -> np.ndarray:
+    """How much of a luminaire's pool falls on each point, from 0 to 1.
+
+    A triangle falling off over ``lamp_reach``, and the strongest of the lamps
+    rather than their sum: two pools that overlap make a brighter *floor*, not a
+    surface twice as bright as the lamp itself.
+    """
+    lamps = tunnel_lamps(line, tunnel)
+    if not len(lamps):
+        return np.zeros(len(station))
+    at = np.array([station[int(np.argmin(np.linalg.norm(line - one, axis=1)))]
+                   for one in lamps])
+    reach = max(float(tunnel.lamp_reach), 1e-6)
+    near = np.abs(station[:, None] - at[None, :]).min(axis=1)
+    return np.clip(1.0 - near / reach, 0.0, 1.0)
+
+
+def _fittings(line: np.ndarray, right: np.ndarray, up: np.ndarray,
+              tunnel: TunnelProfile) -> Optional[PBRMesh]:
+    """The luminaires themselves: a box on the crown at each lamp position."""
+    spacing = float(tunnel.lamp_spacing)
+    if spacing <= 0.0:
+        return None
+    material = lamp_material()
+    boxes = []
+    for where in tunnel_lamps(line, tunnel):
+        at = int(np.argmin(np.linalg.norm(line - where, axis=1)))
+        soffit = float(tunnel.clearance) - float(tunnel.lamp_drop)
+        boxes.append(_upright(
+            line[at], right[at], up[at], 0.0, float(tunnel.lamp_width),
+            soffit, soffit + float(tunnel.lamp_depth), material,
+            along=float(tunnel.lamp_length)))
+    return _merge(boxes, material) if boxes else None
 
 
 def _parapet(line: np.ndarray, right: np.ndarray, up: np.ndarray,
@@ -421,19 +548,23 @@ def _posts(line: np.ndarray, right: np.ndarray, up: np.ndarray,
 
 def _upright(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
              lateral: float, width: float, low: float, high: float,
-             material: PBRMaterial) -> PBRMesh:
-    """One post: a small box standing on the kerb, square to the road.
+             material: PBRMaterial, along: Optional[float] = None) -> PBRMesh:
+    """A small box in the road's own frame, ``lateral`` out and ``low`` to
+    ``high`` up.
 
-    Built in the road's own frame rather than against the world's axes, so a
-    post on a banked deck leans with the deck instead of standing out of it.
+    A barrier post and a tunnel luminaire are the same shape of thing: something
+    small placed against the road rather than against the world's axes, so it
+    leans with a banked deck instead of standing out of it. ``along`` is how
+    long it is in the road's direction, and defaults to square.
     """
-    along = np.cross(right, up)
-    length = float(np.linalg.norm(along))
-    along = along / length if length > 1e-9 else np.array([0.0, 0.0, 1.0])
+    forward = np.cross(right, up)
+    length = float(np.linalg.norm(forward))
+    forward = forward / length if length > 1e-9 else np.array([0.0, 0.0, 1.0])
     edge = width / 2.0
-    plan = [(-edge, -edge), (edge, -edge), (edge, edge), (-edge, edge)]
+    reach = (width if along is None else float(along)) / 2.0
+    plan = [(-edge, -reach), (edge, -reach), (edge, reach), (-edge, reach)]
     positions = np.asarray([
-        centre + right * (lateral + across) + along * ahead + up * height
+        centre + right * (lateral + across) + forward * ahead + up * height
         for height in (high, low)
         for across, ahead in plan])
     sides = []

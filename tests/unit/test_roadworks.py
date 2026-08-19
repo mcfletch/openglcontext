@@ -14,6 +14,8 @@ from OpenGLContext.scenegraph.road import RoadProfile
 from OpenGLContext.scenegraph.roadworks import (
     BarrierProfile,
     BridgeProfile,
+    bore_shade,
+    tunnel_lamps,
     TunnelProfile,
     bridge_meshes,
     concrete_material,
@@ -375,11 +377,22 @@ class TestItIsDarkInThere:
         assert meshes['bore'].colors is not None
 
     def test_it_is_darkest_in_the_middle(self) -> None:
-        meshes = tunnel_meshes(_straight(length=400.0, height=0.0), ROAD)
+        """Away from the portals, with the lamps out: what the bore is like
+        before anybody hangs a light in it."""
+        meshes = tunnel_meshes(_straight(length=400.0, height=0.0), ROAD,
+                               TunnelProfile(lamp_spacing=0.0))
         bore = meshes['bore']
         along = bore.positions[:, 0]
         middle = bore.colors[(along > 180.0) & (along < 220.0), 0]
         assert float(middle.mean()) < 0.35
+
+    def test_and_lit_it_is_brighter_than_that(self) -> None:
+        dark = tunnel_meshes(_straight(length=400.0, height=0.0), ROAD,
+                             TunnelProfile(lamp_spacing=0.0))['bore']
+        lit = tunnel_meshes(_straight(length=400.0, height=0.0), ROAD)['bore']
+        inside = (dark.positions[:, 0] > 150.0) & (dark.positions[:, 0] < 250.0)
+        assert float(lit.colors[inside, 0].mean()) > \
+            float(dark.colors[inside, 0].mean())
 
     def test_it_is_open_daylight_at_the_portals(self) -> None:
         meshes = tunnel_meshes(_straight(length=400.0, height=0.0), ROAD)
@@ -601,3 +614,114 @@ def _face_area(mesh):
     corners = mesh.positions[mesh.indices.reshape(-1, 3)]
     cross = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
     return float(np.linalg.norm(cross, axis=1).sum() / 2.0)
+
+
+class TestTheLampsInABore:
+    """A bore a hundred metres in is dark, and a road nobody can see is not a
+    road. Real ones are lit, so this one is: fittings along the crown, and the
+    pool each throws baked into the lining it falls on.
+    """
+
+    def _bore(self, length=300.0, **named):
+        return _straight(length=length, height=0.0, spacing=5.0), \
+            TunnelProfile(**named)
+
+    def test_a_bore_carries_its_lamps(self):
+        line, tunnel = self._bore()
+        assert len(tunnel_lamps(line, tunnel))
+
+    def test_they_are_spaced_along_it(self):
+        line, tunnel = self._bore(length=300.0, lamp_spacing=25.0)
+        lamps = tunnel_lamps(line, tunnel)
+        gaps = np.linalg.norm(np.diff(lamps, axis=0), axis=1)
+        assert gaps == pytest.approx(25.0, abs=5.0)
+
+    def test_a_wider_spacing_is_fewer_of_them(self):
+        line, _ = self._bore(length=300.0)
+        assert len(tunnel_lamps(line, TunnelProfile(lamp_spacing=50.0))) < \
+            len(tunnel_lamps(line, TunnelProfile(lamp_spacing=20.0)))
+
+    def test_they_hang_below_the_crown(self):
+        line, tunnel = self._bore()
+        lamps = tunnel_lamps(line, tunnel)
+        assert lamps[:, 1] == pytest.approx(
+            tunnel.clearance - tunnel.lamp_drop, abs=0.01)
+
+    def test_and_over_the_middle_of_the_road(self):
+        line, tunnel = self._bore()
+        assert tunnel_lamps(line, tunnel)[:, 2] == pytest.approx(0.0, abs=0.01)
+
+    def test_a_bore_with_no_lamps_asked_for_has_none(self):
+        line, _ = self._bore()
+        assert len(tunnel_lamps(line, TunnelProfile(lamp_spacing=0.0))) == 0
+
+    def test_a_bore_shorter_than_one_spacing_still_gets_one(self):
+        """A short bore is still dark in the middle of it."""
+        line = _straight(length=15.0, height=0.0, spacing=5.0)
+        assert len(tunnel_lamps(line, TunnelProfile(lamp_spacing=40.0))) == 1
+
+
+class TestWhatTheLampsDoToTheLining:
+    def _shade(self, **named):
+        line = _straight(length=400.0, height=0.0, spacing=2.0)
+        return line, TunnelProfile(**named)
+
+    def test_the_lining_is_brighter_under_a_lamp_than_between_two(self):
+        line, tunnel = self._shade(lamp_spacing=40.0, daylight=1.0)
+        shade = bore_shade(line, tunnel)
+        lamps = tunnel_lamps(line, tunnel)
+        # A lamp well away from either portal, and the point midway to the next.
+        under = int(np.argmin(np.abs(line[:, 0] - lamps[4, 0])))
+        between = int(np.argmin(np.abs(
+            line[:, 0] - (lamps[4, 0] + lamps[5, 0]) / 2.0)))
+        assert shade[under] > shade[between]
+
+    def test_with_no_lamps_it_is_the_gloom_all_the_way(self):
+        line, tunnel = self._shade(lamp_spacing=0.0, daylight=1.0, gloom=0.14)
+        middle = bore_shade(line, tunnel)[len(line) // 2]
+        assert middle == pytest.approx(0.14, abs=0.01)
+
+    def test_the_portals_are_still_the_brightest_thing_in_it(self):
+        line, tunnel = self._shade(lamp_spacing=40.0)
+        shade = bore_shade(line, tunnel)
+        assert shade[0] == pytest.approx(1.0, abs=0.01)
+        assert shade[0] >= shade.max() - 1e-6
+
+    def test_nothing_is_brighter_than_daylight(self):
+        line, tunnel = self._shade(lamp_spacing=10.0, lamp_glow=5.0)
+        assert bore_shade(line, tunnel).max() <= 1.0 + 1e-9
+
+    def test_a_brighter_lamp_lifts_the_lining_further(self):
+        line, _ = self._shade()
+        dim = TunnelProfile(lamp_spacing=40.0, lamp_glow=0.2, daylight=1.0)
+        bright = TunnelProfile(lamp_spacing=40.0, lamp_glow=0.8, daylight=1.0)
+        under = int(np.argmin(np.abs(line[:, 0] - tunnel_lamps(line, dim)[4, 0])))
+        assert bore_shade(line, bright)[under] > bore_shade(line, dim)[under]
+
+    def test_it_never_goes_darker_than_the_gloom(self):
+        line, tunnel = self._shade(lamp_spacing=40.0, gloom=0.14, daylight=1.0)
+        assert bore_shade(line, tunnel).min() >= 0.14 - 1e-9
+
+
+class TestTheFittingsThemselves:
+    def test_a_bore_is_built_with_lamps_in_it(self):
+        meshes = tunnel_meshes(_straight(length=300.0, height=0.0), ROAD)
+        assert 'lamps' in meshes and len(meshes['lamps'].positions)
+
+    def test_they_are_well_formed(self):
+        _fits(tunnel_meshes(_straight(length=300.0, height=0.0), ROAD))
+
+    def test_a_bore_with_no_lamps_asked_for_is_built_without_them(self):
+        meshes = tunnel_meshes(_straight(length=300.0, height=0.0), ROAD,
+                               TunnelProfile(lamp_spacing=0.0))
+        assert 'lamps' not in meshes
+
+    def test_a_fitting_burns_rather_than_being_lit(self):
+        """It is the light in there; nothing else is going to light it."""
+        meshes = tunnel_meshes(_straight(length=300.0, height=0.0), ROAD)
+        assert max(meshes['lamps'].material.emissiveColor) > 0.5
+
+    def test_they_are_up_at_the_crown_rather_than_on_the_road(self):
+        tunnel = TunnelProfile()
+        meshes = tunnel_meshes(_straight(length=300.0, height=0.0), ROAD, tunnel)
+        assert float(meshes['lamps'].positions[:, 1].min()) > tunnel.clearance / 2.0

@@ -215,6 +215,17 @@ for a wheel to drop into. It also carries <strong>its own shade</strong> on its
 vertices — full daylight at the portals, falling to a tenth of it fifty metres
 in — so a driver goes into the dark and comes out the far end with no light
 source involved, and a bore shorter than twice that never goes fully dark.</p>
+<p><strong>A bore is lit, and lit twice.</strong> <code>lamp_spacing</code> hangs
+luminaires along the crown, and the pool each throws is <em>baked onto the
+lining</em> (<code>bore_shade</code>) &mdash; so the whole length of a tunnel is
+lit at any distance and at whatever a renderer can afford, which for a bore with
+a lamp every twenty-five metres is the only way it can be. What a baked pool
+cannot do is light anything <em>in</em> the tunnel: a car under a lamp has no
+idea it is under one. So <code>tunnel_lamps(points, profile)</code> says where
+the fittings are, and a game spends its few real lights on the ones the driver is
+among. <code>lamp_glow</code> is how far the baked pool lifts the lining out of
+the gloom and <code>lamp_reach</code> how far it spreads; <code>lamp_spacing</code>
+of zero is an unlit bore.</p>
 <p>Structure is <code>concrete_material()</code>; a parapet or a causeway's wall
 is <code>barrier_material()</code>, which is darker. It is the thing closest to
 the camera for the whole length of a crossing, and in structural concrete under a
