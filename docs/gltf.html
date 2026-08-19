@@ -289,6 +289,22 @@ three constants that set it, are in
 <code>OpenGLContext.loaders.gltf.transforms.framing_bounds()</code>; the viewer's
 <a href="viewer.html#framing">Framing a model</a> covers it in full.</p>
 
+<h3 id="instances">One model, many instances</h3>
+<p>Drawing one asset many times &mdash; a cast of the same character, a forest of
+one tree &mdash; parse it once and build a scene per instance from that parse:</p>
+<pre>from OpenGLContext.loaders import gltf
+
+document = gltf.parse_gltf( "character.glb" )   # read + decode the file once
+figures  = [ gltf.load_gltf( document=document ) for _ in range( 20 ) ]</pre>
+<p>Each <code>load_gltf(document=&hellip;)</code> is its own independent scenegraph
+with its own materials and its own deformable-mesh state, so the instances animate
+and recolour independently. What they share is only what none of them changes: the
+JSON parse is done once, and the immutable vertex and animation-keyframe arrays are
+decoded on the first build and referenced &mdash; not copied &mdash; by every later
+one. A skinned mesh deforms on its own copy, so sharing never couples two bodies'
+poses. A lone <code>load_gltf( "model.glb" )</code> is unchanged: it decodes its own
+arrays and needs no document.</p>
+
 <h3 id="names">Driving a model by name</h3>
 <p>A model an application drives &mdash; repaint this car, pose that dial, hide
 the shell for the view from inside it &mdash; is addressed by the names it was
