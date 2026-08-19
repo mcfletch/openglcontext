@@ -45,7 +45,9 @@ returned/authored types; reach into a submodule (e.g. ``gltf.scene.GLTFScene``,
 """
 from __future__ import annotations
 
-from OpenGLContext.loaders.gltf.loader import load_gltf, load_gltf_url
+from OpenGLContext.loaders.gltf.loader import (
+    load_gltf, load_gltf_url, parse_gltf, SharedDocument,
+)
 from OpenGLContext.loaders.gltf.scene import GLTFScene
 from OpenGLContext.loaders.gltf.transforms import look_orientation
 from OpenGLContext.loaders.gltf.writer import (
@@ -66,6 +68,8 @@ from OpenGLContext.loaders.gltf.samples import (
 __all__ = [
     "load_gltf",
     "load_gltf_url",
+    "parse_gltf",
+    "SharedDocument",
     "write_glb",
     "GLTFWriter",
     "SceneNode",

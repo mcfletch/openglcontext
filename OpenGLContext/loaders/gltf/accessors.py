@@ -140,7 +140,37 @@ def _checked_count(count: Any, what: str) -> int:
     return n
 
 
+def _shared(resolver: Resolver, kind: str, index: int) -> Optional[np.ndarray]:
+    """A previously decoded array for ``(kind, index)``, if this resolver shares.
+
+    A resolver built for one load has no share map, so a single load decodes each
+    accessor as it always did. A resolver pointed at a
+    :class:`~OpenGLContext.loaders.gltf.loader.SharedDocument`'s map returns the
+    array an earlier build already decoded -- the immutable vertex and keyframe
+    data every instance of one asset holds in common.
+    """
+    cache = getattr(resolver, '_reads', None)
+    return None if cache is None else cache.get((kind, index))
+
+
+def _keep(resolver: Resolver, kind: str, index: int, arr: np.ndarray) -> np.ndarray:
+    """Offer ``arr`` to the resolver's share map and return it (read-only there).
+
+    Shared arrays are marked non-writeable so a consumer that deforms a mesh does
+    it on its own copy (the deform already reads the base through ``astype``); an
+    in-place write to shared vertex data would move every instance at once.
+    """
+    cache = getattr(resolver, '_reads', None)
+    if cache is not None:
+        arr.flags.writeable = False
+        cache[(kind, index)] = arr
+    return arr
+
+
 def _read_accessor(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
+    shared = _shared(resolver, 'accessor', index)
+    if shared is not None:
+        return shared
     acc = g.accessors[index]
     dtype = np.dtype(_component_dtype(acc.componentType))
     ncomp = _type_count(acc.type)
@@ -153,7 +183,7 @@ def _read_accessor(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.n
     arr = _accessor_base(g, acc, resolver, index)
     if sparse is not None:
         arr = _apply_sparse(g, acc, sparse, arr, dtype, ncomp, resolver)
-    return arr
+    return _keep(resolver, 'accessor', index, arr)
 
 
 def _apply_sparse(g: "pygltflib.GLTF2", acc: "pygltflib.Accessor", sparse: "pygltflib.Sparse",
@@ -201,8 +231,11 @@ def _normalize_array(arr: np.ndarray, dtype: Optional[Any] = None) -> np.ndarray
 
 
 def _read_floats(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
+    shared = _shared(resolver, 'floats', index)
+    if shared is not None:
+        return shared
     arr = _read_accessor(g, index, resolver).astype(np.float32)
-    return np.ascontiguousarray(arr)
+    return _keep(resolver, 'floats', index, np.ascontiguousarray(arr))
 
 
 def _read_normalized(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np.ndarray:
@@ -212,13 +245,18 @@ def _read_normalized(g: "pygltflib.GLTF2", index: int, resolver: Resolver) -> np
     maximum only when flagged ``normalized`` (signed clamped to -1), matching the
     glTF spec rather than assuming every integer attribute is normalized.
     """
+    shared = _shared(resolver, 'normalized', index)
+    if shared is not None:
+        return shared
     acc = g.accessors[index]
     arr = _read_accessor(g, index, resolver)
     if acc.componentType == _COMPONENT_FLOAT:
-        return np.ascontiguousarray(arr.astype(np.float32))
-    if getattr(acc, 'normalized', False):
-        return np.ascontiguousarray(_normalize_array(arr))
-    return np.ascontiguousarray(arr.astype(np.float32))
+        out = arr.astype(np.float32)
+    elif getattr(acc, 'normalized', False):
+        out = _normalize_array(arr)
+    else:
+        out = arr.astype(np.float32)
+    return _keep(resolver, 'normalized', index, np.ascontiguousarray(out))
 
 
 def _coerce_normalized(acc: "pygltflib.Accessor", arr: np.ndarray) -> np.ndarray:
