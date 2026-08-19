@@ -113,6 +113,10 @@ wraps; a one-shot holds its last frame and reports
 and a cross-fade compose without any of them knowing about the others.
 <code>mixer.apply()</code> poses the model without advancing time, which is what
 a capture or a paused game wants.</p>
+<p><code>mixer.reset()</code> stops every layer at once and writes the rest pose
+back. What needs it is a respawn: being dead is a state a body is <em>held</em>
+in, so something has to say it is over — and a fade would blend out of dying
+into whatever comes next, which is a body easing back onto its feet.</p>
 </section>
 
 <section>
