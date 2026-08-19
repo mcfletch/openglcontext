@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Iterator, Optional, Sequence, Tuple
+from typing import Any, Callable, Iterator, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -57,6 +57,7 @@ class AssetLibrary(object):
     def __init__(self, root: str) -> None:
         self.root = os.path.abspath(root)
         self._shared: dict[str, Optional[Any]] = {}
+        self._variants: dict[Any, Optional[Any]] = {}
 
     def __repr__(self) -> str:
         return 'AssetLibrary(%r)' % (self.root,)
@@ -93,9 +94,43 @@ class AssetLibrary(object):
             self._shared[relative] = self.load(relative)
         return self._shared[relative]
 
+    def variant(self, relative: str, key: Any,
+                prepare: Optional[Callable[[Any], Any]] = None) -> Optional[Any]:
+        """One copy of a model per ``key``, prepared once and then shared.
+
+        Between :meth:`shared`, which is one copy of a model as it was authored,
+        and :meth:`load`, which reads the file again for every caller that means
+        to change what it gets. A crowd of the same model in a handful of
+        colours wants neither: :meth:`shared` cannot be repainted without
+        repainting all of it, and :meth:`load` costs a file read and a parse per
+        member of the crowd -- on the frame that member appears.
+
+        ``key`` names the version -- the colour, the team, the season -- and
+        ``prepare(scene)`` makes it, called once, the first time that key is
+        asked for. Everything asking for the same key afterwards gets that same
+        scene, which is also what lets the renderer draw the crowd as one batch::
+
+            scene = ART.variant('cars/saloon.glb', paint,
+                                prepare=lambda one: recolour(one.group, paint))
+
+        Since the scene is shared, a caller that changes it afterwards changes
+        it for every other holder -- which is the same contract :meth:`shared`
+        has. A model that will not load is remembered as absent, and ``prepare``
+        is not called for one.
+        """
+        where = (relative, key)
+        if where not in self._variants:
+            scene = self.load(relative)
+            if scene is not None and prepare is not None:
+                prepare(scene)
+            self._variants[where] = scene
+        return self._variants[where]
+
     def clear(self) -> None:
-        """Forget every shared copy, so the next call reads the files again."""
+        """Forget every shared copy and every variant, so the next call reads
+        the files again."""
         self._shared.clear()
+        self._variants.clear()
 
 
 def shapes(node: Any) -> Iterator[Any]:

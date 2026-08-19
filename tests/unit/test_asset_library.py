@@ -206,3 +206,79 @@ def test_brighten_lights_a_vrml_material_from_its_diffuse_colour():
     shape = Shape(geometry=_quad(), appearance=Appearance(material=material))
     assert brighten(Transform(children=[shape]), 0.5) == 1
     assert tuple(material.emissiveColor) == pytest.approx((0.4, 0.2, 0.1))
+
+
+class TestVariants:
+    """A road full of cars is one model painted a dozen ways.
+
+    :meth:`AssetLibrary.load` hands back a copy nobody else holds, which is what
+    repainting one needs -- and reading the file again for every car that wants
+    the same colour costs a frame each time. A *variant* is one copy per colour:
+    prepared once, then shared by everything asking for that colour, which is
+    also what lets the pass draw them as one batch.
+    """
+
+    def test_the_same_key_hands_back_the_same_copy(self, library):
+        first = library.variant('cars/car.glb', 'red')
+        assert library.variant('cars/car.glb', 'red') is first
+
+    def test_a_different_key_is_a_different_copy(self, library):
+        assert library.variant('cars/car.glb', 'red') is not \
+            library.variant('cars/car.glb', 'blue')
+
+    def test_a_variant_is_not_the_shared_copy(self, library):
+        """Changing one must not change the model everything else draws."""
+        assert library.variant('cars/car.glb', 'red') is not \
+            library.shared('cars/car.glb')
+
+    def test_it_is_prepared_once_however_often_it_is_asked_for(self, library):
+        made = []
+
+        def prepare(scene):
+            made.append(scene)
+
+        for _ in range(4):
+            library.variant('cars/car.glb', 'red', prepare=prepare)
+        assert len(made) == 1
+
+    def test_what_prepare_did_is_what_every_caller_gets(self, library):
+        library.variant('cars/car.glb', 'red',
+                        prepare=lambda scene: recolour(scene.group, (1, 0, 0)))
+        again = library.variant('cars/car.glb', 'red')
+        painted = [shape.appearance.material.baseColor
+                   for shape in shapes(again.group)]
+        assert all(tuple(colour)[:3] == pytest.approx((1, 0, 0))
+                   for colour in painted)
+
+    def test_two_keys_are_painted_independently(self, library):
+        for key, colour in (('red', (1, 0, 0)), ('blue', (0, 0, 1))):
+            library.variant('cars/car.glb', key,
+                            prepare=lambda scene, c=colour: recolour(scene.group, c))
+        red = shapes(library.variant('cars/car.glb', 'red').group)
+        assert tuple(next(red).appearance.material.baseColor)[:3] == \
+            pytest.approx((1, 0, 0))
+
+    def test_a_colour_makes_a_usable_key(self, library):
+        """Which is how a caller keys one: by the colour it is painting it."""
+        assert library.variant('cars/car.glb', (0.7, 0.2, 0.1)) is \
+            library.variant('cars/car.glb', (0.7, 0.2, 0.1))
+
+    def test_a_model_that_will_not_load_is_none(self, library, caplog):
+        with caplog.at_level(logging.WARNING):
+            assert library.variant('cars/missing.glb', 'red') is None
+
+    def test_and_is_remembered_as_absent(self, library, caplog):
+        with caplog.at_level(logging.WARNING):
+            library.variant('cars/missing.glb', 'red')
+            library.variant('cars/missing.glb', 'red')
+        assert len(caplog.records) == 1
+
+    def test_prepare_is_not_called_for_a_model_that_did_not_load(self, library):
+        made = []
+        library.variant('cars/missing.glb', 'red', prepare=made.append)
+        assert made == []
+
+    def test_clear_drops_the_variants_too(self, library):
+        first = library.variant('cars/car.glb', 'red')
+        library.clear()
+        assert library.variant('cars/car.glb', 'red') is not first
