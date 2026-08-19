@@ -58,6 +58,32 @@ nothing to abandon.</p>
 <p><code>enter</code> and <code>leave</code> bracket the time a tool is in
 force, which is where a preview goes on screen and comes off again.</p>
 
+<h3>The tool palette</h3>
+<p>A strip down the side of the window, one button per declared tool, the one
+in force lit, and a click puts the pointer into that tool. It is a panel rather
+than a HUD layer -- a HUD takes no events -- and it is not modal, so a click
+that misses it reaches the world underneath.</p>
+<pre>from OpenGLContext.ui.toolpalette import ToolPalette
+
+palette = ToolPalette(tools=tools, reserved=MENU_BAR_ROOM)
+context.overlays.push(palette)
+status.reserved = (MENU_BAR_ROOM, 0.0, 0.0, palette.room(metrics))</pre>
+<p><code>reserved</code> is how much of the window's top something else has
+already taken, in reference pixels, so the strip starts under a menu bar rather
+than through it; <code>edge</code> is <code>'left'</code> or
+<code>'right'</code>. <code>room(metrics)</code> answers how much width the
+strip wants, also in reference pixels, which is what a
+<code>HUDLayer.reserved</code> is told so its read-outs stay clear of it.</p>
+<p>A button reads the manager rather than keeping a copy, so a tool chosen by a
+keyboard shortcut or by the application lights the same button a click would
+have, and a manager that <em>refuses</em> the change -- which it does part-way
+through a gesture -- leaves the strip saying what the pointer is really doing.
+Call <code>rebuild()</code> when the set of tools changes.</p>
+<p>A press anywhere on the strip is the strip's, including the gaps between
+buttons: a palette stands over a document the pointer also draws on, and a
+click that missed a button by two pixels must not put a point down on the map
+underneath.</p>
+
 <h3>The pointer a tool is handed</h3>
 <p>A <code>Pointer</code> is where the cursor is on the screen
 (<code>x</code>, <code>y</code>) <em>and in the world</em>: <code>world</code>
@@ -122,6 +148,15 @@ has it.</p>
 <tr><td><code>frame(minimum, maximum, viewport)</code></td>
   <td>put a region on screen, wholly inside the window</td></tr>
 </table>
+<p>Moving the map is also a tool in its own right, so a designer can say
+"just move the map" and have the drawing tool stop guessing:</p>
+<pre>from OpenGLContext.edit.maptools import PanTool
+
+tools = ToolManager([DrawTool(...), PanTool(view, context.getViewPort,
+                                            on_change=map_moved)])</pre>
+<p>The drag is measured from where the pointer last was rather than from where
+it started, because the map moves underneath it and a fixed origin would make
+it accelerate away.</p>
 <p><code>MapViewPlatform</code> reads the view rather than copying it, so
 panning or zooming the map is what moves the camera and there is no second copy
 of where the editor is looking to fall out of step with the first.</p>

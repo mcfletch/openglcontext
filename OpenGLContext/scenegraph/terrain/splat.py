@@ -196,6 +196,17 @@ class SplatTerrain(vnodes.PointSet):
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(12))
         glEnableVertexAttribArray(1)
         glBindVertexArray(0)
+        # A second view of the same buffers for the shadow pass, whose depth-only
+        # program reads the position from attribute 2 rather than 0. Same data,
+        # no second copy of it: a vertex array is a description of buffers, and
+        # the ground is the largest mesh in the world.
+        vao_depth = glGenVertexArrays(1)
+        glBindVertexArray(vao_depth)
+        glBindBuffer(GL_ARRAY_BUFFER, vb)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib)
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0))
+        glEnableVertexAttribArray(2)
+        glBindVertexArray(0)
         tex = dict(col=_array_texture("color", self.layers, self.material_fn),
                    nrm=_array_texture("normal", self.layers, self.material_fn),
                    rgh=_array_texture("roughness", self.layers, self.material_fn),
@@ -214,14 +225,36 @@ class SplatTerrain(vnodes.PointSet):
               "numLayers", "worldMin", "worldSize", "detailScale", "macroScale",
               "normalStrength", "uModelView", "uProjection", "uNormalMatrix",
               "sunDirEye", "sunColor", "skyColor", "groundAmbient", "fogDensity", "fogColor")}
-        self._gl = dict(prog=prog, vao=vao, vb=vb, ib=ib, ncount=len(idx), tex=tex, U=U)
+        self._gl = dict(prog=prog, vao=vao, vao_depth=vao_depth, vb=vb, ib=ib,
+                        ncount=len(idx), tex=tex, U=U)
+
+    def render_depth(self, mode: Any) -> int:
+        """Write the ground's depth for a shadow map.
+
+        **The ground casts.** A hill shades the valley behind it, a cutting
+        shades its own floor, and the rock over a bore is what keeps the sun out
+        of it -- none of which happens for a terrain that only receives. The
+        baked sun and canopy terms this node carries shade *itself*; they say
+        nothing to anything standing on it or running through it.
+
+        The shadow pass has bound its own depth program and set its matrices, so
+        all this does is hand over the geometry -- through a second vertex array
+        that puts the position where that program reads it, which is not where
+        the splat program does.
+        """
+        if not ensure_gl(self):
+            return 1
+        glBindVertexArray(self._gl["vao_depth"])
+        glDrawElements(GL_TRIANGLES, self._gl["ncount"], GL_UNSIGNED_INT, None)
+        glBindVertexArray(0)
+        return 1
 
     def dispose(self) -> None:
         """Free this node's GL objects (VAO, buffers, textures, program). GL thread."""
         g = self._gl
         if not g:
             return
-        delete_gl(vaos=[g["vao"]], buffers=[g["vb"], g["ib"]],
+        delete_gl(vaos=[g["vao"], g["vao_depth"]], buffers=[g["vb"], g["ib"]],
                   textures=list(g["tex"].values()), programs=[g["prog"]])
         self._gl = None
 
@@ -232,7 +265,9 @@ class SplatTerrain(vnodes.PointSet):
             size=(E, H, E), center=(0, self.hf.base + self.hf.relief / 2.0, 0))
 
     def render(self, mode: Any = None, **kw: Any) -> int:
-        if getattr(mode, 'shadow_pass', False) or not getattr(mode, 'visible', True):
+        if getattr(mode, 'shadow_pass', False):
+            return self.render_depth(mode)
+        if not getattr(mode, 'visible', True):
             return 1
         if not ensure_gl(self):
             return 1

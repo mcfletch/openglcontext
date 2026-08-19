@@ -178,32 +178,62 @@ class OverlayStack:
         """Force the next frame to lay out again."""
         self.laidOutFor = None
 
-    # -- input, all of it for the top panel only --------------------------
-    # Each of these offers the event to the top panel and returns whether it
-    # acted; what the *world* hears is decided by sinks(), not by these.
+    # -- input, down the layers -------------------------------------------
+    # Each of these offers the event to the panels topmost first and returns
+    # whether any acted; what the *world* hears is decided by sinks(), not by
+    # these.
+    def layers(self) -> List[Panel]:
+        """The panels an event is offered to, topmost first.
+
+        Down to and including the first modal one, because a modal panel is a
+        lid and nothing under it hears anything.  Above one, several modeless
+        panels -- a menu bar and a tool palette -- are layers of a single
+        interface, and each gets a look at what the layer over it left.
+        """
+        offered: List[Panel] = []
+        for panel in reversed(self.panels):
+            offered.append(panel)
+            if panel.modal:
+                break
+        return offered
+
+    def _first(self, action: Callable[[Panel], bool]) -> bool:
+        """Offer down the layers until one takes it."""
+        for panel in self.layers():
+            if action(panel):
+                return True
+        return False
+
+    def _each(self, action: Callable[[Panel], bool]) -> bool:
+        """Offer to every layer, whoever acts.
+
+        For the pointer's *position*, which is not something one layer takes
+        from another: a pointer that leaves the bar for the strip over it has
+        to stop the bar drawing itself hovered, and it never would if the strip
+        ended the walk by acting on the same move.
+        """
+        acted = False
+        for panel in self.layers():
+            acted = bool(action(panel)) or acted
+        return acted
+
     def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
-        top = self.top
-        return bool(top is not None and top.key(name, modifiers))
+        return self._first(lambda panel: panel.key(name, modifiers))
 
     def character(self, text: str) -> bool:
-        top = self.top
-        return bool(top is not None and top.character(text))
+        return self._first(lambda panel: panel.character(text))
 
     def pointer_moved(self, x: float, y: float) -> bool:
-        top = self.top
-        return bool(top is not None and top.pointer_moved(x, y))
+        return self._each(lambda panel: panel.pointer_moved(x, y))
 
     def pointer_pressed(self, x: float, y: float, button: int = 0) -> bool:
-        top = self.top
-        return bool(top is not None and top.pointer_pressed(x, y, button))
+        return self._first(lambda panel: panel.pointer_pressed(x, y, button))
 
     def pointer_released(self, x: float, y: float, button: int = 0) -> bool:
-        top = self.top
-        return bool(top is not None and top.pointer_released(x, y, button))
+        return self._first(lambda panel: panel.pointer_released(x, y, button))
 
     def wheel(self, delta: int, x: float, y: float) -> bool:
-        top = self.top
-        return bool(top is not None and top.wheel(delta, x, y))
+        return self._first(lambda panel: panel.wheel(delta, x, y))
 
 
 class OverlayMixin:

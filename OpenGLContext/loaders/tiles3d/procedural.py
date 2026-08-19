@@ -106,12 +106,19 @@ def terrain_height(x: np.ndarray, z: np.ndarray) -> np.ndarray:
     return h
 
 
-def terrain_colors(positions: np.ndarray, normals: np.ndarray) -> np.ndarray:
-    """Per-vertex RGB (N,3) from height, slope and water, with noise mottling.
+def terrain_colors(positions: np.ndarray, normals: np.ndarray,
+                   water_level: Optional[float] = None) -> np.ndarray:
+    """Per-vertex RGB (N,3) from height and slope, with noise mottling.
 
     Vectorised. Grass varies between lush and dry tones over broad patches, with a
     finer brightness mottle and dirt/rock breaking through on slopes, so the ground
     reads as varied grass/weeds rather than a flat green sheet.
+
+    ``water_level`` paints anything at or under it as water, which is what a
+    surface *clamped* flat at the waterline wants. A world whose water is its
+    own geometry (:mod:`OpenGLContext.scenegraph.water`) leaves it out: the
+    ground under a lake is its bed, seen through the water, and painting it
+    blue as well makes the shallows opaque.
     """
     x = positions[:, 0].astype("d")
     y = positions[:, 1].astype("d")
@@ -150,9 +157,8 @@ def terrain_colors(positions: np.ndarray, normals: np.ndarray) -> np.ndarray:
     # Steep faces expose rock regardless of height.
     steep = np.clip((0.6 - up) / 0.6, 0, 1)[:, None]
     col = _lerp(col, rock * (0.85 + 0.3 * mid)[:, None], steep * 0.85)
-    # Water surface overrides.
-    is_water = (y <= WATER_LEVEL + 0.5)[:, None]
-    col = np.where(is_water, water, col)
+    if water_level is not None:
+        col = np.where((y <= water_level + 0.5)[:, None], water, col)
     return col.astype("f4")
 
 
@@ -182,8 +188,11 @@ def terrain_patch(
 
     `water_level` clamps the surface up to a flat sheet at that height and gives
     it an up normal; `None` meshes the height field as it is, which is what a
-    world whose water is its own geometry wants. `color_fn(positions, normals)`
-    supplies per-vertex colour, defaulting to the procedural landscape palette.
+    world whose water is its own geometry
+    (:mod:`OpenGLContext.scenegraph.water`) wants. `color_fn(positions, normals)`
+    supplies per-vertex colour, defaulting to the procedural landscape palette --
+    which, where the surface is clamped, is also told the waterline so it paints
+    that sheet as water rather than as the ground it stood in for.
     """
     if height_fn is None:
         height_fn = terrain_height
@@ -209,7 +218,11 @@ def terrain_patch(
         nrm[is_water] = (0.0, 1.0, 0.0)
     nrm = nrm.astype(np.float32)
 
-    col = color_fn(pos, nrm)
+    # A patch that clamps at a waterline has a flat sheet on it, and the colour
+    # function is told so it can paint that sheet as water. One meshed as it is
+    # has a lake *bed*, and the water over it is its own surface.
+    col = (color_fn(pos, nrm, water_level) if water_level is not None
+           and color_fn is terrain_colors else color_fn(pos, nrm))
 
     idx_list: list[int] = []
     for i in range(res - 1):

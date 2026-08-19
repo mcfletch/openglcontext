@@ -153,6 +153,24 @@ class _AsyncPickMixin:
         # oldest so events still get delivered and PBOs are recycled.
         while len(self._async_batches) > self._ASYNC_MAX_INFLIGHT:
             self._resolveBatch(mode, self._async_batches.pop(0), block=True)
+        if self._async_batches:
+            self._askForDelivery(mode)
+
+    def _askForDelivery(self, mode: Any) -> None:
+        """Ask the context for another frame, because a batch is waiting on one.
+
+        A batch is dispatched by :meth:`drainAsyncPicks`, which runs inside a
+        render. An application that renders only when something changed has
+        nothing to change while the pick is in flight, so without this the click
+        waits for whatever unrelated event next asks for a frame -- and arrives
+        when the pointer happens to move, seconds after the button went down.
+        The request stops as soon as the queue empties, so a loop with no picks
+        outstanding still goes quiet.
+        """
+        context = getattr(mode, 'context', None)
+        trigger = getattr(context, 'triggerRedraw', None)
+        if trigger is not None:
+            trigger(0)
 
     def drainAsyncPicks(self, mode: Any) -> None:
         """Dispatch any batches whose fence has signalled (non-blocking)."""
@@ -167,6 +185,8 @@ class _AsyncPickMixin:
             else:
                 remaining.append(b)
         self._async_batches = remaining
+        if remaining:
+            self._askForDelivery(mode)
 
     def _readPBO(self, pid: int, n: int) -> np.ndarray:
         """Copy n*4 bytes out of a Pixel Pack Buffer as a uint8 array."""

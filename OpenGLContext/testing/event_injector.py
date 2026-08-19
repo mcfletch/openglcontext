@@ -197,8 +197,11 @@ class EventInjectionMixin:
 
     if TYPE_CHECKING:
         # Provided by the concrete Context this mixin is composed into
-        # (OpenGLContext.events.eventhandlermixin.EventHandlerMixin).
+        # (OpenGLContext.events.eventhandlermixin.EventHandlerMixin and
+        # OpenGLContext.context.Context).
         def getEventManager(self, eventType: str) -> Any: ...
+        def addPickEvent(self, event: Any) -> None: ...
+        def triggerPick(self) -> None: ...
 
     @classmethod
     def add_event_injection_arguments(cls, parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -280,28 +283,46 @@ class EventInjectionMixin:
         else:
             log.warning("EventInjector: Unknown event type: %s", event_type)
 
+    def _queueOrDispatch(self, event: Dict[str, Any], synth_event: Any,
+                         manager_name: str) -> None:
+        """Send a synthesised pointer event the way the test asked for.
+
+        ``"pick": true`` queues it for the selection pass and asks for one, which
+        is what a windowing backend does: the event is dispatched once the pick
+        has resolved, carrying the node paths under the cursor. That is the path
+        a real click takes, so it is the one a test of *what a click does to the
+        application* wants.
+
+        Without the flag the event goes straight to its manager with no picked
+        paths, which reaches context-level handlers and needs no render -- the
+        cheaper choice when the test is about the handler rather than the route
+        to it.
+        """
+        if event.get('pick'):
+            self.addPickEvent(synth_event)
+            self.triggerPick()
+            return
+        # No select-render pass ran, so there are no picked node paths; an empty
+        # set routes the event to anonymous context-level handlers only.
+        synth_event.setObjectPaths([])
+        manager = self.getEventManager(manager_name)
+        if manager is not None:
+            manager.ProcessEvent(synth_event)
+
     def _inject_mousebutton(self, event: Dict[str, Any]) -> None:
         """Inject a mouse button event."""
         from OpenGLContext.events.mouseevents import MouseButtonEvent
 
         # OpenGLContext Event objects take no constructor arguments; their fields
         # are class attributes set after construction, and managers dispatch via
-        # ProcessEvent(). Passing kwargs / calling the manager directly (as the
-        # original code did) raised before any handler ran -- which is why this
-        # path had no working consumer.
+        # ProcessEvent().
         synth_event: Any = MouseButtonEvent()
         synth_event.context = self
         synth_event.button = event.get('button', 0)
         synth_event.state = event.get('state', 1)  # 1 = press, 0 = release
         synth_event.modifiers = tuple(event.get('modifiers', [0, 0, 0]))
         synth_event.pickPoint = (float(event.get('x', 0)), float(event.get('y', 0)))
-        # No select-render pass ran, so there are no picked node paths; an empty
-        # set routes the event to anonymous context-level handlers only.
-        synth_event.setObjectPaths([])
-
-        manager = self.getEventManager('mousebutton')
-        if manager is not None:
-            manager.ProcessEvent(synth_event)
+        self._queueOrDispatch(event, synth_event, 'mousebutton')
 
     def _inject_mousemove(self, event: Dict[str, Any]) -> None:
         """Inject a mouse move event."""
@@ -312,11 +333,7 @@ class EventInjectionMixin:
         synth_event.buttons = tuple(event.get('buttons', []))
         synth_event.modifiers = tuple(event.get('modifiers', [0, 0, 0]))
         synth_event.pickPoint = (float(event.get('x', 0)), float(event.get('y', 0)))
-        synth_event.setObjectPaths([])
-
-        manager = self.getEventManager('mousemove')
-        if manager is not None:
-            manager.ProcessEvent(synth_event)
+        self._queueOrDispatch(event, synth_event, 'mousemove')
 
     def _inject_keyboard(self, event: Dict[str, Any]) -> None:
         """Inject a keyboard event.
@@ -463,6 +480,7 @@ class EventSender:
         button: int = 0,
         state: int = 1,
         modifiers: Optional[List[int]] = None,
+        pick: bool = False,
     ) -> None:
         """Send a mouse button event.
 
@@ -472,6 +490,9 @@ class EventSender:
             button: Button number (0=left, 1=middle, 2=right)
             state: 1 for press, 0 for release
             modifiers: [shift, ctrl, alt] states
+            pick: route it through the selection pass, as a window does, so the
+                event carries the nodes under the cursor and is delivered when
+                the pick resolves
         """
         self.send_event({
             'type': 'mousebutton',
@@ -480,6 +501,7 @@ class EventSender:
             'button': button,
             'state': state,
             'modifiers': modifiers or [0, 0, 0],
+            'pick': bool(pick),
         })
 
     def send_mousemove(
@@ -488,6 +510,7 @@ class EventSender:
         y: int,
         buttons: Optional[List[int]] = None,
         modifiers: Optional[List[int]] = None,
+        pick: bool = False,
     ) -> None:
         """Send a mouse move event.
 
@@ -496,6 +519,7 @@ class EventSender:
             y: Y coordinate
             buttons: List of pressed button numbers
             modifiers: [shift, ctrl, alt] states
+            pick: route it through the selection pass, as a window does
         """
         self.send_event({
             'type': 'mousemove',
@@ -503,6 +527,7 @@ class EventSender:
             'y': y,
             'buttons': buttons or [],
             'modifiers': modifiers or [0, 0, 0],
+            'pick': bool(pick),
         })
 
     def send_keyboard(

@@ -941,6 +941,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             groups, casters = grouping
             for group in groups:
                 try:
+                    shader.use_depth()
                     self._renderDepthGroup(group, shader, depth_prog, light_view)
                 except Exception as err:
                     log.debug("instanced shadow depth failure: %s", err)
@@ -948,6 +949,13 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 tmatrix = record[2]
                 path = record[4]
                 self.matrix = dot(tmatrix, light_view).astype('f')
+                # A caster binds whatever program it draws through -- a line set
+                # draws through the unlit one and leaves it bound -- so the depth
+                # program is bound here rather than assumed to have survived the
+                # caster before. A uniform location resolved against one program
+                # and uploaded into another writes into whatever sits at that
+                # location, and raises where nothing does.
+                shader.use_depth()
                 shader.set_matrices(self.matrix, self.projection, program=depth_prog)
                 try:
                     path[-1].Render(mode=self)

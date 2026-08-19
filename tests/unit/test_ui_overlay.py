@@ -145,6 +145,52 @@ class TestStack:
         stack.key('o', (0, 0, 0))
         assert fired == ['second']
 
+    def test_a_modeless_panel_under_another_still_hears_a_click(self, metrics):
+        """A menu bar and a tool palette are layers of one interface.
+
+        Neither is a lid, so a click the strip on top did not want is offered
+        to the bar under it rather than stopping at whichever was pushed last.
+        """
+        stack = OverlayStack()
+        under, over = dialog(modal=False), dialog(modal=False)
+        fired = []
+        under.find('ok').on_activate = lambda widget: fired.append('under')
+        stack.push(under, viewport=(800, 600), metrics=metrics)
+        stack.push(over, viewport=(800, 600), metrics=metrics)
+        # A point on the lower panel's button that the upper panel has nothing
+        # at: over.rect is the same rect, so aim outside both panels' widgets
+        # by driving the key accelerator instead, which the upper one ignores.
+        over.find('ok').enabled = False
+        stack.key('o', (0, 0, 0))
+        assert fired == ['under']
+
+    def test_a_modal_panel_stops_the_walk(self, metrics):
+        """Nothing under a lid hears anything, however modeless it is."""
+        stack = OverlayStack()
+        under, over = dialog(modal=False), dialog(modal=True)
+        fired = []
+        under.find('ok').on_activate = lambda widget: fired.append('under')
+        stack.push(under, viewport=(800, 600), metrics=metrics)
+        stack.push(over, viewport=(800, 600), metrics=metrics)
+        over.find('ok').enabled = False
+        stack.key('o', (0, 0, 0))
+        assert fired == []
+
+    def test_a_move_reaches_every_layer(self, metrics):
+        """Hover is not something one layer consumes from the others.
+
+        The pointer leaving the bar for the strip has to un-hover the bar, and
+        it never would if the strip stopped the walk by taking the move.
+        """
+        stack = OverlayStack()
+        under, over = dialog(modal=False), dialog(modal=False)
+        stack.push(under, viewport=(800, 600), metrics=metrics)
+        stack.push(over, viewport=(800, 600), metrics=metrics)
+        seen = []
+        under.pointer_moved = lambda x, y: seen.append((x, y)) or True
+        stack.pointer_moved(*over.find('ok').rect.centre)
+        assert seen, "the panel underneath never heard the move"
+
     def test_a_modeless_panel_does_not_sink(self, metrics):
         stack = OverlayStack()
         stack.push(dialog(modal=False), viewport=(800, 600), metrics=metrics)
