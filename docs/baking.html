@@ -59,7 +59,7 @@ detail and how deep the tree refines are all on the command line:</p>
 </dl>
 </section>
 
-<section>
+<section id="writing">
 <h2>Writing glTF from your own code</h2>
 <p><code>OpenGLContext.loaders.gltf.writer</code> is the mirror of the loader: it
 takes the same <code>PBRMesh</code> geometry and <code>PBRMaterial</code>
@@ -77,6 +77,11 @@ colour attributes; metallic-roughness materials with their five texture channels
 and the <code>KHR_materials_*</code> factors; embedded images with their
 samplers. Index buffers narrow to 16 bits where the vertex count allows.
 Skinning, animation and morph targets are not written.</p>
+<p>A material's <code>DEF</code> is written as its glTF material name, so a
+material an application finds by name in one document is found by that name in a
+document written from it &mdash; see
+<a href="gltf.html#names">Driving a model by name</a>.
+<code>GLTFWriter.add_material( material, name=... )</code> names one explicitly.</p>
 <h3>Many copies of one mesh</h3>
 <p>An <code>InstanceSet</code> on a node writes the standard
 <code>EXT_mesh_gpu_instancing</code> extension, so thousands of placements of one

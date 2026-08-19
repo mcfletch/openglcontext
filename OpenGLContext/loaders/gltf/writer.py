@@ -439,11 +439,14 @@ class GLTFWriter:
         """Write a :class:`~OpenGLContext.scenegraph.pbrmaterial.PBRMaterial`.
 
         Returns the index; the same material object passed again reuses it.
+        Without a ``name``, the material's own ``DEF`` is written as the glTF
+        material name, so a material a caller can address by name in one
+        document is addressable by that name in the document written from it.
         """
         cached = self._material_index.get(material)
         if cached is not None:
             return cached
-        entry = self._material_json(material, name)
+        entry = self._material_json(material, name or getattr(material, 'DEF', '') or None)
         self._materials.append(entry)
         return self._material_index.set(material, len(self._materials) - 1)
 

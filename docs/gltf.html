@@ -288,6 +288,76 @@ drawn &mdash; this decides where to stand, not what to render. The rule, and the
 three constants that set it, are in
 <code>OpenGLContext.loaders.gltf.transforms.framing_bounds()</code>; the viewer's
 <a href="viewer.html#framing">Framing a model</a> covers it in full.</p>
+
+<h3 id="names">Driving a model by name</h3>
+<p>A model an application drives &mdash; repaint this car, pose that dial, hide
+the shell for the view from inside it &mdash; is addressed by the names it was
+authored under, so re-exporting the art is not a change to the code. Three
+registries carry them:</p>
+<pre>scene = gltf.load_gltf( "car.glb" )
+
+interior = scene.getDEF( "interior" )                     # one node, by its glTF name
+scene.materials[ "paint" ].baseColor = (0.1, 0.3, 0.6)    # one material, by its
+player = scene.player_named( "steer", loop=False )        # one animation clip, by its</pre>
+<p><code>scene.materials</code> maps the name a document gave a material to the
+<code>PBRMaterial</code> built for it, for the materials the scene's geometry
+uses. The <code>Shape</code>, its mesh and this mapping all hold the one material
+object, so repainting what it hands back repaints the model. glTF names need not
+be unique: a repeated name maps to the first material in the document carrying
+it, and a material the document left unnamed is drawn and not indexed. The
+<a href="baking.html#writing">writer</a> writes a material's <code>DEF</code> as its glTF
+name, so a name survives a round trip.</p>
+<p><code>player_named()</code> is <code>player()</code> asked by name instead of
+by index, and returns <code>None</code> where no clip carries the name.
+<code>loop=False</code> clamps the clip at its ends, which is what
+<em>posing</em> one wants rather than playing it &mdash; a steering wheel turned
+a fraction of its travel, a lever part-way through its throw:</p>
+<pre>player = scene.player_named( "steer", loop=False )
+player.evaluate( fraction * player.duration )   # 0.0 the first key, 1.0 the last</pre>
+<p>Carrying the travel in a clip rather than as an angle in code leaves the
+limits of the movement with the artist: the keyframes say how far the wheel
+turns, and the caller says only how far through that it is.</p>
+</section>
+
+<section id="assets">
+<h2>The Models a Package Ships</h2>
+<p>An application's art is a table of names &mdash; this vehicle is that
+<code>.glb</code>, that pickup is this one &mdash; and everything else about
+loading one is the same every time.
+<code>OpenGLContext.loaders.assets.AssetLibrary</code> is a directory of models
+addressed by relative name, so the table is a table of filenames and never a path
+built at each call site:</p>
+<pre>from OpenGLContext.loaders.assets import AssetLibrary
+
+ART = AssetLibrary( os.path.join( os.path.dirname( __file__ ), 'assets' ) )
+
+scene = ART.shared( 'cars/saloon.glb' )      # one copy, shared by every caller
+if scene is not None:
+    world.children.append( scene.group )
+
+mine = ART.load( 'cars/saloon.glb' )         # my own copy, to change
+mine.materials[ 'paint' ].baseColor = (0.6, 0.1, 0.1)</pre>
+<p><strong>Ask for a shared copy to draw, and a load to change.</strong>
+<code>shared()</code> reads the file once and hands the same subtree to every
+caller, which is what a scenegraph's <code>USE</code> has always meant: the same
+model mounted in as many places as it is wanted. <code>load()</code> reads the
+file again and hands back a scene nobody else holds, for a caller that will
+repaint or pose what it gets.</p>
+<p><strong>A model that will not load is not an error.</strong> Both calls return
+<code>None</code> for a file that is missing or will not parse, and log a warning
+with its traceback; <code>shared()</code> remembers the absence, so a missing
+file is read for once rather than once a frame. What that leaves is a hand
+empty or a car undrawn, and a caller with a fallback can use it &mdash; a level
+that fails to start over one corrupt file has failed worse than one with an
+invisible car in it.</p>
+<p><code>recolour( node, colour )</code> paints every material in a subtree one
+colour and <code>brighten( node, glow )</code> lights each one in its own,
+for art whose colour is the whole of what it says: a family of pickups is then
+one model painted several ways rather than one file each. Both change what they
+are given, so they belong to a subtree from <code>load()</code>. A model with
+several materials that must stay apart &mdash; paint, glass, bright trim &mdash;
+is repainted through <code>scene.materials</code> instead, which touches the one
+material named and leaves the glass glass.</p>
 </section>
 
 <section id="embedding">
