@@ -252,3 +252,72 @@ class TestTheBaseToolIsHarmless:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestTheWheel:
+    """A notch over the map is the camera's, unless the tool wants it."""
+
+    def test_the_tool_in_force_is_asked_first(self):
+        class Sizing(ToolMode):
+            notches = 0
+
+            def on_wheel(self, pointer, notches):
+                self.notches += notches
+                return True
+
+        tool = Sizing(name='brush')
+        tools = ToolManager([tool])
+        assert tools.wheel(Pointer(), 2)
+        assert tool.notches == 2
+
+    def test_what_no_tool_wants_is_left_for_the_camera(self):
+        tools = ToolManager([ToolMode(name='plain')])
+        assert not tools.wheel(Pointer(), 1)
+
+    def test_a_manager_with_no_tools_wants_nothing(self):
+        assert not ToolManager([]).wheel(Pointer(), 1)
+
+
+class TestTakingItBack:
+    """Undo belongs to the tool that did the thing."""
+
+    class Doing(ToolMode):
+        def __init__(self, **named):
+            super().__init__(**named)
+            self.done = []
+
+        def undo(self):
+            if not self.done:
+                return False
+            self.done.pop()
+            return True
+
+        def redo(self):
+            self.done.append('again')
+            return True
+
+    def test_undo_goes_to_the_tool_in_force(self):
+        tool = self.Doing(name='draw')
+        tool.done.append('something')
+        tools = ToolManager([tool])
+        assert tools.undo()
+        assert tool.done == []
+
+    def test_a_tool_with_nothing_to_take_back_says_so(self):
+        tools = ToolManager([self.Doing(name='draw')])
+        assert not tools.undo()
+
+    def test_redo_goes_to_the_same_tool(self):
+        tool = self.Doing(name='draw')
+        tools = ToolManager([tool])
+        assert tools.redo()
+        assert tool.done == ['again']
+
+    def test_a_tool_that_does_nothing_undoable_says_so(self):
+        tools = ToolManager([ToolMode(name='plain')])
+        assert not tools.undo()
+        assert not tools.redo()
+
+    def test_a_manager_with_no_tools_says_so(self):
+        assert not ToolManager([]).undo()
+        assert not ToolManager([]).redo()

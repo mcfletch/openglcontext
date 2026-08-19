@@ -45,6 +45,7 @@ __all__ = (
     'INSTANCE_ATTR_LOC',
     'INSTANCE_OBJECT_ID_LOC',
     'INSTANCE_MATERIAL_LOC',
+    'INSTANCE_JOINT_BASE_LOC',
     'pack_instance_buffer',
     'draw_instanced_mesh',
 )
@@ -55,6 +56,8 @@ __all__ = (
 INSTANCE_ATTR_LOC = 5
 INSTANCE_OBJECT_ID_LOC = 9
 INSTANCE_MATERIAL_LOC = 10
+#: Where a skinned instance's joint matrices start in the context's palette.
+INSTANCE_JOINT_BASE_LOC = 14
 
 # std140 MaterialBlock stride in bytes (mirrors pbrpass.MATERIAL_UBO stride); used
 # to size a per-instance material array against the driver's UBO limit.
@@ -337,6 +340,14 @@ def group_material_table(group: Any) -> tuple[list, list]:
     material objects in first-seen order; ``indices[i]`` is member i's slot in that
     list. This is what the material-array UBO is packed from and what the
     per-instance material-index attribute carries.
+
+    **Distinct in what it says, not in which object says it.** A crowd built
+    from one document carries a material object per figure, all of them
+    identical; treating those as different materials would fill the table with
+    copies of one entry and split the batch into a draw per seventy-three
+    figures. Two materials with the same packed factors *and* the same textures
+    are one slot -- and the group key has already settled that a group's
+    textures agree.
     """
     materials: list = []
     slot: dict = {}
@@ -345,12 +356,23 @@ def group_material_table(group: Any) -> tuple[list, list]:
         shape = rec[-1][-1]
         appearance = getattr(shape, 'appearance', None)
         material = getattr(appearance, 'material', None) if appearance is not None else None
-        k = id(material)
+        k = _material_content_key(material)
         if k not in slot:
             slot[k] = len(materials)
             materials.append(material)
         indices.append(slot[k])
     return materials, indices
+
+
+def _material_content_key(material: Any) -> Any:
+    """What a material says, as a hashable value; its identity if it cannot say."""
+    if material is None:
+        return None
+    try:
+        from OpenGLContext.passes.pbrpass import pack_material_block
+        return pack_material_block(material).tobytes()
+    except Exception:       # pragma: no cover - a material the packer cannot read
+        return id(material)
 
 
 def morton_order(positions: Any) -> list:
@@ -730,15 +752,22 @@ _INSTANCE_DTYPE: Optional[np.dtype] = None
 
 
 def _instance_dtype() -> np.dtype:
-    """One instance: mat4 modelview (16 f32) + object id (u32) + material idx (u32)."""
+    """One instance: mat4 modelview (16 f32), object id, material index, joint base.
+
+    The joint base is where this instance's joint matrices begin in the
+    context's palette, which is what lets a whole crowd of skinned figures --
+    each in a pose of its own -- be drawn by one call.
+    """
     global _INSTANCE_DTYPE
     if _INSTANCE_DTYPE is None:
-        _INSTANCE_DTYPE = np.dtype([('mv', '<f4', 16), ('oid', '<u4'), ('mat', '<u4')])
+        _INSTANCE_DTYPE = np.dtype([('mv', '<f4', 16), ('oid', '<u4'),
+                                    ('mat', '<u4'), ('joint', '<u4')])
     return _INSTANCE_DTYPE
 
 
 def pack_instance_buffer(modelviews: Any, object_ids: Any,
-                         material_indices: Any = None) -> np.ndarray:
+                         material_indices: Any = None,
+                         joint_bases: Any = None) -> np.ndarray:
     """Pack per-instance modelviews + object ids + material indices.
 
     The modelview is stored row-major (as OpenGLContext keeps it); read straight
@@ -759,6 +788,10 @@ def pack_instance_buffer(modelviews: Any, object_ids: Any,
         arr['mat'][:] = 0
     else:
         arr['mat'][:] = np.asarray(material_indices, dtype='<u4')
+    if joint_bases is None:
+        arr['joint'][:] = 0
+    else:
+        arr['joint'][:] = np.asarray(joint_bases, dtype='<u4')
     return arr
 
 
@@ -807,6 +840,10 @@ def _build_instance_vao(gpu: Any, arr: np.ndarray, stride: int) -> tuple:
     glVertexAttribIPointer(INSTANCE_MATERIAL_LOC, 1, GL_UNSIGNED_INT, stride,
                            ctypes.c_void_p(68))
     glVertexAttribDivisor(INSTANCE_MATERIAL_LOC, 1)
+    glEnableVertexAttribArray(INSTANCE_JOINT_BASE_LOC)
+    glVertexAttribIPointer(INSTANCE_JOINT_BASE_LOC, 1, GL_UNSIGNED_INT, stride,
+                           ctypes.c_void_p(72))
+    glVertexAttribDivisor(INSTANCE_JOINT_BASE_LOC, 1)
     glBindVertexArray(0)
     gpu._instance_vao = vao
     gpu._instance_vbo = inst_vbo
@@ -814,7 +851,8 @@ def _build_instance_vao(gpu: Any, arr: np.ndarray, stride: int) -> tuple:
 
 
 def draw_instanced_mesh(gpu: Any, modelviews: Any, object_ids: Any,
-                        material_indices: Any = None) -> int:
+                        material_indices: Any = None,
+                        joint_bases: Any = None) -> int:
     """Draw ``gpu`` (a PBRMesh ``_MeshGPU``) once per instance in one GL call.
 
     Uses a VAO + per-instance VBO cached on ``gpu`` (built once by
@@ -831,7 +869,8 @@ def draw_instanced_mesh(gpu: Any, modelviews: Any, object_ids: Any,
     n = len(modelviews)
     if n == 0:
         return 0
-    arr = pack_instance_buffer(modelviews, object_ids, material_indices)
+    arr = pack_instance_buffer(modelviews, object_ids, material_indices,
+                               joint_bases=joint_bases)
     stride = arr.dtype.itemsize
 
     vao = getattr(gpu, '_instance_vao', None)

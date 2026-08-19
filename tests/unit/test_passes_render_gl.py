@@ -70,7 +70,7 @@ def render_scene(monkeypatch):
                     'shadow': 0, 'transmissive': 0, 'legacy_pick': 0, 'bloom': 0}
         orig_draw = instancing.draw_instanced_mesh
 
-        def counting_draw(gpu, mvs, oids, material_indices=None):
+        def counting_draw(gpu, mvs, oids, material_indices=None, **named):
             counters['instanced_calls'] += 1
             counters['instances'] += len(mvs)
             return orig_draw(gpu, mvs, oids, material_indices)

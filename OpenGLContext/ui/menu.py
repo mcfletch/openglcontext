@@ -29,7 +29,7 @@ still up after the thing was done is in the way.
 """
 from __future__ import annotations
 
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, Iterator, List, Optional, Sequence, Tuple
 
 from vrml import field, node
 
@@ -153,6 +153,16 @@ class MenuItem(Widget):
             renderer.textIn(body, trailing, skin.disabledText, align='right')
 
 
+def _walkItems(items: Sequence[Widget]) -> Iterator[MenuItem]:
+    """Each item, then whatever hangs off it, depth first."""
+    for item in items:
+        if not isinstance(item, MenuItem):
+            continue
+        yield item
+        if item.submenu:
+            yield from _walkItems(list(item.submenu))
+
+
 class _MenuPanel(Panel):
     """What a menu and a menu bar have in common: items, and opening lists.
 
@@ -188,6 +198,17 @@ class _MenuPanel(Panel):
         """This panel's own items, in the order they are drawn."""
         return [child for child in self.layoutChildren()
                 if isinstance(child, MenuItem)]
+
+    def allItems(self) -> Iterator[MenuItem]:
+        """Every item of this menu and of the lists hanging off it.
+
+        A key and a menu item often do the same thing, and the item's tick has
+        to follow either of them. A title's list is its ``submenu``, which is
+        not among its children until the list is opened -- by which time the
+        tick is already wrong -- so an application looking for an item to tick
+        walks this rather than the widget tree.
+        """
+        return _walkItems(self.items())
 
     def submenuAnchor(self, item: MenuItem) -> Tuple[float, float]:
         """Where the list this item leads to should open."""

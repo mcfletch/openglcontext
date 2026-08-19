@@ -304,13 +304,24 @@ def resolve_ibl_mode(renderer: str = '',
     return 'full'
 
 
-def ibl_is_adaptive(requested: str = '') -> bool:
+def ibl_is_adaptive(requested: str = '', capturing: bool = False) -> bool:
     """Whether IBL should fps-adaptively degrade.
 
     An explicitly chosen mode (full/analytic/off), from the context definition
     or from ``OPENGLCONTEXT_IBL``, pins that mode; only ``auto``/unset adapts.
-    Pinning matters for deterministic captures and for a loaded environment
-    cubemap, which only the ``full`` probe samples."""
+    Pinning matters for a loaded environment cubemap, which only the ``full``
+    probe samples.
+
+    **A capture never adapts.** Adaptation is a live-session courtesy -- it
+    keeps a scene above 60 fps for somebody watching it -- and a run whose
+    whole purpose is one image has nobody watching. Left adaptive, what that
+    image shows depends on where the climb back to ``full`` had got to when the
+    frame was taken, which makes a reference render a coin toss on how fast the
+    machine happened to be. The shadow cascades are pinned for a capture for
+    the same reason (``OPENGLCONTEXT_SHADOW_CASCADES``).
+    """
+    if capturing:
+        return False
     env = (requested or '').strip().lower()
     if env not in ('', 'auto'):
         return False

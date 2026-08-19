@@ -467,6 +467,27 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         """Deactivate the shader program."""
         self._bind_program(0)
 
+    #: Where the shaders that carry nothing but a position and a colour read
+    #: the position from. Everything else -- lit, unlit, vertex-colour, PBR --
+    #: reads it at 2, keeping location 0 for the texture coordinate.
+    POSITION_ATTRIBUTE = 2
+    COMPACT_POSITION_ATTRIBUTE = 0
+
+    def position_location(self, program: Optional[int] = None) -> int:
+        """Which attribute a program reads the vertex position from.
+
+        Two conventions live side by side, and a geometry node that chooses its
+        program at draw time has to lay its buffer out for whichever it chose:
+        a vertex array bound to the location the shader does not read leaves
+        every vertex at the origin, and the geometry disappears without a GL
+        error to say so.
+        """
+        if program is None:
+            program = self._program_for_default()
+        if program and program in (self.point_program, self.line_program):
+            return self.COMPACT_POSITION_ATTRIBUTE
+        return self.POSITION_ATTRIBUTE
+
     def _get_location(self, name: str, program: Optional[int] = None) -> int:
         """Get uniform location, caching the result.
 
@@ -989,6 +1010,31 @@ def configure_light_from_node(
             intensity=intensity,
             program=program,
         )
+
+
+def appearance_solid_color(appearance: Any) -> Color4:
+    """The one colour an appearance draws geometry that carries no colour of
+    its own -- a line, an unlit point cloud.
+
+    A material that emits takes its emissive colour, because that is what an
+    unlit surface of it looks like; anything else takes its base/diffuse
+    colour. White where there is no material at all, which is what a caller
+    who gave the geometry no appearance is asking for.
+    """
+    material = getattr(appearance, 'material', None) if appearance else None
+    if material is None:
+        return (1.0, 1.0, 1.0, 1.0)
+    alpha = 1.0 - float(getattr(material, 'transparency', 0.0) or 0.0)
+    emissive = getattr(material, 'emissiveColor', None)
+    if emissive is not None and any(float(part) > 0.0 for part in emissive):
+        return (float(emissive[0]), float(emissive[1]), float(emissive[2]),
+                alpha)
+    base = getattr(material, 'baseColor', None)
+    if base is None:
+        base = getattr(material, 'diffuseColor', None)
+    if base is None:
+        return (1.0, 1.0, 1.0, alpha)
+    return (float(base[0]), float(base[1]), float(base[2]), alpha)
 
 
 def configure_material_from_node(

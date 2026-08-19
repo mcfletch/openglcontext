@@ -292,9 +292,12 @@ DEMO_SCENES: Tuple[SceneSpec, ...] = (
           description='Look down into the pot to see the glowing coals.'),
     _cube('PotOfCoalsAnimationPointer', elevation=0.55, tilt=-0.42, margin=1.05,
           anim_time=1.0, bloom=True),
-    SceneSpec('RecursiveSkeletons', margin=2.6,
+    SceneSpec('RecursiveSkeletons', margin=2.6, anim_time=0.6,
               description='Recursive skeleton fractal; pull back to clear the '
-                          'huge bounds (a tight margin traps the camera inside).'),
+                          'huge bounds (a tight margin traps the camera inside). '
+                          'The clip is pinned: without a time the captured pose '
+                          'is wherever the settle happened to reach, which is a '
+                          'different pose on a busy machine.'),
     SceneSpec('RiggedFigure', anim_time=0.6),
     SceneSpec('RiggedSimple'),
     _studio('ScatteringSkull', yaw=-0.6, elevation=0.12, margin=0.9),

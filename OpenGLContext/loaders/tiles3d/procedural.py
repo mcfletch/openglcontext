@@ -11,6 +11,7 @@ Vectorised value-noise fBm (numpy only, deterministic) — no external noise lib
 import json
 import os
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import numpy as np
@@ -82,28 +83,142 @@ def _ridged(x: np.ndarray, z: np.ndarray, seed: int, octaves: int = 5) -> np.nda
     return total / norm
 
 
+def fbm(x: np.ndarray, z: np.ndarray, seed: int = 0, octaves: int = 5,
+        lacunarity: float = 2.0, gain: float = 0.5) -> np.ndarray:
+    """Fractal value noise over ``(x, z)``, from 0 to 1.
+
+    Deterministic in ``seed``, vectorised, and numpy-only. This is the grain
+    the shipped landscape is made of, so anything that wants to add to it --
+    a sculpted hill, a scatter mask, a splat weight -- can be made of the same
+    grain rather than of a second kind of noise that does not match.
+
+    One unit of ``x``/``z`` is one feature of the coarsest octave, so a caller
+    working in metres divides by the size it wants the features to be.
+    """
+    return _fbm(np.asarray(x, dtype=np.float64), np.asarray(z, dtype=np.float64),
+                seed=seed, octaves=octaves, lacunarity=lacunarity, gain=gain)
+
+
+def ridged(x: np.ndarray, z: np.ndarray, seed: int = 0,
+           octaves: int = 5) -> np.ndarray:
+    """Ridged fractal noise over ``(x, z)``, from 0 to 1.
+
+    The same noise folded about its middle, which turns rounded hills into
+    ridges with sharp crests -- what mountains are made of here.
+    """
+    return _ridged(np.asarray(x, dtype=np.float64),
+                   np.asarray(z, dtype=np.float64), seed=seed, octaves=octaves)
+
+
 # --- terrain height + colour --------------------------------------------------
 
-def terrain_height(x: np.ndarray, z: np.ndarray) -> np.ndarray:
-    """World-space height (Y) over an (x, z) grid — arbitrary numpy shapes."""
-    x = np.asarray(x, dtype=np.float64)
-    z = np.asarray(z, dtype=np.float64)
-    hills = 45.0 * (_fbm(x * 0.0016, z * 0.0016, seed=1, octaves=5) - 0.5)
-    mask = _smooth(np.clip(
-        (_fbm(x * 0.0006 + 5, z * 0.0006 - 3, seed=7, octaves=3) - 0.40) / 0.28,
-        0.0, 1.0))
-    mountains = 360.0 * _ridged(x * 0.0011, z * 0.0011, seed=3, octaves=6) * mask
-    h = 20.0 + hills + mountains
-    # River canyon: a meandering channel carved deep where |x - path(z)| is small.
-    path = 240.0 * np.sin(z * 0.0016) + 120.0 * np.sin(z * 0.0007 + 1.3)
-    canyon = np.exp(-((x - path) / 70.0) ** 2)
-    h = h - 120.0 * canyon
-    # Lake basin: a broad low region in one quadrant, floor near water level.
-    basin = _smooth(np.clip(
-        (_fbm(x * 0.0009 - 8, z * 0.0009 + 4, seed=9, octaves=4) - 0.5) / 0.25,
-        0.0, 1.0))
-    h = h - 60.0 * basin
-    return h
+@dataclass(frozen=True)
+class TerrainProfile:
+    """How tall and how wide each of a landscape's shapes is.
+
+    The generator is four things added together, and a landscape is which of
+    them there is how much of: broad rolling **hills**; ridged **mountains**
+    under a mask, so they stand in ranges rather than everywhere; a meandering
+    **canyon** cut into whatever is above it; and a broad **basin** dished out
+    of one region, whose floor is where a lake sits.
+
+    Every amount is metres of relief; the widths and scales are metres on the
+    ground. ``seed`` chooses which landscape of that description you get.
+    """
+
+    #: Metres from the trough of the rolling hills to their crest.
+    hills: float = 45.0
+    #: How far apart those hills are, in metres.
+    hill_scale: float = 1.0 / 0.0016
+    #: Metres from the foot of a range to the top of its ridges.
+    mountains: float = 360.0
+    #: How far apart the ridges are, in metres.
+    mountain_scale: float = 1.0 / 0.0011
+    #: How much of the map the ranges cover, from 0 (none) to 1 (everywhere).
+    mountain_cover: float = 0.60
+    #: How deep the river canyon is cut, in metres.
+    canyon: float = 120.0
+    #: How wide it is, in metres, measured to where it has half faded out.
+    canyon_width: float = 70.0
+    #: How far the canyon wanders from a straight line, in metres.
+    canyon_meander: float = 240.0
+    #: How deep the lake basin is dished out, in metres.
+    basin: float = 60.0
+    #: How wide the basin's low ground is, in metres.
+    basin_scale: float = 1.0 / 0.0009
+    #: Where a featureless landscape sits, in metres above the waterline.
+    datum: float = 20.0
+    #: Which landscape of this description. Every noise field is offset from
+    #: it, so two profiles differing only in seed share no feature.
+    seed: int = 0
+
+    def to_json(self) -> dict:
+        """This profile as a document -- one number per field."""
+        return {name: getattr(self, name) for name in self.__dataclass_fields__}
+
+    @classmethod
+    def from_json(cls, document: dict) -> 'TerrainProfile':
+        known = {name: document[name] for name in cls.__dataclass_fields__
+                 if name in document}
+        return cls(**known)
+
+
+def _scale(metres: float) -> float:
+    """A feature size in metres as the frequency the noise is sampled at."""
+    return 1.0 / max(float(metres), 1e-6)
+
+
+def terrain_height_for(profile: TerrainProfile) -> HeightFn:
+    """A height function for one profile: metres of ground over ``(x, z)``.
+
+    The result is an ordinary height function, so everything that samples
+    terrain takes one of these without knowing a profile exists.
+    """
+    seed = int(profile.seed)
+
+    def height(x: np.ndarray, z: np.ndarray) -> np.ndarray:
+        x = np.asarray(x, dtype=np.float64)
+        z = np.asarray(z, dtype=np.float64)
+        h = np.full(np.broadcast(x, z).shape, float(profile.datum))
+        if profile.hills:
+            h = h + profile.hills * (
+                _fbm(x * _scale(profile.hill_scale),
+                     z * _scale(profile.hill_scale),
+                     seed=1 + seed, octaves=5) - 0.5)
+        if profile.mountains:
+            # The mask is what keeps ranges in ranges: mountains everywhere is
+            # noise, and a landscape is read by where the high ground is not.
+            edge = 1.0 - float(profile.mountain_cover)
+            mask = _smooth(np.clip(
+                (_fbm(x * 0.0006 + 5, z * 0.0006 - 3, seed=7 + seed, octaves=3)
+                 - edge) / 0.28, 0.0, 1.0))
+            h = h + profile.mountains * _ridged(
+                x * _scale(profile.mountain_scale),
+                z * _scale(profile.mountain_scale),
+                seed=3 + seed, octaves=6) * mask
+        if profile.canyon:
+            # A meandering channel carved deep where the ground is near its path.
+            path = (profile.canyon_meander * np.sin(z * 0.0016)
+                    + profile.canyon_meander * 0.5 * np.sin(z * 0.0007 + 1.3))
+            h = h - profile.canyon * np.exp(
+                -((x - path) / max(float(profile.canyon_width), 1e-6)) ** 2)
+        if profile.basin:
+            floor = _smooth(np.clip(
+                (_fbm(x * _scale(profile.basin_scale) - 8,
+                      z * _scale(profile.basin_scale) + 4,
+                      seed=9 + seed, octaves=4) - 0.5) / 0.25, 0.0, 1.0))
+            h = h - profile.basin * floor
+        return h
+
+    return height
+
+
+#: The landscape this module has always generated, and every world already
+#: baked from it. The numbers are what :func:`terrain_height` used inline.
+SHIPPED_TERRAIN = TerrainProfile()
+
+#: The shipped landscape as a height function.
+terrain_height: HeightFn = terrain_height_for(SHIPPED_TERRAIN)
 
 
 def terrain_colors(positions: np.ndarray, normals: np.ndarray,

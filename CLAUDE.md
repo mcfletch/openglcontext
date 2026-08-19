@@ -687,44 +687,38 @@ that creates a **fresh window/GL context per test** (and tears it down), so no t
 inherits another's GL state. Run the *whole* suite (not just the files you touched)
 before declaring done.
 
-### The known exceptions: the two load-sensitive timing tests
+### The known exception: the load-sensitive instancing test
 
-Two tests measure against the *clock* rather than against a value, so a machine
-busy with the rest of the suite fails them and the same machine passes them alone.
-Both are **known-flaky in a full run** and neither is evidence of a regression:
+One test measures against the *clock* rather than against a value, so a machine
+busy with the rest of the suite fails it and the same machine passes it alone:
 
 | Test | Why it is unstable |
 |---|---|
-| `test_gltf_conformance.py::test_view_matches_baseline[Parthenon__*]` | The render is **bimodal**: it comes out either pixel-identical to the baseline or ~10% different, never in between, and the difference is a uniform lighting shift over the whole model — the adaptive analytic-sky IBL landing in one of two converged states. Independent of frame rate: measured 6/10 differing at a healthy 220 fps. Some cameras (`cam08`, `cam09`) fail this way far more often than others. |
-| Other **sky-lit** conformance views, rarely | `CesiumMan` was seen to fail this way once (2026-08-02), then passed alone, passed in a conformance-only run of all 314 views, and passed in the next full run. Same lighting path as Parthenon, so most likely the same bimodality at a much lower rate. **Not confirmed** — one observation, never reproduced. Re-run the view before spending anything on it; do not assume it is nothing if it repeats. |
 | `test_instancing_performance.py::test_instancing_is_faster` | Compares wall-clock frame times with instancing on and off. Under load the margin between them closes. |
 
-**Do not re-investigate these, and do not treat either as a regression of whatever
-you were working on.**
-
-For the instancing test, running it alone is enough — it is purely load-sensitive:
+Running it alone is enough -- it is purely load-sensitive:
 
 ```bash
 /workspaces/OpenGL-dev/.venv/bin/python -m pytest tests/unit/test_instancing_performance.py -q
 ```
 
-**Running a Parthenon view alone is *not* a sufficient check** — it fails alone
-too, roughly half the time. Measured 2026-08-02 by rendering `Parthenon__cam08`
-eight times through the current viewer and eight times through the viewer at
-`HEAD` (a `git worktree` at HEAD on `PYTHONPATH`, same model, same harness):
-**7/8 differed at HEAD and 8/8 with the current code** — i.e. it is pre-existing
-and not attributable to any recent change. If you need to know whether *your*
-change did something, repeat that A/B rather than reasoning from a single run.
+It is not fixed, and it has a real fix available: give it a marker that keeps it
+off a busy machine -- the sibling `omi_physics` project solves exactly that with
+a `serial` marker and a documented two-pass run, see its `pyproject.toml`.
 
-The exemption is **these two, on these failure modes, only**: every other failure
-in a full run is still a real failure to fix.
+The exemption is **that one, on that failure mode, only**: every other failure
+in a full run is a real failure to fix.
 
-Neither is fixed, and both have a real fix available: make the capture wait for
-the IBL to actually converge instead of for a wall-clock delay (which would make
-the Parthenon views deterministic rather than bimodal), and give the instancing
-test a marker that keeps it off a busy machine — the sibling `omi_physics`
-project solves exactly that with a `serial` marker and a documented two-pass run,
-see its `pyproject.toml`.
+**The conformance views are no longer among them.** The Parthenon views used to
+be bimodal -- pixel-identical to the baseline or ~10% different, never in
+between -- and other sky-lit views were suspected of the same. The cause was
+image-based lighting adapting to the frame rate while the capture was being
+taken, so the frame landed at whatever point the climb back to `full` had
+reached. A capture now pins it, exactly as it already pinned the shadow
+cascades (`renderoptions`/`ibl.ibl_is_adaptive`), and those views render the
+same bytes every time. `RecursiveSkeletons` was separately nondeterministic
+because it is animated and its scene entry pinned no `anim_time`; it does now.
+If a conformance view starts differing again, it is a regression, not weather.
 
 Run tests from the project root:
 

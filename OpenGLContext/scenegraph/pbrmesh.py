@@ -31,8 +31,9 @@ from OpenGLContext.scenegraph import boundingvolume
 
 LOC_TEXCOORD, LOC_NORMAL, LOC_POSITION, LOC_TANGENT, LOC_COLOR = 0, 1, 2, 3, 4
 # Locations 5..10 are the instanced-draw inputs (mat4 modelview + ids); the second
-# UV set sits above them.
+# UV set sits above them, and a skinned mesh's joint indices and weights above that.
 LOC_TEXCOORD1 = 11
+LOC_JOINTS, LOC_WEIGHTS = 12, 13
 
 
 class _MeshGPU(object):
@@ -56,6 +57,8 @@ class _MeshGPU(object):
         ('tangents', LOC_TANGENT, 4),
         ('colors', LOC_COLOR, 4),
         ('texcoords1', LOC_TEXCOORD1, 2),
+        ('skin_joint_floats', LOC_JOINTS, 4),
+        ('skin_weights', LOC_WEIGHTS, 4),
     )
 
     def __init__(self, mesh: Any, pending_deletes: Optional[list[Any]] = None) -> None:
@@ -91,7 +94,8 @@ class _MeshGPU(object):
             buf = vbo.VBO(data)
             self.attr_layout.append((buf, loc, size))
             if name in ('positions', 'normals', 'tangents'):
-                self.dyn[name] = buf
+                if getattr(mesh, 'deforms_vertices', False):
+                    self.dyn[name] = buf
             elif name == 'texcoords' and getattr(mesh, 'deforms_texcoords', False):
                 # Only where the mesh says its UVs move: a skinned character's
                 # never do, and re-uploading them every frame is pure waste.
@@ -194,6 +198,20 @@ class PBRMesh(node.Node):
     _base_tangents: Any = None
     _base_texcoords: Any = None
 
+    #: Whether the vertex shader skins this mesh rather than the CPU. Settled
+    #: on the first draw, from what the renderer is configured for and what the
+    #: driver can do; until then it is what the engine would prefer, so a mesh
+    #: posed before it is ever drawn keeps the rest pose in its buffers rather
+    #: than deforming arrays the shader is about to skin again.
+    skin_on_gpu: bool = True
+    _skin_path_settled: bool = False
+    _skin_version: int = 0
+    _uploaded_skin_version: int = 0
+    _joint_bound_cache: Any = None
+    #: Whether a compute shader owns this mesh's palette range.
+    _skin_from_gpu: bool = False
+    _palette_base: Optional[int] = None
+
     def __init__(self, positions: Any = None, normals: Any = None, texcoords: Any = None,
                  tangents: Any = None, colors: Any = None, indices: Any = None,
                  solid: bool = True,
@@ -257,9 +275,15 @@ class PBRMesh(node.Node):
         self.morph_targets: list[dict[str, Any]] = []
         self.morph_weights: Optional[np.ndarray] = None
         self.skin_joints: Any = None
+        self.skin_joint_floats: Any = None
         self.skin_weights: Any = None
         self._skin_matrices: Any = None
         self._deform_version = 0
+        self._skin_version = 0
+        self._uploaded_skin_version = 0
+        self._skin_path_settled = False
+        self._skin_from_gpu = False
+        self._joint_bound_cache = None
         #: A material's claim on this surface's shape -- see
         #: :meth:`set_surface_deformer`.  Distinct from morph and skin, which
         #: are the *mesh's* own animation; this is movement the thing painted
@@ -282,6 +306,11 @@ class PBRMesh(node.Node):
             j = np.asarray(skin_joints, dtype=np.uint32)
             w = np.asarray(skin_weights, dtype=np.float32)
             self.skin_joints = np.ascontiguousarray(j.reshape(-1, 4))
+            # The same indices as floats, because that is what a GL 3.3 vertex
+            # attribute carries without an integer-attribute pointer, and a
+            # joint index is far inside what a float names exactly.
+            self.skin_joint_floats = np.ascontiguousarray(
+                self.skin_joints, dtype=np.float32)
             w = w.reshape(-1, 4)
             wsum = w.sum(axis=1, keepdims=True)
             wsum[wsum == 0] = 1.0
@@ -350,6 +379,19 @@ class PBRMesh(node.Node):
         return (bool(self.morph_targets) or self.skin_joints is not None
                 or self._surface_deformer is not None)
 
+    @property
+    def deforms_vertices(self) -> bool:
+        """Whether this mesh's vertex arrays change and so want dynamic buffers.
+
+        A skinned mesh drawn through the vertex shader's skinning does not: its
+        buffers hold the rest pose for the life of the context, and the pose is
+        a palette of matrices instead. Morph targets and a material's surface
+        deformer both still move the vertices themselves.
+        """
+        if bool(self.morph_targets) or self._surface_deformer is not None:
+            return True
+        return self.skin_joints is not None and not self.skin_on_gpu
+
     def set_morph_weights(self, weights: Any) -> None:
         """Set morph-target weights and recompute the deformed mesh (CPU)."""
         if not self.morph_targets:
@@ -361,14 +403,50 @@ class PBRMesh(node.Node):
         self._apply_deform()
 
     def set_skin_matrices(self, matrices: Any) -> None:
-        """Set the per-joint skin matrices (J,4,4 row-vector) and recompute."""
+        """Set the per-joint skin matrices (J,4,4 row-vector) for this frame.
+
+        Where the vertex shader does the skinning, this is the whole of what a
+        posed frame costs the mesh: the matrices are handed to the GPU as they
+        are, and the vertex buffers -- which still hold the rest pose -- are
+        left alone. Where it does not, the mesh is deformed here instead, and
+        the deformed arrays are re-uploaded before the next draw.
+        """
         if self.skin_joints is None:
             return
         self._skin_matrices = np.ascontiguousarray(matrices, dtype=np.float64)
+        self._skin_version += 1
+        if self.skin_on_gpu:
+            self._volume = None
+            return
         self._apply_deform()
 
     def _apply_deform(self) -> None:
         """Recompute positions/normals/tangents = skin(morph(base))."""
+        pos, nrm, tan, uvs = self._deformed()
+        self.positions = None if pos is None else np.ascontiguousarray(pos, dtype=np.float32)
+        self.normals = None if nrm is None else np.ascontiguousarray(nrm, dtype=np.float32)
+        self.tangents = tan
+        if uvs is not None:
+            self.texcoords = np.ascontiguousarray(uvs, dtype=np.float32)
+        self._volume = None
+        self._deform_version += 1
+
+    def posed_positions(self) -> Any:
+        """Where this mesh's vertices are in the pose it was last given.
+
+        The vertex arrays of a mesh the shader skins hold the rest pose for the
+        life of the context, which is the point of skinning there -- so a caller
+        that wants the *posed* vertices rather than a picture of them, to
+        measure a reach or to test a pose, asks for them here and is given a
+        fresh array. Under the CPU deform this is what ``positions`` already
+        holds.
+        """
+        if not self.is_deformable:
+            return self.positions
+        return self._deformed()[0]
+
+    def _deformed(self) -> tuple:
+        """(positions, normals, tangents, texcoords) = surface(skin(morph(base)))."""
         pos = None if self._base_positions is None else self._base_positions.astype(np.float64)
         nrm = None if self._base_normals is None else self._base_normals.astype(np.float64)
         tan = None if self._base_tangents is None else self._base_tangents.copy()
@@ -409,22 +487,72 @@ class PBRMesh(node.Node):
             lens = np.linalg.norm(nrm, axis=1, keepdims=True)
             lens[lens == 0] = 1.0
             nrm = nrm / lens
-        self.positions = None if pos is None else np.ascontiguousarray(pos, dtype=np.float32)
-        self.normals = None if nrm is None else np.ascontiguousarray(nrm, dtype=np.float32)
-        self.tangents = tan
-        if uvs is not None:
-            self.texcoords = np.ascontiguousarray(uvs, dtype=np.float32)
-        self._volume = None
-        self._deform_version += 1
+        return pos, nrm, tan, uvs
 
     # -- bounding volume (frustum culling + shadow occluder points) ---------
     def boundingVolume(self, mode: Any = None) -> Any:
         if self._volume is None:
             if self.positions is None or not len(self.positions):
                 self._volume = boundingvolume.BoundingVolume()
+            elif self.skin_on_gpu and self._skin_matrices is not None:
+                self._volume = boundingvolume.AABoundingBox.fromPoints(self.posed_positions())
             else:
                 self._volume = boundingvolume.AABoundingBox.fromPoints(self.positions)
         return self._volume
+
+    def _posed_volume(self) -> Any:
+        """Bounds for a mesh whose vertices the shader poses, not the CPU.
+
+        The vertex arrays hold the rest pose, so bounding *them* would put a
+        figure's bounds where it was modelled rather than where it is -- which
+        culls a body its animation has carried out of the box, and misleads
+        everything else that reads a scene's extent, the image-based lighting
+        included.
+
+        Every vertex the pose moves is moved by a joint that reaches it, so the
+        sphere around **that joint's own** rest-pose vertices, carried by the
+        joint's matrix, contains it. The union over the joints is therefore a
+        bound on the posed mesh, and a close one: a joint reaches a hand or a
+        shin, not the whole body. It costs one small matrix product a frame
+        rather than skinning the mesh a second time.
+        """
+        centres, radii, used = self._joint_bounds()
+        matrices = self._skin_matrices
+        count = min(len(matrices), len(centres))
+        if not count or not used[:count].any():
+            return boundingvolume.AABoundingBox.fromPoints(self.positions)
+        live = np.flatnonzero(used[:count])
+        homogeneous = np.concatenate(
+            [centres[live], np.ones((len(live), 1))], axis=1)
+        moved = np.einsum('ji,jik->jk', homogeneous, matrices[live])[:, :3]
+        reach = radii[live][:, None]
+        return boundingvolume.AABoundingBox.fromPoints(
+            np.concatenate([moved - reach, moved + reach]))
+
+    def _joint_bounds(self) -> tuple:
+        """Per joint: the centre and radius of the rest vertices it reaches.
+
+        Worked out once from the bind pose, which is all it depends on.
+        """
+        if self._joint_bound_cache is None:
+            rest = (self._base_positions if self._base_positions is not None
+                    else self.positions).astype('d')
+            count = int(self.skin_joints.max()) + 1 if len(self.skin_joints) else 0
+            low = np.full((count, 3), np.inf)
+            high = np.full((count, 3), -np.inf)
+            for column in range(self.skin_joints.shape[1]):
+                reached = self.skin_weights[:, column] > 0
+                if not reached.any():
+                    continue
+                index = self.skin_joints[reached, column]
+                np.minimum.at(low, index, rest[reached])
+                np.maximum.at(high, index, rest[reached])
+            used = np.isfinite(low).all(axis=1)
+            centres = np.where(used[:, None], (low + high) / 2.0, 0.0)
+            radii = np.where(used, np.linalg.norm(
+                np.where(used[:, None], high - low, 0.0), axis=1) / 2.0, 0.0)
+            self._joint_bound_cache = (centres, radii, used)
+        return self._joint_bound_cache
 
     # -- rendering ----------------------------------------------------------
     # Cache key under which the per-context VAO+VBOs hang off ``mode.cache``.
@@ -500,19 +628,114 @@ class PBRMesh(node.Node):
         if not getattr(mode, 'shader_mode', False):
             return 1  # PBR meshes are shader-only
 
+        sp = getattr(mode, 'shader_program', None)
+        if self.skin_joints is not None:
+            self._resolve_skin_path(mode, sp)
         gpu = self._gpu(mode)      # re-uploads morph-deformed buffers if stale
         self._apply_draw_state(mode)
+        if sp is not None and hasattr(sp, 'set_skinning'):
+            # Every mesh says whether it is skinned, not only the skinned ones:
+            # the uniform outlives the draw that set it, and an unskinned shape
+            # after a figure would otherwise be posed by the figure's joints.
+            sp.set_skinning(self._skin_palette_base(mode))
 
         # Tell the shader whether this mesh carries per-vertex colors. Skipped in
         # the shadow depth pass: the depth program has no such uniform (and is the
         # bound program), so setting it would target the wrong program.
         if not getattr(mode, 'shadow_pass', False):
-            sp = getattr(mode, 'shader_program', None)
             if sp is not None and hasattr(sp, 'set_vertex_color'):
                 sp.set_vertex_color(self.colors is not None)
 
         gpu.draw()
         return 1
+
+    # -- skinning -----------------------------------------------------------
+    def _resolve_skin_path(self, mode: Any, program: Any) -> None:
+        """Settle, once, whether the vertex shader skins this mesh or the CPU does.
+
+        Before the first draw the mesh assumes the shader will, so a pose set
+        while the scene is still loading leaves the rest pose in the vertex
+        buffers rather than deforming arrays the shader is about to skin again.
+        Here is where that assumption meets the renderer that is actually
+        running -- a driver with no texture unit to spare for the palette, a
+        pass with no skinning in its program, or an application that has asked
+        for the CPU deform -- and where it is put right if it was wrong.
+        """
+        if self._skin_path_settled:
+            return
+        self._skin_path_settled = True
+        from OpenGLContext.scenegraph.skinning import (
+            gpu_skinning_is_enabled, palette_for,
+        )
+        wanted = (gpu_skinning_is_enabled(getattr(mode, 'context', None) or mode)
+                  and bool(getattr(program, 'skinning_supported', False))
+                  and palette_for(mode) is not None)
+        if wanted:
+            return
+        self.skin_on_gpu = False
+        if self._skin_matrices is not None:
+            self._apply_deform()
+
+    def _skin_palette_base(self, mode: Any) -> Optional[int]:
+        """This mesh's place in the joint palette, its matrices written there.
+
+        ``None`` where the mesh is not skinned on the GPU or has not been posed
+        yet, which draws the rest pose -- the same thing an unposed figure has
+        always drawn.
+        """
+        claimed = self.skin_claim(mode)
+        if claimed is None:
+            return None
+        base, matrices = claimed
+        if matrices is not None:
+            from OpenGLContext.scenegraph.skinning import palette_for
+            palette = palette_for(mode)
+            if palette is not None:
+                palette.write(base, matrices)
+        return base
+
+    def skin_from_gpu(self, mode: Any, joints: int) -> Optional[int]:
+        """Reserve this mesh's palette range for a compute shader to fill.
+
+        The joint matrices then live only on the GPU: nothing is uploaded for
+        this mesh and nothing is read back. Returns where its range starts, or
+        None where there is no palette to reserve from.
+        """
+        if not self.skin_on_gpu:
+            return None
+        from OpenGLContext.scenegraph.skinning import palette_for
+        palette = palette_for(mode)
+        if palette is None:
+            return None
+        self._skin_from_gpu = True
+        return palette.reserve(self, joints)
+
+    def skin_claim(self, mode: Any) -> Optional[tuple]:
+        """``(base, matrices)`` for this mesh, or None if it is not skinned here.
+
+        ``matrices`` is None where what is in the palette is already this pose.
+        Separate from writing them so a caller drawing a whole crowd can gather
+        every figure's range and upload the lot in one go, which is one call
+        rather than one a body.
+        """
+        if not self.skin_on_gpu:
+            return None
+        from OpenGLContext.scenegraph.skinning import palette_for
+        palette = palette_for(mode)
+        if palette is None:
+            return None
+        if self._skin_from_gpu:
+            # A compute shader filled the range this frame; the matrices never
+            # existed on this side to send.
+            reserved = palette.reserved_base(self)
+            return None if reserved is None else (reserved, None)
+        if self._skin_matrices is None:
+            return None
+        base = palette.reserve(self, len(self._skin_matrices))
+        if self._uploaded_skin_version == self._skin_version:
+            return base, None
+        self._uploaded_skin_version = self._skin_version
+        return base, self._skin_matrices
 
     def _wants_cull(self, mode: Any) -> bool:
         """Whether back-face culling should be on for this mesh in this pass.

@@ -154,3 +154,84 @@ def held_glb(socket='socket_grip', translation=(0.0, 0.1, 0.3), rotation=None,
     g.buffers = [Buffer(byteLength=len(blob))]
     g.set_binary_blob(blob)
     return b"".join(g.save_to_bytes())
+
+
+def skinned_bar_glb(rings=6, degrees=60.0, axis=2, tilt=True):
+    """A bar of triangles that bends about its middle when its clip plays.
+
+    Geometry with area, unlike :func:`character_glb`'s two vertices, so a
+    render of it can be compared against a render of it -- which is how the
+    vertex shader's skinning is held to the CPU deform it replaces. The bar
+    runs up the Y axis from the origin; the lower half is bound to a joint that
+    does not move and the upper half to one that rotates about the midpoint, so
+    a frame of the clip is unmistakably a different shape from the rest pose.
+    """
+    heights = np.linspace(0.0, 2.0, rings)
+    position, normal, joints, weights, index = [], [], [], [], []
+    for row, y in enumerate(heights):
+        for x in (-0.4, 0.4):
+            position.append([x, float(y), 0.0])
+            # Tilted rather than square-on, so a joint rotation moves the
+            # normal as well as the vertex: a bar facing the camera with the
+            # bend about the same axis would skin its normals to themselves and
+            # prove nothing about them.
+            normal.append([0.35 * x / 0.4, 0.25 if tilt else 0.0,
+                           0.9] if tilt else [0.0, 0.0, 1.0])
+            upper = min(1.0, max(0.0, (y - 0.6) / 0.8))
+            joints.append([0, 1, 0, 0])
+            weights.append([1.0 - upper, upper, 0.0, 0.0])
+        if row:
+            base = (row - 1) * 2
+            index += [base, base + 1, base + 3, base, base + 3, base + 2]
+    position = np.array(position, dtype='<f4')
+    normal = np.array(normal, dtype='<f4')
+    joints = np.array(joints, dtype='<u2')
+    weights = np.array(weights, dtype='<f4')
+    index = np.array(index, dtype='<u4')
+    inverse_bind = np.stack([
+        np.eye(4), np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0],
+                             [0, -1, 0, 1]], dtype='f8'),
+    ]).astype('<f4')
+    times = np.array([0.0, 1.0], dtype='<f4')
+    half = np.radians(degrees) / 2.0
+    spin = [0.0, 0.0, 0.0, np.cos(half)]
+    spin[axis] = np.sin(half)
+    turn = np.array([[0, 0, 0, 1], spin], dtype='<f4')
+
+    blob, spans = _pack([position, normal, joints, weights, index,
+                         inverse_bind, times, turn])
+    g = GLTF2()
+    g.scene = 0
+    g.scenes = [Scene(nodes=[0, 2])]
+    g.nodes = [
+        Node(name='Base', children=[1]),
+        Node(name='Bend', translation=[0.0, 1.0, 0.0]),
+        Node(name='Bar', mesh=0, skin=0),
+    ]
+    g.meshes = [Mesh(primitives=[Primitive(
+        attributes=Attributes(POSITION=0, NORMAL=1, JOINTS_0=2, WEIGHTS_0=3),
+        indices=4)])]
+    g.skins = [Skin(joints=[0, 1], inverseBindMatrices=5, skeleton=0)]
+    g.accessors = [
+        Accessor(bufferView=0, componentType=5126, count=len(position),
+                 type='VEC3', min=position.min(0).tolist(),
+                 max=position.max(0).tolist()),
+        Accessor(bufferView=1, componentType=5126, count=len(normal), type='VEC3'),
+        Accessor(bufferView=2, componentType=5123, count=len(joints), type='VEC4'),
+        Accessor(bufferView=3, componentType=5126, count=len(weights), type='VEC4'),
+        Accessor(bufferView=4, componentType=5125, count=len(index), type='SCALAR'),
+        Accessor(bufferView=5, componentType=5126, count=2, type='MAT4'),
+        Accessor(bufferView=6, componentType=5126, count=2, type='SCALAR',
+                 min=[0.0], max=[1.0]),
+        Accessor(bufferView=7, componentType=5126, count=2, type='VEC4'),
+    ]
+    g.bufferViews = [BufferView(buffer=0, byteOffset=o, byteLength=n)
+                     for o, n in spans]
+    g.buffers = [Buffer(byteLength=len(blob))]
+    g.animations = [Animation(
+        name='bend',
+        samplers=[AnimationSampler(input=6, output=7, interpolation='LINEAR')],
+        channels=[AnimationChannel(
+            sampler=0, target=AnimationChannelTarget(node=1, path='rotation'))])]
+    g.set_binary_blob(blob)
+    return b"".join(g.save_to_bytes())

@@ -25,11 +25,22 @@ class TestUBOCapacity:
 
 
 class TestInstancePacking:
-    def test_stride_is_72_bytes(self):
-        # mat4 (64) + uint32 object id (4) + uint32 material index (4). Locked
-        # because the pbr.vert attribute offsets assume it.
+    def test_stride_is_76_bytes(self):
+        # mat4 (64) + uint32 object id (4) + uint32 material index (4) + uint32
+        # joint base (4). Locked because the vertex shader's attribute offsets
+        # assume it.
         arr = pack_instance_buffer([np.eye(4)], [1])
-        assert arr.dtype.itemsize == 72
+        assert arr.dtype.itemsize == 76
+
+    def test_an_unskinned_instance_names_the_start_of_the_palette(self):
+        """Every instance carries a joint base; an unskinned one reads none."""
+        arr = pack_instance_buffer([np.eye(4)], [1])
+        assert arr['joint'][0] == 0
+
+    def test_a_skinned_instance_carries_where_its_joints_start(self):
+        arr = pack_instance_buffer([np.eye(4)] * 3, [1, 2, 3],
+                                   joint_bases=[0, 57, 114])
+        assert list(arr['joint']) == [0, 57, 114]
 
     def test_matrix_stored_row_major_contiguous(self):
         mv = np.arange(16, dtype='f').reshape(4, 4)

@@ -173,6 +173,11 @@ class ContextDefinition( node.Node ):
     #: (env: OPENGLCONTEXT_INSTANCING).
     instancing = field.newField( "instancing", "SFBool", 1,
                                  lambda: renderoptions.env_flag('OPENGLCONTEXT_INSTANCING', True))
+    #: Skin a rigged figure in the vertex shader rather than on the CPU
+    #: (env: OPENGLCONTEXT_GPU_SKINNING). Off puts the deform back on the CPU,
+    #: which is the reference the shader path is measured against.
+    gpuSkinning = field.newField( "gpuSkinning", "SFBool", 1,
+                                  lambda: renderoptions.env_flag('OPENGLCONTEXT_GPU_SKINNING', True))
     #: Distance level-of-detail for procedurally tessellated geometry --
     #: teapots, quadrics, NURBS (env: OPENGLCONTEXT_LOD).
     tessellationLOD = field.newField( "tessellationLOD", "SFBool", 1,
@@ -228,6 +233,7 @@ class ContextDefinition( node.Node ):
                          'options': renderoptions.CHOICES['transmission'],
                          'optionLabels': renderoptions.LABELS['transmission']},
         'instancing': {'label': 'Instanced batching'},
+        'gpuSkinning': {'label': 'Skinning on the GPU'},
         'tessellationLOD': {'label': 'Distance detail'},
         'vsync': {'label': 'Wait for refresh (vsync)'},
         'uiScale': {'label': 'Interface size', 'minimum': 0.75, 'maximum': 2.0,
@@ -246,7 +252,8 @@ class ContextDefinition( node.Node ):
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
         'bloom', 'ibl', 'iblIntensity', 'transmission',
-        'instancing', 'tessellationLOD', 'multisampleSamples', 'vsync',
+        'instancing', 'gpuSkinning', 'tessellationLOD',
+        'multisampleSamples', 'vsync',
     )
     #: Fields a settings screen shows under "Interface": how the overlay itself
     #: is drawn, as opposed to the world.

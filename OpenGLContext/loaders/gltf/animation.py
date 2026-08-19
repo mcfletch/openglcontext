@@ -107,6 +107,109 @@ def quat_xyzw_to_vrml(q: np.ndarray) -> Tuple[float, float, float, float]:
     return (x / s, y / s, z / s, float(angle))
 
 
+# ----------------------------------------------------------------------
+# The same arithmetic over a whole skeleton at once
+# ----------------------------------------------------------------------
+# A pose is one rotation per joint, and a blend is the same few operations
+# repeated over every one of them. These take ``(N, 4)`` and answer for all N
+# rows, taking the same branches per row that the helpers above take per call,
+# so the two agree row for row -- see tests/unit/test_quaternion_arrays.py.
+
+#: Below this the slerp denominator underflows and a normalised lerp is used
+#: instead; the same threshold the one-at-a-time slerp turns at.
+_SLERP_LINEAR_ABOVE = 0.9995
+
+#: The identity rotation, as glTF stores one.
+_IDENTITY_ROTATION = np.array([0.0, 0.0, 0.0, 1.0])
+
+
+def quat_normalize_rows(q: np.ndarray) -> np.ndarray:
+    """``(N, 4)`` quaternions scaled to unit length; a zero row becomes identity.
+
+    The length is taken from the dot product rather than ``linalg.norm``, and
+    the zero-row case is filled in afterwards rather than by pre-building an
+    array of identities to divide into: on the few dozen rows a skeleton has,
+    what a call costs is almost entirely what it sets up.
+    """
+    q = np.asarray(q, dtype='d').reshape(-1, 4)
+    lengths = np.sqrt((q * q).sum(axis=1))
+    empty = lengths == 0.0
+    if empty.any():
+        lengths = np.where(empty, 1.0, lengths)
+        out = q / lengths[:, None]
+        out[empty] = _IDENTITY_ROTATION
+        return out
+    return q / lengths[:, None]
+
+
+def quat_slerp_rows(q0: np.ndarray, q1: np.ndarray,
+                    u: Any) -> np.ndarray:
+    """Spherical linear interpolation row by row.
+
+    ``u`` is one fraction for every row or a fraction per row -- a cross-fade
+    weights each joint by whatever drove it, so both are wanted.
+    """
+    fraction = np.atleast_1d(np.asarray(u, dtype='d'))
+    # A cross-fade spends nearly all of its life at one end or the other, and
+    # at the start of it there is nothing to interpolate.
+    if fraction.size == 1 and fraction[0] == 0.0:
+        return quat_normalize_rows(q0)
+    a = quat_normalize_rows(q0)
+    b = quat_normalize_rows(q1)
+    dot = np.sum(a * b, axis=1)
+    # The shorter arc: a quaternion and its negation are one rotation.
+    b = np.where((dot < 0.0)[:, None], -b, b)
+    dot = np.abs(dot)
+    theta0 = np.arccos(np.clip(dot, -1.0, 1.0))
+    sin0 = np.sin(theta0)
+    near = dot > _SLERP_LINEAR_ABOVE
+    safe = np.where(near, 1.0, sin0)          # keep the unused branch finite
+    theta = theta0 * fraction
+    s0 = (np.sin(theta0 - theta) / safe)[:, None]
+    s1 = (np.sin(theta) / safe)[:, None]
+    fraction_column = np.broadcast_to(fraction, dot.shape)[:, None]
+    return quat_normalize_rows(np.where(
+        near[:, None], a + fraction_column * (b - a), s0 * a + s1 * b))
+
+
+def quat_multiply_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Compose row by row: the rotation ``b`` then the rotation ``a``."""
+    a = np.asarray(a, dtype='d').reshape(-1, 4)
+    b = np.asarray(b, dtype='d').reshape(-1, 4)
+    ax, ay, az, aw = a[:, 0], a[:, 1], a[:, 2], a[:, 3]
+    bx, by, bz, bw = b[:, 0], b[:, 1], b[:, 2], b[:, 3]
+    return np.stack([
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    ], axis=1)
+
+
+def quat_conjugate_rows(q: np.ndarray) -> np.ndarray:
+    """The inverse of each unit ``[x, y, z, w]`` row."""
+    out = quat_normalize_rows(q)
+    out[:, :3] *= -1.0
+    return out
+
+
+def quat_xyzw_to_vrml_rows(q: np.ndarray) -> np.ndarray:
+    """``(N, 4)`` quaternions -> ``(N, 4)`` VRML97 axis-angle (x, y, z, radians)."""
+    unit = quat_normalize_rows(q)
+    w = np.clip(unit[:, 3], -1.0, 1.0)
+    angle = 2.0 * np.arccos(w)
+    s = np.sqrt(np.maximum(0.0, 1.0 - w * w))
+    # Where the axis terms vanish -- no rotation, or a full turn -- any axis
+    # names the same rotation, so the field's own default is written.
+    vanished = s < 1e-8
+    safe = np.where(vanished, 1.0, s)
+    out = np.empty((len(unit), 4), dtype='d')
+    out[:, :3] = unit[:, :3] / safe[:, None]
+    out[:, 3] = angle
+    out[vanished] = (0.0, 1.0, 0.0, 0.0)
+    return out
+
+
 _INTERP = ('STEP', 'LINEAR', 'CUBICSPLINE')
 
 
@@ -225,11 +328,22 @@ class Animation(object):
         self.name = name or ''
         self.channels: list = list(channels)
         self.pointer_channels: list = list(pointer_channels or [])
+        self._duration: Optional[float] = None
 
     @property
     def duration(self) -> float:
-        return max((c.sampler.duration
-                    for c in self.channels + self.pointer_channels), default=0.0)
+        """How long the clip runs: the longest of its samplers.
+
+        Worked out on first asking and kept, because a playing track reads it
+        every frame and a character clip carries a couple of hundred channels.
+        A clip given more channels afterwards is re-measured by clearing
+        ``_duration``.
+        """
+        if self._duration is None:
+            self._duration = max(
+                (c.sampler.duration
+                 for c in self.channels + self.pointer_channels), default=0.0)
+        return self._duration
 
     def evaluate(self, t: float) -> dict:
         """Map ``node_index -> {path: value}`` at time ``t`` (value is an array).

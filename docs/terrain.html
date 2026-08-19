@@ -375,6 +375,29 @@ terrain.update_for_camera(eye_xyz, viewport_height, view_projection=vp_matrix)</
   edge (<code>terrain_patch(skirt_depth=…)</code>) so seams between adjacent LOD tiles
   show no gaps.</p>
 
+  <h3 id="terrainprofile">Landscapes of your own</h3>
+  <p>The shipped field is four things added together, and a
+  <code>TerrainProfile</code> is how much of each there is: broad rolling
+  <strong>hills</strong>; ridged <strong>mountains</strong> under a mask, so
+  they stand in ranges rather than everywhere; a meandering <strong>canyon</strong>
+  cut into whatever is above it; and a broad <strong>basin</strong> dished out
+  of one region, whose floor is where a lake sits.</p>
+  <pre><code>from OpenGLContext.loaders.tiles3d.procedural import TerrainProfile, terrain_height_for
+
+alps = TerrainProfile(hills=70.0, mountains=900.0, mountain_scale=1400.0,
+                      mountain_cover=0.82, canyon=0.0, basin=0.0, datum=60.0)
+height_fn = terrain_height_for(alps)          # an ordinary height function</code></pre>
+  <p>Every amount is metres of relief and every scale is metres on the ground,
+  so what a landscape is can be read off its profile. <code>seed</code> gives
+  another landscape of the same description — another set of ranges, another
+  course for the river — rather than another kind of landscape.
+  <code>SHIPPED_TERRAIN</code> is the profile <code>terrain_height</code> is,
+  and it does not move: worlds already baked came from those numbers.</p>
+  <p><code>fbm</code> and <code>ridged</code> are the noise the landscape is
+  made of, exposed so that anything adding to it — a sculpted hill, a scatter
+  mask, a splat weight — can be made of the same grain rather than of a second
+  kind of noise that does not match.</p>
+
   <h2 id="vegetation">Vegetation</h2>
   <p>There are two paths, and which one a world wants depends on how big it is.</p>
 

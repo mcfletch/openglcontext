@@ -1,0 +1,77 @@
+#version 330 core
+#extension GL_ARB_compute_shader : require
+#extension GL_ARB_shader_storage_buffer_object : require
+
+// One thread per joint of every figure: compose that joint's local transform
+// and every ancestor's, and multiply them into a world matrix.
+//
+// Walking to the root per joint rather than composing a generation at a time
+// costs each thread as many small matrix products as the skeleton is deep --
+// a dozen for a humanoid -- and buys the whole pass: no second dispatch, no
+// barrier, and no intermediate buffer of local matrices to write and read
+// back. A GPU has far more threads than a skeleton has joints, so the work
+// that is repeated is work that would otherwise have sat idle.
+//
+// Matrices are stored the way the rest of the renderer means them: row-vector,
+// `p * M`, `world = local * parent`. A GLSL mat4 holds the transpose of that
+// (its columns are the row-vector matrix's rows), which is why the products
+// below read right to left.
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer Pose {
+    // Three vec4 per joint: translation.xyz, rotation (x,y,z,w), scale.xyz.
+    vec4 pose[];
+};
+layout(std430, binding = 1) readonly buffer Hierarchy {
+    int parent[];               // parent slot of each joint, -1 at a root
+};
+layout(std430, binding = 2) writeonly buffer World {
+    mat4 world[];
+};
+
+uniform int jointsPerFigure;
+uniform int figures;
+
+mat3 rotationOf(vec4 q) {
+    float x = q.x, y = q.y, z = q.z, w = q.w;
+    float n = x * x + y * y + z * z + w * w;
+    if (n > 0.0) {
+        float s = inversesqrt(n);
+        x *= s; y *= s; z *= s; w *= s;
+    } else {
+        x = 0.0; y = 0.0; z = 0.0; w = 1.0;
+    }
+    return mat3(
+        1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y + w * z), 2.0 * (x * z - w * y),
+        2.0 * (x * y - w * z), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z + w * x),
+        2.0 * (x * z + w * y), 2.0 * (y * z - w * x), 1.0 - 2.0 * (x * x + y * y));
+}
+
+mat4 localOf(int figure, int slot) {
+    int base = (figure * jointsPerFigure + slot) * 3;
+    vec3 translation = pose[base].xyz;
+    vec4 rotation = pose[base + 1];
+    vec3 scale = pose[base + 2].xyz;
+    mat3 r = rotationOf(rotation);
+    return mat4(vec4(scale.x * r[0], 0.0),
+                vec4(scale.y * r[1], 0.0),
+                vec4(scale.z * r[2], 0.0),
+                vec4(translation, 1.0));
+}
+
+void main() {
+    int index = int(gl_GlobalInvocationID.x);
+    if (index >= figures * jointsPerFigure) {
+        return;
+    }
+    int figure = index / jointsPerFigure;
+    int slot = index - figure * jointsPerFigure;
+    mat4 composed = localOf(figure, slot);
+    int up = parent[slot];
+    while (up >= 0) {
+        composed = localOf(figure, up) * composed;
+        up = parent[up];
+    }
+    world[index] = composed;
+}

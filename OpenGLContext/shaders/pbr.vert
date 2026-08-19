@@ -17,6 +17,8 @@ layout(location = 9) in uint aInstanceObjectId;
 layout(location = 10) in uint aInstanceMaterial;   // index into the material array
 layout(location = 11) in vec2 aTexCoord1;          // second UV set (glTF TEXCOORD_1)
 
+#include "_skinning_inc.glsl"
+
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
 uniform mat3 normalMatrix;
@@ -40,15 +42,23 @@ void main() {
     // costlier but avoids a per-instance uniform.
     mat3 nrm = instancingEnabled ? transpose(inverse(mat3(mv))) : normalMatrix;
 
-    vec4 eyePosition = mv * vec4(aPosition, 1.0);
+    // Skinning moves the vertex into the pose before anything transforms it:
+    // the joint matrices are built in the skeleton's own space, which is what
+    // the model matrix then takes to the world.
+    vec3 position = aPosition;
+    vec3 normal = aNormal;
+    vec3 tangent = aTangent.xyz;
+    applySkin(position, normal, tangent);
+
+    vec4 eyePosition = mv * vec4(position, 1.0);
     vPosition = eyePosition.xyz;
-    vNormal = normalize(nrm * aNormal);
+    vNormal = normalize(nrm * normal);
     // Tangents are surface-direction vectors, so they transform by the modelview
     // upper-3x3, NOT the inverse-transpose normalMatrix (that is for normals).
     // Guard the normalize: with no tangent attribute location 3 defaults to 0, and
     // normalize(0) is NaN -- emit a zero tangent instead so the fragment's
     // length(vTangent) > 0 test cleanly disables normal mapping (finding 4.1).
-    vec3 tEye = mat3(mv) * aTangent.xyz;
+    vec3 tEye = mat3(mv) * tangent;
     float tLen = length(tEye);
     vTangent = tLen > 0.0 ? tEye / tLen : vec3(0.0);
     vTangentW = aTangent.w;

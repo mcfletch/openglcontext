@@ -67,8 +67,22 @@ class TestPoints:
 
 class TestAnimating:
     def test_playing_a_clip_deforms_the_skin(self):
+        """Where the pose puts the vertices, whichever side skins them.
+
+        The vertex arrays of a mesh the shader skins hold the rest pose all the
+        way through, so what a clip moves is asked for rather than read off.
+        """
         model = CharacterModel.load(character_glb())
         mesh = _skinned_mesh(model.group)
+        rest = np.array(mesh.posed_positions())
+        model.play('raise', loop=False)
+        model.update(1.0)
+        assert not np.allclose(mesh.posed_positions(), rest, atol=1e-4)
+
+    def test_the_cpu_deform_moves_the_arrays_themselves(self):
+        model = CharacterModel.load(character_glb())
+        mesh = _skinned_mesh(model.group)
+        mesh.skin_on_gpu = False
         rest = np.array(mesh.positions)
         model.play('raise', loop=False)
         model.update(1.0)

@@ -252,3 +252,41 @@ class TestTheMenuBar:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestReachingEveryItem:
+    """A key and a menu item often do the same thing, and the tick has to
+    follow either of them. A bar title's list is its ``submenu``, which is not
+    among its children until the list is opened -- by which time the tick is
+    already wrong."""
+
+    def _bar(self):
+        return MenuBar(menus=[
+            ('File', [MenuItem(text='Open'), MenuItem(text='Quit')]),
+            ('View', [MenuItem(text='Shaded relief', checkable=True),
+                      MenuItem(text='Contours', submenu=[
+                          MenuItem(text='10 m'), MenuItem(text='25 m')])]),
+        ])
+
+    def test_it_reaches_the_titles(self) -> None:
+        found = [item.text for item in self._bar().allItems()]
+        assert 'File' in found and 'View' in found
+
+    def test_it_reaches_the_lists_under_them(self) -> None:
+        found = [item.text for item in self._bar().allItems()]
+        assert 'Shaded relief' in found
+
+    def test_it_reaches_a_list_under_a_list(self) -> None:
+        found = [item.text for item in self._bar().allItems()]
+        assert '25 m' in found
+
+    def test_a_bar_with_nothing_in_it_reaches_nothing(self) -> None:
+        assert list(MenuBar(menus=[]).allItems()) == []
+
+    def test_what_it_finds_can_be_ticked(self) -> None:
+        bar = self._bar()
+        for item in bar.allItems():
+            if item.text == 'Shaded relief':
+                item.checked = True
+        assert [item.checked for item in bar.allItems()
+                if item.text == 'Shaded relief'] == [True]

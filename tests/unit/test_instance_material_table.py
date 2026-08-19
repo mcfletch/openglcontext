@@ -17,6 +17,16 @@ class FakeMaterial:
         self.name = name
 
 
+def real_material(baseColor):
+    """A material the packer actually reads.
+
+    The table groups by what a material *says*, so telling two of them apart
+    means giving them different factors rather than different names.
+    """
+    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    return PBRMaterial(baseColor=baseColor)
+
+
 class FakeShape:
     def __init__(self, geometry, material=None, texture=None):
         self.geometry = geometry
@@ -55,7 +65,8 @@ class TestTextureKeyGroupsAcrossMaterials:
 class TestMaterialTable:
     def test_distinct_materials_indexed_in_first_seen_order(self):
         g = FakeGeometry('g')
-        m1, m2 = FakeMaterial('m1'), FakeMaterial('m2')
+        m1 = real_material((1.0, 0.0, 0.0))
+        m2 = real_material((0.0, 0.0, 1.0))
         members = [rec(FakeShape(g, m1)), rec(FakeShape(g, m2)),
                    rec(FakeShape(g, m1))]
         groups, _ = build_instance_groups(
@@ -76,3 +87,20 @@ class TestMaterialTable:
         materials, indices = group_material_table(groups[0])
         assert materials == [m]
         assert indices == [0, 0, 0, 0]
+
+
+class TestOneMaterialManyObjects:
+    """A crowd out of one document carries a material object per figure."""
+
+    def test_materials_that_say_the_same_thing_share_a_slot(self):
+        g = FakeGeometry('g')
+        copies = [real_material((0.2, 0.4, 0.6)) for _ in range(5)]
+        members = [rec(FakeShape(g, m)) for m in copies]
+
+        groups, _ = build_instance_groups(
+            members, min_instances=2, key=geometry_texture_key,
+            instanceable=instanceable)
+        materials, indices = group_material_table(groups[0])
+
+        assert len(materials) == 1
+        assert indices == [0, 0, 0, 0, 0]

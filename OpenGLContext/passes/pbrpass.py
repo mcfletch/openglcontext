@@ -30,12 +30,13 @@ from OpenGL.GL import shaders as GL_shaders
 
 from OpenGLContext.passes import flatcore
 from OpenGLContext.passes.shaderpass import (
-    VRML97ShaderProgram, SHADER_DIR, load_fragment_source, resolve_shadow_config,
+    VRML97ShaderProgram, load_fragment_source, resolve_shadow_config,
     preprocess_shader,
 )
 from OpenGLContext.passes.transmission import TransmissionBuffer
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, material_to_pbr
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
+from OpenGLContext.scenegraph.skinning import SKIN_PALETTE_UNIT, palette_supported
 
 log = logging.getLogger(__name__)
 
@@ -229,7 +230,26 @@ def pbr_feature_defines(enabled: Optional[Any] = None) -> list:
 
 
 def pack_material_block(material: Any) -> np.ndarray:
-    """Pack a material into the std140 MaterialBlock byte layout (float32 array)."""
+    """Pack a material into the std140 MaterialBlock byte layout (float32 array).
+
+    Kept on the material against its own ``_ubo_version``, the counter every
+    runtime material edit already bumps: an instanced group repacks its whole
+    material table every frame, and a crowd of figures out of one document
+    carries a material apiece that nothing is changing.
+    """
+    version = int(getattr(material, '_ubo_version', 0))
+    cached = getattr(material, '_packed_block', None)
+    if cached is not None and cached[0] == version:
+        return cached[1]
+    packed = _pack_material_block(material)
+    try:
+        material._packed_block = (version, packed)
+    except Exception:       # pragma: no cover - a material that refuses attributes
+        pass
+    return packed
+
+
+def _pack_material_block(material: Any) -> np.ndarray:
     d = _material_factors(material)
     buf = np.zeros(MATERIAL_BLOCK_WORDS, dtype=np.float32)
     iv = buf.view(np.int32)
@@ -279,12 +299,13 @@ def pack_material_block(material: Any) -> np.ndarray:
     return buf
 
 
-def _compile_file(vert_name: str, frag_name: str, validate: bool = True) -> Any:
+def _compile_file(vert_name: str, frag_name: str, validate: bool = True,
+                  vertex_defines: Optional[list] = None) -> Any:
     # preprocess_shader resolves the shared #includes: the auxiliary
     # VRML97 shaders the PBR pass reuses (unlit/point/line/vertex_color) now pull
     # encodeObjectId in via `#include "_objectid_inc.glsl"`, which the GLSL
     # compiler rejects unless spliced here first.
-    vert = preprocess_shader(vert_name)
+    vert = preprocess_shader(vert_name, vertex_defines)
     frag = preprocess_shader(frag_name)
     v = GL_shaders.compileShader(vert, GL_VERTEX_SHADER)
     fr = GL_shaders.compileShader(frag, GL_FRAGMENT_SHADER)
@@ -305,10 +326,10 @@ def _delete_shaders(*shaders: Any) -> None:
 
 def _compile_shadow_frag(vert_name: str, frag_name: str, max_shadow_lights: int,
                          cube_array: bool, validate: bool = False,
-                         extra_defines: Optional[list] = None) -> Any:
+                         extra_defines: Optional[list] = None,
+                         vertex_defines: Optional[list] = None) -> Any:
     """Compile a program whose fragment shader carries the shared shadow include."""
-    with open(os.path.join(SHADER_DIR, vert_name)) as f:
-        vert = f.read()
+    vert = preprocess_shader(vert_name, vertex_defines)
     frag = load_fragment_source(frag_name, max_shadow_lights, cube_array,
                                 extra_defines=extra_defines)
     v = GL_shaders.compileShader(vert, GL_VERTEX_SHADER)
@@ -349,11 +370,17 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self.ext_channels = ext_texture_channels(self.texture_budget)
             ext_defines = ['#define PBR_EXT_TEXTURES %d'
                            % (1 if ext_textures_supported(self.texture_budget) else 0)]
+            # Vertex-shader skinning needs a texture unit of its own for the
+            # joint palette; a driver whose combined budget does not reach it
+            # compiles the skinning out and the deform stays on the CPU.
+            self.skinning_supported = palette_supported()
+            skin_defines = ['#define PBR_SKINNING %d'
+                            % (1 if self.skinning_supported else 0)]
             # validate=False: PBR + shadow samplers of several targets default to
             # unit 0 at link time; real units are assigned before drawing.
             self.program = _compile_shadow_frag(
                 'pbr.vert', 'pbr.frag', self.MAX_SHADOW_LIGHTS, self.shadow_cube_array,
-                extra_defines=ext_defines)
+                extra_defines=ext_defines, vertex_defines=skin_defines)
             # selection + auxiliary geometry reuse the VRML97 helper programs
             self.unlit_program = _compile_file('vrml97_unlit.vert', 'vrml97_unlit.frag')
             # vertex_color now #includes _shadow_inc (2a), so bake the same shadow
@@ -366,12 +393,17 @@ class PBRShaderProgram(VRML97ShaderProgram):
             # Minimal position-only program for shadow depth passes (22+ per frame
             # with several lights); avoids running the full PBR fragment shader
             # just to write depth.
-            self.depth_program = _compile_file('shadow_depth.vert', 'shadow_depth.frag')
+            self.depth_program = _compile_file('shadow_depth.vert', 'shadow_depth.frag',
+                                               vertex_defines=skin_defines)
 
             glUseProgram(self.program)
             self.init_shadow_samplers()
             self._init_pbr_samplers()
             self._init_material_block()
+            self._init_skinning(self.program)
+            glUseProgram(0)
+            glUseProgram(self.depth_program)
+            self._init_skinning(self.depth_program)
             glUseProgram(0)
             self._compiled = True
             self._ok = True
@@ -382,6 +414,10 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self._compiled = True
             self._clear_programs()  # null every handle; leave _ok False (3.4)
             return False
+
+    #: Whether this driver has the texture unit the joint palette needs; False
+    #: until a program has been compiled against a real context.
+    skinning_supported: bool = False
 
     # Transmission render path for this frame: 'off' | 'full' | 'blend'. Set by
     # the pass before drawing; configure_appearance consults it per shape.
@@ -490,6 +526,36 @@ class PBRShaderProgram(VRML97ShaderProgram):
     def set_vertex_color(self, enabled: bool) -> None:
         """Enable/disable per-vertex color (glTF COLOR_0) modulation of baseColor."""
         self._set_uniform1i('hasVertexColor', 1 if enabled else 0, self.program)
+
+    # -- skinning ----------------------------------------------------------
+    def _init_skinning(self, program: Any) -> None:
+        """Point a program's palette sampler at its unit, once at compile time."""
+        if not self.skinning_supported or not program:
+            return
+        self._set_uniform1i('jointPalette', SKIN_PALETTE_UNIT, program)
+        self._set_uniform1i('skinningEnabled', 0, program)
+        self._set_uniform1i('skinningInstanced', 0, program)
+
+    def set_skinning(self, base: Optional[int], program: Any = None,
+                     instanced: bool = False) -> None:
+        """Skin the next draw from ``base`` in the joint palette, or not at all.
+
+        ``None`` turns skinning off for the draws that follow, which is what
+        every unskinned shape in the scene wants; the uniform is a branch the
+        whole draw takes together, so an unskinned mesh pays nothing for the
+        skinned one beside it.
+        """
+        if not self.skinning_supported:
+            return
+        target = program if program is not None else (
+            getattr(self, '_active_program', 0) or self.program)
+        if base is None:
+            self._set_uniform1i('skinningEnabled', 0, target)
+            return
+        self._set_uniform1i('skinningInstanced', 1 if instanced else 0, target)
+        if not instanced:
+            self._set_uniform1i('jointBase', int(base), target)
+        self._set_uniform1i('skinningEnabled', 1, target)
 
     # -- material / appearance --------------------------------------------
     def set_alpha(self, alpha: float, alpha_mode: int) -> None:
@@ -686,8 +752,20 @@ class PBRPass(flatcore.FlatPass):
     MAX_INSTANCE_MATERIALS: int = 73   # 224 B/material fits the 16 KB UBO min
 
     def _instanceable(self, path: Any) -> bool:
-        """Any geometry exposing ``instanceGPU(mode)`` (PBRMesh, Box, Sphere, ...)."""
-        return hasattr(getattr(path[-1], 'geometry', None), 'instanceGPU')
+        """Any geometry exposing ``instanceGPU(mode)`` (PBRMesh, Box, Sphere, ...).
+
+        A skinned mesh is not one of them: two figures of a build hold the same
+        rest-pose vertices and would batch on content, but each reads its own
+        range of the joint palette, and one draw can name only one range.
+        """
+        geometry = getattr(path[-1], 'geometry', None)
+        if getattr(geometry, 'skin_joints', None) is not None:
+            # Two figures of a build hold the same rest-pose vertices and batch
+            # on content, each reading its own range of the joint palette. A
+            # figure the CPU skins holds its *posed* vertices instead, so no two
+            # of them are the same geometry and there is nothing to batch.
+            return False
+        return hasattr(geometry, 'instanceGPU')
 
     def _instanceKey(self, path: Any) -> Any:
         """Batch by geometry + texture set: materials differing only by FACTORS
@@ -749,6 +827,33 @@ class PBRPass(flatcore.FlatPass):
         glBindBufferBase(GL_UNIFORM_BUFFER, MATERIAL_UBO_BINDING, buf)
         return buf
 
+    def _instanceJointBases(self, group: Any) -> Optional[dict]:
+        """Where each member of a skinned group reads its joints, by geometry.
+
+        Also what puts each figure's matrices into the palette: the per-shape
+        draw does that on its way past, and an instanced group has no per-shape
+        draw to do it on.
+        """
+        if getattr(group.geometry, 'skin_joints', None) is None:
+            return None
+        from OpenGLContext.scenegraph.skinning import palette_for
+        bases: dict = {}
+        pending: list = []
+        for record in group.members:
+            geometry = record[4][-1].geometry
+            claimed = geometry.skin_claim(self)
+            if claimed is None:
+                return None
+            base, matrices = claimed
+            bases[id(geometry)] = base
+            if matrices is not None:
+                pending.append((base, matrices))
+        if pending:
+            palette = palette_for(self)
+            if palette is not None:
+                palette.write_runs(pending)
+        return bases
+
     def _drawInstanceGroup(self, group: Any, shader: Any, prog: Any,
                            id_map: Optional[dict]) -> None:
         """Draw a whole InstanceGroup with one glDrawElementsInstanced per chunk.
@@ -779,7 +884,11 @@ class PBRPass(flatcore.FlatPass):
             shader.set_vertex_color(getattr(geom, 'colors', None) is not None)
 
         gpu = geom.instanceGPU(self)
+        bases = self._instanceJointBases(group)
         shader.set_instancing(True, program=prog)
+        if hasattr(shader, 'set_skinning'):
+            shader.set_skinning(0 if bases is not None else None, program=prog,
+                                instanced=True)
         try:
             for members, chunk_mats, chunk_idx in self._material_chunks(
                     group.members, materials, indices, self.MAX_INSTANCE_MATERIALS):
@@ -794,9 +903,13 @@ class PBRPass(flatcore.FlatPass):
                 else:
                     oids = [0] * len(members)
                 self._bind_material_array(chunk_mats)
+                member_bases = (per_instance(
+                    [bases[id(rec[4][-1].geometry)] for rec in members], counts)
+                    if bases is not None else None)
                 draw_instanced_mesh(gpu, modelviews,
                                     per_instance(oids, counts),
-                                    material_indices=per_instance(chunk_idx, counts))
+                                    material_indices=per_instance(chunk_idx, counts),
+                                    joint_bases=member_bases)
         finally:
             shader.set_instancing(False, program=prog)
             # The transient array UBO replaced the single-material binding; force

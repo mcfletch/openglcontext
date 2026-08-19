@@ -171,6 +171,94 @@ is an extension.</p>
 </section>
 
 <section>
+<h2>Many figures at once</h2>
+<p>A figure's pose is a few dozen rows of arithmetic — sample the clips, blend
+them, compose the skeleton, build the joint matrices — and on a few dozen rows
+almost all of what a numpy call costs is setting the call up. Posing two
+hundred and fifty figures one at a time therefore costs two hundred and fifty
+times that set-up and barely more arithmetic than posing one.</p>
+<p><code>OpenGLContext.character.crowd.Crowd</code> does the work for every
+figure it holds in one pass. Hand it the models instead of updating each one:</p>
+<pre><code>from OpenGLContext.character.crowd import Crowd
+
+crowd = Crowd()
+for model in cast:
+    crowd.add(model)
+...
+crowd.update(dt, mode=context)    # once a frame, instead of model.update(dt)</code></pre>
+<p>Every figure in a crowd must come from <strong>one loaded document</strong>,
+so that a joint means the same joint in all of them; <code>add</code> refuses a
+figure whose skeleton is laid out differently. Load one document with
+<code>parse_gltf</code> and build each figure from it with
+<code>load_gltf(document=…)</code> — see <a href="gltf.html">the loader</a> — and
+they will share their vertex and keyframe data as well.</p>
+<p>Figures doing the same <em>kind</em> of thing — the same layers, the same
+masks, the same number of clips, whatever their weights and wherever their
+clocks stand — are answered together; a figure doing something no other figure
+is doing costs what it always did. Cross-fades, masked layers and additive
+layers all batch: what a crowd does is not an approximation of what
+<code>model.update(dt)</code> does, it is the same arithmetic with a figure
+axis on it, and the tests hold the two to each other.</p>
+
+<h3>Not every figure every frame</h3>
+<p>The largest single lever a crowd has is not posing bodies nobody can see the
+difference on. <code>update</code> takes a <code>budget</code> — how many
+figures to bring up to date this frame, taken in turn so none is starved — and
+each member has a <code>rate</code> in poses per second:</p>
+<pre><code>member = crowd.add(model, rate=10.0)   # ten poses a second, not sixty
+crowd.update(dt, budget=80)            # at most eighty figures this frame</code></pre>
+<p>Clocks always run. A figure posed every third frame is where its clip says it
+is when its turn comes, not three frames behind; what a budget or a rate saves
+is the pose, not the playback.</p>
+</section>
+
+<section>
+<h2>Where the skinning happens</h2>
+<p>Linear-blend skinning is the same short sum for every vertex of a body — four
+joint matrices, weighted. Done in the <strong>vertex shader</strong>, the only
+thing that crosses the bus per frame is the joint palette: one matrix per joint,
+a few kilobytes for a crowd rather than a few megabytes of deformed vertices.
+This is on by default; <code>OPENGLCONTEXT_GPU_SKINNING=0</code> (or the
+<code>gpuSkinning</code> setting) puts the deform back on the CPU, which is the
+reference the shader path is measured against and the path taken on a driver
+with no texture unit to spare for the palette.</p>
+<p>A consequence worth knowing: the vertex arrays of a mesh the shader skins
+hold the <strong>rest pose</strong> for the life of the context. A caller that
+wants the posed vertices — to measure a reach, to test a pose — asks for them:</p>
+<pre><code>mesh.posed_positions()      # where the pose put them, whichever side skins</code></pre>
+<p>Bounds are worked out from the joints rather than from the rest vertices, so
+a figure whose animation carries it outside where it was modelled is still
+bounded where it is.</p>
+<p>Where the driver has compute shaders — <code>ARB_compute_shader</code>, which
+many GL 3.3 drivers expose — a crowd composes the <strong>skeletons and the
+palettes</strong> on the GPU too: per frame it uploads the pose, forty-eight
+bytes a joint, and two dispatches write the palettes straight into the buffer
+the skinning shader reads. Nothing is read back.
+<code>OPENGLCONTEXT_GPU_SKELETON=0</code> keeps that arithmetic in numpy, which
+is what happens anyway on a driver without compute; the two agree to single
+precision, which is what the palette is stored in either way.</p>
+<p>Figures of one build that share their rest-pose geometry are drawn as a
+single instanced call, each instance naming its own range of the palette, so a
+crowd is a handful of draws rather than one per body.</p>
+
+<h3>What this comes to</h3>
+<p>Measured on an RTX 3060 Ti, rendering offscreen: fifty-seven-bone rigs,
+about four thousand skinned vertices and twenty-three clips each, every figure
+on its own clock and all of them on screen.</p>
+<table>
+<tr><th>Figures</th><th>Animation</th><th>Drawing</th><th>Frame</th></tr>
+<tr><td>100</td><td>2.5 ms</td><td>4.9 ms</td><td>134 fps</td></tr>
+<tr><td>250</td><td>4.0 ms</td><td>16.2 ms</td><td>50 fps</td></tr>
+<tr><td>500</td><td>7.7 ms</td><td>20.5 ms</td><td>36 fps</td></tr>
+</table>
+<p>The drawing column at these counts is mostly the GPU filling pixels — every
+figure is on screen and large — rather than work the engine is doing: the
+processor-side cost of a 250-figure frame is 12 ms of the 20. The benchmark is
+<code>tests/helpers/_crowd_perf_harness.py</code>, which takes a figure count
+and reports the split.</p>
+</section>
+
+<section>
 <h2>Looking at every clip at once</h2>
 <p><code>oglc-character-sheet</code> renders a model's clips as contact sheets —
 one sheet per clip, a row for each of four views, a column for each moment of

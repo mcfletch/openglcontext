@@ -42,7 +42,22 @@ from OpenGLContext import quaternion
 from OpenGLContext.loaders.gltf.animation import compute_world_matrices
 from OpenGLContext.scenegraph.transform import Transform
 
-__all__ = ['SOCKET_PREFIX', 'sockets', 'mounted', 'attach', 'detach']
+__all__ = ['SOCKET_PREFIX', 'sockets', 'mounted', 'attach', 'detach',
+           'generation']
+
+#: Bumped whenever anything is hung on a joint or taken off one.
+#:
+#: A rig writes a joint's transform back to the scenegraph only where something
+#: outside the rig reads it, and what is hung on a joint is the thing that
+#: changes that. Working it out means walking the skeleton; asking whether it
+#: *could* have changed is this counter, which a crowd reads once a figure a
+#: frame and which the walk then happens only after.
+_GENERATION = [0]
+
+
+def generation() -> int:
+    """How many times something has been hung on a joint or taken off one."""
+    return _GENERATION[0]
 
 #: What an attachment point's node name starts with.
 SOCKET_PREFIX = 'socket_'
@@ -130,6 +145,7 @@ def attach(point: Any, node: Any) -> Any:
     children = list(point.children)
     if node not in children:
         point.children = children + [node]
+        _GENERATION[0] += 1
     return node
 
 
@@ -139,4 +155,5 @@ def detach(point: Any, node: Any) -> bool:
     if node not in children:
         return False
     point.children = [child for child in children if child is not node]
+    _GENERATION[0] += 1
     return True

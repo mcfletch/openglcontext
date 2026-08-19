@@ -60,7 +60,7 @@ def main():
         return _od(self)
     pbrmesh._MeshGPU.draw = _cd
     _oi = instancing.draw_instanced_mesh
-    def _ci(gpu, mvs, oids, material_indices=None):
+    def _ci(gpu, mvs, oids, material_indices=None, **named):
         counts['instanced'] += 1
         counts['instances'] += len(mvs)
         return _oi(gpu, mvs, oids, material_indices)

@@ -36,7 +36,7 @@ try:
         return _od(self)
     pbrmesh._MeshGPU.draw = _cs
     _oi = instancing.draw_instanced_mesh
-    def _ci(gpu, mvs, oids, material_indices=None):
+    def _ci(gpu, mvs, oids, material_indices=None, **named):
         C['instanced'] += 1
         return _oi(gpu, mvs, oids, material_indices)
     instancing.draw_instanced_mesh = _ci

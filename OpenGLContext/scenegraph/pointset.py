@@ -117,8 +117,10 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         else:
             shader_program.use(lit=False)
             program = shader_program.unlit_program
-            # Set default white color for unlit points
-            shader_program.set_solid_color((1.0, 1.0, 1.0, 1.0))
+            # The colour the Shape's material asks for; white where the caller
+            # gave the points neither per-vertex colours nor a material.
+            shader_program.set_solid_color(
+                getattr(mode, '_solid_color', None) or (1.0, 1.0, 1.0, 1.0))
 
         shader_program.set_matrices(mode.matrix, mode.projection, program=program)
 
@@ -157,10 +159,15 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         vao = gpu['vao'].get(int(program))
         if vao is None:
             vao = glGenVertexArrays(1)
+            # Where the position goes depends on which program was chosen: the
+            # point program reads it at 0 and the unlit one at 2. A buffer bound
+            # to the location the shader does not read puts every vertex at the
+            # origin, and the geometry disappears with no GL error to say why.
+            position = shader_program.position_location(program)
             glBindVertexArray(vao)
             vbo_obj.bind()
-            glEnableVertexAttribArray(0)
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, None)
+            glEnableVertexAttribArray(position)
+            glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, None)
             if has_colors:
                 glEnableVertexAttribArray(1)
                 glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))

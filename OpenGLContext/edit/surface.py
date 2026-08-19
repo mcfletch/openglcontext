@@ -1,4 +1,4 @@
-"""Finding the point under the cursor, and dragging it about.
+"""Finding the point under the cursor, dragging it about, and reading the slope.
 
 An editor's first question is *where on the world did they click?* and its
 second is *where are they dragging it to?*. They have different answers.
@@ -17,7 +17,13 @@ across the ground without climbing the thing it is standing on --
 
 The ground's *slope* comes from neither. Picking gives a point, not a normal;
 the normal is the gradient of the height function, which the editor has --
-:func:`surface_normal`.
+:func:`surface_normal`, and :func:`height_gradient` for the slope itself.
+
+The gradient answers a third question too: **where is the nearest ground at a
+given height?** The shortest way to a contour is straight up or down the hill,
+so it is a step along the gradient -- :func:`snap_to_height`. A road held to a
+grade round a hillside runs *along* a contour, and an editor that can put a
+point on one is the difference between drawing that road and approximating it.
 """
 from __future__ import annotations
 
@@ -28,7 +34,16 @@ import numpy as np
 from OpenGLContext.edit.tools import Pointer
 
 __all__ = ['pointer_from', 'ray_from', 'ray_plane', 'horizon_plane',
-           'surface_normal']
+           'surface_normal', 'height_gradient', 'snap_to_height']
+
+#: How far apart the samples a slope is read from are, in metres. Small enough
+#: to be local, large enough that a height function with noise in it reports
+#: the slope of the ground rather than the slope of a grain of it.
+GRADIENT_STEP = 2.0
+
+#: How many times a snap steps towards its contour. The step is exact for
+#: ground that rises evenly, so the rest is for ground that curves under it.
+SNAP_STEPS = 4
 
 #: A depth of 1 is the far plane: the pick found nothing there, so there is no
 #: surface under the cursor to speak of.
@@ -119,3 +134,66 @@ def surface_normal(height_fn: Callable[[Any, Any], Any], x: Any, z: Any,
     normal = np.stack([-dx, np.ones_like(dx), -dz], axis=-1)
     length = np.linalg.norm(normal, axis=-1, keepdims=True)
     return np.asarray(normal / np.where(length > 0, length, 1.0))
+
+
+def height_gradient(height_fn: Callable[[Any, Any], Any], x: Any, z: Any,
+                    step: float = GRADIENT_STEP) -> Tuple[Any, Any]:
+    """How fast the ground rises east and north at a point.
+
+    A pair of rates, not a direction: the length of the pair is the steepness
+    and its direction is straight up the hill. Central differences either side
+    of the point, so a slope read on a valley floor is the valley's rather than
+    that of whichever side the samples were taken from.
+    """
+    x = np.asarray(x, dtype='d')
+    z = np.asarray(z, dtype='d')
+    half = float(step) / 2.0
+    east = (np.asarray(height_fn(x + half, z), dtype='d')
+            - np.asarray(height_fn(x - half, z), dtype='d')) / float(step)
+    north = (np.asarray(height_fn(x, z - half), dtype='d')
+             - np.asarray(height_fn(x, z + half), dtype='d')) / float(step)
+    return (east, north)
+
+
+def snap_to_height(height_fn: Callable[[Any, Any], Any], x: float, z: float,
+                   height: Optional[float] = None,
+                   interval: float = 25.0, reach: float = 250.0,
+                   step: float = GRADIENT_STEP) -> Tuple[float, float]:
+    """The nearest ground at a given height, from a point.
+
+    ``height`` is the elevation to land on; with none, the nearest multiple of
+    ``interval``, which is the contour a designer is looking at. ``reach`` is
+    how far the point may be moved: a contour half a kilometre away is not what
+    the pointer meant, and a snap that drags a point across the map is worse
+    than no snap.
+
+    A step along the gradient, taken a few times: for ground that rises evenly
+    the first step is exact, and the rest are for ground that curves under it.
+    Flat ground has no nearest contour, so the point stays where it is.
+    """
+    at_x, at_z = float(x), float(z)
+    here = float(np.asarray(height_fn(np.asarray([at_x]),
+                                      np.asarray([at_z])))[0])
+    target = (round(here / float(interval)) * float(interval)
+              if height is None else float(height))
+    for _ in range(SNAP_STEPS):
+        east, north = height_gradient(height_fn, np.asarray([at_x]),
+                                      np.asarray([at_z]), step)
+        rise = float(east[0]) ** 2 + float(north[0]) ** 2
+        if rise <= 1e-12:
+            break
+        current = float(np.asarray(height_fn(np.asarray([at_x]),
+                                             np.asarray([at_z])))[0])
+        # Straight up or down the hill by however far the ground has to rise:
+        # for an even slope this lands exactly on the contour.
+        scale = (target - current) / rise
+        moved_x = at_x + float(east[0]) * scale
+        # North is -z in the world, so a step north is a step down in z.
+        moved_z = at_z - float(north[0]) * scale
+        travelled = float(np.hypot(moved_x - float(x), moved_z - float(z)))
+        if travelled > float(reach):
+            fraction = float(reach) / max(travelled, 1e-9)
+            return (float(x) + (moved_x - float(x)) * fraction,
+                    float(z) + (moved_z - float(z)) * fraction)
+        at_x, at_z = moved_x, moved_z
+    return (at_x, at_z)

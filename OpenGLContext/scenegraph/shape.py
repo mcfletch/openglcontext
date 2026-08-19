@@ -94,7 +94,10 @@ class Shape(basenodes.Shape):
         Sets up material and texture uniforms on the shader, then
         calls geometry's render method (which will use shader path).
         """
-        from OpenGLContext.passes.shaderpass import configure_material_from_node
+        from OpenGLContext.passes.shaderpass import (
+            appearance_solid_color,
+            configure_material_from_node,
+        )
 
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:
@@ -106,10 +109,23 @@ class Shape(basenodes.Shape):
             self.geometry.render(textured=False, mode=mode)
             return
 
+        # The one colour geometry with no material of its own is drawn in --
+        # a line, a point cloud. Published here because the appearance belongs
+        # to the shape and the geometry node does not see it.
+        mode._solid_color = appearance_solid_color(self.appearance)
+
         # PBR program: it configures its own material + texture maps (and
         # up-converts VRML97 Material), then we just render the geometry.
         if getattr(mode, 'visible', True) and hasattr(shader_program, 'configure_appearance'):
             shader_program.configure_appearance(self.appearance, mode)
+            # Whether the base colour is modulated by a per-vertex colour is one
+            # uniform for the whole pass, so it is answered for every shape
+            # rather than only by the geometry that has colours: a box drawn
+            # after a vertex-coloured terrain would otherwise be modulated by
+            # the colour attribute it does not supply, which reads as black.
+            if hasattr(shader_program, 'set_vertex_color'):
+                shader_program.set_vertex_color(
+                    getattr(self.geometry, 'colors', None) is not None)
             self.geometry.render(textured=True, mode=mode)
             return
 

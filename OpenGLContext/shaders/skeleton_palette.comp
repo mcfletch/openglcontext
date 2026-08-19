@@ -1,0 +1,67 @@
+#version 330 core
+#extension GL_ARB_compute_shader : require
+#extension GL_ARB_shader_storage_buffer_object : require
+
+// One thread per joint of every skin of every figure: turn a world matrix into
+// the matrix the skinning vertex shader multiplies a vertex by.
+//
+//     palette[j] = inverseBind[j] * world[joint j] * inverse(world[mesh node])
+//
+// in row-vector terms; the inverse of the mesh node's own transform is what
+// cancels the modelview the mesh will be drawn with, so the skin lives in the
+// space the vertices were modelled in. Written straight into the buffer the
+// vertex shader reads as a texture buffer, so nothing crosses the bus.
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 2) readonly buffer World {
+    mat4 world[];
+};
+layout(std430, binding = 3) readonly buffer Joints {
+    int jointSlot[];            // rig slot of each joint, per skin, run together
+};
+layout(std430, binding = 4) readonly buffer InverseBind {
+    mat4 inverseBind[];         // one per entry of jointSlot
+};
+layout(std430, binding = 5) readonly buffer Targets {
+    // Per (figure, skin) that wants a palette written:
+    //   x = figure, y = first joint of the skin in jointSlot/inverseBind,
+    //   z = how many joints, w = where the palette range starts.
+    ivec4 targets[];
+};
+layout(std430, binding = 6) readonly buffer MeshSlots {
+    int meshSlot[];             // rig slot of each target's mesh node, or -1
+};
+layout(std430, binding = 7) writeonly buffer Palette {
+    mat4 palette[];
+};
+
+uniform int jointsPerFigure;
+uniform int targetCount;
+uniform int jointsPerTarget;    // the widest skin, so the grid is rectangular
+
+void main() {
+    int index = int(gl_GlobalInvocationID.x);
+    int target = index / jointsPerTarget;
+    if (target >= targetCount) {
+        return;
+    }
+    int joint = index - target * jointsPerTarget;
+    ivec4 entry = targets[target];
+    if (joint >= entry.z) {
+        return;
+    }
+    int figure = entry.x;
+    int slot = jointSlot[entry.y + joint];
+    mat4 jointWorld = slot >= 0
+        ? world[figure * jointsPerFigure + slot]
+        : mat4(1.0);
+    int mesh = meshSlot[target];
+    mat4 nodeInverse = mesh >= 0
+        ? inverse(world[figure * jointsPerFigure + mesh])
+        : mat4(1.0);
+    // Row-vector `ib * jointWorld * nodeInverse`, which in the transposed
+    // matrices a GLSL mat4 holds reads the other way about.
+    palette[entry.w + joint] =
+        nodeInverse * jointWorld * inverseBind[entry.y + joint];
+}

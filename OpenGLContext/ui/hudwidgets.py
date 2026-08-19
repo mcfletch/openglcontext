@@ -62,7 +62,7 @@ from vrml import field, node
 
 from OpenGLContext.hud import COLUMN, GUIBox
 from OpenGLContext.ui.geometry import Rect
-from OpenGLContext.ui.metrics import FontMetrics
+from OpenGLContext.ui.metrics import ELLIPSIS, FontMetrics
 from OpenGLContext.ui.widgets import RootWidget, Widget
 
 __all__ = [
@@ -581,6 +581,12 @@ class Readout(HUDWidget):
     critical = field.newField('critical', 'SFBool', 1, False)
     #: ``left``, ``center`` or ``right`` within whatever room it is given.
     align = field.newField('align', 'SFString', 1, 'left')
+    #: The most characters this read-out may take, label included; 0 for no
+    #: limit. A value that comes from the game -- a message, a place name --
+    #: has no natural length, and one that runs across the screen crosses
+    #: whatever is anchored at the other end. Characters rather than pixels so
+    #: it holds at every interface scale.
+    maximumColumns = field.newField('maximumColumns', 'SFInt32', 1, 0)
 
     def valueColour(self, skin: Any) -> Any:
         """The colour the number is drawn in."""
@@ -589,9 +595,18 @@ class Readout(HUDWidget):
         return self.tinted(skin.hudText)
 
     def text(self) -> str:
-        """Label and value as one line, with either half optional."""
-        return ' '.join(part for part in (str(self.label), str(self.value))
+        """Label and value as one line, with either half optional.
+
+        Cut to :attr:`maximumColumns` when it is set, with an ellipsis saying
+        so: a read-out that silently dropped its end would be a read-out
+        nobody could trust the end of.
+        """
+        line = ' '.join(part for part in (str(self.label), str(self.value))
                         if part)
+        room = int(self.maximumColumns)
+        if room > 0 and len(line) > room:
+            return line[:max(0, room - 1)] + ELLIPSIS
+        return line
 
     def iconWidth(self, metrics: FontMetrics) -> int:
         if not self.icon:

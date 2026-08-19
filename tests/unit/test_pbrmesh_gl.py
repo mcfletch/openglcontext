@@ -73,7 +73,10 @@ class TestMeshGPUUpload:
         assert gpu.indexed is True
         assert gpu.count == 3
         assert len(gpu.attr_layout) == 6          # all six optional attrs present
-        assert set(gpu.dyn) == {'positions', 'normals', 'tangents'}
+        # Nothing moves this mesh's vertices, so none of its buffers is dynamic:
+        # a static mesh should not be carrying the machinery for a re-upload it
+        # will never make.
+        assert set(gpu.dyn) == set()
         assert glGetError() == GL_NO_ERROR
 
     def test_non_indexed_mesh_counts_vertices(self, gl):
@@ -151,20 +154,50 @@ class TestDynamicDeform:
         mesh.set_morph_weights([1.0, 0.0])           # second weight 0 -> skipped
         assert mesh.positions[0][2] == pytest.approx(2.0)   # only target 0 applied
 
-    def test_skin_deform_transforms_positions(self, gl):
-        p = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], 'f')
-        mesh = PBRMesh(
-            positions=p,
+    def _skinned(self):
+        return PBRMesh(
+            positions=np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], 'f'),
             normals=np.tile([0, 0, 1], (3, 1)).astype('f'),
             tangents=np.tile([1, 0, 0, 1], (3, 1)).astype('f'),
             skin_joints=np.zeros((3, 4), np.uint32),
             skin_weights=np.tile([1, 0, 0, 0], (3, 1)).astype('f'))
-        assert mesh.is_deformable is True
+
+    @staticmethod
+    def _shift_x(distance):
         translate = np.eye(4)
-        translate[3, 0] = 5.0                        # row-vector translation +x
-        mesh.set_skin_matrices(np.stack([translate]))
+        translate[3, 0] = distance                   # row-vector translation +x
+        return np.stack([translate])
+
+    def test_skin_pose_moves_the_vertices(self, gl):
+        mesh = self._skinned()
+        assert mesh.is_deformable is True
+
+        mesh.set_skin_matrices(self._shift_x(5.0))
+
+        assert mesh.posed_positions()[0][0] == pytest.approx(5.0)
+        mesh._gpu(_mode())
+        assert glGetError() == GL_NO_ERROR
+
+    def test_the_shader_path_leaves_the_buffers_at_rest(self, gl):
+        """Nothing is re-uploaded per frame: the pose is a palette of matrices."""
+        mesh = self._skinned()
+
+        mesh.set_skin_matrices(self._shift_x(5.0))
+
+        assert mesh.skin_on_gpu is True
+        assert mesh.deforms_vertices is False
+        assert mesh.positions[0][0] == pytest.approx(0.0)
+        assert set(mesh._gpu(_mode()).dyn) == set()
+
+    def test_the_cpu_path_deforms_the_arrays_and_re_uploads(self, gl):
+        mesh = self._skinned()
+        mesh.skin_on_gpu = False
+
+        mesh.set_skin_matrices(self._shift_x(5.0))
+
+        assert mesh.deforms_vertices is True
         assert mesh.positions[0][0] == pytest.approx(5.0)
-        mesh._gpu(_mode())                           # uploads deformed arrays
+        assert set(mesh._gpu(_mode()).dyn) == {'positions', 'normals', 'tangents'}
         assert glGetError() == GL_NO_ERROR
 
 

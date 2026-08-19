@@ -43,8 +43,12 @@ class TestPBRMeshSkin:
         # vertex 0 is fully bound to joint 0; rotate joint 0 by +90deg about Z
         mats = np.stack([_rot_z_rowvec(np.pi / 2), np.eye(4)])
         m.set_skin_matrices(mats)
-        assert np.allclose(m.positions[0], [0, 1, 0], atol=1e-6)   # (1,0,0)->(0,1,0)
-        assert np.allclose(m.positions[1], [0, 1, 0], atol=1e-6)   # joint1 identity
+        # Where the pose puts the vertex, whichever side does the skinning: the
+        # vertex arrays of a mesh the shader skins hold the rest pose all the
+        # way through, so the posed positions are asked for rather than read off.
+        posed = m.posed_positions()
+        assert np.allclose(posed[0], [0, 1, 0], atol=1e-6)   # (1,0,0)->(0,1,0)
+        assert np.allclose(posed[1], [0, 1, 0], atol=1e-6)   # joint1 identity
 
     def test_weight_blend_between_two_joints(self):
         pos = np.array([[1, 0, 0]], dtype='f')
@@ -56,7 +60,7 @@ class TestPBRMeshSkin:
         t[3, 0] = 2.0
         m.set_skin_matrices(np.stack([np.eye(4), t]))
         # 0.5*(1,0,0) + 0.5*(3,0,0) = (2,0,0)
-        assert np.allclose(m.positions[0], [2, 0, 0], atol=1e-6)
+        assert np.allclose(m.posed_positions()[0], [2, 0, 0], atol=1e-6)
 
     def test_unnormalized_weights_are_normalized(self):
         pos = np.array([[1, 0, 0]], dtype='f')
@@ -66,7 +70,7 @@ class TestPBRMeshSkin:
         t = np.eye(4)
         t[3, 0] = 2.0
         m.set_skin_matrices(np.stack([np.eye(4), t]))
-        assert np.allclose(m.positions[0], [2, 0, 0], atol=1e-6)
+        assert np.allclose(m.posed_positions()[0], [2, 0, 0], atol=1e-6)
 
 
 class TestSkinAssembly:
@@ -89,7 +93,7 @@ class TestSkinAssembly:
         worlds = {0: np.eye(4), 1: _rot_z_rowvec(np.pi / 2)}
         skin = ga.Skin(joints=[1], inverse_bind=inv_bind, mesh_node=0, meshes=[mesh])
         skin.apply(worlds)
-        assert np.allclose(mesh.positions[0], [0, 1, 0], atol=1e-6)
+        assert np.allclose(mesh.posed_positions()[0], [0, 1, 0], atol=1e-6)
 
 
 def _pack(arrays):
@@ -178,11 +182,12 @@ class TestLoaderSkin:
         mesh = _find_mesh(scene.group)
         player = scene.player(0, loop=False)
         player.evaluate(0.0)
-        assert np.allclose(mesh.positions[1], [1, 0, 0], atol=1e-5)   # bind pose
+        assert np.allclose(mesh.posed_positions()[1], [1, 0, 0], atol=1e-5)  # bind pose
         player.evaluate(1.0)
         # jointB (node 2) rotated 90deg about Z; vertex 1 bound to it -> (0,1,0)
-        assert np.allclose(mesh.positions[1], [0, 1, 0], atol=1e-4)
-        assert np.allclose(mesh.positions[0], [0, 0, 0], atol=1e-5)   # vertex 0 at jointA
+        posed = mesh.posed_positions()
+        assert np.allclose(posed[1], [0, 1, 0], atol=1e-4)
+        assert np.allclose(posed[0], [0, 0, 0], atol=1e-5)   # vertex 0 at jointA
 
 
 class TestSceneNodeAccess:

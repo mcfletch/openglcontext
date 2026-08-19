@@ -210,7 +210,10 @@ class IndexedLineSet(
         else:
             shader_program.use(lit=False)
             program = shader_program.unlit_program
-            shader_program.set_solid_color((1.0, 1.0, 1.0, 1.0))
+            # The colour the Shape's material asks for; white where the caller
+            # gave the line neither per-vertex colours nor a material.
+            shader_program.set_solid_color(
+                getattr(mode, '_solid_color', None) or (1.0, 1.0, 1.0, 1.0))
 
         shader_program.set_matrices(mode.matrix, mode.projection, program=program)
 
@@ -222,11 +225,16 @@ class IndexedLineSet(
         gpu = self._line_gpu
         vao = gpu['vao'].get(int(program))
         if vao is None:
+            # Where the position goes depends on which program was chosen: the
+            # line program reads it at 0 and the unlit one at 2. A buffer bound
+            # to the location the shader does not read puts every vertex at the
+            # origin, and the line disappears with no GL error to say why.
+            position = shader_program.position_location(program)
             vao = glGenVertexArrays(1)
             glBindVertexArray(vao)
             vbo_obj.bind()
-            glEnableVertexAttribArray(0)
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, None)
+            glEnableVertexAttribArray(position)
+            glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, None)
             if has_colors:
                 glEnableVertexAttribArray(1)
                 glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))

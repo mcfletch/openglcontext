@@ -119,6 +119,62 @@ normal; the normal is the gradient of the height function, which an editor has:
 </section>
 
 <section>
+<h2>Reading relief off a plan view</h2>
+<p>A map lit from straight overhead is flat: every surface faces the light
+equally, and a ridge and a valley come out the same colour. A map is
+<em>read</em>, so the ground is shaded by which way it faces relative to a fixed
+low sun &mdash; the cartographic hillshade &mdash; and the shape of the land is
+legible with no shadow crossing the line drawn on it.</p>
+<pre>from OpenGLContext.edit.relief import shade_colors
+
+colors = shade_colors(colors, normals)     # then draw the mesh <em>unlit</em></pre>
+<p>The sun is a convention, not a light: it sits in the <strong>north west</strong>
+at 45&deg;, where every printed relief map has put it for a century. Lighting
+relief from anywhere east of north makes hills read as hollows, and the illusion
+is strong enough to send a road along the wrong side of a ridge.</p>
+<p>The shading goes into the vertex colours and the mesh is drawn unlit, so a
+plan view needs no lights, builds no shadow maps, and costs one dot product a
+vertex.</p>
+<table>
+<tr><th>Argument</th><th>Means</th><th>Default</th></tr>
+<tr><td><code>azimuth</code></td><td>degrees clockwise from north</td><td>315</td></tr>
+<tr><td><code>altitude</code></td><td>degrees above the horizon</td><td>45</td></tr>
+<tr><td><code>ambient</code></td><td>light reaching ground turned away from the
+  sun, so nothing on the map goes to black</td><td>0.35</td></tr>
+<tr><td><code>exaggeration</code></td><td>how much steeper the land is made
+  before it is lit</td><td>4</td></tr>
+</table>
+<p>The exaggeration matters more than it looks. Country a road can be built
+through is gentle &mdash; a one-in-twenty slope is a hard climb for a car and
+almost nothing to the eye &mdash; so shading it honestly leaves a flat green
+sheet. It is in the <em>shading</em> only: the ground is drawn at the height it
+really is, and a contour still says what that height is.</p>
+<p><code>hillshade(normals, ...)</code> answers the shading alone, from 0 to 1,
+for a caller colouring the ground some other way; <code>steepen(normals, k)</code>
+is the leaning-over on its own.</p>
+</section>
+
+<section>
+<h2>Putting a point on a contour</h2>
+<p>A road held to a grade round a hillside runs <em>along</em> an iso-height, so
+an editor that can put a point on one is the difference between drawing that
+road and approximating it. The shortest way to a contour is straight up or down
+the hill, which is a step along the gradient:</p>
+<pre>from OpenGLContext.edit.surface import height_gradient, snap_to_height
+
+x, z = snap_to_height(height_fn, x, z, height=None, interval=25.0, reach=250.0)</pre>
+<p><code>height</code> is the elevation to land on; with none, the nearest
+multiple of <code>interval</code> &mdash; the contour the designer is looking at.
+<code>reach</code> caps how far the point may be moved, because a contour half a
+kilometre away is not what the pointer meant and a snap that drags a point
+across the map is worse than no snap. Flat ground has no nearest contour, so the
+point stays where it is.</p>
+<p>It is exact in one step for ground that rises evenly and takes a few more
+where the ground curves under it. <code>height_gradient</code> is the pair of
+rates on its own, for a caller that wants the slope rather than the snap.</p>
+</section>
+
+<section>
 <h2>The plan view</h2>
 <p>A route is drawn on a <strong>map</strong>. The camera looks straight down
 and the projection is orthographic, so a metre is the same number of pixels
@@ -160,6 +216,41 @@ it accelerate away.</p>
 <p><code>MapViewPlatform</code> reads the view rather than copying it, so
 panning or zooming the map is what moves the camera and there is no second copy
 of where the editor is looking to fall out of step with the first.</p>
+</section>
+
+<section>
+<h2>Looking at it from an angle</h2>
+<p>A plan view is the right thing to <em>draw</em> on and the wrong thing to
+<em>judge</em> on. Shading and contours answer "how high is that"; they cannot
+answer "does that look right", which is the question a landscape is finally
+judged by. <code>OrbitView</code> is the camera for it &mdash; a point on the
+ground it looks at, and a heading, a pitch and a distance to look from:</p>
+<pre>from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
+
+view = OrbitView(centre=(0.0, 0.0), ground=42.0, distance=800.0)
+context.platform = OrbitViewPlatform(view, context.getViewPort())
+...
+view.orbit(dx * 0.4, dy * 0.4)     # a drag: turn and rise, in degrees
+view.dolly(1.0 / 1.25)             # a wheel notch: in or out</pre>
+<p><code>heading</code> is degrees clockwise from north, and zero puts the
+camera to the south looking north &mdash; the way up a map is read.
+<code>pitch</code> is degrees above the horizontal and defaults to the
+three-quarter view somebody means by "let me look at it": high enough to read
+the plan, low enough to read the relief. Orbiting leaves the subject where it
+is, because an orbit that moved what it was looking at is a pan and loses the
+thing being inspected; the pitch stops short of overhead and of the horizon,
+where a camera has no unique up-vector and sees the ground edge-on.</p>
+<p><code>frame(minimum, maximum, viewport)</code> looks at a region from far
+enough off to see all of it, and <code>look_at</code> moves the subject.
+<code>OrbitViewPlatform</code> reads the view rather than copying it, as the map
+platform does; setting a <em>position</em> on it works out the heading, pitch
+and distance that put the camera there, so anything that moves a camera by
+position &mdash; a bookmark, a saved viewpoint &mdash; moves this one.</p>
+<p>An editor holds both and swaps its <code>platform</code> between them: one
+window, one scene, two cameras. Rendering both at once is a different piece of
+work &mdash; the render pass takes the whole window, so a split view means a
+viewport and a scissor per pass and a second shadow-map and selection pass to
+pay for.</p>
 </section>
 
 <section>

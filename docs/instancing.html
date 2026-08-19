@@ -209,6 +209,17 @@ forest = InstancedShape(
 </section>
 
 <section id="coverage">
+  <h3>Skinned figures</h3>
+  <p>Figures of one build hold the same rest-pose vertices &mdash; the pose
+  lives in the joint palette, not in the buffers &mdash; so a crowd of them
+  batches on content like any other repeated mesh. Each instance carries the
+  place its own joints start in that palette, so one draw covers a hundred
+  bodies in a hundred different poses. See <a href="characters.html">rigged
+  characters</a>.</p>
+  <p>A figure whose skinning runs on the processor instead does <em>not</em>
+  batch: its buffers hold its posed vertices, so no two of them are the same
+  geometry and there is nothing to collapse.</p>
+
   <h2>What instances &mdash; and what deliberately does not</h2>
   <p>A geometry becomes instanceable by exposing its mesh in the shared attribute layout
     (an <code>instanceGPU(mode)</code> method); the passes pick it up automatically. Today

@@ -130,6 +130,29 @@ class ToolMode:
         """A key, while this tool is in force."""
         return False
 
+    def on_wheel(self, pointer: Pointer, notches: int) -> bool:
+        """The wheel turned over the world, while this tool is in force.
+
+        Taking it is how a brush is resized without a key: the camera gets the
+        notch otherwise, which is what a wheel does everywhere else.
+        """
+        return False
+
+    # -- taking it back ----------------------------------------------------
+    def undo(self) -> bool:
+        """Take back the last thing this tool did. False if there was none.
+
+        Undo belongs to the tool because the tools edit different things: a
+        route, a landscape, a set of markers. One history over all of them
+        would take back whichever change came last regardless of what the
+        designer is working on.
+        """
+        return False
+
+    def redo(self) -> bool:
+        """Do again what :meth:`undo` took back."""
+        return False
+
 
 class ToolManager:
     """The tool in force, and the routing that gives it first refusal."""
@@ -213,3 +236,18 @@ class ToolManager:
             return True
         tool = self.active
         return bool(tool is not None and tool.on_key(name, modifiers))
+
+    def wheel(self, pointer: Pointer, notches: int) -> bool:
+        tool = self.active
+        return bool(tool is not None and tool.on_wheel(pointer, int(notches)))
+
+    # -- taking it back ----------------------------------------------------
+    def undo(self) -> bool:
+        """Ask the tool in force to take back what it last did."""
+        tool = self.active
+        return bool(tool is not None and tool.undo())
+
+    def redo(self) -> bool:
+        """Ask the tool in force to do it again."""
+        tool = self.active
+        return bool(tool is not None and tool.redo())

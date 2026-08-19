@@ -648,3 +648,42 @@ class TestRoomTakenBySomethingElse:
         plain, plain_readout = self._layer()
         _layer, reserved = self._layer(reserved=(40.0, 0.0, 0.0, 0.0))
         assert reserved.rect.top == plain_readout.rect.top - 40
+
+
+class TestAReadoutThatIsToldHowMuchRoomItHas:
+    """A read-out whose value comes from the game -- a message, a place name --
+    has no natural length, and one that runs across the screen crosses whatever
+    is anchored at the other end of it."""
+
+    def _readout(self, value, **named):
+        from OpenGLContext.ui.hudwidgets import Readout
+        from OpenGLContext.ui.metrics import REFERENCE_METRICS
+        readout = Readout(value=value, **named)
+        return readout, REFERENCE_METRICS
+
+    def test_a_long_value_is_cut_to_the_room_it_was_given(self) -> None:
+        readout, metrics = self._readout('x' * 200, maximumColumns=40)
+        assert len(readout.text()) <= 40
+
+    def test_what_is_left_says_it_was_cut(self) -> None:
+        readout, _metrics = self._readout('x' * 200, maximumColumns=40)
+        assert readout.text().endswith('…')
+
+    def test_a_value_that_fits_is_left_alone(self) -> None:
+        readout, _metrics = self._readout('Saved monaco.glisteel',
+                                          maximumColumns=40)
+        assert readout.text() == 'Saved monaco.glisteel'
+
+    def test_with_no_room_given_nothing_is_cut(self) -> None:
+        readout, _metrics = self._readout('x' * 200)
+        assert len(readout.text()) == 200
+
+    def test_the_label_counts_towards_the_room(self) -> None:
+        readout, _metrics = self._readout('x' * 200, label='NOTE',
+                                          maximumColumns=40)
+        assert len(readout.text()) <= 40
+
+    def test_it_is_narrower_on_screen_for_being_cut(self) -> None:
+        wide, metrics = self._readout('x' * 200)
+        narrow, _ = self._readout('x' * 200, maximumColumns=40)
+        assert narrow.content_size(metrics)[0] < wide.content_size(metrics)[0]

@@ -383,6 +383,13 @@ adjust or disable it:</p>
     <code>analytic</code> (a cheaper approximation), or <code>off</code> (flat
     ambient, no reflections).</li>
 </ul>
+<p>Left to itself, environment lighting steps down to the cheaper approximation
+when the frame rate sags and climbs back after sustained headroom, so it never
+pins a scene below sixty frames a second. That is a courtesy to somebody
+watching, and <strong>a capture has nobody watching</strong>: a run started with
+<code>--capture</code> holds the mode it began with for the whole run, so what
+the image shows does not depend on where the climb had got to when the frame was
+taken. The shadow cascades are pinned for a capture for the same reason.</p>
 </section>
 
 <section id="shadows">

@@ -40,7 +40,7 @@ try:
 
     STATE = {'instanced_calls': 0, 'instances': 0, 'scan': None}
     _orig_draw = instancing.draw_instanced_mesh
-    def _counting_draw(gpu, mvs, oids, material_indices=None):
+    def _counting_draw(gpu, mvs, oids, material_indices=None, **named):
         STATE['instanced_calls'] += 1
         STATE['instances'] += len(mvs)
         return _orig_draw(gpu, mvs, oids, material_indices)

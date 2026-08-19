@@ -8,11 +8,15 @@ layout(location = 2) in vec3 aPosition;
 // instancingEnabled, so an instanced shadow caster writes depth in one draw.
 layout(location = 5) in mat4 aInstanceModelView;
 
+#include "_skinning_inc.glsl"
+
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
 uniform bool instancingEnabled;
 
 void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
-    gl_Position = projectionMatrix * (mv * vec4(aPosition, 1.0));
+    vec3 position = aPosition;
+    applySkin(position);
+    gl_Position = projectionMatrix * (mv * vec4(position, 1.0));
 }

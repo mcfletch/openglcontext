@@ -190,6 +190,10 @@ context.overlays.push(bar)</pre>
     <tr><td><code>instancing</code></td><td>bool</td>
       <td>Collapse shapes sharing a geometry into one instanced draw.</td>
       <td><code>OPENGLCONTEXT_INSTANCING</code></td></tr>
+    <tr><td><code>gpuSkinning</code></td><td>bool</td>
+      <td>Skin a rigged figure in the vertex shader rather than on the
+        processor. Off is the reference the shader path is measured against.</td>
+      <td><code>OPENGLCONTEXT_GPU_SKINNING</code></td></tr>
     <tr><td><code>tessellationLOD</code></td><td>bool</td>
       <td>Distance level of detail for procedural geometry. Off gives
         deterministic tessellation.</td><td><code>OPENGLCONTEXT_LOD</code></td></tr>
@@ -330,6 +334,15 @@ session.revert()         # throw the draft away</pre>
     &mdash; not the events the panel handles, and not the ones it ignores; not
     the world, and not a parent panel. It is not a filter that passes what it
     does not want.</p>
+  <p><strong>Panels that are not lids are layers.</strong> An event is offered
+    to the panels topmost first, down to and including the first modal one, and
+    stops at whichever takes it. So an application can have a menu bar along the
+    top <em>and</em> a tool palette down the side and each gets a look at what
+    the other left, rather than only the one that happened to be pushed last.
+    The pointer's <em>position</em> is offered to every layer whatever they do
+    with it, because hover is not something one layer takes from another: a
+    pointer leaving the bar for the strip has to stop the bar drawing itself
+    hovered.</p>
   <p>That has consequences the mix-in carries for you:</p>
   <ul>
     <li>The input sampler (<code>InputState</code>) is not fed while a modal
@@ -618,6 +631,10 @@ panel = Panel(title='Movement', modal=True, preferredColumns=48, children=[
         <code>Slider</code> and a <code>Carousel</code> all use them.</td></tr>
     <tr><td><code>ui.overlay</code></td>
       <td>The stack and the context mix-in.</td></tr>
+    <tr><td><code>ui.toolpalette</code></td>
+      <td>A strip of tools down one side, bound to an
+        <a href="editing.html">editor's</a> <code>ToolManager</code>: one button
+        per tool, the one in force lit, and a click puts the pointer into it.</td></tr>
     <tr><td><code>ui.screen</code>, <code>ui.hudwidgets</code>,
       <code>ui.debugoverlay</code></td>
       <td>The <a href="hud.html">HUD layers</a> drawn under these panels, and

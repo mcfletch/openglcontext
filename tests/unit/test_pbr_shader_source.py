@@ -22,9 +22,13 @@ class TestTangentTransform:
         src = _read('pbr.vert')
         # The tangent must transform by the modelview upper-3x3, not normalMatrix.
         # ``mv`` is the modelview (the per-draw uniform, or the per-instance
-        # attribute when instancing); either spelling is accepted.
-        m = re.search(r'mat3\((?:mv|modelViewMatrix)\)\s*\*\s*aTangent', src)
+        # attribute when instancing); either spelling is accepted. What is
+        # transformed is the local ``tangent``, which is the attribute after any
+        # skinning has moved it.
+        m = re.search(r'mat3\((?:mv|modelViewMatrix)\)\s*\*\s*(?:aTangent|tangent)', src)
         assert m, "tangent must transform by mat3(modelview) (4.1)"
+        assert re.search(r'tangent\s*=\s*aTangent\.xyz', src), \
+            "the transformed tangent must start from the attribute"
         assert 'normalize(normalMatrix * aTangent' not in src
         # And ``mv`` really is the modelview, not some other matrix.
         assert re.search(r'mv\s*=\s*.*(?:aInstanceModelView|modelViewMatrix)', src)
