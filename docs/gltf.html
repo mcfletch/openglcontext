@@ -343,6 +343,21 @@ caller, which is what a scenegraph's <code>USE</code> has always meant: the same
 model mounted in as many places as it is wanted. <code>load()</code> reads the
 file again and hands back a scene nobody else holds, for a caller that will
 repaint or pose what it gets.</p>
+<p><strong>A crowd in a handful of colours wants neither.</strong> A road full of
+traffic, a team in strip, a rank of soldiers: <code>shared()</code> cannot be
+repainted without repainting all of it, and <code>load()</code> costs a file read
+and a parse <em>per member of the crowd</em>, on the frame that member appears.
+<code>variant()</code> is one copy per version &mdash; prepared once, then shared
+by everything asking for that version, which is also what lets the renderer draw
+the crowd as one batch:</p>
+<pre>from OpenGLContext.loaders.assets import recolour
+
+scene = ART.variant( 'cars/saloon.glb', paint,
+                     prepare=lambda one: recolour( one.group, paint ) )</pre>
+<p>The key names the version &mdash; the colour, the team, the season &mdash; and
+<code>prepare</code> is called once, the first time that key is asked for. Since
+the scene is then shared, a caller that changes it afterwards changes it for
+every other holder, which is the same contract <code>shared()</code> has.</p>
 <p><strong>A model that will not load is not an error.</strong> Both calls return
 <code>None</code> for a file that is missing or will not parse, and log a warning
 with its traceback; <code>shared()</code> remembers the absence, so a missing

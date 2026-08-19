@@ -354,6 +354,45 @@ which material the result wears.</p>
 </section>
 
 <section>
+<h2 id="manifest">What a world <em>is</em>: the manifest</h2>
+<p>A tileset says how to draw a world and nothing about what it is. Anything
+offering somebody a <strong>choice</strong> of worlds needs more than that before
+it loads one &mdash; what it is called, how far round its road goes, how much of
+that road is carried on structures, and which picture shows it &mdash; and
+reading a tileset to find out means loading the world being chosen between.</p>
+<p>So a bake writes <code>world.json</code> beside the tileset, and a chooser
+reads a directory of them:</p>
+<pre>from OpenGLContext.loaders.tiles3d.manifest import read_manifest
+
+found = read_manifest( '/worlds/ashdown-forest' )     # or its tileset, or the manifest
+print( found.summary() )                              # 'Ashdown Forest, 8.3 km'</pre>
+<p><code>name</code> is the only required field, because it is the only one that
+cannot be done without: everything else is description, and a manifest written by
+an older bake that lacks a field is read rather than refused. <code>tileset</code>
+and <code>picture</code> are named relative to the manifest, so a whole world is
+one directory that can be moved or copied. <code>roadLength</code> is in metres
+and <code>structures</code> is how many metres of the road sit on each kind of
+structure &mdash; what tells a bridge-and-tunnel circuit from a road that lies on
+the land.</p>
+<pre>{
+  "baked": "2026-08-19",
+  "closed": true,
+  "extent": 4096.0,
+  "name": "Ashdown Forest",
+  "picture": "track.png",
+  "roadLength": 8306.87,
+  "seed": 11,
+  "structures": { "bridge": 1529.5, "causeway": 515.9, "tunnel": 795.2 },
+  "tileset": "tileset.json"
+}</pre>
+<p>It is written for a person as much as for a program &mdash; indented, keys
+spelled out &mdash; so a world can be renamed or given a picture by editing it.
+A manifest that will not parse reads as <em>absent</em> rather than raising: a
+chooser scanning a directory of worlds should skip the broken one and offer the
+rest.</p>
+<p><code>oglc-bake</code> writes one for every bake, naming the world after the
+output directory unless <code>--name</code> says otherwise.</p>
+
 <h2>Limits</h2>
 <ul>
   <li><strong>Content is written in world coordinates</strong>, with no per-tile
