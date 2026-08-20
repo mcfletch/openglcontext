@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Packaging an application &mdash; a bundle to hand somebody, and a package to install</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Packaging an application</h1>
+</header>
+
+<section>
+<p class="introduction">An application built on the engine is delivered to
+somebody who has no Python: a <strong>frozen bundle</strong> &mdash; one
+directory holding an interpreter, the engine and the application, entered
+through an executable &mdash; or a <strong>native package</strong> that installs
+such a tree into a system directory. The engine supplies what neither can work
+out for itself: which of its modules are reached by name rather than by import,
+which windowing toolkits an application is not using, and which libraries it
+asks the machine for.</p>
+</section>
+
+<section id="freezing">
+  <h2>Freezing with PyInstaller</h2>
+
+  <p>PyInstaller follows import statements, and the engine reaches a great deal
+    of itself by name: every windowing backend, every file-format loader, every
+    viewer adapter and every scenegraph node is declared in
+    <code>OpenGLContext.plugins</code> as a string and imported when a scene
+    asks for it. So are the generated resource modules a <code>res://</code> URL
+    names and the font atlas a size of text needs. Beneath that, PyOpenGL
+    chooses its platform module and its array format handlers the same way
+    (<code>OpenGL.plugins</code>), and opens the GLSL sources, the environment
+    maps and the GLFW library by path.</p>
+
+  <p>None of that is anything an application should have to list. Both packages
+    ship <strong>PyInstaller hooks</strong> &mdash; in
+    <code>OpenGL/__pyinstaller/</code> and
+    <code>OpenGLContext/__pyinstaller/</code> &mdash; which PyInstaller finds by
+    itself through the <code>pyinstaller40</code> entry point, with nothing to
+    switch on. They read the registries of the installed engine rather than a
+    list written out by hand, so a node or a shader added to the engine reaches
+    a frozen application without an edit anywhere.</p>
+
+  <p>What a <code>.spec</code> is left to say is what belongs to the
+    application:</p>
+
+<pre>from PyInstaller.utils.hooks import collect_data_files
+from OpenGLContext import packaging
+
+analysis = Analysis(
+    ['packaging/entry.py'],
+    datas=collect_data_files('mygame'),
+    excludes=packaging.unused_backend_modules(keep=['glfw']),
+)</pre>
+
+  <p><code>unused_backend_modules()</code> is the one that saves real
+    weight. The engine imports the Qt backend for its registration side effect
+    and names the others in its registries, so a bundle picks up whichever
+    toolkits happen to be installed beside it &mdash; a quarter of a gigabyte of
+    Qt against an application that opens its window with GLFW. Naming the
+    backends the application does use leaves the rest out. The engine's own
+    <code>&lt;name&gt;context</code> modules stay: they are kilobytes, and they
+    report the backend as unavailable, which is what a bundle wants.</p>
+
+  <h3>One bundle, several commands</h3>
+
+  <p>Most of a bundle's size is the interpreter and the libraries, and they are
+    the same whichever command runs, so an application that ships a tool beside
+    it &mdash; a world baker, a downloader &mdash; should not freeze each
+    command separately. <code>OpenGLContext.packaging.multicall</code> gives one
+    bundle several executables, each named after the command it runs and
+    recognised by the name it was run under:</p>
+
+<pre>from OpenGLContext.packaging.multicall import command_modules, run
+
+COMMANDS = {
+    'mygame': 'mygame.game:main',
+    'oglc-bake': 'OpenGLContext_editor.bin.bake:main',
+}
+MODULES = command_modules(COMMANDS)   # for the spec's hiddenimports
+
+if __name__ == '__main__':
+    sys.exit(run(COMMANDS))</pre>
+
+  <p>The <code>.spec</code> builds one <code>EXE</code> per key from the one
+    analysis, and <code>COLLECT</code> puts them all beside a single
+    <code>_internal</code>. A command sees <code>sys.argv</code> exactly as it
+    would have if it had been installed as its own console script, and a bundle
+    imports only the command it was actually asked for.</p>
+</section>
+
+<section id="deb">
+  <h2>A Debian package</h2>
+
+  <p><code>oglc-deb</code> builds a <code>.deb</code> holding the application
+    <em>and</em> the Python that runs it. Nothing outside the package is needed:
+    no system Python, no virtual environment for the player to make, no pip at
+    install time.</p>
+
+<pre>uv python install --install-dir runtime 3.12
+oglc-deb --project . --runtime runtime --output dist</pre>
+
+  <p>The result installs under <code>/opt/&lt;package&gt;</code>, with the
+    application's console scripts linked into <code>/usr/games</code> and a
+    desktop menu entry:</p>
+
+<pre>/opt/mygame/python/    the interpreter and its standard library
+/opt/mygame/venv/      the application and everything it imports
+/usr/games/mygame      a link to the console script
+/usr/share/applications/mygame.desktop</pre>
+
+  <p>The interpreter has to be a <strong>relocatable</strong> build &mdash; one
+    that finds its standard library beside itself rather than at a path compiled
+    into it. The python-build-standalone distributions that
+    <code>uv python install</code> fetches are such a build;
+    <code>--runtime</code> takes the directory or a tar archive of one. That is
+    what lets the environment be assembled in a staging directory by an ordinary
+    user and run from <code>/opt</code>: the three places a virtual environment
+    records where it was made &mdash; <code>pyvenv.cfg</code>, the
+    <code>#!</code> line of every console script, and the symlink that is its
+    interpreter &mdash; are written as the paths it will be installed at
+    (<code>OpenGLContext.packaging.appdir</code>).</p>
+
+  <p>The package is byte-compiled with the installed paths recorded, since
+    <code>/opt</code> is read-only to the player and an environment that arrives
+    uncompiled would compile itself again on every run and never keep the
+    result. The parts of the interpreter an application cannot reach &mdash; the
+    C headers, Tk, IDLE, pip, the manual &mdash; are left out, some twenty
+    megabytes; <code>--keep-unused</code> ships them.</p>
+
+  <h3>What the machine is asked for</h3>
+
+  <p>The graphics libraries are named as dependencies rather than bundled: a
+    driver's GL library belongs to the machine, and a copy carried in a package
+    would be the wrong one. They cannot be derived from the binaries the way
+    <code>dpkg-shlibdeps</code> would, either &mdash; GLFW opens every one of
+    them through <code>dlopen</code> rather than linking it, so nothing about
+    them appears in an ELF header. The names are declared, in
+    <code>OpenGLContext.packaging</code>.</p>
+
+  <p>What is worth declaring is what a graphical session does not already
+    imply. A machine logged into X11 has <code>libX11</code> by definition, and
+    one logged into Wayland has <code>libwayland-client</code>. Neither is
+    guaranteed to have GLU, which nothing but OpenGL software wants, or
+    <code>libdecor</code>, without which a Wayland window comes up with no
+    titlebar &mdash; no way to move it and no way to close it.</p>
+
+  <p>So a package asks for <strong>either</strong> stack rather than both, and
+    takes the machine as it finds it. GL, EGL and GLU belong to no session and
+    are named outright; the windowing stack is one dependency that a desktop of
+    either kind already satisfies:</p>
+
+<pre>Depends: libegl1, libgl1, libglu1-mesa, libwayland-client0 | libx11-6
+Recommends: libdecor-0-0, libdecor-0-plugin-1-gtk | libdecor-0-plugin-1-cairo</pre>
+
+  <p>On any machine that can run the game, that alternative is met by what is
+    already installed and nothing is pulled in. Wayland is named first because
+    that is what <code>apt</code> reaches for on a machine that has neither
+    &mdash; a container being built to run the game headless, most often. One
+    library stands for its whole stack: the rest travels with it on any real
+    desktop, and naming them all would turn "either" back into "both".</p>
+
+  <p>This is what the package <em>asks the machine for</em>, not what it can
+    do. The bundle carries GLFW's builds for both &mdash; they are under
+    400&nbsp;KB each &mdash; and picks between them at run time from
+    <code>XDG_SESSION_TYPE</code>, because the session belongs to whoever is
+    playing rather than to whoever built the package.</p>
+
+  <p><code>--session</code> names a stack in full instead, for a fleet whose
+    session is known, and <code>--session both</code> asks for every library
+    either stack could want &mdash; which installs regardless of what is true
+    of a machine, at the cost of pulling one desktop's libraries onto the
+    other. The three sets are <code>SYSTEM_LIBRARIES</code>,
+    <code>WAYLAND_LIBRARIES</code> and <code>X11_LIBRARIES</code>.</p>
+
+  <p>An application adds to the list with <code>--depends</code>. A library
+    reached through <code>dlopen</code> whose absence is a degraded result
+    rather than a failure belongs in <code>--recommends</code> instead: a sound
+    backend, or the <code>libdecor</code> plug-in that draws the titlebar, which
+    a full-screen game never wants and should not drag GTK in to be told so.</p>
+
+  <h3>Options worth knowing</h3>
+  <ul>
+    <li><code>--command NAME</code>, repeatable &mdash; which console scripts to
+      put in <code>/usr/games</code>. The distribution's own by default; a game
+      that ships a tool belonging to another distribution names it here.</li>
+    <li><code>--extras A,B</code> &mdash; the project's optional dependencies to
+      install with it.</li>
+    <li><code>--session either|wayland|x11|both</code> &mdash; which windowing
+      stack the package declares, as above. <code>either</code> by default,
+      which takes the machine as it finds it.</li>
+    <li><code>--requirement FILE</code>, repeatable &mdash; requirement files
+      installed before the project, which is where a dependency that is not yet
+      on an index is pinned.</li>
+    <li><code>--menu-name</code>, <code>--categories</code>,
+      <code>--icon</code> &mdash; the desktop entry. Without an icon of its own
+      the entry names a stock one, which every theme answers to.</li>
+    <li><code>--revision N</code> &mdash; the packaging of one upstream release,
+      counting from 1.</li>
+    <li><code>--prefix</code>, <code>--bindir</code>, <code>--section</code>
+      &mdash; for an application that is not a game.</li>
+  </ul>
+
+  <p>A Python version becomes a Debian one on the way in: Debian sorts a letter
+    <em>after</em> nothing at all, so <code>0.1.0a1</code> would be newer than
+    <code>0.1.0</code> and a player on the pre-release would never be offered
+    the release. Every pre-release marker gets a tilde, which is the one
+    character that sorts before the empty string:
+    <code>0.1.0~a1-1</code>.</p>
+
+  <p>The package is written directly, as the <code>ar</code> archive of two
+    tarballs that a <code>.deb</code> is, so a build host needs no
+    <code>dpkg</code>. Every file in it is owned by root and carries one
+    timestamp, so building the same input twice gives the same package;
+    <code>SOURCE_DATE_EPOCH</code> fixes that timestamp where a build has to be
+    reproducible across days.</p>
+</section>
+
+<section id="limits">
+  <h2>Limits</h2>
+  <ul>
+    <li><strong>PyInstaller builds for the machine it runs on.</strong> A
+      Windows bundle is built on Windows.</li>
+    <li><strong><code>oglc-deb</code> builds for the architecture of the
+      interpreter it is given</strong>, which it reads from that interpreter
+      rather than from the build machine. There is no cross-architecture build:
+      the wheels installed into the environment are the build machine's.</li>
+    <li><strong>No world, no map, no content.</strong> What an application
+      fetches or generates at run time is not something a package can carry, and
+      the application's own documentation is where a player is told so.</li>
+  </ul>
+</section>
+
+</body></html>

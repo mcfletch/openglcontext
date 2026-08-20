@@ -247,6 +247,17 @@ scripts when the package is installed: <code>oglc-view</code>
 <code>oglc-lorentz</code>. <code>oglc-gltf</code>,
 <code>oglc-vrml</code> and <code>oglc-tiles</code> are deprecated aliases for
 <code>oglc-view</code>.</p>
+
+<p>The <strong>packaging</strong> package is for shipping an application built
+on the engine to somebody who has no Python &mdash; a frozen bundle, or a native
+package holding its own interpreter. It is the engine's answers to what neither
+can work out alone: which of its modules are reached by name rather than by
+import (the PyInstaller hooks in <code>__pyinstaller</code>, which PyInstaller
+finds by entry point), which windowing toolkits an application is not using, and
+which libraries it asks the operating system for. It carries one console
+command, <code>oglc-deb</code>. Nothing in it is imported at run time and
+nothing in it draws (see <a href="packaging.html">Packaging an
+application</a>).</p>
 </section>
 <section>
 <h2>Scenegraph Rendering</h2>

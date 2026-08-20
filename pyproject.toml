@@ -91,11 +91,21 @@ oglc-gltf-demo = "OpenGLContext.bin.gltf_demo:main"
 oglc-gltf-regression = "OpenGLContext.bin.gltf_regression:main"
 oglc-ui-demo = "OpenGLContext.bin.ui_demo:main"
 oglc-character-sheet = "OpenGLContext.bin.character_sheet:main"
+# Ship an application built on the engine as a Debian package: a relocatable
+# CPython and the application on top of it, under /opt.
+oglc-deb = "OpenGLContext.packaging.deb:main"
 # Deprecated aliases for oglc-view, which reads all four formats; each of these
 # three is now a thin wrapper around it. Removed after one release cycle.
 oglc-vrml = "OpenGLContext.bin.vrml_view:main"
 oglc-gltf = "OpenGLContext.bin.gltf_view:main"
 oglc-tiles = "OpenGLContext.bin.tiles_view:main"
+
+# PyInstaller reads this to find the hooks in OpenGLContext/__pyinstaller, which
+# tell it about the plug-in registries, the generated resource modules and the
+# shader sources -- none of which it can see by following import statements.
+# Nothing is imported from that package at run time.
+[project.entry-points.pyinstaller40]
+hook-dirs = "OpenGLContext.__pyinstaller:get_hook_dirs"
 
 [project.urls]
 Homepage = "http://pyopengl.sourceforge.net/context/"

@@ -89,9 +89,24 @@ uv pip install -e ".[glfw,gltf]"</pre>
           editor, the console and a skin. See
           <a href="overlayui.html">The overlay UI</a>.</dd>
 
+        <dt><code>oglc-character-sheet</code></dt>
+        <dd>Every clip a rigged character plays, as one picture &mdash; a row
+          per view and a column per moment of the cycle, with an overview sheet
+          and an <code>index.html</code> over the set. A bad silhouette, a foot
+          through the floor or an arm through the ribs shows up at a glance
+          where scrubbing a viewer finds one at a time. Drawn through the
+          ordinary PBR pass, so the sheet shows what a game gets. See
+          <a href="characters.html">Rigged characters</a>.</dd>
+
         <dt><code>oglc-test</code></dt>
         <dd>Run a context's automated tests &mdash; the test runner behind the
           visual-regression suite.</dd>
+
+        <dt><code>oglc-deb</code></dt>
+        <dd>Build a Debian package for an application on the engine: the
+          application and the Python that runs it, under <code>/opt</code>, with
+          nothing for the machine to install. See
+          <a href="packaging.html">Packaging an application</a>.</dd>
 
         <dt><code>oglc-lorentz</code></dt>
         <dd>A Lorentz attractor drawn as a ten-thousand-point line set. A small
@@ -158,6 +173,11 @@ uv pip install -e ".[glfw,gltf]"</pre>
           <li><a href="recording.html">Recording Video</a> -- Writing the frames
             a context draws to an H.264 file, straight from the framebuffer to
             the GPU's video encoder, on a clock that counts frames</li>
+          <li><a href="packaging.html">Packaging an Application</a> -- Handing
+            somebody a game with no Python to install: freezing a bundle with
+            PyInstaller, which the engine's own hooks make work, and building a
+            Debian package that carries its own interpreter under
+            <code>/opt</code> with <code>oglc-deb</code></li>
           <li><a href="particles.html">Particle Effects</a> -- Fire, smoke,
             sparks, explosions and trails as camera-facing quads in one
             instanced draw: a numpy pool with a packed live set, emitters as

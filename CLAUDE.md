@@ -55,6 +55,7 @@ OpenGLContext/
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/terrain.html
 ├── move/             # Camera, movement modes, walking -- docs/navigation.html
 ├── nav/              # Navigation mesh generated from a collision mesh
+├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.html
 ├── passes/           # Rendering passes -- docs/renderpasses.html, flat.html, pbr.html
 │   ├── _flat.py      # What both flat passes share; not instantiated directly
 │   ├── flatcore.py   # Core-profile pass (GLSL)
@@ -65,6 +66,7 @@ OpenGLContext/
 │   ├── shadow*.py    # Shadow mapping -- docs/shadows.html
 │   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.html
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
+├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.html
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.html
 ├── resources/        # Generated Python modules holding icons and shader text
 ├── scenegraph/       # VRML97-style nodes

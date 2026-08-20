@@ -114,7 +114,7 @@ class ContextConfigMixin:
         """
         if entrypoint is None:
             entrypoint = cls.getDefaultContextType() or "glfw"
-        log.warning("Default context type: %s", entrypoint)
+        log.debug("Default context type: %s", entrypoint)
         if isinstance(entrypoint, (bytes, unicode)):
             for ep in cls.getContextTypes(type):
                 if entrypoint == ep.name:
