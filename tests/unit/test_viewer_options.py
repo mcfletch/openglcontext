@@ -44,12 +44,37 @@ class TestUsableWithoutACommandLine:
         assert ViewerOptions().physics is False
 
     def test_the_framing_yaw_default_follows_the_environment(self, monkeypatch):
-        monkeypatch.setenv('YAW', '0.25')
+        monkeypatch.setenv('OPENGLCONTEXT_VIEW_YAW', '0.25')
         assert ViewerOptions().yaw == pytest.approx(0.25)
-        monkeypatch.setenv('YAW', 'sideways')
+        monkeypatch.setenv('OPENGLCONTEXT_VIEW_YAW', 'sideways')
         assert ViewerOptions().yaw == pytest.approx(-0.62), 'bad value ignored'
-        monkeypatch.delenv('YAW')
+        monkeypatch.delenv('OPENGLCONTEXT_VIEW_YAW')
         assert ViewerOptions().yaw == pytest.approx(-0.62)
+
+    def test_an_unnamespaced_yaw_is_not_read(self, monkeypatch):
+        """A bare name belongs to whoever else set it, not to the viewer.
+
+        ``YAW`` is a plausible variable in a robotics or CAD shell, and one
+        that turned the camera would rotate every framed capture made there.
+        """
+        monkeypatch.setenv('YAW', '1.4')
+        assert ViewerOptions().yaw == pytest.approx(-0.62)
+
+    @pytest.mark.parametrize('spelling', ['off', 'no', 'false', 'FALSE'])
+    def test_a_spelled_out_no_turns_physics_off(self, monkeypatch, spelling):
+        """Every accepted spelling of "no", not only ``0``.
+
+        These variables are how a feature is pinned for a capture or a CI run,
+        so a spelling that silently reverses the pin makes the result a lie.
+        """
+        monkeypatch.setenv('OPENGLCONTEXT_PHYSICS', spelling)
+        assert ViewerOptions().physics is False
+
+    def test_a_value_that_is_neither_a_yes_nor_a_no_is_reported(
+            self, monkeypatch, caplog):
+        monkeypatch.setenv('OPENGLCONTEXT_PHYSICS', 'perhaps')
+        assert ViewerOptions().physics is False
+        assert 'OPENGLCONTEXT_PHYSICS' in caplog.text
 
 
 class TestTheCommandLineFillsIn:

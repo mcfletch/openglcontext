@@ -382,15 +382,36 @@ class TestACleanRenderingEnvironment:
         for path in root.rglob('*.py'):
             seen.update(re.findall(r'OPENGLCONTEXT_[A-Z_]+', path.read_text()))
         # The ones that are not about what a frame looks like or how it is
-        # produced, and so are deliberately inherited.  The two stall switches
-        # decide when a log line is written and what counts as a stall; a
-        # capture renders the same pixels either way, and a diagnostic that a
-        # subprocess silently dropped would be no diagnostic at all.
-        allowed = {'OPENGLCONTEXT_AUDIO', 'OPENGLCONTEXT_AUDIO_VOLUME',
-                   'OPENGLCONTEXT_DEBUG_WHEEL', 'OPENGLCONTEXT_PHYSICS',
-                   'OPENGLCONTEXT_STALL_MS', 'OPENGLCONTEXT_TRACE_STALLS',
-                   'OPENGLCONTEXT_STALL_TRACE'}
+        # produced, and so are deliberately inherited.  Each says why, because
+        # the list is the only thing standing between a diagnostic and a
+        # subprocess that silently drops it -- or between a rendering setting
+        # and a reference image that inherited it.
+        allowed = {
+            # Sound is not pixels.  A capture compares images.
+            'OPENGLCONTEXT_AUDIO',
+            'OPENGLCONTEXT_AUDIO_VOLUME',
+            # Diagnostics.  These decide when a log line is written and what
+            # counts as a stall; a capture renders the same pixels either way,
+            # and a diagnostic a subprocess silently dropped would be no
+            # diagnostic at all.
+            'OPENGLCONTEXT_DEBUG_WHEEL',
+            'OPENGLCONTEXT_STALL_MS',
+            'OPENGLCONTEXT_TRACE_STALLS',
+            'OPENGLCONTEXT_STALL_TRACE',
+        }
         assert not (seen - set(renderoptions.ENVIRONMENT) - allowed)
+
+    def test_the_exemptions_are_not_rendering_settings(self):
+        """Anything that moves the camera or the objects belongs in the tuple.
+
+        ``OPENGLCONTEXT_PHYSICS`` drops the avatar under gravity and collides
+        it with the scene, and ``OPENGLCONTEXT_VIEW_YAW`` turns the model on
+        the framing turntable.  Both decide where the camera ends up, so a
+        reference image rendered with either inherited is a reference for
+        whatever the parent process happened to be carrying.
+        """
+        for name in ('OPENGLCONTEXT_PHYSICS', 'OPENGLCONTEXT_VIEW_YAW'):
+            assert name in renderoptions.ENVIRONMENT, name
 
 
 class TestWhatCleanMeans:
@@ -434,3 +455,4 @@ class TestWhatCleanMeans:
         for name in ('OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_IBL',
                      'OPENGLCONTEXT_BLOOM', 'OPENGLCONTEXT_PROFILE'):
             assert name not in found, name
+

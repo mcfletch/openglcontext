@@ -55,6 +55,12 @@ ENVIRONMENT: Tuple[str, ...] = (
     'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME', 'OPENGLCONTEXT_CAPTURE_DELAY',
     'OPENGLCONTEXT_DISABLE_FPS_DISPLAY', 'OPENGLCONTEXT_HIDDEN',
     'OPENGLCONTEXT_NO_VSYNC', 'OPENGLCONTEXT_GLTF_BASELINE',
+    # Both of these decide where the camera ends up.  Physics drops the avatar
+    # under gravity and collides it with the scene; the framing yaw turns the
+    # model on the turntable a model with no camera of its own is framed
+    # against.  A reference image rendered with either inherited is a
+    # reference for whatever the parent process happened to be carrying.
+    'OPENGLCONTEXT_PHYSICS', 'OPENGLCONTEXT_VIEW_YAW',
 )
 
 #: The two of those that say **how a render is presented** rather than what it
