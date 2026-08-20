@@ -212,3 +212,67 @@ class TestNoOrphanPages:
         assert not (pages - linked), (
             'not linked from docs/documentation.html: %s'
             % sorted(pages - linked))
+
+
+class TestTheConsoleCommandsAreDocumented:
+    """``docs/documentation.html`` is where a reader finds what to type.
+
+    A command declared in ``[project.scripts]`` and described nowhere is a
+    command nobody runs: it appears on the path at install time and there is no
+    page that says it exists.  The list is hand-written prose, so what is
+    checked is that it names every command and invents none.
+    """
+
+    PAGE = DOCS / 'documentation.html'
+
+    def _declared(self):
+        data = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))
+        return set(data['project']['scripts'])
+
+    def _listed(self, text):
+        """The commands with an entry of their own in the list"""
+        return set(re.findall(r'<dt><code>([a-z0-9-]+)</code></dt>', text))
+
+    def _excused(self, text):
+        """Every command named in a paragraph about deprecation
+
+        A deprecated alias is named there rather than given an entry of its
+        own, which is the right shape for it: a reader is being told to use
+        something else, not what it is for. Read from the page rather than
+        listed here, so that removing an alias after its release cycle brings
+        its exemption down with it.
+
+        This excuses the command the aliases point *at* as well, since it is
+        named in the same paragraph -- so the one thing this does not check is
+        whether `oglc-view` still has an entry. Telling the two apart means
+        reading the prose, which would fail the next time somebody rewords it.
+        A command newly added is in no such paragraph and is always caught,
+        which is the case that matters.
+        """
+        excused = set()
+        for paragraph in re.findall(r'<p class="technical">(.*?)</p>', text, re.S):
+            if 'deprecated' in paragraph:
+                excused.update(re.findall(r'<code>([a-z0-9-]+)</code>', paragraph))
+        return excused
+
+    @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
+    def test_every_command_has_an_entry(self):
+        """An entry in the list, not a mention somewhere on the page.
+
+        A command named in passing while describing something else is not how
+        a reader finds out that it exists, which is the job this list does.
+        """
+        text = self.PAGE.read_text(encoding='utf-8')
+        missing = sorted(
+            self._declared() - self._listed(text) - self._excused(text))
+        assert not missing, (
+            'declared in [project.scripts] with no entry in the console-command '
+            'list in docs/documentation.html: %s' % (missing,))
+
+    @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
+    def test_the_list_invents_nothing(self):
+        text = self.PAGE.read_text(encoding='utf-8')
+        invented = sorted(self._listed(text) - self._declared())
+        assert not invented, (
+            'listed as a console command in docs/documentation.html but not '
+            'declared in [project.scripts]: %s' % (invented,))
