@@ -44,12 +44,17 @@ def _skeleton(joints):
 
 
 def crowd_character_glb(joints=57, vertices=4096, clips=23, keys=21,
-                        moving=8, seed=11):
+                        moving=8, seed=11, interpolation='LINEAR'):
     """A rig of ``joints`` bones, ``vertices`` skinned vertices and ``clips`` clips.
 
     Each clip carries a channel per joint per path, as an exported one does,
     of which ``moving`` joints' rotations actually vary; the rest hold a single
     value, which is the shape the sampler's grouping is built for.
+
+    ``interpolation`` is how the moving channels get between their keys --
+    ``LINEAR`` as a baked export writes them, or ``CUBICSPLINE``, which stores
+    an in-tangent and an out-tangent either side of each value and is what a
+    curve authored rather than baked exports as.
     """
     rng = np.random.default_rng(seed)
     children, parents = _skeleton(joints)
@@ -119,15 +124,27 @@ def crowd_character_glb(joints=57, vertices=4096, clips=23, keys=21,
                 channels.append(AnimationChannel(
                     sampler=len(samplers) - 1,
                     target=AnimationChannelTarget(node=joint, path=path)))
-        turn = np.zeros((keys, 4), dtype='<f4')
         angle = np.linspace(0.0, np.pi / 3 * (1 + clip % 3), keys)
+        turn = np.zeros((keys, 4), dtype='<f4')
         turn[:, 2] = np.sin(angle / 2)
         turn[:, 3] = np.cos(angle / 2)
-        curve = _accessor(arrays, accessors, 7, turn, 'VEC4')
+        if interpolation == 'CUBICSPLINE':
+            # Three rows a key: the in-tangent, the value, the out-tangent.
+            # Tangents that are not zero, so the curve between the keys is
+            # genuinely a curve and not the straight line a linear channel
+            # would draw through the same values.
+            spline = np.zeros((keys * 3, 4), dtype='<f4')
+            spline[1::3] = turn
+            slope = np.gradient(angle) * 1.5
+            spline[0::3, 2] = np.sin(angle / 2) * slope     # in-tangents
+            spline[2::3, 2] = -np.sin(angle / 2) * slope    # out-tangents
+            curve = _accessor(arrays, accessors, 7, spline, 'VEC4')
+        else:
+            curve = _accessor(arrays, accessors, 7, turn, 'VEC4')
         for step in range(moving):
             joint = (step * max(1, joints // max(1, moving))) % joints
             samplers.append(AnimationSampler(input=7, output=curve,
-                                             interpolation='LINEAR'))
+                                             interpolation=interpolation))
             channels.append(AnimationChannel(
                 sampler=len(samplers) - 1,
                 target=AnimationChannelTarget(node=joint, path='rotation')))

@@ -156,3 +156,128 @@ class TestComposingSkeletonsOnTheGPU:
 
         assert report['compute_ran'] == '1'
         assert float(report['worst_difference']) < 1e-5, report
+
+
+class TestTheProcessorPathCanStillBeChosen:
+    def test_turning_the_shader_path_off_reaches_a_mesh_that_would_batch(
+            self, tmp_path):
+        """Where a mesh is skinned has to be settled before it is batched.
+
+        A mesh drawn in an instanced batch has no draw of its own to settle it
+        in, so settling it at its first draw settles it never -- and the
+        renderer goes on skinning in the shader whatever it was asked for,
+        which would leave a driver that cannot skin there drawing rest poses.
+        """
+        from tests.helpers._crowd_asset import crowd_character_glb
+
+        path = tmp_path / 'rig.glb'
+        path.write_bytes(crowd_character_glb(joints=12, vertices=256))
+        out = _run('fallback', str(path), str(tmp_path))
+        report = dict(line.split('=', 1) for line in out.strip().split('\n')
+                      if '=' in line)
+
+        assert int(report['meshes']) >= 1
+        assert report['skin_on_gpu'] == '0', 'the option was not honoured'
+        assert report['deforms_vertices'] == '1'
+        assert report['moved'] == '1', 'the processor path posed nothing'
+
+
+class TestBlendingClipsOnTheGPU:
+    """The compute blend against the numpy one it replaces.
+
+    The numpy blend is the definition of the pose -- a weighted mean, the
+    shortfall taken from where the joint rests -- so what the shader has to do
+    is arrive at the same place: over a fifty-seven bone rig, figures on
+    different clips at different points, and a cross-fade with the two clips at
+    unequal weights.
+    """
+
+    def _report(self, tracks, tmp_path, interpolation='LINEAR', equipped=0,
+                masked=0):
+        from tests.helpers._crowd_asset import crowd_character_glb
+
+        path = tmp_path / 'rig.glb'
+        path.write_bytes(crowd_character_glb(
+            joints=57, vertices=256, clips=6, interpolation=interpolation))
+        out = _run('blend', str(path), str(tmp_path),
+                   env={'BLEND_TRACKS': str(tracks),
+                        'BLEND_EQUIPPED': str(equipped),
+                        'BLEND_MASKED': str(masked)})
+        return dict(line.split('=', 1) for line in out.strip().split('\n')
+                    if '=' in line)
+
+    @pytest.mark.parametrize('tracks', [1, 2])
+    def test_a_layer_masked_to_part_of_the_body_matches_too(self, tracks,
+                                                            tmp_path):
+        """A figure firing while it runs: the upper layer moves the joints it
+        is masked to and leaves the rest doing what the layer below says."""
+        report = self._report(tracks, tmp_path, masked=30)
+
+        assert report['blend_ran'] == '1'
+        for path in ('translation', 'rotation', 'scale'):
+            assert float(report['worst_%s' % path]) < 1e-5, (path, report)
+
+    @pytest.mark.parametrize('interpolation', ['LINEAR', 'CUBICSPLINE'])
+    @pytest.mark.parametrize('tracks', [1, 2])
+    def test_the_pose_matches_the_numpy_one(self, tracks, interpolation,
+                                            tmp_path):
+        report = self._report(tracks, tmp_path, interpolation)
+
+        assert report['blend_ran'] == '1'
+        assert int(report['joints_checked']) >= 57 * 5
+        for path in ('translation', 'rotation', 'scale'):
+            # Single precision is what the pose is uploaded in, so that is as
+            # close as the two can be asked to come.
+            assert float(report['worst_%s' % path]) < 1e-5, (path, report)
+
+
+class TestAFigureCarryingSomething:
+    """A weapon on a hand must not push the whole figure back onto numpy.
+
+    The scenegraph reaches what a figure is holding by walking to it, so that
+    hand -- and the joints down to it -- have to say where the pose put them.
+    That is a handful of joints, and a handful is worked out here while the
+    skeleton stays on the GPU.
+    """
+
+    def _report(self, tmp_path, equipped, masked=0):
+        from tests.helpers._crowd_asset import crowd_character_glb
+
+        path = tmp_path / 'rig.glb'
+        path.write_bytes(crowd_character_glb(joints=57, vertices=256, clips=6))
+        out = _run('blend', str(path), str(tmp_path),
+                   env={'BLEND_TRACKS': '2', 'BLEND_EQUIPPED': str(equipped),
+                        'BLEND_MASKED': str(masked)})
+        return dict(line.split('=', 1) for line in out.strip().split('\n')
+                    if '=' in line)
+
+    def test_it_keeps_the_gpu_blend(self, tmp_path):
+        report = self._report(tmp_path, equipped=40)
+
+        assert report['blend_ran'] == '1'
+        assert int(report['writable']) > 0, 'nothing was hung on a joint'
+
+    def test_the_joints_it_writes_are_where_the_whole_blend_puts_them(
+            self, tmp_path):
+        report = self._report(tmp_path, equipped=40)
+
+        assert int(report['written_joints']) > 0
+        # The scenegraph holds these in single precision, so that is as close
+        # as the two can be asked to come.
+        assert float(report['worst_written']) < 1e-5, report
+
+    def test_a_figure_carrying_nothing_writes_no_joints(self, tmp_path):
+        report = self._report(tmp_path, equipped=0)
+
+        assert report['writable'] == '0'
+        assert report['written_joints'] == '0'
+
+    def test_a_masked_layer_reaches_the_joints_it_writes(self, tmp_path):
+        """The joints written here are worked out from a few of the skeleton,
+        and a layer masked to part of the body has to be honoured in that
+        narrowed run exactly as it is in the whole one."""
+        report = self._report(tmp_path, equipped=40, masked=30)
+
+        assert report['blend_ran'] == '1'
+        assert int(report['written_joints']) > 0
+        assert float(report['worst_written']) < 1e-5, report

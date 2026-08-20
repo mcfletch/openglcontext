@@ -203,6 +203,11 @@ class Crowd:
         layout = self._layout
         assert layout is not None
         count = len(group)
+        # A frame that owes nobody a bounds refresh, for figures playing plain
+        # clips with nothing hung on them, never needs the pose on this side at
+        # all: the whole chain from keyframes to joint palette runs on the GPU.
+        if self._frame % self.BOUNDS_INTERVAL != 1 and self._blend_on_gpu(group):
+            return
         if self._has_morph_weights(group):
             # Morph weights are per mesh and of no fixed width, so a figure
             # whose clips drive them is posed on its own rather than bending
@@ -253,8 +258,13 @@ class Crowd:
                    for member in group)
 
     def _lay_layer(self, group: List[Member], index: int,
-                   pose: Tuple[np.ndarray, ...]) -> None:
-        """Write one clip straight into the pose, for every figure at once."""
+                   pose: Tuple[np.ndarray, ...],
+                   restriction: Optional["_Restriction"] = None) -> None:
+        """Write one clip straight into the pose, for every figure at once.
+
+        ``restriction`` narrows it to a few joints, for a pose being worked out
+        only where the scenegraph reads it.
+        """
         picked = [self._track(member, index, 0) for member in group]
         by_clip: Dict[str, List[Tuple[int, Any]]] = {}
         for row, track in enumerate(picked):
@@ -262,6 +272,8 @@ class Crowd:
         for entries in by_clip.values():
             rows = np.asarray([row for row, _ in entries], dtype=np.intp)
             sampler = self._sampler(entries[0][1].clip)
+            if restriction is not None:
+                sampler = restriction.narrow(sampler)
             times = np.asarray([t.time for _, t in entries], dtype='d')
             sampled = sampler.sample_many(times)
             for path_index in range(len(_PATHS)):
@@ -271,15 +283,27 @@ class Crowd:
                     pose[path_index][np.ix_(rows, slots)] = sampled[path_index]
 
     def _apply_layer(self, group: List[Member], index: int, tracks: int,
-                     pose: Tuple[np.ndarray, ...]) -> None:
-        """Blend one layer of every figure of the group over the pose so far."""
+                     pose: Tuple[np.ndarray, ...],
+                     restriction: Optional["_Restriction"] = None) -> None:
+        """Blend one layer of every figure of the group over the pose so far.
+
+        ``restriction`` narrows the whole run to a few joints -- the ones
+        something outside the rig reads -- so a figure whose pose is being
+        worked out on the GPU can still have those joints written here without
+        paying for the skeleton it is not asking about.
+        """
         layout = self._layout
         assert layout is not None
         count = len(group)
         first = group[0].mixer.layers[index]
         mask = first.slot_mask(layout)
         additive = first.additive
-        blends = [_GroupBlend(count, layout.n, width,
+        joints = layout.n if restriction is None else len(restriction.slots)
+        if mask is not None and restriction is not None:
+            # The layer's mask is over the whole skeleton; a narrowed run reads
+            # it by the joint's place in the narrowed set, not by its slot.
+            mask = mask[restriction.slots]
+        blends = [_GroupBlend(count, joints, width,
                               rotation=(path == 'rotation' and not additive))
                   for path, width in _PATHS]
         for position in range(tracks):
@@ -293,6 +317,8 @@ class Crowd:
             for entries in by_clip.values():
                 rows = np.asarray([row for row, _ in entries], dtype=np.intp)
                 sampler = self._sampler(entries[0][1].clip)
+                if restriction is not None:
+                    sampler = restriction.narrow(sampler)
                 times = np.asarray([t.time for _, t in entries], dtype='d')
                 weights = np.asarray([t.weight for _, t in entries], dtype='d')
                 sampled = sampler.sample_many(times)
@@ -356,6 +382,120 @@ class Crowd:
             self._skin_group(group, pose)
         return True
 
+    def _blend_on_gpu(self, group: List[Member]) -> bool:
+        """Sample, blend, compose and skin this group entirely on the GPU.
+
+        False -- and the caller does it all in numpy -- unless every figure of
+        the group is doing what the blend shader reads: layers in order, each
+        masked or not, and none of them additive. What the scenegraph reads of
+        the result is worked out here afterwards, for those joints only.
+        """
+        skeleton = self._compute_skeleton()
+        layout = self._layout
+        if skeleton is None or layout is None:
+            return False
+        if not skeleton.describe_clips(self._all_samplers(), layout.rest_pose()):
+            return False
+        played = self._blend_tables(group, skeleton)
+        if played is None:
+            return False
+        tracks, layers, spans, masks = played
+        targets = self._palette_targets(group)
+        if targets is None:
+            return False
+        if not (skeleton.blend(tracks, layers, spans, masks)
+                and skeleton.run(None, targets, self._palette.buffer,
+                                 count=len(group))):
+            return False
+        self._write_read_joints(group)
+        return True
+
+    def _write_read_joints(self, group: List[Member]) -> None:
+        """Put the joints something reads onto the scenegraph, and no others.
+
+        The pose is on the GPU and nothing reads it back, but a weapon hanging
+        off a hand is reached by walking the scenegraph -- so that hand, and
+        the joints down to it, have to say where they are. That is a handful of
+        joints out of a skeleton, and working out a handful is a fraction of
+        working out all of them: the clips are read for those joints only.
+        """
+        layout = self._layout
+        if layout is None:
+            return
+        wanted = [member.mixer._writable() for member in group]
+        if not sum(len(slots) for slots in wanted):
+            return
+        slots = np.unique(np.concatenate(wanted)).astype(np.int32)
+        columns = np.full(layout.n, 0, dtype=np.intp)
+        columns[slots] = np.arange(len(slots))
+        self._write_slots(group, self._partial_pose(group, slots), wanted,
+                          columns=columns)
+
+    def _partial_pose(self, group: List[Member],
+                      slots: np.ndarray) -> Tuple[np.ndarray, ...]:
+        """The pose of ``slots`` only, for every figure of a plain group."""
+        layout = self._layout
+        assert layout is not None
+        count = len(group)
+        positions = np.full(layout.n, -1, dtype=np.int32)
+        positions[slots] = np.arange(len(slots), dtype=np.int32)
+        restriction = _Restriction(slots, positions)
+        pose = (np.repeat(layout.rest_translation[slots][None], count, axis=0),
+                np.repeat(layout.rest_rotation[slots][None], count, axis=0),
+                np.repeat(layout.rest_scale[slots][None], count, axis=0))
+        first = group[0].mixer
+        for index, layer in enumerate(first.layers):
+            tracks = [track for track in layer.tracks if track.weight > 0]
+            if not tracks or not layer.weight:
+                continue
+            # The same choice the whole-skeleton pose makes: one clip at full
+            # weight is a scatter, not a blend.
+            if self._plain(group, index, len(tracks)):
+                self._lay_layer(group, index, pose, restriction=restriction)
+            else:
+                self._apply_layer(group, index, len(tracks), pose,
+                                  restriction=restriction)
+        return pose
+
+    def _all_samplers(self) -> List[ClipSampler]:
+        """Every clip of the build, regrouped, in a stable order."""
+        first = self.members[0].mixer
+        return [self._sampler(clip) for _name, clip in sorted(first.clips.items())]
+
+    def _blend_tables(self, group: List[Member], skeleton: Any) -> Optional[tuple]:
+        """What every figure is playing, as the tables the blend shader reads.
+
+        ``(tracks, layers, spans, masks)`` -- or None where any figure is doing
+        something the shader does not read, and the whole group is then blended
+        in numpy instead.
+        """
+        clip_index = skeleton.clip_index
+        tracks: List[Tuple[float, float, float, float]] = []
+        layers: List[Tuple[float, float, float, float]] = []
+        spans: List[Tuple[int, int]] = []
+        masks = _MaskTable(self._layout, skeleton.mask_words())
+        for member in group:
+            first = len(layers)
+            for layer in member.mixer.layers:
+                if not layer.weight or not layer.tracks:
+                    continue
+                if layer.additive:
+                    return None
+                start = len(tracks)
+                for track in layer.tracks:
+                    if track.weight <= 0:
+                        continue
+                    clip = clip_index.get(track.clip.name)
+                    if clip is None:
+                        return None
+                    tracks.append((clip, track.time, track.weight, 0.0))
+                if len(tracks) == start:
+                    continue
+                layers.append((start, len(tracks) - start,
+                               masks.index(layer), layer.weight))
+            spans.append((first, len(layers) - first))
+        return tracks, layers, spans, masks.rows()
+
     def _compute_skeleton(self) -> Any:
         """The compute-shader skeleton for this crowd's rig, built on first use."""
         if self._skeleton is not None or self._skeleton_tried:
@@ -394,11 +534,16 @@ class Crowd:
         for figure, member in enumerate(group):
             for index, (skin, _slots, _bind, mesh_slot) in enumerate(
                     member.mixer._skin_plans):
+                written = set()
                 for mesh in skin.meshes:
                     base = mesh.skin_from_gpu(mode, self.skeleton_joints(index))
                     if base is None:
                         return None
-                    targets.append((figure, index, mesh_slot, base))
+                    # A figure's levels share one range between them; writing
+                    # it once is writing it for both.
+                    if base not in written:
+                        written.add(base)
+                        targets.append((figure, index, mesh_slot, base))
         return targets
 
     def skeleton_joints(self, skin: int) -> int:
@@ -459,20 +604,101 @@ class Crowd:
     def _write_group(self, group: List[Member],
                      pose: Tuple[np.ndarray, ...]) -> None:
         """Put each figure's pose onto its own scenegraph nodes."""
+        self._write_slots(group, pose, [member.mixer._writable()
+                                        for member in group])
+
+    def _write_slots(self, group: List[Member], pose: Tuple[np.ndarray, ...],
+                     wanted: List[np.ndarray],
+                     columns: Optional[np.ndarray] = None) -> None:
+        """Write the named joints of every figure, converting once for all of them.
+
+        ``wanted`` is each figure's joints as rig slots; ``columns`` maps a rig
+        slot to its place in the pose arrays, for a pose worked out for a few
+        joints rather than the whole skeleton. A conversion out of numpy per
+        figure -- let alone per joint -- is most of what writing a pose back
+        costs, so the group's whole set is converted in one go and the loop
+        that follows does nothing but assign.
+        """
+        counts = [len(slots) for slots in wanted]
+        if not sum(counts):
+            return
+        slots = np.concatenate(wanted)
+        figures = np.repeat(np.arange(len(group)), counts)
+        places = slots if columns is None else columns[slots]
+        translations = pose[0][figures, places].tolist()
+        rotations = quat_xyzw_to_vrml_rows(pose[1][figures, places]).tolist()
+        scales = pose[2][figures, places].tolist()
+        at = 0
         for row, member in enumerate(group):
             mixer = member.mixer
-            slots = mixer._writable()
-            if not len(slots):
-                continue
-            axis_angle = quat_xyzw_to_vrml_rows(pose[1][row][slots])
-            for index, slot in enumerate(slots):
-                mixer._write_slot(int(slot), pose[0][row][slot],
-                                  axis_angle[index], pose[2][row][slot])
+            for slot in wanted[row]:
+                mixer._write_slot(int(slot), translations[at], rotations[at],
+                                  scales[at])
+                at += 1
 
 
 # ======================================================================
 # The arithmetic, with a figure axis on it
 # ======================================================================
+
+class _MaskTable:
+    """The distinct joint masks a group's layers use, as bits.
+
+    A layer masked to the arms moves those joints and leaves the rest as it
+    found them, and the shader asks that a bit at a time. Two layers masked to
+    the same joints are one row here, which is what a crowd of figures all
+    firing from the shoulder comes to.
+    """
+
+    def __init__(self, layout: Any, words: int) -> None:
+        self._layout = layout
+        self._words = words
+        self._rows: List[np.ndarray] = []
+        self._of: Dict[Any, int] = {}
+
+    def index(self, layer: Any) -> float:
+        """Which row this layer's mask is, or -1 where it masks nothing."""
+        if layer.mask is None:
+            return -1.0
+        found = self._of.get(layer.mask)
+        if found is None:
+            found = len(self._rows)
+            self._of[layer.mask] = found
+            self._rows.append(_mask_bits(layer.slot_mask(self._layout),
+                                         self._words))
+        return float(found)
+
+    def rows(self) -> Optional[np.ndarray]:
+        return np.stack(self._rows) if self._rows else None
+
+
+def _mask_bits(flags: np.ndarray, words: int) -> np.ndarray:
+    """A boolean per joint as ``words`` of thirty-two bits."""
+    out = np.zeros(words, dtype=np.uint32)
+    for slot in np.flatnonzero(flags):
+        out[slot >> 5] |= np.uint32(1) << np.uint32(slot & 31)
+    return out
+
+
+class _Restriction:
+    """The few joints a partial pose is being worked out for.
+
+    A figure whose pose lives on the GPU still owes the scenegraph the joints
+    something reaches through -- a hand with a weapon on it, and the joints
+    down to that hand. This is which ones, and the narrowed clips that answer
+    for them; the views are kept, because which joints those are changes when
+    equipment does and not per frame.
+    """
+
+    __slots__ = ('slots', 'positions')
+
+    def __init__(self, slots: np.ndarray, positions: np.ndarray) -> None:
+        self.slots = slots
+        self.positions = positions
+
+    def narrow(self, sampler: ClipSampler) -> ClipSampler:
+        return sampler.restricted(self.slots, self.positions)
+
 
 class _GroupBlend:
     """A layer's running weighted mean of one path, for every figure at once.

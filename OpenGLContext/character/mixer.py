@@ -525,9 +525,14 @@ class AnimationMixer:
         slots = self._writable()
         if len(slots):
             axis_angle = quat_xyzw_to_vrml_rows(pose[1][slots])
+            # One conversion out of numpy for the lot: a tuple built a float at
+            # a time, once a joint, is most of what writing a pose back costs.
+            translations = pose[0][slots].tolist()
+            rotations = axis_angle.tolist()
+            scales = pose[2][slots].tolist()
             for row, slot in enumerate(slots):
-                self._write_slot(int(slot), pose[0][slot], axis_angle[row],
-                                 pose[2][slot])
+                self._write_slot(int(slot), translations[row], rotations[row],
+                                 scales[row])
         for node, value in weights.items():
             self._write_weights(node, value)
 
@@ -558,8 +563,14 @@ class AnimationMixer:
                 sorted(s for s in wanted if self.driven[s]), dtype=np.int32)
         return self._write_slots
 
-    def _write_slot(self, slot: int, translation: np.ndarray,
-                    rotation: np.ndarray, scale: np.ndarray) -> None:
+    def _write_slot(self, slot: int, translation: Sequence[float],
+                    rotation: Sequence[float], scale: Sequence[float]) -> None:
+        """Put one joint's translation, rotation and scale on its Transform.
+
+        The values come as plain sequences of floats rather than array rows:
+        the caller converts the whole pose out of numpy in one go, because
+        doing it a number at a time is most of what writing a pose costs.
+        """
         xform = self.rig.transforms[slot]
         if xform is None:
             return
@@ -573,7 +584,7 @@ class AnimationMixer:
             return
         for path, value in (('translation', translation), ('rotation', rotation),
                             ('scale', scale)):
-            written = tuple(float(v) for v in value)
+            written = tuple(value)
             key = (slot, path)
             if self._written.get(key) == written:
                 continue

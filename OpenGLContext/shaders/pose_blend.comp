@@ -1,0 +1,248 @@
+#version 330 core
+#extension GL_ARB_compute_shader : require
+#extension GL_ARB_shader_storage_buffer_object : require
+
+// One thread per joint of every figure: sample whatever clips that figure is
+// playing, blend them layer by layer, and write the joint's translation,
+// rotation and scale into the pose the skeleton pass reads.
+//
+// **Layers, in order, each masked to the joints it may move.** A figure runs on
+// its base layer and fires on an upper one masked to its arms; each layer is a
+// weighted **mean** of its own tracks -- two clips at full weight give the
+// midpoint between them and not twice either -- blended over the pose built so
+// far, and where a layer's weights do not reach one the shortfall is taken from
+// underneath it. That is the same arithmetic the processor-side blend does, and
+// the test for this file is that the two agree.
+//
+// What is *not* here: additive layers and morph weights. A figure using either
+// is blended on the processor instead.
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) writeonly buffer Pose {
+    vec4 pose[];                    // three per joint: translation, rotation, scale
+};
+layout(std430, binding = 8) readonly buffer Rest {
+    vec4 rest[];                    // the same three, where the model rests
+};
+layout(std430, binding = 9) readonly buffer ChannelIndex {
+    // (clip * joints + slot) * 3 + path -> a channel, or -1 for a joint this
+    // clip does not move.
+    int channelOf[];
+};
+layout(std430, binding = 10) readonly buffer Channels {
+    // keyCount, first key time, first key value, interpolation (0 step,
+    // 1 linear, 2 cubic).
+    ivec4 channels[];
+};
+layout(std430, binding = 11) readonly buffer Times {
+    float keyTimes[];
+};
+layout(std430, binding = 12) readonly buffer Values {
+    vec4 keyValues[];
+};
+layout(std430, binding = 13) readonly buffer Tracks {
+    // clip, time, weight, unused -- one per clip playing on a layer.
+    vec4 tracks[];
+};
+layout(std430, binding = 14) readonly buffer FigureLayers {
+    ivec4 figureLayers[];           // first layer, how many, unused, unused
+};
+layout(std430, binding = 15) readonly buffer Layers {
+    // first track, how many, which mask (-1 for none), the layer's weight.
+    vec4 layers[];
+};
+layout(std430, binding = 16) readonly buffer Masks {
+    uint maskWords[];               // maskStride words per mask, a bit per joint
+};
+
+uniform int jointsPerFigure;
+uniform int figures;
+uniform int maskStride;
+
+const int STEP = 0;
+const int LINEAR = 1;
+const int CUBIC = 2;
+
+vec4 normalizeRotation(vec4 q) {
+    float n = dot(q, q);
+    return n > 0.0 ? q * inversesqrt(n) : vec4(0.0, 0.0, 0.0, 1.0);
+}
+
+vec4 slerp(vec4 a, vec4 b, float u) {
+    a = normalizeRotation(a);
+    b = normalizeRotation(b);
+    float d = dot(a, b);
+    if (d < 0.0) {                  // the shorter arc: -q is the same rotation
+        b = -b;
+        d = -d;
+    }
+    if (d > 0.9995) {               // where the sin denominator underflows
+        return normalizeRotation(a + u * (b - a));
+    }
+    float theta0 = acos(clamp(d, -1.0, 1.0));
+    float sin0 = sin(theta0);
+    float theta = theta0 * u;
+    return normalizeRotation(a * (sin(theta0 - theta) / sin0)
+                             + b * (sin(theta) / sin0));
+}
+
+// Which keyframe segment `t` falls in, and how far along it. Held at either
+// end, as a clip is outside its own range.
+void segmentOf(int first, int count, float t, out int index, out float fraction) {
+    index = 0;
+    fraction = 0.0;
+    if (count < 2 || t <= keyTimes[first]) {
+        return;
+    }
+    if (t >= keyTimes[first + count - 1]) {
+        index = count - 1;
+        return;
+    }
+    int low = 0;
+    int high = count - 1;
+    while (low + 1 < high) {        // the last segment starting at or before t
+        int mid = (low + high) / 2;
+        if (keyTimes[first + mid] <= t) {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    index = low;
+    float span = keyTimes[first + low + 1] - keyTimes[first + low];
+    fraction = span > 0.0 ? (t - keyTimes[first + low]) / span : 0.0;
+}
+
+vec4 keyValue(int channel, int interpolation, int key) {
+    ivec4 entry = channels[channel];
+    int offset = interpolation == CUBIC ? 3 * key + 1 : key;
+    return keyValues[entry.z + offset];
+}
+
+vec4 sampleChannel(int channel, float t, bool rotation) {
+    ivec4 entry = channels[channel];
+    int count = entry.x;
+    int interpolation = entry.w;
+    if (count <= 0) {
+        return vec4(0.0);
+    }
+    int index;
+    float fraction;
+    segmentOf(entry.y, count, t, index, fraction);
+    if (interpolation == CUBIC) {
+        if (count == 1 || t <= keyTimes[entry.y]) {
+            return keyValues[entry.z + 1];
+        }
+        if (t >= keyTimes[entry.y + count - 1]) {
+            return keyValues[entry.z + 3 * (count - 1) + 1];
+        }
+        int following = min(index + 1, count - 1);
+        float span = keyTimes[entry.y + following] - keyTimes[entry.y + index];
+        vec4 v0 = keyValues[entry.z + 3 * index + 1];
+        vec4 b0 = keyValues[entry.z + 3 * index + 2];
+        vec4 v1 = keyValues[entry.z + 3 * following + 1];
+        vec4 a1 = keyValues[entry.z + 3 * following];
+        float u = fraction;
+        float u2 = u * u;
+        float u3 = u2 * u;
+        vec4 out4 = (2.0 * u3 - 3.0 * u2 + 1.0) * v0
+                  + (u3 - 2.0 * u2 + u) * span * b0
+                  + (-2.0 * u3 + 3.0 * u2) * v1
+                  + (u3 - u2) * span * a1;
+        return rotation ? normalizeRotation(out4) : out4;
+    }
+    if (count == 1 || fraction == 0.0 || interpolation == STEP) {
+        return keyValue(channel, interpolation, index);
+    }
+    vec4 a = keyValue(channel, interpolation, index);
+    vec4 b = keyValue(channel, interpolation, min(index + 1, count - 1));
+    return rotation ? slerp(a, b, fraction) : a + (b - a) * fraction;
+}
+
+bool movesThisJoint(int mask, int slot) {
+    if (mask < 0) {
+        return true;                // an unmasked layer moves the whole model
+    }
+    uint word = maskWords[mask * maskStride + (slot >> 5)];
+    return (word & (1u << uint(slot & 31))) != 0u;
+}
+
+void main() {
+    int index = int(gl_GlobalInvocationID.x);
+    if (index >= figures * jointsPerFigure) {
+        return;
+    }
+    int figure = index / jointsPerFigure;
+    int slot = index - figure * jointsPerFigure;
+    int restBase = slot * 3;
+
+    vec4 value[3];
+    for (int path = 0; path < 3; ++path) {
+        value[path] = rest[restBase + path];
+    }
+
+    ivec4 stack = figureLayers[figure];
+    for (int step = 0; step < stack.y; ++step) {
+        vec4 layer = layers[stack.x + step];
+        if (!movesThisJoint(int(layer.z), slot)) {
+            continue;               // this layer leaves the joint as it found it
+        }
+        vec4 blended[3];
+        float total[3];
+        bool touched[3];
+        for (int path = 0; path < 3; ++path) {
+            blended[path] = vec4(0.0);
+            total[path] = 0.0;
+            touched[path] = false;
+        }
+        int first = int(layer.x);
+        int count = int(layer.y);
+        for (int k = 0; k < count; ++k) {
+            vec4 track = tracks[first + k];
+            int clip = int(track.x);
+            float t = track.y;
+            float weight = track.z;
+            if (weight <= 0.0) {
+                continue;
+            }
+            for (int path = 0; path < 3; ++path) {
+                int channel = channelOf[(clip * jointsPerFigure + slot) * 3 + path];
+                if (channel < 0) {
+                    continue;
+                }
+                bool rotation = (path == 1);
+                vec4 sampled = sampleChannel(channel, t, rotation);
+                if (!touched[path]) {
+                    blended[path] = sampled;
+                } else {
+                    float fraction = weight / (total[path] + weight);
+                    blended[path] = rotation
+                        ? slerp(blended[path], sampled, fraction)
+                        : blended[path] + (sampled - blended[path]) * fraction;
+                }
+                total[path] += weight;
+                touched[path] = true;
+            }
+        }
+        for (int path = 0; path < 3; ++path) {
+            if (!touched[path]) {
+                continue;
+            }
+            float strength = layer.w * min(1.0, total[path]);
+            if (strength >= 1.0) {
+                value[path] = blended[path];
+            } else if (path == 1) {
+                value[path] = slerp(value[path], blended[path], strength);
+            } else {
+                value[path] = value[path]
+                            + (blended[path] - value[path]) * strength;
+            }
+        }
+    }
+
+    int base = index * 3;
+    for (int path = 0; path < 3; ++path) {
+        pose[base + path] = value[path];
+    }
+}

@@ -106,6 +106,7 @@ class JointPalette:
         Keyed by the id of the owner, so a mesh asking again gets the range it
         already has rather than another one.
         """
+        owner = _palette_owner(owner)
         key = id(owner)
         found = self._reserved.get(key)
         if found is not None:
@@ -119,7 +120,7 @@ class JointPalette:
 
     def reserved_base(self, owner: Any) -> Optional[int]:
         """The range this owner already holds, or None if it holds none."""
-        return self._reserved.get(id(owner))
+        return self._reserved.get(id(_palette_owner(owner)))
 
     def _grow(self, wanted: int) -> None:
         """Make the buffer big enough for ``wanted`` joints, keeping what is in it.
@@ -212,6 +213,21 @@ class JointPalette:
                 except Exception:
                     pass
                 setattr(self, name, 0)
+
+
+def _palette_owner(mesh: Any) -> Any:
+    """Which mesh's range a mesh reads from.
+
+    A figure's coarse level is the same body as its fine one, posed by the same
+    skin, so the two are handed identical matrices; giving them one range means
+    writing those matrices once and holding them once.
+    """
+    seen = set()
+    peer = getattr(mesh, '_palette_peer', None)
+    while peer is not None and id(peer) not in seen:
+        seen.add(id(mesh))
+        mesh, peer = peer, getattr(peer, '_palette_peer', None)
+    return mesh
 
 
 def palette_for(mode: Any) -> Optional[JointPalette]:

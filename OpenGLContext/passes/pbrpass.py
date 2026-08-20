@@ -781,17 +781,24 @@ class PBRPass(flatcore.FlatPass):
     def _instanceable(self, path: Any) -> bool:
         """Any geometry exposing ``instanceGPU(mode)`` (PBRMesh, Box, Sphere, ...).
 
-        A skinned mesh is not one of them: two figures of a build hold the same
-        rest-pose vertices and would batch on content, but each reads its own
-        range of the joint palette, and one draw can name only one range.
+        A **skinned** mesh counts where the shader poses it: figures of a build
+        then hold the same rest-pose vertices, so they batch on content, and
+        each instance carries the place its own joints start in the palette. A
+        figure the processor skins does not: its buffers hold its *posed*
+        vertices, so no two of them are the same geometry and there is nothing
+        to collapse.
         """
         geometry = getattr(path[-1], 'geometry', None)
         if getattr(geometry, 'skin_joints', None) is not None:
-            # Two figures of a build hold the same rest-pose vertices and batch
-            # on content, each reading its own range of the joint palette. A
-            # figure the CPU skins holds its *posed* vertices instead, so no two
-            # of them are the same geometry and there is nothing to batch.
-            return False
+            # Settle where this mesh is skinned before asking, not at its first
+            # draw: a mesh that batches has no draw of its own to settle it in,
+            # and would have gone on assuming the shader would skin it however
+            # the renderer was configured.
+            resolve = getattr(geometry, '_resolve_skin_path', None)
+            if resolve is not None:
+                resolve(self, self.getShaderProgram())
+            if not getattr(geometry, 'skin_on_gpu', False):
+                return False
         return hasattr(geometry, 'instanceGPU')
 
     def _instanceKey(self, path: Any) -> Any:

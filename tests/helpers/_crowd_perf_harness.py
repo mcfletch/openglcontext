@@ -12,6 +12,10 @@ skin them).
 Options are ``key=value`` and settle what is being measured:
 
     skinning=gpu|cpu     where linear-blend skinning runs (default gpu)
+    lod=0                metres past which a coarser mesh is drawn (0 = one level)
+    interpolation=LINEAR how the clips get between their keys (or CUBICSPLINE)
+    equipped=0           hang something on this joint of every figure
+    masked=0             add an upper layer masked to joints from here up
     write=exposed|all    how much of each pose reaches the scenegraph
     joints=57            bones per figure
     vertices=4096        skinned vertices per figure
@@ -34,12 +38,14 @@ def _options(argv):
     options = {'skinning': 'gpu', 'write': 'exposed', 'joints': 57,
                'vertices': 4096, 'shadows': 0, 'clip_share': 1,
                'crowd': 1, 'budget': 0, 'profile': 0, 'compute': 1,
-               'finish': 1}
+               'finish': 1, 'lod': 0, 'interpolation': 'LINEAR',
+               'equipped': 0, 'masked': 0}
     for item in argv:
         if '=' not in item:
             continue
         key, value = item.split('=', 1)
-        options[key] = value if key in ('skinning', 'write') else int(value)
+        options[key] = (value if key in ('skinning', 'write', 'interpolation')
+                       else int(value))
     return options
 
 
@@ -83,7 +89,11 @@ def main():
         """One parse, one scenegraph per figure, laid out on a grid."""
         start = time.perf_counter()
         document = parse_gltf(crowd_character_glb(
-            joints=options['joints'], vertices=options['vertices']))
+            joints=options['joints'], vertices=options['vertices'],
+            interpolation=options['interpolation']))
+        coarse = parse_gltf(crowd_character_glb(
+            joints=options['joints'],
+            vertices=max(64, options['vertices'] // 4))) if options['lod'] else None
         models, roots = [], []
         columns = int(math.ceil(math.sqrt(figures)))
         names = None
@@ -92,6 +102,17 @@ def main():
             model.mixer.pose_write = options['write']
             if names is None:
                 names = sorted(model.clips)
+            if coarse is not None:
+                model.add_level(None, float(options['lod']), document=coarse)
+            if options['masked']:
+                upper = frozenset(range(options['masked'], model.mixer.rig.n))
+                layer = model.mixer.layer('upper', mask=upper)
+                layer.play(names[(index + 2) % len(names)])
+            if options['equipped']:
+                from OpenGLContext.character.attachment import attach
+                rig = model.mixer.rig
+                attach(rig.transforms[min(options['equipped'], rig.n - 1)],
+                       Transform())
             model.play(names[index % len(names)])
             # Every figure on its own clock, so no two are posed alike unless
             # clip_share says to make them so -- which is what a crowd dedupe
@@ -152,14 +173,19 @@ def main():
         def OnDraw(self, *a, **k):
             started = time.perf_counter()
             crowd = built.get('crowd')
+            if profiler is not None and options['profile'] == 2 and self._frame > 12:
+                profiler.enable()
             if crowd is not None:
                 crowd.update(1 / 60.0, budget=options['budget'] or None,
                              mode=self)
             else:
                 for model in self.models:
                     model.update(1 / 60.0)
+            if profiler is not None and options['profile'] == 2 and self._frame > 12:
+                profiler.disable()
             posed = time.perf_counter()
-            if profiler is not None and self._frame > 12:
+            if (profiler is not None and options['profile'] == 1
+                    and self._frame > 12):
                 profiler.enable()
                 result = BaseContext.OnDraw(self, *a, **k)
                 profiler.disable()

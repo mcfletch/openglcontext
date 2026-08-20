@@ -81,6 +81,16 @@ class CharacterModel:
         """Advance the animation by ``dt`` seconds and pose the model."""
         self.mixer.update(dt)
 
+    def add_level(self, source: Any, distance: float, **named: Any) -> bool:
+        """Draw a coarser mesh beyond ``distance`` -- see :mod:`~.levels`.
+
+        The skeleton, the clips and the pose stay one thing however many levels
+        a figure carries; only the geometry differs, and the renderer picks
+        which of them by how far away the figure is.
+        """
+        from OpenGLContext.character.levels import add_level
+        return add_level(self, source, distance, **named)
+
     def mask(self, *bones: str, exclude: Iterable[str] = ()) -> frozenset:
         """The nodes under ``bones``, for masking a layer.
 

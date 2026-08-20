@@ -210,6 +210,9 @@ class PBRMesh(node.Node):
     _joint_bound_cache: Any = None
     #: Whether a compute shader owns this mesh's palette range.
     _skin_from_gpu: bool = False
+    #: A mesh whose joint palette this one shares -- a figure's coarse level
+    #: reading the range its fine level holds, since both are posed alike.
+    _palette_peer: Any = None
     _palette_base: Optional[int] = None
 
     def __init__(self, positions: Any = None, normals: Any = None, texcoords: Any = None,

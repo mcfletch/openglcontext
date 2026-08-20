@@ -224,3 +224,123 @@ class TestSamplingManyAtOnce:
         assert translation.shape == (2, 0, 3)
         assert rotation.shape == (2, 0, 4)
         assert scale.shape == (2, 0, 3)
+
+
+class TestTheCubicTestContentIsReallyCubic:
+    """A cubic clip whose tangents did nothing would prove nothing.
+
+    The GPU blend is held against this sampler on a cubic asset, so the asset
+    has to bend between its keys rather than draw the straight line a linear
+    channel would draw through the same values.
+    """
+
+    def _sampler(self, interpolation):
+        from OpenGLContext.loaders.gltf import load_gltf
+        from tests.helpers._crowd_asset import crowd_character_glb
+
+        scene = load_gltf(crowd_character_glb(
+            joints=8, vertices=64, clips=1, keys=6, moving=3,
+            interpolation=interpolation))
+        for channel in scene.animations[0].channels:
+            if channel.sampler.interpolation == interpolation:
+                return channel.sampler
+        raise AssertionError('no %s channel was written' % interpolation)
+
+    def test_the_curve_leaves_the_line_between_its_keys(self):
+        cubic = self._sampler('CUBICSPLINE')
+        linear = self._sampler('LINEAR')
+
+        # Halfway between two keys is where a curve is furthest from the chord.
+        apart = max(float(np.abs(cubic.evaluate(t) - linear.evaluate(t)).max())
+                    for t in (0.1, 0.3, 0.5, 0.7, 0.9))
+
+        assert apart > 1e-3, apart
+
+    def test_the_keys_themselves_still_agree(self):
+        """Only between the keys: at one, both read the value that is there."""
+        cubic = self._sampler('CUBICSPLINE')
+        linear = self._sampler('LINEAR')
+
+        for t in linear.times:
+            assert np.allclose(cubic.evaluate(float(t)), linear.evaluate(float(t)),
+                               atol=1e-6)
+
+
+class TestAskingForAFewJointsOnly:
+    """A caller wanting seven joints of fifty-seven should pay for seven.
+
+    What it must not do is answer differently: a narrowed view is the same
+    clip, read at the same moments, for the joints it was narrowed to.
+    """
+
+    def _narrowed(self, sampler, rig, wanted):
+        wanted = np.asarray(sorted(wanted), dtype=np.int32)
+        positions = np.full(rig.n, -1, dtype=np.int32)
+        positions[wanted] = np.arange(len(wanted), dtype=np.int32)
+        return sampler.restricted(wanted, positions), wanted
+
+    @pytest.mark.parametrize('t', TIMES)
+    def test_it_answers_what_the_whole_clip_answers(self, t):
+        rig = _rig()
+        sampler = ClipSampler(_mixed_clip(), rig)
+        view, wanted = self._narrowed(sampler, rig, [1, 2, 5])
+
+        whole = sampler.sample(t)
+        part = view.sample(t)
+
+        for index, (values, slots) in enumerate((
+                (whole[0], sampler.slots_translation),
+                (whole[1], sampler.slots_rotation),
+                (whole[2], sampler.slots_scale))):
+            narrowed_slots = (view.slots_translation, view.slots_rotation,
+                              view.slots_scale)[index]
+            for row, slot in enumerate(slots):
+                if slot not in wanted:
+                    continue
+                place = int(np.flatnonzero(wanted == slot)[0])
+                where = np.flatnonzero(narrowed_slots == place)
+                assert len(where), (index, slot)
+                assert np.allclose(part[index][int(where[0])], values[row],
+                                   atol=1e-12)
+
+    def test_it_leaves_out_the_joints_it_was_not_asked_for(self):
+        rig = _rig()
+        sampler = ClipSampler(_mixed_clip(), rig)
+        view, wanted = self._narrowed(sampler, rig, [1])
+
+        for slots in (view.slots_translation, view.slots_rotation,
+                      view.slots_scale):
+            assert len(slots) <= len(wanted)
+        assert len(view.slots_translation) < len(sampler.slots_translation)
+
+    def test_asking_twice_gives_the_same_view(self):
+        """Which joints are read changes when equipment does, not per frame."""
+        rig = _rig()
+        sampler = ClipSampler(_mixed_clip(), rig)
+
+        first, wanted = self._narrowed(sampler, rig, [1, 2])
+        again, _ = self._narrowed(sampler, rig, [1, 2])
+
+        assert first is again
+
+    def test_a_view_of_joints_the_clip_does_not_move_samples_to_nothing(self):
+        rig = _rig()
+        sampler = ClipSampler(_mixed_clip(), rig)
+        view, _wanted = self._narrowed(sampler, rig, [0])
+
+        translation, rotation, scale = view.sample(0.5)
+
+        assert len(translation) == 0 and len(rotation) == 0 and len(scale) == 0
+
+    @pytest.mark.parametrize('t', TIMES)
+    def test_many_at_once_agrees_too(self, t):
+        rig = _rig()
+        sampler = ClipSampler(_mixed_clip(), rig)
+        view, _wanted = self._narrowed(sampler, rig, [1, 2, 5])
+
+        many = view.sample_many([t, t])
+        one = view.sample(t)
+
+        for batched, single in zip(many, one, strict=True):
+            assert np.allclose(batched[0], single, atol=1e-12)
+            assert np.allclose(batched[1], single, atol=1e-12)

@@ -246,6 +246,8 @@ class ClipSampler:
             path: _PathChannels(width) for path, width in _PATHS
         }
         self._weights: List[Tuple[int, Any]] = []
+        #: Views of this clip narrowed to a few joints, kept by which joints.
+        self._restricted: Dict[bytes, "ClipSampler"] = {}
         self._group(animation, rig)
 
     # -- what the clip drives ---------------------------------------------
@@ -322,6 +324,36 @@ class ClipSampler:
                 members[0][1].times, values, rows, interpolation,
                 is_rotation and members[0][1].is_rotation))
 
+    # -- a few joints of it ------------------------------------------------
+    def restricted(self, wanted: np.ndarray, positions: np.ndarray) -> "ClipSampler":
+        """A view of this clip answering for ``wanted`` slots and no others.
+
+        What it costs to sample a clip is what it costs to sample the channels
+        in it, so a caller that wants seven joints out of fifty-seven should be
+        paying for seven. ``positions`` maps a rig slot to its place in
+        ``wanted``, and the view's ``slots_*`` are those places -- so the
+        arithmetic downstream is over a skeleton of exactly the joints asked
+        for.
+
+        Built on first ask and kept: which joints a figure's transforms are
+        read at changes only when something is hung on it or taken off.
+        """
+        key = np.ascontiguousarray(wanted, dtype=np.int32).tobytes()
+        found = self._restricted.get(key)
+        if found is not None:
+            return found
+        view = ClipSampler.__new__(ClipSampler)
+        view.clip = self.clip
+        view.rig = self.rig
+        view.name = self.name
+        view.duration = self.duration
+        view._weights = []          # morph weights are per mesh, not per joint
+        view._restricted = {}
+        view._paths = {path: _narrow(self._paths[path], width, wanted, positions)
+                       for path, width in _PATHS}
+        self._restricted[key] = view
+        return view
+
     # -- sampling ----------------------------------------------------------
     def sample(self, t: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Translation, rotation and scale at ``t``, one row per driven slot.
@@ -353,6 +385,41 @@ class ClipSampler:
         beside the skeleton's arrays rather than in them.
         """
         return {node: sampler.evaluate(t) for node, sampler in self._weights}
+
+
+def _narrow(store: _PathChannels, width: int, wanted: np.ndarray,
+            positions: np.ndarray) -> _PathChannels:
+    """One path's channels, keeping only those driving ``wanted``."""
+    out = _PathChannels(width)
+    if not len(store.slots):
+        return out
+    keep = np.flatnonzero(np.isin(store.slots, wanted))
+    if not len(keep):
+        return out
+    out.slots = positions[store.slots[keep]].astype(np.int32)
+    # Rows are renumbered into the narrowed order, which is the order of the
+    # kept slots because ``keep`` comes back sorted.
+    renumbered = {int(old): new for new, old in enumerate(keep)}
+    constant_rows, constant_values = [], []
+    for old, new in sorted(renumbered.items(), key=lambda pair: pair[1]):
+        where = np.flatnonzero(store.constant_rows == old)
+        if len(where):
+            constant_rows.append(new)
+            constant_values.append(store.constant[int(where[0])])
+    out.constant_rows = np.asarray(constant_rows, dtype=np.int32)
+    out.constant = (np.stack(constant_values) if constant_values
+                    else np.zeros((0, width), dtype='d'))
+    for block in store.blocks:
+        rows = [(index, renumbered[int(row)])
+                for index, row in enumerate(block.rows)
+                if int(row) in renumbered]
+        if not rows:
+            continue
+        out.blocks.append(_Block(
+            block.times, block.values[[index for index, _new in rows]],
+            np.asarray([new for _index, new in rows], dtype=np.int32),
+            block.interpolation, block.is_rotation))
+    return out
 
 
 def _widen(values: np.ndarray, width: int) -> np.ndarray:

@@ -200,6 +200,22 @@ layers all batch: what a crowd does is not an approximation of what
 <code>model.update(dt)</code> does, it is the same arithmetic with a figure
 axis on it, and the tests hold the two to each other.</p>
 
+<h3>A lighter mesh at range</h3>
+<p>A character usually ships twice: the mesh it is seen with and a lighter one
+exported from the same armature. Both are the same body, so the skeleton, the
+clips and the pose are one thing computed once, and only the geometry differs:</p>
+<pre><code>model = CharacterModel.load('marine.glb')
+model.add_level('marine_lod1.glb', 25.0)    # lighter beyond twenty-five metres</code></pre>
+<p>The coarser document's meshes are handed to the skins that are already being
+posed and both go under a VRML97 <code>LOD</code>, so the renderer draws
+whichever the distance calls for and a crowd batches by whichever level each
+figure is showing — the near ones in one instanced draw and the far ones in
+another. The two levels share one range of the joint palette, because what they
+are handed is the same matrices.</p>
+<p>A level whose skeleton is not the model's, joint name for joint name, is
+<strong>refused</strong> with a warning rather than adapted: a coarse mesh posed
+by the wrong bones is worse than a fine one drawn at distance.</p>
+
 <h3>Not every figure every frame</h3>
 <p>The largest single lever a crowd has is not posing bodies nobody can see the
 difference on. <code>update</code> takes a <code>budget</code> — how many
@@ -237,6 +253,17 @@ the skinning shader reads. Nothing is read back.
 <code>OPENGLCONTEXT_GPU_SKELETON=0</code> keeps that arithmetic in numpy, which
 is what happens anyway on a driver without compute; the two agree to single
 precision, which is what the palette is stored in either way.</p>
+<p>And the <strong>clips themselves</strong>: a figure playing straight clips
+with nothing hung on its joints has its whole pose worked out there, from the
+keyframes up. The build's clips are uploaded once and the frame sends only what
+each figure is playing &mdash; a clip, a time and a weight per track, sixteen
+bytes &mdash; so two hundred and fifty figures cost about a millisecond of
+processor time between them. All three of glTF's interpolations are read, the cubic one included. A figure
+doing more than straight clips (a masked or an additive layer, morph weights,
+or a weapon on a joint whose transform something reads) is blended in numpy
+instead, which is the same
+answer more slowly; <code>OPENGLCONTEXT_GPU_BLEND=0</code> asks for that
+everywhere.</p>
 <p>Figures of one build that share their rest-pose geometry are drawn as a
 single instanced call, each instance naming its own range of the palette, so a
 crowd is a handful of draws rather than one per body.</p>
@@ -247,9 +274,9 @@ about four thousand skinned vertices and twenty-three clips each, every figure
 on its own clock and all of them on screen.</p>
 <table>
 <tr><th>Figures</th><th>Animation</th><th>Drawing</th><th>Frame</th></tr>
-<tr><td>100</td><td>2.5 ms</td><td>4.9 ms</td><td>134 fps</td></tr>
-<tr><td>250</td><td>4.0 ms</td><td>16.2 ms</td><td>50 fps</td></tr>
-<tr><td>500</td><td>7.7 ms</td><td>20.5 ms</td><td>36 fps</td></tr>
+<tr><td>100</td><td>0.8 ms</td><td>2.7 ms</td><td>283 fps</td></tr>
+<tr><td>250</td><td>1.3 ms</td><td>6.8 ms</td><td>124 fps</td></tr>
+<tr><td>500</td><td>2.4 ms</td><td>14.1 ms</td><td>61 fps</td></tr>
 </table>
 <p>The drawing column at these counts is mostly the GPU filling pixels — every
 figure is on screen and large — rather than work the engine is doing: the

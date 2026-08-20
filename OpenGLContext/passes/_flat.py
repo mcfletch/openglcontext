@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
+from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod
 from OpenGL.GL import *
 from OpenGL.GL import (
     glEnable, glDisable, glDisablei, glBlendFunc, glDepthMask, glDepthFunc,
@@ -709,6 +709,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         nodetypes.Viewpoint,
         nodetypes.NavigationInfo,
         nodetypes.Auditory,
+        # Not a nodetype but a node class: an LOD has to be found again each
+        # frame so it can be told where the viewer is, and the same path
+        # bookkeeping that finds the lights will find it.
+        lod.LOD,
     ]
     def currentBackground( self ):
         """Find our current background node"""
@@ -848,6 +852,30 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             )
             return 0
 
+    def selectLevels( self, matrix ):
+        """Let every LOD node choose its level for where the viewer now is.
+
+        Before the render set is gathered, not during it: a level that changes
+        replaces a subtree, and the flattened scenegraph the pass renders from
+        has to be told about the new one before it walks it.
+
+        Only from the camera. A shadow pass draws the same scene from a light,
+        and choosing detail by how far a *lamp* is from a figure would swap
+        levels as the sun moved.
+        """
+        paths = self.paths.get( lod.LOD, () )
+        if not paths:
+            return
+        for path in list( paths ):
+            node = path[-1]
+            try:
+                distance = lod.distance_to_viewer(
+                    node, dot( path.transformMatrix(), matrix ) )
+            except Exception as err:      # pragma: no cover - malformed content
+                log.warning( 'could not place an LOD node: %s', err )
+                continue
+            node.select( distance )
+
     def renderSet( self, matrix ):
         """Calculate ordered rendering set to display"""
         # ordered set of things to work with...
@@ -938,6 +966,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         matrix = self.getModelView()
         self.matrix = matrix
 
+        self.selectLevels( matrix )
         toRender = self.renderSet( matrix )
         self.stats.shapes = len(toRender)
         maxDepth = self.maxDepth = self.greatestDepth( toRender )

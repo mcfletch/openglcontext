@@ -20,18 +20,30 @@ clips, measured on an RTX 3060 Ti:
 | | Per figure, per frame |
 |---|---|
 | Before | **2.85 ms** of processor time, plus a re-upload of every deformed position, normal and tangent |
-| After | **0.016 ms** in a crowd of 250, and nothing uploaded but the pose |
+| After | **0.005 ms** in a crowd of 250, and nothing uploaded but what it is playing |
 
-Two hundred and fifty figures, all on screen, all on their own clocks:
+Across the counts the plan asked for, every figure on screen and large:
 
-| | Animation | Drawing | Frame |
-|---|---|---|---|
-| Before | ~71 ms | ~39 ms | ~9 fps |
-| After | **4.0 ms** | 16.2 ms | **50 fps** |
+| Figures | Animation | Drawing | Frame | |
+|---|---|---|---|---|
+| 100 | 0.8 ms | 2.7 ms | 3.5 ms | **283 fps** |
+| 250 | 1.3 ms | 6.8 ms | 8.1 ms | **124 fps** |
+| 500 | 2.4 ms | 14.1 ms | 16.5 ms | **61 fps** |
 
-The drawing column at that count is mostly the GPU filling pixels rather than
-work the engine is doing: the processor-side cost of the whole frame is 12 ms
-of the 20. At a hundred figures the frame is 7.5 ms (134 fps).
+Two hundred and fifty figures were ~9 fps before any of this.
+
+**What the tiers cost.** The engine's own floor is GL 3.3 with none of the
+above; each tier is what a driver missing the one below falls back to, measured
+at 100 figures:
+
+| | Animation | Frame |
+|---|---|---|
+| Everything | 0.8 ms | **283 fps** |
+| No compute (`OPENGLCONTEXT_GPU_SKELETON=0`) | 3.7 ms | 157 fps |
+| No shader skinning either (`OPENGLCONTEXT_GPU_SKINNING=0`) | 68 ms | 13 fps |
+
+The last row is where a figure started, and it is what a driver with no texture
+unit to spare for a joint palette still gets, correctly.
 
 The benchmark is `tests/helpers/_crowd_perf_harness.py`; it takes a figure
 count and reports the split, and `joints`, `vertices`, `skinning`, `compute`,
@@ -134,6 +146,51 @@ The test is agreement with the numpy path, joint for joint, on a fifty-seven
 bone rig -- to 3 × 10⁻⁸, which is single-precision round-off and what the
 palette is stored in either way.
 
+## And the clips, too
+
+`shaders/pose_blend.comp` finishes the job: a thread per joint of every figure
+samples whatever clips that figure is playing and blends them by weight,
+writing the translation, rotation and scale the skeleton pass then composes.
+The build's clips are uploaded once -- a channel table indexed by
+`(clip, joint, path)`, the keyframe times and values behind it -- and a frame
+sends only what each figure is playing: a clip, a time and a weight per track,
+sixteen bytes. At 250 figures the animation half went **3.9 ms → 1.3 ms**, and
+at 500 it is 2.4 ms.
+
+The blend is a weighted **mean**, the shortfall from where the joint rests, and
+the shorter arc for rotations -- the arithmetic the numpy blend does, which is
+what the test holds it to: over a fifty-seven bone rig, figures on different
+clips at different moments, and a cross-fade at unequal weights, the two agree
+to 1.7 × 10⁻⁷.
+
+All three of glTF's interpolations: step, linear, and the cubic one that stores
+a tangent either side of each value, which is what a curve authored rather than
+baked exports as. Cubic cost the same to move across as the others -- at 250
+figures on cubic clips the animation half is 3.7 ms on the processor and
+1.2 ms here -- and it is held to the same agreement, on an asset whose tangents
+genuinely bend the curve away from the line its keys would draw.
+
+**Layers, in order, each masked to what it may move**, because that is what a
+figure firing while it runs is: a base layer walking the whole body and an
+upper one masked to the arms over it. The distinct masks of a group go up as a
+bit per joint, deduplicated -- a crowd all firing from the shoulder is one mask
+between them -- and the shader skips a layer for a joint the mask leaves out.
+
+**What a figure still owes this side** is the joints something outside the rig
+reads: a weapon hangs off a hand and the renderer walks to it, so that hand and
+the joints down to it have to say where the pose put them. Those are worked out
+here -- and *only* those. `ClipSampler.restricted` narrows a clip to a few
+joints once, so reading the pose of ten joints costs ten channels rather than a
+hundred and seventy, and the whole group's write-back converts out of numpy in
+one go rather than once a figure.
+
+For a figure of the shape twig-bb fields -- carrying a weapon, with a masked
+upper layer -- 250 of them cost **15.5 ms of animation on the processor and
+9.5 ms with the blend on the GPU**, which is 38 fps against 50.
+
+**What it does not read**, and what therefore falls back to numpy for that
+group: additive layers and morph weights.
+
 ## Drawing them
 
 A crowd of figures out of one build hold the **same rest-pose vertices**, so
@@ -155,6 +212,32 @@ skinned ones:
 
 Together these took the draw of 250 figures from ~16 ms of processor time to
 ~4 ms.
+
+## A lighter mesh at range
+
+VRML97's own `LOD` node held several versions of a thing and the distances
+between them, and always returned the first: choosing needed the viewer, which
+nothing handed it. `scenegraph/lod.py` chooses now, and
+`FlatPass.selectLevels` is what tells it where the viewer is -- once a frame,
+before the render set is gathered, and **only from the camera**, since a shadow
+pass draws the same scene from a light and detail chosen by how far off a
+*lamp* was would swap levels as the sun moved. A change announces itself on the
+signal a `Switch` uses, so the flattened scenegraph the pass renders from is
+rebuilt for the new level. Every scene with an `LOD` in it gains this, not only
+characters.
+
+On top of it, `character/levels.py`: `model.add_level(source, distance)` reads
+the coarser document, checks its skeleton is the model's joint name for joint
+name, hands its meshes to the skins already being posed, and puts both under an
+`LOD`. So a second level costs a figure **nothing per frame** -- one skeleton,
+one pose, one range of the joint palette between them -- and the near figures
+batch into one instanced draw while the far ones batch into another. A level
+whose skeleton does not match is refused with a warning rather than adapted.
+
+twig-bb uses it: the `*_lod1.glb` beside each build, which nothing had ever
+selected, is drawn beyond eighteen metres. At 500 figures packed into thirty
+metres the benchmark goes from 44 to 48 fps; a scene where most figures are
+genuinely distant gains more, since more of them are on the lighter mesh.
 
 ## Not posing everyone
 
@@ -183,16 +266,20 @@ and were re-blessed.
 
 ## Left open
 
-* **The clip blend itself is still on the processor.** The GPU does the
-  skeleton and the palettes; sampling and blending is ~2 ms of the 4 at 250
-  figures. Putting it across means the whole pose set on the GPU -- the clip
-  keyframes as buffers, and a bounded per-figure track record uploaded each
-  frame -- which is a natural extension of `gpuskeleton.py` and its buffers.
-* **Level of detail by screen size.** The `*_lod1.glb` beside each character is
-  never chosen; `Crowd` has the update budget and rate, but nothing picks a
-  coarser *mesh* for a distant figure.
+* **Additive layers are blended on the processor.** A layer that adds its
+  difference from a reference frame needs that frame sampled as well, which is
+  a second read of every channel; the shader does not do it, so a group using
+  one is blended in numpy.
+* **Level of detail is by distance, not by screen size.** A figure's size on
+  screen is its distance *and* the field of view; `LOD`'s ranges are VRML97's
+  own and are in metres, so a scene that changes its field of view materially
+  would want its ranges chosen for the widest.
 * **The per-figure load swap.** A figure still arrives with its level rather
   than swapping from a stand-in the moment its own load posts.
 * **Morph weights are not batched.** A group whose clips drive them falls back
   to posing its figures one at a time; morph weights are per mesh and of no
   fixed width, so they do not join the skeleton's arrays.
+* **Integrated graphics are unmeasured.** There is none on this machine. Every
+  tier below the top one is exercised and correct (the table above), so what is
+  unknown is the *speed* of a part whose vertex throughput and bus are much
+  smaller, not whether it works.

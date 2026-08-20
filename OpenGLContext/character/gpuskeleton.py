@@ -50,10 +50,33 @@ TARGETS_BINDING = 5
 MESH_SLOTS_BINDING = 6
 PALETTE_BINDING = 7
 
-#: Threads per work group; matches ``local_size_x`` in both shaders.
+REST_BINDING = 8
+CHANNEL_INDEX_BINDING = 9
+CHANNELS_BINDING = 10
+TIMES_BINDING = 11
+VALUES_BINDING = 12
+TRACKS_BINDING = 13
+FIGURE_LAYERS_BINDING = 14
+LAYERS_BINDING = 15
+MASKS_BINDING = 16
+
+#: Threads per work group; matches ``local_size_x`` in every shader here.
 GROUP = 64
 
+#: How a clip's interpolation is written for the shader.
+_INTERPOLATION = {'STEP': 0, 'LINEAR': 1, 'CUBICSPLINE': 2}
+
 _AVAILABLE: Optional[bool] = None
+
+
+def compute_blend_is_enabled() -> bool:
+    """Whether to blend clips on the GPU too (``OPENGLCONTEXT_GPU_BLEND``).
+
+    On by default where the skeletons are already being composed there. Off
+    leaves the blend in numpy, which is the reference this one is held to.
+    """
+    from OpenGLContext import renderoptions
+    return renderoptions.env_flag('OPENGLCONTEXT_GPU_BLEND', True)
 
 
 def compute_skeleton_is_enabled() -> bool:
@@ -156,6 +179,10 @@ class GPUSkeleton:
         self._buffers: Dict[str, _Buffer] = {}
         self._skin_signature: Any = None
         self._target_signature: Any = None
+        #: Clip name -> its index in the uploaded table, once the clips are
+        #: described; empty until then, and empty is what says the blend has
+        #: to stay on the processor.
+        self.clip_index: Dict[str, int] = {}
         self.ok = self._build(parents)
 
     # -- setting up --------------------------------------------------------
@@ -163,12 +190,20 @@ class GPUSkeleton:
         try:
             self._programs['world'] = _compile('skeleton_world.comp')
             self._programs['palette'] = _compile('skeleton_palette.comp')
+            if compute_blend_is_enabled():
+                self._programs['blend'] = _compile('pose_blend.comp')
             for name, binding in (
                     ('pose', POSE_BINDING), ('hierarchy', HIERARCHY_BINDING),
                     ('world', WORLD_BINDING), ('joints', JOINTS_BINDING),
                     ('inverse_bind', INVERSE_BIND_BINDING),
                     ('targets', TARGETS_BINDING),
-                    ('mesh_slots', MESH_SLOTS_BINDING)):
+                    ('mesh_slots', MESH_SLOTS_BINDING),
+                    ('rest', REST_BINDING),
+                    ('channel_index', CHANNEL_INDEX_BINDING),
+                    ('channels', CHANNELS_BINDING), ('times', TIMES_BINDING),
+                    ('values', VALUES_BINDING), ('tracks', TRACKS_BINDING),
+                    ('figure_layers', FIGURE_LAYERS_BINDING),
+                    ('layers', LAYERS_BINDING), ('masks', MASKS_BINDING)):
                 self._buffers[name] = _Buffer(binding)
             self._buffers['hierarchy'].write(
                 np.ascontiguousarray(parents, dtype=np.int32))
@@ -204,10 +239,88 @@ class GPUSkeleton:
         self._buffers['inverse_bind'].write(
             np.concatenate(bind_runs) if bind_runs else empty_bind)
 
+    def describe_clips(self, samplers: Sequence[Any], rest: Any) -> bool:
+        """Upload every clip of the build, and where the model rests.
+
+        One call per rig: the clips of a document do not change. Returns
+        whether they could be uploaded -- a clip carrying anything the shader
+        does not read (morph weights) leaves the blend on the processor rather
+        than being half-done here.
+        """
+        if 'blend' not in self._programs:
+            return False
+        if self.clip_index:
+            return True
+        try:
+            table = _pack_clips(samplers, self.joints_per_figure)
+        except _Unpackable as err:
+            log.info('clips stay on the processor: %s', err)
+            return False
+        index, channels, times, values, names = table
+        self._buffers['channel_index'].write(index)
+        self._buffers['channels'].write(channels)
+        self._buffers['times'].write(times)
+        self._buffers['values'].write(values)
+        self._buffers['rest'].write(_pack_pose_rows(rest))
+        self.clip_index = names
+        return True
+
+    def blend(self, tracks: Any, layers: Any, spans: Any,
+              masks: Optional[np.ndarray] = None) -> bool:
+        """Sample and blend every figure's clips into the pose buffer.
+
+        ``tracks`` is every ``(clip, time, weight)`` being played, run
+        together; ``layers`` is ``(first track, track count, mask, weight)``
+        for each layer, in the order they are applied; ``spans`` says which
+        layers belong to each figure. ``masks`` is a bit per joint per distinct
+        mask, one row a mask. False where there is nothing to blend from.
+        """
+        if not self.clip_index or 'blend' not in self._programs:
+            return False
+        from OpenGL.GL import (
+            GL_SHADER_STORAGE_BARRIER_BIT, glDispatchCompute, glMemoryBarrier,
+            glUseProgram,
+        )
+        count = len(spans)
+        joints = self.joints_per_figure
+        played = np.zeros((max(len(tracks), 1), 4), dtype=np.float32)
+        if len(tracks):
+            played[:len(tracks)] = tracks
+        stack = np.zeros((max(len(layers), 1), 4), dtype=np.float32)
+        if len(layers):
+            stack[:len(layers)] = layers
+        ranges = np.zeros((count, 4), dtype=np.int32)
+        if count:
+            ranges[:, :2] = spans
+        words = self.mask_words()
+        if masks is None or not len(masks):
+            masks = np.zeros((1, words), dtype=np.uint32)
+        self._buffers['tracks'].write(played)
+        self._buffers['layers'].write(stack)
+        self._buffers['figure_layers'].write(ranges)
+        self._buffers['masks'].write(np.ascontiguousarray(masks, dtype=np.uint32))
+        self._buffers['pose'].reserve(count * joints * 3 * 16)
+        for name in ('pose', 'rest', 'channel_index', 'channels', 'times',
+                     'values', 'tracks', 'figure_layers', 'layers', 'masks'):
+            self._buffers[name].bind()
+        program = self._programs['blend']
+        glUseProgram(program)
+        _set_int(program, 'jointsPerFigure', joints)
+        _set_int(program, 'figures', count)
+        _set_int(program, 'maskStride', words)
+        glDispatchCompute((count * joints + GROUP - 1) // GROUP, 1, 1)
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT)
+        glUseProgram(0)
+        return True
+
+    def mask_words(self) -> int:
+        """How many 32-bit words a mask over this rig's joints takes."""
+        return (self.joints_per_figure + 31) // 32
+
     # -- the frame ---------------------------------------------------------
-    def run(self, pose: Tuple[np.ndarray, np.ndarray, np.ndarray],
+    def run(self, pose: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]],
             targets: Sequence[Tuple[int, int, int, int]],
-            palette_buffer: int) -> bool:
+            palette_buffer: int, count: int = 0) -> bool:
         """Compose ``pose`` into every named skin's palette. False if it could not.
 
         ``targets`` is one ``(figure, skin, joints, palette base)`` per palette
@@ -220,9 +333,12 @@ class GPUSkeleton:
             GL_SHADER_STORAGE_BARRIER_BIT, GL_SHADER_STORAGE_BUFFER,
             glBindBufferBase, glDispatchCompute, glMemoryBarrier, glUseProgram,
         )
-        count = len(pose[0])
         joints = self.joints_per_figure
-        self._buffers['pose'].write(_pack_pose(pose))
+        if pose is not None:
+            count = len(pose[0])
+            self._buffers['pose'].write(_pack_pose(pose))
+        elif not count:
+            return False
         self._buffers['world'].reserve(count * joints * 64)
         for name in ('pose', 'hierarchy', 'world'):
             self._buffers[name].bind()
@@ -273,6 +389,87 @@ class GPUSkeleton:
             buffer.release()
         self._buffers = {}
         self.ok = False
+
+
+class _Unpackable(Exception):
+    """A clip carries something the blend shader does not read."""
+
+
+def _pack_clips(samplers: Sequence[Any], joints: int) -> tuple:
+    """Every clip as the flat tables the blend shader indexes.
+
+    ``channelOf[(clip * joints + slot) * 3 + path]`` names a channel, or -1
+    where that clip leaves the joint where it rests. A channel is where its
+    keys start and how many, so the shader searches the times it owns and
+    nothing else.
+    """
+    index = np.full((len(samplers), joints, 3), -1, dtype=np.int32)
+    channels: List[Tuple[int, int, int, int]] = []
+    times: List[np.ndarray] = []
+    values: List[np.ndarray] = []
+    names: Dict[str, int] = {}
+    keys = 0
+    rows = 0
+    for clip, sampler in enumerate(samplers):
+        if sampler._weights:
+            raise _Unpackable('%s drives morph weights' % sampler.name)
+        names[sampler.name] = clip
+        for path, store in enumerate(
+                (sampler._paths['translation'], sampler._paths['rotation'],
+                 sampler._paths['scale'])):
+            for row, slot in enumerate(store.slots):
+                channel = _channel_for(store, row)
+                if channel is None:
+                    continue
+                grid, key_values, interpolation = channel
+                channels.append((len(grid), keys, rows,
+                                 _INTERPOLATION.get(interpolation, 1)))
+                index[clip, int(slot), path] = len(channels) - 1
+                times.append(np.asarray(grid, dtype=np.float32))
+                values.append(_widen4(key_values))
+                keys += len(grid)
+                rows += len(key_values)
+    if not channels:
+        raise _Unpackable('no channel could be packed')
+    return (index.reshape(-1), np.asarray(channels, dtype=np.int32),
+            np.concatenate(times), np.concatenate(values), names)
+
+
+def _channel_for(store: Any, row: int) -> Optional[tuple]:
+    """One channel of one path as (times, values, interpolation).
+
+    A channel that holds one value throughout is written as a single key, which
+    is what it is: the shader then finds no segment and reads it straight.
+    """
+    for block in store.blocks:
+        where = np.flatnonzero(block.rows == row)
+        if len(where):
+            return (block.times, block.values[int(where[0])], block.interpolation)
+    constant = np.flatnonzero(store.constant_rows == row)
+    if len(constant):
+        return (np.zeros(1), store.constant[int(constant[0])].reshape(1, -1),
+                'STEP')
+    if not len(store.blocks) and row < len(store.constant):
+        return (np.zeros(1), store.constant[row].reshape(1, -1), 'STEP')
+    return None
+
+
+def _widen4(values: np.ndarray) -> np.ndarray:
+    """Key values as vec4 rows, whatever width the path is."""
+    array = np.asarray(values, dtype=np.float32).reshape(len(values), -1)
+    out = np.zeros((len(array), 4), dtype=np.float32)
+    out[:, :array.shape[1]] = array[:, :4]
+    return out
+
+
+def _pack_pose_rows(rest: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
+    """``(N, 3, 4)`` float32: where each joint rests."""
+    translation, rotation, scale = rest
+    packed = np.zeros((len(translation), 3, 4), dtype=np.float32)
+    packed[:, 0, :3] = translation
+    packed[:, 1, :] = rotation
+    packed[:, 2, :3] = scale
+    return packed
 
 
 def _pack_pose(pose: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
