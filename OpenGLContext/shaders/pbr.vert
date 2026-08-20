@@ -18,6 +18,7 @@ layout(location = 10) in uint aInstanceMaterial;   // index into the material ar
 layout(location = 11) in vec2 aTexCoord1;          // second UV set (glTF TEXCOORD_1)
 
 #include "_skinning_inc.glsl"
+#include "_wave_inc.glsl"
 
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
@@ -49,6 +50,9 @@ void main() {
     vec3 normal = aNormal;
     vec3 tangent = aTangent.xyz;
     applySkin(position, normal, tangent);
+    // Water moves on the card too, and after the mesh's own animation:
+    // the wave belongs to the surface rather than to the vertices.
+    applyWave(position, normal);
 
     vec4 eyePosition = mv * vec4(position, 1.0);
     vPosition = eyePosition.xyz;

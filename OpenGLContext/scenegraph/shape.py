@@ -126,6 +126,13 @@ class Shape(basenodes.Shape):
             if hasattr(shader_program, 'set_vertex_color'):
                 shader_program.set_vertex_color(
                     getattr(self.geometry, 'colors', None) is not None)
+            # Water moves on the card: the mesh is uploaded once and the wave
+            # is a handful of uniforms. Answered for every shape rather than
+            # only by water, or the hillside after a lake would ripple too.
+            if hasattr(shader_program, 'set_wave'):
+                shader_program.set_wave(
+                    getattr(self.geometry, 'wave_style', None),
+                    float(getattr(self.geometry, 'wave_time', 0.0) or 0.0))
             self.geometry.render(textured=True, mode=mode)
             return
 

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Water in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Water</h1>
+</header>
+<section>
+<p class="introduction">Water is two things that meet at its surface. From
+outside it is a <strong>surface</strong> — a sheet on a lake, a ribbon running
+down a river, a wave field you can ask the height of. From inside it is a
+<strong>medium</strong> — what being in it does to the view, to the mix and to
+the body. <code>OpenGLContext.scenegraph.water</code> holds both, and they are
+independent: a game can have lakes and never put anybody in one, or flood a
+level whose water is never drawn.</p>
+<pre>from OpenGLContext.scenegraph.water import (
+    STILL, FLOWING, CHOPPY,          # how a body of water moves
+    water_surface, water_ribbon, water_glints,   # what it looks like
+    wave_height, wave_normal,        # where the surface is, right now
+    Volume, Volumes, submerge,       # where the water is, and being in it
+)</pre>
+</section>
+
+<section>
+<h2>How water moves: <code>WaterStyle</code></h2>
+<p>One dataclass covers the range, and three settings of it are named:</p>
+<table>
+<tr><th>Field</th><th>Unit</th><th><code>STILL</code></th><th><code>FLOWING</code></th><th><code>CHOPPY</code></th></tr>
+<tr><td><code>amplitude</code></td><td>metres, trough to crest</td><td>0.0</td><td>0.09</td><td>0.42</td></tr>
+<tr><td><code>wavelength</code></td><td>metres between crests</td><td>11.0</td><td>4.5</td><td>7.0</td></tr>
+<tr><td><code>speed</code></td><td>metres a second the crests travel</td><td>0.0</td><td>1.6</td><td>2.4</td></tr>
+<tr><td><code>steepness</code></td><td>how far the normals tilt on top of the displacement</td><td>0.045</td><td>0.063</td><td>0.099</td></tr>
+<tr><td><code>flow</code></td><td>metres a second the surface drifts, <code>(x, z)</code></td><td>(0, 0)</td><td>(1, 0)</td><td>(0, 0)</td></tr>
+</table>
+<p><code>STILL</code> is a pond: nothing moves, and the ripple is in the light
+on it. <code>FLOWING</code> is a river, with small crests travelling
+downstream and the surface drifting with them. <code>CHOPPY</code> is weather,
+with enough height in it that a shoreline moves. A caller who wants a fourth
+writes one — water is a continuum, and the three names are settings rather
+than an enumeration.</p>
+<p>Where <code>flow</code> is not zero it is also the direction the crests
+travel. <code>style.moving()</code> answers whether anything about it changes
+with time, which is what a caller advancing the clock only for water that
+needs it asks.</p>
+
+<h3>The field</h3>
+<p>The surface is the sum of <strong>three crossing sine trains</strong>,
+evaluated from <em>world</em> position and time rather than from a mesh's own
+coordinates. Two consequences follow, and they are the reason it is built this
+way:</p>
+<ul>
+  <li><strong>Sheets that meet agree.</strong> A river running into a lake is
+  at the same height as the lake along the join, because both asked the same
+  function about the same place.</li>
+  <li><strong>A height can be asked for.</strong>
+  <code>wave_height(style, x, z, when)</code> and
+  <code>wave_normal(style, x, z, when)</code> take scalars or numpy arrays and
+  answer what the surface is doing there — which is what buoyancy, a boat's
+  waterline or a splash reads.</li>
+</ul>
+<pre>from OpenGLContext.scenegraph.water import CHOPPY, wave_height
+
+lift = wave_height(CHOPPY, boat[0], boat[2], when=context.time)</pre>
+</section>
+
+<section>
+<h2 id="surfaces">Drawing it</h2>
+<h3>A lake: <code>water_surface</code></h3>
+<pre>mesh = water_surface(x0, x1, z0, z1, level=12.0,
+                     resolution=33, style=CHOPPY, on_gpu=True)</pre>
+<p>A sheet over a footprint at <code>level</code>. <code>resolution</code> is
+how many vertices across it is meshed at: for still water that carries the
+ripple in the normals, and for choppy water it is also how much of the wave the
+surface can hold — a sheet meshed coarsely against its own wavelength is a flat
+sheet with a strange normal, so keep at least a few vertices per
+<code>wavelength</code>.</p>
+
+<h3>A river: <code>water_ribbon</code></h3>
+<pre>mesh = water_ribbon(course, width=8.0, style=FLOWING, lift=0.15)</pre>
+<p><code>course</code> is <code>(N,3)</code> world points — where the water
+runs and how high it is there — and <code>width</code> is metres across, either
+one number or one per point so a river carrying more is wider further down. A
+lake is one flat plane and a river is not, which is why this exists: a sheet at
+a level cannot follow a course downhill. The surface lies <em>across the
+flow</em> at every point, so a bend is a bend in plan. <code>lift</code> raises
+it above the course, for a caller whose course is the bed rather than the
+surface.</p>
+
+<h3 id="glints">A river seen from far off: <code>water_glints</code></h3>
+<pre>mesh = water_glints(course, width=8.0, spacing=60.0, style=FLOWING)</pre>
+<p>A river a kilometre away is two pixels wide and mostly hidden by whatever
+stands over it; what the eye gets is the surface flashing between the trees.
+<code>water_glints</code> spends a handful of quads on that instead of a
+tile's whole budget on a line nobody can resolve — <strong>this is what a
+river's level of detail is</strong>.</p>
+<p><code>spacing</code> is how far apart the glints are, in metres, and it is
+the LOD dial: wider with distance. Because a coarser tile is also a bigger
+tile, a spacing that grows with the tile's geometric error keeps the number of
+glints in a tile roughly constant, which makes it a budget rather than a fade.
+<code>size</code> is how much of the river's width each one covers. Where they
+fall is a function of position along the course rather than a random draw, so a
+world baked twice glints in the same places.</p>
+
+<h3 id="on_gpu">Moving it: <code>on_gpu</code></h3>
+<p>Every one of the three takes <code>on_gpu</code>. Left out, the wave is
+built into the vertices at time <code>when</code> — right for a still sheet, or
+for a caller who wants the mesh to <em>be</em> the surface. Set, the mesh is
+built <strong>flat</strong> and the style is handed to the card:</p>
+<pre>mesh = water_surface(0, 200, 0, 200, level=0.0, style=CHOPPY, on_gpu=True)
+...
+mesh.wave_time = context.time      # once a frame; nothing is re-uploaded</pre>
+<p>The vertex shader displaces it, so the mesh is uploaded once and a frame
+costs a handful of uniforms. This is the same arrangement skinning uses for a
+pose, and the wave is applied in the shadow depth program too, so moving water
+casts the shadow of the shape it is in.</p>
+<p>Build the wave into the vertices <em>or</em> hand it to the card — not both,
+or the wave is applied twice. <code>Shape</code> answers the wave uniforms for
+every shape it draws, so the hillside beside a lake does not ripple.</p>
+</section>
+
+<section>
+<h2 id="media">Being in it: media and volumes</h2>
+<p>A <code>Medium</code> is one substance described from the inside. Three are
+in the table, and the numbers are the games' own — nothing in any specification
+says how far you can see through slime:</p>
+<table>
+<tr><th>Name</th><th><code>visibility</code></th><th><code>muffle</code></th><th><code>harm</code></th></tr>
+<tr><td><code>water</code></td><td>9 m</td><td>0.75</td><td>0</td></tr>
+<tr><td><code>slime</code></td><td>4.5 m</td><td>0.85</td><td>12 health a second</td></tr>
+<tr><td><code>lava</code></td><td>2 m</td><td>0.90</td><td>32 health a second</td></tr>
+</table>
+<p><code>visibility</code> is how many metres it takes the view to close to the
+medium's <code>color</code>, and both are <strong>linear</strong>: the fog
+blends in linear HDR before tone mapping, so the colours in the table are much
+darker than water looks from above. Water <em>absorbs</em> — it takes the light
+out of what you are looking at — where a pale, long-range fog would read as air
+with something in it. <code>muffle</code> is how much of the mix's high end
+goes, and is never 1: total silence reads as the sound having broken.
+<code>register(Medium(...))</code> adds a substance; a name the table has never
+heard of is treated as water rather than as dry air, because whatever it is,
+the body is inside something.</p>
+
+<h3>Where the water is</h3>
+<pre>from OpenGLContext.scenegraph.water import Volume, Volumes
+
+volumes = Volumes([
+    Volume.below(minimum=(-40, -40), maximum=(40, 40), level=2.0, depth=30.0),
+    Volume(minimum=(10, -8, 10), maximum=(14, -4, 14), medium='lava'),
+])
+volumes.medium_at(point)               # 'water', 'lava' or '' for dry air</pre>
+<p>Boxes in world metres, with the boundary counted as inside so a body exactly
+at the waterline is in the water. Where boxes overlap, <code>rule</code> picks
+the answer: <code>'worst'</code> (the default) gives the one that will hurt
+most, for a body half in a pool and half in the lava under it;
+<code>'smallest'</code> gives the most specific, which is what a world whose
+boxes are some partition's own bounds — a BSP leaf, a tile — wants.</p>
+
+<h3>Putting a context under</h3>
+<pre>from OpenGLContext.scenegraph.water import medium_fog, submerge
+
+self.fog = medium_fog()                       # once, bound into the scene
+...
+name = submerge(self, volumes, self.platform.position)   # once a frame</pre>
+<p><code>submerge</code> sets the context's fog to what the medium looks like
+from inside and the audio engine's whole-mix low-pass to its muffle, then
+answers the substance it found so a caller can report it or charge
+<code>harm</code> for it. Being under water is not a coloured pane over the
+screen: it is a medium with depth in it, so what is in your hands stays clear
+while the far wall does not.</p>
+<p>Every part is optional. <code>volumes</code> may be <code>None</code> for a
+world with no water; a context with no <code>fog</code> is left alone; and a
+machine with no sound is never opened just to muffle a silence.
+<code>volumes</code> is anything answering <code>medium_at(point)</code>, so a
+game whose water comes out of a BSP's contents flags passes its own object
+rather than converting.</p>
+</section>
+
+<section>
+<h2>Limits</h2>
+<ul>
+  <li><strong>Not a simulation.</strong> The wave field is analytic — three
+  sine trains — which is what makes it cheap, seamless and reproducible. There
+  is no fluid solver, and water does not find its own level or pour.</li>
+  <li><strong>Not a physics body.</strong> Buoyancy and drag read
+  <code>wave_height</code>; what a body does with that belongs to whatever
+  moves it.</li>
+  <li><strong>Reflection and refraction are the material's.</strong> Water is a
+  PBR material with transmission and an index of refraction of 1.33; there is no
+  planar reflection pass and no screen-space refraction.</li>
+  <li><strong>A volume is a box.</strong> A sloping river's medium is the boxes
+  a caller cuts it into.</li>
+  <li><strong>Shoreline is the mesh's.</strong> Nothing feathers the edge where
+  water meets ground, and a sheet that ends inside a hill ends visibly.</li>
+</ul>
+</section>
+
+<footer>
+<p>See also: <a href="terrain.html">Terrain &amp; 3D&nbsp;Tiles</a> for the
+landscape water sits in, <a href="baking.html">Baking a world</a> for putting
+rivers and lakes into a streamable tileset,
+<a href="pbr.html">PBR materials</a> for what <code>water_material</code>
+builds, <a href="audio.html">Spatial Audio</a> for the mix the muffle acts on,
+and <a href="navigation.html">Movement modes</a> for swimming in it.</p>
+</footer>
+</body>
+</html>

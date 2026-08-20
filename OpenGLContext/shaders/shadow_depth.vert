@@ -9,6 +9,7 @@ layout(location = 2) in vec3 aPosition;
 layout(location = 5) in mat4 aInstanceModelView;
 
 #include "_skinning_inc.glsl"
+#include "_wave_inc.glsl"
 
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
@@ -18,5 +19,7 @@ void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
     vec3 position = aPosition;
     applySkin(position);
+    vec3 waveNormal = vec3(0.0, 1.0, 0.0);
+    applyWave(position, waveNormal);
     gl_Position = projectionMatrix * (mv * vec4(position, 1.0));
 }

@@ -557,6 +557,33 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self._set_uniform1i('jointBase', int(base), target)
         self._set_uniform1i('skinningEnabled', 1, target)
 
+    # -- water ------------------------------------------------------------
+    def set_wave(self, style: Any, when: float = 0.0,
+                 program: Any = None) -> None:
+        """Move the next draw as ``style`` says, or not at all.
+
+        ``None`` turns the wave off for the draws that follow, which is what
+        every other shape in the scene wants; the uniform is a branch the whole
+        draw takes together, so a hillside pays nothing for the lake beside it.
+
+        The mesh is uploaded once and only these uniforms change, which is what
+        makes a moving surface cost nothing per frame -- the same arrangement
+        skinning uses for a pose.
+        """
+        target = program if program is not None else (
+            getattr(self, '_active_program', 0) or self.program)
+        if style is None:
+            self._set_uniform1i('waveEnabled', 0, target)
+            return
+        self._set_uniform1f('waveAmplitude', float(style.amplitude), target)
+        self._set_uniform1f('waveLength', float(style.wavelength), target)
+        self._set_uniform1f('waveSpeed', float(style.speed), target)
+        self._set_uniform1f('waveSteepness', float(style.steepness), target)
+        self._set_uniform2f('waveFlow', (float(style.flow[0]),
+                                         float(style.flow[1])), target)
+        self._set_uniform1f('waveTime', float(when), target)
+        self._set_uniform1i('waveEnabled', 1, target)
+
     # -- material / appearance --------------------------------------------
     def set_alpha(self, alpha: float, alpha_mode: int) -> None:
         """Opacity + alpha mode (frame/pass-dependent; the rest is in the UBO)."""
