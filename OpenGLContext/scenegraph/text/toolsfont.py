@@ -1,4 +1,4 @@
-"""rendering of TTF outlines (as provided by _fonttools)
+"""Filled and extruded 3D glyphs from TrueType outlines
 """
 from OpenGLContext.arrays import *
 import weakref, sys, os

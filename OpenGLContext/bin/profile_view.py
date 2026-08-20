@@ -21,10 +21,12 @@ class TestContext(
         BaseContext.OnInit( self )
 
 def main():
-    usage = """vrml_view.py myscene.wrl
+    usage = """python -m OpenGLContext.bin.profile_view myscene.wrl
 
-    A very limited VRML97 viewer which saves profile results
-    to OpenGLContext.profile using the cProfile module.
+    A VRML97 viewer which writes cProfile results to a file named
+    OpenGLContext.profile in the working directory.  Not a console
+    script: oglc-view is the viewer, and this is the profiling harness
+    behind it.
     """
     import sys, cProfile
     if not sys.argv[1:2]:

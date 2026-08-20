@@ -1,4 +1,11 @@
-"""Flat rendering mechanism using structural scenegraph observation"""
+"""The compatibility-profile flat pass: the fixed-function pipeline
+
+Lighting and materials go through ``glLight*`` and ``glMaterial*``, and
+geometry is drawn from display lists and client-side vertex arrays.  The
+core-profile pass is :mod:`OpenGLContext.passes.flatcore`; which of the two
+renders a given context is decided in
+:mod:`OpenGLContext.passes.renderpass`, not chosen by the caller.
+"""
 from . import _flat
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
