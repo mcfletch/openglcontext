@@ -144,7 +144,9 @@ class ContextDefinition( node.Node ):
                                      lambda: int(renderoptions.env_number('OPENGLCONTEXT_SHADOW_CASCADES', 0, integer=True)))
     #: Lights the shader will bind in one frame. Lower is faster in a scene
     #: with many lights; the shader's own ceiling still applies.
-    maximumLights = field.newField( "maximumLights", "SFInt32", 1, 8 )
+    #: (env: OPENGLCONTEXT_MAXIMUM_LIGHTS)
+    maximumLights = field.newField( "maximumLights", "SFInt32", 1,
+                                    lambda: int(renderoptions.env_number('OPENGLCONTEXT_MAXIMUM_LIGHTS', 8, integer=True)) )
 
     #: HDR bloom post-process (env: OPENGLCONTEXT_BLOOM).
     bloom = field.newField( "bloom", "SFBool", 1,

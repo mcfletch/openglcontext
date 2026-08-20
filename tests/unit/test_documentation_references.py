@@ -153,3 +153,62 @@ class TestTheDirectoryMapIsComplete:
         assert not (packages - listed), (
             'sub-packages of OpenGLContext/ missing from the directory map in '
             'CLAUDE.md: %s' % sorted(packages - listed))
+
+
+class TestTheEnvironmentReferenceIsComplete:
+    """``docs/environment.html`` is the only page that lists the switches.
+
+    They are otherwise described across a dozen feature pages, which is fine
+    for someone who already knows which feature they want and no use to anyone
+    else.  The page is hand-written prose, so what is checked is that it names
+    every variable and invents none.
+    """
+
+    PAGE = DOCS / 'environment.html'
+
+    def _documented(self):
+        text = self.PAGE.read_text(encoding='utf-8')
+        return set(re.findall(r'OPENGLCONTEXT_[A-Z_0-9]+', text))
+
+    @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
+    def test_every_rendering_variable_is_documented(self):
+        from OpenGLContext import renderoptions
+        missing = set(renderoptions.ENVIRONMENT) - self._documented()
+        assert not missing, (
+            'in renderoptions.ENVIRONMENT but absent from '
+            'docs/environment.html: %s' % sorted(missing))
+
+    @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
+    def test_it_documents_the_inherited_ones_too(self):
+        """The exemptions need documenting most: nothing else mentions them."""
+        documented = self._documented()
+        for name in ('OPENGLCONTEXT_AUDIO', 'OPENGLCONTEXT_AUDIO_VOLUME',
+                     'OPENGLCONTEXT_STALL_MS', 'OPENGLCONTEXT_TRACE_STALLS',
+                     'OPENGLCONTEXT_STALL_TRACE', 'OPENGLCONTEXT_DEBUG_WHEEL'):
+            assert name in documented, name
+
+    @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
+    def test_it_invents_nothing(self):
+        package = set()
+        for path in PACKAGE.rglob('*.py'):
+            package.update(re.findall(
+                r'OPENGLCONTEXT_[A-Z_0-9]+',
+                path.read_text(encoding='utf-8', errors='replace')))
+        invented = self._documented() - package
+        assert not invented, (
+            'documented in docs/environment.html but named nowhere in the '
+            'package: %s' % sorted(invented))
+
+
+class TestNoOrphanPages:
+    """A page nothing links to is a page nobody finds."""
+
+    @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
+    def test_every_page_is_reachable_from_the_index(self):
+        index = DOCS / 'documentation.html'
+        linked = set(re.findall(r'href="([a-z0-9_]+\.html)"',
+                                index.read_text(encoding='utf-8')))
+        pages = {p.name for p in DOCS.glob('*.html')}
+        assert not (pages - linked), (
+            'not linked from docs/documentation.html: %s'
+            % sorted(pages - linked))

@@ -456,3 +456,20 @@ class TestWhatCleanMeans:
                      'OPENGLCONTEXT_BLOOM', 'OPENGLCONTEXT_PROFILE'):
             assert name not in found, name
 
+
+
+class TestEveryListedVariableIsRead:
+    """A variable in ``ENVIRONMENT`` that nothing reads is a promise unkept.
+
+    ``clean_environment()`` drops it, the reference page documents it, and a
+    user who sets it sees no change at all.  Every field on ContextDefinition
+    that names a variable takes its default from it.
+    """
+
+    def test_the_light_ceiling_follows_its_variable(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_MAXIMUM_LIGHTS', '3')
+        assert int(ContextDefinition().maximumLights) == 3
+
+    def test_it_falls_back_to_the_shader_ceiling(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_MAXIMUM_LIGHTS', raising=False)
+        assert int(ContextDefinition().maximumLights) == 8
