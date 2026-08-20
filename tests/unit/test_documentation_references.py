@@ -127,3 +127,29 @@ class TestDocsNameFilesThatExist:
         assert not broken, (
             'named in docs/ but not in the checkout: %s'
             % {k: sorted(v) for k, v in broken.items()})
+
+
+class TestTheDirectoryMapIsComplete:
+    """``CLAUDE.md``'s map is how a change finds the package it belongs in.
+
+    A package missing from it is a package whose code ends up somewhere else,
+    and the one most likely to be missing is the one added last -- so the map
+    is checked rather than remembered.
+    """
+
+    MAP = ROOT / 'CLAUDE.md'
+
+    @pytest.mark.skipif(not (ROOT / 'CLAUDE.md').is_file(),
+                        reason='CLAUDE.md is not shipped in the distribution')
+    def test_every_sub_package_is_listed(self):
+        text = self.MAP.read_text(encoding='utf-8')
+        block = text.split('## Directory Structure')[1].split('```')[1]
+        listed = set(re.findall(r'[│├└─ ]+([a-z_0-9]+)/', block))
+        packages = {
+            path.name
+            for path in PACKAGE.iterdir()
+            if path.is_dir() and path.name != '__pycache__'
+        }
+        assert not (packages - listed), (
+            'sub-packages of OpenGLContext/ missing from the directory map in '
+            'CLAUDE.md: %s' % sorted(packages - listed))

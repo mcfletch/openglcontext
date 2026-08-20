@@ -1,22 +1,34 @@
-'''Rendering contexts for various GUI libraries, scene graph
-geometry objects, and PyOpenGL testing code
+'''A 3D engine on PyOpenGL: scenes, a renderer, and a window to put it in
 
-The OpenGLContext project provides a simplified environment
-for writing OpenGL code with PyOpenGL.  This simplified
-environment abstracts the GUI library interfaces for a
-large number of GUI libraries to allow the easy creation of
-cross platform and cross-GUI-OpenGL programs.
+OpenGLContext renders 3D scenes with PyOpenGL, in a window belonging to
+whichever GUI toolkit the application already uses.  GLFW, GLUT, Pygame,
+wxPython and Qt/PySide are all supported; GLFW is the one to reach for with
+the core profile.  A context can own the whole window or sit as one canvas
+inside a larger application.
 
-The project also provides simplified geometry display
-primitives to allow new developers to concentrate on the
-particular task in which they are interested rather than
-forcing them to re-implement basic geometry display
-mechanisms.
+    from OpenGLContext.viewer import ViewerContext, ViewerOptions
 
-Taking advantage of this simplified environment, we have
-provided a number of testing modules.  These testing
-modules should operate under any of the fully functional
-GUI contexts (note that there are unfinished contexts).
+    class MyViewer(ViewerContext):
+        options = ViewerOptions(source='model.glb')
+
+    MyViewer.ContextMainLoop()
+
+What it holds:
+
+    scenegraph   VRML97-style nodes, plus the metallic/roughness material
+                 and mesh the glTF loader produces
+    loaders      glTF 2.0/GLB, VRML97, Wavefront OBJ and streamed 3D Tiles
+    passes       The core-profile and compatibility render passes, physically
+                 based rendering, image-based lighting, shadows, instancing
+    move         Walking, flying, swimming and mouse-look, with collision
+    physics      Rigid bodies, colliders, gravity zones and triggers
+    audio        Sound placed in the scene and heard from where you stand
+    ui           Panels, widgets and a settings screen over the live frame
+    viewer       The embeddable viewer that `oglc-view` is a command line for
+
+It is also the primary suite of test cases PyOpenGL is verified against.
+
+Documentation is under `docs/`, indexed by `docs/documentation.html`.
 '''
 
 __version__ = "3.0.0a2"
@@ -38,9 +50,12 @@ VRMLContext( 'wx', 'OpenGLContext.wxvrmlcontext.VRMLContext' )
 VRMLContext( 'glut', 'OpenGLContext.glutvrmlcontext.VRMLContext' )
 VRMLContext( 'glfw', 'OpenGLContext.glfwvrmlcontext.VRMLContext' )
 
+# Imported for its side effect: the package registers the Qt backend with the
+# registries above as it loads.  Absent unless the separate OpenGLContext-qt
+# distribution is installed, which is the whole of what makes qt selectable.
 try:
-    import OpenGLContext_qt
-except ImportError as err:
+    import OpenGLContext_qt      # noqa: F401
+except ImportError:
     pass
 
 Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml','.wrl.gz'] )

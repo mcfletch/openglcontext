@@ -38,53 +38,67 @@ When creating new plans:
 
 ## Directory Structure
 
+Every sub-package of `OpenGLContext/`. **Keep this list complete**: it is how a
+change finds the package it belongs in, and a package missing from it is a
+package whose code ends up somewhere else.
+
 ```text
 OpenGLContext/
-├── passes/           # Rendering passes (multi-pass rendering system)
-│   ├── _flat.py      # Base FlatPass with shader and legacy support
-│   ├── flatcore.py   # Core profile FlatPass (use_shaders=True by default)
-│   ├── flatcompat.py # Compatibility profile FlatPass
-│   ├── shaderpass.py # VRML97ShaderProgram - shader management
-│   └── renderpass.py # Base render pass classes
-├── scenegraph/       # VRML97-style scenegraph nodes
-│   ├── shape.py      # Shape node (binds Appearance to geometry)
-│   ├── appearance.py # Appearance node (material + texture)
-│   ├── pointset.py   # PointSet geometry (particles, point clouds)
-│   ├── indexedfaceset.py  # Indexed face set geometry
-│   ├── arraygeometry.py   # VBO-based geometry base class
-│   ├── background.py      # Background nodes
-│   ├── light.py           # Light nodes (DirectionalLight, PointLight, SpotLight)
-│   ├── text/              # Text rendering subsystem
-│   │   ├── fontprovider.py   # Font provider registry
-│   │   ├── glutfont.py       # GLUT bitmap font (legacy)
-│   │   ├── shaderfont.py     # Shader-compatible font wrapper
-│   │   └── shadertext.py     # Texture atlas text renderer
-│   └── ...
-├── shaders/          # GLSL shader source files
-│   ├── vrml97_lighting.vert/frag  # Main lit shader (Phong lighting)
-│   ├── vrml97_unlit.vert/frag     # Unlit shader (picking, text)
-│   ├── vrml97_point.vert/frag     # Point/particle shader
-│   ├── vrml97_vertex_color.vert/frag  # Per-vertex color shader
-│   └── vrml97_background.vert/frag    # Background shader
-├── events/           # Event handling system
-├── move/             # Camera/viewpoint movement
-├── loaders/          # File format loaders (VRML, OBJ, etc.)
-├── ui/               # Overlay UI (settings, dialogs, console) -- docs/overlayui.html
-│   ├── overlay.py    # OverlayStack + OverlayMixin: the stack and its input routing
+├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.html
+├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.html
+├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.html
+├── debug/            # Developer aids: buffer dumps, GL state, leak counts
+├── edit/             # Editor toolkit: tool modes, plan/orbit views -- docs/editing.html
+├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.html
+├── loaders/          # File formats into the scenegraph -- docs/gltf.html, vrml97.html
+│   ├── gltf/         # glTF 2.0 / GLB
+│   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/terrain.html
+├── move/             # Camera, movement modes, walking -- docs/navigation.html
+├── nav/              # Navigation mesh generated from a collision mesh
+├── passes/           # Rendering passes -- docs/renderpasses.html, flat.html, pbr.html
+│   ├── _flat.py      # What both flat passes share; not instantiated directly
+│   ├── flatcore.py   # Core-profile pass (GLSL)
+│   ├── flatcompat.py # Compatibility-profile pass (fixed function)
+│   ├── renderpass.py # Chooses between the two and caches the choice
+│   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.html
+│   ├── ibl.py        # Image-based lighting probe
+│   ├── shadow*.py    # Shadow mapping -- docs/shadows.html
+│   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.html
+│   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
+├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.html
+├── resources/        # Generated Python modules holding icons and shader text
+├── scenegraph/       # VRML97-style nodes
+│   ├── basenodes.py  # Every registered node class, by name
+│   ├── shape.py      # Binds Appearance to geometry
+│   ├── pbrmaterial.py, pbrmesh.py   # The metallic/roughness material and mesh
+│   ├── road*.py      # Roads, roadworks, signs -- docs/roads.html
+│   ├── water/        # Wave field, surface, medium -- docs/water.html
+│   ├── terrain/      # Height fields and splat materials -- docs/terrain.html
+│   ├── vegetation/   # Instanced cover and fields
+│   └── text/         # Text rendering and font providers -- docs/text.html
+├── shaders/          # GLSL sources (.vert/.frag plus shared _*.glsl includes)
+├── testing/          # The shipped test machinery conftest.py imports
+├── tests/            # A second test root -- being moved to tests/unit/ (C1)
+├── ui/               # Overlay UI: panels, widgets, skin -- docs/overlayui.html
+│   ├── overlay.py    # OverlayStack + OverlayMixin: the stack and input routing
 │   ├── panel.py      # One screen: focus, accelerators, modality
-│   ├── widgets.py    # Label/Button/Toggle/Select/Slider/Text+NumberField/KeyCapture
+│   ├── widgets.py    # Label/Button/Toggle/Select/Slider/Text+NumberField
+│   ├── hudwidgets.py # The in-world HUD: reticule, meters, messages -- docs/hud.html
+│   ├── debugoverlay.py  # The developer overlay, fed by registered providers
 │   ├── layout.py     # Row/Column/Grid (built on hud.GUIBox)
 │   ├── draw.py       # The GL renderer: one program, one batched buffer
-│   ├── session.py    # SettingsSession: editing a node on a copy
-│   ├── generate.py   # A settings page from a node's fields (UI_HINTS)
-│   ├── skin.py       # Colours, insets, nine-slice artwork
-│   └── settings.py, bindings.py, dialogs.py, console.py, scroll.py
+│   └── generate.py   # A settings page from a node's fields (UI_HINTS)
+├── video/            # H.264 capture of the colour buffer -- docs/recording.html
+├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.html
+│   └── adapters/     # One per format; what oglc-view dispatches on
+├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition
+├── contextdefinition.py  # The fields a context is configured by
 ├── context.py        # Base context class
-├── glutcontext.py    # GLUT context implementation
-├── glfwcontext.py    # GLFW context implementation
+├── glfwcontext.py, glutcontext.py, pygamecontext.py, wxcontext.py
+│                     # One per backend, plus *interactive*, *vrml*, *testing*
 ├── interactivecontext.py  # Interactive context with mouse/keyboard
-└── testingcontext.py      # Testing context utilities
+└── testingcontext.py      # Picks the backend's testing context
 ```
 
 ## Rendering Architecture
@@ -478,11 +492,20 @@ exists), state the reason in the present tense and drop the backstory.
 
 ### File Locations
 
-- Tests are in the `tests/` directory
+The full map is under [Directory Structure](#directory-structure); this is the
+short answer for the places a change most often lands.
+
+- Unit tests are in `tests/unit/`; the runnable demo scripts the visual
+  regression suite drives are in `tests/`
 - Scenegraph nodes are in `OpenGLContext/scenegraph/`
 - Rendering passes are in `OpenGLContext/passes/`
 - Shaders are in `OpenGLContext/shaders/` as `.vert` and `.frag` files
-- Context implementations (GLUT, GLFW, etc.) are in `OpenGLContext/`
+- Context implementations (GLUT, GLFW, Pygame, wx) are in `OpenGLContext/`
+- User documentation is `docs/*.html`; plans are `plans/*.md`
+
+**A capability a game would also want belongs in the engine, not in a demo or
+a tool.** If the natural home is a new module, add it to a package that already
+owns the subject and add it to the directory map above.
 
 ### Geometry Node Pattern
 

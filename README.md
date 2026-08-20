@@ -1,4 +1,4 @@
-# OpenGLContext 3.0.0a1
+# OpenGLContext
 
 OpenGLContext renders 3D scenes with PyOpenGL, in a window belonging to
 whichever GUI toolkit your application already uses. It loads glTF 2.0 and
@@ -37,6 +37,17 @@ create your own demos or tools.
 
 - **Game-style positional audio** — sounds placed in the scene and heard from
   where the listener stands.
+
+- **Worlds, not just models** — roads swept from a centreline and a
+  cross-section, water as still lakes, flowing rivers or choppy weather and as
+  a medium you can be inside, streamed 3D Tiles terrain with distance-LOD
+  vegetation, and a navigation mesh generated from the collision mesh.
+
+- **Rigged characters** — skeletal animation with several clips playing at
+  once, attachments on a hand, distance LOD, and crowds posed on the GPU.
+
+- **Records what it draws** — H.264 straight from the framebuffer to the
+  GPU's video encoder, on a clock that counts frames.
 
 - **Viewer Application** — `oglc-view model.glb`. With embedded links to sample
   content you can browse through the embedded UI.
