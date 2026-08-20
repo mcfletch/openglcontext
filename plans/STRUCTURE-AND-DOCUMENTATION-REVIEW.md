@@ -1,6 +1,8 @@
 # Structure & Documentation Review — consistency, cohesion, obviousness
 
-**Status:** 📋 Planned — findings recorded, nothing executed.
+**Status:** 🟡 Partial — **steps 1–7 landed** on branch `docs-structure-review`
+(findings 5, 6, 8, 9, 10, 13 and part of 7). Findings 1, 2, 3, 4, 11, 12 and the
+rest of 7 are open.
 **Date:** 2026-08-20.
 **Scope:** the `OpenGLContext` package, `docs/`, `README.md` and `CLAUDE.md`.
 Not a bug hunt: every item here is about whether a developer can *predict* where
@@ -30,7 +32,7 @@ below re-proposes those.
 | 3 | `hud.py` at top level, its other half in `ui/`; culling maths under `loaders/` | The layout does not predict the contents | Small |
 | 4 | Nine of fifteen sub-packages have no front door in `__init__.py` | No answer to "what do I import from `passes`?" | Small |
 | 5 | `viewer/options.py` re-implements the environment readers, with different semantics | `OPENGLCONTEXT_PHYSICS=off` turns physics **on** | Small, and a defect |
-| 6 | `renderoptions.ENVIRONMENT` is missing four live variables | `clean_environment()` does not clean them | Small, and a defect |
+| 6 | Two rendering settings sit on `ENVIRONMENT`'s exemption list, and one listed variable is read by nothing | `clean_environment()` does not clean them; setting `MAXIMUM_LIGHTS` does nothing | Small, and a defect |
 | 7 | Docstrings are two-tier: 49 large legacy modules carry one terse line | The oldest, most-read core is the least explained | Large |
 | 8 | Five docstrings name modules that moved; one names a module that never existed | The reader follows the pointer and lands nowhere | Small |
 | 9 | `structure.html` and `basenodes.py` document an extension mechanism that is not the one in the code | A third party follows it and nothing registers | Small |
@@ -293,33 +295,38 @@ not only a tidy-up — do it first and separately.
 
 ---
 
-## 6. `clean_environment()` does not clean the whole family
+## 6. Two rendering settings were exempted, and one variable was read by nothing
 
-`renderoptions.ENVIRONMENT` (line 42) is documented as
+**Corrected after implementation.** The first draft of this finding said four
+variables had been forgotten from `renderoptions.ENVIRONMENT`. That was wrong:
+the invariant is already tested
+(`test_every_variable_the_package_reads_is_listed`), and those names sit on a
+deliberate `allowed` list carrying a stated rationale — sound for the audio pair
+and the three diagnostics, which change no pixels and which a subprocess should
+inherit rather than silently lose. What was actually wrong was narrower.
 
-> *"Every environment variable that changes what a frame looks like or how it is
-> produced."*
+### `OPENGLCONTEXT_PHYSICS` and the framing yaw are rendering settings
 
-and `clean_environment()` is built on the principle that
+Physics drops the avatar under gravity and collides it with the scene; the
+framing yaw turns a model with no camera of its own on the turntable it is
+framed against. Both decide where the camera ends up, so a reference image
+rendered with either inherited is a reference for whatever the parent process
+happened to be carrying. Both are now in `ENVIRONMENT`, and the exemption list
+says per-name why each of the remaining six is exempt.
 
-> *"Dropping the whole family rather than the few a caller remembers is the point:
-> the next variable to be added is exactly the one nobody would think to clear."*
+### `OPENGLCONTEXT_MAXIMUM_LIGHTS` was read by nothing
 
-Four live variables are not in the tuple:
+It was listed in `ENVIRONMENT` — and so dropped by `clean_environment()` — but
+`ContextDefinition.maximumLights` was the one field in that class whose default
+was a literal `8` rather than a `renderoptions.env_number` lambda. Setting the
+variable did nothing at all. It now reads its variable, exactly as
+`shadowCascades` immediately above it does.
 
-| Variable | Read at | Effect on a rendered frame |
-|---|---|---|
-| `OPENGLCONTEXT_PHYSICS` | `viewer/options.py:116` | moves the objects being photographed |
-| `OPENGLCONTEXT_AUDIO` | `audio/settings.py:45` | no pixels, but it is a feature pin |
-| `OPENGLCONTEXT_AUDIO_VOLUME` | `audio/settings.py:52` | as above |
-| `OPENGLCONTEXT_DEBUG_WHEEL` | `events/glfwevents.py:37` | prints to the log during a capture |
-
-**Fix:** add all four to `ENVIRONMENT`. Add a unit test that walks the source for
-`OPENGLCONTEXT_[A-Z_]+` string literals and asserts each appears in `ENVIRONMENT`,
-so the next variable added cannot be forgotten — which is precisely the failure
-mode the docstring names.
-
----
+The existing invariant test only checks one direction — every variable read is
+listed. It does not catch a listed variable nothing reads, which is how this
+survived. The reference page added in finding 10 closes that gap from the other
+side: a variable in the tuple must appear on the page, and the page may name
+nothing the package does not.
 
 ## 7. Docstrings are two-tier
 
@@ -635,29 +642,61 @@ from `__init__.py` and add the six missing bullets.
 
 ---
 
-## Suggested order
+## What landed, and what is left
 
-Each step is independently shippable.
+Steps 1–7 are on branch `docs-structure-review`, six commits, based on
+`develop` at `f702190`. Full unit suite after: **6298 passed, 0 failed**
+(`OPENGLCONTEXT_GLTF_BASELINE` must be pinned when running from a worktree
+outside the workspace, since the baselines are a sibling directory).
 
-| Step | Work | Why here |
+| Step | Work | State |
 |---|---|---|
-| 1 | Finding 5 — delete `viewer/options._env_flag`/`_env_float` | It is a defect, and one file |
-| 2 | Finding 6 — complete `ENVIRONMENT`, add the literal-scan test | Same area, same test file |
-| 3 | Finding 8 — five docstring paths, the stencil sentence, `gltf.html:119`, and the reference-check test | An hour; stops the reader distrusting the pages |
-| 4 | Finding 7a — the eleven wrong or duplicated summary lines | Half an hour |
-| 5 | Finding 9 — the `.egg` paragraphs, the command list, the scripts test | Wrong instructions cost a third party a day |
-| 6 | Finding 13 — root docstring, `CLAUDE.md` map, `README.md` | Cheap; every later reader benefits |
-| 7 | Finding 10 — `docs/environment.html`, generated from `ENVIRONMENT` | Builds on 2 |
-| 8 | Finding 4 — package front doors and `__init__` docstrings | Mechanical; makes `pydoc` usable |
-| 9 | Finding 1 — write the naming rule; apply it to `ui/` | Large but purely mechanical, and `ui/` has no external protocol |
-| 10 | Finding 2 — `matrices.py` and `culling.py`, with shims | Needs care over the two conventions; do it with the shadow and tiles tests green |
-| 11 | Finding 3 — `hud.py` → `ui/layoutbase.py`, `ui/hudwidgets.py` → `ui/hud.py` | After 9, so the renames land together |
-| 12 | Finding 11 — `docs/navmesh.html` | |
-| 13 | Finding 12 — ten demos | Largest; one per sitting, each shippable |
-| 14 | Finding 7b, 7c — the legacy module docstrings and the two public APIs | Ongoing; a module at a time |
+| 1 | Delete `viewer/options._env_flag`/`_env_float` | ✅ Done |
+| 2 | `ENVIRONMENT`: the two rendering settings, the dead variable | ✅ Done |
+| 3 | Five docstring paths, the stencil sentence, the docs paths, the reference test | ✅ Done |
+| 4 | The wrong and duplicated summary lines | ✅ Done |
+| 5 | The `.egg` paragraphs and the command list | ✅ Done |
+| 6 | Root docstring, `CLAUDE.md` map, `README.md` | ✅ Done |
+| 7 | `docs/environment.html` | ✅ Done |
+| 8 | Package front doors and `__init__` docstrings (finding 4) | 📋 Open |
+| 9 | The naming rule; apply it to `ui/` (finding 1) | 📋 Open |
+| 10 | `matrices.py` and `culling.py`, with shims (finding 2) | 📋 Open |
+| 11 | `hud.py` → `ui/layoutbase.py` (finding 3) | 📋 Open |
+| 12 | `docs/navmesh.html` (finding 11) | 📋 Open |
+| 13 | Ten demos (finding 12) | 📋 Open |
+| 14 | Legacy module docstrings, the two public APIs (finding 7b, 7c) | 📋 Open |
 
-Steps 1–7 are roughly a day together and remove every case where a page or a
-docstring states something untrue. Steps 8–14 are the structural work.
+### Found while implementing, and not in the original findings
+
+- **`viewer/options.py` read a bare `YAW`.** Unnamespaced, so a variable
+  belonging to anyone else in the shell turned the framing camera and every
+  capture made there. It is `OPENGLCONTEXT_VIEW_YAW`, and in `ENVIRONMENT`.
+- **`Context.getSceneGraph`'s worked example did not run** — there is no
+  `loader.vrml97` to import from. It is `Loader.load` now.
+- **`OPENGLCONTEXT_MAXIMUM_LIGHTS` was read by nothing** (finding 6 above).
+- **`flatcore.py`'s docstring example** told the reader to set
+  `use_shaders=True`, which that class has defaulted to true for some time.
+- **`bin/profile_view.py`** has a `main()` and no entry point, and its usage
+  string named `vrml_view.py`. `docs/structure.html` promised it as
+  `oglc-profile`. The promise is withdrawn rather than the command registered:
+  it opens VRML97 only, where `oglc-view` opens four formats, so a profiling
+  option on `oglc-view` is the right shape if it is wanted. Whether the module
+  moves out of `bin/` is [CODEBASE-CONSOLIDATION.md](CODEBASE-CONSOLIDATION.md)
+  C1's call.
+
+### Notes for whoever merges this
+
+- **`OpenGLContext/telemetry/` is not in this branch.** It was uncommitted work
+  in the primary checkout when the branch was cut, so `CLAUDE.md`'s directory
+  map has no line for it. `test_documentation_references.py` fails until one is
+  added, which is the intended prompt.
+- **`renderoptions.ENVIRONMENT` is edited on both sides.** This branch appends
+  two names; the primary checkout appends the telemetry trio and
+  `OPENGLCONTEXT_SEED`. Both are additions to the same tuple — take both, and
+  add the new names to `docs/environment.html`, which its own test requires.
+- **`CLAUDE.md` is edited on both sides** but in different regions: the
+  directory map at the top here, the environment-variable section around line
+  333 there.
 
 ## Not proposed
 
