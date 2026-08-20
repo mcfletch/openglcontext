@@ -35,10 +35,25 @@ which provides a context class factory function, and a "mainloop"
 function. The <a href="../pydoc/OpenGLContext.testingcontext.html">
 testingcontext.py</a> module then provides an interface for finding the
 appropriate testing context for the specified GUI library.</p>
-<p class="technical">Context classes are registered via SetupTools
-entry_points in the setup.py script. &nbsp;You can register context
-classes for your GUI library and produce a .egg file which will plug
-into OpenGLContext. </p>
+<p class="technical">Context classes are registered by calling
+<code>OpenGLContext.plugins.Context</code> with a name and the dotted path
+to the class, which <code>OpenGLContext/__init__.py</code> does for the
+in-tree backends. A third party registers its own the same way, at import
+time:</p>
+
+<pre class="code">from OpenGLContext.plugins import Context, InteractiveContext
+
+Context( 'mytoolkit', 'mypackage.context.MyContext' )
+InteractiveContext( 'mytoolkit', 'mypackage.context.MyInteractiveContext' )</pre>
+
+<p class="technical">The registry is a list in the running process, so what
+puts a third-party backend on it is the application importing that package
+&mdash; there is no entry-point scan and no install step beyond having the
+package importable. <code>OPENGLCONTEXT_BACKEND=mytoolkit</code> then selects
+it by the name given here. Loaders, viewer adapters and scenegraph nodes are
+registered the same way through <code>plugins.Loader</code>,
+<code>plugins.Adapter</code> (see <a href="viewer.html">Adding a
+format</a>) and <code>plugins.Node</code>.</p>
 
 <h3>Which backends are supported</h3>
 
