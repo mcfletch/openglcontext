@@ -246,6 +246,13 @@ def _fake_context() -> Any:
         def getEventManager(self, event_type: str) -> Any:
             return self._managers.get(event_type)
 
+        def ProcessEvent(self, event: Any) -> Any:
+            # What the real EventHandlerMixin does: look the manager up by the
+            # event's own type and hand it over.
+            manager = self._managers.get(event.type)
+            if manager is not None:
+                manager.ProcessEvent(event)
+
         def OnResize(self, width: int, height: int) -> None:
             self.resized.append((width, height))
 

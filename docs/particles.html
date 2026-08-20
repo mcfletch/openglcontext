@@ -274,8 +274,11 @@ live = survivors</pre>
         <td>True leaves particles behind when the emitter moves &mdash; a rocket
             trail. False carries them with it &mdash; a torch flame.</td></tr>
     <tr><td>Reproducibility</td><td><code>seed</code></td>
-        <td>&minus;1 for a fresh sequence; a fixed value for a reference
-            image.</td></tr>
+        <td>A fixed value pins the sequence, for a reference image.
+            &minus;1 draws from the
+            <a href="telemetry.html#randomness">session's particle stream</a>,
+            so an emitter looks different every time the game is played and
+            the same every time one recorded session is replayed.</td></tr>
   </table>
   <p>Every one of them is a declared VRML field with a
     <code>UI_HINTS</code> entry, so an emitter can be written into a scene file,

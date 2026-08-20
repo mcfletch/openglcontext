@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Session telemetry &mdash; recording a session, and running it again</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Session telemetry</h1>
+</header>
+
+<section>
+<p class="introduction">A whole session written to one file: every input the
+platform delivered, every frame's time, every exception with its traceback, and
+the application's own description of itself sampled as it ran. The file is read
+back with a command, and it is <strong>replayed</strong> &mdash; the same keys
+and the same clicks in the same places arrive on the same frames, against the
+clock the recording kept, so a failure somebody else met can be run again
+here.</p>
+</section>
+
+<section id="switching-it-on">
+  <h2>Switching it on</h2>
+  <p>From outside the application, which is what you ask a player to do:</p>
+  <pre>OPENGLCONTEXT_TELEMETRY=/tmp/session.jsonl python -m twig_bb</pre>
+  <p><code>1</code> (or <code>auto</code>) instead of a path writes a dated,
+    process-stamped file under the user's application-data directory, so
+    successive runs accumulate rather than overwriting each other:</p>
+  <pre>OPENGLCONTEXT_TELEMETRY=1 python -m twig_bb
+# ~/.config/OpenGLContext/telemetry/session-20260820-143011-4242.jsonl</pre>
+  <p>From inside it, which is what a &ldquo;report a problem&rdquo; menu item
+    calls. Recording can begin at any point in a session; what it holds from
+    then on is a complete session record less the part before it was asked
+    for:</p>
+  <pre>self.startTelemetry('/tmp/session.jsonl')   # None for the dated default
+...
+self.stopTelemetry()</pre>
+  <p>Nothing is recorded unless one of those happens, and the machinery that
+    does the recording is not installed until then, so an application nobody has
+    switched it on for pays nothing at all.</p>
+</section>
+
+<section id="what-is-in-it">
+  <h2>What the file holds</h2>
+  <p>JSON lines, one record to a line, each on disk before the next is offered
+    &mdash; so a session killed outright, which is how a session being
+    diagnosed usually ends, keeps everything up to the moment it went.</p>
+  <table>
+    <tr><th><code>kind</code></th><th>What it says</th></tr>
+    <tr><td><code>header</code></td>
+      <td>When the session started, the command that started it, the process,
+        the Python and platform, the window that was asked for, and every
+        rendering environment variable that was set.</td></tr>
+    <tr><td><code>input</code></td>
+      <td>One input the platform delivered &mdash; a key, a character, a
+        button, a wheel notch, pointer motion, a resize &mdash; stamped with
+        the time it arrived and <strong>the frame that acted on it</strong>.</td></tr>
+    <tr><td><code>frames</code></td>
+      <td>A block of frames: every frame's wall-clock time, the time inside the
+        draw, the loop's phase breakdown where the backend measures one (see
+        <a href="hud.html">the loop trace</a>), and how many crossed the stall
+        threshold.</td></tr>
+    <tr><td><code>entropy</code></td>
+      <td>Where this session's randomness started: its
+        <a href="#randomness">seed</a>, and where the ordinary
+        <code>random</code> and <code>numpy.random</code> generators had got
+        to.</td></tr>
+    <tr><td><code>exception</code></td>
+      <td>An exception and its traceback, from the main thread, from any other
+        thread, or from anything that logged one, with the frame the session
+        had reached.</td></tr>
+    <tr><td><code>log</code></td>
+      <td>A warning or error somebody logged, with its logger.</td></tr>
+    <tr><td><code>state</code></td>
+      <td>Every section of the <a href="hud.html">developer overlay</a>, sampled
+        every few seconds. The overlay already knows how to describe the
+        application &mdash; the map, the player, the renderer's counts, whatever
+        the game registered &mdash; so the recording gets all of it without a
+        second description that can drift from the first.</td></tr>
+    <tr><td><code>mark</code></td>
+      <td>Something the application knows and the engine cannot; see below.</td></tr>
+    <tr><td><code>end</code></td>
+      <td>How the session finished. A file with no <code>end</code> is one that
+        was killed or is still being written.</td></tr>
+  </table>
+  <p>A session at sixty frames a second writes a few kilobytes a minute. Past a
+    ceiling &mdash; 128&nbsp;MB by default,
+    <code>OPENGLCONTEXT_TELEMETRY_MAX_MB</code> to change it &mdash; input and
+    frame times stop while exceptions, marks and the ending still get through,
+    and a <code>truncated</code> record says so. The ceiling is there to keep
+    the failure, not to lose it.</p>
+</section>
+
+<section id="marks">
+  <h2>Marking what the engine cannot know</h2>
+  <p>The engine knows what was pressed and how long the frame took. It does not
+    know that a level finished loading, that a match started, or that the player
+    picked up the thing they were about to fall through the floor with. A mark
+    is the line a reader looks for first when the file is four minutes long and
+    the failure is at the end of it:</p>
+  <pre>self.telemetry.mark('level-loaded', map='ztn3dm1', bots=4)</pre>
+  <p><code>self.telemetry</code> is <code>None</code> when nothing is
+    recording, so a game that marks unconditionally guards the call &mdash; or
+    lets a small helper do it:</p>
+  <pre>def mark(self, name, **fields):
+    if self.telemetry is not None:
+        self.telemetry.mark(name, **fields)</pre>
+</section>
+
+<section id="randomness">
+  <h2>Randomness</h2>
+  <p>A game whose world, loot, weapon spread or bot decisions come out of a
+    random number generator does not replay from its input alone: the same keys
+    pressed against a different sequence of numbers give a different game. So a
+    session has a <strong>seed</strong>, the engine owns it
+    (<code>OpenGLContext.entropy</code>), and the recording keeps it.</p>
+
+  <h3>The session seed</h3>
+  <pre>from OpenGLContext import entropy
+
+entropy.seed()          # this session's seed, chosen once
+entropy.reseed(4242)    # start again from a number of your own</pre>
+  <p>Setting <code>OPENGLCONTEXT_SEED=4242</code> fixes a whole session,
+    including the ordinary <code>random</code> and <code>numpy.random</code>
+    generators a game reaches for without thinking about it. That is a
+    reproducible run for a bug report, a regression test, or a level everyone
+    can compare notes on.</p>
+  <p><strong>Asking for a seed is what seeds those generators.</strong> Left
+    alone, the engine chooses a session seed for its own streams and does not
+    touch them at all: a library that reseeded the process's generators behind
+    its caller's back would silently undo an application's own
+    <code>random.seed(...)</code>. So a recording changes nothing about a
+    session &mdash; it writes down <em>where those generators had got to</em>,
+    and a replay puts them back.</p>
+
+  <h3>Named streams</h3>
+  <p>Anything in the engine that would otherwise have drawn from nowhere in
+    particular draws from a stream derived from the seed, and so should a
+    game:</p>
+  <pre>entropy.generator('loot')        # a numpy Generator, kept, advancing
+entropy.randomizer('bot-chat')   # the same idea, random.Random flavour</pre>
+  <p>Two subsystems drawing from differently-named streams cannot disturb each
+    other's sequence, so adding a third does not change what the first two
+    produce &mdash; which is what keeps a seeded world the same world as the
+    engine grows. Asking twice for one name gets the stream, not the start of
+    it: a bot picking somewhere to walk every few seconds would otherwise pick
+    the same place for ever.</p>
+  <p>Inside the engine, <a href="particles.html">particle emitters</a> with no
+    <code>seed</code> of their own, ambient audio's repeat jitter, and
+    <code>NavMesh.random_point()</code> all draw from session streams. Each
+    still looks different every time the game is played, and each repeats
+    exactly when a recorded session is replayed.</p>
+</section>
+
+<section id="reading">
+  <h2>Reading a session back</h2>
+  <p>The file is not meant to be read by eye. The report answers the question
+    somebody actually has &mdash; what happened in this session &mdash; in the
+    order they want it:</p>
+  <pre>python -m OpenGLContext.telemetry /tmp/session.jsonl</pre>
+  <pre>2026-08-20T14:30:11+00:00  twig-bb ztn3dm1
+  pid 4242, python 3.12.3, linux, 1280x720, core, seed 13097442885663472141
+  ended: exception
+
+14,880 frames in 248.1s, 60.0 fps
+  median 16.6ms, worst 812.4ms, 14 stalls
+  where the time went: idle 187204ms, render 58911ms, poll 402ms
+
+1 exception(s):
+  4:08.412  frame 14879  (fatal)
+    Traceback (most recent call last):
+      ...
+    ValueError: no spawn point for team 2
+
+1 mark(s):
+  0:03.204  frame 190  level-loaded map=ztn3dm1 bots=4
+
+input: 41,207 events -- pointer 38,110, keyboard 2,984, mousebutton 113</pre>
+  <p><code>--events</code> lists every input in order rather than counting them
+    by kind &mdash; the question you ask once a frame number has given you
+    somewhere to look. <code>--limit</code> sets how many exceptions, marks and
+    distinct warnings are shown.</p>
+</section>
+
+<section id="replaying">
+  <h2>Running it again</h2>
+  <p>This is what recording input against frames is <em>for</em>. Point a build
+    at the journal and it takes its input from the file instead of from the
+    player:</p>
+  <pre>OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/session.jsonl python -m twig_bb</pre>
+  <p>Each frame is given the input that was recorded against it, before that
+    frame is drawn, and the engine's time source
+    (<code>OpenGLContext.events.systemtime</code>) reads the time the recording
+    had reached at that frame. Everything time-driven follows: TimeSensors, the
+    animation they drive, and any simulation that asks the engine what time it
+    is. A frame that took 800&nbsp;ms during the recording advances the world by
+    800&nbsp;ms on replay however long it takes here.</p>
+  <p>Combine it with the auto-exit switches to get a screenshot of the frame
+    something went wrong on:</p>
+  <pre>OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/session.jsonl \
+OPENGLCONTEXT_AUTO_EXIT_FRAMES=14879 \
+OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR=/tmp/shots python -m twig_bb</pre>
+  <p>Past the end of the recording the replay stops feeding input, says so once
+    in the log and on the overlay, and the session continues live.</p>
+
+  <h3>What replays exactly, and what does not</h3>
+  <p>A session replays exactly to the extent that it was a function of its input
+    and the engine's clock. Two things take an application outside that, and
+    both are worth knowing before a replay is trusted:</p>
+  <ul>
+    <li><strong>Reading the wall clock directly.</strong> Code that calls
+      <code>time.time()</code> for itself is not on the recorded clock. Reading
+      <code>OpenGLContext.events.systemtime.systemTime()</code> instead puts it
+      on the same clock as everything else in the scene, which is worth doing
+      for <a href="recording.html">video recording</a> as well.</li>
+    <li><strong>A generator the engine cannot reach.</strong> The session's
+      seed and the state of <code>random</code> and <code>numpy.random</code>
+      are recorded and put back, and so are the
+      <a href="#randomness">named streams</a>. A generator an application makes
+      for itself &mdash; its own <code>numpy.random.default_rng()</code>, seeded
+      from the clock &mdash; is not any of those; building it from
+      <code>entropy.generator('name')</code> puts it on the recording.</li>
+    <li><strong>Anything else that differs between runs</strong> &mdash; a
+      thread whose scheduling decides an order, a resource that streams in at a
+      different moment. A replay of those is close rather than identical: close
+      enough to walk into the same wall, which is usually the whole of what is
+      wanted.</li>
+  </ul>
+  <p>A replay makes no recording of its own, and reads the journal without
+    changing it, so the same file replays the same way as often as you like.</p>
+</section>
+
+<section id="overlay">
+  <h2>On the developer overlay</h2>
+  <p>A <strong>Session</strong> section appears on the
+    <a href="hud.html">developer overlay</a> while a session is being recorded
+    or replayed, and only then. Recording, it names the file, the session's
+    <a href="#randomness">seed</a>, the frame reached, how many records have
+    been written and what the file weighs; replaying, it
+    names the file and says how far through the recording it is. A player told
+    to &ldquo;switch recording on and reproduce it&rdquo; can see that it is on,
+    and somebody watching a replay can see when it has run out.</p>
+</section>
+
+<section id="testing">
+  <h2>The same vocabulary a test uses</h2>
+  <p>An input is written down in the vocabulary of
+    <code>OpenGLContext.events.synthetic</code>, which is also what
+    <code>OpenGLContext.testing.event_injector</code> speaks. A recorded session
+    can therefore be driven by a test, and a script written by hand for a test
+    is read by the same report that reads a session:</p>
+  <pre>{"type": "keyboard",    "key": "w", "state": 1, "modifiers": [0, 0, 0]}
+{"type": "mousebutton", "button": 0, "state": 1, "x": 100, "y": 200, "pick": true}
+{"type": "pointer",     "x": 100, "y": 200}
+{"type": "resize",      "width": 800, "height": 600}</pre>
+  <p><code>pick</code> says the pointer event went through the selection pass,
+    which is the route a real click takes: it is delivered once the buffer has
+    resolved what is under the cursor, carrying the node paths with it.</p>
+</section>
+
+<section id="environment">
+  <h2>Environment</h2>
+  <table>
+    <tr><th>Variable</th><th>Effect</th></tr>
+    <tr><td><code>OPENGLCONTEXT_TELEMETRY</code></td>
+      <td>Record this session to the named file. <code>1</code> or
+        <code>auto</code> writes a dated file under the user's
+        application-data directory.</td></tr>
+    <tr><td><code>OPENGLCONTEXT_TELEMETRY_REPLAY</code></td>
+      <td>Replay the named journal into this session instead of taking live
+        input.</td></tr>
+    <tr><td><code>OPENGLCONTEXT_TELEMETRY_MAX_MB</code></td>
+      <td>The journal's ceiling, in megabytes (default 128).</td></tr>
+    <tr><td><code>OPENGLCONTEXT_SEED</code></td>
+      <td>Fix this session's <a href="#randomness">randomness</a>, the ordinary
+        <code>random</code> and <code>numpy.random</code> generators
+        included.</td></tr>
+  </table>
+  <p>All four are in <code>renderoptions.ENVIRONMENT</code>, so a subprocess
+    capture does not inherit them: a journal names one file for one session and
+    a child process that took the name over would overwrite its parent's; a
+    replay drives the camera; and a seed decides where the scattered vegetation
+    stands. A capture that wants a fixed sequence pins the seed itself.</p>
+  <p>A path that cannot be written is a warning and a session that is not
+    recorded &mdash; never a reason an application will not start. The same goes
+    for a value that is not a number, and for a replay file that holds no
+    session.</p>
+</section>
+
+<section id="modules">
+  <h2>Where it lives</h2>
+  <table>
+    <tr><th>Module</th><th>What is in it</th></tr>
+    <tr><td><code>telemetry.recorder</code></td>
+      <td><code>SessionRecorder</code>: every rule about what is worth writing
+        down and when, with no GL, no window and no file in it.</td></tr>
+    <tr><td><code>telemetry.journal</code></td>
+      <td><code>SessionJournal</code>: the file, its header, its ceiling, and
+        what happens when it cannot be written.</td></tr>
+    <tr><td><code>telemetry.record</code></td>
+      <td>The wiring: the taps on a context's input entry points, the exception
+        hooks, the logging relay, and switching it all on.</td></tr>
+    <tr><td><code>telemetry.replay</code></td>
+      <td><code>Recording</code>, <code>RecordedClock</code> and
+        <code>Replay</code>: a journal as data, the engine clock driven from
+        it, and the input delivered a frame at a time.</td></tr>
+    <tr><td><code>telemetry.report</code></td>
+      <td><code>python -m OpenGLContext.telemetry</code>.</td></tr>
+    <tr><td><code>entropy</code></td>
+      <td>The session seed, the named streams derived from it, and capturing
+        and restoring where the ordinary generators stand.</td></tr>
+    <tr><td><code>events.synthetic</code></td>
+      <td>An input event as a plain record and back again, shared with the test
+        event injector.</td></tr>
+    <tr><td><code>ui.debugoverlay</code></td>
+      <td><code>telemetry_provider</code>: the Session section.</td></tr>
+  </table>
+  <p>The design and its reasoning are in
+    <code>plans/SESSION-TELEMETRY.md</code>.</p>
+</section>
+
+</body></html>

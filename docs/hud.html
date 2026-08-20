@@ -644,6 +644,10 @@ python -m OpenGLContext.stalltrace /tmp/stalls.jsonl</pre>
     <tr><td><code>ui.widgets</code></td>
       <td><code>RootWidget</code>, which a HUD layer and a panel are both
         kinds of: the children, the skin and the scaled copy of it.</td></tr>
+    <tr><td><code>telemetry</code></td>
+      <td>The whole session, not just its slow parts: input, frame times,
+        exceptions and this overlay's own sections, in a file that can be
+        <a href="telemetry.html">read back or replayed</a>.</td></tr>
     <tr><td><code>stalltrace</code></td>
       <td>The recording: a stack sampler gated on the stall itself, the episode
         journal it writes, and the report that reads the file back.</td></tr>

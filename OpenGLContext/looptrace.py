@@ -214,6 +214,18 @@ class LoopTrace:
         return age is not None and age >= self.stall_seconds
 
     # -- reading ----------------------------------------------------------
+    @property
+    def last(self) -> Optional[Record]:
+        """``(duration, phases)`` of the iteration that finished most recently.
+
+        For anything wanting a *complete* breakdown rather than the running
+        total of the iteration it is inside: a caller running within an open
+        iteration -- which is everything the loop calls -- cannot be told about
+        that iteration's phases, because the ones it is inside have not been
+        charged yet.
+        """
+        return self._records[-1] if self._records else None
+
     def summary(self) -> Dict[str, Any]:
         """The whole picture as one mapping, ready for a provider to lay out.
 

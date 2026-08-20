@@ -51,6 +51,7 @@ from OpenGL.GL import (
 from vrml import field, node
 from vrml.vrml97 import nodetypes
 
+from OpenGLContext import entropy
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
     InstanceBuffer, delete_gl, ensure_gl, load_program, texture_rgba,
@@ -110,7 +111,12 @@ class ParticlePool:
     def __init__(self, capacity: int = 1000, seed: Optional[int] = None) -> None:
         self.capacity = int(max(0, capacity))
         self.live = 0
-        self._random = np.random.default_rng(seed)
+        # No seed of its own means the session's particle stream rather than
+        # nowhere in particular: an emitter still looks different every time
+        # the game is played, and a recorded session replays with the same
+        # sparks it had. See OpenGLContext.entropy.
+        self._random = (np.random.default_rng(seed) if seed is not None
+                        else entropy.generator('particles'))
         size = self.capacity
         self.position = np.zeros((size, 3), dtype=np.float32)
         self.velocity = np.zeros((size, 3), dtype=np.float32)

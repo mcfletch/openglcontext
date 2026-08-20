@@ -411,6 +411,26 @@ class TestWhatCleanMeans:
         monkeypatch.setenv('OPENGLCONTEXT_NO_VSYNC', '1')
         assert renderoptions.clean_environment()['OPENGLCONTEXT_NO_VSYNC'] == '1'
 
+    def test_a_child_capture_does_not_take_over_the_session_journal(
+            self, monkeypatch):
+        """A journal names one file for one session; a child that inherited
+        the name would open it afresh and overwrite its parent's."""
+        monkeypatch.setenv('OPENGLCONTEXT_TELEMETRY', '/tmp/session.jsonl')
+        assert 'OPENGLCONTEXT_TELEMETRY' not in renderoptions.clean_environment()
+
+    def test_a_child_capture_does_not_inherit_a_replay(self, monkeypatch):
+        """A replay drives the camera, so a reference image rendered under one
+        is a reference for the recording rather than for the scene."""
+        monkeypatch.setenv('OPENGLCONTEXT_TELEMETRY_REPLAY', '/tmp/session.jsonl')
+        assert ('OPENGLCONTEXT_TELEMETRY_REPLAY'
+                not in renderoptions.clean_environment())
+
+    def test_a_child_capture_does_not_inherit_a_random_seed(self, monkeypatch):
+        """A seed decides where the vegetation stands; a capture that wants a
+        fixed one pins it rather than taking whatever the parent carried."""
+        monkeypatch.setenv('OPENGLCONTEXT_SEED', '4242')
+        assert 'OPENGLCONTEXT_SEED' not in renderoptions.clean_environment()
+
     def test_a_caller_can_still_say_otherwise(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
         found = renderoptions.clean_environment(OPENGLCONTEXT_HIDDEN='0')

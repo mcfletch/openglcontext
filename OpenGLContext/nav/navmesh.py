@@ -40,6 +40,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from OpenGLContext import entropy
+
 log = logging.getLogger(__name__)
 
 __all__ = ['NavMesh', 'build', 'from_world']
@@ -151,11 +153,15 @@ class NavMesh:
         """Somewhere on the mesh, or None if there is nowhere.
 
         What a bot with nothing better to do walks toward.  Seeded, so a match
-        replays from its inputs.
+        replays from its inputs: ``seed`` pins one answer, and without one the
+        session's own navigation stream is drawn from, which advances -- a bot
+        asking again wants somewhere else to go.  See
+        :mod:`OpenGLContext.entropy`.
         """
         if not len(self.cells):
             return None
-        chooser = random.Random(seed)
+        chooser = (random.Random(seed) if seed is not None
+                   else entropy.randomizer('navmesh'))
         index = chooser.randrange(len(self.cells))
         return _point(self._centres[index])
 

@@ -302,5 +302,30 @@ class TestConfiguration:
             LoopTrace.DEFAULT_STALL_MS / 1000.0)
 
 
+class TestTheMostRecentIteration:
+    """A caller inside an open iteration cannot be told about that one: the
+    phases it is inside have not been charged yet.  It gets the last complete
+    one, which is what a session recording writes down."""
+
+    def test_there_is_none_before_the_first_iteration(self, clock):
+        assert LoopTrace(clock=clock).last is None
+
+    def test_it_is_the_iteration_that_finished_most_recently(self, clock):
+        trace = LoopTrace(clock=clock)
+        for seconds in (0.010, 0.020, 0.030):
+            with trace.iteration():
+                clock.advance(seconds)
+        duration, _phases = trace.last
+        assert duration == pytest.approx(0.030)
+
+    def test_it_carries_that_iteration_s_own_phases(self, clock):
+        trace = LoopTrace(clock=clock)
+        with trace.iteration():
+            with trace.phase('idle'):
+                clock.advance(0.040)
+        _duration, phases = trace.last
+        assert phases['idle'] == pytest.approx(0.040)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

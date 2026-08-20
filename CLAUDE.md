@@ -333,6 +333,52 @@ record is one *episode* (a whole slow period, not a frame) and leads with a
 per-function `self`/`cumulative` tally; the whole stacks under it are the
 evidence for that tally, not the answer. `OpenGLContext.stalltrace`.
 
+### OPENGLCONTEXT_TELEMETRY / OPENGLCONTEXT_TELEMETRY_REPLAY
+
+Records a **whole session** to one JSON-lines file: every input the platform
+delivered (stamped with the frame that acted on it), every frame's wall-clock
+time and phase breakdown, every exception with its traceback, logged warnings,
+and the developer overlay's own sections sampled every few seconds. Read it
+back with the module; **replay** it to run the session again.
+
+```bash
+OPENGLCONTEXT_TELEMETRY=/tmp/session.jsonl /workspaces/OpenGL-dev/.venv/bin/twig-bb
+/workspaces/OpenGL-dev/.venv/bin/python -m OpenGLContext.telemetry /tmp/session.jsonl
+OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/session.jsonl /workspaces/OpenGL-dev/.venv/bin/twig-bb
+```
+
+`OPENGLCONTEXT_TELEMETRY=1` writes a dated file under the user's app-data
+directory; `OPENGLCONTEXT_TELEMETRY_MAX_MB` caps the file (default 128), past
+which exceptions and marks still get through. An application switches it on for
+itself with `context.startTelemetry(path)` and marks its own events with
+`context.telemetry.mark('level-loaded', map='ztn3dm1')`.
+
+Unlike the stall switches these **are** in `renderoptions.ENVIRONMENT`: a
+journal names one file for one session, so a subprocess capture that inherited
+the name would overwrite its parent's, and a replay drives the camera. See
+[docs/telemetry.html](docs/telemetry.html) and
+[plans/SESSION-TELEMETRY.md](plans/SESSION-TELEMETRY.md).
+
+### OPENGLCONTEXT_SEED
+
+Fixes the session's randomness — `OpenGLContext.entropy` owns one seed per
+session, and setting this seeds the ordinary `random` and `numpy.random`
+generators from it as well, so a whole run is reproducible. Useful well beyond
+telemetry: a reference image whose scene scatters vegetation or throws sparks is
+deterministic under a pinned seed.
+
+```bash
+OPENGLCONTEXT_SEED=4242 /workspaces/OpenGL-dev/.venv/bin/python -m twig_bb
+```
+
+Unset, the engine still chooses a seed for its own **named streams**
+(`entropy.generator('trees')`, `entropy.randomizer('bots')`) but leaves the
+process's generators exactly as it found them — a library that reseeded them
+would silently undo an application's own `random.seed(...)`. Telemetry records
+the seed *and* where those generators stood, and a replay puts both back.
+Also in `renderoptions.ENVIRONMENT`: a capture that wants a fixed sequence pins
+it rather than inheriting one.
+
 ## Code Conventions
 
 ### Writing Style

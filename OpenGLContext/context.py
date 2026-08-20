@@ -158,6 +158,11 @@ class Context(ScreenMixin, ContextConfigMixin):
             simulation lives there can stutter while the frame rate
             reads healthy. See setupLoopTrace.
 
+        telemetry -- the session recording, when one was asked for, else
+            None. A whole session -- every input, every frame time, every
+            exception -- written to a file that can be read back or
+            replayed. See setupTelemetry and OpenGLContext.telemetry.
+
         extensions -- extensionmanager.ExtensionManager instance
             with which to find and initialise extensions for this
             context.
@@ -192,6 +197,7 @@ class Context(ScreenMixin, ContextConfigMixin):
     frameCounter = None
     loopTrace = None
     stallJournal = None
+    telemetry = None
     contextDefinition = None
 
     ### State flags/values
@@ -243,6 +249,8 @@ class Context(ScreenMixin, ContextConfigMixin):
             setupFontProviders,
             setupFrameRateCounter,
             setupLoopTrace,
+            setupEntropy,
+            setupTelemetry,
             DoInit
         """
         self.setupLogging()
@@ -262,6 +270,8 @@ class Context(ScreenMixin, ContextConfigMixin):
         self.setupFontProviders()
         self.setupFrameRateCounter()
         self.setupLoopTrace()
+        self.setupEntropy()
+        self.setupTelemetry()
         self.setupAutoExit()
         self.DoInit()
 
@@ -492,6 +502,7 @@ class Context(ScreenMixin, ContextConfigMixin):
                 self.stallJournal.close()
             except Exception:
                 log.debug('could not close the stall journal', exc_info=True)
+        self.stopTelemetry('quit')
 
         os._exit(0)
         # sys.exit(0)
@@ -648,6 +659,72 @@ class Context(ScreenMixin, ContextConfigMixin):
 
         self.loopTrace = looptrace.LoopTrace()
         self.stallJournal = stalltrace.install(self.loopTrace, context=self)
+
+    def setupEntropy(self):
+        """Settle where this session's randomness comes from
+
+        Before DoInit, and so before the application builds anything: a
+        world generated from different numbers is a different world, and
+        OPENGLCONTEXT_SEED has to be in force by the time the first one is
+        drawn rather than whenever something first happens to ask.
+
+        Establishes the session seed, which named streams
+        (OpenGLContext.entropy.generator) derive from, and which telemetry
+        records. When the environment named a seed this also seeds the
+        process's own random and numpy.random generators from it, so a
+        whole run is reproducible; when it did not, those are left exactly
+        as they were. See OpenGLContext.entropy.
+        """
+        from OpenGLContext import entropy
+
+        return entropy.seed()
+
+    def setupTelemetry(self):
+        """Record or replay this session, if the environment asked for one
+
+        OPENGLCONTEXT_TELEMETRY=<path> writes the whole session -- every
+        input the platform delivered, every frame's time, every exception,
+        and the developer overlay's own description of the application --
+        to a file, which OpenGLContext.telemetry.report reads back.
+
+        OPENGLCONTEXT_TELEMETRY_REPLAY=<path> runs such a file again
+        instead of taking live input: the same keys and clicks arrive on
+        the same frames, against the recorded clock.
+
+        Nothing is installed unless one of those is set, so a game nobody
+        has switched this on for pays nothing. See OpenGLContext.telemetry,
+        and startTelemetry for switching it on from the application.
+        """
+        from OpenGLContext import telemetry
+
+        self.telemetry = telemetry.install(self)
+
+    def startTelemetry(self, path=None, **named):
+        """Begin recording this session to path (None for a dated default)
+
+        What a "report a problem" menu item calls: recording can start at
+        any point in a session, and what it records from then on is a
+        complete session record less the part before it was asked for.
+
+        Returns the OpenGLContext.telemetry.SessionRecording, which is also
+        self.telemetry, and which the application marks its own events on:
+
+            self.telemetry.mark('level-loaded', map='ztn3dm1')
+        """
+        from OpenGLContext import telemetry
+
+        self.stopTelemetry()
+        return telemetry.start(self, path, **named)
+
+    def stopTelemetry(self, reason='stopped'):
+        """Finish any recording or replay in progress"""
+        session = self.telemetry
+        if session is not None:
+            try:
+                session.close(reason)
+            except Exception:
+                log.debug('could not close the session recording', exc_info=True)
+            self.telemetry = None
 
     def tracePhase(self, name):
         """Charge the wrapped block to a named phase of the loop iteration

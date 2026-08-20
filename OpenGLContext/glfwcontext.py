@@ -357,6 +357,10 @@ class GLFWContext(
             # its last, and worst, few seconds.
             if self.stallJournal is not None:
                 self.stallJournal.close()
+            # The same argument for the session recording: what it holds of the
+            # last few seconds is exactly what a session that ended badly is
+            # worth reading for.
+            self.stopTelemetry('mainloop-ended')
 
         # Cleanup.  The cached text renderers own GL objects in this context,
         # so they have to be let go before it is destroyed rather than left for

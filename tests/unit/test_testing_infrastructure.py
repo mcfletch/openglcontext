@@ -382,6 +382,13 @@ class TestEventInjectionMixin:
             def getEventManager(self, event_type):
                 return self._managers.get(event_type)
 
+            def ProcessEvent(self, event):
+                # What the real EventHandlerMixin does: look the manager up by
+                # the event's own type and hand it over.
+                manager = self._managers.get(event.type)
+                if manager is not None:
+                    manager.ProcessEvent(event)
+
         return FakeContext()
 
     def test_inject_mousebutton_builds_valid_event(self):

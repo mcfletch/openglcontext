@@ -148,6 +148,13 @@ uv pip install -e ".[glfw,gltf]"</pre>
             from thresholds, an icon-and-number readout and a fading message
             queue -- plus the developer overlay, fed by registered providers,
             where the frame rate is now drawn</li>
+          <li><a href="telemetry.html">Session Telemetry</a> -- Recording a
+            whole session to one file -- every input, every frame time, every
+            exception with its traceback, and the application's own description
+            of itself -- then reading it back with
+            <code>python -m OpenGLContext.telemetry</code> or
+            <strong>replaying</strong> it, so a failure somebody else met runs
+            again here</li>
           <li><a href="recording.html">Recording Video</a> -- Writing the frames
             a context draws to an H.264 file, straight from the framebuffer to
             the GPU's video encoder, on a clock that counts frames</li>

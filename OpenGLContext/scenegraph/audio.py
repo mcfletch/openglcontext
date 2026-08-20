@@ -31,7 +31,6 @@ from __future__ import annotations
 import logging
 import math
 import os
-import random
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -39,6 +38,7 @@ from vrml import field, node, protofunctions
 from vrml.vrml97 import basenodes, nodetypes
 
 from omi_audio import formats, model, spatial
+from OpenGLContext import entropy
 from OpenGLContext.loaders import resolver
 
 log = logging.getLogger(__name__)
@@ -296,9 +296,11 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         #: sources that have a :attr:`AudioSource.repeatInterval`.
         self._repeats: Dict[int, float] = {}
         # Ambient timing is presentation and not simulation -- nothing reads a
-        # repeat back -- so an ordinary generator is enough, and one per
-        # emitter keeps two speakers of the same clip from drifting together.
-        self._jitter = random.Random()
+        # repeat back -- so the session's own stream is enough. Emitters draw
+        # from it in turn rather than each from the same place, which is what
+        # keeps two speakers of one clip from drifting together, and it means a
+        # recorded session repeats the same ambience it had.
+        self._jitter = entropy.randomizer('audio-jitter')
 
     def record(self) -> model.AudioEmitter:
         """This node's fields as the ``KHR_audio_emitter`` record.

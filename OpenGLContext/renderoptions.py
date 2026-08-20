@@ -55,6 +55,17 @@ ENVIRONMENT: Tuple[str, ...] = (
     'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME', 'OPENGLCONTEXT_CAPTURE_DELAY',
     'OPENGLCONTEXT_DISABLE_FPS_DISPLAY', 'OPENGLCONTEXT_HIDDEN',
     'OPENGLCONTEXT_NO_VSYNC', 'OPENGLCONTEXT_GLTF_BASELINE',
+    # A session journal names one file for one session, so a child process
+    # that inherited the name would overwrite its parent's; and a replay
+    # drives the camera, which would make a reference image depend on a
+    # recording. See OpenGLContext.telemetry.
+    'OPENGLCONTEXT_TELEMETRY', 'OPENGLCONTEXT_TELEMETRY_REPLAY',
+    'OPENGLCONTEXT_TELEMETRY_MAX_MB',
+    # A seed decides where scattered vegetation stands and which way a spark
+    # flies, so a reference image rendered under an inherited one is a
+    # reference for whatever the parent happened to be carrying. A capture
+    # that wants a fixed sequence pins it. See OpenGLContext.entropy.
+    'OPENGLCONTEXT_SEED',
 )
 
 #: The two of those that say **how a render is presented** rather than what it

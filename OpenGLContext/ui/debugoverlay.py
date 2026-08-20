@@ -48,7 +48,7 @@ __all__ = [
     'DebugOverlay', 'DebugPanel', 'DebugSection', 'Fixed', 'LaidOutRow',
     'audio_provider', 'format_value', 'frame_provider', 'loop_provider',
     'render_provider', 'platform_provider', 'physics_provider',
-    'simulation_provider', 'install_default_providers',
+    'simulation_provider', 'telemetry_provider', 'install_default_providers',
 ]
 
 #: What a provider returns: pairs of name and value, or a mapping of the same.
@@ -507,6 +507,45 @@ def audio_provider(context: Any) -> Provider:
     return rows
 
 
+def telemetry_provider(context: Any) -> Provider:
+    """Whether this session is being recorded or replayed, and how far in.
+
+    A player asked to "switch recording on and reproduce it" needs to see that
+    it is on, and somebody watching a replay needs to know how much of the
+    recording is left -- past its end a replay is an ordinary live session
+    again, and nothing else on the screen would say so.
+
+    Nothing at all when neither is happening, which is the usual case: an empty
+    provider is a section the overlay leaves out.
+    """
+    def rows() -> Rows:
+        session = getattr(context, 'telemetry', None)
+        if session is None:
+            return []
+        recorder = getattr(session, 'recorder', None)
+        if recorder is not None:
+            journal = session.journal
+            from OpenGLContext import entropy
+            found = [('recording', journal.path.name),
+                     ('seed', entropy.seed()),
+                     ('frames', recorder.frames),
+                     ('records', journal.written),
+                     ('size', '%.1fkB' % (journal.bytes / 1024.0,))]
+            if journal.disabled:
+                found.append(('state', 'stopped: could not write'))
+            elif journal.saturated:
+                found.append(('state', 'at its ceiling'))
+            return found
+        replay = getattr(session, 'replay', None)
+        if replay is None:
+            return []
+        path = getattr(session, 'path', None)
+        return [('replaying', path.name if path is not None else 'a recording'),
+                ('frame', '%d/%d' % (replay.frames, replay.recording.frames)),
+                ('state', 'finished' if replay.finished else 'running')]
+    return rows
+
+
 def install_default_providers(overlay: DebugOverlay, context: Any) -> None:
     """Register the sections every context can answer for itself."""
     overlay.register('Frame', frame_provider(context), order=10)
@@ -514,6 +553,9 @@ def install_default_providers(overlay: DebugOverlay, context: Any) -> None:
     # healthy `fps` over a poor `loop fps` is the whole diagnosis, and a reader
     # who has to hunt down the panel for the second number will not compare it.
     overlay.register('Loop', loop_provider(context), order=15)
+    # Beside Loop, because both are about the session rather than the scene,
+    # and because a recording is a thing you want to see is running.
+    overlay.register('Session', telemetry_provider(context), order=16)
     overlay.register('Render', render_provider(context), order=20)
     overlay.register('View', platform_provider(context), order=30)
     overlay.register('Audio', audio_provider(context), order=35)

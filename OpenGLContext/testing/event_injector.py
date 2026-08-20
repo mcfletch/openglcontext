@@ -32,6 +32,7 @@ import sys
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from OpenGLContext.events import synthetic
 from OpenGLContext.testing.process_exit import flush_and_exit
 
 log = logging.getLogger(__name__)
@@ -202,6 +203,8 @@ class EventInjectionMixin:
         def getEventManager(self, eventType: str) -> Any: ...
         def addPickEvent(self, event: Any) -> None: ...
         def triggerPick(self) -> None: ...
+        def ProcessEvent(self, event: Any) -> Any: ...
+        def OnResize(self, width: int, height: int) -> None: ...
 
     @classmethod
     def add_event_injection_arguments(cls, parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -263,119 +266,42 @@ class EventInjectionMixin:
     def _dispatch_injected_event(self, event: Dict[str, Any]) -> None:
         """Convert JSON event to OpenGLContext event and dispatch.
 
+        The input vocabulary is :mod:`OpenGLContext.events.synthetic`, shared
+        with the session recorder and its replay, so a script written for this
+        is understood by them and a recorded session can be replayed by a test.
+
         Args:
             event: Parsed JSON event dictionary
         """
         event_type = event.get('type')
 
-        if event_type == 'mousebutton':
-            self._inject_mousebutton(event)
-        elif event_type == 'mousemove':
-            self._inject_mousemove(event)
-        elif event_type == 'keyboard':
-            self._inject_keyboard(event)
-        elif event_type == 'capture':
+        if event_type == 'capture':
             self._do_injection_capture(event.get('name', 'capture'))
         elif event_type == 'exit':
             self._do_injection_exit()
-        elif event_type == 'resize':
-            self._inject_resize(event)
+        elif event_type == 'keyboard':
+            self._inject_keyboard(event)
+        elif event_type in synthetic.KINDS:
+            synthetic.dispatch(self, event)
         else:
             log.warning("EventInjector: Unknown event type: %s", event_type)
 
-    def _queueOrDispatch(self, event: Dict[str, Any], synth_event: Any,
-                         manager_name: str) -> None:
-        """Send a synthesised pointer event the way the test asked for.
-
-        ``"pick": true`` queues it for the selection pass and asks for one, which
-        is what a windowing backend does: the event is dispatched once the pick
-        has resolved, carrying the node paths under the cursor. That is the path
-        a real click takes, so it is the one a test of *what a click does to the
-        application* wants.
-
-        Without the flag the event goes straight to its manager with no picked
-        paths, which reaches context-level handlers and needs no render -- the
-        cheaper choice when the test is about the handler rather than the route
-        to it.
-        """
-        if event.get('pick'):
-            self.addPickEvent(synth_event)
-            self.triggerPick()
-            return
-        # No select-render pass ran, so there are no picked node paths; an empty
-        # set routes the event to anonymous context-level handlers only.
-        synth_event.setObjectPaths([])
-        manager = self.getEventManager(manager_name)
-        if manager is not None:
-            manager.ProcessEvent(synth_event)
-
-    def _inject_mousebutton(self, event: Dict[str, Any]) -> None:
-        """Inject a mouse button event."""
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
-
-        # OpenGLContext Event objects take no constructor arguments; their fields
-        # are class attributes set after construction, and managers dispatch via
-        # ProcessEvent().
-        synth_event: Any = MouseButtonEvent()
-        synth_event.context = self
-        synth_event.button = event.get('button', 0)
-        synth_event.state = event.get('state', 1)  # 1 = press, 0 = release
-        synth_event.modifiers = tuple(event.get('modifiers', [0, 0, 0]))
-        synth_event.pickPoint = (float(event.get('x', 0)), float(event.get('y', 0)))
-        self._queueOrDispatch(event, synth_event, 'mousebutton')
-
-    def _inject_mousemove(self, event: Dict[str, Any]) -> None:
-        """Inject a mouse move event."""
-        from OpenGLContext.events.mouseevents import MouseMoveEvent
-
-        synth_event: Any = MouseMoveEvent()
-        synth_event.context = self
-        synth_event.buttons = tuple(event.get('buttons', []))
-        synth_event.modifiers = tuple(event.get('modifiers', [0, 0, 0]))
-        synth_event.pickPoint = (float(event.get('x', 0)), float(event.get('y', 0)))
-        self._queueOrDispatch(event, synth_event, 'mousemove')
-
     def _inject_keyboard(self, event: Dict[str, Any]) -> None:
-        """Inject a keyboard event.
+        """Inject a raw key, and the character a press of it also produces.
 
-        A raw key generates both a low-level ``keyboard`` event (keyed on
-        name/state) and, on press, a ``keypress`` event -- the latter is what
-        most application handlers bind to via addEventHandler("keypress", ...).
-        Dispatch to whichever managers exist.
+        A key generates a low-level ``keyboard`` event, and on press a
+        ``keypress`` as well -- the latter is what most application handlers
+        bind to through ``addEventHandler("keypress", ...)``.  A script says
+        "the player pressed this key" once and gets both, because that is what
+        pressing a key on a keyboard does.
         """
-        from OpenGLContext.events.keyboardevents import KeyboardEvent, KeypressEvent
-
-        key = event.get('key', '')
-        state = event.get('state', 1)  # 1 = press, 0 = release
-        modifiers = tuple(event.get('modifiers', [0, 0, 0]))
-
-        synth_event: Any = KeyboardEvent()
-        synth_event.context = self
-        synth_event.name = key
-        synth_event.state = state
-        synth_event.modifiers = modifiers
-
-        manager = self.getEventManager('keyboard')
-        if manager is not None:
-            manager.ProcessEvent(synth_event)
-
-        if state:
-            press_event: Any = KeypressEvent()
-            press_event.context = self
-            press_event.name = key
-            press_event.modifiers = modifiers
-            press_manager = self.getEventManager('keypress')
-            if press_manager is not None:
-                press_manager.ProcessEvent(press_event)
-
-    def _inject_resize(self, event: Dict[str, Any]) -> None:
-        """Inject a resize event."""
-        width = event.get('width', 640)
-        height = event.get('height', 480)
-
-        # Trigger resize handling
-        if hasattr(self, 'OnResize'):
-            self.OnResize(width, height)
+        synthetic.dispatch(self, event)
+        if event.get('state', 1):
+            synthetic.dispatch(self, {
+                'type': 'keypress',
+                'key': event.get('key', ''),
+                'modifiers': event.get('modifiers', [0, 0, 0]),
+            })
 
     def _do_injection_capture(self, name: str) -> None:
         """Capture framebuffer for test verification.
