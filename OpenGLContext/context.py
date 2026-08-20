@@ -699,6 +699,73 @@ class Context(ScreenMixin, ContextConfigMixin):
 
         self.telemetry = telemetry.install(self)
 
+    def mark(self, name, /, **fields):
+        """Note something this application knows and the engine cannot
+
+        The engine knows what was pressed and how long the frame took. It
+        does not know that a level finished loading, that a match started,
+        or that the player picked up the thing they were about to fall
+        through the floor with:
+
+            self.mark('level-loaded', map='ztn3dm1', bots=4)
+
+        A mark is the line a reader looks for first when a journal is four
+        minutes long and the failure is at the end of it, so this is a
+        call whatever the session is: nothing recording, a recording, or a
+        replay of one. A game that had to ask first would end up guarding
+        the calls away, and those are exactly the ones that would have
+        explained the failure nobody could reproduce.
+
+        In a replay the mark is compared with the one the recording holds
+        in its place, which is how a session says whether it played out
+        the same way; see OpenGLContext.telemetry.replay.MarkComparison.
+
+        Fields are data: numbers, strings, and numpy's numbers, which are
+        written as theirs. A field may be called anything, `name`
+        included -- what a game calls the map, the weapon and the player --
+        because the mark's own name is positional.
+        """
+        session = self.telemetry
+        if session is not None:
+            session.mark(name, **fields)
+
+    def reachedMark(self, name):
+        """Whether this session is at the point a recording made `name`
+
+        For the things a replay cannot get from the input or the clock:
+        a level a worker thread finished decoding, a download that landed.
+        They happen on whatever frame the disk decides, and a session in
+        which the level appeared three frames early is one where every
+        recorded input after it was given to a world that had already
+        started. So the code that acts on one asks first:
+
+            if not self.reachedMark('scene-mounted'):
+                return          # the recording had it later; wait for that
+
+        and marks it when it does act, which is what the replay reads.
+        True whenever nothing is being replayed, and true in a replay whose
+        recording holds no such mark still to answer -- so a replay never
+        waits for something that never happened.
+        """
+        session = self.telemetry
+        return True if session is None else session.reached(name)
+
+    def overdueMark(self, name):
+        """Whether a recording had made `name` by the frame this session is on
+
+        The other half of reachedMark, and the half that says *hurry*: a
+        thing that arrives when a worker thread is finished with it can be
+        late as easily as early, and a replay that mounts a level nine
+        frames after the recording did is as far out of step as one that
+        mounted it nine frames before. Code that can wait for its own work
+        waits while this is true.
+
+        False whenever nothing is being replayed, and false in a replay
+        whose recording holds no such mark still to answer.
+        """
+        session = self.telemetry
+        return False if session is None else session.overdue(name)
+
     def startTelemetry(self, path=None, **named):
         """Begin recording this session to path (None for a dated default)
 

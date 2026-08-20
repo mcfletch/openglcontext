@@ -540,9 +540,16 @@ def telemetry_provider(context: Any) -> Provider:
         if replay is None:
             return []
         path = getattr(session, 'path', None)
-        return [('replaying', path.name if path is not None else 'a recording'),
-                ('frame', '%d/%d' % (replay.frames, replay.recording.frames)),
-                ('state', 'finished' if replay.finished else 'running')]
+        found = [('replaying', path.name if path is not None else 'a recording'),
+                 ('frame', '%d/%d' % (replay.frames, replay.recording.frames)),
+                 ('state', 'finished' if replay.finished else 'running')]
+        # Whether this replay is doing what the recording says it did, which is
+        # the question somebody watching one has: see
+        # OpenGLContext.telemetry.replay.MarkComparison.
+        comparison = getattr(session, 'marks', None)
+        if comparison is not None and (comparison.made or comparison.expected):
+            found.append(('marks', comparison.verdict()))
+        return found
     return rows
 
 

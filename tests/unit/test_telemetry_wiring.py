@@ -299,8 +299,17 @@ class TestSwitchingItOn:
 
 
 class TestReplayingIntoAContext:
-    def test_the_recorded_input_arrives_on_the_frames_it_arrived_on(
+    def test_the_recorded_input_arrives_for_the_frames_it_arrived_on(
             self, context, target):
+        """A frame's input is there before the frame does its work.
+
+        The platform delivers input *between* frames -- it is polled, and then
+        the application does the frame's work on what was found -- so a replay
+        hands each frame's input over as the frame before it ends. Delivered at
+        the top of the draw instead it arrives after that frame's idle work and
+        is acted on a frame late, which is a shot, a weapon change and a jump
+        each landing a frame after it did.
+        """
         session = telemetry.start(context, target)
         context.ProcessEvent(key('a', 1))
         context.OnDraw()
@@ -312,11 +321,10 @@ class TestReplayingIntoAContext:
         playing = FakeContext()
         driver = telemetry.start_replay(playing, target)
         try:
-            playing.OnDraw()
+            assert [event.name for event in playing.processed] == []
+            playing.OnDraw()                    # frame 0, and 'a' with it
             assert [event.name for event in playing.processed] == ['a']
-            playing.OnDraw()
-            assert [event.name for event in playing.processed] == ['a']
-            playing.OnDraw()
+            playing.OnDraw()                    # frame 1 drawn; 'b' is next
             assert [event.name for event in playing.processed] == ['a', 'b']
         finally:
             driver.close()
@@ -354,6 +362,86 @@ class TestWhatTheGameCanSay:
         context.OnDraw()
         session.close()
         assert records(target, 'input')[0]['type'] == 'pointer-origin'
+
+
+def _intervals(readings):
+    """What passed between one reading and the next, to the microsecond."""
+    return [round(b - a, 6)
+            for a, b in zip(readings, readings[1:], strict=False)]
+
+
+class TestTheClockWhileRecording:
+    """A recorded session reads one instant per frame, and that is what makes
+    a replay exact.
+
+    A replay's clock is a step function: it holds the time the recording had
+    reached at that frame for the whole of the frame. A recording whose game
+    read the wall clock as it ran is not on a step function at all -- what it
+    read depended on how far into the frame it happened to ask -- so the two
+    runs measure the same interval differently by however long the work inside
+    a frame takes. Milliseconds of it, which is enough to put a weapon's fire
+    rate, a respawn or an animation one frame out and everything after it out
+    with them. So recording installs a clock of the same shape as the one a
+    replay installs.
+    """
+
+    def readings(self, context, frames=4):
+        """What the world's clock says at one fixed point in each frame."""
+        from OpenGLContext.events import systemtime
+        found = []
+        for _each in range(frames):
+            found.append(systemtime.systemTime())
+            context.OnDraw()
+        return found
+
+    def test_it_stands_still_inside_one_frame(self, context, target):
+        from OpenGLContext.events import systemtime
+        session = telemetry.start(context, target)
+        try:
+            context.OnDraw()
+            assert systemtime.systemTime() == systemtime.systemTime()
+        finally:
+            session.close()
+
+    def test_it_moves_on_by_what_is_written_down_for_the_frame(self, context,
+                                                               target):
+        """The file's own numbers, so a replay adding them up arrives at the
+        same instants rather than at a second measurement of them."""
+        from OpenGLContext.events import systemtime
+        session = telemetry.start(context, target)
+        before = systemtime.systemTime()
+        for _each in range(4):
+            context.OnDraw()
+        moved = systemtime.systemTime() - before
+        session.close()
+        written = sum(sum(record['ms']) for record in records(target, 'frames'))
+        # To a microsecond: the world's clock is wall-clock-valued, and a
+        # double at sixteen hundred million seconds has a quarter of one of
+        # those between it and the next number it can hold.
+        assert moved == pytest.approx(written / 1000.0, abs=1e-6)
+
+    def test_the_wall_clock_is_given_back_when_the_recording_stops(
+            self, context, target):
+        from OpenGLContext.events import systemtime
+        before = systemtime.timeSource()
+        telemetry.start(context, target).close()
+        assert systemtime.timeSource() is before
+
+    def test_a_replay_reads_the_same_intervals_the_recording_read(
+            self, context, target):
+        """The property the whole thing rests on: what the game measured
+        between one frame and the next is what it measures again."""
+        session = telemetry.start(context, target)
+        recorded = self.readings(context)
+        session.close()
+
+        playing = FakeContext()
+        driver = telemetry.start_replay(playing, target)
+        try:
+            played = self.readings(playing)
+        finally:
+            driver.close()
+        assert (_intervals(recorded) == _intervals(played))
 
 
 class TestTheExceptionHook:

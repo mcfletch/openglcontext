@@ -53,7 +53,6 @@ rectangles back.
 from __future__ import annotations
 
 import math
-import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -62,6 +61,7 @@ from vrml import field, node
 
 from OpenGLContext.hud import COLUMN, GUIBox
 from OpenGLContext.ui.geometry import Rect
+from OpenGLContext.events import systemtime
 from OpenGLContext.ui.metrics import ELLIPSIS, FontMetrics
 from OpenGLContext.ui.widgets import RootWidget, Widget
 
@@ -262,7 +262,7 @@ class HUDLayer(RootWidget):
         and what lets a game drive its HUD from its own simulation clock.
         """
         if now is None:
-            now = time.monotonic()
+            now = systemtime.systemTime()
         for widget in self.walk():
             if widget is self:
                 continue
@@ -404,7 +404,7 @@ class Crosshair(HUDWidget):
     # -- events -----------------------------------------------------------
     def hit(self, now: Optional[float] = None) -> None:
         """Acknowledge a confirmed hit, so the player sees that it landed."""
-        self._hit_at = self._now = (time.monotonic() if now is None else now)
+        self._hit_at = self._now = (systemtime.systemTime() if now is None else now)
 
     def tick(self, now: float) -> None:
         self._now = now
@@ -513,7 +513,7 @@ class BarMeter(HUDWidget):
         flashing about is the game's rule and not the meter's: health lost
         matters and health gained from a pickup may not.
         """
-        self._flash_at = self._now = (time.monotonic() if now is None else now)
+        self._flash_at = self._now = (systemtime.systemTime() if now is None else now)
 
     def tick(self, now: float) -> None:
         self._now = now
@@ -929,7 +929,7 @@ class MessageQueue(HUDWidget):
              color: Optional[Sequence[float]] = None) -> Message:
         """Show a line, and hand back the message so a caller can hold it."""
         if now is None:
-            now = time.monotonic()
+            now = systemtime.systemTime()
         message = Message(text, now,
                           float(self.duration if duration is None else duration),
                           color)
@@ -1087,7 +1087,7 @@ class DamageIndicator(HUDWidget):
         if intensity <= 0.0:
             return None
         mark = DamageMark(bearing, intensity,
-                          time.monotonic() if now is None else now)
+                          systemtime.systemTime() if now is None else now)
         self.marks.append(mark)
         del self.marks[:-int(self.capacity)]
         return mark

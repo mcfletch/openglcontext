@@ -23,7 +23,7 @@ __all__ = ['describe', 'main']
 
 
 def describe(recording: Recording, events: bool = False,
-             limit: int = 10) -> str:
+             limit: int = 10, marks: bool = False) -> str:
     """One session as text, for a terminal.
 
     events -- list every input in order, rather than counting them by kind. A
@@ -31,13 +31,14 @@ def describe(recording: Recording, events: bool = False,
         the counts say whether the player was moving, and the timeline says
         what they did, which is a question you ask once you have a frame to ask
         it about.
+    marks -- list every mark the game made rather than the ends of them.
     limit -- how many exceptions, marks and distinct warnings to show.
     """
     lines: List[str] = []
     lines.extend(_session(recording))
     lines.extend(_frames(recording))
     lines.extend(_failures(recording, limit))
-    lines.extend(_marks(recording, limit))
+    lines.extend(_marks(recording, limit, marks))
     lines.extend(_input(recording, events))
     lines.extend(_state(recording))
     return '\n'.join(lines)
@@ -123,19 +124,43 @@ def _failures(recording: Recording, limit: int) -> List[str]:
     return lines
 
 
-def _marks(recording: Recording, limit: int) -> List[str]:
-    if not recording.marks:
+def _marks(recording: Recording, limit: int, every: bool = False) -> List[str]:
+    """What the game said it was doing, which is what a reader looks at first.
+
+    A game that marks well makes hundreds of them, and the ones that matter are
+    at the **end**: a session is diagnosed from where it went wrong. So more
+    than will fit is shown as a tally by name and then both ends of the list,
+    rather than the beginning and a count of everything else -- which is a
+    level loading, four minutes before the interesting part.
+    """
+    found = recording.marks
+    if not found:
         return []
-    lines = ['', '%d mark(s):' % (len(recording.marks),)]
-    for record in recording.marks[:limit]:
-        fields = ' '.join('%s=%s' % pair
-                          for pair in (record.get('fields') or {}).items())
-        lines.append(('  %s  frame %s  %s %s' % (
-            _stamp(record), record.get('frame', '-'),
-            record.get('name', '-'), fields)).rstrip())
-    if len(recording.marks) > limit:
-        lines.append('  ... and %d more' % (len(recording.marks) - limit,))
+    lines = ['', '%d mark(s):' % (len(found),)]
+    if len(found) > limit and not every:
+        counted = collections.Counter(str(record.get('name', '-'))
+                                      for record in found)
+        lines.append('  ' + ', '.join('%s %d' % (name, count)
+                                      for name, count in counted.most_common()))
+        first = limit // 2
+        shown = found[:first]
+        rest = found[len(found) - (limit - first):]
+    else:
+        shown, rest = found, []
+    lines.extend(_mark(record) for record in shown)
+    if rest:
+        lines.append('  ... and %d more' % (len(found) - len(shown) - len(rest),))
+        lines.extend(_mark(record) for record in rest)
     return lines
+
+
+def _mark(record: Dict[str, Any]) -> str:
+    """One mark as its line: when, which frame, its name and what it carried."""
+    fields = ' '.join('%s=%s' % pair
+                      for pair in (record.get('fields') or {}).items())
+    return ('  %s  frame %s  %s %s' % (
+        _stamp(record), record.get('frame', '-'),
+        record.get('name', '-'), fields)).rstrip()
 
 
 def _input(recording: Recording, events: bool) -> List[str]:
@@ -208,6 +233,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument('path', help='a file written by OPENGLCONTEXT_TELEMETRY')
     parser.add_argument('--events', action='store_true',
                         help='list every input in order, not just the counts')
+    parser.add_argument('--marks', action='store_true',
+                        help='list every mark the game made, not just the ends')
     parser.add_argument('--limit', type=int, default=10,
                         help='how many exceptions, marks and distinct warnings '
                              'to show (default: 10)')
@@ -218,5 +245,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
     recording = Recording.read(options.path)
     sys.stdout.write(describe(recording, events=options.events,
-                              limit=options.limit) + '\n')
+                              limit=options.limit,
+                              marks=options.marks) + '\n')
     return 0

@@ -195,10 +195,92 @@ mark, the logged warning and the frame times, with the ending recorded as
 for: a main loop closes its recording from a `finally`, and every exception
 hook runs after every `finally` has already emptied the journal.
 
+### A replay that says whether it reproduced the session (2026-08-20)
+
+A replay delivered the same input against the same clock and could say nothing
+about what the game made of it, which left "did this reproduce it?" a question
+somebody answered by watching. The game already knows: it is marking what it
+does. So a replay now **answers each mark with the one the journal holds in its
+place** — same name, same fields, same frame — and logs the verdict as the
+session ends, with the same line on the overlay's Session section while it runs:
+
+```
+replay of session.jsonl: 486 marks, all as recorded
+replay of session.jsonl: 74 of 486 marks as recorded, then death target=player by=bot2
+  where the recording has death target=bot2 by=player
+```
+
+`MarkComparison` in `replay.py` holds the comparison and nothing else; a
+divergence is described once, because everything after the first one follows
+from it. Numbers agree to within `CLOSE_ENOUGH`, and a live mark is compared as
+the *data a journal would have written for it*, so a tuple and the list it is
+recorded as are the same mark.
+
+Five things landed with it, each a thing that was standing between a session and
+its replay:
+
+- **One instant per frame while recording.** A replay's clock is a step
+  function; a recording whose game read the wall clock as it ran has no matching
+  shape, so the two runs measure the same interval differently by however long
+  a frame's work takes. Milliseconds of it, which is a weapon's fire rate
+  landing one frame out and everything after it out with it. `RecordingClock`
+  now serves the engine's time source while a session records, moving at the end
+  of each frame by exactly the duration the file holds for it — and the recorded
+  timeline is the sum of those durations rather than a second measurement of the
+  same thing (`SessionRecorder.frame` answers what it charged; `milliseconds()`
+  is the one place the file's resolution lives). The replay's clock moves at the
+  end of a frame for the same reason, where it used to move at the top and leave
+  every reading one frame stale.
+- **Input delivered where the platform delivered it.** A backend polls, and then
+  the application does the frame's work on what it found; a replay handing the
+  input over at the top of the *draw* gives it to the frame after the one that
+  acted on it, so every shot, weapon change and jump lands a frame late. It is
+  handed over as the frame before it ends instead (`Replay.finish`).
+
+- **`Context.mark(name, **fields)`**, so a game marks unconditionally rather than
+  guarding every call behind `if self.telemetry is not None` — the guarded ones
+  are exactly the marks that would have explained the failure. It works while
+  recording, while replaying and while neither. The name is positional, so a
+  field may be called `name`. `ReplaySession` grew `mark` at the same time: a
+  game marking during a replay used to raise `AttributeError`.
+- **The frame a loaded scene is mounted on.** A level arrives when the disk and
+  the decoder are finished with it, which is not the same frame twice, and a
+  session in which it appeared three frames early is one where every recorded
+  input after it was given to a world that had already started. `AsyncSceneMixin`
+  marks `scene-mounted`; a replay holds a finished load until the recorded frame
+  for it (`Context.reachedMark`) and **waits** for one the recording already had
+  by this frame (`Context.overdueMark`), bounded by `SCENE_WAIT_SECONDS` because
+  a replay may not hang on a load that never arrives. Both halves were found by
+  the comparison above, on the first two sessions it was pointed at: 57 recorded
+  frames of loading replayed in 54, and then in 66.
+- **The overlay UI reads the engine's clock.** `ScreenMixin.screenTrees` and the
+  HUD widgets defaulted to `time.monotonic()`, so every fade, hit mark and
+  message on a replayed session was measured against this machine's clock rather
+  than the recorded one — and a game feeding them its own timings was mixing two
+  clocks. They read `systemtime.systemTime()` now, which is what a recording
+  drives.
+- **A mark carrying numpy's numbers is kept.** `json.dumps` refused an array and
+  the whole record was dropped, which is a good way to lose the mark that says
+  where the player was standing. `journal.as_data` writes an array as its numbers
+  and anything else as its text; a record that will not serialise at all still
+  costs only itself.
+
+`twig_bb.telemetry` is the first game's worth of marks against this — the level,
+the match, the weapons, the shots, the pickups, the deaths, the bots' targets —
+made by reading the match's own event stream a second time rather than by
+calling out of the rules, and `twig-bb/tools/replay_check.py` plays a scripted
+match, records it, replays it and reports the verdict. A fifteen-second match on
+`ztn3dm1` against three bots — a level load, walking, turning, weapon changes, a
+hundred shots, hits, deaths, respawns, pickups and the bots finding the player —
+replays with **every mark made again, with the same fields, on the same
+frame**. How many that is depends on how the fight goes; it was 156 and 199 in
+the two runs this was written from.
+
 **Limits, and where they would be lifted.** A replay is exact to the extent
 that the session was a function of its input, the engine's clock and the
 recorded randomness. What is left outside: an application reading `time.time()`
-for itself rather than `systemtime.systemTime()`, and a generator it builds for
+for itself rather than `systemtime.systemTime()` — the engine's own UI no longer
+does — and a generator it builds for
 itself rather than asking `entropy.generator()` for -- its own
 `numpy.random.default_rng()` seeded from the clock is on neither the recorded
 seed nor the recorded states. Both are a matter of an application using the
@@ -206,3 +288,10 @@ engine's own source, which is what the documentation asks for. The phase
 breakdown recorded with a block comes from the most recently completed loop
 iteration, so within a block it lags by one frame; blocks are summed over sixty
 frames, where that is immaterial.
+
+The **first frame** is the one interval a replay cannot reconstruct: a recording
+begins before the session draws anything — while a level loads, while a menu is
+up — and the file holds no duration for that gap. And the world's clock is
+wall-clock-valued, so a double at sixteen hundred million seconds carries a
+quarter of a microsecond between one representable instant and the next; the
+recorded timeline is reproduced to about that.

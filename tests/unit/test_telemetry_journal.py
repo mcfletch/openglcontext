@@ -56,10 +56,21 @@ class TestWhenItCannotWrite:
         journal({'kind': 'mark', 'name': 'ignored'})       # must not raise
         journal.close()
 
-    def test_a_record_that_will_not_serialise_costs_that_record_only(self, tmp_path):
+    def test_a_value_json_does_not_know_is_written_as_its_text(self, tmp_path):
+        """A mark carrying a live object still says which mark it was."""
         target = tmp_path / 'session.jsonl'
         journal = SessionJournal(target)
-        journal({'kind': 'mark', 'name': object()})
+        journal({'kind': 'mark', 'name': 'held', 'fields': {'by': object()}})
+        journal.close()
+        assert lines(target)[1]['fields']['by'].startswith('<object object')
+
+    def test_a_record_that_will_not_serialise_at_all_costs_that_record_only(
+            self, tmp_path):
+        target = tmp_path / 'session.jsonl'
+        journal = SessionJournal(target)
+        circular: dict = {'kind': 'mark', 'name': 'round'}
+        circular['fields'] = circular
+        journal(circular)
         journal({'kind': 'mark', 'name': 'after'})
         journal.close()
         assert [record.get('name') for record in lines(target)[1:]] == ['after']

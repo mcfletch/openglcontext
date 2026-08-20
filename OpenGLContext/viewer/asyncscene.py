@@ -18,10 +18,27 @@ last, which is not necessarily the model they stopped on.
 Format-neutral: what a load *produces* is whatever :meth:`requestScene`'s
 ``produce`` callable returns.
 """
+import logging
 import threading
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 
-__all__ = ['AsyncSceneMixin']
+log = logging.getLogger(__name__)
+
+__all__ = ['AsyncSceneMixin', 'SCENE_MARK', 'SCENE_WAIT_SECONDS']
+
+#: How long a replayed session waits for a load the recording already had, in
+#: seconds.  Long enough for a level that took seconds to read the first time;
+#: bounded because a replay is diagnostic equipment and may not hang on a load
+#: that never arrives.
+SCENE_WAIT_SECONDS = 30.0
+
+#: What mounting a loaded scene is written down as in a session recording, and
+#: what a replay holds the mounting until the recorded frame of.  A level
+#: arrives when the disk and the decoder are finished with it, which is not the
+#: same frame twice: a session in which it appeared three frames early is one
+#: where every recorded input after it was given to a world that had already
+#: started.  See :mod:`OpenGLContext.telemetry`.
+SCENE_MARK = 'scene-mounted'
 
 
 class AsyncSceneMixin(object):
@@ -40,12 +57,22 @@ class AsyncSceneMixin(object):
     #: Bumped per request; a worker whose token is stale is dropped.
     _loadToken: int = 0
 
+    #: What the last request was loading, so the mark that says it was mounted
+    #: can name it.
+    _loadLabel: str = ''
+    #: Set when a worker posts its result; what a replayed session waits on.
+    _loadFinished: Optional[threading.Event] = None
+    #: How long such a session waits.  A field rather than the constant, so an
+    #: application that knows its loads are quick can say so.
+    sceneWaitSeconds: float = SCENE_WAIT_SECONDS
+
     if TYPE_CHECKING:
         def triggerRedraw(self, force: int = 0) -> Any: ...
 
     def setupAsyncScene(self) -> None:
         """Prepare the handover.  Call before the first :meth:`requestScene`."""
         self._loadLock = threading.Lock()
+        self._loadFinished = threading.Event()
         self._pendingScene = None
         self._loadToken = 0
         self.sceneLoading = False
@@ -65,6 +92,10 @@ class AsyncSceneMixin(object):
         assert self._loadLock is not None
         self._loadToken += 1
         token = self._loadToken
+        self._loadLabel = str(label)
+        if self._loadFinished is None:
+            self._loadFinished = threading.Event()
+        self._loadFinished.clear()
         self.sceneLoading = True
         self.onSceneLoading(label)
         self.triggerRedraw(1)
@@ -80,6 +111,8 @@ class AsyncSceneMixin(object):
                 if token == self._loadToken:    # a newer request wins; drop this
                     self._pendingScene = (scene, error)
                     self.sceneLoading = False
+                    if self._loadFinished is not None:
+                        self._loadFinished.set()
         threading.Thread(target=worker, name='scene-load', daemon=True).start()
 
     def pollPendingScene(self) -> bool:
@@ -88,21 +121,73 @@ class AsyncSceneMixin(object):
         Returns whether anything was applied.  Call from the idle handler before
         anything else touches the scenegraph.  The scenegraph is built here and
         not in the worker, which is what keeps every GL upload on this thread.
+
+        **A replayed session mounts it on the frame it was mounted on.**  A
+        load finishes when the disk and the decoder are finished with it, so a
+        scene that is ready early here is held until the recording's own frame
+        for it; see :data:`SCENE_MARK`.
         """
         if self._loadLock is None:
             return False
+        if self.sceneLoading:
+            self._waitIfOverdue()
         with self._loadLock:
             pending = self._pendingScene
+            if pending is None:
+                return False
+            if not self._mountDue():
+                return False
             self._pendingScene = None
-        if pending is None:
-            return False
         scene, error = pending
         if scene is not None:
             self.applyLoadedScene(scene)
         else:
             self.applyFailedLoad(error)
+        self._markMounted(scene is not None)
         self.triggerRedraw(1)
         return True
+
+    # -- recording when it happened ---------------------------------------
+    def _mountDue(self) -> bool:
+        """Whether a finished load may be mounted on this frame.
+
+        Now, unless this session is a replay that has not yet reached the frame
+        the recording mounted one on.  Asked of the host rather than of the
+        telemetry package, since a host that is not a
+        :class:`~OpenGLContext.context.Context` -- which is how this mix-in is
+        tested -- has no session at all and is never held up.
+        """
+        reached = getattr(self, 'reachedMark', None)
+        return True if reached is None else bool(reached(SCENE_MARK))
+
+    def _waitIfOverdue(self) -> None:
+        """Wait for a load a replayed recording had already mounted by now.
+
+        A load takes what it takes, and the frames drawn meanwhile are whatever
+        the machine managed: a session that spent 57 frames reading a level
+        replays in 66 of them, and every recorded input after that is nine
+        frames out of step.  So a replay that has reached the frame the scene
+        was mounted on stops drawing and waits for it.
+
+        Bounded (:data:`SCENE_WAIT_SECONDS`), and a wait that runs out is a
+        warning and a session that carries on: a replay is diagnostic equipment
+        and does not get to hang on a load that never arrives.
+        """
+        overdue = getattr(self, 'overdueMark', None)
+        if overdue is None or not overdue(SCENE_MARK):
+            return
+        finished = self._loadFinished
+        if finished is None or finished.wait(self.sceneWaitSeconds):
+            return
+        log.warning('waited %gs for %r, which the recorded session had by this '
+                    'frame; the replay goes on without it',
+                    self.sceneWaitSeconds, self._loadLabel)
+
+    def _markMounted(self, loaded: bool) -> None:
+        """Write down that a scene was mounted on this frame, for a replay."""
+        mark = getattr(self, 'mark', None)
+        if mark is not None:
+            mark(SCENE_MARK, label=self._loadLabel, loaded=bool(loaded))
 
     # -- what a context fills in ------------------------------------------
     def onSceneLoading(self, label: str) -> None:

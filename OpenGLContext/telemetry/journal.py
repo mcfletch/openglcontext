@@ -23,7 +23,8 @@ from typing import Any, Dict, Optional
 
 log = logging.getLogger(__name__)
 
-__all__ = ['DEFAULT_MAX_BYTES', 'ESSENTIAL', 'SessionJournal', 'default_path']
+__all__ = ['DEFAULT_MAX_BYTES', 'ESSENTIAL', 'SessionJournal', 'as_data',
+           'default_path']
 
 #: How large a journal may grow before the ordinary traffic stops.  A session
 #: at sixty frames a second writes a few kilobytes a minute, so this is days of
@@ -34,6 +35,26 @@ DEFAULT_MAX_BYTES = 128 * 1024 * 1024
 #: the ceiling drops can be summarised from what is already there; none of
 #: these can be reconstructed from anything.
 ESSENTIAL = frozenset(('header', 'exception', 'mark', 'end', 'truncated'))
+
+
+def as_data(value: Any) -> Any:
+    """``value`` as something JSON can hold.
+
+    A game marks where somebody was and how much was left of them, and both of
+    those are numbers out of numpy rather than out of Python -- an array and a
+    scalar that ``json`` refuses, which would cost the mark that was made to
+    explain the failure.  Arrays become their numbers and scalars become theirs;
+    anything else becomes its text, which is worth more to a reader than the
+    record not being there.
+    """
+    for name in ('tolist', 'item'):
+        method = getattr(value, name, None)
+        if callable(method):
+            try:
+                return method()
+            except (TypeError, ValueError):
+                pass
+    return str(value)
 
 
 class SessionJournal:
@@ -92,7 +113,7 @@ class SessionJournal:
         if self.saturated and kind not in ESSENTIAL:
             return
         try:
-            line = json.dumps(record) + '\n'
+            line = json.dumps(record, default=as_data) + '\n'
         except (TypeError, ValueError):
             # One record that will not serialise -- a mark carrying something
             # that is not data -- must not take the rest of the session with it.

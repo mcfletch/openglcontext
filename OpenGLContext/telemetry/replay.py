@@ -7,7 +7,7 @@ same keys, the same clicks in the same places, on the same frames, against a
 clock driven by the frame times that were recorded rather than by however fast
 this machine happens to be.
 
-Three pieces:
+Four pieces:
 
 :class:`Recording`
     The file as data -- its header, its input grouped by frame, when each frame
@@ -22,6 +22,11 @@ Three pieces:
 :class:`Replay`
     Delivers each frame's input before that frame is drawn, and moves the clock
     on.
+
+:class:`MarkComparison`
+    What the game says about itself this time, against what it said when the
+    session was recorded -- which is how a replay answers the only question it
+    raises: did it play out the same way, and if not, where did the two part?
 
 What replays exactly is what the session was a function of: its input and its
 clock.  A game that reads ``time.time()`` for itself, seeds from the system
@@ -41,7 +46,13 @@ from OpenGLContext.events import systemtime
 
 log = logging.getLogger(__name__)
 
-__all__ = ['Recording', 'RecordedClock', 'Replay', 'read_records']
+__all__ = ['MarkComparison', 'Recording', 'RecordedClock', 'Replay',
+           'read_records']
+
+#: How far two recorded numbers may differ and still be the same number. A
+#: replay runs the same arithmetic on the same machine, so this is about the
+#: last bit of a float rather than about tolerance for a different answer.
+CLOSE_ENOUGH = 1e-9
 
 
 def read_records(path: Any) -> List[Dict[str, Any]]:
@@ -171,12 +182,20 @@ class RecordedClock:
         rather than restarting it.
 
     Nothing advances it: :meth:`frame` says which frame is being drawn, which is
-    where :class:`Replay` calls it.
+    where :class:`Replay` calls it -- as that frame *ends*, which is where the
+    recording's own clock moved (:class:`OpenGLContext.telemetry.record.RecordingClock`).
+
+    Time is counted from the first recorded frame rather than from the start of
+    the file, so installing this does not jump the world forward by however long
+    the session spent starting up before it drew anything.
     """
 
     def __init__(self, times: Iterable[float], start: Optional[float] = None) -> None:
         self.times = [float(value) for value in times]
         self.start = systemtime.systemTime() if start is None else float(start)
+        #: When the first recorded frame began, which this clock reads as
+        #: ``start``.
+        self.origin = self.times[0] if self.times else 0.0
         self.frames = 0
         self._now = self.start
         self._previous: Any = None
@@ -195,7 +214,7 @@ class RecordedClock:
             elapsed = self.times[min(int(index), len(self.times) - 1)]
         else:
             elapsed = 0.0
-        self._now = self.start + elapsed
+        self._now = self.start + elapsed - self.origin
         return self._now
 
     def __call__(self) -> float:
@@ -246,6 +265,9 @@ class Replay:
         self.clock = RecordedClock(recording.frame_times(), start=start)
         #: Frames replayed so far, which is the frame about to be drawn.
         self.frames = 0
+        #: The last frame whose input has gone out, so a frame's input is
+        #: delivered once however many times it is asked for.
+        self._delivered = -1
         self.last = max([recording.frames - 1] + list(self._inputs), default=-1)
 
     @property
@@ -253,15 +275,17 @@ class Replay:
         """Whether every recorded frame and input has been replayed."""
         return self.frames > self.last
 
-    def frame(self) -> int:
-        """Deliver the input recorded against the frame about to be drawn.
+    def deliverFrame(self, index: int) -> bool:
+        """Deliver the input recorded against frame ``index``, once.
 
-        Called at the top of the frame, because that is where the input the
-        recording stamped with this frame had arrived: the platform is polled,
-        then the frame acts on what it found.
+        Answers whether this was the delivery: asked for a frame already
+        delivered it does nothing, which is what lets the input go out at the
+        moment the platform would have delivered it and the frame that draws it
+        ask again without seeing it twice.
         """
-        index = self.frames
-        self.clock.frame(index)
+        if index <= self._delivered:
+            return False
+        self._delivered = index
         for record in self._inputs.get(index, ()):
             try:
                 self.deliver(record)
@@ -269,8 +293,38 @@ class Replay:
                 # One input that will not go back is a gap in the replay, not
                 # the end of it: whatever follows may still reach the failure.
                 log.debug('could not replay %r', record, exc_info=True)
+        return True
+
+    def frame(self) -> int:
+        """Begin the frame about to be drawn, with its input delivered.
+
+        Ordinarily :meth:`finish` has already delivered it, as the frame before
+        this one ended; this is what delivers the first frame's, and any that
+        a backend which never finishes a frame would otherwise never see.
+
+        The clock is not moved here; see :meth:`finish`.
+        """
+        index = self.frames
+        self.deliverFrame(index)
         self.frames += 1
         return index
+
+    def finish(self) -> float:
+        """The frame has ended: move the clock on, and offer the next input.
+
+        Both at the *end* of the frame, because that is where the session being
+        replayed had them.  The clock moved there
+        (:class:`OpenGLContext.telemetry.record.RecordingClock`), so what the
+        next frame reads here is what the next frame read then.  And the
+        platform delivered input *between* frames -- it is polled, and then the
+        application does the frame's work on what was found -- so input
+        delivered at the top of the draw instead arrives after that work and is
+        acted on a frame late, which is a shot, a weapon change and a jump each
+        landing a frame after it did.
+        """
+        now = self.clock.frame(self.frames)
+        self.deliverFrame(self.frames)
+        return now
 
     # -- the clock --------------------------------------------------------
     def install(self) -> 'Replay':
@@ -281,3 +335,182 @@ class Replay:
     def remove(self) -> None:
         """Give the engine's time source back."""
         self.clock.restore()
+
+
+class MarkComparison:
+    """The marks a replay makes, against the ones its recording holds.
+
+    A replay is worth exactly what it reproduces, and the engine cannot tell
+    whether it did: it delivered the same input against the same clock, and
+    what came of that is the game's business.  The game's own marks are the
+    game's account of what came of it, so matching them in order -- same mark,
+    same fields, same frame -- is the session answering for itself.
+
+    marks -- the ``mark`` records the journal holds, in the order they were
+        written.
+
+    Position rather than search: a replay is claimed to have done the same
+    things in the same order, so the *n*-th mark answers the *n*-th mark, and
+    anything else is a divergence.  Only the first one is described, because
+    everything after it is that one's consequence.
+    """
+
+    def __init__(self, marks: Iterable[Dict[str, Any]]) -> None:
+        self.expected = list(marks)
+        #: Marks the replay has made, and how they went.
+        self.made = 0
+        self.matched = 0
+        self.diverged = 0
+        #: Where the two first parted, as a line a person reads, or None.
+        self.first: Optional[str] = None
+
+    # -- taking them in ---------------------------------------------------
+    def mark(self, frame: int, name: str, fields: Dict[str, Any]) -> bool:
+        """Answer the next recorded mark with this one; True if they agree."""
+        expected = (self.expected[self.made] if self.made < len(self.expected)
+                    else None)
+        self.made += 1
+        difference = _difference(expected, frame, name, fields)
+        if difference is None:
+            self.matched += 1
+            return True
+        self.diverged += 1
+        if self.first is None:
+            self.first = difference
+        return False
+
+    def reached(self, name: str, frame: int) -> bool:
+        """Whether ``frame`` has caught up with the next recorded ``name``.
+
+        What lets a replay put back something that did *not* come from the
+        player: a level mounted when a worker thread finished with it, a
+        download that landed.  Those arrive on whatever frame the disk decides,
+        and a session where the level appeared three frames early is one where
+        every recorded input after it was given to a world that had already
+        started.
+
+        True when the recording holds no such mark still to be answered, so a
+        replay never waits for something that never happened.
+        """
+        when = self.expected_frame(name)
+        return True if when is None else int(frame) >= when
+
+    def overdue(self, name: str, frame: int) -> bool:
+        """Whether the recording had made ``name`` by ``frame`` and this has not.
+
+        The other half of :meth:`reached`, and the half that says *hurry*: a
+        load can finish late as easily as early, and a replay that mounts a
+        level nine frames after the recording did is as far out of step as one
+        that mounted it nine frames before.  False when the recording holds no
+        such mark, so nothing ever waits for something that never happened.
+        """
+        when = self.expected_frame(name)
+        return when is not None and int(frame) >= when
+
+    def expected_frame(self, name: str) -> Optional[int]:
+        """The frame the next unanswered recorded ``name`` was made on."""
+        for expected in self.expected[self.made:]:
+            if str(expected.get('name', '')) == name:
+                return int(expected.get('frame', 0))
+        return None
+
+    # -- what came of it --------------------------------------------------
+    @property
+    def missing(self) -> List[Dict[str, Any]]:
+        """Recorded marks the replay has not reached: what it never did."""
+        return self.expected[self.made:]
+
+    def summary(self) -> Dict[str, Any]:
+        """The comparison as numbers, for an overlay or a report."""
+        return {'recorded': len(self.expected), 'made': self.made,
+                'matched': self.matched, 'diverged': self.diverged,
+                'missing': len(self.missing), 'first': self.first}
+
+    def verdict(self) -> str:
+        """One line saying whether this replay reproduced its recording."""
+        if not self.expected and not self.made:
+            return 'no marks to compare: the game marked nothing'
+        if self.first is not None:
+            return '%d of %d marks as recorded, then %s' % (
+                self.matched, len(self.expected), self.first)
+        if self.missing:
+            return ('%s as recorded; %d the recording holds were never made'
+                    % (_count(self.matched, 'mark'), len(self.missing)))
+        if self.matched == 1:
+            return '1 mark, as recorded'
+        return '%d marks, all as recorded' % (self.matched,)
+
+    def __repr__(self) -> str:
+        return '<%s %s>' % (self.__class__.__name__, self.verdict())
+
+
+def _count(number: int, thing: str) -> str:
+    """``3 marks``, and ``1 mark``."""
+    return '%d %s%s' % (number, thing, '' if number == 1 else 's')
+
+
+def _difference(expected: Optional[Dict[str, Any]], frame: int, name: str,
+                fields: Dict[str, Any]) -> Optional[str]:
+    """How a mark differs from the one it should have answered, or None."""
+    if expected is None:
+        return 'a mark the recording does not hold: %s' % (
+            _describe(name, fields),)
+    if str(expected.get('name', '')) != name:
+        return '%s where the recording has %s' % (
+            _describe(name, fields),
+            _describe(str(expected.get('name', '')),
+                      expected.get('fields') or {}))
+    written = _as_data(fields)
+    if not _same(expected.get('fields') or {}, written):
+        return '%s where the recording has %s' % (
+            _describe(name, written),
+            _describe(name, expected.get('fields') or {}))
+    if int(expected.get('frame', -1)) != int(frame):
+        return '%s on frame %d where the recording has frame %d' % (
+            _describe(name, written), frame, int(expected.get('frame', -1)))
+    return None
+
+
+def _describe(name: str, fields: Dict[str, Any]) -> str:
+    """A mark as a reader wants to see it: its name and what it carried."""
+    if not fields:
+        return name
+    return '%s %s' % (name, ' '.join(
+        '%s=%s' % (key, value) for key, value in sorted(fields.items())))
+
+
+def _as_data(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """A live mark's fields as the data a journal would have written for them.
+
+    Through the journal's own serialiser, so what is compared is what would
+    have been recorded: a tuple and the list it is written as are the same
+    mark, and so are an array and its numbers.
+    """
+    from OpenGLContext.telemetry.journal import as_data
+    try:
+        return dict(json.loads(json.dumps(fields, default=as_data)))
+    except (TypeError, ValueError):
+        return dict(fields)
+
+
+def _same(expected: Any, found: Any) -> bool:
+    """Whether two recorded values say the same thing.
+
+    Numbers within :data:`CLOSE_ENOUGH`, because the same arithmetic run twice
+    on one machine agrees to the last bit or two and a replay is not being
+    asked about the last bit.
+    """
+    if isinstance(expected, dict) and isinstance(found, dict):
+        return (set(expected) == set(found)
+                and all(_same(expected[key], found[key]) for key in expected))
+    if isinstance(expected, (list, tuple)) and isinstance(found, (list, tuple)):
+        return (len(expected) == len(found)
+                and all(_same(one, other)
+                        for one, other in zip(expected, found,
+                                              strict=False)))
+    if isinstance(expected, bool) or isinstance(found, bool):
+        return expected is found
+    if isinstance(expected, (int, float)) and isinstance(found, (int, float)):
+        return abs(float(expected) - float(found)) <= max(
+            CLOSE_ENOUGH, CLOSE_ENOUGH * abs(float(expected)))
+    return bool(expected == found)

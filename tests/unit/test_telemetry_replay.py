@@ -138,17 +138,35 @@ class TestReplaying:
         assert replay.finished
 
     def test_the_clock_follows_the_frame_being_replayed(self):
+        """It moves as a frame *ends*, which is where a recording's own clock
+        moves: what the next frame reads here is what the next frame read
+        then. Moved at the top of the frame instead, every reading is one
+        frame stale."""
         replay = Replay(journal({'kind': 'frames', 'frame': 0, 't': 0.0,
-                                 'ms': [16.0, 500.0]}),
+                                 'ms': [16.0, 500.0, 16.0]}),
                         lambda record: None, start=100.0)
         replay.install()
         try:
             replay.frame()
             assert systemtime.systemTime() == pytest.approx(100.0)
-            replay.frame()
+            replay.finish()
             assert systemtime.systemTime() == pytest.approx(100.016)
+            replay.frame()
+            replay.finish()
+            assert systemtime.systemTime() == pytest.approx(100.516)
         finally:
             replay.remove()
+
+    def test_the_clock_starts_where_it_was_rather_than_jumping_forward(self):
+        """A recording begins before its first frame -- while a level loads,
+        while a menu is up -- and the world must not leap over that gap when
+        the replay starts."""
+        replay = Replay(journal({'kind': 'frames', 'frame': 0, 't': 12.5,
+                                 'ms': [16.0]}),
+                        lambda record: None, start=100.0)
+        with replay.clock:
+            replay.frame()
+            assert systemtime.systemTime() == pytest.approx(100.0)
 
     def test_a_delivery_that_fails_costs_the_event_and_not_the_replay(self):
         seen = []

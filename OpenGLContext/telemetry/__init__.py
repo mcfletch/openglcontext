@@ -21,8 +21,8 @@ This records a whole session to one file:
 - the developer overlay's own description of the application, sampled every few
   seconds, which is how a game's map, player and counters reach the file
   without a second description that can drift from the first,
-- and whatever the game marks: ``context.telemetry.mark('level-loaded',
-  map='ztn3dm1')``.
+- and whatever the game marks: ``context.mark('level-loaded', map='ztn3dm1')``,
+  which is a call whether or not anything is recording.
 
 Switching it on::
 
@@ -47,6 +47,12 @@ runs again as it ran.  A game that reads ``time.time()`` for itself or seeds
 from the system random source replays approximately rather than exactly --
 close enough to walk into the same wall, which is usually the whole of what is
 wanted.
+
+**And it says whether it did.**  A replay answers each of the game's marks with
+the one the journal holds in its place -- same mark, same fields, same frame --
+and reports how the two accounts compared as the session ends
+(:class:`~OpenGLContext.telemetry.replay.MarkComparison`).  A game that marks
+what it does is a game whose replays are checked.
 
 Nothing is recorded unless asked for, and the taps that do the recording are
 installed only then, so a shipped game that nobody has switched this on for

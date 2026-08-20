@@ -26,9 +26,9 @@ measuring it per frame is both necessary and cheap.
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any, List, Optional
 
+from OpenGLContext.events import systemtime
 from OpenGLContext.ui.metrics import FontMetrics, font_size_for, metrics_for
 
 log = logging.getLogger(__name__)
@@ -146,7 +146,7 @@ class ScreenMixin(object):
         these, which is what puts a screen over the HUD rather than under it.
         """
         if now is None:
-            now = time.monotonic()
+            now = systemtime.systemTime()
         viewport = self.getViewPort()
         trees = []
         for layer in list(self.hudLayers):

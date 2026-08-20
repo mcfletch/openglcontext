@@ -366,7 +366,10 @@ OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/session.jsonl /workspaces/OpenGL-dev/.venv/b
 directory; `OPENGLCONTEXT_TELEMETRY_MAX_MB` caps the file (default 128), past
 which exceptions and marks still get through. An application switches it on for
 itself with `context.startTelemetry(path)` and marks its own events with
-`context.telemetry.mark('level-loaded', map='ztn3dm1')`.
+`context.mark('level-loaded', map='ztn3dm1')` — a call whether or not anything
+is recording. A replay compares those marks with the recorded ones and logs how
+the two accounts agreed as it ends, which is how a session says whether it
+played out the same way.
 
 Unlike the stall switches these **are** in `renderoptions.ENVIRONMENT`: a
 journal names one file for one session, so a subprocess capture that inherited

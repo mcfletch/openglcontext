@@ -101,6 +101,27 @@ class TestLayers:
         screen.addHUDLayer(HUDLayer(visible=False))
         assert screen.screenTrees(metrics) == []
 
+    def test_the_layers_are_ticked_from_the_engine_s_clock(self, metrics):
+        """One clock for the whole scene, and the HUD is in the scene.
+
+        The engine's time source is what a recorded session replaces
+        (:mod:`OpenGLContext.telemetry`), so a HUD reading it fades and expires
+        exactly as it did when the session was recorded -- and a game whose own
+        timings come from the same clock stays in step with what is drawn.
+        """
+        from OpenGLContext.events import systemtime
+        from OpenGLContext.ui.hudwidgets import MessageQueue
+        screen = Screen()
+        queue = MessageQueue(duration=1.0)
+        screen.addHUDLayer(HUDLayer(children=[queue]))
+        queue.post('fresh', now=0.0)
+        previous = systemtime.setTimeSource(lambda: 0.5)
+        try:
+            screen.screenTrees(metrics)
+        finally:
+            systemtime.setTimeSource(previous)
+        assert [message.text for message in queue.messages] == ['fresh']
+
     def test_the_layers_are_ticked_before_they_are_drawn(self, metrics):
         from OpenGLContext.ui.hudwidgets import MessageQueue
         screen = Screen()

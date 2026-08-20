@@ -30,16 +30,18 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from OpenGLContext import entropy
-from OpenGLContext.events import synthetic
+from OpenGLContext.events import synthetic, systemtime
 from OpenGLContext.telemetry.journal import (DEFAULT_MAX_BYTES, SessionJournal,
                                              default_path)
 from OpenGLContext.telemetry.recorder import SessionRecorder
-from OpenGLContext.telemetry.replay import Recording, Replay
+from OpenGLContext.telemetry.replay import (MarkComparison, Recording,
+                                            Replay)
 
 log = logging.getLogger(__name__)
 
-__all__ = ['MAX_MB_ENV', 'REPLAY_ENV', 'ReplaySession', 'SessionRecording',
-           'TELEMETRY_ENV', 'Tap', 'install', 'start', 'start_replay']
+__all__ = ['MAX_MB_ENV', 'REPLAY_ENV', 'RecordingClock', 'ReplaySession',
+           'SessionRecording', 'TELEMETRY_ENV', 'Tap', 'install', 'start',
+           'start_replay']
 
 #: Record this session to the named file. ``1`` or ``auto`` writes to a dated
 #: file under the user's application-data directory.
@@ -152,6 +154,58 @@ class _LogRelay(logging.Handler):
             self.handleError(record)
 
 
+class RecordingClock:
+    """The engine's time source while a session is being recorded.
+
+    **One instant per frame**, taken at the frame boundary and held for the
+    whole of the next frame.  A replay's clock has exactly that shape -- it
+    holds the time the recording reached at a frame for the whole of it
+    (:class:`~OpenGLContext.telemetry.replay.RecordedClock`) -- and a recording
+    whose game read the wall clock as it ran has no shape at all: what it read
+    depended on how far into the frame it happened to ask, so the two runs
+    measure the same interval differently by however long a frame's work takes.
+    Milliseconds of it, which is a weapon's fire rate, a respawn or an
+    animation landing one frame out and everything after it out with them.
+
+    It starts at the wall clock's time and moves by **the frame durations the
+    journal records**, which is what the replay's clock adds up: the two are
+    then the same sequence of instants rather than two measurements of one
+    session, and a fire rate or a respawn falls on the same frame twice.  A
+    session drawing frames is a session whose world clock keeps wall time to
+    the rounding of the file (a hundredth of a millisecond a frame).
+
+    Keep the source it replaced and put it back when finished, which
+    :class:`SessionRecording` does when the recording closes.
+    """
+
+    def __init__(self, start: Optional[float] = None) -> None:
+        self._now = systemtime.wallClock() if start is None else float(start)
+        self._previous: Any = None
+        self._installed = False
+
+    def __call__(self) -> float:
+        return self._now
+
+    def advance(self, seconds: float) -> float:
+        """Move on by one frame's duration.  Called as each frame ends."""
+        self._now += float(seconds)
+        return self._now
+
+    def install(self) -> 'RecordingClock':
+        """Take over as the engine's time source."""
+        if not self._installed:
+            self._previous = systemtime.setTimeSource(self)
+            self._installed = True
+        return self
+
+    def restore(self) -> None:
+        """Give the previous time source back. Safe to call twice."""
+        if self._installed:
+            systemtime.setTimeSource(self._previous)
+            self._installed = False
+            self._previous = None
+
+
 class SessionRecording:
     """One context, recorded: the taps, the hooks and the journal together.
 
@@ -177,13 +231,32 @@ class SessionRecording:
         #: routes -- escaping the draw and then unwinding the main loop -- is
         #: one record rather than two.
         self._recorded: Optional[BaseException] = None
+        #: The world's clock while this records; see :class:`RecordingClock`.
+        self.clock = RecordingClock()
         self.closed = False
         self._install()
 
     # -- what the game says -----------------------------------------------
-    def mark(self, name: str, **fields: Any) -> None:
+    def mark(self, name: str, /, **fields: Any) -> None:
         """Note something the application knows and the engine cannot."""
         self.recorder.mark(name, **fields)
+
+    def reached(self, name: str) -> bool:
+        """Whether this session is at the point a recording made ``name``.
+
+        Always, while recording: the session *is* the recording, so nothing it
+        is about to do is early.  See :meth:`ReplaySession.reached`, which is
+        where the question has an answer worth waiting for.
+        """
+        return True
+
+    def overdue(self, name: str) -> bool:
+        """Whether something a recording had by now has not happened here.
+
+        Never, while recording: there is nothing to be behind.  See
+        :meth:`ReplaySession.overdue`.
+        """
+        return False
 
     @property
     def path(self) -> Any:
@@ -201,6 +274,7 @@ class SessionRecording:
             Tap(context, 'forgetPointerOrigin', before=self._pointerOrigin),
             Tap(context, 'OnResize', before=self._resize),
         ]
+        self.clock.install()
         self._handler = _LogRelay(self.recorder)
         logging.getLogger().addHandler(self._handler)
         self._hooks = {
@@ -229,6 +303,7 @@ class SessionRecording:
             self.exception(in_flight, fatal=True)
             reason = 'exception'
         self.closed = True
+        self.clock.restore()
         for tap in self._taps:
             tap.remove()
         self._taps = []
@@ -270,16 +345,19 @@ class SessionRecording:
         duration = (None if self._previousEnd is None
                     else now - self._previousEnd)
         self._previousEnd = now
+        draw = now - self._drawStarted
         trace = getattr(self.context, 'loopTrace', None)
         # The most recently *completed* iteration: this frame is inside the
         # open one, whose phases have not been charged yet. A block sums sixty
         # frames of them, where being one frame out does not show.
         last = getattr(trace, 'last', None)
         phases = last[1] if last else None
-        self.recorder.frame(duration, draw=now - self._drawStarted,
-                            phases=phases,
-                            stalled=bool(duration
-                                         and duration >= self._stallSeconds()))
+        # The world moves on here and nowhere else, and by exactly what is
+        # written down for this frame -- so every reading taken inside a frame
+        # is the one a replay of it will take.
+        self.clock.advance(self.recorder.frame(
+            duration, draw=draw, phases=phases,
+            stalled=bool(duration and duration >= self._stallSeconds())))
 
     def _stallSeconds(self) -> float:
         """What counts as a stall here.
@@ -335,16 +413,56 @@ class SessionRecording:
 
 
 class ReplaySession:
-    """One context, driven by a recording instead of by a player."""
+    """One context, driven by a recording instead of by a player.
+
+    A game reaches this as ``context.telemetry`` exactly as it reaches a
+    recording, and marks on it exactly as it marks on one -- so nothing in a
+    game has to ask which kind of session it is in.  What a replay does with a
+    mark is *compare* it with the one the recording holds in that place, which
+    is how the session answers whether it played out the same way: see
+    :attr:`marks`.
+    """
 
     def __init__(self, context: Any, replay: Replay, path: Any = None) -> None:
         self.context = context
         self.replay = replay
         #: The journal being replayed, for anything reporting what is running.
         self.path = Path(path) if path is not None else None
+        #: What the game says about itself this time against what it said then.
+        self.marks = MarkComparison(replay.recording.marks)
+        #: Frames finished, counted as the recorder counts them, so a mark made
+        #: at the same point in the frame carries the same number.
+        self.frames = 0
         self._announced = False
-        self._tap = Tap(context, 'OnDraw', before=self._beginFrame)
+        self.closed = False
+        self._tap = Tap(context, 'OnDraw', before=self._beginFrame,
+                        after=self._endFrame)
         replay.install()
+
+    # -- what the game says -----------------------------------------------
+    def mark(self, name: str, /, **fields: Any) -> None:
+        """Answer the mark the recording holds here with the one made now."""
+        self.marks.mark(self.frames, name, fields)
+
+    def reached(self, name: str) -> bool:
+        """Whether this replay has reached the frame ``name`` was recorded on.
+
+        For what the player did not do and the clock does not decide: a level
+        that a worker thread finished with, a download that landed.  Holding
+        those until the frame they happened on is what keeps the recorded input
+        that follows them meaningful; see
+        :meth:`OpenGLContext.telemetry.replay.MarkComparison.reached`.
+        """
+        return self.marks.reached(name, self.frames)
+
+    def overdue(self, name: str) -> bool:
+        """Whether the recording had made ``name`` by the frame this is on.
+
+        What tells a replay to *wait* for something rather than go on without
+        it: a level the recording had mounted by this frame is one the recorded
+        input from here on was given to.
+        """
+        return self.marks.overdue(name, self.frames)
 
     def _beginFrame(self, *arguments: Any, **named: Any) -> None:
         self.replay.frame()
@@ -354,13 +472,28 @@ class ReplaySession:
                         'the session continues live from here',
                         self.replay.frames)
 
+    def _endFrame(self, error: Optional[BaseException]) -> None:
+        self.frames += 1
+        # The world moves on at the end of the frame, which is where the
+        # recording's own clock moved.
+        self.replay.finish()
+
     def close(self, reason: str = 'stopped') -> None:
         """Stop replaying and give the engine's clock back. Safe to call twice.
 
         ``reason`` is accepted and ignored, so a context can finish whichever
         kind of session it has without asking which kind it is: a replay writes
         nothing, so it has nowhere to put one.
+
+        How the two accounts compared is logged as the session ends, because
+        that is the answer somebody ran the replay for and a number left on an
+        overlay nobody was watching is not delivered.
         """
+        if not self.closed:
+            self.closed = True
+            log.warning('replay of %s: %s',
+                        self.path.name if self.path is not None
+                        else 'a recording', self.marks.verdict())
         self._tap.remove()
         self.replay.remove()
         if getattr(self.context, 'telemetry', None) is self:

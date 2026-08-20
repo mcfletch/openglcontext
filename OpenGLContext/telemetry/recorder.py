@@ -10,9 +10,10 @@ are :mod:`OpenGLContext.telemetry.record`'s.
 
 **Input belongs to the frame that will act on it.**  A key pressed while the
 platform is being polled is read by the update that follows, so it is stamped
-with the frame that has not been drawn yet -- and a replay delivers it at the
-top of that frame.  That correspondence is as much a part of the format as the
-fields are.
+with the frame that has not been drawn yet -- and a replay hands it over as the
+frame *before* that one ends, which is where the platform handed it over, so
+the frame's own work finds it exactly as it did.  That correspondence is as much
+a part of the format as the fields are.
 
 **A frame's records are held until the frame ends**, which is what lets a
 hundred pointer positions inside one frame collapse to the one position anything
@@ -29,7 +30,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 log = logging.getLogger(__name__)
 
-__all__ = ['SessionRecorder']
+__all__ = ['SessionRecorder', 'milliseconds']
 
 #: Input whose successive reports inside one frame say the same thing: only
 #: where the pointer ended up is observable by the time the frame runs, so the
@@ -85,6 +86,9 @@ class SessionRecorder:
         self._phases: Dict[str, float] = {}
         self._stalls = 0
         self._block_started: Optional[float] = None
+        #: Seconds of frames written down so far, added up as the file holds
+        #: them; see :meth:`frame`.
+        self._timeline = 0.0
         self._state_at = float('-inf')
 
     # -- the clock --------------------------------------------------------
@@ -115,7 +119,7 @@ class SessionRecorder:
 
     def frame(self, duration: Optional[float], draw: Optional[float] = None,
               phases: Optional[Dict[str, float]] = None,
-              stalled: bool = False) -> None:
+              stalled: bool = False) -> float:
         """Finish one frame, writing out everything it collected.
 
         duration -- seconds from the previous frame's start to this one's: the
@@ -126,13 +130,24 @@ class SessionRecorder:
         draw -- seconds inside ``OnDraw``.
         phases -- the loop's own breakdown of the iteration, where the backend
             measures one (see :mod:`OpenGLContext.looptrace`).
+
+        Answers what this frame is **worth on the recorded timeline** -- the
+        duration as the file will hold it, to a hundredth of a millisecond --
+        which is what the world's clock moves by while recording, so that a
+        replay adding the file's own numbers up arrives at the same instants.
         """
         if self.closed:
-            return
+            return 0.0
         if duration is None:
             duration = draw or 0.0
+        step = milliseconds(duration) / 1000.0
         if self._block_started is None:
-            self._block_started = self.elapsed - duration
+            # The timeline this session is written down against, which is the
+            # sum of the frames written down rather than a second measurement
+            # of the same thing: a replay has only the file to add up, and two
+            # accounts of when a frame happened is one of them being wrong.
+            self._block_started = self._timeline
+        self._timeline += step
         self._times.append(duration)
         self._draws.append(draw)
         if phases:
@@ -145,8 +160,9 @@ class SessionRecorder:
         self.frames += 1
         if len(self._times) >= self.block:
             self._closeBlock()
+        return step
 
-    def mark(self, name: str, **fields: Any) -> None:
+    def mark(self, name: str, /, **fields: Any) -> None:
         """Note something the application knows and the engine cannot.
 
         ``recorder.mark('level-loaded', map='ztn3dm1', bots=4)`` -- the line a
@@ -257,10 +273,10 @@ class SessionRecorder:
             'kind': 'frames',
             'frame': self.frames - count,
             't': round(self._block_started or 0.0, 4),
-            'ms': [round(seconds * 1000.0, 2) for seconds in self._times],
+            'ms': [milliseconds(seconds) for seconds in self._times],
         }
         if any(draw is not None for draw in self._draws):
-            record['draw_ms'] = [None if draw is None else round(draw * 1000.0, 2)
+            record['draw_ms'] = [None if draw is None else milliseconds(draw)
                                  for draw in self._draws]
         if self._phases:
             record['phases_ms'] = {name: round(seconds * 1000.0, 2)
@@ -289,6 +305,17 @@ class SessionRecorder:
             return
         if sections:
             self._hold({'kind': 'state', 'sections': sections})
+
+
+def milliseconds(seconds: float) -> float:
+    """Seconds as the milliseconds a journal holds for them.
+
+    A hundredth of a millisecond, which is finer than anything a frame can be
+    measured to and coarse enough that a file is not mostly digits.  One place
+    for it because the recorded timeline is the sum of these: what is written
+    down and what the world's clock moves by have to be the same number.
+    """
+    return round(seconds * 1000.0, 2)
 
 
 def _traceback(error: BaseException) -> List[str]:

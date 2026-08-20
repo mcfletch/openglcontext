@@ -106,13 +106,21 @@ self.stopTelemetry()</pre>
     picked up the thing they were about to fall through the floor with. A mark
     is the line a reader looks for first when the file is four minutes long and
     the failure is at the end of it:</p>
-  <pre>self.telemetry.mark('level-loaded', map='ztn3dm1', bots=4)</pre>
-  <p><code>self.telemetry</code> is <code>None</code> when nothing is
-    recording, so a game that marks unconditionally guards the call &mdash; or
-    lets a small helper do it:</p>
-  <pre>def mark(self, name, **fields):
-    if self.telemetry is not None:
-        self.telemetry.mark(name, **fields)</pre>
+  <pre>self.mark('level-loaded', map='ztn3dm1', bots=4)</pre>
+  <p>Every context has it, and it is a call whatever the session is: nothing
+    recording, a recording, or a replay of one. Nothing to ask first, so
+    nothing to guard away &mdash; and the marks somebody guards away are
+    exactly the ones that would have explained the failure nobody could
+    reproduce. With nothing recording it costs an attribute read.</p>
+  <p>Fields are data: numbers, strings, and numpy&rsquo;s numbers, which are
+    written as theirs. A field may be called anything the game calls it,
+    <code>name</code> included, since the mark&rsquo;s own name is
+    positional.</p>
+  <p>What to mark is whatever the engine cannot see for itself and a reader
+    would look for: the level, the match, the pickups, the shots, what the
+    opponents decided. <code>twig_bb.telemetry</code> is a whole game&rsquo;s
+    worth of it, made by reading the match&rsquo;s own event stream a second
+    time rather than by calling out of the rules.</p>
 </section>
 
 <section id="randomness">
@@ -186,8 +194,11 @@ entropy.randomizer('bot-chat')   # the same idea, random.Random flavour</pre>
 input: 41,207 events -- pointer 38,110, keyboard 2,984, mousebutton 113</pre>
   <p><code>--events</code> lists every input in order rather than counting them
     by kind &mdash; the question you ask once a frame number has given you
-    somewhere to look. <code>--limit</code> sets how many exceptions, marks and
-    distinct warnings are shown.</p>
+    somewhere to look, and <code>--marks</code> does the same for what the game
+    said it was doing. <code>--limit</code> sets how many exceptions, marks and
+    distinct warnings are shown; past it the marks are counted by name and both
+    ends of the list are printed, since a session is diagnosed from its
+    end.</p>
 </section>
 
 <section id="replaying">
@@ -196,13 +207,26 @@ input: 41,207 events -- pointer 38,110, keyboard 2,984, mousebutton 113</pre>
     at the journal and it takes its input from the file instead of from the
     player:</p>
   <pre>OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/session.jsonl python -m twig_bb</pre>
-  <p>Each frame is given the input that was recorded against it, before that
-    frame is drawn, and the engine's time source
+  <p>Each frame is given the input that was recorded against it &mdash; handed
+    over as the frame before it ends, which is where the platform handed it
+    over, so the frame's own work finds it exactly as it did &mdash; and the
+    engine's time source
     (<code>OpenGLContext.events.systemtime</code>) reads the time the recording
     had reached at that frame. Everything time-driven follows: TimeSensors, the
     animation they drive, and any simulation that asks the engine what time it
     is. A frame that took 800&nbsp;ms during the recording advances the world by
     800&nbsp;ms on replay however long it takes here.</p>
+  <p><strong>A recorded session reads one instant per frame</strong>, which is
+    what makes that exact. A replay's clock is a step function &mdash; it holds
+    the time the recording reached at a frame for the whole of that frame &mdash;
+    so a recording whose game read the wall clock as it ran would have no
+    matching shape: what it read would depend on how far into the frame it
+    happened to ask, and the two runs would measure the same interval
+    differently by however long a frame's work takes. Milliseconds of it, which
+    is a fire rate, a respawn or an animation landing one frame out and
+    everything after it out with them. So recording installs a clock of the same
+    shape, moving at the end of each frame by exactly the duration the file
+    records for it. It is still wall-clock time, read once a frame.</p>
   <p>Combine it with the auto-exit switches to get a screenshot of the frame
     something went wrong on:</p>
   <pre>OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/session.jsonl \
@@ -210,6 +234,23 @@ OPENGLCONTEXT_AUTO_EXIT_FRAMES=14879 \
 OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR=/tmp/shots python -m twig_bb</pre>
   <p>Past the end of the recording the replay stops feeding input, says so once
     in the log and on the overlay, and the session continues live.</p>
+
+  <h3>Did it play out the same way?</h3>
+  <p>The engine can say that it delivered the same input against the same
+    clock. It cannot say what the game made of that &mdash; but the game can,
+    because it is already <a href="#marks">marking</a> what it did. So a replay
+    answers each mark with the one the journal holds in its place, comparing the
+    name, the fields and the frame, and says at the end how the two accounts
+    compared:</p>
+  <pre>WARNING OpenGLContext.telemetry.record: replay of session.jsonl: 199 marks, all as recorded</pre>
+  <p>A session that parted from its recording says where, once, since everything
+    after the first difference follows from it:</p>
+  <pre>WARNING OpenGLContext.telemetry.record: replay of session.jsonl: 74 of 199 marks as recorded,
+  then death target=player by=bot2 where the recording has death target=bot2 by=player</pre>
+  <p>The same line is on the <a href="#overlay">Session</a> section of the
+    developer overlay while the replay runs, so a divergence can be watched for
+    rather than waited for. Nothing needs switching on: a game that marks is
+    a game whose replays are checked.</p>
 
   <h3>What replays exactly, and what does not</h3>
   <p>A session replays exactly to the extent that it was a function of its input
@@ -228,11 +269,20 @@ OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR=/tmp/shots python -m twig_bb</pre>
       for itself &mdash; its own <code>numpy.random.default_rng()</code>, seeded
       from the clock &mdash; is not any of those; building it from
       <code>entropy.generator('name')</code> puts it on the recording.</li>
+    <li><strong>The first frame.</strong> A recording begins before the session
+      draws anything &mdash; while a level loads, while a menu is up &mdash; and
+      the file holds no duration for that gap. The interval a game measures
+      across the very first recorded frame is therefore the recording's own, and
+      not reproduced.</li>
     <li><strong>Anything else that differs between runs</strong> &mdash; a
-      thread whose scheduling decides an order, a resource that streams in at a
-      different moment. A replay of those is close rather than identical: close
-      enough to walk into the same wall, which is usually the whole of what is
-      wanted.</li>
+      thread whose scheduling decides an order. A resource that streams in at a
+      different moment is <em>not</em> in this list any more: a scene loaded off
+      the render thread (<code>AsyncSceneMixin</code>) is mounted on the frame
+      the recording mounted it on, held back if it is early and waited for if
+      it is late, since a level that appeared three frames sooner is a world the
+      recorded input from then on was never given to. A replay of what is left
+      is close rather than identical: close enough to walk into the same wall,
+      which is usually the whole of what is wanted.</li>
   </ul>
   <p>A replay makes no recording of its own, and reads the journal without
     changing it, so the same file replays the same way as often as you like.</p>
@@ -245,7 +295,9 @@ OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR=/tmp/shots python -m twig_bb</pre>
     or replayed, and only then. Recording, it names the file, the session's
     <a href="#randomness">seed</a>, the frame reached, how many records have
     been written and what the file weighs; replaying, it
-    names the file and says how far through the recording it is. A player told
+    names the file, says how far through the recording it is, and &mdash; once
+    the game has marked anything &mdash; whether what it is doing
+    <a href="#replaying">matches what was recorded</a>. A player told
     to &ldquo;switch recording on and reproduce it&rdquo; can see that it is on,
     and somebody watching a replay can see when it has run out.</p>
 </section>

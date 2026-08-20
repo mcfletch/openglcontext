@@ -213,6 +213,75 @@ class TestTheOverlaySection:
         finally:
             driver.close()
 
+    def test_a_replay_says_whether_it_is_doing_what_was_recorded(self, tmp_path):
+        """The question somebody watching a replay has; see
+        :class:`OpenGLContext.telemetry.replay.MarkComparison`."""
+        from OpenGLContext import telemetry
+        from OpenGLContext.ui.debugoverlay import telemetry_provider
+
+        class Context:
+            telemetry = None
+
+            def OnDraw(self, force=1):
+                return 1
+
+            def mark(self, name, **fields):
+                self.telemetry.mark(name, **fields)
+
+        recorded = Context()
+        session = telemetry.start(recorded, tmp_path / 'session.jsonl')
+        recorded.OnDraw()
+        recorded.mark('level-loaded', map='ztn3dm1')
+        session.close()
+
+        playing = Context()
+        driver = telemetry.start_replay(playing, tmp_path / 'session.jsonl')
+        try:
+            playing.OnDraw()
+            playing.mark('level-loaded', map='ztn3dm1')
+            assert dict(telemetry_provider(playing)())['marks'] == (
+                '1 mark, as recorded')
+        finally:
+            driver.close()
+
+
+class TestWhatTheGameSaidItWasDoing:
+    """The marks are what a reader looks at first, and a game that marks well
+    makes hundreds of them: the ones around the failure are at the *end*."""
+
+    def marked(self, count=40):
+        return session(*[
+            {'kind': 'mark', 't': index, 'frame': index,
+             'name': 'fired' if index % 2 else 'hit',
+             'fields': {'by': 'bot1'}}
+            for index in range(count)])
+
+    def test_a_few_marks_are_all_shown(self):
+        found = report.describe(session(
+            {'kind': 'mark', 't': 1.0, 'frame': 60, 'name': 'level-loaded',
+             'fields': {'map': 'ztn3dm1'}}))
+        assert 'level-loaded map=ztn3dm1' in found
+
+    def test_more_than_will_fit_are_counted_by_name(self):
+        found = report.describe(self.marked(), limit=6)
+        assert 'fired 20' in found
+        assert 'hit 20' in found
+
+    def test_the_last_of_them_are_shown_as_well_as_the_first(self):
+        """A session is diagnosed from its end."""
+        found = report.describe(self.marked(), limit=6)
+        assert 'frame 0' in found
+        assert 'frame 39' in found
+
+    def test_the_ones_left_out_are_counted(self):
+        assert 'and 34 more' in report.describe(self.marked(), limit=6)
+
+    def test_every_one_can_be_asked_for(self):
+        found = report.describe(self.marked(), limit=6, marks=True)
+        assert 'and 34 more' not in found
+        assert found.count('frame 1 ') == 1
+        assert 'frame 20' in found
+
 
 class TestWhenThereIsTooMuchToShow:
     def test_the_exceptions_beyond_the_limit_are_counted(self):
