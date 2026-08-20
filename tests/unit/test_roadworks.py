@@ -18,6 +18,7 @@ from OpenGLContext.scenegraph.roadworks import (
     tunnel_lamps,
     TunnelProfile,
     bridge_meshes,
+    causeway_meshes,
     concrete_material,
     tunnel_meshes,
 )
@@ -223,6 +224,104 @@ class TestATunnel:
     def test_it_carries_a_material(self) -> None:
         for mesh in tunnel_meshes(_straight(height=0.0), ROAD).values():
             assert mesh.material is not None
+
+
+class TestTheseSurfacesFaceOutwards:
+    """A structure is seen from outside it, so its faces have to point that way.
+
+    A face wound the wrong way round is given a normal pointing into the solid,
+    and a renderer then lights it from behind: the surface comes out unlit
+    whatever the sun is doing. On a causeway that is the whole flank of the
+    crossing -- a black band lying along the horizon for as long as the
+    crossing lasts -- and on a viaduct it is the parapet a driver spends the
+    span looking over.
+    """
+
+    def _enclosed(self, mesh, keep=None):
+        """The volume the triangles enclose, signed by which way they face.
+
+        The divergence theorem over the surface: positive when the faces are
+        wound so their normals point out of the solid, negative when the solid
+        is inside out. It needs no opinion about which way any particular face
+        ought to point, which is what makes it the honest question -- the inner
+        face of a wall points at the road, and that is not the fault being
+        looked for.
+
+        ``keep`` picks out one part of a mesh carrying several -- the two sides
+        of a road are built by mirroring one section, which reverses it, so a
+        part can be right down one side and inside out down the other and come
+        to nothing at all averaged over both.
+        """
+        points = np.asarray(mesh.positions, dtype='d')
+        triangles = np.asarray(mesh.indices, dtype=np.int64).reshape(-1, 3)
+        if keep is not None:
+            triangles = triangles[keep(points[triangles].mean(axis=1))]
+        origin = points[triangles].reshape(-1, 3).mean(axis=0)
+        a, b, c = (points[triangles[:, 0]] - origin,
+                   points[triangles[:, 1]] - origin,
+                   points[triangles[:, 2]] - origin)
+        return float(np.einsum('ij,ij->i', a, np.cross(b, c)).sum() / 6.0)
+
+    def _both_sides(self, mesh):
+        return [self._enclosed(mesh, keep=lambda mid: mid[:, 2] < 0.0),
+                self._enclosed(mesh, keep=lambda mid: mid[:, 2] > 0.0)]
+
+    def test_a_causeway_s_wall_faces_out_on_both_sides(self) -> None:
+        parts = causeway_meshes(_straight(height=4.0), ROAD, _valley)
+        for side in self._both_sides(parts['wall']):
+            assert side > 0.0, side
+
+    def test_and_so_does_the_fill_it_stands_on(self) -> None:
+        parts = causeway_meshes(_straight(height=4.0), ROAD, _valley)
+        assert self._enclosed(parts['body']) > 0.0
+
+    def test_a_deck_faces_out_on_both_sides(self) -> None:
+        parts = bridge_meshes(_straight(), ROAD, _valley)
+        assert self._enclosed(parts['deck']) > 0.0
+
+    def test_and_so_does_the_parapet_along_it(self) -> None:
+        parts = bridge_meshes(_straight(), ROAD, _valley)
+        for side in self._both_sides(parts['parapet']):
+            assert side > 0.0, side
+
+    def test_and_the_railing_standing_on_it(self) -> None:
+        parts = bridge_meshes(_straight(), ROAD, _valley,
+                              BridgeProfile(parapet=BarrierProfile(rails=2)))
+        for side in self._both_sides(parts['parapet']):
+            assert side > 0.0, side
+
+    def test_and_the_piers_holding_it_up(self) -> None:
+        parts = bridge_meshes(_straight(), ROAD, _valley)
+        assert self._enclosed(parts['piers']) > 0.0
+
+
+class TestWhatACausewayIsBuiltOf:
+    """A causeway's wall is concrete, like the fill it stands on.
+
+    The barrier material is for a *railing* -- galvanised steel and traffic
+    stain, dark because it is the thing closest to the camera for the whole
+    length of a viaduct and structural concrete there comes out white. A
+    causeway has no railing: what stands on its edge is a low solid wall, and
+    at a tenth albedo its outer face is lit by nothing but sky whichever way
+    the sun is. From the driver's seat, on both sides at once, that is a black
+    line lying along the horizon for as long as the crossing lasts.
+    """
+
+    def test_the_wall_is_the_structure_rather_than_a_barrier(self) -> None:
+        concrete = concrete_material()
+        parts = causeway_meshes(_straight(height=4.0), ROAD, _valley,
+                                material=concrete)
+        assert parts['wall'].material is concrete
+
+    def test_and_the_same_stuff_as_the_fill_under_it(self) -> None:
+        parts = causeway_meshes(_straight(height=4.0), ROAD, _valley)
+        assert np.allclose(parts['wall'].material.baseColor,
+                           parts['body'].material.baseColor)
+
+    def test_a_deck_s_parapet_is_still_a_barrier(self) -> None:
+        parts = bridge_meshes(_straight(), ROAD, _valley)
+        assert not np.allclose(parts['parapet'].material.baseColor,
+                               parts['deck'].material.baseColor)
 
 
 class TestTheMaterial:

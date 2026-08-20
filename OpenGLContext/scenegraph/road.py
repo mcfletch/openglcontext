@@ -127,6 +127,32 @@ class RoadProfile:
         return replace(self, verge_drop=0.0,
                        verge_width=(EDGE_BEAM if self.verge_width > 0 else 0.0))
 
+    def section_offset(self, across: Any) -> np.ndarray:
+        """How far below the crown the road's surface is, that far out.
+
+        ``across`` is one distance from the centreline or an array of them, in
+        metres, either side -- the section is symmetrical, so the sign does not
+        matter. The answer is at or below zero, since the crown is the highest
+        point of the road.
+
+        Beyond the road's own edge it is held at the verge's value: past there
+        the surface is the ground rather than the road, and what the road can
+        say is the height the ground has to arrive at for the two to meet.
+
+        This is what puts anything *on* the road at the height the road
+        actually is -- a vehicle placed by how far along and how far across it
+        is, a marker, a sign's foot -- without asking the physics what is under
+        it, which answers about whatever else happens to be standing there.
+        """
+        section = self.section()
+        lateral, vertical = section[:, 0], section[:, 1]
+        half = float(lateral.max())
+        keep = lateral >= 0
+        found: np.ndarray = np.interp(
+            np.minimum(np.abs(np.asarray(across, dtype='d')), half),
+            lateral[keep], vertical[keep])
+        return found
+
     def section_u(self) -> np.ndarray:
         """The texture coordinate across the section, 0 at the left verge to 1.
 

@@ -65,6 +65,12 @@ you give are the points swept.</p>
 <p><code>carriageway_width</code> and <code>total_width</code> report what those
 add up to. <code>texture_length</code> is what sets the length of the centre-line
 dashes, since the dashes are in the texture.</p>
+<p><code>section_offset(across)</code> answers how far below the crown the
+surface is at a distance out, one value or a whole array of them, held at the
+verge's value past the road's own edge. It is what puts anything placed by how
+far along the road it is and how far across — a vehicle, a marker, a sign's foot
+— at the height the road actually is there, without asking the physics what is
+underneath it and being told about whatever else is standing in the way.</p>
 
 <h3 id="route">The plan: where a road can go at all</h3>
 <p>A line drawn across a landscape without regard for it climbs and drops
@@ -133,8 +139,20 @@ which shows as the ground flickering through the tarmac.</p>
 tall already needs fill growing as the square of its height, and a cutting
 eighteen metres deep has to put its spoil somewhere and hold its faces; past
 those the road is <strong>carried</strong> instead — a deck on piers over the low
-ground, a bore through the high ground — and the terrain beneath or above is left
-exactly as it was found.</p>
+ground, a bore through the high ground. Under a deck the land is left exactly as
+it was found: filling a valley in would put the structure inside a hill of its
+own making. Through a bore the opposite holds and the cutting <em>runs the
+length of the tunnel</em>, because a ground mesh draws straight lines between
+its samples: a cut that stops at the portal leaves the line from the last cut
+sample up to the untouched hill standing across the opening, and the road
+arrives at a bank with the arch in the air behind it. The cost is that the hill
+over a long bore opens into a broad cutting; what would keep it whole is a hole
+in the ground mesh with the bore's own outside plugging it.</p>
+<p>A <strong>portal opens where the bore fits inside the hill</strong>, which is
+measured to the <em>crown</em> and not to the carriageway: a bore's arch stands
+seven or eight metres over the road, so a portal placed where there are two
+metres of soil over the tarmac is one whose mouth is buried. The stretch between
+there and the surface is an ordinary cutting.</p>
 <p>Which is which is chosen from the finished alignment against the undisturbed
 land, by
 <code>OpenGLContext_editor.world.structures.choose_structures</code>. It returns
@@ -148,8 +166,9 @@ for run in choose_structures(alignment, natural_ground, closed=True):
 <p>A departure has to <em>last</em> as well as be large: sixty metres for a
 tunnel, forty for a span, or it is dug out or filled instead. Each structure then
 reaches out down its approaches — up to a hundred and twenty metres — until the
-road is within an abutment's height of the ground, so a deck lands on something
-and a bore opens at a portal rather than either stopping in the air. A designer
+road is within an abutment's height of the ground, or the cover over it has
+fallen to <code>PORTAL_COVER</code>, so a deck lands on something and a bore
+opens at a portal rather than either stopping in the air. A designer
 overrides any stretch with an <code>overrides</code> triple.</p>
 <p>A <strong>causeway</strong> is the middle case: a few metres over low ground
 — a lake margin, a shallow draw — where a deck is more structure than the
@@ -226,11 +245,22 @@ the fittings are, and a game spends its few real lights on the ones the driver i
 among. <code>lamp_glow</code> is how far the baked pool lifts the lining out of
 the gloom and <code>lamp_reach</code> how far it spreads; <code>lamp_spacing</code>
 of zero is an unlit bore.</p>
-<p>Structure is <code>concrete_material()</code>; a parapet or a causeway's wall
-is <code>barrier_material()</code>, which is darker. It is the thing closest to
-the camera for the whole length of a crossing, and in structural concrete under a
-strong sun it comes out white — the most conspicuous object in the
-scene.</p>
+<p>Structure is <code>concrete_material()</code>, and a causeway's wall is the
+same stuff as the fill it stands on. A deck's <em>railing</em> is
+<code>barrier_material()</code>, which is darker: it is the thing closest to the
+camera for the whole length of a span, and in structural concrete under a strong
+sun it comes out white &mdash; the most conspicuous object in the scene. That
+darkness is wrong on a solid wall, where the outer face has nothing but sky to
+light it whichever way the sun is.</p>
+<p><strong>Every one of these surfaces is seen from outside it</strong>, and is
+wound so its faces point that way — a section written in whichever order reads
+best, and mirrored to build the other side of the road, still comes out facing
+the way it is meant to. Wound the other way a face is given a normal pointing
+into the solid and a renderer lights it from behind, so it draws unlit whatever
+the sun is doing; on a causeway that is the flank of the crossing, a black band
+lying along the horizon for as long as the crossing lasts. The one surface that
+faces the other way is the lining of a bore, which is only ever seen from the
+carriageway running through it.</p>
 <p>Over a structure the carriageway takes the road's <strong>on-structure
 cut</strong>: the verge neither falls nor stays. There is no ground beside a deck
 for it to fall to, and a strip of grass inside a bore is grass inside a bore, so

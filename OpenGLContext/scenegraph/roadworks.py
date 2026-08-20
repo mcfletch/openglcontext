@@ -57,6 +57,12 @@ BARRIER_ROUGHNESS = 0.6
 
 HeightFn = Callable[[Any, Any], Any]
 
+#: Which side of a swept surface is the one that gets looked at. A wall, a deck
+#: and a pier are seen from outside; the lining of a bore is seen from the road
+#: running through it and from nowhere else.
+OUTWARD = 'outward'
+INWARD = 'inward'
+
 
 @dataclass
 class BarrierProfile:
@@ -294,7 +300,6 @@ def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
                     ground: Optional[HeightFn] = None,
                     causeway: Optional[CausewayProfile] = None,
                     material: Optional[PBRMaterial] = None,
-                    barrier: Optional[PBRMaterial] = None,
                     ) -> Dict[str, PBRMesh]:
     """The fill under a causeway and the low wall along each edge.
 
@@ -307,13 +312,19 @@ def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
     so the verge does not hang over the edge -- leaning out by the profile's
     batter as it goes down. It is open at the top, where the carriageway
     closes it.
+
+    **The wall is the same stuff as the fill it stands on**, and takes
+    ``material`` with it. It is a low solid wall rather than a railing, so
+    :func:`barrier_material` -- which is dark, because a viaduct's parapet is
+    the thing closest to the camera for a whole span and structural concrete
+    there comes out white -- is the wrong thing on it: at a tenth albedo its
+    outer face is lit by nothing but sky whichever way the sun is, and from the
+    driver's seat, on both sides at once, that is a black line lying along the
+    horizon for as long as the crossing lasts.
     """
     line = _line(points, "a causeway")
     profile = profile or RoadProfile()
     causeway = causeway or CausewayProfile()
-    rail_material = (barrier if barrier is not None
-                     else material if material is not None
-                     else barrier_material())
     material = material if material is not None else concrete_material()
     right, up = sweep_frames(line)
     carried = profile.on_structure()
@@ -321,7 +332,7 @@ def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
     edge = float(carried.section()[0, 1])
 
     parts: Dict[str, PBRMesh] = {
-        'wall': _parapet(line, right, up, rail_material, half, edge,
+        'wall': _parapet(line, right, up, material, half, edge,
                          causeway.wall_height, causeway.wall_width)}
     if ground is not None:
         parts['body'] = _fill(line, right, up, ground, causeway, half, edge,
@@ -354,9 +365,7 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
                   tunnel.clearance + tunnel.portal_border, tunnel.segments,
                   foot=tunnel.springing + tunnel.portal_border,
                   floor=tunnel.floor)
-    # Reversed, so the sweep's triangles wind the other way and the lining is
-    # lit and drawn from the carriageway side.
-    bore = _swept(line, right, up, material, list(reversed(arch)),
+    bore = _swept(line, right, up, material, arch, facing=INWARD,
                   shade=bore_shade(line, tunnel))
     portals = _merge([_ring(line[at], right[at], up[at], arch, outer, material,
                             outwards=facing)
@@ -601,6 +610,11 @@ def _fill(line: np.ndarray, right: np.ndarray, up: np.ndarray,
         _strip(len(line), 4),
         _cap(np.arange(4), flip=True),
         _cap(np.arange(4) + (len(line) - 1) * 4, flip=False)])
+    # The section runs left top, left foot, right foot, right top, which turns
+    # the same way :func:`_swept` has to correct for: wound as written, the
+    # flanks of the fill face into it and a renderer lights them from behind.
+    indices = _wound(indices, _turns_left(
+        np.stack([lateral[0], vertical[0]], axis=-1)))
     return _mesh(positions, indices, material)
 
 
@@ -614,11 +628,21 @@ def _line(points: Any, what: str) -> np.ndarray:
 def _swept(line: np.ndarray, right: np.ndarray, up: np.ndarray,
            material: PBRMaterial, section: Any,
            closed_ends: bool = False,
-           shade: Optional[np.ndarray] = None) -> PBRMesh:
+           shade: Optional[np.ndarray] = None,
+           facing: str = OUTWARD) -> PBRMesh:
     """Sweep a (K,2) lateral/vertical section along a framed centreline.
 
     ``shade`` is an optional per-point brightness the whole ring takes, which is
     how a bore carries its own darkness.
+
+    ``facing`` is which side of the surface is the one that will be looked at:
+    :data:`OUTWARD` for a wall, a deck or a pier, :data:`INWARD` for the lining
+    of a bore, which is only ever seen from the carriageway running through it.
+    The triangles are wound to suit, so a section written in whichever order
+    reads best -- and mirrored to build the other side of the road, which
+    reverses it -- still comes out facing the way it is meant to. Wound the
+    other way it is given normals pointing into the solid and a renderer lights
+    it from behind, so the surface is unlit whatever the sun is doing.
     """
     section = np.asarray(section, dtype='d').reshape(-1, 2)
     ring = len(section)
@@ -632,11 +656,32 @@ def _swept(line: np.ndarray, right: np.ndarray, up: np.ndarray,
             indices,
             _cap(np.arange(ring), flip=True),
             _cap(np.arange(ring) + (len(line) - 1) * ring, flip=False)])
+    indices = _wound(indices, _turns_left(section) == (facing == OUTWARD))
     colors = None
     if shade is not None:
         colors = np.ones((len(line) * ring, 4), dtype='f')
         colors[:, :3] = np.repeat(shade, ring)[:, None]
     return _mesh(positions, indices, material, colors=colors)
+
+
+def _turns_left(section: np.ndarray) -> bool:
+    """Whether a section is written anticlockwise in its own plane.
+
+    The shoelace area of the section, closed back to its first point. A sweep's
+    faces come out pointing away from the solid when the section runs the other
+    way, which is what :func:`_swept` uses this to settle.
+    """
+    lateral, vertical = section[:, 0], section[:, 1]
+    return bool(float(np.dot(lateral, np.roll(vertical, -1))
+                      - np.dot(vertical, np.roll(lateral, -1))) > 0.0)
+
+
+def _wound(indices: np.ndarray, other_way: bool) -> np.ndarray:
+    """The same triangles, wound the other way round when asked."""
+    if not other_way:
+        return indices
+    found: np.ndarray = indices.reshape(-1, 3)[:, ::-1].ravel()
+    return found
 
 
 def _strip(rows: int, ring: int) -> np.ndarray:
