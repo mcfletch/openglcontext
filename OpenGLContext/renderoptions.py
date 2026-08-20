@@ -66,6 +66,12 @@ ENVIRONMENT: Tuple[str, ...] = (
     # reference for whatever the parent happened to be carrying. A capture
     # that wants a fixed sequence pins it. See OpenGLContext.entropy.
     'OPENGLCONTEXT_SEED',
+    # Both of these decide where the camera ends up.  Physics drops the avatar
+    # under gravity and collides it with the scene; the framing yaw turns the
+    # model on the turntable a model with no camera of its own is framed
+    # against.  A reference image rendered with either inherited is a
+    # reference for whatever the parent process happened to be carrying.
+    'OPENGLCONTEXT_PHYSICS', 'OPENGLCONTEXT_VIEW_YAW',
 )
 
 #: The two of those that say **how a render is presented** rather than what it

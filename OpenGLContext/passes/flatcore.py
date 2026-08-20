@@ -1,18 +1,12 @@
-"""Flat rendering mechanism using structural scenegraph observation
+"""The core-profile flat pass: the VRML97 lighting model in GLSL
 
-Core-profile compatible flat rendering pass. This module inherits from
-_flat.FlatPass which now supports both legacy fixed-function and
-shader-based rendering paths.
-
-Set use_shaders=True on FlatPass instances to enable core-profile
-compatible shader-based rendering using the VRML97 lighting model.
-
-Example usage:
-    from OpenGLContext.passes import flatcore
-
-    # Create the render pass with shaders enabled
-    render_pass = flatcore.FlatPass(scene, contexts)
-    render_pass.use_shaders = True  # Enable shader-based rendering
+Draws through :class:`~OpenGLContext.passes.shaderpass.VRML97ShaderProgram`
+rather than the fixed-function pipeline, so it runs on an OpenGL 3.3+ core
+context.  ``use_shaders`` is already true here; the compatibility-profile pass
+is :mod:`OpenGLContext.passes.flatcompat`, and
+:mod:`OpenGLContext.passes.renderpass` picks between them from the context's
+profile and renderer.  Shadow mapping comes from
+:class:`~OpenGLContext.passes.shadowmixin.ShadowMapMixin`.
 """
 import os
 from typing import Optional

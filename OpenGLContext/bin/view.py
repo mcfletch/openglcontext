@@ -197,7 +197,7 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
                         help='pin the animation to this time (deterministic capture)')
     parser.add_argument('--yaw', type=float,
                         help='initial model yaw (radians) when auto-framing '
-                             '(default -0.62, or the YAW env var)')
+                             '(default -0.62, or $OPENGLCONTEXT_VIEW_YAW)')
     parser.add_argument('--margin', type=float, metavar='FACTOR',
                         help='auto-frame fit factor (default 1.15); below 1 pulls '
                              'the camera in so the model fills more of the frame')

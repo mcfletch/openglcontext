@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Environment Variables in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Environment Variables</h1>
+</header>
+<section>
+
+<p class="introduction">Every switchable rendering feature is a field on the
+<code>ContextDefinition</code>, and the environment variable is that field's
+<strong>default</strong>. So a shell variable pins a feature for a script or a
+CI run, a settings screen can still show the same feature and change it while
+the program runs, and the two never disagree about what the default was. The
+reader is <code>OpenGLContext.renderoptions</code>; a pass asks through it
+rather than reading the environment itself.</p>
+
+<h2>How values are read</h2>
+
+<p><strong>Yes and no.</strong> A boolean accepts <code>1</code>,
+<code>on</code>, <code>true</code>, <code>yes</code> for true and
+<code>0</code>, <code>off</code>, <code>false</code>, <code>no</code>,
+<code>none</code> for false, in any capitalisation. A value that is neither is
+<strong>ignored with a warning</strong> and the default stands, rather than
+being treated as true: these variables are how a feature is pinned for a run,
+and a typo that silently reversed the pin would make the result of that run a
+lie. An unparseable number is reported the same way.</p>
+
+<p><strong><code>auto</code>.</strong> The three-valued options mean "the
+engine decides". Image-based lighting and transmission both degrade themselves
+on a software rasteriser, and a setting that forced a choice would take that
+away.</p>
+
+<p><strong>Read once.</strong> These are start-up switches, read the first time
+they are needed and then remembered. A pass that changed its mind mid-session
+because something else edited <code>os.environ</code> would be unpredictable.
+The <code>ContextDefinition</code> field is the thing meant to change while the
+program runs, and it outranks whatever the variable settled.</p>
+
+<p><strong>Rendering something reproducible?</strong> Use
+<code>renderoptions.clean_environment()</code> to build the environment for the
+subprocess. It drops every variable in the table below except the two marked
+<em>presentation</em>, so a reference image cannot depend on what the parent
+process happened to be carrying, and lets you pin exactly what the render
+needs.</p>
+
+<h2>Choosing the renderer</h2>
+
+<table>
+<tr><th>Variable</th><th>Values</th><th>Default</th><th>What it does</th></tr>
+<tr><td><code>OPENGLCONTEXT_PROFILE</code></td><td><code>core</code>,
+  <code>compatibility</code></td><td><code>compatibility</code></td>
+  <td>Which OpenGL profile the context asks for. <code>core</code> uses GLSL
+  throughout; see <a href="renderpasses.html">Core-profile rendering</a>.</td></tr>
+<tr><td><code>OPENGLCONTEXT_BACKEND</code></td><td><code>glfw</code>,
+  <code>glut</code>, <code>pygame</code>, <code>wx</code>, <code>qt</code></td>
+  <td>chosen by availability</td>
+  <td>Which GUI toolkit owns the window. <code>qt</code> needs the separate
+  <code>OpenGLContext-qt</code> distribution installed.</td></tr>
+<tr><td><code>OPENGLCONTEXT_RENDERER</code></td><td><code>pbr</code></td>
+  <td>unset</td>
+  <td><code>pbr</code> selects the metallic/roughness renderer. See
+  <a href="pbr.html">PBR</a>.</td></tr>
+</table>
+
+<h2>Lighting and shadows</h2>
+
+<table>
+<tr><th>Variable</th><th>Values</th><th>Default</th><th>What it does</th></tr>
+<tr><td><code>OPENGLCONTEXT_SHADOWS</code></td><td>yes/no</td><td>on</td>
+  <td>Dynamic shadow mapping. See <a href="shadows.html">Shadows</a>.</td></tr>
+<tr><td><code>OPENGLCONTEXT_SHADOWS_SOFT</code></td><td>yes/no</td><td>off</td>
+  <td>Percentage-closer filtering on the shadow lookup: softer edges, more
+  samples per fragment.</td></tr>
+<tr><td><code>OPENGLCONTEXT_SHADOW_CASCADES</code></td><td>integer 0&ndash;4</td>
+  <td><code>0</code></td>
+  <td>Cascades for a directional light; more is crisper at distance.
+  <code>0</code> lets the pass choose from VRAM and frame rate, so pin a fixed
+  value when shadow output has to be reproducible.</td></tr>
+<tr><td><code>OPENGLCONTEXT_MAXIMUM_LIGHTS</code></td><td>integer 0&ndash;8</td>
+  <td><code>8</code></td>
+  <td>Lights the shader binds in one frame. Lower is faster in a scene with
+  many lights; the shader's own ceiling still applies.</td></tr>
+<tr><td><code>OPENGLCONTEXT_IBL</code></td><td><code>auto</code>,
+  <code>full</code>, <code>analytic</code>, <code>off</code></td>
+  <td><code>auto</code></td>
+  <td>Image-based lighting. <code>full</code> is the precomputed
+  irradiance/prefilter/BRDF-LUT probe, <code>analytic</code> the cheaper sky
+  approximation.</td></tr>
+<tr><td><code>OPENGLCONTEXT_IBL_INTENSITY</code></td><td>number</td>
+  <td><code>1.0</code></td>
+  <td>Scale on the ambient contribution from the environment.</td></tr>
+<tr><td><code>OPENGLCONTEXT_ENV_HDR</code></td><td>path or URL</td><td>unset</td>
+  <td>An equirectangular Radiance <code>.hdr</code> to light and reflect from,
+  and to draw as the skybox. Takes precedence over the cubemap.</td></tr>
+<tr><td><code>OPENGLCONTEXT_ENV_CUBEMAP</code></td><td>face-name prefix</td>
+  <td>unset</td>
+  <td>Six cubemap faces, named by a common prefix &mdash; for example
+  <code>/path/pimbackground_</code> for the <code>_UP</code>/<code>_DN</code>
+  face set. Used when no HDR is given.</td></tr>
+<tr><td><code>OPENGLCONTEXT_BLOOM</code></td><td>yes/no</td><td>off</td>
+  <td>The bright-pass bloom composite.</td></tr>
+<tr><td><code>OPENGLCONTEXT_TRANSMISSION</code></td><td><code>auto</code>,
+  <code>full</code>, <code>blend</code>, <code>off</code></td>
+  <td><code>auto</code></td>
+  <td>Glass (<code>KHR_materials_transmission</code>). <code>full</code>
+  captures the backdrop and refracts it; <code>blend</code> is the cheap
+  alpha-blended stand-in.</td></tr>
+</table>
+
+<h2>How much work per frame</h2>
+
+<table>
+<tr><th>Variable</th><th>Values</th><th>Default</th><th>What it does</th></tr>
+<tr><td><code>OPENGLCONTEXT_INSTANCING</code></td><td>yes/no</td><td>on</td>
+  <td>Collapse repeated shapes into one instanced draw. See
+  <a href="instancing.html">Instanced geometry</a>.</td></tr>
+<tr><td><code>OPENGLCONTEXT_INSTANCE_MIN</code></td><td>integer</td>
+  <td><code>4</code></td>
+  <td>How many copies of a shape it takes before the pass batches them rather
+  than drawing each.</td></tr>
+<tr><td><code>OPENGLCONTEXT_INSTANCE_COLLAPSE</code></td><td>yes/no</td>
+  <td>on</td>
+  <td>Whether shapes sharing a geometry and a compatible appearance are
+  gathered into one group.</td></tr>
+<tr><td><code>OPENGLCONTEXT_INSTANCE_CLUSTER_CULL</code></td><td>yes/no</td>
+  <td>off</td>
+  <td>Cull a whole instance group by its combined bounds before testing the
+  members individually.</td></tr>
+<tr><td><code>OPENGLCONTEXT_LOD</code></td><td>yes/no</td><td>on</td>
+  <td>Distance level of detail: <code>LOD</code> nodes, vegetation and
+  character meshes all pick a cheaper form with range.</td></tr>
+<tr><td><code>OPENGLCONTEXT_GPU_SKINNING</code></td><td>yes/no</td><td>on</td>
+  <td>Skin a rigged mesh in the vertex shader rather than on the CPU.</td></tr>
+<tr><td><code>OPENGLCONTEXT_GPU_SKELETON</code></td><td>yes/no</td><td>on</td>
+  <td>Evaluate the pose itself on the card, so a crowd costs one upload.</td></tr>
+<tr><td><code>OPENGLCONTEXT_GPU_BLEND</code></td><td>yes/no</td><td>on</td>
+  <td>Blend between animation clips on the card.</td></tr>
+<tr><td><code>OPENGLCONTEXT_PICKING</code></td><td>yes/no</td><td>on</td>
+  <td>Object-id picking. Off, the selection pass, its object-id buffer and its
+  readback are all skipped &mdash; worth it for a program that never picks.</td></tr>
+<tr><td><code>OPENGLCONTEXT_PHYSICS</code></td><td>yes/no</td><td>off</td>
+  <td>Whether the viewer walks the scene with gravity and collision rather
+  than framing it. See <a href="physics.html">Physics</a>.</td></tr>
+</table>
+
+<h2>The window, capture and the interface</h2>
+
+<table>
+<tr><th>Variable</th><th>Values</th><th>Default</th><th>What it does</th></tr>
+<tr><td><code>OPENGLCONTEXT_HIDDEN</code></td><td>yes/no</td><td>off</td>
+  <td><em>Presentation.</em> Render without mapping a window. A hidden window
+  renders and reads back identically, so a suite of several hundred GL tests
+  costs nobody their desktop. Not supported by the Qt backend.</td></tr>
+<tr><td><code>OPENGLCONTEXT_NO_VSYNC</code></td><td>yes/no</td><td>off</td>
+  <td><em>Presentation.</em> Do not wait for the compositor on swap.</td></tr>
+<tr><td><code>OPENGLCONTEXT_UI_SCALE</code></td><td>number</td>
+  <td><code>1.0</code></td>
+  <td>Multiplier on the overlay interface's size. The window height already
+  picks the font size, so this is a preference on top of that. See
+  <a href="overlayui.html">Overlay UI</a>.</td></tr>
+<tr><td><code>OPENGLCONTEXT_DISABLE_FPS_DISPLAY</code></td><td>yes/no</td>
+  <td>off</td><td>Suppress the frame-rate readout, which otherwise differs
+  between two runs of the same capture.</td></tr>
+<tr><td><code>OPENGLCONTEXT_VIEW_YAW</code></td><td>number, radians</td>
+  <td><code>-0.62</code></td>
+  <td>The angle a model with no camera of its own is turned to when it is
+  framed &mdash; the three-quarter view.</td></tr>
+<tr><td><code>OPENGLCONTEXT_AUTO_EXIT_FRAMES</code></td><td>integer</td>
+  <td>unset</td>
+  <td>Quit after this many frames. With the capture settings below, this is
+  how a screenshot is taken without a person present.</td></tr>
+<tr><td><code>OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR</code></td><td>path</td>
+  <td>unset</td><td>Where the automatic capture is written.</td></tr>
+<tr><td><code>OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME</code></td><td>filename</td>
+  <td>the script's name</td><td>What the automatic capture is called.</td></tr>
+<tr><td><code>OPENGLCONTEXT_CAPTURE_DELAY</code></td><td>seconds</td>
+  <td><code>0.5</code></td>
+  <td>How long the comparison harness lets a scene settle before reading the
+  framebuffer.</td></tr>
+<tr><td><code>OPENGLCONTEXT_GLTF_BASELINE</code></td><td>path</td>
+  <td>the sibling <code>reference-images</code></td>
+  <td>Where <code>oglc-gltf-regression</code> finds the images it diffs
+  against.</td></tr>
+</table>
+
+<h2>Recording a session, and making one repeatable</h2>
+
+<table>
+<tr><th>Variable</th><th>Values</th><th>Default</th><th>What it does</th></tr>
+<tr><td><code>OPENGLCONTEXT_TELEMETRY</code></td><td>path, or <code>1</code></td>
+  <td>unset</td>
+  <td>Record the whole session to that JSON-lines file: every input stamped
+  with the frame that acted on it, every frame's time and phase breakdown,
+  every exception with its traceback, and the developer overlay's own sections
+  sampled as it ran. <code>1</code> writes a dated file under the user's
+  app-data directory. Read it back with
+  <code>python -m OpenGLContext.telemetry &lt;file&gt;</code>. See
+  <a href="telemetry.html">Session telemetry</a>.</td></tr>
+<tr><td><code>OPENGLCONTEXT_TELEMETRY_REPLAY</code></td><td>path</td>
+  <td>unset</td>
+  <td>Run a recorded session again: the same keys and clicks in the same places
+  on the same frames, with the engine's clock driven from the recorded frame
+  times.</td></tr>
+<tr><td><code>OPENGLCONTEXT_TELEMETRY_MAX_MB</code></td><td>number</td>
+  <td><code>128</code></td>
+  <td>Cap on the journal. Past it, exceptions and marks still get through.</td></tr>
+<tr><td><code>OPENGLCONTEXT_SEED</code></td><td>integer</td><td>unset</td>
+  <td>Fix the session's randomness. <code>OpenGLContext.entropy</code> owns one
+  seed per session and seeds the ordinary <code>random</code> and
+  <code>numpy.random</code> generators from it, so a scene that scatters
+  vegetation or throws sparks renders the same way twice. It has to be in force
+  before the first generator is drawn from.</td></tr>
+</table>
+
+<h2>Sound and diagnostics</h2>
+
+<p>These are the exceptions to the rule above: they are not about what a frame
+looks like, so <code>clean_environment()</code> passes them through to a
+subprocess rather than dropping them. A diagnostic a subprocess silently
+dropped would be no diagnostic at all.</p>
+
+<table>
+<tr><th>Variable</th><th>Values</th><th>Default</th><th>What it does</th></tr>
+<tr><td><code>OPENGLCONTEXT_AUDIO</code></td><td>yes/no</td><td>on</td>
+  <td>Whether the audio engine mixes at all. See
+  <a href="audio.html">Spatial audio</a>.</td></tr>
+<tr><td><code>OPENGLCONTEXT_AUDIO_VOLUME</code></td><td>number</td>
+  <td><code>1.0</code></td><td>Master gain.</td></tr>
+<tr><td><code>OPENGLCONTEXT_STALL_MS</code></td><td>milliseconds</td>
+  <td>unset</td>
+  <td>A frame longer than this is logged as a stall. See
+  <a href="hud.html">the developer overlay</a>.</td></tr>
+<tr><td><code>OPENGLCONTEXT_TRACE_STALLS</code></td><td>yes/no</td><td>off</td>
+  <td>Log where the time in a stalled frame went.</td></tr>
+<tr><td><code>OPENGLCONTEXT_STALL_TRACE</code></td><td>yes/no</td><td>off</td>
+  <td>Sample stacks during the frame loop, so a stall names the code it was
+  in.</td></tr>
+<tr><td><code>OPENGLCONTEXT_DEBUG_WHEEL</code></td><td>yes/no</td><td>off</td>
+  <td>Log each scroll notch as the GLFW backend translates it.</td></tr>
+</table>
+
+<h2>Not ours</h2>
+
+<p><code>PYOPENGL_PLATFORM</code> belongs to PyOpenGL and selects the GL
+platform binding. It matters here in one case: wxPython on GTK3 creates its
+context through EGL, so core-profile rendering under wx wants
+<code>PYOPENGL_PLATFORM=egl</code>. The <code>wxcontext</code> module sets it
+when it can, which it cannot if OpenGL was imported first. See
+<a href="structure.html">the structural overview</a>.</p>
+
+</section>
+
+<footer>
+<p>See also: <a href="structure.html">Structural overview</a> for how a context
+and its definition fit together, <a href="overlayui.html">Overlay UI</a> for
+the settings screen these same fields generate, and
+<a href="renderpasses.html">Rendering passes</a> for what the rendering
+switches act on.</p>
+</footer>
+</body>
+</html>

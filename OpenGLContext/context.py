@@ -104,7 +104,7 @@ class Context(ScreenMixin, ContextConfigMixin):
 
     Attributes:
 
-        sg -- OpenGLContext.basenodes.sceneGraph; the root of the
+        sg -- OpenGLContext.scenegraph.basenodes.sceneGraph; the root of the
             node-rendering tree.  If not NULL, is used to control
             most aspects of the rendering process.
             See: getSceneGraph
@@ -746,7 +746,7 @@ class Context(ScreenMixin, ContextConfigMixin):
         """Customisation point for initialising event manager objects
 
         See:
-            OpenGLContext.eventhandlermixin.EventHandlerMixin
+            OpenGLContext.events.eventhandlermixin.EventHandlerMixin
         """
 
     def setupRedrawRequest(self):
@@ -1190,12 +1190,12 @@ class Context(ScreenMixin, ContextConfigMixin):
 
             OpenGLContext.scenegraph.scenegraph.SceneGraph
 
-        Normally you would create that using either a loader
-        from OpenGLContext.loader:
+        Normally you would create that with the loader, which reads
+        VRML97, glTF and OBJ from a path or a URL:
 
-            from OpenGLContext.loader import vrml97
+            from OpenGLContext.loaders.loader import Loader
             def OnInit( self ):
-                self.sg = vrml97.load( 'c:\\somefile\\world.wrl' )
+                self.sg = Loader.load( 'world.wrl' )
 
         or by using the classes in OpenGLContext.scenegraph.basenodes:
 

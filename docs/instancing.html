@@ -270,7 +270,7 @@ forest = InstancedShape(
     matrices are eye-space (they fold in the camera), so the buffer is re-uploaded each
     frame even for a static scene; keeping it static would mean uploading model-space
     matrices and doing the view transform in the shader.
-    <code>tests/test_instanced_caching_gl.py</code> counts GPU-object creations per frame
+    <code>tests/unit/test_instanced_caching_gl.py</code> counts GPU-object creations per frame
     and requires zero in steady state.</p>
 
   <h3>Not drawing what is off-screen</h3>
@@ -292,7 +292,7 @@ forest = InstancedShape(
     <code>cluster_cull</code>) and wired into <code>frustumVisibilityFilter</code>. The
     cluster box is padded by the largest member's world radius so it can never reject a
     cluster that has a visible member &mdash; correctness is provably identical to the
-    per-object filter (<code>tests/test_instance_cluster_cull_gl.py</code> checks the drawn
+    per-object filter (<code>tests/unit/test_instance_cluster_cull_gl.py</code> checks the drawn
     set matches exactly). Because per-object culling already gives correctness, this is a
     pure cost optimisation and is <em>opt-in</em>:
     <code>OPENGLCONTEXT_INSTANCE_CLUSTER_CULL=1</code>, active only above 256 objects.</p>

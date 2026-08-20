@@ -1,29 +1,52 @@
-"""Convenience module for working with scenegraph nodes
+"""Every registered scenegraph node class, by name, in one namespace
 
-These are the OpenGLContext implementations of the various
-vrml.vrml97.basenodes nodes (and a few others) which are made
-available for direct, centralized access.  Node classes are registered
-via SetupTools/Package Resources plugin/entry point declarations
-in the setup.py script (or in the setup.py script of another package).
+These are the OpenGLContext implementations of the ``vrml.vrml97.basenodes``
+nodes and a few others, gathered here so that a caller reaches any of them
+without knowing which module it lives in::
 
-You can create a new Node-type by registering the class via setuptools
+    from OpenGLContext.scenegraph import basenodes
 
-    entry_points = {
-        'OpenGLContext.scenegraph.nodes': [
-            'NodeName = full.path.to.the.Class',
-        ],
-    }
+    sg = basenodes.sceneGraph( children = [
+        basenodes.Transform( children = [
+            basenodes.Shape(
+                geometry = basenodes.Box( size = (1, 1, 1) ),
+                appearance = basenodes.Appearance(
+                    material = basenodes.Material( diffuseColor = (1, 0, 0) ),
+                ),
+            ),
+        ] ),
+    ] )
 
-and installing the .egg.
+This is also the vocabulary the VRML97 parser resolves node names against, so
+a name registered here can be used in a ``.wrl`` file.
 
-XXX currently there's no way to override a built-in node, that could
-be provided by having e.g. a precedence declaration for the nodes,
-but at the moment that looks too messy to bother with.
+**Adding a node.** Register the class with :class:`OpenGLContext.plugins.Node`
+under the name it should be known by, and import your package before building
+a scenegraph::
+
+    from OpenGLContext.plugins import Node
+
+    Node( 'Wobbler', 'mypackage.nodes.Wobbler' )
+
+The registry is a list in the running process, filled by
+``OpenGLContext/__init__.py`` for the built-in nodes.  What puts a third
+party's node on it is the application importing that package; nothing is
+scanned and nothing is installed.
+
+**Register before this module is first imported.**  The names here are read
+from the registry once, when the module loads, so a class registered
+afterwards is absent until something reloads it.  Importing your package
+early -- before the scenegraph is built -- is all this asks.
+
+Registering a name that is already taken is not a way to replace a built-in
+node: the two lookups disagree about which of the two wins, so which class a
+scenegraph gets depends on how it was reached.  Give a new node a new name.
 """
+
+import logging
 
 __all__ = []
 PROTOTYPES = {}
-import logging
 
 log = logging.getLogger(__name__)
 

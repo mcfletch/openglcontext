@@ -1,4 +1,8 @@
-"""IndexedLineSet VRML97 node implemented using display-lists"""
+"""IndexedLineSet: polylines with per-vertex or per-line colour
+
+Draws through the shader pass under the core profile, and as a display list
+under the compatibility profile.
+"""
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext import displaylist

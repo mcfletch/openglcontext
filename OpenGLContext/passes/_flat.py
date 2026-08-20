@@ -1,8 +1,16 @@
-"""Flat rendering passes (base implementation)
+"""What every flat pass does, whichever profile it draws through
 
-This module provides both legacy fixed-function and shader-based rendering.
-Set use_shaders=True on FlatPass instances to enable core-profile compatible
-shader-based rendering using the VRML97 lighting model.
+The flat pass observes the scenegraph's structure and draws it once per frame
+in a fixed sequence -- background, opaque, transmissive, transparent, selection
+and overlay -- rather than traversing it once per rendering mode.  This module
+holds the part that is the same either way: the traversal, the sorting, the
+frustum culling, the pick queue and the matrix stack.
+
+It is a base class and not something to instantiate.  The two concrete passes
+are :mod:`OpenGLContext.passes.flatcore` (GLSL, core profile) and
+:mod:`OpenGLContext.passes.flatcompat` (fixed function, compatibility
+profile), and :mod:`OpenGLContext.passes.renderpass` chooses between them for
+a context and caches the choice across frames.
 """
 from __future__ import annotations
 

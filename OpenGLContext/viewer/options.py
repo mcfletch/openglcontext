@@ -1,7 +1,7 @@
 """Everything a viewer can be told to do, in one object.
 
 :class:`ViewerOptions` is what the viewing component reads.  An application
-constructs one directly; ``oglc-gltf`` has ``argparse`` fill one in, since
+constructs one directly; ``oglc-view`` has ``argparse`` fill one in, since
 ``argparse`` populates any object handed to it as its namespace.  One type
 serves both, so a library caller needs no command line and the two can never
 drift into disagreeing about a default.
@@ -16,28 +16,12 @@ two places is a default that is eventually wrong in one of them.
     class MyViewer(ViewerContext):
         options = ViewerOptions(source='model.glb', physics=True)
 """
-import os
 from dataclasses import dataclass, field, fields
 from typing import Any, Optional, Sequence, Tuple
 
+from OpenGLContext import renderoptions
+
 __all__ = ['ViewerOptions']
-
-
-def _env_flag(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
-    if value is None or value == '':
-        return default
-    return value != '0'
-
-
-def _env_float(name: str, default: float) -> float:
-    value = os.environ.get(name)
-    if value is None or value == '':
-        return default
-    try:
-        return float(value)
-    except ValueError:
-        return default
 
 
 @dataclass
@@ -66,7 +50,8 @@ class ViewerOptions:
 
     # -- auto-framing -----------------------------------------------------
     #: Model yaw when auto-framing, in radians -- the three-quarter angle.
-    yaw: float = field(default_factory=lambda: _env_float('YAW', -0.62))
+    yaw: float = field(default_factory=lambda: renderoptions.env_number(
+        'OPENGLCONTEXT_VIEW_YAW', -0.62))
     #: Fit factor: below 1 pulls the camera in so a wide, flat model whose
     #: bounding sphere overstates its footprint still fills the frame.
     margin: Optional[float] = None
@@ -113,7 +98,8 @@ class ViewerOptions:
     #: or floorless model would otherwise drop the avatar out of the shot,
     #: where a framed view was what was wanted.
     physics: bool = field(
-        default_factory=lambda: _env_flag('OPENGLCONTEXT_PHYSICS'))
+        default_factory=lambda: renderoptions.env_flag(
+            'OPENGLCONTEXT_PHYSICS', False))
 
     # -- streaming sources -------------------------------------------------
     #: Screen-space error target in pixels for a streamed dataset: how wrong a
