@@ -13,14 +13,14 @@ class Direct( movementmanager.MovementManager ):
         (_('Down'), 'down', 'down' ),
         (_('Left'), 'left', 'left' ),
         (_('Right'), 'right', 'right' ),
-        
+
         (_('Turn Up'), 'turnup', 'turnup' ),
         (_('Turn Down'), 'turndown', 'turndown' ),
         (_('Turn Left'), 'turnleft', 'turnleft' ),
         (_('Turn Right'), 'turnright', 'turnright' ),
-        
+
         (_('Straighten'), 'straighten','straighten'),
-        
+
         (_('Faster'), 'faster', 'faster' ),
         (_('Slower'), 'slower','slower' ),
     ]
@@ -141,13 +141,13 @@ class Direct( movementmanager.MovementManager ):
         without altering the y-axis orientation.
 
         See:
-            OpenGLContext.viewplatform.ViewPlatform.straighten
-        
+            OpenGLContext.move.viewplatform.ViewPlatform.straighten
+
         triggers redraw after completion
         """
         self.platform.straighten()
         self.context.triggerRedraw(1)
-        
+
     def faster( self, event ):
         """Increase our walking speed"""
         self.STEPDISTANCE *= 1.5

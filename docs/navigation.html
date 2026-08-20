@@ -266,7 +266,7 @@ walk.bindings = list(walk.bindings) + [
       <td>yes</td></tr>
     <tr><td><code>bin/vrml_view</code></td><td>walk, fly</td>
       <td>declared only; its camera is still the older navigator</td></tr>
-    <tr><td><code>oglc-ui</code> (<code>bin/ui_demo</code>)</td>
+    <tr><td><code>oglc-ui-demo</code> (<code>bin/ui_demo</code>)</td>
       <td>walk, fly, first-person</td>
       <td>declared, so the overlay demo has modes to show</td></tr>
     <tr><td><code>oglc-forest</code> (the forest demo)</td>
@@ -278,7 +278,7 @@ walk.bindings = list(walk.bindings) + [
     <code>OpenGLContext.move.modes.walk_fly_modes(scale=1.0)</code>, which is
     what <code>oglc-view</code> and anything else embedding the
     <a href="gltf.html#embedding">viewing component</a> declare;
-    <code>bin/vrml_view</code> and <code>oglc-ui</code> still declare their own
+    <code>bin/vrml_view</code> and <code>oglc-ui-demo</code> still declare their own
     <code>movement_modes()</code>. The <code>scale</code> parameter exists
     because a viewer frames models from a bolt to a city and one walking speed
     cannot suit both: a walking context passes the same scale it sizes its

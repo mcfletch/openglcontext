@@ -1,4 +1,20 @@
-"""Mobile camera implementation using quaternions"""
+"""The camera as a position and an orientation, and the matrices from them.
+
+A :class:`ViewPlatform` is where the viewer stands and which way they face.  It
+holds a position, an orientation as a quaternion, and the four numbers that
+describe the frustum, and it turns those into the projection and model-view
+matrices a pass renders through.  Orientation is a quaternion rather than
+Euler angles because the platform is composed with and interpolated toward
+other orientations -- following a target, snapping to a viewpoint -- and angles
+gimbal-lock where quaternions do not.
+
+A context reaches one through
+:class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin`, which every
+interactive context mixes in; the movement modes in
+:mod:`OpenGLContext.move.modes` drive it, and the editor views in
+:mod:`OpenGLContext.edit` subclass it to look at a world from overhead or from
+a fixed orbit.
+"""
 
 from math import pi, atan
 from OpenGLContext.arrays import array, negative, radians, dot
@@ -20,21 +36,16 @@ RADTODEG = 180 / pi
 
 
 class ViewPlatform(object):
-    """Mobile Viewing Platform
+    """Where the viewer stands and which way they face
 
-    The ViewPlatform is, loosely speaking, a camera which
-    sets up the projection and model-view matrices for
-    an OpenGLContext scene.
+    The ViewPlatform is the camera: it sets up the projection and model-view
+    matrices for an OpenGLContext scene.
 
-    Most Context's will have an associated ViewPlatform
-    thanks to the ViewPlatformMixIn class, which
-    instantiates the ViewPlatform.  Shadow-rendering
-    Context's will actually use a subclass which
-    generates "infinite" perspective views required by
-    the particular stencil-buffer shadowing algorithm.
-
-    See:
-        OpenGLContext.viewplatformmixin.ViewPlatformMixIn
+    Most contexts have one, built for them by
+    :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin`.  Reach it
+    as ``context.platform``, and move it with the movement modes rather than by
+    writing the fields, so that collision and the world's own constraints still
+    apply.
 
     Attributes:
         frustum -- OpenGL-friendly storage of frustum values,
