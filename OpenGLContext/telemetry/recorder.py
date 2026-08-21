@@ -323,3 +323,31 @@ def _traceback(error: BaseException) -> List[str]:
     formatted = traceback_module.format_exception(
         type(error), error, error.__traceback__)
     return [line for chunk in formatted for line in chunk.rstrip().split('\n')]
+
+
+class NotRecording:
+    """A recorder that keeps nothing, so a caller may mark unconditionally.
+
+    :func:`~OpenGLContext.telemetry.install` answers ``None`` where the
+    environment asked for no file, and a game that has to check for that
+    before every :meth:`SessionRecorder.mark` ends up guarding the calls away
+    -- which are exactly the calls that would have explained the failure
+    nobody could reproduce. Marking somewhere that discards costs a call.
+
+    Falsy, so ``if context.telemetry:`` still distinguishes the two.
+    """
+
+    __slots__ = ()
+
+    def mark(self, name: str, /, **fields: Any) -> None:
+        """Take a mark and keep nothing."""
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return 'NotRecording()'
+
+
+#: The one that is needed, since it holds nothing to tell two of them apart.
+NOT_RECORDING = NotRecording()

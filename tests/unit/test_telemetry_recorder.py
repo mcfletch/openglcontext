@@ -313,3 +313,44 @@ class TestMessagesWithAStack:
                          traceback=['Traceback (most recent call last):',
                                     'ValueError: it went wrong'])
         assert kinds(written, 'log')[0]['traceback'][-1].endswith('it went wrong')
+
+
+class TestMarkingWhenNobodyIsRecording:
+    """A game marks what it does whether or not anyone asked for a file.
+
+    :func:`~OpenGLContext.telemetry.install` answers None when the environment
+    asked for nothing, so a caller that marks unconditionally would have to
+    guard every call -- and the calls that get guarded away are the ones that
+    explain the failure nobody could reproduce.
+    """
+
+    def test_it_takes_a_mark_and_keeps_nothing(self) -> None:
+        from OpenGLContext.telemetry import NOT_RECORDING
+        assert NOT_RECORDING.mark('drive-ended', why='hit a car') is None
+
+    def test_it_says_it_is_not_recording(self) -> None:
+        from OpenGLContext.telemetry import NOT_RECORDING
+        assert not NOT_RECORDING
+
+    def test_and_a_real_recording_says_it_is(self, tmp_path) -> None:
+        from OpenGLContext.telemetry import SessionRecorder
+        assert SessionRecorder(_Written())
+
+    def test_one_stands_in_for_the_other(self) -> None:
+        """Same call, so a caller written for one runs against the other."""
+        from OpenGLContext.telemetry import NOT_RECORDING, SessionRecorder
+        for recorder in (NOT_RECORDING, SessionRecorder(_Written())):
+            recorder.mark('pass-begun', gap=40.0, sight=260.0)
+
+
+class _Written:
+    """A journal that keeps its records in a list."""
+
+    def __init__(self) -> None:
+        self.records: list = []
+
+    def write(self, record) -> None:
+        self.records.append(record)
+
+    def close(self, reason=None) -> None:
+        pass

@@ -73,10 +73,15 @@ from OpenGLContext.telemetry.record import (MAX_MB_ENV, REPLAY_ENV,
                                             ReplaySession, SessionRecording,
                                             TELEMETRY_ENV, Tap, install, start,
                                             start_replay)
-from OpenGLContext.telemetry.recorder import SessionRecorder
+from OpenGLContext.telemetry.recorder import (
+    NOT_RECORDING,
+    NotRecording,
+    SessionRecorder,
+)
 from OpenGLContext.telemetry.replay import Recording, RecordedClock, Replay
 
-__all__ = ['DEFAULT_MAX_BYTES', 'MAX_MB_ENV', 'REPLAY_ENV', 'Recording',
+__all__ = ['DEFAULT_MAX_BYTES', 'MAX_MB_ENV', 'NOT_RECORDING',
+           'NotRecording', 'REPLAY_ENV', 'Recording',
            'RecordedClock', 'Replay', 'ReplaySession', 'SessionJournal',
            'SessionRecorder', 'SessionRecording',
            'TELEMETRY_ENV', 'Tap', 'default_path', 'install', 'start',
