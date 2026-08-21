@@ -215,6 +215,11 @@ uv pip install -e ".[glfw,gltf]"</pre>
             Walking, flying, swimming and mouse-look as declared nodes: sampled
             input, key bindings a settings screen can rewrite, world-imposed
             modes and pointer capture</li>
+          <li><a href="navmesh.html">Navigation Mesh</a> -- Where a character
+            can walk, worked out from the collision mesh at load time rather
+            than baked beside the level: walkable cells by slope, a corridor
+            found by A* across them, and the route pulled taut through the
+            portals so it is the line a person would take</li>
           <li><a href="physics.html">Physics &amp; Collision</a> -- Real-time
             rigid-body physics built on the OMI glTF model: collision, gravity
             zones, triggers, joints, shape cooking, a character controller with

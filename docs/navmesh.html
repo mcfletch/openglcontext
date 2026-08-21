@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Navigation Meshes in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Navigation Meshes</h1>
+</header>
+
+<section>
+<p class="introduction">A <strong>navigation mesh</strong> is the floor, minus
+everything nobody can walk on, cut into cells that know their neighbours. Give
+it two points and it answers with a route.
+<code>OpenGLContext.nav.navmesh</code> builds one out of a level's
+<em>collision mesh</em> &mdash; the triangles a character's capsule is already
+tested against &mdash; and searches it.</p>
+<pre>from OpenGLContext.nav import navmesh
+
+navmesh.build(points, triangles)   # walkable cells out of a triangle soup
+navmesh.from_world(world)          # the same, from a physics world
+mesh.cell_at(point)                # which cell a point stands on
+mesh.path(start, goal)             # the route, pulled taut
+mesh.random_point()                # somewhere to go</pre>
+
+<h2>Generated at load time, not baked beside the level</h2>
+<p>The mesh is derived from geometry that is already in memory when the level
+is, rather than read from navigation data shipped alongside it. Three things
+follow from that, and they are the reason it is built this way:</p>
+<ul>
+  <li><strong>Levels nobody baked still navigate.</strong> Any map that loads
+  into a collision world has a navmesh, whatever tools it was made with.</li>
+  <li><strong>It follows the geometry.</strong> Change the floor, move a wall,
+  load a different map, and the next build describes what is there now &mdash;
+  there is no second file to keep in step.</li>
+  <li><strong>It depends on no content we may not read.</strong> The input is
+  the collision mesh, which the engine owns.</li>
+</ul>
+<p>The cost is paid at load: build time is proportional to the triangles handed
+in, and the result is held in memory as arrays.</p>
+</section>
+
+<section>
+<h2 id="building">Building it</h2>
+<h3><code>build(points, triangles, max_slope, clearance)</code></h3>
+<p><code>points</code> is <code>(N, 3)</code> world positions in metres and
+<code>triangles</code> is <code>(M, 3)</code> indices into them &mdash; a
+triangle soup, which is what a level's collision geometry is. The answer is a
+<code>NavMesh</code>, and <code>len(mesh)</code> is how many walkable cells it
+found.</p>
+<p>A triangle becomes a cell when it faces upward and is no steeper than
+<code>max_slope</code>. Facing upward is separate from being flat: a
+downward-facing triangle is a ceiling however level it is, and is dropped.</p>
+<p>Cells are joined into neighbours <strong>by shared edge, matched on
+position</strong> rather than on vertex index. A collision mesh is a soup in
+which the same corner arrives once per triangle that touches it, each time with
+a different index, so matching indices would leave every cell an island.
+Positions are welded on a 0.1&nbsp;mm grid &mdash; below anything a level
+distinguishes, above the drift of transforming a mesh into world space. The
+shared edge between two neighbours is kept as a <strong>portal</strong>, which
+is what the string pull later runs the line through.</p>
+
+<h3><code>from_world(world, max_slope, clearance)</code></h3>
+<p>The seam a game uses. It walks the bodies of an
+<code>omi_physics</code> world, takes every static trimesh collider, offsets each
+by its body's position, and builds one mesh from all of them. The character
+walks on the collision mesh, so the navmesh comes from the collision mesh: a
+second description of the same geometry is a second description that can
+disagree.</p>
+<p>A world with no static trimesh in it gives an empty <code>NavMesh</code>
+rather than an error &mdash; <code>len(mesh) == 0</code>, and every query
+against it answers "nowhere".</p>
+
+<h3 id="numbers">The numbers, and where a game's own answers live</h3>
+<table>
+<tr><th>Name</th><th>Default</th><th>Unit</th><th>What it decides</th></tr>
+<tr><td><code>DEFAULT_MAX_SLOPE</code></td><td>50.0</td><td>degrees from
+  horizontal</td><td>The steepest triangle that becomes a cell.</td></tr>
+<tr><td><code>DEFAULT_CLEARANCE</code></td><td>0.0</td><td>metres of
+  headroom</td><td>How much room over a cell a body needs; 0 asks no
+  question.</td></tr>
+<tr><td><code>STAND_REACH</code></td><td>2.5</td><td>metres</td><td>How far
+  below a point <code>cell_at</code> looks for its floor.</td></tr>
+<tr><td><code>STAND_TOLERANCE</code></td><td>0.5</td><td>metres</td><td>How far
+  <em>above</em> a point its floor may be and still count.</td></tr>
+</table>
+<p><strong>A navmesh is built for a particular body.</strong> The slope one
+character can climb is not the slope another can, so <code>max_slope</code> is
+an argument rather than a constant, and a game passes its avatar's own
+<code>CharacterCapabilities.maxSlope</code> &mdash; which is likewise 50
+degrees until a game says otherwise, and is the same number the walking code
+asks of a surface before it will stand on it. See
+<a href="physics.html">Physics</a> for the rest of that body's
+description.</p>
+<p><code>clearance</code> is what makes a wall an obstacle. A wall contributes
+no walkable triangles of its own, so the floor either side of it is floor, and
+without a headroom test the two halves are joined straight through it. The test
+overlaps a cell's bounding box against the unwalkable triangles' boxes, because
+a wall in a level is a plane of zero thickness that a point test passes
+through. It removes the floor immediately against a wall as well, which is
+right: a body has a radius and cannot stand there.</p>
+<p>It is <strong>off by default</strong>, at <code>clearance=0.0</code>,
+because comparing bounding boxes is blunt on the large triangles a real level's
+walls are made of: on the <code>oa_dm1</code> map it removes 1092 of 1220 floor
+cells, most of them nowhere near a wall. On small, axis-aligned geometry it is
+exact, and a caller who knows their geometry passes the height their body
+needs. Everyone else gets the whole walkable floor.</p>
+</section>
+
+<section>
+<h2 id="asking">Asking it things</h2>
+<h3><code>cell_at(point, reach, below)</code></h3>
+<p>The cell a point is standing on, as an index into <code>mesh.cells</code>,
+or <code>None</code>. The cell <em>under</em> the point: height is what tells
+two floors stacked over one another apart, so a gallery and the hall beneath it
+give different answers for the same <code>(x, z)</code>. A point more than
+<code>reach</code> above any floor belongs to no cell, which is how a point in
+mid-air over a pit avoids binding to the bottom of it. A little below counts
+too, by <code>below</code>, since a capsule's centre sits above the floor and a
+sloped plane runs either side of a sample taken from the triangle next
+door.</p>
+
+<h3><code>path(start, goal)</code></h3>
+<p>A list of <code>(x, y, z)</code> points to walk, starting at
+<code>start</code> and ending at <code>goal</code>. A* over the cells finds the
+corridor, and the corridor is then <a href="#pull">pulled taut</a> through its
+portals.</p>
+<p>An <strong>empty list</strong> is the answer when either end is off the mesh
+or nothing connects them. That is a normal reply rather than an error: a bot on
+a ledge with no way down has nowhere to walk and should do something else.</p>
+
+<h3><code>random_point(seed)</code></h3>
+<p>A cell centre, drawn at random &mdash; what a bot with no orders walks
+toward. With a <code>seed</code> it is one fixed answer, so a match replays from
+its inputs. Without one it draws from the session's navigation entropy stream,
+which advances: a bot asking twice wants somewhere else to go.</p>
+
+<h3 id="pull">The string pull</h3>
+<p>A* answers with cells, and the obvious route through cells is their centres.
+That route zigzags: triangle centres are not on the line anybody would walk, so
+a bot crossing an empty room walks a staircase and rounds corners that are not
+there.</p>
+<p>The pull runs a funnel through the portals instead. Two edges of a cone are
+narrowed by each portal in turn and a corner is planted where they cross, which
+leaves a line that touches the geometry only where the geometry actually turns
+it &mdash; and on open floor collapses to two points, start and goal.</p>
+<p>It is a <strong>horizontal</strong> operation. Height comes from the portals
+the line passes through, so a route up a ramp climbs with it; what is pulled
+straight is the plan.</p>
+</section>
+
+<section>
+<h2 id="demo">Seeing it work</h2>
+<figure>
+  <img src="images/demos/navmesh_demo.jpg"
+       alt="An overhead view of a square room with two walls across it: the floor is covered in green wireframe triangles, an amber line zigzags from a blue sphere around both walls to an orange sphere, and a straighter cyan line follows the same route">
+  <figcaption><strong><code>python tests/navmesh_demo.py</code></strong>
+    &mdash; a 16&nbsp;m room whose two walls make the way through a zigzag.
+    The green wireframe is the navmesh: 416 walkable cells out of the 516
+    triangles of floor and wall handed to <code>build()</code>, with the dark
+    bands beside each wall the cells <code>clearance=1.8</code> removed. Amber
+    is the raw cell-centre route, cyan the same route string-pulled. Press
+    <code>g</code> for the next goal, <code>r</code> for a random one.</figcaption>
+</figure>
+<p>Each re-path prints what the search cost and what the pull saved:</p>
+<pre>$ python tests/navmesh_demo.py
+navmesh 416 walkable cells from 516 triangles (max slope 50.0 degrees, clearance 1.8 m)
+goal (14.0, 14.0) | search visited 333 cells | corridor 77 cells
+  centres 79 points 48.82 m -&gt; pulled 11 points 37.30 m (-23.6%)</pre>
+<p>Seventy-nine points of zigzag become eleven, and the walk is 11.5&nbsp;m
+shorter &mdash; on a route whose corners are two wall ends.</p>
+</section>
+
+<section>
+<h2 id="using">Using it</h2>
+<p>From triangles in hand:</p>
+<pre>import numpy as np
+from OpenGLContext.nav import navmesh
+
+# A four-metre floor, as two triangles wound to face up.
+points = np.array([(0, 0, 0), (4, 0, 0), (4, 0, 4), (0, 0, 4)], dtype='d')
+triangles = np.array([(0, 2, 1), (0, 3, 2)], dtype='i')
+
+mesh = navmesh.build(points, triangles)
+len(mesh)                             # 2
+mesh.cell_at((1.0, 0.0, 1.0))         # 0
+mesh.cell_at((9.0, 0.0, 9.0))         # None -- off the mesh
+mesh.path((0.5, 0.0, 0.5), (0.5, 0.0, 3.5))
+# [(0.5, 0.0, 0.5), (0.5, 0.0, 3.5)]</pre>
+<p>From a loaded level, which is the usual way:</p>
+<pre>from omi_physics import model
+from omi_physics.world import PhysicsWorld
+from OpenGLContext.nav import navmesh
+
+world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
+shape = world.add_shape(model.Shape.trimesh(points, triangles))
+world.add_body(model.Motion(type=model.STATIC),
+               collider=model.Collider(shape=shape), position=(0, 0, 0))
+
+mesh = navmesh.from_world(world, max_slope=50.0)
+len(mesh)                             # 2 -- the same floor, found in the world
+mesh.random_point(seed=3)             # (2.6666666666666665, 0.0, 1.3333333333333333)</pre>
+<p>A bot then asks <code>mesh.path(bot.position, mesh.random_point())</code>
+whenever it wants somewhere new to be. Build once per level, hold the
+<code>NavMesh</code>, and call <code>path()</code> per decision rather than per
+frame: a bot follows the points it was given until it wants somewhere
+else.</p>
+</section>
+
+<section>
+<h2>Limits</h2>
+<ul>
+  <li><strong>A cell is one triangle.</strong> Neighbouring walkable triangles
+  are not merged into larger convex regions, so the search runs over as many
+  cells as the floor has triangles. Merging is an optimisation for a level
+  whose cell count costs something, and it changes nothing above the
+  interface.</li>
+  <li><strong>The mesh is static.</strong> It describes the geometry it was
+  built from. A door that opens, a bridge that falls or a crate that is pushed
+  is not in it until the mesh is built again.</li>
+  <li><strong>A body's radius is not carried.</strong> What keeps a route off
+  the walls is the <code>clearance</code> test removing the cells against them,
+  which is a property of the build rather than of the character asking for the
+  path.</li>
+  <li><strong>Headroom is measured between bounding boxes</strong>, which is
+  exact on small axis-aligned geometry and coarse on the large triangles a
+  level's walls are cut from. What a real level wants is a blocker's distance
+  from the cell; until that is written, <code>clearance</code> is left at 0 and
+  the whole walkable floor is returned.</li>
+  <li><strong>Cost is distance.</strong> A* weighs cells by the straight-line
+  gap between their centres, so the route is the shortest one. Danger, cover
+  and terrain a character would rather avoid are not in the weights.</li>
+  <li><strong><code>cell_at</code> scans the cells.</strong> The lookup tests
+  every cell's footprint, so it is linear in the mesh; a level large enough for
+  that to matter wants an index over the cells.</li>
+</ul>
+</section>
+
+<footer>
+<p>See also: <a href="physics.html">Physics &amp; character movement</a> for the
+collision mesh a navmesh is built from and the <code>maxSlope</code> that
+decides what counts as ground, <a href="navigation.html">Movement modes</a> for
+how a body is moved along a route, and
+<a href="characters.html">Rigged characters</a> for what walks it.</p>
+</footer>
+</body>
+</html>
