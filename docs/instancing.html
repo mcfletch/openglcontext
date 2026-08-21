@@ -119,6 +119,50 @@ implements each piece.</p>
       &ldquo;same crate&rdquo; nodes into one draw for free.</li>
   </ul>
 
+  <h3>Seeing it work</h3>
+  <p><code>tests/instancing_batched.py</code> is the demo. Three fields of 96
+    spheres and a row of boxes &mdash; 300 shapes &mdash; drawn in four calls,
+    with the counts printed each time they change and <code>i</code> to switch
+    batching off and watch them separate:</p>
+  <pre>$ python tests/instancing_batched.py
+instancing ON   300 shapes -&gt; 4 draws (300 instances in 4 groups)
+instancing OFF  300 shapes -&gt; 300 draws (0 instances in 0 groups)</pre>
+  <p>Each field is built a different way, so the two mechanisms below can be
+    told apart by eye: the left field shares one <code>Sphere</code> node across
+    all 96 shapes (identity), the middle gives each shape its own equal
+    <code>Sphere</code> (content), and the right shares a node again but under a
+    second material, which is what makes it a third group rather than part of
+    the first. Running it with
+    <code>OPENGLCONTEXT_INSTANCE_COLLAPSE=off</code> draws the same scene in
+    110 calls, since only the two shared-node fields still batch.</p>
+  <p>Nothing in that demo asks to be instanced. It builds ordinary
+    <code>Shape</code> nodes and reads the counts back off the context
+    afterwards, which is all an application has to do:</p>
+  <pre>from OpenGLContext.scenegraph.basenodes import (
+    Appearance, Material, Shape, Sphere, Transform,
+)
+
+ball = Sphere(radius=0.32)              # one node, referenced many times
+blue = Material(diffuseColor=(0.25, 0.45, 0.85))
+
+scene = Transform(children=[
+    Transform(translation=(x, y, 0.0),
+              children=[Shape(geometry=ball,
+                              appearance=Appearance(material=blue))])
+    for x in range(12) for y in range(8)
+])
+
+# After a frame has been drawn, on the context:
+stats = context.renderStats
+print(stats.shapes, stats.draws, stats.instances, stats.instanceGroups)</pre>
+  <p><code>renderStats</code> is a
+    <code>passes.renderstats.RenderStats</code> holding the counts for the frame just drawn, and the developer overlay
+    (<a href="hud.html">HUD &amp; developer overlay</a>) shows the same numbers
+    live. Instancing is also a field on the
+    <code>ContextDefinition</code>, so a settings screen can offer it and the
+    demo's <code>i</code> key is just
+    <code>context.contextDefinition.instancing = False</code>.</p>
+
   <h3 id="instancedshape">A declared set is one node</h3>
   <p>The draw is one call either way. What is <em>not</em> the same either way is
     the work before it: a thousand copies modelled as a thousand nodes is a
