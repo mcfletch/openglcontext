@@ -60,3 +60,66 @@ class TestSwitchingItOff:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestBeingToldTheSameChoiceRepeatedly:
+    """A Switch is told its choice every frame, whether or not it changed.
+
+    Level-of-detail assigns ``whichChoice`` each frame from the viewer's
+    distance, so the pass hears about a choice that has not moved. Rebuilding
+    the subtree each time it hears would leave a second path to the same node,
+    and a third, each holding its own cached transform -- a cost that grows
+    with the length of the session rather than with the scene.
+    """
+
+    def held(self, watcher):
+        return (sum(len(v) for v in watcher.paths.values()),
+                sum(len(v) for v in watcher.nodePaths.values()))
+
+    def test_the_records_do_not_grow(self, watched) -> None:
+        watcher, switch, shape = watched
+        before = self.held(watcher)
+        for _ in range(5):
+            switch.whichChoice = 0
+        assert self.held(watcher) == before
+
+    def test_a_real_change_is_still_followed(self, watched) -> None:
+        watcher, switch, shape = watched
+        second = Group(children=[Shape(geometry=Box())])
+        switch.choice = list(switch.choice) + [second]
+        switch.whichChoice = 1
+        assert watcher.nodePaths.get(id(second)), (
+            'switching to a new choice did not integrate it'
+        )
+
+    def test_the_old_choice_is_let_go(self, watched) -> None:
+        watcher, switch, shape = watched
+        second = Group(children=[Shape(geometry=Box())])
+        switch.choice = list(switch.choice) + [second]
+        switch.whichChoice = 1
+        drawn = [p for paths in watcher.paths.values() for p in paths]
+        assert [p for p in drawn if p.broken] == [], (
+            'the path to the choice that was switched away from is still drawn'
+        )
+
+
+class TestTheSignalItself:
+    def test_assigning_the_same_choice_says_nothing(self) -> None:
+        """The signal reports a change of child, not an assignment."""
+        shape = Shape(geometry=Box())
+        switch = Switch(choice=[Group(children=[shape])], whichChoice=0)
+        heard = []
+
+        def listener(value=None):
+            heard.append(value)
+
+        dispatcher.connect(listener, signal=switch_module.SWITCH_CHANGE_SIGNAL,
+                           sender=switch)
+        try:
+            switch.whichChoice = 0
+            switch.whichChoice = 0
+        finally:
+            dispatcher.disconnect(listener,
+                                  signal=switch_module.SWITCH_CHANGE_SIGNAL,
+                                  sender=switch)
+        assert heard == []

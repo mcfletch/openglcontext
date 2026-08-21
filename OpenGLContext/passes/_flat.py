@@ -144,12 +144,22 @@ class SGObserver( object ):
         `value` is None for a Switch drawing nothing -- `whichChoice` of -1,
         which is how VRML97 hides a subtree. Then there is only the old path to
         break, and nothing to walk in its place.
+
+        A Switch may name the child it already has -- level-of-detail assigns
+        its choice from the viewer's distance every frame -- so a live path to
+        `value` is kept rather than walked again. Exactly one survives: walking
+        it afresh each time would leave a second path to the same node, and a
+        third, each holding the transforms cached against it.
         """
         for path in self.npFor( sender ):
+            keeping = None
             for childPath in path.iterchildren():
-                if childPath[-1] is not value:
+                if ( value is not None and childPath[-1] is value
+                     and not childPath.broken and keeping is None ):
+                    keeping = childPath
+                else:
                     childPath.invalidate()
-            if value is not None:
+            if value is not None and keeping is None:
                 self.integrate( value, path )
         self.purge()
     def onChildAdd( self, sender, value ):
@@ -170,28 +180,48 @@ class SGObserver( object ):
                             childPath.invalidate()
                 self.purge()
     def purge( self ):
-        """Purge all references to path"""
-        for key,values in self.paths.items():
-            filtered = []
+        """Drop every path whose subtree has left the scenegraph
+
+        Both records have to let go. ``paths`` is the draw set a render walks;
+        ``nodePaths`` is keyed by node and holds a path for every integrated
+        node, including nodes this pass draws nothing for, so it cannot be
+        maintained from ``paths`` alone.
+
+        A path left in either record keeps alive every transform matrix cached
+        against it, and each of those caches stays registered for the fields it
+        depends on. Content streaming in and out of a world then grows the set
+        of receivers every sender must notify, so the cost of a frame rises
+        with how long the session has run rather than with what is on screen.
+        """
+        dropped = []
+        for key, values in self.paths.items():
+            live = []
             for v in values:
-                if not v.broken:
-                    filtered.append( v )
+                if v.broken:
+                    dropped.append( v )
                 else:
-                    np = self.npFor( v )
-                    while v in np:
-                        np.remove( v )
-                    if not np:
-                        try:
-                            del self.nodePaths[id(v)]
-                        except KeyError as err:
-                            pass
-                    # Drop the removed path's persistent picking id so a later
-                    # pick can't resolve a stale object.
-                    sel_map = getattr( self, '_sel_id_map', None )
-                    oid = getattr( v, '_sel_id', 0 )
-                    if sel_map is not None and oid:
-                        sel_map.pop( oid, None )
-            self.paths[key][:] = filtered
+                    live.append( v )
+            values[:] = live
+        for node_id in list( self.nodePaths.keys() ):
+            paths = self.nodePaths[node_id]
+            # By identity, not equality: two distinct paths running the same
+            # route compare equal, and only this one is known to be broken.
+            live = [ p for p in paths if not p.broken ]
+            if len(live) == len(paths):
+                continue
+            dropped.extend([ p for p in paths if p.broken ])
+            if live:
+                paths[:] = live
+            else:
+                del self.nodePaths[node_id]
+        # Drop the removed paths' persistent picking ids so a later pick can't
+        # resolve a stale object.
+        sel_map = getattr( self, '_sel_id_map', None )
+        if sel_map is not None:
+            for v in dropped:
+                oid = getattr( v, '_sel_id', 0 )
+                if oid:
+                    sel_map.pop( oid, None )
 
 def get_modelview( shader, mode ):
     return mode.matrix 

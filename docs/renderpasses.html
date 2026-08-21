@@ -116,6 +116,23 @@ root to that node, so per-frame rendering is a small number of iterations over a
 prepared list rather than a recursive traversal. This is the same mechanism
 described in <a href="flat.html">Flat Rendering</a>; the core pass reuses
 it unchanged.</p>
+<p>A path lives exactly as long as the route it names. When a subtree leaves the
+graph its paths are invalidated and dropped from both records the pass keeps:
+the draw set it iterates, and the per-node index it uses to turn a change
+somewhere in the graph back into the paths running through it. That index holds
+a path for every integrated node, including nodes the pass draws nothing for, so
+the two are maintained together. A path left behind would keep alive every
+transform matrix cached against it, and each of those caches stays registered
+for the fields it depends on -- content streaming in and out of a world would
+then widen the set of receivers every change has to notify, and a frame would
+cost more the longer the session had run.</p>
+<p>The Switch signal reports a <em>change of child</em>, not an assignment.
+<code>whichChoice</code> is commonly written every frame -- level-of-detail sets
+it from the viewer's distance -- and an assignment naming the child already
+being drawn is not a change: the signal is not sent, and a pass that hears one
+keeps the path it has rather than walking the subtree again. A node that
+switches its own children should follow the same rule, so that observers are
+woken for changes rather than for writes.</p>
 </section>
 
 <section>

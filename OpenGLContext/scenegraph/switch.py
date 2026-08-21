@@ -1,4 +1,6 @@
 """VRML97 Switch node"""
+import weakref
+
 from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext.scenegraph import boundingvolume
 from pydispatch import dispatcher
@@ -12,17 +14,38 @@ class Switch(basenodes.Switch):
     def __init__( self, *args, **named ):
         """Setup watcher for whichChoice and children"""
         super(Switch,self).__init__( *args, **named )
+        # What the switch is already showing, so the first assignment naming it
+        # is recognised as the no-op it is -- and so turning the switch off is
+        # recognised as a change away from it.
+        chosen = self._chosen()
+        self._announced = weakref.ref( chosen ) if chosen is not None else None
         dispatcher.connect( 
             self._onSwitchChange, 
             signal=('set',self.__class__.whichChoice), 
             sender=self 
         )
-    def _onSwitchChange( self, value ):
-        """Generate signal telling the world that switch's child has changed"""
+    def _chosen( self ):
+        """The child `whichChoice` names, or None when it names nothing"""
         if self.whichChoice < 0 or self.whichChoice >= len(self.choice):
-            value = None 
-        else:
-            value = self.choice[self.whichChoice]
+            return None
+        return self.choice[self.whichChoice]
+    def _onSwitchChange( self, value ):
+        """Tell the world when the switch's child has changed
+
+        The watcher fires on every assignment to `whichChoice`, and
+        level-of-detail assigns it each frame from the viewer's distance, so
+        most assignments name the child already being drawn. The signal reports
+        a change of child: an assignment that chooses the same one is not one,
+        and announcing it would wake every receiver for nothing.
+
+        Held weakly, so remembering what was announced does not keep a child
+        alive after the switch has let go of it.
+        """
+        value = self._chosen()
+        announced = self._announced() if self._announced is not None else None
+        if value is announced:
+            return
+        self._announced = weakref.ref( value ) if value is not None else None
         dispatcher.send(
             sender = self,
             signal = SWITCH_CHANGE_SIGNAL,
