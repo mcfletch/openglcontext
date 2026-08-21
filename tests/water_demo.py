@@ -26,6 +26,22 @@ Beyond the pools a `water_ribbon` sweeps a river along a bending course
 that loses height from end to end -- the thing a flat sheet at one `level`
 cannot do.
 
+Behind the river is a `LAKE`: 180 m of open water, which is where how
+finely a sheet is meshed stops being a detail. It is meshed by
+`mesh_across`, from its own wavelength. Press `d` to mesh it the way a
+sheet used to be, at nine vertices whatever its size, and the two are
+printed as they are measured against the wave field itself:
+
+    lake 180 m across, meshed from its wavelength: 33 vertices, 1.6 samples
+        per wave, keeps 98% of its swell
+    lake 180 m across, meshed the old way:          9 vertices, 0.4 samples
+        per wave, keeps 47% of its swell
+
+Nine vertices across 180 m is a vertex every 22 m against a 9 m wave --
+less than one sample per wave, under the Nyquist limit, where a wave does
+not merely flatten but comes back as a longer one that was never in the
+water.
+
 Every sheet is built with `on_gpu=True`: uploaded once, then moved by the
 four `wave_time` writes in `OnIdle`. Nothing is re-meshed and nothing is
 re-uploaded to make the water move.
@@ -60,8 +76,8 @@ from OpenGLContext.scenegraph.basenodes import (
 )
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.water import (
-    CHOPPY, FLOWING, STILL, Volume, Volumes, medium_fog, submerge,
-    water_ribbon, water_surface, wave_height,
+    CHOPPY, FLOWING, LAKE, STILL, Volume, Volumes, medium_fog, submerge,
+    mesh_across, water_ribbon, water_surface, wave_height,
 )
 from OpenGLContext.viewer.environment import sky_background
 
@@ -84,6 +100,18 @@ Z0, Z1, LEVEL, BED = -26.0, 6.0, 0.0, -1.2
 #: axis is meshed every half metre and CHOPPY's 7 m crests get fourteen vertices
 #: apiece -- well clear of the point where a sheet is too coarse for its wave.
 RESOLUTION = 65
+
+#: The lake beyond the river: 180 m of open water, which is the size at which
+#: how finely a sheet is meshed stops being a detail. Its wave is 9 m long, so
+#: the nine-vertices-across a sheet used to get puts one vertex every 22 m --
+#: less than one sample per wave, which is under the Nyquist limit, and a wave
+#: sampled under Nyquist does not merely flatten: it comes back as a different,
+#: longer wave that was never in the water.
+LAKE_X0, LAKE_X1, LAKE_Z0, LAKE_Z1 = -90.0, 90.0, -104.0, -48.0
+
+#: What a sheet used to be meshed at, whatever its size. Kept so `d` can put it
+#: back and the difference can be seen rather than described.
+FIXED_RESOLUTION = 9
 
 #: How far down the volumes go. A body that has gone through the bed is still
 #: in the water as far as the view is concerned.
@@ -113,7 +141,11 @@ ACROSS, ALONG, FLOAT_RADIUS = 3, 8, 0.35
 SHORE = [
     (-90.0, -20.0, Z0, Z1), (-8.0, -6.0, Z0, Z1),
     (6.0, 8.0, Z0, Z1), (20.0, 90.0, Z0, Z1),
-    (-90.0, 90.0, -32.0, Z0), (-90.0, 90.0, -140.0, -44.0),
+    (-90.0, 90.0, -32.0, Z0),
+    # Beyond the river, with the lake's footprint left out of it.
+    (-90.0, 90.0, -48.0, -44.0),
+    (-90.0, LAKE_X0, LAKE_Z0, LAKE_Z1), (LAKE_X1, 90.0, LAKE_Z0, LAKE_Z1),
+    (-90.0, 90.0, -140.0, LAKE_Z0),
     (-90.0, 90.0, Z1, 140.0),
 ]
 
@@ -190,6 +222,15 @@ class TestContext(BaseContext):
             print('%-8s amplitude %.2f m  wavelength %.1f m  speed %.1f m/s'
                   % (label, style.amplitude, style.wavelength, style.speed))
 
+        # The lake, meshed from its own wavelength. Its Shape is kept so `d`
+        # can swap the geometry for one meshed the old fixed way.
+        self._lakeShape = Shape(geometry=None, appearance=None)
+        self._lakeFine = True
+        children.append(_slab(LAKE_X0, LAKE_X1, LAKE_Z0, LAKE_Z1, BED,
+                              0.3, BOTTOM))
+        children.append(self._lakeShape)
+        self._buildLake()
+
         ribbon = water_ribbon(_river_course(), 9.0, style=FLOWING, on_gpu=True)
         self.meshes.append(ribbon)
         children.append(Shape(geometry=ribbon, appearance=Appearance(
@@ -211,6 +252,7 @@ class TestContext(BaseContext):
         #: The last medium printed, so an unchanged frame stays quiet.
         self._medium = None
         self._under = False
+        self.addEventHandler('keypress', name='d', function=self.OnDensity)
         self.addEventHandler('keypress', name='v', function=self.OnDive)
         self.addEventHandler('keypress', name='h', function=self.OnHeights)
         print(__doc__)
@@ -229,6 +271,44 @@ class TestContext(BaseContext):
                 self.floats.append((style, float(x), float(z), transform))
                 nodes.append(transform)
         return nodes
+
+    def _buildLake(self):
+        """Mesh the lake, and say what that meshing keeps of its wave.
+
+        The carried fraction is measured rather than claimed: the lake's own
+        wave field is sampled finely enough to be the answer, then again at the
+        density the sheet is actually meshed at.
+        """
+        side = LAKE_X1 - LAKE_X0
+        across = (mesh_across(side, LAKE) if self._lakeFine
+                  else FIXED_RESOLUTION)
+        sheet = water_surface(LAKE_X0, LAKE_X1, LAKE_Z0, LAKE_Z1, level=LEVEL,
+                              resolution=across, style=LAKE, on_gpu=True)
+        # Swap it in under the Shape already in the scene, and take the sheet
+        # it replaces out of the list OnIdle writes wave_time to.
+        old = self._lakeShape.geometry
+        self.meshes = [m for m in self.meshes if m is not old]
+        self._lakeShape.geometry = sheet
+        self._lakeShape.appearance = Appearance(material=sheet.material)
+        self.meshes.append(sheet)
+        self.triggerRedraw(1)
+
+        spacing = side / max(across - 1, 1)
+        fine = np.linspace(LAKE_X0, LAKE_X1, 400)
+        true = wave_height(LAKE, *np.meshgrid(fine, fine), 0.0)
+        coarse = np.linspace(LAKE_X0, LAKE_X1, across)
+        got = wave_height(LAKE, *np.meshgrid(coarse, coarse), 0.0)
+        span = float(true.max() - true.min())
+        print('lake %.0f m across, meshed %-20s %2d vertices, %.1f samples per '
+              'wave, keeps %.0f%% of its swell'
+              % (side, 'from its wavelength:' if self._lakeFine else 'the old way:',
+                 across, LAKE.wavelength / spacing,
+                 100.0 * float(got.max() - got.min()) / max(span, 1e-9)))
+
+    def OnDensity(self, event=None):
+        """Mesh the lake the other way, so the difference is on the screen."""
+        self._lakeFine = not self._lakeFine
+        self._buildLake()
 
     def OnDive(self, event):
         """Put the camera into the middle pool, or back on the bank."""

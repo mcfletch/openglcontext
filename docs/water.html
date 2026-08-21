@@ -203,8 +203,42 @@ rather than converting.</p>
     Every sheet is built with <code>on_gpu=True</code>, so a frame costs four
     <code>wave_time</code> writes and nothing is re-uploaded. Press
     <code>v</code> to put the camera under the middle pool and <code>h</code> to
-    print what the surface is doing.</figcaption>
+    print what the surface is doing. Behind the river is a
+    <code>LAKE</code>: 180&nbsp;m of open water, meshed by
+    <code>mesh_across</code> from its own wavelength.</figcaption>
 </figure>
+
+<h3>How finely a sheet is meshed</h3>
+<p>A sheet is meshed once across its whole footprint, so a fixed vertex count
+  cannot be right for both a pond and a lake: the lake samples its own ripple
+  every few tens of metres, the wave aliases away, and what is left is a flat
+  plate with a strange normal on it.
+  <code>mesh_across(side, style)</code> takes the density from the
+  <em>wavelength</em> instead, capped at <code>MESH_LIMIT</code> because a
+  sheet is one draw and that is what it costs &mdash; in the file of a baked
+  world as much as in the frame.</p>
+<p>Press <code>d</code> in the demo to mesh its lake the way a sheet used to be
+  and watch the swell go out of it. Both are measured against the wave field
+  itself, not asserted:</p>
+<pre>lake 180 m across, meshed from its wavelength: 33 vertices, 1.6 samples per wave, keeps 98% of its swell
+lake 180 m across, meshed the old way:          9 vertices, 0.4 samples per wave, keeps 47% of its swell</pre>
+<p>Nine vertices across 180&nbsp;m is a vertex every 22&nbsp;m against a
+  9&nbsp;m wave &mdash; under one sample per wave, and so under the Nyquist
+  limit, where a wave does not merely flatten but returns as a longer one that
+  was never in the water.</p>
+<p><code>MESH_PER_WAVE</code> is four. Two is the Nyquist limit itself: enough
+  to represent a sine in principle, and in practice whether the vertices land
+  on the crests or on the zero crossings is down to where the sheet happens to
+  start. Measured over a 12&nbsp;m sheet, two samples per wave keep 73% of the
+  wave and four keep 89%; over 40&nbsp;m, 84% against 96%. On the sheets where
+  it matters most the two agree, because both are already held at
+  <code>MESH_LIMIT</code>. <code>MESH_FLOOR</code> is the other end of it: a
+  sheet carrying any swell is never meshed coarser than the fixed count this
+  rule replaced, which was wrong on a lake and right on a pond.</p>
+<p>The fine ripple does not live in the mesh at all. It is
+  <code>waveRipple</code> in the fragment shader, composed as a tilt of
+  whatever normal the surface already has, so the glitter costs the same at any
+  density and the mesh only has to carry the swell.</p>
 
 <p class="technical">The demo runs with
 <code>OPENGLCONTEXT_SHADOWS=0</code>: a GPU-displaced sheet casts its shadow map
