@@ -117,11 +117,13 @@ FLOWING = WaterStyle(name='flowing', amplitude=0.09, wavelength=4.5,
 CHOPPY = WaterStyle(name='choppy', amplitude=0.42, wavelength=7.0, speed=2.4,
                     steepness=RIPPLE * 2.2)
 
-#: Open water with nowhere to go: a lake or a reservoir. A slow swell with
-#: enough height in it to read as a surface from a distance, which is the
-#: distance most water is seen from. Still water is a *mirror*, and a mirror
-#: a few hundred metres across with nothing to reflect but a pale sky is a
-#: white plate lying in the landscape.
+#: Open water with nowhere to go: a lake or a reservoir. A slow swell, long
+#: and low, with enough height in it to read as a surface from the distance
+#: open water is usually seen from. :data:`STILL` has no displacement at all --
+#: its ripple is in the normals and its surface is exactly its waterline --
+#: which is a pond seen from its own bank, and leaves a sheet a few hundred
+#: metres across with no crest to catch the light and nothing to give it
+#: scale.
 LAKE = WaterStyle(name='lake', amplitude=0.16, wavelength=9.0, speed=0.8,
                   steepness=RIPPLE * 1.3)
 
@@ -130,20 +132,22 @@ LAKE = WaterStyle(name='lake', amplitude=0.16, wavelength=9.0, speed=0.8,
 #: so it is a budget rather than a target.
 MESH_LIMIT = 33
 
-#: The fewest vertices across a sheet that carries any swell at all, matching
-#: the fixed count this rule replaced. A pond was never the problem.
+#: The fewest vertices across a sheet that carries any swell at all. A small
+#: sheet is cheap however it is meshed, and the density rule alone would give
+#: a pond fewer vertices than its own wave needs.
 MESH_FLOOR = 9
 
 #: How many samples a wavelength gets. The mesh only has to hold the *swell* --
 #: the fine ripple that makes water read as water lives in the fragment shader
 #: (``waveRipple``), where it is the same at any mesh density.
 #:
-#: Four rather than two. Two is the Nyquist limit: enough to represent a sine in
-#: principle, and in practice whether the vertices land on the crests or on the
-#: zero crossings is down to where the sheet happens to start. Measured against
-#: the field sampled finely, two carries 73% of the wave over a 12 m sheet and
-#: 84% over 40 m; four carries 89% and 96%. It costs nothing on the sheets that
-#: matter most, which are already held at :data:`MESH_LIMIT`.
+#: Four, and not the two the Nyquist limit allows: two is enough to represent a
+#: sine in principle, and in practice whether the vertices land on the crests or
+#: on the zero crossings is down to where the sheet happens to start. Measured
+#: against the field sampled finely, two samples per wave carry 73% of the wave
+#: over a 12 m sheet and 84% over 40 m, where four carry 89% and 96%. Four costs
+#: nothing on the sheets this matters most for, which are already held at
+#: :data:`MESH_LIMIT`.
 MESH_PER_WAVE = 4.0
 
 
@@ -151,24 +155,22 @@ def mesh_across(side: float, style: "Optional[WaterStyle]" = None,
                 limit: int = MESH_LIMIT) -> int:
     """How many vertices across a sheet of this size has to be meshed at.
 
-    From the *wavelength*, not from a count picked once: a sheet meshed at
-    nine vertices across a tile hundreds of metres wide samples its own
-    ripple every few hundred metres, which aliases the wave away and leaves
-    a flat plate with a strange normal on it. That is what open water looks
-    like when it looks like concrete.
+    From the *wavelength*, not from a count picked once: one count cannot suit
+    both a pond and a lake the size of a valley. A sheet meshed too coarsely
+    for its own wave samples it under the Nyquist limit, where the wave does
+    not merely flatten but returns as a longer one that was never in the
+    water -- which is what open water looks like when it looks like concrete.
 
-    Capped at ``limit``, because a sheet is one draw and a lake the size of
-    a valley would otherwise ask for a million vertices to carry a ripple
-    nobody can see from the far side of it.
+    Bounded at both ends. Never above ``limit``, because a sheet is one draw
+    and that is what it costs, in the file of a baked world as much as in the
+    frame. Never below :data:`MESH_FLOOR` for a style carrying any swell, so
+    that a small sheet is meshed at least as finely as a fixed count would
+    have managed. Still water has no displacement to carry, so it is left to
+    ask for as little as it likes.
     """
     style = style if style is not None else STILL
     wave = max(float(style.wavelength), 1e-3)
     wanted = float(side) / wave * MESH_PER_WAVE + 1.0
-    # Never below MESH_FLOOR on a sheet with a swell in it: the fixed count
-    # this replaced was wrong on a lake and right on a pond, and a rule that
-    # returns fewer vertices than it did on the small sheets would be a
-    # regression dressed as a fix. Still water has no displacement to carry,
-    # so it is left to ask for as little as it likes.
     floor = MESH_FLOOR if float(style.amplitude) else 2.0
     return int(min(max(wanted, floor), float(limit)))
 
