@@ -38,7 +38,7 @@ from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
 __all__ = [
     'BarrierProfile', 'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
     'bridge_meshes', 'causeway_meshes', 'tunnel_meshes',
-    'bore_shade', 'tunnel_lamps',
+    'bore_shade', 'bore_sky', 'tunnel_lamps',
     'concrete_material', 'barrier_material', 'lamp_material',
 ]
 
@@ -238,6 +238,26 @@ def concrete_material() -> PBRMaterial:
                        roughness=CONCRETE_ROUGHNESS, doubleSided=False)
 
 
+def lining_material(concrete: PBRMaterial) -> PBRMaterial:
+    """The same concrete, with the lamps that light it already on it.
+
+    The pool each luminaire throws is worked out when the bore is built and
+    written onto the lining's vertices (:func:`bore_shade`). Read as a *tint*
+    that darkens the concrete, and the scene then lights the darkened concrete
+    again: the handful of lamps that became real lights are counted twice, and
+    the walls brighten and dim as those lights are handed from one fitting to
+    the next -- which is a tunnel that flickers as it is driven through.
+
+    Read as **baked light** it is added instead, so the lamps are on the wall at
+    any distance and for nothing, and the scene's own lights still shade the
+    concrete as they shade anything else. A car's headlights paint their circle
+    across it, which is what a driver in a tunnel is actually looking at.
+    """
+    found = concrete.copy() if hasattr(concrete, "copy") else concrete
+    found.bakedLight = True
+    return found
+
+
 def barrier_material() -> PBRMaterial:
     """What a parapet is made of: darker than the deck it stands on."""
     return PBRMaterial(baseColor=BARRIER_ALBEDO, metallic=0.0,
@@ -354,6 +374,13 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
     profile = profile or RoadProfile()
     tunnel = tunnel or TunnelProfile()
     material = material if material is not None else concrete_material()
+    # The lining is lit *once*. The pool each luminaire throws is baked onto
+    # its vertices (:func:`bore_shade`), which is what lets a bore be lit at
+    # any distance for nothing; lit again by the scene's own lights the same
+    # lamps are counted twice, and since only the few fittings the car is
+    # among become real lights, the lining brightens and dims as they are
+    # switched -- which reads as the tunnel flickering as you drive down it.
+    lining = lining_material(material)
     right, up = sweep_frames(line)
     # Built to the road as it runs *through* a bore rather than as it runs on
     # the ground: the grass verge is an edge beam in there, and a bore sized for
@@ -365,8 +392,9 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
                   tunnel.clearance + tunnel.portal_border, tunnel.segments,
                   foot=tunnel.springing + tunnel.portal_border,
                   floor=tunnel.floor)
-    bore = _swept(line, right, up, material, arch, facing=INWARD,
-                  shade=bore_shade(line, tunnel))
+    bore = _swept(line, right, up, lining, arch, facing=INWARD,
+                  shade=bore_shade(line, tunnel),
+                  sky=bore_sky(line, tunnel))
     portals = _merge([_ring(line[at], right[at], up[at], arch, outer, material,
                             outwards=facing)
                       for at, facing in ((0, -1.0), (len(line) - 1, 1.0))],
@@ -419,6 +447,29 @@ def bore_shade(points: Any, tunnel: Optional[TunnelProfile] = None) -> np.ndarra
     daylight = _daylight(station, tunnel)
     pool = _lamp_pool(line, station, tunnel)
     return np.clip(daylight + float(tunnel.lamp_glow) * pool, 0.0, 1.0)
+
+
+def bore_sky(points: Any, tunnel: Optional[TunnelProfile] = None) -> np.ndarray:
+    """How much of the outdoors reaches each point along a bore, from 0 to 1.
+
+    A tunnel is a hole in the ground and no sky arrives in the middle of it.
+    Baked alongside the lamps (:func:`bore_shade`) and carried in the fourth
+    channel of the same vertex colour, where a renderer reads it as occlusion
+    of the light that has no direction: without it the sky lights the inside
+    of a bore as evenly as it lights the hillside over it, and no amount of
+    dimming the lamps makes the interior read as an interior.
+
+    One at either portal, falling to nothing :attr:`TunnelProfile.daylight`
+    metres in -- the same reach the daylight itself carries, because they are
+    the same fact about the same hole.
+    """
+    line = _line(points, "a tunnel")
+    tunnel = tunnel or TunnelProfile()
+    station = _station(line)
+    from_end = np.minimum(station, station[-1] - station)
+    reach = max(float(tunnel.daylight), 1e-6)
+    sky: np.ndarray = np.clip(1.0 - from_end / reach, 0.0, 1.0)
+    return sky
 
 
 def _station(line: np.ndarray) -> np.ndarray:
@@ -629,11 +680,14 @@ def _swept(line: np.ndarray, right: np.ndarray, up: np.ndarray,
            material: PBRMaterial, section: Any,
            closed_ends: bool = False,
            shade: Optional[np.ndarray] = None,
+           sky: Optional[np.ndarray] = None,
            facing: str = OUTWARD) -> PBRMesh:
     """Sweep a (K,2) lateral/vertical section along a framed centreline.
 
     ``shade`` is an optional per-point brightness the whole ring takes, which is
-    how a bore carries its own darkness.
+    how a bore carries its own darkness, and ``sky`` how much of the outdoors
+    still reaches each point -- the fourth channel of the same vertex colour,
+    read as occlusion.
 
     ``facing`` is which side of the surface is the one that will be looked at:
     :data:`OUTWARD` for a wall, a deck or a pier, :data:`INWARD` for the lining
@@ -661,6 +715,8 @@ def _swept(line: np.ndarray, right: np.ndarray, up: np.ndarray,
     if shade is not None:
         colors = np.ones((len(line) * ring, 4), dtype='f')
         colors[:, :3] = np.repeat(shade, ring)[:, None]
+        if sky is not None:
+            colors[:, 3] = np.repeat(sky, ring)
     return _mesh(positions, indices, material, colors=colors)
 
 

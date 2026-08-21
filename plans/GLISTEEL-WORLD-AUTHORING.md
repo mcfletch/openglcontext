@@ -701,11 +701,17 @@ page). Driving it is the GL smoke test.
 
 **Goal.** A road with things on it and beside it, and roads that meet.
 
-- **Signs.** Warning of what the alignment already knows about itself: a dip, a crest, a
-  bend tighter than the ones before it, a tunnel ahead. The alignment carries the
+- **Signs — landed.** Warning of what the alignment already knows about itself: a dip, a
+  crest, a bend tighter than the ones before it, a tunnel ahead. The alignment carries the
   curvature and the grade, so the *placement* is derivable rather than authored — which is
-  the point of generating a road rather than drawing one. A sign is a post and a plate
-  with a symbol, placed at a stopping distance before what it warns of.
+  the point of generating a road rather than drawing one. A sign is a post and the plates
+  on it, placed at a stopping distance before what it warns of.
+  **The pattern is Ontario's**: a black symbol on a yellow diamond, an advisory speed on a
+  tab below it, and the posted limit as a white MAXIMUM plate repeated along the road. How
+  fast a bend is worth is derivable too — `road.corner_speed` is what its radius will hold
+  and `road.advisory_speed` is 60% of that, rounded down to 10 km/h, which is the number on
+  the tab. The posted limit is a decision rather than a measurement, so it is told to the
+  world (`ProceduralWorld.posted`). See [../docs/roads.html](../docs/roads.html).
 - **Obstacles.** Parked and moving cars, rocks, deer, foxes. Two different problems: a
   *placed* obstacle is a `MeshLayer` entry with a collider, and a *moving* one is an actor
   the game steps. Both want a shared notion of "a thing in the world with a body", which

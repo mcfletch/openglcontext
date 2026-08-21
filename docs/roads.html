@@ -245,6 +245,24 @@ the fittings are, and a game spends its few real lights on the ones the driver i
 among. <code>lamp_glow</code> is how far the baked pool lifts the lining out of
 the gloom and <code>lamp_reach</code> how far it spreads; <code>lamp_spacing</code>
 of zero is an unlit bore.</p>
+<p><strong>What is baked onto the lining is light, not tint.</strong> The
+lining's material sets <code>bakedLight</code>
+(<code>OGLC_materials_baked_light</code> in a glTF file), which tells the
+renderer that this mesh's <code>COLOR_0</code> is light worked out when the
+world was built: the three colour channels are <em>added</em> as emission
+instead of multiplying the surface, so the lamps are on the wall whatever the
+scene is doing and a headlight still paints its own circle across them. Read as
+a tint the concrete comes out dark and the scene then lights that concrete
+again, so the few fittings that became real lights are counted twice &mdash; and
+because only the nearest few are lit, the whole bore brightens and dims as they
+are handed on.</p>
+<p>The fourth channel of the same vertex colour is <strong>how much of the
+outdoors still reaches that point</strong> (<code>bore_sky</code>): one at either
+portal, nothing <code>daylight</code> metres in. A renderer in this mode reads it
+as occlusion of the environment rather than as transparency, so the lining stays
+solid and the sky stops lighting the middle of a tunnel as evenly as it lights
+the hillside over it. Without it there is no amount of dimming the lamps that
+makes an interior read as an interior.</p>
 <p>Structure is <code>concrete_material()</code>, and a causeway's wall is the
 same stuff as the fill it stands on. A deck's <em>railing</em> is
 <code>barrier_material()</code>, which is darker: it is the thing closest to the
@@ -307,21 +325,67 @@ most of the point of generating a road instead of drawing one.
 <code>OpenGLContext_editor.world.signs.warn_of</code> reads a road and returns
 the warnings it wants; <code>OpenGLContext.scenegraph.roadsigns</code> is the
 object they are drawn as.</p>
-<pre>from OpenGLContext.scenegraph.roadsigns import sign_meshes, sign_texture
-parts = sign_meshes('bend-left')       # post, plate -- at the origin, facing -Z
-plate = sign_texture('dip')            # the face, painted rather than shipped</pre>
+<pre>from OpenGLContext.scenegraph.roadsigns import SignFace, sign_meshes, sign_texture
+parts = sign_meshes(SignFace('bend-left', 60))  # post and plates, facing -Z
+plate = sign_texture('dip')                     # a face, painted not shipped</pre>
 <p>A sign is one prototype placed many times, so <code>sign_meshes</code> builds
-it at the origin facing -Z and a placement turns it to meet the traffic. The
-plate is a triangle wearing a painted picture -- red border, white face, a black
-symbol -- so a world needs no sign artwork of its own; the symbol is clipped to
-the face it is painted on, because a triangle narrows towards its point and a
-symbol sized to look right across the bottom runs off the sides at the top.</p>
+it at the origin facing -Z and a placement turns it to meet the traffic. A
+<code>SignFace</code> is what a sign <em>is</em>: the kind, and the speed in
+km/h that goes with it.</p>
+<p><strong>The signs are Ontario's.</strong> A warning is a black symbol on a
+yellow diamond; how fast the hazard is worth goes on a rectangular tab below it;
+and a speed limit is a white rectangle reading MAXIMUM over the number over
+km/h. The shape carries as much of the meaning as the symbol does — a driver
+reads a diamond as "take care" and a white rectangle as "this is the law"
+before they have read anything on it — so a plate's geometry is cut to its own
+outline rather than being a quad with the corners painted out, and the picture
+is drawn at the plate's own aspect inside its atlas cell so nothing is
+stretched. The faces are painted, so a world needs no sign artwork of its own.
+</p>
+<p><strong>How fast a bend is worth comes off the bend.</strong>
+<code>corner_speed(radius)</code> is what the tyres will hold —
+<code>sqrt(grip * g * r)</code> — and <code>advisory_speed(radius)</code> is
+what the tab says: 60% of it, rounded down to 10 km/h, because a sign carrying
+the limit is a sign that is wrong for a wet road, a laden car or a cold tyre.
+<code>cornering_radius(speed)</code> is the same rule read the other way, which
+is what a road being laid out to a design speed uses, so a road is signed by the
+rule it was built by. All three are in
+<code>OpenGLContext.scenegraph.road</code>.</p>
+<p><strong>How much road a driver can see is geometry too.</strong>
+<code>sight_distances(line, clear, reach, closed)</code> answers, for every
+point of a centreline, how far along it can be seen. A line of sight is the
+<em>chord</em> between the driver and what they are looking at, and what blocks
+it is whatever stands inside the bend between the two: <code>clear</code> is how
+far to the side of the road the view is unobstructed, so a bend of radius
+<em>r</em> is seen about <code>sqrt(8 * r * clear)</code> round it, and a
+straight to the end of <code>reach</code> (600&nbsp;m by default,
+<code>SIGHT_REACH</code>). All in metres.</p>
+<p><code>clear</code> is one figure for the road or <strong>one for each point
+of it</strong>, because a road does not run through the same thing for its whole
+length: a viaduct has a see-through railing and a drop beyond it that holds
+nothing, so it is seen along however it curves, while inside a bore the wall is
+at the road's edge and what is not in the tube is not seen at all. Ground
+geometry only &mdash; a crest that hides the road beyond it is a different
+question and this does not answer it.</p>
+<p>What reads it is anything deciding whether there is room for a manoeuvre on
+road nobody has looked at yet: an empty look-ahead on a bend is a road nobody
+can see the end of, not a road with nothing on it. On a two-lane road it decides
+whether an overtake is on at all &mdash; getting by an 80&nbsp;km/h car at racing
+speed wants a couple of hundred metres of it, and a road cut through a wood with
+the trees at the verge offers half that.</p>
+<p><strong>The posted limit is told to the road, not read off it</strong>, since
+it is a decision rather than a measurement:
+<code>ProceduralWorld.posted</code> (100 km/h by default, 0 for an unposted
+road) is repeated along the circuit every 1500 m, skipping anywhere a warning
+already stands — two plates a driver reads as one sign is a driver who has read
+neither.</p>
 <p>A warning stands a <strong>stopping distance</strong> before what it is about:
 far enough to act on, near enough to be about this hazard and not the next.
 What counts as a hazard is measured against the design speed, because there is
 always some speed at which any corner is too tight. Two hazards close enough
 together are one sign -- a left and a right become a double bend, which is what
-that sign means, and anything else keeps whichever matters more.</p>
+that sign means, anything else keeps whichever matters more, and the sign keeps
+the lower of the two speeds.</p>
 <p>A sign stands inside the corridor the road was cleared through, which the
 world knows and the sign does not: <code>SignProfile.offset</code> is how far
 outside the road's own edge the post goes, and a world with trees up to the verge

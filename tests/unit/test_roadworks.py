@@ -514,9 +514,14 @@ class TestItIsDarkInThere:
         assert portals.colors is None or float(portals.colors[:, 0].min()) > 0.9
 
     def test_the_shade_is_opaque(self) -> None:
-        """A colour with alpha under one would make the lining see-through."""
+        """The fourth channel is how much sky reaches the lining, not how much
+        of the hillside shows through it: a material whose vertex colours are
+        baked light reads it as occlusion and leaves the surface solid."""
         meshes = tunnel_meshes(_straight(length=400.0, height=0.0), ROAD)
-        assert np.allclose(meshes['bore'].colors[:, 3], 1.0)
+        material = meshes['bore'].material
+        assert material.bakedLight
+        assert float(material.baseColor[3] if len(material.baseColor) > 3
+                     else 1.0) == 1.0
 
 
 class TestABoreIsAClosedTube:
@@ -824,3 +829,115 @@ class TestTheFittingsThemselves:
         tunnel = TunnelProfile()
         meshes = tunnel_meshes(_straight(length=300.0, height=0.0), ROAD, tunnel)
         assert float(meshes['lamps'].positions[:, 1].min()) > tunnel.clearance / 2.0
+
+
+class TestABoreIsLitOnce:
+    """The lining carries its own light: the pool each luminaire throws is baked
+    onto its vertices, which is what lets a bore be lit at any distance for
+    nothing. Lit *again* by the runtime lights, the same lamps are counted
+    twice -- and because only the few fittings the car is among become real
+    lights, the lining brightens and dims as they are switched, which reads as
+    the tunnel flickering as you drive down it.
+    """
+
+    @staticmethod
+    def _bore(**named):
+        line = np.stack([np.zeros(40), np.zeros(40), np.linspace(0, 200, 40)],
+                        axis=-1)
+        return tunnel_meshes(line, **named)
+
+    def test_the_lining_carries_the_lamps_rather_than_being_tinted_by_them(
+            self) -> None:
+        found = self._bore()['bore'].material
+        assert found.bakedLight and not found.unlit
+
+    def test_because_it_carries_its_own(self) -> None:
+        found = self._bore()['bore']
+        assert found.colors is not None and len(found.colors)
+
+    def test_a_material_a_caller_brings_decides_the_look_and_not_the_light(
+            self) -> None:
+        """What concrete a bore is lined with is the caller's; whether the
+        scene lights it a second time is not, because the shade baked along it
+        only means anything if nothing else is added to it."""
+        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+        wanted = PBRMaterial(baseColor=(0.5, 0.5, 0.5))
+        found = self._bore(material=wanted)['bore'].material
+        assert tuple(found.baseColor) == tuple(wanted.baseColor)
+        assert found.bakedLight and not wanted.bakedLight
+
+    def test_the_portals_are_lit_like_anything_else_outside(self) -> None:
+        """A portal is seen from the daylight, and what it looks like is what
+        the sun is doing to it."""
+        assert not self._bore()['portals'].material.bakedLight
+
+
+class TestBakedLightSurvivesABake:
+    """A world writes its tunnels into glTF and a game reads them back, so a
+    lining whose vertex colours are light rather than tint has to say so in the
+    file. Read as a tint the concrete comes out dark and is then lit again, and
+    the lamps that became real lights are counted twice.
+    """
+
+    def test_a_written_bore_says_so_in_the_file(self, tmp_path) -> None:
+        from OpenGLContext.loaders.gltf.writer import write_glb
+        line = np.stack([np.zeros(24), np.zeros(24), np.linspace(0, 120, 24)],
+                        axis=-1)
+        path = tmp_path / 'bore.glb'
+        write_glb(tunnel_meshes(line)['bore'], str(path))
+        assert b'OGLC_materials_baked_light' in path.read_bytes()
+
+    def test_and_an_ordinary_surface_does_not(self, tmp_path) -> None:
+        from OpenGLContext.loaders.gltf.writer import write_glb
+        line = np.stack([np.zeros(24), np.zeros(24), np.linspace(0, 120, 24)],
+                        axis=-1)
+        path = tmp_path / 'deck.glb'
+        write_glb(bridge_meshes(line)['deck'], str(path))
+        assert b'OGLC_materials_baked_light' not in path.read_bytes()
+
+    def test_and_a_reader_takes_it_back_off_the_file(self) -> None:
+        from OpenGLContext.loaders.gltf.materials import _MATERIAL_EXT_HANDLERS
+        handler = _MATERIAL_EXT_HANDLERS['OGLC_materials_baked_light']
+        assert handler({}, lambda *args, **named: None) == {'bakedLight': True}
+
+
+class TestABoreIsDarkBecauseItIsEnclosed:
+    """A tunnel is a hole in the ground, and no sky reaches the middle of it.
+
+    The lamps baked onto the lining say how much light is *added* there; what
+    says how much of the outdoors still arrives is the fourth channel of the
+    same vertex colour, read as occlusion. Without it the sky lights the inside
+    of a bore as evenly as it lights the hillside over it, and no amount of
+    dimming the lamps makes the interior read as an interior.
+    """
+
+    @staticmethod
+    def _bore(length=400.0, **named):
+        line = np.stack([np.zeros(80), np.zeros(80),
+                         np.linspace(0, length, 80)], axis=-1)
+        return tunnel_meshes(line, **named)
+
+    def test_the_middle_of_a_long_bore_sees_no_sky(self) -> None:
+        colors = self._bore()['bore'].colors
+        assert float(colors[:, 3].min()) < 0.02
+
+    def test_the_mouth_of_it_sees_all_of_it(self) -> None:
+        colors = self._bore()['bore'].colors
+        assert float(colors[:, 3].max()) > 0.98
+
+    def test_and_what_it_sees_falls_off_as_the_road_goes_in(self) -> None:
+        from OpenGLContext.scenegraph.roadworks import bore_sky
+        line = np.stack([np.zeros(60), np.zeros(60),
+                         np.linspace(0, 300, 60)], axis=-1)
+        sky = bore_sky(line)
+        assert sky[0] > sky[10] > sky[20] >= sky[len(sky) // 2]
+
+    def test_a_short_bore_is_daylight_all_the_way_through(self) -> None:
+        """Nothing is enclosed if you can see out of both ends of it."""
+        colors = self._bore(length=20.0)['bore'].colors
+        assert float(colors[:, 3].min()) > 0.5
+
+    def test_the_light_baked_on_it_is_still_its_own_three_channels(self) -> None:
+        colors = self._bore()['bore'].colors
+        assert float(colors[:, :3].min()) >= 0.0
+        assert float(colors[:, :3].max()) <= 1.0

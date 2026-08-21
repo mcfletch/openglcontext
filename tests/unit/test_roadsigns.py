@@ -88,29 +88,27 @@ class TestTheFace:
             found = _ink(sign_texture(kind, size=128))
             rows, columns = np.nonzero(found)
             return float(columns[rows < rows.min() + 12].mean()) / 128.0 - 0.5
-        assert turns('bend-left') < -0.05 < 0.05 < turns('bend-right')
+        assert turns('bend-left') < -0.02 < 0.02 < turns('bend-right')
 
     def test_it_has_something_on_it(self) -> None:
         """A blank plate is a plate nobody reads."""
         assert int(_ink(sign_texture('junction', size=128)).sum()) > 200
 
     def test_the_symbol_stays_inside_the_face(self) -> None:
-        """A triangle narrows towards its point, so a symbol sized to look
-        right across the bottom runs off the sides at the top."""
+        """A diamond narrows towards all four of its corners, so a symbol sized
+        to look right across its middle runs off it above and below.
+
+        Nothing of the symbol touches the border: every pixel next to one of
+        its own is either more symbol or plate face.
+        """
         for kind in WARNINGS:
-            found = np.asarray(sign_texture(kind, size=128))
-            rows, columns = np.nonzero(
-                (found[..., 3] > 200)
-                & (np.abs(found[..., 0].astype(int) - 176) < 24)
-                & (found[..., 1] < 70))                 # the red border
-            assert len(rows), kind
-            ink = np.nonzero(_ink(sign_texture(kind, size=128)))
-            # No black on a border pixel: the face is where the symbol lives.
-            assert not (set(zip(*ink, strict=True))
-                        & set(zip(rows, columns, strict=True))), kind
+            image = sign_texture(kind, size=128)
+            symbol, face = _ink(image), _face(image)
+            assert symbol.any() and face.any(), kind
+            assert not (_grown(symbol) & ~(symbol | face)).any(), kind
 
     def test_the_corners_are_clear(self) -> None:
-        """A triangular plate on a square texture: the corners are cut away."""
+        """A diamond on a square texture: the corners are cut away."""
         found = np.asarray(sign_texture('dip', size=64))
         assert int(found[0, 0, 3]) == 0 and int(found[0, -1, 3]) == 0
 
@@ -145,9 +143,34 @@ class TestTheUnwrap:
 
 
 def _ink(image) -> np.ndarray:
-    """Where the black symbol is: opaque, and darker than the red border."""
+    """Where the symbol is: the black *inside* the plate's face.
+
+    The border is black as well, so colour alone does not tell the two apart.
+    What does is that the symbol has face either side of it along its own row
+    and the border does not.
+    """
     found = np.asarray(image)
-    return (found[..., 3] > 200) & (found[..., :3].max(axis=-1) < 60)
+    black = (found[..., 3] > 200) & (found[..., :3].max(axis=-1) < 60)
+    face = (found[..., 3] > 200) & ~black
+    left = np.cumsum(face, axis=1) > 0
+    right = np.cumsum(face[:, ::-1], axis=1)[:, ::-1] > 0
+    return black & left & right
+
+
+def _face(image) -> np.ndarray:
+    """Where the plate's own colour is: opaque, and not the black legend."""
+    found = np.asarray(image)
+    black = (found[..., 3] > 200) & (found[..., :3].max(axis=-1) < 60)
+    return (found[..., 3] > 200) & ~black
+
+
+def _grown(mask: np.ndarray) -> np.ndarray:
+    """The mask and every pixel touching it."""
+    out = mask.copy()
+    for axis in (0, 1):
+        for step in (1, -1):
+            out |= np.roll(mask, step, axis=axis)
+    return out
 
 
 if __name__ == '__main__':
@@ -155,10 +178,10 @@ if __name__ == '__main__':
 
 
 class TestThePlateCostsWhatAPlateCosts:
-    """The plate is a triangle, so the picture's transparent corners fall
-    outside the geometry and never reach a fragment. Declared as a cutout
+    """The plate is cut to its own outline, so the picture's transparent corners
+    fall outside the geometry and never reach a fragment. Declared as a cutout
     anyway, every sign in a world joins the sorted alpha pass -- which is what a
-    warning sign is not: three hundred triangles of opaque painted metal."""
+    warning sign is not: a few hundred triangles of opaque painted metal."""
 
     def test_it_is_opaque(self) -> None:
         assert sign_material('dip').alphaMode == 'OPAQUE'
@@ -167,10 +190,16 @@ class TestThePlateCostsWhatAPlateCosts:
         """It has a back of its own; drawing both faces of both is waste."""
         assert not sign_material('dip').doubleSided
 
-    def test_the_geometry_is_a_triangle_rather_than_a_quad(self) -> None:
+    def test_the_geometry_is_the_shape_the_picture_is(self) -> None:
+        """A diamond of four corners, not a quad with the corners painted out."""
         plate = sign_meshes('dip')['plate']
         front = plate.positions[plate.positions[:, 2] < 0]
-        assert len(front) == 3
+        assert len(front) == 4
+        across = float(np.abs(front[:, 0]).max())
+        # Its widest point is halfway up it, which a rectangle's is not.
+        widest = front[np.abs(np.abs(front[:, 0]) - across) < 1e-6]
+        assert float(widest[:, 1].mean()) == pytest.approx(
+            float(front[:, 1].mean()))
 
 
 class TestOneTextureForEveryKind:

@@ -373,3 +373,65 @@ class TestTheCutOverAStructure:
         blend = morphed_sections(profile, profile.on_structure(),
                                  np.array([0.0, 1.0]))
         assert abs(blend[1, 0, 0]) < abs(blend[0, 0, 0])
+
+
+class TestThePaintIsWhereTheRoadIs:
+    """A road's markings are painted into the surface texture across its whole
+    section, so where the bands fall has to come from the *profile* rather than
+    from a set of fractions. Painted to fractions of a section they do not
+    belong to, the carriageway comes out narrower than it is built: the lane a
+    driver sees is not the lane the car is on, and a car half a lane wide looks
+    like a car that fills one.
+    """
+
+    @staticmethod
+    def _bands(profile, size=512):
+        """Where the tarmac starts and stops across the painted image."""
+        import numpy as np
+        from OpenGLContext.scenegraph.road import TARMAC_ALBEDO, road_texture
+        found = np.asarray(road_texture(size, profile=profile), dtype='d') / 255.0
+        row = found[0]
+        dark = row.max(axis=-1) < max(TARMAC_ALBEDO) * 2.5
+        columns = np.nonzero(dark)[0]
+        return columns.min() / size, (columns.max() + 1) / size
+
+    def test_the_tarmac_is_as_wide_as_the_carriageway(self) -> None:
+        from OpenGLContext.scenegraph.road import RoadProfile
+        profile = RoadProfile(lane_width=3.6, lanes=2)
+        first, last = self._bands(profile)
+        painted = (last - first) * profile.total_width
+        assert painted == pytest.approx(profile.carriageway_width, abs=0.25)
+
+    def test_a_wider_road_paints_a_wider_carriageway(self) -> None:
+        from OpenGLContext.scenegraph.road import RoadProfile
+        narrow = self._bands(RoadProfile(lane_width=3.0, lanes=2))
+        wide = self._bands(RoadProfile(lane_width=3.6, lanes=4))
+        assert (wide[1] - wide[0]) > (narrow[1] - narrow[0])
+
+    def test_the_edge_lines_are_at_the_edge_of_the_carriageway(self) -> None:
+        import numpy as np
+        from OpenGLContext.scenegraph.road import (
+            LINE_ALBEDO,
+            RoadProfile,
+            road_texture,
+        )
+        profile = RoadProfile(lane_width=3.6, lanes=2)
+        size = 512
+        found = np.asarray(road_texture(size, profile=profile), dtype='d') / 255.0
+        row = found[0]
+        paint = np.nonzero(row.min(axis=-1) > min(LINE_ALBEDO) * 0.9)[0]
+        assert len(paint)
+        edge = 0.5 - (profile.carriageway_width / 2.0) / profile.total_width
+        assert paint.min() / size == pytest.approx(edge, abs=0.03)
+
+    def test_and_the_dashes_run_down_the_crown(self) -> None:
+        import numpy as np
+        from OpenGLContext.scenegraph.road import (
+            LINE_ALBEDO,
+            RoadProfile,
+            road_texture,
+        )
+        found = np.asarray(road_texture(512, profile=RoadProfile()),
+                           dtype='d') / 255.0
+        middle = found[:, 256]
+        assert (middle.min(axis=-1) > min(LINE_ALBEDO) * 0.9).any()

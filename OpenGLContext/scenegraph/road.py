@@ -33,8 +33,165 @@ from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 __all__ = [
     'RoadProfile', 'resample_polyline', 'sweep_frames', 'morphed_sections',
     'road_surface', 'road_mesh', 'road_texture', 'tarmac_material',
-    'estimate_normals',
+    'estimate_normals', 'corner_speed', 'cornering_radius', 'advisory_speed',
+    'CAUTION', 'GRAVITY', 'GRIP', 'SPEED_STEP', 'SIGHT_REACH',
+    'sight_distances',
 ]
+
+#: How much of a car's weight is available sideways in a corner, as a fraction:
+#: what a tyre on dry tarmac has to hold it on the line. It is what turns the
+#: speed a road is meant to be driven at into the tightest corner it may have,
+#: and a corner's own radius into the speed it allows.
+GRIP = 1.0
+
+#: Standard gravity, m/s**2.
+GRAVITY = 9.81
+
+#: What fraction of the speed a bend allows its sign says. A sign carrying the
+#: limit is a sign that is wrong for a wet road, a laden car, a cold tyre and a
+#: driver who is not concentrating -- all of which are ordinary. Well inside it
+#: is what an advisory speed is for, and it leaves the number as advice a
+#: careful driver can beat rather than a bound they must not cross.
+CAUTION = 0.6
+
+#: What a sign's speed is rounded down to, in km/h. Signs carry round numbers,
+#: and rounding *down* keeps the advice inside the bend it is about.
+SPEED_STEP = 10
+
+
+def corner_speed(radius: float, grip: float = GRIP) -> float:
+    """How fast a bend of this radius may be taken, in metres per second.
+
+    A car of speed ``v`` on a corner of radius ``R`` needs ``v**2 / R`` of
+    lateral acceleration to hold the line, and has ``grip * g`` to find it with,
+    so the fastest it may go is ``sqrt(grip * g * R)``. A straight -- a radius
+    of infinity -- allows any speed, which is what infinity means here.
+    """
+    radius = float(radius)
+    if radius <= 0.0 or grip <= 0.0:
+        return 0.0
+    return math.sqrt(grip * GRAVITY * radius)
+
+
+def cornering_radius(speed: float, grip: float = GRIP) -> float:
+    """The tightest corner that speed may be driven round, in metres.
+
+    :func:`corner_speed` read the other way, which is what a road being laid out
+    to a design speed needs: there is always some speed at which any corner is
+    too tight, and the answer to which corners count is how fast the road is
+    meant to be driven. A road with no design speed has no limit.
+    """
+    speed = float(speed)
+    if speed <= 0.0 or grip <= 0.0:
+        return 0.0
+    return speed * speed / (grip * GRAVITY)
+
+
+def advisory_speed(radius: float, grip: float = GRIP, caution: float = CAUTION,
+                   step: int = SPEED_STEP) -> int:
+    """What a sign before a bend of this radius says, in km/h.
+
+    :data:`CAUTION` of what the bend allows, rounded *down* to ``step`` so the
+    number on the plate is inside the corner rather than at its limit. A bend
+    too tight for even one step is signed at one step rather than at zero: a
+    plate saying nothing tells a driver nothing, and there is no corner a car
+    cannot be driven round slowly enough.
+
+    Zero for a straight, which is not a bend and wants no sign.
+    """
+    found = corner_speed(radius, grip)
+    if not math.isfinite(found):
+        return 0
+    step = max(int(step), 1)
+    return max(int(found * 3.6 * float(caution)) // step * step, step)
+
+
+#: How far ahead sight is worked out before it stops mattering, in metres.
+#: Past this a driver is planning rather than looking, and the answer costs
+#: work per point of the road to produce.
+SIGHT_REACH = 600.0
+
+
+def sight_distances(line: Any, clear: float,
+                    reach: float = SIGHT_REACH,
+                    closed: bool = True) -> np.ndarray:
+    """How far down the road can be seen from each point of it, in metres.
+
+    A line of sight is the **chord** between the driver and what they are
+    looking at, and what blocks it is whatever stands inside the bend between
+    the two. ``clear`` is how far inside the road the view is unobstructed --
+    the carriageway and whatever is cut back beside it -- so a road through
+    open ground can be seen round where the same road with trees at the verge
+    cannot.
+
+    A straight is seen to the end of ``reach``; a bend of radius *r* is seen
+    about `sqrt(8 * r * clear)` round it. All in metres.
+
+    The road between the two points is checked at its middle, which is where an
+    arc departs its chord: a road is locally an arc, and its middle is where it
+    bows furthest out of the line.
+
+    Every point of the line gets an answer, because the caller is a driver
+    asking about wherever it happens to be and the road does not change under
+    it. Ground geometry only: a crest that hides the road beyond it is a
+    different question and this does not answer it.
+    """
+    points = np.asarray(line, dtype='d')
+    if points.shape[-1] >= 3:
+        points = points[:, [0, 2]]
+    count = len(points)
+    if count < 2:                                # pragma: no cover - no road
+        return np.zeros(count)
+    step = np.roll(points, -1, axis=0) - points
+    if not closed:
+        step[-1] = step[-2]
+    run = np.linalg.norm(step, axis=1)
+    # Distance driven from each point to each later one, which is what a
+    # driver has to cover rather than the straight line to it.
+    walked = np.concatenate([[0.0], np.cumsum(run)])
+    around = float(walked[-1])
+    reach = float(reach)
+    # Whatever is clear beside each point, or the same figure at all of them.
+    clear = np.broadcast_to(np.asarray(clear, dtype='d'), (count,))
+    seen = np.full(count, reach)
+    blocked = np.zeros(count, dtype=bool)
+    index = np.arange(count)
+    spacing = max(float(np.mean(run)), 1e-6)
+    for ahead in range(2, int(reach / spacing) + 3):
+        far = index + ahead
+        mid = index + ahead // 2
+        if closed:
+            arc = walked[far % count] - walked[index]
+            arc = np.where(far >= count, arc + around, arc)
+            there, between = points[far % count], points[mid % count]
+        else:
+            ends = np.minimum(far, count - 1)
+            arc = walked[ends] - walked[index]
+            there = points[ends]
+            between = points[np.minimum(mid, count - 1)]
+        chord = there - points
+        span = np.linalg.norm(chord, axis=1)
+        # How far the road bows out of the line joining its two ends, which is
+        # what has to stay inside the clear ground for either end to see the
+        # other. A chord of no length is a road that has doubled back on
+        # itself, and nobody sees round that.
+        offset = between - points
+        bow = np.where(
+            span > 1e-9,
+            np.abs(chord[:, 0] * offset[:, 1] - chord[:, 1] * offset[:, 0])
+            / np.maximum(span, 1e-9),
+            np.inf)
+        away = bow > clear
+        if not closed:
+            # The end of an open road is the end of what there is to see.
+            away = away | (index + ahead > count - 1)
+        found = away & ~blocked
+        seen[found] = np.minimum(arc[found], reach)
+        blocked |= found | (arc >= reach)
+        if blocked.all():
+            break
+    return seen
+
 
 #: Which way is up when a road has no other opinion. A road banks with its
 #: grade but does not roll over, so the frame is built against world up.
@@ -52,6 +209,11 @@ LINE_ALBEDO = (0.86, 0.86, 0.82)
 #: How wide the kerb is where a road runs over a structure, in metres -- what
 #: the verge becomes when there is no ground beside the road to fall to.
 EDGE_BEAM = 0.4
+
+#: How wide a painted line is, in metres. In metres rather than in fractions of
+#: the image, so a road of any width is marked out the way a driver expects one
+#: to be.
+LINE_WIDTH = 0.15
 
 #: Wet, asphalt darkens and turns near-mirror; the environment then does the
 #: work a reflection pass would otherwise have to.
@@ -235,7 +397,8 @@ def morphed_sections(profile: RoadProfile, other: RoadProfile,
             "profiles with %d and %d section points cannot be blended"
             % (len(here), len(there)))
     weight = np.asarray(blend, dtype='d').reshape(-1, 1, 1)
-    return here[None] * (1.0 - weight) + there[None] * weight
+    found: np.ndarray = here[None] * (1.0 - weight) + there[None] * weight
+    return found
 
 
 def road_surface(points: Any, profile: RoadProfile, sections: Any = None
@@ -329,7 +492,8 @@ def road_mesh(points: Any, profile: Optional[RoadProfile] = None,
     return PBRMesh(positions=positions, normals=normals, texcoords=texcoords,
                    tangents=tangents, indices=indices,
                    colors=_road_colors(points, positions, shade),
-                   material=material if material is not None else tarmac_material())
+                   material=(material if material is not None
+                             else tarmac_material(profile=profile)))
 
 
 def _road_colors(points: Any, positions: Any, shade: Any) -> Any:
@@ -349,7 +513,8 @@ def _road_colors(points: Any, positions: Any, shade: Any) -> Any:
     return colors
 
 
-def road_texture(size: int = 512, seed: int = 0) -> Any:
+def road_texture(size: int = 512, seed: int = 0,
+                 profile: Optional[RoadProfile] = None) -> Any:
     """The road surface across its whole section, as one image.
 
     Bands from the left edge: verge, shoulder, carriageway with its edge lines
@@ -359,28 +524,33 @@ def road_texture(size: int = 512, seed: int = 0) -> Any:
 
     The image is the *width* of the section and repeats along the road, so the
     dashes are as long as the profile's ``texture_length`` makes them.
+
+    **Where each band falls comes from the profile**, through the same
+    :meth:`RoadProfile.section_u` the geometry is unwrapped by, so the paint
+    lands where the road is. Painted to fixed fractions instead, a carriageway
+    comes out narrower than it was built and the lane a driver sees is not the
+    lane the car is on -- which makes a car half a lane wide look like a car
+    that fills one, with a wheel over a line that is not where the tarmac ends.
     """
     from PIL import Image
+    profile = profile or RoadProfile()
     rng = np.random.default_rng(seed)
     pixels = np.zeros((size, size, 3), dtype='d')
     across = np.linspace(0.0, 1.0, size)[None, :]
 
-    # The bands, as fractions of the section. These follow the default profile's
-    # proportions; a road with an unusual section still reads correctly because
-    # the markings stay inside the carriageway band.
-    verge = 0.18
-    shoulder = 0.10
+    half = profile.carriageway_width / 2.0
+    kerb = _texture_u(profile, half)             # where the tarmac ends
+    berm = _texture_u(profile, half + profile.shoulder_width)
     grass = np.array(VERGE_ALBEDO)
     gravel = np.array(GRAVEL_ALBEDO)
     tarmac = np.array(TARMAC_ALBEDO)
 
     band = np.zeros((1, size, 3))
-    band += grass * (across < verge)[..., None]
-    band += gravel * ((across >= verge) & (across < verge + shoulder))[..., None]
-    band += tarmac * ((across >= verge + shoulder)
-                      & (across <= 1.0 - verge - shoulder))[..., None]
-    band += gravel * ((across > 1.0 - verge - shoulder) & (across <= 1.0 - verge))[..., None]
-    band += grass * (across > 1.0 - verge)[..., None]
+    band += grass * (across < 1.0 - berm)[..., None]
+    band += gravel * ((across >= 1.0 - berm) & (across < 1.0 - kerb))[..., None]
+    band += tarmac * ((across >= 1.0 - kerb) & (across <= kerb))[..., None]
+    band += gravel * ((across > kerb) & (across <= berm))[..., None]
+    band += grass * (across > berm)[..., None]
     pixels += band
 
     # Aggregate speckle, in proportion to how bright each band is, so the
@@ -389,8 +559,10 @@ def road_texture(size: int = 512, seed: int = 0) -> Any:
     pixels = np.clip(pixels * (1.0 + grain), 0.0, 1.0)
 
     paint = np.array(LINE_ALBEDO)
-    edge = 0.012
-    for centre in (verge + shoulder + edge * 1.5, 1.0 - verge - shoulder - edge * 1.5):
+    # A line's width in metres rather than in fractions of the image, so a road
+    # of any width gets a marking a driver would recognise.
+    edge = LINE_WIDTH / 2.0 / max(profile.total_width, 1e-6)
+    for centre in (1.0 - kerb + edge * 1.5, kerb - edge * 1.5):
         stripe = np.abs(across - centre) < edge
         pixels[:, stripe[0]] = paint
 
@@ -402,8 +574,20 @@ def road_texture(size: int = 512, seed: int = 0) -> Any:
     return Image.fromarray((pixels * 255.0).astype('u1'), 'RGB')
 
 
+def _texture_u(profile: RoadProfile, across: float) -> float:
+    """Where a point ``across`` metres right of the crown reads the texture.
+
+    Read off the profile's own unwrap rather than worked out again, so the paint
+    and the geometry cannot disagree about where the road's edge is.
+    """
+    section = np.asarray(profile.section(), dtype='d')
+    return float(np.interp(float(across), section[:, 0],
+                           np.asarray(profile.section_u(), dtype='d')))
+
+
 def tarmac_material(wetness: float = 0.0, seed: int = 0,
-                    texture_size: int = 512, image: Any = None) -> PBRMaterial:
+                    texture_size: int = 512, image: Any = None,
+                    profile: Optional[RoadProfile] = None) -> PBRMaterial:
     """The road surface as a PBR material.
 
     The colour is the texture's, because one image spans tarmac, gravel and the
@@ -421,5 +605,6 @@ def tarmac_material(wetness: float = 0.0, seed: int = 0,
         roughness=DRY_ROUGHNESS + (WET_ROUGHNESS - DRY_ROUGHNESS) * wetness,
         doubleSided=False,
         textures={'baseColor': image if image is not None
-                  else PBRTexture(road_texture(texture_size, seed), srgb=True)},
+                  else PBRTexture(road_texture(texture_size, seed, profile),
+                                  srgb=True)},
     )
