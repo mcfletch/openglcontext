@@ -76,6 +76,49 @@ self.addHUDLayer(self.hud)</pre>
     layer is measured and painted afresh each frame.</p>
 </section>
 
+<section id="demo">
+  <h2>Seeing it work</h2>
+  <figure>
+    <img src="images/demos/hud_demo.jpg"
+         alt="A reticule, two bar meters, a lamp row, a message, a mini-map and an ammunition read-out drawn over a dusk world of pillars">
+    <figcaption><strong><code>python tests/hud_demo.py</code></strong>
+      &mdash; one <code>HUDLayer</code> holding a game's whole screen furniture
+      over a lit world, every element placed by the corner it names. A
+      <code>Crosshair</code> in the middle, whose <code>spread</code> opens and
+      closes on the clock the way a weapon's accuracy does; two
+      <code>BarMeter</code>s bottom left, one reading green and one amber
+      because that is where each value sits against its own thresholds; a
+      <code>LampRow</code> of five lives across the top with a
+      <code>MessageQueue</code> fading out underneath it; a
+      <code>MiniMap</code> of the pillar ring with the player marked on it; a
+      <code>Readout</code> bottom right, drawing a nine-slice icon beside its
+      number; the key legend top right in a <code>TextBlock</code>; and a
+      <code>DamageIndicator</code> washing the right-hand edge, which is the
+      way the last hit came from. The meters sweep their whole
+      range on a clock, so each threshold colour comes up in turn.</figcaption>
+  </figure>
+  <p>Nothing on that screen is interactive, and the world underneath hears
+    every event as though the HUD were not there. The keys fire the transient
+    effects: <code>x</code> takes a hit, <code>v</code> puts a
+    <code>ScreenWash</code> over the viewport, <code>space</code> puts a hit
+    mark on the reticule, <code>m</code> posts a message, and
+    <code>alt-f</code> brings up the developer overlay &mdash; where the demo
+    registers a section of its own numbers, at the top of the plate.</p>
+  <p>The demo at its smallest is two widgets, which is enough to be worth
+    having on screen:</p>
+  <pre>from OpenGLContext.ui.hudwidgets import BarMeter, Crosshair, HUDLayer
+
+# in OnInit, after the base class's
+self.health = BarMeter(label='HEALTH', value=64, anchor='bottom-left')
+self.addHUDLayer(HUDLayer(children=[
+    Crosshair(shape='cross-dot', gap=5, length=8),
+    self.health,
+]))
+
+# and from then on, wherever the number changes
+self.health.value = 22          # red, from the meter's own thresholds</pre>
+</section>
+
 <section id="anchors">
   <h2>Placement is by anchor</h2>
   <p>Health in one corner, ammunition in another, the reticule in the middle:

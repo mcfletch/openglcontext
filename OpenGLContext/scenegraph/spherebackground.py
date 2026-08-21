@@ -162,6 +162,19 @@ class _SphereBackground( object ):
             not len(self.groundAngle) and 
             not len(self.groundColor)
         ):
+            # Nothing but sky colours. One of them, with no angle to grade it
+            # against, is VRML97's way of saying the sky is that colour all
+            # over, so it spans the sphere; with no colours at all there is
+            # nothing to draw.
+            if len(self.skyColor):
+                # Three stops rather than two: buildSphere lays a vertex pair
+                # per stop between the poles, so a set of only the two poles
+                # describes no surface and nothing rasterises.
+                uniform = zeros((3, 4), 'f')
+                uniform[:, 1:] = self.skyColor[0]
+                uniform[1, 0] = pi / 2.0
+                uniform[2, 0] = pi
+                return uniform
             return []
         # now need to trim skyA and skyC to lowest groundA
         # and (likely) generate a new A and C for the sky's last value...
