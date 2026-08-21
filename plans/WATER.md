@@ -133,3 +133,17 @@ field is analytic, which is what makes it cheap, seamless and reproducible.
 
 **Not a physics body.** Buoyancy and drag read the height field this provides;
 what they do with it belongs to whatever moves the body.
+
+## What was left for later
+
+Three things the wave field does not do, each with a plan of its own:
+
+- [WATER-GERSTNER-CRESTS.md](WATER-GERSTNER-CRESTS.md) — the field is a sum of
+  sines, so it is symmetric about its mean and `choppy` is a bigger swell
+  rather than a choppier sea. Gerstner displacement gives it narrow crests and
+  flat troughs, at the cost of the height-field contract named above.
+- [WATER-FOAM.md](WATER-FOAM.md) — nothing goes white. No foam term exists
+  anywhere in the package or the shaders.
+- [WATER-SHOALING.md](WATER-SHOALING.md) — the field never sees the bed, so a
+  swell runs up a beach unchanged and stops at the waterline instead of
+  breaking on it.
