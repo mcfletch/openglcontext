@@ -90,6 +90,12 @@ class PBRMaterial(node.Node):
     # lightmaps are authored against an engine-specific exposure.
     lightmapStrength = field.newField('lightmapStrength', 'SFFloat', 1, 1.0)
     unlit = field.newField('unlit', 'SFBool', 1, False)               # KHR_materials_unlit
+    #: Whether ``COLOR_0`` is *baked light* rather than a tint. Set, the
+    #: vertex colours are added as emission and the surface keeps its own
+    #: colour -- so light worked out when the world was built is on the
+    #: surface whatever the scene is doing, and a light in the scene still
+    #: shades that surface the way it shades any other.
+    bakedLight = field.newField('bakedLight', 'SFBool', 1, False)
     emissiveStrength = field.newField('emissiveStrength', 'SFFloat', 1, 1.0)  # KHR_materials_emissive_strength
     specular = field.newField('specular', 'SFFloat', 1, 1.0)          # KHR_materials_specular factor
     specularColor = field.newField('specularColor', 'SFColor', 1, (1.0, 1.0, 1.0))
@@ -131,7 +137,8 @@ class PBRMaterial(node.Node):
     _UBO_FIELDS = frozenset({
         'baseColor', 'metallic', 'roughness', 'emissiveColor', 'occlusionStrength',
         'normalScale', 'transparency', 'alphaMode', 'alphaCutoff', 'doubleSided',
-        'texCoordMask', 'unlit', 'emissiveStrength', 'specular', 'specularColor',
+        'texCoordMask', 'unlit', 'bakedLight', 'emissiveStrength',
+        'specular', 'specularColor',
         'clearcoat', 'clearcoatRoughness', 'sheenColor', 'sheenRoughness', 'ior',
         'transmission', 'thickness', 'attenuationColor', 'attenuationDistance',
         'diffuseTransmission', 'diffuseTransmissionColor', 'anisotropyStrength',

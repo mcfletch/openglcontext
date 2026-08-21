@@ -251,6 +251,10 @@ def _kind_for(array: np.ndarray, name: str, allowed: Sequence[int]) -> str:
 # in materials.py is the other half of the pair.
 _MATERIAL_EXTENSIONS: tuple[tuple[str, dict[str, tuple[str, Any]]], ...] = (
     ('KHR_materials_unlit', {}),
+    # Ours: the vertex colours on this material are light worked out when the
+    # world was built rather than a tint on the surface, so a reader adds them
+    # as emission and lets its own lights shade the surface underneath.
+    ('OGLC_materials_baked_light', {}),
     ('KHR_materials_emissive_strength',
      {'emissiveStrength': ('emissiveStrength', 1.0)}),
     ('KHR_materials_ior', {'ior': ('ior', 1.5)}),
@@ -532,6 +536,10 @@ class GLTFWriter:
                     block[key] = _factor(value)
             if extension == 'KHR_materials_unlit':
                 if bool(getattr(material, 'unlit', False)):
+                    wanted[extension] = {}
+                continue
+            if extension == 'OGLC_materials_baked_light':
+                if bool(getattr(material, 'bakedLight', False)):
                     wanted[extension] = {}
                 continue
             if block or extension in wanted:

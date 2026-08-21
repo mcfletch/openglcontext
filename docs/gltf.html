@@ -150,6 +150,19 @@ browses the whole sample set with side-by-side reference screenshots.</p>
     <code>EXT_texture_webp</code>, and the legacy
     <code>KHR_materials_pbrSpecularGlossiness</code> (converted to
     metallic-roughness).</li>
+  <li><strong>Baked light</strong>: <code>OGLC_materials_baked_light</code>, this
+    project's own, says a mesh's <code>COLOR_0</code> is light worked out when
+    the world was built rather than a tint on the surface. Its colour channels
+    are added as emission and leave the material's own colour alone; its fourth
+    channel is how much of the environment reaches the surface, read as
+    occlusion rather than as transparency. What it is for is a surface whose
+    lighting cannot be afforded at runtime &mdash; the lining of a tunnel with a
+    lamp every twenty-five metres, see
+    <a href="roads.html">Roads</a> &mdash; where a scene light still shades the
+    surface on top of what was baked, so a headlight paints its own circle
+    across it. Written by the writer and read back by the loader; a file
+    carrying it renders correctly in a viewer that ignores it, as a surface
+    tinted by its vertex colours.</li>
   <li><strong>Geometry compression</strong>: <code>KHR_draco_mesh_compression</code>
     when the optional <code>DracoPy</code> package is installed
     (<code>pip install DracoPy</code>, or <code>OpenGLContext[draco]</code>). Without

@@ -172,7 +172,9 @@ def _material_factors(material: Any) -> dict:
             attenuation_color=tuple(m.attenuationColor)[:3],
             attenuation_distance=float(m.attenuationDistance),
             uv_transform=getattr(m, 'uv_transform', None),
-            tex_coord_mask=int(getattr(m, 'texCoordMask', 0) or 0),
+            tex_coord_mask=(int(getattr(m, 'texCoordMask', 0) or 0)
+                            | (BAKED_LIGHT_BIT
+                               if getattr(m, 'bakedLight', False) else 0)),
             iridescence=float(getattr(m, 'iridescence', 0.0)),
             iridescence_ior=float(getattr(m, 'iridescenceIor', 1.3)),
             iridescence_thick_min=float(getattr(m, 'iridescenceThicknessMin', 100.0)),
@@ -227,6 +229,12 @@ def pbr_feature_defines(enabled: Optional[Any] = None) -> list:
     keep = set(PBR_OPTIONAL_FEATURES if enabled is None else enabled)
     return ['#define USE_%s %d' % (f, 1 if f in keep else 0)
             for f in PBR_OPTIONAL_FEATURES]
+
+
+#: Which bit of the texture-coordinate mask says the vertex colours are
+#: baked light rather than a tint. Above the per-channel UV-set bits (1 to
+#: 32), and read by the fragment shader as ``bakedLightMode``.
+BAKED_LIGHT_BIT = 64
 
 
 def pack_material_block(material: Any) -> np.ndarray:

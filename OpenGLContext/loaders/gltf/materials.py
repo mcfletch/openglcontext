@@ -94,6 +94,18 @@ def _ext_unlit(ext: dict, add: AddTexture) -> dict:
     return {'unlit': True}
 
 
+def _ext_baked_light(ext: dict, add: AddTexture) -> dict:
+    """Ours: ``COLOR_0`` on this material is light, not a tint.
+
+    Written by a baker that worked the light out when the world was built --
+    the pool a tunnel's luminaires throw along its lining, say. A reader adds
+    it as emission and lights the surface underneath as it lights anything
+    else, so the baked lamps are there at any distance and a torch still
+    plays across them.
+    """
+    return {'bakedLight': True}
+
+
 def _ext_emissive_strength(ext: dict, add: AddTexture) -> dict:
     return {'emissiveStrength': float(ext.get('emissiveStrength', 1.0))}
 
@@ -171,6 +183,7 @@ def _ext_anisotropy(ext: dict, add: AddTexture) -> dict:
 
 _MATERIAL_EXT_HANDLERS = {
     'KHR_materials_unlit': _ext_unlit,
+    'OGLC_materials_baked_light': _ext_baked_light,
     'KHR_materials_emissive_strength': _ext_emissive_strength,
     'KHR_materials_specular': _ext_specular,
     'KHR_materials_ior': _ext_ior,
@@ -185,7 +198,8 @@ _MATERIAL_EXT_HANDLERS = {
 }
 
 _MATERIAL_EXT_DEFAULTS = dict(
-    unlit=False, emissiveStrength=1.0, specular=1.0, specularColor=(1.0, 1.0, 1.0),
+    unlit=False, bakedLight=False, emissiveStrength=1.0, specular=1.0,
+    specularColor=(1.0, 1.0, 1.0),
     ior=1.5, clearcoat=0.0, clearcoatRoughness=0.0, sheenColor=(0.0, 0.0, 0.0),
     sheenRoughness=0.0, iridescence=0.0, iridescenceIor=1.3,
     iridescenceThicknessMin=100.0, iridescenceThicknessMax=400.0,
