@@ -736,13 +736,17 @@ void main() {
         // cosine-weighted hemispherical *irradiance*. Approximate that integral by
         // dividing the radiance by PI (finding 4.4) so the analytic diffuse level
         // matches the prefiltered-probe path instead of being ~PI too bright.
-        vec3 envDiffuse = envColor(Nw) * INV_PI;
+        // iblIntensity scales this path exactly as it scales the probe above.
+        // Without it the control works on one machine and not another, and
+        // stops working mid-session wherever `auto` degrades full -> analytic.
+        vec3 envDiffuse = envColor(Nw) * INV_PI * iblIntensity;
         // fade the reflection toward the average sky tone for rough surfaces
-        vec3 envSpec = mix(envColor(Rw), vec3(0.5, 0.52, 0.55), roughness * 0.8);
+        vec3 envSpec = mix(envColor(Rw), vec3(0.5, 0.52, 0.55),
+                           roughness * 0.8) * iblIntensity;
         vec2 ab = envBRDFApprox(NdotV, roughness);
         ambDiffuse  = envDiffuse * albedo * (1.0 - metallic) * ao;
         ambSpecular = envSpec * (F0 * ab.x + specF90 * ab.y) * ao;
-        irrBack = envColor(-Nw) * INV_PI;
+        irrBack = envColor(-Nw) * INV_PI * iblIntensity;
     } else {                           // off: flat ambient, no reflection
         ambDiffuse  = sceneAmbient * albedo * (1.0 - metallic) * ao;
         ambSpecular = vec3(0.0);
@@ -774,7 +778,8 @@ void main() {
         vec3 Rwc = normalize(e2w * reflect(-V, Nc));
         vec3 ccEnv = (iblMode == 2)
             ? textureLod(prefilterMap, Rwc, ccRoughEff * prefilterMaxLod).rgb * iblIntensity
-            : mix(envColor(Rwc), vec3(0.5, 0.52, 0.55), ccRoughEff * 0.8);
+            : mix(envColor(Rwc), vec3(0.5, 0.52, 0.55),
+                  ccRoughEff * 0.8) * iblIntensity;
         float ccFr = F_Schlick(NcdotV, 0.04);
         float ccAtt = 1.0 - ccFactorEff * ccFr;
         ambDiffuse *= ccAtt;
@@ -799,7 +804,8 @@ void main() {
                                        sheenRough * prefilterMaxLod).rgb * iblIntensity;
         } else if (iblMode == 1) {
             sheenE = mix(0.04, 0.72, sheenRough) * (1.0 - 0.4 * NdotV);   // analytic fit
-            sheenRadiance = mix(envColor(Rw), vec3(0.5, 0.52, 0.55), sheenRough * 0.8);
+            sheenRadiance = mix(envColor(Rw), vec3(0.5, 0.52, 0.55),
+                                sheenRough * 0.8) * iblIntensity;
         } else {
             sheenE = mix(0.04, 0.72, sheenRough) * (1.0 - 0.4 * NdotV);
             sheenRadiance = sceneAmbient;

@@ -206,15 +206,16 @@ rather than converting.</p>
     print what the surface is doing.</figcaption>
 </figure>
 
-<p class="technical">Two settings the demo pins, and why. It runs with
-<code>OPENGLCONTEXT_SHADOWS=0</code>: a GPU-displaced sheet casts a shadow map
+<p class="technical">Two things about the picture. The demo runs with
+<code>OPENGLCONTEXT_SHADOWS=0</code>: a GPU-displaced sheet casts its shadow map
 from the flat mesh the CPU still holds, so a moved surface shadows itself in
-bands. And the surfaces read pale rather than deep here because the
-environment-specular term is not weighted by the Fresnel factor a dielectric
-needs, so water's F0 of about 0.02 takes far more of the environment than it
-should; <code>OPENGLCONTEXT_IBL_INTENSITY</code> does not scale that term.
-Neither touches the wave field, which is what the floats measure and what this
-demo is for.</p>
+bands. And the surfaces read pale rather than deep because the index of
+refraction does not reach the shader for mesh geometry, so the reflection is
+computed as if the surface were a mirror instead of a dielectric with an F0
+of about 0.02. The same <code>water_material()</code> on a sphere reflects
+correctly, and varying <code>ior</code> across 1.05, 1.33 and 2.5 changes a
+sphere while leaving a sheet unmoved. Neither touches the wave field, which is
+what the floats measure and what this demo is for.</p>
 
 <p>What an application writes to get a body of water, and to know when something
 is inside it:</p>
