@@ -120,21 +120,28 @@ implements each piece.</p>
   </ul>
 
   <h3>Seeing it work</h3>
-  <p><code>tests/instancing_batched.py</code> is the demo. Three fields of 96
-    spheres and a row of boxes &mdash; 300 shapes &mdash; drawn in four calls,
-    with the counts printed each time they change and <code>i</code> to switch
-    batching off and watch them separate:</p>
+  <figure>
+    <img src="images/demos/instancing_batched.jpg"
+         alt="Three fields of spheres, blue, orange and green, above a row of boxes">
+    <figcaption><strong><code>python tests/instancing_batched.py</code></strong>
+      &mdash; 296 shapes drawn in 4 calls. Each field is built a different way
+      so the grouping rules can be told apart by eye: the blue field shares one
+      <code>Sphere</code> node across all 96 shapes, the orange field gives each
+      shape its own equal <code>Sphere</code>, and the green field shares a node
+      again but under a second material. The boxes are a fourth group because
+      the geometry differs. Press <code>i</code> to switch batching off and
+      watch the draw count jump to 296.</figcaption>
+  </figure>
+  <p>The counts print whenever they change, so the collapse is legible without
+    reading the picture:</p>
   <pre>$ python tests/instancing_batched.py
-instancing ON   300 shapes -&gt; 4 draws (300 instances in 4 groups)
-instancing OFF  300 shapes -&gt; 300 draws (0 instances in 0 groups)</pre>
-  <p>Each field is built a different way, so the two mechanisms below can be
-    told apart by eye: the left field shares one <code>Sphere</code> node across
-    all 96 shapes (identity), the middle gives each shape its own equal
-    <code>Sphere</code> (content), and the right shares a node again but under a
-    second material, which is what makes it a third group rather than part of
-    the first. Running it with
-    <code>OPENGLCONTEXT_INSTANCE_COLLAPSE=off</code> draws the same scene in
-    110 calls, since only the two shared-node fields still batch.</p>
+instancing ON   296 of 296 shapes -&gt; 4 draws (296 instances in 4 groups)
+instancing OFF  296 of 296 shapes -&gt; 296 draws (0 instances in 0 groups)</pre>
+  <p>The first number is what survived frustum culling, which runs
+    <em>before</em> batching. Running the same scene with
+    <code>OPENGLCONTEXT_INSTANCE_COLLAPSE=off</code> takes 106 calls: the two
+    shared-node fields still batch into 2, and the 96 separate spheres and 8
+    separate boxes each cost a draw of their own.</p>
   <p>Nothing in that demo asks to be instanced. It builds ordinary
     <code>Shape</code> nodes and reads the counts back off the context
     afterwards, which is all an application has to do:</p>

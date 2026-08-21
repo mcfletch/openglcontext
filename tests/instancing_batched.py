@@ -9,7 +9,7 @@ thing a game actually gets for free: the **render pass** noticing that
 many shapes are the same and drawing each set in a single call, without
 the geometry nodes knowing anything about it.
 
-Three fields of spheres, 96 shapes each, and a row of boxes:
+Three fields of 96 spheres and a row of 8 boxes -- 296 shapes:
 
  * *left, blue* -- 96 `Shape` nodes that all reference **one** `Sphere`
    node.  This is the VRML `USE` / glTF shared-mesh case, and the batcher
@@ -27,12 +27,15 @@ Three fields of spheres, 96 shapes each, and a row of boxes:
 Press `i` to turn instancing off and on. The counts are printed whenever
 they change, so the collapse is legible without reading the picture:
 
-    instancing ON   300 shapes -> 4 draws (300 instances in 4 groups)
-    instancing OFF  300 shapes -> 300 draws (0 instances in 0 groups)
+    instancing ON   296 of 296 shapes -> 4 draws (296 instances in 4 groups)
+    instancing OFF  296 of 296 shapes -> 296 draws (0 instances in 0 groups)
 
-With `OPENGLCONTEXT_INSTANCE_COLLAPSE=off` the same scene draws in 110:
+The first number is what survived frustum culling, which runs before
+batching; turn away from the fields and both numbers fall together.
+
+With `OPENGLCONTEXT_INSTANCE_COLLAPSE=off` the same scene draws in 106:
 the two shared-node fields still batch into 2, and the 96 separate
-spheres and 12 separate boxes each cost a draw of their own.
+spheres and 8 separate boxes each cost a draw of their own.
 
 Press `c` to print the same counts on demand. The usual keys walk around.
 '''
@@ -50,12 +53,17 @@ BaseContext = testingcontext.getInteractive('glfw')
 
 #: Spheres per field, as columns x rows.  Enough that one draw against one
 #: per shape is an obvious difference rather than a subtle one.
-COLUMNS, ROWS = 12, 8
+COLUMNS, ROWS = 8, 12
 
 #: Radius every sphere in the demo is built at.  The middle field relies on
 #: these being *equal but separate* nodes, which is what content batching is
 #: for, so this is deliberately one constant rather than a per-field value.
 RADIUS = 0.32
+
+#: Shapes the scene is built from: three fields of spheres and a row of boxes.
+#: The pass reports how many of them survived culling, which is a little fewer
+#: whenever some are off the edge of the window.
+SCENE_SHAPES = 3 * COLUMNS * ROWS + COLUMNS
 
 
 def _field(x_offset, material, shared):
@@ -79,7 +87,7 @@ def _field(x_offset, material, shared):
 class TestContext(BaseContext):
     """Four instance groups, and a key that stops them being groups."""
 
-    initialPosition = (1.5, 3.0, 34)
+    initialPosition = (2.4, 4.6, 22)
 
     def OnInit(self):
         BaseContext.OnInit(self)
@@ -96,16 +104,16 @@ class TestContext(BaseContext):
                              color=(0.6, 0.7, 1.0)),
         ]
         # Left: one geometry node, referenced 96 times.
-        children.extend(_field(-13.5, blue, shared=Sphere(radius=RADIUS)))
+        children.extend(_field(-9.0, blue, shared=Sphere(radius=RADIUS)))
         # Middle: 96 separate geometry nodes of equal content.
-        children.extend(_field(-3.0, orange, shared=None))
+        children.extend(_field(-1.0, orange, shared=None))
         # Right: the shared node again, under a different material, so the
         # appearance rather than the geometry is what splits the group.
-        children.extend(_field(7.5, green, shared=Sphere(radius=RADIUS)))
+        children.extend(_field(7.0, green, shared=Sphere(radius=RADIUS)))
         # A row of boxes: a different geometry, so a fourth group.
         for column in range(COLUMNS):
             children.append(Transform(
-                translation=(-13.5 + column * 1.9, -1.6, 0.0),
+                translation=(-9.0 + column * 1.9, -1.6, 0.0),
                 children=[Shape(geometry=Box(size=(0.6, 0.6, 0.6)),
                                 appearance=Appearance(material=grey))]))
 
@@ -129,9 +137,12 @@ class TestContext(BaseContext):
         stats = getattr(self, 'renderStats', None)
         if stats is None:
             return
-        line = ('instancing %-4s %d shapes -> %d draws (%d instances in %d groups)'
+        # stats.shapes is what survived frustum culling, which happens
+        # before batching -- so it is usually a little under the scene total.
+        line = ('instancing %-4s %d of %d shapes -> %d draws '
+                '(%d instances in %d groups)'
                 % ('ON' if self.contextDefinition.instancing else 'OFF',
-                   stats.shapes, stats.draws, stats.instances,
+                   stats.shapes, SCENE_SHAPES, stats.draws, stats.instances,
                    stats.instanceGroups))
         if force or line != self._reported:
             self._reported = line
