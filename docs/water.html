@@ -187,6 +187,73 @@ rather than converting.</p>
 </section>
 
 <section>
+<h2 id="demo">Seeing it work</h2>
+<figure>
+  <img src="images/demos/water_demo.jpg"
+       alt="Three rectangular pools cut in sand, each carrying a grid of orange floats: the left grid flat, the middle gently uneven, the right thrown about by large waves, with a river running across behind them">
+  <figcaption><strong><code>python tests/water_demo.py</code></strong>
+    &mdash; the three named styles side by side over one bed, with a
+    <code>water_ribbon</code> running across behind them along a course that
+    loses height from end to end. Each pool carries a grid of floats put on the
+    surface by <code>wave_height</code> once a frame, which gives the wave field
+    a scale the eye can measure: over one pool&#8217;s footprint
+    <code>STILL</code> on the left is flat to the millimetre,
+    <code>FLOWING</code> in the middle spans 0.34&nbsp;m trough to crest, and
+    <code>CHOPPY</code> on the right spans 1.58&nbsp;m.
+    Every sheet is built with <code>on_gpu=True</code>, so a frame costs four
+    <code>wave_time</code> writes and nothing is re-uploaded. Press
+    <code>v</code> to put the camera under the middle pool and <code>h</code> to
+    print what the surface is doing.</figcaption>
+</figure>
+
+<p class="technical">Two settings the demo pins, and why. It runs with
+<code>OPENGLCONTEXT_SHADOWS=0</code>: a GPU-displaced sheet casts a shadow map
+from the flat mesh the CPU still holds, so a moved surface shadows itself in
+bands. And the surfaces read pale rather than deep here because the
+environment-specular term is not weighted by the Fresnel factor a dielectric
+needs, so water's F0 of about 0.02 takes far more of the environment than it
+should; <code>OPENGLCONTEXT_IBL_INTENSITY</code> does not scale that term.
+Neither touches the wave field, which is what the floats measure and what this
+demo is for.</p>
+
+<p>What an application writes to get a body of water, and to know when something
+is inside it:</p>
+<pre>import time
+
+from OpenGLContext.scenegraph.basenodes import Appearance, Shape, sceneGraph
+from OpenGLContext.scenegraph.water import (
+    CHOPPY, Volume, Volumes, medium_fog, submerge, water_surface,
+)
+
+# Built once: 80 m square at sea level, meshed 65 x 65, moved by the card.
+sheet = water_surface(-40, 40, -40, 40, level=0.0, resolution=65,
+                      style=CHOPPY, on_gpu=True)
+lake = Shape(geometry=sheet, appearance=Appearance(material=sheet.material))
+scene = sceneGraph(children=[lake, medium_fog()])
+
+# Where the water is, for a body that may end up inside it.
+volumes = Volumes([Volume.below(minimum=(-40, -40), maximum=(40, 40),
+                                level=0.0, depth=30.0)])
+start = time.monotonic()
+
+
+def step(context):
+    """Once a frame: move the surface, and put the camera in or out of it."""
+    sheet.wave_time = time.monotonic() - start
+    return submerge(context, volumes, context.getViewPlatform().position)</pre>
+
+<p>The demo&#8217;s <code>h</code> key answers the same
+<code>wave_height</code> call the floats ride on, at each pool&#8217;s centre:</p>
+<pre>  STILL    surface at +0.000 m (t=0.05s)
+  FLOWING  surface at -0.020 m (t=0.05s)
+  CHOPPY   surface at -0.283 m (t=0.05s)</pre>
+<p>and <code>v</code> reports what <code>submerge</code> found as the camera
+crosses the surface:</p>
+<pre>medium under the camera: water
+medium under the camera: air</pre>
+</section>
+
+<section>
 <h2>Limits</h2>
 <ul>
   <li><strong>Not a simulation.</strong> The wave field is analytic — three

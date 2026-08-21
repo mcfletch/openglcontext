@@ -60,6 +60,10 @@ class FakeMode:
 def _bare():
     sel = SelectionMixin.__new__(SelectionMixin)
     sel.matrix = np.identity(4, 'f')
+    # The camera model-view the picks unproject against. The real pass
+    # sets both in setViewPlatform; sel.matrix is then rewritten per node
+    # by the traversal, which is why the dispatch reads this one.
+    sel.modelView = np.identity(4, 'f')
     sel.projection = np.identity(4, 'f')
     sel.viewport = (0, 0, 16, 16)
     sel._async_batches = None

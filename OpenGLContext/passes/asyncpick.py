@@ -146,7 +146,9 @@ class _AsyncPickMixin:
             'id_pid': id_pid, 'id_cap': id_cap,
             'dz_pid': dz_pid, 'dz_cap': dz_cap,
             'fence': fence, 'id_map': id_map,
-            'matrix': self.matrix, 'projection': self.projection,
+            # self.modelView, not self.matrix: the traversal has finished
+            # by now and self.matrix holds the last node it drew.
+            'matrix': self.modelView, 'projection': self.projection,
             'viewport': self.viewport,
         })
         # Keep the in-flight queue bounded: if the GPU falls behind, block on the

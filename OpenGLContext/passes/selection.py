@@ -156,7 +156,11 @@ class SelectionMixin(_AsyncPickMixin):
             # Buffer not ready, fall back to legacy method
             return
 
-        matrix = self.matrix
+        # The camera's, not self.matrix: the traversal rewrites that for
+        # every node it visits, so by dispatch time it holds whatever was
+        # drawn last and every picked point would come back in that node's
+        # local space.
+        matrix = self.modelView
         id_map = getattr(selection_buffer, 'id_map', {}) or {}
 
         for event in events.values():
@@ -239,7 +243,11 @@ class SelectionMixin(_AsyncPickMixin):
         self.lighting = False
         self.textured = False
 
-        matrix = self.matrix
+        # The camera's, not self.matrix: the traversal rewrites that for
+        # every node it visits, so by dispatch time it holds whatever was
+        # drawn last and every picked point would come back in that node's
+        # local space.
+        matrix = self.modelView
         vp = self.getViewport()
         vp_w, vp_h = float(vp[2]), float(vp[3])
         debugSelection = mode.context.contextDefinition.debugSelection
