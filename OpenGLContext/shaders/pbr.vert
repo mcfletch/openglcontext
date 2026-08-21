@@ -27,6 +27,9 @@ uniform bool instancingEnabled;   // read model + id from instance attributes
 
 out vec3 vNormal;        // eye space
 out vec3 vPosition;      // eye space
+out vec2 vSurface;       // where on the water this is, in its own plane
+out vec3 vSurfX;         // that plane's axes in eye space, so the ripple
+out vec3 vSurfZ;         // can be composed with whatever normal is there
 out vec2 vTexCoord;
 out vec2 vTexCoord1;     // second UV set
 out vec3 vTangent;       // eye space
@@ -53,6 +56,14 @@ void main() {
     // Water moves on the card too, and after the mesh's own animation:
     // the wave belongs to the surface rather than to the vertices.
     applyWave(position, normal);
+    // Where this fragment stands on the water, and which way that surface's
+    // own x and z point once they are in eye space. Read before the modelview,
+    // because the field is read in the plane the sheet was meshed in; the axes
+    // are what lets the fragment shader tilt whatever normal it has by the
+    // ripple's slopes without needing a matrix of its own.
+    vSurface = position.xz;
+    vSurfX = nrm * vec3(1.0, 0.0, 0.0);
+    vSurfZ = nrm * vec3(0.0, 0.0, 1.0);
 
     vec4 eyePosition = mv * vec4(position, 1.0);
     vPosition = eyePosition.xyz;

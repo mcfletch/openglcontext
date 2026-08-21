@@ -68,20 +68,31 @@ void applyWave(inout vec3 position, inout vec3 normal) {
         slopeX += rate * cos(angle);
         slopeZ += rate * sin(angle);
     }
-    if (waveSteepness > 0.0) {
-        // Carried downstream with the flow, so a river's light travels with it.
-        float driftX = position.x - waveFlow.x * waveTime;
-        float driftZ = position.z - waveFlow.y * waveTime;
-        float first = 6.283185307179586 / WAVE_RIPPLE_SCALE;
-        float second = 6.283185307179586 / (WAVE_RIPPLE_SCALE * 1.7);
-        slopeX += waveSteepness * cos(first * (driftX + 0.6 * driftZ))
-                + waveSteepness * 0.6 * cos(second * (driftX - 1.3 * driftZ));
-        slopeZ += waveSteepness * 0.6 * sin(first * (driftX + 0.6 * driftZ))
-                - waveSteepness * sin(second * (driftX - 1.3 * driftZ));
-    }
     position.y += height;
     normal = normalize(vec3(-slopeX, 1.0, -slopeZ));
 }
+
+// The fine ripple, from a point on the surface in the plane it lies in.
+//
+// Kept out of applyWave and given to the *fragment* shader: it repeats over
+// a few metres, and a sheet of water is meshed across a whole tile. Sampled
+// at the vertices it aliases away to nothing and the surface comes out a
+// flat plate; sampled per pixel it is the same ripple at any mesh density,
+// which is what makes a lake read as water rather than as concrete.
+vec2 waveRipple(vec2 surface) {
+    if (!waveEnabled || waveSteepness <= 0.0) { return vec2(0.0); }
+    // Carried downstream with the flow, so a river's light travels with it.
+    float driftX = surface.x - waveFlow.x * waveTime;
+    float driftZ = surface.y - waveFlow.y * waveTime;
+    float first = 6.283185307179586 / WAVE_RIPPLE_SCALE;
+    float second = 6.283185307179586 / (WAVE_RIPPLE_SCALE * 1.7);
+    float slopeX = waveSteepness * cos(first * (driftX + 0.6 * driftZ))
+                 + waveSteepness * 0.6 * cos(second * (driftX - 1.3 * driftZ));
+    float slopeZ = waveSteepness * 0.6 * sin(first * (driftX + 0.6 * driftZ))
+                 - waveSteepness * sin(second * (driftX - 1.3 * driftZ));
+    return vec2(slopeX, slopeZ);
+}
 #else
 void applyWave(inout vec3 position, inout vec3 normal) {}
+vec2 waveRipple(vec2 surface) { return vec2(0.0); }
 #endif

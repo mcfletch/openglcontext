@@ -35,6 +35,10 @@ from OpenGLContext.scenegraph.water.submersion import (
 )
 from OpenGLContext.scenegraph.water.surface import (
     CHOPPY,
+    LAKE,
+    MESH_LIMIT,
+    MESH_PER_WAVE,
+    mesh_across,
     FLOWING,
     RIPPLE,
     RIPPLE_SCALE,
@@ -58,7 +62,8 @@ __all__ = [
     'WATER_ALBEDO', 'WATER_ROUGHNESS', 'WATER_TRANSPARENCY', 'WATER_IOR',
     'RIPPLE', 'RIPPLE_SCALE', 'water_material', 'water_surface', 'water_ribbon', 'water_glints',
     'bounds',
-    'WaterStyle', 'STILL', 'FLOWING', 'CHOPPY', 'wave_height', 'wave_normal',
+    'WaterStyle', 'STILL', 'FLOWING', 'CHOPPY', 'LAKE', 'MESH_LIMIT',
+    'MESH_PER_WAVE', 'mesh_across', 'wave_height', 'wave_normal',
     'Medium', 'MEDIA', 'WATER', 'SLIME', 'LAVA', 'UNKNOWN', 'medium_for',
     'worst_of', 'Volume', 'Volumes',
     'medium_fog', 'apply', 'muffle_for', 'submerge',

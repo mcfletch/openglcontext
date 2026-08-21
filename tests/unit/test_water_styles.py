@@ -6,7 +6,6 @@ same field wherever it is asked from, and that a caller can ask how high the
 water is at a point.
 """
 import numpy as np
-import pytest
 
 from OpenGLContext.scenegraph.water.surface import (
     CHOPPY,
@@ -175,3 +174,44 @@ class TestHandingItToTheCard:
         wanted = wave_height(CHOPPY, points[:, 0], points[:, 2], 1.5)
         assert np.allclose(np.asarray(moved.positions)[:, 1], wanted,
                            atol=1e-5)
+
+
+class TestALakeIsWater:
+    """A sheet meshed at nine vertices across a tile is a sheet whose ripple is
+    sampled every few hundred metres: the wave aliases into nothing and what is
+    left is a flat plate with a strange normal. It reads as concrete.
+    """
+
+    def test_a_lake_has_a_style_of_its_own(self) -> None:
+        from OpenGLContext.scenegraph.water import LAKE
+        assert LAKE.amplitude > 0.0 and LAKE.wavelength > 0.0
+
+    def test_it_is_gentler_than_weather(self) -> None:
+        from OpenGLContext.scenegraph.water import CHOPPY, LAKE
+        assert LAKE.amplitude < CHOPPY.amplitude
+
+    def test_but_it_is_not_a_mirror(self) -> None:
+        from OpenGLContext.scenegraph.water import LAKE, STILL
+        assert LAKE.amplitude > STILL.amplitude
+
+    def test_a_sheet_carries_the_wave_it_is_asked_for(self) -> None:
+        """Meshed for the wavelength rather than at a fixed count, so the
+        surface actually holds the shape."""
+        import numpy as np
+        from OpenGLContext.scenegraph.water import LAKE, mesh_across
+        from OpenGLContext.scenegraph.water.surface import water_surface
+        side = 400.0
+        found = water_surface(0.0, side, 0.0, side, level=0.0,
+                              resolution=mesh_across(side, LAKE), style=LAKE)
+        heights = np.asarray(found.positions)[:, 1]
+        assert float(heights.max() - heights.min()) > LAKE.amplitude * 0.5
+
+    def test_and_a_bigger_sheet_gets_more_of_them(self) -> None:
+        """Up to the budget: past that a sheet is meshed as finely as it is
+        worth meshing and the ripple carries the rest."""
+        from OpenGLContext.scenegraph.water import LAKE, mesh_across
+        assert mesh_across(120.0, LAKE) > mesh_across(30.0, LAKE)
+
+    def test_without_asking_for_a_million_of_them(self) -> None:
+        from OpenGLContext.scenegraph.water import LAKE, MESH_LIMIT, mesh_across
+        assert mesh_across(20000.0, LAKE) <= MESH_LIMIT

@@ -1,4 +1,5 @@
 #version 330 core
+#include "_wave_inc.glsl"
 // Desktop OpenGL 3.3 only, by design (finding 5.3): no GLSL-ES / WebGL profile.
 
 // Physically-based (metallic/roughness) fragment shader, glTF 2.0 aligned.
@@ -53,6 +54,9 @@
 
 in vec3 vNormal;
 in vec3 vPosition;
+in vec2 vSurface;        // where on the water this is, in its own plane
+in vec3 vSurfX;          // that plane's axes in eye space
+in vec3 vSurfZ;
 in vec2 vTexCoord;
 in vec2 vTexCoord1;      // second UV set (glTF TEXCOORD_1)
 in vec3 vTangent;
@@ -133,6 +137,9 @@ Material _M;
 #define attenuationDistance  _M.attenuationDistance
 #define unlitMode            _M.unlitMode
 #define texCoordMask         _M.texCoordMask
+// Bit 64 of that mask: the vertex colours are light worked out when the world
+// was built rather than a tint on the surface.
+#define bakedLightMode       ((texCoordMask & 64) != 0)
 #define uvTransform          _M.uvTransform
 #define iridescenceFactor    _M.iridescence.x
 #define iridescenceIor       _M.iridescence.y
@@ -383,7 +390,10 @@ void main() {
     vec4 baseTex = hasBaseColor ? texture(baseColorTexture, uvFor(1)) : vec4(1.0);
     vec3 albedo = baseColorFactor * (hasBaseColor ? toLinear(baseTex.rgb) : vec3(1.0));
     float alpha = alphaValue * (hasBaseColor ? baseTex.a : 1.0);
-    if (hasVertexColor) {              // glTF COLOR_0 multiplies base color (linear)
+    // glTF COLOR_0 multiplies base color (linear) -- unless the material
+    // says its vertex colours are baked light, in which case they are added
+    // further down as emission and the surface keeps its own colour.
+    if (hasVertexColor && !bakedLightMode) {
         albedo *= vColor.rgb;
         alpha *= vColor.a;
     }
@@ -415,9 +425,19 @@ void main() {
         float o = texture(occlusionTexture, uvFor(8)).r;
         ao = 1.0 + occlusionStrength * (o - 1.0);
     }
+    // Where the vertex colours are baked light, their fourth channel is how
+    // much of the environment still reaches the surface. A tunnel lining is
+    // the case: it is a hole in the ground, no sky arrives in the middle of
+    // one, and without this the environment lights the inside of a bore as
+    // evenly as it lights the hillside over it.
+    if (hasVertexColor && bakedLightMode) ao *= vColor.a;
 
     vec3 emissive = emissiveFactor * emissiveStrength;   // KHR_materials_emissive_strength
     if (hasEmissive) emissive *= toLinear(texture(emissiveTexture, uvFor(16)).rgb);
+    // Light worked out when the world was built: added rather than
+    // multiplied, so it is on the surface whatever the scene is doing, and
+    // whatever the scene does do is shading on top of it.
+    if (hasVertexColor && bakedLightMode) emissive += albedo * vColor.rgb;
 
     // Baked irradiance, read as LINEAR light. A lightmap is not a colour
     // texture: it is a radiosity solution written straight to 8 bits, and the
@@ -430,9 +450,21 @@ void main() {
 
     // --- normal (with optional tangent-space normal map) ---
     vec3 Ngeom = normalize(vNormal);
-    // Two-sided surfaces: flip the normal on back-facing fragments so they are
-    // lit correctly (single-sided back faces are culled, so this is harmless).
+    // Two-sided surfaces: flip the normal on back-facing fragments so they
+    // are lit correctly (single-sided back faces are culled, so this is
+    // harmless).
     if (!gl_FrontFacing) Ngeom = -Ngeom;
+    // Water's fine ripple, per fragment. It repeats over a few metres and a
+    // sheet is meshed across a whole tile, so at the vertices it is sampled
+    // hundreds of metres apart and aliases away to nothing -- which is what
+    // leaves a lake looking like a flat plate. Composed here as a tilt of
+    // whatever normal the surface already has, along that surface's own
+    // axes, so the long swell stays in the geometry and the glitter costs
+    // the same at any mesh density.
+    vec2 ripple = waveRipple(vSurface);
+    if (ripple.x != 0.0 || ripple.y != 0.0) {
+        Ngeom = normalize(Ngeom - ripple.x * vSurfX - ripple.y * vSurfZ);
+    }
     vec3 N = Ngeom;
     if (hasNormal && length(vTangent) > 0.0) {
         vec3 T = normalize(vTangent - N * dot(N, vTangent));

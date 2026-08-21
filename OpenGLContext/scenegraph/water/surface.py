@@ -46,6 +46,7 @@ from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 __all__ = ['WATER_ALBEDO', 'WATER_ROUGHNESS', 'WATER_TRANSPARENCY', 'WATER_IOR',
+           'LAKE', 'MESH_LIMIT', 'MESH_PER_WAVE', 'mesh_across',
            'RIPPLE', 'RIPPLE_SCALE', 'water_material', 'water_surface',
            'WaterStyle', 'STILL', 'FLOWING', 'CHOPPY', 'wave_height',
            'wave_normal', 'water_ribbon', 'water_glints', 'bounds']
@@ -115,6 +116,44 @@ FLOWING = WaterStyle(name='flowing', amplitude=0.09, wavelength=4.5,
 #: Weather. Crossing trains with real height in them, so a shoreline moves.
 CHOPPY = WaterStyle(name='choppy', amplitude=0.42, wavelength=7.0, speed=2.4,
                     steepness=RIPPLE * 2.2)
+
+#: Open water with nowhere to go: a lake or a reservoir. A slow swell with
+#: enough height in it to read as a surface from a distance, which is the
+#: distance most water is seen from. Still water is a *mirror*, and a mirror
+#: a few hundred metres across with nothing to reflect but a pale sky is a
+#: white plate lying in the landscape.
+LAKE = WaterStyle(name='lake', amplitude=0.16, wavelength=9.0, speed=0.8,
+                  steepness=RIPPLE * 1.3)
+
+#: The most vertices across a sheet is meshed at. A sheet is one draw and this
+#: is what it costs -- in a baked world, in the file as well as in the frame --
+#: so it is a budget rather than a target.
+MESH_LIMIT = 33
+
+#: How many samples a wavelength gets. Two carries the *swell*, which is all the
+#: mesh has to hold: the fine ripple that makes water read as water lives in the
+#: fragment shader (``waveRipple``), where it is the same at any mesh density.
+MESH_PER_WAVE = 2.0
+
+
+def mesh_across(side: float, style: "Optional[WaterStyle]" = None,
+                limit: int = MESH_LIMIT) -> int:
+    """How many vertices across a sheet of this size has to be meshed at.
+
+    From the *wavelength*, not from a count picked once: a sheet meshed at
+    nine vertices across a tile hundreds of metres wide samples its own
+    ripple every few hundred metres, which aliases the wave away and leaves
+    a flat plate with a strange normal on it. That is what open water looks
+    like when it looks like concrete.
+
+    Capped at ``limit``, because a sheet is one draw and a lake the size of
+    a valley would otherwise ask for a million vertices to carry a ripple
+    nobody can see from the far side of it.
+    """
+    style = style if style is not None else STILL
+    wave = max(float(style.wavelength), 1e-3)
+    wanted = float(side) / wave * MESH_PER_WAVE + 1.0
+    return int(min(max(wanted, 2.0), float(limit)))
 
 #: The directions the wave trains run, as turns from the style's own heading,
 #: and each one's share of the amplitude and of the wavelength. Three, crossing:
