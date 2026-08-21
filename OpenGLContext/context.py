@@ -36,6 +36,7 @@ from vrml.vrml97 import nodetypes
 from vrml import node, cache
 import weakref
 import os
+import sys
 import time
 import logging
 
@@ -504,8 +505,19 @@ class Context(ScreenMixin, ContextConfigMixin):
                 log.debug('could not close the stall journal', exc_info=True)
         self.stopTelemetry('quit')
 
+        # Likewise: sys.stdout is block-buffered whenever it is a pipe rather
+        # than a terminal, and os._exit discards whatever is still in it. A
+        # program run by a harness -- every demo under tests/ is -- would
+        # otherwise lose everything it printed, and look right only when a
+        # person ran it by hand.
+        for stream in (sys.stdout, sys.stderr):
+            try:
+                if stream is not None:
+                    stream.flush()
+            except Exception:
+                pass            # a closed or broken pipe is not worth dying on
+
         os._exit(0)
-        # sys.exit(0)
 
     def OnFrameRate(self, event=None):
         """Show or hide the developer overlay, where the frame rate is drawn"""

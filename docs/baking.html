@@ -100,6 +100,59 @@ photographic texture as PNG multiplies a tile's weight for no visible gain:</p>
 <pre>from OpenGLContext.loaders.gltf.writer import EncodedImage
 
 material.textures['baseColor'] = EncodedImage.from_path('bark.jpg', srgb=True)</pre>
+
+<h3 id="roundtrip">Seeing the round trip</h3>
+<figure>
+  <img src="images/demos/bake_demo.jpg"
+       alt="A cairn of grey boulders under a gold capstone, ringed by twelve pebbles on green vertex-coloured ground">
+  <figcaption><strong><code>python tests/bake_demo.py</code></strong>
+    &mdash; a scene built in code, written to a <code>.glb</code>, loaded back
+    and mounted. What is drawn is the file: three of the boulders reference one
+    mesh, the twelve pebbles are one more mesh under an <code>InstanceSet</code>,
+    and the ground is a vertex-coloured <code>terrain_patch</code> placed by its
+    node's translation. Press <code>r</code> to print the counts again; the
+    written file is left on disk for opening in another viewer.</figcaption>
+</figure>
+<p>The demo counts what it wrote out of the document's JSON and what it got back
+out of the loaded scenegraph, so the two columns are separate measurements
+rather than two views of one number:</p>
+<pre>$ python tests/bake_demo.py
+wrote /tmp/oglc-bake-demo-95gl6ypw/cairn.glb
+                  written    read back
+nodes                   7            7
+meshes                  4            4
+materials               3            3
+vertices            4,480        4,480
+triangles           4,002        4,002
+instances              12           12
+bytes             203,692      227,224
+208,260 bytes on disk: that buffer, the JSON describing it, and the
+GLB headers. The loaded arrays weigh more because an index that is 16 bits
+in the file is 32 in the buffer the GPU is handed.</pre>
+<p>Seven nodes over four meshes is the sharing arriving intact: the boulder is
+written once and placed three times, and it loads back as one
+<code>PBRMesh</code> under three <code>Shape</code>s. The stone material is
+shared by the boulders and the pebbles, so three materials cover the four
+meshes.</p>
+<p>What an application writes to do the same:</p>
+<pre>from OpenGLContext.loaders.gltf import GLTFWriter, SceneNode, load_gltf
+from OpenGLContext.scenegraph.props import rock_mesh
+
+boulder = rock_mesh(radius=1.3, seed=3)                 # one mesh...
+writer = GLTFWriter()
+writer.add_node(SceneNode(name='cairn', children=[
+    SceneNode(mesh=boulder, translation=(x, 0.0, z))    # ...placed three times
+    for x, z in [(-1.7, 0.4), (1.6, -0.7), (0.3, -2.4)]]))
+writer.write('/tmp/cairn.glb')
+
+document = writer.document()
+print(len(document['meshes']), 'mesh,', len(document['nodes']), 'nodes')
+scene = load_gltf('/tmp/cairn.glb')                     # mount scene.group to draw</pre>
+<p>That prints <code>1 mesh, 4 nodes</code>. Everything it imports ships with
+OpenGLContext, and so does everything the demo imports: writing a document is the
+engine's half of the split. <code>oglc-bake</code>, the half that turns a world
+into a streamable tileset, comes with
+<a href="https://github.com/mcfletch/openglcontext-editor"><code>OpenGLContext-editor</code></a>.</p>
 </section>
 
 <section>

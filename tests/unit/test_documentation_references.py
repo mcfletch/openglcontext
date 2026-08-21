@@ -96,7 +96,12 @@ class TestDocsNameCommandsThatExist:
         broken = {}
         for page in sorted(DOCS.glob('*.html')):
             text = page.read_text(encoding='utf-8', errors='replace')
-            for name in set(re.findall(r'\boglc-[a-z-]+', text)):
+            # Not inside a filesystem path, and not a prefix of a longer
+            # hyphenated word: a page quoting a run whose temporary directory
+            # was named after the command would otherwise look like a page
+            # naming a command that does not exist.
+            for name in set(re.findall(
+                    r'(?<![\w/-])oglc-[a-z]+(?:-[a-z]+)*(?![\w-])', text)):
                 if name not in scripts and name not in SIBLING_COMMANDS:
                     broken.setdefault(page.name, set()).add(name)
         assert not broken, (

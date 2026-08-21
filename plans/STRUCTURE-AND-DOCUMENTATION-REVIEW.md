@@ -1,8 +1,8 @@
 # Structure & Documentation Review — consistency, cohesion, obviousness
 
 **Status:** 🟡 Partial — **steps 1–7 landed** on branch `docs-structure-review`
-(findings 5, 6, 8, 9, 10, 13 and part of 7). Findings 1, 2, 3, 4, 11, 12 and the
-rest of 7 are open.
+(findings 5, 6, 8, 9, 10, 13 and part of 7), and **findings 11 and 12 landed**
+on branch `demos`. Findings 1, 2, 3, 4 and the rest of 7 are open.
 **Date:** 2026-08-20.
 **Scope:** the `OpenGLContext` package, `docs/`, `README.md` and `CLAUDE.md`.
 Not a bug hunt: every item here is about whether a developer can *predict* where
@@ -662,7 +662,7 @@ outside the workspace, since the baselines are a sibling directory).
 | 9 | The naming rule; apply it to `ui/` (finding 1) | 📋 Open |
 | 10 | `matrices.py` and `culling.py`, with shims (finding 2) | 📋 Open |
 | 11 | `hud.py` → `ui/layoutbase.py` (finding 3) | 📋 Open |
-| 12 | `docs/navmesh.html` (finding 11) | 📋 Open |
+| 12 | `docs/navmesh.html` (finding 11) | ✅ Done |
 | 13 | Ten demos (finding 12) | 📋 Open |
 | 14 | Legacy module docstrings, the two public APIs (finding 7b, 7c) | 📋 Open |
 
@@ -683,6 +683,38 @@ outside the workspace, since the baselines are a sibling directory).
   option on `oglc-view` is the right shape if it is wanted. Whether the module
   moves out of `bin/` is [CODEBASE-CONSOLIDATION.md](CODEBASE-CONSOLIDATION.md)
   C1's call.
+
+### What the demos turned up (branch `demos`)
+
+Ten demos landed, one per documented feature that had none, each with a render
+in its page captioned with what it shows and the command to run it, and each
+carrying runnable sample code that was executed before it was pasted.
+`tests/unit/test_feature_demos.py` renders every one offscreen and checks its
+page names it and shows it; the five that move are marked randomized so the
+visual suite does not diff a frame that is never the same twice.
+
+**Building them found five engine defects.** Every one was invisible to the
+unit suite and visible the moment something tried to use the feature from
+outside — which is the argument for demos, made concrete.
+
+| Defect | Where | Effect |
+|---|---|---|
+| `OnQuit` discarded buffered stdout | `context.py` | `os._exit` with no flush, and stdout is block-buffered on a pipe — every demo's printed output was lost under the harness and only looked right run by hand |
+| A `Background` of one `skyColor` painted nothing | `spherebackground.py` | Two causes stacked: `colorSet` returned an empty set, and once that was fixed `buildSphere` still made a degenerate two-vertex sphere. Two agents hit it independently; one worked around it, one shipped a black sky |
+| A pick event carried the last drawn node's matrix | `selection.py`, `asyncpick.py` | `self.matrix` is rewritten per node by the traversal, so `event.unproject()` answered in that node's local space. Every editor tool built on `edit.surface` was off by that node's transform |
+| `LampRow` defaulted to an anchor `place()` does not know | `ui/hudwidgets.py` | `'top-center'` is not in `ANCHORS`, so the fallback put a default lamp row in the middle of the screen |
+| Shadow acne on GPU-displaced water | `passes/shadow*`, `scenegraph/water` | A moved sheet casts its shadow map from the flat mesh the CPU still holds, so it shadows itself in bands. **Not fixed** — recorded, and the water demo pins `OPENGLCONTEXT_SHADOWS=0` |
+
+**Also not fixed, and worth its own work:** the environment-specular term is not
+weighted by the Fresnel factor a dielectric needs, so water's F0 of about 0.02
+takes far more of the environment than it should and open water reads pale.
+`OPENGLCONTEXT_IBL_INTENSITY` does not scale that term. It lives in the PBR
+shader and pass, which were being edited elsewhere while this branch was
+written. `docs/water.html` states both limits.
+
+**One thing to watch:** `crowd_demo` opens a Khronos sample model. It is in the
+asset cache here, and the test skips rather than fails where it is absent, so a
+machine with no network reports honestly instead of going red.
 
 ### Notes for whoever merges this
 

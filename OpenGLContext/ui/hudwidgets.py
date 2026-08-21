@@ -684,7 +684,7 @@ class LampRow(HUDWidget):
 
     #: A start rig belongs across the top of the view, where it does not cover
     #: the road and is still inside the eye's reach of it.
-    anchor = field.newField('anchor', 'SFString', 1, 'top-center')
+    anchor = field.newField('anchor', 'SFString', 1, 'top')
 
     # -- what is burning --------------------------------------------------
     def burning(self, at: int) -> bool:

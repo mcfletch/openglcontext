@@ -92,6 +92,10 @@ def _buffer_with_id(size=16):
 def _bare(buffer):
     sel = SelectionMixin.__new__(SelectionMixin)
     sel.matrix = np.identity(4, 'f')
+    # The camera model-view the picks unproject against. The real pass
+    # sets both in setViewPlatform; sel.matrix is then rewritten per node
+    # by the traversal, which is why the dispatch reads this one.
+    sel.modelView = np.identity(4, 'f')
     sel.projection = np.identity(4, 'f')
     sel.viewport = (0, 0, 16, 16)
     sel._selection_buffer = buffer
@@ -112,7 +116,7 @@ class TestProcessPickEventsFromBuffer:
         # populated with that path + a depth and forwarded to the context.
         assert ev.paths == [path]
         assert ev.viewCoordinate[0] == 8 and ev.viewCoordinate[1] == 8
-        assert ev.modelViewMatrix is sel.matrix
+        assert ev.modelViewMatrix is sel.modelView
         assert mode.context.processed == [ev]
 
     def test_unmapped_id_dispatches_empty_path(self, gl_context):

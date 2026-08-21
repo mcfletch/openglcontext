@@ -49,6 +49,36 @@ the sweep, one vertex ring per point, so the same route at
 <code>spacing=40</code> is the road a distant tile carries. Left out, the points
 you give are the points swept.</p>
 
+<h3 id="demo">Seeing one built</h3>
+<figure>
+  <img src="images/demos/roads_demo.jpg"
+       alt="A two-lane road curving away across rolling green ground, its dark
+            carriageway between pale gravel shoulders and darker grass verges">
+  <figcaption><strong><code>python tests/roads_demo.py</code></strong>
+    &mdash; 452&nbsp;m of two-lane road, swept from an alignment of straights and
+    radii laid over a height function. The three parts of the section read out
+    from the centre line: the carriageway with its dashes and edge lines, a
+    gravel shoulder each side, and a grass verge falling away to the ground.
+    Press <code>d</code> to re-sample the centreline at 30&nbsp;m instead of
+    4&nbsp;m and print the counts again, <code>w</code> to wet the tarmac.</figcaption>
+</figure>
+<p>What an application writes is the sweep and the node it goes in:</p>
+<pre>from OpenGLContext.scenegraph.basenodes import Appearance, Shape
+from OpenGLContext.scenegraph.road import RoadProfile, road_mesh
+
+centreline = [(0, 1.3, 55), (0, 1.3, 10), (-9, 1.5, -55), (-41, 6.1, -150),
+              (-56, 12.7, -250), (-33, 9.4, -345), (-8, 5.2, -405)]
+mesh = road_mesh(centreline, RoadProfile(), spacing=4.0)
+road = Shape(geometry=mesh, appearance=Appearance(material=mesh.material))
+print(len(mesh.positions), 'vertices,', len(mesh.indices) // 3, 'triangles')
+# 840 vertices, 1428 triangles</pre>
+<p>The demo reports the road it built the same way, so what the spacing costs is
+in the text as well as in the picture:</p>
+<pre>452.3 m of road at 4 m spacing: 115 points, 805 vertices, 1368 triangles
+451.9 m of road at 30 m spacing: 17 points, 119 vertices, 192 triangles</pre>
+<p>Nothing about the route changed between those two lines &mdash; only the
+interval the centreline was re-sampled to before the sweep.</p>
+
 <h3>The profile</h3>
 <p><code>RoadProfile</code> is measured out from the crown, in metres:</p>
 <table>

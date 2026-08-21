@@ -226,6 +226,45 @@ crowd.update(dt, budget=80)            # at most eighty figures this frame</code
 <p>Clocks always run. A figure posed every third frame is where its clip says it
 is when its turn comes, not three frames behind; what a budget or a rate saves
 is the pose, not the playback.</p>
+
+<h3>Seeing it work</h3>
+<figure>
+<img src="images/demos/crowd_demo.jpg"
+     alt="A hundred and fifty copies of one walking figure spread across a plain, each at a different point in its stride">
+<figcaption><strong><code>python tests/crowd_demo.py</code></strong> &mdash; a
+hundred and fifty copies of one rigged glTF model, each on its own clock, posed
+by a single <code>Crowd</code> and drawn as one instanced call. Press
+<code>s</code> to turn the distance scheduler off and on and watch how many
+figures the frame has to pose; <code>b</code> caps the count at eighty a frame.
+The model is <code>CesiumMan</code> from the Khronos sample catalogue, fetched
+once into the on-disk asset cache.</figcaption>
+</figure>
+<p>What it prints every sixty frames, from the camera it opens at:</p>
+<pre>150 figures  scheduler ON  posed 52.3 of 150 per frame
+    107 shapes -&gt; 2 draws (106 instanced in 1 group)</pre>
+<p>The shader skins the bodies, so all hundred and fifty hold the same rest-pose
+vertices and collapse into one instanced draw; the second call is the ground.
+Of the 151 shapes in the scene, 107 survive frustum culling at that camera. With
+the scheduler off every figure is posed every frame, the count reads 150.0, and
+the picture is the same one.</p>
+<p>What an application writes to build a crowd from one loaded model:</p>
+<pre><code>from OpenGLContext.character.crowd import Crowd
+from OpenGLContext.character.model import CharacterModel
+from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
+from OpenGLContext.scenegraph.basenodes import Transform
+
+document = parse_gltf('marine.glb')     # parsed and decoded once for all of them
+crowd, children = Crowd(), []
+for index in range(150):
+    figure = CharacterModel(load_gltf(document=document))
+    figure.play('walk')
+    # a different point in the stride, so no two walk in lockstep
+    figure.mixer.layers[0].tracks[0].time = (index * 0.131) % 2.0
+    crowd.add(figure, rate=12.0 if index &gt; 40 else 0.0)
+    children.append(Transform(translation=(index % 15 - 7.0, 0, -(index // 15)),
+                              children=[figure.group]))
+...
+crowd.update(dt, mode=context)          # once a frame, for all of them</code></pre>
 </section>
 
 <section>

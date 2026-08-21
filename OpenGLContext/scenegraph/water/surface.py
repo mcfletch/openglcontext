@@ -341,8 +341,13 @@ def _grid(across: int, along: int) -> np.ndarray:
     rows, columns = np.meshgrid(np.arange(across - 1), np.arange(along - 1),
                                 indexing='ij')
     corner = (rows * along + columns).ravel()
-    quads = np.stack([corner, corner + along, corner + along + 1,
-                      corner, corner + along + 1, corner + 1], axis=-1)
+    # Counter-clockwise seen from above, which is what makes the sheet
+    # front-facing and agrees with the upward normals stored beside it. Wound
+    # the other way the shader takes every fragment for a back face, flips the
+    # normal away from the camera, and reads the surface at grazing incidence
+    # wherever it is actually looked at square on.
+    quads = np.stack([corner, corner + 1, corner + along + 1,
+                      corner, corner + along + 1, corner + along], axis=-1)
     return quads.reshape(-1).astype(np.uint32)
 
 
@@ -426,8 +431,9 @@ def _across(line: np.ndarray) -> np.ndarray:
 def _ladder(rungs: int) -> np.ndarray:
     """Triangles for a strip two vertices wide and ``rungs`` long."""
     first = np.arange(rungs - 1) * 2
-    quads = np.stack([first, first + 1, first + 3,
-                      first, first + 3, first + 2], axis=-1)
+    # Counter-clockwise seen from above, as in _grid.
+    quads = np.stack([first, first + 3, first + 1,
+                      first, first + 2, first + 3], axis=-1)
     return quads.reshape(-1).astype(np.uint32)
 
 
@@ -504,8 +510,10 @@ def water_glints(course: Any, width: Any, spacing: float,
         points[:, 1] += wave_height(style, points[:, 0], points[:, 2], when)
         normals = wave_normal(style, points[:, 0], points[:, 2], when)
     first = np.arange(len(at)) * 4
-    quads = np.stack([first, first + 1, first + 2,
-                      first, first + 2, first + 3], axis=-1)
+    # Counter-clockwise seen from above, as in _grid: `across` and `ahead`
+    # put the corners round the patch the other way.
+    quads = np.stack([first, first + 2, first + 1,
+                      first, first + 3, first + 2], axis=-1)
     mesh = PBRMesh(positions=points.astype('f'), normals=normals.astype('f'),
                    indices=quads.reshape(-1).astype(np.uint32),
                    material=material if material is not None else water_material())

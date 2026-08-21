@@ -63,6 +63,14 @@ RANDOMIZED_SCRIPTS = [
     'particles_simple.py',  # Random particle positions
     'starfield.py',  # Random star positions
     'teapot_ceramic.py',  # Auto-rotates by wall clock; captured angle varies
+    # The feature demos that move. Each is driven from the clock so that what
+    # it demonstrates is visible without a key being held, which means the
+    # frame a capture lands on is not the same one twice.
+    'water_demo.py',  # Wave time advances every frame
+    'hud_demo.py',  # Meters sweep and messages expire on a timer
+    'crowd_demo.py',  # 150 figures walking, each at its own point in the stride
+    'telemetry_demo.py',  # Bodies orbit on the clock
+    'recording_demo.py',  # The carousel orbits and bobs on the clock
 ]
 
 # Single source of truth for the visual-diff tolerance. The gate

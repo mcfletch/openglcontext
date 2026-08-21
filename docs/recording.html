@@ -71,6 +71,71 @@ recorder.close()</pre>
     frame and is not finished.</p>
 </section>
 
+<section id="demo">
+  <h2>Seeing it work</h2>
+  <figure>
+    <img src="images/demos/recording_demo.jpg"
+         alt="Eight coloured blocks ride a carousel around a white sphere on a grey floor, each casting a shadow, and a red lamp burns above and to the left">
+    <figcaption><strong><code>python tests/recording_demo.py</code></strong>
+      &mdash; eight blocks turning and bobbing around a sphere, a scene in which
+      every frame differs from the last, so an unevenly clocked recording of it
+      reads as a stutter. Press <code>r</code> to start recording and again to
+      stop and close the file; the lamp burns red while a recording is running.
+      Press <code>c</code> to run the next recording on the wall clock rather
+      than a fixed step.</figcaption>
+  </figure>
+  <p><code>--record</code> takes the keyboard out of it, which is what a
+    scripted run wants: the demo records that many frames, says what it wrote
+    and exits.</p>
+  <pre>$ python tests/recording_demo.py --record 90
+recording to recording_demo.mp4 at 30 fps, 90 frames
+recorded 90 frames to recording_demo.mp4
+  picture     300x300
+  frame rate  30/1 fps (3.000 seconds of video)
+  clock       fixed step
+  file size   81983 bytes</pre>
+  <p>The <code>clock</code> line says which time source the recording ran on,
+    and the frame rate is the spacing the frames were stamped at.
+    <code>--output PATH</code> chooses the file, and the environment variables
+    <code>OPENGLCONTEXT_RECORD_FRAMES</code> and
+    <code>OPENGLCONTEXT_RECORD_PATH</code> say the same two things.</p>
+  <p>An application records itself with the same wiring, plus the answer for a
+    machine that has no encoder:</p>
+  <pre>from OpenGLContext import testingcontext
+from OpenGLContext.video.recorder import RecordingMixin, RecordingUnavailable
+
+BaseContext = testingcontext.getInteractive('glfw')
+
+
+class RecordedContext(RecordingMixin, BaseContext):
+    def OnInit(self):
+        # 90 frames at 30 fps: three seconds of video, and the run ends there
+        self.setupRecording('run.mp4', fps=30, frames=90)
+
+    def SwapBuffers(self):
+        try:
+            self.tickRecording()            # before the swap
+        except RecordingUnavailable as error:
+            self.recorder = None            # nothing here can encode
+            print('not recording: %s' % (error,))
+        return super().SwapBuffers()
+
+    def OnIdle(self, event=None):
+        self.triggerRedraw(1)               # a recording wants every frame
+
+
+if __name__ == "__main__":
+    RecordedContext.ContextMainLoop()</pre>
+  <p><code>RecordingUnavailable</code> arrives at the first frame the recording
+    would have kept, because that is where the encoder is opened. Clearing
+    <code>self.recorder</code> is what stops the next frame asking again; the
+    context goes on drawing, and everything but the recording works as it does
+    anywhere else.</p>
+  <p><code>OnIdle</code> is there because a context draws when something
+    changes. A recording wants a frame every time round the loop, and an
+    application whose scene may sit still asks for one.</p>
+</section>
+
 <section id="settings">
   <h2>What a recording takes</h2>
   <table>

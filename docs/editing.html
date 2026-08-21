@@ -254,6 +254,63 @@ pay for.</p>
 </section>
 
 <section>
+<h2 id="demo">Seeing it work</h2>
+<figure>
+  <img src="images/demos/editing_demo.jpg"
+       alt="A plan view looking straight down on green ground, five grey-roofed
+            blocks casting short shadows, and five coloured markers dropped on
+            the ground, one of them standing on the roof of the tallest block">
+  <figcaption><strong><code>python tests/editing_demo.py</code></strong>
+    &mdash; a world edited in the plan view: five markers put down at the point
+    under the pointer, one of them then dragged 66&nbsp;m across the ground, by
+    tool modes that are asked for the pointer before the camera is. Nobody moves the mouse
+    while a screenshot is taken, so the demo drives its own clicks and its drag
+    through the pick. Press <code>o</code> for the three-quarter view and
+    <code>m</code> to come back; <code>1</code>, <code>2</code> and
+    <code>3</code> choose the drop, move and pan tools; <code>u</code> takes
+    back what the tool in force last did.</figcaption>
+</figure>
+<p>Every scripted click is aimed at a world point, turned into a pixel by
+<code>screen_from_world</code> and answered by the pick, so the pair the demo
+prints is a round trip:</p>
+<pre>click  pixel (674, 510) &lt;- world (22.0, -30.0)
+drop   marker 2 at world (21.88, 20.00, -30.00)</pre>
+<p>That one is aimed at the middle of a 20&nbsp;m block, so it comes back
+20&nbsp;m up and the marker stands on the roof.</p>
+<p>What an application writes is the tool and the routing that gives it the
+pointer first:</p>
+<pre>from OpenGLContext.edit.surface import pointer_from
+from OpenGLContext.edit.tools import ToolManager, ToolMode
+
+class DropMarker(ToolMode):
+    """Put something on the world where the pointer is."""
+
+    def on_press(self, pointer):
+        if pointer.button or not pointer.on_surface:
+            return False          # not ours: the camera can have it
+        print('drop at %.2f, %.2f, %.2f' % tuple(pointer.world))
+        return True
+
+class Editor(BaseContext):
+    def OnInit(self):
+        self.tools = ToolManager([DropMarker(name='drop')])
+        ...
+
+    def ProcessEvent(self, event):
+        """The tool in force is asked before the camera is."""
+        if getattr(event, 'type', None) == 'mousebutton' and event.state:
+            if self.tools.press(pointer_from(event)):
+                return None       # taken, so it never reaches the camera
+        return super(Editor, self).ProcessEvent(event)</pre>
+<p>Returning without calling up the chain is the whole of "the tool took it":
+the movement sampler reads events on their way past
+(<code>ViewPlatformMixin.ProcessEvent</code>), so a press a tool has taken is a
+press the camera never hears about. Everything the tool leaves &mdash; the right
+button, the wheel, the keys it does not answer for &mdash; carries on to
+whatever handled it before.</p>
+</section>
+
+<section>
 <h2>What is not here yet</h2>
 <ul>
   <li><strong>Gizmos.</strong> Translate and height handles with their own
