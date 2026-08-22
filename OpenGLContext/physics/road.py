@@ -25,7 +25,9 @@ from typing import TYPE_CHECKING, Any, Optional
 import numpy as np
 from omi_physics import model
 
-from OpenGLContext.scenegraph.road import RoadProfile, road_surface
+from OpenGLContext.scenegraph.road import (
+    RoadProfile, banked_sections, road_surface,
+)
 
 if TYPE_CHECKING:
     from omi_physics.world import PhysicsWorld
@@ -54,17 +56,31 @@ class RoadColliders:
         points, and never shorter than one.
     :param closed: whether the road returns to where it started, so the chunk
         after the last is the first.
+    :param bank: how far the road leans at each centreline point, as a fraction
+        and signed the way
+        :func:`~OpenGLContext.scenegraph.road.plan_curvature` is. A world that
+        banks its corners writes this beside its centreline, and a collider
+        swept without it is a flat road under a leaning one -- which is a car
+        driving through the carriageway on the inside of every corner.
     """
 
     def __init__(self, world: "PhysicsWorld", points: Any,
                  profile: Optional[RoadProfile] = None,
                  reach: float = REACH_METRES, chunk: float = CHUNK_METRES,
-                 closed: bool = False) -> None:
+                 closed: bool = False, bank: Any = None) -> None:
         self.world = world
         self.points = np.asarray(points, dtype='d').reshape(-1, 3)
         if len(self.points) < 2:
             raise ValueError("a road needs a centreline of at least two points")
         self.profile = profile or RoadProfile()
+        #: The lean at each point, or None for a road that does not bank.
+        self.bank: Optional[np.ndarray] = None
+        if bank is not None:
+            self.bank = np.asarray(bank, dtype='d').reshape(-1)
+            if len(self.bank) != len(self.points):
+                raise ValueError(
+                    "a road of %d points needs %d leans, not %d"
+                    % (len(self.points), len(self.points), len(self.bank)))
         self.reach = float(reach)
         self.closed = bool(closed)
         steps = np.linalg.norm(np.diff(self.points, axis=0), axis=1)
@@ -146,10 +162,14 @@ class RoadColliders:
         if last - first < 1:                     # pragma: no cover - degenerate
             return
         run = self.points[first:last + 1]
+        lean = None if self.bank is None else self.bank[first:last + 1]
         if self.closed and key == self._chunks - 1:
             # Close the loop: the last chunk runs on into the first point.
             run = np.vstack([run, self.points[:1]])
-        positions, _normals, _uv, indices = road_surface(run, self.profile)
+            if lean is not None:
+                lean = np.concatenate([lean, self.bank[:1]])
+        positions, _normals, _uv, indices = road_surface(
+            run, self.profile, sections=self._sections(lean), bank=lean)
         shape = self.world.add_shape(model.Shape.trimesh(
             np.asarray(positions, dtype='d'),
             np.asarray(indices, dtype='i').reshape(-1, 3)))
@@ -158,6 +178,21 @@ class RoadColliders:
             collider=model.Collider(shape=shape))
         self._triangles += len(indices) // 3
         self.world.refit_aabbs()
+
+    def _sections(self, lean: Optional[np.ndarray]) -> Any:
+        """The cut across each ring of a chunk, or None for a flat stretch.
+
+        The camber is used up by the lean exactly as it is in the surface that
+        is drawn (:func:`~OpenGLContext.scenegraph.road.banked_sections`). Two
+        centimetres of crown is nothing to look at and everything to a car:
+        left in, the collider stands proud of the drawn road down the middle of
+        every banked corner.
+        """
+        if lean is None:
+            return None
+        return banked_sections(
+            np.tile(self.profile.section(), (len(lean), 1, 1)), lean,
+            self.profile)
 
     def _drop(self, key: int) -> None:
         body = self._bodies.pop(key)

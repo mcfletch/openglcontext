@@ -165,8 +165,13 @@ scene.advance(dt)                         # steps the world, writes back Transfo
   surface at one resolution, cut into chunks and held near the car:</p>
   <pre><code>from OpenGLContext.physics.road import RoadColliders
 road = RoadColliders(physics_world, course.centreline, course.road_profile(),
-                     closed=True)
+                     closed=True, bank=course.bank)
 road.update(car_position)                # once a frame</code></pre>
+  <p><code>bank</code> is the road's lean at each centreline point, which a
+  baked world writes beside the line
+  (<a href="roads.html#banking">banked corners</a>). It is not optional
+  decoration: a flat collider under a superelevated road is a surface the car
+  falls through on the inside of every corner and stands on the outside of.</p>
   <p>Its sibling
   <a href="terrain.html#fieldphysics"><code>HeightFieldColliders</code></a> does
   the same for ground carried as a field. Between them a game can turn tile

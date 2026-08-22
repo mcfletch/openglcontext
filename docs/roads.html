@@ -100,7 +100,10 @@ surface is at a distance out, one value or a whole array of them, held at the
 verge's value past the road's own edge. It is what puts anything placed by how
 far along the road it is and how far across — a vehicle, a marker, a sign's foot
 — at the height the road actually is there, without asking the physics what is
-underneath it and being told about whatever else is standing in the way.</p>
+underneath it and being told about whatever else is standing in the way.
+<p><code>section_offset(across, bank)</code> takes the corner's lean as well
+(<a href="#banking">below</a>): a banked cut has less camber left in it, and
+past the lean it has none.</p>
 
 <h3 id="route">The plan: where a road can go at all</h3>
 <p>A line drawn across a landscape without regard for it climbs and drops
@@ -324,9 +327,65 @@ mechanism widens a road for a lay-by.</p>
 <h3>How it is swept</h3>
 <p>Each centreline point gets a <strong>frame</strong>: the tangent along the
 line, the right vector across it, and the up vector their cross product gives.
-The profile is placed in that frame, so the carriageway banks with a climb and
-holds its width through a bend. Up is world up rather than anything carried
-along the line — a road banks, it does not roll over.</p>
+The profile is placed in that frame, so the carriageway tilts with a climb and
+holds its width through a bend. Up is world up unless the road is given a lean
+to roll the frame by, which is what banking a corner is.</p>
+
+<h3 id="banking">Banked corners</h3>
+<p>A corner can be <strong>superelevated</strong> &mdash; the whole carriageway
+rolled about the centreline so that it leans into the turn. Part of the car's
+weight then does the work of holding it on the line, so the corner is faster,
+or as fast round a tighter radius. That is what lets a road hold its design
+speed through country a flat road of the same speed would have to sweep across
+in long arcs.</p>
+<pre>from OpenGLContext.scenegraph.road import bank_profile, banked_sections, road_mesh
+bank = bank_profile(line, speed=200 / 3.6, profile=profile, closed=True)
+mesh = road_mesh(line, profile, bank=bank,
+                 sections=banked_sections(sections, bank, profile))</pre>
+<p><code>bank_profile(line, speed, profile, maximum, gradient, closed)</code>
+returns the lean at each centreline point, as a fraction &mdash; how far the
+surface rises across the road over the distance it rises across &mdash; signed
+so that <strong>positive is a right-hand bend</strong>, whose right-hand side is
+the low one. Each corner gets the lean that <em>balances</em> a car at
+<code>speed</code>: at that speed the road alone holds the car on the line and
+the tyre's grip is untouched, so the speed is a <strong>floor</strong> and what
+the corner actually holds is more.</p>
+<table>
+<tr><th>Argument</th><th>Default</th><th>Is</th></tr>
+<tr><td><code>speed</code></td><td>—</td><td>the speed corners are banked to hold, in m/s</td></tr>
+<tr><td><code>maximum</code></td><td>0.10 (<code>MAXIMUM_BANK</code>)</td><td>as far as a road may lean, whatever the corner asks</td></tr>
+<tr><td><code>gradient</code></td><td>0.005 (<code>BANK_GRADIENT</code>)</td><td>how much faster the carriageway's edge climbs than its centreline through a transition</td></tr>
+<tr><td><code>baseline</code></td><td>30.0 m</td><td>over how much road the curvature is measured</td></tr>
+</table>
+<p><strong>Ten per cent is the ceiling because a road is not an oval.</strong>
+Highway practice runs from about four per cent where ice is expected &mdash; a
+vehicle stopped on a steeper one slides sideways down it &mdash; to about twelve
+where it is not. At ten, a corner is some ten per cent faster than the same
+corner flat, or a fifth tighter for the same speed. Nothing stops a caller
+asking for more; what the default is, is what a road is built to.</p>
+<p><strong>The lean is taken up before the corner, not in it.</strong> A road
+cannot roll from camber to full bank at a vertex, so the change is held to
+<code>gradient</code>, which over the half-width the road rotates about is a
+limit on how much the lean may change per metre &mdash; some seventy metres of
+transition for a full bank on a two-lane road. The runoff straddles the corner's
+entry, so a car arrives already leaning; a corner too near another to have its
+runoff is banked as far as the road between them allows, and a road that is not
+a circuit starts and ends flat.</p>
+<p><strong>The camber is used up by the lean.</strong> A crowned carriageway
+drains both ways and a banked one drains one way, so as the lean grows the outer
+half rotates up about the crown until the whole carriageway is a single plane.
+<code>banked_sections(sections, bank, profile)</code> is that, applied to a cut
+already worked out; <code>RoadProfile.banked(bank)</code> is the same thing said
+as a profile.</p>
+<p><code>plan_curvature(line, baseline, closed)</code> is underneath it: how
+tightly the line turns at each point, in 1/metres, signed the same way. It
+measures over a real length of road rather than between neighbouring samples,
+because a line written down every few metres carries an arc as chords and three
+neighbours of one read as a corner far tighter than the one they are on.</p>
+<p><strong>Everything swept along the road takes the lean.</strong> A bridge
+deck, a tunnel bore, a causeway's fill and the collider under the wheels all
+accept a <code>bank</code>, because a superelevated corner rolls what is on it
+about the centreline together.</p>
 </section>
 
 <section>
@@ -379,7 +438,10 @@ what the tab says: 60% of it, rounded down to 10 km/h, because a sign carrying
 the limit is a sign that is wrong for a wet road, a laden car or a cold tyre.
 <code>cornering_radius(speed)</code> is the same rule read the other way, which
 is what a road being laid out to a design speed uses, so a road is signed by the
-rule it was built by. All three are in
+rule it was built by. All three take a <code>bank</code>
+(<a href="#banking">above</a>), because how far a bend leans is part of how fast
+it is: a plate warning a driver off a corner the road is holding them through is
+a plate they learn to ignore. All three are in
 <code>OpenGLContext.scenegraph.road</code>.</p>
 <p><strong>How much road a driver can see is geometry too.</strong>
 <code>sight_distances(line, clear, reach, closed)</code> answers, for every
@@ -552,7 +614,9 @@ the grid, time a lap, or drive an opponent — and geometry does not carry it.</
 with its <code>name</code>, its <code>centreline</code> points, its
 <code>carriagewayWidth</code> and <code>totalWidth</code>, its
 <code>length</code>, whether it is <code>closed</code> into a circuit, and its
-<code>structures</code> — each a <code>kind</code> and the distances
+<code>bank</code> &mdash; one lean per centreline point, empty for a road whose
+corners are flat &mdash; and its
+<code>structures</code>, each a <code>kind</code> and the distances
 <code>from</code> and <code>to</code> along the centreline, so a game knows the
 car is on a bridge without asking the geometry:</p>
 <pre>import json

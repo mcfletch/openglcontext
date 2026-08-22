@@ -708,9 +708,9 @@ page). Driving it is the GL smoke test.
   on it, placed at a stopping distance before what it warns of.
   **The pattern is Ontario's**: a black symbol on a yellow diamond, an advisory speed on a
   tab below it, and the posted limit as a white MAXIMUM plate repeated along the road. How
-  fast a bend is worth is derivable too — `road.corner_speed` is what its radius will hold
-  and `road.advisory_speed` is 60% of that, rounded down to 10 km/h, which is the number on
-  the tab. The posted limit is a decision rather than a measurement, so it is told to the
+  fast a bend is worth is derivable too — `road.corner_speed` is what its radius and its
+  lean will hold and `road.advisory_speed` is 60% of that, rounded down to 10 km/h, which
+  is the number on the tab. The posted limit is a decision rather than a measurement, so it is told to the
   world (`ProceduralWorld.posted`). See [../docs/roads.html](../docs/roads.html).
 - **Obstacles.** Parked and moving cars, rocks, deer, foxes. Two different problems: a
   *placed* obstacle is a `MeshLayer` entry with a collider, and a *moving* one is an actor
@@ -1364,3 +1364,60 @@ them; §E decides per species.
   `OpenGLContext_editor.bake.placing` owns standing a prototype somewhere and
   gathering the results; the sign path was moved onto both. Bake of the shipped
   world, measured on a quiet machine: 27.5 s.
+
+- **2026-08-21** — **Corners are banked.** A road may now be superelevated: the whole
+  carriageway rolled about its centreline so that a corner leans into itself.
+  `OpenGLContext.scenegraph.road` owns the arithmetic — `plan_curvature` for how tightly
+  the line turns and which way, `superelevation` for the lean that balances a car at a
+  given speed, `bank_profile` for the lean along a whole alignment with its transitions,
+  `banked_sections` for the camber the lean uses up, and a `bank` argument on
+  `sweep_frames`, `road_surface`, `road_mesh`, the three `roadworks` sweeps and
+  `RoadColliders`. `corner_speed`, `cornering_radius` and `advisory_speed` all take one.
+  `RoadPath` carries it, `conform_terrain` meets the verge each side is actually at,
+  `RoadLayer` writes it into the tileset beside the centreline, and `glisteel` reads it
+  back for the collider, the traffic and the plates.
+
+  **Decisions taken, and why.**
+
+  *Road banking, not an oval's.* `MAXIMUM_BANK` is 0.10 — 5.7°, the upper end of what is
+  built into a road. Highway practice runs from about 0.04 where ice is expected, since a
+  vehicle stopped on a steeper one slides down it, to about 0.12 where it is not. What it
+  buys is a corner some 10% faster than the same corner flat, or a fifth tighter for the
+  same speed: the shipped circuit's corner floor went from 315 m to 270 m. An oval reaches
+  three or four times this; nothing stops a caller asking for it, but it is not what a
+  road is.
+
+  *The design speed is a floor, not a target.* Each corner is banked to *balance* a car at
+  the design speed — at that speed the road alone holds it and the tyre's grip is
+  untouched — so what the corner actually holds is strictly more. The shipped circuit's
+  slowest corner is 205 km/h against a 200 km/h design speed, and its median corner holds
+  anything at all. `CORNER_MARGIN` keeps the floor clear rather than grazed: a plan is
+  drawn at one spacing, filleted, draped and re-sampled, and each of those moves the line.
+
+  *The runoff leads the corner rather than lagging it.* The first rate limiter clipped the
+  demand forwards, which put the roll *inside* the bend — the one place a driver cannot be
+  given something else to deal with. What landed is a cone dilation: the lean at a point is
+  the most any corner within reach asks for, less what the road lets out over the distance
+  to it, so the whole transition sits on the approach. `BANK_GRADIENT` is 1 in 200, some
+  70 m of transition for a full bank on a two-lane road. Where two opposite corners crowd
+  each other, or a corner is near the end of a road that is not a circuit, the pair get
+  what the road between them can deliver; an open road starts and ends flat.
+
+  *The frame rolls; the cut does not tilt.* Rotating the frame keeps the carriageway the
+  width it was told — tilting the cut instead stretches it by the cosine of the lean. The
+  camber is handled separately and turns out to be a one-line adjustment: the crown is
+  *used up* by the lean, symmetrically, so `RoadProfile.banked(bank)` is the same profile
+  with `crossfall` reduced by `|bank|`. The outer half of the cut rotating up about the
+  crown and the whole plane then rotating together fall out of that identity.
+
+  *A gantry does not lean.* The line painted across the road does — a flat strip on a road
+  at one in ten stands a third of a metre proud on one side — but the steel over it stands
+  upright on its two feet, which is what a gantry over a banked road does. `placed()` grew
+  a `roll` for the paint.
+
+  **Checked end to end.** A ray dropped onto the collider at the point `Course.lane_point`
+  puts a car lands within 0.1 mm of it, right across a banked corner; swept flat under the
+  same road it is out by more than 20 cm. Documentation:
+  [docs/roads.html](../docs/roads.html) gained a *Banked corners* section,
+  [docs/physics.html](../docs/physics.html) the collider's `bank`, and the READMEs of the
+  world generator, the game and the track editor say what a designer and a player get.
