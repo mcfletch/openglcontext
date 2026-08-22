@@ -26,7 +26,9 @@ from OpenGL.GL import (
 )
 # numpy names re-exported dynamically through OpenGLContext.arrays; mypy cannot
 # see them, so the attr-defined here is a false positive.
-from OpenGLContext.arrays import array, dot  # type: ignore[attr-defined]
+from OpenGLContext.arrays import (  # type: ignore[attr-defined]
+    arange, array, asarray, dot, flatnonzero, zeros,
+)
 from OpenGLContext import frustum
 from OpenGLContext.debug.logs import getTraceback
 from vrml.vrml97 import nodetypes
@@ -83,6 +85,24 @@ class SGObserver( object ):
     of paths for all renderable objects in the scenegraph.
     """
     INTERESTING_TYPES = []
+
+    #: Counts changes to the *set* of paths rendered from, so per-path data
+    #: gathered against it is rebuilt rather than read against a set it no
+    #: longer describes. Declared on the class rather than set up in
+    #: ``__init__`` because a pass may be built by a subclass or a test harness
+    #: that never reaches this one, and a gather must work on any of them.
+    _pathGeneration = 0
+    #: The ``(N,8,4)`` array :meth:`_boundingArrays` stacks corners into, kept
+    #: so a frame allocates nothing for a scene whose size has not changed.
+    _pointsBuffer = None
+    #: The ``(N,4,4)`` array :meth:`_worldMatrices` fills each frame, kept so a
+    #: frame allocates nothing for a scene whose size has not changed.
+    _matrixBuffer = None
+
+    def _pathSetChanged( self ):
+        """Say that the set of paths to render is not the one last gathered."""
+        self._pathGeneration += 1
+
     def __init__( self, scene, contexts ):
         """Initialize the FlatPass for this scene and set of contexts
 
@@ -128,6 +148,7 @@ class SGObserver( object ):
             for typ in self.INTERESTING_TYPES:
                 if isinstance( next, typ ):
                     self.paths.setdefault( typ, []).append( path )
+                    self._pathSetChanged()
             if hasattr(next, 'renderedChildren'):
                 # watch for next's changes...
                 for child in next.renderedChildren( ):
@@ -201,6 +222,8 @@ class SGObserver( object ):
                     dropped.append( v )
                 else:
                     live.append( v )
+            if len(live) != len(values):
+                self._pathSetChanged()
             values[:] = live
         for node_id in list( self.nodePaths.keys() ):
             paths = self.nodePaths[node_id]
@@ -915,21 +938,114 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             node.select( distance )
 
     def renderSet( self, matrix ):
-        """Calculate ordered rendering set to display"""
-        # ordered set of things to work with...
+        """The scene's shapes, culled to the frustum and ordered for drawing.
+
+        Every path is asked for its world matrix, because a matrix is what the
+        scenegraph may have changed since the last frame and the path is what
+        knows.  Everything after that is done to the whole scene at once: the
+        camera transform is one matrix product over a stacked array rather than
+        one per shape, and the frustum test is one product against the clipping
+        planes rather than eight points and six planes per shape.
+
+        Culling *before* the sort key rather than after is what makes the rest
+        of the frame proportional to what is on screen: a key is only worked out
+        for a shape that survives, and in a level most shapes do not.  The keys
+        of shapes nobody can see were never read.
+        """
+        paths = self.paths.get( nodetypes.Rendering, ())
+        if not paths:
+            return []
+        volumes, points, bounded = self._boundingArrays( paths )
+        matrices = self._worldMatrices( paths )
+        keep = self._frustumSurvivors( matrices, points, bounded )
+        if not len(keep):
+            return []
+        kept = matrices[keep]
+        # One product for the whole surviving set. `matrix` is the camera's, so
+        # this is the only place the frame's viewpoint enters the gather.
+        modelviews = kept @ asarray( matrix, 'f' )
         toRender = []
-        for path in self.paths.get( nodetypes.Rendering, ()):
-            tmatrix = path.transformMatrix()
-            mvmatrix = dot(tmatrix,matrix)
-            sortKey = path[-1].sortKey( self, tmatrix )
-            if hasattr( path[-1], 'boundingVolume' ):
-                bvolume = path[-1].boundingVolume( self )
-            else:
-                bvolume = None
-            toRender.append( (sortKey, mvmatrix,tmatrix,bvolume, path ) )
-        toRender = self.frustumVisibilityFilter( toRender )
+        for at, index in enumerate( keep ):
+            path = paths[index]
+            tmatrix = matrices[index]
+            toRender.append( (
+                path[-1].sortKey( self, tmatrix ),
+                modelviews[at], tmatrix, volumes[index], path,
+            ) )
         toRender.sort( key = lambda x: x[0])
         return toRender
+
+    def _boundingArrays( self, paths ):
+        """Each path's bounding volume and its corner points, stacked.
+
+        Asked of every node every frame rather than remembered: a volume is not
+        a property of the shape alone. An
+        :class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape` bounds
+        all of its placements, so its extent changes whenever they do, and a set
+        of corners kept from an earlier frame would cull this frame's copies
+        against where the last frame's were. The node's own volume cache is
+        where that question is already answered correctly; this only stacks the
+        answers so the test can be done to the whole scene at once.
+
+        ``bounded`` marks the paths whose volume offers the eight corners the
+        test needs. A volume that offers none -- unbounded, or an instanced
+        shape with nothing placed -- is never culled: an unknown extent has to
+        mean drawing it, and a shape with nothing placed draws nothing anyway.
+        """
+        count = len(paths)
+        points = self._pointsBuffer
+        if points is None or len(points) != count:
+            points = self._pointsBuffer = zeros( (count, 8, 4), 'f' )
+        volumes, bounded = [], []
+        for index, path in enumerate( paths ):
+            node = path[-1]
+            volume = node.boundingVolume( self ) if hasattr(
+                node, 'boundingVolume' ) else None
+            volumes.append( volume )
+            corners = None
+            if volume is not None:
+                try:
+                    corners = asarray( volume.getPoints(), 'f' )
+                except (AttributeError, boundingvolume.UnboundedObject):
+                    corners = None
+            if corners is not None and corners.shape == (8, 4):
+                points[index] = corners
+                bounded.append( True )
+            else:
+                bounded.append( False )
+        return volumes, points, array( bounded, dtype=bool )
+
+    def _worldMatrices( self, paths ):
+        """Every path's world matrix, stacked into one array.
+
+        The per-path call stands because the transform cache behind it is what
+        knows whether anything moved; what is saved is everything downstream of
+        it being done one shape at a time.
+        """
+        matrices = self._matrixBuffer
+        if matrices is None or len(matrices) != len(paths):
+            matrices = self._matrixBuffer = zeros( (len(paths), 4, 4), 'f' )
+        for index, path in enumerate( paths ):
+            matrices[index] = path.transformMatrix()
+        return matrices
+
+    def _frustumSurvivors( self, matrices, points, bounded ):
+        """Indices of the paths the frustum does not reject.
+
+        A shape is rejected when some clipping plane has all eight of its
+        corners behind it, which is the same decision
+        :meth:`OpenGLContext.scenegraph.boundingvolume.BoundingBox.visible`
+        makes one shape at a time.
+        """
+        planes = asarray( self.frustum.planes, 'f' )
+        if not len(planes):
+            return arange( len(matrices) )
+        # Corners into world space: (N,8,4) against each path's own (4,4).
+        world = points @ matrices
+        world[:, :, 3] = 1.0
+        distances = world @ planes.T
+        outside = (distances < 0).all( axis=1 ).any( axis=1 ) & bounded
+        return flatnonzero( ~outside )
 
     def greatestDepth( self, toRender ):
         # experimental: adjust our frustum to smaller depth based on
@@ -941,6 +1057,11 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             except (AttributeError,boundingvolume.UnboundedObject) as err:
                 return 0
             else:
+                # A volume with no corners bounds nothing and so says nothing
+                # about how deep the frame goes; an instanced shape with no
+                # placements is the ordinary way one arrives here.
+                if not len(points):
+                    continue
                 translated = dot( points, mv )
                 maxDepth = min((maxDepth, min( translated[:,2] )))
         # 101 is to allow the 100 unit background to show... sigh

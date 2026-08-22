@@ -204,6 +204,34 @@ forest = InstancedShape(
     &mdash; <code>physics/gltf_world.py</code>'s collision extraction does, so a
     car cannot drive through a tree it can see.</p>
 
+  <h3 id="instancedmodel">A whole model, placed many times</h3>
+  <p>A loaded model is usually not one shape. A rocket is a body, four fins, a
+    nozzle and a warhead, each under its own transform, and placing it by hand
+    two hundred times gives the pass two hundred copies of <em>every one of
+    those parts</em> to gather and cull each frame.</p>
+  <p><code>InstancedModel</code> is that model as one
+    <code>InstancedShape</code> per part. It flattens the transforms above each
+    shape away once, and <code>place()</code> takes an <code>(N,4,4)</code>
+    array of copy matrices and composes each part's own matrix with them:</p>
+  <pre>from OpenGLContext.scenegraph.instancedshape import (
+    InstancedModel, placement_matrices,
+)
+
+rockets = InstancedModel(model=art.load('weapons/rocket.glb'))
+rockets.place(placement_matrices(translations=positions,
+                                 rotations=headings, scales=sizes))</pre>
+  <p>What the pass gathers is then the number of <em>parts</em>, whatever the
+    number of copies &mdash; an eleven-part model placed two hundred times is
+    eleven objects, not two thousand two hundred. Placing nothing draws nothing,
+    which is what an empty set has to look like, so a pool sized for the worst
+    case costs nothing while it is idle. <code>model_parts()</code> is the
+    flattening on its own, for a caller that wants the
+    <code>(shape, matrix)</code> pairs without the node.</p>
+  <p class="technical">A copy is one matrix rather than a subtree, so moving the
+    set is an array write rather than a field written on a transform per part
+    per copy &mdash; which keeps the scenegraph's change notifications out of the
+    per-frame path as well.</p>
+
   <h3>Content collapse: matching identical-but-separate meshes</h3>
   <p>Node identity (&ldquo;is this literally the same object in memory?&rdquo;) catches
     the explicit cases cheaply. To catch the opportunistic ones, a geometry can supply a

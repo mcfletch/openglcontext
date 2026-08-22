@@ -27,10 +27,14 @@ from typing import Any, Optional
 import numpy as np
 from vrml import field
 
+from vrml.vrml97 import nodetypes
+
 from OpenGLContext.scenegraph import boundingvolume
+from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.shape import Shape
 
-__all__ = ['InstancedShape', 'placement_matrices']
+__all__ = ['InstancedShape', 'InstancedModel', 'placement_matrices',
+           'model_parts']
 
 
 def placement_matrices(translations: Any = None, rotations: Any = None,
@@ -167,3 +171,94 @@ class InstancedShape(Shape):
             if set_matrices is not None:
                 set_matrices(base, mode.projection)
         return None
+
+
+def model_parts(node: Any) -> list:
+    """``(shape, matrix)`` for every shape in ``node``, flattened.
+
+    ``matrix`` carries the shape from its own coordinates to ``node``'s, so the
+    transforms between them have been composed away and the hierarchy is gone.
+    That is what makes a model placeable as a set: a copy of it is one matrix,
+    and each part's matrix within the copy never changes.
+
+    Row-vector convention throughout, so a point lands at
+    ``p @ matrix @ copyMatrix``.
+    """
+    found: list = []
+    todo = [(node, np.identity(4, dtype='f'))]
+    while todo:
+        current, matrix = todo.pop(0)
+        if isinstance(current, nodetypes.Transforming):
+            # A transform that moves nothing offers no matrix rather than an
+            # identity, so the shape of what comes back is checked rather than
+            # assumed: composing is only meaningful for a 4x4.
+            try:
+                local = np.asarray(current.localMatrices().data[0], dtype='f')
+            except (AttributeError, IndexError, TypeError, ValueError):
+                local = None
+            if local is not None and local.shape == (4, 4):
+                matrix = np.matmul(local, matrix)
+        if getattr(current, 'geometry', None) is not None:
+            found.append((current, matrix))
+        for child in getattr(current, 'children', None) or ():
+            todo.append((child, matrix))
+    return found
+
+
+class InstancedModel(Group):
+    """A whole model drawn many times, one node per part rather than per copy.
+
+    A model with parts placed by hand is one subtree per copy, and the render
+    pass then does its per-object work -- a world matrix, a bounding volume, a
+    frustum test, a sort key, a draw -- once for every part of every copy. The
+    scene grows with the number of copies whether or not any of them can be
+    seen, and a set parked out of the way costs exactly what a set on screen
+    does.
+
+    This is the same model as one :class:`InstancedShape` per *part*, each
+    carrying every copy's matrix. The pass sees as many objects as the model has
+    parts, however many copies there are, and each part draws in one batch.
+
+    Build it from a loaded model and drive it with :meth:`place`::
+
+        pool = InstancedModel(model=art.load('weapons/rocket.glb'))
+        pool.place(matrices)        # (N,4,4), one per copy
+
+    ``place`` with nothing draws nothing, which is what an empty set has to
+    look like.
+    """
+
+    def __init__(self, model: Any = None, parts: Any = None, **named: Any):
+        super(InstancedModel, self).__init__(**named)
+        self._parts = list(parts) if parts is not None else (
+            model_parts(model) if model is not None else [])
+        #: One instanced shape per part, in the order the model built them, and
+        #: the part's own matrix alongside so `place` need not walk anything.
+        self._locals = np.stack([matrix for _shape, matrix in self._parts]) \
+            if self._parts else np.zeros((0, 4, 4), 'f')
+        self._shapes = [
+            InstancedShape(geometry=shape.geometry,
+                           appearance=getattr(shape, 'appearance', None))
+            for shape, _matrix in self._parts
+        ]
+        self.children = list(self._shapes)
+
+    def __len__(self) -> int:
+        """How many parts the model was flattened into."""
+        return len(self._shapes)
+
+    def place(self, copies: Any) -> None:
+        """Draw the model once at each of ``copies``, an ``(N,4,4)`` array.
+
+        Each part is placed at its own matrix within the model, composed with
+        the copy's -- one array operation per part, rather than a field written
+        on a transform per part per copy.
+        """
+        if copies is None or not len(copies):
+            for shape in self._shapes:
+                if len(shape.placements):
+                    shape.placements = []
+            return
+        copies = np.asarray(copies, dtype='f').reshape(-1, 4, 4)
+        for index, shape in enumerate(self._shapes):
+            shape.placements = np.matmul(self._locals[index], copies)

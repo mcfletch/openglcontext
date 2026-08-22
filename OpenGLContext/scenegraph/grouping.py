@@ -28,21 +28,25 @@ class ChildrenSensitiveField( node.MFNode ):
         return value
 
 def _cacheClear( signal, sender, subsignal=None, subvalue=None ):
-    (typ,field) = signal 
+    """Drop the typed views of ``field``, so the next reader rebuilds them.
+
+    The views are filtered copies of the field, and the field is the only thing
+    that knows what it holds. Editing a copy from the notification alone reads
+    one more meaning into the notification than it carries: an ``OList`` keeps
+    the node it was set on as the sender of its changes, and goes on sending as
+    that node after the node's field has moved to a different list -- which is
+    what a loader building one node's children a second time leaves behind. Those
+    notifications then arrive announcing children the field already holds, and a
+    copy that appends them names each of those children twice.
+
+    Rebuilding from the field cannot say anything the field does not say, and the
+    rebuild is one pass over the children when a reader next asks, rather than
+    one per notification.
+    """
+    (typ,field) = signal
     cache = field.getCache( sender )
     if cache is not None:
-        if subsignal is not None:
-            # just update the cache with the single change...
-            if subsignal == 'new':
-                for key,current in cache.items():
-                    if isinstance( subvalue, key ):
-                        current.append( subvalue )
-            elif subsignal == 'del':
-                for key,current in cache.items():
-                    if subvalue in current:
-                        current.remove( subvalue )
-        else:
-            cache.clear()
+        cache.clear()
 
 class ChildrenTypedField( ChildrenSensitiveField ):
     """Field sub-class/mix-in for iterating over children by node-types"""

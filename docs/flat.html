@@ -47,6 +47,37 @@ incoming mouse events to find the object under the mouse. &nbsp;This
 avoids the use of the legacy select render mode.</p>
 </section>
 <section>
+<h2>Gathering and culling a frame</h2>
+<p><code>renderSet()</code> turns that flat set of paths into the ordered list a
+frame draws. Each path is asked for its world matrix, because a matrix is what
+the scenegraph may have changed since the last frame and the path is what knows.
+Everything after that is done to the whole scene at once: the corner points of
+every bounding volume are stacked into one <code>(N,8,4)</code> array, carried
+into world space by one matrix product, and tested against the frustum's
+clipping planes by one more. A shape is rejected when some plane has all eight of
+its corners behind it &mdash; the same decision the per-shape test makes, taken
+for the whole scene in two array operations rather than one Python call per
+object.</p>
+<p><strong>Culling comes before the sort key</strong>, which is what keeps the
+rest of the frame proportional to what is on screen. A sort key involves the
+appearance, its textures and, for transparent shapes, a projected depth; in a
+level most shapes are not visible, and the keys of shapes nobody can see are
+never worked out.</p>
+<p>Two kinds of bounding volume decline to give corners, and they are opposites.
+An <em>unbounded</em> volume is of unknown extent and is never culled: not
+knowing where a thing is has to mean drawing it. A volume with <em>no</em>
+extent bounds nothing &mdash; an
+<a href="instancing.html#instancedshape"><code>InstancedShape</code></a> with
+nothing placed is the ordinary way one arises &mdash; and draws nothing whether
+it is kept or not.</p>
+<p class="technical">Bounding volumes are asked of their nodes every frame rather
+than remembered by the pass. A volume is not a property of the shape alone: an
+instanced shape bounds all of its placements, so its extent changes whenever they
+do, and corners kept from an earlier frame would cull this frame's copies against
+where the last frame's were. The node's own volume cache is where that question
+is answered, with the dependency tracking to invalidate it.</p>
+</section>
+<section>
 <h2>Triggering the RenderPass</h2>
 
 <p>So let's take a look at how the rendering process is triggered, from
