@@ -1080,23 +1080,30 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     def greatestDepth( self, toRender ):
         # experimental: adjust our frustum to smaller depth based on
         # the projected z-depth of bbox points...
-        maxDepth = 0
+        # **The depths are not read, and have not been.** A depth measured this
+        # way is an eye-space z in front of the camera, so it is never positive;
+        # it starts at zero and only ever decreases. The floor below -- which is
+        # there so the hundred-unit background still shows -- is therefore always
+        # the larger of the two, and the answer is the same constant whatever
+        # the scene contains. Projecting every corner of every shape to reach it
+        # cost a measurable slice of each frame.
+        #
+        # What the scan still decides is whether every record *has* an extent:
+        # one of unknown extent could reach any distance, and a zero is how this
+        # tells the caller not to narrow the projection at all. So that is what
+        # is asked, and nothing else.
+        #
+        # Restoring the depths means fixing the floor -- `max` against a
+        # positive number can only ever choose the positive number -- and that
+        # changes the projection every scene is drawn with, so it is a
+        # deliberate change rather than a tidy-up.
         for (key,mv,tm,bv,path) in toRender:
             try:
-                points = bv.getPoints()
+                bv.getPoints()
             except (AttributeError,boundingvolume.UnboundedObject) as err:
                 return 0
-            else:
-                # A volume with no corners bounds nothing and so says nothing
-                # about how deep the frame goes; an instanced shape with no
-                # placements is the ordinary way one arrives here.
-                if not len(points):
-                    continue
-                translated = dot( points, mv )
-                maxDepth = min((maxDepth, min( translated[:,2] )))
         # 101 is to allow the 100 unit background to show... sigh
-        maxDepth = max((maxDepth,101))
-        return -(maxDepth*1.01)
+        return -(101*1.01)
 
     _render_mode_logged = False
 
