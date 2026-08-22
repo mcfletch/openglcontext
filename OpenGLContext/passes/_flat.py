@@ -955,9 +955,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         paths = self.paths.get( nodetypes.Rendering, ())
         if not paths:
             return []
-        volumes, points, bounded = self._boundingArrays( paths )
+        volumes, points, bounded, drawing = self._boundingArrays( paths )
         matrices = self._worldMatrices( paths )
-        keep = self._frustumSurvivors( matrices, points, bounded )
+        keep = self._frustumSurvivors( matrices, points, bounded, drawing )
         if not len(keep):
             return []
         kept = matrices[keep]
@@ -988,17 +988,30 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         answers so the test can be done to the whole scene at once.
 
         ``bounded`` marks the paths whose volume offers the eight corners the
-        test needs. A volume that offers none -- unbounded, or an instanced
-        shape with nothing placed -- is never culled: an unknown extent has to
-        mean drawing it, and a shape with nothing placed draws nothing anyway.
+        test needs. A volume that offers none is *unbounded* -- of unknown
+        extent -- and is never culled: not knowing where a thing is has to mean
+        drawing it.
+
+        ``drawing`` is the separate question of whether the node has anything to
+        put on screen at all, which it answers itself through
+        :meth:`~OpenGLContext.scenegraph.shape.Shape.drawsNothing`. A node that
+        says no is left out: it is not culled for being outside the frustum, it
+        simply is not there this frame.
         """
         count = len(paths)
         points = self._pointsBuffer
         if points is None or len(points) != count:
             points = self._pointsBuffer = zeros( (count, 8, 4), 'f' )
-        volumes, bounded = [], []
+        volumes, bounded, drawing = [], [], []
         for index, path in enumerate( paths ):
             node = path[-1]
+            nothing = getattr( node, 'drawsNothing', None )
+            if nothing is not None and nothing():
+                volumes.append( None )
+                bounded.append( False )
+                drawing.append( False )
+                continue
+            drawing.append( True )
             volume = node.boundingVolume( self ) if hasattr(
                 node, 'boundingVolume' ) else None
             volumes.append( volume )
@@ -1013,7 +1026,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 bounded.append( True )
             else:
                 bounded.append( False )
-        return volumes, points, array( bounded, dtype=bool )
+        return (volumes, points, array( bounded, dtype=bool ),
+                array( drawing, dtype=bool ))
 
     def _worldMatrices( self, paths ):
         """Every path's world matrix, stacked into one array.
@@ -1029,7 +1043,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             matrices[index] = path.transformMatrix()
         return matrices
 
-    def _frustumSurvivors( self, matrices, points, bounded ):
+    def _frustumSurvivors( self, matrices, points, bounded, drawing ):
         """Indices of the paths the frustum does not reject.
 
         A shape is rejected when some clipping plane has all eight of its
@@ -1039,13 +1053,13 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """
         planes = asarray( self.frustum.planes, 'f' )
         if not len(planes):
-            return arange( len(matrices) )
+            return flatnonzero( drawing )
         # Corners into world space: (N,8,4) against each path's own (4,4).
         world = points @ matrices
         world[:, :, 3] = 1.0
         distances = world @ planes.T
         outside = (distances < 0).all( axis=1 ).any( axis=1 ) & bounded
-        return flatnonzero( ~outside )
+        return flatnonzero( drawing & ~outside )
 
     def greatestDepth( self, toRender ):
         # experimental: adjust our frustum to smaller depth based on

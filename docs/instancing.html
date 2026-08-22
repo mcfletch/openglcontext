@@ -407,8 +407,11 @@ rockets.place(placement_matrices(translations=positions,
     <li><strong>Same texture per group.</strong> Instances can vary by material numbers but
       not by texture image; a different texture set starts a new group (plain OpenGL has no
       per-instance texture without bindless-texture hardware).</li>
-    <li><strong>Opaque only.</strong> Transparent objects need per-frame depth sorting and
-      are not instanced.</li>
+    <li><strong>Batched draws are opaque only.</strong> Transparent objects need per-frame
+      depth sorting, so they are drawn record by record rather than in one batch. A
+      declared set still draws every one of its placements there &mdash; the set is
+      expanded by the node, one draw per copy &mdash; it just does not collapse into a
+      single call.</li>
     <li><strong>One tessellation per group.</strong> Procedural LOD surfaces (NURBS,
       extrusions) are not instanced, to keep their distance level-of-detail. The Teapot
       instances at its finest tessellation, trading LOD for the batched draw.</li>
@@ -424,6 +427,15 @@ rockets.place(placement_matrices(translations=positions,
       answer to one of those &mdash; a click that must name the individual tree
       &mdash; place them as separate shapes and let the opportunistic path batch
       them.</li>
+    <li><strong>Being one object costs the culling.</strong> The set's bounding box
+      covers every placement, so a set spread across a whole level is never outside the
+      frustum and every copy is drawn every frame. That is a good trade for copies that
+      are <em>together</em> (a tree cluster, a tile's grass) or that are <em>mostly
+      nowhere</em> (a pool of projectiles, all of it parked until something is fired),
+      and a bad one for copies scattered through a level where most are behind a wall:
+      as separate shapes each of those is rejected on its own. Measure it rather than
+      assuming &mdash; a set whose copies are far apart can be slower instanced than
+      not.</li>
   </ul>
 </section>
 

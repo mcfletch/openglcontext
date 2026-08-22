@@ -200,6 +200,20 @@ class Shape(basenodes.Shape):
         finally:
             glPopAttrib()
 
+    def drawsNothing(self):
+        """Whether this shape would put nothing on screen this frame.
+
+        A shape that says so is left out of the render set entirely, so it
+        costs no world matrix, no frustum test, no sort key and no draw. It is
+        asked once per frame per path, so the answer has to be cheap to give.
+
+        This is *not* the same question as an empty bounding volume. A shape may
+        have no extent the frustum test can use and still have something to
+        draw, and a volume of unknown extent must always be drawn; only the node
+        knows which of those it is.
+        """
+        return False
+
     def sortKey(self, mode, matrix):
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         if self.appearance:

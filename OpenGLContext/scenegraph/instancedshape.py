@@ -109,6 +109,18 @@ class InstancedShape(Shape):
             return None
         return np.asarray(placements, dtype='f').reshape(-1, 4, 4)
 
+    def drawsNothing(self) -> bool:
+        """True when nothing is placed, so there is nothing to draw.
+
+        A set with no placements is the ordinary resting state of a pool --
+        every rocket landed, every pickup taken -- and it has to cost nothing
+        and show nothing. The render pass reads a placement array of ``None`` as
+        *one* draw at the record's own matrix, which is right for a plain shape
+        and would put a stray copy of this one at the set's origin.
+        """
+        placements = self.placements
+        return placements is None or not len(placements)
+
     def boundingVolume(self, mode: Any = None) -> Any:
         """A box around every placement of the geometry.
 
@@ -145,14 +157,11 @@ class InstancedShape(Shape):
         placed = np.matmul(points[None, :, :], placements).reshape(-1, 4)
         return boundingvolume.AABoundingBox.fromPoints(placed[:, :3])
 
-    def Render(self, mode: Any = None) -> Any:
-        """Draw the geometry once per placement.
+    def _renderPlacements(self, draw: Any, mode: Any) -> None:
+        """Call ``draw`` once per placement, at the modelview it belongs at.
 
-        This is the path taken when the pass is not batching -- instancing
-        switched off, or a set too small to be worth a batch. Each placement
-        gets the modelview it belongs at, on the pass and on the bound program,
-        and the pass's own matrix is put back as it was afterwards: that one
-        belongs to the record rather than to any one placement.
+        The pass's own matrix is put back as it was afterwards: that one belongs
+        to the record rather than to any one placement.
         """
         placements = self.instancePlacements()
         if placements is None:
@@ -165,12 +174,31 @@ class InstancedShape(Shape):
                 mode.matrix = np.matmul(placement, base)
                 if set_matrices is not None:
                     set_matrices(mode.matrix, mode.projection)
-                super(InstancedShape, self).Render(mode=mode)
+                draw(mode=mode)
         finally:
             mode.matrix = base
             if set_matrices is not None:
                 set_matrices(base, mode.projection)
         return None
+
+    def Render(self, mode: Any = None) -> Any:
+        """Draw the geometry once per placement.
+
+        This is the path taken when the pass is not batching -- instancing
+        switched off, or a set too small to be worth a batch.
+        """
+        return self._renderPlacements(super(InstancedShape, self).Render, mode)
+
+    def RenderTransparent(self, mode: Any = None) -> Any:
+        """Draw a blended set once per placement, like an opaque one.
+
+        The transparent pass draws record by record rather than in batches, so
+        this is the only route a translucent set has: without it the whole set
+        draws once, at the record's own matrix, and every copy but the one at
+        the set's origin is missing.
+        """
+        return self._renderPlacements(
+            super(InstancedShape, self).RenderTransparent, mode)
 
 
 def model_parts(node: Any) -> list:

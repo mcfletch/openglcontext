@@ -115,3 +115,58 @@ class TestWhatTheRenderPassSees:
         copies = Group(children=[
             Transform(children=[a_model()]) for _ in range(64)])
         assert self.rendering_paths(copies) == 128
+
+
+class TestABlendedSetDrawsEveryCopy:
+    """A translucent instanced shape draws once per placement, like an opaque one.
+
+    The transparent pass draws record by record rather than in batches, so it
+    reaches the node's own draw and nothing else. A set that did not expand its
+    placements there would put one copy at the set's origin and lose the rest --
+    and every pickup with a glass shell around it is such a set.
+    """
+
+    class _Recorder:
+        """Stands in for the pass: remembers the matrix each draw was given."""
+
+        def __init__(self):
+            self.matrix = np.identity(4, dtype='f')
+            self.projection = np.identity(4, dtype='f')
+            self.seen = []
+
+    def shape(self, copies):
+        from OpenGLContext.scenegraph.instancedshape import InstancedShape
+        moves = np.stack([np.identity(4, dtype='f') for _ in range(copies)])
+        for at in range(copies):
+            moves[at][3, 0] = float(at)
+        return InstancedShape(geometry=Box(size=(1, 1, 1)), placements=moves)
+
+    def drawn(self, shape, method):
+        mode = self._Recorder()
+        original = getattr(type(shape).__mro__[1], method)
+
+        def record(self_, mode=None):
+            mode.seen.append(np.asarray(mode.matrix, 'f').copy())
+
+        setattr(type(shape).__mro__[1], method, record)
+        try:
+            getattr(shape, method)(mode=mode)
+        finally:
+            setattr(type(shape).__mro__[1], method, original)
+        return mode.seen
+
+    def test_the_opaque_draw_visits_every_placement(self):
+        assert len(self.drawn(self.shape(4), 'Render')) == 4
+
+    def test_the_blended_draw_visits_every_placement(self):
+        assert len(self.drawn(self.shape(4), 'RenderTransparent')) == 4
+
+    def test_each_blended_copy_is_drawn_where_it_was_placed(self):
+        seen = self.drawn(self.shape(3), 'RenderTransparent')
+        assert [float(m[3, 0]) for m in seen] == [0.0, 1.0, 2.0]
+
+    def test_a_blended_set_with_nothing_placed_draws_nothing(self):
+        from OpenGLContext.scenegraph.instancedshape import InstancedShape
+        empty = InstancedShape(geometry=Box(size=(1, 1, 1)))
+        assert self.drawn(empty, 'RenderTransparent') == []
+        assert empty.drawsNothing()
