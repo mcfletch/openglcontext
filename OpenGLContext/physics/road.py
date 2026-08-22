@@ -15,8 +15,16 @@ geometry comes and goes.
 
 Like :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders`, the road
 is cut into chunks and only the ones near whatever is moving are in the physics
-world -- an hour of driving costs what one view of the world costs. Chunks share
-their end rings, so two neighbours agree exactly where they meet.
+world -- an hour of driving costs what one view of the world costs.
+
+**A chunk is cut out of one road rather than built as a road of its own.** The
+frame a cross-section is swept along at a point is made from the segments either
+side of it, which a chunk considered alone does not have at its ends; the
+frames are swept once for the whole centreline
+(:func:`~OpenGLContext.scenegraph.road.sweep_frames`) and each chunk takes its
+own slice. So two neighbours agree exactly where they meet, and the ring they
+share is one ring. On a circuit that goes for the seam as well, which is where a
+start line usually is.
 """
 from __future__ import annotations
 
@@ -26,7 +34,7 @@ import numpy as np
 from omi_physics import model
 
 from OpenGLContext.scenegraph.road import (
-    RoadProfile, banked_sections, road_surface,
+    RoadProfile, banked_sections, road_surface, sweep_frames,
 )
 
 if TYPE_CHECKING:
@@ -83,6 +91,19 @@ class RoadColliders:
                     % (len(self.points), len(self.points), len(self.bank)))
         self.reach = float(reach)
         self.closed = bool(closed)
+        #: Whether the centreline already ends where it began. Both spellings
+        #: of a circuit are in use, and what closes the loop differs between
+        #: them.
+        self._wraps_already = bool(
+            np.linalg.norm(self.points[-1] - self.points[0]) < 1e-9)
+        #: The frame at every centreline point, swept once for the whole road.
+        #: A chunk takes its own slice of this rather than sweeping its own
+        #: (:func:`~OpenGLContext.scenegraph.road.road_surface`): a frame is
+        #: made from the points either side, which a chunk on its own does not
+        #: have, so a chunk that swept itself would roll its end rings away
+        #: from the road they join on to.
+        self._right, self._up = sweep_frames(self.points, self.bank,
+                                             closed=self.closed)
         steps = np.linalg.norm(np.diff(self.points, axis=0), axis=1)
         #: Distance along the road to each point, which is what a chunk is cut
         #: on and what a position is found in.
@@ -163,13 +184,22 @@ class RoadColliders:
             return
         run = self.points[first:last + 1]
         lean = None if self.bank is None else self.bank[first:last + 1]
-        if self.closed and key == self._chunks - 1:
-            # Close the loop: the last chunk runs on into the first point.
+        frames = (self._right[first:last + 1], self._up[first:last + 1])
+        if self.closed and key == self._chunks - 1 and not self._wraps_already:
+            # Close the loop: the last chunk runs on into the first point. A
+            # line already written with that point at its end closes itself,
+            # and adding it again would put a ring on top of a ring with no
+            # road between them -- a segment of no length, whose frame is no
+            # frame at all.
             run = np.vstack([run, self.points[:1]])
-            if lean is not None:
+            frames = (np.vstack([frames[0], self._right[:1]]),
+                      np.vstack([frames[1], self._up[:1]]))
+            if lean is not None and self.bank is not None:
                 lean = np.concatenate([lean, self.bank[:1]])
+        # No ``bank``: the lean is already in the frames, and what it does to
+        # the cut is in the sections.
         positions, _normals, _uv, indices = road_surface(
-            run, self.profile, sections=self._sections(lean), bank=lean)
+            run, self.profile, sections=self._sections(lean), frames=frames)
         shape = self.world.add_shape(model.Shape.trimesh(
             np.asarray(positions, dtype='d'),
             np.asarray(indices, dtype='i').reshape(-1, 3)))

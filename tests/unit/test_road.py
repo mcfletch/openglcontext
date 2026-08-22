@@ -650,3 +650,108 @@ class TestABankedSurface:
         assert profile.section_offset(half, bank=0.2) == pytest.approx(0.0)
         assert profile.section_offset(half, bank=0.005) == pytest.approx(
             -0.015 * half)
+
+
+class TestALineWithNoLengthInASegment:
+    """A centreline may arrive with a point written twice.
+
+    A segment of no length has no direction, and the frame built from one is
+    not a frame: :func:`sweep_frames` falls into its vertical-tangent guard,
+    the up vector comes out zero, and every vertex of that ring collapses onto
+    the centreline.  What a car meets there is a hole in the road.
+    """
+
+    def _doubled(self, at):
+        """A straight with the point at ``at`` written twice."""
+        line = _straight(length=100.0, count=11)
+        return np.insert(line, at, line[at], axis=0)
+
+    def test_the_doubled_point_keeps_an_up_vector(self) -> None:
+        from OpenGLContext.scenegraph.road import sweep_frames
+        _right, up = sweep_frames(self._doubled(5))
+        assert np.linalg.norm(up[5]) == pytest.approx(1.0, abs=1e-9), (
+            "the ring there has no up vector: %r" % (up[5],))
+
+    def test_it_gets_the_frame_the_road_has_there(self) -> None:
+        from OpenGLContext.scenegraph.road import sweep_frames
+        right, up = sweep_frames(self._doubled(5))
+        assert np.allclose(right[5], right[4], atol=1e-9)
+        assert np.allclose(up[5], up[4], atol=1e-9)
+
+    def test_a_doubled_point_at_the_end_keeps_its_frame(self) -> None:
+        """Where a caller closes a loop by repeating the first point onto a
+        line that already ended with it."""
+        from OpenGLContext.scenegraph.road import sweep_frames
+        line = _straight(length=100.0, count=11)
+        line = np.vstack([line, line[-1:]])
+        _right, up = sweep_frames(line)
+        assert np.linalg.norm(up[-1]) == pytest.approx(1.0, abs=1e-9)
+
+    def test_the_surface_does_not_collapse_there(self) -> None:
+        profile = RoadProfile()
+        positions = road_surface(self._doubled(5), profile)[0]
+        ring = len(profile.section())
+        cut = positions[5 * ring:6 * ring]
+        assert np.linalg.norm(cut[-1] - cut[0]) == pytest.approx(
+            profile.total_width, rel=1e-3), (
+                "the ring is %.3f m wide, not %.3f"
+                % (float(np.linalg.norm(cut[-1] - cut[0])),
+                   profile.total_width))
+
+
+class TestASweepThatComesBackToItsStart:
+    """A circuit has no first point: the ring before the first is the last.
+
+    Swept as though it were an open road, the two ends get a one-sided tangent
+    and the cut at the seam is rolled away from the road either side of it.
+    """
+
+    def _loop(self, radius=60.0, count=24, repeat=False):
+        angle = np.linspace(0.0, 2 * math.pi, count, endpoint=False)
+        ring = np.stack([radius * np.cos(angle), np.zeros(count),
+                         radius * np.sin(angle)], axis=-1)
+        return np.vstack([ring, ring[:1]]) if repeat else ring
+
+    def test_an_open_sweep_is_unchanged(self) -> None:
+        from OpenGLContext.scenegraph.road import sweep_frames
+        line = self._loop()
+        assert np.allclose(sweep_frames(line)[0],
+                           sweep_frames(line, closed=False)[0])
+
+    def test_the_seam_gets_the_frame_its_neighbours_have(self) -> None:
+        """Round a circle every across vector is radial, the seam included."""
+        from OpenGLContext.scenegraph.road import sweep_frames
+        line = self._loop()
+        right, _up = sweep_frames(line, closed=True)
+        radial = line / np.linalg.norm(line, axis=1, keepdims=True)
+        assert np.allclose(np.abs((right * radial).sum(axis=1)), 1.0,
+                           atol=1e-9)
+
+    def test_a_line_that_already_repeats_its_first_point(self) -> None:
+        """The shape a baked circuit arrives in: the closing ring is the
+        opening one, so the two cuts have to coincide."""
+        from OpenGLContext.scenegraph.road import banked_sections
+        profile = RoadProfile()
+        line = self._loop(repeat=True)
+        lean = np.full(len(line), 0.10)
+        sections = banked_sections(
+            np.tile(profile.section(), (len(line), 1, 1)), lean, profile)
+        positions = road_surface(line, profile, sections=sections, bank=lean,
+                                 closed=True)[0]
+        ring = len(profile.section())
+        assert np.allclose(positions[-ring:], positions[:ring], atol=1e-5), (
+            "the closing ring is %.3f m from the opening one"
+            % float(np.abs(positions[-ring:] - positions[:ring]).max()))
+
+    def test_frames_can_be_supplied_for_a_stretch_of_a_longer_road(self) -> None:
+        """A chunk of a road cannot be swept on its own: the frame at its ends
+        depends on the points either side, which the chunk does not have."""
+        from OpenGLContext.scenegraph.road import sweep_frames
+        profile = RoadProfile()
+        line = self._loop(count=48)
+        right, up = sweep_frames(line, closed=True)
+        whole = road_surface(line, profile, closed=True)[0]
+        ring = len(profile.section())
+        part = road_surface(line[10:20], profile,
+                            frames=(right[10:20], up[10:20]))[0]
+        assert np.allclose(part, whole[10 * ring:20 * ring], atol=1e-5)

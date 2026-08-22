@@ -179,3 +179,67 @@ class TestACarOnIt:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestACircuitThatComesBackToItsGrid:
+    """A baked circuit is written with its first point again at the end.
+
+    The chunk that closes the loop then has a ring with no length of road
+    before it.  Built as though that ring were the end of an open stretch, its
+    cut collapses onto the centreline, and what stands on the grid -- which is
+    where a circuit's start line is -- meets a surface that is not the road it
+    can see.
+    """
+
+    def _circuit(self, radius=400.0, points=240, height=20.0, repeat=True):
+        angle = np.linspace(0.0, 2 * np.pi, points, endpoint=False)
+        ring = np.stack([radius * np.cos(angle), np.full(points, height),
+                         radius * np.sin(angle)], axis=-1)
+        return np.vstack([ring, ring[:1]]) if repeat else ring
+
+    def _built(self, line, bank):
+        world = PhysicsWorld()
+        lean = None if bank is None else np.full(len(line), bank)
+        road = RoadColliders(world, line, PROFILE, reach=1e6, closed=True,
+                             chunk=120.0, bank=lean)
+        road.update(line[0])
+        return world
+
+    def _off_crown(self, world, line, radius, out):
+        """The surface height ``out`` metres outside the centreline, all round."""
+        found = []
+        for point in line[:-1]:
+            angle = np.arctan2(float(point[2]), float(point[0]))
+            at = radius + out
+            height = _surface(world, at * np.cos(angle), at * np.sin(angle))
+            if height is not None:
+                found.append(height)
+        return np.asarray(found)
+
+    def test_a_banked_circuit_has_no_step_at_its_seam(self) -> None:
+        line = self._circuit()
+        world = self._built(line, 0.10)
+        heights = self._off_crown(world, line, 400.0, 3.0)
+        # A leaning surface is not quite where a plan radius says, so the odd
+        # ray lands off the edge; the point is that what is found is level.
+        assert len(heights) > 0.95 * (len(line) - 1)
+        assert np.ptp(heights) < 0.005, (
+            "the surface steps %.3f m somewhere round the circuit"
+            % float(np.ptp(heights)))
+
+    def test_an_unbanked_circuit_has_none_either(self) -> None:
+        line = self._circuit()
+        world = self._built(line, None)
+        heights = self._off_crown(world, line, 400.0, 3.0)
+        assert np.ptp(heights) < 0.005, (
+            "the surface steps %.3f m somewhere round the circuit"
+            % float(np.ptp(heights)))
+
+    def test_a_circuit_written_without_the_repeat_works_too(self) -> None:
+        line = self._circuit(repeat=False)
+        world = self._built(line, 0.10)
+        heights = self._off_crown(world, np.vstack([line, line[:1]]),
+                                  400.0, 3.0)
+        assert np.ptp(heights) < 0.005, (
+            "the surface steps %.3f m somewhere round the circuit"
+            % float(np.ptp(heights)))

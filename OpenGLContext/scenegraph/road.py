@@ -248,7 +248,7 @@ def sight_distances(line: Any, clear: float,
     around = float(walked[-1])
     reach = float(reach)
     # Whatever is clear beside each point, or the same figure at all of them.
-    clear = np.broadcast_to(np.asarray(clear, dtype='d'), (count,))
+    beside = np.broadcast_to(np.asarray(clear, dtype='d'), (count,))
     seen = np.full(count, reach)
     blocked = np.zeros(count, dtype=bool)
     index = np.arange(count)
@@ -277,7 +277,7 @@ def sight_distances(line: Any, clear: float,
             np.abs(chord[:, 0] * offset[:, 1] - chord[:, 1] * offset[:, 0])
             / np.maximum(span, 1e-9),
             np.inf)
-        away = bow > clear
+        away = bow > beside
         if not closed:
             # The end of an open road is the end of what there is to see.
             away = away | (index + ahead > count - 1)
@@ -428,10 +428,10 @@ class RoadProfile:
         lateral, vertical = section[:, 0], section[:, 1]
         half = float(lateral.max())
         out = np.minimum(np.abs(np.asarray(across, dtype='d')), half)
-        found: np.ndarray = np.interp(out, lateral[lateral >= 0],
-                                      vertical[lateral >= 0])
-        return found + self._crown_removed(bank) * np.minimum(
+        found = np.interp(out, lateral[lateral >= 0], vertical[lateral >= 0])
+        dropped = found + self._crown_removed(bank) * np.minimum(
             out, self.carriageway_width / 2.0)
+        return np.asarray(dropped, dtype='d')
 
     def _crown_removed(self, bank: Any) -> Any:
         """How much of the camber a lean this steep has used up, as a fraction.
@@ -685,7 +685,47 @@ def banked_sections(sections: Any, bank: Any,
     return cuts
 
 
-def sweep_frames(line: np.ndarray, bank: Any = None
+def _returns_to_its_start(line: Any) -> bool:
+    """Whether a centreline is written with its first point again at the end.
+
+    Both spellings of a circuit are in use -- a baker that writes the repeat so
+    the line reads as a closed ring, and one that leaves it off -- and what
+    closes the loop differs between them.
+    """
+    ends = np.asarray(line, dtype='d')
+    return bool(np.linalg.norm(ends[-1] - ends[0]) < 1e-9)
+
+
+def _segment_directions(segments: Any) -> np.ndarray:
+    """Unit directions along each segment, one per segment.
+
+    A segment of no length has no direction of its own and takes the nearest
+    one that has. A point written twice leaves such a segment -- a resampled
+    line that landed two samples together, or a caller closing a loop onto a
+    line that already ends where it began -- and normalising it as it stands
+    gives zero. A zero tangent makes no frame at all: the ring built on it
+    collapses onto the centreline, and what a car meets there is a hole in the
+    road rather than a surface.
+    """
+    steps = np.asarray(segments, dtype='d').reshape(-1, 3)
+    lengths = np.linalg.norm(steps, axis=1, keepdims=True)
+    real = lengths[:, 0] > 1e-9
+    directions = np.zeros_like(steps)
+    if not real.any():
+        # A line that goes nowhere at all. Any direction will do, and one that
+        # exists beats a frame full of NaN.
+        directions[:] = (1.0, 0.0, 0.0)
+        return directions
+    directions[real] = steps[real] / lengths[real]
+    if real.all():
+        return directions
+    order = np.arange(len(real))
+    before = np.maximum.accumulate(np.where(real, order, -1))
+    after = np.minimum.accumulate(np.where(real, order, len(real) - 1)[::-1])[::-1]
+    return directions[np.where(before >= 0, before, after)]
+
+
+def sweep_frames(line: np.ndarray, bank: Any = None, closed: bool = False
                  ) -> Tuple[np.ndarray, np.ndarray]:
     """Per-point (right, up) vectors for a centreline.
 
@@ -701,16 +741,32 @@ def sweep_frames(line: np.ndarray, bank: Any = None
     into the turn. Rolling the frame rather than tilting the cut is what keeps
     the carriageway the width it was told: the road rotates about its own
     centreline, exactly as one is built.
+
+    ``closed`` says the line comes back to where it started, so there is no
+    first point and no last: what precedes the opening ring is the closing
+    segment and what follows the closing ring is the opening one. Without it
+    the two ends take a one-sided tangent -- correct for a road that stops,
+    and on a circuit a cut rolled away from the road either side of it, at the
+    one point a start line is most likely to be. A line written with its first
+    point again at the end is closed the same way, on the segment that runs
+    into the repeat.
     """
-    segments = np.diff(line, axis=0)
-    lengths = np.linalg.norm(segments, axis=1, keepdims=True)
-    lengths[lengths == 0] = 1.0
-    directions = segments / lengths
+    directions = _segment_directions(np.diff(line, axis=0))
     tangents = np.empty_like(line)
-    tangents[0] = directions[0]
-    tangents[-1] = directions[-1]
     if len(line) > 2:
         tangents[1:-1] = directions[:-1] + directions[1:]
+    if closed and _returns_to_its_start(line):
+        # The repeat and the opening point are the same place on the same
+        # road, so they are one ring and take one tangent.
+        tangents[0] = directions[-1] + directions[0]
+        tangents[-1] = tangents[0]
+    elif closed:
+        joining = _segment_directions(line[0] - line[-1])[0]
+        tangents[0] = joining + directions[0]
+        tangents[-1] = directions[-1] + joining
+    else:
+        tangents[0] = directions[0]
+        tangents[-1] = directions[-1]
     norms = np.linalg.norm(tangents, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
     tangents = tangents / norms
@@ -755,7 +811,7 @@ def morphed_sections(profile: RoadProfile, other: RoadProfile,
 
 
 def road_surface(points: Any, profile: RoadProfile, sections: Any = None,
-                 bank: Any = None
+                 bank: Any = None, closed: bool = False, frames: Any = None
                  ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Sweep a profile along a centreline: positions, normals, UVs, indices.
 
@@ -775,12 +831,33 @@ def road_surface(points: Any, profile: RoadProfile, sections: Any = None,
     centreline. It rolls the frame the cut is swept along. A caller giving one
     passes its ``sections`` through :func:`banked_sections` as well, so that the
     camber is taken out of the carriageway as the lean takes over from it.
+
+    ``closed`` says the centreline is a circuit rather than a road that stops
+    (:func:`sweep_frames`).
+
+    ``frames`` is the ``(right, up)`` pair to sweep along, one per point,
+    instead of working them out from ``points``. **This is how a stretch of a
+    longer road is built.** A frame is made from the points either side, so a
+    stretch swept on its own has nothing to make its end frames from and takes
+    a one-sided tangent there; the cut is then rolled away from the road it
+    joins on to. Sweeping the whole line's frames once and handing each stretch
+    its own slice is what makes the pieces meet
+    (:class:`OpenGLContext.physics.road.RoadColliders`). ``bank`` is already in
+    them, so it is not applied twice.
     """
     line = np.asarray(points, dtype='d').reshape(-1, 3)
     if len(line) < 2:
         raise ValueError("a road needs a centreline of at least two points")
     section = profile.section()
-    right, up = sweep_frames(line, bank)
+    if frames is None:
+        right, up = sweep_frames(line, bank, closed=closed)
+    else:
+        right, up = (np.asarray(one, dtype='d').reshape(-1, 3)
+                     for one in frames)
+        if len(right) != len(line) or len(up) != len(line):
+            raise ValueError(
+                "a road of %d points needs %d frames, not %d and %d"
+                % (len(line), len(line), len(right), len(up)))
     ring = len(section)
 
     if sections is None:

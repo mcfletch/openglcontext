@@ -601,6 +601,32 @@ trees do not move and neither does the sun; see
 node — for a caller writing its own geometry, computing a collider, or feeding a
 tile writer. <code>resample_polyline(points, spacing)</code> is the resampler on
 its own.</p>
+
+<h3 id="circuits">Circuits, and roads built a stretch at a time</h3>
+<p>The frame at a point is made from the segments either side of it, so the two
+<em>ends</em> of a line have only one segment each and take a one-sided tangent.
+That is right for a road that stops and wrong for a circuit, where the ring
+before the first is the last one. Pass <code>closed=True</code> to
+<code>sweep_frames</code> or <code>road_surface</code> and the line is treated as
+a ring, so the cut at the seam matches the road either side of it. Both spellings
+of a circuit work: one whose last point is a fresh point, and one written with
+its first point again at the end.</p>
+<p><strong>A stretch of a longer road cannot be swept on its own.</strong> Its
+end frames would come from the one segment inside the stretch rather than from
+the road it joins on to, and the cut there is rolled away from its neighbour's —
+by a hand's breadth on a gentle bend, and by a quarter of a metre where a steep
+bank meets a tight one. Sweep the whole line's frames once and hand each stretch
+its own slice:</p>
+<pre>right, up = sweep_frames(line, bank, closed=True)
+part = road_surface(line[first:last], profile,
+                    frames=(right[first:last], up[first:last]))</pre>
+<p>The bank is already in the frames, so it is not applied again. This is how
+<a href="physics.html#roadcolliders">the road's collider</a> builds its chunks,
+and it is what makes two neighbouring chunks meet exactly.</p>
+<p>A point written twice — a resampled line that landed two samples together, or
+a caller closing a loop onto a line that already ends where it began — leaves a
+segment with no length and so no direction of its own. It takes the nearest
+direction there is, rather than becoming a ring with no width.</p>
 </section>
 
 <section>
