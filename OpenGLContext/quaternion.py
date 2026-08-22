@@ -79,7 +79,7 @@ class Quaternion(object):
     """Quaternion object implementing those methods required
     to be useful for OpenGL rendering (and not many others)"""
     __slots__ = ('internal','__weakref__')
-    def __init__ (self, elements = [1,0,0,0] ):
+    def __init__ (self, elements = (1,0,0,0) ):
         """The initializer is a four-element array,
         
         w, x,y,z -- all elements should be doubles/floats

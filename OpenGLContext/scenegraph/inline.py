@@ -1,7 +1,10 @@
 """VRML97 Inline node"""
 from vrml.vrml97 import basenodes, nodetypes
-from vrml import field, protofunctions, fieldtypes
+from vrml import protofunctions, fieldtypes
 from OpenGLContext import context
+import logging
+
+log = logging.getLogger(__name__)
 
 class InlineURLField( fieldtypes.MFString ):
     """Field for managing interactions with an Inline's URL value"""
@@ -63,17 +66,21 @@ class Inline(basenodes.Inline):
                         baseURI = baseNode.baseURI
                     else:
                         baseURI = None
-                    
+
                     result = Loader.load( u, baseURL = baseURI )
                 except IOError:
                     pass
                 else:
-                    print('loaded', u)
+                    log.info("loaded %s", u)
                     self.scenegraph = result
-                    for context in contexts:
-                        c = context()
+                    for reference in contexts:
+                        c = reference()
                         if c:
                             c.triggerRedraw(1)
                     return
-        warnings.warn( """Unable to load any scene from the url %s for the node %s"""%( url, str(self)))
-        
+        log.warning(
+            """Unable to load any scene from the url %s for the node %s""",
+            url,
+            str(self),
+        )
+

@@ -56,16 +56,16 @@ class wxMouseButtonEvent( wxXEvent, mouseevents.MouseButtonEvent ):
             self.renderingPass = context.currentPass
         self.modifiers = self._getModifiers(wxEventObject)
         self.button = None
-        for local, wx in self.BUTTON_MAPPING:
-            if wx == wxEventObject.Button:
+        for local, wxButton in self.BUTTON_MAPPING:
+            if wxButton == wxEventObject.Button:
                 self.button = local
-                self.state = wxEventObject.ButtonDown( wx )
-                break 
+                self.state = wxEventObject.ButtonDown( wxButton )
+                break
         if self.button is None:
-            for local,wx in self.BUTTON_MAPPING:
-                if wxEventObject.Button( wx ):
+            for local, wxButton in self.BUTTON_MAPPING:
+                if wxEventObject.Button( wxButton ):
                     self.button = local
-                    self.state = wxEventObject.ButtonDown( wx )
+                    self.state = wxEventObject.ButtonDown( wxButton )
                     break
         self.pickPoint = wxEventObject.GetX(), context.getViewPort()[1]- wxEventObject.GetY()
         

@@ -1,7 +1,7 @@
 """EventManager providing vcr-like control of an InternalTime object"""
 from . import eventmanager, systemtime, internaltime
 from pydispatch import dispatcher
-import logging 
+import logging
 log = logging.getLogger( __name__ )
 
 class Timer( eventmanager.EventManager ):
@@ -53,10 +53,10 @@ class Timer( eventmanager.EventManager ):
             if context.getTimeManager():
                 context.getTimeManager().addEventGenerator(self)
             else:
-                raise ValueError ("""Attempted to register a Timer for a Context with a NULL getTimeManager() result"""% (context))
+                raise ValueError ("""Attempted to register a Timer for a Context %s with a NULL getTimeManager() result"""% (context,))
         else:
-            raise ValueError ("""Attempted to register a Timer for a Context %s without a getTimeManager method"""% (context))
-        
+            raise ValueError ("""Attempted to register a Timer for a Context %s without a getTimeManager method"""% (context,))
+
     def deregister (self, context):
         """De-register this timer with a given context's time event manager
 
@@ -67,9 +67,9 @@ class Timer( eventmanager.EventManager ):
             if context.getTimeManager():
                 context.getTimeManager().removeEventGenerator(self)
             else:
-                raise ValueError ("""Attempted to de-register a Timer for a Context with a NULL getTimeManager() result"""% (context))
+                raise ValueError ("""Attempted to de-register a Timer for a Context %s with a NULL getTimeManager() result"""% (context,))
         else:
-            raise ValueError ("""Attempted to de-register a Timer for a Context %s without a getTimeManager method"""% (context))
+            raise ValueError ("""Attempted to de-register a Timer for a Context %s without a getTimeManager method"""% (context,))
     def addEventHandler( self, timetype ="fraction", function = None ):
         """Add/remove handler for the given timetype from this Timer object
 
@@ -123,14 +123,14 @@ class Timer( eventmanager.EventManager ):
             event.setTimer( self )
             self.ProcessEvent( event )
         return len(events)
-        
+
     def poll( self, realTime = None ):
         """Poll the internal timer for pending events
 
         Returns the number of events dispatched
         """
         return self._doAndDispatch(self.internal.poll, realTime)
-        
+
     def start (self, realTime = None):
         """Start the internal timer"""
         self._doAndDispatch(self.internal.start, realTime)
@@ -143,7 +143,7 @@ class Timer( eventmanager.EventManager ):
     def resume(self, realTime = None):
         """Resume the internal timer"""
         self._doAndDispatch(self.internal.resume, realTime)
-        
+
 if __name__ == "__main__":
     def test ():
         cases = [
