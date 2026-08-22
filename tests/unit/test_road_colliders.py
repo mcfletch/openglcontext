@@ -179,3 +179,69 @@ class TestACarOnIt:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestTheEdgeOfADeck:
+    """A car that runs wide on a bridge goes off it: there is nothing beside a
+    deck but the thing the bridge was built over.
+
+    The barrier the structure is drawn with is what stops that, and a barrier
+    that is drawn and not collided with stops nothing. So the stretches a
+    caller says are carried get a wall along each edge, and a car meets it.
+    """
+
+    def _world(self, barriers=(), **kwargs):
+        world = PhysicsWorld()
+        road = RoadColliders(world, _straight(), PROFILE, barriers=barriers,
+                             **kwargs)
+        road.update(np.array(_START))
+        return world, road
+
+    @staticmethod
+    def _sideways(world, x, z, towards):
+        """Fire across the road at the height a car's body is, and see what
+        stops it. Not over the top of the barrier: what is being asked is what
+        the car meets, and half a metre up is where the car is."""
+        return raycast(world, (x, 0.5, z), (0.0, 0.0, float(towards)),
+                       max_distance=40.0)
+
+    def test_a_road_on_the_ground_has_no_edge_to_fall_off(self) -> None:
+        world, _road = self._world()
+        assert self._sideways(world, 200.0, 0.0, 1.0) is None
+
+    def test_a_carried_stretch_has_a_wall_each_side(self) -> None:
+        world, _road = self._world(barriers=[(0.0, 1200.0)])
+        for towards in (1.0, -1.0):
+            hit = self._sideways(world, 200.0, 0.0, towards)
+            assert hit is not None, 'nothing beside the deck at %+.0f' % towards
+
+    def test_the_wall_is_at_the_edge_rather_than_across_the_road(self) -> None:
+        world, _road = self._world(barriers=[(0.0, 1200.0)])
+        hit = self._sideways(world, 200.0, 0.0, 1.0)
+        # The inner face of the wall, which stands its own width inside the
+        # edge of the deck.
+        half = PROFILE.on_structure().total_width / 2.0
+        assert hit.distance == pytest.approx(half, abs=0.5)
+        assert hit.distance > PROFILE.carriageway_width / 2.0
+
+    def test_only_the_stretch_that_is_carried_gets_one(self) -> None:
+        world, road = self._world(barriers=[(400.0, 800.0)])
+        road.update(np.array([600.0, 1.0, 0.0]))
+        assert self._sideways(world, 600.0, 0.0, 1.0) is not None
+        assert self._sideways(world, 1150.0, 0.0, 1.0) is None
+
+    def test_it_is_still_the_road_underneath(self) -> None:
+        """A barrier beside the carriageway is not a barrier over it."""
+        world, _road = self._world(barriers=[(0.0, 1200.0)])
+        assert _surface(world, 200.0, 0.0) == pytest.approx(0.0, abs=0.1)
+
+    def test_the_triangles_are_counted_with_the_rest(self) -> None:
+        _world, plain = self._world()
+        _world2, walled = self._world(barriers=[(0.0, 1200.0)])
+        assert walled.triangle_count() > plain.triangle_count()
+
+    def test_a_chunk_let_go_takes_its_wall_with_it(self) -> None:
+        world, road = self._world(barriers=[(0.0, 1200.0)])
+        road.clear()
+        assert road.triangle_count() == 0
+        assert self._sideways(world, 200.0, 0.0, 1.0) is None

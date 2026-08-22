@@ -165,8 +165,28 @@ scene.advance(dt)                         # steps the world, writes back Transfo
   surface at one resolution, cut into chunks and held near the car:</p>
   <pre><code>from OpenGLContext.physics.road import RoadColliders
 road = RoadColliders(physics_world, course.centreline, course.road_profile(),
-                     closed=True)
+                     closed=True, bank=course.bank)
 road.update(car_position)                # once a frame</code></pre>
+  <p><code>bank</code> is the road's lean at each centreline point, which a
+  baked world writes beside the line
+  (<a href="roads.html#banking">banked corners</a>). It is not optional
+  decoration: a flat collider under a superelevated road is a surface the car
+  falls through on the inside of every corner and stands on the outside of.</p>
+  <p><strong>And a deck needs its edge.</strong> Beside a bridge or a causeway
+  there is nothing but the thing it was built to cross, so
+  <code>barriers</code> takes the stretches that are carried &mdash; as
+  <code>(from, to)</code> metres along the centreline, which is how a baked
+  world writes them &mdash; and puts a wall along both edges of each:</p>
+  <pre><code>road = RoadColliders(physics_world, course.centreline, course.road_profile(),
+                     closed=True, bank=course.bank, barriers=course.edges())</code></pre>
+  <p>The structure is <em>drawn</em> with a barrier for exactly this reason, and
+  one that is drawn and not collided with keeps nothing on anything: the car
+  goes through the railing and off the deck. The collider's wall is the drawn
+  barrier's footprint carried to its full height
+  (<code>OpenGLContext.scenegraph.roadworks.barrier_wall</code>) &mdash; solid,
+  because what the holes in a railing are for is seeing through, not driving
+  through. A <em>bore</em> is carried too and gets none: what is beside a tunnel
+  is the hillside it is driven through.</p>
   <p>Its sibling
   <a href="terrain.html#fieldphysics"><code>HeightFieldColliders</code></a> does
   the same for ground carried as a field. Between them a game can turn tile

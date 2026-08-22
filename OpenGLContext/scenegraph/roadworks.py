@@ -37,7 +37,7 @@ from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
 
 __all__ = [
     'BarrierProfile', 'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
-    'bridge_meshes', 'causeway_meshes', 'tunnel_meshes',
+    'bridge_meshes', 'causeway_meshes', 'tunnel_meshes', 'barrier_wall',
     'bore_shade', 'bore_sky', 'tunnel_lamps',
     'concrete_material', 'barrier_material', 'lamp_material',
 ]
@@ -269,6 +269,7 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
                   bridge: Optional[BridgeProfile] = None,
                   material: Optional[PBRMaterial] = None,
                   barrier: Optional[PBRMaterial] = None,
+                  bank: Any = None,
                   ) -> Dict[str, PBRMesh]:
     """A deck, its parapets and its piers, along a stretch of centreline.
 
@@ -282,6 +283,12 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
     ``material`` is the structure and ``barrier`` the parapets, which are a
     different thing standing on it; giving only ``material`` puts everything in
     it, which is what a caller with one material of its own means.
+   
+    ``bank`` is how far the road leans at each of those points, as a fraction
+    and signed the way :func:`~OpenGLContext.scenegraph.road.plan_curvature`
+    is. A superelevated corner rolls everything on it about the centreline
+    together, which is what keeps a structure under the carriageway rather than
+    beside it.
     """
     line = _line(points, "a bridge")
     profile = profile or RoadProfile()
@@ -290,7 +297,7 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
                      else material if material is not None
                      else barrier_material())
     material = material if material is not None else concrete_material()
-    right, up = sweep_frames(line)
+    right, up = sweep_frames(line, bank)
     # Built to the road as it runs *over* a deck rather than as it runs on the
     # ground: an edge beam rather than a verge falling away to ground that is
     # not there. The carriageway over the deck is swept with the same section,
@@ -320,6 +327,7 @@ def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
                     ground: Optional[HeightFn] = None,
                     causeway: Optional[CausewayProfile] = None,
                     material: Optional[PBRMaterial] = None,
+                    bank: Any = None,
                     ) -> Dict[str, PBRMesh]:
     """The fill under a causeway and the low wall along each edge.
 
@@ -341,12 +349,18 @@ def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
     outer face is lit by nothing but sky whichever way the sun is, and from the
     driver's seat, on both sides at once, that is a black line lying along the
     horizon for as long as the crossing lasts.
+
+    ``bank`` is how far the road leans at each of those points, as a fraction
+    and signed the way :func:`~OpenGLContext.scenegraph.road.plan_curvature`
+    is. A superelevated corner rolls everything on it about the centreline
+    together, which is what keeps a structure under the carriageway rather than
+    beside it.
     """
     line = _line(points, "a causeway")
     profile = profile or RoadProfile()
     causeway = causeway or CausewayProfile()
     material = material if material is not None else concrete_material()
-    right, up = sweep_frames(line)
+    right, up = sweep_frames(line, bank)
     carried = profile.on_structure()
     half = carried.total_width / 2.0
     edge = float(carried.section()[0, 1])
@@ -363,12 +377,19 @@ def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
 def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
                   tunnel: Optional[TunnelProfile] = None,
                   material: Optional[PBRMaterial] = None,
+                  bank: Any = None,
                   ) -> Dict[str, PBRMesh]:
     """A bore and its two portals, along a stretch of centreline.
 
     ``points`` is (N,3) at the height the road surface runs at. The lining
     faces inwards, because the only place it is seen from is the carriageway
     inside it.
+   
+    ``bank`` is how far the road leans at each of those points, as a fraction
+    and signed the way :func:`~OpenGLContext.scenegraph.road.plan_curvature`
+    is. A superelevated corner rolls everything on it about the centreline
+    together, which is what keeps a structure under the carriageway rather than
+    beside it.
     """
     line = _line(points, "a tunnel")
     profile = profile or RoadProfile()
@@ -381,7 +402,7 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
     # among become real lights, the lining brightens and dims as they are
     # switched -- which reads as the tunnel flickering as you drive down it.
     lining = lining_material(material)
-    right, up = sweep_frames(line)
+    right, up = sweep_frames(line, bank)
     # Built to the road as it runs *through* a bore rather than as it runs on
     # the ground: the grass verge is an edge beam in there, and a bore sized for
     # the verge would be metres wider than anything needs.
@@ -406,7 +427,44 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
     return parts
 
 
-def tunnel_lamps(points: Any, tunnel: Optional[TunnelProfile] = None) -> np.ndarray:
+def barrier_wall(points: Any, profile: Optional[RoadProfile] = None,
+                 barrier: Optional[BarrierProfile] = None,
+                 material: Optional[PBRMaterial] = None,
+                 bank: Any = None) -> PBRMesh:
+    """The wall a car meets at the edge of a deck: **what to collide with**.
+
+    A barrier is there to keep a car on the structure, and one that is drawn
+    and not collided with keeps nothing on anything -- the car goes through the
+    railing and off the deck into whatever the bridge was built over. So the
+    shape here is the drawn barrier's footprint
+    (:func:`bridge_meshes`, :func:`causeway_meshes`) carried to its full
+    ``height``, standing on each edge of the road as it runs *over* a structure.
+
+    **Solid**, where the drawn one is a kerb carrying a railing: what the holes
+    in a railing are for is seeing through, not driving through, and a collider
+    with the holes in is a barrier a car passes between the bars of.
+
+    ``bank`` leans it with the deck, as everything swept along a road is leaned
+    (:func:`~OpenGLContext.scenegraph.road.sweep_frames`), so the wall stands on
+    the edge the carriageway actually has.
+
+    It is geometry rather than a body: what to do with it is
+    :class:`~OpenGLContext.physics.road.RoadColliders`'s business.
+    """
+    line = _line(points, "a barrier")
+    profile = profile or RoadProfile()
+    barrier = barrier or BarrierProfile()
+    material = material if material is not None else barrier_material()
+    right, up = sweep_frames(line, bank)
+    carried = profile.on_structure()
+    half = carried.total_width / 2.0
+    edge = float(carried.section()[0, 1])
+    return _parapet(line, right, up, material, half, edge,
+                    float(barrier.height), float(barrier.width))
+
+
+def tunnel_lamps(points: Any, tunnel: Optional[TunnelProfile] = None,
+                 bank: Any = None) -> np.ndarray:
     """Where the luminaires hang in a bore, as (N,3) world points.
 
     The pool each throws is baked into the lining, so a bore is lit whatever a
@@ -417,13 +475,17 @@ def tunnel_lamps(points: Any, tunnel: Optional[TunnelProfile] = None) -> np.ndar
     Evenly along the bore with a half space at each end, so the first lamp is
     inside the portal rather than on it, and a bore shorter than one spacing
     still gets the one in the middle that makes it a lit bore.
+
+    ``bank`` is the road's lean at each point, which the fittings hang from:
+    they are bolted to a lining that rolls with the carriageway, so they roll
+    with it too.
     """
     line = _line(points, "a tunnel")
     tunnel = tunnel or TunnelProfile()
     spacing = float(tunnel.lamp_spacing)
     if spacing <= 0.0:
         return np.zeros((0, 3), dtype='d')
-    _right, up = sweep_frames(line)
+    _right, up = sweep_frames(line, bank)
     station = _station(line)
     length = float(station[-1])
     count = max(1, int(round(length / spacing)))

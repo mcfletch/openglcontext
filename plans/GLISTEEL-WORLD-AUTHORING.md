@@ -708,9 +708,9 @@ page). Driving it is the GL smoke test.
   on it, placed at a stopping distance before what it warns of.
   **The pattern is Ontario's**: a black symbol on a yellow diamond, an advisory speed on a
   tab below it, and the posted limit as a white MAXIMUM plate repeated along the road. How
-  fast a bend is worth is derivable too — `road.corner_speed` is what its radius will hold
-  and `road.advisory_speed` is 60% of that, rounded down to 10 km/h, which is the number on
-  the tab. The posted limit is a decision rather than a measurement, so it is told to the
+  fast a bend is worth is derivable too — `road.corner_speed` is what its radius and its
+  lean will hold and `road.advisory_speed` is 60% of that, rounded down to 10 km/h, which
+  is the number on the tab. The posted limit is a decision rather than a measurement, so it is told to the
   world (`ProceduralWorld.posted`). See [../docs/roads.html](../docs/roads.html).
 - **Obstacles.** Parked and moving cars, rocks, deer, foxes. Two different problems: a
   *placed* obstacle is a `MeshLayer` entry with a collider, and a *moving* one is an actor
@@ -1364,3 +1364,185 @@ them; §E decides per species.
   `OpenGLContext_editor.bake.placing` owns standing a prototype somewhere and
   gathering the results; the sign path was moved onto both. Bake of the shipped
   world, measured on a quiet machine: 27.5 s.
+
+- **2026-08-21** — **Corners are banked.** A road may now be superelevated: the whole
+  carriageway rolled about its centreline so that a corner leans into itself.
+  `OpenGLContext.scenegraph.road` owns the arithmetic — `plan_curvature` for how tightly
+  the line turns and which way, `superelevation` for the lean that balances a car at a
+  given speed, `bank_profile` for the lean along a whole alignment with its transitions,
+  `banked_sections` for the camber the lean uses up, and a `bank` argument on
+  `sweep_frames`, `road_surface`, `road_mesh`, the three `roadworks` sweeps and
+  `RoadColliders`. `corner_speed`, `cornering_radius` and `advisory_speed` all take one.
+  `RoadPath` carries it, `conform_terrain` meets the verge each side is actually at,
+  `RoadLayer` writes it into the tileset beside the centreline, and `glisteel` reads it
+  back for the collider, the traffic and the plates.
+
+  **Decisions taken, and why.**
+
+  *Road banking, not an oval's.* `MAXIMUM_BANK` is 0.10 — 5.7°, the upper end of what is
+  built into a road. Highway practice runs from about 0.04 where ice is expected, since a
+  vehicle stopped on a steeper one slides down it, to about 0.12 where it is not. What it
+  buys is a corner some 10% faster than the same corner flat, or a fifth tighter for the
+  same speed: the shipped circuit's corner floor went from 315 m to 270 m. An oval reaches
+  three or four times this; nothing stops a caller asking for it, but it is not what a
+  road is.
+
+  *The design speed is a floor, not a target.* Each corner is banked to *balance* a car at
+  the design speed — at that speed the road alone holds it and the tyre's grip is
+  untouched — so what the corner actually holds is strictly more. The shipped circuit's
+  slowest corner is 205 km/h against a 200 km/h design speed, and its median corner holds
+  anything at all. `CORNER_MARGIN` keeps the floor clear rather than grazed: a plan is
+  drawn at one spacing, filleted, draped and re-sampled, and each of those moves the line.
+
+  *The runoff leads the corner rather than lagging it.* The first rate limiter clipped the
+  demand forwards, which put the roll *inside* the bend — the one place a driver cannot be
+  given something else to deal with. What landed is a cone dilation: the lean at a point is
+  the most any corner within reach asks for, less what the road lets out over the distance
+  to it, so the whole transition sits on the approach. `BANK_GRADIENT` is 1 in 200, some
+  70 m of transition for a full bank on a two-lane road. Where two opposite corners crowd
+  each other, or a corner is near the end of a road that is not a circuit, the pair get
+  what the road between them can deliver; an open road starts and ends flat.
+
+  *The frame rolls; the cut does not tilt.* Rotating the frame keeps the carriageway the
+  width it was told — tilting the cut instead stretches it by the cosine of the lean. The
+  camber is handled separately and turns out to be a one-line adjustment: the crown is
+  *used up* by the lean, symmetrically, so `RoadProfile.banked(bank)` is the same profile
+  with `crossfall` reduced by `|bank|`. The outer half of the cut rotating up about the
+  crown and the whole plane then rotating together fall out of that identity.
+
+  *A gantry does not lean.* The line painted across the road does — a flat strip on a road
+  at one in ten stands a third of a metre proud on one side — but the steel over it stands
+  upright on its two feet, which is what a gantry over a banked road does. `placed()` grew
+  a `roll` for the paint.
+
+  **Checked end to end.** A ray dropped onto the collider at the point `Course.lane_point`
+  puts a car lands within 0.1 mm of it, right across a banked corner; swept flat under the
+  same road it is out by more than 20 cm. Documentation:
+  [docs/roads.html](../docs/roads.html) gained a *Banked corners* section,
+  [docs/physics.html](../docs/physics.html) the collider's `bank`, and the READMEs of the
+  world generator, the game and the track editor say what a designer and a player get.
+
+- **2026-08-21** — **A road with a character of its own.** The alignment's limits
+  may now *vary along it*: `follow_terrain` takes `smoothing`, `maximum_grade`
+  and `design_speed` as one figure or one per point, `hold_corners` takes a
+  radius per corner, and a new `OpenGLContext_editor.world.character` decides
+  what all of those should be. `RoadPath` carries the cleared corridor and the
+  widening; `RoadLayer` writes the widening into the tileset; the engine gained
+  `RoadProfile.widened` and `widened_sections`, and `RoadColliders` a
+  `widening`. The shipped circuit is now a lap with a hairpin on it.
+
+  **Everything is derived, not sprinkled.** The corners come from a mix, so a
+  lap has one to brake for and one to carry flat; how fast a stretch is laid out
+  for is what its own corner allows; how steeply it may climb is what the land
+  demands over a quarter-kilometre; how much it is smoothed follows the speed,
+  so slow stretches keep the ground's shape and fast ones are ironed flat; how
+  far the trees go back is the sight a driver needs round the bend they are on,
+  read off `sqrt(8·r·clear)`; and the climbs get an extra lane's width, worst
+  first, until a budget is spent. The shipped four-kilometre circuit comes out
+  with corners from 60 m to a straight, stretches laid out for 87 to 200 km/h,
+  grades to 14% where the land climbs, corridors from 6.1 m to 11.0 m, and two
+  widened climbs over a sixth of the lap.
+
+  **Decisions taken, and why.**
+
+  *A drawn route keeps its corners.* `corner_radii` applies to the circuit the
+  generator invents, never to a route a caller gave: a designer who drew a
+  hairpin meant it, and re-drawing it from a mix is the generator overruling
+  them. A drawn route still gets everything derived from the line and the land,
+  which follows from what they drew rather than replacing it.
+
+  *A budget on the climbing lanes.* Derived purely, this landscape earns a
+  climbing lane over 40% of the lap — which is a wide road, not a road with
+  passing places on it. `CLIMBING_LANE_SHARE` caps it at a sixth and gives it to
+  the worst climbs first. How much of a road is built three lanes wide is a
+  decision somebody pays for, so it is a knob rather than a consequence.
+
+  *A ramp, not an average, for the taper.* Averaging a 0/1 flag reaches half its
+  height at the edge of what was flagged and the rest in one step — for a lane
+  that is a lane beginning in mid-air. The taper is a distance ramp instead:
+  full where earned, nothing a taper away, straight between.
+
+  *A variable-width box filter for the smoothing.* A convolution cannot take a
+  width per point; a difference of running sums can, in one pass, and is exactly
+  the average of the points each window covers.
+
+  **Two things looked into and left alone.** A coarse tile's road wanders from
+  the fine one by cutting its corners, and tighter corners make that worse — but
+  the root geometric error of a baked world is 6 m whatever its depth, so the
+  spacing never gets coarse enough for it to matter, and a cap on it was written
+  and then removed as machinery nothing exercises. And two ground-level captures
+  that came back with no road on them were the camera, not the world: an eye
+  1.6 m up aimed a hundred metres along a tight corner is aimed into the trees
+  beside it. Seen from above, both places have the road exactly where it belongs.
+
+  Documentation: [docs/roads.html](../docs/roads.html) gained *Somewhere to be
+  passed*, and the READMEs of the world generator, the game and the track editor
+  say what a designer and a player get.
+
+- **2026-08-22** — **The driver, and the edge of a deck.** An autopilot lap of the
+  varied circuit with traffic on it did not finish, and taking it apart turned up
+  five defects, none of them in the road:
+
+  *A pass counted as a crash.* `Session._watch_for_a_crash` asked "what is in
+  front" at the width a driver *reads the road* at (2.8 m), but two cars in
+  their own lanes on a 7.2 m carriageway are 3.6 m apart. Drift two feet towards
+  the crown and every car met on a two-way road ended the run with nothing
+  touching. `CONTACT_REACH` was documented as "touching distance and no more"
+  and had no width beside it; now `CONTACT_WIDTH`, and the two questions are
+  asked at their own widths.
+
+  *A following distance was a length of road.* Seven metres is comfortable at a
+  crawl and a third of a second at ninety, and the driver spent the lap surging
+  up to whatever was in front and braking off it again. It is a **time** now,
+  which is what `FOLLOWING_SECONDS` already argued for in its own docstring --
+  `StandIn` had been overriding the figure every frame, so only the direct
+  autopilot was driving on the bad one. The rule moved into `DriverStyle`, and a
+  stand-in says "a pass is not a follow" by asking for no seconds at all.
+
+  *It could not overtake.* The plain `Autopilot` had no lane decision, so it
+  queued behind the first slow car for the whole lap while everything quicker
+  piled up behind it. It pulls out now, sized by **two** speeds -- how long the
+  pass takes is the gain it has *now*, and how much road that consumes is what
+  closes on the other side of a two-way road -- and it abandons back to its own
+  side the moment the way through shuts. Sized on one speed it asked for forty
+  metres and used four hundred.
+
+  *`--pace` never reached it.* Documented as how hard the car drives itself, and
+  passed only to the stand-in; the direct autopilot drove at the limit of the
+  tyres with nothing in hand.
+
+  *And it could not rejoin.* Pure pursuit steers at a point up the road and
+  holds whatever speed the road allows, and neither knows the car is off it. A
+  car knocked wide drove on at road speed into the trees. It lifts to
+  `REJOIN_SPEED` with a wheel off the carriageway now.
+
+  **The bridge, which was the one that mattered.** A deck and a causeway are
+  *drawn* with a barrier along each edge -- that is what the barrier is for, and
+  `BarrierProfile`'s own docstring says so -- and nothing in `physics/` had ever
+  heard of it. The car went through the railing and off into the valley the
+  bridge was built over, every time it ran wide on one. `roadworks.barrier_wall`
+  is the shape a collider takes: the drawn barrier's footprint carried to its
+  full height, solid, because the holes in a railing are for seeing through
+  rather than driving through. `RoadColliders` takes the carried stretches and
+  puts one up along both edges of each; a **bore** is carried too and gets none,
+  since what is beside a tunnel is the hillside it is in. Measured on the
+  shipped circuit: a wall 4.4 m from the crown on every deck and causeway, and a
+  car driven at full lock into the edge for six seconds stays on it.
+
+  Found on the way and fixed: `RoadColliders.triangle_count()` only ever went
+  up. It counts what is *held* now, which is what it says it counts.
+
+  **Where it leaves the autopilot.** `--control line`, which drives through the
+  stand-in, gets round: 7192 m in 439 s with sixteen cars on the road, never
+  more than 2.4 m off the centreline. The default `--control wheel`, which
+  steers directly, no longer leaves the road and no longer falls off a bridge,
+  but queues -- its passing rule wants some 275 m of clear oncoming lane and
+  sixteen cars rarely leave that. What would finish it is lifting the stand-in's
+  tuned passing -- sight, `PASS_MARGIN`, refusals, slipping into gaps -- out of
+  `StandIn` and into the driver so both share one; that is a refactor of a
+  subtle mechanic and is not started.
+
+  Documentation: *What keeps a car on a structure* in
+  [docs/roads.html](../docs/roads.html), the collider's `barriers` in
+  [docs/physics.html](../docs/physics.html), and the game's README on what the
+  driver knows about traffic and what a deck's edge does.
