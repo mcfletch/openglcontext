@@ -336,6 +336,25 @@ voice.set_gain(level * left, level * right)</pre>
     anybody, and the fold is what Web&nbsp;Audio specifies rather than something
     chosen here.</p>
 
+  <h3 id="aim-rate">How often a playing sound is re-aimed</h3>
+  <p>All of the above &mdash; the distance curve, the cone, the azimuth and the
+    pan &mdash; is worked out for a <em>playing</em> sound fifteen times a
+    second rather than once a frame. The interval is
+    <code>OpenGLContext.scenegraph.audio.AIM_INTERVAL</code>.</p>
+  <p>What it produces is a pair of volumes that move continuously and slowly: a
+    listener walking at a few metres a second changes them by a fraction over a
+    frame, and the mixer ramps between values rather than stepping to them. What
+    it costs is paid by every emitter in a level on every frame, so a level with
+    a busy soundscape spends a measurable part of its frame there &mdash; about
+    two milliseconds on the reference machine. Fifteen a second is faster than
+    the result can audibly step and slow enough that the cost stops scaling with
+    the frame rate.</p>
+  <p><strong>Starting</strong> a sound is not delayed by it: a source is aimed
+    the first time it is seen, so a sound is placed before it is heard. The
+    interval governs only how often one already playing is asked again. Emitters
+    take staggered phases so a level's worth of them do not all re-aim on one
+    frame, which would turn the saving into a stutter.</p>
+
   <h3>VRML97's ellipsoids</h3>
   <p>The <code>Sound</code> node describes something none of the above can:
     <strong>two ellipsoids sharing a focus at the sound</strong>, with a ramp

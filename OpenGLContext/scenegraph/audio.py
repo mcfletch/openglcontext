@@ -47,6 +47,21 @@ log = logging.getLogger(__name__)
 #: ``KHR_lights_punctual`` do.
 FORWARD = np.array([0.0, 0.0, -1.0, 0.0])
 
+#: How often a *playing* sound's gains are worked out again, in seconds.
+#:
+#: Aiming turns a position into two volumes -- a distance, a cone angle, an
+#: azimuth and an equal-power pan -- and a level with a few dozen emitters
+#: asking for that every frame is a measurable part of the frame. What it buys
+#: is a pair of numbers that move continuously and slowly: a listener walking at
+#: a few metres a second changes them by a fraction over a frame.
+#:
+#: Fifteen a second, which is faster than a source's gain can audibly step for
+#: any speed a person moves at, and slow enough that the cost stops scaling with
+#: the frame rate. **Starting** a sound is not delayed by it -- a source is
+#: aimed the first time it is seen -- so this never affects where a sound
+#: appears to come from, only how often a sound already playing is re-asked.
+AIM_INTERVAL = 1.0 / 15.0
+
 #: How a generated settings page presents the distance models.
 DISTANCE_MODELS = tuple(entry.value for entry in spatial.DistanceModel)
 SHAPE_TYPES = tuple(entry.value for entry in spatial.ShapeType)
@@ -301,6 +316,14 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         # keeps two speakers of one clip from drifting together, and it means a
         # recorded session repeats the same ambience it had.
         self._jitter = entropy.randomizer('audio-jitter')
+        #: When each playing source was last re-aimed, by source.  See
+        #: :data:`AIM_INTERVAL`.
+        self._aimed: Dict[int, float] = {}
+        #: How far through its first aiming interval this emitter starts, so a
+        #: level's worth of them do not all re-aim on the same frame and turn a
+        #: saving into a stutter every few frames.  Drawn from the session's own
+        #: stream like the ambient timing above, so a recorded session repeats.
+        self._aimPhase = self._jitter.random() * AIM_INTERVAL
 
     def record(self) -> model.AudioEmitter:
         """This node's fields as the ``KHR_audio_emitter`` record.
@@ -334,6 +357,28 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         for source in self.sources:
             self._updateSource(engine, source, record, position, forward, now)
 
+    def _dueToAim(self, source: Any, now: float) -> bool:
+        """Whether a playing source's gains should be worked out again now.
+
+        Aiming is two gains from a distance, a cone angle and an azimuth, and a
+        level's worth of emitters asking for them every frame is a measurable
+        part of the frame -- for an answer that is a pair of volumes, changing
+        continuously and slowly.  See :data:`AIM_INTERVAL` for why the interval
+        is the size it is.
+
+        A source is always aimed the first time it is seen, so a sound that has
+        just started is placed before it is heard rather than up to an interval
+        later.
+        """
+        last = self._aimed.get(id(source))
+        if last is None:
+            self._aimed[id(source)] = now + self._aimPhase
+            return True
+        if now - last < AIM_INTERVAL:
+            return False
+        self._aimed[id(source)] = now
+        return True
+
     def repeatsAt(self, source: Any) -> Optional[float]:
         """When ``source`` next sounds, or None if it is not waiting to.
 
@@ -349,7 +394,9 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         handle = self._playing.get(id(source))
         if handle is not None:
             if handle.playing:
-                engine.aim(handle, record, position, forward, gain=source.gain)
+                if self._dueToAim(source, now):
+                    engine.aim(handle, record, position, forward,
+                               gain=source.gain)
                 return
             if not source.loop and self._stillFinished(source, now):
                 return

@@ -546,3 +546,61 @@ class TestBuildingEmittersFromADocument:
         assert source.url == []
         assert any('evil.example' in record.getMessage()
                    for record in caplog.records)
+
+
+class TestHowOftenAPlayingSoundIsReAimed:
+    """Aiming is continuous and slow, so it is asked for at its own rate.
+
+    Turning a position into two volumes costs a distance, a cone angle, an
+    azimuth and a pan, and a level with a few dozen emitters asking every frame
+    is a measurable part of the frame. What has to stay true is that a sound is
+    placed before it is heard, and that it keeps up with a listener who moves.
+    """
+
+    def make(self, **named):
+        named.setdefault('sources', [audionodes.AudioSource(url=['beep'],
+                                                            loop=True)])
+        return audionodes.AudioEmitter(**named)
+
+    def aims(self, engine, emitter, times, at=(0.0, 0.0, -1.0)):
+        """How many times ``engine.aim`` is called across ``times``."""
+        counted = []
+        original = engine.aim
+
+        def aim(*args, **named):
+            counted.append(1)
+            return original(*args, **named)
+
+        engine.aim = aim
+        try:
+            for now in times:
+                emitter.updateAudio(engine, translation(*at), now)
+        finally:
+            engine.aim = original
+        return len(counted)
+
+    def test_a_playing_sound_is_not_re_aimed_every_frame(self, engine):
+        emitter = self.make()
+        emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        frames = [frame / 60.0 for frame in range(1, 61)]   # a second at sixty
+        assert self.aims(engine, emitter, frames) < len(frames)
+
+    def test_it_is_re_aimed_often_enough_to_follow_a_listener(self, engine):
+        """Over a second, about as often as the interval says."""
+        emitter = self.make()
+        emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        frames = [frame / 60.0 for frame in range(1, 61)]
+        counted = self.aims(engine, emitter, frames)
+        expected = 1.0 / audionodes.AIM_INTERVAL
+        assert expected * 0.5 <= counted <= expected + 2
+
+    def test_the_first_look_at_a_playing_sound_aims_it(self, engine):
+        """A sound is placed before it is heard, not an interval later."""
+        emitter = self.make()
+        emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        assert self.aims(engine, emitter, [1.0 / 60.0]) == 1
+
+    def test_two_emitters_do_not_re_aim_on_the_same_frame(self, engine):
+        """Spread on purpose: a level's worth landing together is a stutter."""
+        phases = {self.make()._aimPhase for _ in range(20)}
+        assert len(phases) > 1
