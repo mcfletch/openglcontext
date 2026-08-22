@@ -377,6 +377,19 @@ session.revert()         # throw the draft away</pre>
       lands on the world's own Escape handler, which in every OpenGLContext
       application quits it. The same goes for the click that dismisses a dialog,
       whose release would otherwise pick whatever was behind it.</li>
+    <li><strong>The world is told to let go of what it was holding</strong> the
+      moment a panel takes the input. The real release never reaches it &mdash;
+      the panel has the keyboard &mdash; and an application that tracks held
+      keys itself, as a movement mode and a game's steering both do, has no
+      other way to learn the key came up. Left alone that is a throttle stuck
+      open and a wheel stuck at full lock behind the menu that stopped them
+      being let go of. Clearing <code>InputState</code> covers the sampler;
+      <code>letGoOfHeldInput()</code> covers everyone else, by sending a
+      key-<em>up</em> for each held key, in the only language an input handler
+      speaks. The keystroke that <em>opened</em> the panel is not among them,
+      for the Escape reason above. It is the same idea as
+      <code>clearHeldKeys()</code>, which does it for a window that loses focus
+      mid-key.</li>
   </ul>
   <p>A panel may also declare itself <code>capturing</code>: while one is up the
     overlay runs no accelerators, no Tab traversal and no Enter default, so a
