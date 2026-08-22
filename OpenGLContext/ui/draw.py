@@ -91,7 +91,18 @@ void main(){
 
 
 def _rgba(colour: Any) -> Tuple[float, float, float, float]:
-    """Four floats from a colour field, tolerating a three-component one."""
+    """Four floats from a colour field, tolerating a three-component one.
+
+    Asked once per quad and once per glyph, so a whole overlay asks it thousands
+    of times a frame for a handful of distinct colours. The common shapes -- a
+    plain three- or four-tuple of numbers -- are unpacked directly; anything
+    else (a VRML colour field, a numpy row) goes the general way.
+    """
+    if type(colour) is tuple:
+        if len(colour) == 4:
+            return colour
+        if len(colour) == 3:
+            return (colour[0], colour[1], colour[2], 1.0)
     values = [float(component) for component in colour]
     while len(values) < 4:
         values.append(1.0)
