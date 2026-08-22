@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import ctypes
 
@@ -147,6 +147,9 @@ class OverlayRenderer:
         self._pictures = PictureCache(upload=self._uploadTexture,
                                       delete=self._deleteTexture)
         self._vertices: List[float] = []
+        #: Atlas coordinates by character, so the arithmetic behind them runs
+        #: once for each character the application ever draws.
+        self._glyphs: Dict[str, Tuple[float, float, float, float]] = {}
         self._texture: Any = None
         self._mode: str = self.BLEND
         self._scissor: Optional[Rect] = None
@@ -510,18 +513,57 @@ class OverlayRenderer:
             source_offset += source_size
         return spans
 
+    def _glyphUV(self, character: str) -> Tuple[float, float, float, float]:
+        """Where one character sits in the atlas, worked out once ever.
+
+        The atlas does not change while it is bound, and the arithmetic behind
+        this -- a modulo, a division and four more divisions -- was being done
+        per character per frame for text that mostly says the same thing from
+        one frame to the next.
+        """
+        found = self._glyphs.get(character)
+        if found is None:
+            found = self._glyphs[character] = tuple(
+                float(value) for value in self._text.glyph_uv(character))
+        return found
+
     def text(self, text: str, x: int, y: int, colour: Any) -> None:
-        """One line of text, with ``y`` the bottom of the character cell."""
+        """One line of text, with ``y`` the bottom of the character cell.
+
+        The vertices are emitted here rather than through :meth:`quad` per
+        character.  Everything that method decides -- the colour as four floats,
+        whether the cell can hold anything, which texture and blend mode the
+        batch is in -- is the *same answer* for every character of a line, and
+        asking it per character was most of what drawing an overlay cost: a
+        screenful of text is a few hundred of them, every frame.
+        """
         if not text or self._text is None:
             return
-        char_w = self._text.char_width
-        char_h = self._text.char_height
-        cursor = x
+        red, green, blue, alpha = _rgba(colour)
+        if alpha <= 0:
+            return
+        char_w = float(self._text.char_width)
+        char_h = float(self._text.char_height)
+        if char_w <= 0 or char_h <= 0:
+            return
+        self._state(self._text.texture, self.BLEND)
+        vertices = self._vertices
+        uv = self._glyphUV
+        cursor = float(x)
+        low = float(y)
+        high = low + char_h
         for character in text:
-            u0, v0, u1, v1 = self._text.glyph_uv(character)
-            self.quad(Rect(cursor, y, char_w, char_h), colour, (u0, v0, u1, v1),
-                      texture=self._text.texture, mask=1.0)
-            cursor += char_w
+            u0, v0, u1, v1 = uv(character)
+            right = cursor + char_w
+            vertices.extend((
+                cursor, low, u0, v0, red, green, blue, alpha, 1.0,
+                right, low, u1, v0, red, green, blue, alpha, 1.0,
+                right, high, u1, v1, red, green, blue, alpha, 1.0,
+                cursor, low, u0, v0, red, green, blue, alpha, 1.0,
+                right, high, u1, v1, red, green, blue, alpha, 1.0,
+                cursor, high, u0, v1, red, green, blue, alpha, 1.0,
+            ))
+            cursor = right
 
     def textIn(self, rect: Rect, text: str, colour: Any, align: str = 'left',
                pad: int = 0) -> None:
