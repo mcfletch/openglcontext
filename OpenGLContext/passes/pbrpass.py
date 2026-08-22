@@ -599,6 +599,22 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1i('alphaMode', int(alpha_mode), self.program)
 
     def bind_pbr_textures(self, material: Any, mode: Any) -> None:
+        """Put ``material``'s images on the texture units the shaders read.
+
+        Skipped outright when the units already hold this material's images.
+        The render set is sorted by texture, so a level's shapes arrive in runs
+        sharing one material; without the memo each channel of each of them
+        costs an active-texture, a bind and a uniform whether or not anything
+        changed -- a couple of dozen GL calls a draw, hundreds of draws a frame.
+
+        The memo is cleared whenever a program is bound, because the overlay and
+        the depth maps bind these units for themselves and what they left is not
+        this pass's to assume.
+        """
+        bound = (id(material), self.program)
+        if self._boundTextures == bound:
+            return
+        self._boundTextures = bound
         # Sampler -> texture-unit assignments are constant; they are set once at
         # compile time (see _init_pbr_samplers in compile), so don't re-set them
         # per draw.

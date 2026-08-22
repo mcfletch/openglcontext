@@ -178,6 +178,11 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         # (e.g. the same material on many shapes) skips the glUniform call. The
         # cache reflects exactly what we uploaded, so skipping is never stale.
         self._uniform_value_cache: Dict[Optional[int], Dict[str, Any]] = {}
+        #: Which material's textures are currently bound, for the pass now
+        #: running. Cleared whenever a program is activated, because anything
+        #: drawn between passes -- the overlay, a depth map -- binds these units
+        #: for itself and what was left on them is no longer known.
+        self._boundTextures: Any = None
         self._compiled: bool = False
         # True only after every sub-program linked. Distinct from _compiled (which
         # means "compile was attempted"): a partial failure leaves _compiled=True
@@ -234,6 +239,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         uniform uploads with GL_INVALID_OPERATION). The cheap driver-side re-bind
         is kept; only the per-draw GL_CURRENT_PROGRAM *read* is eliminated.
         """
+        # A new program means the texture units are not known to hold what the
+        # last material bound; see :attr:`_boundTextures`.
+        self._boundTextures = None
         glUseProgram(program)
         self._active_program = program
 
