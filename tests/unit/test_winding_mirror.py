@@ -48,27 +48,14 @@ class TestFrontFace:
         assert winding.front_face(False, Bad()) == GL_CW
 
 
-glfw = pytest.importorskip("glfw")
 from OpenGL.GL import (   # noqa: E402
     GL_CULL_FACE, GL_FRONT_FACE, glGetIntegerv, glIsEnabled,
 )
 
 
 @pytest.fixture
-def gl():
-    if not glfw.init():
-        pytest.skip("glfw init failed (no GL)")
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    win = glfw.create_window(32, 32, "winding", None, None)
-    if not win:
-        glfw.terminate()
-        pytest.skip("no GL context available")
-    glfw.make_context_current(win)
-    try:
-        yield win
-    finally:
-        glfw.destroy_window(win)
-        glfw.terminate()
+def gl(gl_window):
+    return gl_window('winding', size=(32, 32), profile='any')
 
 
 class TestApplyWindingCull:

@@ -91,24 +91,9 @@ def test_vectorized_cull_matches_naive():
 
 
 @pytest.fixture
-def gl_context():
-    """Hidden compatibility-profile GLFW window for fixed-function glFrustum."""
-    glfw = pytest.importorskip("glfw")
-    import os
-
-    os.environ.setdefault("OPENGLCONTEXT_BACKEND", "glfw")
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    # GLFW window hints are sticky/process-global; reset them so a prior
-    # core-profile test's profile can't leak into this context.
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    win = glfw.create_window(64, 64, "boundingvolume", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
+def gl_context(gl_window):
+    """Compatibility profile: the frustum here comes from ``glFrustum``."""
+    return gl_window('boundingvolume', profile='compatibility')
 
 
 def test_frustum_extraction_matches_glfrustum(gl_context):

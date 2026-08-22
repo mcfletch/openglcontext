@@ -8,30 +8,14 @@ right-way-up: +Y face reads red, -Y reads blue, the side faces read green.
 This validates ibl_equirect.frag and IBLProbe._render_equirect_env without the
 full viewer. Skips cleanly when a GL context can't be created.
 """
-import os
 
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip("glfw")
-
 
 @pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(96, 96, "ibl-equirect", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
+def gl_context(gl_window):
+    return gl_window('ibl-equirect', size=(96, 96))
 
 
 def _striped_equirect(h=64, w=128):

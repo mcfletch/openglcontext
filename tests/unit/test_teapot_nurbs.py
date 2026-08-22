@@ -8,6 +8,8 @@ arrays.
 import numpy as np
 import pytest
 
+from OpenGLContext.testing.glcontext import GLUnavailable, hidden_window
+
 from OpenGLContext.scenegraph import teapot_nurbs_data as data
 from OpenGLContext.scenegraph import teapot_nurbs
 from OpenGLContext.scenegraph.teapot import Teapot
@@ -304,22 +306,13 @@ def test_empty_input_returns_empty_tangents():
 
 @pytest.fixture(scope='module')
 def gl_context():
-    """A hidden GLFW window providing a current GL context."""
-    glfw = pytest.importorskip('glfw')
-    if not glfw.init():
-        pytest.skip('GLFW could not initialise')
-    # GLFW window hints are sticky/process-global; reset them so a prior
-    # core-profile test's profile can't leak into this context.
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.ALPHA_BITS, 0)
-    win = glfw.create_window(64, 64, 'teapot-test', None, None)
-    if not win:
-        glfw.terminate()
-        pytest.skip('GLFW could not create a window/context')
-    glfw.make_context_current(win)
-    yield win
-    glfw.terminate()
+    """One window for the whole module, with no alpha in what is read back."""
+    try:
+        with hidden_window('teapot-test', profile='any',
+                           hints={'ALPHA_BITS': 0}) as window:
+            yield window
+    except GLUnavailable as err:
+        pytest.skip(str(err))
 
 
 @pytest.mark.core_profile

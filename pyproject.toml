@@ -177,6 +177,10 @@ commands = [["pytest", { replace = "posargs", extend = true }]]
 
 [tool.pytest.ini_options]
 testpaths = ["OpenGLContext/tests", "tests"]
+# The GL-window fixtures the rendering tests ask for (gl_context, gl_window,
+# gl_context_compat) ship in the package, so an application built on the engine
+# turns on the same ones the same way -- see docs/testing.html.
+addopts = "-p OpenGLContext.testing.plugin"
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

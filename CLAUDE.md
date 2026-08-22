@@ -762,6 +762,34 @@ that creates a **fresh window/GL context per test** (and tears it down), so no t
 inherits another's GL state. Run the *whole* suite (not just the files you touched)
 before declaring done.
 
+### Asking for a GL context: `gl_context`
+
+A test that renders in-process asks for the `gl_context` fixture and gets a
+hidden core-profile 3.3 window, current for that test and gone afterwards. It
+comes from `OpenGLContext.testing.plugin`, which `pyproject.toml` turns on with
+`addopts = "-p OpenGLContext.testing.plugin"`, so an application built on the
+engine turns the same fixtures on the same way -- see
+[docs/testing.html](docs/testing.html).
+
+```python
+def test_the_glow_spreads(gl_context):
+    ...                                   # the context is current here
+
+@pytest.fixture                           # a bigger one, or another profile
+def gl_context(gl_window):
+    return gl_window('bloom', size=(96, 96))
+```
+
+`gl_context_compat` is the compatibility-profile one, for the fixed-function
+paths; `gl_window` is the factory both are built on. **Do not hand-roll the
+GLFW calls in a test module.** Thirty of them did, each subtly different -- four
+never reset the sticky window hints, so the context they got was the one the
+previous test had asked for, and two asked for no profile at all while needing
+`glGenLists` and `glFrustum`. `OpenGLContext.testing.glcontext.hidden_window` is
+the same thing without pytest, for a module-scoped fixture or a scratch script,
+and `gl_available()` answers "can this machine render at all" once for the
+process instead of once per test file.
+
 ### The known exception: the load-sensitive instancing test
 
 One test measures against the *clock* rather than against a value, so a machine

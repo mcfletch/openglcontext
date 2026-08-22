@@ -22,9 +22,10 @@ Rendered fixed-function in a hidden GLFW (compatibility) context.
 import numpy as np
 import pytest
 
+from OpenGLContext.testing.glcontext import GLUnavailable, hidden_window
+
 from OpenGLContext.scenegraph.quadrics import Sphere, Cone
 
-glfw = pytest.importorskip('glfw')
 from OpenGL.GL import *              # noqa: E402,F403
 from OpenGL.GLU import gluPerspective  # noqa: E402
 
@@ -41,19 +42,12 @@ CHANNEL_DELTA = 12
 
 @pytest.fixture(scope='module')
 def gl_ctx():
-    if not glfw.init():
-        pytest.skip('GLFW could not initialise')
-    # GLFW window hints are sticky/process-global; reset them so a prior
-    # core-profile test's profile can't leak into this context.
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    win = glfw.create_window(S, S, 'lod', None, None)
-    if not win:
-        glfw.terminate()
-        pytest.skip('GLFW could not create a window/context')
-    glfw.make_context_current(win)
-    yield win
-    glfw.terminate()
+    """One window for the whole module: nothing here changes its state."""
+    try:
+        with hidden_window('lod', size=(S, S), profile='any') as window:
+            yield window
+    except GLUnavailable as err:
+        pytest.skip(str(err))
 
 
 def _coords(kind, level):

@@ -55,6 +55,19 @@ WAIVERS = {
 _BASELINE_ROOT = R.default_baseline_root()
 _HAS_DISPLAY = display_available()
 
+# The baselines live in a sibling repository rather than in this one, so a
+# checkout that does not have it has nothing at all to compare against. That is
+# one missing repository, not three hundred missing baselines, and three hundred
+# assertion failures name neither the repository nor the way to point at a copy
+# of it -- so say it once, here, and leave the per-view gate below to mean what
+# it says: this roster view has no baseline yet.
+if not os.path.isdir(_BASELINE_ROOT):
+    pytest.skip(
+        'no glTF baselines at %s -- check out the reference-images repository '
+        'beside this one, or set OPENGLCONTEXT_GLTF_BASELINE to a copy of it'
+        % (_BASELINE_ROOT,),
+        allow_module_level=True)
+
 # (spec, camera) per rendered view -- a scene with baked cameras contributes one
 # view per camera; an auto-framed scene contributes a single (spec, None).
 _VIEWS = [(spec, camera)

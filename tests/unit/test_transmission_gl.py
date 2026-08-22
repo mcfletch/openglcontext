@@ -5,32 +5,12 @@ PBR shader samples for refraction. These drive the real GL resource lifecycle
 (allocate, resize, capture, bind, release) against a hidden GLFW context; the
 pure resolve_mode / read-buffer logic is covered in test_transmission_capture.py.
 """
-import os
 
 import pytest
 
-glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.passes import transmission  # noqa: E402
 from OpenGLContext.passes.transmission import TransmissionBuffer  # noqa: E402
-
-
-@pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(64, 64, "transmission", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
 
 
 class TestResolveMode:

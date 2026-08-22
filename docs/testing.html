@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Testing what you draw &mdash; a GL context in the test process</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Testing what you draw</h1>
+</header>
+
+<section>
+<p class="introduction">Some of what an application draws can only be checked by
+drawing it. <code>OpenGLContext.testing</code> is what that takes: a hidden GL
+window for a test that renders in its own process, a runner for the tests that
+need a whole application in a child process, and the pixel comparison that says
+whether the frame is the one you blessed. It ships with the engine, so a game
+built on OpenGLContext tests its rendering the same way the engine tests
+its own.</p>
+</section>
+
+<section id="fixtures">
+  <h2>A GL context in the test process</h2>
+  <p>Turn the fixtures on from the project's pytest configuration:</p>
+  <pre>[tool.pytest.ini_options]
+addopts = "-p OpenGLContext.testing.plugin"</pre>
+  <p>and a test can ask for a window:</p>
+  <pre>def test_the_glow_spreads(gl_context):
+    from OpenGLContext.passes.bloom import BloomPass
+    ...                                   # the context is current here</pre>
+  <p>Three fixtures come with the plugin:</p>
+  <dl>
+    <dt><code>gl_context</code></dt>
+    <dd>A hidden core-profile 3.3 window, 64&times;64, current for the test.</dd>
+    <dt><code>gl_context_compat</code></dt>
+    <dd>The same in the compatibility profile, for the fixed-function paths
+      &mdash; <code>glFrustum</code>, display lists, the GLU tessellator. It
+      skips where the driver answers a compatibility request with a core
+      context, since nothing that wants one would work in it.</dd>
+    <dt><code>gl_window</code></dt>
+    <dd>The factory both are built on, for a test that wants a different size,
+      profile or hint. Every window it makes is destroyed when the test ends,
+      and asking for a second one leaves <em>it</em> current &mdash; which is how
+      a test proves that a resource cached against one context is not handed to
+      the next.</dd>
+  </dl>
+  <p>A test that wants its own size or profile builds it on the factory rather
+    than on GLFW:</p>
+  <pre>@pytest.fixture
+def gl_context(gl_window):
+    return gl_window('bloom', size=(96, 96))
+
+@pytest.fixture
+def gl_context(gl_window):
+    """The GLU NURBS and tessellator paths, which are compatibility-only."""
+    return gl_window('nurbs', profile='compatibility')</pre>
+  <p>All three <strong>skip</strong> rather than fail where there is no GL
+    target, which is what a machine without one should get. A typo in the
+    arguments &mdash; a profile nobody offers &mdash; is a <code>ValueError</code>
+    instead, because skipping it would hide the test for good.</p>
+</section>
+
+<section id="window">
+  <h2>What the window is</h2>
+  <p><strong>It is never mapped.</strong> A suite with hundreds of rendering
+    tests in it would otherwise flash hundreds of windows over whatever the
+    person running it is doing, and steal focus while they type. A hidden window
+    renders and reads back identically &mdash; every <code>glReadPixels</code>
+    sees the same pixels &mdash; and on Wayland it is also the only way a swap is
+    guaranteed not to block on a compositor that has nothing to show.</p>
+  <p><strong>The hints are reset first.</strong> GLFW window hints are
+    process-global and sticky, so a window asked for without a reset is the
+    window the <em>previous</em> test asked for. Every context from these
+    fixtures starts from <code>glfw.default_window_hints()</code>.</p>
+  <p><strong>One window per test.</strong> GL state is global to a context, so a
+    test that inherits another's context inherits whatever it left enabled,
+    bound and compiled. Where a whole file's worth of tests genuinely shares one
+    scene, say so with a scope:</p>
+  <pre>@pytest.fixture(scope='module')
+def gl_context():
+    with hidden_window('teapot', hints={'ALPHA_BITS': 0}) as window:
+        yield window</pre>
+</section>
+
+<section id="without-pytest">
+  <h2>Without pytest</h2>
+  <p>The window machinery has no pytest in it, so a script or another runner can
+    use it directly:</p>
+  <pre>from OpenGLContext.testing.glcontext import GLUnavailable, hidden_window
+
+try:
+    with hidden_window('probe', size=(128, 128), profile='core'):
+        ...
+except GLUnavailable as err:
+    print('no GL here:', err)</pre>
+  <p><code>gl_available()</code> answers whether a context can be created at all
+    &mdash; for a module-level <code>skipif</code>, say. It is worked out once
+    and remembered, since it cannot change while the process lives.</p>
+</section>
+
+<section id="offscreen">
+  <h2>Rendering offscreen, and on a headless runner</h2>
+  <p><code>display_available()</code> is the single answer to &ldquo;can OpenGL
+    render here?&rdquo;: a windowed display, or an offscreen platform selected
+    with <code>PYOPENGL_PLATFORM=egl</code> (or <code>osmesa</code>). Counting
+    the offscreen case is what stops a visual suite silently skipping and
+    reporting green on a headless runner without having drawn anything. A
+    virtual X server (<code>xvfb-run</code>) is the other way.</p>
+  <p>Two environment variables belong to a test run rather than to an
+    application, and both survive into child processes:
+    <code>OPENGLCONTEXT_HIDDEN=1</code> keeps windows off the screen, and
+    <code>OPENGLCONTEXT_NO_VSYNC=1</code> stops a swap blocking on a compositor
+    frame callback. Set <code>OPENGLCONTEXT_HIDDEN=0</code> to watch a test
+    render, which is how you find out why one looks wrong.</p>
+</section>
+
+<section id="subprocess">
+  <h2>A whole application, in a child process</h2>
+  <p>Some tests are about the application rather than about a pass: that it
+    starts, draws a frame and exits, that a command-line option reaches the
+    renderer, that a leak does not accumulate over a hundred frames. Those run in
+    a subprocess, where a crash is a return code rather than the end of the
+    suite.</p>
+  <pre>from OpenGLContext.testing.subprocess_runner import run_test_with_popen
+
+result = run_test_with_popen(script, args=['--frames', '8'], timeout=30)
+assert result.success, result.stderr</pre>
+  <p>The runner knows the child's process id, so a timeout reaps the whole
+    process tree rather than the runner itself. A context exits by itself after
+    <code>OPENGLCONTEXT_AUTO_EXIT_FRAMES</code> frames, and writes a screenshot
+    on the way out when
+    <code>OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR</code> and
+    <code>OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME</code> say where.</p>
+  <p><strong>Build the child's environment rather than inheriting it.</strong>
+    Test modules set <code>OPENGLCONTEXT_*</code> variables at import time to
+    configure their own renderer, and those writes persist in the parent, so a
+    child started with <code>dict(os.environ)</code> renders with whatever the
+    run has accumulated &mdash; which makes its result depend on collection
+    order. <code>gl_subprocess_env()</code> starts from the system and graphics
+    variables alone and adds exactly what the caller names;
+    <code>renderoptions.clean_environment()</code> does the same for a caller
+    that wants the full list of what to drop. Anything that renders a frame and
+    then compares its pixels uses one of them.</p>
+  <p>Events can be injected into such a child over a Unix socket, so a test can
+    click, type and ask for a capture:
+    <code>OpenGLContext.testing.event_injector</code> has both ends.</p>
+</section>
+
+<section id="pixels">
+  <h2>Comparing pixels</h2>
+  <p><code>OpenGLContext.testing.framebuffer_comparison</code> reads a frame back
+    and compares it against a blessed one. The comparison is a
+    <strong>percentage tolerance</strong> &mdash; by default 2% of pixels may
+    differ by more than 5 per channel &mdash; not a byte-for-byte match, because
+    cross-GPU rasterization, anti-aliasing and gamma differ. Pin a software
+    rasterizer (<code>LIBGL_ALWAYS_SOFTWARE=1</code>) where byte-stable
+    references are wanted.</p>
+  <p>A frame is only comparable if the renderer was told to stop adapting.
+    Directional-shadow cascade count and image-based lighting both follow the
+    frame rate, so a capture pins them:
+    <code>OPENGLCONTEXT_SHADOW_CASCADES=<var>n</var></code> fixes the cascades,
+    and the capture path fixes the IBL. An animated scene pins its
+    <code>anim_time</code>. Without that, what is compared is the moment the
+    capture happened to be taken.</p>
+  <p>The engine's own glTF conformance baselines live in a separate
+    <code>reference-images</code> repository beside the source tree.
+    <code>OPENGLCONTEXT_GLTF_BASELINE</code> points at a copy of it; without
+    either, the conformance tests skip and say so rather than failing once per
+    view.</p>
+</section>
+
+<section id="what-to-test">
+  <h2>What to put in a test, and where</h2>
+  <p><strong>Hoist the rule out of the window.</strong> A rule, a loop or a state
+    machine inside a class whose setup opens a GL surface is code no test can put
+    under a microscope. Move it into a plain object that takes its time step and
+    its inputs as arguments and holds no GL, and leave the windowed class a thin
+    shell that builds one, feeds it and draws the result. What is left for
+    <code>gl_context</code> is then the part that genuinely has to draw.</p>
+  <p><strong>Drive the real thing.</strong> Prefer real geometry, real nodes and
+    a real context over a mock: a test that replaces every collaborator with a
+    stub proves the stubs work. Mocks are for the edges that are genuinely hard
+    to produce &mdash; a specific GL error, missing hardware, a network
+    failure.</p>
+  <p><strong>Smoke tests over reference images, for anything random.</strong> A
+    reference image of a particle system is a reference image of a random number
+    generator. Assert that pixels changed where pixels should have changed.</p>
+</section>
+
+</body></html>

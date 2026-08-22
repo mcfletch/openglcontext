@@ -69,5 +69,51 @@ class TestHasMouseMoveHandlersDelegates:
         assert ctx.hasMouseMoveHandlers() is False
 
 
+
+class _Sender:
+    """Something a callback can be registered against."""
+
+
+class _DropsARowWhenCompared:
+    """An event type that deletes another sender's row as it is compared to.
+
+    Standing in for the cyclic collector, which is what does this in a real
+    run: ``dispatcher.connections`` is keyed by sender, pydispatch deletes a
+    sender's row the moment that sender is collected, and a collection can land
+    on any allocation the scan makes -- so the table can lose a key between one
+    step of the walk and the next.
+    """
+
+    def __init__(self, drop):
+        self.drop = drop
+
+    def __eq__(self, other):
+        self.drop()
+        return False
+
+    def __hash__(self):
+        return id(self)
+
+
+class TestWalkingATableThatIsChanging:
+    """The scan reads a registry other things are free to edit underneath it."""
+
+    def test_a_row_dropped_mid_scan_does_not_break_the_scan(self):
+        from pydispatch import dispatcher
+        doomed, living = _Sender(), _Sender()
+
+        def drop():
+            dispatcher.disconnect(_receiver, signal='dropped', sender=doomed)
+
+        trap = _DropsARowWhenCompared(drop)
+        dispatcher.connect(_receiver, signal=(trap, 0, None), sender=living)
+        dispatcher.connect(_receiver, signal='dropped', sender=doomed)
+        try:
+            assert _MoveManager().hasReceivers() is False
+        finally:
+            dispatcher.disconnect(_receiver, signal=(trap, 0, None),
+                                  sender=living)
+
+
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))

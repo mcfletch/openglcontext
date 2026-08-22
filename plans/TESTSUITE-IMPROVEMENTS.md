@@ -1,6 +1,6 @@
 # Test Suite Improvements
 
-## Status: In Progress (Phase 1-4 Complete)
+## Status: In Progress (Phase 1-4 Complete; see the landed sections at the end)
 
 ## Summary
 
@@ -74,9 +74,15 @@ Known failures:
 3. **Coverage improvement** - Currently 9%, target 80%+
 4. **CI integration (Phase 6)** - Deferred to separate plan
 
-## Open finding: an import that breaks a later GL test
+## An import that broke a later GL test
 
-`tests/unit/test_passes_render_gl.py` fails its first four tests, and then the
+**Closed 2026-08-21, by measurement rather than by diagnosis.** The recorded
+reproduction below no longer reproduces -- `pytest tests/unit/test_glut_lineset.py
+tests/unit/test_passes_render_gl.py -p no:randomly` is green -- and so is the
+whole run: 7165 passed, 0 failed. What fixed it was not identified, so what was
+known is kept here in case it returns.
+
+`tests/unit/test_passes_render_gl.py` failed its first four tests, and then the
 pytest process dies without printing a summary, whenever it runs after certain
 other modules. Two files reproduce it:
 
@@ -688,9 +694,60 @@ would think to clear.**
 are the two callers today.
 
 
-## The Parthenon conformance views fail intermittently in a full run
+## One GL context, asked for one way
 
-**Open.** `test_gltf_conformance[Parthenon__camNN]` fails for a *varying* subset
+**Landed 2026-08-21.** Thirty test modules built their own hidden GLFW window,
+in thirty-two copies of the same seventeen lines, and five more opened a probe
+window apiece at import time to decide whether to skip. They had drifted:
+
+* four never called `glfw.default_window_hints()`, so the context they got
+  carried whatever the *previous* test had asked for -- GLFW's hints are
+  process-global and sticky;
+* two asked for no profile at all while needing `glGenLists` and `glFrustum`,
+  and passed only because this driver's default happens to be compatibility;
+* several called `glfw.terminate()` in teardown, which `tests/unit/conftest.py`
+  neutralises for the session because it faults in the Mesa/Wayland EGL path.
+
+The window machinery now lives in `OpenGLContext/testing/glcontext.py`
+(`hidden_window`, `gl_available`, `GLUnavailable` -- no pytest in it) and the
+fixtures in `OpenGLContext/testing/plugin.py` (`gl_context`,
+`gl_context_compat`, `gl_window`), turned on by
+`addopts = "-p OpenGLContext.testing.plugin"`. That makes it an API a project
+built on the engine can use rather than a habit this suite has: `docs/testing.html`
+is its documentation. Net effect on the suite: 582 lines of test code removed
+for 170 added, and every context asked for from a clean slate.
+
+## A missing baseline repository is one message, not three hundred
+
+**Landed 2026-08-21.** `tests/unit/test_gltf_conformance.py` compares against
+baselines in the sibling `reference-images` repository, which is not part of
+this one. A checkout without it produced **315 failures**, none of which named
+the repository or the environment variable that points at a copy. The module now
+skips with one message when the baseline root is absent, and gates exactly as
+before when it is there -- the per-view assertion still means "this roster view
+has no baseline yet", which is the thing it was written to catch.
+
+## The event registry was walked while it was being edited
+
+**Landed 2026-08-21.** `EventManager.hasReceivers` iterated
+`dispatcher.connections` directly. pydispatch keys that mapping by sender and
+deletes a sender's row as that sender is collected, so the cyclic collector --
+which can run on any allocation the walk makes -- changed the mapping underneath
+it and the walk died with `RuntimeError: dictionary changed size during
+iteration`. It surfaced as `test_captured_events_are_delivered.py` failing in a
+full run and passing alone; it is not a test problem. `hasMouseMoveHandlers` is
+on the render path, so the same crash was available to any application whose
+scene was being collected while a frame asked whether anything wanted mouse
+moves. The scan now walks a snapshot.
+
+**Still worth doing there:** the scan is O(every connection in the process) and
+runs up to three times a frame (cached per frame by `passes/selection.py`).
+pydispatch has no signal index to ask instead, so a large scene pays for the
+whole table on every frame that has a mouse move in it.
+
+## The Parthenon conformance views in a full run
+
+**Closed.** `test_gltf_conformance[Parthenon__camNN]` failed for a *varying* subset
 of its ten baked cameras, only ever in a full `tests/unit` run, and never when
 the file is run on its own.
 
@@ -720,8 +777,12 @@ for eight frames not to be enough. The environment-inheritance cause described
 in the section above is already fixed for this caller and is not it —
 `render_view` builds the child environment with `renderoptions.clean_environment`.
 
-**The fix is a readiness signal, not a longer delay.** A bigger
-`--capture-delay` moves the race rather than removing it; the viewer should
-report when the scene's resources are actually resident and the capture should
-wait for that. Until then a full-run failure here is a real red that has to be
-re-run to interpret, which is exactly the state a suite should not be in.
+**The cause was image-based lighting adapting to the frame rate while the
+capture was being taken**, so the frame landed at whatever point the climb back
+to `full` had reached -- bimodal, which is why a failing capture was a
+materially different frame rather than tolerance creep. A capture now pins the
+IBL exactly as it already pinned the shadow cascades
+(`renderoptions` / `ibl.ibl_is_adaptive`), and `RecursiveSkeletons` -- which was
+separately nondeterministic because it is animated -- pins its `anim_time`. All
+316 views render the same bytes every time; a difference here now is a
+regression rather than weather.

@@ -6,11 +6,9 @@ wraps the GLU trim primitives, and ``nurbstess._tessellate_nurbs_surface`` drive
 GLU tessellator. All three need a live GL context plus a real ``gluNewNurbsRenderer``
 object, so they are exercised here against a hidden GLFW window.
 """
-import os
 
 import pytest
 
-glfw = pytest.importorskip("glfw")
 
 from OpenGL.GLU import gluDeleteNurbsRenderer, gluNewNurbsRenderer  # noqa: E402
 
@@ -27,22 +25,12 @@ _KNOT = [0, 0, 0, 0, 1, 1, 1, 1]
 
 
 @pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    win = glfw.create_window(64, 64, "nurbs", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
+def gl_context(gl_window):
+    """Compatibility profile: these are the GLU NURBS and tessellator paths."""
+    window = gl_window('nurbs', profile='compatibility')
     saved = nurbssampling.object_space_tess
-    yield win
+    yield window
     nurbssampling.object_space_tess = saved
-    glfw.destroy_window(win)
 
 
 @pytest.fixture

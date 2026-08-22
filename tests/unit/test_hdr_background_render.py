@@ -6,69 +6,37 @@ that it is tone-mapped (not raw HDR clipped, not black), and that a higher expos
 brightens it. Skips cleanly without a GL context.
 """
 import math
-import os
 
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip("glfw")
+
+@pytest.fixture
+def gl_context(gl_window):
+    yield from _with_a_fresh_program(gl_window('hdr-bg', size=(128, 128)))
 
 
 @pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(128, 128, "hdr-bg", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    # The node caches its compiled program at class level (one persistent context
-    # in the real app); a fresh per-test context invalidates that id, so reset it.
+def gl_context_compat(gl_window):
+    """Compatibility *and* 3.3, so the fixed-function enums the non-shader
+    render arm touches (``GL_LIGHTING``) are valid while GLSL 330 compiles."""
+    yield from _with_a_fresh_program(
+        gl_window('hdr-bg-compat', size=(128, 128), profile='compatibility'))
+
+
+def _with_a_fresh_program(window):
+    """Forget the program cached against a context that has just gone.
+
+    The node caches its compiled program at class level -- one persistent
+    context, in the real application -- and a per-test context makes that id
+    meaningless.
+    """
     from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     HDRBackground._shader = None
     HDRBackground._shader_locations = None
-    yield win
+    yield window
     HDRBackground._shader = None
     HDRBackground._shader_locations = None
-    glfw.destroy_window(win)
-
-
-@pytest.fixture
-def gl_context_compat():
-    """A compatibility-profile 3.3 context, so the legacy fixed-function enums the
-    non-shader render arm touches (GL_LIGHTING) are valid while GLSL 330 still
-    compiles."""
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_COMPAT_PROFILE)
-    win = glfw.create_window(128, 128, "hdr-bg-compat", None, None)
-    if not win:
-        pytest.skip("no compatibility GL window")
-    glfw.make_context_current(win)
-    from OpenGL.GL import glIsEnabled, GL_LIGHTING
-    try:
-        glIsEnabled(GL_LIGHTING)                       # probe: is this really compat?
-    except Exception:
-        glfw.destroy_window(win)
-        pytest.skip("driver gave a core-only context; GL_LIGHTING unavailable")
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
-    HDRBackground._shader = None
-    HDRBackground._shader_locations = None
-    yield win
-    HDRBackground._shader = None
-    HDRBackground._shader_locations = None
-    glfw.destroy_window(win)
 
 
 def _perspective(fovy, aspect, near, far):

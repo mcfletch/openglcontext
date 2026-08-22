@@ -314,28 +314,10 @@ class TestExpandedArraysDefensive:
                                   creaseAngle=0.5, vertexArray=vertexArray)
 
 
-glfw = pytest.importorskip("glfw")
-
-
 @pytest.fixture
-def gl():
-    if not glfw.init():
-        pytest.skip("glfw init failed (no GL)")
-    # GLFW window hints are sticky/process-global; reset them so a prior
-    # core-profile test's profile can't leak into this context. The display-list
-    # path here is compatibility-profile only (glGenLists).
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    win = glfw.create_window(64, 64, "ifs", None, None)
-    if not win:
-        glfw.terminate()
-        pytest.skip("no GL context available")
-    glfw.make_context_current(win)
-    try:
-        yield win
-    finally:
-        glfw.destroy_window(win)
-        glfw.terminate()
+def gl(gl_window):
+    """Compatibility profile: the display-list path here is ``glGenLists``."""
+    return gl_window('ifs', profile='compatibility')
 
 
 if __name__ == '__main__':

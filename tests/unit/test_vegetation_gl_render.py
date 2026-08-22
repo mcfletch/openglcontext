@@ -11,7 +11,6 @@ import types
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip("glfw")
 from OpenGL.GL import *  # noqa: E402
 from PIL import Image  # noqa: E402
 
@@ -45,24 +44,8 @@ def _species_npz(tmp_path):
 
 
 @pytest.fixture
-def gl():
-    if not glfw.init():
-        pytest.skip("glfw init failed (no GL)")
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, True)
-    win = glfw.create_window(64, 64, "veg", None, None)
-    if not win:
-        glfw.terminate()
-        pytest.skip("no core-profile GL context available")
-    glfw.make_context_current(win)
-    try:
-        yield win
-    finally:
-        glfw.destroy_window(win)
-        glfw.terminate()
+def gl(gl_window):
+    return gl_window('veg', forward_compatible=True)
 
 
 def _mode():
