@@ -137,6 +137,51 @@ class InstancedShape(Shape):
             ((self, 'geometry'), (self, 'placements'), (volume, None)),
         )
 
+    def visiblePlacements(self, frustum: Any, matrix: Any,
+                          mode: Any = None) -> Optional[np.ndarray]:
+        """The placements ``frustum`` keeps, given the shape's world ``matrix``.
+
+        Being one object costs the per-copy culling: the set's bounding box
+        covers every placement, so a set spread through a level is never outside
+        the frustum and every copy is drawn. This is that culling given back,
+        without giving up the single draw -- the geometry's eight corners are
+        carried through every placement at once and tested against the clipping
+        planes in one product, and what comes back is the subset to draw.
+
+        ``None`` means "no answer": no placements, no frustum, or geometry whose
+        extent is not known. A caller that gets it draws the whole set, which is
+        what not knowing has to mean.
+
+        The frustum is the caller's, never the node's own: a shadow pass culls
+        against a light and the colour pass against the camera, and a set that
+        remembered one answer would drop the casters standing behind the viewer.
+        """
+        placements = self.instancePlacements()
+        if placements is None or frustum is None:
+            return None
+        planes = np.asarray(getattr(frustum, 'planes', ()), dtype='f')
+        if not len(planes):
+            return None
+        geometry = self.geometry
+        if not geometry or not hasattr(geometry, 'boundingVolume'):
+            return None
+        try:
+            corners = np.asarray(geometry.boundingVolume(mode).getPoints(),
+                                 dtype='f')
+        except (AttributeError, boundingvolume.UnboundedObject):
+            return None
+        if corners.shape != (8, 4):
+            return None
+        # Corners into world space for every placement at once: (M,8,4).
+        world = np.matmul(np.matmul(corners[None, :, :], placements),
+                          np.asarray(matrix, dtype='f'))
+        world[:, :, 3] = 1.0
+        distances = world @ planes.T
+        rejected = (distances < 0).all(axis=1).any(axis=1)
+        if not rejected.any():
+            return placements
+        return placements[~rejected]
+
     def _placedVolume(self, mode: Any) -> Any:
         placements = self.instancePlacements()
         geometry = self.geometry

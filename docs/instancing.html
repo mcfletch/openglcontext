@@ -427,15 +427,20 @@ rockets.place(placement_matrices(translations=positions,
       answer to one of those &mdash; a click that must name the individual tree
       &mdash; place them as separate shapes and let the opportunistic path batch
       them.</li>
-    <li><strong>Being one object costs the culling.</strong> The set's bounding box
-      covers every placement, so a set spread across a whole level is never outside the
-      frustum and every copy is drawn every frame. That is a good trade for copies that
-      are <em>together</em> (a tree cluster, a tile's grass) or that are <em>mostly
-      nowhere</em> (a pool of projectiles, all of it parked until something is fired),
-      and a bad one for copies scattered through a level where most are behind a wall:
-      as separate shapes each of those is rejected on its own. Measure it rather than
-      assuming &mdash; a set whose copies are far apart can be slower instanced than
-      not.</li>
+    <li><strong>Being one object is one pick and one sort</strong>, though no longer
+      one cull: the pass asks a set which of its copies the current frustum keeps
+      (<code>visiblePlacements</code>) and uploads only those, so a set scattered
+      through a level costs the copies in view rather than all of them. The answer
+      belongs to the pass that asked, never to the shape &mdash; a depth pass culls
+      against a light and would otherwise drop the casters standing behind the
+      viewer.</li>
+    <li><strong>Placing a set every frame is not free.</strong> Rewriting
+      <code>placements</code> invalidates the set's bounding volume, which is
+      recomputed and re-registered against its dependencies. For copies that move
+      every frame anyway that is a good trade against the draws it saves; for copies
+      that mostly stand still it is worth measuring both ways, and a set of a few
+      dozen scattered objects can come out slower instanced than as separate
+      shapes.</li>
   </ul>
 </section>
 

@@ -498,21 +498,33 @@ class InstanceGroup:
         return 'InstanceGroup(%d instances of %r)' % (len(self), self.geometry)
 
 
-def record_placements(record: tuple) -> Optional[Any]:
+def record_placements(record: tuple, visible: Optional[dict] = None) -> Optional[Any]:
     """The ``(N,4,4)`` local matrices a record draws at, or ``None`` for one.
 
     A record whose shape is an
     :class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape` stands for
     every placement that shape holds; every other record stands for itself.
+
+    ``visible`` is a caller's per-record answer to "which of them can be seen
+    from *here*", keyed by ``id`` of the record's path -- see
+    :meth:`~OpenGLContext.scenegraph.instancedshape.InstancedShape.visiblePlacements`.
+    It belongs to the caller and not to the shape because a shadow pass culls
+    against a light while the colour pass culls against the camera; a pass that
+    offers none gets the whole set, which is what the depth pass wants.
     """
     shape = record[-1][-1]
+    if visible is not None:
+        found = visible.get(id(record[-1]))
+        if found is not None:
+            return found
     placements = getattr(shape, 'instancePlacements', None)
     return placements() if placements is not None else None
 
 
-def instance_counts(records: List[tuple]) -> List[int]:
+def instance_counts(records: List[tuple],
+                    visible: Optional[dict] = None) -> List[int]:
     """How many instances each record draws, in order."""
-    return [1 if (p := record_placements(r)) is None else len(p)
+    return [1 if (p := record_placements(r, visible)) is None else len(p)
             for r in records]
 
 
@@ -530,7 +542,8 @@ def per_instance(values: List[Any], counts: List[int]) -> List[Any]:
 
 
 def instance_matrices(records: List[tuple], index: int = 1,
-                      after: Any = None) -> np.ndarray:
+                      after: Any = None,
+                      visible: Optional[dict] = None) -> np.ndarray:
     """Every instance's matrix for a set of records, as an ``(N,4,4)`` f32 array.
 
     ``index`` picks which of the record's own matrices to place within -- 1 for
@@ -543,7 +556,7 @@ def instance_matrices(records: List[tuple], index: int = 1,
     rows: List[np.ndarray] = []
     for record in records:
         matrix = np.asarray(record[index], dtype='f')
-        placements = record_placements(record)
+        placements = record_placements(record, visible)
         rows.append(matrix[None, :, :] if placements is None
                     else np.matmul(placements, matrix))
     out = (np.concatenate(rows, axis=0) if rows

@@ -170,3 +170,66 @@ class TestABlendedSetDrawsEveryCopy:
         empty = InstancedShape(geometry=Box(size=(1, 1, 1)))
         assert self.drawn(empty, 'RenderTransparent') == []
         assert empty.drawsNothing()
+
+
+class TestCullingTheCopiesOfASet:
+    """Being one object need not cost the per-copy culling.
+
+    A set's bounding box covers every placement, so a set spread through a level
+    is never outside the frustum and every copy would be drawn. Asking the set
+    which of its copies a given frustum keeps gives that culling back without
+    giving up the single draw.
+    """
+
+    def shape(self, xs):
+        from OpenGLContext.scenegraph.instancedshape import InstancedShape
+        moves = np.stack([np.identity(4, dtype='f') for _ in xs])
+        for at, x in enumerate(xs):
+            moves[at][3, 0] = float(x)
+        return InstancedShape(geometry=Box(size=(1, 1, 1)), placements=moves)
+
+    def frustum(self, low, high):
+        """A slab keeping only ``low <= x <= high``, as two clipping planes."""
+        class _Frustum:
+            planes = np.array([(1.0, 0.0, 0.0, -low),
+                               (-1.0, 0.0, 0.0, high)], dtype='f')
+        return _Frustum()
+
+    def kept(self, shape, frustum):
+        found = shape.visiblePlacements(frustum, np.identity(4, dtype='f'))
+        return None if found is None else sorted(
+            round(float(m[3, 0])) for m in found)
+
+    def test_copies_outside_the_frustum_are_dropped(self):
+        shape = self.shape([-100, 0, 100])
+        assert self.kept(shape, self.frustum(-10, 10)) == [0]
+
+    def test_copies_inside_are_all_kept(self):
+        shape = self.shape([-2, 0, 2])
+        assert self.kept(shape, self.frustum(-10, 10)) == [-2, 0, 2]
+
+    def test_a_set_wholly_outside_keeps_none(self):
+        shape = self.shape([100, 200])
+        assert self.kept(shape, self.frustum(-10, 10)) == []
+
+    def test_a_copy_straddling_the_edge_is_kept(self):
+        """Its box crosses the plane, so some of it is on screen."""
+        shape = self.shape([10])
+        assert self.kept(shape, self.frustum(-10, 10)) == [10]
+
+    def test_no_frustum_is_no_answer_rather_than_no_copies(self):
+        """Not knowing where the edges are has to mean drawing everything."""
+        assert self.shape([0, 1]).visiblePlacements(None, np.identity(4)) is None
+
+    def test_a_set_with_nothing_placed_has_no_answer(self):
+        from OpenGLContext.scenegraph.instancedshape import InstancedShape
+        empty = InstancedShape(geometry=Box(size=(1, 1, 1)))
+        assert empty.visiblePlacements(self.frustum(-1, 1),
+                                       np.identity(4)) is None
+
+    def test_the_world_matrix_moves_the_whole_set(self):
+        """A set under a transform is culled where the transform puts it."""
+        shape = self.shape([0])
+        far = np.identity(4, dtype='f')
+        far[3, 0] = 100.0
+        assert len(shape.visiblePlacements(self.frustum(-10, 10), far)) == 0

@@ -153,8 +153,8 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         self.matrix = members[0][1]
         # A member standing for a whole placement set expands to one instance per
         # placement, all sharing that node's pick id.
-        modelviews = instance_matrices(members)
-        counts = instance_counts(members)
+        modelviews = instance_matrices(members, visible=self.visiblePlacements)
+        counts = instance_counts(members, visible=self.visiblePlacements)
         if id_map is not None:
             oids = [self._objectIdFor(rec[4]) if self._shapePickable(rec[4]) else 0
                     for rec in members]

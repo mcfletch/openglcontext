@@ -98,6 +98,10 @@ class SGObserver( object ):
     #: The ``(N,4,4)`` array :meth:`_worldMatrices` fills each frame, kept so a
     #: frame allocates nothing for a scene whose size has not changed.
     _matrixBuffer = None
+    #: Which copies of each declared set this gather's frustum kept, by ``id``
+    #: of the record's path. Belongs to the gather rather than to the shapes: a
+    #: depth pass culling against a light must not read the camera's answer.
+    visiblePlacements = None
 
     def _pathSetChanged( self ):
         """Say that the set of paths to render is not the one last gathered."""
@@ -965,11 +969,23 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         # this is the only place the frame's viewpoint enters the gather.
         modelviews = kept @ asarray( matrix, 'f' )
         toRender = []
+        seen = self.visiblePlacements = {}
         for at, index in enumerate( keep ):
             path = paths[index]
             tmatrix = matrices[index]
+            node = path[-1]
+            # A declared set is one object to the test above, so its whole box
+            # survived if any of it did. Ask it which of its copies this frustum
+            # actually keeps, and drop the record if the answer is none.
+            within = getattr( node, 'visiblePlacements', None )
+            if within is not None:
+                found = within( self.frustum, tmatrix, mode=self )
+                if found is not None:
+                    if not len(found):
+                        continue
+                    seen[id(path)] = found
             toRender.append( (
-                path[-1].sortKey( self, tmatrix ),
+                node.sortKey( self, tmatrix ),
                 modelviews[at], tmatrix, volumes[index], path,
             ) )
         toRender.sort( key = lambda x: x[0])

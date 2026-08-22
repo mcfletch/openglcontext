@@ -937,8 +937,8 @@ class PBRPass(flatcore.FlatPass):
                 # A member standing for a whole placement set expands to one
                 # instance per placement; its pick id and its material go to all
                 # of them, since they are one node.
-                modelviews = instance_matrices(members)
-                counts = instance_counts(members)
+                modelviews = instance_matrices(members, visible=self.visiblePlacements)
+                counts = instance_counts(members, visible=self.visiblePlacements)
                 if id_map is not None:
                     oids = [self._objectIdFor(rec[4]) if self._shapePickable(rec[4])
                             else 0 for rec in members]
