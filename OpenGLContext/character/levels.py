@@ -28,7 +28,10 @@ from __future__ import annotations
 import logging
 from typing import Any, List, Optional, Sequence
 
-from vrml.vrml97.basenodes import Group
+# The engine's own Group, which is what offers ``renderedChildren``: the
+# renderer walks a scenegraph by asking each node for that and nothing else, so
+# a level wrapped in the plain VRML97 node is a level it never descends into.
+from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.lod import LOD
 
 log = logging.getLogger(__name__)
