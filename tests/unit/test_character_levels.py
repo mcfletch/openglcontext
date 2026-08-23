@@ -9,6 +9,9 @@ import pytest
 
 pygltflib = pytest.importorskip("pygltflib")
 
+from vrml.vrml97 import nodetypes
+
+from OpenGLContext import visitor
 from OpenGLContext.character.levels import levels_match
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
@@ -72,6 +75,40 @@ class TestTakingALevel:
         far = _skinned_under(node.level[1])
 
         assert len(near[0].positions) > len(far[0].positions)
+
+
+class TestTheRendererReachesTheLevelItDraws:
+    """A level has to be held in a node the rendering traversal walks into.
+
+    That traversal follows ``renderedChildren`` and nothing else
+    (:mod:`OpenGLContext.visitor`), and it is how the flat pass gathers the
+    node-paths it draws from.  A level held in a node offering none is a level
+    whose meshes are never gathered: the figure keeps its skeleton, poses every
+    frame, and puts nothing on screen.
+    """
+
+    def _reachable(self, model):
+        return visitor.find(model.group, nodetypes.Rendering)
+
+    def test_taking_a_level_leaves_the_near_meshes_reachable(self, fine,
+                                                             coarse):
+        """Close up, a figure draws what it drew before it had any levels."""
+        model = _model(fine)
+        before = len(self._reachable(model))
+        assert before, 'a figure with no levels should already draw something'
+
+        assert model.add_level(None, 20.0, document=coarse) is True
+
+        assert len(self._reachable(model)) == before
+
+    def test_the_coarse_level_is_reachable_once_it_is_chosen(self, fine,
+                                                             coarse):
+        model = _model(fine)
+        model.add_level(None, 20.0, document=coarse)
+        for node in _lods(model.group):
+            node.select(1000.0)
+
+        assert self._reachable(model), 'the level chosen for range draws nothing'
 
 
 def _skinned_under(node, seen=None):
