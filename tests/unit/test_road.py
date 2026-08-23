@@ -755,3 +755,83 @@ class TestASweepThatComesBackToItsStart:
         part = road_surface(line[10:20], profile,
                             frames=(right[10:20], up[10:20]))[0]
         assert np.allclose(part, whole[10 * ring:20 * ring], atol=1e-5)
+
+class TestARoadThatWidensToLetSomebodyPast:
+    def _sections(self, profile, widening):
+        from OpenGLContext.scenegraph.road import widened_sections
+        base = np.tile(profile.section(), (len(widening), 1, 1))
+        return widened_sections(base, widening, profile)
+
+    def test_a_road_told_to_widen_by_nothing_is_the_road_it_was(self) -> None:
+        profile = RoadProfile()
+        assert np.allclose(self._sections(profile, np.zeros(4)),
+                           profile.section())
+
+    def test_the_carriageway_gains_what_it_is_given(self) -> None:
+        profile = RoadProfile(lane_width=3.6, lanes=2)
+        found = self._sections(profile, np.full(3, 3.6))[1]
+        half = float(profile.carriageway_width / 2.0)
+        assert found[:, 0].max() - profile.section()[:, 0].max() == \
+            pytest.approx(1.8)
+        # The carriageway edge, one point out from the crown either side.
+        assert found[len(found) // 2 + 1, 0] == pytest.approx(half + 1.8)
+
+    def test_it_widens_evenly_about_the_crown(self) -> None:
+        found = self._sections(RoadProfile(), np.full(2, 4.0))[0]
+        assert np.allclose(found[:, 0], -found[::-1, 0])
+
+    def test_the_shoulder_and_verge_go_out_with_it(self) -> None:
+        """A wider carriageway does not eat its own shoulder."""
+        profile = RoadProfile()
+        plain = profile.section()
+        wide = self._sections(profile, np.full(2, 4.0))[0]
+        beside = plain[-1, 0] - plain[-2, 0]
+        assert wide[-1, 0] - wide[-2, 0] == pytest.approx(beside)
+
+    def test_the_camber_still_reaches_the_edge_it_now_has(self) -> None:
+        profile = RoadProfile(crossfall=0.02, lane_width=3.6, lanes=2)
+        wide = self._sections(profile, np.full(2, 3.6))[0]
+        edge = wide[len(wide) // 2 + 1]
+        assert edge[1] == pytest.approx(-0.02 * edge[0])
+
+    def test_it_is_the_same_as_asking_the_profile_for_that_road(self) -> None:
+        """Widening a cut and cutting a widened road are one operation."""
+        profile = RoadProfile(lane_width=3.6, lanes=2, crossfall=0.025)
+        found = self._sections(profile, np.full(2, 2.4))[0]
+        assert np.allclose(found, profile.widened(2.4).section())
+
+    def test_it_composes_with_the_cut_a_structure_takes(self) -> None:
+        from OpenGLContext.scenegraph.road import (
+            morphed_sections, widened_sections,
+        )
+        profile = RoadProfile()
+        found = widened_sections(
+            morphed_sections(profile, profile.on_structure(),
+                             np.array([0.0, 1.0])),
+            np.full(2, 3.0), profile)
+        assert np.allclose(found[0], profile.widened(3.0).section())
+        assert np.allclose(found[1],
+                           profile.on_structure().widened(3.0).section())
+
+    def test_a_widening_of_the_wrong_length_is_refused(self) -> None:
+        from OpenGLContext.scenegraph.road import widened_sections
+        profile = RoadProfile()
+        with pytest.raises(ValueError, match='widening'):
+            widened_sections(np.tile(profile.section(), (3, 1, 1)),
+                             np.zeros(2), profile)
+
+
+class TestBankingAWidenedRoad:
+    def test_the_crown_is_taken_out_to_the_edge_the_road_actually_has(self) -> None:
+        """The camber is gone across the whole carriageway, not across the
+        width the road would have had if it had not widened."""
+        from OpenGLContext.scenegraph.road import (
+            banked_sections, widened_sections,
+        )
+        profile = RoadProfile(crossfall=0.02, lane_width=3.6, lanes=2)
+        wide = widened_sections(np.tile(profile.section(), (2, 1, 1)),
+                                np.full(2, 4.0), profile)
+        found = banked_sections(wide, np.full(2, 0.2), profile)[0]
+        edge = found[len(found) // 2 + 1]
+        assert edge[1] == pytest.approx(0.0, abs=1e-9)
+        assert edge[0] == pytest.approx(profile.carriageway_width / 2.0 + 2.0)

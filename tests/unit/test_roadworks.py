@@ -941,3 +941,65 @@ class TestABoreIsDarkBecauseItIsEnclosed:
         colors = self._bore()['bore'].colors
         assert float(colors[:, :3].min()) >= 0.0
         assert float(colors[:, :3].max()) <= 1.0
+
+
+class TestTheWallACarMeetsOnADeck:
+    """A barrier is there "to keep a car on it", and a railing that is drawn
+    and not collided with is a barrier that keeps nothing on anything: the car
+    drives through it and off the deck into whatever the bridge was built over.
+
+    So the shape a *collider* takes is the barrier's footprint carried to its
+    full height -- solid, because what the holes in a railing are for is seeing
+    through, not driving through.
+
+    The deck these are built on runs east and level, forty metres up, so what
+    is across it is z and what is up is y less that forty.
+    """
+
+    def _wall(self, points=None, **kwargs):
+        from OpenGLContext.scenegraph.roadworks import barrier_wall
+        return barrier_wall(points if points is not None else _straight(),
+                            **kwargs)
+
+    def test_it_stands_at_the_edge_of_the_deck(self) -> None:
+        """Where the drawn parapet stands: the road as it runs *over* a
+        structure, which is an edge beam rather than a verge."""
+        profile = RoadProfile()
+        wall = self._wall(profile=profile)
+        half = profile.on_structure().total_width / 2.0
+        assert np.abs(wall.positions[:, 2]).max() == pytest.approx(half,
+                                                                   abs=1e-3)
+
+    def test_there_is_one_on_each_side(self) -> None:
+        wall = self._wall()
+        assert wall.positions[:, 2].min() < -1.0
+        assert wall.positions[:, 2].max() > 1.0
+
+    def test_it_is_as_tall_as_the_barrier_is(self) -> None:
+        from OpenGLContext.scenegraph.roadworks import BarrierProfile
+        wall = self._wall(barrier=BarrierProfile(height=1.4))
+        above = wall.positions[:, 1].max() - 40.0
+        assert above == pytest.approx(1.4, abs=0.2)
+
+    def test_it_is_solid_rather_than_a_railing(self) -> None:
+        """A car meets the whole of it, not the two bars a driver sees."""
+        wall = self._wall()
+        heights = np.unique(np.round(wall.positions[:, 1], 3))
+        assert len(heights) == 2, 'more than a top and a bottom: %r' % (heights,)
+
+    def test_it_leans_with_a_banked_deck(self) -> None:
+        wall = self._wall(bank=np.full(len(_straight()), 0.1))
+        near = wall.positions[wall.positions[:, 2] > 0][:, 1].mean()
+        far = wall.positions[wall.positions[:, 2] < 0][:, 1].mean()
+        assert near < far, 'the right-hand side of a right-leaning deck is low'
+
+    def test_it_follows_the_road_it_is_on(self) -> None:
+        wall = self._wall()
+        assert wall.positions[:, 0].min() == pytest.approx(0.0, abs=1e-6)
+        assert wall.positions[:, 0].max() == pytest.approx(200.0, abs=1e-6)
+
+    def test_it_has_triangles_a_collider_can_use(self) -> None:
+        wall = self._wall()
+        assert len(wall.indices) % 3 == 0
+        assert len(wall.indices) > 0
+        assert int(wall.indices.max()) < len(wall.positions)

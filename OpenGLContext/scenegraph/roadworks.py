@@ -37,7 +37,7 @@ from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
 
 __all__ = [
     'BarrierProfile', 'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
-    'bridge_meshes', 'causeway_meshes', 'tunnel_meshes',
+    'bridge_meshes', 'causeway_meshes', 'tunnel_meshes', 'barrier_wall',
     'bore_shade', 'bore_sky', 'tunnel_lamps',
     'concrete_material', 'barrier_material', 'lamp_material',
 ]
@@ -425,6 +425,42 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
     if lamps is not None:
         parts['lamps'] = lamps
     return parts
+
+
+def barrier_wall(points: Any, profile: Optional[RoadProfile] = None,
+                 barrier: Optional[BarrierProfile] = None,
+                 material: Optional[PBRMaterial] = None,
+                 bank: Any = None) -> PBRMesh:
+    """The wall a car meets at the edge of a deck: **what to collide with**.
+
+    A barrier is there to keep a car on the structure, and one that is drawn
+    and not collided with keeps nothing on anything -- the car goes through the
+    railing and off the deck into whatever the bridge was built over. So the
+    shape here is the drawn barrier's footprint
+    (:func:`bridge_meshes`, :func:`causeway_meshes`) carried to its full
+    ``height``, standing on each edge of the road as it runs *over* a structure.
+
+    **Solid**, where the drawn one is a kerb carrying a railing: what the holes
+    in a railing are for is seeing through, not driving through, and a collider
+    with the holes in is a barrier a car passes between the bars of.
+
+    ``bank`` leans it with the deck, as everything swept along a road is leaned
+    (:func:`~OpenGLContext.scenegraph.road.sweep_frames`), so the wall stands on
+    the edge the carriageway actually has.
+
+    It is geometry rather than a body: what to do with it is
+    :class:`~OpenGLContext.physics.road.RoadColliders`'s business.
+    """
+    line = _line(points, "a barrier")
+    profile = profile or RoadProfile()
+    barrier = barrier or BarrierProfile()
+    material = material if material is not None else barrier_material()
+    right, up = sweep_frames(line, bank)
+    carried = profile.on_structure()
+    half = carried.total_width / 2.0
+    edge = float(carried.section()[0, 1])
+    return _parapet(line, right, up, material, half, edge,
+                    float(barrier.height), float(barrier.width))
 
 
 def tunnel_lamps(points: Any, tunnel: Optional[TunnelProfile] = None,

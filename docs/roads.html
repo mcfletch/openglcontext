@@ -324,12 +324,51 @@ narrowed section rather than to the road's grass.</p>
 <code>road_surface(points, profile, sections=…)</code> accepts; the same
 mechanism widens a road for a lay-by.</p>
 
+<h3 id="widening">Somewhere to be passed</h3>
+<p>A road that is the same width everywhere is a road where getting by whatever
+is in front happens when the driver in front allows it.
+<code>widened_sections(sections, widening, profile)</code> gives a stretch of it
+more carriageway &mdash; ``widening`` metres, evenly about the crown, with the
+shoulder and verge going out with it rather than being eaten by it &mdash; and
+<code>RoadProfile.widened(extra)</code> is the same road said as a profile.</p>
+<pre><code>from OpenGLContext.scenegraph.road import banked_sections, widened_sections
+cut = widened_sections(sections, widening, profile)   # first the extra tarmac
+cut = banked_sections(cut, bank, profile)             # then the camber it leaves</code></pre>
+<p><strong>It composes, because a cut is linear in how wide its carriageway
+is.</strong> Widening one already blended for a structure gives exactly the cut
+that structure would have had if the road had been that wide all along, so a
+deck with a passing place on it needs no special case. Apply it <em>before</em>
+<a href="#banking">banking</a>, which reads the carriageway edge off the cut it
+is handed and so takes the camber out to wherever the road actually reaches.</p>
+<p>The collider takes it too &mdash;
+<code>RoadColliders(&hellip;, widening=&hellip;)</code> &mdash; and a baked world
+writes it beside the centreline as <code>widening</code>. Swept at the road's
+nominal width instead, the collider is a wall down each edge of the extra
+tarmac.</p>
+<p><strong>What it is not</strong> is a marked third lane. The carriageway is
+wider and its markings widen with it; a road that gains a lane line, and an
+asymmetric climbing lane added on the uphill side only, are not generated.</p>
+
 <h3>How it is swept</h3>
 <p>Each centreline point gets a <strong>frame</strong>: the tangent along the
 line, the right vector across it, and the up vector their cross product gives.
 The profile is placed in that frame, so the carriageway tilts with a climb and
 holds its width through a bend. Up is world up unless the road is given a lean
 to roll the frame by, which is what banking a corner is.</p>
+
+<h3 id="barriers">What keeps a car on a structure</h3>
+<p>A deck and a causeway are drawn with a <strong>barrier</strong> along each
+edge &mdash; a solid kerb with a railing standing on it, shaped so a driver can
+still see down past it, since a bridge forty metres over a valley is there
+<em>because</em> of what is under it. <code>BarrierProfile</code> is that shape.</p>
+<p><strong>It has to be collided with, not just drawn.</strong> A barrier that is
+only geometry keeps nothing on anything: the car goes through the railing and
+off the deck into whatever the bridge was built over.
+<code>barrier_wall(points, profile, barrier, bank)</code> is the shape a
+collider takes &mdash; the barrier's own footprint carried to its full height,
+solid, because the holes in a railing are for seeing through rather than driving
+through. <a href="physics.html#roadcolliders">RoadColliders</a> puts one up
+along every stretch it is told is carried.</p>
 
 <h3 id="banking">Banked corners</h3>
 <p>A corner can be <strong>superelevated</strong> &mdash; the whole carriageway

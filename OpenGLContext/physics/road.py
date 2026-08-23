@@ -34,8 +34,9 @@ import numpy as np
 from omi_physics import model
 
 from OpenGLContext.scenegraph.road import (
-    RoadProfile, banked_sections, road_surface, sweep_frames,
+    RoadProfile, banked_sections, road_surface, sweep_frames, widened_sections,
 )
+from OpenGLContext.scenegraph.roadworks import BarrierProfile, barrier_wall
 
 if TYPE_CHECKING:
     from omi_physics.world import PhysicsWorld
@@ -70,25 +71,42 @@ class RoadColliders:
         banks its corners writes this beside its centreline, and a collider
         swept without it is a flat road under a leaning one -- which is a car
         driving through the carriageway on the inside of every corner.
+    :param widening: how much more carriageway the road has at each centreline
+        point, in metres. A stretch built to be passed on is wider than the road
+        it is on, and a collider swept at the road's nominal width is a wall
+        down each edge of the extra tarmac.
+    :param barriers: the stretches that are **carried** -- a deck, a causeway --
+        as ``(from, to)`` distances along the centreline in metres. Each gets a
+        wall along both edges, because beside a deck there is nothing but the
+        thing the bridge was built over. The drawn structure has a barrier there
+        for exactly this reason; one that is not collided with keeps nothing on
+        anything, and the car goes through the railing and off the edge.
+
+        Which stretches those are is the caller's to say: a bore is carried too
+        and wants no wall, since what is beside it is the hillside it is in.
+    :param barrier: what those walls are, or None for an ordinary one.
     """
 
     def __init__(self, world: "PhysicsWorld", points: Any,
                  profile: Optional[RoadProfile] = None,
                  reach: float = REACH_METRES, chunk: float = CHUNK_METRES,
-                 closed: bool = False, bank: Any = None) -> None:
+                 closed: bool = False, bank: Any = None,
+                 widening: Any = None, barriers: Any = (),
+                 barrier: Optional[BarrierProfile] = None) -> None:
         self.world = world
         self.points = np.asarray(points, dtype='d').reshape(-1, 3)
         if len(self.points) < 2:
             raise ValueError("a road needs a centreline of at least two points")
         self.profile = profile or RoadProfile()
         #: The lean at each point, or None for a road that does not bank.
-        self.bank: Optional[np.ndarray] = None
-        if bank is not None:
-            self.bank = np.asarray(bank, dtype='d').reshape(-1)
-            if len(self.bank) != len(self.points):
-                raise ValueError(
-                    "a road of %d points needs %d leans, not %d"
-                    % (len(self.points), len(self.points), len(self.bank)))
+        self.bank: Optional[np.ndarray] = self._along(bank, 'leans')
+        #: How much wider the carriageway is at each point, or None for a road
+        #: of one width.
+        self.widening: Optional[np.ndarray] = self._along(widening, 'widenings')
+        #: The stretches with an edge to fall off, as ``(from, to)`` metres.
+        self.barriers = tuple((float(low), float(high))
+                              for low, high in (barriers or ()))
+        self.barrier = barrier or BarrierProfile()
         self.reach = float(reach)
         self.closed = bool(closed)
         #: Whether the centreline already ends where it began. Both spellings
@@ -113,8 +131,21 @@ class RoadColliders:
         #: rings and two neighbours share the ring between them.
         self.rings = max(int(round(float(chunk) / max(spacing, 1e-6))), 1)
         self._chunks = int(np.ceil((len(self.points) - 1) / self.rings)) or 1
-        self._bodies: dict[int, int] = {}
+        self._bodies: dict[int, list] = {}
+        #: Triangles held per chunk, so dropping one takes its own back.
+        self._counts: dict[int, int] = {}
         self._triangles = 0
+
+    def _along(self, values: Any, what: str) -> Optional[np.ndarray]:
+        """One figure per centreline point, or None for a road that has none."""
+        if values is None:
+            return None
+        found = np.asarray(values, dtype='d').reshape(-1)
+        if len(found) != len(self.points):
+            raise ValueError("a road of %d points needs %d %s, not %d"
+                             % (len(self.points), len(self.points), what,
+                                len(found)))
+        return found
 
     def update(self, position: Any) -> None:
         """Hold the chunks within reach of ``position``, and no others."""
@@ -183,7 +214,8 @@ class RoadColliders:
         if last - first < 1:                     # pragma: no cover - degenerate
             return
         run = self.points[first:last + 1]
-        lean = None if self.bank is None else self.bank[first:last + 1]
+        lean = self._span_of(self.bank, first, last, key)
+        wider = self._span_of(self.widening, first, last, key)
         frames = (self._right[first:last + 1], self._up[first:last + 1])
         if self.closed and key == self._chunks - 1 and not self._wraps_already:
             # Close the loop: the last chunk runs on into the first point. A
@@ -194,38 +226,88 @@ class RoadColliders:
             run = np.vstack([run, self.points[:1]])
             frames = (np.vstack([frames[0], self._right[:1]]),
                       np.vstack([frames[1], self._up[:1]]))
-            if lean is not None and self.bank is not None:
-                lean = np.concatenate([lean, self.bank[:1]])
         # No ``bank``: the lean is already in the frames, and what it does to
         # the cut is in the sections.
         positions, _normals, _uv, indices = road_surface(
-            run, self.profile, sections=self._sections(lean), frames=frames)
-        shape = self.world.add_shape(model.Shape.trimesh(
-            np.asarray(positions, dtype='d'),
-            np.asarray(indices, dtype='i').reshape(-1, 3)))
-        self._bodies[key] = self.world.add_body(
-            model.Motion(type=model.STATIC),
-            collider=model.Collider(shape=shape))
-        self._triangles += len(indices) // 3
+            run, self.profile, sections=self._sections(len(run), lean, wider),
+            frames=frames)
+        pieces = [(np.asarray(positions, dtype='d'),
+                   np.asarray(indices, dtype='i').reshape(-1, 3))]
+        pieces.extend(self._walls(first, last, key, lean))
+        bodies = []
+        for where, triangles in pieces:
+            shape = self.world.add_shape(model.Shape.trimesh(where, triangles))
+            bodies.append(self.world.add_body(
+                model.Motion(type=model.STATIC),
+                collider=model.Collider(shape=shape)))
+        self._bodies[key] = bodies
+        self._counts[key] = sum(len(triangles) for _where, triangles in pieces)
+        self._triangles += self._counts[key]
         self.world.refit_aabbs()
 
-    def _sections(self, lean: Optional[np.ndarray]) -> Any:
-        """The cut across each ring of a chunk, or None for a flat stretch.
+    def _walls(self, first: int, last: int, key: int,
+               lean: Optional[np.ndarray]) -> list:
+        """The barrier along each carried stretch this chunk covers.
 
-        The camber is used up by the lean exactly as it is in the surface that
-        is drawn (:func:`~OpenGLContext.scenegraph.road.banked_sections`). Two
-        centimetres of crown is nothing to look at and everything to a car:
-        left in, the collider stands proud of the drawn road down the middle of
-        every banked corner.
+        One wall per stretch rather than one for the chunk: a chunk may hold the
+        end of a deck and the road after it, and a wall run on past the abutment
+        is a wall down the middle of an ordinary road.
         """
-        if lean is None:
+        out = []
+        for low, high in self.barriers:
+            begin = max(int(np.searchsorted(self.stations, low)) - 1, first)
+            end = min(int(np.searchsorted(self.stations, high)), last)
+            if end - begin < 1:
+                continue
+            run = self.points[begin:end + 1]
+            over = None if lean is None or self.bank is None \
+                else self.bank[begin:end + 1]
+            wall = barrier_wall(run, self.profile, self.barrier, bank=over)
+            out.append((np.asarray(wall.positions, dtype='d'),
+                        np.asarray(wall.indices, dtype='i').reshape(-1, 3)))
+        return out
+
+    def _span_of(self, values: Optional[np.ndarray], first: int, last: int,
+                 key: int) -> Optional[np.ndarray]:
+        """One chunk's worth of a per-point figure, closing the loop if it ends.
+
+        Closed exactly where the run of points is: a line already written with
+        its first point at the end needs nothing added, and adding it anyway
+        would put a figure against a ring that is not there.
+        """
+        if values is None:
             return None
-        return banked_sections(
-            np.tile(self.profile.section(), (len(lean), 1, 1)), lean,
-            self.profile)
+        found = values[first:last + 1]
+        if self.closed and key == self._chunks - 1 and not self._wraps_already:
+            found = np.concatenate([found, values[:1]])
+        return found
+
+    def _sections(self, rings: int, lean: Optional[np.ndarray],
+                  wider: Optional[np.ndarray]) -> Any:
+        """The cut across each ring of a chunk, or None where it never changes.
+
+        The road is widened and then the camber taken out of it by the lean,
+        exactly as in the surface that is drawn
+        (:func:`~OpenGLContext.scenegraph.road.widened_sections`,
+        :func:`~OpenGLContext.scenegraph.road.banked_sections`). Two centimetres
+        of crown is nothing to look at and everything to a car: left in, the
+        collider stands proud of the drawn road down the middle of every banked
+        corner.
+        """
+        if lean is None and wider is None:
+            return None
+        found = np.tile(self.profile.section(), (rings, 1, 1))
+        if wider is not None:
+            found = widened_sections(found, wider, self.profile)
+        if lean is not None:
+            found = banked_sections(found, lean, self.profile)
+        return found
 
     def _drop(self, key: int) -> None:
-        body = self._bodies.pop(key)
         remove = getattr(self.world, 'remove_body', None)
-        if remove is not None:
-            remove(body)
+        for body in self._bodies.pop(key):
+            if remove is not None:
+                remove(body)
+        # What is held, not what has ever been built: a count that only went up
+        # says a lap of driving is carrying the whole world's road.
+        self._triangles -= self._counts.pop(key, 0)

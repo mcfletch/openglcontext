@@ -44,7 +44,8 @@ __all__ = [
     'estimate_normals', 'corner_speed', 'cornering_radius', 'advisory_speed',
     'CAUTION', 'GRAVITY', 'GRIP', 'SPEED_STEP', 'SIGHT_REACH',
     'sight_distances', 'superelevation', 'plan_curvature', 'bank_profile',
-    'banked_sections', 'MAXIMUM_BANK', 'BANK_GRADIENT', 'CURVE_BASELINE',
+    'banked_sections', 'widened_sections', 'MAXIMUM_BANK', 'BANK_GRADIENT',
+    'CURVE_BASELINE',
 ]
 
 #: How much of a car's weight is available sideways in a corner, as a fraction:
@@ -385,6 +386,24 @@ class RoadProfile:
         return replace(self, crossfall=max(self.crossfall - abs(float(bank)),
                                            0.0))
 
+    def widened(self, extra: float = 0.0) -> 'RoadProfile':
+        """The same road with ``extra`` metres more carriageway across it.
+
+        Evenly about the crown, half either side, and the shoulder and the verge
+        go out with it rather than being eaten by it: what a road gains when it
+        widens is carriageway, and the ground beside it is where it always was
+        relative to the edge.
+
+        It is what a stretch built to be **passed on** is. A road that is the
+        same width everywhere is a road where getting by whatever is in front
+        happens where the driver in front allows it; a stretch with a lane's
+        worth of extra tarmac in it is somewhere it can be done.
+        """
+        extra = float(extra)
+        if extra == 0.0 or self.lanes <= 0:
+            return self
+        return replace(self, lane_width=self.lane_width + extra / self.lanes)
+
     def on_structure(self) -> 'RoadProfile':
         """The same road as it runs over a bridge or through a tunnel.
 
@@ -680,9 +699,44 @@ def banked_sections(sections: Any, bank: Any,
             "a road of %d cuts needs %d leans, not %d"
             % (len(cuts), len(cuts), len(lean)))
     flattened = profile._crown_removed(lean)[:, None]
-    cuts[:, :, 1] += flattened * np.minimum(np.abs(cuts[:, :, 0]),
-                                            profile.carriageway_width / 2.0)
+    # The cut runs left to right with the crown in the middle, so one point out
+    # from it is the carriageway's own edge.
+    half = np.abs(cuts[:, cuts.shape[1] // 2 + 1, 0])[:, None]
+    cuts[:, :, 1] += flattened * np.minimum(np.abs(cuts[:, :, 0]), half)
     return cuts
+
+
+def widened_sections(sections: Any, widening: Any,
+                     profile: Optional['RoadProfile'] = None) -> np.ndarray:
+    """Cuts across a road with ``widening`` metres more carriageway in them.
+
+    ``sections`` is (N,K,2) -- one cut per centreline point, as
+    :func:`road_surface` takes them -- and ``widening`` how much wider the
+    carriageway is at each of those points, in metres. Zero is the road's own
+    cut; a lane's worth is a stretch there is room to be passed on, and tapering
+    from one to the other over a few dozen metres is how a road opens out.
+
+    A cut is a **linear** function of how wide its carriageway is -- every
+    offset in it is a sum of widths -- so widening one that has already been
+    blended for a structure (:func:`morphed_sections`) gives exactly the cut
+    that structure would have had if the road had been that wide all along.
+    Which is why this takes cuts rather than profiles: it composes.
+
+    Apply it *before* :func:`banked_sections`, which reads the carriageway edge
+    off the cut it is given and so takes the camber out to wherever the road
+    actually reaches.
+    """
+    profile = profile or RoadProfile()
+    cuts = np.asarray(sections, dtype='d')
+    extra = np.asarray(widening, dtype='d').reshape(-1)
+    if len(extra) != len(cuts):
+        raise ValueError(
+            "a road of %d cuts needs %d widenings, not %d"
+            % (len(cuts), len(cuts), len(extra)))
+    step = profile.widened(1.0).section() - profile.section()
+    found: np.ndarray = cuts + extra[:, None, None] * step[None]
+    return found
+
 
 
 def _returns_to_its_start(line: Any) -> bool:
