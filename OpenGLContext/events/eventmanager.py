@@ -40,11 +40,20 @@ class EventManager(object):
         (``dispatcher.getAllReceivers()`` with no arguments only returns the
         register-for-Any receivers, so it cannot answer this -- hence the scan of
         the connection table.)
+
+        **Over a snapshot, because the table is not ours to hold still.**
+        pydispatch keys ``connections`` by sender and drops a sender's row as
+        that sender is collected, so the cyclic collector -- which can run on
+        any allocation this walk makes -- changes the mapping underneath it.
+        A frame that had only asked whether anything wanted mouse moves then
+        died with ``dictionary changed size during iteration``. Copying the
+        keys costs a list of pointers; the receiver lists are copied only for a
+        signal that already matches, which is the rare case.
         """
-        for signals in dispatcher.connections.values():
-            for signal, receivers in signals.items():
+        for signals in list( dispatcher.connections.values() ):
+            for signal, receivers in list( signals.items() ):
                 if (isinstance( signal, tuple ) and signal and signal[0] == self.type
-                        and any( True for _ in dispatcher.liveReceivers( receivers ) )):
+                        and any( True for _ in dispatcher.liveReceivers( list( receivers ) ) )):
                     return True
         return False
     def ProcessEvent(self, event):

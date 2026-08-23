@@ -112,7 +112,6 @@ class TestUVTransform:
         assert m[1][0] == pytest.approx(-1.0)
 
 
-glfw = pytest.importorskip("glfw")
 from PIL import Image  # noqa: E402
 from OpenGL.GL import (  # noqa: E402
     GL_CLAMP_TO_EDGE, GL_LINEAR, GL_NEAREST, GL_REPEAT, GL_TEXTURE_2D,
@@ -123,20 +122,8 @@ import types  # noqa: E402
 
 
 @pytest.fixture
-def gl():
-    if not glfw.init():
-        pytest.skip("glfw init failed (no GL)")
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    win = glfw.create_window(32, 32, "pbrtex", None, None)
-    if not win:
-        glfw.terminate()
-        pytest.skip("no GL context available")
-    glfw.make_context_current(win)
-    try:
-        yield win
-    finally:
-        glfw.destroy_window(win)
-        glfw.terminate()
+def gl(gl_window):
+    return gl_window('pbrtex', size=(32, 32), profile='any')
 
 
 class TestPBRTextureGL:

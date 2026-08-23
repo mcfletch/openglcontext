@@ -4,32 +4,14 @@ Renders a small bright square into the bloom pass's HDR target and composites; t
 glow must bleed a soft halo around the square (which a no-bloom copy would not).
 Skips cleanly when a GL context can't be created.
 """
-import os
 
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip("glfw")
-
 
 @pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    # GLFW window hints are sticky/process-global; reset them so a prior
-    # core-profile test's profile can't leak into this context.
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(96, 96, "bloom", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
+def gl_context(gl_window):
+    return gl_window('bloom', size=(96, 96))
 
 
 def test_bloom_spreads_a_halo(gl_context):

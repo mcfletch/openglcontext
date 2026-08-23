@@ -5,31 +5,16 @@ and caches the verdict; these drive it against a real hidden GLFW context. The
 pure key/grouping logic is in test_instancing_logic; the instanced draw itself is
 exercised end-to-end by test_passes_render_gl.
 """
-import os
 
 import pytest
 
-glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.passes import instancing  # noqa: E402
 
 
 @pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(32, 32, "caps", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
+def gl_context(gl_window):
+    return gl_window('caps', size=(32, 32))
 
 
 def test_detect_capabilities_reports_live_context(gl_context):

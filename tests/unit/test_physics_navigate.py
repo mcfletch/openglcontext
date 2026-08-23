@@ -12,29 +12,10 @@ import os
 import numpy as np
 import pytest
 
-
-def _gl_available():
-    try:
-        import glfw
-    except Exception:
-        return False
-    try:
-        if not glfw.init():
-            return False
-        # GLFW window hints are sticky/process-global; reset them so a prior
-        # core-profile test's profile can't leak into this context.
-        glfw.default_window_hints()
-        glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-        w = glfw.create_window(64, 64, 't', None, None)
-        if not w:
-            return False
-        glfw.destroy_window(w)
-        return True
-    except Exception:
-        return False
+from OpenGLContext.testing.glcontext import gl_available
 
 
-gl = pytest.mark.skipif(not _gl_available(), reason='no GL target available')
+gl = pytest.mark.skipif(not gl_available(), reason='no GL target available')
 
 
 def _make_context():

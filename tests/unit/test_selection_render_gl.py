@@ -6,12 +6,10 @@ The full per-pick legacy render loop (``shaderSelectRenderOptimized``) is exerci
 end-to-end by test_passes_render_gl's legacy-pick scene; here we cover the fast
 zero-render buffer readback + dispatch in isolation with a bare mixin.
 """
-import os
 
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip("glfw")
 
 from OpenGL.GL import (  # noqa: E402
     GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_BUFFER_BIT,
@@ -20,24 +18,6 @@ from OpenGL.GL import (  # noqa: E402
 
 from OpenGLContext.passes.selection import SelectionMixin  # noqa: E402
 from OpenGLContext.passes.selectionbuffers import SelectionBufferFBO  # noqa: E402
-
-
-@pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(64, 64, "sel-render", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
 
 
 ENCODED_ID = 7 | (8 << 8) | (9 << 16)   # rgba bytes (7, 8, 9, 0)

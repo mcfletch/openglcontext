@@ -390,8 +390,8 @@ def boundingSphere(nodes):
     """
     mode = _Measure()
     volumes = []
-    for node in nodes:
-        measure = getattr(node, 'boundingVolume', None)
+    for child in nodes:
+        measure = getattr(child, 'boundingVolume', None)
         if measure is None:
             continue
         try:

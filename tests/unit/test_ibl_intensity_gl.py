@@ -18,6 +18,7 @@ import textwrap
 
 import pytest
 
+from OpenGLContext.testing.glcontext import gl_available
 from OpenGLContext.testing.paths import tests_root
 
 ROOT = os.path.dirname(str(tests_root(__file__)))
@@ -61,26 +62,7 @@ SCRIPT = textwrap.dedent('''
 ''')
 
 
-def _gl_available():
-    try:
-        import glfw
-    except Exception:
-        return False
-    try:
-        if not glfw.init():
-            return False
-        glfw.default_window_hints()
-        glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-        window = glfw.create_window(64, 64, 't', None, None)
-        if not window:
-            return False
-        glfw.destroy_window(window)
-        return True
-    except Exception:
-        return False
-
-
-gl = pytest.mark.skipif(not _gl_available(), reason='no GL target available')
+gl = pytest.mark.skipif(not gl_available(), reason='no GL target available')
 
 
 def _brightness(mode, intensity, tmp_path):

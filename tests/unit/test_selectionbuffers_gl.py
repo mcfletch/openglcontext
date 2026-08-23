@@ -6,12 +6,10 @@ holders, so a hidden GLFW core-profile window is enough to exercise create /
 resize / bind / clear / readback / blit / delete without any pass or scenegraph.
 Skips cleanly when a GL context can't be created.
 """
-import os
 
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip("glfw")
 
 from OpenGL.GL import (  # noqa: E402
     GL_COLOR_ATTACHMENT1, GL_COLOR_BUFFER_BIT, GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE,
@@ -24,21 +22,8 @@ from OpenGLContext.passes.selectionbuffers import SelectionFBO, SelectionBufferF
 
 
 @pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(96, 96, "selbuf", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
+def gl_context(gl_window):
+    return gl_window('selbuf', size=(96, 96))
 
 
 def _fill_id_texture(rgba):

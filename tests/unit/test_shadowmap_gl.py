@@ -7,11 +7,9 @@ completeness-check / cleanup lifecycle against a hidden GLFW core context, plus
 the driver-defensive branches via monkeypatch. The GL-call-shape (mocked)
 assertions live in test_shadowmap.py.
 """
-import os
 
 import pytest
 
-glfw = pytest.importorskip("glfw")
 
 from OpenGL.GL import (  # noqa: E402
     GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE, glCheckFramebufferStatus,
@@ -26,21 +24,9 @@ from OpenGLContext.passes.shadowmap import (  # noqa: E402
 
 
 @pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 4)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 1)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(64, 64, "shadowmap", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
+def gl_context(gl_window):
+    """4.1 rather than 3.3: the shadow pass wants the later GLSL."""
+    return gl_window('shadowmap', version=(4, 1))
 
 
 def _complete():

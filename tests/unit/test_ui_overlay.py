@@ -50,6 +50,8 @@ class World:
 
     def __init__(self):
         self.dispatched = []
+        #: What an application would do with an event that reaches it.
+        self.handlers = []
         self.redraws = 0
         self.captureSuspended = None
         self.inputState = InputState()
@@ -73,6 +75,8 @@ class World:
     def ProcessEvent(self, event):
         self.inputState.process(event)
         self.dispatched.append(event)
+        for handler in list(self.handlers):
+            handler(event)
         return event
 
 
@@ -621,3 +625,70 @@ class TestPictureLifetime:
         panel = dialog()
         bare.pushOverlay(panel)
         panel.close()          # must not raise
+
+
+class TestTheWorldIsToldToLetGoWhenAPanelOpens:
+    """A key held when a panel opens must not stay held behind it.
+
+    The panel takes the input, so the real release never reaches the world --
+    and an application that tracks held keys itself has no other way to learn
+    the key came up.  Left alone that is a throttle stuck open and a wheel at
+    full lock behind the menu that stopped them being let go of.
+    """
+
+    @pytest.fixture
+    def context(self):
+        return FakeContext()
+
+    def _releases(self, context):
+        return [one.name for one in context.dispatched
+                if getattr(one, 'type', None) == 'keyboard'
+                and not getattr(one, 'state', 0)]
+
+    def test_a_held_key_is_released_to_the_world(self, context):
+        context.ProcessEvent(FakeEvent('keyboard', name='w', state=1))
+        context.dispatched.clear()
+        context.pushOverlay(dialog())
+        assert self._releases(context) == ['w']
+
+    def test_every_held_key_is(self, context):
+        for name in ('w', 'a', ' '):
+            context.ProcessEvent(FakeEvent('keyboard', name=name, state=1))
+        context.dispatched.clear()
+        context.pushOverlay(dialog())
+        assert sorted(self._releases(context)) == [' ', 'a', 'w']
+
+    def test_nothing_held_means_nothing_sent(self, context):
+        context.pushOverlay(dialog())
+        assert self._releases(context) == []
+
+    def test_the_real_release_does_not_arrive_as_well(self, context):
+        """The world has already been told; a second one would run the
+        key-up handlers twice."""
+        context.ProcessEvent(FakeEvent('keyboard', name='w', state=1))
+        context.pushOverlay(dialog())
+        context.dispatched.clear()
+        context.ProcessEvent(FakeEvent('keyboard', name='w', state=0))
+        assert self._releases(context) == []
+
+    def test_the_key_that_opened_the_panel_is_not_released(self, context):
+        """Escape opens a menu on its key-down.  Handing the world its
+        key-up as well runs the world's own Escape handler, which in every
+        OpenGLContext application quits it."""
+        panel = dialog()
+
+        def opening(event):
+            context.pushOverlay(panel)
+
+        context.handlers.append(opening)
+        context.ProcessEvent(FakeEvent('keyboard', name='<escape>', state=1))
+        assert context.overlays.visible
+        assert self._releases(context) == []
+
+    def test_a_key_pressed_while_the_panel_is_up_stays_the_panels(
+            self, context):
+        context.pushOverlay(dialog())
+        context.dispatched.clear()
+        context.ProcessEvent(FakeEvent('keyboard', name='w', state=1))
+        context.ProcessEvent(FakeEvent('keyboard', name='w', state=0))
+        assert context.dispatched == []

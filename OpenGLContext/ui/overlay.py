@@ -24,7 +24,7 @@ first::
 
 from __future__ import annotations
 
-from typing import Any, Callable, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import logging
 
@@ -254,9 +254,21 @@ class OverlayMixin:
     suspendPointerCapture: Any
     _overlays: Optional[OverlayStack] = None
     _overlayActive: bool = False
-    #: Inputs whose press the overlay took, so their release is taken too.
-    #: See :meth:`overlaySinks`.
-    _claimed: Optional[Set['_Claim']] = None
+    _holdingInputs: Optional[Dict['_Claim', bool]] = None
+    #: The input the world is being told about right now, or None. See
+    #: :meth:`letGoOfHeldInput`.
+    _dispatching: Optional['_Claim'] = None
+
+    @property
+    def _holding(self) -> Dict['_Claim', bool]:
+        """Which side is holding each down/up input, made on first use.
+
+        True where the overlay took the press, False where it went past. Read
+        and cleared by the release -- see :meth:`overlaySinks`.
+        """
+        if self._holdingInputs is None:
+            self._holdingInputs = {}
+        return self._holdingInputs
 
     @property
     def overlays(self) -> OverlayStack:
@@ -290,10 +302,50 @@ class OverlayMixin:
         if active != self._overlayActive:
             self._overlayActive = active
             self.suspendPointerCapture(active)
+            if active:
+                self.letGoOfHeldInput()
             self.getInputState().clear()
             if not active:
                 self.releaseOverlayPictures()
         self.triggerRedraw(1)
+
+    def letGoOfHeldInput(self) -> None:
+        """Tell the world every key it is holding has come up.
+
+        A panel takes the input, so the release of a key held while it opens
+        never arrives -- and an application that tracks held keys itself, as a
+        movement mode and a game's steering both do, has no other way to learn
+        the key is no longer down.  Left alone that is a throttle stuck open
+        and a wheel stuck at full lock behind the menu that stopped them being
+        let go of.  Clearing
+        :class:`~OpenGLContext.events.inputstate.InputState` covers the
+        sampler; this covers everyone else, by saying it in the only language
+        an input handler speaks.
+
+        The keystroke that *opened* the panel is not among them: it is being
+        delivered right now, and handing the world its release as well would
+        run whatever else is bound to that key coming up -- which for Escape,
+        the key that opens a panel in most applications, is the handler that
+        quits.
+
+        The same idea as
+        :meth:`OpenGLContext.events.glfwevents.EventHandlerMixin.clearHeldKeys`,
+        which does it for a window that loses focus mid-key.
+        """
+        from OpenGLContext.events import synthetic
+        held = getattr(self.getInputState(), 'held_keys', None)
+        if held is None:                       # pragma: no cover - no sampler
+            return
+        for name in sorted(held()):
+            if self._dispatching == ('keyboard', name):
+                continue
+            event = synthetic.build({'type': 'keyboard', 'key': name,
+                                     'state': 0})
+            if event is None:                  # pragma: no cover - a known type
+                continue
+            event.context = self
+            self._holding.pop(('keyboard', name), None)
+            super(OverlayMixin, self).ProcessEvent(event)   # type: ignore[misc]
 
     def releaseOverlayPictures(self) -> None:
         """Give the overlay's picture textures back to the card.
@@ -323,7 +375,14 @@ class OverlayMixin:
         """Offer the event to the overlay first; pass it on only if it survives."""
         if self.overlaySinks(event):
             return None
-        return super(OverlayMixin, self).ProcessEvent(event)   # type: ignore[misc]
+        # Which input the world is being told about right now, so that a panel
+        # opened by this very keystroke does not immediately hand the world its
+        # release (:meth:`letGoOfHeldInput`).
+        previous, self._dispatching = self._dispatching, _claimKey(event)
+        try:
+            return super(OverlayMixin, self).ProcessEvent(event)   # type: ignore[misc]
+        finally:
+            self._dispatching = previous
 
     def overlaySinks(self, event: Any) -> bool:
         """Give an event to the overlay; True if nothing else should see it.
@@ -332,45 +391,47 @@ class OverlayMixin:
         a HUD, a console left open while play continues -- sinks only what it
         actually used.
 
-        **A press the overlay took takes its release with it**, whether or not
-        an overlay is still up by the time the release arrives.  Without that
-        ledger the last panel on the stack is a trap: Escape's key-down closes
-        it, the stack empties, and the key-up lands on the world's own Escape
-        handler, which in every OpenGLContext application quits it.  The same
-        goes for the click that dismisses a dialog, whose release would
-        otherwise pick whatever was behind it.
+        **An input goes whole to whichever side took its press.**  Anything
+        that arrives as a down and an up -- a key, a mouse button -- is held by
+        whoever read the down, and only the matching up lets go of it, so the
+        two halves must not be split by a panel opening or closing in between:
+
+        * A press the overlay took takes its release with it.  Without that the
+          last panel on the stack is a trap: Escape's key-down closes it, the
+          stack empties, and the key-up lands on the world's own Escape
+          handler, which in every OpenGLContext application quits it.  The same
+          goes for the click that dismisses a dialog, whose release would
+          otherwise pick whatever was behind it.
+        * A press that went *past* the overlay keeps its release, however
+          modal a panel that has opened since.  The far side is holding that
+          key down and has no other way to learn it came up: swallowing the
+          release leaves a throttle open, a wheel at full lock, or a drag with
+          no end.  Software key-repeat (``glfwevents.pumpKeyRepeats``) makes
+          this the ordinary case rather than a corner: a key held while a panel
+          opens goes on delivering presses, and those belong to the panel while
+          the key itself does not.
         """
         claim = _claimKey(event)
         stack = self._overlays
         if stack is None or not stack.visible:
-            return self._releaseClaim(claim, event)
-        acted = self._routeToOverlay(stack, event)
-        if acted:
-            self.triggerRedraw(1)
-        sunk = bool(stack.sinks() or acted)
-        if claim is not None and sunk:
-            self._holdClaim(claim, event)
-        elif claim is not None:
-            self._releaseClaim(claim, event)
-        return sunk
-
-    def _holdClaim(self, claim: '_Claim', event: Any) -> None:
-        """Remember a press the overlay took, or forget it on its release."""
-        if self._claimed is None:
-            self._claimed = set()
-        if _isPress(event):
-            self._claimed.add(claim)
+            sunk = False
         else:
-            self._claimed.discard(claim)
-
-    def _releaseClaim(self, claim: Optional['_Claim'], event: Any) -> bool:
-        """Whether this release finishes an input the overlay already took."""
-        if claim is None or _isPress(event) or not self._claimed:
-            return False
-        if claim not in self._claimed:
-            return False
-        self._claimed.discard(claim)
-        return True
+            acted = self._routeToOverlay(stack, event)
+            if acted:
+                self.triggerRedraw(1)
+            sunk = bool(stack.sinks() or acted)
+        if claim is None:
+            return sunk
+        if _isPress(event):
+            # Whichever side takes the press holds the input until its release.
+            # A repeat of a key the far side already holds still goes to the
+            # panel, but it does not change hands: the key is not the panel's
+            # to let go of.
+            self._holding.setdefault(claim, sunk)
+            return sunk
+        # A press the overlay took takes its release with it, wherever the
+        # stack has got to by now; anything else follows what is on screen.
+        return bool(self._holding.pop(claim, None)) or sunk
 
     def _routeToOverlay(self, stack: OverlayStack, event: Any) -> bool:
         kind = getattr(event, 'type', None)

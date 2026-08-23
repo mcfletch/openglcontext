@@ -6,12 +6,10 @@ submit/drain and batch resolve drive core-profile GL, so they run against a real
 ``SelectionMixin`` instance supplies the ``matrix``/``projection``/``viewport``
 and selection-buffer hooks the mixin expects. Skips cleanly with no GL context.
 """
-import os
 
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip("glfw")
 
 from OpenGL.GL import (  # noqa: E402
     GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_BUFFER_BIT,
@@ -69,24 +67,6 @@ def _bare():
     sel._async_batches = None
     sel._pbo_free = None
     return sel
-
-
-@pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(64, 64, "asyncpick", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
 
 
 ENCODED_ID = 1 | (2 << 8) | (3 << 16)   # rgba bytes (1, 2, 3, 0)

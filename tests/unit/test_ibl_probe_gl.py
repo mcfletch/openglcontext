@@ -5,33 +5,13 @@ RGBA16F-render capability probe, the procedural and cubemap env-source paths,
 the rebuild-on-env-change and build-failure fallbacks, per-frame texture binding,
 and defensive teardown. The pure mode-resolution logic is in test_ibl.py.
 """
-import os
 
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.passes import ibl  # noqa: E402
 from OpenGLContext.passes.ibl import IBLProbe  # noqa: E402
-
-
-@pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    win = glfw.create_window(64, 64, "ibl-probe", None, None)
-    if not win:
-        pytest.skip("no GL window")
-    glfw.make_context_current(win)
-    yield win
-    glfw.destroy_window(win)
 
 
 class _FakeProgram:

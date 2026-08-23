@@ -10,12 +10,10 @@ texture coordinates puts the picture on its head.  Nothing catches that until
 somebody looks at a photograph.
 """
 
-import os
 
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip("glfw")
 Image = pytest.importorskip("PIL.Image")
 
 WIDTH = HEIGHT = 64
@@ -26,23 +24,14 @@ BOTTOM_COLOUR = (0, 0, 255)
 
 
 @pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip("glfw init failed")
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    window = glfw.create_window(WIDTH, HEIGHT, "picture", None, None)
-    if not window:
-        pytest.skip("no GL window")
-    glfw.make_context_current(window)
+def gl_context(gl_window):
+    window = gl_window('picture', size=(WIDTH, HEIGHT))
     yield window
+    # The cached atlases hold GL objects in this context, and the driver hands
+    # the next window the same identifier often enough that leaving them would
+    # make one test's textures another test's problem.
     from OpenGLContext.scenegraph.text import shadertext
     shadertext.drop_text_renderers()
-    glfw.destroy_window(window)
 
 
 @pytest.fixture

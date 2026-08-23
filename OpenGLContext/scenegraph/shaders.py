@@ -155,7 +155,7 @@ class ShaderAttribute(shaders.ShaderAttribute):
             buffer = reshape(buffer, (-1, stride))
             return buffer[:, offset : offset + self.size]
         else:
-            raise NotImplemented(
+            raise NotImplementedError(
                 """Haven't implemented view support for N dimensional arrays"""
             )
 

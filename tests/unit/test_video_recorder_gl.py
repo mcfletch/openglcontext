@@ -5,12 +5,10 @@ recorder does and compares the texture against the framebuffer it came from, so
 a blit that forgets to flip fails immediately rather than at the far end of an
 encoder.
 """
-import os
 
 import numpy as np
 import pytest
 
-glfw = pytest.importorskip('glfw')
 pytest.importorskip('pyopengl_video')
 
 SIZE = (256, 192)
@@ -18,21 +16,8 @@ FPS = 30
 
 
 @pytest.fixture
-def gl_context():
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    if not glfw.init():
-        pytest.skip('glfw init failed')
-    glfw.default_window_hints()
-    glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-    glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-    window = glfw.create_window(*SIZE, 'recorder', None, None)
-    if not window:
-        pytest.skip('no GL window')
-    glfw.make_context_current(window)
-    yield window
-    glfw.destroy_window(window)
+def gl_context(gl_window):
+    return gl_window('recorder', size=SIZE)
 
 
 @pytest.fixture

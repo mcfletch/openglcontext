@@ -15,8 +15,16 @@ geometry comes and goes.
 
 Like :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders`, the road
 is cut into chunks and only the ones near whatever is moving are in the physics
-world -- an hour of driving costs what one view of the world costs. Chunks share
-their end rings, so two neighbours agree exactly where they meet.
+world -- an hour of driving costs what one view of the world costs.
+
+**A chunk is cut out of one road rather than built as a road of its own.** The
+frame a cross-section is swept along at a point is made from the segments either
+side of it, which a chunk considered alone does not have at its ends; the
+frames are swept once for the whole centreline
+(:func:`~OpenGLContext.scenegraph.road.sweep_frames`) and each chunk takes its
+own slice. So two neighbours agree exactly where they meet, and the ring they
+share is one ring. On a circuit that goes for the seam as well, which is where a
+start line usually is.
 """
 from __future__ import annotations
 
@@ -25,7 +33,9 @@ from typing import TYPE_CHECKING, Any, Optional
 import numpy as np
 from omi_physics import model
 
-from OpenGLContext.scenegraph.road import RoadProfile, road_surface
+from OpenGLContext.scenegraph.road import (
+    RoadProfile, banked_sections, road_surface, sweep_frames,
+)
 
 if TYPE_CHECKING:
     from omi_physics.world import PhysicsWorld
@@ -54,19 +64,46 @@ class RoadColliders:
         points, and never shorter than one.
     :param closed: whether the road returns to where it started, so the chunk
         after the last is the first.
+    :param bank: how far the road leans at each centreline point, as a fraction
+        and signed the way
+        :func:`~OpenGLContext.scenegraph.road.plan_curvature` is. A world that
+        banks its corners writes this beside its centreline, and a collider
+        swept without it is a flat road under a leaning one -- which is a car
+        driving through the carriageway on the inside of every corner.
     """
 
     def __init__(self, world: "PhysicsWorld", points: Any,
                  profile: Optional[RoadProfile] = None,
                  reach: float = REACH_METRES, chunk: float = CHUNK_METRES,
-                 closed: bool = False) -> None:
+                 closed: bool = False, bank: Any = None) -> None:
         self.world = world
         self.points = np.asarray(points, dtype='d').reshape(-1, 3)
         if len(self.points) < 2:
             raise ValueError("a road needs a centreline of at least two points")
         self.profile = profile or RoadProfile()
+        #: The lean at each point, or None for a road that does not bank.
+        self.bank: Optional[np.ndarray] = None
+        if bank is not None:
+            self.bank = np.asarray(bank, dtype='d').reshape(-1)
+            if len(self.bank) != len(self.points):
+                raise ValueError(
+                    "a road of %d points needs %d leans, not %d"
+                    % (len(self.points), len(self.points), len(self.bank)))
         self.reach = float(reach)
         self.closed = bool(closed)
+        #: Whether the centreline already ends where it began. Both spellings
+        #: of a circuit are in use, and what closes the loop differs between
+        #: them.
+        self._wraps_already = bool(
+            np.linalg.norm(self.points[-1] - self.points[0]) < 1e-9)
+        #: The frame at every centreline point, swept once for the whole road.
+        #: A chunk takes its own slice of this rather than sweeping its own
+        #: (:func:`~OpenGLContext.scenegraph.road.road_surface`): a frame is
+        #: made from the points either side, which a chunk on its own does not
+        #: have, so a chunk that swept itself would roll its end rings away
+        #: from the road they join on to.
+        self._right, self._up = sweep_frames(self.points, self.bank,
+                                             closed=self.closed)
         steps = np.linalg.norm(np.diff(self.points, axis=0), axis=1)
         #: Distance along the road to each point, which is what a chunk is cut
         #: on and what a position is found in.
@@ -146,10 +183,23 @@ class RoadColliders:
         if last - first < 1:                     # pragma: no cover - degenerate
             return
         run = self.points[first:last + 1]
-        if self.closed and key == self._chunks - 1:
-            # Close the loop: the last chunk runs on into the first point.
+        lean = None if self.bank is None else self.bank[first:last + 1]
+        frames = (self._right[first:last + 1], self._up[first:last + 1])
+        if self.closed and key == self._chunks - 1 and not self._wraps_already:
+            # Close the loop: the last chunk runs on into the first point. A
+            # line already written with that point at its end closes itself,
+            # and adding it again would put a ring on top of a ring with no
+            # road between them -- a segment of no length, whose frame is no
+            # frame at all.
             run = np.vstack([run, self.points[:1]])
-        positions, _normals, _uv, indices = road_surface(run, self.profile)
+            frames = (np.vstack([frames[0], self._right[:1]]),
+                      np.vstack([frames[1], self._up[:1]]))
+            if lean is not None and self.bank is not None:
+                lean = np.concatenate([lean, self.bank[:1]])
+        # No ``bank``: the lean is already in the frames, and what it does to
+        # the cut is in the sections.
+        positions, _normals, _uv, indices = road_surface(
+            run, self.profile, sections=self._sections(lean), frames=frames)
         shape = self.world.add_shape(model.Shape.trimesh(
             np.asarray(positions, dtype='d'),
             np.asarray(indices, dtype='i').reshape(-1, 3)))
@@ -158,6 +208,21 @@ class RoadColliders:
             collider=model.Collider(shape=shape))
         self._triangles += len(indices) // 3
         self.world.refit_aabbs()
+
+    def _sections(self, lean: Optional[np.ndarray]) -> Any:
+        """The cut across each ring of a chunk, or None for a flat stretch.
+
+        The camber is used up by the lean exactly as it is in the surface that
+        is drawn (:func:`~OpenGLContext.scenegraph.road.banked_sections`). Two
+        centimetres of crown is nothing to look at and everything to a car:
+        left in, the collider stands proud of the drawn road down the middle of
+        every banked corner.
+        """
+        if lean is None:
+            return None
+        return banked_sections(
+            np.tile(self.profile.section(), (len(lean), 1, 1)), lean,
+            self.profile)
 
     def _drop(self, key: int) -> None:
         body = self._bodies.pop(key)
