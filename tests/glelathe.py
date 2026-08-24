@@ -1,14 +1,21 @@
 #! /usr/bin/env python
-'''Test of gleLathe and related functions
+'''=Lathe, Screw and Spiral=
 
-NOTE: This test uses the GLE library which uses legacy OpenGL and requires
-a compatibility profile context.
+[glelathe.py-screen-0001.png Screenshot]
+
+A washer, a drill-like screw through its centre, and a cone-shaped spring
+around it -- one `Lathe`, one `Screw` and one `Spiral`, all built from the
+same square contour and turning under an `OrientationInterpolator`.
+
+The geometry is generated as vertex arrays, so this renders in a core
+profile as well as a compatibility one. See `extrusions_shapes.py` for the
+whole set of swept nodes, and `docs/extrusions.html` for what each field
+does.
 '''
 #import OpenGL
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from math import pi
@@ -29,14 +36,11 @@ normals = array([
     
 
 class TestContext( BaseContext ):
-    # Requires compatibility profile for GLE library
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        print("""You should see a round "washer" formed by sweeping a square
-through a circle.  A drill-like screw should penetrate the
-center of the washer.  Around the washer should be a cone-
-shaped "spring", which should extend some distance downward.""")
+        print("""A round "washer" formed by sweeping a square through a
+circle. A drill-like screw penetrates the centre of the washer, and around
+it is a cone-shaped "spring" extending some distance downward.""")
         appearance = Appearance(
             material=Material(
                 shininess = 1.0,
@@ -60,20 +64,19 @@ shaped "spring", which should extend some distance downward.""")
                                 Shape(
                                     geometry = extrusions.Lathe(
                                         contour = contour,
-                                        normals = normals,
+                                        normals2d = normals,
                                         startRadius = 1.5,
-                                        textureMode = 'cylinder vertex',
+                                        sides = 48,
                                     ),
                                     appearance = appearance,
                                 ),
                                 Shape(
                                     geometry = extrusions.Screw(
                                         contour = contour,
-                                        normals = normals,
+                                        normals2d = normals,
                                         startZ = -5,
                                         endZ = 5,
                                         totalAngle = 5 * pi,
-                                        textureMode = 'flat normal model',
                                     ),
                                     appearance = Appearance(
                                         material=Material(),
@@ -82,13 +85,13 @@ shaped "spring", which should extend some distance downward.""")
                                 Shape(
                                     geometry = extrusions.Spiral(
                                         contour = contour,
-                                        normals = normals,
+                                        normals2d = normals,
                                         startRadius = 3,
                                         deltaRadius = 1.5,
                                         startZ = 0,
                                         deltaZ = 1.5,
                                         totalAngle = 8 * pi,
-                                        textureMode = 'cylinder vertex model',
+                                        sides = 48,
                                     ),
                                     appearance = appearance,
                                 ),

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Swept Geometry and Tessellation</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <style>
+    figure { margin: 1.5em 0; }
+    figure img { max-width: 100%; height: auto; display: block;
+                 border-radius: 6px; background: #111; }
+    figcaption { font-size: 0.9em; opacity: 0.8; margin-top: 0.5em; }
+    table { border-collapse: collapse; margin: 1em 0; }
+    th, td { border: 1px solid #999; padding: 0.4em 0.7em; text-align: left;
+             vertical-align: top; }
+    th { background: rgba(128,128,128,0.15); }
+    .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+             gap: 1.2em; }
+  </style>
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Swept Geometry and Tessellation</h1>
+</header>
+
+<section>
+<p>Six geometry nodes describe a shape by sweeping a 2D outline along a path: a
+lathe, a spiral, a screw, two kinds of tube, and VRML97's own
+<code>Extrusion</code>. Each holds the parameters and generates its vertex
+arrays with <a href="https://github.com/mcfletch/opengl_extrusions"
+>opengl_extrusions</a>, a NumPy geometry generator with no OpenGL in it.</p>
+
+<p>What comes back is an ordinary indexed triangle mesh, so these draw through
+the same path as every other piece of geometry in the scene: <strong>core
+profile and compatibility profile alike</strong>, lit, shadowed, textured,
+pickable, depth-sorted, and eligible for the pass-level instancing batcher.</p>
+
+<figure>
+  <img src="images/extrusions/shapes.png"
+       alt="A lathe, a spiral, a screw, a torus, a pipe elbow and a tapering elbow">
+  <figcaption>Every swept node, from <code>tests/extrusions_shapes.py</code>.
+  Top: a <code>Lathe</code> and a <code>Spiral</code> of the same parameters --
+  the lathe's section stays upright as it climbs, the spiral's tilts with the
+  climb -- and a <code>Screw</code>. Bottom: a toroid, a
+  <code>PolyCylinder</code> and a <code>PolyCone</code>.</figcaption>
+</figure>
+</section>
+
+<section>
+<h2>The nodes</h2>
+
+<table>
+<tr><th>Node</th><th>What it sweeps</th><th>Reach for it for</th></tr>
+<tr><td><code>Lathe</code></td>
+    <td>a contour around the z axis, its plane staying <em>radial</em></td>
+    <td>screw threads, spiral ramps, washers, turned parts</td></tr>
+<tr><td><code>Spiral</code></td>
+    <td>a contour along the helix itself, its plane square to the path</td>
+    <td>springs, coiled wire, handrails</td></tr>
+<tr><td><code>Screw</code></td>
+    <td>a contour along z while turning</td>
+    <td>drill bits, twisted columns, augers</td></tr>
+<tr><td><code>PolyCylinder</code></td>
+    <td>a circle along a path, constant radius</td>
+    <td>pipes, cables, rails, barriers</td></tr>
+<tr><td><code>PolyCone</code></td>
+    <td>a circle along a path, a radius at every point</td>
+    <td>tapering pipes, tree branches, rockets</td></tr>
+<tr><td><code>Extrusion</code></td>
+    <td>VRML97's cross-section along its spine</td>
+    <td>anything a <code>.wrl</code> file asks for</td></tr>
+</table>
+
+<p>The rotational sweeps read their contour in the <strong>r-z plane</strong>:
+x is distance out from the axis, added to the sweep radius, and y is height.</p>
+
+<figure>
+  <img src="images/extrusions/fig_lathe.png" alt="A lathe under six sets of parameters">
+  <figcaption>What each of a <code>Lathe</code>'s fields does, on one square
+  section. Top: <code>totalAngle</code> of &pi; and of 2&pi;, then
+  <code>deltaZ&nbsp;0.6</code> over two turns -- a rising coil. Bottom:
+  <code>deltaRadius&nbsp;0.4</code>, which spirals outward instead;
+  <code>sides&nbsp;6</code>, a hexagonal ring; and <code>sides&nbsp;48</code>, a
+  smooth one.</figcaption>
+</figure>
+
+<figure>
+  <img src="images/extrusions/fig_spiral.png" alt="A lathe and a spiral as the climb steepens">
+  <figcaption>The same parameters both ways, as the climb steepens. Top row
+  <code>Lathe</code>, bottom row <code>Spiral</code>; left to right
+  <code>deltaZ</code> of 0, 0.5 and 1.4 over one turn. Flat, the two are
+  identical; the steeper the climb, the further apart they get.</figcaption>
+</figure>
+
+<figure>
+  <img src="images/extrusions/fig_screw.png" alt="Screws of varying twist and length">
+  <figcaption>Top: <code>totalAngle</code> of 0 (a plain bar), &pi; and 6&pi;,
+  all of the same square section over the same length. Bottom: the same twist
+  over a short <code>startZ</code>..<code>endZ</code> and over a long one, and a
+  five-pointed star section -- which is what makes an auger.</figcaption>
+</figure>
+
+<figure>
+  <img src="images/extrusions/fig_polycone.png" alt="Six radius profiles along one path">
+  <figcaption>What a per-point radius buys you. Top: a constant radius (which is
+  <code>PolyCylinder</code>), a taper to nothing, and a barrel. Bottom: a waist,
+  a stepped profile, and a taper following a curved path.</figcaption>
+</figure>
+
+<figure>
+  <img src="images/extrusions/fig_contours.png" alt="Six contours swept the same way">
+  <figcaption>The built-in outlines, each swept along the same straight path so
+  only the contour differs: a 6- and a 24-sided circle, a rectangle, a rounded
+  rectangle, and two stars.</figcaption>
+</figure>
+
+<figure>
+  <img src="images/extrusions/fig_caps.png" alt="Cap options">
+  <figcaption>Top: <code>caps TRUE</code>, <code>caps FALSE</code>, and a contour
+  with a hole -- the cap has the hole in it, because caps are tessellated rather
+  than fanned. Bottom: an open contour, which makes a sheet with no inside and
+  no cap; then the same star-section cap refined two ways.</figcaption>
+</figure>
+
+<figure>
+  <img src="images/extrusions/fig_scale_twist.png" alt="Per-point scale, twist and colour">
+  <figcaption>All on the same straight path, so only the per-point parameters
+  differ. Top: none; a scale tapering to 0.3; a scale whose x and y differ.
+  Bottom: a twist to &pi;/2; twist and taper together; a per-point colour.
+  </figcaption>
+</figure>
+
+<pre><code>from OpenGLContext.scenegraph.basenodes import Appearance, Material, Shape
+from OpenGLContext.scenegraph.extrusions import Lathe
+
+washer = Shape(
+    geometry=Lathe(
+        contour=[(0, -0.1), (0.3, -0.1), (0.3, 0.1), (0, 0.1)],
+        startRadius=1.0, sides=48,
+    ),
+    appearance=Appearance(material=Material(diffuseColor=(0.8, 0.6, 0.2))),
+)</code></pre>
+
+<h3>Shared fields</h3>
+<table>
+<tr><th>Field</th><th>Default</th><th>What it does</th></tr>
+<tr><td><code>normals</code></td><td><code>'edge'</code></td>
+    <td><code>'facet'</code> for flat faces and hard edges, <code>'edge'</code>
+    for smooth around the contour and creased across each ring,
+    <code>'path_edge'</code> for smooth both ways -- see below</td></tr>
+<tr><td><code>texture</code></td><td><code>'normalized'</code></td>
+    <td>0..1 both ways, <code>'arc_length'</code> for model units, or
+    <code>''</code> for no texture coordinates</td></tr>
+<tr><td><code>solid</code></td><td><code>TRUE</code></td>
+    <td>whether the back faces may be culled</td></tr>
+</table>
+
+<p>The generated mesh is cached on the scenegraph cache and rebuilt when a field
+it depends on changes, so a slider driving <code>sides</code> costs one
+regeneration per move rather than one per frame.</p>
+
+<h3>What <code>normals</code> does</h3>
+
+<figure>
+  <img src="images/extrusions/normals.png"
+       alt="A hexagonal tube and a bent tube, each shaded three ways">
+  <figcaption>From <code>tests/extrusions_normals.py</code>. Left to right in
+  each row: <code>facet</code>, <code>edge</code>, <code>path_edge</code>. The
+  geometry is identical; only the normals differ.</figcaption>
+</figure>
+
+<p>Top, a hexagonal tube: <code>facet</code> gives six flat faces and six hard
+edges, <code>edge</code> blends them so a six-sided tube shades like a cylinder
+while its silhouette stays a hexagon, and on a straight run
+<code>path_edge</code> has nothing further to smooth. Bottom, a round tube round
+a corner: <code>facet</code> reads as a stack of rings, <code>edge</code> stays
+smooth around the tube and creased at the corner -- which is what a mitred pipe
+joint should look like -- and <code>path_edge</code> rounds the corner off
+visually as well, for something meant to bend smoothly.</p>
+
+<p><code>edge</code> is the default and usually the right answer: curves in the
+outline stay smooth, corners in the path stay sharp.</p>
+</section>
+
+<section>
+<h2>Corners</h2>
+
+<figure>
+  <img src="images/extrusions/joins.png" alt="Four join styles round the same corner">
+  <figcaption>From <code>tests/extrusions_joins.py</code>. Clockwise from top
+  left: <code>raw</code> (the runs come apart), <code>angle</code> (a mitre,
+  with the seam where its two surfaces meet), <code>round</code> (an elbow) and
+  <code>cut</code> (a bevel). The purple hairpin is a mitre at a corner sharp
+  enough that <code>miterLimit</code> turns it into a bevel.</figcaption>
+</figure>
+
+<table>
+<tr><th><code>join</code></th><th>At a corner</th></tr>
+<tr><td><code>'raw'</code></td><td>each run swept on its own, ending square --
+    the tube comes apart. For a chain of separate objects; never for a
+    pipe.</td></tr>
+<tr><td><code>'angle'</code></td><td>a mitre, in the plane bisecting the
+    corner, with the outside stretched to reach it. Continuous, and the
+    default.</td></tr>
+<tr><td><code>'cut'</code></td><td>a bevel: each run ends square and one flat
+    band joins them. Does not reach as far past the corner as a mitre, and the
+    band is shaded as the facet it is.</td></tr>
+<tr><td><code>'round'</code></td><td>an elbow: the ring is turned through the
+    bend over <code>roundSegments</code> steps, so the corner is the tube itself
+    rotated and the contour keeps its size.</td></tr>
+</table>
+
+<p><code>miterLimit</code> (default 4) bounds how far a mitre may stretch as a
+multiple of the tube's own reach. Without one, the outside of a nearly-reversed
+corner runs away to a spike.</p>
+</section>
+
+<section>
+<h2>Following a curve</h2>
+
+<figure>
+  <img src="images/extrusions/curves.png" alt="Splines, a vertical loop and a trefoil knot">
+  <figcaption>From <code>tests/extrusions_curves.py</code>. A Catmull-Rom
+  sampled coarsely and finely, a B&eacute;zier, a B-spline, a loop through the
+  vertical, and a trefoil knot swept as a closed path.</figcaption>
+</figure>
+
+<p>A path given as a list of points is a decision already made -- how many, and
+where. <code>opengl_extrusions.curves</code> samples a curve to a
+<em>chord-error tolerance</em> instead, so the samples land where the curvature
+is:</p>
+
+<pre><code>from opengl_extrusions import catmull_rom
+from OpenGLContext.scenegraph.basenodes import PolyCylinder
+
+path = catmull_rom([(0, 0, 0), (2, 1, 0), (4, 0, 1)], tolerance=1e-3)
+rail = PolyCylinder(path=path, radius=0.1, frames='rmf')</code></pre>
+
+<h3><code>frames</code>: <code>'up'</code> or <code>'rmf'</code></h3>
+
+<p><code>'up'</code> keeps the contour aligned to one fixed direction. Simple
+and predictable, and what a road or a railing wants. Where the path runs
+<em>parallel</em> to that direction there is nothing left to align to, and the
+node reports it rather than producing a frame that spins.</p>
+
+<p><code>'rmf'</code> carries each frame from the one before it by the smallest
+rotation that turns the old direction onto the new one. No reference direction
+means no direction that breaks it, so this is the one for a cable, a knot, a
+loop, or any path that might point anywhere. It is the default for
+<code>PolyCylinder</code> and <code>PolyCone</code>.</p>
+</section>
+
+<section>
+<h2>VRML97's Extrusion</h2>
+
+<figure>
+  <img src="images/extrusions/vrml97.png" alt="Six VRML97 extrusions">
+  <figcaption>From <code>tests/extrusions_vrml97.py</code>. Scale along the
+  spine, a taper, an orientation turning as it travels, a curved spine, a tube
+  with no caps, and a closed spine.</figcaption>
+</figure>
+
+<p>The node's own fields, to ISO/IEC 14772-1:1997 clause 6.23:
+<code>crossSection</code>, <code>spine</code>, <code>scale</code>,
+<code>orientation</code>, <code>beginCap</code>, <code>endCap</code>,
+<code>ccw</code>, <code>convex</code> and <code>creaseAngle</code>.</p>
+
+<p>The cross-section is read in the <strong>x-z</strong> plane, as the
+specification writes it, and is oriented at each spine point by that
+specification's Spine-aligned Cross-section Plane -- axes taken from the
+spine's own neighbours rather than from any reference direction. A
+<code>crossSection</code> or <code>spine</code> whose last point repeats its
+first is <em>closed</em>: the surface has no seam there, and a closed spine has
+no ends to cap.</p>
+</section>
+
+<section>
+<h2>Texture coordinates</h2>
+
+<figure>
+  <img src="images/extrusions/fig_texture_parameter.png"
+       alt="A checkerboard on six different sweeps">
+  <figcaption>The same checkerboard on six sweeps, from
+  <code>tests/extrusions_gallery.py texture_parameter</code>. Where the squares
+  stretch is where the mapping stretches.</figcaption>
+</figure>
+
+<p>Two families. <code>'normalized'</code> and <code>'arc_length'</code> describe
+the sweep's own parameterisation -- around the contour and along the path, in
+0..1 or in model units. Beside them are the twelve <em>generated</em> modes the
+GLE tubing library offers, named
+<code>vertex</code>/<code>normal</code>, optionally <code>model</code>, then
+<code>flat</code>/<code>cyl</code>/<code>sph</code>:</p>
+
+<figure>
+  <img src="images/extrusions/fig_texture_modes.png"
+       alt="Twelve texture modes on one tube">
+  <figcaption>All twelve on one tube. Two come out plain --
+  <code>normal_sph</code> and <code>normal_model_sph</code> give a constant v on
+  a straight tube, whose normals all lie in the contour plane.</figcaption>
+</figure>
+
+<figure>
+  <img src="images/extrusions/fig_texture_caps.png" alt="Textured end caps">
+  <figcaption>End caps are mapped from the outline's own bounding box, so a
+  texture lies flat across the face whatever its shape -- including one with a
+  hole, and refined ones.</figcaption>
+</figure>
+</section>
+
+<section>
+<h2>Tessellation</h2>
+
+<figure>
+  <img src="images/extrusions/tessellation.png"
+       alt="Six tessellated faces with their triangle edges drawn">
+  <figcaption>From <code>tests/extrusions_tessellation.py</code>; the white
+  lines are the triangle edges. Top: a letter O (two rings, one a hole), a
+  pentagram by the odd rule (the doubly-wound middle comes out empty), the same
+  by the nonzero rule. Bottom: a rounded square plain, the same refined to a
+  maximum triangle area, and a star refined to a minimum angle.</figcaption>
+</figure>
+
+<figure>
+  <img src="images/extrusions/fig_preprocessing.png"
+       alt="Six awkward outlines and what preprocessing makes of them">
+  <figcaption>From <code>tests/extrusions_preprocessing.py</code>: an outline
+  crossing itself, two rings crossing, a T-junction, two shapes sharing an edge,
+  near-duplicate vertices, and a ring closed by a repeated point.</figcaption>
+</figure>
+
+<p>End caps are tessellated, which is why an extrusion of a contour with holes
+gets a cap with the holes in it. The tessellator is a public API in its own
+right -- a <strong>constrained Delaunay triangulation</strong> with exact-sign
+predicates, which copes with outlines that cross themselves, holes, coincident
+vertices and T-junctions:</p>
+
+<pre><code>from opengl_extrusions import tessellate
+
+result = tessellate([outer_ring, hole_ring], winding='odd', min_angle=30.0)
+result.points        # (V, 2)
+result.triangles     # (T, 3), counter-clockwise</code></pre>
+
+<p>Which parts come out solid is decided by a winding rule: <code>odd</code>
+(the default, under which nested rings alternate), <code>nonzero</code>,
+<code>positive</code>, <code>negative</code> or <code>abs_geq_two</code>.
+<code>min_angle</code> and <code>max_area</code> refine the mesh; an angle
+target spends triangles only where the outline forces thin ones, while an area
+target subdivides evenly throughout.</p>
+</section>
+
+<section>
+<h2>Generated geometry into the scenegraph</h2>
+
+<p>Any mesh with glTF-named vertex arrays becomes scenegraph nodes with no file
+and no parsing in between, through
+<code>OpenGLContext.scenegraph.frommesh</code>:</p>
+
+<pre><code>from opengl_extrusions import extrude, circle
+from OpenGLContext.scenegraph.frommesh import shape_from_mesh
+
+pipe = extrude(circle(0.1, 16), [(0, 0, 0), (0, 1, 0), (1, 2, 0)])
+scene.children.append(shape_from_mesh(pipe, appearance=steel))</code></pre>
+
+<p><strong>This is the form the glTF loader already produces.</strong> A
+generated primitive is not merely glTF-<em>shaped</em>: it is the same
+arrangement of arrays <code>PBRMesh</code> holds, which is the node
+<code>loaders/gltf</code> builds for every primitive of every <code>.glb</code>
+the engine reads. Attribute names, component types, index type and memory layout
+all line up, so generated geometry and loaded geometry arrive at the render pass
+indistinguishable from one another -- and shadow, instance, pick and sort by the
+same code.</p>
+
+<p><strong>Nothing is copied at the boundary.</strong> <code>PBRMesh</code>
+normalises attributes with <code>asarray(..., float32)</code> and
+<code>ascontiguousarray</code>, and indices with
+<code>asarray(..., uint32)</code>, every one of which is a no-op on an array that
+already holds that dtype and layout -- which is what these generators commit to
+producing. The array the generator filled is the array the VBO uploads.</p>
+
+<p>The reading is structural, so this is not limited to one library: anything
+exposing <code>attributes</code> and <code>indices</code> works, whether it came
+from a procedural tool, an editor, or a script of your own.</p>
+</section>
+
+<section>
+<h2>Demonstrations</h2>
+<ul>
+  <li><code>tests/extrusions_shapes.py</code> -- every swept node side by side</li>
+  <li><code>tests/extrusions_joins.py</code> -- the four join styles, and the miter limit</li>
+  <li><code>tests/extrusions_curves.py</code> -- splines, adaptive sampling, closed loops</li>
+  <li><code>tests/extrusions_vrml97.py</code> -- the VRML97 node's fields</li>
+  <li><code>tests/extrusions_normals.py</code> -- the three shading modes on two subjects</li>
+  <li><code>tests/extrusions_tessellation.py</code> -- tessellated faces with their triangles drawn</li>
+  <li><code>tests/extrusions_gallery.py</code> -- one figure per parameter, which
+    is what the figures above are captured from. Run
+    <code>python tests/extrusions_gallery.py --list</code> for the set, then
+    name one to see it.</li>
+</ul>
+</section>
+
+<footer>
+  <p><a href="documentation.html">Back to the documentation index</a></p>
+</footer>
+</body></html>

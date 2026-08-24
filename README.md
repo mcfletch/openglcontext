@@ -161,6 +161,12 @@ needs changing. Everything else here is additive.
 - **Spatial audio** — VRML97's `Sound` and `AudioClip` play, alongside glTF's
   `KHR_audio_emitter`, through the `omi_audio` package. `docs/audio.html`.
 
+- **Swept geometry** — `Lathe`, `Spiral`, `Screw`, `PolyCylinder`, `PolyCone` and
+  VRML97's `Extrusion` generate their vertex arrays with the `opengl_extrusions`
+  package, which also provides the constrained Delaunay tessellator that fills
+  their end caps. The result is an indexed triangle mesh, so these draw in a core
+  profile like any other geometry. `docs/extrusions.html`.
+
 - **Particle systems**, **fog**, and a **HUD/debug overlay** with frame timing and
   loop instrumentation. `docs/particles.html`, `docs/hud.html`.
 

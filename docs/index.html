@@ -15,109 +15,175 @@
           <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
         </ul>
       </nav>
-      <h1>OpenGLContext <span class="subheading">A Learning Environment for
+      <h1>OpenGLContext <span class="subheading">A 3D Engine for Python, on
           PyOpenGL</span></h1>
     </header>
     <section id="introduction">
       <h2>Introduction</h2>
-      <p class="introduction">OpenGLContext is a testing and learning
-        environment for <a href="https://github.com/mcfletch/pyopengl">PyOpenGL</a>.
-        It provides a generic scenegraph engine (based on VRML97's scenegraph model) as
-        well as basic context creation and interaction support in multiple GUI
-        environments. Recent work adds a modern OpenGL 3.3 core-profile renderer,
-        a physically based rendering (PBR) pass, and a glTF&nbsp;2.0 loader and
-        viewer.</p>
-      <h2>Quick Links</h2>
-      <ul>
-        <li><a href="documentation.html">Documentation</a></li>
-        <li><a href="documentation.html#installation">Installation</a></li>
-         <li>Related projects on GitHub</li>
-        <ul>
-          <li><a href="https://github.com/mcfletch/openglcontext">OpenGLContext</a></li>
-          <li><a href="https://github.com/mcfletch/pyvrml97">PyVRML97</a></li>
-          <li><a href="https://github.com/mcfletch/ttfquery">TTFQuery</a></li>
-          <li><a href="https://github.com/mcfletch/simpleparse">SimpleParse</a></li>
-          <li><a href="https://github.com/mcfletch/pydispatcher">PyDispatcher</a></li>
-        </ul>
-      </ul>
-      <div class="clear-both"><br /></div>
+      <p class="introduction">OpenGLContext is a 3D engine written in Python on
+        top of <a href="https://github.com/mcfletch/pyopengl">PyOpenGL</a>. It
+        opens a window on any of five GUI toolkits, loads glTF&nbsp;2.0, VRML97,
+        OBJ and 3D&nbsp;Tiles content into a scenegraph, and draws it with a
+        physically based OpenGL&nbsp;3.3 core-profile renderer &mdash; with
+        physics, spatial audio, an overlay UI and a movement model beside it, so
+        that an application is the world you author rather than the plumbing
+        under it. It is also the environment PyOpenGL itself is exercised and
+        taught in: the
+        <a href="tutorials/index.html">tutorials</a> and the
+        <a href="documentation.html">sample code</a> are a way into OpenGL for
+        people who have not written any.</p>
+      <p>Install it, then open a model and walk around it:</p>
+      <pre>pip install "OpenGLContext[glfw]"
+oglc-view model.glb</pre>
+      <p>The <a href="documentation.html#installation">installation notes</a>
+        cover the optional extras &mdash; other backends, Draco-compressed glTF,
+        audio playback and video recording &mdash; and the
+        <a href="viewer.html">viewer</a> page covers what
+        <code>oglc-view</code> can open.</p>
     </section>
-    <section>
+    <section id="features">
       <h2>Features</h2>
       <ul>
-        <li>Works on Multiple GUI Environments with Keyboard, Mouse and GUI
-          events</li>
-        <ul>
-          <li>GLFW (recommended for core-profile / PBR rendering)</li>
-          <li>GLUT</li>
-          <li>Pygame</li>
-          <li>wxPython</li>
-          <li>Qt (using the optional <a href="https://github.com/mcfletch/openglcontext-qt">OpenGLContext-qt</a> project)</li>
-        </ul>
-        <li>Provides Basic Interactivity</li>
-        <ul>
-          <li>3D Flying Mode</li>
-          <li>Examine Mode</li>
-          <li>Walking Mode (Physics Based)</li>
-          <li>FPS Mode (Physics Based with Mouse Look)</li>
-          <li>Selection rendering based on unique-color buffers</li>
-          <li>Timer mechanisms and simple event handling</li>
-        </ul>
-        <li>Geometry Types</li>
-        <ul>
-          <li>Points (and Point-sprites)</li>
-          <li>Lines</li>
-          <li>Polygons</li>
-          <li>Trimmed NURBs</li>
-          <li>Extruded Shapes, Lathes, Screws and Spirals (with GLE)</li>
-          <li>Boxes, Spheres, Cylinders, Cones, Nurbs Teapot</li>
-          <li><a href="text.html">Text</a> &mdash; TrueType, as a screen-space
-            texture atlas, 3-D polygonal solids, or 3-D outlines</li>
-          <li><a href="gltf.html">glTF meshes</a> &mdash; skinned, morph-target
-            and vertex-deformed, with <a href="pbr.html">PBR materials</a></li>
-          <li><a href="terrain.html">Terrain</a> &mdash; splat-textured height
-            fields, and streamed 3D&nbsp;Tiles datasets</li>
-          <li><a href="terrain.html#vegetation">Vegetation</a> &mdash; instanced
-            billboards, grass clumps and near-mesh LOD</li>
-        </ul>
-        <li>Textures (with Pillow), Materials, and
-          <a href="pbr.html">physically based (PBR) materials</a></li>
-        <li>Rendering</li>
-        <ul>
-          <li>Legacy fixed-function pipeline (compatibility profile)</li>
-          <li><a href="flat.html">Modern shader pipeline</a>
-            (OpenGL&nbsp;3.3 core profile)</li>
-          <li>Image-based lighting and dynamic shadows</li>
-          <li>Shader scenegraph nodes</li>
-          <li><a href="particles.html">Particle effects</a> &mdash; fire, smoke,
-            sparks and explosions in one instanced draw</li>
-        </ul>
-        <li><a href="audio.html">Spatial audio</a> &mdash; sound placed in the
-          scene on glTF's <code>KHR_audio_emitter</code> model, mixed in numpy
-          by the standalone <code>omi_audio</code> engine</li>
-        <li><a href="hud.html">HUD &amp; developer overlay</a> &mdash; reticule,
-          meters and messages over a live world, and a provider-fed overlay of
-          everything a player should never see</li>
-        <li>Optimizations</li>
-        <ul>
-          <li>Caching infrastructure</li>
-          <li>Frustum culling</li>
-          <li>CPU node-path matrix calculation (forward/backward transforms)</li>
-        </ul>
-        <li>Loaders</li>
-        <ul>
-          <li><a href="gltf.html">glTF&nbsp;2.0 / GLB loader and viewer</a></li>
-          <li>Tiles3D Loader (octree glTF terrain)</li>
-          <li>VRML97 loader (SimpleParse is a required dependency)</li>
-          <li>Wavefront OBJ loader</li>
-          <li>BSP (Quake&nbsp;III file loader/viewer, with the twig-bb project)</li>
-        </ul>
+        <li><strong>Rendering</strong>
+          <ul>
+            <li><a href="flat.html">Modern shader pipeline</a> on the
+              OpenGL&nbsp;3.3 core profile, and a fixed-function pipeline on the
+              compatibility profile</li>
+            <li><a href="pbr.html">Physically based materials</a> &mdash; a
+              metallic/roughness <a href="ubershader.html">uber-shader</a> with
+              image-based lighting</li>
+            <li><a href="shadows.html">Dynamic shadows</a> from cascaded shadow
+              maps, shared by the core lighting and PBR passes</li>
+            <li><a href="particles.html">Particle effects</a> &mdash; fire,
+              smoke, sparks and explosions in one instanced draw</li>
+            <li><a href="instancing.html">Instanced geometry</a>, frustum
+              culling and a scenegraph-wide cache, so repeated shapes cost one
+              draw call</li>
+            <li>Shader scenegraph nodes, for programs you write yourself</li>
+          </ul>
+        </li>
+        <li><strong>Geometry</strong>
+          <ul>
+            <li>Points and point sprites, lines, polygons and indexed face
+              sets</li>
+            <li>Boxes, spheres, cylinders, cones and the NURBS teapot</li>
+            <li>NURBS surfaces and curves, trimmed, tessellated to the
+              distance they are seen from</li>
+            <li><a href="extrusions.html">Extrusions, lathes, screws, spirals
+              and tubes</a> &mdash; swept as vertex arrays, so they draw in
+              either profile, and filled by a constrained Delaunay tessellator
+              that also handles any outline you hand it</li>
+            <li><a href="text.html">Text</a> &mdash; TrueType, as a screen-space
+              texture atlas, 3-D polygonal solids, or 3-D outlines</li>
+            <li><a href="gltf.html">glTF meshes</a> &mdash; skinned,
+              morph-target and vertex-deformed</li>
+            <li><a href="characters.html">Rigged characters</a> &mdash; clips
+              blended together, weapons hung on a hand, and crowds</li>
+          </ul>
+        </li>
+        <li><strong>Worlds</strong>
+          <ul>
+            <li><a href="terrain.html">Terrain</a> &mdash; splat-textured height
+              fields, and streamed 3D&nbsp;Tiles datasets with screen-space-error
+              LOD and per-tile colliders</li>
+            <li><a href="terrain.html#vegetation">Vegetation</a> &mdash;
+              instanced billboards, grass clumps and near-mesh LOD</li>
+            <li><a href="water.html">Water</a> &mdash; lakes, rivers and choppy
+              weather from one wave field, and water as a medium you are
+              inside</li>
+            <li><a href="roads.html">Roads</a> &mdash; a centreline and a
+              cross-section swept into a drivable surface</li>
+            <li><a href="baking.html">Baking</a> an authored world into a
+              streamable 3D&nbsp;Tiles octree, and
+              <a href="editing.html">building an editor</a> to author it in</li>
+          </ul>
+        </li>
+        <li><strong>Simulation</strong>
+          <ul>
+            <li><a href="physics.html">Physics and collision</a> &mdash;
+              rigid bodies on the OMI glTF model, gravity zones, triggers,
+              joints and a character controller</li>
+            <li><a href="navmesh.html">Navigation mesh</a> worked out from the
+              collision mesh, with routes pulled taut through its portals</li>
+            <li><a href="audio.html">Spatial audio</a> &mdash; sound placed in
+              the scene on glTF's <code>KHR_audio_emitter</code> model, mixed in
+              numpy</li>
+            <li>Timers, interpolators and the
+              <a href="eventmodel.html">event model</a> that carries a change
+              through the scenegraph</li>
+          </ul>
+        </li>
+        <li><strong>Interaction</strong>
+          <ul>
+            <li><a href="navigation.html">Movement modes</a> &mdash; examine,
+              fly, walk, swim and FPS mouse-look, with rebindable keys</li>
+            <li>Selection and picking, rendered through unique-colour
+              buffers</li>
+            <li><a href="overlayui.html">Overlay UI</a> &mdash; panels, a
+              generated settings screen, a key-binding editor and a console,
+              scaled to the window</li>
+            <li><a href="hud.html">HUD and debug overlay</a> &mdash; reticule,
+              meters and messages over a live world, and a debug overlay of
+              frame rate, renderer and audio, plus whatever numbers a subsystem
+              or the application registers</li>
+          </ul>
+        </li>
+        <li><strong>Loading content</strong>
+          <ul>
+            <li><a href="gltf.html">glTF&nbsp;2.0 and GLB</a>, with the
+              <a href="viewer.html">viewer</a> that opens them</li>
+            <li><a href="terrain.html#tiles3d">OGC 3D&nbsp;Tiles</a>, streamed
+              from an octree of glTF tiles</li>
+            <li><a href="vrml97.html">VRML97</a> worlds, and Wavefront OBJ
+              models</li>
+            <li>Quake&nbsp;III BSP levels and PK3 archives, through the
+              <a href="https://github.com/mcfletch/twig-bb">twig-bb</a>
+              project</li>
+            <li>Textures with Pillow, and system fonts through TTFQuery</li>
+          </ul>
+        </li>
+        <li><strong>Windowing</strong>
+          <ul>
+            <li>GLFW &mdash; recommended for core-profile and PBR rendering</li>
+            <li>GLUT, Pygame and wxPython</li>
+            <li>Qt&nbsp;6 via PySide through the separate
+              <a href="https://github.com/mcfletch/openglcontext-qt">OpenGLContext-qt</a>
+              distribution</li>
+            <li>One keyboard, mouse and window event model across all of
+              them</li>
+          </ul>
+        </li>
+        <li><strong>Shipping an application</strong>
+          <ul>
+            <li><a href="testing.html">Testing what you draw</a> &mdash; a
+              hidden GL context in the test process, pytest fixtures that hand
+              one over, and pixel comparison against a baseline</li>
+            <li><a href="telemetry.html">Session telemetry</a> &mdash; a whole
+              session recorded to one file, read back or replayed</li>
+            <li><a href="recording.html">Video recording</a> &mdash; the frames
+              a context draws to H.264, on the GPU's own encoder, which today is
+              an NVIDIA card on Linux</li>
+            <li><a href="packaging.html">Packaging</a> &mdash; a PyInstaller
+              bundle, which the engine ships the hooks for, or a Debian package
+              carrying its own interpreter</li>
+            <li><a href="overlayui.html#settings">Settings</a> &mdash; a
+              renderer option is a field on the context definition, so it has
+              an <a href="environment.html">environment variable</a> for its
+              default, a control on a generated in-game settings screen, and a
+              value the application can store and restore</li>
+          </ul>
+        </li>
       </ul>
-      See the <a href="documentation.html">documentation</a> page for more
-      details. </section>
+    </section>
     <footer>
       <p class="footer">
         <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; built on
+        <a href="https://github.com/mcfletch/pyopengl">PyOpenGL</a>,
+        <a href="https://github.com/mcfletch/pyvrml97">PyVRML97</a>,
+        <a href="https://github.com/mcfletch/ttfquery">TTFQuery</a>,
+        <a href="https://github.com/mcfletch/simpleparse">SimpleParse</a> and
+        <a href="https://github.com/mcfletch/pydispatcher">PyDispatcher</a>
         &middot; BSD-licensed open source
       </p>
     </footer>

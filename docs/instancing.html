@@ -316,13 +316,16 @@ rockets.place(placement_matrices(translations=positions,
   <p>Some geometry is deliberately <em>left out</em>, because instancing it would cost
     more than it saves:</p>
   <ul>
-    <li><strong>NURBS surfaces and the GLE extrusions (Lathe/Screw/Spiral).</strong>
+    <li><strong>NURBS surfaces and the swept geometry (Lathe/Spiral/Screw and the
+      tubes).</strong>
       These are <em>procedural</em> surfaces with <em>distance level-of-detail</em>: far
       or small copies are normally tessellated coarsely and cheaply. An instanced draw is
       forced to share <em>one</em> fixed tessellation across every copy, which throws that
       saving away &mdash; a field of surfaces would pay full, close-up detail at every
-      distance. So they render per-shape, keeping their LOD. (Extrusions additionally have
-      no reusable vertex arrays at all &mdash; they draw straight through the GLE C library.)
+      distance. So they render per-shape, keeping their LOD. (The swept nodes do now hold
+      reusable vertex arrays, so instancing them is a question of whether the LOD is worth
+      more than the draw-call collapse rather than of whether it is possible &mdash; see
+      <a href="extrusions.html">swept geometry</a>.)
       The <strong>Teapot</strong> makes the opposite trade: it <em>does</em> instance
       (baking the finest tessellation), giving up its distance-LOD in exchange for the
       draw-call collapse when many same-material teapots share the screen.</li>

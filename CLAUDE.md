@@ -72,6 +72,8 @@ OpenGLContext/
 ├── scenegraph/       # VRML97-style nodes
 │   ├── basenodes.py  # Every registered node class, by name
 │   ├── shape.py      # Binds Appearance to geometry
+│   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.html
+│   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── pbrmaterial.py, pbrmesh.py   # The metallic/roughness material and mesh
 │   ├── road*.py      # Roads, roadworks, signs -- docs/roads.html
 │   ├── water/        # Wave field, surface, medium -- docs/water.html

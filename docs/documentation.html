@@ -178,6 +178,13 @@ uv pip install -e ".[glfw,gltf]"</pre>
             PyInstaller, which the engine's own hooks make work, and building a
             Debian package that carries its own interpreter under
             <code>/opt</code> with <code>oglc-deb</code></li>
+          <li><a href="extrusions.html">Swept Geometry &amp; Tessellation</a> --
+            Lathes, spirals, screws, tubes and VRML97's <code>Extrusion</code>,
+            generated as vertex arrays and drawn in a core profile: join styles
+            and miter limits, spline paths sampled to a curvature tolerance,
+            rotation-minimizing frames, closed loops, and the constrained
+            Delaunay tessellator that fills their caps and any other outline you
+            hand it</li>
           <li><a href="particles.html">Particle Effects</a> -- Fire, smoke,
             sparks, explosions and trails as camera-facing quads in one
             instanced draw: a numpy pool with a packed live set, emitters as
@@ -357,8 +364,9 @@ uv pip install -e ".[glfw,gltf]"</pre>
             <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/teapot.py">GLUT
                 Teapot</a></li>
             <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/gear.py">Gear</a></li>
-            <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/extrusions.py">Extrusions</a>
-              GLE-based tubing and extrusion</li>
+            <li><a href="extrusions.html">Swept geometry</a> &mdash; lathes,
+              spirals, screws, tubes and VRML97's <code>Extrusion</code>,
+              generated as vertex arrays</li>
           </ul>
           <li>Text</li>
           <ul>
