@@ -32,8 +32,6 @@ The parts are useful separately, and each is worth reaching for on its own:
     Where to put a camera to see a thing -- pure arithmetic, no GL.
 :mod:`~OpenGLContext.viewer.environment`
     The sky, and the skybox that matches what the model's metals reflect.
-:mod:`~OpenGLContext.viewer.overlay`
-    A caption over the frame, and a key that saves a PNG.
 :mod:`~OpenGLContext.viewer.capture`
     Render one settled frame to a file and quit.
 

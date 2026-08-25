@@ -42,17 +42,17 @@ draw, and the same run records the same way twice.</p>
 <section id="recording">
   <h2>Recording from a context</h2>
   <p><code>RecordingMixin</code> gives a context the mode. Set the recording up,
-    tick it from <code>SwapBuffers</code>, and it closes the file when it has run
-    its length:</p>
+    tick it from <a href="structure.html#present"><code>presentFrame</code></a>,
+    and it closes the file when it has run its length:</p>
   <pre>from OpenGLContext.video.recorder import RecordingMixin
 
 class MyContext(RecordingMixin, BaseContext):
     def OnInit(self):
         self.setupRecording('run.mp4', fps=60, seconds=20)
 
-    def SwapBuffers(self):
+    def presentFrame(self):
         self.tickRecording()          # before the swap
-        return super().SwapBuffers()</pre>
+        return super().presentFrame()</pre>
   <p><strong>Tick it before the swap.</strong> The back buffer holds the frame
     just drawn only until it is swapped away, which is the same rule the
     <a href="#stills">still capture</a> follows.</p>
@@ -62,7 +62,7 @@ class MyContext(RecordingMixin, BaseContext):
 
 recorder = VideoRecorder('run.mp4', fps=60, seconds=20)
 ...
-recorder.capture()          # in SwapBuffers, before the swap
+recorder.capture()          # in presentFrame, before the swap
 ...
 recorder.close()</pre>
   <p><code>capture()</code> answers whether it kept the frame, and
@@ -112,13 +112,13 @@ class RecordedContext(RecordingMixin, BaseContext):
         # 90 frames at 30 fps: three seconds of video, and the run ends there
         self.setupRecording('run.mp4', fps=30, frames=90)
 
-    def SwapBuffers(self):
+    def presentFrame(self):
         try:
             self.tickRecording()            # before the swap
         except RecordingUnavailable as error:
             self.recorder = None            # nothing here can encode
             print('not recording: %s' % (error,))
-        return super().SwapBuffers()
+        return super().presentFrame()
 
     def OnIdle(self, event=None):
         self.triggerRedraw(1)               # a recording wants every frame

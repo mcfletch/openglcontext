@@ -351,6 +351,21 @@ def _color_select_render(pass_obj, mode, toRender, events, *,
         glDisable(GL_SCISSOR_TEST)
 
 
+def presentFrame( context ):
+    """Hand the finished frame to ``context`` to put on the screen.
+
+    Not ``SwapBuffers``: presenting the frame is the context's own step, and it
+    is the last moment the frame can be read -- the screenshot key and the
+    capture machinery both read it there.  See
+    :meth:`OpenGLContext.context.Context.presentFrame`.  A context that predates
+    that method, or that is not one of ours, is simply swapped.
+    """
+    present = getattr( context, 'presentFrame', None )
+    if present is not None:
+        return present()
+    return context.SwapBuffers()
+
+
 class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
@@ -1337,7 +1352,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             if overlay is not None:
                 overlay(self)
 
-        context.SwapBuffers()
+        presentFrame( context )
         self.matrix = matrix
         self.shader_mode = False  # Reset after render
 

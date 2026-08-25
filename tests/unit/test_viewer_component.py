@@ -185,7 +185,7 @@ class TestTheMixinsComposeCleanly:
 
     #: Names the viewing component deliberately overrides, and why.
     DELIBERATE = {
-        'OnInit', 'OnIdle', 'OnShutdown', 'SwapBuffers',      # the frame
+        'OnInit', 'OnIdle', 'OnShutdown', 'presentFrame',    # the frame
         'setupCallbacks',
         'getNavigationPlatform',        # walking drives the avatar, not the camera
         'onPhysicsModeChanged',         # the caption names the mode in force
@@ -203,12 +203,11 @@ class TestTheMixinsComposeCleanly:
         from OpenGLContext.viewer.capture import SettleCaptureMixin
         from OpenGLContext.viewer.sceneviewer import _Base
         from OpenGLContext.viewer.caption import CaptionMixin
-        from OpenGLContext.viewer.overlay import ScreenshotMixin
 
         inherited = set()
         for klass in _Base.__mro__:
             inherited |= self._declared(klass)
-        for mixin in (AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
+        for mixin in (AsyncSceneMixin, CaptionMixin,
                       SettleCaptureMixin, SceneViewerMixin):
             clashes = self._declared(mixin) & inherited - self.DELIBERATE
             assert not clashes, '%s shadows %s' % (mixin.__name__, sorted(clashes))

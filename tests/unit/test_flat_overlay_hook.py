@@ -38,10 +38,10 @@ class TestTheOverlayHook:
         assert _render_of(module).count('renderShaderOverlay') == 1, name
 
     @PASSES
-    def test_it_happens_before_the_buffers_are_swapped(self, module, name):
+    def test_it_happens_before_the_frame_is_presented(self, module, name):
         """Drawn after the swap is drawn into the frame nobody sees."""
         source = _render_of(module)
-        assert source.index('renderShaderOverlay') < source.index('SwapBuffers'), name
+        assert source.index('renderShaderOverlay') < source.index('presentFrame'), name
 
     def test_the_core_pass_asks_outside_its_shader_branch(self):
         """Inside it, the legacy path silently draws no screen at all."""

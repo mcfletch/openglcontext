@@ -6,9 +6,8 @@ regression harness, and several test capture runners). They all did the same thi
 ``glReadBuffer(GL_BACK)`` + ``glReadPixels`` + a vertical flip (OpenGL is bottom-up)
 + a Pillow save. This module is the single home for that logic.
 
-Capturing the back buffer inside a ``SwapBuffers`` override (before the swap) is the
-reliable path in the dev-container: reading the buffer *after* the swap returns stale
-data there.
+Capture the back buffer from :meth:`OpenGLContext.context.Context.presentFrame`,
+before the swap: reading it *after* the swap returns an older frame.
 """
 import logging
 import os
@@ -90,7 +89,7 @@ class SettleCapture:
     """Capture once the scene has settled, then signal the caller to exit.
 
     Some renderers (e.g. the analytic-sky IBL) take several frames to converge, so a
-    single-frame capture reads wrong. A caller drives this from its ``SwapBuffers``:
+    single-frame capture reads wrong. A caller drives this from its ``presentFrame``:
     it calls :meth:`tick` every frame and, once both the wall-clock delay and the
     minimum frame count are satisfied, ``tick`` captures to ``path`` and returns True
     so the caller can quit. ``delay`` is a floor on time, ``min_frames`` a floor on

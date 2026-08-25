@@ -10,18 +10,16 @@ So a default binding for a key combination is held to being a ``keyboard``
 key-down here, by name.
 """
 
-import os
-import sys
-
 import pytest
 
 from OpenGLContext.context import Context
 from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
 from OpenGLContext.events.keyboardevents import KeyboardEvent, KeypressEvent
 from OpenGLContext.interactivecontext import InteractiveContext
+from OpenGLContext.screenshot import ScreenshotMixin
 
 
-class Recorder:
+class Recorder(ScreenshotMixin):
     """Stands in for a context: records what would have been bound.
 
     The handlers are looked up as bound methods of the context, so this
@@ -33,7 +31,6 @@ class Recorder:
     OnQuit = Context.OnQuit
     OnFrameRate = Context.OnFrameRate
     OnNextViewpoint = Context.OnNextViewpoint
-    OnSaveImage = Context.OnSaveImage
 
     def __init__(self):
         self.bound = []
@@ -48,6 +45,9 @@ class Recorder:
 
     def find(self, name):
         return [entry for entry in self.bound if entry['name'] == name]
+
+    def triggerRedraw(self, force=0):
+        pass
 
 
 @pytest.fixture
@@ -86,7 +86,9 @@ class TestTheOtherDefaults:
         assert bindings.find('<escape>')
 
     def test_a_screenshot_is_bound(self, bindings):
+        """Alt+S and F2 both ask for one; where it goes is test_screenshot.py."""
         assert bindings.find('s')
+        assert bindings.find('<F2>')
 
     def test_nothing_is_bound_on_a_character_that_needs_a_modifier(self,
                                                                    bindings):
@@ -98,7 +100,7 @@ class TestTheOtherDefaults:
                     % (entry['name'],))
 
 
-class Probe(EventHandlerMixin):
+class Probe(ScreenshotMixin, EventHandlerMixin):
     """The same defaults, registered on real event managers and dispatched into.
 
     The registration tests above pin the *shape* of the binding; this pins the
@@ -113,7 +115,6 @@ class Probe(EventHandlerMixin):
     OnEscape = Context.OnEscape
     OnQuit = Context.OnQuit
     OnNextViewpoint = Context.OnNextViewpoint
-    OnSaveImage = Context.OnSaveImage
     OnFrameRate = Context.OnFrameRate
 
     def __init__(self):
@@ -124,6 +125,9 @@ class Probe(EventHandlerMixin):
     def toggleDebugOverlay(self, event=None):
         self.toggled += 1
         return True
+
+    def triggerRedraw(self, force=0):
+        pass
 
     def fire(self, kind, name, modifiers, state=1):
         event = KeyboardEvent() if kind == 'keyboard' else KeypressEvent()
@@ -164,90 +168,3 @@ class TestPressingIt:
         probe.fire('keyboard', 'f', (0, 0, 1))
         probe.fire('keypress', 'f', (0, 0, 1))
         assert probe.toggled == 1
-
-
-class TestWhereAScreenshotGoes:
-    """Alt+S must write where the user is, not where the program was installed.
-
-    The name came from ``sys.argv[0]``, which for a console script is the full
-    path to the launcher -- so a screenshot landed in the virtualenv's ``bin``
-    directory beside the executable, and on a system install it failed outright.
-    The working directory is the only place the person pressing the key can be
-    assumed to have meant.
-    """
-
-    @pytest.fixture
-    def saver(self, monkeypatch, tmp_path):
-        """A context whose OnSaveImage writes nothing but records the path."""
-        import numpy as np
-        from OpenGLContext import capture
-
-        written = []
-        monkeypatch.setattr(capture, 'ensure_pillow', lambda: True)
-        monkeypatch.setattr(capture, 'read_back_buffer',
-                            lambda *a, **k: (np.zeros((4, 4, 3), 'B'), 4, 4))
-        monkeypatch.setattr(capture, 'save_png',
-                            lambda path, pixels: written.append(path) or True)
-        monkeypatch.chdir(tmp_path)
-
-        class Saver:
-            OnSaveImage = Context.OnSaveImage
-            _screenshotName = Context._screenshotName
-            APPLICATION_NAME = 'OpenGLContext'
-
-            def getViewPort(self):
-                return (640, 480)
-
-            def getApplicationName(self):
-                return self.APPLICATION_NAME
-
-        saver = Saver()
-        saver.written = written
-        return saver
-
-    def test_it_writes_into_the_working_directory(self, saver, tmp_path,
-                                                  monkeypatch):
-        monkeypatch.setattr(sys, 'argv', ['/opt/venv/bin/oglc-gltf'])
-        saver.OnSaveImage()
-        assert os.path.dirname(saver.written[0]) == str(tmp_path)
-
-    def test_it_does_not_write_beside_the_launcher(self, saver, monkeypatch):
-        monkeypatch.setattr(sys, 'argv', ['/opt/venv/bin/oglc-gltf'])
-        saver.OnSaveImage()
-        assert '/opt/venv/bin' not in saver.written[0]
-
-    def test_the_name_still_says_which_program_took_it(self, saver,
-                                                       monkeypatch):
-        monkeypatch.setattr(sys, 'argv', ['/opt/venv/bin/oglc-gltf'])
-        saver.OnSaveImage()
-        assert 'oglc-gltf' in os.path.basename(saver.written[0])
-
-    def test_a_module_run_is_named_for_the_module(self, saver, monkeypatch):
-        monkeypatch.setattr(sys, 'argv', ['/src/twig_bb/viewer.py'])
-        saver.OnSaveImage()
-        assert 'viewer' in os.path.basename(saver.written[0])
-        assert '.py' not in os.path.basename(saver.written[0])
-
-    def test_an_unusable_argv_falls_back_to_the_application_name(self, saver,
-                                                                 monkeypatch):
-        """``python -c`` reports ``-c``, which is not a filename."""
-        monkeypatch.setattr(sys, 'argv', ['-c'])
-        saver.OnSaveImage()
-        assert os.path.basename(saver.written[0]).startswith('OpenGLContext')
-
-    def test_it_does_not_overwrite_an_earlier_shot(self, saver, tmp_path,
-                                                   monkeypatch):
-        monkeypatch.setattr(sys, 'argv', ['/opt/venv/bin/oglc-gltf'])
-        saver.OnSaveImage()
-        first = saver.written[0]
-        open(first, 'wb').close()
-        saver.OnSaveImage()
-        assert saver.written[1] != first
-
-    def test_a_caller_naming_its_own_file_is_obeyed(self, saver, tmp_path,
-                                                    monkeypatch):
-        """The regression harness passes a template; it must keep working."""
-        monkeypatch.setattr(sys, 'argv', ['/opt/venv/bin/oglc-gltf'])
-        target = str(tmp_path / 'reference-%(count)04i.png')
-        saver.OnSaveImage(template=target, overwrite=True)
-        assert saver.written[0] == str(tmp_path / 'reference-0001.png')

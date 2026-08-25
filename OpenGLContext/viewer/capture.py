@@ -48,8 +48,8 @@ class SettleCaptureMixin(object):
     def tickCapture(self) -> bool:
         """Offer the finished frame to the capture.  Returns whether it took it.
 
-        Call from ``SwapBuffers`` **before** the swap, for the same reason as a
-        screenshot: the back buffer is only the frame just drawn until it is
+        Call from ``presentFrame`` **before** the swap, for the same reason as
+        a screenshot: the back buffer is only the frame just drawn until it is
         swapped away.
         """
         if self.settleCapture is None:
