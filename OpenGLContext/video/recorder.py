@@ -9,9 +9,9 @@ so nothing but the compressed result crosses the bus.
 
     recorder = VideoRecorder('run.mp4', fps=60, seconds=20)
     ...
-    def SwapBuffers(self):
+    def presentFrame(self):
         recorder.capture()          # before the swap: the back buffer is the frame
-        return super().SwapBuffers()
+        return super().presentFrame()
     ...
     recorder.close()
 
@@ -189,8 +189,8 @@ class VideoRecorder:
     def capture(self) -> bool:
         """Record the frame in the back buffer. Returns whether it took it.
 
-        Call from ``SwapBuffers`` **before** the swap: the back buffer holds the
-        frame just drawn only until it is swapped away.
+        Call from ``presentFrame`` **before** the swap: the back buffer holds
+        the frame just drawn only until it is swapped away.
 
         A False answer means this frame was not kept, which happens both while
         the recording is waiting for :attr:`start_after` to pass and once it has
@@ -287,7 +287,7 @@ class RecordingMixin(object):
     """Gives a context a record-to-video mode.
 
     Mirrors :class:`~OpenGLContext.viewer.capture.SettleCaptureMixin`: set the
-    recording up once, tick it from ``SwapBuffers``, and the mixin closes the
+    recording up once, tick it from ``presentFrame``, and the mixin closes the
     file when the recording has run its length.
     """
 
@@ -309,7 +309,7 @@ class RecordingMixin(object):
     def tickRecording(self) -> bool:
         """Offer the finished frame to the recording; True while it wants more.
 
-        Call from ``SwapBuffers`` before the swap.
+        Call from ``presentFrame`` before the swap.
         """
         if self.recorder is None:
             return False

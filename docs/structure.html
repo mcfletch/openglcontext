@@ -318,7 +318,9 @@ deliberate order, and <code>Context.__init__</code> runs them that way:</p>
 <ol>
   <li><code>setupDefaultEventCallbacks</code> &mdash; what a key does when
       nobody has said otherwise: Escape, the arrow-key navigation,
-      right-drag to examine, PageDown to cycle viewpoints.</li>
+      right-drag to examine, PageDown to cycle viewpoints,
+      <code>Alt+F</code> for the developer overlay, and
+      <a href="#screenshots">F2 or Alt+S</a> for a screenshot.</li>
   <li><code>setupCallbacks</code> &mdash; what a key does in <em>this</em>
       context. It lands on top, so an application that wants a key the
       framework also binds simply binds it.</li>
@@ -331,6 +333,49 @@ not an error &mdash; it registers, and the key silently never fires.</p>
 the callback alive; a bound method of a live object is the normal choice, and one
 with no other reference is collected the moment the registration returns, leaving
 the key silently dead.</p>
+
+<h3 id="present">Presenting a frame, and reading it</h3>
+<p>A render pass finishes a frame by calling
+<code>Context.presentFrame</code>, which is the last moment that frame can be
+read: <code>SwapBuffers</code> hands the back buffer to the driver, which
+recycles it, so a read afterwards returns an older frame. Anything that has to
+see what the viewer saw &mdash; a screenshot, a
+<a href="testing.html">still capture</a>, a
+<a href="recording.html">recording</a> &mdash; reads it from there.</p>
+<pre>def presentFrame(self):
+    self.tickRecording()              # before the swap: this is the frame
+    return super().presentFrame()</pre>
+<p><code>SwapBuffers</code> is one thing: the method each GUI backend
+implements to put the buffer up. Override <code>presentFrame</code> for work
+that belongs to the frame, and <code>SwapBuffers</code> only when writing a
+backend.</p>
+
+<h3 id="screenshots">The screenshot key</h3>
+<p>Every context binds <code>F2</code> (and <code>Alt+S</code>) to
+<code>requestScreenshot</code> without being asked, so a program built on
+OpenGLContext has a screenshot key with no configuration. The key <em>asks</em>:
+it raises a flag and requests a redraw, and the picture is taken from
+<code>presentFrame</code>, for the reason above. The redraw is what makes the key
+work on a still scene, where there would otherwise be no next frame.</p>
+<p>The file goes to the user&rsquo;s picture folder &mdash; <code>~/Pictures</code>
+or whatever the desktop, the Finder or the Windows shell says that is &mdash;
+named for the window title: <code>GLinting-Steel-0001.png</code>. The count rises
+to the first name nothing is using, so pressing the key twice keeps both shots.
+A machine with no home directory writes to the working directory instead.</p>
+<table>
+<tr><th>Attribute</th><th>What it does</th></tr>
+<tr><td><code>screenshotKey</code></td><td>The key to bind, <code>'&lt;F2&gt;'</code>
+    by default. <code>''</code> binds none, which is how an application keeps F2
+    for something of its own.</td></tr>
+<tr><td><code>screenshotTemplate</code></td><td>How the file is named.
+    <code>%(name)s</code> is the window title, <code>%(count)04i</code> the
+    number that rises until the name is free.</td></tr>
+<tr><td><code>screenshotDirectory()</code></td><td>Where a screenshot with no
+    path of its own is written. Override it to file them somewhere else.</td></tr>
+<tr><td><code>OnSaveImage()</code></td><td>Takes the picture now, from whatever
+    is in the back buffer. Call it from <code>presentFrame</code>, or pass
+    <code>template=</code> to write a named file.</td></tr>
+</table>
 </section>
     <footer>
       <p class="footer">

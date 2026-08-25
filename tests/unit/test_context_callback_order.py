@@ -14,6 +14,7 @@ key silently did the other thing.
 import pytest
 
 from OpenGLContext.context import Context
+from OpenGLContext.screenshot import ScreenshotMixin
 
 
 class _Bindings:
@@ -38,7 +39,7 @@ class _Bindings:
         return None
 
 
-class _Host(_Bindings):
+class _Host(ScreenshotMixin, _Bindings):
     """A context stripped to the two setup methods and the order they run in."""
 
     setupCallbacks = Context.setupCallbacks
@@ -53,7 +54,7 @@ class _Host(_Bindings):
     def OnNextViewpoint(self, event=None):
         pass
 
-    def OnSaveImage(self, event=None):
+    def triggerRedraw(self, force=0):
         pass
 
 

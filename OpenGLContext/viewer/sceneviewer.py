@@ -41,7 +41,7 @@ The pieces underneath are useful on their own and live beside this module:
 :mod:`~OpenGLContext.viewer.asyncscene` (loading without freezing),
 :mod:`~OpenGLContext.viewer.framing` (where to put the camera),
 :mod:`~OpenGLContext.viewer.environment` (sky and skybox),
-:mod:`~OpenGLContext.viewer.overlay`, :mod:`~OpenGLContext.viewer.capture`, and
+:mod:`~OpenGLContext.viewer.capture`, and
 :class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin`, which every
 interactive context has.
 
@@ -68,7 +68,6 @@ from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
 from OpenGLContext.viewer.options import ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
-from OpenGLContext.viewer.overlay import ScreenshotMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
 from OpenGLContext.viewer.source import resolve_source
 
@@ -118,7 +117,7 @@ class KeyBinding(NamedTuple):
     state: int = 0
 
 
-class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
+class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                        SettleCaptureMixin, ViewerScreensMixin):
     """Showing one scene: assembly, cameras, animation and the caption."""
 
@@ -183,7 +182,6 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
         self._player: Any = None
         self.setupAsyncScene()
         self.setupCaption()
-        self.setupScreenshots()
         self.prepareSource()
         self.setupCapture(self.options.capture, self.options.capture_delay,
                           self.options.frames)
@@ -1030,12 +1028,12 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
         shutdown = getattr(super(SceneViewerMixin, self), 'OnShutdown', None)
         return shutdown(*args, **named) if shutdown is not None else None
 
-    def SwapBuffers(self) -> Any:  # pragma: no cover - GL swap + capture
-        # These read the back buffer, which holds the frame just drawn
-        # only until it is swapped away.
+    def presentFrame(self) -> Any:  # pragma: no cover - GL swap + capture
+        # The capture reads the back buffer, which holds the frame just drawn
+        # only until it is swapped away.  Presenting is the step that owns that
+        # moment; the screenshot key is taken from it too.
         captured = self.tickCapture()
-        self.takePendingScreenshot()
-        result = super(SceneViewerMixin, self).SwapBuffers()  # type: ignore[misc]
+        result = super(SceneViewerMixin, self).presentFrame()  # type: ignore[misc]
         if captured:
             self.finishCapture()
         return result

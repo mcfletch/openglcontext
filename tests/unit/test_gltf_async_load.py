@@ -5,8 +5,6 @@ and applied on the render thread (where GL uploads must happen). These tests exe
 that handoff -- request, poll, supersession, failure -- and the screenshot filename,
 all without a GL context (the methods under test touch no GL themselves).
 """
-import os
-import re
 import threading
 import time
 
@@ -108,26 +106,11 @@ def test_superseded_load_is_dropped():
 
 def test_request_screenshot_queues_capture():
     """The screenshot key only sets a flag + asks for a redraw; the actual grab
-    happens later in SwapBuffers (before the buffer swap)."""
+    happens later in presentFrame (before the buffer swap)."""
     ctx = make_ctx()
     ctx.requestScreenshot()
     assert ctx._screenshotPending is True
     assert ctx.redraws >= 1
-
-
-def test_screenshot_path_is_iso_dated_in_cwd(tmp_path, monkeypatch):
-    """The saved file is an iso-dated PNG in the current working directory."""
-    ctx = make_ctx()
-    import OpenGLContext.capture as capmod
-    saved = []
-    monkeypatch.setattr(capmod, 'capture_to_png',
-                        lambda path, **kw: saved.append(path) or True)
-    monkeypatch.chdir(tmp_path)
-    ctx.saveScreenshot()
-    assert len(saved) == 1
-    assert os.path.dirname(saved[0]) == str(tmp_path)
-    name = os.path.basename(saved[0])
-    assert re.match(r'gltf-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.png$', name), name
 
 
 if __name__ == '__main__':

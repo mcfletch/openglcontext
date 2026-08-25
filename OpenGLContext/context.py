@@ -31,6 +31,7 @@ the Context exposes.
 """
 from OpenGL.GL import *
 from OpenGLContext import texturecache, plugins
+from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node, cache
@@ -95,7 +96,7 @@ def inContextThread():
     return 1
 
 
-class Context(ScreenMixin, ContextConfigMixin):
+class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     """Abstract base class on which all Rendering Contexts are based
 
     The Context object represents a single rendering context
@@ -307,7 +308,7 @@ class Context(ScreenMixin, ContextConfigMixin):
         current and the previous frame has already been swapped to the front buffer,
         so the back buffer holds stale (often black) data. To capture the on-screen
         image we draw one more frame and read the back buffer *before* that frame's
-        swap, by intercepting the single SwapBuffers the render pass performs.
+        swap, by intercepting the single SwapBuffers that presenting it performs.
         """
         if not self._autoExitCaptureDir:
             return
@@ -467,14 +468,18 @@ class Context(ScreenMixin, ContextConfigMixin):
         self.addEventHandler(
             "keyboard", name="<pagedown>", function=self.OnNextViewpoint
         )
-        # Alt+S saves a screenshot, and is a key-down for the same reason
+        # F2 takes a screenshot, and so does Alt+S: F2 is what a player reaches
+        # for, Alt+S what the demos here have always used.  Both only ask for
+        # one -- see OpenGLContext.screenshot for why the picture cannot be
+        # taken from the handler.  Alt+S is a key-down for the same reason
         # Alt+F is.
+        self.setupScreenshotKey()
         self.addEventHandler(
             "keyboard",
             name="s",
             state=1,
             modifiers=(False, False, True),
-            function=self.OnSaveImage,
+            function=self.requestScreenshot,
         )
 
     def OnEscape(self, event=None):
@@ -532,80 +537,6 @@ class Context(ScreenMixin, ContextConfigMixin):
                 current.isBound = False
                 current.set_bound = False
         self.triggerRedraw(1)
-
-    def OnSaveImage(
-        self,
-        event=None,
-        template="%(name)s-screen-%(count)04i.png",
-        script=None,
-        date=None,
-        overwrite=False,
-    ):
-        """Save our current screen to disk (if possible)
-
-        The file lands in the **working directory**, named after the program
-        that took it: ``oglc-gltf-screen-0001.png``.  The working directory is
-        the only place the person pressing the key can be assumed to have
-        meant -- naming it after ``sys.argv[0]``, as this once did, wrote the
-        screenshot next to the *launcher*, which for a console script is inside
-        the virtualenv's ``bin`` and on a system install is not writable at all.
-
-        ``%(name)s`` is that program's name with no directory and no extension,
-        falling back to the application name when ``sys.argv[0]`` is not a
-        filename (``python -c`` reports ``-c``).  ``%(script)s`` is still the
-        raw ``sys.argv[0]`` for a caller that passes its own ``template`` and
-        wants it.
-
-        A caller may pass an absolute ``template`` and be obeyed; the working
-        directory is only supplied for a relative one.  ``%(count)04i`` counts
-        up until it finds a name nothing is using, so pressing the key twice
-        keeps both shots.
-        """
-        from OpenGLContext.capture import ensure_pillow, read_back_buffer, save_png
-        if ensure_pillow() is None:
-            return (0, 0)
-        width, height = self.getViewPort()
-        if not width or not height:
-            return (width, height)
-        width, height = int(width), int(height)
-        pixels, width, height = read_back_buffer()
-        if script is None:
-            import sys
-
-            script = sys.argv[0]
-        name = self._screenshotName(script)
-        if date is None:
-            import datetime
-
-            date = datetime.datetime.now().isoformat()
-        count = 0
-        saved = False
-        while (not saved) and count <= 9999:
-            count += 1
-            test = template % locals()
-            if not os.path.isabs(test):
-                test = os.path.join(os.getcwd(), test)
-            if overwrite or (not os.path.exists(test)):
-                log.warning("Saving to file: %s", test)
-                if save_png(test, pixels):
-                    return (width, height)
-                return (0, 0)
-            else:
-                log.info("Existing file: %s", test)
-        return (0, 0)
-
-    def _screenshotName(self, script):
-        """A filename-safe name for the running program.
-
-        The basename of ``sys.argv[0]`` without its extension, which is what
-        tells one screenshot from another when several viewers are open.  An
-        argv[0] that is not a path at all -- ``-c``, or empty -- falls back to
-        the application name, because the point is a name a file can have.
-        """
-        base = os.path.splitext(os.path.basename(script or ''))[0]
-        if not base or base.startswith('-'):
-            return self.getApplicationName()
-        return base
 
     def setupThreading(self):
         """Setup primitives (locks, events) for threading"""
@@ -1098,6 +1029,20 @@ class Context(ScreenMixin, ContextConfigMixin):
             Context.shouldRedraw and Context.triggerRedraw
         """
         self.alreadyDrawn = 1
+
+    def presentFrame(self):
+        """Put the finished frame on the screen.
+
+        The render pass calls this, and it is the one moment the frame is both
+        complete and still readable: once the buffers are swapped the driver has
+        recycled the back buffer and what is in it is an older frame.  Anything
+        that has to see what the player saw -- the screenshot key, a capture, a
+        recording -- reads it here, and a subclass wanting the same overrides
+        *this* rather than :meth:`SwapBuffers`, which stays the backend's single
+        job of putting the buffer up.
+        """
+        self.takePendingScreenshot()
+        return self.SwapBuffers()
 
     def SwapBuffers(self):
         """Called by the rendering loop when the buffers should be swapped
