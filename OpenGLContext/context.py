@@ -64,6 +64,7 @@ def _distanceBetween(first, second):
 #: this is for is rejecting the far plane, which is an order of magnitude out.
 EXAMINE_PICK_REACH = 1.5
 from OpenGLContext.contextconfig import ContextConfigMixin
+from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.ui.screen import ScreenMixin
 
 
@@ -95,7 +96,7 @@ def inContextThread():
     return 1
 
 
-class Context(ScreenMixin, ContextConfigMixin):
+class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     """Abstract base class on which all Rendering Contexts are based
 
     The Context object represents a single rendering context
@@ -467,14 +468,18 @@ class Context(ScreenMixin, ContextConfigMixin):
         self.addEventHandler(
             "keyboard", name="<pagedown>", function=self.OnNextViewpoint
         )
-        # Alt+S saves a screenshot, and is a key-down for the same reason
+        # F2 takes a screenshot, and so does Alt+S: F2 is what a player reaches
+        # for in a game, Alt+S what the demos have always used.  Both only ask
+        # for one -- see OpenGLContext.screenshot for why the picture cannot be
+        # taken from the handler.  Alt+S is a key-down for the same reason
         # Alt+F is.
+        self.setupScreenshotKey()
         self.addEventHandler(
             "keyboard",
             name="s",
             state=1,
             modifiers=(False, False, True),
-            function=self.OnSaveImage,
+            function=self.requestScreenshot,
         )
 
     def OnEscape(self, event=None):

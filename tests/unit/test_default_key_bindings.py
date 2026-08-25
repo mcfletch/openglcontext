@@ -19,14 +19,16 @@ from OpenGLContext.context import Context
 from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
 from OpenGLContext.events.keyboardevents import KeyboardEvent, KeypressEvent
 from OpenGLContext.interactivecontext import InteractiveContext
+from OpenGLContext.screenshot import ScreenshotMixin
 
 
-class Recorder:
+class Recorder(ScreenshotMixin):
     """Stands in for a context: records what would have been bound.
 
     The handlers are looked up as bound methods of the context, so this
     borrows the real ones rather than inventing names for them -- which is
-    also what lets the test assert *which* method a key runs.
+    also what lets the test assert *which* method a key runs.  The screenshot
+    keys come from the mixin every context carries, so it is inherited whole.
     """
 
     OnEscape = Context.OnEscape
@@ -81,12 +83,37 @@ class TestTheDeveloperOverlayKey:
         assert entry['function'].__name__ == 'OnFrameRate'
 
 
+class TestTheScreenshotKeys:
+    """F2 takes a screenshot, and so does Alt+S.
+
+    Two keys for one thing because they answer to different habits: F2 is what
+    a player reaches for in a game, Alt+S what the demos have always used.
+    Both only *ask* -- see :mod:`OpenGLContext.screenshot` for why the picture
+    is taken later.
+    """
+
+    def test_f2_is_bound(self, bindings):
+        assert bindings.find('<F2>'), 'F2 takes no screenshot'
+
+    def test_f2_is_a_key_down_and_not_a_character(self, bindings):
+        """A function key produces no character, so a keypress never arrives."""
+        entry = bindings.find('<F2>')[0]
+        assert entry['type'] == 'keyboard'
+        assert entry['state'] == 1
+
+    def test_alt_s_is_bound_too(self, bindings):
+        assert bindings.find('s')
+
+    def test_both_only_ask_for_one(self, bindings):
+        """Reading the buffer from the handler reads the *previous* frame."""
+        for name in ('<F2>', 's'):
+            entry = bindings.find(name)[0]
+            assert entry['function'].__name__ == 'requestScreenshot', name
+
+
 class TestTheOtherDefaults:
     def test_escape_quits(self, bindings):
         assert bindings.find('<escape>')
-
-    def test_a_screenshot_is_bound(self, bindings):
-        assert bindings.find('s')
 
     def test_nothing_is_bound_on_a_character_that_needs_a_modifier(self,
                                                                    bindings):
@@ -98,7 +125,7 @@ class TestTheOtherDefaults:
                     % (entry['name'],))
 
 
-class Probe(EventHandlerMixin):
+class Probe(EventHandlerMixin, ScreenshotMixin):
     """The same defaults, registered on real event managers and dispatched into.
 
     The registration tests above pin the *shape* of the binding; this pins the
@@ -113,17 +140,23 @@ class Probe(EventHandlerMixin):
     OnEscape = Context.OnEscape
     OnQuit = Context.OnQuit
     OnNextViewpoint = Context.OnNextViewpoint
-    OnSaveImage = Context.OnSaveImage
     OnFrameRate = Context.OnFrameRate
 
     def __init__(self):
         self.toggled = 0
+        self.redraws = 0
         self.initializeEventManagers()
         self.setupDefaultEventCallbacks()
 
     def toggleDebugOverlay(self, event=None):
         self.toggled += 1
         return True
+
+    def triggerRedraw(self, force=0):
+        self.redraws += 1
+
+    def OnSaveImage(self, event=None):
+        raise AssertionError('the handler must not read the buffer itself')
 
     def fire(self, kind, name, modifiers, state=1):
         event = KeyboardEvent() if kind == 'keyboard' else KeypressEvent()
@@ -164,6 +197,19 @@ class TestPressingIt:
         probe.fire('keyboard', 'f', (0, 0, 1))
         probe.fire('keypress', 'f', (0, 0, 1))
         assert probe.toggled == 1
+
+    def test_f2_asks_for_a_screenshot(self, probe):
+        probe.fire('keyboard', '<F2>', (0, 0, 0))
+        assert probe._screenshotPending is True
+
+    def test_f2_asks_for_the_frame_that_will_carry_it(self, probe):
+        """A still scene has no next frame until something requests one."""
+        probe.fire('keyboard', '<F2>', (0, 0, 0))
+        assert probe.redraws == 1
+
+    def test_alt_s_asks_for_one_too(self, probe):
+        probe.fire('keyboard', 's', (0, 0, 1))
+        assert probe._screenshotPending is True
 
 
 class TestWhereAScreenshotGoes:

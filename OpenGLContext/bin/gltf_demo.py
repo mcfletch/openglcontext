@@ -383,7 +383,6 @@ class TestContext(ViewerContext):
             self.addEventHandler('keyboard', name=key, function=self._next_model)
         for key in self.PREV_MODEL_KEYS:
             self.addEventHandler('keyboard', name=key, function=self._prev_model)
-        self.addEventHandler('keyboard', name='<F2>', function=self.requestScreenshot)
 
     def _next_model(self, event: Any = None) -> None:
         self._go(1)

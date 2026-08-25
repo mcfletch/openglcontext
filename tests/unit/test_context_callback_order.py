@@ -14,6 +14,7 @@ key silently did the other thing.
 import pytest
 
 from OpenGLContext.context import Context
+from OpenGLContext.screenshot import ScreenshotMixin
 
 
 class _Bindings:
@@ -38,8 +39,12 @@ class _Bindings:
         return None
 
 
-class _Host(_Bindings):
-    """A context stripped to the two setup methods and the order they run in."""
+class _Host(_Bindings, ScreenshotMixin):
+    """A context stripped to the two setup methods and the order they run in.
+
+    The screenshot keys come from the mixin every context carries, so it is
+    inherited whole rather than having its methods borrowed one by one.
+    """
 
     setupCallbacks = Context.setupCallbacks
     setupDefaultEventCallbacks = Context.setupDefaultEventCallbacks

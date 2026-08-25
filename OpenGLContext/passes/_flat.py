@@ -1337,9 +1337,20 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             if overlay is not None:
                 overlay(self)
 
-        context.SwapBuffers()
+        self.presentFrame( context )
         self.matrix = matrix
         self.shader_mode = False  # Reset after render
+
+    def presentFrame( self, context ):
+        """Put the finished frame on screen.
+
+        Anything that has to read the frame back reads it here, because this is
+        the only moment it is both complete and still in the back buffer: after
+        the swap the driver has recycled that buffer, and reading it returns an
+        older frame.  See OpenGLContext.screenshot.
+        """
+        context.takePendingScreenshot()
+        context.SwapBuffers()
 
     def legacyBackgroundRender( self, vp, matrix ):
         """Do legacy background rendering"""

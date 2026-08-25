@@ -195,6 +195,51 @@ what reaches the handler is a release like any other.</p>
 significant extra machinery).<br>
 
 </p>
+
+<h2 id="defaults">The keys a context binds for itself</h2>
+
+<p>Every context binds a handful of keys in
+<code>setupDefaultEventCallbacks</code>, before an application's own
+<code>setupCallbacks</code> runs.  A key can carry only one handler, so
+claiming one of these is simply binding it &mdash; an application that wants
+<code>F2</code> for something of its own binds <code>F2</code>.</p>
+
+<table>
+<tr><th>Key</th><th>What it does</th></tr>
+<tr><td><code>Escape</code></td><td><code>OnEscape</code>, which quits unless
+    the context says otherwise.  A game or a viewer overrides it to put its
+    menu up instead.</td></tr>
+<tr><td><code>Alt+F</code></td><td>Show or hide the
+    <a href="hud.html#debug">developer overlay</a>.  Alt, because plain
+    <code>f</code> is flying or the next font in half the demos.</td></tr>
+<tr><td><code>Page&nbsp;Down</code></td><td>The next viewpoint in the
+    scene.</td></tr>
+<tr><td><code>F2</code>, <code>Alt+S</code></td><td>Save a screenshot
+    &mdash; see below.</td></tr>
+</table>
+
+<h3 id="screenshots">Screenshots</h3>
+
+<p><code>F2</code> writes the frame to a PNG in the <strong>working
+directory</strong>, named after the running program and counting up:
+<code>oglc-view-screen-0001.png</code>, <code>&hellip;-0002.png</code>.
+Pressing it twice keeps both.  <code>Alt+S</code> is the same key by another
+name, for the habit the demos have always used.</p>
+
+<p><strong>The key only asks.</strong>  A key handler runs between frames, when
+the back buffer no longer holds the frame the player was looking at, so reading
+pixels from inside the handler gets whatever the driver recycled into it &mdash;
+often the frame before last.  So
+<code>ScreenshotMixin.requestScreenshot</code> sets a flag and requests a
+redraw, and the render pass takes the picture in
+<code>FlatPass.presentFrame</code>, at the one moment the frame is both
+finished and still in the back buffer.</p>
+
+<p>A context that needs <code>F2</code> for itself sets
+<code>screenshotKey = ''</code> and nothing is bound; the capability is still
+there under <code>requestScreenshot</code> for a menu item or another key to
+call.  The file itself is written by <code>Context.OnSaveImage</code>, which
+takes a <code>template</code> for a caller that wants to name its own.</p>
 </section>
 
     <footer>

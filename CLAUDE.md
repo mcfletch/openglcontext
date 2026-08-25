@@ -98,6 +98,7 @@ OpenGLContext/
 │   └── adapters/     # One per format; what oglc-view dispatches on
 ├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition
+├── screenshot.py     # The F2 key every context binds -- docs/eventmodel.html
 ├── contextdefinition.py  # The fields a context is configured by
 ├── context.py        # Base context class
 ├── glfwcontext.py, glutcontext.py, pygamecontext.py, wxcontext.py

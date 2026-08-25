@@ -119,7 +119,7 @@ class FlatPass( _flat.FlatPass ):
         if overlay is not None:
             overlay(self)
 
-        context.SwapBuffers()
+        self.presentFrame( context )
         self.matrix = matrix
 
     def legacyBackgroundRender( self, vp, matrix ):

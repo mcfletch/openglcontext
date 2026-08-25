@@ -68,7 +68,6 @@ from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
 from OpenGLContext.viewer.options import ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
-from OpenGLContext.viewer.overlay import ScreenshotMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
 from OpenGLContext.viewer.source import resolve_source
 
@@ -118,7 +117,7 @@ class KeyBinding(NamedTuple):
     state: int = 0
 
 
-class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
+class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                        SettleCaptureMixin, ViewerScreensMixin):
     """Showing one scene: assembly, cameras, animation and the caption."""
 
@@ -183,7 +182,6 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
         self._player: Any = None
         self.setupAsyncScene()
         self.setupCaption()
-        self.setupScreenshots()
         self.prepareSource()
         self.setupCapture(self.options.capture, self.options.capture_delay,
                           self.options.frames)
@@ -1031,10 +1029,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin, ScreenshotMixin,
         return shutdown(*args, **named) if shutdown is not None else None
 
     def SwapBuffers(self) -> Any:  # pragma: no cover - GL swap + capture
-        # These read the back buffer, which holds the frame just drawn
-        # only until it is swapped away.
+        # Reads the back buffer, which holds the frame just drawn only until it
+        # is swapped away.  The screenshot key is read the same way, one step
+        # earlier, in FlatPass.presentFrame.
         captured = self.tickCapture()
-        self.takePendingScreenshot()
         result = super(SceneViewerMixin, self).SwapBuffers()  # type: ignore[misc]
         if captured:
             self.finishCapture()
