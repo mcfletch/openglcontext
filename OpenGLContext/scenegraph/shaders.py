@@ -17,7 +17,7 @@ try:
     from functools import reduce
 except ImportError:
     pass
-from OpenGLContext.scenegraph import polygonsort, boundingvolume
+from OpenGLContext.scenegraph import polygonsort, boundingvolume, shadergeometry
 
 LOCAL_ORIGIN = array([[0, 0, 0, 1.0]], "f")
 
@@ -113,7 +113,14 @@ class ShaderAttribute(shaders.ShaderAttribute):
             return (vbo, location)
         return None
 
-    def renderPost(self, mode, shader, token=None):
+    def renderPost(self, shader, mode, token=None):
+        """Undo what :meth:`render` set up, given the token it returned
+
+        The token is the (buffer, location) pair, or None when the shader had no
+        such attribute and nothing was bound.  Callers that record the attribute
+        into a vertex array object leave it alone instead: the pointer belongs to
+        the object, and unbinding the object is what puts it away.
+        """
         if token:
             vbo, location = token
             vbo.unbind()
@@ -725,30 +732,57 @@ class ShaderGeometry(shaders.ShaderGeometry):
                 current = self.appearance.current
                 if not current:
                     return False
-                tokens = []
-                for attribute in self.attributes:
-                    sub_token = attribute.render(current, mode)
-                    tokens.append((attribute, sub_token))
-                try:
-                    if self.uniforms:
-                        for uniform in self.uniforms:
-                            uniform.render(current, mode)
-                    if self.slices:
-                        # now iterate over our slices...
-                        for slice in self.slices:
-                            for uniform in slice.uniforms:
-                                uniform.render(current, mode)
-                            glDrawArrays(GL_TRIANGLES, slice.offset, slice.count)
-                    else:
-                        # TODO: don't currently have a good way to get
-                        # the proper dimension for the arrays...
-                        glDrawArrays(GL_TRIANGLES, 0, len(self.indices))
-                finally:
-                    for attribute, token in tokens:
-                        attribute.renderPost(mode, token)
+                self._renderAttributes(current, mode)
             finally:
                 self.appearance.renderPost(token, mode)
                 glBindBuffer(GL_ARRAY_BUFFER, 0)
+
+    def _renderAttributes(self, current, mode):
+        """Draw the slices with this shape's attributes bound.
+
+        The attribute pointers are recorded into a vertex array object, which is
+        where a core profile keeps them: there is no array state outside one, so
+        ``glVertexAttribPointer`` with nothing bound is an invalid operation and
+        the shape draws nothing.  Recording them once and re-binding the object
+        also saves re-specifying every attribute on every frame.
+        """
+        program = current.program(mode)
+        if not program:
+            return False
+
+        def build():
+            for attribute in self.attributes:
+                attribute.render(current, mode)
+
+        vao = shadergeometry.get_or_build_vao(
+            self, program,
+            tuple(attribute.buffer.vbo(mode) for attribute in self.attributes),
+            build)
+        transient = vao is None
+        if transient:
+            vao = glGenVertexArrays(1)
+            glBindVertexArray(vao)
+            build()
+        else:
+            glBindVertexArray(vao)
+        try:
+            if self.uniforms:
+                for uniform in self.uniforms:
+                    uniform.render(current, mode)
+            if self.slices:
+                # now iterate over our slices...
+                for slice in self.slices:
+                    for uniform in slice.uniforms:
+                        uniform.render(current, mode)
+                    glDrawArrays(GL_TRIANGLES, slice.offset, slice.count)
+            else:
+                # TODO: don't currently have a good way to get
+                # the proper dimension for the arrays...
+                glDrawArrays(GL_TRIANGLES, 0, len(self.indices))
+        finally:
+            glBindVertexArray(0)
+            if transient:
+                glDeleteVertexArrays(1, [vao])
 
     def sortKey(self, mode, matrix):
         """Produce the sorting key for this shape's appearance/shaders/etc"""

@@ -33,6 +33,7 @@ class TestContext( BaseContext ):
     Shows use of uniforms, and a few simple calculations 
     within the vertex shader...
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         '''Much like the "varying" values which can be used to 
         pass values between vertex and fragment shaders, "uniform"

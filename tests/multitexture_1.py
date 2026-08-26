@@ -6,7 +6,6 @@ a compatibility profile context.
 """
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGLContext import texture
 import sys
@@ -15,7 +14,7 @@ multitexture = None
 
 class TestContext( BaseContext ):
     # Requires compatibility profile for glBegin/glEnd, glTexEnv
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Load the image on initial load of the application"""
         global multitexture

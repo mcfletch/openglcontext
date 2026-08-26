@@ -6,7 +6,6 @@ a compatibility profile context.
 """
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGLContext.scenegraph import polygontessellator, vertex
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -44,7 +43,7 @@ outline = array([
 
 class TestContext( BaseContext ):
     # Requires compatibility profile for glBegin/glEnd, glColor, glVertex
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     scale = 400.0
     def OnInit( self ):
         self.tess = polygontessellator.PolygonTessellator()

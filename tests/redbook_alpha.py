@@ -54,6 +54,7 @@ class TestContext( BaseContext ):
     Demonstrates the effects of alpha blending
     Copyright (c) 1993-1999, Silicon Graphics, Inc. ALL RIGHTS RESERVED 
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,2)
     def OnInit( self ):
         self.leftFirst = 1

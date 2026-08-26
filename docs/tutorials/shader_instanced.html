@@ -68,6 +68,7 @@ use the numpy module "random" to generate a few offsets.</div>
 </div>
 	<div class="code-sample">from numpy import random
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context"""
 </div>

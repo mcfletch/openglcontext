@@ -47,7 +47,6 @@ marker 66 m across the ground:
 '''
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
 from functools import partial

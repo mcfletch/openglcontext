@@ -27,7 +27,7 @@ if '__WXGTK__' in wx.PlatformInfo and 'gtk3' in wx.PlatformInfo:
 from wx import glcanvas
 #from wx.glcanvas import *
 from OpenGL.GL import *
-from OpenGLContext import context, contextdefinition
+from OpenGLContext import context
 from OpenGLContext.events import wxevents
 import logging
 log = logging.getLogger( __name__ )
@@ -81,11 +81,10 @@ class wxContext(
         arguments to the wxGLCanvas initializer, then calls the
         context.Context initializer.
         """
-        if definition is None:
-            definition = contextdefinition.ContextDefinition( **named )
-        else:
-            for key,value in named.items():
-                setattr( definition, key, value )
+        # Resolved before the canvas exists, since its attribute list and the
+        # context attributes below are both built from it -- see
+        # Context.resolveDefinition.
+        definition = self.resolveDefinition( definition, **named )
         if USE_CONTEXT:
             # wxPython Phoenix (4+) has a separate context object...
             glcanvas.GLCanvas.__init__(

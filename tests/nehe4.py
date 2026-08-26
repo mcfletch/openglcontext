@@ -18,7 +18,6 @@ a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 '''The time module is used to provide crude animation support'''
 import time
@@ -26,7 +25,7 @@ import time
 class TestContext( BaseContext ):
     """This context customizes 3 points in the BaseContext"""
     # Force compatibility profile for legacy GL functions
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     '''
     The OnIdle method (if present) is called whenever the GUI library

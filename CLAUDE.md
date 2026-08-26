@@ -262,11 +262,45 @@ it. Every pixel measurement in the UI — skin insets, widget margins,
 
 Controls the OpenGL profile used for rendering:
 
-- `compatibility` (default) - Use OpenGL compatibility profile with legacy fixed-function pipeline
-- `core` - Use OpenGL 3.3+ core profile with shader-based rendering
+- `core` (default) - OpenGL 3.3+ core profile, rendered through shaders
+- `compatibility` - the fixed-function pipeline
 
 ```bash
-export OPENGLCONTEXT_PROFILE=core
+export OPENGLCONTEXT_PROFILE=compatibility
+```
+
+All five backends (`glfw`, `glut`, `pygame`, `wx`, `qt`) create a real core
+context and render identically in one.
+
+**A program that needs a profile declares it**, rather than relying on whoever
+runs it to set the variable:
+
+```python
+class TestContext( BaseContext ):
+    profile = 'compatibility'   # this demo draws with the fixed-function pipeline
+```
+
+`Context.profile` is applied over whatever `contextDefinition` the class
+declares, so it composes rather than replacing; it settles the OpenGL version to
+match; and a definition passed to the constructor outranks both. Declare it for
+anything calling `glBegin`, `glVertexPointer`, `glMaterial`, `glLight`, the
+matrix stack, display lists, or GLSL's `gl_ModelViewProjectionMatrix` — none of
+which exist in core. `Context.resolveDefinition` is where the order is decided,
+and every backend calls it before it opens a window, since the profile, version
+and buffer formats are all window-creation parameters. See
+[docs/structure.html](docs/structure.html#core-profile).
+
+**`scripts/profile_sweep.py` compares the two profiles by what they drew.** A
+fixed-function call in a core context raises `GLError(1282)`, and the render pass
+catches it per node and carries on — so the process exits 0 and the frame is
+black. An exit code is therefore not evidence that anything rendered; the sweep
+runs every script under both profiles through the auto-exit capture path and
+reports the drawn fraction of each capture.
+
+```bash
+scripts/profile_sweep.py --out /tmp/sweep            # both profiles, every script
+scripts/profile_sweep.py --out /tmp/sweep shader_1.py molehill.py
+scripts/profile_sweep.py --report /tmp/sweep/results.json
 ```
 
 **GL feature floor.** All shaders target `#version 330 core` and the VRML97/base
@@ -310,7 +344,6 @@ Selects the windowing backend:
 export OPENGLCONTEXT_BACKEND=glfw
 ```
 
-**Note:** When using `OPENGLCONTEXT_PROFILE=core`, the backend should typically be set to `glfw` as it properly supports core profile context creation.
 
 ### OPENGLCONTEXT_STALL_MS / OPENGLCONTEXT_TRACE_STALLS
 
@@ -913,10 +946,10 @@ def test_mousemove_events_filtered_when_no_handlers():
 
 **Tutorial code:** Files with embedded triple-quoted strings describing the code at length are tutorials. Do not modify tutorial code as part of test suite changes.
 
-### Testing Core Profile
+### Testing the compatibility profile
 
 ```bash
-OPENGLCONTEXT_PROFILE=core /workspaces/OpenGL-dev/.venv/bin/pytests tests/<testname>.py
+OPENGLCONTEXT_PROFILE=compatibility /workspaces/OpenGL-dev/.venv/bin/pytest tests/<testname>.py
 ```
 
 #### wxPython GTK3 Requires EGL for Core Profile
@@ -929,7 +962,7 @@ The `wxcontext` module attempts to set this automatically when GTK3 is detected,
 but if OpenGL is imported before wxcontext, you must set it manually:
 
 ```bash
-PYOPENGL_PLATFORM=egl OPENGLCONTEXT_PROFILE=core /workspaces/OpenGL-dev/.venv/bin/pytest tests/<testname>.py
+PYOPENGL_PLATFORM=egl /workspaces/OpenGL-dev/.venv/bin/pytest tests/<testname>.py
 ```
 
 Or in code (before any OpenGL imports):

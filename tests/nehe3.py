@@ -17,13 +17,12 @@ a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
     """Colorises the NeHe2 geometry"""
     # Force compatibility profile for legacy GL functions
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0)
     def Render( self, mode = 0):
         """Renders the geometry for the scene."""

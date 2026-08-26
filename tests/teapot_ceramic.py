@@ -21,7 +21,6 @@ import os
 
 # PBR pass selection is a whole-process decision (see passes/renderpass.py); it
 # must be set before the first render.  glfw is required for a core context.
-os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
 os.environ['OPENGLCONTEXT_RENDERER'] = 'pbr'
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 

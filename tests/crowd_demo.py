@@ -42,7 +42,6 @@ joints and one two-second clip -- fetched once into the on-disk asset cache.
 import math
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 # The shader that skins a figure on the card is the PBR pass's, and only
 # figures the shader skins hold their rest-pose vertices -- which is what lets

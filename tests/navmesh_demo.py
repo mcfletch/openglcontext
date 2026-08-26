@@ -36,7 +36,6 @@ is where a navmesh reads.
 '''
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
 import heapq

@@ -136,6 +136,18 @@ class Shape(basenodes.Shape):
             self.geometry.render(textured=True, mode=mode)
             return
 
+        if self.appearance and not hasattr(self.appearance, 'texture'):
+            # A `Shader` appearance carries a GLSL program of its own instead of
+            # a texture, and draws through the fixed-function vertex arrays that
+            # program's `gl_Vertex` reads.  Core-profile geometry is submitted
+            # through a vertex array object at attribute locations such a shader
+            # would have to declare, so this pass has nothing to hand it.  Said
+            # once here rather than as an AttributeError per shape per frame.
+            raise NotImplementedError(
+                "a %s appearance draws only in the compatibility profile; declare"
+                " profile = 'compatibility' on the context that uses it"
+                % (self.appearance.__class__.__name__,))
+
         # Skip material/texture setup during selection rendering (mode.visible=False)
         # Selection uses solid colors with unlit shader, not materials
         textured = False

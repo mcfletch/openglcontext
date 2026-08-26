@@ -36,7 +36,6 @@ import time
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
-os.environ.setdefault("OPENGLCONTEXT_PROFILE", "core")
 os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")
 os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
 os.environ.setdefault("OPENGLCONTEXT_BACKEND", "glfw")

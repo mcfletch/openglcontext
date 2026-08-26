@@ -8,7 +8,6 @@ OpenGL.ERROR_ON_COPY = True
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGLContext.loaders.loader import Loader
 
 scene = """#VRML V2.0 utf8
@@ -65,7 +64,7 @@ class TestContext( BaseContext ):
     """Tests the CubeBackground object's rendering
     """
     # Requires compatibility profile for GL_QUADS in CubeBackground
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Scene set up and initial processing"""
         print('Loading scene from embedded VRML97 file')

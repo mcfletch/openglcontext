@@ -17,7 +17,6 @@ import os
 # these before importing OpenGLContext so a plain ``python shadow_spot.py`` shows
 # the shadow. Override any of them in the environment (e.g. OPENGLCONTEXT_SHADOWS=0
 # to see the scene without shadows, OPENGLCONTEXT_SHADOWS_SOFT=1 for soft shadows).
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
 

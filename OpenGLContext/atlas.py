@@ -147,7 +147,9 @@ class Atlas( object ):
                 x,y,
                 None 
             )
-        self.texture()
+        # Bound rather than enabled: the sub-image uploads below need the
+        # binding, and the fixed-function texture unit does not exist in core.
+        self.texture.bind()
         needs = self.need_updates[:]
         del self.need_updates[:len(needs)]
         for need in needs:

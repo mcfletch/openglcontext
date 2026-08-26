@@ -33,7 +33,6 @@ other glTF viewer.
 '''
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 # A loaded document wears PBR materials, and only the metallic/roughness pass
 # has anything to say to one; without it every surface here draws flat white.

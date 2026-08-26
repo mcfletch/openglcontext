@@ -29,6 +29,7 @@ class TestContext( BaseContext ):
     the fragment shader, which interpolates the values across the 
     face (via a "varying" data type).
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context once we have a valid OpenGL environ"""
         '''==Aside: Compilation Errors==

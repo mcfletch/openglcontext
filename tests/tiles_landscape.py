@@ -14,7 +14,6 @@ import math
 import os
 import tempfile
 
-os.environ.setdefault("OPENGLCONTEXT_PROFILE", "core")
 os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")   # honours vertex colours
 os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
 

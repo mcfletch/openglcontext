@@ -21,7 +21,6 @@ Everything after the model path is passed through to the viewer.
 import os, sys, time, statistics
 
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 
 from OpenGL.GL import glFinish
 from OpenGLContext.passes import _flat as F, shadowmixin as SM

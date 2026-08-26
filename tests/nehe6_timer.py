@@ -19,7 +19,6 @@ BaseContext = testingcontext.getInteractive()
 (glBegin, glEnd, glVertex, glTranslate, glRotate, glTexCoord), we need to
 explicitly request a compatibility profile OpenGL context.
 '''
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGLContext.events.timer import Timer
 from OpenGLContext import texture
@@ -31,7 +30,7 @@ class TestContext( BaseContext ):
     which provides the legacy fixed-function pipeline functions like
     glBegin/glEnd that this tutorial uses.
     '''
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0)
     drawPollTimeout = 0.01
     def OnInit( self ):

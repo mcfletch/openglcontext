@@ -4,6 +4,7 @@ from OpenGL.GL import *
 
 class TestContext( BaseContext ):
     """Feedback-mode testing context"""
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def Render( self, mode = 0):
         """Render the geometry for the scene."""
         if mode.visible:

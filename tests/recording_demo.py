@@ -45,7 +45,6 @@ import math
 import os
 import sys
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
 from OpenGLContext import testingcontext

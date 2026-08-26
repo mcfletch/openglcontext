@@ -14,28 +14,38 @@ from OpenGLContext.audio import settings as audiosettings
 
 
 def _get_default_profile():
-    """Get the default OpenGL profile from environment or fallback to compatibility.
+    """The OpenGL profile a context gets when nothing asks for one.
 
-    Environment variable OPENGLCONTEXT_PROFILE can be set to:
-        - "core" for OpenGL 3.3+ core profile (shader-based rendering)
-        - "compatibility" for legacy fixed-function rendering (default)
+    ``core`` -- OpenGL 3.3 core, rendered through shaders.  It is the default
+    because it is what the engine draws with: :class:`PBRMesh`, and so the glTF
+    loader and every generator built on it, is shader-only, and the
+    fixed-function pipeline a compatibility profile exists for is absent from
+    core contexts, from macOS 3.2 and above, from GLES, and from drivers that
+    offer core alone.
 
-    When using core profile, OPENGLCONTEXT_BACKEND should typically be set to
-    a backend that supports core profile contexts (e.g., "glfw").
+    ``compatibility`` -- the fixed-function pipeline, for a program that draws
+    with ``glBegin``, the matrix stack, display lists, ``glMaterial``/``glLight``
+    or GLSL's ``gl_ModelViewProjectionMatrix``.  Fully supported; it is only no
+    longer what a caller gets for free.  ``OPENGLCONTEXT_PROFILE`` names it for
+    a run, and a program that needs it declares ``profile = 'compatibility'``
+    on its context class.  See :meth:`OpenGLContext.context.Context.profile`.
     """
-    return os.environ.get('OPENGLCONTEXT_PROFILE', 'compatibility')
+    return os.environ.get('OPENGLCONTEXT_PROFILE', 'core')
+
+
+def version_for_profile(profile):
+    """The OpenGL version a context of ``profile`` needs, unless told otherwise.
+
+    Core profile requires at least OpenGL 3.2; the shaders here target 3.3.
+    (0, 0) means "let the driver choose", which is what a compatibility context
+    wants: asking for a version there only narrows what the driver may give.
+    """
+    return (3, 3) if profile == 'core' else (0, 0)
 
 
 def _get_default_version():
-    """Get the default OpenGL version based on profile.
-
-    Core profile requires at least OpenGL 3.2. Returns (3, 3) for core profile,
-    (0, 0) for compatibility (let the driver choose).
-    """
-    profile = _get_default_profile()
-    if profile == 'core':
-        return (3, 3)
-    return (0, 0)
+    """The version field's default, from the profile the environment names."""
+    return version_for_profile(_get_default_profile())
 
 
 def _get_default_picking():
@@ -270,6 +280,21 @@ class ContextDefinition( node.Node ):
     DIAGNOSTIC_FIELDS = (
         'pickEnabled', 'pickAsync', 'debugBBox', 'debugSelection', 'debug',
     )
+
+    def __init__( self, **named ):
+        # Zero-argument super, so an instance of this class still finds its own
+        # base after the module has been reloaded: the two-argument form looks
+        # the class up as a module global, which a reload has rebound to a
+        # different class object by then.
+        super().__init__( **named )
+        if 'profile' in named and 'version' not in named:
+            # ``version``'s default is chosen from the profile, and a field
+            # default cannot see the node it belongs to -- so left unset it
+            # reads the profile the *environment* names.  A definition that
+            # states its profile settles its version from that one instead,
+            # since a backend turns ``version >= 3`` into a context hint and
+            # would otherwise open a 3.3 window for a compatibility request.
+            self.version = version_for_profile( self.profile )
 
     @classmethod
     def fromConfig( cls, cfg, section='contextdefinition' ):

@@ -7,6 +7,7 @@ from OpenGL.GLU import *
 from OpenGL.arrays import vbo
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     USE_VBO = True
     def OnInit( self ):
         a = arange( 0, 350000, dtype='i')

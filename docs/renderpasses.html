@@ -28,16 +28,24 @@ specialization of this same path.</p>
 
 <section>
 <h2>Choosing a Profile</h2>
-<p>The profile is read once, from the environment, when a context is created:</p>
-<pre>OPENGLCONTEXT_PROFILE=core   python your_script.py     # shader pipeline
-OPENGLCONTEXT_PROFILE=compatibility python your_script.py  # fixed-function (default)</pre>
-<p><code>core</code> requests an OpenGL&nbsp;3.3 core-profile context and uses the
-shader-based render pass. <code>compatibility</code> (the default) uses the
-fixed-function pipeline. Core profile is the only path that works on platforms
-that have dropped fixed-function support, such as macOS.</p>
-<p>The GLFW backend creates core-profile contexts cleanly and is the recommended
-choice for core / PBR work:</p>
-<pre>OPENGLCONTEXT_PROFILE=core OPENGLCONTEXT_BACKEND=glfw python your_script.py</pre>
+<p><code>core</code> is what a context asks for when nothing says otherwise: it
+requests an OpenGL&nbsp;3.3 core-profile context and uses the shader-based render
+pass. It is the only path that works on platforms that have dropped
+fixed-function support, such as macOS, and the only one that draws the geometry
+nodes the glTF loader and the generators produce.</p>
+<p><code>compatibility</code> gives the fixed-function pipeline, for a program
+that draws with <code>glBegin</code>, the matrix stack, display lists,
+<code>glMaterial</code>/<code>glLight</code> or GLSL's
+<code>gl_ModelViewProjectionMatrix</code>. A program that needs it declares so on
+its Context class, where the requirement travels with the code:</p>
+<pre>class MyContext( BaseContext ):
+    profile = 'compatibility'</pre>
+<p>The environment variable settles the profile for a whole run instead, which is
+what a CI job or a one-off comparison wants:</p>
+<pre>OPENGLCONTEXT_PROFILE=compatibility python your_script.py</pre>
+<p>Either way the profile is read once, before the window exists. See
+<a href="structure.html#core-profile">Saying which profile your program
+needs</a>. All five backends create a core context.</p>
 <p class="technical">The dispatch lives in <code>passes/renderpass.py</code>. When
 the context definition reports <code>profile == 'core'</code>, the renderer
 instantiates the core <code>FlatPass</code> (from
@@ -63,8 +71,9 @@ per context, not per frame.</p>
     </tr>
     <tr>
       <td style="vertical-align: top;">Selected by</td>
+      <td style="vertical-align: top;"><code>profile = 'compatibility'</code>, or
+        <code>OPENGLCONTEXT_PROFILE=compatibility</code></td>
       <td style="vertical-align: top;">default</td>
-      <td style="vertical-align: top;"><code>OPENGLCONTEXT_PROFILE=core</code></td>
     </tr>
     <tr>
       <td style="vertical-align: top;">Lighting</td>

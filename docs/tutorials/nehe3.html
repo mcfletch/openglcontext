@@ -41,6 +41,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 class TestContext( BaseContext ):
     """Colorises the NeHe2 geometry"""
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0)
     def Render( self, mode = 0):
         """Renders the geometry for the scene."""

@@ -17,6 +17,7 @@ class TestContext( BaseContext ):
     the fragment shader, which interpolates the values across the 
     face (a "varying" data type).
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     
     def OnInit( self ):
         self.shader = shaders.compileProgram(

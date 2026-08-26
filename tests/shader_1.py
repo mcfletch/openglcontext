@@ -47,6 +47,7 @@ different interaction mechanisms and the like.  BaseContext here
 is the TestingContext we imported above.'''
 class TestContext( BaseContext ):
     """Creates a simple vertex shader..."""
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     '''The OnInit method is called *after* there is a valid
     OpenGL rendering Context.  You must be very careful not 
     to call (most) OpenGL entry points until the OpenGL context 

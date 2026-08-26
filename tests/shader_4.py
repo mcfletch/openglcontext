@@ -42,6 +42,7 @@ from OpenGLContext.events.timer import Timer
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context"""
         '''We've defined a uniform "tween" which represents the current 

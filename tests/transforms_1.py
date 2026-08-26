@@ -122,6 +122,7 @@ red_triangle = [
 
 class TestContext( BaseContext ):
     """Creates a simple vertex shader..."""
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     @property
     def perspective( self ):
         return self.perspective_matrices[self.perspective_index]

@@ -13,7 +13,6 @@ BaseContext = testingcontext.getInteractive()
 (glBegin, glEnd, glVertex, glTranslate, glMultiTexCoord), we need to
 explicitly request a compatibility profile OpenGL context.
 '''
-from OpenGLContext import contextdefinition
 from OpenGLContext import texture
 from OpenGL.GL import *
 from OpenGL.GL.ARB.multitexture import *
@@ -39,7 +38,7 @@ class TestContext( BaseContext ):
     which provides the legacy fixed-function pipeline functions like
     glBegin/glEnd that this tutorial uses.
     '''
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0)
     rotation =  0
     

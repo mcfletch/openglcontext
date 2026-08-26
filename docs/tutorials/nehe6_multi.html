@@ -54,6 +54,7 @@ glActiveTexture = alternate(
 class TestContext( BaseContext ):
     """Multi-texturing demo
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0)
     rotation =  0
     def OnInit( self ):

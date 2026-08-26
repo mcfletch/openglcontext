@@ -6,6 +6,7 @@ from OpenGL.GL import *
 from OpenGLContext.arrays import array
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         glTranslatef( 1,0,0)

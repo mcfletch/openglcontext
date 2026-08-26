@@ -10,6 +10,7 @@ from OpenGL.GL import *
 from OpenGLContext.arrays import array
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     useArrays = 0
     colors = [(1,0,0),(0,0,.75)]
     def OnInit( self ):

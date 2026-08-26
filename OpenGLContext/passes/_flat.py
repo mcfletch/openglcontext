@@ -39,6 +39,7 @@ import logging
 log = logging.getLogger( __name__ )
 
 if TYPE_CHECKING:
+    from OpenGLContext.passes.renderfailures import RenderFailureLog
     from OpenGLContext.passes.renderstats import RenderStats
     from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
@@ -413,6 +414,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     #: through the developer overlay; see OpenGLContext.passes.renderstats.
     _stats: Optional['RenderStats'] = None
 
+    #: What never drew, for the life of this pass rather than of a frame.
+    #: See OpenGLContext.passes.renderfailures.
+    _failures: Optional['RenderFailureLog'] = None
+
     @property
     def stats(self) -> 'RenderStats':
         """This pass's frame counts, made on first use and then reused.
@@ -424,6 +429,34 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             from OpenGLContext.passes.renderstats import RenderStats
             self._stats = RenderStats()
         return self._stats
+
+    @property
+    def failures(self) -> 'RenderFailureLog':
+        """The causes of failure this pass has seen, made on first use."""
+        if self._failures is None:
+            from OpenGLContext.passes.renderfailures import RenderFailureLog
+            self._failures = RenderFailureLog()
+        return self._failures
+
+    def renderFailed(self, where: str, node: Any, err: BaseException) -> None:
+        """Note that ``node`` raised instead of drawing, and say so once.
+
+        Catching this is what keeps one bad node from taking the frame with it;
+        counting it is what keeps the resulting black window from being silent.
+        The traceback goes out for the first occurrence of each cause and the
+        rest are tallied for the summary at teardown.
+        """
+        if self.failures.record(where, node, err):
+            log.error('Failure in %s render: %s', where, getTraceback(err))
+
+    def reportFailures(self) -> None:
+        """Say what this pass never drew, if anything failed at all.
+
+        Through ``_failures`` rather than :attr:`failures` so a pass that had
+        nothing go wrong does not make a log to report an empty one.
+        """
+        if self._failures is not None:
+            self._failures.report()
 
     # Shader-based rendering support
     use_shaders: bool = False
@@ -665,8 +698,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 try:
                     self._drawInstanceGroup(group, shader, prog, id_map)
                 except Exception as err:
-                    log.error("Failure in instanced group render: %s",
-                              getTraceback(err))
+                    self.renderFailed('instanced', group, err)
                 else:
                     self.stats.instanceGroups += 1
                     self.stats.instances += len(group)
@@ -694,10 +726,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 if debugFrustum and bvolume:
                     bvolume.debugRender()
             except Exception as err:
-                log.error(
-                    "Failure in shader opaque render: %s",
-                    getTraceback(err),
-                )
+                self.renderFailed('opaque', path[-1], err)
             finally:
                 self._restoreShapeId(masked)
 
@@ -764,10 +793,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                     if debugFrustum and bvolume:
                         bvolume.debugRender()
                 except Exception as err:
-                    log.error(
-                        "Failure in shader transparent render: %s",
-                        getTraceback(err),
-                    )
+                    self.renderFailed('transparent', path[-1], err)
                 finally:
                     self._restoreShapeId(masked)
         finally:
@@ -1177,15 +1203,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         matrix = self.getModelView()
         self.matrix = matrix
 
-        self.selectLevels( matrix )
-        toRender = self.renderSet( matrix )
-        self.stats.shapes = len(toRender)
-        maxDepth = self.maxDepth = self.greatestDepth( toRender )
-        vp = context.getViewPlatform()
-        if maxDepth:
-            self.projection = vp.viewMatrix(maxDepth)
-
-        # Set up shader mode if enabled
+        # Before the scene is walked, not after: sorting a shape asks its
+        # appearance for a texture, which compiles one, and how a texture is
+        # compiled depends on which pipeline will sample it.
         if self.use_shaders:
             self.shader_program = self.getShaderProgram()
             self.shader_program.compile()
@@ -1196,6 +1216,14 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         else:
             self.shader_mode = False
             self.shader_program = None
+
+        self.selectLevels( matrix )
+        toRender = self.renderSet( matrix )
+        self.stats.shapes = len(toRender)
+        maxDepth = self.maxDepth = self.greatestDepth( toRender )
+        vp = context.getViewPlatform()
+        if maxDepth:
+            self.projection = vp.viewMatrix(maxDepth)
 
         # Get pick events
         events = context.getPickEvents()
@@ -1394,6 +1422,19 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 #            l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
     
+    def renderGeometry( self, mvmatrix ):
+        """Draw everything visible from ``mvmatrix``, and nothing else
+
+        A whole frame is more than its geometry -- a background, lights, the
+        selection buffer, the overlay.  A caller that wants only the geometry,
+        drawn from a matrix of its own choosing, asks for it here: rendering the
+        scene from a light's point of view to fill a depth map is what this is
+        for.  See docs/tutorials/shadow_1.html.
+        """
+        toRender = self.renderSet( mvmatrix )
+        self.renderOpaque( toRender )
+        self.renderTransparent( toRender )
+
     def renderOpaque( self, toRender ):
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
@@ -1409,12 +1450,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                     if debugFrustum:
                         bvolume.debugRender( )
                 except Exception as err:
-                    log.error(
-                        """Failure in opaque render: %s""",
-                        getTraceback( err ),
-                    )
-                    import os 
-                    os._exit(1)
+                    self.renderFailed( 'opaque', path[-1], err )
     def renderTransparent( self, toRender ):
         """Render the transparent geometry from toRender (in forward order)"""
         self.transparent = True
@@ -1438,11 +1474,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                         if debugFrustum:
                             bvolume.debugRender( )
                     except Exception as err:
-                        log.error(
-                            """Failure in %s: %s""",
-                            path[-1].Render,
-                            getTraceback( err ),
-                        )
+                        self.renderFailed( 'transparent', path[-1], err )
         finally:
             self.transparent = False
             if setup:
@@ -1487,10 +1519,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 try:
                     shape.RenderTransparent( mode = self )
                 except Exception as err:
-                    log.error(
-                        """Failure rendering deferred transparent %s: %s""",
-                        shape, getTraceback( err ),
-                    )
+                    self.renderFailed( 'deferred transparent', shape, err )
         finally:
             self._deferredTransparent = []
             glDisable( GL_BLEND )

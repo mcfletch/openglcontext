@@ -64,15 +64,14 @@ class TestDefaults:
         assert ContextDefinition().shadows
 
     def test_the_environment_still_sets_the_default(self, monkeypatch):
+        # No reload: a field default is a callable the field runs the first
+        # time each definition is asked for it, so a variable set now reaches
+        # a definition made now.  Reloading the module would build a second
+        # ContextDefinition class, and anything holding the first -- another
+        # test module's import, a class that declares a definition -- would go
+        # on using a class this one's isinstance checks no longer recognise.
         monkeypatch.setenv('OPENGLCONTEXT_SHADOWS', '0')
-        import importlib
-        from OpenGLContext import contextdefinition
-        importlib.reload(contextdefinition)
-        try:
-            assert not contextdefinition.ContextDefinition().shadows
-        finally:
-            monkeypatch.delenv('OPENGLCONTEXT_SHADOWS')
-            importlib.reload(contextdefinition)
+        assert not ContextDefinition().shadows
 
     def test_every_declared_render_option_has_a_field(self):
         definition = ContextDefinition()

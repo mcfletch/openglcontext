@@ -4,6 +4,7 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         print('Integers/Booleans:')

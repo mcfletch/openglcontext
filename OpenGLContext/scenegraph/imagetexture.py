@@ -39,7 +39,11 @@ class _Texture(nodetypes.Texture, node.Node):
         number of textures created
         """
         return mode.context.textureCache.getTexture(
-            image, texture.Texture, mode=mode, repeating=(self.repeatS or self.repeatT)
+            image,
+            texture.Texture,
+            mode=mode,
+            repeating=(self.repeatS or self.repeatT),
+            atlasable=not getattr(mode, "shader_mode", False),
         )
 
     def render(
@@ -69,17 +73,20 @@ class _Texture(nodetypes.Texture, node.Node):
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
             elif self.transparent(mode):
                 return 1
-            tex()
+            shader_mode = getattr(mode, "shader_mode", False)
+            if shader_mode:
+                tex.bind()
+            else:
+                tex()
             # now the stuff not related to the texture in particular
             # i.e. the "image" half of the image texture
-            if self.repeatS:
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-            else:
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP)
-            if self.repeatT:
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-            else:
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
+            clamp = GL_CLAMP_TO_EDGE if shader_mode else GL_CLAMP
+            glTexParameteri(
+                GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT if self.repeatS else clamp
+            )
+            glTexParameteri(
+                GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT if self.repeatT else clamp
+            )
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, self.magFilter)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, self.minFilter)
             ### XXX something get's messed up heavily if we actually report the alpha channel's existence :(
@@ -93,7 +100,14 @@ class _Texture(nodetypes.Texture, node.Node):
         is left to the mode's post-rendering code to do this!  As a result,
         if you use this code outside of a scenegraph you will need to add
         a call to reestablish the blending parameters you desire.
+
+        Under a shader there is nothing to undo: the fixed-function texture
+        unit and the texture matrix stack that this resets are what a core
+        profile leaves out, and a sampler reads from whatever the next shape
+        binds.
         """
+        if getattr(mode, "shader_mode", False):
+            return
         try:
             glDisable(GL_TEXTURE_2D)
             glMatrixMode(GL_TEXTURE)

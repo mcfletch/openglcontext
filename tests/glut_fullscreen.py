@@ -12,6 +12,7 @@ from OpenGL.GLUT import *
 import time
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     fullscreen = False
     def Render( self, mode = None):

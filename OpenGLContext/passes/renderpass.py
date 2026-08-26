@@ -17,6 +17,18 @@ USE_FLAT = True
 FLAT = None
 
 
+def report_render_failures() -> None:
+    """Say what the session rendered from and never drew.
+
+    A pass catches each node's exceptions so one bad node cannot take the frame
+    with it, which leaves a scene able to draw nothing while the process exits
+    successfully.  Called as a context quits, this is the line that names the
+    nodes behind an otherwise silent black window.
+    """
+    if FLAT is not None:
+        FLAT.reportFailures()
+
+
 def _core_flatpass_class():
     """Core-profile pass class, guarding the experimental PBR import.
 

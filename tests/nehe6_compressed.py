@@ -6,7 +6,6 @@ a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGL.GL.EXT.texture_compression_s3tc import *
 import time
@@ -18,7 +17,7 @@ except ImportError as err:
 class TestContext( BaseContext ):
     """NeHe 6 Demo"""
     # Force compatibility profile for legacy GL functions
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     def OnInit( self ):
         """Load the image on initial load of the application"""

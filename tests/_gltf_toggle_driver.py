@@ -14,7 +14,6 @@ import os
 import sys
 
 os.environ['OPENGLCONTEXT_BACKEND'] = 'glfw'
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 
 import numpy as np
 

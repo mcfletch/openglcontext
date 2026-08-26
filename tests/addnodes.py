@@ -12,7 +12,6 @@ must be set before the first render; glfw is required for a core context.
 """
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 

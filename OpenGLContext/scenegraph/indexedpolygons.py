@@ -16,6 +16,51 @@ log = logging.getLogger(__name__)
 from math import pi
 
 
+def triangulate_index(index, polygonSides):
+    """``index`` rewritten as triangles, for whatever ``polygonSides`` names.
+
+    ``polygonSides`` is a vertex count -- 3 or 4 -- or ``GL_QUAD_STRIP``, the
+    same three values :meth:`IndexedPolygons.render` accepts.  Quads and quad
+    strips are fixed-function primitives that a core profile does not draw, and
+    the geometry they describe is perfectly ordinary: a quad is two triangles
+    and a quad strip is a triangle strip with its vertices in a different order.
+    Rewriting the indices is what lets a node that names either one draw under
+    both profiles.
+
+    A two-dimensional ``index`` is one primitive per row, which is what the
+    shape of such an array says and what keeps two strips from being joined by a
+    sliver spanning the gap between them.  Vertices that do not complete a
+    primitive are dropped, as GL drops them.
+
+    Returns ``index`` itself when it already describes triangles.
+    """
+    if polygonSides == 3:
+        return index
+    index = asarray(index)
+    if index.ndim > 1:
+        rows = [triangulate_index(row, polygonSides) for row in index]
+        return (concatenate(rows) if rows
+                else index.reshape((0,)).astype(index.dtype))
+    if polygonSides == 4:
+        quads = index[: (len(index) // 4) * 4].reshape((-1, 4))
+        triangles = quads[:, (0, 1, 2, 0, 2, 3)]
+    elif polygonSides == GL_QUAD_STRIP:
+        # A quad strip's nth quad is (v[2n], v[2n+1], v[2n+3], v[2n+2]) -- the
+        # far edge is given before the near one, which is why this is not simply
+        # a triangle strip.
+        pairs = index[: (len(index) // 2) * 2].reshape((-1, 2))
+        if len(pairs) < 2:
+            return index[:0]
+        near, far = pairs[:-1], pairs[1:]
+        triangles = concatenate(
+            [near[:, (0, 1)], far[:, 1:2], near[:, 0:1], far[:, (1, 0)]], axis=1)
+    else:
+        raise ValueError(
+            """%s is not a polygonSides value that can be drawn as triangles"""
+            % (polygonSides,))
+    return triangles.reshape((-1,))
+
+
 class Holder(object):
     """Substitutes as object to hold vbo values"""
 
@@ -253,32 +298,44 @@ class IndexedPolygons(
             glPopClientAttrib()
         return 1
 
+    def _triangle_index(self, mode):
+        """This node's index as triangles, cached against index and polygonSides.
+
+        A quad or a quad strip is rewritten by :func:`triangulate_index`; a node
+        that already names triangles gets its own array back untouched.
+        """
+        index = mode.cache.getData(self, key="triangle_index")
+        if index is None:
+            index = triangulate_index(self.index, self.polygonSides)
+            holder = mode.cache.holder(self, index, key="triangle_index")
+            for name in ("index", "polygonSides"):
+                holder.depend(self, name)
+        return index
+
     def _get_index_vbo(self, mode):
-        """Element-array VBO for self.index (uint32), cached and index-versioned."""
+        """Element-array VBO of the triangle index, cached and index-versioned."""
         ivbo = mode.cache.getData(self, key="shader_index")
         if ivbo is None:
             ivbo = vbo.VBO(
-                self.index.astype("I"), target="GL_ELEMENT_ARRAY_BUFFER")
+                ascontiguousarray(self._triangle_index(mode), "I"),
+                target="GL_ELEMENT_ARRAY_BUFFER")
             holder = mode.cache.holder(self, ivbo, key="shader_index")
-            holder.depend(self, "index")
+            for name in ("index", "polygonSides"):
+                holder.depend(self, name)
         return ivbo
 
     def _render_shader(self, mode, visible=1, lit=1, textured=1, transparent=0):
         """Core-profile shader rendering path (mirrors ArrayGeometry/Quadric).
 
         Draws the equal-indexed position/normal/texcoord arrays with the VRML97
-        shader program via a cached VAO. Only triangles are supported (core
-        profile has no GL_QUADS); the IFS compiler always emits triangles.
+        shader program via a cached VAO.  Core GL draws only triangles, so a
+        node naming quads or a quad strip has its index rewritten into triangles
+        once and cached; see :func:`triangulate_index`.
         """
         from OpenGLContext.scenegraph import shadergeometry as sg
 
         shader_program = getattr(mode, "shader_program", None)
         if shader_program is None or shader_program.program is None:
-            return 1
-        if self.polygonSides != 3:
-            log.warning(
-                "%s: only triangles render under core profile (polygonSides=%s)",
-                self, self.polygonSides)
             return 1
 
         vbos = self.get_vbos(mode)
@@ -303,9 +360,9 @@ class IndexedPolygons(
             for bound_vbo in bound:
                 bound_vbo.unbind()
 
-        vao = sg._get_or_build_vao(
+        vao = sg.get_or_build_vao(
             self, program, (vbos.coord, normals, texcoords, index_vbo), build)
-        count = len(self.index)
+        count = len(self._triangle_index(mode))
         if vao is not None:
             glBindVertexArray(vao)
             try:

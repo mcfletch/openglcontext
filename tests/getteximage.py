@@ -8,6 +8,7 @@ from OpenGL.GL import *
 import os
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     useArrays = 0
     def Render( self, mode ):
         BaseContext.Render( self, mode )

@@ -7,6 +7,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         for param, name in parameters:

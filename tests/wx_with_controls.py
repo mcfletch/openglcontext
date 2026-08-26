@@ -4,6 +4,7 @@ import wx
 from OpenGLContext.events.timer import Timer
 
 class TestContext( wxinteractivecontext.wxInteractiveContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     rotating = 1
     def OnInit( self ):
         self.sg = basenodes.sceneGraph(

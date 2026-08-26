@@ -66,6 +66,14 @@ def gl_context(gl_window):
     target, which is what a machine without one should get. A typo in the
     arguments &mdash; a profile nobody offers &mdash; is a <code>ValueError</code>
     instead, because skipping it would hide the test for good.</p>
+  <p>These fixtures make a bare GLFW window. A test that drives a whole
+    <code>Context</code> &mdash; a demo script, an application's own context
+    class &mdash; declares the profile on the class instead, and gets it on
+    whichever backend is running:</p>
+  <pre>class TestContext( BaseContext ):
+    profile = 'compatibility'   # this test draws with the fixed-function pipeline</pre>
+  <p>See <a href="structure.html#core-profile">Saying which profile your program
+    needs</a> for what that composes with.</p>
 </section>
 
 <section id="window">

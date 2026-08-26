@@ -36,6 +36,7 @@ def drawText( value, x,y,  windowHeight, windowWidth, step = 18 ):
     glMatrixMode(GL_MODELVIEW);
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     def OnInit( self ):
         BaseContext.OnInit( self )

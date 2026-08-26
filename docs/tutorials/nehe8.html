@@ -47,6 +47,7 @@ except ImportError, err:
     from Image import open
 class TestContext( BaseContext ):
     """Blending modes demonstration"""
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     usage ="""Demonstrates blending functions:
     press 'b' to toggle blending functions
     press 'f' to toggle filter functions

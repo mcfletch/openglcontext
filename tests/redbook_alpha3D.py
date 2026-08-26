@@ -49,7 +49,6 @@
 """
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
@@ -70,7 +69,7 @@ class TestContext( BaseContext ):
     Copyright (c) 1993-1999, Silicon Graphics, Inc. ALL RIGHTS RESERVED
     """
     # Requires compatibility profile for display lists, glMaterial, glLight
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,10)
     def OnInit( self ):
         """Setup running params"""

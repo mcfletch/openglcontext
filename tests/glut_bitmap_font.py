@@ -8,6 +8,7 @@ import _bitmap_font, _fontstyles
 from OpenGLContext.scenegraph.text import glutfont
 
 class TestContext( _bitmap_font.TestContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     testingClass = glutfont.GLUTBitmapFont
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

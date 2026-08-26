@@ -21,6 +21,7 @@ import traceback, sys
 from OpenGLContext.events.timer import Timer
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def loadImage( self, imageName = 'gldrawpixels.png' ):
         """Load an image from a file using PIL.
         This is closer to what you really want to do than the

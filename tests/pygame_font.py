@@ -4,6 +4,7 @@ import _bitmap_font, _fontstyles
 from OpenGLContext.scenegraph.text import pygamefont, fontprovider
 
 class TestContext( _bitmap_font.TestContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def setupFontProviders( self ):
         """Load font providers for the context
 

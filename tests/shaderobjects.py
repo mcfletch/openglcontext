@@ -101,6 +101,7 @@ shaders = [
 
 
 class TestContext(BaseContext):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     rotation = 0.00
 
     current_shader = 0

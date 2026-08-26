@@ -14,6 +14,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self, ):
         """Initialisation"""
         print("""Demonstrates drawing a synthetically-generated image 

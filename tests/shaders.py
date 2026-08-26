@@ -43,6 +43,7 @@ void main() {
 
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     light_location = (0, 10, 5)
 
     def OnInit( self ):

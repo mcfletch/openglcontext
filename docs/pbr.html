@@ -39,14 +39,11 @@ material.</p>
 <a href="viewer.html"><code>oglc-view</code></a> viewer, which switches everything
 on for you:</p>
 <pre>oglc-view path/to/model.glb</pre>
-<p>To use PBR for your own scene, set two environment variables on a
-core-profile context:</p>
-<pre>OPENGLCONTEXT_PROFILE=core OPENGLCONTEXT_RENDERER=pbr OPENGLCONTEXT_BACKEND=glfw \
-    python your_script.py</pre>
-<p><code>OPENGLCONTEXT_PROFILE=core</code> selects the shader pipeline and
-<code>OPENGLCONTEXT_RENDERER=pbr</code> chooses the PBR renderer. If PBR cannot be
-started for any reason, the plain <a href="renderpasses.html">core renderer</a> is
-used instead.</p>
+<p>To use PBR for your own scene, name the renderer:</p>
+<pre>OPENGLCONTEXT_RENDERER=pbr python your_script.py</pre>
+<p>The core profile it needs is already the default. If PBR cannot be started for
+any reason, the plain <a href="renderpasses.html">core renderer</a> is used
+instead.</p>
 </section>
 
 <section>

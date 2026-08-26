@@ -24,7 +24,6 @@ import math
 import os
 import time
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
 from OpenGL.GL import (

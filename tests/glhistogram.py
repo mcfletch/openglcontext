@@ -16,6 +16,7 @@ from OpenGL.GL import *
 from OpenGL.GL.ARB.imaging import *
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self, ):
         """Initialisation"""
         print("""Demonstrates drawing a synthetically-generated image 

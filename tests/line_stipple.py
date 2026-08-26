@@ -6,7 +6,6 @@ a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 import flower_geometry
 
@@ -21,7 +20,7 @@ def bit_pattern( *args ):
 
 class TestContext( BaseContext):
     # Requires compatibility profile for glLineStipple
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialisation"""
         print("""Should see flower pattern in gray over white background""")

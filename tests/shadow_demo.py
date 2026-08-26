@@ -20,7 +20,6 @@ import os
 import time
 from math import sin, cos, pi
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
 

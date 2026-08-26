@@ -87,6 +87,12 @@ div.path {
 	margin: 1em;
 	color: darkgrey;
 }
+/* Which OpenGL profile a tutorial path renders in, said before the first link
+   so a reader knows what they are about to open. */
+.introduction .profile {
+	margin-top: .75em;
+	margin-bottom: 0;
+}
 .path-body {
 	margin-left: .5em;
 	margin-right: .5em;

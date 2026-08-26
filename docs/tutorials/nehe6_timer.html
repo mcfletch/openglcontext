@@ -44,6 +44,7 @@ from OpenGLContext import texture
 class TestContext( BaseContext ):
     """Timer-based control of animation (OpenGLContext timers)
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0)
     drawPollTimeout = 0.01
     def OnInit( self ):

@@ -14,6 +14,7 @@ SHORT_TEST = "Short Str\nHere"
 VERTICAL_TEST = "A\nB\nC"
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit(self):
         """Create the font for use later"""
         wx.InitAllImageHandlers()

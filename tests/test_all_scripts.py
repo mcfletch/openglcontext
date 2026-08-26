@@ -610,11 +610,7 @@ SKIP_SCRIPTS = [
 
 # Demos of features that no longer exist in the library; skipped with a visible
 # reason (rather than silently dropped) until they are rewritten or removed.
-OBSOLETE_SCRIPTS = {
-    'savepostscript.py': 'uses the removed gl2ps PostScript render pass',
-    'shadow_1.py': 'uses the removed FlatPass.renderGeometry (old visitor pass API)',
-    'shadow_2.py': 'uses the removed FlatPass.renderGeometry (old visitor pass API)',
-}
+OBSOLETE_SCRIPTS: dict = {}
 
 # Scripts that produce no graphical output - test for functionality only
 # These should NOT be included in visual regression tests
@@ -911,7 +907,6 @@ SCRIPT_CATEGORIES = {
             'numpyfields.py',
             'readpixelsleak.py',
             'saveimage.py',
-            'savepostscript.py',
             'selectrendermode_threads.py',
             'test_glut_lineset.py',
             'test_glvertex2fcrash.py',

@@ -43,6 +43,17 @@ import logging
 
 log = logging.getLogger(__name__)
 
+
+def _fieldIsSet(definition, name):
+    """Whether ``name`` holds a value, as opposed to resolving to its default.
+
+    A field default is a callable the field runs on first read, so reading the
+    field to find out would settle it and destroy the answer.
+    """
+    from vrml import protofunctions
+    return protofunctions.getField(definition, name).fhas(definition)
+
+
 #: How far inside its own bounding sphere the camera has to be before an
 #: examine drag stops orbiting the scene's centre.  Standing well outside a
 #: model, its centre is what you mean; standing in the middle of a building,
@@ -201,6 +212,14 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     stallJournal = None
     telemetry = None
     contextDefinition = None
+    #: The OpenGL profile a subclass needs, when that is all it has to say:
+    #: ``profile = 'compatibility'`` on a demo that draws with the
+    #: fixed-function pipeline.  It is applied over :attr:`contextDefinition`
+    #: rather than replacing it, so a class can name its profile and still
+    #: inherit the size, buffers and rendering features its base declared.
+    #: ``None`` leaves the choice to the definition, and thence to
+    #: ``OPENGLCONTEXT_PROFILE``.  See :meth:`resolveDefinition`.
+    profile = None
 
     ### State flags/values
     # Set to false to trigger a redraw on the next available iteration
@@ -360,15 +379,58 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
 
         logging.basicConfig(level=logging.WARNING)
 
-    def setDefinition(self, definition):
+    @classmethod
+    def resolveDefinition(cls, definition=None, **named):
+        """The definition a context of this class should be created from.
+
+        A backend calls this at the top of its ``__init__``, before it opens
+        anything: the window's profile, version, buffers and size all come from
+        the definition, so a class that declares one has to be consulted while
+        there is still a window to configure.  Doing it here rather than in each
+        backend is what keeps them from disagreeing about it.
+
+        The order is: the ``definition`` passed in, then the one the class
+        declares as :attr:`contextDefinition`, then a fresh one -- whose field
+        defaults read the environment.  ``named`` sets fields on whichever of
+        those it lands on.  A mapping rather than a node is read as the fields
+        to set.
+
+        A declared definition is *copied*, never handed out: a context writes
+        its own size back to its definition as the window is resized, and two
+        contexts of one class sharing a node means the second inherits the
+        first's window size.  The copy carries only the fields the declaration
+        actually set, so every other field still resolves its default when it is
+        read -- an environment variable set after import reaches it as usual.
+        """
         from OpenGLContext import contextdefinition
 
-        definition = definition or self.contextDefinition
-        if not definition:
-            definition = contextdefinition.ContextDefinition()
-        elif not isinstance(definition, contextdefinition.ContextDefinition):
-            definition = contextdefinition.ContextDefinition(**definition)
-        self.contextDefinition = definition
+        declared = definition is None
+        if declared:
+            definition = cls.contextDefinition
+            if definition is not None:
+                definition = definition.copy()
+        if definition is None:
+            definition = contextdefinition.ContextDefinition(**named)
+        else:
+            if not isinstance(definition, contextdefinition.ContextDefinition):
+                definition = contextdefinition.ContextDefinition(**definition)
+            for key, value in named.items():
+                setattr(definition, key, value)
+        if declared and cls.profile and not _fieldIsSet(definition, 'profile'):
+            definition.profile = cls.profile
+            if not _fieldIsSet(definition, 'version'):
+                definition.version = contextdefinition.version_for_profile(cls.profile)
+        return definition
+
+    def setDefinition(self, definition):
+        """Store the definition this context was created from, and read it.
+
+        The backend has normally resolved it already and passes it here; an
+        instance that set one on itself before calling up is honoured too.
+        """
+        if definition is None:
+            definition = self.__dict__.get('contextDefinition')
+        self.contextDefinition = definition = self.resolveDefinition(definition)
         self.coreProfile = definition.profile == "core"
         return self.contextDefinition
 
@@ -499,6 +561,15 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     def OnQuit(self, event=None):
         """Quit the application (forcibly)"""
         self.suppressRedraw()
+
+        # A node that raised on every frame has been counted rather than logged
+        # sixty times a second; this is where the run says which ones, and it
+        # has to be before the forcible exit below.
+        try:
+            from OpenGLContext.passes.renderpass import report_render_failures
+            report_render_failures()
+        except Exception:
+            log.debug('could not report render failures', exc_info=True)
 
         # Before the forcible exit, which runs no finally block and no atexit
         # hook: a session quit in the middle of a stall is exactly the session

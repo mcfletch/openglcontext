@@ -8,7 +8,6 @@ import OpenGL
 OpenGL.UNSIGNED_BYTE_IMAGES_AS_STRING = False
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGLContext import drawcube
 from OpenGLContext.scenegraph import imagetexture
 from OpenGL.GL import *
@@ -16,7 +15,7 @@ import time, os
 
 class TestContext( BaseContext ):
     # Requires compatibility profile for glTranslate, glRotate, drawCube, GL_DEPTH_SCALE
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     drawCapture = 0
     capturedImage = ()

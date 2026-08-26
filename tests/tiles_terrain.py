@@ -17,7 +17,6 @@ import tempfile
 # the demo runs when launched directly (not only under the test harness). PBR ambient
 # is IBL-based; with no environment probe the analytic sky washes the terrain to flat
 # grey, so drive lighting from an explicit sun + modest ambient.
-os.environ.setdefault("OPENGLCONTEXT_PROFILE", "core")
 os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")  # PBR renderer honours vertex colors
 os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
 

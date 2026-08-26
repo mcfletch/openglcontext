@@ -45,6 +45,7 @@ from OpenGL.GL import *
 	<div class="code-sample">import time
 class TestContext( BaseContext ):
     """This context customizes 3 points in the BaseContext"""
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
 </div>
 	<div class="commentary">

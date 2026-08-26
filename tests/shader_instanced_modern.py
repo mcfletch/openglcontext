@@ -213,6 +213,7 @@ void main() {
 
 class TestContext(BaseContext):
     """Demonstrates instanced rendering with modern GLSL."""
+    profile = 'compatibility'   # draws with the fixed-function pipeline
 
     def OnInit(self):
         """Initialize the context"""

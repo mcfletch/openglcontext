@@ -14,7 +14,6 @@ except ImportError:
 from OpenGL.GL import *
 from OpenGLContext.context import Context
 from OpenGLContext.events import glfwevents
-from OpenGLContext import contextdefinition
 from OpenGLContext.looptrace import LoopTrace
 import logging
 
@@ -34,12 +33,10 @@ class GLFWContext(
     window = None
 
     def __init__(self, definition=None, **named):
-        # Set up the context definition
-        if definition is None:
-            definition = contextdefinition.ContextDefinition(**named)
-        else:
-            for key, value in named.items():
-                setattr(definition, key, value)
+        # Resolved before the window exists: profile, version, buffers and size
+        # are all window-creation parameters, so a class that declares a
+        # definition has to be consulted now rather than by Context.__init__.
+        definition = self.resolveDefinition(definition, **named)
         self.contextDefinition = definition
 
         # Initialize GLFW

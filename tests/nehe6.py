@@ -14,7 +14,6 @@ a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 import time
 try:
@@ -25,7 +24,7 @@ except ImportError as err:
 class TestContext( BaseContext ):
     """NeHe 6 Demo"""
     # Force compatibility profile for legacy GL functions
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     '''OnInit is called by the Context class after initialization
     of the context has completed, and before any rendering is

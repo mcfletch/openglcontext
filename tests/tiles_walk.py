@@ -18,7 +18,6 @@ import math
 import os
 import tempfile
 
-os.environ.setdefault("OPENGLCONTEXT_PROFILE", "core")
 os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")
 os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
 

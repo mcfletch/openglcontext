@@ -4,7 +4,6 @@ from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGLContext.context import Context
 from OpenGLContext.events import glutevents
-from OpenGLContext import contextdefinition
 
 
 class GLUTContext(
@@ -23,12 +22,10 @@ class GLUTContext(
     providesGLUT = True
 
     def __init__(self, definition=None, **named):
-        # set up double buffering and rgb display mode
-        if definition is None:
-            definition = contextdefinition.ContextDefinition(**named)
-        else:
-            for key, value in named.items():
-                setattr(definition, key, value)
+        # set up double buffering and rgb display mode.  Resolved before the
+        # window exists, since the display mode and the profile below are both
+        # built from it -- see Context.resolveDefinition.
+        definition = self.resolveDefinition(definition, **named)
         self.contextDefinition = definition
 
         # Note: glutInit is called by ContextMainLoop before this __init__
@@ -41,9 +38,16 @@ class GLUTContext(
 
         if glutInitContextVersion and definition.version[0]:
             glutInitContextVersion(*[int(v) for v in definition.version])
-        if glutInitContextProfile and definition.profile == 'core':
-            glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
-            glutInitContextProfile(GLUT_CORE_PROFILE)
+        if glutInitContextProfile:
+            # Named either way: a version hint of 3.2 or above with no profile
+            # hint leaves the choice to the driver, and a driver that answers
+            # with a core context has taken the fixed-function pipeline away
+            # from a caller who asked for it.
+            if definition.profile == 'core':
+                glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
+                glutInitContextProfile(GLUT_CORE_PROFILE)
+            elif definition.profile == 'compatibility':
+                glutInitContextProfile(GLUT_COMPATIBILITY_PROFILE)
         glutInitDisplayMode(self.glutFlagsFromDefinition(definition))
         # set up window size for newly created windows
         glutInitWindowSize(*[int(i) for i in definition.size])
@@ -61,7 +65,12 @@ class GLUTContext(
     CONTEXT_DEFINITION_FLAG_MAPPING = (
         ("doubleBuffer", GLUT_DOUBLE, GLUT_SINGLE, GLUT_DOUBLE),
         ("depthBuffer", GLUT_DEPTH, 0, GLUT_DEPTH),
-        ("accumulationBuffer", GLUT_ACCUM, 0, GLUT_ACCUM),
+        # -1 means "don't ask", as it does for this buffer in every other
+        # backend: an accumulation buffer is deprecated in GL 3.0 and absent
+        # from core, and a driver that publishes no accumulation-buffer config
+        # gives freeglut nothing to match, which aborts the process rather than
+        # falling back.  A caller that wants one still says so.
+        ("accumulationBuffer", GLUT_ACCUM, 0, 0),
         ("stencilBuffer", GLUT_STENCIL, 0, GLUT_STENCIL),
         ("rgb", GLUT_RGB, GLUT_INDEX, GLUT_RGB),
         # Alpha doesn't seem to be supported...

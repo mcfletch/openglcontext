@@ -16,7 +16,6 @@ BaseContext = testingcontext.getInteractive()
 glLight, glBlendFunc), we need to explicitly request a compatibility
 profile OpenGL context.
 '''
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.constants import GLfloat_3,GLfloat_4
@@ -32,7 +31,7 @@ class TestContext( BaseContext ):
     which provides the legacy fixed-function pipeline functions like
     glBegin/glEnd and glLight that this tutorial uses.
     '''
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     usage ="""Demonstrates blending functions:
     press 'b' to toggle blending functions
     press 'f' to toggle filter functions

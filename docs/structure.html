@@ -85,16 +85,56 @@ RenderMode objects (Timer, Opaque, Transparent, Select) driven by a
 visitor-pattern traversal. That system was removed once the flat pass replaced
 it; <code>Context.renderPasses</code> now names the flat-pass dispatcher.</p>
 
-<h3>OpenGL Core Profile Support</h3>
+<h3 id="core-profile">OpenGL Core Profile Support</h3>
 
-<p>OpenGLContext supports both legacy (compatibility) and modern (core profile)
-OpenGL rendering. To enable core profile rendering, set the environment variable:</p>
+<p>A context is core profile unless something asks otherwise. Core profile uses
+GLSL shaders rather than the fixed-function pipeline, which is what makes it work
+on OpenGL&nbsp;3.3+ contexts and on platforms such as macOS that offer nothing
+else &mdash; and it is what the engine's own geometry draws through, since
+<code>PBRMesh</code>, and so the glTF loader and every generator built on it, is
+shader-only. Every backend (<code>glfw</code>, <code>glut</code>,
+<code>pygame</code>, <code>wx</code>, <code>qt</code>) creates one.</p>
 
-<pre>OPENGLCONTEXT_PROFILE=core python your_script.py</pre>
+<p>The compatibility profile is fully supported, and is what a program asks for
+when it means to draw with the older pipeline.</p>
 
-<p>Core profile uses GLSL shaders instead of the deprecated fixed-function pipeline,
-making it compatible with modern OpenGL 3.3+ contexts and platforms like macOS that
-no longer support the compatibility profile.</p>
+<h4>Saying which profile your program needs</h4>
+
+<p><code>OPENGLCONTEXT_PROFILE=compatibility</code> settles the profile for a
+whole run, which is what a CI job or a one-off comparison wants. A program that
+<em>needs</em> a particular profile says so on its Context class instead, so the
+requirement travels with the code and nobody has to know to set a variable before
+running it:</p>
+
+<pre>class MyContext( BaseContext ):
+    profile = 'compatibility'   # this program draws with the fixed-function pipeline</pre>
+
+<p>Use this for anything calling <code>glBegin</code>, <code>glVertexPointer</code>,
+<code>glMaterial</code>, <code>glLight</code>, the matrix stack, display lists, or
+GLSL's <code>gl_ModelViewProjectionMatrix</code> and friends: none of them exist
+in a core context.</p>
+
+<p><code>profile</code> settles the OpenGL version to go with it, and is applied
+over any <code>contextDefinition</code> the class declares, so a subclass can
+name its profile and still inherit the size, buffers and rendering features its
+base asked for. Where more than the profile is at stake, declare the whole
+definition:</p>
+
+<pre>from OpenGLContext import contextdefinition
+
+class MyContext( BaseContext ):
+    contextDefinition = contextdefinition.ContextDefinition(
+        profile = 'compatibility',
+        size = (800, 600),
+        multisampleSamples = 4,
+    )</pre>
+
+<p>Either declaration is read before the window is created, on every backend --
+the profile, the version and the buffer formats are all window-creation
+parameters, so there is no configuring them afterwards. A definition passed to
+the constructor outranks both. Each context gets its own copy of what the class
+declared, since a context writes its own size back to its definition as the
+window is resized.</p>
 
 <h4>wxPython GTK3 and EGL</h4>
 
@@ -102,7 +142,7 @@ no longer support the compatibility profile.</p>
 creation. When using core profile rendering with wxPython, you must configure PyOpenGL
 to use EGL for proper context tracking:</p>
 
-<pre>PYOPENGL_PLATFORM=egl OPENGLCONTEXT_PROFILE=core python your_script.py</pre>
+<pre>PYOPENGL_PLATFORM=egl python your_script.py</pre>
 
 <p>The wxcontext module attempts to set this automatically, but if OpenGL is imported
 before wxcontext, you may need to set it manually. Symptoms of missing EGL configuration

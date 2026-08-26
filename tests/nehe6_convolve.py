@@ -27,7 +27,6 @@ a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 import time, sys
 try:
@@ -56,7 +55,7 @@ class TestContext( BaseContext ):
     which provides the legacy fixed-function pipeline functions like
     glBegin/glEnd that this tutorial uses.
     '''
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     FILTER_SIZE = 4
     convolutionKernel = arrays.zeros( (4,4,4),'f') + (1.0/(FILTER_SIZE*FILTER_SIZE))

@@ -53,6 +53,7 @@ from OpenGL.GLU import *
 from OpenGLContext.arrays import *
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )

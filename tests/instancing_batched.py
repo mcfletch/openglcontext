@@ -41,7 +41,6 @@ Press `c` to print the same counts on demand. The usual keys walk around.
 '''
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
 from OpenGLContext import testingcontext

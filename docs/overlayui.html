@@ -67,9 +67,9 @@ class Game(OverlayMixin, GLFWInteractiveContext):
     <code>popOverlay()</code>, the <code>overlays</code> stack and the
     <code>renderShaderOverlay</code> hook the core-profile render pass calls once
     the frame is finished. Nothing else has to be wired up.</p>
-  <p><strong>The overlay draws in the shader (core-profile) path only.</strong>
-    A legacy fixed-function context renders no overlay; run with
-    <code>OPENGLCONTEXT_PROFILE=core</code>.</p>
+  <p><strong>The overlay draws in the shader (core-profile) path only</strong>,
+    which is the default. A context that has asked for the compatibility profile
+    renders no overlay.</p>
 </section>
 
 <section id="dialogs">

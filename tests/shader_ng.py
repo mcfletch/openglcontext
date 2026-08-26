@@ -10,6 +10,7 @@ from OpenGLContext.scenegraph import box
 
 class VertexDefinition(list):
     """Small utility class to make it easy to define/load shader vertex arrays"""
+    profile = 'compatibility'   # draws with the fixed-function pipeline
 
     POSITION = NORMAL = ('x', 'y', 'z', 'w')
     COLOR = ('r', 'g', 'b', 'a')

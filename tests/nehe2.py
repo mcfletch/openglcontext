@@ -25,7 +25,6 @@ BaseContext = testingcontext.getInteractive()
 a compatibility profile OpenGL context. Modern OpenGL (3.2+ core profile)
 removes these functions in favor of shader-based rendering.
 '''
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
@@ -38,7 +37,7 @@ class TestContext( BaseContext ):
     which provides the legacy fixed-function pipeline functions like
     glBegin/glEnd that this tutorial uses.
     '''
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     '''The first customization is the initialPosition attribute.  By
     default, the OpenGLContext contexts position your
     eye/camera at (0,0,10), which makes it easy to see most

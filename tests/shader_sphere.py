@@ -9,7 +9,6 @@ import OpenGL
 OpenGL.ERROR_ON_COPY = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
@@ -83,7 +82,7 @@ class TestContext( BaseContext ):
     VBO, and only a VBO under OpenGL 3.1) to that attribute.
     """
     # Requires compatibility profile for glEnableClientState, glVertexPointer, etc.
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
 
     def OnInit( self ):
         coords,indices = sphere( pi/128, pi/2, pi*2 )

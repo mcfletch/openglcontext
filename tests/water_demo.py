@@ -59,7 +59,6 @@ moment, and the usual keys to walk around.
 '''
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 # What this demo is about is the shape of a surface, and a shadow map costs a

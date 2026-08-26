@@ -29,11 +29,11 @@ __all__ = ['count_nodes', 'count_lights', 'count_backgrounds', 'sky_background',
 
 #: What a viewer needs the renderer set to before anything imports it, and what
 #: a program that shows a model through :class:`ViewerContext` must therefore
-#: apply first: the core profile and the metallic/roughness pass, because a PBR
-#: material has nothing to say to any other one, and a warm sky held back far
-#: enough that the sun's shadows read against it.
+#: apply first: the metallic/roughness pass, because a PBR material has nothing
+#: to say to any other one, and a warm sky held back far enough that the sun's
+#: shadows read against it.  The core profile it all runs in is the default and
+#: is not named here.
 VIEWER_DEFAULTS = {
-    'OPENGLCONTEXT_PROFILE': 'core',
     'OPENGLCONTEXT_BACKEND': 'glfw',
     'OPENGLCONTEXT_RENDERER': 'pbr',
     'OPENGLCONTEXT_SHADOWS': '1',

@@ -11,7 +11,6 @@ import os
 # glTF tiles use PBR materials, which are shader-only: force the core profile (and
 # skip analytic-sky IBL, which washes the terrain) so the demo runs when launched
 # directly, not only under the test harness's environment.
-os.environ.setdefault("OPENGLCONTEXT_PROFILE", "core")
 os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
 
 from OpenGLContext import testingcontext

@@ -28,6 +28,7 @@ class TestContext( BaseContext ):
     function to bind a particular data source (normally a 
     VBO, and only a VBO under OpenGL 3.1) to that attribute.
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     
     def OnInit( self ):
         self.shader = shaders.compileProgram(

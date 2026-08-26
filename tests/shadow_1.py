@@ -45,7 +45,6 @@ choices with regard to attempts to minimize artefacts in the shadows.
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -66,7 +65,7 @@ from OpenGLContext.passes import flatcompat as flat
 class TestContext( BaseContext ):
     """Shadow rendering tutorial code"""
     # Requires compatibility profile for legacy GL functions (glHint, etc.)
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     '''We're going to get up nice and close to our geometry in the
     initial view'''
     initialPosition = (.5,1,3)

@@ -7,6 +7,7 @@ from OpenGL.GL import *
 from OpenGL.GLUT import *
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,5) # set initial camera position, tutorial does the re-positioning
     def Render( self, mode ):
         """Do basic rendering"""

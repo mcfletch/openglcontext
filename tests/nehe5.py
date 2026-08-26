@@ -15,7 +15,6 @@ a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 
 from OpenGL.GL import *
 import time
@@ -23,7 +22,7 @@ import time
 class TestContext( BaseContext ):
     """NeHe 5 tutorial"""
     # Force compatibility profile for legacy GL functions
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     '''There are no new customization points used here.'''
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
     def Render( self, mode):

@@ -129,7 +129,6 @@ def _capture_script(module, out, frames):
     tests_dir = os.path.join(REPO, 'tests')
     with tempfile.TemporaryDirectory() as td:
         env = dict(os.environ)
-        env.setdefault('OPENGLCONTEXT_PROFILE', 'core')
         env.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
         env.setdefault('OPENGLCONTEXT_SHADOWS', '1')
         env['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'

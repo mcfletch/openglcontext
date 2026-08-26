@@ -63,6 +63,7 @@ def get_glsl_version():
     return (1, 20)
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context"""
         # Check GLSL version - this tutorial requires legacy GLSL

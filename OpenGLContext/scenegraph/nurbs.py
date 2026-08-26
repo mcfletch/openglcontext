@@ -28,7 +28,7 @@ import logging
 
 log = logging.getLogger(__name__)
 from OpenGLContext import arrays
-from OpenGLContext.scenegraph.shadergeometry import _get_or_build_vao
+from OpenGLContext.scenegraph.shadergeometry import get_or_build_vao
 
 # Re-exported so importers / node registrations that reference nurbs.X keep
 # working after the split (see module docstring).
@@ -199,7 +199,7 @@ class _SurfaceRenderer(object):
             shader_vbo.unbind()
 
         try:
-            vao = _get_or_build_vao(self, program, (shader_vbo,), _bind_attributes)
+            vao = get_or_build_vao(self, program, (shader_vbo,), _bind_attributes)
             if vao is not None:
                 glBindVertexArray(vao)
                 try:

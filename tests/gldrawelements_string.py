@@ -9,6 +9,7 @@ points = array([[0,0,0],[1,0,0],[1,1,0],[0,1,0]], 'f')
 indices = array( range(len(points)), 'I')
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialisation"""
         print("""Should see a grey square over white background.

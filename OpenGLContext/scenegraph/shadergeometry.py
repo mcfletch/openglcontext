@@ -205,7 +205,7 @@ def _same_refs(a, b) -> bool:
     return len(a) == len(b) and all(x is y for x, y in zip(a, b))
 
 
-def _get_or_build_vao(owner, program, vbo_refs, build):
+def get_or_build_vao(owner, program, vbo_refs, build):
     """Return a cached VAO for (owner, program), building it once via ``build``.
 
     A VAO records attribute layout once, so it should be created once per
@@ -290,7 +290,7 @@ def render_shader_interleaved(
             if index_vbo is not None:
                 index_vbo.bind()   # element-array binding is recorded in the VAO
             vbo_obj.unbind()
-        vao = _get_or_build_vao(owner, program, (vbo_obj, index_vbo), build)
+        vao = get_or_build_vao(owner, program, (vbo_obj, index_vbo), build)
         if vao is not None:
             glBindVertexArray(vao)
             try:
@@ -358,7 +358,7 @@ def render_shader_arrays(
             _enabled, bound = bind_separate_arrays(program, vertices, normals, texcoords)
             for bound_vbo in bound:
                 bound_vbo.unbind()
-        vao = _get_or_build_vao(
+        vao = get_or_build_vao(
             owner, program, (vertices, normals, texcoords), build)
         if vao is not None:
             glBindVertexArray(vao)

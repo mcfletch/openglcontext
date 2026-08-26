@@ -32,7 +32,6 @@ none, so what shows here is the darkening. The usual keys walk around.
 import math
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 os.environ.setdefault('OPENGLCONTEXT_IBL', 'off')

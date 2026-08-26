@@ -5,7 +5,6 @@ NOTE: CubeBackground currently uses GL_QUADS which requires compatibility profil
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 from OpenGLContext import context
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
@@ -14,7 +13,7 @@ class TestContext( BaseContext ):
     """Tests the CubeBackground object's rendering
     """
     # Requires compatibility profile for GL_QUADS in CubeBackground
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Scene set up and initial processing"""
         print('Press f to toggle shader/legacy mode')

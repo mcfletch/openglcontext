@@ -37,6 +37,7 @@ outline = [
 ]
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     scale = 400.0
     def OnInit( self ):
         self.tess = gluNewTess()

@@ -129,12 +129,28 @@ class Texture(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
+    def bind(self):
+        """Make this the texture bound to ``GL_TEXTURE_2D``, and return it.
+
+        All a shader needs, and all that uploading into the texture needs.
+        ``GL_TEXTURE_2D`` as an *enable* switches on a fixed-function texture
+        unit, which a core profile does not have; see :meth:`__call__`.
+        """
+        glBindTexture(GL_TEXTURE_2D, self.texture)
+        return self
+
     def __call__(self):
-        """Enable and select the texture...
+        """Bind the texture and switch the fixed-function texture unit on.
+
+        The compatibility-profile entry point: ``glEnable(GL_TEXTURE_2D)`` is
+        what makes the fixed-function pipeline sample from the bound texture,
+        and is ``GLError(1280, 'invalid enumerant')`` in a core context.  Code
+        that samples through a shader calls :meth:`bind` instead.
+
         See:
             glBindTexture, glEnable(GL_TEXTURE_2D)
         """
-        glBindTexture(GL_TEXTURE_2D, self.texture)
+        self.bind()
         glEnable(GL_TEXTURE_2D)
 
     __enter__ = __call__
@@ -337,16 +353,21 @@ class CubeTexture(Texture):
                 image,
             )
 
-    def __call__(self):
-        """Enable and select the texture...
-        See:
-            glBindTexture, glEnable(GL_TEXTURE_2D)
-
-        In core profile, glEnable(GL_TEXTURE_CUBE_MAP) is not needed
-        since textures are sampled via shaders, not fixed-function pipeline.
-        """
+    def bind(self):
+        """Make this the texture bound to ``GL_TEXTURE_CUBE_MAP``, and return it."""
         glBindTexture(GL_TEXTURE_CUBE_MAP, self.texture)
-        # Don't call glEnable in core profile - it's done via samplers in shaders
+        return self
+
+    def __call__(self):
+        """Bind the cube map.
+
+        A cube map is sampled through a shader's sampler, so there is no
+        fixed-function unit to enable: binding is the whole operation.
+
+        See:
+            glBindTexture
+        """
+        return self.bind()
 
     __enter__ = __call__
 

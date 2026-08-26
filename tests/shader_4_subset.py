@@ -10,6 +10,7 @@ from OpenGLContext.arrays import *
 import time
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         vertex = shaders.compileShader("""
             uniform float end_fog;

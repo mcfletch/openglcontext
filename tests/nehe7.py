@@ -17,7 +17,6 @@ BaseContext = testingcontext.getInteractive()
 (glBegin, glEnd, glVertex, glNormal, glTexCoord, glTranslate, glRotate,
 glLight), we need to explicitly request a compatibility profile OpenGL context.
 '''
-from OpenGLContext import contextdefinition
 from OpenGL.GL import *
 import time
 try:
@@ -35,7 +34,7 @@ class TestContext( BaseContext ):
     which provides the legacy fixed-function pipeline functions like
     glBegin/glEnd and glLight that this tutorial uses.
     '''
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     '''Uses the addEventHandler method for registering new event handlers
     for given keyboard and mouse events.
     '''

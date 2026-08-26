@@ -67,8 +67,7 @@ oglc-terrain --size 1280x720 --sse 12 --memory 512    # window + quality/budget<
   option, alpha-MASK cards, instanced); shadows are the engine's cascaded shadow maps
   (<code>OPENGLCONTEXT_SHADOWS</code>, see <a href="shadows.html">Shadow Mapping</a>).</p>
   <p class="technical">The viewer is <code>bin/terrain_view.py</code>. It needs the
-  <strong>core profile + PBR renderer</strong> (it sets
-  <code>OPENGLCONTEXT_PROFILE=core</code>, <code>OPENGLCONTEXT_RENDERER=pbr</code> and
+  <strong>PBR renderer</strong> (it sets <code>OPENGLCONTEXT_RENDERER=pbr</code> and
   the GLFW backend itself), because terrain tiles are PBR glTF and their per-vertex
   colours only render under the PBR pass. Input is bound on both key-down and character
   events (some Wayland/GLFW setups deliver only the latter), and the character controller

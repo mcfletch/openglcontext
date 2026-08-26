@@ -11,6 +11,7 @@ MESSAGE = """Join the revolution!\nIt will be televised people.\nThere's no excu
 SHORT_TEST = "Short Str\nHere"
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit(self):
         """Create the font for use later"""
         self.font = glutfont.GLUTFontProvider.get( FontStyle( family=["Arial","SANS"]))

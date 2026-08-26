@@ -19,7 +19,6 @@ from OpenGLContext.context import Context
 from OpenGLContext.events import pygameevents
 import logging 
 log = logging.getLogger( __name__ )
-from OpenGLContext import contextdefinition
 
 class PygameContext(
     pygameevents.EventHandlerMixin,
@@ -34,16 +33,10 @@ class PygameContext(
     def __init__(self, definition=None, **named):
         #init pygame
         pygame.display.init()
-        if definition is None:
-            # Check if the class has a contextDefinition attribute (e.g., from subclass)
-            class_definition = getattr(self.__class__, 'contextDefinition', None)
-            if class_definition is not None:
-                definition = class_definition
-            else:
-                definition = contextdefinition.ContextDefinition( **named )
-        else:
-            for key,value in named.items():
-                setattr( definition, key, value )
+        # Resolved before the display mode is set, since the profile, version
+        # and buffer sizes below all come from it -- see
+        # Context.resolveDefinition.
+        definition = self.resolveDefinition( definition, **named )
         self.contextDefinition = definition
         self.screen = self.pygameDisplayMode( definition )
         pygame.display.set_caption(definition.title or self.getApplicationName())

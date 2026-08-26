@@ -28,6 +28,7 @@ from OpenGLContext.scenegraph.basenodes import *
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     '''Rather than declaring our constants as context attributes, we'll
     make an explicit namespace in which the constants are stored.'''
     shader_constants = dict(

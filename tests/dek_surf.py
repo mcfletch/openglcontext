@@ -6,7 +6,6 @@ a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import contextdefinition
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
@@ -43,7 +42,7 @@ texpts = array([
 
 class TestContext( BaseContext ):
     # Requires compatibility profile for glMap2f, glEvalMesh2, display lists
-    contextDefinition = contextdefinition.ContextDefinition(profile='compatibility')
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def Render( self, mode ):
         BaseContext.Render( self, mode )
         self.light.Light( GL_LIGHT0, mode )

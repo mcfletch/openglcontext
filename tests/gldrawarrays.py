@@ -6,6 +6,7 @@ from OpenGL.GL import *
 import flower_geometry
 
 class TestContext( BaseContext):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialisation"""
         print("""Should see flower pattern in gray over white background""")

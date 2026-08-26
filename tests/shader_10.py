@@ -23,6 +23,7 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     LIGHT_COUNT = 3
     '''Note that we're going to add 2 new vec4 fields to our light,
     the legacy GL has 2 floats and a direction vector, but we're 

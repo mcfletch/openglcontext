@@ -17,6 +17,7 @@ from OpenGLContext import atlas as atlasmodule
 from OpenGLContext.scenegraph.basenodes import *
     
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # draws with the fixed-function pipeline
     testText = 'Where in the world have you been hiding?'
     _rendered = False
     def OnInit( self ):
