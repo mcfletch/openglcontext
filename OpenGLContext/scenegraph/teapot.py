@@ -24,6 +24,9 @@ import ctypes
 import logging
 
 from OpenGLContext.scenegraph import tessellationlod
+from OpenGLContext.scenegraph.vertexsemantics import (
+    LOC_TEXCOORD, LOC_NORMAL, LOC_POSITION, LOC_TANGENT,
+)
 
 log = logging.getLogger(__name__)
 
@@ -294,20 +297,22 @@ class Teapot(nodetypes.Geometry, node.Node):
                 glBindBuffer(GL_ARRAY_BUFFER, buf)
                 glBufferData(GL_ARRAY_BUFFER, array.nbytes, array, GL_STATIC_DRAW)
                 # Interleaved T2F_N3F_V3F: texcoord@0, normal@8, position@20 bytes.
-                glEnableVertexAttribArray(0)
-                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, None)
-                glEnableVertexAttribArray(1)
-                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(8))
-                glEnableVertexAttribArray(2)
-                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(20))
-                # Tangents (location 3) in their own VBO, for PBR normal/bump mapping.
-                # Harmless to the lit shader, which ignores location 3.
+                glEnableVertexAttribArray(LOC_TEXCOORD)
+                glVertexAttribPointer(LOC_TEXCOORD, 2, GL_FLOAT, GL_FALSE, stride, None)
+                glEnableVertexAttribArray(LOC_NORMAL)
+                glVertexAttribPointer(LOC_NORMAL, 3, GL_FLOAT, GL_FALSE, stride,
+                                      ctypes.c_void_p(8))
+                glEnableVertexAttribArray(LOC_POSITION)
+                glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride,
+                                      ctypes.c_void_p(20))
+                # Tangents in their own VBO, for PBR normal/bump mapping; the lit
+                # shader does not declare the input and ignores it.
                 tangents = compute_tangents(array)
                 tbuf = glGenBuffers(1)
                 glBindBuffer(GL_ARRAY_BUFFER, tbuf)
                 glBufferData(GL_ARRAY_BUFFER, tangents.nbytes, tangents, GL_STATIC_DRAW)
-                glEnableVertexAttribArray(3)
-                glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 0, None)
+                glEnableVertexAttribArray(LOC_TANGENT)
+                glVertexAttribPointer(LOC_TANGENT, 4, GL_FLOAT, GL_FALSE, 0, None)
                 glBindVertexArray(0)
                 return vao, buf, count
 

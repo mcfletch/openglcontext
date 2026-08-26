@@ -75,6 +75,7 @@ OpenGLContext/
 │   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.html
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── pbrmaterial.py, pbrmesh.py   # The metallic/roughness material and mesh
+│   ├── vertexsemantics.py  # Which attribute location each vertex array is read at
 │   ├── road*.py      # Roads, roadworks, signs -- docs/roads.html
 │   ├── water/        # Wave field, surface, medium -- docs/water.html
 │   ├── terrain/      # Height fields and splat materials -- docs/terrain.html
@@ -174,13 +175,12 @@ def _render_shader(self, mode):
     # Set matrices
     shader_program.set_matrices(mode.matrix, mode.projection)
 
-    # Create VAO/VBO, set up vertex attributes
+    # Create VAO/VBO, set up vertex attributes at the locations
+    # scenegraph/vertexsemantics.py declares
     vao = glGenVertexArrays(1)
     glBindVertexArray(vao)
-    # ... setup vertex attributes at fixed locations
-    # layout(location = 0) = position
-    # layout(location = 1) = normal or color
-    # layout(location = 2) = texcoord
+    glEnableVertexAttribArray(LOC_POSITION)
+    glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride, None)
 
     glDrawArrays(GL_TRIANGLES, 0, vertex_count)
 
@@ -197,12 +197,31 @@ The `VRML97ShaderProgram` class (in `passes/shaderpass.py`) manages multiple sha
 - `unlit_program` - For selection/picking and unlit rendering
 - `vertex_color_program` - For per-vertex colored geometry (NURBS)
 - `point_program` - For PointSet/particles with per-vertex colors
+- `line_program` - For IndexedLineSet with per-vertex colors
+- `depth_program` - Position-only, for the shadow depth passes
 
-Shader attribute locations are fixed:
+**Attribute locations are fixed, and `OpenGLContext/scenegraph/vertexsemantics.py`
+is where they are decided** -- keyed by glTF's vertex semantics, which is the
+vocabulary the loaders already speak:
 
-- `layout(location = 0)` - position (aPosition or aTexCoord for text)
-- `layout(location = 1)` - normal or color (aNormal or aColor)
-- `layout(location = 2)` - texcoord or position (aTexCoord or aPosition)
+| Location | Semantic | Shader name |
+|---|---|---|
+| 0 | `TEXCOORD_0` | `aTexCoord` (vec2) |
+| 1 | `NORMAL` | `aNormal` (vec3) |
+| 2 | `POSITION` | `aPosition` (vec3) |
+| 3 | `TANGENT` | `aTangent` (vec4) |
+| 4 | `COLOR_0` | `aColor` (vec4) |
+| 5-10, 14 | -- | reserved for the per-instance inputs |
+| 11 | `TEXCOORD_1` | `aTexCoord1` (vec2) |
+| 12, 13 | `JOINTS_0`, `WEIGHTS_0` | `aJoints`, `aWeights` (vec4 each) |
+
+Locations rather than names, because a VAO records locations: with them fixed,
+one VAO per geometry serves the lit pass, the unlit pass and the depth pass
+alike. Import the `LOC_*` constants rather than writing the number. A program
+that owns both its geometry and its shader (the overlay UI batcher, particles,
+the vegetation and terrain layers) numbers its own inputs, but must not spell one
+of the names above and mean something else by it --
+`tests/unit/test_vertex_semantics.py` holds every shader in the package to that.
 
 ## Environment
 

@@ -21,6 +21,7 @@ import ctypes
 from OpenGL.GL import (
     GL_CCW, GL_CULL_FACE, glDisable, glEnable, glFrontFace,
 )
+from OpenGLContext.scenegraph import vertexsemantics
 
 __all__ = (
     'InstanceGroup',
@@ -50,14 +51,14 @@ __all__ = (
     'draw_instanced_mesh',
 )
 
-# Per-instance attribute locations (must match pbr.vert). A mat4 occupies four
-# consecutive locations (5..8); the packed object id at 9; the material-array
-# index at 10.
-INSTANCE_ATTR_LOC = 5
-INSTANCE_OBJECT_ID_LOC = 9
-INSTANCE_MATERIAL_LOC = 10
+# Per-instance attribute locations, from the engine-wide table in
+# OpenGLContext.scenegraph.vertexsemantics; a mat4 occupies four consecutive
+# locations from the first.
+INSTANCE_ATTR_LOC = vertexsemantics.INSTANCE_MODELVIEW
+INSTANCE_OBJECT_ID_LOC = vertexsemantics.INSTANCE_OBJECT_ID
+INSTANCE_MATERIAL_LOC = vertexsemantics.INSTANCE_MATERIAL
 #: Where a skinned instance's joint matrices start in the context's palette.
-INSTANCE_JOINT_BASE_LOC = 14
+INSTANCE_JOINT_BASE_LOC = vertexsemantics.INSTANCE_JOINT_BASE
 
 # std140 MaterialBlock stride in bytes (mirrors pbrpass.MATERIAL_UBO stride); used
 # to size a per-instance material array against the driver's UBO limit.

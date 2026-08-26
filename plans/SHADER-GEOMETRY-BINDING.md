@@ -1,6 +1,6 @@
 # How geometry reaches a shader it did not come with
 
-**Status:** 📋 Proposed, for review. Nothing here is applied.
+**Status:** 🚧 Step 1 landed (`vertexsemantics.py`, one table); steps 2-5 proposed.
 **Related:** [CORE-PROFILE-DEFAULT.md](CORE-PROFILE-DEFAULT.md) names this as the
 gap behind `shaderobjects.py`, `shader_11` and `shader_12`;
 [SHADER-TUTORIALS-CORE.md](SHADER-TUTORIALS-CORE.md) waits on it for three of its
@@ -58,10 +58,10 @@ speaks it (`frommesh.ATTRIBUTE_KEYWORDS`):
 | `COLOR_0` | vec4 | `colors`, `color` |
 | `JOINTS_0`, `WEIGHTS_0` | vec4 each, skinning | `skin_joint_floats`, `skin_weights` |
 
-## What is true today
+## What was true before step 1
 
-There is already a contract. It is undeclared, it is written down in three
-places that do not reference each other, and there are two of it.
+The contract was undeclared, written down in three places that did not reference
+each other, and there were two of it.
 
 **The main table**, as `pbrmesh.py` constants and as `layout(location = …)` in
 `pbr.vert`, `vrml97_lighting.vert` and `vrml97_unlit.vert`:
@@ -265,9 +265,16 @@ put in, applied one level up.
 
 ## Staging
 
-1. `vertexsemantics.py`: the table, alone, cited from the shaders and from
-   `pbrmesh.py`. No behaviour change; the two conflicting tables become one and
-   `position_location` goes.
+1. ✅ **Landed.** `vertexsemantics.py`: the table, alone, cited from the shaders,
+   from `pbrmesh.py` and from `passes/instancing.py`. The conflicting tables
+   became one -- `vrml97_point`, `vrml97_line`, `vrml97_background`,
+   `hdr_background` and `terrain_splat` were renumbered onto it,
+   `vrml97_vertex_color` moved its colour off the tangent location, and
+   `position_location` went. `shadergeometry` binds at the declared locations
+   instead of looking names up in a program, so `PointSet`, `IndexedLineSet`,
+   the NURBS surfaces, `IndexedPolygons` and the terrain each keep one VAO
+   rather than one per program. `tests/unit/test_vertex_semantics.py` holds
+   every shader in the package to the table.
 2. `GeometryArrays` + `bind_geometry`, with `_MeshGPU` and
    `bind_separate_arrays` reimplemented on it. Still no new capability, and the
    VRML97 array geometry stops rebuilding a VAO per program.
@@ -280,3 +287,10 @@ put in, applied one level up.
 
 Steps 1 and 2 are worth doing whether or not 3 follows: they remove the
 two-tables wart and a per-program VAO rebuild from the VRML97 geometry path.
+
+### Left standing after step 1
+
+`ShaderGeometry` (`scenegraph/shaders.py`) still binds by name, because a node
+that supplies its own `ShaderAttribute` arrays names them itself; it passes the
+program as its VAO cache key and gets one VAO per program. That is what step 3
+changes, by letting the node declare which semantic each name carries.

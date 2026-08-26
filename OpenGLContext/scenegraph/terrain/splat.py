@@ -32,6 +32,7 @@ from OpenGL.GL import (
 )
 from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.scenegraph import boundingvolume
+from OpenGLContext.scenegraph.vertexsemantics import LOC_POSITION, LOC_NORMAL
 from OpenGLContext.scenegraph.instancedgl import (
     load_program, texture_rgba, ensure_gl, delete_gl)
 
@@ -191,21 +192,15 @@ class SplatTerrain(vnodes.PointSet):
         ib = glGenBuffers(1)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.nbytes, idx, GL_STATIC_DRAW)
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0))
-        glEnableVertexAttribArray(0)
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(12))
-        glEnableVertexAttribArray(1)
-        glBindVertexArray(0)
-        # A second view of the same buffers for the shadow pass, whose depth-only
-        # program reads the position from attribute 2 rather than 0. Same data,
-        # no second copy of it: a vertex array is a description of buffers, and
-        # the ground is the largest mesh in the world.
-        vao_depth = glGenVertexArrays(1)
-        glBindVertexArray(vao_depth)
-        glBindBuffer(GL_ARRAY_BUFFER, vb)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib)
-        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 24, ctypes.c_void_p(0))
-        glEnableVertexAttribArray(2)
+        # The splat program and the shadow pass's depth-only program read the
+        # position and normal from the same locations, so one vertex array
+        # serves both -- and the ground is the largest mesh in the world.
+        glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, 24,
+                              ctypes.c_void_p(0))
+        glEnableVertexAttribArray(LOC_POSITION)
+        glVertexAttribPointer(LOC_NORMAL, 3, GL_FLOAT, GL_FALSE, 24,
+                              ctypes.c_void_p(12))
+        glEnableVertexAttribArray(LOC_NORMAL)
         glBindVertexArray(0)
         tex = dict(col=_array_texture("color", self.layers, self.material_fn),
                    nrm=_array_texture("normal", self.layers, self.material_fn),
@@ -225,7 +220,7 @@ class SplatTerrain(vnodes.PointSet):
               "numLayers", "worldMin", "worldSize", "detailScale", "macroScale",
               "normalStrength", "uModelView", "uProjection", "uNormalMatrix",
               "sunDirEye", "sunColor", "skyColor", "groundAmbient", "fogDensity", "fogColor")}
-        self._gl = dict(prog=prog, vao=vao, vao_depth=vao_depth, vb=vb, ib=ib,
+        self._gl = dict(prog=prog, vao=vao, vb=vb, ib=ib,
                         ncount=len(idx), tex=tex, U=U)
 
     def render_depth(self, mode: Any) -> int:
@@ -244,7 +239,7 @@ class SplatTerrain(vnodes.PointSet):
         """
         if not ensure_gl(self):
             return 1
-        glBindVertexArray(self._gl["vao_depth"])
+        glBindVertexArray(self._gl["vao"])
         glDrawElements(GL_TRIANGLES, self._gl["ncount"], GL_UNSIGNED_INT, None)
         glBindVertexArray(0)
         return 1
@@ -254,7 +249,7 @@ class SplatTerrain(vnodes.PointSet):
         g = self._gl
         if not g:
             return
-        delete_gl(vaos=[g["vao"], g["vao_depth"]], buffers=[g["vb"], g["ib"]],
+        delete_gl(vaos=[g["vao"]], buffers=[g["vb"], g["ib"]],
                   textures=list(g["tex"].values()), programs=[g["prog"]])
         self._gl = None
 

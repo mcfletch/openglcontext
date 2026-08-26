@@ -207,43 +207,72 @@ programs, each for a different kind of geometry:</p>
 Cook-Torrance shader, inheriting the rest.</p>
 
 <h3>Fixed Attribute Locations</h3>
-<p>Geometry binds vertex attributes to fixed locations so a cached VAO stays
-valid across programs. Two conventions are in use, by shader family:</p>
+<p>A geometry node and a shader program meet at an attribute location number, and
+<code>OpenGLContext/scenegraph/vertexsemantics.py</code> is where that number is
+decided for the whole engine. The keys are glTF's vertex semantics, the
+vocabulary the loaders already speak:</p>
 <table style="width: 100%;" border="0" cellpadding="5" cellspacing="3">
   <tbody>
     <tr>
       <th style="vertical-align: top;">Location</th>
-      <th style="vertical-align: top;">Lit / unlit / vertex-colour / depth</th>
-      <th style="vertical-align: top;">Point / line / background</th>
+      <th style="vertical-align: top;">Semantic</th>
+      <th style="vertical-align: top;">Shader name</th>
     </tr>
     <tr>
       <td style="vertical-align: top;">0</td>
-      <td style="vertical-align: top;"><code>aTexCoord</code></td>
-      <td style="vertical-align: top;"><code>aPosition</code></td>
+      <td style="vertical-align: top;"><code>TEXCOORD_0</code></td>
+      <td style="vertical-align: top;"><code>aTexCoord</code> (vec2)</td>
     </tr>
     <tr>
       <td style="vertical-align: top;">1</td>
-      <td style="vertical-align: top;"><code>aNormal</code></td>
-      <td style="vertical-align: top;"><code>aColor</code></td>
+      <td style="vertical-align: top;"><code>NORMAL</code></td>
+      <td style="vertical-align: top;"><code>aNormal</code> (vec3)</td>
     </tr>
     <tr>
       <td style="vertical-align: top;">2</td>
-      <td style="vertical-align: top;"><code>aPosition</code></td>
-      <td style="vertical-align: top;">&mdash;</td>
+      <td style="vertical-align: top;"><code>POSITION</code></td>
+      <td style="vertical-align: top;"><code>aPosition</code> (vec3)</td>
     </tr>
     <tr>
       <td style="vertical-align: top;">3</td>
-      <td style="vertical-align: top;"><code>aColor</code> (vertex-colour
-        program only)</td>
+      <td style="vertical-align: top;"><code>TANGENT</code></td>
+      <td style="vertical-align: top;"><code>aTangent</code> (vec4, w = handedness)</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">4</td>
+      <td style="vertical-align: top;"><code>COLOR_0</code></td>
+      <td style="vertical-align: top;"><code>aColor</code> (vec4)</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">5&ndash;10, 14</td>
       <td style="vertical-align: top;">&mdash;</td>
+      <td style="vertical-align: top;">reserved for the
+        <a href="instancing.html">per-instance inputs</a></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">11</td>
+      <td style="vertical-align: top;"><code>TEXCOORD_1</code></td>
+      <td style="vertical-align: top;"><code>aTexCoord1</code> (vec2)</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">12, 13</td>
+      <td style="vertical-align: top;"><code>JOINTS_0</code>, <code>WEIGHTS_0</code></td>
+      <td style="vertical-align: top;"><code>aJoints</code>, <code>aWeights</code>
+        (vec4 each, skinning)</td>
     </tr>
   </tbody>
 </table>
-<p class="technical">The two conventions differ because the lit family carries a
-normal and texture coordinate while the point/line family does not. The
-shadow-depth vertex shader deliberately binds position at location&nbsp;2 to
-match the lit shader, so a VAO built for lit drawing can be reused for the depth
-pass without rebinding.</p>
+<p>A shader of your own may put an input the engine has no name for at
+location&nbsp;15 or above (<code>vertexsemantics.FIRST_FREE_LOCATION</code>).</p>
+<p class="technical">Locations rather than names, because a Vertex Array Object
+records locations. A VAO built by looking each name up in one program is valid
+only for that program, so a mesh drawn by the lit program, the unlit program and
+the shadow depth pass would need three of them; with the locations fixed, one VAO
+per geometry serves every program that follows the table. A program that owns
+both its geometry and its shader &mdash; the overlay UI batcher, the particle
+system, the vegetation layers &mdash; is outside the agreement and numbers its own
+inputs, but it must not spell one of the names above and mean something else by
+it.</p>
 </section>
 
 <section>

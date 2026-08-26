@@ -4,9 +4,13 @@ Draws through the shader pass under the core profile, and as a display list
 under the compatibility profile.
 """
 from OpenGL.GL import *
+from OpenGL.GL import glDeleteVertexArrays
 from OpenGL.arrays import vbo
 from OpenGLContext import displaylist
 from OpenGLContext.scenegraph import coordinatebounded
+from OpenGLContext.scenegraph.vertexsemantics import (
+    LOC_POSITION, LOC_COLOR,
+)
 from vrml.vrml97 import basenodes
 import warnings
 import ctypes
@@ -226,25 +230,23 @@ class IndexedLineSet(
             shader_program.use(lit=True)
             return 1
 
+        # One VAO serves whichever program the pass chose, since both read the
+        # semantics at the same locations.
         gpu = self._line_gpu
-        vao = gpu['vao'].get(int(program))
+        vao = gpu['vao']
         if vao is None:
-            # Where the position goes depends on which program was chosen: the
-            # line program reads it at 0 and the unlit one at 2. A buffer bound
-            # to the location the shader does not read puts every vertex at the
-            # origin, and the line disappears with no GL error to say why.
-            position = shader_program.position_location(program)
             vao = glGenVertexArrays(1)
             glBindVertexArray(vao)
             vbo_obj.bind()
-            glEnableVertexAttribArray(position)
-            glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, None)
+            glEnableVertexAttribArray(LOC_POSITION)
+            glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride, None)
             if has_colors:
-                glEnableVertexAttribArray(1)
-                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
+                glEnableVertexAttribArray(LOC_COLOR)
+                glVertexAttribPointer(LOC_COLOR, 3, GL_FLOAT, GL_FALSE, stride,
+                                      ctypes.c_void_p(12))
             vbo_obj.unbind()
             glBindVertexArray(0)
-            gpu['vao'][int(program)] = vao
+            gpu['vao'] = vao
 
         glBindVertexArray(vao)
         try:
@@ -312,7 +314,7 @@ class IndexedLineSet(
         if gpu is None:
             gpu = self._line_gpu = {
                 'vbo': vbo.VBO(data, usage='GL_DYNAMIC_DRAW'),
-                'vao': {},
+                'vao': None,
                 'stride': stride,
                 'has_colors': has_colors,
                 'segments': segments,
@@ -322,7 +324,11 @@ class IndexedLineSet(
             gpu['stride'] = stride
             gpu['has_colors'] = has_colors
             gpu['segments'] = segments
-            gpu['vao'] = {}
+            if gpu['vao'] is not None:
+                # The layout may have changed with the data; rebind it against
+                # the new upload rather than drawing through stale pointers.
+                glDeleteVertexArrays(1, [gpu['vao']])
+                gpu['vao'] = None
         gpu['vbo'].bind()
         gpu['vbo'].unbind()
 

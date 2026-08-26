@@ -1,19 +1,22 @@
-"""Shader-compatible geometry rendering support
+"""Binding a geometry node's vertex buffers for the shader passes.
 
-This module provides utilities for rendering geometry with the VRML97 shader pass.
-Geometry nodes can use these utilities to support shader-based rendering alongside
-legacy fixed-function rendering.
+Geometry nodes that keep their vertices in ordinary arrays -- as against the
+raw-GL layers, which drive their own programs -- hand those arrays to the
+functions here, which bind them at the locations
+:mod:`OpenGLContext.scenegraph.vertexsemantics` declares. The locations are the
+same in every conforming program, so a Vertex Array Object built once serves the
+lit pass, the unlit pass and the shadow depth pass, and ``get_or_build_vao``
+keeps it on the node.
 
-The shader expects vertex attributes at specific layout locations:
-- layout(location = 0): aTexCoord (vec2)
-- layout(location = 1): aNormal (vec3)
-- layout(location = 2): aPosition (vec3)
+Two interleaved layouts have names here, both 32 bytes per vertex:
 
-Two common vertex formats are supported:
-1. T2F_N3F_V3F (Box): texcoord(2) + normal(3) + position(3) = 32 bytes
-2. V3F_T2F_N3F (Quadrics): position(3) + texcoord(2) + normal(3) = 32 bytes
+``T2F_N3F_V3F``
+    texcoord(2) + normal(3) + position(3); what ``Box`` builds.
+``V3F_T2F_N3F``
+    position(3) + texcoord(2) + normal(3); what the quadrics build.
 
-For separate arrays (ArrayGeometry), each array is bound individually.
+A geometry with an array per attribute passes them to ``bind_separate_arrays``
+instead.
 """
 from __future__ import annotations
 
@@ -21,13 +24,16 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from OpenGL.GL import (
     GL_FLOAT, GL_FALSE, GL_TRIANGLES, GL_UNSIGNED_SHORT,
-    glGetAttribLocation, glEnableVertexAttribArray,
+    glEnableVertexAttribArray,
     glDisableVertexAttribArray, glVertexAttribPointer,
     glDrawArrays, glDrawElements,
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
 )
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import array
+from OpenGLContext.scenegraph.vertexsemantics import (
+    LOC_TEXCOORD, LOC_NORMAL, LOC_POSITION,
+)
 
 if TYPE_CHECKING:
     from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
@@ -66,16 +72,25 @@ class VertexFormat:
 VBO_STRIDE: int = 32
 
 
+#: Which semantic each ``VertexFormat`` key describes, in binding order.
+_INTERLEAVED = (
+    ('position', LOC_POSITION),
+    ('normal', LOC_NORMAL),
+    ('texcoord', LOC_TEXCOORD),
+)
+
+
 def bind_interleaved_vbo(
     vbo_obj: vbo.VBO,
     program: int,
     vertex_format: Dict[str, int]
 ) -> Dict[str, int]:
-    """Bind an interleaved VBO and set up vertex attributes.
+    """Bind an interleaved VBO and set up its vertex attributes.
 
     Args:
         vbo_obj: VBO containing interleaved vertex data
-        program: Shader program ID
+        program: Shader program the draw will use; the locations do not depend
+            on it, and it is here so a caller can key a cache by it.
         vertex_format: One of VertexFormat.T2F_N3F_V3F or VertexFormat.V3F_T2F_N3F
 
     Returns:
@@ -85,45 +100,16 @@ def bind_interleaved_vbo(
 
     stride = vertex_format['stride']
     enabled: Dict[str, int] = {}
-
-    # Position attribute
-    pos_loc = glGetAttribLocation(program, 'aPosition')
-    if pos_loc >= 0:
-        glEnableVertexAttribArray(pos_loc)
+    for name, location in _INTERLEAVED:
+        glEnableVertexAttribArray(location)
         glVertexAttribPointer(
-            pos_loc,
-            vertex_format['position_size'],
+            location,
+            vertex_format['%s_size' % (name,)],
             GL_FLOAT, GL_FALSE,
             stride,
-            vbo_obj + vertex_format['position_offset']
+            vbo_obj + vertex_format['%s_offset' % (name,)]
         )
-        enabled['aPosition'] = pos_loc
-
-    # Normal attribute
-    normal_loc = glGetAttribLocation(program, 'aNormal')
-    if normal_loc >= 0:
-        glEnableVertexAttribArray(normal_loc)
-        glVertexAttribPointer(
-            normal_loc,
-            vertex_format['normal_size'],
-            GL_FLOAT, GL_FALSE,
-            stride,
-            vbo_obj + vertex_format['normal_offset']
-        )
-        enabled['aNormal'] = normal_loc
-
-    # Texture coordinate attribute
-    tex_loc = glGetAttribLocation(program, 'aTexCoord')
-    if tex_loc >= 0:
-        glEnableVertexAttribArray(tex_loc)
-        glVertexAttribPointer(
-            tex_loc,
-            vertex_format['texcoord_size'],
-            GL_FLOAT, GL_FALSE,
-            stride,
-            vbo_obj + vertex_format['texcoord_offset']
-        )
-        enabled['aTexCoord'] = tex_loc
+        enabled[name] = location
 
     return enabled
 
@@ -140,7 +126,8 @@ def bind_separate_arrays(
     vertex data in separate arrays rather than interleaved.
 
     Args:
-        program: Shader program ID
+        program: Shader program the draw will use; the locations do not depend
+            on it, and it is here so a caller can key a cache by it.
         vertices: VBO of vertex positions (vec3)
         normals: VBO of normals (vec3)
         texcoords: VBO of texture coordinates (vec2)
@@ -151,35 +138,18 @@ def bind_separate_arrays(
     enabled: Dict[str, int] = {}
     bound_vbos: List[vbo.VBO] = []
 
-    # Position attribute
-    if vertices is not None:
-        pos_loc = glGetAttribLocation(program, 'aPosition')
-        if pos_loc >= 0:
-            vertices.bind()
-            bound_vbos.append(vertices)
-            glEnableVertexAttribArray(pos_loc)
-            glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, 0, vertices)
-            enabled['aPosition'] = pos_loc
-
-    # Normal attribute
-    if normals is not None:
-        normal_loc = glGetAttribLocation(program, 'aNormal')
-        if normal_loc >= 0:
-            normals.bind()
-            bound_vbos.append(normals)
-            glEnableVertexAttribArray(normal_loc)
-            glVertexAttribPointer(normal_loc, 3, GL_FLOAT, GL_FALSE, 0, normals)
-            enabled['aNormal'] = normal_loc
-
-    # Texture coordinate attribute
-    if texcoords is not None:
-        tex_loc = glGetAttribLocation(program, 'aTexCoord')
-        if tex_loc >= 0:
-            texcoords.bind()
-            bound_vbos.append(texcoords)
-            glEnableVertexAttribArray(tex_loc)
-            glVertexAttribPointer(tex_loc, 2, GL_FLOAT, GL_FALSE, 0, texcoords)
-            enabled['aTexCoord'] = tex_loc
+    for name, buffer, location, components in (
+        ('position', vertices, LOC_POSITION, 3),
+        ('normal', normals, LOC_NORMAL, 3),
+        ('texcoord', texcoords, LOC_TEXCOORD, 2),
+    ):
+        if buffer is None:
+            continue
+        buffer.bind()
+        bound_vbos.append(buffer)
+        glEnableVertexAttribArray(location)
+        glVertexAttribPointer(location, components, GL_FLOAT, GL_FALSE, 0, buffer)
+        enabled[name] = location
 
     return enabled, bound_vbos
 
@@ -205,15 +175,25 @@ def _same_refs(a, b) -> bool:
     return len(a) == len(b) and all(x is y for x, y in zip(a, b))
 
 
-def get_or_build_vao(owner, program, vbo_refs, build):
-    """Return a cached VAO for (owner, program), building it once via ``build``.
+#: Cache key for a layout that reads the same in every program, because it uses
+#: the locations :mod:`OpenGLContext.scenegraph.vertexsemantics` declares.
+SHARED_LAYOUT = 0
 
-    A VAO records attribute layout once, so it should be created once per
-    (node, shader-program) pair and merely re-bound on every later frame -- the
-    same discipline ``passes/instancing`` and ``pbrmesh`` already use. The VAO is
-    keyed by shader program (attribute locations are program-specific) and by the
+
+def get_or_build_vao(owner, program, vbo_refs, build, layout_key=None):
+    """Return a VAO cached on ``owner``, building it once via ``build``.
+
+    A VAO records attribute layout once, so it should be created once and merely
+    re-bound on every later frame -- the same discipline ``passes/instancing``
+    and ``pbrmesh`` already use. It is keyed by ``layout_key`` and by the
     identity of the VBOs it wraps, so a data-driven VBO replacement rebuilds it
     rather than binding stale buffers.
+
+    ``layout_key`` defaults to ``program``, which is what a ``build`` that looks
+    its attribute names up in the program needs: those locations are that
+    program's. A ``build`` that uses the engine's declared locations passes
+    :data:`SHARED_LAYOUT` instead, and its one VAO then serves the lit pass, the
+    unlit pass and the depth pass alike.
 
     ``build`` runs with the new VAO bound and must set up (and leave enabled) the
     vertex attributes; it must NOT draw or disable them. Returns the VAO name.
@@ -226,7 +206,7 @@ def get_or_build_vao(owner, program, vbo_refs, build):
             owner._shader_vao_cache = cache
         except (AttributeError, TypeError):
             return None
-    key = int(program)
+    key = int(program if layout_key is None else layout_key)
     entry = cache.get(key)
     if entry is not None:
         cached_refs, vao = entry
@@ -290,7 +270,8 @@ def render_shader_interleaved(
             if index_vbo is not None:
                 index_vbo.bind()   # element-array binding is recorded in the VAO
             vbo_obj.unbind()
-        vao = get_or_build_vao(owner, program, (vbo_obj, index_vbo), build)
+        vao = get_or_build_vao(owner, program, (vbo_obj, index_vbo), build,
+                               layout_key=SHARED_LAYOUT)
         if vao is not None:
             glBindVertexArray(vao)
             try:
@@ -359,7 +340,8 @@ def render_shader_arrays(
             for bound_vbo in bound:
                 bound_vbo.unbind()
         vao = get_or_build_vao(
-            owner, program, (vertices, normals, texcoords), build)
+            owner, program, (vertices, normals, texcoords), build,
+            layout_key=SHARED_LAYOUT)
         if vao is not None:
             glBindVertexArray(vao)
             try:

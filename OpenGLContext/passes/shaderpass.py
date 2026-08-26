@@ -475,27 +475,6 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         """Deactivate the shader program."""
         self._bind_program(0)
 
-    #: Where the shaders that carry nothing but a position and a colour read
-    #: the position from. Everything else -- lit, unlit, vertex-colour, PBR --
-    #: reads it at 2, keeping location 0 for the texture coordinate.
-    POSITION_ATTRIBUTE = 2
-    COMPACT_POSITION_ATTRIBUTE = 0
-
-    def position_location(self, program: Optional[int] = None) -> int:
-        """Which attribute a program reads the vertex position from.
-
-        Two conventions live side by side, and a geometry node that chooses its
-        program at draw time has to lay its buffer out for whichever it chose:
-        a vertex array bound to the location the shader does not read leaves
-        every vertex at the origin, and the geometry disappears without a GL
-        error to say so.
-        """
-        if program is None:
-            program = self._program_for_default()
-        if program and program in (self.point_program, self.line_program):
-            return self.COMPACT_POSITION_ATTRIBUTE
-        return self.POSITION_ATTRIBUTE
-
     def _get_location(self, name: str, program: Optional[int] = None) -> int:
         """Get uniform location, caching the result.
 

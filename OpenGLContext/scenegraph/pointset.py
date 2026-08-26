@@ -1,9 +1,13 @@
 """Geometry type for "point-arrays" w/ colour support"""
 
 from OpenGL.GL import *
+from OpenGL.GL import glDeleteVertexArrays
 from OpenGL.arrays import vbo
 from vrml.vrml97 import basenodes
 from OpenGLContext.scenegraph import coordinatebounded
+from OpenGLContext.scenegraph.vertexsemantics import (
+    LOC_POSITION, LOC_COLOR,
+)
 from OpenGLContext.arrays import array
 from OpenGL.extensions import alternate
 from OpenGL.GL.ARB.point_parameters import *
@@ -151,29 +155,25 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
 
         # Cached VAO+VBO: the point buffer is built once and re-uploaded (into
         # the same buffer) only when coord/color change, then every warm frame is
-        # just bind-VAO + draw. The VAO is keyed per shader program (attribute
-        # locations are program-specific); a data change clears them so the layout
-        # is rebound against the re-uploaded buffer.
+        # just bind-VAO + draw. One VAO serves whichever program the pass chose,
+        # since both read the semantics at the same locations; a data change
+        # drops it so the layout is rebound against the re-uploaded buffer.
         vbo_obj, stride = self._point_buffer(mode, points, has_colors)
         gpu = self._point_gpu
-        vao = gpu['vao'].get(int(program))
+        vao = gpu['vao']
         if vao is None:
             vao = glGenVertexArrays(1)
-            # Where the position goes depends on which program was chosen: the
-            # point program reads it at 0 and the unlit one at 2. A buffer bound
-            # to the location the shader does not read puts every vertex at the
-            # origin, and the geometry disappears with no GL error to say why.
-            position = shader_program.position_location(program)
             glBindVertexArray(vao)
             vbo_obj.bind()
-            glEnableVertexAttribArray(position)
-            glVertexAttribPointer(position, 3, GL_FLOAT, GL_FALSE, stride, None)
+            glEnableVertexAttribArray(LOC_POSITION)
+            glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride, None)
             if has_colors:
-                glEnableVertexAttribArray(1)
-                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))
+                glEnableVertexAttribArray(LOC_COLOR)
+                glVertexAttribPointer(LOC_COLOR, 3, GL_FLOAT, GL_FALSE, stride,
+                                      ctypes.c_void_p(12))
             vbo_obj.unbind()
             glBindVertexArray(0)
-            gpu['vao'][int(program)] = vao
+            gpu['vao'] = vao
 
         # Set point size (both fixed-function and shader-controlled)
         glPointSize(point_size)
@@ -234,7 +234,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         if gpu is None:
             gpu = self._point_gpu = {
                 'vbo': vbo.VBO(interleaved, usage='GL_DYNAMIC_DRAW'),
-                'vao': {},
+                'vao': None,
                 'stride': stride,
                 'has_colors': has_colors,
             }
@@ -242,7 +242,11 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
             gpu['vbo'].set_array(interleaved)
             gpu['stride'] = stride
             gpu['has_colors'] = has_colors
-            gpu['vao'] = {}   # layout may have changed; rebind against new upload
+            if gpu['vao'] is not None:
+                # The layout may have changed with the data; rebind it against
+                # the new upload rather than drawing through stale pointers.
+                glDeleteVertexArrays(1, [gpu['vao']])
+                gpu['vao'] = None
         # Force the (re-)upload now so the buffer is populated before draw.
         gpu['vbo'].bind()
         gpu['vbo'].unbind()

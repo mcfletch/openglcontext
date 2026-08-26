@@ -7,6 +7,9 @@ from OpenGL.GLU import *
 from OpenGL.GLE import *
 from OpenGL.arrays import vbo
 from OpenGLContext.scenegraph import polygontessellator, vertex
+from OpenGLContext.scenegraph.vertexsemantics import (
+    LOC_NORMAL, LOC_POSITION,
+)
 from OpenGLContext.scenegraph.text import _toolsfont, font, fontprovider
 from ttfquery import glyphquery
 import logging
@@ -688,13 +691,12 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
 
                 from ctypes import c_void_p
 
-                # Position attribute (location 2)
-                glEnableVertexAttribArray(2)
-                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(position_offset))
-
-                # Normal attribute (location 1)
-                glEnableVertexAttribArray(1)
-                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(normal_offset))
+                glEnableVertexAttribArray(LOC_POSITION)
+                glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride,
+                                      c_void_p(position_offset))
+                glEnableVertexAttribArray(LOC_NORMAL)
+                glVertexAttribPointer(LOC_NORMAL, 3, GL_FLOAT, GL_FALSE, stride,
+                                      c_void_p(normal_offset))
 
                 # Render each character with its transform
                 x_offset = 0.0

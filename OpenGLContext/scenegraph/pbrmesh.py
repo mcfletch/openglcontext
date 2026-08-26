@@ -2,16 +2,13 @@
 
 Holds raw vertex attribute arrays (position, normal, texcoord, optional tangent)
 and an optional index buffer, and renders them through the bound shader program
-using the fixed attribute locations the OpenGLContext shaders expect:
-
-    location 0 = texcoord (vec2)
-    location 1 = normal   (vec3)
-    location 2 = position  (vec3)
-    location 3 = tangent   (vec4)   -- only bound when present (normal mapping)
+at the attribute locations :mod:`OpenGLContext.scenegraph.vertexsemantics`
+declares. Because those locations are the same in every conforming program, the
+one VAO built here serves the lit pass, the unlit pass and the shadow depth pass
+alike.
 
 The pass binds the program and sets matrices before calling ``render``; this node
-only sets up the VAO and issues the draw, so it works in both the visible pass
-and the shadow depth pass.
+only sets up the VAO and issues the draw.
 """
 from __future__ import annotations
 
@@ -28,12 +25,10 @@ from OpenGL.GL import (
 from OpenGL.arrays import vbo
 from vrml import node, field
 from OpenGLContext.scenegraph import boundingvolume
-
-LOC_TEXCOORD, LOC_NORMAL, LOC_POSITION, LOC_TANGENT, LOC_COLOR = 0, 1, 2, 3, 4
-# Locations 5..10 are the instanced-draw inputs (mat4 modelview + ids); the second
-# UV set sits above them, and a skinned mesh's joint indices and weights above that.
-LOC_TEXCOORD1 = 11
-LOC_JOINTS, LOC_WEIGHTS = 12, 13
+from OpenGLContext.scenegraph.vertexsemantics import (
+    LOC_TEXCOORD, LOC_NORMAL, LOC_POSITION, LOC_TANGENT, LOC_COLOR,
+    LOC_TEXCOORD1, LOC_JOINTS, LOC_WEIGHTS,
+)
 
 
 class _MeshGPU(object):

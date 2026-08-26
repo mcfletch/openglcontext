@@ -361,7 +361,8 @@ class IndexedPolygons(
                 bound_vbo.unbind()
 
         vao = sg.get_or_build_vao(
-            self, program, (vbos.coord, normals, texcoords, index_vbo), build)
+            self, program, (vbos.coord, normals, texcoords, index_vbo), build,
+            layout_key=sg.SHARED_LAYOUT)
         count = len(self._triangle_index(mode))
         if vao is not None:
             glBindVertexArray(vao)

@@ -70,9 +70,11 @@ implements each piece.</p>
   </ul>
   <p>So the shape's vertices are shared by all copies, while the per-instance array
     supplies each copy's own transform, id and material.</p>
-  <p class="technical">OpenGLContext packs three things per instance, at fixed
-    attribute locations that the shaders (<code>pbr.vert</code>,
-    <code>vrml97_lighting.vert</code>, <code>shadow_depth.vert</code>) agree on:
+  <p class="technical">OpenGLContext packs three things per instance, at the
+    attribute locations <code>scenegraph/vertexsemantics.py</code> reserves and
+    the shaders (<code>pbr.vert</code>, <code>vrml97_lighting.vert</code>,
+    <code>shadow_depth.vert</code>) read &mdash; see
+    <a href="renderpasses.html">Fixed Attribute Locations</a>:
     <em>locations&nbsp;5&ndash;8</em> a <code>mat4</code> model-view matrix (a matrix
     occupies four consecutive vec4 locations), <em>location&nbsp;9</em> a
     <code>uint</code> object id for picking, <em>location&nbsp;10</em> a

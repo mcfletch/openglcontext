@@ -28,7 +28,12 @@ import logging
 
 log = logging.getLogger(__name__)
 from OpenGLContext import arrays
-from OpenGLContext.scenegraph.shadergeometry import get_or_build_vao
+from OpenGLContext.scenegraph.shadergeometry import (
+    get_or_build_vao, SHARED_LAYOUT,
+)
+from OpenGLContext.scenegraph.vertexsemantics import (
+    LOC_POSITION, LOC_NORMAL, LOC_COLOR,
+)
 
 # Re-exported so importers / node registrations that reference nurbs.X keep
 # working after the split (see module docstring).
@@ -173,33 +178,37 @@ class _SurfaceRenderer(object):
             self._setup_vertex_color_lights(mode, shader_program, vc_prog)
 
         # Interleaved layout: with colours it's color(4)+normal(3)+vertex(3);
-        # without, normal(3)+vertex(3). Attribute locations match the VRML97
-        # shaders: 1=aNormal, 2=aPosition, 3=aColor.
+        # without, normal(3)+vertex(3).
         from ctypes import c_void_p
         if has_colors:
             stride, color_offset, normal_offset, vertex_offset = 40, 0, 16, 28
         else:
             stride, color_offset, normal_offset, vertex_offset = 24, None, 0, 12
 
-        # Cache the VAO on the node keyed by program + VBO identity:
-        # the VBO is already cached per LOD level, so only the per-frame VAO
-        # gen/delete + attribute re-binding remained. A tessellation change makes
-        # a new VBO, which rebuilds the VAO.
+        # The VBO is already cached per LOD level, so the VAO is cached beside
+        # it: a tessellation change makes a new VBO, which rebuilds the VAO, and
+        # so does a change of whether the surface carries colours, since that is
+        # what the interleaved stride depends on.
         program = vc_prog if has_colors else shader_program.program
 
         def _bind_attributes():
             shader_vbo.bind()
-            glEnableVertexAttribArray(2)
-            glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(vertex_offset))
-            glEnableVertexAttribArray(1)
-            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, c_void_p(normal_offset))
+            glEnableVertexAttribArray(LOC_POSITION)
+            glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride,
+                                  c_void_p(vertex_offset))
+            glEnableVertexAttribArray(LOC_NORMAL)
+            glVertexAttribPointer(LOC_NORMAL, 3, GL_FLOAT, GL_FALSE, stride,
+                                  c_void_p(normal_offset))
             if has_colors and color_offset is not None:
-                glEnableVertexAttribArray(3)
-                glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, c_void_p(color_offset))
+                glEnableVertexAttribArray(LOC_COLOR)
+                glVertexAttribPointer(LOC_COLOR, 4, GL_FLOAT, GL_FALSE, stride,
+                                      c_void_p(color_offset))
             shader_vbo.unbind()
 
         try:
-            vao = get_or_build_vao(self, program, (shader_vbo,), _bind_attributes)
+            vao = get_or_build_vao(
+                self, program, (shader_vbo, bool(has_colors)), _bind_attributes,
+                layout_key=SHARED_LAYOUT)
             if vao is not None:
                 glBindVertexArray(vao)
                 try:
