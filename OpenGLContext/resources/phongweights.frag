@@ -28,7 +28,7 @@ vec3 phong_weightCalc(
         if (spot_params.w != 0.0) {
             // is a spot...
             float spot_cos = dot(
-                gl_NormalMatrix * normalize(spot_direction.xyz),
+                normalMatrix * normalize(spot_direction.xyz),
                 normalize(-light_pos)
             );
             if (spot_cos <= spot_params.x) {

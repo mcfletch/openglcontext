@@ -33,10 +33,9 @@ class TestContext( BaseContext ):
     Shows use of uniforms, and a few simple calculations 
     within the vertex shader...
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
-        '''Much like the "varying" values which can be used to 
-        pass values between vertex and fragment shaders, "uniform"
+        '''Much like the "in"/"out" values which pass a value from
+        the vertex shader to the fragment shader, "uniform"
         values allow us to pass values into our shaders from 
         our code.  You can think of a uniform value as being used 
         to specify something which is "uniform" (the same) for an 
@@ -53,43 +52,38 @@ class TestContext( BaseContext ):
         these variables are simple floating-point values in this case,
         but could be any supported type.
         
-        We replace our "first principles" approach to calculating the 
-        vertex position with the optimized built-in function ftransform()
-        which has certain performance and repeatability guarantees that 
-        the matrix multiplication doesn't necessarily provide.  As with 
-        the raw operation, once we have performed the ftransform(),
-        gl_Position is the eye-space coordinate of this particular
-        vertex.  
-        
-        The "z" coordinate of the vertex in eye-space represents the
+        The "z" coordinate of the vertex in clip space represents the
         "depth into the screen".  We perform a few basic math operations
         on the distance value, including one which uses our end_fog
         distance.  We then use the resulting floating-point value to
-        control a "mix" of the uniform fog_color and the current vertex'
-        gl_Color value.
+        control a "mix" of the uniform fog_color and the vertex's own
+        colour.
         '''
-        vertex = shaders.compileShader("""
+        vertex = shaders.compileShader("""#version 330 core
+            uniform mat4 modelViewProjection;
             uniform float end_fog;
             uniform vec4 fog_color;
+            in vec3 Vertex_position;
+            in vec3 Vertex_color;
+            out vec4 vertex_color;
             void main() {
                 float fog; // amount of fog to apply
                 float fog_coord; // distance for fog calculation...
-                // This function is generally faster and is guaranteed
-                // to produce the same result on each run...
-                // gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
-                gl_Position = ftransform();
-                
+                gl_Position = modelViewProjection * vec4(
+                    Vertex_position, 1.0
+                );
+
                 fog_coord = abs(gl_Position.z);
                 fog_coord = clamp( fog_coord, 0.0, end_fog);
                 fog = (end_fog - fog_coord)/end_fog;
                 fog = clamp( fog, 0.0, 1.0);
-                gl_FrontColor = mix(fog_color, gl_Color, fog);
+                vertex_color = mix(
+                    fog_color, vec4( Vertex_color, 1.0 ), fog
+                );
             }""",GL_VERTEX_SHADER)
-        '''Instead of defining a custom varying value to communicate the 
-        vertex colours, we have used the built-in (legacy) varying value 
-        "gl_FrontColor" in the vertex shader.  The value of gl_FrontColor
-        appears (with interpolation) in the similarly built-in (legacy)
-        value gl_Color within our fragment shader.
+        '''The vertex shader hands the fogged colour on to the
+        fragment shader in vertex_color, which the fragment shader
+        declares under the same name and reads interpolated.
         
         Because we altered the colour of each vertex in the vertex
         shader, the fog is already "baked into" the interpolated colours
@@ -100,8 +94,11 @@ class TestContext( BaseContext ):
         means it is normally a good idea of do as much of your calculation 
         as possible in the vertex shader.
         '''
-        fragment = shaders.compileShader("""void main() {
-                gl_FragColor = gl_Color;
+        fragment = shaders.compileShader("""#version 330 core
+            in vec4 vertex_color;
+            out vec4 fragColor;
+            void main() {
+                fragColor = vertex_color;
             }""",GL_FRAGMENT_SHADER)
         
         '''We set up our shader and VBO using the same code as in 
@@ -130,10 +127,22 @@ class TestContext( BaseContext ):
         values.
         '''
         self.UNIFORM_LOCATIONS = {
+            'modelViewProjection': glGetUniformLocation(
+                self.shader, 'modelViewProjection'
+            ),
             'end_fog': glGetUniformLocation( self.shader, 'end_fog' ),
             'fog_color': glGetUniformLocation( self.shader, 'fog_color' ),
         }
-    def Render( self, mode = 0):
+        '''The attribute locations and the vertex array object are set
+        up as in the previous tutorial.'''
+        self.Vertex_position_loc = glGetAttribLocation(
+            self.shader, 'Vertex_position'
+        )
+        self.Vertex_color_loc = glGetAttribLocation(
+            self.shader, 'Vertex_color'
+        )
+        self.vao = glGenVertexArrays( 1 )
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
         glUseProgram(self.shader)
@@ -155,26 +164,55 @@ class TestContext( BaseContext ):
         '''
         glUniform1f( self.UNIFORM_LOCATIONS['end_fog'],15)
         glUniform4f(self.UNIFORM_LOCATIONS['fog_color'],1,1,1,1)
-        '''To make the fog effect more interesting, we'll use some 
-        legacy functions to change the model-view matrix so that the 
-        geometry appears much bigger and rotated 45 degrees.'''
-        glRotate( 45, 0,1,0 )
-        glScale( 3,3,3 )
+        '''To make the fog effect more interesting, we place the
+        geometry with a model matrix of our own, so that it appears
+        three times bigger and rotated 45 degrees about the vertical.
+
+        A rotation matrix's columns are where the axes end up, and a
+        scale is the diagonal, so both are short enough to write out.
+        The vertices are row vectors here -- a vertex is multiplied on
+        the left -- so the model transform comes first and the camera
+        the pass gave us follows it.'''
+        angle = pi/4.0
+        rotation = array([
+            [ cos(angle), 0,-sin(angle), 0],
+            [ 0,          1, 0,          0],
+            [ sin(angle), 0, cos(angle), 0],
+            [ 0,          0, 0,          1],
+        ],'f')
+        scale = array([
+            [3,0,0,0],
+            [0,3,0,0],
+            [0,0,3,0],
+            [0,0,0,1],
+        ],'f')
+        glUniformMatrix4fv(
+            self.UNIFORM_LOCATIONS['modelViewProjection'], 1, GL_FALSE,
+            dot( dot( dot( scale, rotation ), mode.matrix ), mode.projection ),
+        )
         '''As has become familiar, we enable the VBO, set up our 
         vertex and colour pointers and call our drawing function.'''
+        glBindVertexArray( self.vao )
         try:
             self.vbo.bind()
             try:
-                glEnableClientState(GL_VERTEX_ARRAY);
-                glEnableClientState(GL_COLOR_ARRAY);
-                glVertexPointer(3, GL_FLOAT, 24, self.vbo )
-                glColorPointer(3, GL_FLOAT, 24, self.vbo+12 )
+                glEnableVertexAttribArray( self.Vertex_position_loc )
+                glEnableVertexAttribArray( self.Vertex_color_loc )
+                glVertexAttribPointer(
+                    self.Vertex_position_loc, 3, GL_FLOAT, GL_FALSE, 24,
+                    self.vbo
+                )
+                glVertexAttribPointer(
+                    self.Vertex_color_loc, 3, GL_FLOAT, GL_FALSE, 24,
+                    self.vbo+12
+                )
                 glDrawArrays(GL_TRIANGLES, 0, 9)
             finally:
                 self.vbo.unbind()
-                glDisableClientState(GL_VERTEX_ARRAY);
-                glDisableClientState(GL_COLOR_ARRAY);
+                glDisableVertexAttribArray( self.Vertex_position_loc )
+                glDisableVertexAttribArray( self.Vertex_color_loc )
         finally:
+            glBindVertexArray( 0 )
             glUseProgram( 0 )
         
 if __name__ == "__main__":

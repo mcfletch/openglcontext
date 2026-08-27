@@ -28,7 +28,6 @@ from OpenGLContext.scenegraph.basenodes import *
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     '''Rather than declaring our constants as context attributes, we'll
     make an explicit namespace in which the constants are stored.'''
     shader_constants = dict(
@@ -105,18 +104,25 @@ class TestContext( BaseContext ):
         code.  The only change to the content here is the addition of the
         Vertex_texture_coordinate_var value which interpolates our texture
         coordinates.'''
-        lightConst = "\n".join([
+        lightConst = "#version 330 core\n" + "\n".join([
             "const int %s = %s;"%( k,v )
             for k,v in self.shader_constants.items()
         ]) + """
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
+
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
+        """
+        '''The values the vertex shader passes on to the fragment shader are
+        declared "out" where they are written and "in" where they are read, so
+        the direction is filled in per shader.'''
+        lightVarying = """
+        %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+        %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+        %(dir)s float Light_distance[LIGHT_COUNT];
 
-        varying vec3 EC_Light_half[LIGHT_COUNT];
-        varying vec3 EC_Light_location[LIGHT_COUNT];
-        varying float Light_distance[LIGHT_COUNT];
-
-        varying vec3 baseNormal;
-        varying vec2 Vertex_texture_coordinate_var;
+        %(dir)s vec3 baseNormal;
+        %(dir)s vec2 Vertex_texture_coordinate_var;
         """
         '''Our vertex shader using the refactored pieces has become quite small.
         The only change here is the addition of the texture-coordinate values.
@@ -125,16 +131,17 @@ class TestContext( BaseContext ):
         shader.
         '''
         vertex = shaders.compileShader(
-            lightConst + phong_preCalc + light_preCalc +
+            lightConst + lightVarying%{'dir':'out'} +
+            phong_preCalc + light_preCalc +
         """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
-        attribute vec2 Vertex_texture_coordinate;
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
+        in vec2 Vertex_texture_coordinate;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+            gl_Position = modelViewProjection * vec4(
                 Vertex_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
             light_preCalc(Vertex_position);
             Vertex_texture_coordinate_var = Vertex_texture_coordinate;
         }""", GL_VERTEX_SHADER)
@@ -145,10 +152,10 @@ class TestContext( BaseContext ):
         We use the sampler2D type to define a variable which can to texture
         lookups into a configured texture-unit on the video card.  The varying
         texture-coordinate variable will provide us with interpolated s,t
-        coordinates which we can use to do a texture2D call on the sampler2D.
+        coordinates which we can use to do a texture call on the sampler2D.
         '''
         fragment = shaders.compileShader(
-            lightConst + phong_weightCalc + """
+            lightConst + lightVarying%{'dir':'in'} + phong_weightCalc + """
         struct Material {            vec4 ambient;
             vec4 diffuse;
             vec4 specular;
@@ -157,11 +164,12 @@ class TestContext( BaseContext ):
         uniform Material material;
         uniform vec4 Global_ambient;
         uniform sampler2D diffuse_texture;
+        out vec4 finalColor;
 
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
 
-            vec4 texDiffuse = texture2D(
+            vec4 texDiffuse = texture(
                 diffuse_texture, Vertex_texture_coordinate_var
             );
             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
@@ -192,7 +200,7 @@ class TestContext( BaseContext ):
                 //fragColor = vec4( weights.y,weights.y,weights.y, 1.0 );
                 //fragColor = mixColor;
             }
-            gl_FragColor = fragColor;
+            finalColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
         '''Compilation is the same.'''
@@ -222,6 +230,11 @@ class TestContext( BaseContext ):
         for uniform,value in self.UNIFORM_VALUES:
             self.findUniform( self.shader, uniform )
         self.findUniform( self.shader, 'lights' )
+        for uniform in ('modelViewProjection','normalMatrix'):
+            self.findUniform( self.shader, uniform )
+        '''And the vertex array object the attribute pointers are recorded
+        into.'''
+        self.vao = glGenVertexArrays( 1 )
         for uniform in self.MATERIAL_UNIFORMS:
             self.findUniform( self.shader, uniform )
         '''We add a texture-coordinate attribute which we'll use to index into
@@ -247,7 +260,7 @@ class TestContext( BaseContext ):
         self.uniform_locations[uniform] = location
         return location
 
-    def Render( self, mode = None):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         '''We set up our texture on texture-unit 1 (the second unit).'''
         if not mode.visible:
@@ -262,6 +275,15 @@ class TestContext( BaseContext ):
 
         '''Enable the shader.'''
         glUseProgram(self.shader)
+        glUniformMatrix4fv(
+            self.uniform_locations['modelViewProjection'], 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glUniformMatrix3fv(
+            self.uniform_locations['normalMatrix'], 1, GL_FALSE,
+            ascontiguousarray( mode.matrix[:3,:3], dtype='f' ),
+        )
+        glBindVertexArray( self.vao )
         '''Now we can configure our texture sampler uniform to point to
         texture-unit 1 (where we configured our texture).'''
         glUniform1i( self.uniform_locations['diffuse_texture'], 1 )
@@ -318,6 +340,7 @@ class TestContext( BaseContext ):
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
                 glDisableVertexAttribArray( self.Vertex_texture_coordinate_loc )
+                glBindVertexArray( 0 )
         finally:
             glUseProgram( 0 )
 

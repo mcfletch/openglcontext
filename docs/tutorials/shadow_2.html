@@ -33,9 +33,10 @@
 </ul>
 	<div class="paragraph indent-level-0">This tutorial is a minor revision of our previous shadow tutorial,
 the only change is to add off-screen rendering of the depth-texture
-rather than rendering on the back-buffer of the screen.</div>
+rather than rendering on the back-buffer of the screen.
 </div>
-	<div class="code-sample">import OpenGL,sys,os,traceback
+</div>
+	<div class="code-sample">import sys,traceback
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Import the previous tutorial as BaseContext</div>
@@ -65,7 +66,7 @@ class TestContext( BaseContext ):
         implementation of the function.</div>
 </div>
 	<div class="code-sample">        if not glBindFramebuffer:
-            print 'Missing required extensions!'
+            print('Missing required extensions!')
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
 </div>
 	<div class="commentary">
@@ -78,10 +79,10 @@ class TestContext( BaseContext ):
             )
         )
         if self.shadowMapSize &lt; 256:
-            print 'Warning: your hardware only supports extremely small textures!'
-        print 'Using shadow map of %sx%s pixels'%(
+            print('Warning: your hardware only supports extremely small textures!')
+        print('Using shadow map of %sx%s pixels'%(
             self.shadowMapSize,self.shadowMapSize
-        )
+        ))
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">We override this default in the init function.</div>
@@ -134,7 +135,8 @@ class TestContext( BaseContext ):
             extensions are available.  We don't actually need a stencil buffer
             just now, so we can ignore that.</div>
 	<div class="paragraph indent-level-12">The final argument is the "mip-map-level" of the texture,
-which currently always must be 0.</div>
+which currently always must be 0.
+</div>
 </div>
 	<div class="code-sample">            glFramebufferTexture2D(
                 GL_FRAMEBUFFER,
@@ -156,7 +158,7 @@ which currently always must be 0.</div>
                 glFramebufferRenderbuffer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, color )
                 glBindRenderbuffer( GL_RENDERBUFFER, 0 )
             glBindFramebuffer(GL_FRAMEBUFFER, 0 )
-            holder = mode.cache.holder(
+            mode.cache.holder(
                 light,(fbo,texture),key=key
             )
         else:
@@ -211,7 +213,7 @@ which currently always must be 0.</div>
 </div>
 	<div class="code-sample">        try:
             checkFramebufferStatus( )
-        except Exception, err:
+        except Exception:
             traceback.print_exc()
             import os
             os._exit(1)
@@ -220,7 +222,8 @@ which currently always must be 0.</div>
 	<div class="paragraph indent-level-0">Clear the depth buffer (texture) on each pass.  Our previous
         tutorial didn't need to do this here because the back-buffer was
         shared with the regular rendering pass and the OpenGLContext renderer
-        had already called glClear() during it's regular context setup.</div>
+        had already called glClear() during it's regular context setup.
+</div>
 </div>
 	<div class="code-sample">        glClear(GL_DEPTH_BUFFER_BIT)
         return texture

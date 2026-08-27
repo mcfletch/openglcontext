@@ -32,6 +32,10 @@ This tutorial is based on the
 with the tutorial, so that only changes from the tutorial are noted
 here.
 </div>
+	<div class="paragraph indent-level-0">
+NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
+a compatibility profile context.
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -39,10 +43,11 @@ from OpenGL.GL import *
 import time
 try:
     from PIL.Image import open
-except ImportError, err:
+except ImportError as err:
     from Image import open
 class TestContext( BaseContext ):
     """NeHe 6 Demo"""
+    # Force compatibility profile for legacy GL functions
     profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0) # set initial camera position, tutorial does the re-positioning
 </div>
@@ -57,13 +62,14 @@ class TestContext( BaseContext ):
         self.imageID = self.loadImage ()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">We are going to use the Python Imaging Library (PIL) for
+	<div class="paragraph indent-level-8">	We are going to use the Python Imaging Library (PIL) for
     loading images, something which is obviously not seen
     in the original tutorial.</div>
 	<div class="paragraph indent-level-4">This method combines all of the functionality required to
 load the image with PIL, convert it to a format compatible
 with PyOpenGL, generate the texture ID, and store the image
-data under that texture ID.</div>
+data under that texture ID.
+</div>
 </div>
 	<div class="code-sample">    def loadImage( self, imageName = "nehe_wall.bmp" ):
         """Load an image file as a 2D texture using PIL"""
@@ -74,7 +80,7 @@ data under that texture ID.</div>
 	<div class="code-sample">        im = open(imageName)
         try:
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBA", 0, -1)
-        except SystemError:
+        except (ValueError,SystemError):
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBX", 0, -1)
 </div>
 	<div class="commentary">
@@ -115,7 +121,8 @@ data under that texture ID.</div>
 	<div class="paragraph indent-level-0">This method encapsulates the functions required to set up
     for textured rendering.  The original tutorial made these
     calls once for the entire program.  This organization makes
-    more sense if you are likely to have multiple textures.</div>
+    more sense if you are likely to have multiple textures.
+</div>
 </div>
 	<div class="code-sample">    def setupTexture( self ):
         """Render-time texture environment setup"""
@@ -175,7 +182,8 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Author:
+	<div class="paragraph indent-level-0">
+Author:
 	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
 	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
@@ -184,7 +192,8 @@ any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
 	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
 credit, or mention my web site somewhere in your program
-or it's docs.</div>
+or it's docs.
+</div>
 </div>
     </section>
 <footer>

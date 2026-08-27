@@ -28,25 +28,26 @@ class TestContext( BaseContext ):
     function to bind a particular data source (normally a 
     VBO, and only a VBO under OpenGL 3.1) to that attribute.
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
-    
     def OnInit( self ):
         self.shader = shaders.compileProgram(
             shaders.compileShader(
-                '''
-                attribute vec3 position;
-                attribute vec3 color;
-                varying vec4 baseColor;
+                '''#version 330 core
+                uniform mat4 modelViewProjection;
+                in vec3 position;
+                in vec3 color;
+                out vec4 baseColor;
                 void main() {
-                    gl_Position = gl_ModelViewProjectionMatrix * vec4( position,1.0);
+                    gl_Position = modelViewProjection * vec4( position,1.0);
                     baseColor = vec4(color,1.0);
                 }''',
                 GL_VERTEX_SHADER,
             ),
             shaders.compileShader(
-                '''varying vec4 baseColor;
+                '''#version 330 core
+                in vec4 baseColor;
+                out vec4 fragColor;
                 void main() { 
-                    gl_FragColor = baseColor;
+                    fragColor = baseColor;
                 }''',
                 GL_FRAGMENT_SHADER,
             ),
@@ -70,11 +71,20 @@ class TestContext( BaseContext ):
         self.color_location = glGetAttribLocation( 
             self.shader, 'color' 
         )
+        self.modelViewProjection_location = glGetUniformLocation(
+            self.shader, 'modelViewProjection'
+        )
+        self.vao = glGenVertexArrays( 1 )
     
-    def Render( self, mode = 0):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
         glUseProgram(self.shader)
+        glUniformMatrix4fv(
+            self.modelViewProjection_location, 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glBindVertexArray( self.vao )
         try:
             self.vbo.bind()
             glVertexAttribPointer( 
@@ -89,6 +99,7 @@ class TestContext( BaseContext ):
             glDrawArrays(GL_TRIANGLES, 0, 9)
             self.vbo.unbind()
         finally:
+            glBindVertexArray( 0 )
             glUseProgram( 0 )
         
 

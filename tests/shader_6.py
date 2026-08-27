@@ -39,7 +39,6 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context"""
         '''== Phong and Blinn Reflectance ==
@@ -97,7 +96,7 @@ class TestContext( BaseContext ):
         create extremely hard-edged cut-offs for specular color.  Here 
         we "fudge" the result by 0.05
         '''
-        phong_weightCalc = """
+        phong_weightCalc = """#version 330 core
         vec2 phong_weightCalc( 
             in vec3 light_pos, // light position
             in vec3 half_light, // half-way vector between light and view
@@ -122,16 +121,19 @@ class TestContext( BaseContext ):
         for the Normals to be varied across the surface.
         '''
         vertex = shaders.compileShader( 
-        """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
+        """#version 330 core
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
+
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
         
-        varying vec3 baseNormal;
+        out vec3 baseNormal;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+            gl_Position = modelViewProjection * vec4( 
                 Vertex_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
         }""", GL_VERTEX_SHADER)
         '''Our fragment shader looks much like our previous tutorial's 
         vertex shader.  As before, we have lots of uniform values,
@@ -147,6 +149,8 @@ class TestContext( BaseContext ):
         eye-to-vertex vector is always the eye-space vector position.
         '''
         fragment = shaders.compileShader( phong_weightCalc + """
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
         uniform vec4 Global_ambient;
         
         uniform vec4 Light_ambient;
@@ -159,11 +163,12 @@ class TestContext( BaseContext ):
         uniform vec4 Material_ambient;
         uniform vec4 Material_diffuse;
         
-        varying vec3 baseNormal;
+        in vec3 baseNormal;
+        out vec4 fragColor;
         void main() {
             // normalized eye-coordinate Light location
             vec3 EC_Light_location = normalize(
-                gl_NormalMatrix * Light_location
+                normalMatrix * Light_location
             );
             // half-vector calculation 
             vec3 Light_half = normalize(
@@ -176,7 +181,7 @@ class TestContext( BaseContext ):
                 Material_shininess
             );
             
-            gl_FragColor = clamp( 
+            fragColor = clamp( 
             (
                 (Global_ambient * Material_ambient)
                 + (Light_ambient * Material_ambient)
@@ -213,6 +218,7 @@ class TestContext( BaseContext ):
         in GLSL.
         '''
         for uniform in (
+            'modelViewProjection','normalMatrix',
             'Global_ambient',
             'Light_ambient','Light_diffuse','Light_location',
             'Light_specular',
@@ -223,6 +229,7 @@ class TestContext( BaseContext ):
             if location in (None,-1):
                 print('Warning, no uniform: %s'%( uniform ))
             setattr( self, uniform+ '_loc', location )
+        self.vao = glGenVertexArrays( 1 )
         for attribute in (
             'Vertex_position','Vertex_normal',
         ):
@@ -231,10 +238,19 @@ class TestContext( BaseContext ):
                 print('Warning, no attribute: %s'%( uniform ))
             setattr( self, attribute+ '_loc', location )
     
-    def Render( self, mode = None):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
         glUseProgram(self.shader)
+        glUniformMatrix4fv(
+            self.modelViewProjection_loc, 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glUniformMatrix3fv(
+            self.normalMatrix_loc, 1, GL_FALSE,
+            ascontiguousarray( mode.matrix[:3,:3], dtype='f' ),
+        )
+        glBindVertexArray( self.vao )
         try:
             '''==Indexed VBO Rendering==
             
@@ -318,6 +334,7 @@ class TestContext( BaseContext ):
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
         finally:
+            glBindVertexArray( 0 )
             glUseProgram( 0 )
 
 if __name__ == "__main__":

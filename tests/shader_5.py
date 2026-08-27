@@ -79,7 +79,6 @@ from OpenGLContext.events.timer import Timer
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context"""
         '''== Diffuse Lighting ==
@@ -145,7 +144,7 @@ class TestContext( BaseContext ):
         Both of the values passed in must be *normalized* vectors.
         '''
         
-        phong_weightCalc = """
+        phong_weightCalc = """#version 330 core
         float phong_weightCalc( 
             in vec3 light_pos, // light position
             in vec3 frag_normal // geometry normal
@@ -165,6 +164,8 @@ class TestContext( BaseContext ):
         '''
         vertex = shaders.compileShader( phong_weightCalc + 
         """
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
         uniform vec4 Global_ambient;
         
         uniform vec4 Light_ambient;
@@ -174,19 +175,19 @@ class TestContext( BaseContext ):
         uniform vec4 Material_ambient;
         uniform vec4 Material_diffuse;
         
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
         
-        varying vec4 baseColor;
+        out vec4 baseColor;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+            gl_Position = modelViewProjection * vec4( 
                 Vertex_position, 1.0
             );
             
-            vec3 EC_Light_location = gl_NormalMatrix * Light_location;
+            vec3 EC_Light_location = normalMatrix * Light_location;
             float diffuse_weight = phong_weightCalc(
                 normalize(EC_Light_location),
-                normalize(gl_NormalMatrix * Vertex_normal)
+                normalize(normalMatrix * Vertex_normal)
             );
             
             baseColor = clamp( 
@@ -226,10 +227,11 @@ class TestContext( BaseContext ):
         actually do per-fragment lighting calculations, but it wouldn't
         particularly improve our rendering with simple diffuse shading.
         '''
-        fragment = shaders.compileShader("""
-        varying vec4 baseColor;
+        fragment = shaders.compileShader("""#version 330 core
+        in vec4 baseColor;
+        out vec4 fragColor;
         void main() {
-            gl_FragColor = baseColor;
+            fragColor = baseColor;
         }
         """, GL_FRAGMENT_SHADER)
         
@@ -265,6 +267,7 @@ class TestContext( BaseContext ):
         '''Since we have so many more uniforms and attributes, we'll 
         use a bit of iteration to set up the values for ourselves.'''
         for uniform in (
+            'modelViewProjection','normalMatrix',
             'Global_ambient',
             'Light_ambient','Light_diffuse','Light_location',
             'Material_ambient','Material_diffuse',
@@ -273,6 +276,7 @@ class TestContext( BaseContext ):
             if location in (None,-1):
                 print('Warning, no uniform: %s'%( uniform ))
             setattr( self, uniform+ '_loc', location )
+        self.vao = glGenVertexArrays( 1 )
         for attribute in (
             'Vertex_position','Vertex_normal',
         ):
@@ -282,18 +286,27 @@ class TestContext( BaseContext ):
             setattr( self, attribute+ '_loc', location )
         
     
-    def Render( self, mode = None):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
         glUseProgram(self.shader)
+        glUniformMatrix4fv(
+            self.modelViewProjection_loc, 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glUniformMatrix3fv(
+            self.normalMatrix_loc, 1, GL_FALSE,
+            ascontiguousarray( mode.matrix[:3,:3], dtype='f' ),
+        )
+        glBindVertexArray( self.vao )
         try:
             self.vbo.bind()
             try:
                 '''We add a strong red tinge so you can see the 
                 global ambient light's contribution.'''
                 glUniform4f( self.Global_ambient_loc, .3,.05,.05,.1 )
-                '''In legacy OpenGL we would be using different 
-                special-purpose calls to set these variables.'''
+                '''Every light and material value the shader
+                reads is a uniform we set here.'''
                 glUniform4f( self.Light_ambient_loc, .2,.2,.2, 1.0 )
                 glUniform4f( self.Light_diffuse_loc, 1,1,1,1 )
                 glUniform3f( self.Light_location_loc, 2,2,10 )
@@ -319,6 +332,7 @@ class TestContext( BaseContext ):
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
         finally:
+            glBindVertexArray( 0 )
             glUseProgram( 0 )
 
 if __name__ == "__main__":

@@ -33,15 +33,23 @@ with the tutorial, so that only changes from the tutorial are noted
 here.
 </div>
 	<div class="paragraph indent-level-0">Note that key-bindings are different from the tutorial:
-arrows move, pageup/pagedown control speed of rotation</div>
+arrows move, pageup/pagedown control speed of rotation
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGL.GL import *
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Because this tutorial uses legacy/immediate-mode OpenGL functions
+(glBegin, glEnd, glVertex, glNormal, glTexCoord, glTranslate, glRotate,
+glLight), we need to explicitly request a compatibility profile OpenGL context.
+</div>
+</div>
+	<div class="code-sample">from OpenGL.GL import *
 import time
 try:
     from PIL.Image import open
-except ImportError, err:
+except ImportError as err:
     from Image import open
 </div>
 	<div class="commentary">
@@ -52,11 +60,19 @@ GLU functions available and continue with our normal setup routines.</div>
 from OpenGL.constants import GLfloat_3,GLfloat_4
 class TestContext( BaseContext ):
     """Texture Filters, Lighting, Keyboard Control"""
-    profile = 'compatibility'   # draws with the fixed-function pipeline
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">We set the contextDefinition to request a compatibility profile,
+    which provides the legacy fixed-function pipeline functions like
+    glBegin/glEnd and glLight that this tutorial uses.
+</div>
+</div>
+	<div class="code-sample">    profile = 'compatibility'   # draws with the fixed-function pipeline
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Uses the addEventHandler method for registering new event handlers
-    for given keyboard and mouse events.</div>
+    for given keyboard and mouse events.
+</div>
 </div>
 	<div class="code-sample">    usage ="""Demonstrates filter functions:
     press 'f' to toggle filter functions
@@ -84,7 +100,8 @@ class TestContext( BaseContext ):
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Adds event handlers for the given keys
         Note that these are different bindings from the tutorial,
-        as you can wander around with the arrow keys already...</div>
+        as you can wander around with the arrow keys already...
+</div>
 </div>
 	<div class="code-sample">        self.addEventHandler(
             'keypress', name = 'f', function = self.OnFilter
@@ -100,7 +117,7 @@ class TestContext( BaseContext ):
             'keyboard', name = '&lt;pagedown&gt;', function = self.OnSlowDown,
             state=0,
         )
-        print self.usage
+        print(self.usage)
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Here we are setting the lighting parameters during init,
@@ -121,7 +138,7 @@ class TestContext( BaseContext ):
             ## Note the conversion to RGB the crate bitmap is paletted!
             im = im.convert( 'RGB')
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBA", 0, -1)
-        except SystemError:
+        except (ValueError,SystemError):
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBX", 0, -1)
         assert ix*iy*4 == len(image), """Image size != expected array size"""
         IDs = []
@@ -148,12 +165,12 @@ class TestContext( BaseContext ):
         glPixelStorei(GL_UNPACK_ALIGNMENT,1)
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_NEAREST)
-        print 'doing mip-maps, fails on RedHat Linux'
+        print('doing mip-maps, fails on RedHat Linux')
         gluBuild2DMipmaps(
             GL_TEXTURE_2D,
             GL_RGBA, ix, iy, GL_RGBA, GL_UNSIGNED_BYTE, image
         )
-        print 'finished mip-mapped'
+        print('finished mip-mapped')
         return IDs
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
@@ -194,13 +211,13 @@ class TestContext( BaseContext ):
     def OnFilter( self, event):
         """Handles the key event telling us to change the filter"""
         self.currentFilter = (self.currentFilter + 1 ) % 3
-        print 'Drawing filter now %s'% (
+        print('Drawing filter now %s'% (
             ["Nearest","Linear","Linear Mip-Mapped"][ self.currentFilter]
-        )
+        ))
     def OnLightToggle( self, event ):
         """Handles the key event telling us to toggle the lighting"""
         self.lightsOn = not self.lightsOn
-        print "Lights now %s"% (["off", "on"][self.lightsOn])
+        print("Lights now %s"% (["off", "on"][self.lightsOn]))
     def OnSpeedUp( self, event):
         """Handles key event to speed up"""
         self.rotationCycle = self.rotationCycle /2.0
@@ -251,7 +268,8 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Author:
+	<div class="paragraph indent-level-0">
+Author:
 	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
 	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
@@ -260,7 +278,8 @@ any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
 	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
 credit, or mention my web site somewhere in your program
-or it's docs.</div>
+or it's docs.
+</div>
 </div>
     </section>
 <footer>

@@ -28,7 +28,6 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     LIGHT_COUNT = 3
     LIGHT_SIZE = 5
     def OnInit( self ):
@@ -42,7 +41,10 @@ class TestContext( BaseContext ):
         using an array of vec4s for the light parameters, so it is 
         easiest to just ignore the w value.
         '''
-        lightConst = """
+        lightConst = """#version 330 core
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
+
         const int LIGHT_COUNT = %s;
         const int LIGHT_SIZE = %s;
         
@@ -53,12 +55,17 @@ class TestContext( BaseContext ):
         const int ATTENUATION = 4;
         
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-        varying vec3 EC_Light_half[LIGHT_COUNT];
-        varying vec3 EC_Light_location[LIGHT_COUNT]; 
-        varying float Light_distance[LIGHT_COUNT]; 
-        
-        varying vec3 baseNormal;
         """%( self.LIGHT_COUNT, self.LIGHT_SIZE )
+        '''The values the vertex shader passes on to the fragment
+        shader are declared "out" where they are written and "in" where
+        they are read, so the direction is filled in per shader.'''
+        lightVarying = """
+        %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+        %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+        %(dir)s float Light_distance[LIGHT_COUNT];
+
+        %(dir)s vec3 baseNormal;
+        """
         '''==Lighting Attenuation=
         
         For the first time in many tutorials we're altering out 
@@ -182,7 +189,7 @@ class TestContext( BaseContext ):
             if (light_position.w == 0.0) {
                 // directional rather than positional light...
                 ec_light_location = normalize(
-                    gl_NormalMatrix *
+                    normalMatrix *
                     light_position.xyz
                 );
                 light_distance = 0.0;
@@ -194,7 +201,7 @@ class TestContext( BaseContext ):
                     light_position.xyz -
                     vertex_position
                 );
-                vec3 light_direction = gl_NormalMatrix * ms_vec;
+                vec3 light_direction = normalMatrix * ms_vec;
                 ec_light_location = normalize( light_direction );
                 light_distance = abs(length( ms_vec ));
             }
@@ -207,8 +214,8 @@ class TestContext( BaseContext ):
         to a separate file named '_shader_tut_lightprecalc.vert'.'''
         light_preCalc = """
         void light_preCalc( in vec3 vertex_position ) {
-            // This function is dependent on the uniforms and 
-            // varying values we've been using, it basically 
+            // This function is dependent on the uniforms and the
+            // interpolated values we've been using, it basically 
             // just iterates over the phong_lightCalc passing in 
             // the appropriate pointers...
             vec3 light_direction;
@@ -226,15 +233,16 @@ class TestContext( BaseContext ):
         }
         """
         vertex = shaders.compileShader( 
-            lightConst + phong_preCalc + light_preCalc +
+            lightConst + lightVarying%{'dir':'out'} +
+            phong_preCalc + light_preCalc +
         """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+            gl_Position = modelViewProjection * vec4( 
                 Vertex_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
             light_preCalc(Vertex_position);
         }""", GL_VERTEX_SHADER)
         '''Our fragment shader is only slightly modified to use our 
@@ -243,12 +251,12 @@ class TestContext( BaseContext ):
         the per-light ambient value by the new weight we've added.
         
         You will also notice that since we are using the 'i' variable 
-        to directly index the varying arrays, we've introduced a 'j' 
+        to directly index the interpolated arrays, we've introduced a 'j' 
         variable that tracks the offset into the light array which 
         begins the current light.
         '''
         fragment = shaders.compileShader( 
-            lightConst + phong_weightCalc + """
+            lightConst + lightVarying%{'dir':'in'} + phong_weightCalc + """
         struct Material {
             vec4 ambient;
             vec4 diffuse;
@@ -257,6 +265,7 @@ class TestContext( BaseContext ):
         };
         uniform Material material;
         uniform vec4 Global_ambient;
+        out vec4 finalColor;
         
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
@@ -281,7 +290,7 @@ class TestContext( BaseContext ):
                 );
             }
             //fragColor = vec4(Light_distance[0],Light_distance[1],Light_distance[2],1.0);
-            gl_FragColor = fragColor;
+            finalColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
         '''Our general uniform setup should look familiar by now.'''
@@ -295,6 +304,11 @@ class TestContext( BaseContext ):
             if location in (None,-1):
                 print('Warning, no uniform: %s'%( uniform ))
             self.uniform_locations[uniform] = location
+        for uniform in ('modelViewProjection','normalMatrix'):
+            self.uniform_locations[uniform] = glGetUniformLocation(
+                self.shader, uniform
+            )
+        self.vao = glGenVertexArrays( 1 )
         self.uniform_locations['lights'] = glGetUniformLocation( 
             self.shader, 'lights' 
         )
@@ -337,12 +351,21 @@ class TestContext( BaseContext ):
             ('lights[2].attenuation',(.15,0.0,0.0,1.0)),
         ]
     ], 'f')
-    def Render( self, mode = None):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
         if not mode.visible:
             return
         glUseProgram(self.shader)
+        glUniformMatrix4fv(
+            self.uniform_locations['modelViewProjection'], 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glUniformMatrix3fv(
+            self.uniform_locations['normalMatrix'], 1, GL_FALSE,
+            ascontiguousarray( mode.matrix[:3,:3], dtype='f' ),
+        )
+        glBindVertexArray( self.vao )
         try:
             self.coords.bind()
             self.indices.bind()
@@ -384,6 +407,7 @@ class TestContext( BaseContext ):
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
         finally:
+            glBindVertexArray( 0 )
             glUseProgram( 0 )
 
 if __name__ == "__main__":

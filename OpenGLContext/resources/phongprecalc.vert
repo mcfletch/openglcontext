@@ -17,7 +17,7 @@ void phong_preCalc(
     if (light_position.w == 0.0) {
         // directional rather than positional light...
         ec_light_location = normalize(
-            gl_NormalMatrix *
+            normalMatrix *
             light_position.xyz
         );
         light_distance = 0.0;
@@ -29,7 +29,7 @@ void phong_preCalc(
             light_position.xyz -
             vertex_position
         );
-        vec3 light_direction = gl_NormalMatrix * ms_vec;
+        vec3 light_direction = normalMatrix * ms_vec;
         ec_light_location = normalize( light_direction );
         light_distance = abs(length( ms_vec ));
     }

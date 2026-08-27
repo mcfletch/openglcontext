@@ -31,7 +31,8 @@
 which in this case creates a crude simulation of a water fountain.
 We use Numpy to do the heavy lifting of the actual updates to
 the particles.  We use the PointSet object's ability to render
-using the applied texture as a sprite (GL.ARB.point_parameters).</div>
+using the applied texture as a sprite (GL.ARB.point_parameters).
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -42,12 +43,27 @@ import random
 from OpenGLContext.scenegraph.basenodes import *
 try:
     import RandomArray
-except ImportError, err:
+except ImportError as err:
     RandomArray = None
 try:
-    from OpenGLContext.scenegraph.text import glutfont
+    xrange
+except NameError:
+    xrange = range
+# Check if any font provider is available for text display
+# Font providers auto-register when imported (glutfont via GLUT, shaderfont via atlas)
+_font_available = False
+try:
+    import importlib.util
+    if importlib.util.find_spec('OpenGLContext.scenegraph.text.glutfont'):
+        _font_available = True
 except ImportError:
-    glutfont = None
+    pass
+if not _font_available:
+    try:
+        from OpenGLContext.scenegraph.text import shaderfont
+        _font_available = shaderfont.is_available()
+    except ImportError:
+        pass
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">These are the parameters we're going to use to create our
@@ -77,9 +93,9 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Do all of our setup functions..."""
         BaseContext.OnInit( self )
-        print """You should see something that looks vaguely like
+        print("""You should see something that looks vaguely like
 a water-fountain, with individual droplets starting
-blue and turning white."""
+blue and turning white.""")
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">The PointSet node will do the actual work of rendering
@@ -130,12 +146,12 @@ blue and turning white."""
         ] )
         self.velocities = array([ (0,0,0)]*count, 'd')
         self.colorVelocities = array( colorVelocities, 'd')
-        print '  &lt;s&gt; make time pass more slowly'
-        print '  &lt;f&gt; make time pass faster'
-        print '  &lt;h&gt; higher'
-        print '  &lt;l&gt; (L) lower'
-        print '  &lt;[&gt; smaller drops'
-        print '  &lt;]&gt; larger drops'
+        print('  &lt;s&gt; make time pass more slowly')
+        print('  &lt;f&gt; make time pass faster')
+        print('  &lt;h&gt; higher')
+        print('  &lt;l&gt; (L) lower')
+        print('  &lt;[&gt; smaller drops')
+        print('  &lt;]&gt; larger drops')
         self.addEventHandler( "keypress", name="s", function = self.OnSlower)
         self.addEventHandler( "keypress", name="f", function = self.OnFaster)
         self.addEventHandler( "keypress", name="h", function = self.OnHigher)
@@ -274,16 +290,16 @@ blue and turning white."""
 	<div class="code-sample">
     def OnSlower( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier /2.0
-        if glutfont:
+        if _font_available:
             self.text.string = [ "Current multiplier: %s"%( self.time.internal.multiplier,)]
         else:
-            print "slower",self.time.internal.multiplier
+            print("slower",self.time.internal.multiplier)
     def OnFaster( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier * 2.0
-        if glutfont:
+        if _font_available:
             self.text.string = [ "Current multiplier: %s"%( self.time.internal.multiplier,)]
         else:
-            print "faster",self.time.internal.multiplier
+            print("faster",self.time.internal.multiplier)
     def OnHigher( self, event ):
         global initialVelocityVector
         initialVelocityVector *= [1,1.25,1]
@@ -300,7 +316,8 @@ blue and turning white."""
         self.points.minSize = max((0.0,self.points.minSize-1.0))
         self.points.maxSize = max((1.0,self.points.maxSize-1.0))
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()</div>
+    TestContext.ContextMainLoop()
+</div>
     </section>
 <footer>
     <ul class="menu">

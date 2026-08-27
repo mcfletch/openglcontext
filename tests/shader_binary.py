@@ -12,7 +12,10 @@ class TestContext( BaseContext ):
     LIGHT_SIZE = 7
     def OnInit( self ):
         """Initialize the context"""
-        lightConst = """
+        lightConst = """#version 330 core
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
+
         const int LIGHT_COUNT = %s;
         const int LIGHT_SIZE = %s;
         
@@ -26,12 +29,14 @@ class TestContext( BaseContext ):
         const int SPOT_DIR = 6;
         
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-        varying vec3 EC_Light_half[LIGHT_COUNT];
-        varying vec3 EC_Light_location[LIGHT_COUNT]; 
-        varying float Light_distance[LIGHT_COUNT]; 
-        
-        varying vec3 baseNormal;
         """%( self.LIGHT_COUNT, self.LIGHT_SIZE )
+        lightVarying = """
+        %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+        %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+        %(dir)s float Light_distance[LIGHT_COUNT];
+
+        %(dir)s vec3 baseNormal;
+        """
         phong_weightCalc = """
         vec3 phong_weightCalc( 
             in vec3 light_pos, // light position/direction
@@ -55,7 +60,7 @@ class TestContext( BaseContext ):
                 if (spot_params.w != 0.0) {
                     // is a spot...
                     float spot_cos = dot(
-                        gl_NormalMatrix * normalize(spot_direction.xyz),
+                        normalMatrix * normalize(spot_direction.xyz),
                         normalize(-light_pos)
                     );
                     if (spot_cos <= spot_params.x) {
@@ -98,22 +103,23 @@ class TestContext( BaseContext ):
             phong_preCalc = phong_preCalc.decode('ascii')
         
         vertex = compileShader( 
-            lightConst + phong_preCalc + light_preCalc + 
+            lightConst + lightVarying%{'dir':'out'} +
+            phong_preCalc + light_preCalc + 
         """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+            gl_Position = modelViewProjection * vec4( 
                 Vertex_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
             light_preCalc( Vertex_position );
         }""", GL_VERTEX_SHADER)
         
         '''Our only change for the fragment shader is to pass in the 
         spot components of the current light when calling phong_weightCalc.'''
         fragment = compileShader( 
-            lightConst + phong_weightCalc + """
+            lightConst + lightVarying%{'dir':'in'} + phong_weightCalc + """
         struct Material {
             vec4 ambient;
             vec4 diffuse;
@@ -122,6 +128,7 @@ class TestContext( BaseContext ):
         };
         uniform Material material;
         uniform vec4 Global_ambient;
+        out vec4 finalColor;
         
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
@@ -146,7 +153,7 @@ class TestContext( BaseContext ):
                     + (lights[j+SPECULAR] * material.specular * weights.z)
                 );
             }
-            gl_FragColor = fragColor;
+            finalColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
         self.shader = compileProgram(vertex,fragment, retrievable=True)

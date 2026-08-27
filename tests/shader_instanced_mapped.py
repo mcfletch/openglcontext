@@ -85,23 +85,35 @@ class TestContext(BaseContext):
         phong_preCalc = GLSLImport(url="res://phongprecalc_vert")
         phong_weightCalc = GLSLImport(url="res://phongweights_frag")
         lightConst = GLSLImport(
-            source="\n".join(
+            source="#version 330 core\n" + "\n".join(
                 [
                     "const int %s = %s;" % (k, v)
                     for k, v in self.shader_constants.items()
                 ]
             )
             + """
+            // The pass supplies its camera to any GLSLObject that names one
+            // of these; the normal matrix is the upper-left 3x3 of the
+            // inverse-transpose model-view.
+            uniform mat4 mat_modelproj;
+            uniform mat4 itp_modelview;
+            #define normalMatrix mat3(itp_modelview)
+
             uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-
-            varying vec3 EC_Light_half[LIGHT_COUNT];
-            varying vec3 EC_Light_location[LIGHT_COUNT];
-            varying float Light_distance[LIGHT_COUNT];
-
-            varying vec3 baseNormal;
-            varying vec2 Vertex_texture_coordinate_var;
             """
         )
+        # The values the vertex shader passes on to the fragment shader are
+        # declared "out" where they are written and "in" where they are read.
+        interpolated = """
+            %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+            %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+            %(dir)s float Light_distance[LIGHT_COUNT];
+
+            %(dir)s vec3 baseNormal;
+            %(dir)s vec2 Vertex_texture_coordinate_var;
+            """
+        vertexVarying = GLSLImport(source=interpolated % {'dir': 'out'})
+        fragmentVarying = GLSLImport(source=interpolated % {'dir': 'in'})
         hardlimit = glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE_ARB)
         count = min((15000, hardlimit // 16))
         scale = [40, 40, 40, 0]
@@ -120,17 +132,17 @@ class TestContext(BaseContext):
             ),
         )
         VERTEX_SHADER = """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
-        attribute vec2 Vertex_texture_coordinate;
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
+        in vec2 Vertex_texture_coordinate;
         uniform samplerBuffer offsets_table;
         void main() {
             vec3 offset = texelFetch( offsets_table, gl_InstanceIDARB ).xyz;
             vec3 final_position = Vertex_position + offset;
-            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+            gl_Position = mat_modelproj * vec4(
                 final_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
             light_preCalc(final_position);
             Vertex_texture_coordinate_var = Vertex_texture_coordinate;
         }"""
@@ -156,6 +168,7 @@ class TestContext(BaseContext):
                 GLSLShader(
                     imports=[
                         lightConst,
+                        vertexVarying,
                         phong_preCalc,
                         light_preCalc,
                     ],
@@ -165,6 +178,7 @@ class TestContext(BaseContext):
                 GLSLShader(
                     imports=[
                         lightConst,
+                        fragmentVarying,
                         phong_weightCalc,
                     ],
                     source=[
@@ -178,11 +192,12 @@ class TestContext(BaseContext):
                         uniform Material material;
                         uniform vec4 Global_ambient;
                         uniform sampler2D diffuse_texture;
+                        out vec4 finalColor;
 
                         void main() {
                             vec4 fragColor = Global_ambient * material.ambient;
 
-                            vec4 texDiffuse = texture2D(
+                            vec4 texDiffuse = texture(
                                 diffuse_texture, Vertex_texture_coordinate_var
                             );
                             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
@@ -210,7 +225,7 @@ class TestContext(BaseContext):
                                     + (lights[j+SPECULAR] * material.specular * weights.z)
                                 );
                             }
-                            gl_FragColor = fragColor;
+                            finalColor = fragColor;
                         }
                         """
                     ],
@@ -256,6 +271,9 @@ class TestContext(BaseContext):
         )
         self.buffer_locks = BufferLocks()
         self.offset = 0
+        # Where OpenGL keeps the description of which buffer each attribute
+        # reads from; there is no such state outside one.
+        self.vao = glGenVertexArrays(1)
 
     def Render(self, mode=None):
         """Render the geometry for the scene."""
@@ -273,6 +291,7 @@ class TestContext(BaseContext):
             self.glslObject.getVariable(key).value = value
         token = self.glslObject.render(mode)
         tokens = []
+        glBindVertexArray(self.vao)
         vbo = self.indices.bind(mode)
         try:
             for attribute in self.attributes:
@@ -292,6 +311,7 @@ class TestContext(BaseContext):
                 attribute.renderPost(self.glslObject, mode, token)
             self.glslObject.renderPost(token, mode)
             vbo.unbind()
+            glBindVertexArray(0)
 
 
 if __name__ == "__main__":

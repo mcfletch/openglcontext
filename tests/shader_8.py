@@ -32,7 +32,6 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     LIGHT_COUNT = 3
     LIGHT_SIZE = 4
     def OnInit( self ):
@@ -45,14 +44,16 @@ class TestContext( BaseContext ):
         we can add to both shaders.  The use of the constants also 
         makes the code far easier to read than using the bare numbers.
         
-        Note that the varying baseNormal value is part of the lighting
-        calculation, so we have included it in our common lighting
-        declarations.
+        The values the vertex shader passes on to the fragment shader
+        are declared "out" where they are written and "in" where they
+        are read, so those go in a second shared block with the
+        direction filled in per shader.  baseNormal is part of the
+        lighting calculation, so it travels with them.
         
         We've also parameterized the LIGHT count and size, so that 
         we can use them in both Python and GLSL code.
         '''
-        lightConst = """
+        lightConst = """#version 330 core
         const int LIGHT_COUNT = %s;
         const int LIGHT_SIZE = %s;
         
@@ -62,16 +63,19 @@ class TestContext( BaseContext ):
         const int POSITION = 3;
         
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-        varying vec3 EC_Light_half[LIGHT_COUNT];
-        varying vec3 EC_Light_location[LIGHT_COUNT]; 
-        
-        varying vec3 baseNormal;
         """%( self.LIGHT_COUNT, self.LIGHT_SIZE )
-        '''As you can see, we're going to create two new varying values,
-        the EC_Light_half and EC_Light_location values.  These are 
-        going to hold the normalized partial calculations for the lights.
-        The other declarations are the same as before, they are just 
-        being shared between the shaders.
+        lightVarying = """
+        %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+        %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+
+        %(dir)s vec3 baseNormal;
+        """
+        '''As you can see, we're going to pass two new values from
+        the vertex shader to the fragment shader, the EC_Light_half and
+        EC_Light_location values.  These are going to hold the
+        normalized partial calculations for the lights.  The other
+        declarations are the same as before, they are just being shared
+        between the shaders.
         
         Our phong_weightCalc calculation hasn't changed.
         '''
@@ -101,19 +105,22 @@ class TestContext( BaseContext ):
         new, varying array values.
         '''
         vertex = shaders.compileShader( 
-            lightConst + 
+            lightConst + lightVarying%{'dir':'out'} +
         """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
+
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
         
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4( 
+            gl_Position = modelViewProjection * vec4( 
                 Vertex_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
             for (int i = 0; i< LIGHT_COUNT; i++ ) {
                 EC_Light_location[i] = normalize(
-                    gl_NormalMatrix * lights[(i*LIGHT_SIZE)+POSITION].xyz
+                    normalMatrix * lights[(i*LIGHT_SIZE)+POSITION].xyz
                 );
                 // half-vector calculation 
                 EC_Light_half[i] = normalize(
@@ -128,7 +135,7 @@ class TestContext( BaseContext ):
         using, to make it clearer which value is being accessed.
         '''
         fragment = shaders.compileShader( 
-            lightConst + phong_weightCalc + """
+            lightConst + lightVarying%{'dir':'in'} + phong_weightCalc + """
         struct Material {
             vec4 ambient;
             vec4 diffuse;
@@ -137,6 +144,7 @@ class TestContext( BaseContext ):
         };
         uniform Material material;
         uniform vec4 Global_ambient;
+        out vec4 finalColor;
         
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
@@ -157,7 +165,7 @@ class TestContext( BaseContext ):
                     + (lights[j+SPECULAR] * material.specular * weights.y)
                 );
             }
-            gl_FragColor = fragColor;
+            finalColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
         
@@ -172,6 +180,11 @@ class TestContext( BaseContext ):
             if location in (None,-1):
                 print('Warning, no uniform: %s'%( uniform ))
             self.uniform_locations[uniform] = location
+        for uniform in ('modelViewProjection','normalMatrix'):
+            self.uniform_locations[uniform] = glGetUniformLocation(
+                self.shader, uniform
+            )
+        self.vao = glGenVertexArrays( 1 )
         self.uniform_locations['lights'] = glGetUniformLocation( 
             self.shader, 'lights' 
         )
@@ -205,12 +218,21 @@ class TestContext( BaseContext ):
             ('lights[2].position',(-4.0,2.0,-10.0,0.0)),
         ]
     ], 'f')
-    def Render( self, mode = None):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
         if not mode.visible:
             return 
         glUseProgram(self.shader)
+        glUniformMatrix4fv(
+            self.uniform_locations['modelViewProjection'], 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glUniformMatrix3fv(
+            self.uniform_locations['normalMatrix'], 1, GL_FALSE,
+            ascontiguousarray( mode.matrix[:3,:3], dtype='f' ),
+        )
+        glBindVertexArray( self.vao )
         try:
             self.coords.bind()
             stride = self.coords.data[0].nbytes
@@ -252,6 +274,7 @@ class TestContext( BaseContext ):
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
         finally:
+            glBindVertexArray( 0 )
             glUseProgram( 0 )
 
 if __name__ == "__main__":

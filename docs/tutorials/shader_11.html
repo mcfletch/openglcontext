@@ -33,7 +33,8 @@
 </ul>
 	<div class="paragraph indent-level-0">The purpose of this tutorial is to consolidate our work so far
 so that we can reuse it in further tutorials without needing to
-repeat code all the time.</div>
+repeat code all the time.
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -52,7 +53,6 @@ to use them here).</div>
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Rather than declaring our constants as context attributes, we'll
@@ -121,7 +121,8 @@ class TestContext( BaseContext ):
         count before compiling the shader.  In the real world we'd want to
         make the number of lights a parameter per-object so that we could
         generate a light-count-specific shader shared among all objects
-        with the same light-count.</div>
+        with the same light-count.
+</div>
 </div>
 	<div class="code-sample">        self.shader_constants['LIGHT_COUNT'] = len(self.lights)
 </div>
@@ -131,6 +132,9 @@ class TestContext( BaseContext ):
 </div>
 	<div class="code-sample">        from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         from OpenGLContext.resources.phongweights_frag import data as phong_weightCalc
+        if bytes is not str:
+            phong_preCalc = phong_preCalc.decode('ascii')
+            phong_weightCalc = phong_weightCalc.decode('ascii')
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
 </div>
 	<div class="commentary">
@@ -140,16 +144,26 @@ class TestContext( BaseContext ):
         Vertex_texture_coordinate_var value which interpolates our texture
         coordinates.</div>
 </div>
-	<div class="code-sample">        lightConst = "\n".join([
+	<div class="code-sample">        lightConst = "#version 330 core\n" + "\n".join([
             "const int %s = %s;"%( k,v )
             for k,v in self.shader_constants.items()
         ]) + """
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
         uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-        varying vec3 EC_Light_half[LIGHT_COUNT];
-        varying vec3 EC_Light_location[LIGHT_COUNT];
-        varying float Light_distance[LIGHT_COUNT];
-        varying vec3 baseNormal;
-        varying vec2 Vertex_texture_coordinate_var;
+        """
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">The values the vertex shader passes on to the fragment shader are
+        declared "out" where they are written and "in" where they are read, so
+        the direction is filled in per shader.</div>
+</div>
+	<div class="code-sample">        lightVarying = """
+        %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+        %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+        %(dir)s float Light_distance[LIGHT_COUNT];
+        %(dir)s vec3 baseNormal;
+        %(dir)s vec2 Vertex_texture_coordinate_var;
         """
 </div>
 	<div class="commentary">
@@ -157,19 +171,21 @@ class TestContext( BaseContext ):
         The only change here is the addition of the texture-coordinate values.
         The texture coordinates are simply assigned to the varying value so that
         they will show up interpolated across the fragments in the fragment
-        shader.</div>
+        shader.
+</div>
 </div>
 	<div class="code-sample">        vertex = shaders.compileShader(
-            lightConst + phong_preCalc + light_preCalc +
+            lightConst + lightVarying%{'dir':'out'} +
+            phong_preCalc + light_preCalc +
         """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
-        attribute vec2 Vertex_texture_coordinate;
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
+        in vec2 Vertex_texture_coordinate;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+            gl_Position = modelViewProjection * vec4(
                 Vertex_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
             light_preCalc(Vertex_position);
             Vertex_texture_coordinate_var = Vertex_texture_coordinate;
         }""", GL_VERTEX_SHADER)
@@ -181,10 +197,11 @@ class TestContext( BaseContext ):
 	<div class="paragraph indent-level-8">We use the sampler2D type to define a variable which can to texture
 lookups into a configured texture-unit on the video card.  The varying
 texture-coordinate variable will provide us with interpolated s,t
-coordinates which we can use to do a texture2D call on the sampler2D.</div>
+coordinates which we can use to do a texture call on the sampler2D.
+</div>
 </div>
 	<div class="code-sample">        fragment = shaders.compileShader(
-            lightConst + phong_weightCalc + """
+            lightConst + lightVarying%{'dir':'in'} + phong_weightCalc + """
         struct Material {            vec4 ambient;
             vec4 diffuse;
             vec4 specular;
@@ -193,9 +210,10 @@ coordinates which we can use to do a texture2D call on the sampler2D.</div>
         uniform Material material;
         uniform vec4 Global_ambient;
         uniform sampler2D diffuse_texture;
+        out vec4 finalColor;
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
-            vec4 texDiffuse = texture2D(
+            vec4 texDiffuse = texture(
                 diffuse_texture, Vertex_texture_coordinate_var
             );
             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
@@ -225,7 +243,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.</div>
                 //fragColor = vec4( weights.y,weights.y,weights.y, 1.0 );
                 //fragColor = mixColor;
             }
-            gl_FragColor = fragColor;
+            finalColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
 </div>
@@ -267,6 +285,14 @@ coordinates which we can use to do a texture2D call on the sampler2D.</div>
         for uniform,value in self.UNIFORM_VALUES:
             self.findUniform( self.shader, uniform )
         self.findUniform( self.shader, 'lights' )
+        for uniform in ('modelViewProjection','normalMatrix'):
+            self.findUniform( self.shader, uniform )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">And the vertex array object the attribute pointers are recorded
+        into.</div>
+</div>
+	<div class="code-sample">        self.vao = glGenVertexArrays( 1 )
         for uniform in self.MATERIAL_UNIFORMS:
             self.findUniform( self.shader, uniform )
 </div>
@@ -279,7 +305,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.</div>
         ):
             location = glGetAttribLocation( self.shader, attribute )
             if location in (None,-1):
-                print 'Warning, no attribute: %s'%( uniform )
+                print('Warning, no attribute: %s'%( uniform ))
             setattr( self, attribute+ '_loc', location )
 </div>
 	<div class="commentary">
@@ -297,10 +323,10 @@ coordinates which we can use to do a texture2D call on the sampler2D.</div>
 	<div class="code-sample">    def findUniform( self, shader, uniform ):
         location = glGetUniformLocation( shader, uniform )
         if location in (None,-1):
-            print 'Warning, no uniform: %s'%( uniform )
+            print('Warning, no uniform: %s'%( uniform ))
         self.uniform_locations[uniform] = location
         return location
-    def Render( self, mode = None):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
 </div>
 	<div class="commentary">
@@ -323,6 +349,15 @@ coordinates which we can use to do a texture2D call on the sampler2D.</div>
 	<div class="paragraph indent-level-0">Enable the shader.</div>
 </div>
 	<div class="code-sample">        glUseProgram(self.shader)
+        glUniformMatrix4fv(
+            self.uniform_locations['modelViewProjection'], 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glUniformMatrix3fv(
+            self.uniform_locations['normalMatrix'], 1, GL_FALSE,
+            ascontiguousarray( mode.matrix[:3,:3], dtype='f' ),
+        )
+        glBindVertexArray( self.vao )
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Now we can configure our texture sampler uniform to point to
@@ -383,6 +418,7 @@ coordinates which we can use to do a texture2D call on the sampler2D.</div>
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
                 glDisableVertexAttribArray( self.Vertex_texture_coordinate_loc )
+                glBindVertexArray( 0 )
         finally:
             glUseProgram( 0 )
     def lightAsArray( self, light ):

@@ -27,14 +27,21 @@
 </div>
 	<div class="paragraph indent-level-0">This customization of the Timer customization of the
 rotating cube demo adds multiple-texture support with
-a "light map" modulating the base texture.</div>
+a "light map" modulating the base texture.
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext import texture
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Because this tutorial uses legacy/immediate-mode OpenGL functions
+(glBegin, glEnd, glVertex, glTranslate, glMultiTexCoord), we need to
+explicitly request a compatibility profile OpenGL context.
+</div>
+</div>
+	<div class="code-sample">from OpenGLContext import texture
 from OpenGL.GL import *
 from OpenGL.GL.ARB.multitexture import *
-from OpenGLContext.arrays import array
 import sys
 from OpenGLContext.events.timer import Timer
 from OpenGL.extensions import alternate
@@ -54,18 +61,25 @@ glActiveTexture = alternate(
 class TestContext( BaseContext ):
     """Multi-texturing demo
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">We set the contextDefinition to request a compatibility profile,
+    which provides the legacy fixed-function pipeline functions like
+    glBegin/glEnd that this tutorial uses.
+</div>
+</div>
+	<div class="code-sample">    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0)
     rotation =  0
     def OnInit( self ):
         """Do all of our setup functions..."""
         if not glMultiTexCoord2f:
-            print 'Multitexture not supported!'
+            print('Multitexture not supported!')
             sys.exit(1)
         self.addEventHandler( "keypress", name="r", function = self.OnReverse)
         self.addEventHandler( "keypress", name="s", function = self.OnSlower)
         self.addEventHandler( "keypress", name="f", function = self.OnFaster)
-        print 'r -- reverse time\ns -- slow time\nf -- speed time'
+        print('r -- reverse time\ns -- slow time\nf -- speed time')
         self.time = Timer( duration = 8.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )
         self.time.register (self)
@@ -84,13 +98,13 @@ class TestContext( BaseContext ):
 </div>
 	<div class="code-sample">    def OnReverse( self, event ):
         self.time.internal.multiplier = -self.time.internal.multiplier
-        print "reverse",self.time.internal.multiplier
+        print("reverse",self.time.internal.multiplier)
     def OnSlower( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier /2.0
-        print "slower",self.time.internal.multiplier
+        print("slower",self.time.internal.multiplier)
     def OnFaster( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier * 2.0
-        print "faster",self.time.internal.multiplier
+        print("faster",self.time.internal.multiplier)
     def Load( self ):
         self.image = self.loadImage ("nehe_wall.bmp")
         self.lightmap = self.loadLightMap( "lightmap1.jpg" )
@@ -141,7 +155,7 @@ class TestContext( BaseContext ):
         """Load an image from a file using PIL."""
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError:
             from Image import open
         glActiveTexture(GL_TEXTURE0_ARB);
         return texture.Texture( open(imageName) )
@@ -150,7 +164,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError:
             from Image import open
         glActiveTextureARB(GL_TEXTURE1);
         return texture.Texture( open(imageName) )
@@ -198,7 +212,8 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Author:
+	<div class="paragraph indent-level-0">
+Author:
 	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
 	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
@@ -207,7 +222,8 @@ any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
 	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
 credit, or mention my web site somewhere in your program
-or it's docs.</div>
+or it's docs.
+</div>
 </div>
     </section>
 <footer>

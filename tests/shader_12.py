@@ -61,21 +61,38 @@ class TestContext( BaseContext ):
         phong_weightCalc = GLSLImport( url="res://phongweights_frag" )
         '''The GLSLImport can also handle directly specifying the source-code,
         rather than loading from a URL.  Here we create a resuable import node
-        which declares our light array and varying values.'''
-        lightConst = GLSLImport( source = "\n".join([
+        which declares our light array and the values that travel from the
+        vertex shader to the fragment shader.
+
+        The rendering pass supplies its camera to any GLSLObject that names
+        one of its matrices, so this shader declares the two it wants rather
+        than uploading them itself.  The normal matrix is the upper-left 3x3
+        of the inverse-transpose model-view, which the pass calls
+        itp_modelview.'''
+        lightConst = GLSLImport( source = "#version 330 core\n" + "\n".join([
                 "const int %s = %s;"%( k,v )
                 for k,v in self.shader_constants.items()
             ]) + """
+            uniform mat4 mat_modelproj;
+            uniform mat4 itp_modelview;
+            #define normalMatrix mat3(itp_modelview)
+
             uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-
-            varying vec3 EC_Light_half[LIGHT_COUNT];
-            varying vec3 EC_Light_location[LIGHT_COUNT];
-            varying float Light_distance[LIGHT_COUNT];
-
-            varying vec3 baseNormal;
-            varying vec2 Vertex_texture_coordinate_var;
             """
         )
+        '''The values the vertex shader passes on to the fragment shader are
+        declared "out" where they are written and "in" where they are read, so
+        each shader imports the version with its own direction filled in.'''
+        interpolated = """
+            %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+            %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+            %(dir)s float Light_distance[LIGHT_COUNT];
+
+            %(dir)s vec3 baseNormal;
+            %(dir)s vec2 Vertex_texture_coordinate_var;
+            """
+        vertexVarying = GLSLImport( source = interpolated%{'dir':'out'} )
+        fragmentVarying = GLSLImport( source = interpolated%{'dir':'in'} )
         '''==GLSLObject, GLSLShader==
 
         The GLSLObject is a particular shader implementation (currently the
@@ -126,19 +143,20 @@ class TestContext( BaseContext ):
                 GLSLShader(
                     imports = [
                         lightConst,
+                        vertexVarying,
                         phong_preCalc,
                         light_preCalc,
                     ],
                     source = [
                         """
-                        attribute vec3 Vertex_position;
-                        attribute vec3 Vertex_normal;
-                        attribute vec2 Vertex_texture_coordinate;
+                        in vec3 Vertex_position;
+                        in vec3 Vertex_normal;
+                        in vec2 Vertex_texture_coordinate;
                         void main() {
-                            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+                            gl_Position = mat_modelproj * vec4(
                                 Vertex_position, 1.0
                             );
-                            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+                            baseNormal = normalMatrix * normalize(Vertex_normal);
                             light_preCalc(Vertex_position);
                             Vertex_texture_coordinate_var = Vertex_texture_coordinate;
                         }"""
@@ -148,6 +166,7 @@ class TestContext( BaseContext ):
                 GLSLShader(
                     imports = [
                         lightConst,
+                        fragmentVarying,
                         phong_weightCalc,
                     ],
                     source = [
@@ -161,11 +180,12 @@ class TestContext( BaseContext ):
                         uniform Material material;
                         uniform vec4 Global_ambient;
                         uniform sampler2D diffuse_texture;
+                        out vec4 finalColor;
 
                         void main() {
                             vec4 fragColor = Global_ambient * material.ambient;
 
-                            vec4 texDiffuse = texture2D(
+                            vec4 texDiffuse = texture(
                                 diffuse_texture, Vertex_texture_coordinate_var
                             );
                             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
@@ -193,7 +213,7 @@ class TestContext( BaseContext ):
                                     + (lights[j+SPECULAR] * material.specular * weights.z)
                                 );
                             }
-                            gl_FragColor = fragColor;
+                            finalColor = fragColor;
                         }
                         """
                     ],
@@ -260,8 +280,11 @@ class TestContext( BaseContext ):
                 shininess = .5,
             ),
         )
+        '''And the vertex array object the attribute pointers are recorded
+        into when we draw.'''
+        self.vao = glGenVertexArrays( 1 )
 
-    def Render( self, mode = None):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         if not mode.visible:
             return
@@ -293,6 +316,10 @@ class TestContext( BaseContext ):
         '''
         token = self.glslObject.render( mode )
         tokens = [  ]
+        '''A vertex array object is where OpenGL keeps the description of
+        which buffer each attribute reads from; there is no such state outside
+        one, so the attribute setup below has to happen with one bound.'''
+        glBindVertexArray( self.vao )
         try:
             '''As mentioned above, our indices ShaderIndexBuffer would normally
             be rendered via a ShaderGeometry/ShaderSlice node.  We're going to
@@ -322,6 +349,7 @@ class TestContext( BaseContext ):
             self.glslObject.renderPost( token, mode )
             '''The index-array VBO also needs to be unbound.'''
             vbo.unbind()
+            glBindVertexArray( 0 )
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

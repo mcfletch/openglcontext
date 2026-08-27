@@ -32,31 +32,44 @@ mechanism for the animation.</div>
 "multiplier" value of the internal time frame of
 reference compared to real world time.  This allows
 for speeding, slowing and reversing the state of
-rotation.</div>
+rotation.
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGL.GL import *
-from OpenGLContext.arrays import array
-import string
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">Because this tutorial uses legacy/immediate-mode OpenGL functions
+(glBegin, glEnd, glVertex, glTranslate, glRotate, glTexCoord), we need to
+explicitly request a compatibility profile OpenGL context.
+</div>
+</div>
+	<div class="code-sample">from OpenGL.GL import *
 from OpenGLContext.events.timer import Timer
 from OpenGLContext import texture
 class TestContext( BaseContext ):
     """Timer-based control of animation (OpenGLContext timers)
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">We set the contextDefinition to request a compatibility profile,
+    which provides the legacy fixed-function pipeline functions like
+    glBegin/glEnd that this tutorial uses.
+</div>
+</div>
+	<div class="code-sample">    profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0)
     drawPollTimeout = 0.01
     def OnInit( self ):
         """Load the image on initial load of the application"""
         self.image = self.loadImage ()
-        print """You should see a slowly rotating textured cube
+        print("""You should see a slowly rotating textured cube
 The animation is provided by a timer, rather than the
 crude time-module based animation we use for the other
-NeHe tutorials."""
-        print '  &lt;r&gt; reverse the time-sequence'
-        print '  &lt;s&gt; make time pass more slowly'
-        print '  &lt;f&gt; make time pass faster'
+NeHe tutorials.""")
+        print('  &lt;r&gt; reverse the time-sequence')
+        print('  &lt;s&gt; make time pass more slowly')
+        print('  &lt;f&gt; make time pass faster')
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Here we will register key-press handlers for the various
@@ -109,13 +122,13 @@ NeHe tutorials."""
 </div>
 	<div class="code-sample">    def OnReverse( self, event ):
         self.time.internal.multiplier = -self.time.internal.multiplier
-        print "reverse",self.time.internal.multiplier
+        print("reverse",self.time.internal.multiplier)
     def OnSlower( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier /2.0
-        print "slower",self.time.internal.multiplier
+        print("slower",self.time.internal.multiplier)
     def OnFaster( self, event ):
         self.time.internal.multiplier = self.time.internal.multiplier * 2.0
-        print "faster",self.time.internal.multiplier
+        print("faster",self.time.internal.multiplier)
     def Render( self, mode):
         """Render scene geometry"""
         BaseContext.Render( self, mode )
@@ -131,7 +144,7 @@ NeHe tutorials."""
         """
         try:
             from PIL.Image import open
-        except ImportError, err:
+        except ImportError as err:
             from Image import open
         im = texture.Texture( open(imageName) )
         return im
@@ -173,7 +186,8 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Author:
+	<div class="paragraph indent-level-0">
+Author:
 	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
 	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
@@ -182,7 +196,8 @@ any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
 	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
 credit, or mention my web site somewhere in your program
-or it's docs.</div>
+or it's docs.
+</div>
 </div>
     </section>
 <footer>

@@ -87,13 +87,14 @@ class TestContext(BaseContext):
                                         shaders=[
                                             GLSLShader(
                                                 source=[
-                                                    """
-            attribute vec3 position;
-            attribute vec3 Color;
+                                                    """#version 330 core
+            uniform mat4 mat_modelproj;
             uniform vec3 mixColor;
-            varying vec4 baseColor;
+            in vec3 position;
+            in vec3 Color;
+            out vec4 baseColor;
             void main() {
-                gl_Position = gl_ModelViewProjectionMatrix * vec4( position,1.0);
+                gl_Position = mat_modelproj * vec4( position,1.0);
                 baseColor = mix( vec4(mixColor,1.0), vec4(Color,1.0), .5 );
             }""",
                                                 ],
@@ -101,9 +102,11 @@ class TestContext(BaseContext):
                                             ),
                                             GLSLShader(
                                                 source=[
-                                                    """varying vec4 baseColor;
+                                                    """#version 330 core
+            in vec4 baseColor;
+            out vec4 fragColor;
             void main() { 
-                gl_FragColor = baseColor;
+                fragColor = baseColor;
             }"""
                                                 ],
                                                 type="FRAGMENT",

@@ -35,12 +35,17 @@
 with the tutorial, so that only changes from the tutorial are noted
 here.
 </div>
+	<div class="paragraph indent-level-0">
+NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
+a compatibility profile context.
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 class TestContext( BaseContext ):
     """Colorises the NeHe2 geometry"""
+    # Force compatibility profile for legacy GL functions
     profile = 'compatibility'   # draws with the fixed-function pipeline
     initialPosition = (0,0,0)
     def Render( self, mode = 0):
@@ -86,7 +91,8 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Author:
+	<div class="paragraph indent-level-0">
+Author:
 	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
 	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
@@ -95,7 +101,8 @@ any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
 	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
 credit, or mention my web site somewhere in your program
-or it's docs.</div>
+or it's docs.
+</div>
 </div>
     </section>
 <footer>

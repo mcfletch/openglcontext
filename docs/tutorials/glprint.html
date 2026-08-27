@@ -31,7 +31,8 @@ with the tutorial, so that only changes from the tutorial are noted
 here.
 </div>
 	<div class="paragraph indent-level-0">We're going to have to use the wxPython context explicitly, so that
-we have a single API for getting a window handle.</div>
+we have a single API for getting a window handle.
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext.wxinteractivecontext import wxInteractiveContext
 from OpenGLContext import testingcontext
@@ -41,8 +42,8 @@ import sys
 try:
     from OpenGL.WGL import *
     import win32ui, win32con
-except ImportError, err:
-    print """Unable to import Win32 text modules: %s"""%(err,)
+except ImportError as err:
+    print("""Unable to import Win32 text modules: %s"""%(err,))
     sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
 </div>
 	<div class="commentary">
@@ -56,9 +57,9 @@ calls are loosely the same as those seen in the tutorial.</div>
         wgldc = wglGetCurrentDC()
         if wgldc &gt; sys.maxint:
             import struct
-            print 'too-large wgldc', wgldc
+            print('too-large wgldc', wgldc)
             wgldc = struct.unpack( '&gt;i', struct.pack( '&gt;I', wgldc ))[0]
-            print 'Converted wgldc to', wgldc
+            print('Converted wgldc to', wgldc)
         dc = win32ui.CreateDCFromHandle( wgldc )
         ## pitch and family value
         f = win32ui.CreateFont(
@@ -162,7 +163,8 @@ if __name__ == "__main__":
     app.MainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Author:
+	<div class="paragraph indent-level-0">
+Author:
 	<a class="" href="http://nehe.gamedev.net">Jeff Molofee (aka NeHe)</a>
 </div>
 	<div class="paragraph indent-level-0">COPYRIGHT AND DISCLAIMER: (c)2000 Jeff Molofee</div>
@@ -171,7 +173,8 @@ any sort, let me know via email, I'm curious to see where
 it ends up :)</div>
 	<div class="paragraph indent-level-0">If you use the code for your own projects please give me
 credit, or mention my web site somewhere in your program
-or it's docs.</div>
+or it's docs.
+</div>
 </div>
     </section>
 <footer>

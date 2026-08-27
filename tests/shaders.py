@@ -21,29 +21,34 @@ log = logging.getLogger( 'shaderobjects' )
 
 STRIDE = 32  # 8 interleaved floats per vertex
 
-TOON_VERTEX = '''
-attribute vec3 position;
-attribute vec3 normal;
-varying vec3 baseNormal;
+# The rendering pass supplies its camera to any GLSLObject that names one of
+# its matrices; the normal matrix is the upper-left 3x3 of the
+# inverse-transpose model-view, which the pass calls itp_modelview.
+TOON_VERTEX = '''#version 330 core
+uniform mat4 mat_modelproj;
+uniform mat4 itp_modelview;
+in vec3 position;
+in vec3 normal;
+out vec3 baseNormal;
 void main() {
-    baseNormal = gl_NormalMatrix * normal;
-    gl_Position = gl_ModelViewProjectionMatrix * vec4( position, 1.0 );
+    baseNormal = mat3( itp_modelview ) * normal;
+    gl_Position = mat_modelproj * vec4( position, 1.0 );
 }'''
 
-TOON_FRAGMENT = '''
+TOON_FRAGMENT = '''#version 330 core
 uniform vec3 light_location;
-varying vec3 baseNormal;
+in vec3 baseNormal;
+out vec4 fragColor;
 void main() {
     vec3 n = normalize( baseNormal );
     vec3 l = normalize( light_location );
     // quantize to 5 steps (0, .25, .5, .75 and 1)
     float intensity = (floor(dot(l, n) * 4.0) + 1.0)/4.0;
-    gl_FragColor = vec4( intensity, intensity*0.5, intensity*0.5, 1.0 );
+    fragColor = vec4( intensity, intensity*0.5, intensity*0.5, 1.0 );
 }'''
 
 
 class TestContext( BaseContext ):
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     light_location = (0, 10, 5)
 
     def OnInit( self ):

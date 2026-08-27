@@ -37,7 +37,8 @@ iterate over a set of lights applying our existing rendering
 algorithm to each defined light.</div>
 	<div class="paragraph indent-level-0">We're also going to quickly demonstrate the use of GLSL structures
 to bind together similar information into namespaces for easier
-reference.</div>
+reference.
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
@@ -49,7 +50,6 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context"""
 </div>
@@ -62,13 +62,10 @@ structure.  The structure doesn't provide many benefits other
 than keeping the namespaces of your code clean and allowing for
 declaring multiple uniforms of the same type, such as a "front"
 and "back" material.</div>
-	<div class="paragraph indent-level-8">We are going to define a very simple Material struct which is
-a subset of the built-in gl_MaterialParameters structure
-(which also has an "emission" parameter).  GLSL defines two
-built-in Material uniforms gl_FrontMaterial and gl_BackMaterial.
-It is possible (though seldom done) to fill in these uniform
-values with glUniform calls rather than the legacy glMaterial
-calls.</div>
+	<div class="paragraph indent-level-8">We are going to define a very simple Material struct holding
+the four values a Blinn-Phong surface needs, and fill it in with
+glUniform calls when we draw.
+</div>
 </div>
 	<div class="code-sample">        materialStruct = """
         struct Material {
@@ -87,9 +84,10 @@ calls.</div>
         variable as being of this type.</div>
 	<div class="paragraph indent-level-8">Our light-weighting code has not changed from the previous
 tutorial.  It is still a Blinn-Phong calculation based on the
-half-vector of light and view vector.</div>
+half-vector of light and view vector.
 </div>
-	<div class="code-sample">        phong_weightCalc = """
+</div>
+	<div class="code-sample">        phong_weightCalc = """#version 330 core
         vec2 phong_weightCalc(
             in vec3 light_pos, // light position
             in vec3 half_light, // half-way vector between light and view
@@ -113,25 +111,29 @@ half-vector of light and view vector.</div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Our vertex shader is also unchanged.  We could move many
         of the operations currently done in our fragment shader here
-        to reduce the processing load for our shader.</div>
+        to reduce the processing load for our shader.
+</div>
 </div>
 	<div class="code-sample">        vertex = shaders.compileShader(
-        """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
-        varying vec3 baseNormal;
+        """#version 330 core
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
+        out vec3 baseNormal;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+            gl_Position = modelViewProjection * vec4(
                 Vertex_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
         }""", GL_VERTEX_SHADER)
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">To create a uniform with a structure type, we simply use
         the structure as the data-type declaration for the uniform.
         As opposed to using e.g. vec4 or vec3, we use Material (our
-        structure name defined above) and give the uniform a name.</div>
+        structure name defined above) and give the uniform a name.
+</div>
 </div>
 	<div class="code-sample">        """uniform Material material;"""
 </div>
@@ -162,14 +164,17 @@ uniform which is declared as a sized array of 12 vec4 elements:</div>
 	<div class="paragraph indent-level-8">We iterate over each light in our array of lights accumulating
 the results into the fragColor variable we've defined.  The
 global component is used to initialize the variable, with the
-contribution of each light added to the result.</div>
+contribution of each light added to the result.
+</div>
 </div>
 	<div class="code-sample">        fragment = shaders.compileShader(
             phong_weightCalc + materialStruct + """
         uniform Material material;
         uniform vec4 Global_ambient;
         uniform vec4 lights[ 12 ]; // 3 possible lights 4 vec4's each
-        varying vec3 baseNormal;
+        uniform mat3 normalMatrix;
+        in vec3 baseNormal;
+        out vec4 finalColor;
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
             int AMBIENT = 0;
@@ -180,7 +185,7 @@ contribution of each light added to the result.</div>
             for (i=0;i&lt;12;i=i+4) {
                 // normalized eye-coordinate Light location
                 vec3 EC_Light_location = normalize(
-                    gl_NormalMatrix * lights[i+POSITION].xyz
+                    normalMatrix * lights[i+POSITION].xyz
                 );
                 // half-vector calculation
                 vec3 Light_half = normalize(
@@ -199,7 +204,7 @@ contribution of each light added to the result.</div>
                     + (lights[i+SPECULAR] * material.specular * weights.y)
                 );
             }
-            gl_FragColor = fragColor;
+            finalColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
 </div>
@@ -210,11 +215,9 @@ structures as a Uniform, with the components of the structures
 specified with separate calls to glUniform4f.  Problem is, that
 doesn't actually *work*.  While glUniform *should* be able to
 handle array-of-structure indexing, it doesn't actually support
-this type of operation in the real world. The built-in
-gl_LightSourceParameters are an array-of-structures, but
-apparently the GL implementations consider this a special case,
-rather than a generic type of functionality to be supported.</div>
-	<div class="paragraph indent-level-8">An array-of-structures value looks like this when declared in GLSL:</div>
+this type of operation in the real world.</div>
+	<div class="paragraph indent-level-8">An array-of-structures value looks like this when declared in GLSL:
+</div>
 </div>
 	<div class="code-sample">        lightStruct = """
         // NOTE: this does not work, it compiles, but you will
@@ -235,7 +238,8 @@ rather than a generic type of functionality to be supported.</div>
 	<div class="paragraph indent-level-8">you will always get a -1 (invalid) location.</div>
 	<div class="paragraph indent-level-8">OpenGL 3.1 introduced the concept of Uniform Buffers, which allow
 for packing Uniform data into VBO storage, but it's not yet clear
-whether they will support array-of-structure specification.</div>
+whether they will support array-of-structure specification.
+</div>
 </div>
 	<div class="code-sample">        self.shader = shaders.compileProgram(vertex,fragment)
         self.coords,self.indices,self.count = Sphere(
@@ -245,16 +249,27 @@ whether they will support array-of-structure specification.</div>
         for uniform,value in self.UNIFORM_VALUES:
             location = glGetUniformLocation( self.shader, uniform )
             if location in (None,-1):
-                print 'Warning, no uniform: %s'%( uniform )
+                print('Warning, no uniform: %s'%( uniform ))
             self.uniform_locations[uniform] = location
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">There's no real reason to treat the "lights" uniform specially,
         other than that we want to call attention to it.  We get the
         uniform as normal.  Note that we *could* also retrieve a
-        sub-element of the array by specifying 'lights[3]' or the like.</div>
+        sub-element of the array by specifying 'lights[3]' or the like.
 </div>
-	<div class="code-sample">        self.uniform_locations['lights'] = glGetUniformLocation(
+</div>
+	<div class="code-sample">        for uniform in ('modelViewProjection','normalMatrix'):
+            self.uniform_locations[uniform] = glGetUniformLocation(
+                self.shader, uniform
+            )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">And the vertex array object the attribute pointers are
+        recorded into.</div>
+</div>
+	<div class="code-sample">        self.vao = glGenVertexArrays( 1 )
+        self.uniform_locations['lights'] = glGetUniformLocation(
             self.shader, 'lights'
         )
         for attribute in (
@@ -262,7 +277,7 @@ whether they will support array-of-structure specification.</div>
         ):
             location = glGetAttribLocation( self.shader, attribute )
             if location in (None,-1):
-                print 'Warning, no attribute: %s'%( uniform )
+                print('Warning, no attribute: %s'%( uniform ))
             setattr( self, attribute+ '_loc', location )
 </div>
 	<div class="commentary">
@@ -286,7 +301,8 @@ whether they will support array-of-structure specification.</div>
 	<div class="paragraph indent-level-4">You'll notice that we're using 0.0 as the 'w' coordinate
 for the light positions.  We're using this to flag that the
 position is actually a *direction*.  This will become useful
-in later tutorials where we have multiple light-types.</div>
+in later tutorials where we have multiple light-types.
+</div>
 </div>
 	<div class="code-sample">    LIGHTS = array([
         x[1] for x in [
@@ -304,10 +320,19 @@ in later tutorials where we have multiple light-types.</div>
             ('lights[2].position',(-4.0,2.0,-10.0,0.0)),
         ]
     ], 'f')
-    def Render( self, mode = None):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
         glUseProgram(self.shader)
+        glUniformMatrix4fv(
+            self.uniform_locations['modelViewProjection'], 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glUniformMatrix3fv(
+            self.uniform_locations['normalMatrix'], 1, GL_FALSE,
+            ascontiguousarray( mode.matrix[:3,:3], dtype='f' ),
+        )
+        glBindVertexArray( self.vao )
         try:
             self.coords.bind()
             self.indices.bind()
@@ -327,7 +352,8 @@ the uniforms on each rendering pass (as we do here) is
 not necessary.  The shader merely needs to be "in use"
 during the glUniform call, and this is a convenient,
 if inefficient, way to ensure it is in use at the time
-we are calling glUniform.</div>
+we are calling glUniform.
+</div>
 </div>
 	<div class="code-sample">                glUniform4fv(
                     self.uniform_locations['lights'],
@@ -336,7 +362,7 @@ we are calling glUniform.</div>
                 )
                 test_lights = (GLfloat * 12)()
                 glGetUniformfv( self.shader, self.uniform_locations['lights'], test_lights )
-                print 'Lights', list(test_lights)
+                print('Lights', list(test_lights))
                 for uniform,value in self.UNIFORM_VALUES:
                     location = self.uniform_locations.get( uniform )
                     if location not in (None,-1):
@@ -366,6 +392,7 @@ we are calling glUniform.</div>
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
         finally:
+            glBindVertexArray( 0 )
             glUseProgram( 0 )
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

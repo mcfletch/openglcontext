@@ -3,7 +3,7 @@
 
 <!-- dumbmarkup support -->
 <head>
-    <title>Transformations in OpenGL: Understanding Transforms</title><link rel="stylesheet" href="../style/modern.css" type="text/css"><link rel="stylesheet" href="../style/tutorial.css" type="text/css">
+    <title>Transformations and Matrices: Understanding Transforms</title><link rel="stylesheet" href="../style/modern.css" type="text/css"><link rel="stylesheet" href="../style/tutorial.css" type="text/css">
 </head>
 <body class="openglcontext-tutorial">
   <div id="content">
@@ -15,7 +15,7 @@
     <li><a href="index.html">Index</a></li>
     <li><a href="index.html">Index</a></li>
 </ul>
-    <h1>Transformations in OpenGL: Understanding Transforms</h1>
+    <h1>Transformations and Matrices: Understanding Transforms</h1>
     </header>
     <section>
 	<div class="code-sample">#! /usr/bin/env python
@@ -29,12 +29,12 @@
 </ul>
 	<div class="paragraph indent-level-0">We'll get started by doing some basic imports to get the
 OpenGLContext context, numpy, and all the other tools
-we're going to use.</div>
+we're going to use.
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
-from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
 from OpenGL.GL import shaders
 from OpenGLContext.scenegraph.basenodes import *
@@ -45,7 +45,8 @@ from OpenGLContext.scenegraph.basenodes import *
 	<div class="code-sample">from vrml.vrml97 import transformmatrix
 </div>
 	<div class="commentary">
-	<h2 class="heading indent-level-0">The Theory</h2>
+	<div class="paragraph indent-level-0">
+_The Theory_</div>
 	<div class="paragraph indent-level-0">OpenGL hardware renders a 2x2x2 cube:</div>
 	<ul class=" indent-level-1">
 	<li class="">Z goes from -1 at the far clipping plane to 1 at the near clipping plane</li>
@@ -57,7 +58,7 @@ the 2x2x2 cube.  If you draw outside the cube, the geometry just won't
 show up at all.  The hardware always draws the same cube, and nothing
 you do is going to alter that cube, all you can do is map
 your geometry into the cube properly.</div>
-	<h2 class="heading indent-level-0">How We're Drawing</h2>
+	<h2 class="title indent-level-0">How We're Drawing</h2>
 	<div class="paragraph indent-level-0">We are going to start off with an identity matrix for our transformation.
 When an identity matrix is multiplied by a coordinate the coordinate is
 unchanged. Thus we are going to be drawing in raw "device" or "display"
@@ -76,19 +77,21 @@ scale of -1 in the Z coordinate.</div>
 ], dtype='f')
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Our shader in this scene takes a single matrix uniform (our identity matrix
+	<div class="paragraph indent-level-0">
+Our shader in this scene takes a single matrix uniform (our identity matrix
 to start) and multiplies it by the coordinates in our triangles. It sets the
 color of each vertex to the colours in the triangles as well. It does *not*
 take into account the OpenGLContext built-in navigation, perspective matrix,
-and the like. As a result, the scene will be entirely static when displayed.</div>
+and the like. As a result, the scene will be entirely static when displayed.
+</div>
 </div>
 	<div class="code-sample">SHADERS = [
     GLSLShader(
-        source = [ """#version 120
+        source = [ """#version 330 core
         uniform mat4 transform;
-        attribute vec3 Vertex_position;
-        attribute vec4 Vertex_color;
-        varying vec4 baseColor;
+        in vec3 Vertex_position;
+        in vec4 Vertex_color;
+        out vec4 baseColor;
         void main() {
             baseColor = Vertex_color;
             gl_Position = transform * vec4(
@@ -98,11 +101,11 @@ and the like. As a result, the scene will be entirely static when displayed.</di
         type = 'VERTEX',
     ),
     GLSLShader(
-        source = [ """#version 120
-        uniform vec4 color;
-        varying vec4 baseColor;
+        source = [ """#version 330 core
+        in vec4 baseColor;
+        out vec4 fragColor;
         void main() {
-            gl_FragColor = baseColor;
+            fragColor = baseColor;
         }
         """],
         type = 'FRAGMENT',
@@ -113,10 +116,11 @@ and the like. As a result, the scene will be entirely static when displayed.</di
 	<div class="paragraph indent-level-0">
 	<img class=" wiki" src="transforms_1.py-screen-0009.png" alt="Screenshot">
 </div>
-	<h2 class="heading indent-level-0">What We're Drawing</h2>
+	<h2 class="title indent-level-0">What We're Drawing</h2>
 	<div class="paragraph indent-level-0">We will draw four triangles.  The first is a cyan triangle which will
 *not* appear in the rendering. It is being drawn at Z == -1.05, so it
-is behind the clipping region.</div>
+is behind the clipping region.
+</div>
 </div>
 	<div class="code-sample">cyan_triangle = [
     (0,2,-1.05,   0,1,1,.5),
@@ -125,7 +129,9 @@ is behind the clipping region.</div>
 ]
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">The small blue triangle will be drawn at Z == -.5</div>
+	<div class="paragraph indent-level-0">
+The small blue triangle will be drawn at Z == -.5
+</div>
 </div>
 	<div class="code-sample">blue_triangle = [
     (1,1,.5,  1,0,0,.5),
@@ -152,7 +158,6 @@ is behind the clipping region.</div>
 ]
 class TestContext( BaseContext ):
     """Creates a simple vertex shader..."""
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     @property
     def perspective( self ):
         return self.perspective_matrices[self.perspective_index]
@@ -220,7 +225,8 @@ class TestContext( BaseContext ):
         ]
 </div>
 	<div class="commentary">
-	<h2 class="heading indent-level-0">Scaling the Scene</h2>
+	<div class="paragraph indent-level-0">
+_Scaling the Scene_</div>
 	<div class="paragraph indent-level-8">Let's apply a few scales to the matrix to get a feel for
 how they work. The diagonal values in the matrix map to individual
 components, so it is pretty easy to calculate scale matrices.</div>
@@ -252,11 +258,12 @@ Our third does a scale of .5 in the Y direction.
 	<div class="paragraph indent-level-0">
 	<img class=" wiki" src="transforms_1.py-screen-0005.png" alt="Translate right">
 	<img class=" wiki" src="transforms_1.py-screen-0004.png" alt="Translate up">
-        _Transforming The Scene_
+_Transforming The Scene_
 </div>
 	<div class="paragraph indent-level-8">Now let's apply a few translations (moves), we add the values
 to the bottom row of the matrix to get the values added to the
-coordinates.</div>
+coordinates.
+</div>
 </div>
 	<div class="code-sample">        self.perspective_matrices.extend([
             array([
@@ -277,12 +284,12 @@ coordinates.</div>
 	<div class="paragraph indent-level-0">
 	<img class=" wiki" src="transforms_1.py-screen-0007.png" alt="Perspective">
 	<img class=" wiki" src="transforms_1.py-screen-0006.png" alt="Perspective">
-	<img class="clear-right wiki" src="transforms_1.py-screen-0009.png" alt="Perspective">
+	<a class="" href="class=clear-right">transforms_1.py-screen-0009.png Perspective</a>
 	<img class=" wiki" src="transforms_1.py-screen-0008.png" alt="Perspective">
-	<img class="clear-right wiki" src="transforms_1.py-screen-0011.png" alt="Perspective">
+	<a class="" href="class=clear-right">transforms_1.py-screen-0011.png Perspective</a>
 	<img class=" wiki" src="transforms_1.py-screen-0010.png" alt="Perspective">
 </div>
-	<h2 class="heading indent-level-8">Perspective Transformations</h2>
+	<h2 class="title indent-level-8">Perspective Transformations</h2>
 	<div class="paragraph indent-level-8">Now let's see what happens to the matrix when we apply a perspective
 transformation.  A perspective transformation basically takes a
 truncated pyramid and maps it into the 2x2x2 cube. The front clipping
@@ -293,7 +300,8 @@ back clipping plane are thus compressed (seem smaller), while those at
 the front clipping plane are close to uncompressed.</div>
 	<div class="paragraph indent-level-8">The perspective matrix calculation here is doing the calculations
 required to give you a particular field of view, near and far clipping
-plane. It also includes the z-axis reflection.</div>
+plane. It also includes the z-axis reflection.
+</div>
 </div>
 	<div class="code-sample">        aspect = self.getViewPort()
         if aspect[1]:
@@ -317,6 +325,15 @@ plane. It also includes the z-axis reflection.</div>
         ] )
 </div>
 	<div class="commentary">
+	<div class="paragraph indent-level-0">A vertex array object records which buffer each attribute reads
+        from, so that describing the layout is done once here rather than on
+        every frame. It is also the only place OpenGL keeps that description:
+        there is no array state outside one, so a `glVertexAttribPointer` with
+        nothing bound draws nothing.</div>
+</div>
+	<div class="code-sample">        self.vao = glGenVertexArrays( 1 )
+</div>
+	<div class="commentary">
 	<div class="paragraph indent-level-0">We set up an event handler to call the function to perform the switch.
         The handler will increment our index into self.perspective_matrices.</div>
 </div>
@@ -333,7 +350,8 @@ plane. It also includes the z-axis reflection.</div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Now we calculate our perspective matrix. Since this is pre-calculated
         we're just pulling in the value. Normal code would calculate the matrix
-        from "camera" position and parameters and then pass it into the Uniform.</div>
+        from "camera" position and parameters and then pass it into the Uniform.
+</div>
 </div>
 	<div class="code-sample">        final_matrix = self.perspective
         print('final_matrix:\n%s'%(final_matrix))
@@ -347,6 +365,7 @@ plane. It also includes the z-axis reflection.</div>
 </div>
 	<div class="code-sample">        token = self.glslObject.render( mode )
         tokens = []
+        glBindVertexArray( self.vao )
         vbo = self.indices.bind(mode)
         try:
             for attribute in self.attributes:
@@ -366,6 +385,7 @@ plane. It also includes the z-axis reflection.</div>
 	<div class="paragraph indent-level-0">The index-array VBO also needs to be unbound.</div>
 </div>
 	<div class="code-sample">            vbo.unbind()
+            glBindVertexArray( 0 )
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">Our event handler to choose the next perspective matrix</div>

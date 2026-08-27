@@ -1,11 +1,9 @@
 '''=Requirements/Setup=
 
-This tutorial introduces modern, low-level 3D rendering 
-techniques.  It tries to avoid the use of "legacy" OpenGL 
-entry points as much as possible.  Though legacy OpenGL 
-is likely to be supported on most desktop/laptop hardware 
-for the foreseeable future, their use is technically 
-discouraged.
+This tutorial introduces modern, low-level 3D rendering
+techniques.  Everything in it is drawn the way an OpenGL core
+profile draws: data in buffers, described by a vertex array
+object, turned into pixels by shaders you write.
 
 We assume you know:
 
@@ -53,16 +51,15 @@ for details.
 
 == System Requirements ==
 
-This tutorial requires a modern OpenGL implementation.  Your 
-card/driver should likely support OpenGL 2.x natively, though 
-OpenGL 1.5+ extensions may work.
+This tutorial needs an OpenGL 3.3 core profile, which is what
+OpenGLContext asks for by default and what every desktop driver of
+the last decade or so provides.  The shaders are written in GLSL
+330.
 
-It is known *not* to work on the following theoretically capable 
+It is known *not* to work on the following theoretically capable
 configurations:
 
-    * Mac Radeon 9600, OS-X 10.4/10.5 (does not support vertex 
-        attribute arrays)
-    * nVidia GeForce 7600 GS rev a1 (does not properly 
+    * nVidia GeForce 7600 GS rev a1 (does not properly
         compile the 11th tutorial (link error)).
 
 Note that there are alternative code-paths that can be used, but 

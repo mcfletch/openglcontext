@@ -1,12 +1,14 @@
 # The shader tutorials in core GLSL — a proposal
 
-**Status:** 📋 Proposed, for review. Nothing in this document has been applied.
-**Related:** [CORE-PROFILE-DEFAULT.md](CORE-PROFILE-DEFAULT.md), whose documentation
-section this is the detail of. The default profile is now core; these tutorials
-declare `profile = 'compatibility'` so they still run, and this is the plan for
-taking that declaration back off.
+**Status:** ✅ Landed. Every tutorial in the *Introduction to Shaders* and
+*Transformations* paths is core GLSL, none declares `profile = 'compatibility'`,
+and `scripts/profile_sweep.py` shows each drawing under both profiles.
+**Related:** [CORE-PROFILE-DEFAULT.md](CORE-PROFILE-DEFAULT.md), whose
+documentation section this is the detail of;
+[SHADER-GEOMETRY-BINDING.md](SHADER-GEOMETRY-BINDING.md), whose step 3 the
+declarative tutorials waited on.
 
-## What is true today
+## What was true before
 
 `docs/tutorials/index.html` is already ordered shader-first — *Introduction to
 Shaders*, then *Transformations*, then *Scenegraph Nodes*, then *Shadows*, with
@@ -138,6 +140,36 @@ Each step is done when:
 - `docs/tutorials/<name>.html` matches the source it quotes, and
 - the prose describes what the shader does rather than what it replaces.
 
+## What landed
+
+Twenty-three scripts, converted in the order above and checked one at a time
+against the fraction of the frame each drew before the change:
+
+| Tutorial | What it needed |
+|---|---|
+| `transforms_1` | `#version 330 core`, `in`/`out`, one VAO |
+| `shader_instanced_modern` | one VAO; `mode.matrix`/`mode.projection` in place of the matrix stack |
+| `shader_1` … `shader_4`, `shader_2_c_void_p`, `shader_4_subset` | declared attributes and a matrix uniform in place of `gl_Vertex`/`gl_Color`/`gl_ModelViewProjectionMatrix`; `glVertexAttribPointer` in place of `glVertexPointer`/`glColorPointer`; a matrix the tutorial builds in place of `glRotate`/`glScale` |
+| `shader_5` … `shader_11`, `shader_binary` | `modelViewProjection` and `normalMatrix` uniforms; the values passed between the shaders split into an `out` copy and an `in` copy of one shared block; a declared fragment output; one VAO |
+| `shader_12`, `shader_ng`, `shaders`, `shadergeometry` | the same, taking the matrices from the pass by naming `mat_modelproj` and `itp_modelview` rather than uploading them |
+| `shader_instanced`, `shader_instanced_mapped` | the same, plus one VAO around the `ShaderAttribute` setup |
+| `shader_spike`, `shader_sphere` | `shader_sphere` gained the shader its name promised, drawing its textured sphere through declared attributes |
+
+Two shared resources moved with them, since every tutorial from 9 up imports
+them: `OpenGLContext/resources/phongprecalc.vert` and `phongweights.frag` read
+`normalMatrix` where they read `gl_NormalMatrix`, and their generated
+`*_vert.py` / `*_frag.py` modules were regenerated to match.
+
+`shader_instanced` had a version guard that exited before drawing on any GLSL
+above 1.40; with the tutorial in core GLSL the guard is gone and it draws. It
+still teaches the same lesson as `shader_instanced_modern`, so folding the two
+together is worth deciding separately.
+
+`docs/tutorials/*.html` is generated from these sources by `directdocs`
+(`directdocs/oglctutorials.py` in the sibling checkout), and every page was
+regenerated, which also caught the pages up with source edits made before this
+work.
+
 ## What this does not cover
 
 - **The NeHe series stays as it is** — compatibility, last in the index,
@@ -149,3 +181,6 @@ Each step is done when:
 - **`redbook_*`, `gl*` entry-point demos, bitmap fonts.** These demonstrate the
   fixed-function API itself. They declare compatibility and that is the correct
   answer for them.
+- **`shaderobjects.py`.** Several of its `GLSLObject`s are fragment shaders with
+  no vertex shader, which means a fixed-function vertex stage; there is no core
+  equivalent, so it keeps its compatibility declaration.

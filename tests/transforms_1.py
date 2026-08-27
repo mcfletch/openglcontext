@@ -60,11 +60,11 @@ and the like. As a result, the scene will be entirely static when displayed.
 '''
 SHADERS = [
     GLSLShader(
-        source = [ """#version 120
+        source = [ """#version 330 core
         uniform mat4 transform;
-        attribute vec3 Vertex_position;
-        attribute vec4 Vertex_color;
-        varying vec4 baseColor;
+        in vec3 Vertex_position;
+        in vec4 Vertex_color;
+        out vec4 baseColor;
         void main() {
             baseColor = Vertex_color;
             gl_Position = transform * vec4(
@@ -74,11 +74,11 @@ SHADERS = [
         type = 'VERTEX',
     ),
     GLSLShader(
-        source = [ """#version 120
-        uniform vec4 color;
-        varying vec4 baseColor;
+        source = [ """#version 330 core
+        in vec4 baseColor;
+        out vec4 fragColor;
         void main() {
-            gl_FragColor = baseColor;
+            fragColor = baseColor;
         }
         """],
         type = 'FRAGMENT',
@@ -122,7 +122,6 @@ red_triangle = [
 
 class TestContext( BaseContext ):
     """Creates a simple vertex shader..."""
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     @property
     def perspective( self ):
         return self.perspective_matrices[self.perspective_index]
@@ -263,6 +262,12 @@ class TestContext( BaseContext ):
             ))
             for fov in [.5,.6,.7,.8,.9,.95] # we don't go to 1 because then far would clip the geometry
         ] )
+        '''A vertex array object records which buffer each attribute reads
+        from, so that describing the layout is done once here rather than on
+        every frame. It is also the only place OpenGL keeps that description:
+        there is no array state outside one, so a `glVertexAttribPointer` with
+        nothing bound draws nothing.'''
+        self.vao = glGenVertexArrays( 1 )
         '''We set up an event handler to call the function to perform the switch.
         The handler will increment our index into self.perspective_matrices.'''
         self.perspective_index = 0
@@ -285,6 +290,7 @@ class TestContext( BaseContext ):
         and then calls the glDraw function.'''
         token = self.glslObject.render( mode )
         tokens = []
+        glBindVertexArray( self.vao )
         vbo = self.indices.bind(mode)
         try:
             for attribute in self.attributes:
@@ -302,6 +308,7 @@ class TestContext( BaseContext ):
             self.glslObject.renderPost( token, mode )
             '''The index-array VBO also needs to be unbound.'''
             vbo.unbind()
+            glBindVertexArray( 0 )
     '''Our event handler to choose the next perspective matrix'''
     def OnPerspective( self, event ):
         self.perspective_index += 1

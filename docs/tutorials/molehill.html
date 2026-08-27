@@ -28,15 +28,15 @@
 	<div class="paragraph indent-level-0">This version of the demo shows how to create the same
 visual effect as the original MoleHill Demo using the
 OpenGLContext Nurbs extension (patterned after the Blaxxun
-Nurbs extension).</div>
+Nurbs extension).
+</div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
-import string, time
 from OpenGLContext.scenegraph.basenodes import *
-from OpenGLContext.scenegraph import nurbs
+#from OpenGLContext.scenegraph import nurbs
 class TestContext( BaseContext ):
     def buildControlPoints( self ):
         """Build control points for NURBS mole hills"""
@@ -45,7 +45,8 @@ class TestContext( BaseContext ):
 	<div class="paragraph indent-level-0">Normally you would use a 3D modeller to create nurbs
         geometry, but we'll generate it by paper-and-pencil method
         (actually, Mark Kilgard did in 1995, we're just copying the
-        setup here).</div>
+        setup here).
+</div>
 </div>
 	<div class="code-sample">        pts1 = []
         pts2 = []
@@ -139,7 +140,7 @@ class TestContext( BaseContext ):
         return pts1,pts2,pts3,pts4
     def OnInit( self ):
         """Create the scenegraph for rendering"""
-        print """You should see a 4-colour "molehill" composed of four different NurbsSurface nodes."""
+        print("""You should see a 4-colour "molehill" composed of four different NurbsSurface nodes.""")
         knots = array( (0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0),'f' )
         pts1,pts2,pts3,pts4 = self.buildControlPoints()
         colors = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],]
@@ -205,12 +206,14 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Original Demo:</div>
+	<div class="paragraph indent-level-0">
+Original Demo:</div>
 	<div class="paragraph indent-level-4">Copyright (c) Mark J. Kilgard, 1995</div>
 	<div class="paragraph indent-level-4">This program is freely distributable without licensing fees
 and is provided without guarantee or warrantee expressed or
 implied. This program is -not- in the public domain.</div>
-	<div class="paragraph indent-level-4">molehill uses the GLU NURBS routines to draw some nice surfaces.</div>
+	<div class="paragraph indent-level-4">molehill uses the GLU NURBS routines to draw some nice surfaces.
+</div>
 </div>
     </section>
 <footer>

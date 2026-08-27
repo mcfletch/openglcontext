@@ -29,7 +29,6 @@ from OpenGLContext.scenegraph.basenodes import Sphere
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context"""
         '''==GLSL Structures==
@@ -42,13 +41,9 @@ class TestContext( BaseContext ):
         declaring multiple uniforms of the same type, such as a "front"
         and "back" material.
 
-        We are going to define a very simple Material struct which is
-        a subset of the built-in gl_MaterialParameters structure
-        (which also has an "emission" parameter).  GLSL defines two
-        built-in Material uniforms gl_FrontMaterial and gl_BackMaterial.
-        It is possible (though seldom done) to fill in these uniform
-        values with glUniform calls rather than the legacy glMaterial
-        calls.
+        We are going to define a very simple Material struct holding
+        the four values a Blinn-Phong surface needs, and fill it in with
+        glUniform calls when we draw.
         '''
         materialStruct = """
         struct Material {
@@ -68,7 +63,7 @@ class TestContext( BaseContext ):
         tutorial.  It is still a Blinn-Phong calculation based on the
         half-vector of light and view vector.
         '''
-        phong_weightCalc = """
+        phong_weightCalc = """#version 330 core
         vec2 phong_weightCalc(
             in vec3 light_pos, // light position
             in vec3 half_light, // half-way vector between light and view
@@ -93,16 +88,19 @@ class TestContext( BaseContext ):
         to reduce the processing load for our shader.
         '''
         vertex = shaders.compileShader(
-        """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
+        """#version 330 core
+        uniform mat4 modelViewProjection;
+        uniform mat3 normalMatrix;
 
-        varying vec3 baseNormal;
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
+
+        out vec3 baseNormal;
         void main() {
-            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+            gl_Position = modelViewProjection * vec4(
                 Vertex_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
         }""", GL_VERTEX_SHADER)
         '''To create a uniform with a structure type, we simply use
         the structure as the data-type declaration for the uniform.
@@ -140,8 +138,10 @@ class TestContext( BaseContext ):
         uniform Material material;
         uniform vec4 Global_ambient;
         uniform vec4 lights[ 12 ]; // 3 possible lights 4 vec4's each
+        uniform mat3 normalMatrix;
 
-        varying vec3 baseNormal;
+        in vec3 baseNormal;
+        out vec4 finalColor;
         void main() {
             vec4 fragColor = Global_ambient * material.ambient;
 
@@ -154,7 +154,7 @@ class TestContext( BaseContext ):
             for (i=0;i<12;i=i+4) {
                 // normalized eye-coordinate Light location
                 vec3 EC_Light_location = normalize(
-                    gl_NormalMatrix * lights[i+POSITION].xyz
+                    normalMatrix * lights[i+POSITION].xyz
                 );
                 // half-vector calculation
                 vec3 Light_half = normalize(
@@ -173,7 +173,7 @@ class TestContext( BaseContext ):
                     + (lights[i+SPECULAR] * material.specular * weights.y)
                 );
             }
-            gl_FragColor = fragColor;
+            finalColor = fragColor;
         }
         """, GL_FRAGMENT_SHADER)
         '''===Why not an Array of Structures?===
@@ -183,10 +183,7 @@ class TestContext( BaseContext ):
         specified with separate calls to glUniform4f.  Problem is, that
         doesn't actually *work*.  While glUniform *should* be able to
         handle array-of-structure indexing, it doesn't actually support
-        this type of operation in the real world. The built-in
-        gl_LightSourceParameters are an array-of-structures, but
-        apparently the GL implementations consider this a special case,
-        rather than a generic type of functionality to be supported.
+        this type of operation in the real world.
 
         An array-of-structures value looks like this when declared in GLSL:
         '''
@@ -227,6 +224,13 @@ class TestContext( BaseContext ):
         uniform as normal.  Note that we *could* also retrieve a
         sub-element of the array by specifying 'lights[3]' or the like.
         '''
+        for uniform in ('modelViewProjection','normalMatrix'):
+            self.uniform_locations[uniform] = glGetUniformLocation(
+                self.shader, uniform
+            )
+        '''And the vertex array object the attribute pointers are
+        recorded into.'''
+        self.vao = glGenVertexArrays( 1 )
         self.uniform_locations['lights'] = glGetUniformLocation(
             self.shader, 'lights'
         )
@@ -273,10 +277,19 @@ class TestContext( BaseContext ):
             ('lights[2].position',(-4.0,2.0,-10.0,0.0)),
         ]
     ], 'f')
-    def Render( self, mode = None):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
         glUseProgram(self.shader)
+        glUniformMatrix4fv(
+            self.uniform_locations['modelViewProjection'], 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glUniformMatrix3fv(
+            self.uniform_locations['normalMatrix'], 1, GL_FALSE,
+            ascontiguousarray( mode.matrix[:3,:3], dtype='f' ),
+        )
+        glBindVertexArray( self.vao )
         try:
             self.coords.bind()
             self.indices.bind()
@@ -334,6 +347,7 @@ class TestContext( BaseContext ):
                 glDisableVertexAttribArray( self.Vertex_position_loc )
                 glDisableVertexAttribArray( self.Vertex_normal_loc )
         finally:
+            glBindVertexArray( 0 )
             glUseProgram( 0 )
 
 if __name__ == "__main__":

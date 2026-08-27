@@ -44,7 +44,7 @@ SPOT_PARAMS = 5
 SPOT_DIR = 6
 
 # Vertex shader using modern GLSL
-VERTEX_SHADER = """#version 140
+VERTEX_SHADER = """#version 330 core
 
 // Vertex inputs
 in vec3 Vertex_position;
@@ -111,7 +111,7 @@ void main() {
 }
 
 # Fragment shader using modern GLSL
-FRAGMENT_SHADER = """#version 140
+FRAGMENT_SHADER = """#version 330 core
 
 // Inputs from vertex shader
 in vec3 baseNormal;
@@ -213,7 +213,6 @@ void main() {
 
 class TestContext(BaseContext):
     """Demonstrates instanced rendering with modern GLSL."""
-    profile = 'compatibility'   # draws with the fixed-function pipeline
 
     def OnInit(self):
         """Initialize the context"""
@@ -222,6 +221,9 @@ class TestContext(BaseContext):
             compileShader(VERTEX_SHADER, GL_VERTEX_SHADER),
             compileShader(FRAGMENT_SHADER, GL_FRAGMENT_SHADER),
         )
+
+        # The vertex array object the attribute pointers are recorded into.
+        self.vao = glGenVertexArrays(1)
 
         # Get uniform locations
         self.mvp_loc = glGetUniformLocation(self.shader, "modelViewProjection")
@@ -322,14 +324,14 @@ class TestContext(BaseContext):
 
         glUseProgram(self.shader)
 
-        # Get current matrices from OpenGL (column-major format)
-        # NumPy interprets these as row-major, so we see transposed matrices
-        modelview = glGetFloatv(GL_MODELVIEW_MATRIX)
-        projection = glGetFloatv(GL_PROJECTION_MATRIX)
-        # For column-major data interpreted as row-major, reverse multiplication order
+        # The pass hands us the camera it is drawing with. There is no matrix
+        # stack to ask in a core profile, and asking one would only tell us what
+        # we had put there.
+        modelview = mode.matrix
+        projection = mode.projection
         mvp = dot(modelview, projection)
-        # Normal matrix: upper-left 3x3 (no extra transpose needed with column-major)
-        normal_matrix = modelview[:3, :3]
+        # Normal matrix: the upper-left 3x3 of the model-view.
+        normal_matrix = ascontiguousarray(modelview[:3, :3], dtype='f')
 
         # Set matrix uniforms (GL_FALSE = data is already in column-major format)
         glUniformMatrix4fv(self.mvp_loc, 1, GL_FALSE, mvp)
@@ -356,7 +358,10 @@ class TestContext(BaseContext):
         glBindTexture(GL_TEXTURE_BUFFER, self.offset_texture)
         glUniform1i(self.offsets_loc, 1)
 
-        # Set up vertex attributes
+        # A vertex array object is where OpenGL keeps the description of which
+        # buffer each attribute reads from; there is no such state outside one,
+        # so a glVertexAttribPointer with nothing bound draws nothing.
+        glBindVertexArray(self.vao)
         self.vertex_vbo.bind()
         stride = 8 * 4  # 8 floats per vertex (pos, tex, normal)
 
@@ -395,6 +400,7 @@ class TestContext(BaseContext):
             glDisableVertexAttribArray(self.texcoord_loc)
         if self.normal_loc >= 0:
             glDisableVertexAttribArray(self.normal_loc)
+        glBindVertexArray(0)
 
         glUseProgram(0)
 

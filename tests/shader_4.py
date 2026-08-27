@@ -42,37 +42,37 @@ from OpenGLContext.events.timer import Timer
 class TestContext( BaseContext ):
     """Demonstrates use of attribute types in GLSL
     """
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context"""
-        '''We've defined a uniform "tween" which represents the current 
+        '''We've defined a uniform "tween" which represents the current
         fractional mix between the two positions.
-        
-        When we were using the glVertexPointer/glColorPointer
-        entry points, there were implicitly defined attribute values
-        (gl_Vertex, gl_Color) that recieved our data-records.  With 
-        legacy-free operation, we explicitly define the attribute values 
-        which will be used.  They look very similar to the declarations
-        for uniform values, save for the varying keyword.
+
+        Each per-vertex value the shader reads is declared as an "in"
+        variable, and each value that is the same for the whole draw as
+        a "uniform".  This tutorial has three of the first -- two
+        positions and a colour -- and two of the second, the tween
+        fraction and the camera matrix.
         '''
-        vertex = shaders.compileShader("""
+        vertex = shaders.compileShader("""#version 330 core
+            uniform mat4 modelViewProjection;
             uniform float tween;
-            attribute vec3 position;
-            attribute vec3 tweened;
-            attribute vec3 color;
-            varying vec4 baseColor;
+            in vec3 position;
+            in vec3 tweened;
+            in vec3 color;
+            out vec4 baseColor;
             void main() {
-                gl_Position = gl_ModelViewProjectionMatrix * mix(
+                gl_Position = modelViewProjection * mix(
                     vec4( position,1.0),
                     vec4( tweened,1.0),
                     tween
                 );
                 baseColor = vec4(color,1.0);
             }""",GL_VERTEX_SHADER)
-        fragment = shaders.compileShader("""
-            varying vec4 baseColor;
+        fragment = shaders.compileShader("""#version 330 core
+            in vec4 baseColor;
+            out vec4 fragColor;
             void main() {
-                gl_FragColor = baseColor;
+                fragColor = baseColor;
             }""",GL_FRAGMENT_SHADER)
         self.shader = shaders.compileProgram(vertex,fragment)
         '''Since our VBO now has two position records and one colour 
@@ -105,6 +105,12 @@ class TestContext( BaseContext ):
         self.tween_location = glGetUniformLocation(
             self.shader, 'tween',
         )
+        self.modelViewProjection_location = glGetUniformLocation(
+            self.shader, 'modelViewProjection',
+        )
+        '''And the vertex array object into which the three attribute
+        descriptions will be recorded.'''
+        self.vao = glGenVertexArrays( 1 )
         '''The OpenGLContext timer class is setup here to provide 
         a 0.0 -> 1.0 animation event and pass it to the given function.'''
         self.time = Timer( duration = 2.0, repeating = 1 )
@@ -112,7 +118,7 @@ class TestContext( BaseContext ):
         self.time.register (self)
         self.time.start ()
     
-    def Render( self, mode = 0):
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
         glUseProgram(self.shader)
@@ -120,31 +126,31 @@ class TestContext( BaseContext ):
         animation fraction.  The timer will generate events to update
         this value during idle time.'''
         glUniform1f( self.tween_location, self.tween_fraction )
+        glUniformMatrix4fv(
+            self.modelViewProjection_location, 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glBindVertexArray( self.vao )
         try:
-            '''Each attribute array, just as with the legacy pointer
-            functions, will bind to the current (Vertex) VBO.  
-            Because we are only using one VBO, we can bind once.  
-            If our position arrays were stored in different VBOs, 
-            we would need to bind and unbind the VBO for the
-            corresponding glVertexAttribPointer calls.
+            '''Each attribute array binds to the VBO which is current
+            when its pointer is specified.  Because we are only using
+            one VBO, we can bind once.  If our position arrays were
+            stored in different VBOs, we would need to bind each one
+            before the glVertexAttribPointer call that reads from it.
             '''
             self.vbo.bind()
             try:
-                '''As with the legacy pointers, we have to explicitly 
-                enable the retrieval of values, without this, the GL 
-                would attempt to read a value for every attribute that 
-                is defined.  Non-enabled attributes get default values 
-                for each vertex.  It is also possible to specify a single 
-                value for an attribute to be used for each vertex 
-                (as though the attribute were a uniform).
+                '''We have to explicitly enable the retrieval of
+                values; without this, an attribute holds one fixed value
+                for every vertex rather than being read from an array.
                 '''
                 glEnableVertexAttribArray( self.position_location )
                 glEnableVertexAttribArray( self.tweened_location )
                 glEnableVertexAttribArray( self.color_location )
-                '''Our vertex array is now 36 bytes/record.  The 
-                glVertexAttribPointer calls are very similar to the legacy 
-                calls, save that they provide the attribute location 
-                into which the data-array will feed.
+                '''Our vertex array is now 36 bytes/record, and each
+                glVertexAttribPointer call says which attribute location
+                the data-array feeds, and where in the record to start
+                reading it.
                 '''
                 stride = 9*4
                 glVertexAttribPointer( 
@@ -162,15 +168,14 @@ class TestContext( BaseContext ):
                 glDrawArrays(GL_TRIANGLES, 0, 9)
             finally:
                 self.vbo.unbind()
-                '''As with the legacy pointer operations, we want to 
-                clean up our array enabling so that any later calls 
-                will not cause seg-faults when they try to read records
-                from these arrays (potentially beyond the end of the
-                arrays).'''
+                '''We clean up our array enabling so that any later
+                calls will not read records from these arrays
+                (potentially beyond the end of the arrays).'''
                 glDisableVertexAttribArray( self.position_location )
                 glDisableVertexAttribArray( self.tweened_location )
                 glDisableVertexAttribArray( self.color_location )
         finally:
+            glBindVertexArray( 0 )
             glUseProgram( 0 )
     '''Our trivial event-handler function simply stores the event's 
     fraction as our tween_fraction value.'''

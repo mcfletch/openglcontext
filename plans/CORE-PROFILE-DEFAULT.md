@@ -1,10 +1,10 @@
 # Core profile by default
 
-**Status:** ✅ Landed, except the tutorial rewrite, which is
-[SHADER-TUTORIALS-CORE.md](SHADER-TUTORIALS-CORE.md) and awaits review.
-`_get_default_profile()` returns `core`; the four engine defects are fixed; every
-script that needs the fixed-function pipeline declares so; the sweep reports no
-script that draws under one profile and not the other.
+**Status:** ✅ Landed. `_get_default_profile()` returns `core`; the four engine
+defects are fixed; every script that needs the fixed-function pipeline declares
+so; the sweep reports no script that draws under one profile and not the other.
+The shader tutorials are core GLSL as well --
+[SHADER-TUTORIALS-CORE.md](SHADER-TUTORIALS-CORE.md).
 **Related:** [CODEBASE-CONSOLIDATION.md](CODEBASE-CONSOLIDATION.md), whose Tier A
 names "flipping the default profile to core" as remaining work. This document is
 that item, scoped, with the reason it is now urgent rather than tidy.

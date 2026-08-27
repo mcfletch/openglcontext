@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 '''Shader sample-code for OpenGLContext
 
-NOTE: This test uses legacy OpenGL (glEnableClientState, glVertexPointer, etc.)
-and requires a compatibility profile context.
+Draws a textured unit-sphere from one interleaved VBO through generic vertex
+attributes.
 '''
 import OpenGL
 #OpenGL.FULL_LOGGING = True
@@ -12,8 +12,34 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *
+from OpenGL.GL import shaders as gl_shaders
 from OpenGLContext.scenegraph.shaders import *
 from OpenGLContext.scenegraph.basenodes import ImageTexture
+
+VERTEX_SHADER = """#version 330 core
+uniform mat4 modelViewProjection;
+in vec3 Vertex_position;
+in vec2 Vertex_texture_coordinate;
+out vec3 baseNormal;
+out vec2 texCoord;
+void main() {
+    // A unit sphere's surface normal is its position.
+    baseNormal = normalize( Vertex_position );
+    texCoord = Vertex_texture_coordinate;
+    gl_Position = modelViewProjection * vec4( Vertex_position, 1.0 );
+}"""
+
+FRAGMENT_SHADER = """#version 330 core
+uniform sampler2D diffuse_texture;
+uniform vec3 light_direction;
+in vec3 baseNormal;
+in vec2 texCoord;
+out vec4 fragColor;
+void main() {
+    float diffuse = max( 0.0, dot( normalize(baseNormal), light_direction ) );
+    vec4 colour = texture( diffuse_texture, texCoord );
+    fragColor = vec4( colour.rgb * (0.25 + 0.75*diffuse), colour.a );
+}"""
 
 def sphere( phi=pi/8.0, latAngle=pi, longAngle=(pi*2) ):
     """Create arrays for rendering a unit-sphere
@@ -81,8 +107,7 @@ class TestContext( BaseContext ):
     function to bind a particular data source (normally a
     VBO, and only a VBO under OpenGL 3.1) to that attribute.
     """
-    # Requires compatibility profile for glEnableClientState, glVertexPointer, etc.
-    profile = 'compatibility'   # draws with the fixed-function pipeline
+
 
     def OnInit( self ):
         coords,indices = sphere( pi/128, pi/2, pi*2 )
@@ -90,29 +115,66 @@ class TestContext( BaseContext ):
         self.coordLength = len(indices)
         self.coords = vbo.VBO( coords )
         self.indices = vbo.VBO( indices, target = 'GL_ELEMENT_ARRAY_BUFFER' )
-        glEnableClientState(GL_VERTEX_ARRAY)
-        glEnableClientState(GL_NORMAL_ARRAY)
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY)
         self.texture = ImageTexture( url = ["nehe_glass.bmp"] )
-        
-    
-    def Render( self, mode = 0):
+        self.shader = gl_shaders.compileProgram(
+            gl_shaders.compileShader( VERTEX_SHADER, GL_VERTEX_SHADER ),
+            gl_shaders.compileShader( FRAGMENT_SHADER, GL_FRAGMENT_SHADER ),
+        )
+        self.position_location = glGetAttribLocation(
+            self.shader, 'Vertex_position'
+        )
+        self.texcoord_location = glGetAttribLocation(
+            self.shader, 'Vertex_texture_coordinate'
+        )
+        self.matrix_location = glGetUniformLocation(
+            self.shader, 'modelViewProjection'
+        )
+        self.texture_location = glGetUniformLocation(
+            self.shader, 'diffuse_texture'
+        )
+        self.light_location = glGetUniformLocation(
+            self.shader, 'light_direction'
+        )
+        # The vertex array object into which the two attribute pointers are
+        # recorded; there is no array state outside one.
+        self.vao = glGenVertexArrays( 1 )
+
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         BaseContext.Render( self, mode )
+        glUseProgram( self.shader )
+        glActiveTexture( GL_TEXTURE0 )
         self.texture.render( mode=mode )
-        self.coords.bind()
-        # TODO: use attributes rather than legacy operations...
-        glEnableClientState(GL_VERTEX_ARRAY)
-        glEnableClientState(GL_NORMAL_ARRAY)
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-        glVertexPointer( 3, GL_FLOAT,20,self.coords)
-        glTexCoordPointer( 3, GL_FLOAT,20,self.coords+12)
-        glNormalPointer( GL_FLOAT,20,self.coords )
-        self.indices.bind()
-        # Can loop loading matrix and calling just this function 
-        # for each sphere you want to render...
-        # include both scale and position in the matrix...
-        glDrawElements( GL_TRIANGLES, self.coordLength, GL_UNSIGNED_SHORT, self.indices )
+        glUniform1i( self.texture_location, 0 )
+        glUniform3f( self.light_location, 0.408, 0.816, 0.408 )
+        glUniformMatrix4fv(
+            self.matrix_location, 1, GL_FALSE,
+            dot( mode.matrix, mode.projection ),
+        )
+        glBindVertexArray( self.vao )
+        try:
+            self.coords.bind()
+            glEnableVertexAttribArray( self.position_location )
+            glVertexAttribPointer(
+                self.position_location, 3, GL_FLOAT, GL_FALSE, 20, self.coords
+            )
+            glEnableVertexAttribArray( self.texcoord_location )
+            glVertexAttribPointer(
+                self.texcoord_location, 2, GL_FLOAT, GL_FALSE, 20,
+                self.coords+12
+            )
+            self.indices.bind()
+            # Can loop loading matrix and calling just this function 
+            # for each sphere you want to render...
+            # include both scale and position in the matrix...
+            glDrawElements(
+                GL_TRIANGLES, self.coordLength, GL_UNSIGNED_SHORT, self.indices
+            )
+        finally:
+            self.indices.unbind()
+            self.coords.unbind()
+            glBindVertexArray( 0 )
+            glUseProgram( 0 )
         
 
 if __name__ == "__main__":

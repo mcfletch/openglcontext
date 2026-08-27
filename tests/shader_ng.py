@@ -10,7 +10,6 @@ from OpenGLContext.scenegraph import box
 
 class VertexDefinition(list):
     """Small utility class to make it easy to define/load shader vertex arrays"""
-    profile = 'compatibility'   # draws with the fixed-function pipeline
 
     POSITION = NORMAL = ('x', 'y', 'z', 'w')
     COLOR = ('r', 'g', 'b', 'a')
@@ -71,23 +70,35 @@ class TestContext(BaseContext):
         phong_preCalc = GLSLImport(url="res://phongprecalc_vert")
         phong_weightCalc = GLSLImport(url="res://phongweights_frag")
         lightConst = GLSLImport(
-            source="\n".join(
+            source="#version 330 core\n" + "\n".join(
                 [
                     "const int %s = %s;" % (k, v)
                     for k, v in self.shader_constants.items()
                 ]
             )
             + """
+            // The pass supplies its camera to any GLSLObject that names one
+            // of these; the normal matrix is the upper-left 3x3 of the
+            // inverse-transpose model-view.
+            uniform mat4 mat_modelproj;
+            uniform mat4 itp_modelview;
+            #define normalMatrix mat3(itp_modelview)
+
             uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-
-            varying vec3 EC_Light_half[LIGHT_COUNT];
-            varying vec3 EC_Light_location[LIGHT_COUNT];
-            varying float Light_distance[LIGHT_COUNT];
-
-            varying vec3 baseNormal;
-            varying vec2 vtx_texcoord_0_var;
             """
         )
+        # The values the vertex shader passes on to the fragment shader are
+        # declared "out" where they are written and "in" where they are read.
+        interpolated = """
+            %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+            %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+            %(dir)s float Light_distance[LIGHT_COUNT];
+
+            %(dir)s vec3 baseNormal;
+            %(dir)s vec2 vtx_texcoord_0_var;
+            """
+        vertexVarying = GLSLImport(source=interpolated % {'dir': 'out'})
+        fragmentVarying = GLSLImport(source=interpolated % {'dir': 'in'})
         self.glslObject = GLSLObject(
             uniforms=[
                 FloatUniform1f(name="material.shininess", value=0.5),
@@ -109,46 +120,23 @@ class TestContext(BaseContext):
                 GLSLShader(
                     imports=[
                         lightConst,
+                        vertexVarying,
                         phong_preCalc,
                         light_preCalc,
                     ],
                     source=[
                         """
-                        attribute vec3 vtx_position;
-                        attribute vec3 vtx_normal;
-                        attribute vec2 vtx_texcoord_0;
-                        
-                        // modelview matrix and inverse...
-                        uniform mat4 mat_modelview; 
-                        uniform mat4 inv_modelview;
-                        uniform mat4 tps_modelview;
-                        uniform mat4 itp_modelview;
-                        
-                        // projection matrix and inverse...
-                        uniform mat4 mat_projection;
-                        uniform mat4 inv_projection;
-                        uniform mat4 tps_projection;
-                        uniform mat4 itp_projection;
-                        
-                        // combined matrices and inverse
-                        uniform mat4 mat_modelproj;
-                        uniform mat4 inv_modelproj;
-                        uniform mat4 tps_modelproj;
-                        uniform mat4 itp_modelproj; // a.k.a. gl_NormalMatrix
-                        
+                        in vec3 vtx_position;
+                        in vec3 vtx_normal;
+                        in vec2 vtx_texcoord_0;
+
                         void main() {
-                            mat4 combined = mat_modelproj;
-                            //mat4 mat_normal = transpose(inverse(mat_modelview));
-                            //mat4 mat_normal = transpose(inv_modelview);
-                            mat4 mat_normal = transpose(inv_modelview);
-                            vec4 position = combined * vec4(
+                            gl_Position = mat_modelproj * vec4(
                                 vtx_position, 1.0
                             );
-                            //baseNormal = normalize( gl_NormalMatrix * vtx_normal);
-                            baseNormal = normalize( mat_normal * vec4(vtx_normal,0.0)).xyz;
+                            baseNormal = normalize( normalMatrix * vtx_normal );
                             light_preCalc(vtx_position);
                             vtx_texcoord_0_var = vtx_texcoord_0;
-                            gl_Position = position;
                         }"""
                     ],
                     type='VERTEX',
@@ -156,6 +144,7 @@ class TestContext(BaseContext):
                 GLSLShader(
                     imports=[
                         lightConst,
+                        fragmentVarying,
                         phong_weightCalc,
                     ],
                     source=[
@@ -169,11 +158,12 @@ class TestContext(BaseContext):
                         uniform Material material;
                         uniform vec4 Global_ambient;
                         uniform sampler2D diffuse_texture;
+                        out vec4 finalColor;
 
                         void main() {
                             vec4 fragColor = Global_ambient * material.ambient;
 
-                            vec4 texDiffuse = texture2D(
+                            vec4 texDiffuse = texture(
                                 diffuse_texture, vtx_texcoord_0_var
                             );
                             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
@@ -201,7 +191,7 @@ class TestContext(BaseContext):
                                     + (lights[j+SPECULAR] * material.specular * weights.z)
                                 );
                             }
-                            gl_FragColor = fragColor;
+                            finalColor = fragColor;
                         }
                         """
                     ],

@@ -13,7 +13,7 @@ This tutorial:
       function
 
 Note: This version uses deprecated GLSL features like attribute, varying,
-gl_ModelViewProjectionMatrix, and gl_NormalMatrix which are not available
+mat_modelproj, and normalMatrix which are not available
 in GLSL 1.40+. If your driver only supports modern GLSL, use
 shader_instanced_modern.py instead.
 '''
@@ -48,36 +48,10 @@ from OpenGL.GL.ARB.texture_buffer_object import *
 use the numpy module "random" to generate a few offsets.
 '''
 from numpy import random
-import sys
-
-def get_glsl_version():
-    """Get GLSL version as a tuple (major, minor)"""
-    version_string = glGetString(GL_SHADING_LANGUAGE_VERSION)
-    if version_string:
-        version_string = version_string.decode('utf-8') if isinstance(version_string, bytes) else version_string
-        parts = version_string.split()[0].split('.')
-        try:
-            return (int(parts[0]), int(parts[1]))
-        except (ValueError, IndexError):
-            pass
-    return (1, 20)
 
 class TestContext( BaseContext ):
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Initialize the context"""
-        # Check GLSL version - this tutorial requires legacy GLSL
-        major, minor = get_glsl_version()
-        if major > 1 or (major == 1 and minor >= 40):
-            print('='*60)
-            print('This tutorial uses legacy GLSL syntax (pre-1.40).')
-            print('Your GLSL version is %d.%d which does not support' % (major, minor))
-            print('deprecated features like gl_ModelViewProjectionMatrix.')
-            print('')
-            print('Please run shader_instanced_modern.py instead.')
-            print('='*60)
-            sys.exit(0)
-
         '''Our basic setup is the same as our previous tutorial...'''
         self.lights = self.createLights()
         self.LIGHTS = array([
@@ -88,20 +62,32 @@ class TestContext( BaseContext ):
         light_preCalc = GLSLImport( url='_shader_tut_lightprecalc.vert' )
         phong_preCalc = GLSLImport( url="res://phongprecalc_vert" )
         phong_weightCalc = GLSLImport( url="res://phongweights_frag" )
-        lightConst = GLSLImport( source = "\n".join([
+        lightConst = GLSLImport( source = "#version 330 core\n" + "\n".join([
                 "const int %s = %s;"%( k,v )
                 for k,v in self.shader_constants.items()
             ]) + """
+            // The pass supplies its camera to any GLSLObject that names one
+            // of these; the normal matrix is the upper-left 3x3 of the
+            // inverse-transpose model-view.
+            uniform mat4 mat_modelproj;
+            uniform mat4 itp_modelview;
+            #define normalMatrix mat3(itp_modelview)
+
             uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-
-            varying vec3 EC_Light_half[LIGHT_COUNT];
-            varying vec3 EC_Light_location[LIGHT_COUNT];
-            varying float Light_distance[LIGHT_COUNT];
-
-            varying vec3 baseNormal;
-            varying vec2 Vertex_texture_coordinate_var;
             """
         )
+        # The values the vertex shader passes on to the fragment shader are
+        # declared "out" where they are written and "in" where they are read.
+        interpolated = """
+            %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+            %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+            %(dir)s float Light_distance[LIGHT_COUNT];
+
+            %(dir)s vec3 baseNormal;
+            %(dir)s vec2 Vertex_texture_coordinate_var;
+            """
+        vertexVarying = GLSLImport( source = interpolated%{'dir':'out'} )
+        fragmentVarying = GLSLImport( source = interpolated%{'dir':'in'} )
         '''To make the instanced geometry do something, we have to pass in a data-array
         which will be indexed by the gl_InstanceIDARB variable.  For this simple tutorial
         we will use an array of offsets which are applied to the geometry.  We will use
@@ -157,17 +143,17 @@ class TestContext( BaseContext ):
         Note the .xyz on the result of the lookup, see above for a discussion of the limitations
         on the data-formats for Texture Buffer objects.'''
         VERTEX_SHADER = """
-        attribute vec3 Vertex_position;
-        attribute vec3 Vertex_normal;
-        attribute vec2 Vertex_texture_coordinate;
+        in vec3 Vertex_position;
+        in vec3 Vertex_normal;
+        in vec2 Vertex_texture_coordinate;
         uniform samplerBuffer offsets_table;
         void main() {
             vec3 offset = texelFetch( offsets_table, gl_InstanceIDARB ).xyz;
             vec3 final_position = Vertex_position + offset;
-            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+            gl_Position = mat_modelproj * vec4(
                 final_position, 1.0
             );
-            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+            baseNormal = normalMatrix * normalize(Vertex_normal);
             light_preCalc(final_position);
             Vertex_texture_coordinate_var = Vertex_texture_coordinate;
         }"""
@@ -193,6 +179,7 @@ class TestContext( BaseContext ):
                 GLSLShader(
                     imports = [
                         lightConst,
+                        vertexVarying,
                         phong_preCalc,
                         light_preCalc,
                     ],
@@ -204,6 +191,7 @@ class TestContext( BaseContext ):
                 GLSLShader(
                     imports = [
                         lightConst,
+                        fragmentVarying,
                         phong_weightCalc,
                     ],
                     source = [
@@ -217,11 +205,12 @@ class TestContext( BaseContext ):
                         uniform Material material;
                         uniform vec4 Global_ambient;
                         uniform sampler2D diffuse_texture;
+                        out vec4 finalColor;
 
                         void main() {
                             vec4 fragColor = Global_ambient * material.ambient;
 
-                            vec4 texDiffuse = texture2D(
+                            vec4 texDiffuse = texture(
                                 diffuse_texture, Vertex_texture_coordinate_var
                             );
                             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
@@ -249,7 +238,7 @@ class TestContext( BaseContext ):
                                     + (lights[j+SPECULAR] * material.specular * weights.z)
                                 );
                             }
-                            gl_FragColor = fragColor;
+                            finalColor = fragColor;
                         }
                         """
                     ],
@@ -302,6 +291,9 @@ class TestContext( BaseContext ):
                 shininess = .5,
             ),
         )
+        '''And the vertex array object the attribute pointers are recorded
+        into when we draw.'''
+        self.vao = glGenVertexArrays( 1 )
 
     '''The only change to our render method is in the glDrawElements call, which
     is replaced by a call to glDrawElementsInstanced'''
@@ -318,6 +310,7 @@ class TestContext( BaseContext ):
             self.glslObject.getVariable( key ).value = value
         token = self.glslObject.render( mode )
         tokens = [  ]
+        glBindVertexArray( self.vao )
         try:
             vbo = self.indices.bind(mode)
             for attribute in self.attributes:
@@ -337,6 +330,7 @@ class TestContext( BaseContext ):
                 attribute.renderPost( self.glslObject, mode, token )
             self.glslObject.renderPost( token, mode )
             vbo.unbind()
+            glBindVertexArray( 0 )
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

@@ -39,7 +39,8 @@ used to create shader-based geometry with explicit support for
 libraries of reusable code.
 </div>
 	<div class="paragraph indent-level-0">We're going to use our previous tutorial as the base for this new
-code-base...</div>
+code-base...
+</div>
 </div>
 	<div class="code-sample">from shader_11 import TestContext as BaseContext
 from OpenGL.GL import *
@@ -96,20 +97,39 @@ can load from anything urllib can handle.</div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">The GLSLImport can also handle directly specifying the source-code,
         rather than loading from a URL.  Here we create a resuable import node
-        which declares our light array and varying values.</div>
+        which declares our light array and the values that travel from the
+        vertex shader to the fragment shader.</div>
+	<div class="paragraph indent-level-8">The rendering pass supplies its camera to any GLSLObject that names
+one of its matrices, so this shader declares the two it wants rather
+than uploading them itself.  The normal matrix is the upper-left 3x3
+of the inverse-transpose model-view, which the pass calls
+itp_modelview.</div>
 </div>
-	<div class="code-sample">        lightConst = GLSLImport( source = "\n".join([
+	<div class="code-sample">        lightConst = GLSLImport( source = "#version 330 core\n" + "\n".join([
                 "const int %s = %s;"%( k,v )
                 for k,v in self.shader_constants.items()
             ]) + """
+            uniform mat4 mat_modelproj;
+            uniform mat4 itp_modelview;
+            #define normalMatrix mat3(itp_modelview)
             uniform vec4 lights[ LIGHT_COUNT*LIGHT_SIZE ];
-            varying vec3 EC_Light_half[LIGHT_COUNT];
-            varying vec3 EC_Light_location[LIGHT_COUNT];
-            varying float Light_distance[LIGHT_COUNT];
-            varying vec3 baseNormal;
-            varying vec2 Vertex_texture_coordinate_var;
             """
         )
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">The values the vertex shader passes on to the fragment shader are
+        declared "out" where they are written and "in" where they are read, so
+        each shader imports the version with its own direction filled in.</div>
+</div>
+	<div class="code-sample">        interpolated = """
+            %(dir)s vec3 EC_Light_half[LIGHT_COUNT];
+            %(dir)s vec3 EC_Light_location[LIGHT_COUNT];
+            %(dir)s float Light_distance[LIGHT_COUNT];
+            %(dir)s vec3 baseNormal;
+            %(dir)s vec2 Vertex_texture_coordinate_var;
+            """
+        vertexVarying = GLSLImport( source = interpolated%{'dir':'out'} )
+        fragmentVarying = GLSLImport( source = interpolated%{'dir':'in'} )
 </div>
 	<div class="commentary">
 	<h1 class="title indent-level-0">GLSLObject, GLSLShader</h1>
@@ -138,7 +158,8 @@ the source inline.  The GLSLShader declares a set of GLSLImport objects
 whose source is concatenated with the GLSLShader's source during
 compilation.  Note that the GLSLShader will not be compiled until/unless
 *all* of the GLSLImport and the GLSLShader itself have defined source
-values.</div>
+values.
+</div>
 </div>
 	<div class="code-sample">        self.glslObject = GLSLObject(
             uniforms = [
@@ -158,19 +179,20 @@ values.</div>
                 GLSLShader(
                     imports = [
                         lightConst,
+                        vertexVarying,
                         phong_preCalc,
                         light_preCalc,
                     ],
                     source = [
                         """
-                        attribute vec3 Vertex_position;
-                        attribute vec3 Vertex_normal;
-                        attribute vec2 Vertex_texture_coordinate;
+                        in vec3 Vertex_position;
+                        in vec3 Vertex_normal;
+                        in vec2 Vertex_texture_coordinate;
                         void main() {
-                            gl_Position = gl_ModelViewProjectionMatrix * vec4(
+                            gl_Position = mat_modelproj * vec4(
                                 Vertex_position, 1.0
                             );
-                            baseNormal = gl_NormalMatrix * normalize(Vertex_normal);
+                            baseNormal = normalMatrix * normalize(Vertex_normal);
                             light_preCalc(Vertex_position);
                             Vertex_texture_coordinate_var = Vertex_texture_coordinate;
                         }"""
@@ -180,6 +202,7 @@ values.</div>
                 GLSLShader(
                     imports = [
                         lightConst,
+                        fragmentVarying,
                         phong_weightCalc,
                     ],
                     source = [
@@ -193,9 +216,10 @@ values.</div>
                         uniform Material material;
                         uniform vec4 Global_ambient;
                         uniform sampler2D diffuse_texture;
+                        out vec4 finalColor;
                         void main() {
                             vec4 fragColor = Global_ambient * material.ambient;
-                            vec4 texDiffuse = texture2D(
+                            vec4 texDiffuse = texture(
                                 diffuse_texture, Vertex_texture_coordinate_var
                             );
                             texDiffuse = mix( material.diffuse, texDiffuse, .5 );
@@ -222,7 +246,7 @@ values.</div>
                                     + (lights[j+SPECULAR] * material.specular * weights.z)
                                 );
                             }
-                            gl_FragColor = fragColor;
+                            finalColor = fragColor;
                         }
                         """
                     ],
@@ -267,7 +291,8 @@ values.</div>
         will automatically lookup their locations.  The buffer attribute is
         the ShaderBuffer which holds the vertex values.  The isCoord attribute
         tells OpenGLContext to use this attribute for calculating bounding boxes
-        for the geometry for use in frustum culling.</div>
+        for the geometry for use in frustum culling.
+</div>
 </div>
 	<div class="code-sample">        self.attributes = [
             ShaderAttribute(
@@ -306,7 +331,13 @@ values.</div>
                 shininess = .5,
             ),
         )
-    def Render( self, mode = None):
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">And the vertex array object the attribute pointers are recorded
+        into when we draw.</div>
+</div>
+	<div class="code-sample">        self.vao = glGenVertexArrays( 1 )
+    def Render( self, mode ):
         """Render the geometry for the scene."""
         if not mode.visible:
             return
@@ -344,10 +375,18 @@ values.</div>
         the changes made.  The GLSLObject produces one of these when rendered.
         The rendering will compile the shaders (reporting errors if they occur),
         bind the object, and iterate through the textures and uniforms
-        configuring them for use with the shader.</div>
+        configuring them for use with the shader.
+</div>
 </div>
 	<div class="code-sample">        token = self.glslObject.render( mode )
         tokens = [  ]
+</div>
+	<div class="commentary">
+	<div class="paragraph indent-level-0">A vertex array object is where OpenGL keeps the description of
+        which buffer each attribute reads from; there is no such state outside
+        one, so the attribute setup below has to happen with one bound.</div>
+</div>
+	<div class="code-sample">        glBindVertexArray( self.vao )
         try:
 </div>
 	<div class="commentary">
@@ -392,6 +431,7 @@ values.</div>
 	<div class="paragraph indent-level-0">The index-array VBO also needs to be unbound.</div>
 </div>
 	<div class="code-sample">            vbo.unbind()
+            glBindVertexArray( 0 )
 if __name__ == "__main__":
     TestContext.ContextMainLoop()
 </div>
