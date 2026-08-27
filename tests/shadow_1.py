@@ -133,7 +133,16 @@ class TestContext( BaseContext ):
         """Create a simple VRML scenegraph to be rendered with shadows"""
         '''This simple scene is a Teapot and a tall thin box on a flat
         box.  It's not particularly exciting, but it does let us see the
-        shadows quite clearly.'''
+        shadows quite clearly.
+
+        The teapot asks for a coarse tessellation with its steps field.  A
+        depth-texture lookup is a point sample of a rasterised surface, so the
+        filter loses a band along every facet boundary of the geometry it is
+        filtering, and the width of that band is set by the depth texture rather
+        than by the mesh.  At the teapot's full NURBS sampling the facets are a
+        pixel or two across, those bands meet, and the pot renders at ambient
+        only.  A sampling close to the classic GLUT teapot's keeps the facets
+        wide enough that what you see is the lit surface between them.'''
         return Transform(
             children = [
                 Transform(
@@ -155,7 +164,7 @@ class TestContext( BaseContext ):
                     children = [
                         Shape(
                             DEF = 'Tea',
-                            geometry = Teapot( size = .5 ),
+                            geometry = Teapot( size = .5, steps = 4 ),
                             appearance = Appearance(
                                 material = Material(
                                     diffuseColor =( .5,1.0,.5 ),

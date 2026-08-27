@@ -13,8 +13,9 @@ an explicit ``useGlut`` comparison option.
 
 Tessellation is distance-LOD aware: the mesh is built (and cached) at a coarser
 GLU sampling step the further the camera is, so a teapot that is a small part of
-the frame costs far fewer triangles.  Level 0 (close up) reproduces the previous
-default sampling, so near appearance is unchanged.
+the frame costs far fewer triangles.  A scene that wants a particular density --
+a coarse mesh whose facets are meant to be seen, or one sized to match a
+technique's tolerances -- sets the ``steps`` field and takes distance out of it.
 """
 from OpenGL.GL import *
 from vrml.vrml97 import nodetypes
@@ -56,12 +57,17 @@ class Teapot(nodetypes.Geometry, node.Node):
         useGlut: If True, render with the legacy ``glutSolidTeapot`` endpoint
             (when GLUT is available and not in shader mode), kept for
             comparison.  Default False: use the NURBS-tessellated mesh.
+        steps: GLU domain-distance sampling for the tessellation; larger is
+            finer.  0.0 (the default) picks the sampling from the camera
+            distance instead.  Around 4.0 gives facet sizes close to
+            ``glutSolidTeapot``'s.
     """
     PROTO = 'Teapot'
     size = field.newField('size', 'SFFloat', 1, 1.0)
     solid = field.newField('solid', 'SFBool', 1, True)
     lid = field.newField('lid', 'SFBool', 1, True)
     useGlut = field.newField('useGlut', 'SFBool', 1, False)
+    steps = field.newField('steps', 'SFFloat', 1, 0.0)
 
     # Approximate local bounding sphere of the unit (size=1) y-up teapot, used
     # only to pick a distance-LOD level; precision is not needed, and using an
@@ -69,46 +75,44 @@ class Teapot(nodetypes.Geometry, node.Node):
     _UNIT_CENTER = (0.0, 0.0, 0.0)
     _UNIT_RADIUS = 1.9   # ~half-diagonal of the ~3.0 x 1.6 x 2.0 extent
 
-    # Tessellated N3F_V3F arrays per LOD level: {level: (base, lid)}. Shared
+    # Tessellated T2F_N3F_V3F arrays per sampling: {steps: (base, lid)}. Shared
     # across instances (the geometry is context-independent).
-    _arrays: dict[int, tuple] = {}
-    # Retry budget per level: the first render at a level can fail
+    _arrays: dict[float, tuple] = {}
+    # Retry budget per sampling: the first render at a sampling can fail
     # for transient reasons (no current GL context); latching it off disabled the
-    # teapot. Retry up to this many times before giving up on that level.
-    _tessellate_attempts: dict[int, int] = {}
+    # teapot. Retry up to this many times before giving up on that sampling.
+    _tessellate_attempts: dict[float, int] = {}
     _MAX_TESSELLATE_ATTEMPTS = 3
 
-    # Shader-path GL resources per LOD level:
-    # {level: {'base_vao','base_count','lid_vao','lid_count'}}.
-    _buffers: dict[int, dict] = {}
+    # Shader-path GL resources per sampling:
+    # {steps: {'base_vao','base_count','lid_vao','lid_count'}}.
+    _buffers: dict[float, dict] = {}
 
     # -- tessellation ------------------------------------------------------
     @classmethod
-    def _ensure_tessellated(cls, level=0):
-        """Tessellate the Bezier patches into vertex arrays for ``level`` once."""
-        entry = cls._arrays.get(level)
+    def _ensure_tessellated(cls, steps):
+        """Tessellate the Bezier patches into vertex arrays at ``steps`` once."""
+        entry = cls._arrays.get(steps)
         if entry is not None:
             return entry[0] is not None
         try:
-            from OpenGLContext.scenegraph.teapot_nurbs import (
-                tessellate_teapot, steps_for_level,
-            )
-            base, lid = tessellate_teapot(steps=steps_for_level(level))
-            cls._arrays[level] = (base, lid)
+            from OpenGLContext.scenegraph.teapot_nurbs import tessellate_teapot
+            base, lid = tessellate_teapot(steps=steps)
+            cls._arrays[steps] = (base, lid)
             return True
         except Exception as e:
-            attempts = cls._tessellate_attempts.get(level, 0) + 1
-            cls._tessellate_attempts[level] = attempts
+            attempts = cls._tessellate_attempts.get(steps, 0) + 1
+            cls._tessellate_attempts[steps] = attempts
             # Only give up permanently after repeated failures; a single failure
             # may be transient (no current GL context on the first frame), so let
-            # a later render retry instead of disabling the level.
+            # a later render retry instead of disabling the sampling.
             if attempts >= cls._MAX_TESSELLATE_ATTEMPTS:
-                log.error("Failed to tessellate teapot (level %d) after %d attempts: %s",
-                          level, attempts, e)
-                cls._arrays[level] = (None, None)
+                log.error("Failed to tessellate teapot (steps %s) after %d attempts: %s",
+                          steps, attempts, e)
+                cls._arrays[steps] = (None, None)
             else:
-                log.warning("Teapot tessellation (level %d) attempt %d failed (will retry): %s",
-                            level, attempts, e)
+                log.warning("Teapot tessellation (steps %s) attempt %d failed (will retry): %s",
+                            steps, attempts, e)
             return False
 
     def _lod_level(self, mode):
@@ -117,35 +121,62 @@ class Teapot(nodetypes.Geometry, node.Node):
         radius = self._UNIT_RADIUS * self.size
         return tessellationlod.lod_level(mode, center, radius)
 
+    def _tessellation_steps(self, mode=None):
+        """GLU sampling this teapot's mesh is built at.
+
+        The ``steps`` field when it is set, otherwise the sampling the distance
+        LOD asks for.  Everything that builds or caches a mesh goes through
+        here, so a node with ``steps`` set has one mesh at every distance.
+        """
+        if self.steps > 0:
+            return float(self.steps)
+        from OpenGLContext.scenegraph.teapot_nurbs import steps_for_level
+        return steps_for_level(self._lod_level(mode))
+
     # -- instancing --------------------------------------------------------
     # Many shapes sharing one Teapot node (or the same size/lid) collapse into a
-    # single instanced draw. The instanced mesh bakes the finest (level-0)
-    # tessellation, so instances give up the distance-LOD that the per-object
-    # path applies: a field of instanced teapots pays full vertex detail at every
-    # distance, trading that for one draw call. The quadrics make the same trade;
-    # see plans/INSTANCED-GEOMETRY.md.
+    # single instanced draw. The instanced mesh bakes one tessellation, so
+    # instances give up the distance-LOD that the per-object path applies: a
+    # field of instanced teapots pays the same vertex detail at every distance,
+    # trading that for one draw call. The quadrics make the same trade; see
+    # plans/INSTANCED-GEOMETRY.md.
     def instanceContentKey(self):
-        """Teapots of the same size/lid/solid share one baked mesh -> one draw.
+        """Teapots of the same size/lid/solid/steps share one mesh -> one draw.
 
         ``size`` is folded into the instance mesh (the per-instance modelview
-        carries only the scene transform), and ``lid``/``solid`` change the mesh
-        or its polygon mode, so all three split the batch.
+        carries only the scene transform); ``lid``/``solid`` change the mesh or
+        its polygon mode, and ``steps`` changes its density, so each splits the
+        batch.
         """
         return ('Teapot', round(float(self.size), 6),
-                bool(self.lid), bool(self.solid))
+                bool(self.lid), bool(self.solid),
+                round(self._instance_steps(), 6))
+
+    def _instance_steps(self):
+        """Sampling the baked instance mesh (and the bounding volume) is built at.
+
+        Instancing and bounding both need a mesh with no camera to ask, so a node
+        with no ``steps`` of its own takes the finest sampling the LOD table
+        offers.
+        """
+        if self.steps > 0:
+            return float(self.steps)
+        from OpenGLContext.scenegraph.teapot_nurbs import steps_for_level
+        return steps_for_level(0)
 
     def _instanceArrays(self):
         """Baked (positions, normals, texcoords) for the instanced mesh, or None.
 
-        The finest (level-0) tessellation with ``size`` folded into the
+        The mesh at :meth:`_instance_steps` with ``size`` folded into the
         positions, de-interleaved from the T2F_N3F_V3F arrays into the shader's
         separate-attribute layout. Returns None when tessellation is unavailable
         (no GLU / no context yet), matching the render path's own guard.
         """
         from OpenGLContext.scenegraph.teapot_nurbs import FLOATS_PER_VERTEX
-        if not self._ensure_tessellated(0):
+        steps = self._instance_steps()
+        if not self._ensure_tessellated(steps):
             return None
-        base_array, lid_array = self._arrays[0]
+        base_array, lid_array = self._arrays[steps]
         chunks = [base_array]
         if self.lid and lid_array is not None:
             chunks.append(lid_array)
@@ -162,7 +193,7 @@ class Teapot(nodetypes.Geometry, node.Node):
     #: Fields the baked instance mesh is built from, so the cache is dropped
     #: when one of them moves.  Named here rather than inline so a test can ask
     #: what the mesh depends on instead of restating it.
-    instanceGPU_depend_fields = ('size', 'lid')
+    instanceGPU_depend_fields = ('size', 'lid', 'steps')
 
     def instanceGPU(self, mode):
         """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
@@ -193,10 +224,10 @@ class Teapot(nodetypes.Geometry, node.Node):
     def render(self, visible=1, lit=1, textured=1, transparent=0, mode=None):
         """Render the Teapot.
 
-        Uses the NURBS-tessellated mesh (distance-LOD selected).  The legacy
-        GLUT endpoint is used only when useGlut is set, GLUT is available, and we
-        are not in shader mode (GLUT's fixed-function teapot cannot render in a
-        core profile).
+        Uses the NURBS-tessellated mesh at :meth:`_tessellation_steps`.  The
+        legacy GLUT endpoint is used only when useGlut is set, GLUT is available,
+        and we are not in shader mode (GLUT's fixed-function teapot cannot render
+        in a core profile).
         """
         shader_mode = mode is not None and getattr(mode, 'shader_mode', False)
 
@@ -204,8 +235,8 @@ class Teapot(nodetypes.Geometry, node.Node):
             self._render_glut()
             return
 
-        level = self._lod_level(mode)
-        if not self._ensure_tessellated(level):
+        steps = self._tessellation_steps(mode)
+        if not self._ensure_tessellated(steps):
             # Tessellation unavailable (e.g. no GLU / no current context yet).
             if HAS_GLUT_TEAPOT and not shader_mode:
                 self._render_glut()
@@ -214,9 +245,9 @@ class Teapot(nodetypes.Geometry, node.Node):
             return
 
         if shader_mode:
-            self._render_shader(mode, level)
+            self._render_shader(mode, steps)
         else:
-            self._render_legacy(level)
+            self._render_legacy(steps)
 
     def _render_glut(self):
         """Explicit legacy GLUT-based rendering (useGlut comparison option)."""
@@ -230,9 +261,9 @@ class Teapot(nodetypes.Geometry, node.Node):
             glFrontFace(GL_CCW)
 
     # -- legacy fixed-function path ----------------------------------------
-    def _render_legacy(self, level):
-        """Fixed-function rendering of the interleaved N3F_V3F arrays."""
-        base_array, lid_array = self._arrays[level]
+    def _render_legacy(self, steps):
+        """Fixed-function rendering of the interleaved T2F_N3F_V3F arrays."""
+        base_array, lid_array = self._arrays[steps]
         glPushAttrib(GL_ENABLE_BIT | GL_POLYGON_BIT)
         # Exterior faces are CCW/outward; interior faces are the reversed copies.
         # Cull backfaces so each surface point shows its exterior from outside and
@@ -273,14 +304,14 @@ class Teapot(nodetypes.Geometry, node.Node):
 
     # -- shader / core-profile path ----------------------------------------
     @classmethod
-    def _initialize_buffers(cls, level):
-        """Build VAOs/VBOs for the tessellated arrays of ``level`` (shader path)."""
-        entry = cls._buffers.get(level)
+    def _initialize_buffers(cls, steps):
+        """Build VAOs/VBOs for the tessellated arrays at ``steps`` (shader path)."""
+        entry = cls._buffers.get(steps)
         if entry is not None:
             return entry['base_vao'] is not None
-        if not cls._ensure_tessellated(level):
+        if not cls._ensure_tessellated(steps):
             return False
-        base_array, lid_array = cls._arrays[level]
+        base_array, lid_array = cls._arrays[steps]
         try:
             from OpenGLContext.scenegraph.teapot_nurbs import (
                 FLOATS_PER_VERTEX, compute_tangents,
@@ -319,22 +350,22 @@ class Teapot(nodetypes.Geometry, node.Node):
             base_vao, base_vbo, base_count = make(base_array)
             lid_vao, lid_vbo, lid_count = make(lid_array)
             glBindBuffer(GL_ARRAY_BUFFER, 0)
-            cls._buffers[level] = {
+            cls._buffers[steps] = {
                 'base_vao': base_vao, 'base_vbo': base_vbo, 'base_count': base_count,
                 'lid_vao': lid_vao, 'lid_vbo': lid_vbo, 'lid_count': lid_count,
             }
-            log.debug("Teapot buffers (level %d) initialized: %d base, %d lid vertices",
-                      level, base_count, lid_count)
+            log.debug("Teapot buffers (steps %s) initialized: %d base, %d lid vertices",
+                      steps, base_count, lid_count)
             return base_vao is not None
         except Exception as e:
-            log.error("Failed to initialize teapot buffers (level %d): %s", level, e)
-            cls._buffers[level] = {'base_vao': None, 'base_count': 0,
+            log.error("Failed to initialize teapot buffers (steps %s): %s", steps, e)
+            cls._buffers[steps] = {'base_vao': None, 'base_count': 0,
                                    'lid_vao': None, 'lid_count': 0}
             return False
 
-    def _render_shader(self, mode, level):
-        """Shader-based rendering using the tessellated mesh for ``level``."""
-        if not self._initialize_buffers(level):
+    def _render_shader(self, mode, steps):
+        """Shader-based rendering using the tessellated mesh at ``steps``."""
+        if not self._initialize_buffers(steps):
             log.warning("Cannot render teapot: buffers not initialized")
             return
 
@@ -343,7 +374,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             log.warning("Cannot render teapot: no shader program")
             return
 
-        bufs = self._buffers[level]
+        bufs = self._buffers[steps]
 
         def draw():
             cull_was_enabled = glIsEnabled(GL_CULL_FACE)
@@ -398,17 +429,17 @@ class Teapot(nodetypes.Geometry, node.Node):
         glBindVertexArray(0)
 
     # -- bounding volume ---------------------------------------------------
-    @classmethod
-    def _mesh_aabb(cls):
+    def _mesh_aabb(self):
         """(min, max) corner of the tessellated unit teapot, or None.
 
-        Computed from the level-0 N3F_V3F vertex arrays already in memory rather
-        than eyeballed extents that risk frustum-culling the visible teapot.
-        Returns None when tessellation is unavailable.
+        Computed from the T2F_N3F_V3F vertex arrays already in memory rather than
+        eyeballed extents that risk frustum-culling the visible teapot.  Returns
+        None when tessellation is unavailable.
         """
-        if not cls._ensure_tessellated(0):
+        steps = self._instance_steps()
+        if not self._ensure_tessellated(steps):
             return None
-        base_array, lid_array = cls._arrays[0]
+        base_array, lid_array = self._arrays[steps]
         chunks = []
         from OpenGLContext.scenegraph.teapot_nurbs import FLOATS_PER_VERTEX
         for arr in (base_array, lid_array):
@@ -441,4 +472,5 @@ class Teapot(nodetypes.Geometry, node.Node):
             # the unit y-up teapot (spout+handle span ~x3.0, ~y1.6, ~z2.0), scaled.
             box = boundingvolume.AABoundingBox(
                 size=[self.size * 3.0, self.size * 1.6, self.size * 2.0])
-        return boundingvolume.cacheVolume(self, box, ((self, 'size'),))
+        return boundingvolume.cacheVolume(
+            self, box, ((self, 'size'), (self, 'steps')))

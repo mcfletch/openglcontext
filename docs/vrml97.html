@@ -132,7 +132,12 @@ profile</li>
 cross-section swept along a spine, with the specification's scale, orientation,
 caps, <code>ccw</code> and <code>creaseAngle</code> fields</li>
   <li><a href="../pydoc/OpenGLContext.scenegraph.shaders.html">Shader, ShaderAttribute, GLSLShader, ShaderBuffer, FloatUniform*, IntUniform*, TextureUniform</a> -- Shader (and VBO)-based geometry</li>
-  <li><a href="../pydoc/OpenGLContext.scenegraph.teapot.html">Teapot</a> -- Simple GLUT Utah Teapot implementation<br>
+  <li><a href="../pydoc/OpenGLContext.scenegraph.teapot.html">Teapot</a> -- the Utah
+  Teapot, tessellated from its 32 Bezier patches with the GLU NURBS tessellators.
+  <code>size</code> matches <code>glutSolidTeapot</code>'s scale argument,
+  <code>lid</code> and <code>solid</code> toggle the lid and the polygon mode, and
+  <code>steps</code> fixes the GLU sampling (larger is finer; 0, the default, picks
+  it from the camera distance)<br>
   </li>
 
 

@@ -328,9 +328,11 @@ rockets.place(placement_matrices(translations=positions,
       reusable vertex arrays, so instancing them is a question of whether the LOD is worth
       more than the draw-call collapse rather than of whether it is possible &mdash; see
       <a href="extrusions.html">swept geometry</a>.)
-      The <strong>Teapot</strong> makes the opposite trade: it <em>does</em> instance
-      (baking the finest tessellation), giving up its distance-LOD in exchange for the
-      draw-call collapse when many same-material teapots share the screen.</li>
+      The <strong>Teapot</strong> makes the opposite trade: it <em>does</em> instance,
+      giving up its distance-LOD in exchange for the draw-call collapse when many
+      same-material teapots share the screen. The baked mesh is the one its
+      <code>steps</code> field asks for, or the finest tessellation when that field is
+      left at 0.</li>
     <li><strong>Transparent objects.</strong> Correct transparency needs the copies sorted
       back-to-front every frame, which fights batching. Instancing is opaque-only; the rare
       &ldquo;thousands of transparent things&rdquo; case is better served by the point/particle
@@ -419,7 +421,9 @@ rockets.place(placement_matrices(translations=positions,
       single call.</li>
     <li><strong>One tessellation per group.</strong> Procedural LOD surfaces (NURBS,
       extrusions) are not instanced, to keep their distance level-of-detail. The Teapot
-      instances at its finest tessellation, trading LOD for the batched draw.</li>
+      instances at one tessellation -- its <code>steps</code>, or the finest -- trading
+      LOD for the batched draw. Teapots of differing <code>steps</code> are separate
+      meshes and so separate draws.</li>
     <li><strong>Per-vertex colour is dropped</strong> by the shared instanced mesh: a
       colour-per-vertex mesh still batches, but renders with its material colour rather than
       baked vertex colours.</li>

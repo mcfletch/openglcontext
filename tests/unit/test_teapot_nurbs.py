@@ -185,6 +185,34 @@ class TestTeapotLOD:
         assert Teapot(size=1.0)._lod_level(_Mode(False, far)) == 0
 
 
+class TestTeapotSteps:
+    """An explicit ``steps`` fixes the GLU sampling, ignoring camera distance."""
+
+    def test_default_follows_distance_lod(self):
+        far = np.eye(4)
+        far[3, 2] = -400.0
+        mode = _Mode(False, far)
+        t = Teapot(size=1.0)
+        assert t._tessellation_steps(mode) == teapot_nurbs.steps_for_level(
+            t._lod_level(mode))
+
+    def test_explicit_steps_ignores_distance(self):
+        near = np.eye(4)
+        near[3, 2] = -3.0
+        far = np.eye(4)
+        far[3, 2] = -400.0
+        t = Teapot(size=1.0, steps=6.0)
+        assert t._tessellation_steps(_Mode(False, near)) == 6.0
+        assert t._tessellation_steps(_Mode(False, far)) == 6.0
+
+    def test_steps_splits_the_instance_batch(self):
+        """Two sampling steps are two meshes, so they cannot share one draw."""
+        assert Teapot(steps=6.0).instanceContentKey() != Teapot().instanceContentKey()
+
+    def test_steps_is_an_instance_mesh_dependency(self):
+        assert 'steps' in Teapot.instanceGPU_depend_fields
+
+
 def _patch_render(monkeypatch, t, tessellate_ok=True):
     """Stub the render backends, recording which one draws.
 
@@ -194,9 +222,9 @@ def _patch_render(monkeypatch, t, tessellate_ok=True):
     """
     calls = []
     monkeypatch.setattr(type(t), '_ensure_tessellated',
-                        classmethod(lambda cls, level=0: tessellate_ok))
-    monkeypatch.setattr(t, '_render_legacy', lambda level: calls.append('legacy'))
-    monkeypatch.setattr(t, '_render_shader', lambda mode, level: calls.append('shader'))
+                        classmethod(lambda cls, steps: tessellate_ok))
+    monkeypatch.setattr(t, '_render_legacy', lambda steps: calls.append('legacy'))
+    monkeypatch.setattr(t, '_render_shader', lambda mode, steps: calls.append('shader'))
     monkeypatch.setattr(t, '_render_glut', lambda: calls.append('glut'))
     return calls
 
@@ -422,3 +450,18 @@ def test_interior_faces_use_interior_atlas_region(gl_context):
     m = len(arr) // 2
     assert arr[:m, 1].min() >= 0.25 - 1e-4   # exterior in v[0.25, 0.5]
     assert arr[m:, 1].max() <= 0.25 + 1e-4   # interior in v[0, 0.25]
+
+
+def test_steps_cache_separate_meshes(gl_context):
+    """Two sampling steps tessellate and cache as two meshes, not one."""
+    Teapot._arrays = {}
+    Teapot._tessellate_attempts = {}
+    try:
+        assert Teapot._ensure_tessellated(4.0)
+        assert Teapot._ensure_tessellated(12.0)
+        coarse = Teapot._arrays[4.0][0]
+        fine = Teapot._arrays[12.0][0]
+        assert len(coarse) < len(fine)
+    finally:
+        Teapot._arrays = {}
+        Teapot._tessellate_attempts = {}

@@ -93,6 +93,7 @@ RANDOMIZED_SCRIPTS = [
     'readpixelsleak.py',  # Rotates on the clock while it reads the buffer back
     'lod_demo.py',  # The camera sweeps in and out on the clock
     'lightobject.py',  # A TimeSensor swings the light round on the clock
+    'cubeback_rot.py',  # A looping TimeSensor tilts the background on the clock
     'shader_4_subset.py',  # Moves a vertex from time.time() every frame
 ]
 
