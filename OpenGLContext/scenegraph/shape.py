@@ -1,6 +1,7 @@
 """Renderable geometry composed of a geometry object with applied appearance"""
 
 from OpenGL.GL import *
+from OpenGL.GL import glUseProgram
 from vrml.vrml97 import basenodes
 from vrml import field
 from OpenGLContext.scenegraph import boundingvolume, polygonsort
@@ -136,17 +137,12 @@ class Shape(basenodes.Shape):
             self.geometry.render(textured=True, mode=mode)
             return
 
-        if self.appearance and not hasattr(self.appearance, 'texture'):
-            # A `Shader` appearance carries a GLSL program of its own instead of
-            # a texture, and draws through the fixed-function vertex arrays that
-            # program's `gl_Vertex` reads.  Core-profile geometry is submitted
-            # through a vertex array object at attribute locations such a shader
-            # would have to declare, so this pass has nothing to hand it.  Said
-            # once here rather than as an AttributeError per shape per frame.
-            raise NotImplementedError(
-                "a %s appearance draws only in the compatibility profile; declare"
-                " profile = 'compatibility' on the context that uses it"
-                % (self.appearance.__class__.__name__,))
+        if self.appearance and hasattr(self.appearance, 'objects'):
+            if getattr(mode, 'visible', True):
+                return self._render_shader_appearance(mode)
+            # Selection paints every shape in its own id colour with the pass's
+            # own program; the appearance's shader would paint whatever it likes.
+            return self.geometry.render(textured=False, mode=mode)
 
         # Skip material/texture setup during selection rendering (mode.visible=False)
         # Selection uses solid colors with unlit shader, not materials
@@ -182,6 +178,35 @@ class Shape(basenodes.Shape):
         # Cleanup texture
         if textured:
             shader_program.unbind_texture()
+
+    def _render_shader_appearance(self, mode):
+        """Draw the geometry through the GLSL program the appearance carries.
+
+        A `Shader` appearance is an `Appearance` that brings its own program
+        instead of a material and a texture. The program is bound and given the
+        uniforms it names, then the geometry draws into it exactly as it would
+        into the pass's own: the vertex arrays go to the locations
+        `OpenGLContext.scenegraph.vertexsemantics` declares, and
+        `GLSLObject.compile` has bound the shader's inputs to match.
+        """
+        from OpenGLContext.passes.shaderpass import ShaderAppearanceProgram
+
+        # What the pass expects bound for the shapes that follow this one; the
+        # appearance's program replaces it for one draw and is put back after,
+        # the same discipline the raw-GL layers follow.
+        previous = mode.current_program() if hasattr(mode, 'current_program') else 0
+        _lit, _textured, _alpha, token = self.appearance.render(mode=mode)
+        if not token:
+            return
+        pass_program = mode.shader_program
+        mode.shader_program = ShaderAppearanceProgram(token)
+        try:
+            self.geometry.render(textured=True, mode=mode)
+        finally:
+            mode.shader_program = pass_program
+            self.appearance.renderPost(token, mode=mode)
+            if previous:
+                glUseProgram(previous)
 
     def RenderTransparent(self, mode):
         if not self.geometry:

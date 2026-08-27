@@ -1,6 +1,7 @@
 """Shader node implementation"""
 
 from OpenGL.GL import *
+from OpenGL.GL import glBindAttribLocation, glUseProgram
 from OpenGL.GL import shaders as GL_shaders
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
@@ -17,7 +18,9 @@ try:
     from functools import reduce
 except ImportError:
     pass
-from OpenGLContext.scenegraph import polygonsort, boundingvolume, shadergeometry
+from OpenGLContext.scenegraph import (
+    polygonsort, boundingvolume, shadergeometry, vertexsemantics,
+)
 
 LOCAL_ORIGIN = array([[0, 0, 0, 1.0]], "f")
 
@@ -497,6 +500,31 @@ class GLSLShader(shaders.GLSLShader):
         return True
 
 
+class ShaderInput(node.Node):
+    """Which of the engine's vertex arrays one of a shader's inputs reads.
+
+    Declared on a :class:`GLSLObject` when the shader calls an input something
+    other than the engine's own name for it::
+
+        GLSLObject(
+            shaders = [ ... ],
+            attributes = [
+                ShaderInput( semantic='POSITION', name='vertexInput' ),
+            ],
+        )
+
+    ``semantic`` is one of the glTF vertex semantics in
+    :mod:`OpenGLContext.scenegraph.vertexsemantics`; ``name`` is what this
+    shader declares. Entries apply *over* the engine's own names, so a shader
+    that renames only its position still receives normals and texture
+    coordinates by naming them ``aNormal`` and ``aTexCoord``.
+    """
+
+    PROTO = 'ShaderInput'
+    semantic = field.newField('semantic', 'SFString', 1, 'POSITION')
+    name = field.newField('name', 'SFString', 1, '')
+
+
 class _GLSLObjectCache(object):
     shader = None
     locationMap = None
@@ -507,6 +535,7 @@ class GLSLObject(shaders.GLSLObject):
 
     IMPLEMENTATION = "GLSL"
     compileLog = field.newField(" compileLog", "SFString", "")
+    attributes = field.newField("attributes", "MFNode", 1, list)
 
     # we've manually chosen this implementation...
     def render(self, mode, shader=None):
@@ -587,6 +616,7 @@ class GLSLObject(shaders.GLSLObject):
                 holder.data = None
                 return None
         if len(subShaders) == len(self.shaders):
+            self.bindAttributeLocations(program)
             glLinkProgram(program)
             glUseProgram(program)
             # TODO: retrieve maximum texture count and restrict to that...
@@ -619,6 +649,32 @@ class GLSLObject(shaders.GLSLObject):
             log.debug("Not done loading shader source yet")
         holder.data = 0
         return None
+
+    def bindAttributeLocations(self, program):
+        """Say where each vertex input arrives, before the program is linked.
+
+        Every geometry node in the engine writes its arrays to the locations
+        :mod:`OpenGLContext.scenegraph.vertexsemantics` declares, so a shader
+        that spells its inputs with the engine's own names -- ``aPosition``,
+        ``aNormal``, ``aTexCoord`` and the rest -- needs to declare nothing and
+        receives them. ``self.attributes`` names the inputs this shader calls
+        something else.
+
+        A ``layout(location = ...)`` qualifier in the source outranks this
+        (GLSL 3.30 4.3.8.2), so a shader that states its own locations keeps
+        them.
+        """
+        for entry in vertexsemantics.SEMANTICS:
+            glBindAttribLocation(program, entry.location, as_8_bit(entry.attribute))
+        for declared in self.attributes:
+            name = as_str(declared.name)
+            if not name:
+                continue
+            glBindAttribLocation(
+                program,
+                vertexsemantics.location(as_str(declared.semantic)),
+                as_8_bit(name),
+            )
 
     def program(self, mode):
         """Retrieve our program ID"""
@@ -726,6 +782,9 @@ class ShaderGeometry(shaders.ShaderGeometry):
         """Do run-time rendering of the Shape for the given mode"""
         if not self.attributes or not self.appearance:
             return None
+        # What the pass expects bound for whatever it draws after this node;
+        # our appearance's program replaces it for one draw and is put back.
+        previous = mode.current_program() if hasattr(mode, 'current_program') else 0
         _, _, _, token = self.appearance.render(mode)
         if token is not None:
             try:
@@ -736,6 +795,8 @@ class ShaderGeometry(shaders.ShaderGeometry):
             finally:
                 self.appearance.renderPost(token, mode)
                 glBindBuffer(GL_ARRAY_BUFFER, 0)
+                if previous:
+                    glUseProgram(previous)
 
     def _renderAttributes(self, current, mode):
         """Draw the slices with this shape's attributes bound.

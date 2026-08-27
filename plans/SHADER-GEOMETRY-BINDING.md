@@ -1,6 +1,6 @@
 # How geometry reaches a shader it did not come with
 
-**Status:** 🚧 Step 1 landed (`vertexsemantics.py`, one table); steps 2-5 proposed.
+**Status:** 🚧 Steps 1 and 3 landed; steps 2, 4 and 5 proposed.
 **Related:** [CORE-PROFILE-DEFAULT.md](CORE-PROFILE-DEFAULT.md) names this as the
 gap behind `shaderobjects.py`, `shader_11` and `shader_12`;
 [SHADER-TUTORIALS-CORE.md](SHADER-TUTORIALS-CORE.md) waits on it for three of its
@@ -278,10 +278,16 @@ put in, applied one level up.
 2. `GeometryArrays` + `bind_geometry`, with `_MeshGPU` and
    `bind_separate_arrays` reimplemented on it. Still no new capability, and the
    VRML97 array geometry stops rebuilding a VAO per program.
-3. `ShaderInput` on `GLSLObject`, the `glBindAttribLocation` pass, the default
-   mapping. `Shape._render_shader` binds the appearance's program when it has
-   one. `shaderobjects.py` and the declarative tutorials drop their
-   compatibility declaration.
+3. ✅ **Landed.** `ShaderInput` on `GLSLObject`, the `glBindAttribLocation` pass
+   before linking, and the engine's own attribute names as the default mapping.
+   `Shape._render_shader` draws the geometry through the appearance's program
+   when it has one, standing the pass's own program aside for that draw and
+   putting it back after -- the discipline `passes/instancing` already asks of
+   the raw-GL layers. In the selection pass the shape draws with the pass's
+   program, so picking still paints an id colour. `shaderobjects.py` keeps its
+   compatibility declaration: several of its objects are fragment shaders with
+   no vertex shader, which is a fixed-function vertex stage and has no core
+   equivalent.
 4. The missing-attribute report.
 5. The legacy prelude, behind its own field.
 

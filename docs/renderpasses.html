@@ -264,6 +264,42 @@ vocabulary the loaders already speak:</p>
 </table>
 <p>A shader of your own may put an input the engine has no name for at
 location&nbsp;15 or above (<code>vertexsemantics.FIRST_FREE_LOCATION</code>).</p>
+<h3>A Shape whose appearance brings its own shader</h3>
+<p><code>Shader</code> is a programmable substitute for <code>Appearance</code>:
+it carries a GLSL program instead of a material and a texture.</p>
+<pre>Shape(
+    geometry = Sphere( radius=2 ),
+    appearance = Shader( objects=[ GLSLObject( shaders=[ ... ] ) ] ),
+)</pre>
+<p>The geometry and the program are written by different people, so something has
+to say which vertex array feeds which input, and that something is the table
+above. <code>GLSLObject.compile</code> binds the engine&rsquo;s own attribute
+names to those locations before it links, so a shader that declares
+<code>in vec3 aPosition;</code> receives positions with nothing else said. A
+shader that calls an input something else says so with a
+<code>ShaderInput</code>:</p>
+<pre>GLSLObject(
+    shaders = [ ... ],
+    attributes = [
+        ShaderInput( semantic='POSITION', name='vertexInput' ),
+        ShaderInput( semantic='NORMAL',   name='surfaceNormal' ),
+    ],
+)</pre>
+<p>Entries apply <em>over</em> the engine&rsquo;s own names, so renaming only the
+position still leaves normals and texture coordinates arriving by their usual
+names. A <code>layout(location = ...)</code> qualifier in the source outranks
+both (GLSL 3.30 4.3.8.2), so a shader that states its own locations keeps
+them.</p>
+<p>The pass supplies its camera to any <code>GLSLObject</code> that names one of
+its matrices &mdash; <code>mat_modelproj</code>, <code>mat_modelview</code>,
+their inverses and transposes &mdash; so a shader declaring
+<code>uniform mat4 mat_modelproj;</code> gets one with nothing to upload;
+<code>itp_modelview</code> is the inverse-transpose model-view, whose upper-left
+3&times;3 is the normal matrix. Everything else in the program is the shader
+author&rsquo;s own, and the pass leaves it alone. During the selection pass the
+shape draws with the pass&rsquo;s own program instead, so picking paints an id
+colour rather than whatever the appearance&rsquo;s shader would.</p>
+
 <p class="technical">Locations rather than names, because a Vertex Array Object
 records locations. A VAO built by looking each name up in one program is valid
 only for that program, so a mesh drawn by the lit program, the unlit program and

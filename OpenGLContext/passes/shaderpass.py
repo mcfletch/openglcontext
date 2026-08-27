@@ -155,6 +155,70 @@ def texture_transform_matrix(transform_node: Optional[Any]) -> Matrix3:
     return m
 
 
+def _ignore(*args: Any, **named: Any) -> None:
+    """Accept a call the pass would answer and the shader author already has."""
+
+
+class ShaderAppearanceProgram(object):
+    """Stands in for the pass's programs while an appearance's own one draws.
+
+    A geometry node asks the pass which program to bind its vertex arrays
+    against, and then for somewhere to put a material, a light set, a texture
+    and the matrices. When the appearance is a ``Shader`` node carrying a GLSL
+    program of its own, only the first of those has an answer: the uniforms are
+    the shader author's, and ``GLSLObject.render`` has already supplied the ones
+    the engine offers by name (``mat_modelproj`` and its relatives). So the
+    program is reported and the rest are accepted and dropped.
+
+    The geometry's arrays land where the shader reads them because
+    ``GLSLObject.compile`` binds the engine's attribute names to the locations
+    :mod:`OpenGLContext.scenegraph.vertexsemantics` declares before it links.
+    """
+
+    #: What a geometry node configures on the pass's shader and this one has
+    #: nothing to say about. Anything outside the set is an AttributeError
+    #: rather than a silent no-op, so a geometry that needs a real answer says
+    #: so instead of drawing wrongly.
+    _ACCEPTED = frozenset((
+        'set_matrices', 'set_solid_color', 'set_text_mode', 'set_vertex_color',
+        'set_wave', 'set_texture_enabled', 'set_texture_transform',
+        'set_default_texture_transform', 'set_default_material',
+        'bind_texture', 'unbind_texture',
+    ))
+
+    def __init__(self, program: int) -> None:
+        self.program = program
+        self.unlit_program = program
+        self.vertex_color_program = program
+        self.point_program = program
+        self.line_program = program
+        self.depth_program = program
+
+    def use(self, lit: bool = True, vertex_colors: bool = False) -> bool:
+        glUseProgram(self.program)
+        return True
+
+    def use_vertex_color(self) -> bool:
+        return self.use()
+
+    def use_point(self) -> bool:
+        return self.use()
+
+    def use_line(self) -> bool:
+        return self.use()
+
+    def use_depth(self) -> bool:
+        return self.use()
+
+    def unuse(self) -> None:
+        glUseProgram(0)
+
+    def __getattr__(self, name: str) -> Any:
+        if name in self._ACCEPTED or name.startswith('_set_uniform'):
+            return _ignore
+        raise AttributeError(name)
+
+
 class VRML97ShaderProgram(_ShadowUniformMixin):
     """Manages the VRML97 lighting shader program and uniforms.
 
