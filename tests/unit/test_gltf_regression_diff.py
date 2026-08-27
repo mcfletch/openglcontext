@@ -515,10 +515,10 @@ class TestProvenance:
 
 
 class TestBaselineDefault:
-    def test_falls_back_to_the_sibling_reference_images_repo(self, monkeypatch):
+    def test_falls_back_to_the_reference_images_submodule(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_GLTF_BASELINE', raising=False)
         root = R.default_baseline_root().replace(os.sep, '/')
-        assert root.endswith('/reference-images/gltf_baseline')
+        assert root.endswith('/tests/reference_images/gltf_baseline')
 
 
 class TestEnvPrefixFor:

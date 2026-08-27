@@ -1,0 +1,4 @@
+[submodule "tests/reference_images"]
+	path = tests/reference_images
+	url = git@github.com:mcfletch/reference-images.git
+	branch = main

@@ -55,6 +55,11 @@ REFERENCE_IMAGES_DIR = TESTS_DIR / "reference_images"
 RESULT_IMAGES_DIR = TESTS_DIR / "result_images"
 REPORT_PATH = TESTS_DIR / "report.html"
 
+#: Seeds the engine's randomness for every capture, so that what a script
+#: scatters is the same from run to run. Any value would do; this one is fixed
+#: so that a reference frame keeps matching.
+CAPTURE_SEED = 4242
+
 # Scripts that use randomization and shouldn't expect visual match
 # These will still capture images but won't fail on visual differences
 RANDOMIZED_SCRIPTS = [
@@ -71,6 +76,24 @@ RANDOMIZED_SCRIPTS = [
     'crowd_demo.py',  # 150 figures walking, each at its own point in the stride
     'telemetry_demo.py',  # Bodies orbit on the clock
     'recording_demo.py',  # The carousel orbits and bobs on the clock
+    # The NeHe translations spin their geometry straight from time.time(), which
+    # is what those lessons are about; the angle a capture lands on is whatever
+    # the clock said. Their siblings that do not move are compared normally.
+    'nehe4.py',
+    'nehe5.py',
+    'nehe6.py',
+    'nehe6_compressed.py',
+    'nehe6_convolve.py',
+    'nehe6_timer.py',
+    'nehe6_multi.py',
+    'nehe7.py',
+    'nehe8.py',
+    'simplerotate.py',  # Rotates on the clock, which is the whole demo
+    'saveimage.py',  # Rotates on the clock while it writes the file out
+    'readpixelsleak.py',  # Rotates on the clock while it reads the buffer back
+    'lod_demo.py',  # The camera sweeps in and out on the clock
+    'lightobject.py',  # A TimeSensor swings the light round on the clock
+    'shader_4_subset.py',  # Moves a vertex from time.time() every frame
 ]
 
 # Single source of truth for the visual-diff tolerance. The gate
@@ -276,6 +299,11 @@ def _subprocess_env(auto_exit_frames: int = AUTO_EXIT_FRAMES) -> dict:
     # and their scene traversal still run; only the device is not opened
     # (OpenGLContext.audio.scene), so the capture is of exactly the same frame.
     env['OPENGLCONTEXT_AUDIO'] = '0'
+    # One seed for every run, so a scene that scatters spheres or offsets
+    # instances scatters them the same way each time and its capture can be
+    # compared against a stored frame. Without it the engine picks a seed per
+    # session (OpenGLContext.entropy) and the picture is different every run.
+    env['OPENGLCONTEXT_SEED'] = str(CAPTURE_SEED)
     return env
 
 

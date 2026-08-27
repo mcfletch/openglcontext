@@ -22,9 +22,11 @@ tests/test.jpg
 build
 tests/callcontext.txt
 
-# Generated test-run outputs (finding 3.29): keep only the canonical
-# tests/reference_images/<name>.png baselines, never the diff/result/reference
-# copies the comparison tool writes next to them.
+# Generated test-run outputs: keep only the canonical <name>.png baselines,
+# never the diff/result/reference copies the comparison tool writes next to
+# them. tests/reference_images is a submodule and carries these same patterns
+# in its own .gitignore, which is what applies to what lands there; these are
+# for a checkout without it.
 tests/reference_images/*_diff.png
 tests/reference_images/*_result.png
 tests/reference_images/*_reference.png

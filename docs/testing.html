@@ -178,18 +178,21 @@ assert result.success, result.stderr</pre>
     and the capture path fixes the IBL. An animated scene pins its
     <code>anim_time</code>. Without that, what is compared is the moment the
     capture happened to be taken.</p>
-  <p>The engine's own glTF conformance baselines live in a separate
-    <code>reference-images</code> repository beside the source tree &mdash; a
-    submodule of the development workspace, checked out as a sibling of this
-    one, holding one PNG and one JSON of capture parameters per sample scene.
-    They are kept apart from the code because they are large and are re-blessed
-    on their own schedule.</p>
-  <pre>git submodule update --init reference-images
-oglc-gltf-regression            # compare
-oglc-gltf-regression --bless    # re-establish, after reviewing the change</pre>
-  <p><code>OPENGLCONTEXT_GLTF_BASELINE</code> points at a copy somewhere else;
-    without either, the conformance tests skip and say so rather than failing
-    once per view.</p>
+  <p>Every image a regression test compares against lives in
+    <code>tests/reference_images</code>, which is a submodule &mdash; the
+    <code>reference-images</code> repository &mdash; because the pictures are
+    large and are re-blessed on their own schedule rather than when the code
+    changes. Clone with them, or fetch them into an existing checkout:</p>
+  <pre>git clone --recurse-submodules https://github.com/mcfletch/openglcontext
+git submodule update --init tests/reference_images   # in an existing clone</pre>
+  <p>Its top level holds one frame per test script, looked up by script name.
+    <code>gltf_baseline/</code> holds the glTF conformance baselines, one PNG
+    and one JSON of capture parameters per sample scene, which
+    <code>oglc-gltf-regression</code> diffs against and <code>--bless</code>
+    re-establishes after review. <code>OPENGLCONTEXT_GLTF_BASELINE</code> points
+    at a copy somewhere else.</p>
+  <p>Without the submodule the tests still run: a view with no reference to
+    compare against is reported as having none rather than failing.</p>
 </section>
 
 <section id="what-to-test">

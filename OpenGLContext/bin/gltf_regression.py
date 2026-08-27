@@ -12,7 +12,7 @@ of its viewpoints it:
 1. renders the model through the ``oglc-gltf`` viewer in its own hidden GL context
    (one process per view -- the robust way to render a batch),
 2. compares the new render against **our reference** -- the verified baseline in
-   the separate ``reference-images`` sub-repo -- and flags a regression when they
+   ``tests/reference_images`` submodule -- and flags a regression when they
    diverge beyond tolerance,
 3. fetches (and disk-caches) the **upstream Khronos reference** screenshot as a
    tertiary sanity check, and
@@ -94,14 +94,16 @@ DIFF_THRESHOLD = 8
 def default_baseline_root() -> str:
     """Where verified 'our reference' baselines live.
 
-    ``OPENGLCONTEXT_GLTF_BASELINE`` wins; otherwise the sibling ``reference-images``
-    sub-repo's ``gltf_baseline`` folder (kept out of the main code repo).
+    ``tests/reference_images`` is a submodule of this repository holding every
+    image a regression test compares against, so a clone taken with
+    ``--recurse-submodules`` can run them; the glTF baselines are its
+    ``gltf_baseline`` folder. ``OPENGLCONTEXT_GLTF_BASELINE`` points somewhere
+    else, for a working copy kept outside the checkout.
     """
     env = os.environ.get('OPENGLCONTEXT_GLTF_BASELINE', '').strip()
     if env:
         return env
-    parent = os.path.dirname(REPO)
-    return os.path.join(parent, 'reference-images', 'gltf_baseline')
+    return os.path.join(REPO, 'tests', 'reference_images', 'gltf_baseline')
 
 
 def _env_prefix(name: str = 'pimbackground_') -> str | None:
@@ -611,8 +613,9 @@ def build_parser(prog: str = 'oglc-gltf-regression') -> argparse.ArgumentParser:
     p.add_argument('--only', action='append', metavar='NAME',
                    help='render only this scene (repeatable)')
     p.add_argument('--baseline-root', metavar='DIR',
-                   help='baseline directory (default: sibling reference-images/gltf_baseline '
-                        'or $OPENGLCONTEXT_GLTF_BASELINE)')
+                   help='baseline directory (default: '
+                        'tests/reference_images/gltf_baseline or '
+                        '$OPENGLCONTEXT_GLTF_BASELINE)')
     p.add_argument('--parthenon', metavar='GLB',
                    help='path to a local Parthenon .glb (default: auto-detect sibling)')
     p.add_argument('--report', metavar='HTML', help='report output path')
