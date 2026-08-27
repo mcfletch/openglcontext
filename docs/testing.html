@@ -179,10 +179,17 @@ assert result.success, result.stderr</pre>
     <code>anim_time</code>. Without that, what is compared is the moment the
     capture happened to be taken.</p>
   <p>The engine's own glTF conformance baselines live in a separate
-    <code>reference-images</code> repository beside the source tree.
-    <code>OPENGLCONTEXT_GLTF_BASELINE</code> points at a copy of it; without
-    either, the conformance tests skip and say so rather than failing once per
-    view.</p>
+    <code>reference-images</code> repository beside the source tree &mdash; a
+    submodule of the development workspace, checked out as a sibling of this
+    one, holding one PNG and one JSON of capture parameters per sample scene.
+    They are kept apart from the code because they are large and are re-blessed
+    on their own schedule.</p>
+  <pre>git submodule update --init reference-images
+oglc-gltf-regression            # compare
+oglc-gltf-regression --bless    # re-establish, after reviewing the change</pre>
+  <p><code>OPENGLCONTEXT_GLTF_BASELINE</code> points at a copy somewhere else;
+    without either, the conformance tests skip and say so rather than failing
+    once per view.</p>
 </section>
 
 <section id="what-to-test">

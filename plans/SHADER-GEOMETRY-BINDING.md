@@ -1,6 +1,6 @@
 # How geometry reaches a shader it did not come with
 
-**Status:** 🚧 Steps 1 and 3 landed; steps 2, 4 and 5 proposed.
+**Status:** ✅ Landed. The compatibility prelude of step 5 was dropped in favour of converting the remaining GLSL to the 330 baseline.
 **Related:** [CORE-PROFILE-DEFAULT.md](CORE-PROFILE-DEFAULT.md) names this as the
 gap behind `shaderobjects.py`, `shader_11` and `shader_12`;
 [SHADER-TUTORIALS-CORE.md](SHADER-TUTORIALS-CORE.md) waits on it for three of its
@@ -275,9 +275,15 @@ put in, applied one level up.
    the NURBS surfaces, `IndexedPolygons` and the terrain each keep one VAO
    rather than one per program. `tests/unit/test_vertex_semantics.py` holds
    every shader in the package to the table.
-2. `GeometryArrays` + `bind_geometry`, with `_MeshGPU` and
-   `bind_separate_arrays` reimplemented on it. Still no new capability, and the
-   VRML97 array geometry stops rebuilding a VAO per program.
+2. ✅ **Landed.** `scenegraph/geometryarrays.py`: `GeometryArrays` describes what
+   a geometry offers, keyed by semantic, and `bind_geometry` is the one function
+   that turns a description into a vertex array object. `GeometryArrays.separate`
+   and `.interleaved` are the two shapes the engine's own geometry comes in, so
+   `bind_separate_arrays`, `bind_interleaved_vbo`, `render_shader_arrays` and
+   `render_shader_interleaved` are gone and `ArrayGeometry`, `Gear`, `Box`, the
+   quadrics and `IndexedPolygons` each describe their buffers once.
+   `_MeshGPU._ATTRS` now names semantics rather than locations and answers
+   `vertexArrays()`, so `PBRMesh` describes itself in the same terms.
 3. ✅ **Landed.** `ShaderInput` on `GLSLObject`, the `glBindAttribLocation` pass
    before linking, and the engine's own attribute names as the default mapping.
    `Shape._render_shader` draws the geometry through the appearance's program
@@ -288,15 +294,33 @@ put in, applied one level up.
    compatibility declaration: several of its objects are fragment shaders with
    no vertex shader, which is a fixed-function vertex stage and has no core
    equivalent.
-4. The missing-attribute report.
-5. The legacy prelude, behind its own field.
+4. ✅ **Landed.** `report_missing_inputs` compares a program's
+   `GL_ACTIVE_ATTRIBUTES` with what the geometry offers and names the difference
+   through `RenderFailureLog` -- once per program-and-geometry rather than once
+   a frame. A shader's own input at a free location is not the engine's to
+   supply and is not reported.
+5. ❌ **Not built, deliberately.** The compatibility prelude cannot be a pure
+   prepend -- `attribute` and `varying` are keywords a `#define` cannot rewrite
+   -- so it would be a translation layer under content the reader is being
+   taught to write. The remaining GLSL 1.20 in the tree was converted to the 330
+   baseline instead: the sample shaders under `tests/resources/`, the shared
+   `res://simpleshader_*` pair, and a vertex shader for the fragment-only
+   objects in `shaderobjects.py`. `docs/glslversions.html` is the migration
+   table, in both directions.
 
 Steps 1 and 2 are worth doing whether or not 3 follows: they remove the
 two-tables wart and a per-program VAO rebuild from the VRML97 geometry path.
 
-### Left standing after step 1
+### Left standing
 
 `ShaderGeometry` (`scenegraph/shaders.py`) still binds by name, because a node
 that supplies its own `ShaderAttribute` arrays names them itself; it passes the
-program as its VAO cache key and gets one VAO per program. That is what step 3
-changes, by letting the node declare which semantic each name carries.
+program as its VAO cache key and gets one VAO per program. Giving those
+attributes a semantic would fold them in too, and is worth doing when something
+needs it.
+
+`OpenGLContext/resources/legacy_lighting.vert.txt` and `lights.vert.txt` stay at
+GLSL 1.20. They reimplement the fixed-function lighting model in terms of
+`gl_LightSource` and `gl_FrontMaterial`, which is a description of that pipeline
+rather than a shader for this one; nothing loads them, and `vrml97_lighting.*`
+is the lit shader the engine uses.

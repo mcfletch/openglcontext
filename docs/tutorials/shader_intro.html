@@ -21,11 +21,9 @@
 	<div class="commentary">
 	<h1 class="title indent-level-0">Requirements/Setup</h1>
 	<div class="paragraph indent-level-0">This tutorial introduces modern, low-level 3D rendering
-techniques.  It tries to avoid the use of "legacy" OpenGL
-entry points as much as possible.  Though legacy OpenGL
-is likely to be supported on most desktop/laptop hardware
-for the foreseeable future, their use is technically
-discouraged.</div>
+techniques.  Everything in it is drawn the way an OpenGL core
+profile draws: data in buffers, described by a vertex array
+object, turned into pixels by shaders you write.</div>
 	<div class="paragraph indent-level-0">We assume you know:</div>
 	<ul class=" indent-level-4">
 	<li class="">General programming (with Python)</li>
@@ -85,14 +83,14 @@ pip install -I OpenGLContext
 system's package manager.  See the OpenGLContext installation notes
 for details.</div>
 	<h1 class="title indent-level-0">System Requirements</h1>
-	<div class="paragraph indent-level-0">This tutorial requires a modern OpenGL implementation.  Your
-card/driver should likely support OpenGL 2.x natively, though
-OpenGL 1.5+ extensions may work.</div>
+	<div class="paragraph indent-level-0">This tutorial needs an OpenGL 3.3 core profile, which is what
+OpenGLContext asks for by default and what every desktop driver of
+the last decade or so provides.  The shaders are written in GLSL
+330.</div>
 	<div class="paragraph indent-level-0">It is known *not* to work on the following theoretically capable
 configurations:</div>
 	<ul class=" indent-level-4">
-	<li class="">Mac Radeon 9600, OS-X 10.4/10.5 (does not support vertex     attribute arrays)</li>
-	<li class="">nVidia GeForce 7600 GS rev a1 (does not properly     compile the 11th tutorial (link error)).</li>
+	<li class="">nVidia GeForce 7600 GS rev a1 (does not properly    compile the 11th tutorial (link error)).</li>
 </ul>
 	<div class="paragraph indent-level-0">Note that there are alternative code-paths that can be used, but
 that the tutorial does not currently explore those paths in the

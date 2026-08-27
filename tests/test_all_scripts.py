@@ -633,9 +633,8 @@ SLOW_SCRIPTS = {
     'glget.py': SLOW_TIMEOUT,
     'glget_with_fonts.py': SLOW_TIMEOUT,
     'molehill.py': SLOW_TIMEOUT,
-    'shader_instanced.py': SLOW_TIMEOUT,
     'shader_instanced_mapped.py': SLOW_TIMEOUT,
-    'shader_instanced_modern.py': SLOW_TIMEOUT,
+    'shader_instanced.py': SLOW_TIMEOUT,
     'teapot_comparison.py': SLOW_TIMEOUT,
     'test_shader_comprehensive.py': SLOW_TIMEOUT,
 }
@@ -895,9 +894,8 @@ SCRIPT_CATEGORIES = {
     'instanced': {
         "slow": True,
         "scripts": [
-            'shader_instanced.py',
             'shader_instanced_mapped.py',
-            'shader_instanced_modern.py',
+            'shader_instanced.py',
         ],
     },
     'misc': {
