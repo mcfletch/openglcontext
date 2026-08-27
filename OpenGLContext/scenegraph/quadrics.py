@@ -110,17 +110,17 @@ class Quadric( nodetypes.Geometry, node.Node ):
 
     def _render_shader(self, mode):
         """Render the quadric using the shader pipeline."""
-        from OpenGLContext.scenegraph.shadergeometry import (
-            render_shader_interleaved, VertexFormat
+        from OpenGLContext.scenegraph.shadergeometry import VertexFormat
+        from OpenGLContext.scenegraph.geometryarrays import (
+            GeometryArrays, render_geometry,
         )
         vbos = self._lod_vbos( mode )
         if vbos is None:
             return 1
         coords, indices, count = vbos
-        return render_shader_interleaved(
-            mode, coords, 0, VertexFormat.V3F_T2F_N3F,
-            index_vbo=indices, index_count=count, owner=self
-        )
+        return render_geometry(mode, GeometryArrays.interleaved(
+            coords, VertexFormat.V3F_T2F_N3F, count=count, indices=indices,
+        ), owner=self, where=self.__class__.__name__)
 
     # -- distance level-of-detail -----------------------------------------
     def _lod_bounding_radius( self ):

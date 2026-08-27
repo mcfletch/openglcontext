@@ -42,8 +42,9 @@ class Gear( nodetypes.Geometry, node.Node ):
 
     def _render_shader(self, mode):
         """Render gear using shader pipeline."""
-        from OpenGLContext.scenegraph.shadergeometry import render_shader_arrays
-        from OpenGL.arrays import vbo as vbo_module
+        from OpenGLContext.scenegraph.geometryarrays import (
+            GeometryArrays, render_geometry,
+        )
 
         # Get or compile shader geometry
         shader_data = mode.cache.getData(self, 'shader_gear')
@@ -54,10 +55,9 @@ class Gear( nodetypes.Geometry, node.Node ):
             return 1
 
         vertices, normals, count = shader_data
-        return render_shader_arrays(
-            mode, vertices, normals, None, count,
-            draw_mode=GL_TRIANGLES, owner=self
-        )
+        return render_geometry(mode, GeometryArrays.separate(
+            count=count, positions=vertices, normals=normals,
+        ), owner=self, where='Gear')
 
     def _compile_shader_geometry(self, mode):
         """Compile gear geometry to VBOs for shader rendering."""

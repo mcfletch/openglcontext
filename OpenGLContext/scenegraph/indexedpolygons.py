@@ -350,43 +350,17 @@ class IndexedPolygons(
         else:
             glDisable(GL_CULL_FACE)
 
-        normals = vbos.normal if lit else None
-        texcoords = vbos.texCoord if textured else None
-
-        def build():
-            _enabled, bound = sg.bind_separate_arrays(
-                program, vbos.coord, normals, texcoords)
-            index_vbo.bind()   # element-array binding is recorded in the VAO
-            for bound_vbo in bound:
-                bound_vbo.unbind()
-
-        vao = sg.get_or_build_vao(
-            self, program, (vbos.coord, normals, texcoords, index_vbo), build,
-            layout_key=sg.SHARED_LAYOUT)
-        count = len(self._triangle_index(mode))
-        if vao is not None:
-            glBindVertexArray(vao)
-            try:
-                glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, None)
-            finally:
-                glBindVertexArray(0)
-            return 1
-
-        # Transient fallback (owner could not hold a cache).
-        transient = glGenVertexArrays(1)
-        glBindVertexArray(transient)
-        try:
-            enabled, bound = sg.bind_separate_arrays(
-                program, vbos.coord, normals, texcoords)
-            index_vbo.bind()
-            try:
-                glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, index_vbo)
-            finally:
-                index_vbo.unbind()
-                sg.unbind_attributes(enabled, bound)
-        finally:
-            glBindVertexArray(0)
-            glDeleteVertexArrays(1, [transient])
+        from OpenGLContext.scenegraph.geometryarrays import (
+            GeometryArrays, render_geometry,
+        )
+        render_geometry(mode, GeometryArrays.separate(
+            count=len(self._triangle_index(mode)),
+            indices=index_vbo,
+            index_type=GL_UNSIGNED_INT,
+            positions=vbos.coord,
+            normals=vbos.normal if lit else None,
+            texcoords=vbos.texCoord if textured else None,
+        ), owner=self, where='IndexedPolygons')
         return 1
 
     def drawTransparent(self, constant, mode=None):

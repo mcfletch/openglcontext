@@ -187,20 +187,20 @@ class ArrayGeometry(object):
 
     def _render_shader(self, mode):
         """Render using shader pipeline with separate attribute arrays."""
-        from OpenGLContext.scenegraph.shadergeometry import render_shader_arrays
+        from OpenGLContext.scenegraph.geometryarrays import (
+            GeometryArrays, render_geometry,
+        )
 
         objectType, startIndex, count = self.arguments
         apply_winding_cull(mode, self.ccw == GL_CCW, self.solid)
 
-        return render_shader_arrays(
-            mode,
-            self.vertices,
-            self.normals,
-            self.textures,
-            count,
+        return render_geometry(mode, GeometryArrays.separate(
+            count=count,
             draw_mode=objectType,
-            owner=self,
-        )
+            positions=self.vertices,
+            normals=self.normals,
+            texcoords=self.textures,
+        ), owner=self, where='ArrayGeometry')
     def draw( self ):
         """Does the actual rendering after the arrays are set up
 

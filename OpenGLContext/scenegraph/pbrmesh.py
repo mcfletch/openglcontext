@@ -25,9 +25,9 @@ from OpenGL.GL import (
 from OpenGL.arrays import vbo
 from vrml import node, field
 from OpenGLContext.scenegraph import boundingvolume
-from OpenGLContext.scenegraph.vertexsemantics import (
-    LOC_TEXCOORD, LOC_NORMAL, LOC_POSITION, LOC_TANGENT, LOC_COLOR,
-    LOC_TEXCOORD1, LOC_JOINTS, LOC_WEIGHTS,
+from OpenGLContext.scenegraph import vertexsemantics
+from OpenGLContext.scenegraph.geometryarrays import (
+    GeometryArrays, VertexArray, report_missing_inputs,
 )
 
 
@@ -45,15 +45,18 @@ class _MeshGPU(object):
     # PBRMesh._gpu re-uploads when it lags the node's ``_deform_version``.
     _uploaded_morph_version: int = 0
 
+    #: (array name on the mesh, vertex semantic, components). The location each
+    #: semantic is read at comes from the table, so this says only what the mesh
+    #: has and what it means.
     _ATTRS = (
-        ('positions', LOC_POSITION, 3),
-        ('normals', LOC_NORMAL, 3),
-        ('texcoords', LOC_TEXCOORD, 2),
-        ('tangents', LOC_TANGENT, 4),
-        ('colors', LOC_COLOR, 4),
-        ('texcoords1', LOC_TEXCOORD1, 2),
-        ('skin_joint_floats', LOC_JOINTS, 4),
-        ('skin_weights', LOC_WEIGHTS, 4),
+        ('positions', 'POSITION', 3),
+        ('normals', 'NORMAL', 3),
+        ('texcoords', 'TEXCOORD_0', 2),
+        ('tangents', 'TANGENT', 4),
+        ('colors', 'COLOR_0', 4),
+        ('texcoords1', 'TEXCOORD_1', 2),
+        ('skin_joint_floats', 'JOINTS_0', 4),
+        ('skin_weights', 'WEIGHTS_0', 4),
     )
 
     def __init__(self, mesh: Any, pending_deletes: Optional[list[Any]] = None) -> None:
@@ -80,7 +83,11 @@ class _MeshGPU(object):
         # VAO records the attribute *binding* (buffer id + pointer), so updating
         # the buffer's contents keeps the VAO valid -- no re-specification needed.
         self.dyn: dict[str, Any] = {}
-        for name, loc, size in self._ATTRS:
+        #: semantic -> VertexArray, for anything that needs to know what this
+        #: mesh can feed a shader (see ``geometryarrays.report_missing_inputs``).
+        self.arrays: dict[str, Any] = {}
+        for name, semantic, size in self._ATTRS:
+            loc = vertexsemantics.location(semantic)
             # Optional attributes (e.g. a second UV set) may be absent on simpler
             # mesh types such as the quadric/IFS _ArrayMesh; treat missing as None.
             data = getattr(mesh, name, None)
@@ -88,6 +95,7 @@ class _MeshGPU(object):
                 continue
             buf = vbo.VBO(data)
             self.attr_layout.append((buf, loc, size))
+            self.arrays[semantic] = VertexArray(buf, size)
             if name in ('positions', 'normals', 'tangents'):
                 if getattr(mesh, 'deforms_vertices', False):
                     self.dyn[name] = buf
@@ -106,6 +114,14 @@ class _MeshGPU(object):
             buf.unbind()
         if self.idx_vbo is not None:
             self.idx_vbo.unbind()
+
+    def vertexArrays(self) -> Any:
+        """What this mesh offers a shader, in the engine's common description."""
+        return GeometryArrays(
+            self.arrays, self.count, self.draw_mode,
+            indices=self.idx_vbo if self.indexed else None,
+            index_type=GL_UNSIGNED_INT,
+        )
 
     def _bind_attributes(self) -> None:
         for buf, loc, size in self.attr_layout:
@@ -644,6 +660,12 @@ class PBRMesh(node.Node):
             if sp is not None and hasattr(sp, 'set_vertex_color'):
                 sp.set_vertex_color(self.colors is not None)
 
+        if sp is not None and getattr(sp, 'program', None):
+            # An input nothing feeds reads one default value for every vertex,
+            # which draws the mesh flat or at the origin and raises nothing.
+            report_missing_inputs(
+                sp.program, gpu.vertexArrays(), mode=mode, node=self,
+                where='PBRMesh')
         gpu.draw()
         return 1
 

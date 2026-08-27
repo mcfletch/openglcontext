@@ -276,17 +276,16 @@ class TestShaderGeometryModule(unittest.TestCase):
         self.assertIsNotNone(shadergeometry)
 
     def test_import_functions(self) -> None:
-        """Key functions should be importable"""
+        """Key names should be importable"""
         from OpenGLContext.scenegraph.shadergeometry import (
             VBO_STRIDE,
-            bind_vbo_for_shader,
-            unbind_vbo_for_shader,
-            render_shader_interleaved,
+            VertexFormat,
+            get_or_build_vao,
         )
-        self.assertIsNotNone(bind_vbo_for_shader)
-        self.assertIsNotNone(unbind_vbo_for_shader)
-        self.assertIsNotNone(render_shader_interleaved)
-        self.assertEqual(VBO_STRIDE, 32)  # T2F_N3F_V3F format
+        self.assertIsNotNone(get_or_build_vao)
+        self.assertEqual(VBO_STRIDE, 32)  # both interleaved layouts
+        self.assertEqual(VertexFormat.T2F_N3F_V3F['position_offset'], 20)
+        self.assertEqual(VertexFormat.V3F_T2F_N3F['position_offset'], 0)
 
 
 class TestFramebufferComparison(unittest.TestCase):

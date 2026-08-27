@@ -91,13 +91,14 @@ class Box( basenodes.Box ):
 
     def _render_shader(self, mode):
         """Render the box using the shader pipeline."""
-        from OpenGLContext.scenegraph.shadergeometry import (
-            render_shader_interleaved, VertexFormat
+        from OpenGLContext.scenegraph.shadergeometry import VertexFormat
+        from OpenGLContext.scenegraph.geometryarrays import (
+            GeometryArrays, render_geometry,
         )
         vb = self._get_shader_vbo(mode)
-        return render_shader_interleaved(
-            mode, vb, 36, VertexFormat.T2F_N3F_V3F, owner=self
-        )
+        return render_geometry(mode, GeometryArrays.interleaved(
+            vb, VertexFormat.T2F_N3F_V3F, count=36,
+        ), owner=self, where='Box')
 
     def instanceContentKey(self):
         """Boxes of the same size share geometry, so they batch as instances."""
