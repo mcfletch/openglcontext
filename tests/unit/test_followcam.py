@@ -143,3 +143,105 @@ def test_is_holding_reports_state():
     assert cam.is_holding
     cam.release()
     assert not cam.is_holding
+
+
+# -- speed-scaled follow distance ----------------------------------------------
+#
+# A chase camera that sits at one distance shows the same amount of world at
+# every speed, which is least useful exactly when the player is moving fastest.
+# `pull_back` eases the camera outward as the target speeds up.
+
+def _pull_back_camera(**named):
+    named.setdefault('offset', (0.0, 12.0, 12.0))
+    named.setdefault('pull_back', 0.5)
+    named.setdefault('pull_back_speed', 10.0)
+    return FollowCamera(_FakePlatform(), **named)
+
+
+def test_a_camera_with_no_pull_back_never_moves_its_offset():
+    """The default is the fixed-offset camera, unchanged by advancing it."""
+    cam = FollowCamera(_FakePlatform(), offset=(0.0, 12.0, 12.0))
+    cam.target((0.0, 0.0, 0.0))
+    for _ in range(200):
+        cam.advance(1 / 60.0, speed=1000.0)
+    cam.apply()
+    assert cam.distance_scale == 1.0
+    assert np.allclose(cam.platform.position, (0.0, 12.0, 12.0))
+
+
+def test_a_standing_target_is_watched_from_the_base_offset():
+    cam = _pull_back_camera()
+    cam.target((0.0, 0.0, 0.0))
+    for _ in range(200):
+        cam.advance(1 / 60.0, speed=0.0)
+    assert cam.distance_scale == pytest.approx(1.0, abs=1e-3)
+
+
+def test_a_target_at_full_speed_is_watched_from_the_pulled_back_offset():
+    cam = _pull_back_camera()
+    cam.target((0.0, 0.0, 0.0))
+    for _ in range(400):
+        cam.advance(1 / 60.0, speed=10.0)
+    assert cam.distance_scale == pytest.approx(1.5, abs=1e-3)
+    cam.apply()
+    assert np.allclose(cam.platform.position, (0.0, 18.0, 18.0))
+
+
+def test_beyond_full_speed_the_camera_stops_pulling_back():
+    """The scale is a ramp to a limit, not an unbounded function of speed."""
+    cam = _pull_back_camera()
+    for _ in range(400):
+        cam.advance(1 / 60.0, speed=1000.0)
+    assert cam.distance_scale == pytest.approx(1.5, abs=1e-3)
+
+
+def test_half_speed_asks_for_half_the_pull_back():
+    cam = _pull_back_camera()
+    for _ in range(400):
+        cam.advance(1 / 60.0, speed=5.0)
+    assert cam.distance_scale == pytest.approx(1.25, abs=1e-3)
+
+
+def test_the_camera_eases_rather_than_jumping_to_the_new_distance():
+    """One frame moves part of the way, so a speed spike does not snap the view."""
+    cam = _pull_back_camera(pull_back_rate=3.0)
+    cam.advance(1 / 60.0, speed=10.0)
+    assert 1.0 < cam.distance_scale < 1.1
+
+
+def test_the_eased_distance_does_not_depend_on_the_frame_rate():
+    """Same elapsed time, different step sizes, same distance -- within a hair.
+
+    A camera whose framing depended on how fast the machine ran would frame the
+    same run differently on two machines.
+    """
+    slow = _pull_back_camera()
+    fast = _pull_back_camera()
+    for _ in range(30):
+        slow.advance(1 / 30.0, speed=10.0)
+    for _ in range(120):
+        fast.advance(1 / 120.0, speed=10.0)
+    assert slow.distance_scale == pytest.approx(fast.distance_scale, abs=1e-3)
+
+
+def test_pulling_back_keeps_looking_at_the_target():
+    cam = FollowCamera(ViewPlatform(), offset=(0.0, 12.0, 12.0),
+                       pull_back=0.5, pull_back_speed=10.0)
+    target = (5.0, 0.0, -3.0)
+    cam.target(target)
+    for _ in range(400):
+        cam.advance(1 / 60.0, speed=10.0)
+    cam.apply()
+    homogeneous = np.array([target[0], target[1], target[2], 1.0])
+    view = (homogeneous @ cam.platform.modelMatrix(inverse=False))[:3]
+    assert abs(view[0]) < 1e-6 and abs(view[1]) < 1e-6
+    assert view[2] < 0
+
+
+def test_a_zero_length_step_leaves_the_distance_alone():
+    """Called with dt=0 (a paused frame) the camera holds where it is."""
+    cam = _pull_back_camera()
+    cam.advance(1 / 60.0, speed=10.0)
+    settled = cam.distance_scale
+    cam.advance(0.0, speed=10.0)
+    assert cam.distance_scale == settled

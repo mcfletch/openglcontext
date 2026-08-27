@@ -10,6 +10,13 @@ until released.  The marble demo uses this to keep the view locked on the square
 marble fell from while the respawn penalty elapses, instead of chasing the marble
 into the void.
 
+And it supports **pulling back**: a camera at one fixed distance shows the same
+amount of world at every speed, which is least useful exactly when the target is
+moving fastest and the player most needs to see what is coming.  Give it a
+``pull_back`` fraction and feed :meth:`advance` the target's speed each frame, and
+the offset eases outward with speed and back in again as the target slows.  The
+default is zero, so a camera that does not ask for it behaves exactly as before.
+
 Orientation convention: this targets the **core-profile** view path, where
 ``ViewPlatform`` builds the modelview from ``modelMatrix`` /
 ``quaternion.matrix``.  :func:`look_at_orientation` returns the VRML axis-angle
@@ -17,6 +24,7 @@ that (after ``setOrientation`` negates it, as it does for every VRML orientation
 places the target on the camera's view -Z axis — verified end-to-end against
 ``ViewPlatform.modelMatrix`` in ``tests/test_followcam.py``.
 """
+import math
 from typing import Any, Optional, Tuple
 
 import numpy as np
@@ -68,10 +76,28 @@ class FollowCamera:
     """Drive a ``ViewPlatform`` to a fixed offset from a target, looking at it."""
 
     def __init__(self, platform: Any, offset: Any = (0.0, 14.0, 14.0),
-                 up: Any = (0.0, 1.0, 0.0)) -> None:
+                 up: Any = (0.0, 1.0, 0.0), pull_back: float = 0.0,
+                 pull_back_speed: float = 1.0, pull_back_rate: float = 3.0) -> None:
+        """Follow ``platform``'s target from ``offset``, ``up`` fixing the roll.
+
+        ``pull_back`` is the extra fraction of ``offset`` the camera reaches at
+        ``pull_back_speed`` -- 0.5 means half again as far away -- ramping
+        linearly from nothing at a standstill and holding at the limit above that
+        speed.  ``pull_back_rate`` is how quickly the distance eases toward the
+        one the current speed asks for, in nats per second: higher is snappier,
+        and the easing is what keeps a speed spike from snapping the view.
+
+        With the default ``pull_back`` of zero the distance never changes and
+        :meth:`advance` need not be called at all.
+        """
         self.platform = platform
         self.offset = np.asarray(offset, dtype='d')
         self.up = np.asarray(up, dtype='d')
+        self.pull_back = float(pull_back)
+        # A zero or negative full-speed would divide by nothing / invert the ramp.
+        self.pull_back_speed = max(float(pull_back_speed), 1e-6)
+        self.pull_back_rate = float(pull_back_rate)
+        self._distance_scale = 1.0
         self._target = np.zeros(3)
         self._held_target: Optional[np.ndarray] = None
 
@@ -101,9 +127,28 @@ class FollowCamera:
     def active_target(self) -> np.ndarray:
         return self._held_target if self._held_target is not None else self._target
 
+    @property
+    def distance_scale(self) -> float:
+        """What the offset is currently multiplied by; 1.0 at a standstill."""
+        return self._distance_scale
+
+    def advance(self, dt: float, speed: float = 0.0) -> None:
+        """Ease the follow distance toward the one ``speed`` asks for.
+
+        Call once a frame with the elapsed time and the target's speed, before
+        :meth:`apply`.  The easing is exponential in *elapsed time* rather than
+        in frames, so the same run frames the same way on a fast machine and a
+        slow one.
+        """
+        if self.pull_back == 0.0 or dt <= 0.0:
+            return
+        wanted = 1.0 + self.pull_back * min(speed / self.pull_back_speed, 1.0)
+        approach = 1.0 - math.exp(-self.pull_back_rate * dt)
+        self._distance_scale += (wanted - self._distance_scale) * approach
+
     def apply(self) -> None:
         """Write the camera pose onto the platform for this frame."""
         target = self.active_target
-        eye = target + self.offset
+        eye = target + self.offset * self._distance_scale
         self.platform.setPosition(tuple(eye))
         self.platform.setOrientation(look_at_orientation(eye, target, self.up))
