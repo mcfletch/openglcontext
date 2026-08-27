@@ -1,19 +1,27 @@
 // Aliased checkboard pattern...
 // this is a rather poorly designed shader, as it has multiple
 // branches and doesn't have any configurability.
+//
+// texCoord and vertexColor come from res://simpleshader_vert_txt, which is
+// where a fragment-only GLSLObject gets its vertex stage.
+#version 330 core
+
+in vec2 texCoord;
+in vec4 vertexColor;
+out vec4 fragColor;
 
 void main() {
-	if (gl_TexCoord[0].x > .5) {
-		if (gl_TexCoord[0].y > .5) {
-			gl_FragColor = mix( gl_Color, vec4( 0,0,0,1 ), .5);
+	if (texCoord.x > .5) {
+		if (texCoord.y > .5) {
+			fragColor = mix( vertexColor, vec4( 0,0,0,1 ), .5);
 		} else {
-			gl_FragColor = mix( gl_Color, vec4( 1,1,1,1 ), .5);
+			fragColor = mix( vertexColor, vec4( 1,1,1,1 ), .5);
 		}
 	} else {
-		if (gl_TexCoord[0].y > .5) {
-			gl_FragColor = mix( gl_Color, vec4( 1,1,1,1 ), .5);
+		if (texCoord.y > .5) {
+			fragColor = mix( vertexColor, vec4( 1,1,1,1 ), .5);
 		} else {
-			gl_FragColor = mix( gl_Color, vec4( 0,0,0,1 ), .5);
+			fragColor = mix( vertexColor, vec4( 0,0,0,1 ), .5);
 		}
 	}
 }

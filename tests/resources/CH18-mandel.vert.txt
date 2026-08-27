@@ -8,21 +8,33 @@
 //
 // See 3Dlabs-License.txt for license information
 //
-// Note: this version uses fixed-mode for all configuration parameters
-// for the vertex shader...
+#version 330 core
+
+// Supplied by the render pass to any GLSLObject that names them.
+uniform mat4 mat_modelproj;
+uniform mat4 mat_modelview;
+uniform mat4 itp_modelview;
+
+// Where the light is, in eye coordinates.  The fixed-function pipeline kept
+// this in gl_LightSource[0].position; a core profile has the application say.
+uniform vec3 LightPosition;
 
 uniform float Shininess;
 uniform float Specular;
 uniform float Diffuse;
 
-varying float LightIntensity;
-varying vec3  Position;
+in vec3 aPosition;
+in vec3 aNormal;
+in vec2 aTexCoord;
+
+out float LightIntensity;
+out vec3  Position;
 
 void main()
 {
-    vec3 ecPosition = vec3(gl_ModelViewMatrix * gl_Vertex);
-    vec3 tnorm      = normalize(gl_NormalMatrix * gl_Normal);
-    vec3 lightVec   = normalize(gl_LightSource[0].position.xyz - ecPosition);
+    vec3 ecPosition = vec3(mat_modelview * vec4(aPosition, 1.0));
+    vec3 tnorm      = normalize(mat3(itp_modelview) * aNormal);
+    vec3 lightVec   = normalize(LightPosition - ecPosition);
     vec3 reflectVec = reflect(-lightVec, tnorm);
     vec3 viewVec    = normalize(-ecPosition);
     float spec      = max(dot(reflectVec, viewVec), 0.0);
@@ -30,7 +42,6 @@ void main()
     LightIntensity  = Diffuse * 
                           max(dot(lightVec, tnorm), 0.0) +
                           Specular * spec;
-    Position        = vec3(gl_MultiTexCoord0 - 0.5) * 5.0;
-    gl_Position     = ftransform();
-
+    Position        = vec3(aTexCoord - 0.5, 0.0) * 5.0;
+    gl_Position     = mat_modelproj * vec4(aPosition, 1.0);
 }

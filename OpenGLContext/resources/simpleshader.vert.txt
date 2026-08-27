@@ -1,3 +1,32 @@
+// The vertex shader a GLSLObject gets when it brings only a fragment shader.
+//
+// A core profile has no fixed-function vertex stage, so a fragment shader on
+// its own has nothing to draw with.  This one reads the engine's own vertex
+// arrays -- see OpenGLContext/scenegraph/vertexsemantics.py -- and passes on
+// the values a fragment shader written against the fixed-function pipeline
+// used to find in gl_TexCoord[0], gl_Color and the interpolated normal.
+//
+// Available as res://simpleshader_vert_txt.
+#version 330 core
+
+// Supplied by the render pass to any GLSLObject that names them.
+uniform mat4 mat_modelproj;
+uniform mat4 itp_modelview;
+
+in vec3 aPosition;
+in vec3 aNormal;
+in vec2 aTexCoord;
+in vec4 aColor;
+
+out vec3 baseNormal;
+out vec2 texCoord;
+out vec4 vertexColor;
+
 void main() {
-	gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+	baseNormal = mat3( itp_modelview ) * aNormal;
+	texCoord = aTexCoord;
+	// Geometry with no colour array leaves this attribute unfed, which reads
+	// as (0,0,0,1); the shaders below want white in that case.
+	vertexColor = vec4( max( aColor.rgb, vec3(1.0) - sign(aColor.a) ), 1.0 );
+	gl_Position = mat_modelproj * vec4( aPosition, 1.0 );
 }

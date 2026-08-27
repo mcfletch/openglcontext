@@ -1,3 +1,10 @@
+// The fragment shader a GLSLObject gets when it brings only a vertex shader.
+//
+// Available as res://simpleshader_frag_txt.
+#version 330 core
+
+out vec4 fragColor;
+
 void main() {
-	gl_FragColor = vec4( 0, 1, 0, 1 );
+	fragColor = vec4( 0, 1, 0, 1 );
 }

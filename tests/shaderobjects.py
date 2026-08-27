@@ -20,6 +20,15 @@ log.warning("Context %s", BaseContext)
 
 logging.getLogger("OpenGLContext.scenegraph.shaders").setLevel(logging.DEBUG)
 
+#: A core profile has no fixed-function vertex stage, so a GLSLObject that
+#: brings only a fragment shader needs one.  This is the engine's own: it reads
+#: the vertex arrays and passes on the normal, the texture coordinate and a
+#: colour, which is what those fragment shaders read.
+DEFAULT_VERTEX = GLSLShader(url="res://simpleshader_vert_txt", type="VERTEX")
+
+#: Where the light is, in eye coordinates -- what the fixed-function pipeline
+#: kept in gl_LightSource[0].position.
+LIGHT_LOCATION = (0.34, 0.80, 0.49)
 
 shaders = [
     Shader(objects=[o], DEF="Shader_%s" % (i,))
@@ -27,7 +36,7 @@ shaders = [
         [
             GLSLObject(
                 uniforms=[
-                    FloatUniform2f(name="henry", value=[0, 1]),
+                    FloatUniform3f(name="light_location", value=LIGHT_LOCATION),
                 ],
                 shaders=[
                     GLSLShader(url="./resources/toon.vert.txt", type="VERTEX"),
@@ -47,6 +56,7 @@ shaders = [
             ),
             GLSLObject(
                 uniforms=[
+                    FloatUniform3f(name="LightPosition", value=LIGHT_LOCATION),
                     FloatUniform1f(name="Shininess", value=0.9),
                     FloatUniform1f(name="Diffuse", value=0.9),
                     FloatUniform1f(name="Specular", value=0.8),
@@ -67,12 +77,14 @@ shaders = [
             GLSLObject(
                 uniforms=[],
                 shaders=[
+                    DEFAULT_VERTEX,
                     GLSLShader(url="./resources/grid.frag.txt", type="FRAGMENT"),
                 ],
             ),
             GLSLObject(
                 uniforms=[],
                 shaders=[
+                    DEFAULT_VERTEX,
                     GLSLShader(url="./resources/discard.frag.txt", type="FRAGMENT"),
                 ],
             ),
@@ -84,6 +96,7 @@ shaders = [
                     ),
                 ],
                 shaders=[
+                    DEFAULT_VERTEX,
                     GLSLShader(
                         url="./resources/simpletexture.frag.txt", type="FRAGMENT"
                     ),
@@ -101,7 +114,6 @@ shaders = [
 
 
 class TestContext(BaseContext):
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     rotation = 0.00
 
     current_shader = 0

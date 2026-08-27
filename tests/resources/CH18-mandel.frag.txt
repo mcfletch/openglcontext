@@ -8,9 +8,10 @@
 //
 // See 3Dlabs-License.txt for license information
 //
+#version 330 core
 
-varying vec3  Position;
-varying float LightIntensity;
+in vec3  Position;
+in float LightIntensity;
 
 uniform float MaxIterations;
 uniform float Zoom;
@@ -18,6 +19,8 @@ uniform vec2 Center;
 uniform vec3  InnerColor;
 uniform vec3  OuterColor1;
 uniform vec3  OuterColor2;
+
+out vec4 fragColor;
 
 void main()
 {
@@ -49,6 +52,6 @@ void main()
 
     color *= LightIntensity;
 
-    gl_FragColor = vec4(color, 1.0);
-	//gl_FragColor = vec4( Center.x/1000.0,Center.y/1000,0.0, 1.0);
+    fragColor = vec4(color, 1.0);
+	//fragColor = vec4( Center.x/1000.0,Center.y/1000,0.0, 1.0);
 }

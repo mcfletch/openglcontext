@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>GLSL in OpenGLContext</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>GLSL in OpenGLContext</h1>
+</header>
+
+<section>
+<p>Every shader OpenGLContext ships is written in <strong>GLSL 330</strong> and
+begins with <code>#version 330 core</code>. That is the version OpenGL 3.3
+brings, which is what the engine asks for by default
+(<a href="structure.html#core-profile">core profile</a>) and what every desktop
+driver of the last decade or so provides.</p>
+
+<p>This page is for two readers: someone writing a shader for the engine, who
+wants to know what the engine will hand them; and someone with an older shader
+that no longer compiles, who wants to know what to change.</p>
+</section>
+
+<section>
+<h2>What the engine supplies</h2>
+
+<h3>Vertex inputs</h3>
+<p>A geometry node writes its arrays to fixed attribute locations, declared once
+in <code>OpenGLContext/scenegraph/vertexsemantics.py</code> and listed under
+<a href="renderpasses.html">Fixed Attribute Locations</a>. Spell an input with
+the engine's own name and it arrives with nothing declared on the node:</p>
+<pre>in vec3 aPosition;     // location 2
+in vec3 aNormal;       // location 1
+in vec2 aTexCoord;     // location 0
+in vec4 aTangent;      // location 3
+in vec4 aColor;        // location 4</pre>
+<p>To call an input something else, name the semantic it carries with a
+<code>ShaderInput</code> on the <code>GLSLObject</code> &mdash; see
+<a href="renderpasses.html">A Shape whose appearance brings its own
+shader</a>.</p>
+
+<h3>Uniforms</h3>
+<p>The render pass sets these on any <code>GLSLObject</code> that declares one,
+so naming it is all that is needed:</p>
+<table border="0" cellpadding="5" cellspacing="3">
+  <tbody>
+    <tr><th>Uniform</th><th>What it is</th></tr>
+    <tr><td><code>mat_modelview</code></td><td>model to eye</td></tr>
+    <tr><td><code>mat_projection</code></td><td>eye to clip</td></tr>
+    <tr><td><code>mat_modelproj</code></td><td>the two multiplied: model to clip</td></tr>
+    <tr><td><code>inv_</code>, <code>tps_</code>, <code>itp_</code> prefixes</td>
+        <td>the inverse, the transpose, and the inverse-transpose of each</td></tr>
+  </tbody>
+</table>
+<p>All are <code>mat4</code>. The normal matrix is the upper-left 3&times;3 of
+<code>itp_modelview</code>:</p>
+<pre>uniform mat4 itp_modelview;
+...
+vec3 eyeNormal = mat3( itp_modelview ) * aNormal;</pre>
+<p>A shader compiled and bound by hand &mdash; as the tutorials from
+<code>shader_1</code> to <code>shader_11</code> do &mdash; declares and uploads
+its own matrices instead, from the <code>mode.matrix</code> and
+<code>mode.projection</code> the pass hands to <code>Render</code>.</p>
+
+<h3>A fragment shader on its own</h3>
+<p>A core profile has no fixed-function vertex stage, so a
+<code>GLSLObject</code> carrying only a fragment shader has nothing to draw
+with. <code>res://simpleshader_vert_txt</code> is the vertex shader for that
+case: it transforms the position and passes on <code>baseNormal</code>,
+<code>texCoord</code> and <code>vertexColor</code>.</p>
+<pre>GLSLObject(
+    shaders = [
+        GLSLShader( url="res://simpleshader_vert_txt", type="VERTEX" ),
+        GLSLShader( url="./my.frag", type="FRAGMENT" ),
+    ],
+)</pre>
+<p><code>tests/shaderobjects.py</code> uses it for three of its shaders.</p>
+</section>
+
+<section>
+<h2>Moving a GLSL 1.20 shader to 330</h2>
+<p>The substitutions, in the order they usually bite:</p>
+<table style="width: 100%;" border="0" cellpadding="5" cellspacing="3">
+  <tbody>
+    <tr><th>GLSL 1.20</th><th>GLSL 330</th></tr>
+    <tr><td>no <code>#version</code>, or <code>#version 120</code></td>
+        <td><code>#version 330 core</code>, on the first line</td></tr>
+    <tr><td><code>attribute vec3 x;</code></td><td><code>in vec3 x;</code></td></tr>
+    <tr><td><code>varying vec4 x;</code></td>
+        <td><code>out vec4 x;</code> in the vertex shader,
+            <code>in vec4 x;</code> in the fragment shader</td></tr>
+    <tr><td><code>gl_FragColor = c;</code></td>
+        <td><code>out vec4 fragColor;</code> &hellip; <code>fragColor = c;</code></td></tr>
+    <tr><td><code>texture2D(s, uv)</code></td><td><code>texture(s, uv)</code></td></tr>
+    <tr><td><code>gl_Vertex</code></td><td><code>vec4( aPosition, 1.0 )</code></td></tr>
+    <tr><td><code>gl_Normal</code></td><td><code>aNormal</code></td></tr>
+    <tr><td><code>gl_MultiTexCoord0</code></td><td><code>aTexCoord</code></td></tr>
+    <tr><td><code>gl_Color</code></td><td><code>aColor</code>, or a value the vertex shader passes on</td></tr>
+    <tr><td><code>gl_TexCoord[0]</code></td><td>a value the vertex shader passes on</td></tr>
+    <tr><td><code>gl_ModelViewProjectionMatrix</code></td><td><code>mat_modelproj</code></td></tr>
+    <tr><td><code>gl_ModelViewMatrix</code></td><td><code>mat_modelview</code></td></tr>
+    <tr><td><code>gl_NormalMatrix</code></td><td><code>mat3( itp_modelview )</code></td></tr>
+    <tr><td><code>ftransform()</code></td><td><code>mat_modelproj * vec4( aPosition, 1.0 )</code></td></tr>
+    <tr><td><code>gl_LightSource[0].position</code></td><td>a <code>uniform vec3</code> the application sets</td></tr>
+    <tr><td><code>gl_FrontMaterial</code></td><td>uniforms the application sets, or a <code>struct</code> of them</td></tr>
+    <tr><td><code>gl_InstanceIDARB</code></td><td><code>gl_InstanceID</code></td></tr>
+  </tbody>
+</table>
+
+<p class="technical">Two of these are not substitutions but decisions.
+<code>gl_TexCoord[0]</code> and <code>gl_Color</code> were filled in by the
+fixed-function vertex stage, so a fragment shader reading them needs a vertex
+shader that writes them &mdash; either your own or
+<code>res://simpleshader_vert_txt</code> above. And the light and material
+built-ins were global GL state, so a shader reading them needs the application
+to say what the light and the material are; the engine's own lit shader
+(<code>OpenGLContext/shaders/vrml97_lighting.*</code>) shows one way, packing
+the lights into a <code>uniform vec4 lights[]</code> array.</p>
+
+<h3>Going the other way</h3>
+<p>To run one of these shaders on a driver that offers only GLSL 1.20, reverse
+the table: drop the <code>#version</code> line, turn each <code>in</code> in a
+vertex shader back into <code>attribute</code> and each <code>in</code>/
+<code>out</code> pair between the stages back into <code>varying</code>, write
+to <code>gl_FragColor</code> instead of a declared output, call
+<code>texture2D</code>, and read <code>gl_ModelViewProjectionMatrix</code> and
+<code>gl_NormalMatrix</code> in place of the matrix uniforms. The context has to
+ask for the profile that still has them:</p>
+<pre>class MyContext( BaseContext ):
+    profile = 'compatibility'</pre>
+<p>A vertex array object is still required by some drivers even under a
+compatibility profile, so leave the <code>glGenVertexArrays</code> /
+<code>glBindVertexArray</code> pair in place.</p>
+</section>
+
+<section>
+<h2>Where the shaders are</h2>
+<ul>
+  <li><code>OpenGLContext/shaders/*.vert</code>, <code>*.frag</code> &mdash; the
+    engine's own programs, plus the <code>_*.glsl</code> files they
+    <code>#include</code>.</li>
+  <li><code>OpenGLContext/resources/*.vert</code>, <code>*.frag</code>,
+    <code>*.txt</code> &mdash; shaders reachable by <code>res://</code> URL from
+    a scenegraph. Each has a generated <code>*_vert.py</code> /
+    <code>*_frag.py</code> beside it holding the same bytes; edit the source and
+    regenerate the module.</li>
+  <li><code>tests/resources/*.txt</code> &mdash; the sample shaders
+    <code>tests/shaderobjects.py</code> loads by path.</li>
+</ul>
+<p>Two files in that resources directory stay at GLSL 1.20:
+<code>legacy_lighting.vert.txt</code> and <code>lights.vert.txt</code>. They reimplement the
+fixed-function lighting model in terms of <code>gl_LightSource</code> and
+<code>gl_FrontMaterial</code>, which is a description of that pipeline rather
+than a shader for this one; nothing loads them, and the engine's own
+<code>vrml97_lighting.*</code> is the lit shader it uses.</p>
+</section>
+
+    <footer>
+      <p class="footer">
+        <a href="https://github.com/mcfletch/openglcontext">OpenGLContext on GitHub</a>
+        &middot; BSD-licensed open source
+      </p>
+    </footer>
+
+</body>
+</html>

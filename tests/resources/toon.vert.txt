@@ -2,9 +2,18 @@
 // 	http://www.lighthouse3d.com/opengl/glsl/index.php?toon2
 // By way of:
 //  http://www.pygame.org/wiki/GLSLExample
+#version 330 core
 
-varying vec3 normal;
+// Supplied by the render pass to any GLSLObject that names them.
+uniform mat4 mat_modelproj;
+uniform mat4 itp_modelview;
+
+in vec3 aPosition;
+in vec3 aNormal;
+
+out vec3 normal;
+
 void main() {
-	normal = gl_NormalMatrix * gl_Normal;
-	gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+	normal = mat3( itp_modelview ) * aNormal;
+	gl_Position = mat_modelproj * vec4( aPosition, 1.0 );
 }
