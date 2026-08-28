@@ -7,7 +7,7 @@ from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGL.GL import shaders
 from OpenGLContext.arrays import *
-import time
+from OpenGLContext.events import systemtime
 
 class TestContext( BaseContext ):
     def OnInit( self ):
@@ -88,7 +88,7 @@ class TestContext( BaseContext ):
             dot( dot( model, mode.matrix ), mode.projection ),
         )
         
-        self.vbo[0:1] = array([0,(time.time()%1.0)*.5+.5,0,0,1,0],'f')
+        self.vbo[0:1] = array([0,(systemtime.systemTime()%1.0)*.5+.5,0,0,1,0],'f')
         glBindVertexArray( self.vao )
         try:
             self.vbo.bind()

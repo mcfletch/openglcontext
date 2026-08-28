@@ -53,6 +53,10 @@ ENVIRONMENT: Tuple[str, ...] = (
     'OPENGLCONTEXT_UI_SCALE', 'OPENGLCONTEXT_PICKING',
     'OPENGLCONTEXT_AUTO_EXIT_FRAMES', 'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR',
     'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME', 'OPENGLCONTEXT_CAPTURE_DELAY',
+    # What a capture's world clock advances by per frame decides where every
+    # animation in the scene has got to by the frame that is read back. See
+    # OpenGLContext.video.clock.capture_clock.
+    'OPENGLCONTEXT_CAPTURE_FPS',
     'OPENGLCONTEXT_DISABLE_FPS_DISPLAY', 'OPENGLCONTEXT_HIDDEN',
     'OPENGLCONTEXT_NO_VSYNC', 'OPENGLCONTEXT_GLTF_BASELINE',
     # A session journal names one file for one session, so a child process

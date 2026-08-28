@@ -17,10 +17,10 @@ NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
 a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
+'''systemtime is the engine's clock, which the animation below is driven from'''
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
-'''The time module is used to provide crude animation support'''
-import time
 
 class TestContext( BaseContext ):
     """This context customizes 3 points in the BaseContext"""
@@ -47,14 +47,18 @@ class TestContext( BaseContext ):
         glDisable( GL_LIGHTING) # context lights by default
         glDisable( GL_CULL_FACE)
         glTranslatef(-1.5,0.0,-6.0);
-        '''The call to time.time creates a float value which is
-        converted to a fraction of three seconds then multiplied
-        by 360 (degrees) to get the current appropriate rotation
-        for an object spinning at 1/3 rps.
+        '''systemTime is the engine's clock, in seconds.  Taking it
+        modulo three gives a value that runs from 0 to 3 and starts
+        again, and 360 degrees of that is an object spinning at
+        1/3 rps.
         
         Note that OpenGL uses *degrees*, not radians!
+        
+        One clock serves the whole scene, so nothing in it can drift
+        away from anything else, and a recording or a screen capture
+        can hand the scene a clock of its own to be advanced by.
         '''
-        glRotated( time.time()%(3.0)/3 * 360, 0,1,0)
+        glRotated( systemtime.systemTime()%(3.0)/3 * 360, 0,1,0)
         glBegin(GL_TRIANGLES)
         glColor3f(1,0,0)
         glVertex3f( 0.0,  1.0, 0.0)
@@ -70,7 +74,7 @@ class TestContext( BaseContext ):
         glLoadIdentity()
         glTranslatef(1.5,0.0,-6.0);
         '''Animating as above, but at 1 rev/s'''
-        glRotated( time.time()%(1.0)/1 * -360, 1,0,0)
+        glRotated( systemtime.systemTime()%(1.0)/1 * -360, 1,0,0)
 
         glColor3f(0.5,0.5,1.0)
         glBegin(GL_QUADS)

@@ -5,10 +5,10 @@ NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
 a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GL.EXT.texture_compression_s3tc import *
-import time
 try:
     from PIL.Image import open
 except ImportError as err:
@@ -51,7 +51,7 @@ class TestContext( BaseContext ):
         BaseContext.Render( self, mode )
         glDisable( GL_LIGHTING) # context lights by default
         glTranslatef(1.5,0.0,-6.0);
-        glRotated( time.time()%(8.0)/8 * -360, 1,0,0)
+        glRotated( systemtime.systemTime()%(8.0)/8 * -360, 1,0,0)
         self.setupTexture()
         self.drawCube()
     def setupTexture( self ):

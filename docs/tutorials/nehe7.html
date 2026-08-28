@@ -37,6 +37,7 @@ arrows move, pageup/pagedown control speed of rotation
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 </div>
 	<div class="commentary">
@@ -46,7 +47,6 @@ glLight), we need to explicitly request a compatibility profile OpenGL context.
 </div>
 </div>
 	<div class="code-sample">from OpenGL.GL import *
-import time
 try:
     from PIL.Image import open
 except ImportError as err:
@@ -200,7 +200,7 @@ class TestContext( BaseContext ):
         current rotation "jumps" to the new calculated angle.</div>
 </div>
 	<div class="code-sample">        glRotated(
-            time.time()%(self.rotationCycle)/self.rotationCycle * -360,
+            systemtime.systemTime()%(self.rotationCycle)/self.rotationCycle * -360,
             1,0,0
         )
         self.drawCube()

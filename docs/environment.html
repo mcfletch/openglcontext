@@ -190,6 +190,14 @@ needs.</p>
   <td><code>0.5</code></td>
   <td>How long the comparison harness lets a scene settle before reading the
   framebuffer.</td></tr>
+<tr><td><code>OPENGLCONTEXT_CAPTURE_FPS</code></td><td>frames a second</td>
+  <td><code>60</code> during a bounded run, otherwise off</td>
+  <td>What a capture's world clock advances by per frame drawn. A bounded run
+  puts the engine's time source on a clock that counts frames from zero rather
+  than reading the wall clock, so a scene animated from a <code>Timer</code> or
+  a <code>TimeSensor</code> reaches the same point in every run and the frame
+  read back is a picture of the scene rather than of how long the process took
+  to start. <code>0</code> keeps the wall clock.</td></tr>
 <tr><td><code>OPENGLCONTEXT_GLTF_BASELINE</code></td><td>path</td>
   <td><code>tests/reference_images</code></td>
   <td>Where <code>oglc-gltf-regression</code> finds the images it diffs

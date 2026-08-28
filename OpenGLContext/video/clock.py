@@ -22,14 +22,28 @@ Everything time-driven follows: TimeSensors, and so the animation they drive,
 read the same source (:mod:`OpenGLContext.events.systemtime`). Code that reads
 ``time.time()`` directly does not, and has to be changed to
 ``systemtime.systemTime()`` for its motion to be recorded evenly.
+
+A screen capture wants the same clock for its own reason -- a frame read back
+after a fixed number of draws should show the same moment of a scene whatever
+drew it -- and :func:`capture_clock` is that arrangement, installed by the
+context itself rather than by a caller.
 """
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from OpenGLContext.events import systemtime
 
-__all__ = ['FixedStepClock']
+__all__ = ['FixedStepClock', 'capture_clock', 'CAPTURE_FPS', 'CAPTURE_START']
+
+#: Frames a second a capture advances at when nothing names a rate.
+CAPTURE_FPS = 60
+
+#: The time a capture's clock starts at.  Pinned rather than taken from the
+#: wall clock, because the first frame of every run has to begin at the same
+#: point in a scene's animation for the last one to be comparable.
+CAPTURE_START = 0.0
 
 
 class FixedStepClock:
@@ -113,3 +127,33 @@ class FixedStepClock:
         return '<%s %s/%s fps, %d frames, t=%.3f>' % (
             self.__class__.__name__, self.frame_rate[0], self.frame_rate[1],
             self.frames, self())
+
+
+def capture_clock() -> "FixedStepClock | None":
+    """The clock a capture run advances on, or None to keep the wall clock.
+
+    A capture renders a fixed number of frames and reads the last one back, so
+    what it catches should follow from the scene rather than from how quickly
+    the machine reached that frame.  On a frame-counting clock it does: a
+    TimeSensor a third of the way through its cycle is a third of the way
+    through it on every machine and in every run.
+
+    ``OPENGLCONTEXT_AUTO_EXIT_FRAMES`` asks for a bounded run, which is what a
+    capture is, so that alone turns this on at :data:`CAPTURE_FPS`.
+    ``OPENGLCONTEXT_CAPTURE_FPS`` names a different rate, or 0 for a run that
+    wants to watch real time pass.
+
+    Only what reads :mod:`OpenGLContext.events.systemtime` follows -- which is
+    every Timer and TimeSensor.  Code calling ``time.time()`` itself does not,
+    and has to ask this clock instead for its motion to be reproducible.
+    """
+    from OpenGLContext import renderoptions
+
+    fps = renderoptions.env_number(
+        'OPENGLCONTEXT_CAPTURE_FPS',
+        CAPTURE_FPS if os.environ.get('OPENGLCONTEXT_AUTO_EXIT_FRAMES') else 0,
+        integer=True,
+    )
+    if fps <= 0:
+        return None
+    return FixedStepClock(fps=int(fps), start=CAPTURE_START)

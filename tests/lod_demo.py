@@ -22,7 +22,6 @@ Run:  python tests/lod_demo.py
 """
 import math
 import os
-import time
 
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
@@ -32,6 +31,7 @@ from OpenGL.GL import (
 from OpenGLContext import testingcontext
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph import tessellationlod
+from OpenGLContext.events import systemtime
 
 BaseContext = testingcontext.getInteractive('glfw')
 
@@ -90,7 +90,7 @@ class TestContext(BaseContext):
         # object at full detail; far end drives everything to the coarsest level.
         self._near, self._far = 16.0, 190.0
         self._period = 16.0     # seconds for a full out-and-back sweep
-        self._start = time.time()
+        self._start = systemtime.systemTime()
         self.getViewPlatform().setPosition((0, 1.5, self._near))
         self._print_legend()
 
@@ -106,7 +106,7 @@ class TestContext(BaseContext):
 
     def OnIdle(self, *args):
         # Smooth cosine dolly between near and far; report level changes.
-        phase = ((time.time() - self._start) % self._period) / self._period
+        phase = ((systemtime.systemTime() - self._start) % self._period) / self._period
         cam_z = self._near + (self._far - self._near) * 0.5 * (1 - math.cos(2 * math.pi * phase))
         self.getViewPlatform().setPosition((0, 1.5, cam_z))
         self._report_levels(cam_z)

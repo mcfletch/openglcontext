@@ -14,10 +14,10 @@ NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
 a compatibility profile context.
 '''
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 
 from OpenGL.GL import *
-import time
 
 class TestContext( BaseContext ):
     """NeHe 5 tutorial"""
@@ -30,13 +30,13 @@ class TestContext( BaseContext ):
         BaseContext.Render( self, mode )
         glDisable( GL_LIGHTING) # context lights by default
         glTranslatef(-1.5,0.0,-6.0);
-        '''Animating using crude time.time() operation'''
-        glRotated( time.time()%(3.0)/3 * 360, 0,1,0)
+        '''Animating straight from the clock, with no state of our own'''
+        glRotated( systemtime.systemTime()%(3.0)/3 * 360, 0,1,0)
         self.drawPyramid()
 
         glLoadIdentity()
         glTranslatef(1.5,0.0,-6.0);
-        glRotated( time.time()%(1.0)/1 * -360, 1,0,0)
+        glRotated( systemtime.systemTime()%(1.0)/1 * -360, 1,0,0)
         self.drawCube()
     def OnIdle( self, ):
         """Request refresh of the context whenever idle"""

@@ -244,6 +244,8 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     _autoExitFrames = None
     _autoExitFrameCount = 0
     _autoExitCaptureDir = None
+    #: The frame-counting clock this run advances, if it is a capture.
+    _captureClock = None
 
     ### Node-like attributes
     PROTO = "Context"
@@ -271,6 +273,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             setupFrameRateCounter,
             setupLoopTrace,
             setupEntropy,
+            setupCaptureClock,
             setupTelemetry,
             DoInit
         """
@@ -292,6 +295,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         self.setupFrameRateCounter()
         self.setupLoopTrace()
         self.setupEntropy()
+        self.setupCaptureClock()
         self.setupTelemetry()
         self.setupAutoExit()
         self.DoInit()
@@ -319,6 +323,33 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if capture_dir:
             self._autoExitCaptureDir = capture_dir
             log.info(f"Auto-exit capture enabled: screenshots will be saved to {capture_dir}")
+
+    def setupCaptureClock(self):
+        """Put this run on a frame-counting clock if it is a capture.
+
+        Before DoInit, so that a Timer or TimeSensor built while the scene is
+        being constructed takes its start from the same clock it will later be
+        advanced by.  See OpenGLContext.video.clock.capture_clock for when one
+        is installed and what follows it.
+        """
+        from OpenGLContext.video.clock import capture_clock
+
+        clock = capture_clock()
+        if clock is not None:
+            clock.install()
+            log.info("Capture clock: %s frames a second, counted", clock.frame_rate[0])
+        self._captureClock = clock
+        return clock
+
+    def stopCaptureClock(self):
+        """Give back whatever clock this context replaced.  Safe to call twice.
+
+        The time source is process-wide, so a context that has finished must
+        not leave the world being advanced by frames nobody is drawing.
+        """
+        if self._captureClock is not None:
+            self._captureClock.restore()
+            self._captureClock = None
 
     def _autoExitDraw(self):
         """Render one final frame and capture it before auto-exit.
@@ -580,6 +611,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             except Exception:
                 log.debug('could not close the stall journal', exc_info=True)
         self.stopTelemetry('quit')
+        self.stopCaptureClock()
 
         # Likewise: sys.stdout is block-buffered whenever it is a pipe rather
         # than a terminal, and os._exit discards whatever is still in it. A
@@ -946,6 +978,13 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         # could use if self.frameCounter, but that introduces a
         # potential race condition, so eat the extra call...
         t = perf()
+
+        # A capture's world moves on by one frame per call, before the cascade
+        # that reads the clock.  Unconditionally: a scene whose only change is
+        # the one a timer drives would otherwise return early below, leaving
+        # the clock where it was and the animation stopped.
+        if self._captureClock is not None:
+            self._captureClock.advance()
 
         # Check for auto-exit on each OnDraw call, even if we return early
         # This ensures we count total calls rather than just rendered frames

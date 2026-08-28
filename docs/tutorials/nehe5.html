@@ -38,9 +38,9 @@ a compatibility profile context.
 </div>
 </div>
 	<div class="code-sample">from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
-import time
 class TestContext( BaseContext ):
     """NeHe 5 tutorial"""
     # Force compatibility profile for legacy GL functions
@@ -57,13 +57,13 @@ class TestContext( BaseContext ):
         glTranslatef(-1.5,0.0,-6.0);
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Animating using crude time.time() operation</div>
+	<div class="paragraph indent-level-0">Animating straight from the clock, with no state of our own</div>
 </div>
-	<div class="code-sample">        glRotated( time.time()%(3.0)/3 * 360, 0,1,0)
+	<div class="code-sample">        glRotated( systemtime.systemTime()%(3.0)/3 * 360, 0,1,0)
         self.drawPyramid()
         glLoadIdentity()
         glTranslatef(1.5,0.0,-6.0);
-        glRotated( time.time()%(1.0)/1 * -360, 1,0,0)
+        glRotated( systemtime.systemTime()%(1.0)/1 * -360, 1,0,0)
         self.drawCube()
     def OnIdle( self, ):
         """Request refresh of the context whenever idle"""

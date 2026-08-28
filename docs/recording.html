@@ -189,6 +189,12 @@ with FixedStepClock(fps=60) as clock:
     the right trade for a recording and the wrong one for a game someone is
     playing, which is why <code>fixed_step=False</code> is there &mdash; a
     recording of an interactive session, stalls and all, wants the wall clock.</p>
+  <p>A screen capture wants the same clock for a different reason: a frame read
+    back after a fixed number of draws should show the same moment of a scene
+    whatever machine drew it. <code>capture_clock()</code> is that arrangement,
+    installed by the context itself when
+    <code>OPENGLCONTEXT_AUTO_EXIT_FRAMES</code> asks for a bounded run &mdash;
+    see <a href="testing.html#pixels">Testing</a>.</p>
 </section>
 
 <section id="orientation">

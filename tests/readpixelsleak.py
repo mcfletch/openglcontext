@@ -4,8 +4,9 @@
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube
+from OpenGLContext.events import systemtime
 from OpenGL.GL import *
-import time, os, sys
+import os, sys
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -17,7 +18,7 @@ class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         glTranslatef(1.5,0.0,-6.0);
-        glRotated( time.time()%(8.0)/8 * -360, 1,0,0)
+        glRotated( systemtime.systemTime()%(8.0)/8 * -360, 1,0,0)
         drawcube.drawCube()
         width, height = self.getViewPort()
         red = glReadPixelsub(0,0, width, height,GL_RED, outputType=None)
