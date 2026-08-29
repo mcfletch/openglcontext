@@ -15,21 +15,22 @@ What is on screen, from the floor up:
  * *green* -- the navmesh: one wireframe triangle per walkable cell.  The
    dark bands under the walls are cells the headroom test removed, which
    is what stops a route being joined straight through a wall.
- * *amber* -- the cell-centre route, the raw output of the A* over the
-   cells.  It zigzags because triangle centres do.
- * *cyan* -- the same route **string-pulled** through the portals between
-   those cells: the line a person would walk, hugging each wall's end and
-   straight everywhere else.
+ * *amber* -- the corridor `NavMesh.corridor` found, drawn cell centre by
+   cell centre.  It zigzags because triangle centres do.
+ * *cyan* -- the same corridor **string-pulled** through the portals
+   between its cells: the line a person would walk, hugging the end of
+   each wall and straight everywhere else.
  * *blue and orange spheres* -- where the route starts and where it is
    going.
 
 Press `g` to send the route to the next of four goals, `r` to pick a
 random point on the mesh, and `c` to print the numbers again.  Every
-re-path prints what the search cost and what the pull saved:
+re-path prints how many cells the corridor runs through and what the pull
+saved:
 
     navmesh 416 walkable cells from 516 triangles (max slope 50.0 degrees, clearance 1.8 m)
-    goal (14.0, 14.0) | search visited 333 cells | corridor 77 cells
-      centres 79 points 48.82 m -> pulled 11 points 37.30 m (-23.6%)
+    goal (14.0, 14.0) | corridor 77 cells
+      centres 79 points 48.82 m -> pulled 6 points 33.34 m (-31.7%)
 
 The usual keys walk around, though the view starts overhead because that
 is where a navmesh reads.
@@ -37,9 +38,6 @@ is where a navmesh reads.
 import os
 
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import heapq
-import math
 
 import numpy as np
 
@@ -123,44 +121,6 @@ def joined(*meshes):
         triangles.append(np.asarray(part_triangles) + offset)
         offset += len(part_points)
     return (np.vstack(points), np.vstack(triangles))
-
-
-def centre_route(mesh, first, last):
-    """The cell route A* finds, and how many cells it looked at.
-
-    The same walk over the public ``neighbours`` graph that
-    :meth:`NavMesh.path` makes before it pulls the line taut -- run here so
-    the demo has the un-pulled route to draw against the pulled one.
-    """
-    centres = mesh.points[mesh.cells].mean(axis=1)
-
-    def gap(one, other):
-        return float(np.linalg.norm(centres[one] - centres[other]))
-
-    came, best, seen = {}, {first: 0.0}, set()
-    queue = [(gap(first, last), first)]
-    while queue:
-        _estimate, current = heapq.heappop(queue)
-        if current == last:
-            route = [last]
-            while route[-1] != first:
-                route.append(came[route[-1]])
-            route.reverse()
-            return ([_point(centres[index]) for index in route], len(seen))
-        if current in seen:
-            continue
-        seen.add(current)
-        for neighbour in mesh.neighbours.get(current, ()):
-            cost = best[current] + gap(current, neighbour)
-            if cost < best.get(neighbour, math.inf):
-                best[neighbour] = cost
-                came[neighbour] = current
-                heapq.heappush(queue, (cost + gap(neighbour, last), neighbour))
-    return ([], len(seen))
-
-
-def _point(value):
-    return (float(value[0]), float(value[1]), float(value[2]))
 
 
 def walked(points):
@@ -260,19 +220,18 @@ class TestContext(BaseContext):
     # -- re-pathing ------------------------------------------------------
     def repath(self):
         """Search, pull, draw, and say what both cost."""
-        first = self.mesh.cell_at(START)
-        last = self.mesh.cell_at(self.target)
-        if first is None or last is None:
-            print('goal (%.1f, %.1f) is off the mesh'
+        cells = self.mesh.corridor(START, self.target)
+        if not cells:
+            print('goal (%.1f, %.1f) is off the mesh, or nothing leads to it'
                   % (self.target[0], self.target[2]))
             return
-        centres, visited = centre_route(self.mesh, first, last)
-        route = [START] + centres + [self.target]
+        route = [START] + [tuple(centre) for centre in self.mesh.centres[cells]]
+        route.append(self.target)
         pulled = self.mesh.path(START, self.target)
         self._draw(self.centre_line, route, CENTRE_COLOUR, CENTRE_LIFT)
         self._draw(self.path_line, pulled, PATH_COLOUR, PATH_LIFT)
         self.goal_marker.translation = (self.target[0], 0.35, self.target[2])
-        self._report(route, pulled, visited, len(centres))
+        self._report(route, pulled, len(cells))
         self.triggerRedraw(1)
 
     def _draw(self, geometry, points, colour, lift):
@@ -280,14 +239,14 @@ class TestContext(BaseContext):
         geometry.color.color = [colour] * max(len(points), 1)
         geometry.coordIndex = list(range(len(points)))
 
-    def _report(self, route, pulled, visited, corridor):
+    def _report(self, route, pulled, corridor):
         raw, taut = walked(route), walked(pulled)
         saved = (100.0 * (raw - taut) / raw) if raw else 0.0
-        print('goal (%.1f, %.1f) | search visited %d cells | corridor %d cells'
-              % (self.target[0], self.target[2], visited, corridor))
+        print('goal (%.1f, %.1f) | corridor %d cells'
+              % (self.target[0], self.target[2], corridor))
         print('  centres %d points %.2f m -> pulled %d points %.2f m (-%.1f%%)'
               % (len(route), raw, len(pulled), taut, saved))
-        self._last = (route, pulled, visited, corridor)
+        self._last = (route, pulled, corridor)
 
     def OnNextGoal(self, event):
         self.goal = (self.goal + 1) % len(GOALS)

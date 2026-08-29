@@ -30,6 +30,8 @@ navmesh.build(points, triangles)   # walkable cells out of a triangle soup
 navmesh.from_world(world)          # the same, from a physics world
 mesh.cell_at(point)                # which cell a point stands on
 mesh.path(start, goal)             # the route, pulled taut
+mesh.corridor(start, goal)         # the cells it crosses
+mesh.visible(here, there)          # can a body walk straight between them
 mesh.random_point()                # somewhere to go</pre>
 
 <h2>Generated at load time, not baked beside the level</h2>
@@ -132,11 +134,32 @@ door.</p>
 <h3><code>path(start, goal)</code></h3>
 <p>A list of <code>(x, y, z)</code> points to walk, starting at
 <code>start</code> and ending at <code>goal</code>. A* over the cells finds the
-corridor, and the corridor is then <a href="#pull">pulled taut</a> through its
-portals.</p>
+<a href="#corridor">corridor</a>, the corridor is <a href="#pull">pulled
+taut</a> through its portals, and the taut line then drops every corner the
+mesh lets it see past.</p>
 <p>An <strong>empty list</strong> is the answer when either end is off the mesh
 or nothing connects them. That is a normal reply rather than an error: a bot on
 a ledge with no way down has nowhere to walk and should do something else.</p>
+
+<h3 id="corridor"><code>corridor(start, goal)</code></h3>
+<p>The cells a route crosses, in order, as indices into
+<code>mesh.cells</code>; empty on the same terms as <code>path()</code>. Each
+cell shares an edge with the next, so <code>mesh.portals[(here, there)]</code>
+gives the gate between any two of them and a caller can walk the corridor
+itself &mdash; to draw the search, to ask which rooms a route passes through,
+or to hold a bot's corridor and re-pull it as the bot moves. A caller who just
+wants somewhere to walk wants <code>path()</code>.</p>
+
+<h3 id="visible"><code>visible(start, goal, reach, below)</code></h3>
+<p>Whether a body could walk <em>straight</em> from one point to the other:
+<code>True</code> when an unbroken run of cells covers the line between them,
+so a wall, a pit and the edge of the floor all stop it and a ramp does not. The
+run is walked over the mesh rather than measured in the plane, which is what
+keeps one storey's answer off another's &mdash; a line drawn over a floor below
+is not a line along it.</p>
+<p>It is what a bot asks before it pays for a whole path, and it is what
+<code>path()</code> asks in order to drop a corner nothing is standing
+behind.</p>
 
 <h3><code>random_point(seed)</code></h3>
 <p>A cell centre, drawn at random &mdash; what a bot with no orders walks
@@ -156,6 +179,25 @@ it &mdash; and on open floor collapses to two points, start and goal.</p>
 <p>It is a <strong>horizontal</strong> operation. Height comes from the portals
 the line passes through, so a route up a ramp climbs with it; what is pulled
 straight is the plan.</p>
+<p><strong>A funnel is taut inside its corridor and no further</strong>, so
+which cells the search picked is part of the answer rather than a detail
+beneath it. Between any two cells there are many equally short runs of cells
+&mdash; over a grid of triangles a staircase costs the same by its two sides as
+by its diagonal &mdash; and a corridor settled by whichever of them the queue
+reached first is a route that crosses a room to a wall and then follows the
+wall along. Two things keep the line straight:</p>
+<ul>
+  <li><strong>The search costs a step</strong> by how much further a walker has
+  to go to reach the portal it leaves by, measured to the <em>nearest point</em>
+  on that portal. Measured to the middle of the portal instead, or between cell
+  centres, a diagonal costs the same as the two sides of it and the tie decides
+  the route.</li>
+  <li><strong>The pulled line then drops every corner it can see past</strong>,
+  by <a href="#visible"><code>visible()</code></a>. A corner stands either
+  against the geometry or against the corridor, and only the first kind is a
+  corner a walker has to make. Each corner kept is the furthest one still in
+  sight of the last, which can only shorten the route.</li>
+</ul>
 </section>
 
 <section>
@@ -168,16 +210,21 @@ straight is the plan.</p>
     The green wireframe is the navmesh: 416 walkable cells out of the 516
     triangles of floor and wall handed to <code>build()</code>, with the dark
     bands beside each wall the cells <code>clearance=1.8</code> removed. Amber
-    is the raw cell-centre route, cyan the same route string-pulled. Press
-    <code>g</code> for the next goal, <code>r</code> for a random one.</figcaption>
+    is the corridor drawn cell centre by cell centre, cyan the same corridor
+    string-pulled. Press <code>g</code> for the next goal, <code>r</code> for a
+    random one.</figcaption>
 </figure>
-<p>Each re-path prints what the search cost and what the pull saved:</p>
+<p>Each re-path prints how many cells the corridor runs through and what the
+pull saved:</p>
 <pre>$ python tests/navmesh_demo.py
 navmesh 416 walkable cells from 516 triangles (max slope 50.0 degrees, clearance 1.8 m)
-goal (14.0, 14.0) | search visited 333 cells | corridor 77 cells
-  centres 79 points 48.82 m -&gt; pulled 11 points 37.30 m (-23.6%)</pre>
-<p>Seventy-nine points of zigzag become eleven, and the walk is 11.5&nbsp;m
-shorter &mdash; on a route whose corners are two wall ends.</p>
+goal (14.0, 14.0) | corridor 77 cells
+  centres 79 points 48.82 m -&gt; pulled 6 points 33.34 m (-31.7%)</pre>
+<p>Seventy-nine points of zigzag become six, and the walk is 15.5&nbsp;m
+shorter. The six are the two ends of the room and the four corners the two
+walls actually turn the route through: out of the left room round the end of
+the first wall, across the channel between them on the diagonal, and out round
+the end of the second.</p>
 </section>
 
 <section>
@@ -236,12 +283,19 @@ else.</p>
   level's walls are cut from. What a real level wants is a blocker's distance
   from the cell; until that is written, <code>clearance</code> is left at 0 and
   the whole walkable floor is returned.</li>
-  <li><strong>Cost is distance.</strong> A* weighs cells by the straight-line
-  gap between their centres, so the route is the shortest one. Danger, cover
-  and terrain a character would rather avoid are not in the weights.</li>
-  <li><strong><code>cell_at</code> scans the cells.</strong> The lookup tests
-  every cell's footprint, so it is linear in the mesh; a level large enough for
-  that to matter wants an index over the cells.</li>
+  <li><strong>Cost is distance.</strong> A step is weighed by how far a
+  walker travels to reach the portal it leaves by, so the route is the
+  shortest one. Danger, cover and terrain a character would rather avoid are
+  not in the weights.</li>
+  <li><strong>The route is short rather than shortest.</strong> The corridor is
+  chosen by a cost measured to the nearest point on each portal, and the taut
+  line through it is then freed of the corners it can see past. On a floor cut
+  into triangles that lands on the line a person would take; it is not a proof
+  of the shortest walk across the room.</li>
+  <li><strong><code>cell_at</code> scans the cells.</strong> The lookup narrows
+  by footprint box across the whole mesh before testing the few that survive,
+  so it is linear in the cell count; a level large enough for that to matter
+  wants an index over the cells.</li>
 </ul>
 </section>
 
