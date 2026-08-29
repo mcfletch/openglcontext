@@ -307,15 +307,17 @@ class SolidGlyph( OutlineGlyph ):
                 n0_3d = [n0[0], n0[1], 0.0]
                 n1_3d = [n1[0], n1[1], 0.0]
 
-                # Triangle 1: v0, v2, v1 (CCW from outside)
+                # The contour normal is the tangent turned a quarter-turn, so
+                # v0 -> v1 -> v2 is the order that winds towards it.
+                # Triangle 1: v0, v1, v2 (CCW from outside)
                 result.append([n0_3d[0], n0_3d[1], n0_3d[2], v0[0], v0[1], v0[2]])
-                result.append([n0_3d[0], n0_3d[1], n0_3d[2], v2[0], v2[1], v2[2]])
                 result.append([n1_3d[0], n1_3d[1], n1_3d[2], v1[0], v1[1], v1[2]])
+                result.append([n0_3d[0], n0_3d[1], n0_3d[2], v2[0], v2[1], v2[2]])
 
-                # Triangle 2: v1, v2, v3 (CCW from outside)
+                # Triangle 2: v1, v3, v2 (CCW from outside)
                 result.append([n1_3d[0], n1_3d[1], n1_3d[2], v1[0], v1[1], v1[2]])
-                result.append([n0_3d[0], n0_3d[1], n0_3d[2], v2[0], v2[1], v2[2]])
                 result.append([n1_3d[0], n1_3d[1], n1_3d[2], v3[0], v3[1], v3[2]])
+                result.append([n0_3d[0], n0_3d[1], n0_3d[2], v2[0], v2[1], v2[2]])
 
         return result
 
@@ -400,7 +402,13 @@ class ToolsFontMixIn( object ):
         return self.font.lineHeight/self.getScale()
 
     def createChar( self, char, mode=None ):
-        """Create the single-character display list"""
+        """Create the single-character display list and metrics
+
+        In shader mode there is no display list: the glyph is drawn from a
+        vertex buffer, and display lists do not exist in a core profile.  The
+        metrics are still wanted, since they are what a line is measured and
+        justified by.
+        """
         glyph = self.font.getGlyph( char )
         if glyph:
             metrics = font.CharacterMetrics(
@@ -408,6 +416,8 @@ class ToolsFontMixIn( object ):
                 glyph.width/self.getScale(),
                 glyph.height/self.getScale(),
             )
+            if getattr( mode, 'shader_mode', False ):
+                return None, metrics
             list = glGenLists (1)
             if list == 0:
                 raise RuntimeError( """Unable to generate display list for %s"""%( self, ))
@@ -431,6 +441,7 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
     """A FontTools-provided Solid (polygonal) Font"""
     format = "solid"
     fontClass = _SolidFont
+    shader_compatible = True
 
     def __init__(self, *args, **kwargs):
         super(ToolsSolidFont, self).__init__(*args, **kwargs)
@@ -440,94 +451,40 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
         self._shader_vbo_chars = set()  # Characters included in the VBO
 
     def render(self, lines, fontStyle=None, mode=None):
-        """Render text, using shader path when in shader mode."""
-        # Check for shader mode
+        """Render text, drawing from vertex buffers when in shader mode."""
         if mode is not None and getattr(mode, 'shader_mode', False):
-            # Convert lines to string if needed
             if isinstance(lines, (bytes, str)):
-                text = lines if isinstance(lines, str) else lines.decode('utf-8')
-            else:
-                # Lines is a list of Line objects
-                text = '\n'.join(line.base for line in lines)
+                lines = self.toLines(lines, mode=mode)
+            if fontStyle is None:
+                fontStyle = self.fontStyle
+            return self._renderShaderJustified(lines, fontStyle, mode)
 
-            # Use shader rendering
-            return self._renderShaderJustified(text, fontStyle, mode)
-
-        # Fall back to legacy rendering
         return super(ToolsSolidFont, self).render(lines, fontStyle, mode)
 
-    def _renderShaderJustified(self, text, fontStyle, mode):
-        """Render text with shader, handling justification."""
-        if fontStyle is None:
-            fontStyle = self.fontStyle
+    def _renderShaderJustified(self, lines, fontStyle, mode):
+        """Draw each line at the place the fontStyle justifies it to
 
-        lines = text.split('\n')
-        spacing = self.getSpacing(fontStyle=fontStyle, mode=mode)
-
-        # Calculate line widths for justification
-        line_data = []
-        for line_text in lines:
-            width = 0.0
-            self.font.ensureGlyphs(line_text)
-            for char in line_text:
-                glyph = self.font.getGlyph(char)
-                if glyph:
-                    width += glyph.width / self.getScale()
-            line_data.append((line_text, width))
-
-        # Determine justification
-        justify = 'LEFT'
-        if fontStyle and fontStyle.justify:
-            justify = fontStyle.justify[0].upper()
-            if justify in ['CENTER', 'MIDDLE', 'CENTRE']:
-                justify = 'CENTER'
-            elif justify in ['END', 'RIGHT']:
-                justify = 'RIGHT'
-            else:
-                justify = 'LEFT'
-
-        # Calculate vertical adjust
-        # For now, simple top-down rendering
-        y_offset = 0.0
-        line_height = self.lineHeight(mode=mode)
-
+        The fixed-function path reaches the same positions by translating the
+        matrix stack between display-list calls; here each line gets its own
+        copy of the pass's matrix, since there is no stack to walk.
+        """
         base_matrix = mode.matrix.copy()
-
-        for line_text, width in line_data:
-            if not line_text:
-                y_offset -= line_height * spacing
+        for line, x, y in self.layout(lines, fontStyle, mode=mode):
+            if not line.base:
                 continue
-
-            # Calculate x offset based on justification
-            if justify == 'CENTER':
-                x_start = -width / 2.0
-            elif justify == 'RIGHT':
-                x_start = -width
-            else:
-                x_start = 0.0
-
-            # Build transform for this line
-            line_matrix = base_matrix.copy()
-            # Apply y offset
-            line_matrix[3, 0] += y_offset * base_matrix[1, 0]
-            line_matrix[3, 1] += y_offset * base_matrix[1, 1]
-            line_matrix[3, 2] += y_offset * base_matrix[1, 2]
-            # Apply x start offset
-            line_matrix[3, 0] += x_start * base_matrix[0, 0]
-            line_matrix[3, 1] += x_start * base_matrix[0, 1]
-            line_matrix[3, 2] += x_start * base_matrix[0, 2]
-
-            # Temporarily set mode.matrix for renderShader
-            old_matrix = mode.matrix
-            mode.matrix = line_matrix
+            mode.matrix = self._translated(base_matrix, x, y)
             try:
-                self.renderShader(line_text, mode)
+                self.renderShader(line.base, mode)
             finally:
-                mode.matrix = old_matrix
-
-            y_offset -= line_height * spacing
-
+                mode.matrix = base_matrix
         return lines
+
+    @staticmethod
+    def _translated(matrix, x, y):
+        """A copy of matrix moved (x,y) in the frame the matrix describes"""
+        result = matrix.copy()
+        result[3, :3] += x * matrix[0, :3] + y * matrix[1, :3]
+        return result
 
     def renderGlyph( self, glyph, mode = None ):
         """Render a single glyph
@@ -711,15 +668,8 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
                         continue
 
                     if glyph_info['count'] > 0:
-                        # Apply x offset transform
-                        char_matrix = base_matrix.copy()
-                        # Translate in x for character position
-                        char_matrix[3, 0] += x_offset * base_matrix[0, 0]
-                        char_matrix[3, 1] += x_offset * base_matrix[0, 1]
-                        char_matrix[3, 2] += x_offset * base_matrix[0, 2]
-
                         shader_program.set_matrices(
-                            char_matrix,
+                            self._translated(base_matrix, x_offset, 0.0),
                             mode.getProjection(),
                             shader_program.program
                         )
@@ -735,8 +685,8 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
                     shader_program.program
                 )
 
-                glDisableVertexAttribArray(2)
-                glDisableVertexAttribArray(1)
+                glDisableVertexAttribArray(LOC_POSITION)
+                glDisableVertexAttribArray(LOC_NORMAL)
             finally:
                 self._shader_vbo.unbind()
         finally:
@@ -764,6 +714,9 @@ class _ToolsFontProvider( fontprovider.TTFFontProvider):
         # map specifier: _toolsfont.Font sub-class
         self.fontClass = fontClass
         self.format = self.fontClass.format
+        # Whether a core-profile pass can use us is a property of the font that
+        # does the drawing, not of this shared provider class.
+        self.shader_compatible = fontClass.shader_compatible
         fontClass.fontProvider = self
 
     def key( self, fontStyle, mode=None ):

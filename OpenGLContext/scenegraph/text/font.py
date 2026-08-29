@@ -8,8 +8,17 @@ log = logging.getLogger( __name__ )
 from OpenGL._bytes import bytes, unicode
 
 class Font(object):
-    """Abstract base-class for all font implementations"""
+    """Abstract base-class for all font implementations
+
+    Class attributes:
+        shader_compatible -- whether ``render`` can draw in a core-profile
+            pass.  A font that only calls the fixed-function pipeline leaves
+            this false and is offered to compatibility-profile passes alone;
+            the provider publishes the same flag so that font-provider
+            selection can skip it (see ``fontprovider.FontProvider``).
+    """
     fontStyle = None
+    shader_compatible = False
     def render( 
         self, 
         lines,
@@ -76,6 +85,31 @@ class Font(object):
             if __debug__:
                 log.debug( """  success, %s, %s""", *current)
         return current
+    #: Fraction of its own width each line is shifted by, for every VRML97
+    #: spelling of the major (first) justification value.
+    JUSTIFY_X = {
+        'BEGIN': 0.0, 'FIRST': 0.0, 'LEFT': 0.0,
+        'MIDDLE': -0.5, 'CENTER': -0.5, 'CENTRE': -0.5,
+        'END': -1.0, 'RIGHT': -1.0,
+    }
+
+    def layout( self, lines, fontStyle=None, mode=None ):
+        """Yield (line, x, y) for each line, in the text's own units
+
+        x and y are offsets from the origin the Text node is drawn at.  The
+        major justification decides x from the line's own width; the minor one
+        decides where the block as a whole starts, and the spacing how far
+        apart the baselines are.
+        """
+        spacing = self.getSpacing( fontStyle=fontStyle, mode=mode )
+        y = self.verticalAdjust( spacing, lines, fontStyle=fontStyle, mode=mode )
+        fraction = 0.0
+        if fontStyle and fontStyle.justify:
+            fraction = self.JUSTIFY_X.get( fontStyle.justify[0].upper(), 0.0 )
+        for line in lines:
+            yield line, line.width * fraction, y
+            y -= line.height * spacing
+
     def getSpacing( self, fontStyle, mode=None ):
         """Get the vertical spacing multiplier"""
         if (not fontStyle):
@@ -121,8 +155,12 @@ class Font(object):
         """Center-justify a list of lines"""
     def rightJustify( self, lines, fontStyle, mode=None  ):
         """Right-justify a list of lines"""
-    def createChar( self, char, fontStyle, mode=None ):
-        """Create the single-character display list
+    def createChar( self, char, mode=None ):
+        """Create the single-character display list and its metrics
+
+        Returns (display-list-or-None, CharacterMetrics); a font drawing from
+        vertex buffers has no list to return, and getChar keeps the metrics
+        either way.
         """
 
     def verticalAdjust( self, spacing, lines, fontStyle, mode=None ):
@@ -374,52 +412,28 @@ class BitmapFontMixIn( object ):
             glBitmap( 0,0,0,0, 0,-height, None )
     
 class PolygonalFontMixIn(object):
-    """Mix-in providing justification functions for polygonal text"""
+    """Mix-in providing justification functions for polygonal text
+
+    ``layout`` settles where each line goes, so all three justifications are
+    one walk of the matrix stack: step to the line's place, call its display
+    lists, step back.
+    """
     def leftJustify( self, lines, fontStyle, mode=None  ):
         """Left-justify a list of lines (wrapper to do in child matrix)"""
         doinchildmatrix.doInChildMatrix(
-            self._leftJustify, lines, fontStyle, mode,
+            self._renderLines, lines, fontStyle, mode,
         )
-    def _leftJustify( self, lines, fontStyle, mode=None  ):
-        """Left-justify a list of lines (actual function)"""
-        for line in lines:
-            if fontStyle:
-                height = line.height * fontStyle.spacing
-            else:
-                height = line.height
-            # should do justification here...
-            if len(line.lists):
-                glCallLists( line.lists )
-                glTranslate( -line.width, -height, 0.0)
-            else:
-                glTranslate( 0.0, -height, 0.0)
-    def centerJustify( self, lines, fontStyle, mode=None  ):
-        """Center-justify a list of lines (wrapper to do in child matrix)"""
-        doinchildmatrix.doInChildMatrix(
-            self._centerJustify, lines, fontStyle, mode,
-        )
-    def _centerJustify( self, lines, fontStyle, mode=None  ):
-        """Center-justify a list of lines"""
-        for line in lines:
-            height = line.height * fontStyle.spacing
-            # should do justification here...
-            half = line.width/2.0
-            glTranslate( -half, 0.0, 0.0)
+    centerJustify = rightJustify = leftJustify
+    def _renderLines( self, lines, fontStyle, mode=None  ):
+        """Call each line's display lists where the layout puts it"""
+        for line, x, y in self.layout( lines, fontStyle, mode=mode ):
+            if not len(line.lists):
+                continue
+            glTranslate( x, y, 0.0 )
             glCallLists( line.lists )
-            glTranslate( -half, -height, 0.0)
-    def rightJustify( self, lines, fontStyle, mode=None  ):
-        """Right-justify a list of lines (wrapper to do in child matrix)"""
-        doinchildmatrix.doInChildMatrix(
-            self._rightJustify, lines, fontStyle, mode,
-        )
-    def _rightJustify( self, lines, fontStyle, mode=None  ):
-        """Right-justify a list of lines"""
-        for line in lines:
-            height = line.height * fontStyle.spacing
-            # should do justification here...
-            glTranslate( -line.width, 0.0, 0.0)
-            glCallLists( line.lists )
-            glTranslate( 0, -height, 0.0)
+            # the lists advance x by the line's width as they draw, so the
+            # step back has to undo that as well as the step out
+            glTranslate( -x-line.width, -y, 0.0 )
     
 class Line( object ):
     """Holds meta-data about a rendered line of text"""

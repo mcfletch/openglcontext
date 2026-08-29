@@ -51,6 +51,51 @@ crash without one), so it is a fallback rather than the default.</p>
 size is closest to the requested character height.</p>
 </section>
 <section>
+<h2>Solid (Extruded) Text</h2>
+<p>A <a href="../pydoc/OpenGLContext.scenegraph.text.fontstyle3d.html#FontStyle3D">FontStyle3D</a>
+asks for text as geometry: the glyph outlines are read from the TrueType file
+with FontTools, tessellated into caps, and swept back along -Z to give the
+letters depth. The result is an ordinary lit, shadowed, pickable surface that
+sits in the scene at whatever angle its Transform puts it, unlike the
+screen-aligned atlas text above.</p>
+<p>The fields that shape it, on top of the FontStyle ones:</p>
+<ul>
+  <li><code>thickness</code> -- how far back the glyph is swept, in the same
+units as <code>size</code>. Zero gives a flat cap with no sides.</li>
+  <li><code>renderFront</code>, <code>renderBack</code>, <code>renderSides</code>
+-- which of the three surfaces are built. Front only (the default) is the
+cheapest; all three give a closed solid.</li>
+  <li><code>quality</code> -- how many line segments each curve in an outline is
+approximated by. Higher is smoother and larger.</li>
+</ul>
+<pre>from OpenGLContext.scenegraph.basenodes import *
+from OpenGLContext.scenegraph.text import fontstyle3d
+
+Shape(
+    appearance = Appearance( material = Material( diffuseColor = (.8,.8,.8) )),
+    geometry = Text(
+        string = [ "Solid Text" ],
+        fontStyle = fontstyle3d.FontStyle3D(
+            family = [ "SANS" ],
+            size = .3,
+            justify = "MIDDLE",
+            thickness = .25,
+            renderFront = 1, renderBack = 1, renderSides = 1,
+        ),
+    ),
+)</pre>
+<p>The provider draws in both profiles: in the compatibility profile through
+display lists, and in the <a href="renderpasses.html">core profile</a> from a
+vertex buffer holding the glyph's positions and normals, one draw call per
+character. <code>tests/solid_font.py</code> is the running demo, and
+<code>&lt;n&gt;</code> steps it through the sans-serif faces the system has
+installed.</p>
+<p class="technical">Importing
+<code>OpenGLContext.scenegraph.text.toolsfont</code> is what registers the
+provider; a FontStyle3D whose <code>format</code> is left at its default of
+"solid" then resolves to it.</p>
+</section>
+<section>
 
 <p>The <a href="../pydoc/OpenGLContext.scenegraph.text.fontprovider.html">FontProvider</a>
 class provides registration point for objects (font providers) which
@@ -158,6 +203,12 @@ string renders as is a question of the chosen font carrying the glyphs for it</l
 specifies. &nbsp;<code>horizontal</code> and <code>leftToRight</code> are
 declared but not read, so text always runs horizontally and left to right,
 whatever they are set to</li>
+
+  <li>both values of FontStyle's <code>justify</code> are read: the first
+places each line against the origin by its own width (BEGIN, MIDDLE or END),
+the second places the block of lines as a whole (FIRST, the default, sits the
+first line's baseline on the origin). &nbsp;<code>spacing</code> multiplies
+the gap between baselines</li>
 
   <li>rather than particular support for font colors and the like,
 OpenGLContext (following VRML97) simply applies the Shape node's

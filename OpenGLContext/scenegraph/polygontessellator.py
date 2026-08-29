@@ -184,13 +184,17 @@ class PolygonTessellator(object):
             elif self.type == GL_TRIANGLE_STRIP:
                 result = []
                 for marker in range(len(self.current)-2):
+                    # A strip alternates orientation as it advances, and GL
+                    # compensates by swapping the first two vertices of every
+                    # odd triangle.  Flattening has to do the same, or half the
+                    # triangles come out facing the other way.
                     if marker %2: # odd
-                        result.append( self.current[marker] )
                         result.append( self.current[marker+1] )
+                        result.append( self.current[marker] )
                         result.append( self.current[marker+2] )
                     else:
-                        result.append( self.current[marker+1] )
                         result.append( self.current[marker] )
+                        result.append( self.current[marker+1] )
                         result.append( self.current[marker+2] )
                 if not self.ccw:
                     result.reverse()
