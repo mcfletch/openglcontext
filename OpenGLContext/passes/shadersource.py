@@ -12,7 +12,8 @@ from __future__ import annotations
 import os
 import re
 import logging
-from typing import Optional, Tuple
+from functools import lru_cache
+from typing import Dict, FrozenSet, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +31,20 @@ _INCLUDE_RE = re.compile(r'^[ \t]*#include[ \t]+"([^"]+)"[ \t]*(?://.*)?$')
 # Ceiling on simultaneous shadow-casting lights; the actual count is derived per
 # driver from GL_MAX_TEXTURE_IMAGE_UNITS but never exceeds this.
 HARD_MAX_SHADOW_LIGHTS: int = 4
+
+#: A vertex input declaration and the word its own trailing comment leads with:
+#: ``layout(location = 3) in vec4 aTangent;   // optional: zero disables ...``
+_INPUT_RE = re.compile(
+    r'^[ \t]*layout[ \t]*\([ \t]*location[ \t]*=[ \t]*\d+[ \t]*\)'
+    r'[ \t]*in[ \t]+\w+[ \t]+(\w+)[ \t]*;'
+    r'[ \t]*(?://[ \t]*(\w+))?',
+    re.MULTILINE)
+
+#: The marker that says a shader has no meaning for an input's default value.
+#: Its counterpart, ``optional``, is what every other input carries: an
+#: uber-shader declares more arrays than any one geometry holds, and reads each
+#: of them only where a uniform says it is there.
+REQUIRED_MARKER: str = 'required'
 
 
 def _resolve_includes(src: str, seen: set) -> str:
@@ -78,6 +93,36 @@ def preprocess_shader(filename: str, defines: Optional[list] = None) -> str:
                 break
         src = '\n'.join(lines)
     return src
+
+
+def input_markers(source: str) -> Dict[str, str]:
+    """Each vertex input ``source`` declares, and the marker it carries.
+
+    The marker is the first word of the comment on the declaration's own line,
+    and ``''`` where there is none.
+    """
+    return dict(_INPUT_RE.findall(source))
+
+
+@lru_cache(maxsize=None)
+def required_inputs(filename: str) -> FrozenSet[str]:
+    """The vertex arrays the shader in ``filename`` cannot be drawn without.
+
+    Everything else it declares has a meaning at the value GL supplies when
+    nothing feeds it -- a zero tangent disables normal mapping, an absent skin
+    leaves the rest pose -- so a geometry that does not carry it draws correctly
+    rather than silently wrongly. The engine's shaders say which is which at the
+    declaration (:data:`REQUIRED_MARKER`), and that is what
+    :func:`OpenGLContext.scenegraph.geometryarrays.report_missing_inputs`
+    reports against.
+
+    Includes are resolved first, so an input a shared block declares (the
+    skinning weights) is described where it is declared.
+    """
+    return frozenset(
+        name for name, marker in input_markers(preprocess_shader(filename)).items()
+        if marker == REQUIRED_MARKER
+    )
 
 
 def shadow_defines(max_shadow_lights: int, cube_array: bool) -> list:

@@ -3,8 +3,8 @@
 // Line vertex shader with per-vertex color support
 // Used for IndexedLineSet geometry
 
-layout(location = 2) in vec3 aPosition;
-layout(location = 4) in vec3 aColor;
+layout(location = 2) in vec3 aPosition;  // required
+layout(location = 4) in vec3 aColor;     // required: this program is chosen for the colours
 
 // Per-instance model-view (divisor 1), spanning locations 5..8, read only when
 // instancingEnabled -- matches the lit/PBR shader convention so the instancing

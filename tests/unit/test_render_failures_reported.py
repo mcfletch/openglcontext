@@ -68,6 +68,60 @@ class TestTheFailureIsRecordedAndCountedOnce:
         ], frames=2)
         assert renderpass.FLAT.failures.summary() == []
 
+    def test_ordinary_geometry_feeding_the_uber_shader_records_nothing(
+            self, render_scene):
+        """The PBR program reads more arrays than a box or a sphere carries.
+
+        A tangent, a colour, a second UV set and a skin are read only where a
+        uniform says the geometry brought them, so a shape that has none of them
+        draws correctly and is not a failure to report.
+        """
+        from OpenGLContext.passes import renderpass
+        geometry = [basenodes.Box(size=(1, 1, 1)), basenodes.Sphere(radius=1.0),
+                    basenodes.Cylinder(radius=0.5), basenodes.Cone()]
+        render_scene([
+            basenodes.Transform(translation=(index * 3.0, 0, -8), children=[
+                basenodes.Shape(geometry=shape,
+                                appearance=basenodes.Appearance(
+                                    material=basenodes.Material()))])
+            for index, shape in enumerate(geometry)
+        ] + [basenodes.PointLight(location=(0, 5, 5), intensity=1.0)], frames=2)
+        assert renderpass.FLAT.failures.summary() == []
+
+
+class TestAGeometryThatCannotFeedTheShader:
+    """The other half of the check: an array the shader has no default for."""
+
+    def test_a_mesh_without_normals_is_named(self, render_scene, caplog):
+        from OpenGLContext.passes import renderpass
+        with caplog.at_level(logging.ERROR, logger='OpenGLContext.passes._flat'):
+            render_scene(unlit_normals_scene(), frames=2)
+        summary = renderpass.FLAT.failures.summary()
+        assert len(summary) == 1
+        assert 'aNormal' in summary[0].description
+        # Nothing raised, so there is no traceback to print; the message is what
+        # there is to say and it has to reach the log.
+        assert 'aNormal' in caplog.text
+        assert 'NoneType: None' not in caplog.text
+
+
+def unlit_normals_scene():
+    """A mesh the PBR program has nothing to shade: no normals at all."""
+    import numpy as np
+    from types import SimpleNamespace
+
+    from OpenGLContext.scenegraph.frommesh import mesh_from_primitive
+    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+
+    positions = np.array([
+        [-4, -4, -20], [4, -4, -20], [4, 4, -20],
+    ], 'f')
+    mesh = mesh_from_primitive(
+        SimpleNamespace(attributes={'POSITION': positions}, indices=None),
+        material=PBRMaterial(baseColor=(0.8, 0.1, 0.1)))
+    return [basenodes.Shape(geometry=mesh),
+            basenodes.PointLight(location=(0, 5, 5), intensity=1.0)]
+
 
 class TestTheRunSaysWhatNeverDrew:
     def test_reporting_names_the_failure(self, render_scene, caplog):

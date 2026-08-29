@@ -14,9 +14,13 @@ the same in every conforming program, one vertex array object per geometry
 serves the lit pass, the unlit pass and the shadow depth pass alike, and
 :func:`bind_geometry` keeps it on the node.
 
-:func:`report_missing_inputs` closes the other half: a shader that reads a
-semantic the geometry has not got draws every vertex from a default value, with
-no GL error to say so, and this says so instead.
+:func:`report_missing_inputs` closes the other half: a shader reading a semantic
+the geometry has not got draws every vertex from a default value, with no GL
+error to say so. Most of those defaults mean something -- an uber-shader
+declares a tangent, a second UV set and a skin, and reads each only where a
+uniform says the geometry brought it -- so what is reported is the arrays the
+shader itself declares it cannot be drawn without
+(:func:`OpenGLContext.passes.shadersource.required_inputs`).
 """
 from __future__ import annotations
 
@@ -235,7 +239,12 @@ def render_geometry(
     vao = bind_geometry(arrays, owner=owner, program=program)
     if vao is None:
         return False
-    report_missing_inputs(program, arrays, mode=mode, node=owner, where=where)
+    # Against the program bound rather than the lit one: the same vertex arrays
+    # go through the depth pass, which asks for less.
+    bound = shader_program.bound_program() or program
+    report_missing_inputs(
+        bound, arrays, shader_program.required_inputs(bound),
+        mode=mode, node=owner, where=where)
     glBindVertexArray(vao)
     try:
         draw_geometry(arrays)
@@ -245,7 +254,7 @@ def render_geometry(
 
 
 class MissingVertexInput(Exception):
-    """A shader reads a vertex input the geometry does not supply.
+    """A geometry has not got an array the shader cannot draw without.
 
     Not raised: a missing attribute is not an error the GL reports, and the draw
     goes ahead reading a default value for every vertex. This exists so that the
@@ -273,37 +282,46 @@ def program_inputs(program: int) -> Iterable[str]:
 def report_missing_inputs(
     program: int,
     arrays: GeometryArrays,
+    required: Iterable[str],
     mode: Any = None,
     node: Any = None,
     where: str = 'geometry',
 ) -> Optional[MissingVertexInput]:
-    """Say which of ``program``'s inputs ``arrays`` has not got.
+    """Say which of the arrays ``program`` needs ``arrays`` has not got.
 
     An attribute nothing feeds reads the same default value for every vertex,
     which draws a shape flat, or black, or at the origin, and raises nothing.
+    ``required`` is what the program has no meaning for that default in --
+    :func:`OpenGLContext.passes.shadersource.required_inputs` reads it from the
+    shader, and the program wrappers answer for the one they have bound. The
+    arrays outside it are what an uber-shader declares and reads only where a
+    uniform says the geometry brought them, so a box lacking a tangent is not
+    news.
+
     Reported once per program-and-geometry through the pass's failure log, which
     logs the first of each cause and counts the rest.
 
     Returns the description when something was missing, so a caller without a
-    pass can still see it; returns None when everything the shader reads is
-    offered.
+    pass can still see it; returns None when the geometry can feed the shader.
     """
     key = (int(program), arrays.semantics)
     if key in _CHECKED:
         return None
     _CHECKED.add(key)
+    needed = frozenset(required)
     provided = {vertexsemantics.BY_SEMANTIC[semantic].attribute
                 for semantic in arrays.arrays}
     missing = [
+        # The driver's copy of the program is the authority on what is actually
+        # read: an input the defines compiled out (skinning, on a driver with no
+        # texture unit for the palette) is nothing to feed.
         name for name in program_inputs(program)
-        # Only the engine's own names are ours to supply; a shader's private
-        # input at a free location is its own business.
-        if name in vertexsemantics.BY_ATTRIBUTE and name not in provided
+        if name in needed and name not in provided
     ]
     if not missing:
         return None
     err = MissingVertexInput(
-        'the shader reads %s, which this geometry does not supply'
+        'the shader cannot draw without %s, which this geometry does not supply'
         % (', '.join(sorted(missing)),))
     failed = getattr(mode, 'renderFailed', None)
     if failed is not None:

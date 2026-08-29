@@ -224,6 +224,19 @@ the vegetation and terrain layers) numbers its own inputs, but must not spell on
 of the names above and mean something else by it --
 `tests/unit/test_vertex_semantics.py` holds every shader in the package to that.
 
+**Each input in a shader a pass binds says whether it can be drawn without.**
+The first word of the declaration's own comment is the marker: `required`, or
+`optional` and what the default value means there. An uber-shader declares every
+array any geometry might carry and reads most of them only where a uniform says
+this one did, so `required` is the short list, and it is what
+`report_missing_inputs` names a geometry against
+(`passes/shadersource.required_inputs`, `docs/renderpasses.html`).
+
+```glsl
+layout(location = 1) in vec3 aNormal;    // required: shading has no direction without it
+layout(location = 3) in vec4 aTangent;   // optional: zero disables normal mapping
+```
+
 ## Environment
 
 Use the virtualenv at `/workspaces/OpenGL-dev/.venv` for all Python operations. It

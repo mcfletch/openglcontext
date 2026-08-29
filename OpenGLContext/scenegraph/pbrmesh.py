@@ -663,9 +663,12 @@ class PBRMesh(node.Node):
         if sp is not None and getattr(sp, 'program', None):
             # An input nothing feeds reads one default value for every vertex,
             # which draws the mesh flat or at the origin and raises nothing.
+            # Against the program now bound -- the depth pass draws these same
+            # arrays and asks for less than the lit program does.
+            bound = sp.bound_program() or sp.program
             report_missing_inputs(
-                sp.program, gpu.vertexArrays(), mode=mode, node=self,
-                where='PBRMesh')
+                bound, gpu.vertexArrays(), sp.required_inputs(bound),
+                mode=mode, node=self, where='PBRMesh')
         gpu.draw()
         return 1
 

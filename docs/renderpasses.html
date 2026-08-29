@@ -264,6 +264,33 @@ vocabulary the loaders already speak:</p>
 </table>
 <p>A shader of your own may put an input the engine has no name for at
 location&nbsp;15 or above (<code>vertexsemantics.FIRST_FREE_LOCATION</code>).</p>
+
+<h3>Which of those arrays a program has to have</h3>
+<p>An input nothing feeds is not a GL error: the draw goes ahead and every vertex
+reads the same default value. Most of those defaults mean something. The PBR
+program declares a tangent, a vertex colour, a second UV set and a skin, and
+reads each only where a uniform says the geometry brought it, so a box carrying a
+position, a normal and a texture coordinate draws correctly. The inputs whose
+default means nothing are the ones a geometry must supply, and each shader says
+which of its inputs those are at the declaration:</p>
+<pre>layout(location = 1) in vec3 aNormal;    // required: shading has no direction without it
+layout(location = 3) in vec4 aTangent;   // optional: zero disables normal mapping</pre>
+<p>The first word of the declaration's own comment is the marker;
+<code>required</code> is the one that is read, and every other input carries
+<code>optional</code> and what its default means.
+<code>shadersource.required_inputs(<em>filename</em>)</code> collects them,
+a shader program answers for whichever of its programs is bound
+(<code>VRML97ShaderProgram.required_inputs()</code> &mdash; the depth pass asks
+for a position and nothing else), and
+<code>geometryarrays.report_missing_inputs</code> names a geometry that cannot
+feed one. It is said once per program and geometry rather than once a frame, and
+goes out through the same log as everything else that could not draw:</p>
+<pre>WARNING OpenGLContext.passes.renderfailures: Rendering finished with 1 node that could not draw:
+    Sphere ?: MissingVertexInput: the shader cannot draw without aNormal, which this geometry does not supply (1 time, opaque pass)</pre>
+<p>An appearance's own GLSL is outside this. What a program can be drawn without
+is a fact about its source, and the engine has that only for the shaders it
+compiled, so nothing is reported against a <code>Shader</code> node's program.</p>
+
 <h3>A Shape whose appearance brings its own shader</h3>
 <p><code>Shader</code> is a programmable substitute for <code>Appearance</code>:
 it carries a GLSL program instead of a material and a texture.</p>

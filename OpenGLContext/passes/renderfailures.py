@@ -1,4 +1,4 @@
-"""What failed to draw, counted per cause and reported once.
+"""What could not be drawn, counted per cause and reported once.
 
 A render pass catches every exception a node raises, so one bad node cannot take
 the rest of the frame with it.  The cost of that is a scene which draws nothing
@@ -19,11 +19,12 @@ same failure" is tested directly; see ``tests/unit/test_render_failures.py``.
 from __future__ import annotations
 
 import logging
+import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
-__all__ = ['RenderFailure', 'RenderFailureLog']
+__all__ = ['RenderFailure', 'RenderFailureLog', 'describe']
 
 #: Stands in for anything the log asked a node or an exception for and did not
 #: get.  A failing node is by definition misbehaving, and a report that raised
@@ -53,6 +54,22 @@ def _message(err: BaseException) -> str:
     except Exception:
         return UNKNOWN
     return text.splitlines()[0] if text else UNKNOWN
+
+
+def describe(err: BaseException) -> str:
+    """``err`` as the log should carry it: its traceback, or its message.
+
+    A node that raised has a traceback and that is the explanation. A failure
+    the pass worked out for itself -- a geometry that cannot feed the shader --
+    was never raised and has none, and the message is the whole of what there is
+    to say. Formatted from the exception rather than from ``sys.exc_info()``, so
+    an unrelated handler further up the stack cannot lend it a traceback that
+    belongs to something else.
+    """
+    if err.__traceback__ is None:
+        return '%s: %s' % (type(err).__name__, err)
+    return ''.join(traceback.format_exception(
+        type(err), err, err.__traceback__)).rstrip()
 
 
 class RenderFailure:
@@ -108,7 +125,7 @@ class RenderFailureLog:
         return sorted(self._failures.values(), key=lambda f: -f.count)
 
     def report(self, logger: Optional[logging.Logger] = None) -> None:
-        """Say what never drew, once for the run.
+        """Say what could not be drawn, once for the run.
 
         At warning level and against the whole run rather than a frame: a scene
         that drew nothing is the thing a person looking at a black window needs
@@ -122,7 +139,7 @@ class RenderFailureLog:
         self._reported = True
         logger = logger if logger is not None else log
         logger.warning(
-            'Rendering finished with %d node%s that never drew:\n%s',
+            'Rendering finished with %d node%s that could not draw:\n%s',
             len(failures), '' if len(failures) == 1 else 's',
             '\n'.join('    %s (%d time%s, %s pass)' % (
                 failure.description, failure.count,

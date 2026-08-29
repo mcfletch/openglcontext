@@ -18,8 +18,8 @@
 #endif
 
 #if PBR_SKINNING
-layout(location = 12) in vec4 aJoints;    // joint indices, carried as floats
-layout(location = 13) in vec4 aWeights;   // weights, normalised at load
+layout(location = 12) in vec4 aJoints;    // optional: joint indices, read when skinningEnabled
+layout(location = 13) in vec4 aWeights;   // optional: weights (normalised at load), read when skinningEnabled
 
 layout(location = 14) in uint aInstanceJointBase;   // per instance, divisor 1
 

@@ -14,7 +14,7 @@ import logging
 
 import pytest
 
-from OpenGLContext.passes.renderfailures import RenderFailureLog
+from OpenGLContext.passes.renderfailures import RenderFailureLog, describe
 
 
 class _Node:
@@ -128,3 +128,26 @@ class TestTheNodesCannotBreakTheLog:
                 raise RuntimeError('no message for you')
 
         assert failures.record('opaque', _Node(), _Hostile()) is True
+
+
+class TestHowAFailureIsExplained:
+    """What the first occurrence of a cause carries into the log."""
+
+    def test_a_raised_error_is_explained_by_its_traceback(self):
+        try:
+            raise RuntimeError('the geometry cannot draw')
+        except RuntimeError as err:
+            explanation = describe(err)
+        assert 'Traceback' in explanation
+        assert 'the geometry cannot draw' in explanation
+
+    def test_an_error_that_was_never_raised_is_explained_by_its_message(self):
+        """A failure the pass worked out for itself has no stack to show."""
+        assert describe(RuntimeError('no normals')) == 'RuntimeError: no normals'
+
+    def test_an_unraised_error_is_not_lent_someone_elses_traceback(self):
+        try:
+            raise ValueError('a different failure entirely')
+        except ValueError:
+            explanation = describe(RuntimeError('no normals'))
+        assert 'a different failure entirely' not in explanation

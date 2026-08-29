@@ -254,6 +254,22 @@ once, through `RenderFailureLog` — instead of a shape that draws at the origin
 or draws black, with no GL error. This is the same instrument the profile flip
 put in, applied one level up.
 
+**Active is not the same as needed** (2026-08-29). An uber-shader declares every
+array any geometry might carry and reads each only where a uniform says this one
+did: `pbr.vert` names a tangent, a vertex colour, a second UV set and a skin, all
+five active in the linked program, none of them missed by a box. With the PBR
+renderer the core-profile default, comparing against the active set therefore
+reported every ordinary shape in every scene — an `ERROR` per geometry kind and a
+teardown summary naming nodes that had drawn perfectly well. So what a program
+*needs* is declared in the shader, at the input: the marker word that leads the
+declaration's own comment, `required` or `optional`, collected by
+`shadersource.required_inputs` and answered per bound program by
+`VRML97ShaderProgram.required_inputs`. The active set is still consulted, for
+what it does know: an input the defines compiled out (skinning, on a driver with
+no texture unit for the palette) is nothing to feed. The check runs against the
+program *bound*, so the same vertex arrays going through the depth pass are held
+to `shadow_depth.vert`'s one requirement rather than the lit program's.
+
 ## What this does not cover
 
 - **`ShaderGeometry` keeps its own path.** A node that supplies raw
@@ -294,11 +310,13 @@ put in, applied one level up.
    compatibility declaration: several of its objects are fragment shaders with
    no vertex shader, which is a fixed-function vertex stage and has no core
    equivalent.
-4. ✅ **Landed.** `report_missing_inputs` compares a program's
-   `GL_ACTIVE_ATTRIBUTES` with what the geometry offers and names the difference
-   through `RenderFailureLog` -- once per program-and-geometry rather than once
-   a frame. A shader's own input at a free location is not the engine's to
-   supply and is not reported.
+4. ✅ **Landed.** `report_missing_inputs` compares what the bound program cannot
+   draw without -- the `required` markers in its own source, intersected with
+   its `GL_ACTIVE_ATTRIBUTES` -- against what the geometry offers, and names the
+   difference through `RenderFailureLog`, once per program-and-geometry rather
+   than once a frame. An input the shader has a defined meaning for at its
+   default value is marked `optional` and not reported, and neither is an
+   appearance's own program, whose defaults the engine cannot know.
 5. ❌ **Not built, deliberately.** The compatibility prelude cannot be a pure
    prepend -- `attribute` and `varying` are keywords a `#define` cannot rewrite
    -- so it would be a translation layer under content the reader is being

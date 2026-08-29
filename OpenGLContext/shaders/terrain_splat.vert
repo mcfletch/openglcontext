@@ -1,6 +1,6 @@
 #version 330 core
-layout(location=2) in vec3 aPosition;   // world-space terrain vertex
-layout(location=1) in vec3 aNormal;     // world-space normal
+layout(location=2) in vec3 aPosition;   // required: world-space terrain vertex
+layout(location=1) in vec3 aNormal;     // required: world-space normal
 uniform mat4 uModelView;
 uniform mat4 uProjection;
 uniform mat3 uNormalMatrix;             // world-normal -> eye-normal

@@ -14,7 +14,7 @@ import os
 import re
 import logging
 from math import cos, sin
-from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, FrozenSet, Optional, Tuple, TYPE_CHECKING
 
 from OpenGL.GL import (
     GL_FALSE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER,
@@ -54,6 +54,7 @@ from OpenGLContext.passes.shadersource import (
     SHADOW_INCLUDE_PATH,
     HARD_MAX_SHADOW_LIGHTS,
     preprocess_shader,
+    required_inputs,
     shadow_defines,
     resolve_shadow_config,
     load_fragment_source,
@@ -213,6 +214,20 @@ class ShaderAppearanceProgram(object):
     def unuse(self) -> None:
         glUseProgram(0)
 
+    def bound_program(self) -> int:
+        """The one program this has: an appearance draws with its own."""
+        return int(self.program)
+
+    def required_inputs(self, program: Optional[int] = None) -> FrozenSet[str]:
+        """Nothing: what this program can be drawn without is its author's.
+
+        The engine knows its own shaders' defaults and reports a geometry that
+        cannot feed one (:func:`OpenGLContext.passes.shadersource.required_inputs`).
+        A ``Shader`` node's GLSL is outside that agreement, so the check has
+        nothing to hold it to.
+        """
+        return frozenset()
+
     def __getattr__(self, name: str) -> Any:
         if name in self._ACCEPTED or name.startswith('_set_uniform'):
             return _ignore
@@ -326,6 +341,42 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         'program', 'unlit_program', 'vertex_color_program',
         'point_program', 'line_program', 'depth_program',
     )
+
+    #: The vertex shader each of those is compiled from. A geometry about to
+    #: draw asks what the bound program cannot be drawn without, and this is
+    #: how the handle it has leads back to the source that says so.
+    VERTEX_SOURCES: Dict[str, str] = {
+        'program': 'vrml97_lighting.vert',
+        'unlit_program': 'vrml97_unlit.vert',
+        'vertex_color_program': 'vrml97_vertex_color.vert',
+        'point_program': 'vrml97_point.vert',
+        'line_program': 'vrml97_line.vert',
+        'depth_program': 'shadow_depth.vert',
+    }
+
+    def bound_program(self) -> int:
+        """The program this has bound, or the lit one before anything is.
+
+        What a geometry node is about to draw with, so what it is checked
+        against; :meth:`_program_for_default` is the same answer for uniform
+        uploads, where a program is always bound and None cannot happen.
+        """
+        return int(self._active_program or self.program or 0)
+
+    def required_inputs(self, program: Optional[int] = None) -> FrozenSet[str]:
+        """The vertex arrays ``program`` cannot be drawn without.
+
+        Defaults to the program now bound, which is the one a geometry node is
+        about to draw with -- the depth pass asks for a position and nothing
+        else, where the lit program it shares its vertex arrays with asks for
+        more. An unrecognised handle is owed nothing, since the engine can only
+        speak for the shaders it compiled.
+        """
+        program = program or self.bound_program()
+        for attribute, source in self.VERTEX_SOURCES.items():
+            if program and getattr(self, attribute, None) == program:
+                return required_inputs(source)
+        return frozenset()
 
     def _clear_programs(self) -> None:
         """Null every program handle after a failed/partial compile.

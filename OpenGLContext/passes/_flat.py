@@ -31,6 +31,7 @@ from OpenGLContext.arrays import (  # type: ignore[attr-defined]
 )
 from OpenGLContext import frustum
 from OpenGLContext.debug.logs import getTraceback
+from OpenGLContext.passes.renderfailures import describe
 from vrml.vrml97 import nodetypes
 from vrml import olist
 from OpenGLContext.scenegraph import shaders
@@ -414,7 +415,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     #: through the developer overlay; see OpenGLContext.passes.renderstats.
     _stats: Optional['RenderStats'] = None
 
-    #: What never drew, for the life of this pass rather than of a frame.
+    #: What could not draw, for the life of this pass rather than of a frame.
     #: See OpenGLContext.passes.renderfailures.
     _failures: Optional['RenderFailureLog'] = None
 
@@ -439,18 +440,18 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         return self._failures
 
     def renderFailed(self, where: str, node: Any, err: BaseException) -> None:
-        """Note that ``node`` raised instead of drawing, and say so once.
+        """Note that ``node`` did not draw as it should have, and say so once.
 
-        Catching this is what keeps one bad node from taking the frame with it;
-        counting it is what keeps the resulting black window from being silent.
-        The traceback goes out for the first occurrence of each cause and the
-        rest are tallied for the summary at teardown.
+        Catching what a node raises is what keeps one bad node from taking the
+        frame with it; counting it is what keeps the resulting black window from
+        being silent. The explanation goes out for the first occurrence of each
+        cause and the rest are tallied for the summary at teardown.
         """
         if self.failures.record(where, node, err):
-            log.error('Failure in %s render: %s', where, getTraceback(err))
+            log.error('Failure in %s render: %s', where, describe(err))
 
     def reportFailures(self) -> None:
-        """Say what this pass never drew, if anything failed at all.
+        """Say what this pass could not draw, if anything failed at all.
 
         Through ``_failures`` rather than :attr:`failures` so a pass that had
         nothing go wrong does not make a log to report an empty one.

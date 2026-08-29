@@ -2,11 +2,16 @@
 
 // PBR (metallic/roughness) vertex shader. Shares the OpenGLContext attribute
 // location convention; tangent at location 3 is used for normal mapping.
-layout(location = 0) in vec2 aTexCoord;
-layout(location = 1) in vec3 aNormal;
-layout(location = 2) in vec3 aPosition;
-layout(location = 3) in vec4 aTangent;   // xyz tangent, w = handedness
-layout(location = 4) in vec4 aColor;     // per-vertex color (glTF COLOR_0)
+//
+// Each input says whether the program can be drawn without it: an ordinary box
+// carries a position, a normal and a texture coordinate, and the rest are read
+// only where a uniform says the geometry brought them. See
+// OpenGLContext/passes/shadersource.py:required_inputs.
+layout(location = 0) in vec2 aTexCoord;  // optional: sampled where a map is bound
+layout(location = 1) in vec3 aNormal;    // required: shading has no direction without it
+layout(location = 2) in vec3 aPosition;  // required
+layout(location = 3) in vec4 aTangent;   // optional: xyz tangent, w handedness; zero disables normal mapping
+layout(location = 4) in vec4 aColor;     // optional: per-vertex color (glTF COLOR_0), read when hasVertexColor
 
 // Instanced draw inputs (one per instance, divisor 1). A single mat4 occupies four
 // consecutive attribute locations (5..8). The row-major OpenGLContext modelview
@@ -15,7 +20,7 @@ layout(location = 4) in vec4 aColor;     // per-vertex color (glTF COLOR_0)
 layout(location = 5) in mat4 aInstanceModelView;
 layout(location = 9) in uint aInstanceObjectId;
 layout(location = 10) in uint aInstanceMaterial;   // index into the material array
-layout(location = 11) in vec2 aTexCoord1;          // second UV set (glTF TEXCOORD_1)
+layout(location = 11) in vec2 aTexCoord1;          // optional: second UV set (glTF TEXCOORD_1)
 
 #include "_skinning_inc.glsl"
 #include "_wave_inc.glsl"

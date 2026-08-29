@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import logging
 import weakref
-from typing import Any, Iterator, Optional, Sequence
+from typing import Any, Dict, Iterator, Optional, Sequence
 
 import numpy as np
 
@@ -351,6 +351,11 @@ class PBRShaderProgram(VRML97ShaderProgram):
     """Cook-Torrance metallic/roughness program (+ the inherited shadow machinery)."""
 
     MATERIAL_UBO_BINDING: int = MATERIAL_UBO_BINDING
+
+    #: The lit program is the metallic/roughness one; the helper programs are
+    #: the VRML97 ones this inherits, from the same files.
+    VERTEX_SOURCES: Dict[str, str] = dict(
+        VRML97ShaderProgram.VERTEX_SOURCES, program='pbr.vert')
 
     def __init__(self) -> None:
         super().__init__()

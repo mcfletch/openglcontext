@@ -18,7 +18,7 @@ FLAT = None
 
 
 def report_render_failures() -> None:
-    """Say what the session rendered from and never drew.
+    """Say what the session rendered from and could not draw.
 
     A pass catches each node's exceptions so one bad node cannot take the frame
     with it, which leaves a scene able to draw nothing while the process exits

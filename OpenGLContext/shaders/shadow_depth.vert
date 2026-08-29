@@ -3,7 +3,7 @@
 // only -- no normals, texcoords, lighting, or PBR work -- so a shadow pass is
 // just a vertex transform + depth write. Position uses the same attribute
 // location (2) as pbr.vert so the geometry's cached VAO binds unchanged.
-layout(location = 2) in vec3 aPosition;
+layout(location = 2) in vec3 aPosition;  // required
 // Per-instance light-space modelview (divisor 1), locations 5..8; used only when
 // instancingEnabled, so an instanced shadow caster writes depth in one draw.
 layout(location = 5) in mat4 aInstanceModelView;

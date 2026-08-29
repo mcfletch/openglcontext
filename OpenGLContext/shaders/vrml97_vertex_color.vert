@@ -4,9 +4,9 @@
 // Used for geometry like NURBS surfaces that have per-vertex colors
 
 // Vertex attributes
-layout(location = 1) in vec3 aNormal;
-layout(location = 2) in vec3 aPosition;
-layout(location = 4) in vec4 aColor;  // Per-vertex color (RGBA)
+layout(location = 1) in vec3 aNormal;    // required: shading has no direction without it
+layout(location = 2) in vec3 aPosition;  // required
+layout(location = 4) in vec4 aColor;     // required: per-vertex colour (RGBA), what this program is for
 
 // Transformation matrices
 uniform mat4 modelViewMatrix;
