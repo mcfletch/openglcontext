@@ -85,6 +85,12 @@ class Crowd:
         self.members: List[Member] = []
         self._by_mixer: Dict[int, Member] = {}
         self._layout: Optional[Rig] = None
+        #: Runs of arithmetic the last :meth:`update` took -- one per set of
+        #: figures doing the same kind of thing. It is what says whether a
+        #: crowd is gathering: a hundred and fifty figures in three runs costs
+        #: three set-ups, and in a hundred and fifty runs costs a hundred and
+        #: fifty of them.
+        self.groups = 0
         #: One sampler per clip *name*, shared by every figure: the figures are
         #: separate scenegraphs over one document, so their clips are separate
         #: objects holding the same keyframes, and regrouping them once is
@@ -147,7 +153,9 @@ class Crowd:
                 due.append(member)
         if budget is not None and len(due) > budget:
             due = self._take_turns(due, budget)
-        for group in self._groups(due).values():
+        groups = self._groups(due)
+        self.groups = len(groups)
+        for group in groups.values():
             self._pose_group(group)
         return len(due)
 
@@ -248,13 +256,18 @@ class Crowd:
         Which is what a figure is doing nearly all of the time -- a cross-fade
         is a fifth of a second and the walking is the rest -- and it needs no
         blend at all: the clip's values *are* the pose for the joints it moves.
+
+        A group is gathered by the shape of the work and not by the weights, so
+        the weights are the group's own figure by figure: one member part way
+        through a fade is enough to make the whole group take the blend.
         """
         if tracks != 1:
             return False
         first = group[0].mixer.layers[index]
-        if first.additive or first.mask is not None or first.weight != 1.0:
+        if first.additive or first.mask is not None:
             return False
-        return all(member.mixer.layers[index].tracks[0].weight >= 1.0
+        return all(member.mixer.layers[index].weight == 1.0
+                   and member.mixer.layers[index].tracks[0].weight >= 1.0
                    for member in group)
 
     def _lay_layer(self, group: List[Member], index: int,

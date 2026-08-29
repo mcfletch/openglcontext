@@ -126,6 +126,35 @@ class TestManyFiguresAgree:
         for one, other in zip(alone, together, strict=True):
             assert np.allclose(_pose_of(one), _pose_of(other), atol=1e-9)
 
+    def test_figures_whose_layers_are_at_different_weights_agree(self, document):
+        """The same layers at unequal weights is one group, not one weight.
+
+        A crowd gathers figures by the *shape* of the work, so a layer dialled
+        between two poses puts every figure of the crowd in one group whatever
+        each has that layer turned up to -- which is what a crowd part way
+        through stopping and starting looks like. The strength has to come from
+        each figure rather than from whichever of them the group is led by.
+        """
+        weights = [1.0, 0.65, 0.3, 1.0, 0.0]
+        crowd = Crowd()
+        alone, together = [], []
+        for weight in weights:
+            one, other = _figure(document), _figure(document)
+            for model in (one, other):
+                model.play('kick')
+                model.layer('upper').play('raise')
+                model.layer('upper').weight = weight
+            alone.append(one)
+            crowd.add(other)
+            together.append(other)
+        for _ in range(4):
+            for model in alone:
+                model.update(1 / 30.0)
+            crowd.update(1 / 30.0)
+
+        for one, other in zip(alone, together, strict=True):
+            assert np.allclose(_pose_of(one), _pose_of(other), atol=1e-9)
+
     def test_figures_doing_different_things_still_agree(self, document):
         crowd = Crowd()
         alone, together = [], []

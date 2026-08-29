@@ -391,6 +391,19 @@ shadowed.</p>
 </section>
 
 <section>
+<h2>What a Rigged Figure Casts</h2>
+<p>A skinned body is deformed in the vertex shader off a shared joint palette, so
+its vertex buffers hold the pose it was modelled in and nothing else. The depth
+shader carries the same skinning, and the depth pass hands it the same palette,
+so a walking figure casts the shadow of the stride it is in.</p>
+<p>That holds whether the casters are drawn one at a time or collapsed into a
+single instanced draw. A batch of figures is one draw and many poses, so each
+instance names where its own joints start in the palette &mdash; exactly as the
+colour pass does. See <a href="characters.html">rigged characters</a> and
+<a href="instancing.html">instanced drawing</a>.</p>
+</section>
+
+<section>
 <h2>Implementation Notes</h2>
 <p class="technical">Shadow storage is pooled in immutable depth textures allocated
 once with <code>glTexStorage*</code>: a 2D array holding all spot maps and

@@ -35,6 +35,8 @@ __all__ = (
     'record_placements',
     'instance_counts',
     'instance_matrices',
+    'instance_joint_bases',
+    'member_joint_bases',
     'per_instance',
     'morton_order',
     'Cluster',
@@ -565,6 +567,54 @@ def instance_matrices(records: List[tuple], index: int = 1,
     if after is not None:
         out = np.matmul(out, np.asarray(after, dtype='f'))
     return out
+
+
+def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[int, int]]:
+    """Where each member of a skinned group reads its joints, by geometry.
+
+    None where the group is not skinned, or where a figure has no palette range
+    to read -- and the caller then draws the batch unskinned, which is the rest
+    pose, rather than pointing every instance at one figure's joints.
+
+    Also what puts each figure's matrices into the palette: a per-shape draw
+    does that on its way past and a batch has no per-shape draw to do it on.
+    The whole batch is written in one call, and a figure whose matrices are
+    already there contributes nothing to it.
+
+    Both the colour pass and the shadow depth pass draw a batch, so both come
+    through here; whichever runs first in a frame does the writing and the
+    other finds it done.
+    """
+    if getattr(group.geometry, 'skin_joints', None) is None:
+        return None
+    from OpenGLContext.scenegraph.skinning import palette_for
+    bases: Dict[int, int] = {}
+    pending: list = []
+    for record in group.members:
+        geometry = record[4][-1].geometry
+        claimed = geometry.skin_claim(mode)
+        if claimed is None:
+            return None
+        base, matrices = claimed
+        bases[id(geometry)] = base
+        if matrices is not None:
+            pending.append((base, matrices))
+    if pending:
+        palette = palette_for(mode)
+        if palette is not None:
+            palette.write_runs(pending)
+    return bases
+
+
+def member_joint_bases(bases: Dict[int, int], records: List[tuple],
+                       counts: List[int]) -> List[int]:
+    """The joint base of every instance ``records`` draws, in draw order.
+
+    ``counts`` is what :func:`instance_counts` said of the same records, so a
+    record standing for a placement set hands its figure's joints to each of
+    its placements.
+    """
+    return per_instance([bases[id(r[4][-1].geometry)] for r in records], counts)
 
 
 def _winding_sign(mv: Any) -> int:

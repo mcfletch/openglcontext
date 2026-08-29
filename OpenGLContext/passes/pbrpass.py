@@ -885,33 +885,6 @@ class PBRPass(flatcore.FlatPass):
         glBindBufferBase(GL_UNIFORM_BUFFER, MATERIAL_UBO_BINDING, buf)
         return buf
 
-    def _instanceJointBases(self, group: Any) -> Optional[dict]:
-        """Where each member of a skinned group reads its joints, by geometry.
-
-        Also what puts each figure's matrices into the palette: the per-shape
-        draw does that on its way past, and an instanced group has no per-shape
-        draw to do it on.
-        """
-        if getattr(group.geometry, 'skin_joints', None) is None:
-            return None
-        from OpenGLContext.scenegraph.skinning import palette_for
-        bases: dict = {}
-        pending: list = []
-        for record in group.members:
-            geometry = record[4][-1].geometry
-            claimed = geometry.skin_claim(self)
-            if claimed is None:
-                return None
-            base, matrices = claimed
-            bases[id(geometry)] = base
-            if matrices is not None:
-                pending.append((base, matrices))
-        if pending:
-            palette = palette_for(self)
-            if palette is not None:
-                palette.write_runs(pending)
-        return bases
-
     def _drawInstanceGroup(self, group: Any, shader: Any, prog: Any,
                            id_map: Optional[dict]) -> None:
         """Draw a whole InstanceGroup with one glDrawElementsInstanced per chunk.
@@ -925,7 +898,8 @@ class PBRPass(flatcore.FlatPass):
         """
         from OpenGLContext.passes.instancing import (
             draw_instanced_mesh, group_material_table, instance_counts,
-            instance_matrices, per_instance,
+            instance_joint_bases, instance_matrices, member_joint_bases,
+            per_instance,
         )
         geom = group.geometry
         materials, indices = group_material_table(group)
@@ -942,7 +916,7 @@ class PBRPass(flatcore.FlatPass):
             shader.set_vertex_color(getattr(geom, 'colors', None) is not None)
 
         gpu = geom.instanceGPU(self)
-        bases = self._instanceJointBases(group)
+        bases = instance_joint_bases(self, group)
         shader.set_instancing(True, program=prog)
         if hasattr(shader, 'set_skinning'):
             shader.set_skinning(0 if bases is not None else None, program=prog,
@@ -961,9 +935,8 @@ class PBRPass(flatcore.FlatPass):
                 else:
                     oids = [0] * len(members)
                 self._bind_material_array(chunk_mats)
-                member_bases = (per_instance(
-                    [bases[id(rec[4][-1].geometry)] for rec in members], counts)
-                    if bases is not None else None)
+                member_bases = (member_joint_bases(bases, members, counts)
+                                if bases is not None else None)
                 draw_instanced_mesh(gpu, modelviews,
                                     per_instance(oids, counts),
                                     material_indices=per_instance(chunk_idx, counts),

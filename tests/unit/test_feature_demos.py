@@ -47,7 +47,7 @@ FRAMES = '40'
 #: needs the network, so these are skipped rather than failed where the file is
 #: absent and cannot be fetched -- a machine with no network is not a machine
 #: where the demo is broken.
-NEEDS_MODEL = {'crowd_demo': 'CesiumMan'}
+NEEDS_MODEL = {'crowd_demo': 'Fox'}
 
 
 def _model_available(name):

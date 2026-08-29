@@ -297,6 +297,10 @@ rockets.place(placement_matrices(translations=positions,
   place its own joints start in that palette, so one draw covers a hundred
   bodies in a hundred different poses. See <a href="characters.html">rigged
   characters</a>.</p>
+  <p>The <a href="shadows.html">shadow depth pass</a> batches the same way and
+  reads the same palette, each instance again naming where its own joints
+  start, so a body's shadow is of the pose it is in rather than of the pose it
+  was modelled in.</p>
   <p>A figure whose skinning runs on the processor instead does <em>not</em>
   batch: its buffers hold its posed vertices, so no two of them are the same
   geometry and there is nothing to collapse.</p>

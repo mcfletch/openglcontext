@@ -1,6 +1,6 @@
 """Render a posed skinned figure through each skinning path (a subprocess).
 
-Two jobs, chosen by the first argument:
+The job is the first argument:
 
 ``compare``
     Render one posed figure with the vertex shader skinning it and again with
@@ -11,8 +11,21 @@ Two jobs, chosen by the first argument:
     Animate a figure for many frames with the shader skinning it and count what
     crossed the bus: the joint palette should be written every frame and the
     vertex buffers not at all.
+``compute``
+    Compare the joint palettes a compute shader writes with the ones numpy
+    writes for the same pose.
+``fallback``
+    Check that a figure whose skinning the renderer cannot do on the card falls
+    back to the CPU deform rather than drawing the rest pose.
+``blend``
+    Compare the pose the blend compute shader produces with the numpy blend.
+``shadows``
+    Render a shadowed field of posed figures batched into one instanced draw
+    and again drawn one shape at a time, and report how much of the frame
+    differs. Batching is meant to change nothing about the picture, shadows
+    included.
 
-Both report ``key=value`` lines on stdout.
+Every job reports ``key=value`` lines on stdout.
 """
 import os
 import sys
@@ -258,10 +271,149 @@ def _report(state, counts):
         print('%s=%s' % (key, value), flush=True)
 
 
+#: Figures in the shadowed field. Above ``OPENGLCONTEXT_INSTANCE_MIN`` (4), so
+#: the batched frame really does collapse them into one draw.
+SHADOW_FIGURES = 6
+
+
+def _ground(size=9.0):
+    """A wide quad at y=0 that takes shadows and casts none."""
+    import numpy as np
+    from OpenGLContext.scenegraph.appearance import Appearance
+    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+    from OpenGLContext.scenegraph.shape import Shape
+
+    # Wound anti-clockwise seen from above, which is the side it is looked at
+    # from; the other way round it is back-face culled and the frame is empty.
+    positions = np.array([(-size, 0, size), (size, 0, size),
+                          (size, 0, -size), (-size, 0, -size)], 'f')
+    shape = Shape(
+        geometry=PBRMesh(positions=positions,
+                         normals=np.array([(0, 1, 0)] * 4, 'f'),
+                         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32)),
+        appearance=Appearance(material=PBRMaterial(baseColor=(0.55, 0.57, 0.6),
+                                                   roughness=1.0)))
+    shape.castsShadow = False
+    return shape
+
+
+def shadows(model_path, out_dir):
+    """One shadowed field, batched and unbatched, compared frame to frame.
+
+    Every figure is at a different point in its clip, so a shadow drawn from
+    the rest pose -- or from one figure's pose used for all of them -- is a
+    different picture from the one the per-shape path draws.
+    """
+    import numpy as np
+    _setup(True)
+    os.environ['OPENGLCONTEXT_SHADOWS'] = '1'
+    os.environ['OPENGLCONTEXT_SHADOW_CASCADES'] = '1'
+    report = {}
+    frames = {}
+
+    from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
+    from OpenGLContext import testingcontext
+    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.scenegraph.basenodes import (
+        sceneGraph, Transform, DirectionalLight,
+    )
+    from OpenGLContext.character.model import CharacterModel
+    from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
+
+    class ShadowContext(BaseContext):
+        def OnInit(self):
+            # One parse for all of them, as a crowd is built: the figures then
+            # hold the same rest-pose vertices and batch into one draw.
+            document = parse_gltf(model_path)
+            self.models = []
+            # A low sun behind the figures, so each shadow stretches towards
+            # the camera across open ground rather than hiding under its body.
+            children = [_ground(),
+                        DirectionalLight(direction=(0.12, -0.45, 0.88),
+                                         color=(1, 1, 1), intensity=2.4)]
+            for index in range(SHADOW_FIGURES):
+                model = CharacterModel(load_gltf(document=document))
+                clip = sorted(model.clips)[0]
+                model.play(clip, loop=False)
+                # A different point of the clip each, so the figures are in
+                # visibly different poses and no two shadows agree by accident.
+                model.update(0.15 + 0.17 * index)
+                self.models.append(model)
+                children.append(Transform(
+                    translation=(1.5 * index - 3.75, 0.0, -1.6),
+                    children=[model.group]))
+            self.sg = sceneGraph(children=children)
+            self.platform.setPosition((0, 5.0, 5.0))
+            self.platform.setOrientation((1, 0, 0, -0.62))
+            self._frame = 0
+
+        def OnIdle(self, *a):
+            self.triggerRedraw(1)
+            return 1
+
+        def OnDraw(self, *a, **k):
+            result = BaseContext.OnDraw(self, *a, **k)
+            self._frame += 1
+            # Two settled frames apart, so neither reads a shadow map that is
+            # still being fitted.
+            if self._frame in (8, 16):
+                width, height = self.getViewPort()
+                raw = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
+                stage = 0 if self._frame == 8 else 1
+                frames[stage] = np.frombuffer(
+                    raw, dtype=np.uint8).reshape(height, width, 3)[::-1].copy()
+                if stage == 0:
+                    stats = getattr(self, 'renderStats', None)
+                    report['instanced'] = int(getattr(stats, 'instances', 0))
+                    # The field goes through the per-shape path for the second
+                    # capture; the field is read per frame, so this is enough.
+                    self.contextDefinition.instancing = False
+            return result
+
+    os.environ['OPENGLCONTEXT_AUTO_EXIT_FRAMES'] = '18'
+
+    class Reporting(ShadowContext):
+        def OnQuit(self, *a, **k):
+            _emit_shadows(report, frames, out_dir)
+            return ShadowContext.OnQuit(self, *a, **k)
+
+    from OpenGLContext.contextdefinition import ContextDefinition
+    Reporting.ContextMainLoop(definition=ContextDefinition(size=(480, 360)))
+    _emit_shadows(report, frames, out_dir)
+
+
+def _emit_shadows(report, frames, out_dir):
+    """Report the comparison, and leave both frames beside it to be looked at."""
+    import numpy as np
+    if 0 in frames and 1 in frames:
+        for stage, name in ((0, 'batched'), (1, 'per-shape')):
+            _write_png(os.path.join(out_dir, 'shadows-%s.png' % name),
+                       frames[stage])
+        batched, single = frames[0].astype(np.int16), frames[1].astype(np.int16)
+        report['differing_fraction'] = float((np.abs(batched - single) > 8).mean())
+        # The lit ground is what a shadow is dark against, so a frame that is
+        # dark nearly everywhere has drawn nothing to cast one onto and the
+        # comparison above would agree over an empty picture.
+        lit = np.asarray(single).reshape(-1, 3).max(axis=1)
+        report['shadowed_fraction'] = float(((lit > 24) & (lit < 128)).mean())
+    for key, value in report.items():
+        print('%s=%s' % (key, value), flush=True)
+
+
+def _write_png(path, pixels):
+    try:
+        from PIL import Image
+    except ImportError:
+        return
+    Image.fromarray(pixels, 'RGB').save(path)
+
+
 def main():
     job = sys.argv[1]
     return {'compare': compare, 'uploads': uploads, 'compute': compute,
-            'fallback': fallback, 'blend': blend}[job](sys.argv[2], sys.argv[3])
+            'fallback': fallback, 'blend': blend,
+            'shadows': shadows}[job](sys.argv[2], sys.argv[3])
 
 
 

@@ -216,6 +216,77 @@ are handed is the same matrices.</p>
 <strong>refused</strong> with a warning rather than adapted: a coarse mesh posed
 by the wrong bones is worse than a fine one drawn at distance.</p>
 
+<h3>A crowd that walks about</h3>
+<p>A crowd where every figure plays the same clip from the same clock is one
+figure drawn many times. <code>OpenGLContext.character.wander</code> is what
+makes it a crowd of individuals — each body somewhere else, facing somewhere
+else and part way through something else — while the renderer goes on drawing
+all of them in one call:</p>
+<pre><code>from functools import partial
+from OpenGLContext.character.wander import Gait, WanderingCrowd
+
+crowd = WanderingCrowd((-13.0, 13.0, -19.0, -0.5),      # the ground they keep to
+                       speed=(0.55, 1.65), scale=0.008,
+                       gait=partial(Gait, walk='Walk', run='Run', idle='Survey',
+                                    walk_stride=0.82, run_stride=1.38))
+for _ in range(150):
+    model = CharacterModel(load_gltf(document=document))
+    scene.children.append(crowd.add(model))    # the Transform to mount it by
+...
+crowd.update(dt, mode=context)                 # once a frame: move, then pose</code></pre>
+<p>Each figure walks for a while, comes to a halt, does something while it is
+stopped, turns towards somewhere else and sets off again; how long each of those
+lasts, how fast it travels and which way it turns come per figure out of a named
+entropy stream, so a session run again with the same
+<a href="environment.html"><code>OPENGLCONTEXT_SEED</code></a> plays out the same
+way. A figure that reaches the edge of the field turns back inwards rather than
+wandering off.</p>
+
+<h4>Three layers, and each body at its own point in them</h4>
+<p><code>Gait</code> puts the model's clips in three layers — the idle
+underneath, the walk and the run over it — and what a figure shows is its own
+weights on them. A body at half speed is a blend of the idle and the walk; one
+picking up speed is a blend of the walk and the run; one that has stopped is the
+idle alone. That is the per-figure blending a crowd exists to do, and because
+the crowd gathers figures by the <em>shape</em> of the work rather than by the
+weights, a field spread right across that range still costs a handful of runs
+rather than one per body.</p>
+<p>A model carrying more than one idle is given all of them, and a figure steps
+on to the next each time it comes to a halt — so a body that stops twice does
+two different things, and over a field every idle gets shown. Tell the crowd how
+many there are so it can spread them:</p>
+<pre><code>WanderingCrowd(bounds, actions=3,
+               gait=partial(Gait, walk='Walk', idle=['Survey', 'Sniff', 'Shake']))</code></pre>
+
+<h4>The numbers to measure, not guess</h4>
+<p>A figure travels along its heading, and heading is measured from
+<strong>+Z</strong> — <code>rotation=(0, 1, 0, heading)</code> applied to +Z is
+where it goes. A model authored facing the other way is turned round once, with
+<code>WanderingCrowd(..., facing=math.pi)</code>, rather than by bending the
+arithmetic around it.</p>
+<p>That and each clip's stride come off one measurement: play the clip and watch
+<strong>what is touching the ground</strong>. It travels backwards under the
+body at the speed the clip is carrying the body forward, so its velocity is the
+stride and its direction is the model's forward. The strides settle two things
+at once — how fast to run each clip's clock for the speed a body is actually
+travelling at, so the feet stay on the ground, and where the crossover from
+walking to running falls.</p>
+<p>Guessing either is what makes a crowd <em>moonwalk</em>, the bodies sliding
+along while their legs stride the other way, and it does not show in a still
+frame, because a stride looks the same forwards and backwards until something
+moves. <code>tests/unit/test_character_wander.py</code> holds the demo's numbers
+to it: what is on the ground must not travel over it. Reading the posed mesh
+rather than a foot bone, so it works on a quadruped as readily as on a figure
+with a humanoid skeleton.</p>
+<p><code>Wander</code> underneath is a state machine over arrays with a figure
+axis on it, in the manner of the posing above: it holds no clips, no scenegraph
+and no GL, and a hundred and fifty figures cost about 0.05&nbsp;ms a frame
+between them. It reports which figures a step actually
+<code>walked</code> and which it <code>turned</code>, and only those are written
+back to the scenegraph — a figure walking straight ahead does not turn and a
+standing one does not move, and setting a field on a node that has not moved is
+by far the largest thing in placing a crowd.</p>
+
 <h3>Not every figure every frame</h3>
 <p>The largest single lever a crowd has is not posing bodies nobody can see the
 difference on. <code>update</code> takes a <code>budget</code> — how many
@@ -226,28 +297,44 @@ crowd.update(dt, budget=80)            # at most eighty figures this frame</code
 <p>Clocks always run. A figure posed every third frame is where its clip says it
 is when its turn comes, not three frames behind; what a budget or a rate saves
 is the pose, not the playback.</p>
+<p>Setting those rates from how far each figure is from the eye is what a
+<code>WanderingCrowd</code> does for a field that moves — and which figures are
+near changes every frame once they walk:</p>
+<pre><code>crowd.schedule(context.platform.position,
+               ((8.0, 0.0),            # inside eight metres, every frame
+                (20.0, 12.0),          # out to twenty, twelve poses a second
+                (float('inf'), 4.0)))  # beyond that, four</code></pre>
+<p>The crowd also says how many <em>runs</em> of arithmetic its last update
+took, one per set of figures doing the same kind of thing:
+<code>crowd.groups</code>. It is the number that says whether a crowd is
+gathering — a hundred and fifty figures in three runs cost three set-ups, and
+in a hundred and fifty runs cost a hundred and fifty of them.</p>
 
 <h3>Seeing it work</h3>
 <figure>
 <img src="images/demos/crowd_demo.jpg"
-     alt="A hundred and fifty copies of one walking figure spread across a plain, each at a different point in its stride">
+     alt="A hundred and fifty copies of one rigged model spread across a plain, each at a different point in a walk, a run or a stop">
 <figcaption><strong><code>python tests/crowd_demo.py</code></strong> &mdash; a
-hundred and fifty copies of one rigged glTF model, each on its own clock, posed
-by a single <code>Crowd</code> and drawn as one instanced call. Press
-<code>s</code> to turn the distance scheduler off and on and watch how many
-figures the frame has to pose; <code>b</code> caps the count at eighty a frame.
-The model is <code>CesiumMan</code> from the Khronos sample catalogue, fetched
-once into the on-disk asset cache.</figcaption>
+hundred and fifty copies of one rigged glTF model, each crossing the field on
+its own, posed by a single <code>Crowd</code> and drawn as one instanced call.
+Press <code>s</code> to turn the distance scheduler off and on and watch how
+many figures the frame has to pose; <code>b</code> caps the count at eighty a
+frame. The model is <code>Fox</code> from the Khronos sample catalogue &mdash;
+twenty-six joints and three clips &mdash; fetched once into the on-disk asset
+cache.</figcaption>
 </figure>
 <p>What it prints every sixty frames, from the camera it opens at:</p>
-<pre>150 figures  scheduler ON  posed 52.3 of 150 per frame
-    107 shapes -&gt; 2 draws (106 instanced in 1 group)</pre>
+<pre>150 figures  scheduler ON  posed 37.5 of 150 per frame, in 3 runs
+    87 walking, 31 running, 4 turning, 28 standing
+    96 shapes -&gt; 2 draws (95 instanced in 1 group)</pre>
 <p>The shader skins the bodies, so all hundred and fifty hold the same rest-pose
 vertices and collapse into one instanced draw; the second call is the ground.
-Of the 151 shapes in the scene, 107 survive frustum culling at that camera. With
-the scheduler off every figure is posed every frame, the count reads 150.0, and
-the picture is the same one.</p>
-<p>What an application writes to build a crowd from one loaded model:</p>
+The shadow pass batches them the same way and reads the same joint palette, so
+each body's shadow is of the pose it is in. Of the 151 shapes in the scene, 96
+survive frustum culling at that moment. With the scheduler off every figure is
+posed every frame, the count reads 150.0, and the picture is the same one.</p>
+<p>What an application writes to build a crowd from one loaded model, without
+the wandering:</p>
 <pre><code>from OpenGLContext.character.crowd import Crowd
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.loaders.gltf import load_gltf, parse_gltf

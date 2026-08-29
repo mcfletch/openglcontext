@@ -854,20 +854,42 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         The per-instance modelview is in LIGHT space (tmatrix * light_view), so the
         depth shader's instanced branch places each caster correctly. Ids/materials
         are irrelevant to a depth pass, so they pack 0.
+
+        A skinned batch also carries the place each figure's joints start in the
+        palette, and the depth program skins from it exactly as the colour one
+        does: the shadow is of the pose the body is in, not of the pose it was
+        built in.
         """
-        from OpenGLContext.passes.instancing import draw_instanced_mesh
+        from OpenGLContext.passes.instancing import (
+            draw_instanced_mesh, instance_counts, instance_joint_bases,
+            member_joint_bases,
+        )
         modelviews = self._lightSpaceModelviews(group.members, light_view)
         if not len(modelviews):
             return
+        bases = instance_joint_bases(self, group)
         # projectionMatrix (light proj) is consumed; modelViewMatrix is ignored
         # under instancing but set for completeness.
         shader.set_matrices(modelviews[0], self.projection, program=depth_prog)
         shader.set_instancing(True, program=depth_prog)
+        skinning = getattr(shader, 'set_skinning', None)
+        if skinning is not None:
+            skinning(0 if bases is not None else None, program=depth_prog,
+                     instanced=True)
         try:
-            draw_instanced_mesh(group.geometry.instanceGPU(self), modelviews,
-                                [0] * len(modelviews))
+            draw_instanced_mesh(
+                group.geometry.instanceGPU(self), modelviews,
+                [0] * len(modelviews),
+                joint_bases=(member_joint_bases(
+                    bases, group.members, instance_counts(group.members))
+                    if bases is not None else None))
         finally:
             shader.set_instancing(False, program=depth_prog)
+            if skinning is not None:
+                # The uniform outlives the draw that set it, and the caster
+                # after this one -- a batch of crates, a single ground quad --
+                # reads a per-instance joint base nothing has bound.
+                skinning(None, program=depth_prog)
 
     def _depthGrouping(self, toRender: List) -> Tuple[List, List]:
         """Partition depth casters into instanced groups + singles (R4).

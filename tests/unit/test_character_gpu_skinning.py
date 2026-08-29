@@ -281,3 +281,29 @@ class TestAFigureCarryingSomething:
         assert report['blend_ran'] == '1'
         assert int(report['written_joints']) > 0
         assert float(report['worst_written']) < 1e-5, report
+
+
+class TestShadowsFollowThePose:
+    """A batched crowd casts the shadows a per-shape one does.
+
+    Collapsing figures into one instanced draw is meant to change nothing
+    about the picture. The depth pass batches as well as the colour pass, so
+    it too has to hand each instance the range of the joint palette its own
+    pose is in -- otherwise the bodies move and their shadows stand still in
+    the pose the model was built in.
+    """
+
+    def test_a_batched_field_and_a_per_shape_one_draw_the_same_frame(
+            self, tmp_path):
+        model = tmp_path / 'figure.glb'
+        model.write_bytes(skinned_bar_glb())
+        out = _run('shadows', str(model), str(tmp_path))
+
+        report = dict(line.split('=', 1) for line in out.strip().split('\n')
+                      if '=' in line)
+
+        assert int(report['instanced']) >= 2, (
+            'nothing batched, so the batched path was never exercised: %s' % out)
+        assert float(report['shadowed_fraction']) > 0.02, (
+            'no shadow in the frame to disagree about: %s' % out)
+        assert float(report['differing_fraction']) < 0.005, out
