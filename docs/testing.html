@@ -175,9 +175,24 @@ assert result.success, result.stderr</pre>
     Directional-shadow cascade count and image-based lighting both follow the
     frame rate, so a capture pins them:
     <code>OPENGLCONTEXT_SHADOW_CASCADES=<var>n</var></code> fixes the cascades,
-    and the capture path fixes the IBL. An animated scene pins its
-    <code>anim_time</code>. Without that, what is compared is the moment the
+    and the capture path fixes the IBL. A scene loaded through the viewer pins
+    its <code>anim_time</code>. Without that, what is compared is the moment the
     capture happened to be taken.</p>
+  <p><strong>The clock itself is pinned for the length of a capture.</strong>
+    How long five frames take is not the same twice, so a scene animated from
+    the clock reached a different pose each run and its stored frame was being
+    compared against a different moment. A run with
+    <code>OPENGLCONTEXT_AUTO_EXIT_FRAMES</code> set therefore renders against
+    <code>OpenGLContext.video.clock.FixedStepClock</code>, which advances by one
+    frame's worth of world per frame drawn; every time-driven node reads it, so
+    Timers and the TimeSensors driving scenegraph animation all arrive at the
+    same instant every run. <code>Context.CAPTURE_FRAME_RATE</code> is the rate,
+    and it decides only <em>which</em> instant.</p>
+  <p>A demo that reads <code>time.time()</code> itself does not follow that
+    clock, and its capture stays as variable as the machine is. Read
+    <code>OpenGLContext.events.systemtime.systemTime()</code> instead &mdash;
+    the same source the engine advances &mdash; and the motion becomes
+    reproducible for a capture and even for a recording.</p>
   <p>Every image a regression test compares against lives in
     <code>tests/reference_images</code>, which is a submodule &mdash; the
     <code>reference-images</code> repository &mdash; because the pictures are

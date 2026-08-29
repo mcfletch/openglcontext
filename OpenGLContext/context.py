@@ -244,6 +244,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     _autoExitFrames = None
     _autoExitFrameCount = 0
     _autoExitCaptureDir = None
+    _autoExitClock = None
 
     ### Node-like attributes
     PROTO = "Context"
@@ -319,6 +320,36 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if capture_dir:
             self._autoExitCaptureDir = capture_dir
             log.info(f"Auto-exit capture enabled: screenshots will be saved to {capture_dir}")
+
+        self.setupAutoExitClock()
+
+    #: Frames per second a capture run advances the world at. The value only
+    #: decides which instant of an animation the capture lands on; that it is
+    #: the *same* instant every run is the point.
+    CAPTURE_FRAME_RATE = 60
+
+    def setupAutoExitClock(self):
+        """Advance the world a frame at a time while capturing
+
+        A scene animated from the clock is at whatever pose the wall clock had
+        reached when the capture was taken, and how long a frame takes is not
+        the same twice -- so a stored reference frame is being compared against
+        a different moment each run.  A capture therefore renders against
+        :class:`~OpenGLContext.video.clock.FixedStepClock`, which every
+        time-driven node reads (Timers and the TimeSensors that drive scenegraph
+        animation alike), so each run reaches the same instant.
+        """
+        if self._autoExitFrames is None:
+            return
+        from OpenGLContext.video.clock import FixedStepClock
+        self._autoExitClock = FixedStepClock(
+            fps=self.CAPTURE_FRAME_RATE, start=0.0
+        ).install()
+
+    def advanceCaptureClock(self):
+        """Finish a frame's worth of world time, if a capture pinned the clock"""
+        if self._autoExitClock is not None:
+            self._autoExitClock.advance()
 
     def _autoExitDraw(self):
         """Render one final frame and capture it before auto-exit.
@@ -951,6 +982,9 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         # This ensures we count total calls rather than just rendered frames
         if self._autoExitFrames is not None:
             self._autoExitFrameCount += 1
+            # Before the cascade below, which is where the timers are polled:
+            # this frame is meant to see the instant it belongs to.
+            self.advanceCaptureClock()
             if self._autoExitFrameCount >= self._autoExitFrames:
                 log.info(f"Auto-exit: {self._autoExitFrameCount} OnDraw calls")
                 self._autoExitDraw()

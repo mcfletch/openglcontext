@@ -17,7 +17,6 @@ Runs with shadow mapping on (core profile). Override via the environment:
     OPENGLCONTEXT_SHADOWS_SOFT=1   soft (PCSS) shadows
 """
 import os
-import time
 from math import sin, cos, pi
 
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
@@ -33,6 +32,7 @@ from OpenGLContext.scenegraph.basenodes import (
     PointLight, DirectionalLight, SpotLight,
 )
 from OpenGLContext.arrays import zeros
+from OpenGLContext.events import systemtime
 
 
 # Knot vector for an order-4 (cubic) 4x4 NURBS patch
@@ -148,11 +148,11 @@ class TestContext(BaseContext):
             self.sphere, self.box, self.nurbs,
             self.spot, self.point, directional,
         ])
-        self._start = time.time()
+        self._start = systemtime.systemTime()
 
     def OnIdle(self, *args):
         """Drive the animation; updating node fields re-renders the shadows."""
-        t = time.time() - self._start
+        t = systemtime.systemTime() - self._start
         # sphere orbits high overhead so its shadow falls onto the box, NURBS and floor
         self.sphere.translation = (5 * cos(t * 0.9), 6.0 + 1.2 * sin(t * 1.8), 5 * sin(t * 0.9))
         # box spins in place
