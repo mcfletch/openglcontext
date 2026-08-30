@@ -65,11 +65,11 @@ os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 # whole depth pass over a scene that has nothing to cast one onto.
 os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '0')
 
-import time
 
 import numpy as np
 
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Box, DirectionalLight, Shape, Sphere, Transform, sceneGraph,
 )
@@ -247,7 +247,7 @@ class TestContext(BaseContext):
         self.sg = sceneGraph(children=children)
 
         self.getViewPlatform().setFrustum(fieldOfView=FIELD_OF_VIEW)
-        self._start = time.time()
+        self._start = systemtime.systemTime()
         #: The last medium printed, so an unchanged frame stays quiet.
         self._medium = None
         self._under = False
@@ -319,14 +319,14 @@ class TestContext(BaseContext):
 
     def OnHeights(self, event=None):
         """What the surface is doing, at this moment, at each pool's centre."""
-        when = time.time() - self._start
+        when = systemtime.systemTime() - self._start
         for label, style, x0, x1 in SHEETS:
             height = wave_height(style, (x0 + x1) / 2.0, 0.0, when)
             print('  %-8s surface at %+.3f m (t=%.2fs)'
                   % (label, float(height), when))
 
     def OnIdle(self, event=None):
-        when = time.time() - self._start
+        when = systemtime.systemTime() - self._start
         # The whole per-frame cost of moving four bodies of water: one uniform
         # each. The meshes were uploaded in OnInit and are not touched again.
         for mesh in self.meshes:

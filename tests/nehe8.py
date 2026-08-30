@@ -10,6 +10,7 @@ with the tutorial, so that only changes from the tutorial are noted
 here.
 '''
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 '''Because this tutorial uses legacy/immediate-mode OpenGL functions
 (glBegin, glEnd, glVertex, glNormal, glTexCoord, glTranslate, glRotate,
@@ -19,7 +20,6 @@ profile OpenGL context.
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.constants import GLfloat_3,GLfloat_4
-import time
 try:
     from PIL.Image import open
 except ImportError as err:
@@ -92,7 +92,7 @@ class TestContext( BaseContext ):
         '''We don't want to filter out back-facing faces'''
         glDisable( GL_CULL_FACE )
         glRotated( 
-            time.time()%(self.rotationCycle)/self.rotationCycle * -360, 
+            systemtime.systemTime()%(self.rotationCycle)/self.rotationCycle * -360, 
             1,0,0
         )
         self.blend()

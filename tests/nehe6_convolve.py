@@ -28,13 +28,14 @@ a compatibility profile context.
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
-import time, sys
+import sys
 try:
     from PIL.Image import open
 except ImportError as err:
     from Image import open
 from OpenGL.GL.ARB.imaging import *
 from OpenGLContext import arrays
+from OpenGLContext.events import systemtime
 
 class TestContext( BaseContext ):
     """There is one new customization point used here: OnInit
@@ -144,7 +145,7 @@ class TestContext( BaseContext ):
         BaseContext.Render( self, mode )
         glDisable( GL_LIGHTING) # context lights by default
         glTranslatef(1.5,0.0,-6.0);
-        glRotated( time.time()%(8.0)/8 * -360, 1,0,0)
+        glRotated( systemtime.systemTime()%(8.0)/8 * -360, 1,0,0)
         self.setupTexture()
         self.drawCube()
     def setupTexture( self ):

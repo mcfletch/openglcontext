@@ -10,8 +10,9 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube
 from OpenGLContext.scenegraph import imagetexture
+from OpenGLContext.events import systemtime
 from OpenGL.GL import *
-import time, os
+import os
 
 class TestContext( BaseContext ):
     # Requires compatibility profile for glTranslate, glRotate, drawCube, GL_DEPTH_SCALE
@@ -41,7 +42,7 @@ class TestContext( BaseContext ):
                 #-((time.time()%2)*25)-6.0
                 -6.0,
             )
-            glRotated( time.time()%(8.0)/8 * -360, 1,0,0)
+            glRotated( systemtime.systemTime()%(8.0)/8 * -360, 1,0,0)
             self.texture.render(mode=mode)
             drawcube.drawCube()
             self.texture.renderPost(mode=mode)

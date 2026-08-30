@@ -116,11 +116,13 @@ check for extensions which *only* define new constants.
             sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
 </div>
 	<div class="commentary">
-	<div class="paragraph indent-level-0">Configure some parameters to make for nice shadows
-        at the expense of some extra calculations</div>
+	<div class="paragraph indent-level-0">Ask for the texture coordinates to be interpolated across each
+        polygon in scene space rather than in screen space.  The shadow
+        lookup is a texture coordinate, so the cheaper screen-space
+        approximation would put the edge of a shadow in the wrong place on
+        any surface that is steeply angled away from the camera.</div>
 </div>
 	<div class="code-sample">        glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST)
-        glEnable( GL_POLYGON_SMOOTH )
 </div>
 	<div class="commentary">
 	<div class="paragraph indent-level-0">We create the geometry for our scene in a method to allow
@@ -182,14 +184,6 @@ check for extensions which *only* define new constants.
 	<div class="paragraph indent-level-0">This simple scene is a Teapot and a tall thin box on a flat
         box.  It's not particularly exciting, but it does let us see the
         shadows quite clearly.</div>
-	<div class="paragraph indent-level-8">The teapot asks for a coarse tessellation with its steps field.  A
-depth-texture lookup is a point sample of a rasterised surface, so the
-filter loses a band along every facet boundary of the geometry it is
-filtering, and the width of that band is set by the depth texture rather
-than by the mesh.  At the teapot's full NURBS sampling the facets are a
-pixel or two across, those bands meet, and the pot renders at ambient
-only.  A sampling close to the classic GLUT teapot's keeps the facets
-wide enough that what you see is the lit surface between them.</div>
 </div>
 	<div class="code-sample">        return Transform(
             children = [
@@ -212,7 +206,7 @@ wide enough that what you see is the lit surface between them.</div>
                     children = [
                         Shape(
                             DEF = 'Tea',
-                            geometry = Teapot( size = .5, steps = 4 ),
+                            geometry = Teapot( size = .5 ),
                             appearance = Appearance(
                                 material = Material(
                                     diffuseColor =( .5,1.0,.5 ),

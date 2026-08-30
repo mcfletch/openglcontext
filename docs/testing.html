@@ -178,21 +178,26 @@ assert result.success, result.stderr</pre>
     and the capture path fixes the IBL. A scene loaded through the viewer pins
     its <code>anim_time</code>. Without that, what is compared is the moment the
     capture happened to be taken.</p>
-  <p><strong>The clock itself is pinned for the length of a capture.</strong>
-    How long five frames take is not the same twice, so a scene animated from
-    the clock reached a different pose each run and its stored frame was being
-    compared against a different moment. A run with
-    <code>OPENGLCONTEXT_AUTO_EXIT_FRAMES</code> set therefore renders against
-    <code>OpenGLContext.video.clock.FixedStepClock</code>, which advances by one
-    frame's worth of world per frame drawn; every time-driven node reads it, so
-    Timers and the TimeSensors driving scenegraph animation all arrive at the
-    same instant every run. <code>Context.CAPTURE_FRAME_RATE</code> is the rate,
-    and it decides only <em>which</em> instant.</p>
-  <p>A demo that reads <code>time.time()</code> itself does not follow that
-    clock, and its capture stays as variable as the machine is. Read
-    <code>OpenGLContext.events.systemtime.systemTime()</code> instead &mdash;
-    the same source the engine advances &mdash; and the motion becomes
-    reproducible for a capture and even for a recording.</p>
+  <p><strong>A capture counts frames rather than seconds.</strong> A scene
+    animated against the wall clock reaches a different point in its animation
+    on a fast machine than on a slow one, so the frame read back is a picture of
+    how long the process took to start. Under
+    <code>OPENGLCONTEXT_AUTO_EXIT_FRAMES</code> the engine's time source is a
+    <code>FixedStepClock</code> starting at zero and advancing one frame's worth
+    per <code>OnDraw</code>: a TimeSensor a third of the way through its cycle
+    is a third of the way through it in every run, on every machine.
+    <code>OPENGLCONTEXT_CAPTURE_FPS</code> names a rate other than 60, or 0 for
+    a capture that wants to watch real time pass.</p>
+  <p>Everything reading <code>OpenGLContext.events.systemtime</code> follows it,
+    which is every <code>Timer</code> and every <code>TimeSensor</code>. Code
+    calling <code>time.time()</code> itself does not, and has to ask
+    <code>systemtime.systemTime()</code> instead to be reproducible. Nor does
+    state advanced from <code>OnIdle</code>, which the main loop calls as often
+    as it has room for: a scene moved there holds whatever the last idle wrote
+    rather than what the frame being drawn is worth. The few scripts that do
+    that are listed in <code>RANDOMIZED_SCRIPTS</code> in
+    <code>tests/test_all_scripts.py</code> and are run for their exit status
+    instead.</p>
   <p>Every image a regression test compares against lives in
     <code>tests/reference_images</code>, which is a submodule &mdash; the
     <code>openglcontext-reference-images</code> repository &mdash; because the

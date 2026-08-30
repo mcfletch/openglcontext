@@ -60,41 +60,18 @@ REPORT_PATH = TESTS_DIR / "report.html"
 #: so that a reference frame keeps matching.
 CAPTURE_SEED = 4242
 
-# Scripts that use randomization and shouldn't expect visual match
-# These will still capture images but won't fail on visual differences
+# Scripts whose captured frame is not a function of the scene, and so are run
+# for their exit status rather than compared against a reference.
+#
+# A capture counts frames rather than seconds (OpenGLContext.video.clock), so a
+# scene animated from a Timer, a TimeSensor or the engine's clock lands on the
+# same frame every run and is compared normally. What remains here advances its
+# state from OnIdle, which the main loop calls as often as it has room for:
+# the scenegraph then holds whatever the last idle wrote rather than what the
+# frame being drawn is worth, and no clock can settle which that was.
 RANDOMIZED_SCRIPTS = [
-    'audio_spatial.py',  # An emitter orbits on a wall clock
-    'particles_effects.py',  # Emitters run on a wall clock
-    'particles_simple.py',  # Random particle positions
-    'starfield.py',  # Random star positions
-    'teapot_ceramic.py',  # Auto-rotates by wall clock; captured angle varies
-    # The feature demos that move. Each is driven from the clock so that what
-    # it demonstrates is visible without a key being held, which means the
-    # frame a capture lands on is not the same one twice.
-    'water_demo.py',  # Wave time advances every frame
-    'hud_demo.py',  # Meters sweep and messages expire on a timer
-    'crowd_demo.py',  # 150 figures walking, each at its own point in the stride
-    'telemetry_demo.py',  # Bodies orbit on the clock
-    'recording_demo.py',  # The carousel orbits and bobs on the clock
-    # The NeHe translations spin their geometry straight from time.time(), which
-    # is what those lessons are about; the angle a capture lands on is whatever
-    # the clock said. Their siblings that do not move are compared normally.
-    'nehe4.py',
-    'nehe5.py',
-    'nehe6.py',
-    'nehe6_compressed.py',
-    'nehe6_convolve.py',
-    'nehe6_timer.py',
-    'nehe6_multi.py',
-    'nehe7.py',
-    'nehe8.py',
-    'simplerotate.py',  # Rotates on the clock, which is the whole demo
-    'saveimage.py',  # Rotates on the clock while it writes the file out
-    'readpixelsleak.py',  # Rotates on the clock while it reads the buffer back
-    'lod_demo.py',  # The camera sweeps in and out on the clock
-    'lightobject.py',  # A TimeSensor swings the light round on the clock
-    'cubeback_rot.py',  # A looping TimeSensor tilts the background on the clock
-    'shader_4_subset.py',  # Moves a vertex from time.time() every frame
+    'particles_effects.py',  # Emitters step from OnIdle
+    'telemetry_demo.py',  # Bodies are moved to their orbits from OnIdle
 ]
 
 # Single source of truth for the visual-diff tolerance. The gate

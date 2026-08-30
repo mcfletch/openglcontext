@@ -468,6 +468,25 @@ the seed *and* where those generators stood, and a replay puts both back.
 Also in `renderoptions.ENVIRONMENT`: a capture that wants a fixed sequence pins
 it rather than inheriting one.
 
+### OPENGLCONTEXT_CAPTURE_FPS
+
+What a capture's world clock advances by per frame. A bounded run
+(`OPENGLCONTEXT_AUTO_EXIT_FRAMES`) puts the engine's time source on a
+`FixedStepClock` starting at zero and advancing one frame's worth per `OnDraw`,
+so a scene animated from a `Timer` or a `TimeSensor` reaches the same point on
+every machine and the frame read back is a picture of the scene rather than of
+how long the process took to start. This names a rate other than 60, or `0` for
+a capture that wants to watch real time pass.
+
+```bash
+OPENGLCONTEXT_CAPTURE_FPS=30 /workspaces/OpenGL-dev/.venv/bin/python tests/nehe4.py
+```
+
+Only what reads `OpenGLContext.events.systemtime` follows — every `Timer` and
+`TimeSensor`. A demo calling `time.time()` itself does not, and asks
+`systemtime.systemTime()` instead; nor does state advanced from `OnIdle`, which
+the main loop calls as often as it has room for. `OpenGLContext.video.clock`.
+
 ## Code Conventions
 
 ### Writing Style
@@ -930,7 +949,11 @@ Scripts are categorized for appropriate testing:
 - **Visual scripts**: Produce graphical output, included in visual regression (`TestVisualRegression`)
 - **Non-visual scripts**: Functionality tests with stdout output (glget.py, boundingvolume.py, etc.) - run via `TestAllScripts`
 - **Platform-specific**: Windows-only (WGL), wxPython, pygame scripts with automatic skip logic
-- **Randomized**: Scripts with non-deterministic output marked with `expect_visual_diff`
+- **Randomized**: Scripts whose captured frame does not follow from the scene,
+  marked with `expect_visual_diff` and run for their exit status. A capture
+  counts frames rather than seconds, so an animated scene is compared normally;
+  what is left here advances its state from `OnIdle`. See
+  `RANDOMIZED_SCRIPTS` in `tests/test_all_scripts.py`.
 
 ### Unit Test Requirements
 

@@ -61,7 +61,7 @@ NeHe tutorials.""")
         the node is not part of a scenegraph.'''
         self.time.register (self)
         self.time.start ()
-        '''As with the time.time() mechanism, we need to track our 
+        '''As when reading the clock directly, we need to track our 
         current rotation so that the rendering pass can perform the 
         rotation calculated by the timer callback.'''
         self.rotation =  0

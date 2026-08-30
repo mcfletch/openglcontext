@@ -12,13 +12,13 @@ Note that key-bindings are different from the tutorial:
 arrows move, pageup/pagedown control speed of rotation
 '''
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 '''Because this tutorial uses legacy/immediate-mode OpenGL functions
 (glBegin, glEnd, glVertex, glNormal, glTexCoord, glTranslate, glRotate,
 glLight), we need to explicitly request a compatibility profile OpenGL context.
 '''
 from OpenGL.GL import *
-import time
 try:
     from PIL.Image import open
 except ImportError as err:
@@ -152,7 +152,7 @@ class TestContext( BaseContext ):
         change the rotation cycle there is a discontinuity where the 
         current rotation "jumps" to the new calculated angle.'''
         glRotated( 
-            time.time()%(self.rotationCycle)/self.rotationCycle * -360, 
+            systemtime.systemTime()%(self.rotationCycle)/self.rotationCycle * -360, 
             1,0,0
         )
         self.drawCube()
