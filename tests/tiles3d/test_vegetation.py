@@ -15,6 +15,17 @@ def _quad(size=10.0):
     return p, np.array([[0, 1, 2], [0, 2, 3]], "u4")
 
 
+def _planted(instance):
+    """What one instance transform draws, under the seating that stands it up.
+
+    A scatter seats its prototype so the plant's foot rather than its origin
+    lands on the surface, which puts one shared lift between the per-instance
+    transform and the prototype -- see
+    ``tests/unit/test_scattered_plants_stand_on_the_ground.py``.
+    """
+    return instance.children[0].children[0]
+
+
 def test_group_has_one_transform_per_instance():
     p, t = _quad()
     proto = Shape(geometry=Box(size=(1, 1, 1)))
@@ -28,8 +39,11 @@ def test_instances_share_the_prototype():
     p, t = _quad()
     proto = Shape(geometry=Box(size=(1, 1, 1)))
     group = build_vegetation_group(p, t, proto, density=1.0, seed=4)
+    # One node reached by every instance is what collapses the scatter to 1 draw.
+    seated = {id(child.children[0]) for child in group.children}
+    assert len(seated) == 1
     for child in group.children:
-        assert child.children[0] is proto  # shared -> instancing collapses to 1 draw
+        assert _planted(child) is proto
 
 
 def test_instance_positions_match_scatter():
@@ -65,9 +79,9 @@ def test_vegetation_lod_uses_two_prototypes():
                              camera=(0, 0, 0), near_distance=90.0)
     near_group, far_group = g.children
     for c in near_group.children:
-        assert c.children[0] is near_proto
+        assert _planted(c) is near_proto
     for c in far_group.children:
-        assert c.children[0] is far_proto
+        assert _planted(c) is far_proto
     assert len(near_group.children) > 0 and len(far_group.children) > 0
 
 

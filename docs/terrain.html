@@ -528,6 +528,35 @@ trees = build_vegetation_lod(pos, idx.reshape(-1, 3), near_mesh, far_billboard,
   (<code>group_from_scatter</code>, <code>partition_by_distance</code>,
   <code>build_vegetation_lod</code>, <code>build_grass_patch</code>).</p>
 
+  <h3 id="footing">Where a plant meets the ground</h3>
+  <p><strong>A placement is the point the plant stands on</strong>, and every
+  vegetation path in the engine agrees on it. The GPU nodes carry it in their
+  vertex data: a billboard quad spans <code>y</code> in <code>[0, 1]</code>,
+  <code>load_clump_glb</code> rebases a clump to <code>y&nbsp;=&nbsp;0</code>, and
+  a tree mesh is authored with its trunk foot at the origin.</p>
+  <p>A scenegraph prototype is whatever its author modelled, and VRML's primitives
+  are centred on their origin &mdash; so a <code>Cone</code> used straight as a
+  shrub would be planted half its height into the hill with its tip showing.
+  <code>group_from_scatter</code> gives a prototype the same contact point the GPU
+  nodes have, by measuring what it occupies and lifting it by its own underside.
+  A prototype already modelled foot-at-origin measures a zero lift and does not
+  move.</p>
+  <pre><code>shrub = Shape(geometry=Cone(bottomRadius=2.5, height=8.0), appearance=green)
+veg = build_vegetation_group(pos, idx.reshape(-1, 3), shrub, density=0.004, seed=1)
+
+group_from_scatter(placements, oak, sink=0.1)     # settle a root flare in
+group_from_scatter(placements, buoy, seat=False)  # modelled about its middle</code></pre>
+  <p><code>sink</code> settles the prototype that far back into the ground, in the
+  units it is modelled in &mdash; what a root flare or a boulder base wants so
+  that it meets the ground rather than perching on it. <code>seat=False</code>
+  keeps the prototype's own origin as the contact point. The seated prototype is
+  wrapped once and shared by every instance, so the scatter is still one draw.</p>
+  <p class="technical"><code>OpenGLContext.loaders.assets.seated(node, sink=0)</code>
+  is the same thing for anything else placed on a surface &mdash; a prop, a rock,
+  a parked car &mdash; and <code>assets.bounds(node)</code> is the measurement
+  under it: the box a subtree occupies in its own root's space, with every
+  <code>Transform</code> applied and no GL context needed.</p>
+
   <h2>Refining &amp; tuning</h2>
   <table>
     <tr><th>Knob</th><th>Effect</th></tr>
@@ -563,11 +592,47 @@ trees = build_vegetation_lod(pos, idx.reshape(-1, 3), near_mesh, far_billboard,
   <p>A landscape that fits in memory whole needs none of the streaming above.
   <code>OpenGLContext.scenegraph.terrain</code> holds it as a
   <strong><code>HeightField</code></strong> &mdash; an elevation grid over a
-  centred world square, sampled bilinearly &mdash; drawn by
+  centred world square &mdash; drawn by
   <strong><code>SplatTerrain</code></strong>, which blends several ground
   materials per fragment from a control image. A 4&nbsp;km square at 513&sup2;
   samples is one mesh and one draw, and the height under any point is arithmetic
   rather than a ray cast.</p>
+
+  <h3 id="onesurface">One surface, three readers</h3>
+  <p>A height field answers about the same ground three ways, and every one of
+  them gives the same answer:</p>
+  <table>
+    <tr><th>Reader</th><th>What asks it</th></tr>
+    <tr><td><code>field.mesh()</code></td>
+        <td>what <code>SplatTerrain</code> draws &mdash; the ground a player
+        sees</td></tr>
+    <tr><td><code>HeightFieldColliders</code></td>
+        <td>the trimesh chunks a car drives on, cut from that same grid</td></tr>
+    <tr><td><code>field.sample(x, z)</code></td>
+        <td>everything analytic: the walker's floor, the seat of every scattered
+        plant, the slope a grass mask thins by</td></tr>
+  </table>
+  <p>Four corner samples do not lie in a plane, so each cell of the grid is drawn
+  as <em>two triangles</em>, and the height inside a cell depends on which of the
+  two a point falls in. <code>sample</code> reads that same triangulated surface,
+  so a camera clamped with it stands on the ground that is drawn, and a plant
+  seated on it meets that ground.</p>
+  <p class="technical">Interpolating the four corners of a cell instead &mdash; a
+  bilinear patch &mdash; names a height on a surface nothing draws: it rides a
+  quarter of the cell's twist above the drawn ground on one diagonal and the same
+  below it on the other. Over the eight-metre cells of a 4&nbsp;km square at
+  513&sup2;, that is metres &mdash; a camera under the hill looking out through
+  it, and vegetation buried to the tips.
+  <code>tests/unit/test_heightfield_is_the_drawn_surface.py</code> holds the three
+  readers to each other.</p>
+  <p><strong>A height function is not the ground; the mesh built from it is.</strong>
+  The same rule applies wherever a surface is meshed by sampling a function at
+  vertices &mdash; the streamed tiles above, <code>terrain_patch</code>. What is
+  drawn there is the triangles between those samples, so anything placed on that
+  ground has to be placed against them: scatter over the tile mesh
+  (<code>scatter_on_mesh</code>), or against a sampler that reads it. Feeding the
+  original function to <code>scatter_disc</code> seats plants on a surface that
+  was never drawn.</p>
 
   <h3 id="fromfunction">Where a height field comes from</h3>
   <p>A landscape is <em>authored</em> as a function of <code>(x, z)</code> &mdash;

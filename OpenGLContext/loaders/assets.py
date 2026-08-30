@@ -39,7 +39,7 @@ from OpenGLContext.loaders.gltf.transforms import _local_matrix_rv
 
 log = logging.getLogger(__name__)
 
-__all__ = ['AssetLibrary', 'bounds', 'brighten', 'recolour', 'shapes']
+__all__ = ['AssetLibrary', 'bounds', 'brighten', 'recolour', 'seated', 'shapes']
 
 
 class AssetLibrary(object):
@@ -199,8 +199,13 @@ def bounds(node: Any) -> "Optional[Tuple[np.ndarray, np.ndarray]]":
     In the space the subtree's own root sits in, with every ``Transform`` on the
     way down applied -- so what comes back is where the geometry actually is,
     not where it was authored. What a caller does with it is usually to cut a
-    collider from a model, or to check that a model is the size it was meant to
-    be; neither wants a GL context, and this needs none.
+    collider from a model, to seat it on the ground (:func:`seated`), or to
+    check that a model is the size it was meant to be; none of those wants a GL
+    context, and this needs none.
+
+    Geometry that carries its shape as numbers -- a VRML ``Cone``, a ``Sphere``
+    -- is measured by the box it declares rather than by a vertex array it does
+    not have, so a subtree of primitives measures the same as one of meshes.
     """
     boxes: list = []
     _measure(node, np.eye(4), boxes)
@@ -210,19 +215,74 @@ def bounds(node: Any) -> "Optional[Tuple[np.ndarray, np.ndarray]]":
     return stacked[:, 0].min(axis=0), stacked[:, 1].max(axis=0)
 
 
+def seated(node: Any, sink: float = 0.0) -> Any:
+    """``node`` wrapped so that its underside sits at the wrapper's origin.
+
+    Placing a model puts *its origin* where the caller asked, which reads as
+    "on the ground" only for art authored with its feet there. A VRML primitive
+    is centred on its origin, and a model exported from a modelling package sits
+    wherever its author left it, so the same placement drops one into the hill
+    and floats the next above it. This measures what the subtree occupies and
+    lifts it by its own underside, which makes the origin the point the thing
+    stands on.
+
+    ``sink`` is how far *back* into the ground to settle it, in the units the
+    subtree is modelled in -- what a tree's root flare or a boulder's base wants
+    so that it meets the ground rather than perching on it.
+
+    The wrapper is a new node and ``node`` is not touched, so one prototype
+    seats into as many scatters as a caller likes. A subtree with nothing to
+    measure comes back unchanged: there is no underside to find, and refusing to
+    place it would be a worse answer than placing it where it was asked for.
+    """
+    measured = bounds(node)
+    if measured is None:
+        return node
+    lift = -float(measured[0][1]) - float(sink)
+    from OpenGLContext.scenegraph.transform import Transform
+    return Transform(translation=[0.0, lift, 0.0], children=[node])
+
+
 def _measure(node: Any, parent: np.ndarray, boxes: list) -> None:
     """Accumulate one subtree's world-space boxes into ``boxes``."""
     # Row-vector convention, as the renderer and the glTF loader both use:
     # p_world = p_local @ local @ parent.
     world = (_local_matrix_rv(node) @ parent
              if getattr(node, 'translation', None) is not None else parent)
-    points = getattr(getattr(node, 'geometry', None), 'positions', None)
-    if points is not None and len(points):
-        local = np.asarray(points, dtype='d').reshape(-1, 3)
+    local = _local_points(getattr(node, 'geometry', None))
+    if local is not None:
         placed = np.column_stack([local, np.ones(len(local))]) @ world
         boxes.append((placed[:, :3].min(axis=0), placed[:, :3].max(axis=0)))
     for child in (getattr(node, 'children', None) or ()):
         _measure(child, world, boxes)
+
+
+def _local_points(geometry: Any) -> "Optional[np.ndarray]":
+    """Points spanning a geometry's own extent, in its own space, or None.
+
+    A vertex array where there is one, and otherwise the corners of the box the
+    geometry declares -- which is how a node that is a handful of numbers
+    (``Cone``, ``Sphere``, ``Text``) says how big it is. The corners bound the
+    same space the vertices would, which is all a box is asked for.
+    """
+    if geometry is None:
+        return None
+    points = getattr(geometry, 'positions', None)
+    if points is None:
+        points = getattr(getattr(geometry, 'coord', None), 'point', None)
+    if points is not None and len(points):
+        return np.asarray(points, dtype='d').reshape(-1, 3)
+    volume = getattr(geometry, 'boundingVolume', None)
+    if volume is None:
+        return None
+    try:
+        # No render pass to ask, so this is only the geometry that can answer
+        # from its own fields; one that needs the pass (a cache, a font) says so
+        # by raising, and contributes nothing rather than stopping the measure.
+        corners = np.asarray(volume(None).getPoints(), dtype='d')
+    except Exception:
+        return None
+    return corners.reshape(-1, corners.shape[-1])[:, :3] if len(corners) else None
 
 
 def _materials(node: Any) -> Iterator[Any]:

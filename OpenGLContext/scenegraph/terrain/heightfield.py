@@ -3,9 +3,10 @@
 Wraps a normalised (0..1) elevation grid with its world extent and relief so a
 single object answers both the *render* question (give me the mesh + normals) and
 the *gameplay* question (how high is the ground under (x, z), how steep is it).
-Bilinear sampling matches the interpolated render mesh exactly, so a camera
-clamped with :meth:`sample` sits on the surface the player sees, not above or
-below it. Also bakes the two static shadow terms used by the splat shader.
+:meth:`HeightField.sample` reads the same triangulated surface :meth:`HeightField.mesh`
+draws, so a camera clamped with it sits on the ground the player sees rather than
+above or below it, and a plant seated on it meets that ground. Also bakes the two
+static shadow terms used by the splat shader.
 """
 import math
 from typing import Any, Callable, Optional
@@ -109,25 +110,51 @@ class HeightField:
         return cls(grid, extent, relief, base=base)
 
     def sample(self, x: "float | np.ndarray", z: "float | np.ndarray") -> np.ndarray:
-        """Bilinear world-height at ``(x, z)`` (scalars or arrays), matching the mesh."""
+        """World height at ``(x, z)`` (scalars or arrays), on the drawn surface.
+
+        Four corner samples do not lie in a plane, so :meth:`mesh` draws each
+        cell as the two triangles either side of the ``b``--``c`` diagonal, and
+        the height inside a cell is the height of whichever of those two the
+        point falls in. That is the surface a player sees and the one
+        :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` cuts
+        its trimesh from, so it is the one every analytic reader -- the walker's
+        floor, the seat of a scattered plant, a slope mask -- has to be given.
+
+        Interpolating all four corners instead names a height on a surface
+        nothing draws: it stands a quarter of the cell's twist above the drawn
+        ground on one diagonal and the same below it on the other, which on wide
+        cells over real relief is metres of camera under the hill.
+
+        Points outside the square are held at the border height.
+        """
         E, R = self.extent, self.res
         x = np.asarray(x, 'd')
         z = np.asarray(z, 'd')
         u = np.clip((x + E / 2) / E * (R - 1), 0, R - 1)
         v = np.clip((z + E / 2) / E * (R - 1), 0, R - 1)
-        u0 = np.floor(u).astype(int)
-        v0 = np.floor(v).astype(int)
-        u1 = np.minimum(u0 + 1, R - 1)
-        v1 = np.minimum(v0 + 1, R - 1)
-        fu = u - u0
-        fv = v - v0
+        # The cell a point is in, by its low corner. The last row and column
+        # close the cell before them rather than opening one that is not there,
+        # so a point on the far border interpolates inward.
+        column = np.clip(np.floor(u), 0, max(R - 2, 0)).astype(int)
+        row = np.clip(np.floor(v), 0, max(R - 2, 0)).astype(int)
+        fu = u - column
+        fv = v - row
         h = self.grid
-        h00 = h[v0, u0]
-        h01 = h[v0, u1]
-        h10 = h[v1, u0]
-        h11 = h[v1, u1]
-        return ((h00 * (1 - fu) + h01 * fu) * (1 - fv) +
-                (h10 * (1 - fu) + h11 * fu) * fv) * self.relief + self.base
+        # Named as in :meth:`mesh`: a is the cell's low corner, b one step along
+        # x, c one step along z, d the far corner. A degenerate one-sample grid
+        # has no step to take, and every corner is the sample itself.
+        next_column = np.minimum(column + 1, R - 1)
+        next_row = np.minimum(row + 1, R - 1)
+        a = h[row, column]
+        b = h[row, next_column]
+        c = h[next_row, column]
+        d = h[next_row, next_column]
+        # b--c is the shared edge: below it the triangle is (a, b, c), above it
+        # (b, d, c), and each is the plane through its own three corners.
+        lower = a + fu * (b - a) + fv * (c - a)
+        upper = d + (1.0 - fu) * (c - d) + (1.0 - fv) * (b - d)
+        height: np.ndarray = np.where(fu + fv <= 1.0, lower, upper)
+        return height * self.relief + self.base
 
     def height_at(self, x: float, z: float) -> float:
         """Scalar world-height at ``(x, z)``."""
@@ -150,7 +177,8 @@ class HeightField:
         zm = np.maximum(z - eps, -half)
         sx = (self.sample(xp, z) - self.sample(xm, z)) / np.maximum(xp - xm, 1e-6)
         sz = (self.sample(x, zp) - self.sample(x, zm)) / np.maximum(zp - zm, 1e-6)
-        return np.hypot(sx, sz)
+        rise: np.ndarray = np.hypot(sx, sz)
+        return rise
 
     def mesh(self) -> "tuple[np.ndarray, np.ndarray]":
         """Interleaved (position, normal) vertices and triangle indices for the grid.

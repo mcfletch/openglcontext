@@ -402,6 +402,24 @@ are given, so they belong to a subtree from <code>load()</code>. A model with
 several materials that must stay apart &mdash; paint, glass, bright trim &mdash;
 is repainted through <code>scene.materials</code> instead, which touches the one
 material named and leaves the glass glass.</p>
+<p><code>bounds( node )</code> is the box a subtree occupies, as
+<code>(minimum, maximum)</code> in the space its own root sits in, with every
+<code>Transform</code> on the way down applied and no GL context needed &mdash;
+for cutting a collider from a model, or checking one is the size it was meant to
+be. Geometry that carries its shape as numbers rather than as a vertex array (a
+VRML <code>Cone</code>, a <code>Sphere</code>) is measured by the box it
+declares, so a subtree of primitives measures like one of meshes.</p>
+<p><code>seated( node, sink=0 )</code> is that measurement put to its commonest
+use. Placing a model puts <em>its origin</em> where the caller asked, which reads
+as "on the ground" only for art authored with its feet there &mdash; and a VRML
+primitive is centred on its origin, while an exported model sits wherever its
+author left it. <code>seated</code> wraps a subtree so that its underside is at
+the wrapper's origin, which makes that origin the point the thing stands on;
+<code>sink</code> settles it that far back into the ground, for a root flare or a
+boulder base that should meet the ground rather than perch on it. The wrapper is
+a new node and the original is untouched, so one model seats into as many
+placements as a caller likes. Scattered vegetation goes through it &mdash; see
+<a href="terrain.html#footing">Where a plant meets the ground</a>.</p>
 </section>
 
 <section id="embedding">

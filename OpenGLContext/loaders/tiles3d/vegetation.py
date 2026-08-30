@@ -121,7 +121,17 @@ def scatter_disc(
     Points are drawn uniformly in the disc and lifted to `height_fn(x, z)` (clamped to
     `water_level`), so vegetation sits on the ground. Used for camera-following
     vegetation fields; `density` is instances per m². `keep(positions)->mask` filters
-    (e.g. grass elevations only)."""
+    (e.g. grass elevations only).
+
+    `height_fn` has to read the surface that is *drawn*, or the plants sit on one
+    that is not: :meth:`HeightField.sample
+    <OpenGLContext.scenegraph.terrain.heightfield.HeightField.sample>` does, and so
+    does a sampler over a tile mesh. The height *function* a mesh was built from
+    does not -- what is drawn is the triangles between the samples taken from it,
+    and the two part company by a quarter of a cell's twist. Scattering over the
+    mesh itself (:func:`~OpenGLContext.loaders.tiles3d.scatter.scatter_on_mesh`)
+    has no such gap to close.
+    """
     cx, cy, cz = center
     count = int(np.pi * radius * radius * density)
     if count <= 0:
@@ -250,8 +260,31 @@ def conifer(
     return Group(children=parts)
 
 
-def group_from_scatter(placements: Scatter, prototype: Any) -> Group:
-    """A `Group` of per-instance `Transform`s over one shared `prototype`."""
+def group_from_scatter(placements: Scatter, prototype: Any, seat: bool = True,
+                       sink: float = 0.0) -> Group:
+    """A `Group` of per-instance `Transform`s over one shared `prototype`.
+
+    A placement is where the plant *meets the ground*, which is the contact
+    point the instanced vegetation nodes already use: a billboard quad spans
+    ``y`` in ``[0, 1]``, a clump is rebased to ``y = 0``, a tree mesh is
+    authored with its trunk foot at the origin. ``seat`` gives a scenegraph
+    prototype the same contact point by measuring it and lifting it by its own
+    underside (:func:`~OpenGLContext.loaders.assets.seated`), so a VRML
+    primitive -- centred on its origin, and otherwise planted half its height
+    into the hill -- stands on the ground like everything else. A prototype
+    already modelled foot-at-origin measures a zero lift and is unchanged.
+
+    ``sink`` settles the prototype that far back into the ground, in the units
+    it is modelled in, for a root flare or a boulder base that should meet the
+    ground rather than perch on it. ``seat=False`` keeps the prototype's own
+    origin as the contact point, for art deliberately modelled about its middle.
+
+    The seated prototype is wrapped once and shared by every instance, so the
+    instancing engine still collapses the scatter into one draw.
+    """
+    if seat:
+        from OpenGLContext.loaders.assets import seated
+        prototype = seated(prototype, sink=sink)
     children = []
     for position, yaw, scale in zip(placements.positions, placements.yaws,
                                     placements.scales, strict=True):
@@ -326,7 +359,7 @@ def build_grass_patch(
 
     def keep(pos: np.ndarray) -> np.ndarray:
         d = np.linalg.norm(pos[:, [0, 2]] - cam[[0, 2]], axis=1)
-        mask = d <= radius
+        mask: np.ndarray = d <= radius
         if elevation is not None:
             lo, hi = elevation
             mask &= (pos[:, 1] >= lo) & (pos[:, 1] <= hi)

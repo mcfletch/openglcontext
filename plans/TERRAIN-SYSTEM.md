@@ -117,6 +117,34 @@ later phases:
   scattered on the heightfield render in one instanced draw** (verified offscreen).
   **Still future:** octahedral impostor far-LODs, and GPU-grass compute scatter + indirect draw.
 
+### 2026-08-29 — one ground surface, and a footing to stand on it
+
+Two independent reasons a plant or a camera ended up somewhere other than on the ground.
+Both are now pinned by tests (`tests/unit/test_heightfield_is_the_drawn_surface.py`,
+`tests/unit/test_scattered_plants_stand_on_the_ground.py`).
+
+1. **`HeightField.sample` read a surface nothing drew.** `mesh()` triangulates each cell
+   (two triangles about the `b`–`c` diagonal) and `HeightFieldColliders` cuts its chunks on
+   the same diagonal, but `sample()` interpolated all four corners — a bilinear patch, which
+   parts company with the drawn triangles by a quarter of the cell's twist. On the forest
+   demo's 513² grid over 4 km (8 m cells, 450 m relief) that measured **±3 m**, with 10.6% of
+   the ground off by more than half a metre and 2.1% by more than one. Everything analytic
+   read it: the walker's floor (eye at 1.7 m, so a −3 m error is a camera under the hill
+   looking out through it), the seat of every scattered plant, the slope a grass mask thins
+   by. `sample()` now evaluates the same two triangles; the forest field measures exact.
+2. **A scattered prototype was placed by its origin, not its foot.** The GPU vegetation nodes
+   all agree the instance position is the ground contact point — billboard quads span `y` in
+   `[0, 1]`, `load_clump_glb` rebases to `y = 0`, tree meshes are authored foot-at-origin —
+   but `group_from_scatter` trusted the caller's node, and VRML primitives are centred on
+   their origin. `tests/tiles_vegetation.py` scattered a `Cone` and planted every shrub half
+   its height into the hill, tips showing, some punching out through the underside of the
+   terrain. `group_from_scatter` now seats the prototype (`assets.seated`, `seat=`/`sink=`);
+   a prototype already built on the ground measures a zero lift and does not move.
+
+`assets.bounds` grew the measurement seating needs: geometry that carries its shape as
+numbers (`Cone`, `Sphere`) is measured by the box it declares rather than by a vertex array
+it does not have, where before it returned `None`.
+
 ### Session 2 — realism, navigation, streaming, culling
 
 - **Procedural realistic terrain** ✅ `procedural.py`: numpy value-noise fBm + ridged

@@ -1,7 +1,12 @@
 """Offscreen render regression for instanced vegetation on terrain.
 
 Renders the vegetation demo and asserts many green (foliage) pixels appear over the
-terrain — i.e. the scattered, instanced shrubs actually rasterized.
+terrain — i.e. the scattered, instanced shrubs actually rasterized, and rasterized
+whole. A shrub seated on its own centre rather than its foot is half inside the
+hill, which still draws foliage — its tip — so the count has to be high enough to
+tell a field of shrubs from a field of tips. The seating itself is measured, in
+metres rather than in pixels, by
+``tests/unit/test_scattered_plants_stand_on_the_ground.py``.
 """
 import os
 import subprocess
@@ -40,4 +45,7 @@ def test_vegetation_renders_green_foliage(tmp_path):
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     # Foliage: clearly green pixels (green channel dominant over red and blue).
     green = (g > 60) & (g > r + 25) & (g > b + 25)
-    assert green.sum() > 500, "expected scattered green foliage, got %d px" % green.sum()
+    # 236 shrubs standing on the ground cover about 6.7k pixels of this view; the
+    # same scatter sunk to its shrubs' waists covers under 2k.
+    assert green.sum() > 4000, \
+        "expected a field of shrubs, got %d px of foliage" % green.sum()
