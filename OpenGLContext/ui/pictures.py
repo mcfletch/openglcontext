@@ -20,6 +20,12 @@ So this cache does three things the naive one did not:
 
 Nothing here calls GL itself -- uploading and deleting are two callables handed
 in -- which is what makes the whole thing testable without a window.
+
+**Formats the imaging library does not read** are reachable through
+:func:`registerDecoder`.  An application whose content is in a container PIL
+has never heard of -- a block-compressed game texture, say -- registers a
+decoder for the suffix and every picture path in the toolkit accepts it, rather
+than that application converting files behind the toolkit's back.
 """
 from __future__ import annotations
 
@@ -32,7 +38,35 @@ from OpenGLContext.loaders.resolver import fetch_to_cache, is_url
 
 log = logging.getLogger(__name__)
 
-__all__ = ['PictureCache', 'DEFAULT_BUDGET', 'UPLOADS_PER_PUMP']
+__all__ = ['PictureCache', 'DEFAULT_BUDGET', 'UPLOADS_PER_PUMP',
+           'registerDecoder', 'decoderFor']
+
+#: Suffix (lower case, with its dot) -> a callable taking a path and returning
+#: a PIL image, or None if it will not read that file.  Empty by default: the
+#: imaging library covers every format this toolkit's own artwork uses, and an
+#: entry here is an application saying it has content that library cannot read.
+_decoders: dict = {}
+
+
+def registerDecoder(suffix: str, decoder: Callable[[str], Any]) -> None:
+    """Teach the picture cache a file format the imaging library cannot read.
+
+    ``decoder`` is handed a filesystem path and returns a PIL image, or None
+    where it declines the file -- an optional dependency it needs being absent,
+    say.  Declining is not an error and leaves the picture undrawn, which is
+    what an unreadable picture has always done.
+
+    Registering a suffix the imaging library already reads overrides it, which
+    is deliberate: an application with a faster or more permissive reader for a
+    format should be able to say so.
+    """
+    _decoders[suffix.lower()] = decoder
+
+
+def decoderFor(path: str) -> Optional[Callable[[str], Any]]:
+    """The registered decoder for a path's suffix, or None."""
+    import os
+    return _decoders.get(os.path.splitext(path)[1].lower())
 
 #: Resident texels before the least recently used are dropped.  64M texels is
 #: 256 MB at RGBA8 -- room for a large gallery, and far below what a card that
@@ -177,7 +211,11 @@ class PictureCache(object):
             path = fetch_to_cache(url, cache_dir=self.cacheDirectory)
         else:
             path = local_path(url)
-        image = Image.open(path).convert('RGBA')
+        decoder = decoderFor(path)
+        image = decoder(path) if decoder is not None else Image.open(path)
+        if image is None:
+            raise OSError('no decoder would read %s' % (path,))
+        image = image.convert('RGBA')
         width, height = image.size
         return width, height, ImageOps.flip(image).tobytes()
 

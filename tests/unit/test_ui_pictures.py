@@ -252,3 +252,74 @@ class TestSayingWhenSomethingArrived:
             assert cache.waitForPending(timeout=10.0)
         finally:
             cache.close()
+
+
+class TestFormatsTheImagingLibraryCannotRead:
+    """`registerDecoder` is how an application brings its own container.
+
+    Content in a format PIL has never heard of -- a block-compressed game
+    texture, say -- would otherwise force the application to convert files
+    behind the toolkit's back and hand it paths to the copies.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _clean_registry(self):
+        """The registry is process-wide, so a test must not leak into the next."""
+        from OpenGLContext.ui import pictures
+        saved = dict(pictures._decoders)
+        yield
+        pictures._decoders.clear()
+        pictures._decoders.update(saved)
+
+    def test_a_registered_decoder_reads_a_suffix_pil_cannot(self, gl, tmp_path):
+        from PIL import Image
+
+        from OpenGLContext.ui.pictures import registerDecoder
+        path = tmp_path / 'texture.madeup'
+        path.write_bytes(b'not an image by any reckoning')
+        registerDecoder('.madeup', lambda _p: Image.new('RGBA', (3, 5), (1, 2, 3, 4)))
+        cache = PictureCache(upload=gl.upload, delete=gl.delete, workers=0)
+        found = cache.get(str(path), blocking=True)
+        assert found is not None
+        _texture, width, height = found
+        assert (width, height) == (3, 5)
+
+    def test_a_decoder_that_declines_leaves_the_picture_undrawn(self, gl, tmp_path):
+        """Returning None is an optional dependency being absent, not a crash."""
+        from OpenGLContext.ui.pictures import registerDecoder
+        path = tmp_path / 'texture.madeup'
+        path.write_bytes(b'x')
+        registerDecoder('.madeup', lambda _p: None)
+        cache = PictureCache(upload=gl.upload, delete=gl.delete, workers=0)
+        assert cache.get(str(path), blocking=True) is None
+
+    def test_a_decoder_that_raises_is_a_failed_picture_and_not_a_failed_frame(
+            self, gl, tmp_path):
+        from OpenGLContext.ui.pictures import registerDecoder
+
+        def explode(_path):
+            raise ValueError('bad container')
+        path = tmp_path / 'texture.madeup'
+        path.write_bytes(b'x')
+        registerDecoder('.madeup', explode)
+        cache = PictureCache(upload=gl.upload, delete=gl.delete, workers=0)
+        assert cache.get(str(path), blocking=True) is None
+        assert cache.failures == 1
+
+    def test_the_suffix_match_ignores_case(self, gl, tmp_path):
+        from PIL import Image
+
+        from OpenGLContext.ui.pictures import registerDecoder
+        registerDecoder('.MadeUp', lambda _p: Image.new('RGBA', (2, 2)))
+        path = tmp_path / 'texture.MADEUP'
+        path.write_bytes(b'x')
+        cache = PictureCache(upload=gl.upload, delete=gl.delete, workers=0)
+        assert cache.get(str(path), blocking=True) is not None
+
+    def test_an_ordinary_picture_still_goes_straight_to_the_imaging_library(
+            self, gl, picture):
+        """The registry is a fallback for the unusual, not a layer over the usual."""
+        from OpenGLContext.ui.pictures import decoderFor
+        assert decoderFor(picture('plain.png')) is None
+        cache = PictureCache(upload=gl.upload, delete=gl.delete, workers=0)
+        assert cache.get(picture('plain.png'), blocking=True) is not None

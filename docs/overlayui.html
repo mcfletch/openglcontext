@@ -722,4 +722,28 @@ gallery and dismissed again leaves the gallery's pictures where they were.</p>
 immediately afterwards.</p>
 </section>
 
+<section id="picture-formats">
+<h2>Pictures in a format the imaging library cannot read</h2>
+<p>Pictures are decoded with the Python Imaging Library, which covers PNG, JPEG,
+TGA, WebP and the rest of what a toolkit's own artwork is drawn in. An
+application whose content is in something else &mdash; a block-compressed game
+texture container, say &mdash; registers a decoder for the suffix:</p>
+<pre><code>from OpenGLContext.ui import pictures
+
+pictures.registerDecoder('.crn', my_module.load)</code></pre>
+<p>The decoder is handed a filesystem path and returns a PIL image, or
+<code>None</code> where it declines the file &mdash; an optional dependency it
+needs being absent, say. Declining is not an error: the picture is simply not
+drawn, and a gallery shows its plate, which is what an unreadable picture has
+always done. A decoder that raises costs that one picture and is counted in
+<code>PictureCache.failures</code>.</p>
+<p>Every picture path in the toolkit goes through this, so a skin, a gallery and
+a thumbnail all gain the format at once. Registering a suffix the imaging
+library already reads overrides it, which is deliberate: an application with a
+faster or more permissive reader for a format should be able to say so.</p>
+<p>The registry is empty by default. An entry in it is an application saying it
+has content the imaging library cannot read &mdash; it is not a layer over the
+ordinary case, which still goes straight to PIL.</p>
+</section>
+
 </body></html>
