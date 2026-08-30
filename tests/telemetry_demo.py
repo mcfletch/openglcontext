@@ -64,6 +64,7 @@ import math
 
 from OpenGLContext import testingcontext
 from OpenGLContext.events import systemtime
+from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Box, Cylinder, DirectionalLight, Material, Shape, Sphere,
     Transform, sceneGraph,
@@ -151,6 +152,12 @@ class TestContext(BaseContext):
         self._paused_at = None
         self._paused_for = 0.0
         self._flare_until = None
+        #: Fires once per event cascade, which is once per frame drawn, so
+        #: the orbits are advanced by the frame rather than by the idle.
+        self.frame = Timer(duration=1.0, repeating=1)
+        self.frame.addEventHandler('fraction', self.OnFrame)
+        self.frame.register(self)
+        self.frame.start()
         self.addEventHandler('keypress', name=' ', function=self.OnFlare)
         self.addEventHandler('keypress', name='p', function=self.OnPause)
         self.addEventHandler('keypress', name='m', function=self.OnCheckpoint)
@@ -296,7 +303,14 @@ class TestContext(BaseContext):
             else systemtime.systemTime()
         return now - self._started - self._paused_for
 
-    def OnIdle(self, event=None):
+    def OnFrame(self, event=None):
+        """Put the bodies where the frame about to be drawn wants them.
+
+        From the timer rather than from OnIdle, which the main loop calls as
+        often as it has room for: the scene would then hold whatever the last
+        idle happened to write rather than what this frame is worth, and two
+        runs of the same number of frames would not draw the same picture.
+        """
         seconds = self.motionTime()
         for body, mover in zip(self.bodies, self.movers, strict=True):
             mover.translation = body.position(seconds)
@@ -307,6 +321,9 @@ class TestContext(BaseContext):
         scale = (FLARE_SCALE if self._flare_until is not None
                  and seconds < self._flare_until else 1.0)
         self.lamp.scale = (scale, scale, scale)
+
+    def OnIdle(self, event=None):
+        """Keep asking for frames; the orbits advance in each one."""
         self.triggerRedraw(1)
 
 

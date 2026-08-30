@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import logging
 import math
-import time
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -52,6 +51,7 @@ from vrml import field, node
 from vrml.vrml97 import nodetypes
 
 from OpenGLContext import entropy
+from OpenGLContext.events import systemtime
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
     InstanceBuffer, delete_gl, ensure_gl, load_program, texture_rgba,
@@ -488,8 +488,13 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
         draw is the only per-frame hook a scenegraph node has.  A scene rendered
         twice in one frame -- a shadow pass, a selection pass -- therefore steps
         by nearly zero the second time, which is harmless, rather than twice.
+
+        The engine's clock, not the wall clock: a capture advances it a frame's
+        worth per frame drawn and a recording steps it the same way, and a
+        simulation that read real time would be the one thing in the scene not
+        following.  See OpenGLContext.events.systemtime.
         """
-        now = time.time()
+        now = systemtime.systemTime()
         elapsed = 0.0 if self._stepped is None else now - self._stepped
         self._stepped = now
         self.simulate(elapsed, origin=origin, direction=direction)

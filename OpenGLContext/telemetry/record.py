@@ -178,8 +178,12 @@ class RecordingClock:
     :class:`SessionRecording` does when the recording closes.
     """
 
+    #: Frames finished, not seconds passing -- see
+    #: :class:`OpenGLContext.video.clock.FixedStepClock`, which says the same.
+    counts_frames = True
+
     def __init__(self, start: Optional[float] = None) -> None:
-        self._now = systemtime.wallClock() if start is None else float(start)
+        self._now = systemtime.systemTime() if start is None else float(start)
         self._previous: Any = None
         self._installed = False
 
@@ -187,13 +191,27 @@ class RecordingClock:
         return self._now
 
     def advance(self, seconds: float) -> float:
-        """Move on by one frame's duration.  Called as each frame ends."""
-        self._now += float(seconds)
+        """Move on by one frame's duration.  Called as each frame ends.
+
+        Nothing to do while deferring: whatever is counting frames instead is
+        being advanced by whoever owns it.
+        """
+        if self._installed:
+            self._now += float(seconds)
         return self._now
 
     def install(self) -> 'RecordingClock':
-        """Take over as the engine's time source."""
-        if not self._installed:
+        """Take over as the engine's time source, unless one already counts.
+
+        A capture pins the world to a fixed step from a fixed start, which is
+        what a recording wants of a clock anyway and stricter than what this
+        one gives -- so a recording taken during a capture reads that clock and
+        leaves it installed.  Recording and capture would otherwise displace
+        each other and the run would stop being repeatable.
+        """
+        if not self._installed and not getattr(
+            systemtime.timeSource(), 'counts_frames', False
+        ):
             self._previous = systemtime.setTimeSource(self)
             self._installed = True
         return self

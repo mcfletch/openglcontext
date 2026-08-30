@@ -63,16 +63,15 @@ CAPTURE_SEED = 4242
 # Scripts whose captured frame is not a function of the scene, and so are run
 # for their exit status rather than compared against a reference.
 #
-# A capture counts frames rather than seconds (OpenGLContext.video.clock), so a
-# scene animated from a Timer, a TimeSensor or the engine's clock lands on the
-# same frame every run and is compared normally. What remains here advances its
-# state from OnIdle, which the main loop calls as often as it has room for:
-# the scenegraph then holds whatever the last idle wrote rather than what the
-# frame being drawn is worth, and no clock can settle which that was.
-RANDOMIZED_SCRIPTS = [
-    'particles_effects.py',  # Emitters step from OnIdle
-    'telemetry_demo.py',  # Bodies are moved to their orbits from OnIdle
-]
+# Scripts captured but not compared, because their picture is not reproducible.
+# A capture counts frames rather than seconds (OpenGLContext.video.clock) and
+# seeds the engine's randomness (OPENGLCONTEXT_SEED), so a scene animated from
+# a Timer, a TimeSensor or the world's clock, and one that scatters what it
+# draws, both land on the same frame every run. A demo belongs here when its
+# picture turns on something neither of those settles -- and when it advances
+# its own state, it has to do so from the frame rather than from OnIdle, which
+# the main loop calls as often as it has room for.
+RANDOMIZED_SCRIPTS = []
 
 # Single source of truth for the visual-diff tolerance. The gate
 # is percentage-based, not pixel-exact: cross-GPU rasterization, anti-aliasing

@@ -227,6 +227,12 @@ input: 41,207 events -- pointer 38,110, keyboard 2,984, mousebutton 113</pre>
     everything after it out with them. So recording installs a clock of the same
     shape, moving at the end of each frame by exactly the duration the file
     records for it. It is still wall-clock time, read once a frame.</p>
+  <p>A capture's clock has that shape already and is stricter about it &mdash; a
+    fixed step from a fixed start, so the run repeats exactly &mdash; so a
+    recording started while one is installed reads it and leaves it in place.
+    Both are marked <code>counts_frames</code>, which is how each recognises the
+    other; without that the two would take turns owning the world and a recorded
+    capture would stop being repeatable.</p>
   <p>Combine it with the auto-exit switches to get a screenshot of the frame
     something went wrong on:</p>
   <pre>OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/session.jsonl \

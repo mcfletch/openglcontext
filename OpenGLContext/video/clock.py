@@ -61,6 +61,11 @@ class FixedStepClock:
     drawn, which is where a recorder does it.
     """
 
+    #: This clock's time comes from frames finished rather than from seconds
+    #: passing.  Another frame-stepped source that finds one installed leaves
+    #: it be, rather than the two of them taking turns owning the world.
+    counts_frames = True
+
     def __init__(self, fps: float | tuple[int, int] = 60,
                  start: float | None = None):
         numerator, denominator = self._as_ratio(fps)

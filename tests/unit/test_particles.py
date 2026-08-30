@@ -10,7 +10,9 @@ import math
 import numpy as np
 import pytest
 
+from OpenGLContext.events import systemtime
 from OpenGLContext.scenegraph import particles
+from OpenGLContext.video.clock import FixedStepClock
 
 
 def pool(capacity=16, **named):
@@ -669,3 +671,61 @@ class TestWhereTheParticlesActuallyAre:
         assert emitter.pool.live == 0
         assert float(np.asarray(emitter.boundingVolume(None).size)[0]) \
             < float(np.asarray(wide.size)[0])
+
+
+class TestTheClockItStepsBy:
+    """An emitter steps by the engine's clock, not by the wall clock.
+
+    A capture pins that clock to a frame's worth per frame drawn, and a
+    recording steps it the same way, so a particle system reading the wall
+    clock would be the one thing in the scene not following.
+    """
+
+    @pytest.fixture(autouse=True)
+    def restore_the_wall_clock(self):
+        original = systemtime.timeSource()
+        yield
+        systemtime.setTimeSource(original)
+
+    def emitter(self):
+        node = particles.ParticleEmitter(rate=10.0, lifetime=100.0, maxParticles=64)
+        node._advance((0.0, 0.0, 0.0), None)     # the first call only sets the mark
+        return node
+
+    def test_a_frame_emits_what_that_frame_is_worth(self):
+        """Ten a second and a sixtieth of a second on: a sixth of a particle."""
+        clock = FixedStepClock(fps=60, start=0.0).install()
+        node = self.emitter()
+
+        for _ in range(60):
+            clock.advance()
+            node._advance((0.0, 0.0, 0.0), None)
+
+        assert node.pool.live == 10
+
+    def test_drawing_a_frame_twice_does_not_step_it_twice(self):
+        """A shadow pass and a visible pass are one frame between them."""
+        clock = FixedStepClock(fps=60, start=0.0).install()
+        node = self.emitter()
+        for _ in range(60):
+            clock.advance()
+            node._advance((0.0, 0.0, 0.0), None)
+        once = node.pool.live
+
+        node._advance((0.0, 0.0, 0.0), None)
+
+        assert node.pool.live == once
+
+    def test_two_runs_of_the_same_frames_agree(self):
+        """Which is what makes a captured frame worth comparing."""
+        counts = []
+        for _ in range(2):
+            clock = FixedStepClock(fps=60, start=0.0).install()
+            node = self.emitter()
+            for _ in range(12):
+                clock.advance()
+                node._advance((0.0, 0.0, 0.0), None)
+            counts.append(node.pool.live)
+            clock.restore()
+
+        assert counts[0] == counts[1]

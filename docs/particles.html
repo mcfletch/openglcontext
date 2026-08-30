@@ -200,6 +200,12 @@ live = survivors</pre>
       <code>v -= v * drag * dt</code> overshoots into a <em>reversal</em> on a
       long frame, so particles suddenly fly backwards when the frame rate drops.
       <code>v *= exp(-drag * dt)</code> cannot, at any step size.</li>
+    <li><strong>The step comes from the engine's clock</strong>
+      (<code>OpenGLContext.events.systemtime</code>), not from the wall clock,
+      so a system follows whatever is driving the rest of the scene: a
+      recording advancing a frame's worth at a time, a replay reading the
+      instants the recording read, or a capture pinned so the same frame count
+      produces the same picture.</li>
     <li><strong>The frame time is clamped</strong> to
       <code>MAX_STEP</code> (0.1&nbsp;s). A window drag or a stalled texture
       upload gives a frame of seconds; integrating it honestly throws every
