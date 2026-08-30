@@ -195,10 +195,15 @@ assert result.success, result.stderr</pre>
     reproducible for a capture and even for a recording.</p>
   <p>Every image a regression test compares against lives in
     <code>tests/reference_images</code>, which is a submodule &mdash; the
-    <code>reference-images</code> repository &mdash; because the pictures are
-    large and are re-blessed on their own schedule rather than when the code
-    changes. Clone with them, or fetch them into an existing checkout:</p>
-  <pre>git clone --recurse-submodules https://github.com/mcfletch/openglcontext
+    <code>openglcontext-reference-images</code> repository &mdash; because the
+    pictures are large and are re-blessed on their own schedule rather than when
+    the code changes. The PNGs are held in
+    <a href="https://git-lfs.com/">Git LFS</a>, so
+    <code>git lfs install</code> has to have been run once for the checkout to
+    hold images rather than pointer files. Clone with them, or fetch them into
+    an existing checkout:</p>
+  <pre>git lfs install                                      # once per machine
+git clone --recurse-submodules https://github.com/mcfletch/openglcontext
 git submodule update --init tests/reference_images   # in an existing clone</pre>
   <p>Its top level holds one frame per test script, looked up by script name.
     <code>gltf_baseline/</code> holds the glTF conformance baselines, one PNG
