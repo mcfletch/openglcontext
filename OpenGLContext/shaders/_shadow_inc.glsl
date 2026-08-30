@@ -25,7 +25,7 @@
 uniform int   shadowCount;
 uniform int   shadowLightIndex[MAX_SHADOW_LIGHTS];
 uniform int   shadowKind[MAX_SHADOW_LIGHTS];
-uniform float shadowBias;
+uniform vec3  shadowDepthBias[MAX_SHADOW_LIGHTS * MAX_CASCADES];  // world bias -> map depth
 uniform float shadowNormalOffset;
 uniform float shadowTexel;
 uniform int   shadowSoft;
@@ -54,7 +54,6 @@ uniform sampler2DArray       shadowArrayRaw;   // same texture, raw depth for PC
 // per-slot array in the Python + here, not per-light-ing these calibrations.
 const float PCSS_SEARCH_SCALE   = 300.0;   // blocker-search radius per unit light size (texels)
 const float PCSS_PENUMBRA_SCALE = 3000.0;  // penumbra depth -> PCF filter radius (texels)
-const float CUBE_BIAS_SCALE     = 2.0;     // cube faces need extra depth bias vs the 2D maps
 
 // PCF kernel bounds (finding: name the bare 2.0 / 12.0 magic radii). pcfArray caps
 // the half-kernel at PCF_MAX_RADIUS taps (5x5); a soft penumbra wider than
@@ -63,10 +62,25 @@ const float CUBE_BIAS_SCALE     = 2.0;     // cube faces need extra depth bias v
 const float PCF_MAX_RADIUS_TEXELS = 12.0;  // widest PCSS penumbra the soft path spans
 const int   PCF_MAX_RADIUS        = 2;     // half-kernel tap cap (2 -> 5x5)
 
-// Depth bias is a single flat term (plus normal-offset in shadowSamplePos). There
-// is deliberately no slope-scaled bias: on steep grazing surfaces (and lower-
-// precision depth on integrated GPUs) that can leave faint acne; the normal-offset
-// covers the common cases. Add slope-scaling here if a target needs it.
+// The depth bias a receiver subtracts is measured in shadow-map texels -- the
+// scale of what it has to clear, since the map holds one depth per texel -- and
+// shadowmath.depth_bias_terms converts it into each map's own depth units,
+// delivered as the three coefficients below. A texel is a fixed width in a
+// cascade and grows with distance in a spot or cube map; depth is linear in the
+// one and 1/z in the others. One number in depth units is therefore a different
+// slack in every map and at every depth within a perspective one, which is what
+// detaches a shadow from the object casting it under one light while leaving
+// acne under another. This costs a multiply-add per lookup and makes a light's
+// shadowBias field mean the same thing wherever it is set.
+//
+// There is deliberately no slope-scaled bias on top: on steep grazing surfaces
+// (and lower-precision depth on integrated GPUs) that can leave faint acne; the
+// normal-offset in shadowSamplePos covers the common cases. Add slope-scaling
+// here if a target needs it.
+float depthBias(int layer, float depth) {
+    vec3 k = shadowDepthBias[layer];
+    return k.x * (k.y - depth) + k.z;
+}
 
 #ifdef SHADOW_CUBE_ARRAY
 uniform samplerCubeArrayShadow shadowCubeArray;   // point shadows, cube layer = slot
@@ -113,14 +127,14 @@ float pcfArray(vec2 uv, float layer, float ref, float radiusTexels) {
 }
 
 // PCSS blocker search on the raw (non-comparison) view. Returns -1 if no blockers.
-float blockerSearch(vec2 uv, float layer, float receiver) {
+float blockerSearch(vec2 uv, float layer, float receiver, float bias) {
     float searchTexels = max(2.0, shadowLightSize * PCSS_SEARCH_SCALE);
     float sum = 0.0; float count = 0.0;
     for (int x = -2; x <= 2; x++) {
         for (int y = -2; y <= 2; y++) {
             float d = texture(shadowArrayRaw,
                               vec3(uv + vec2(x, y) * (searchTexels * 0.5) * shadowTexel, layer)).r;
-            if (d < receiver - shadowBias) { sum += d; count += 1.0; }
+            if (d < receiver - bias) { sum += d; count += 1.0; }
         }
     }
     return count > 0.0 ? sum / count : -1.0;
@@ -128,15 +142,17 @@ float blockerSearch(vec2 uv, float layer, float receiver) {
 
 // --- Spot light: one array layer (cascade 0 of the slot's block) --------------
 float spotFactor(int slot) {
-    float layer = float(slot * MAX_CASCADES);
+    int index = slot * MAX_CASCADES;
+    float layer = float(index);
     vec4 lc = shadowMatrix[slot * MAX_CASCADES] * vec4(shadowSamplePos(), 1.0);
     if (lc.w <= 0.0) return 1.0;
     vec3 p = (lc.xyz / lc.w) * 0.5 + 0.5;
     if (p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
-    float ref = p.z - shadowBias;
+    float bias = depthBias(index, p.z);
+    float ref = p.z - bias;
     if (shadowSoft == 1) {
         // PCSS: penumbra grows with blocker-to-receiver distance (contact hardening).
-        float blocker = blockerSearch(p.xy, layer, p.z);
+        float blocker = blockerSearch(p.xy, layer, p.z, bias);
         if (blocker < 0.0) return 1.0;                 // fully lit, no occluder
         float penumbra = max(p.z - blocker, 0.0);
         float radius = clamp(3.0 + penumbra * shadowLightSize * PCSS_PENUMBRA_SCALE,
@@ -155,12 +171,13 @@ float csmFactor(int slot) {
         if (i >= n) break;
         if (depth <= cascadeSplit[slot * MAX_CASCADES + i]) { c = i; break; }
     }
-    float layer = float(slot * MAX_CASCADES + c);
-    vec4 lc = shadowMatrix[slot * MAX_CASCADES + c] * vec4(shadowSamplePos(), 1.0);
+    int index = slot * MAX_CASCADES + c;
+    float layer = float(index);
+    vec4 lc = shadowMatrix[index] * vec4(shadowSamplePos(), 1.0);
     if (lc.w <= 0.0) return 1.0;
     vec3 p = (lc.xyz / lc.w) * 0.5 + 0.5;
     if (p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
-    float ref = p.z - shadowBias;
+    float ref = p.z - depthBias(index, p.z);
     // Same bounded PCF as the spot path (finding 3.24): hard -> 3x3, soft -> 5x5.
     // Intentionally a fixed-radius soft kernel, not PCSS contact-hardening like the
     // spot path: a directional light has no finite size / blocker distance to drive
@@ -179,7 +196,8 @@ float cubeDepthRef(int slot, out vec3 dir) {
     float farP = cubeFar[slot];
     // Projective depth (0..1) for a fragment at axis-distance zc.
     float ndc = (2.0 * farP * nearP / zc - (farP + nearP)) / (nearP - farP);
-    return (0.5 * ndc + 0.5) - shadowBias * CUBE_BIAS_SCALE;
+    float depth = 0.5 * ndc + 0.5;
+    return depth - depthBias(slot * MAX_CASCADES, depth);
 }
 
 #ifdef SHADOW_CUBE_ARRAY

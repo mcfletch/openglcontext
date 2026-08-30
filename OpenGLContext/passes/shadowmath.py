@@ -56,7 +56,8 @@ def look_at_matrix(eye: Vec3, forward: Vec3, up: Vec3 = (0.0, 1.0, 0.0)) -> Matr
 
 def perspective_matrix(fovy: float, aspect: float, near: float, far: float) -> Matrix4:
     """Row-vector perspective projection (delegates to pyvrml97)."""
-    return transformmatrix.perspectiveMatrix(fovy, aspect, near, far).astype('f')
+    matrix: Matrix4 = transformmatrix.perspectiveMatrix(fovy, aspect, near, far)
+    return matrix.astype('f')
 
 
 def near_far_from_points(
@@ -271,6 +272,86 @@ def cube_projection(near: float, far: float) -> Matrix4:
     return perspective_matrix(np.pi / 2.0, 1.0, near, far).astype('f')
 
 
+#: Slack a receiver leaves itself before deciding it is in shadow, in shadow-map
+#: texels -- the scale of what it has to clear, since the map holds one depth per
+#: texel and a surface departs from the stored value by about a texel's width
+#: across one. Measured against a wall a shadow map's texels cover coarsely:
+#: acne goes at 2 texels and is unchanged by 16, while the shadow's grip on the
+#: object casting it never loosens (the offset scales with the same texel the
+#: shadow edge is quantised to). 3 sits past the knee with room for surfaces at
+#: a more grazing angle to the light than that, since there is no slope-scaled
+#: term. A light overrides it with its own ``shadowBias`` field.
+SHADOW_DEPTH_BIAS = 3.0
+
+#: Below this, a depth range is a light whose casters collapsed to one distance
+#: rather than a light with a shallow view, and any bias it produced would be
+#: worth more than the whole range.
+_MIN_DEPTH_SPAN = 1e-4
+_EPS = 1e-12
+
+
+def _usable_span(span: float) -> bool:
+    """Whether a near-to-far range is one a bias can be expressed against."""
+    return bool(np.isfinite(span)) and span > _MIN_DEPTH_SPAN
+
+
+def depth_bias_terms(
+    projection: Matrix4,
+    texel_bias: float,
+    resolution: int,
+) -> Tuple[float, float, float]:
+    """Coefficients turning a bias in shadow texels into ``projection``'s depth.
+
+    A receiver nudges its own depth toward the light before comparing it with the
+    map. What it has to clear is the map's own quantisation: the caster's depth
+    was sampled at texel centres, so across one texel a surface departs from the
+    stored value by about the width of that texel in the world. The bias is
+    therefore measured in texels -- a dimensionless slack that means the same
+    thing for a room and for a landscape, and does not have to be retuned when a
+    light moves or a map is given more resolution.
+
+    Two conversions stand between that and what the shader subtracts. A texel is
+    a fixed width in an orthographic cascade and grows with distance in a spot or
+    cube map; and depth is linear in the cascade and 1/z in the others. Returns
+    ``(scale, reference, constant)``, which the shader reads as::
+
+        offset = scale * (reference - depth) + constant
+
+    for a window depth in 0..1. For a perspective map the two conversions cancel
+    to something linear in depth: a texel is ``t * k`` wide at distance ``t`` for
+    ``k = 2*tan(fov/2)/resolution``, depth is ``d = B - A/t`` for
+    ``A = far*near/(far-near)`` and ``B = far/(far-near)``, so ``dd/dt`` is
+    ``(B-d)**2/A`` and the product is ``k * (B - d)``. For an orthographic one
+    both are constant, and the whole offset is.
+
+    A degenerate range (a light whose casters collapsed to one distance) yields a
+    zero offset rather than an infinity: no bias is a shadow with acne, an
+    infinity is a scene with no shadows at all.
+    """
+    p = np.asarray(projection, dtype='d')
+    bias = float(texel_bias)
+    c, d = float(p[2][2]), float(p[3][2])
+    width = float(p[0][0])
+    if not width or not np.isfinite(width):
+        return (0.0, 0.0, 0.0)
+    # Perspective m[0][0] is cot(fov/2) over a square map, orthographic m[0][0]
+    # is 2/(right-left): either way this is the texel, per unit distance for the
+    # first and outright for the second.
+    texel = 2.0 / (width * max(1, int(resolution)))
+    if p[2][3] == 0.0:                                  # orthographic
+        span = -2.0 / c if c else 0.0                   # ortho_matrix: m[2][2] = -2/(far-near)
+        if not _usable_span(span):
+            return (0.0, 0.0, 0.0)
+        return (0.0, 0.0, bias * texel / span)
+    if abs(c - 1.0) < _EPS or abs(c + 1.0) < _EPS:      # perspective
+        return (0.0, 0.0, 0.0)
+    near, far = d / (c - 1.0), d / (c + 1.0)
+    span = far - near
+    if near <= 0.0 or not _usable_span(span):
+        return (0.0, 0.0, 0.0)
+    return (bias * texel, far / span, 0.0)
+
+
 def shadow_matrix_eye(
     camera_view: Matrix4,
     light_view: Matrix4,
@@ -286,5 +367,5 @@ def shadow_matrix_eye(
     where ``shadow_matrix_eye = inv(camera_view) @ light_view @ light_projection``.
     """
     inv_cam = np.linalg.inv(camera_view.astype('d'))
-    m = inv_cam @ light_view.astype('d') @ light_projection.astype('d')
+    m: Matrix4 = inv_cam @ light_view.astype('d') @ light_projection.astype('d')
     return m.astype('f')

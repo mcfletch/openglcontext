@@ -212,21 +212,41 @@ one, which keeps the bias small enough to avoid peter-panning:</p>
   <li><strong>Polygon offset</strong> (the primary control) -- while the depth map
     is being drawn, the hardware pushes each polygon's stored depth slightly away
     from the light, so surfaces clear their own texels.</li>
-  <li><strong>A constant depth bias</strong> in the receiver shader -- a small
-    fixed amount subtracted from the compared depth.</li>
+  <li><strong>A depth bias</strong> in the receiver shader, <strong>measured in
+    shadow-map texels</strong> -- the scale of what it has to clear, since the map
+    holds one depth per texel and a surface departs from the stored value by about
+    a texel's width across one. The default is 3 texels, and a light sets its own
+    with <code>shadowBias</code>.</li>
   <li><strong>A normal offset</strong> -- the point being tested is nudged a short
     distance along its surface normal before the lookup, which cancels most of the
     remaining acne on surfaces facing the light at an angle, without the ground-gap
     that a larger depth bias would cause.</li>
 </ul>
-<p class="technical">The values live in <code>passes/shadowmixin.py</code>
-(<code>SHADOW_POLYGON_OFFSET_FACTOR/UNITS</code>, <code>SHADOW_DEPTH_BIAS</code>,
-<code>SHADOW_NORMAL_OFFSET</code>) and the shader (<code>_shadow_inc.glsl</code>,
-uniforms <code>shadowBias</code> / <code>shadowNormalOffset</code>); cube-map faces
-get a little extra bias (<code>CUBE_BIAS_SCALE</code>). There is deliberately no
-slope-scaled bias: the normal-offset covers the common cases, and slope-scaling can
-be added per target if a low-precision GPU needs it. A per-light
-<code>shadowBias</code> field lets a specific light override the default.</p>
+<p>The texel is what makes one number work everywhere. A shadow map's depth is
+1/z in a spot or cube map and linear in a cascade, and a texel covers a fixed
+width in the cascade and a growing one in the others, so the same bias expressed
+in a map's own depth units is a different slack in every map -- and, in a
+perspective one, at every depth inside it. Measured in texels it is the same
+slack throughout, does not change with the scale of the scene, and halves when a
+map is given twice the resolution. It also cannot peter-pan: the offset scales
+with the very texel the shadow's edge is already quantised to, so a generous bias
+loses no grip on the contact point.</p>
+<p class="technical">The polygon offset and the normal offset live in
+<code>passes/shadowmixin.py</code> (<code>SHADOW_POLYGON_OFFSET_FACTOR/UNITS</code>,
+<code>SHADOW_NORMAL_OFFSET</code>); the depth bias is
+<code>shadowmath.SHADOW_DEPTH_BIAS</code>, which is also the default of the
+<code>shadowBias</code> field every light carries. Each light's own value is
+converted against that light's own projection by
+<code>shadowmath.depth_bias_terms</code>, once per map (per cascade, for a sun),
+and reaches the shader as the three coefficients of
+<code>shadowDepthBias[]</code> -- so a light asking for more slack gets it without
+loosening any other light's shadow, and a cube map needs no separate allowance.
+There is deliberately no slope-scaled bias: the normal-offset covers the common
+cases, and slope-scaling can be added per target if a low-precision GPU needs it.
+The two failure modes are held apart by
+<code>tests/unit/test_shadow_bias_gl.py</code>, which renders a lit wall and a
+pole standing on a floor and measures the speckle on one and the contact gap on
+the other.</p>
 
 <h3>A note on rendering back faces</h3>
 <p>A well-known alternative acne fix is to draw only the <em>back</em> faces of

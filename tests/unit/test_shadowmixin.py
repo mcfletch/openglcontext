@@ -223,7 +223,7 @@ class TestBiasConstants:
     def test_bias_uses_named_constant(self):
         from OpenGLContext.passes import shadowmixin
         m = ShadowMapMixin()
-        assert m._shadowBias() == shadowmixin.SHADOW_DEPTH_BIAS
+        assert shadowmixin.light_depth_bias(object()) == shadowmixin.SHADOW_DEPTH_BIAS
         assert m._normalOffset() == shadowmixin.SHADOW_NORMAL_OFFSET
 
     def test_polygon_offset_constants_present(self):

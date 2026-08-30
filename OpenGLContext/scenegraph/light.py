@@ -6,6 +6,7 @@ from vrml.vrml97 import transformmatrix
 from vrml import node, field
 from OpenGLContext.arrays import array, dot, identity
 from OpenGLContext import vectorutilities
+from OpenGLContext.passes.shadowmath import SHADOW_DEPTH_BIAS
 
 class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
     """Abstract base class for all lights
@@ -122,7 +123,7 @@ class PointLight(basenodes.PointLight, Light):
     """
     # Shadow-mapping controls (OpenGLContext extension fields)
     castShadows = field.newField('castShadows', 'SFBool', 1, True)
-    shadowBias = field.newField('shadowBias', 'SFFloat', 1, 0.0015)
+    shadowBias = field.newField('shadowBias', 'SFFloat', 1, SHADOW_DEPTH_BIAS)
     shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
 
     def effectiveRange(self, threshold=1.0 / 255.0):
@@ -205,7 +206,7 @@ class DirectionalLight (basenodes.DirectionalLight, Light):
     pointSource = 0.0
     # Shadow-mapping controls (OpenGLContext extension fields)
     castShadows = field.newField('castShadows', 'SFBool', 1, True)
-    shadowBias = field.newField('shadowBias', 'SFFloat', 1, 0.0015)
+    shadowBias = field.newField('shadowBias', 'SFFloat', 1, SHADOW_DEPTH_BIAS)
     shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
 
     def effectiveRange(self, threshold=1.0 / 255.0):

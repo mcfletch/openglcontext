@@ -105,12 +105,15 @@ class _ShadowUniformMixin:
         """Set the number of active shadow-casting lights."""
         self._set_uniform1i('shadowCount', max(0, min(count, self.MAX_SHADOW_LIGHTS)), self._shadow_prog)
 
-    def set_shadow_params(self, bias: float = 0.0015, resolution: int = 2048,
+    def set_shadow_params(self, resolution: int = 2048,
                           normal_offset: float = 0.0, soft: bool = False,
                           gather: bool = False, light_size: float = 0.01,
                           eye_to_world: Optional['Matrix4'] = None) -> None:
-        """Set global shadow parameters."""
-        self._set_uniform1f('shadowBias', float(bias), self._shadow_prog)
+        """Set the shadow parameters every slot shares.
+
+        The depth bias is not among them: it converts against each map's own
+        projection, so it is set per slot by the bind_*_slot methods.
+        """
         self._set_uniform1f('shadowTexel', 1.0 / float(max(1, resolution)), self._shadow_prog)
         self._set_uniform1f('shadowNormalOffset', float(normal_offset), self._shadow_prog)
         self._set_uniform1i('shadowSoft', 1 if soft else 0, self._shadow_prog)
@@ -133,6 +136,12 @@ class _ShadowUniformMixin:
         loc = self._get_location(f'shadowMatrix[{idx}]', self._shadow_prog)
         if loc != -1:
             glUniformMatrix4fv(loc, 1, GL_FALSE, matrix.astype('f'))
+
+    def _set_depth_bias(self, slot: int, cascade: int, terms: Any) -> None:
+        """Set one map's world-bias-to-depth coefficients (shadowmath.depth_bias_terms)."""
+        idx = slot * self.MAX_CASCADES + cascade
+        self._set_uniform3f(f'shadowDepthBias[{idx}]',
+                            tuple(float(t) for t in terms), self._shadow_prog)
 
     def _bind_shadow_texture(self, unit: int, target: int, texture_id: int) -> None:
         glActiveTexture(GL_TEXTURE0 + unit)
@@ -159,16 +168,19 @@ class _ShadowUniformMixin:
         self._bind_shadow_texture(self.SHADOW_CUBE_BASE, GL_TEXTURE_CUBE_MAP_ARRAY, texture_id)
 
     def bind_spot_slot(self, slot: int, light_index: int,
-                       shadow_matrix_eye: 'Matrix4') -> None:
+                       shadow_matrix_eye: 'Matrix4',
+                       bias_terms: Any = (0.0, 0.0, 0.0)) -> None:
         """Point a slot at a spot light (layer slot*MAX_CASCADES of the array)."""
         if slot >= self.MAX_SHADOW_LIGHTS or self._shadow_prog is None:
             return
         self._set_uniform1i(f'shadowLightIndex[{slot}]', light_index, self._shadow_prog)
         self._set_uniform1i(f'shadowKind[{slot}]', self.SHADOW_KIND['spot'], self._shadow_prog)
         self._set_cascade_matrix(slot, 0, shadow_matrix_eye)
+        self._set_depth_bias(slot, 0, bias_terms)
 
     def bind_csm_slot(self, slot: int, light_index: int,
-                      matrices_eye: Any, splits: Any) -> None:
+                      matrices_eye: Any, splits: Any,
+                      bias_terms: Any = None) -> None:
         """Point a slot at a directional light's cascades (array layer block)."""
         if slot >= self.MAX_SHADOW_LIGHTS or self._shadow_prog is None:
             return
@@ -180,10 +192,13 @@ class _ShadowUniformMixin:
             self._set_cascade_matrix(slot, c, matrices_eye[c])
             idx = slot * self.MAX_CASCADES + c
             self._set_uniform1f(f'cascadeSplit[{idx}]', float(splits[c]), self._shadow_prog)
+            self._set_depth_bias(slot, c,
+                                 bias_terms[c] if bias_terms else (0.0, 0.0, 0.0))
 
     def bind_cube_slot(self, slot: int, light_index: int,
                        cube_texture_id: Optional[int],
-                       light_pos_world: Any, near: float, far: float) -> None:
+                       light_pos_world: Any, near: float, far: float,
+                       bias_terms: Any = (0.0, 0.0, 0.0)) -> None:
         """Point a slot at a point light. Fallback path binds a per-slot cube map;
         the cube-array path shares one texture bound via :meth:`bind_cube_array`."""
         if slot >= self.MAX_SHADOW_LIGHTS or self._shadow_prog is None:
@@ -195,3 +210,6 @@ class _ShadowUniformMixin:
         self._set_uniform3f(f'cubeLightPos[{slot}]', tuple(light_pos_world), self._shadow_prog)
         self._set_uniform1f(f'cubeNear[{slot}]', float(near), self._shadow_prog)
         self._set_uniform1f(f'cubeFar[{slot}]', float(far), self._shadow_prog)
+        # The cube reads its bias from the slot's first layer entry: its six faces
+        # share one projection, so one conversion serves them all.
+        self._set_depth_bias(slot, 0, bias_terms)

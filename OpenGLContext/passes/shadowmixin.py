@@ -28,6 +28,7 @@ from OpenGLContext.arrays import dot  # type: ignore[attr-defined]  # numpy re-e
 from OpenGLContext import frustum as frustum_module
 from OpenGLContext.scenegraph import light as light_module
 from OpenGLContext.passes import shadowmath
+from OpenGLContext.passes.shadowmath import SHADOW_DEPTH_BIAS
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
 from OpenGLContext.passes.shadowpool import _CascadeControllerMixin, _ShadowMapPoolMixin
 from vrml.vrml97 import nodetypes
@@ -43,38 +44,35 @@ log = logging.getLogger(__name__)
 # removed in favour of the per-geometry ``solid`` handling the nodes already do.
 SHADOW_POLYGON_OFFSET_FACTOR = 2.0
 SHADOW_POLYGON_OFFSET_UNITS = 4.0
-SHADOW_DEPTH_BIAS = 0.0015     # default receiver depth bias (shader)
 SHADOW_NORMAL_OFFSET = 0.02    # receiver normal offset, world units (shader)
 # Bounds for a per-light requested shadow-map resolution.
 SHADOW_MIN_RESOLUTION = 256
 SHADOW_MAX_RESOLUTION = 8192
 
 
-def per_light_shadow_settings(
-    lights: List[Any], default_bias: float, default_resolution: int
-) -> Tuple[float, int]:
-    """Derive (bias, resolution) for the shadow pass from the casting lights.
+def per_light_shadow_resolution(lights: List[Any], default_resolution: int) -> int:
+    """Resolution for the shadow maps, from the casting lights.
 
-    The shadow maps share one physical depth array, so a single bias and
-    resolution serve every slot. Take the largest requested of each among the
-    lights -- the higher resolution keeps detail for the pickiest light, and the
-    larger bias favours suppressing acne -- falling back to the defaults when a
-    light leaves the field unset. Resolution is clamped to a sane GL range. This
-    is what makes the per-light ``shadowBias`` / ``shadowMapResolution`` node
-    fields actually drive rendering.
+    They share one physical depth array, so one resolution serves every slot:
+    the largest any light asks for, which keeps detail for the pickiest of them,
+    clamped to a range a driver will allocate. A light leaving the field unset
+    asks for nothing.
+
+    Bias is not settled here. It is a count of shadow texels, converted into each
+    map's own depth units where that map is built (``shadowmath.depth_bias_terms``),
+    so every light's ``shadowBias`` reaches its own shadow rather than the largest
+    of them reaching all.
     """
-    biases, resolutions = [], []
-    for light in lights:
-        b = getattr(light, 'shadowBias', None)
-        if b is not None:
-            biases.append(float(b))
-        r = getattr(light, 'shadowMapResolution', None)
-        if r:
-            resolutions.append(int(r))
-    bias = max(biases) if biases else default_bias
+    resolutions = [int(r) for r in (getattr(light, 'shadowMapResolution', None)
+                                    for light in lights) if r]
     resolution = max(resolutions) if resolutions else default_resolution
-    resolution = int(max(SHADOW_MIN_RESOLUTION, min(resolution, SHADOW_MAX_RESOLUTION)))
-    return bias, resolution
+    return int(max(SHADOW_MIN_RESOLUTION, min(resolution, SHADOW_MAX_RESOLUTION)))
+
+
+def light_depth_bias(light: Any) -> float:
+    """The depth bias ``light`` asks its receivers to use, in shadow texels."""
+    bias = getattr(light, 'shadowBias', None)
+    return SHADOW_DEPTH_BIAS if bias is None else float(bias)
 
 
 class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
@@ -256,7 +254,6 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 shader.set_shadow_count(0)
                 continue
             shader.set_shadow_params(
-                bias=self._shadowBias(),
                 resolution=self.shadow_resolution,
                 normal_offset=self._normalOffset(),
                 soft=self.shadow_soft,
@@ -266,13 +263,15 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             )
             for b in bindings:
                 if b['kind'] == 'spot':
-                    shader.bind_spot_slot(b['slot'], b['light_index'], b['matrix'])
+                    shader.bind_spot_slot(b['slot'], b['light_index'], b['matrix'],
+                                          b['bias'])
                 elif b['kind'] == 'directional':
                     shader.bind_csm_slot(b['slot'], b['light_index'],
-                                         b['matrices'], b['splits'])
+                                         b['matrices'], b['splits'], b['biases'])
                 elif b['kind'] == 'point':
                     shader.bind_cube_slot(b['slot'], b['light_index'], b['texture'],
-                                          b['light_pos'], b['near'], b['far'])
+                                          b['light_pos'], b['near'], b['far'],
+                                          b['bias'])
             shader.set_shadow_count(len(bindings))
         shader._shadow_program = None
         shader._bind_program(shader.program)
@@ -329,7 +328,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             self._markDepthRendered(light_node, raw_transform, (smap.texture, layer))
         matrix = shadowmath.shadow_matrix_eye(camera_view, view, proj)
         return {'kind': 'spot', 'slot': slot, 'light_index': light_index,
-                'matrix': matrix}
+                'matrix': matrix,
+                'bias': shadowmath.depth_bias_terms(
+                    proj, light_depth_bias(light_node), self.shadow_resolution)}
 
     def _renderDirectional(self, path: Any, light_node: Any, slot: int,
                            light_index: int, camera_view: np.ndarray,
@@ -385,6 +386,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         grouping = self._depthGrouping(occluders)
         matrices = []
         cascade_splits = []
+        biases = []
+        texel_bias = light_depth_bias(light_node)
         for c, (view, proj, far_d) in enumerate(cascades):
             if not smap.bind_layer(base_layer + c, self.shadow_resolution, self._array_layers()):
                 return None
@@ -394,8 +397,12 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 smap.unbind()
             matrices.append(shadowmath.shadow_matrix_eye(camera_view, view, proj))
             cascade_splits.append(far_d)
+            # Each cascade fits its own box, so a world bias is a different share
+            # of each one's depth range.
+            biases.append(shadowmath.depth_bias_terms(
+                proj, texel_bias, self.shadow_resolution))
         return {'kind': 'directional', 'slot': slot, 'light_index': light_index,
-                'matrices': matrices, 'splits': cascade_splits}
+                'matrices': matrices, 'splits': cascade_splits, 'biases': biases}
 
     def _renderPoint(self, path: Any, light_node: Any, slot: int, light_index: int,
                      camera_view: np.ndarray,
@@ -429,7 +436,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         return {'kind': 'point', 'slot': slot, 'light_index': light_index,
                 'texture': None if cube_array else smap.texture,
                 'light_pos': tuple(float(x) for x in pos),
-                'near': near, 'far': far}
+                'near': near, 'far': far,
+                'bias': shadowmath.depth_bias_terms(
+                    proj, light_depth_bias(light_node), self.shadow_cube_resolution)}
 
     def _renderCubeFaces(self, smap: Any, pos: np.ndarray, proj: np.ndarray,
                          slot: int, cube_array: bool) -> Optional[bool]:
@@ -545,27 +554,23 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         return shadowmath.spot_light_view_projection(pos, direction, cutoff, near, far)
 
     def _applyPerLightShadowSettings(self, caps: ShadowCapabilities) -> None:
-        """Read per-light shadowBias / shadowMapResolution.
+        """Read the shadow-map resolution the casting lights ask for.
 
-        Bias is refreshed every frame (a uniform, cheap to change). Resolution is
-        only applied before the maps are first allocated, so honouring the field
-        never triggers a mid-frame texture realloc;
-        a later resolution change is ignored until the pools are disposed.
+        Applied only before the maps are first allocated, so honouring the field
+        never triggers a mid-frame texture realloc; a later resolution change is
+        ignored until the pools are disposed. Each light's ``shadowBias`` is read
+        where its own map is built instead, since it converts against that map's
+        projection.
         """
         casters = [p[-1] for p in self.paths.get(nodetypes.Light, ())
                    if getattr(p[-1], 'on', True) and self._castsShadow(p[-1], caps)]
-        bias, resolution = per_light_shadow_settings(
-            casters, SHADOW_DEPTH_BIAS, self.shadow_resolution)
-        self._effective_shadow_bias = bias
+        resolution = per_light_shadow_resolution(casters, self.shadow_resolution)
         maps_unallocated = (self._shared_array is None
                             and self._shared_cube_array is None
                             and not self._maps_cube)
         if casters and maps_unallocated:
             self.shadow_resolution = resolution
             self.shadow_cube_resolution = max(SHADOW_MIN_RESOLUTION, resolution // 2)
-
-    def _shadowBias(self) -> float:
-        return getattr(self, '_effective_shadow_bias', SHADOW_DEPTH_BIAS)
 
     def _normalOffset(self) -> float:
         # A few shadow-map texels in world units; scales with scene size loosely.

@@ -32,6 +32,33 @@ def _base_env(monkeypatch, **extra):
         monkeypatch.setenv(k, str(v))
 
 
+def frames_of(render_scene, children, **named):
+    """Every finished frame ``children`` draws, as an (H, W, 3) array each.
+
+    Read inside ``SwapBuffers``, which is the only moment a finished frame is
+    still in the back buffer -- after the swap it is gone, and a core-profile
+    context will not let the front buffer be read at all. It is also where
+    ``SettleCapture`` reads, so this sees what a screenshot would.
+    """
+    from OpenGLContext.capture import read_back_buffer
+    from OpenGLContext import glfwcontext
+
+    frames = []
+    original = glfwcontext.GLFWContext.SwapBuffers
+
+    def capturing(self):
+        frames.append(read_back_buffer()[0])
+        return original(self)
+
+    glfwcontext.GLFWContext.SwapBuffers = capturing
+    try:
+        render_scene(children, **named)
+    finally:
+        glfwcontext.GLFWContext.SwapBuffers = original
+    assert frames, 'the scene drew no frames at all'
+    return frames
+
+
 class _Rendered:
     def __init__(self, context, counters):
         self.context = context

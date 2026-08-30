@@ -58,30 +58,9 @@ def box_scene(*extra):
 
 
 def rendered(render_scene, *extra):
-    """The middle of the frame this scene draws.
-
-    Read from ``SwapBuffers``, which is the only moment the finished frame is
-    still in the back buffer -- after the swap it is gone, and a core-profile
-    context will not let the front buffer be read at all.  It is also where
-    ``SettleCapture`` reads, so this sees what a screenshot would.
-    """
-    from OpenGLContext.capture import read_back_buffer
-    from OpenGLContext import glfwcontext
-
-    frames = []
-    original = glfwcontext.GLFWContext.SwapBuffers
-
-    def capturing(self):
-        frames.append(read_back_buffer()[0])
-        return original(self)
-
-    glfwcontext.GLFWContext.SwapBuffers = capturing
-    try:
-        render_scene(box_scene(*extra))
-    finally:
-        glfwcontext.GLFWContext.SwapBuffers = original
-    assert frames, 'the scene drew no frames at all'
-    return middle(frames[-1])
+    """The middle of the frame this scene draws."""
+    from tests.unit.test_passes_render_gl import frames_of
+    return middle(frames_of(render_scene, box_scene(*extra))[-1])
 
 
 def middle(image, span=8):
