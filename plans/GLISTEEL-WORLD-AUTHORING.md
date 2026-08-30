@@ -216,7 +216,7 @@ appears.
 | §C | Roads — spec, cross-sections, the four ops, render node, reflections | engine (render) + editor (gen) | 🟡 all four ops, the plan-easing that keeps a route on the ground, and the control-map paint landed; the reflection bake outstanding | §A, §B |
 | §D | Water — rivers, lakes, surface render, shorelines, whitewater, beaches | engine (render) + editor (gen) | 📋 | §A, §B |
 | §E | Road-aware refinement & octree LOD | editor | 📋 | §A, §B, §C |
-| §F | Editor toolkit — tool-modes, menus, picking, gizmos, ortho map | engine (picking/ortho) + editor (toolkit) | 🟡 tool modes, menus, surface picking and the plan view landed; gizmos and occluded picking outstanding | §F.0 independent; rest after §C/§D |
+| §F | Editor toolkit — tool-modes, menus, picking, gizmos, ortho map | engine (picking/ortho) + editor (toolkit) | 🟡 tool modes, menus, surface picking, the plan view and the translate gizmo landed; rotate/scale handles and occluded picking outstanding | §F.0 independent; rest after §C/§D |
 | §G | `glisteel-editor` — the race-track editor app | new repo | 🟡 draws a circuit on the shipped landscape and bakes a world to drive; water and real elevation wait on §D/§B | §B–§F |
 | §H | `glisteel` — the car game demo | new repo | ✅ streams, drives, times a lap | §A runtime, §E output |
 | §I | Performance to 60 fps on the discrete-GPU target | engine + game | ✅ 106 fps at 1080p driving the shipped world | §H to measure |
@@ -628,10 +628,19 @@ through UI. Modelled on the navigation-mode pattern
   **shelved**; it is wanted only for picking an *occluded or off-screen* point (a road
   point on terrain behind a hill, without moving the camera), which is an edge case a
   track editor can defer.
-- **Gizmos** (engine). Translate/height handles rendered as editor geometry with their
-  own object ids, so the existing MRT buffer hit-tests them like any other pick; the
-  chosen handle drives a closed-form axis-constrained drag — for moving a road control
-  point or a water source.
+- **Gizmos** (engine). ✅ **Landed 2026-08-30** as `edit/gizmo.py`:
+  `TranslationGizmo` is three arms of ordinary scenegraph geometry, so the existing
+  MRT buffer hit-tests them like any other pick, and the grabbed arm drives a
+  closed-form axis-constrained drag (`axis_parameter`, the closest approach of the
+  eye ray to the arm's line). It works in the coordinates of whatever group it is
+  put in, taking that transform from the node path the pick resolved, so a road
+  control point or a water source is dragged in the units it is stored in.
+  `edit/controlnet.py` is the companion for geometry a pick cannot name a point
+  within: `ControlNet` puts a pickable marker on every control point of a NURBS
+  node and an unpickable cage line along every row and column, so a designer can
+  see what a pull is about to do before making it. `tests/molehill_edit.py` is
+  the demo. Rotate and scale handles are the same shape of problem and are not
+  built.
 - **Editor panels** (editor). Tool options, a layer/inspector panel, the project browser —
   `Panel`s and `HUDLayer`s from the existing toolkit.
 
@@ -1136,11 +1145,11 @@ them; §E decides per species.
   a landscape was comparing every sample against every segment. Grouped by cell:
   1.26 s to 0.29 s for the editor's view of a 4.6 km circuit.
 
-  **Still outstanding for §F/§G:** gizmos (translate and height handles with
-  their own pick ids), picking a point behind a hill (the depth buffer answers
-  only for what is drawn — see [RAYCAST-PICKING.md](RAYCAST-PICKING.md)), a file
-  browser rather than the path on the command line, undo, and more than one
-  route per project. §B would give the editor real elevation to draw on and §D
+  **Still outstanding for §F/§G:** rotate and scale handles (the translate
+  gizmo landed 2026-08-30), picking a point behind a hill (the depth buffer
+  answers only for what is drawn — see
+  [RAYCAST-PICKING.md](RAYCAST-PICKING.md)), a file browser rather than the path
+  on the command line, undo, and more than one route per project. §B would give the editor real elevation to draw on and §D
   the water to drop into it.
 - **2026-08-17** — **§I, most of the way.** The 24-instance world at 1920×1080 went from
   37.2 fps to 57.5, and at 1000×560 from 16.5 to 73.9; the heaviest world measured (240

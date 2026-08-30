@@ -119,6 +119,108 @@ normal; the normal is the gradient of the height function, which an editor has:
 </section>
 
 <section>
+<h2 id="gizmo">Handles: moving a point along one axis</h2>
+<p>A drag against the ground plane is right for a point that lives on the
+ground. A point in the air &mdash; a control point, a light, a camera &mdash;
+needs a direction chosen for it, and that is what a <strong>gizmo</strong> is
+for: three arms stand at the point, one per axis, and grabbing one holds the
+whole drag to that axis. The point goes up, or east, and not somewhere diagonal
+that the eye ray happened to sweep through.</p>
+<pre>from OpenGLContext.edit.gizmo import TranslationGizmo
+
+gizmo = TranslationGizmo(size=1.5)
+group.children = list(group.children) + [gizmo.node]
+gizmo.attach(point)                    # the arms appear there
+
+def OnPress(self, event):
+    if gizmo.press(event) is not None: # landed on an arm: a drag has begun
+        return
+
+def OnDrag(self, event):
+    moved = gizmo.drag(event)          # None when no arm is held
+    if moved is not None:
+        self.put_it(moved)             # write it wherever it belongs</pre>
+<p>The arms are ordinary scenegraph nodes, so <strong>the pick hit-tests them
+like any other geometry</strong> and there is no second hit-test to keep in step
+with what is drawn. <code>press</code> reads the axis off the node path the
+selection pass resolved; <code>release</code> ends the drag and
+<code>cancel</code> abandons it, putting the point back where it was grabbed,
+which is what Escape does.</p>
+<p>A gizmo <strong>works in the coordinates of the group it is put in</strong>.
+Editors put it beside the thing it is moving, and that group is often scaled or
+turned, so a drag measured in window pixels has to come back as a distance in
+the units the point is stored in. The gizmo takes the transform from the same
+node path, pushes its anchor and its axis out to root coordinates for the
+arithmetic, and answers in the units it was asked in.</p>
+<p>That arithmetic is <code>axis_parameter(origin, direction, anchor, axis)</code>:
+the closest approach of the eye ray to the arm's line, as a distance along the
+arm. It answers <code>None</code> for a ray running along the arm, where every
+point of it is equally near and the pointer is not saying where to go &mdash; so
+an edge-on drag holds still rather than lurching. What is recorded on the press
+is how far along the arm the pointer took hold, and the rest of the drag is
+measured from there, so the handle does not jump to the cursor.</p>
+<p>Arms are a fixed length in the surrounding group's units, so a gizmo far from
+the camera is drawn small.</p>
+
+<h3>The control points of a NURBS surface</h3>
+<p>A NURBS surface is one shape, so a pick aimed at it answers "the surface"
+however carefully it was aimed: there is nothing in the frame that <em>is</em>
+the third control point. <code>ControlNet</code> supplies one &mdash; a marker
+standing on every control point &mdash; so a picked marker is a control point by
+name, and moving it is an edit to the geometry.</p>
+<p><strong>The lines between the points matter as much as the points.</strong> A
+marker on its own says where one control point is; the row and the column it
+lies on say which points it is <em>between</em>, and that is what tells a
+designer what a pull is about to do &mdash; the cage bends first and the surface
+follows it. So the net draws a polyline along every row and every column of the
+control grid (one polyline through the lot, for a curve) and moves them with the
+points. The cage is <code>pickable=False</code>: it is there to be read rather
+than aimed at, and a line lying over a marker must not swallow a click meant for
+the point or the surface behind it (see
+<a href="instancing.html">click-through picking</a>).</p>
+<pre>from OpenGLContext.edit.controlnet import ControlNet
+
+net = ControlNet(shape.geometry)       # any node with a controlPoint field
+group.children = list(group.children) + [net.node]
+...
+index = net.index_for(event.getObjectPaths())
+if index is not None:
+    net.select(index)                  # the marker takes the selected colour
+    gizmo.attach(net.point(index))
+...
+net.move(index, gizmo.drag(event))     # the surface retessellates</pre>
+<p><code>move</code> <em>assigns</em> the <code>controlPoint</code> field rather
+than writing through it, because the cached tessellation depends on that field
+and a cache watches for it being set; an in-place write would leave the old
+surface on screen under the new net. <code>controlPoint</code> is the field name
+VRML97 gives both <code>NurbsSurface</code> and <code>NurbsCurve</code>, so a net
+serves either.</p>
+<p>The markers share one geometry and one appearance, so a whole net is a single
+instanced draw rather than a draw per point (see
+<a href="instancing.html">Instanced rendering</a>), and the cage is a second.
+The selected marker is the exception: it is given its own appearance for as long
+as it is selected, which is both what takes it out of the batch and what makes
+it visibly the one being worked on.</p>
+<figure>
+  <img src="images/demos/molehill_edit.jpg"
+       alt="Four coloured NURBS surfaces meeting in a molehill, white spheres
+            marking their control points and thin lines joining the points into
+            a grid, a red-green-blue tri-axis handle standing on one selected
+            point at the top of the red hill, and two control points far above
+            the surfaces with long lines running down to their neighbours">
+  <figcaption><strong><code>python tests/molehill_edit.py</code></strong>
+    &mdash; the <a href="tutorials/molehill.html">Molehill</a> surfaces with
+    their control net made draggable. Click a marker to select it, then drag one
+    of the three arms; the surface retessellates as the point travels. The red
+    hill here has been pulled three units east along its own <code>x</code>
+    axis. The two markers standing well above everything, with their long cage
+    lines, are the control points Molehill raises the green and blue hills by:
+    the cage is what makes that legible. Escape abandons a drag, or puts the
+    handle away.</figcaption>
+</figure>
+</section>
+
+<section>
 <h2>Reading relief off a plan view</h2>
 <p>A map lit from straight overhead is flat: every surface faces the light
 equally, and a ridge and a valley come out the same colour. A map is
@@ -313,11 +415,14 @@ whatever handled it before.</p>
 <section>
 <h2>What is not here yet</h2>
 <ul>
-  <li><strong>Gizmos.</strong> Translate and height handles with their own
-  object ids, so the pick hit-tests them like any other geometry and the chosen
-  handle drives an axis-constrained drag. A point on the map is dragged with
-  the tools and the plan view as they are; a handle in a perspective view wants
-  these.</li>
+  <li><strong>Rotation and scale handles.</strong> <a href="#gizmo">The
+  gizmo</a> translates. A ring per axis to turn something by, and a box per axis
+  to stretch it by, are the same shape of problem: a pickable node per handle
+  and a closed-form constraint on the drag.</li>
+  <li><strong>A gizmo of constant screen size.</strong> The arms are a fixed
+  length in world units, so one far from the camera is drawn small. Scaling
+  them by the distance to the eye each frame would keep them the same size to
+  aim at wherever the point is.</li>
   <li><strong>Picking what is behind a hill.</strong> The depth buffer answers
   for what is drawn, so a point the camera cannot see cannot be picked without
   moving the camera. A CPU ray against the terrain would answer it; see

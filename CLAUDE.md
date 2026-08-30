@@ -48,7 +48,9 @@ OpenGLContext/
 ├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.html
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.html
 ├── debug/            # Developer aids: buffer dumps, GL state, leak counts
-├── edit/             # Editor toolkit: tool modes, plan/orbit views -- docs/editing.html
+├── edit/             # Editor toolkit: tool modes, plan/orbit views, handles -- docs/editing.html
+│   ├── gizmo.py      # The tri-axis handle; a drag held to one axis
+│   └── controlnet.py # A NURBS node's control points, as pickable markers
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.html
 ├── loaders/          # File formats into the scenegraph -- docs/gltf.html, vrml97.html
 │   ├── gltf/         # glTF 2.0 / GLB

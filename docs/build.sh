@@ -10,8 +10,10 @@
 #   2. The rendered screenshots in docs/images/, by generate_doc_images.py.
 #
 # Requirements:
-#   - Tutorials: the sibling 'directdocs' checkout and the 'genshi' package.
-#     Override the checkout location with DIRECTDOCS=/path/to/directdocs.
+#   - Tutorials: the 'directdocs' package, which lives in the sibling pyopengl
+#     checkout, and the 'genshi' package.  DIRECTDOCS names the directory the
+#     package is imported from, so it is the checkout root rather than the
+#     package itself.
 #   - Screenshots: a GL display, or an offscreen platform (PYOPENGL_PLATFORM=egl).
 #     The Parthenon gallery also needs the sibling 'parthenon' model; it is
 #     skipped if absent.
@@ -20,14 +22,14 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
 
 # 1. Tutorials (the "demo documentation extraction"): must run before publishing
-DIRECTDOCS="${DIRECTDOCS:-$REPO/../directdocs}"
+DIRECTDOCS="${DIRECTDOCS:-$REPO/../pyopengl}"
 echo "== Extracting tutorials from tests/*.py -> docs/tutorials/ =="
-if [ -d "$DIRECTDOCS" ]; then
+if [ -d "$DIRECTDOCS/directdocs" ]; then
     ( cd "$DIRECTDOCS" && python -m directdocs.oglctutorials ) \
         && echo "  tutorials regenerated" \
         || echo "  WARNING: tutorial extraction failed (is 'genshi' installed?)"
 else
-    echo "  SKIP: directdocs not found at $DIRECTDOCS (set DIRECTDOCS=/path)"
+    echo "  SKIP: no directdocs package under $DIRECTDOCS (set DIRECTDOCS=/path)"
 fi
 
 # 2. Screenshots
