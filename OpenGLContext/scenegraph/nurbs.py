@@ -94,8 +94,10 @@ class _SurfaceRenderer(object):
 
         # Legacy fixed-function rendering
         if lit:
+            # The surface evaluator generates the normals; the pass is what
+            # keeps them unit length after the modelview scales them
+            # (flatcompat.legacyNormalRescale).
             glEnable(GL_AUTO_NORMAL)
-            glEnable(GL_NORMALIZE)
         try:
             nurbObject = gluNewNurbsRenderer()
             try:
@@ -114,7 +116,6 @@ class _SurfaceRenderer(object):
         finally:
             if lit:
                 glDisable(GL_AUTO_NORMAL)
-                glDisable(GL_NORMALIZE)
 
     def _render_shader(self, mode, visible=1, lit=1):
         """Render the surface using shader-based pipeline.

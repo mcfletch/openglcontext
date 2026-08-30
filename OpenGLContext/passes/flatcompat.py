@@ -104,6 +104,7 @@ class FlatPass( _flat.FlatPass ):
             glDepthFunc(GL_LESS)
             glEnable(GL_CULL_FACE)
             glCullFace(GL_BACK)
+            self.legacyNormalRescale()
 
             self.legacyLightRender( matrix )
 
@@ -136,6 +137,32 @@ class FlatPass( _flat.FlatPass ):
             ### default VRML background is black
             glClearColor(0.0,0.0,0.0,1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+
+    def legacyNormalRescale( self ):
+        """Have the GL return transformed normals to unit length
+
+        The fixed function transforms a normal by the inverse transpose of the
+        modelview, which for a scale of ``s`` divides the normal's length by
+        ``s``.  A Transform with a ``scale`` field would otherwise light what is
+        under it as though ``N.L`` were ``1/s`` times what it is -- a half-size
+        shape lit twice as brightly, a doubled one half as much -- and the
+        core-profile shaders, which normalize the transformed normal, would
+        disagree with this pass about the same scene.
+
+        GL_NORMALIZE rather than GL_RESCALE_NORMAL: VRML97 allows a
+        non-uniform scale, which rescaling alone does not answer.
+        """
+        glEnable(GL_NORMALIZE)
+
+    def renderGeometry( self, mvmatrix ):
+        """Draw the geometry, with the state a fixed-function draw depends on
+
+        Render sets that state up for a whole frame, but a caller wanting the
+        geometry alone -- a shadow tutorial filling a depth map from a light,
+        say -- comes straight here and never passes through it.
+        """
+        self.legacyNormalRescale()
+        return super( FlatPass, self ).renderGeometry( mvmatrix )
 
     def legacyLightRender( self, matrix ):
         """Do legacy light-rendering operation"""

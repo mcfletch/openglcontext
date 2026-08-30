@@ -163,7 +163,6 @@ class ArrayGeometry(object):
             if lit and self.normals is not None:
                 glEnableClientState( GL_NORMAL_ARRAY )
                 self.callBound( glNormalPointerf, self.normals)
-                glEnable(GL_NORMALIZE); # should do this explicitly eventually
             else:
                 glDisable( GL_LIGHTING )
 #				glDisableClientState( GL_NORMAL_ARRAY )

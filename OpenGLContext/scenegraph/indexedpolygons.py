@@ -89,7 +89,6 @@ class Holder(object):
             # make the color field alter the diffuse color
             glNormalPointer(GL_FLOAT, 0, normal)
             glEnableClientState(GL_NORMAL_ARRAY)
-            glEnable(GL_NORMALIZE)  # should do this explicitly eventually
             return 1
         else:
             glDisable(GL_LIGHTING)
@@ -151,7 +150,6 @@ class VBOHolder(Holder):
             finally:
                 normal.unbind()
             glEnableClientState(GL_NORMAL_ARRAY)
-            glEnable(GL_NORMALIZE)  # should do this explicitly eventually
             return 1
         else:
             glDisable(GL_LIGHTING)

@@ -28,6 +28,16 @@ profile). For how the shader path works -- its passes, shader programs and the
 VRML97 lighting shaders -- read <a href="renderpasses.html">Core-Profile
 Rendering</a>; for the physically based renderer built on it, read
 <a href="pbr.html">Physically Based Rendering</a>.</p>
+<p class="technical">Both paths return a transformed normal to unit length, so
+a <code>Transform</code> with a <code>scale</code> lights what is under it the
+same in either profile. The shader path normalizes in the vertex shader; the
+fixed-function path asks the GL for it (<code>GL_NORMALIZE</code>, in
+<code>FlatPass.legacyNormalRescale</code>), because the fixed function
+transforms a normal by the inverse transpose of the modelview and a scale of
+<code>s</code> divides the normal's length by <code>s</code>. Without it a
+half-size shape is lit twice as brightly and a doubled one half as much. A
+caller that renders geometry on its own through
+<code>renderGeometry</code> gets the same state.</p>
 </section>
 <section>
 <h2>Observables and Tree Updates</h2>
