@@ -64,7 +64,12 @@ class Texture(object):
         texture -- OpenGL textureID as returned by a call
             to glGenTextures(1), will be freed when the
             Texture object is deleted
-        format -- GL_RGB/GL_RGBA/GL_LUMINANCE
+        format -- GL_RGB/GL_RGBA/GL_LUMINANCE/GL_LUMINANCE_ALPHA, the format
+            the image was read as.  The luminance names describe what a sample
+            means -- one channel standing for all three -- rather than what is
+            uploaded: a core profile takes neither as a format, so the texture
+            holds GL_R8/GL_RG8 and carries the swizzle that makes a sample of
+            it (L, L, L, 1) or (L, L, L, A).  See :meth:`store`.
     """
 
     def __init__(self, image=None, format=None):
@@ -121,6 +126,21 @@ class Texture(object):
         glTexImage2D(
             GL_TEXTURE_2D, 0, internal_format, x, y, 0, source_format, GL_UNSIGNED_BYTE, image
         )
+        # A luminance texture means one channel standing for all three, which is
+        # what GL_LUMINANCE did and what GL_R8 does not: it samples as
+        # (R, 0, 0, 1), so a greyscale light map modulating a surface annihilates
+        # its green and blue and leaves it red. The swizzle restores the meaning
+        # -- (R, R, R, 1), and (R, R, R, G) where alpha came with it -- for the
+        # sized formats a core profile will accept.
+        swizzle = {
+            GL_LUMINANCE: (GL_RED, GL_RED, GL_RED, GL_ONE),
+            GL_LUMINANCE_ALPHA: (GL_RED, GL_RED, GL_RED, GL_GREEN),
+        }.get(format)
+        if swizzle is not None:
+            for parameter, source in zip(
+                (GL_TEXTURE_SWIZZLE_R, GL_TEXTURE_SWIZZLE_G,
+                 GL_TEXTURE_SWIZZLE_B, GL_TEXTURE_SWIZZLE_A), swizzle):
+                glTexParameteri(GL_TEXTURE_2D, parameter, source)
         # Set texture parameters for Core Profile compatibility
         # Without these, the default GL_TEXTURE_MIN_FILTER (GL_NEAREST_MIPMAP_LINEAR)
         # requires mipmaps, which causes the texture to appear black if not generated
