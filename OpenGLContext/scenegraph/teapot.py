@@ -401,8 +401,14 @@ class Teapot(nodetypes.Geometry, node.Node):
 
         ``size`` matches glutSolidTeapot's scale argument and is applied here
         rather than baked into the mesh, so every ``size`` shares one cached
-        tessellation.  Extracted so the (formerly duplicated) scale block lives
-        in one place.
+        tessellation.
+
+        The scale goes on the model side of the modelview -- these are
+        row-vector matrices, so a point reaches it first -- which is what makes
+        it scale the pot. On the other side it would scale eye space instead,
+        where a perspective divide cancels it in x and y and leaves only the
+        depth changed: the pot would look right and cast the shadow of a pot
+        standing somewhere else.
         """
         if self.size == 1.0:
             draw()
@@ -414,7 +420,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             [0, 0, self.size, 0],
             [0, 0, 0, 1],
         ], dtype=np.float32)
-        shader_program.set_matrices(np.dot(base_mv, scale), mode.projection)
+        shader_program.set_matrices(np.dot(scale, base_mv), mode.projection)
         try:
             draw()
         finally:
