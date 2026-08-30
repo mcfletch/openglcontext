@@ -121,9 +121,11 @@ variables:</p>
         <td style="vertical-align: top;">pin the directional detail level instead of adapting to the frame rate</td></tr>
   </tbody>
 </table>
-<p>A light casts a shadow when it is marked to. Directional lights (a sun) cast by
-default; point and spot lights cast when their <code>castShadows</code> field is
-set. Loaded glTF <code>KHR_lights_punctual</code> lights follow the same rule.</p>
+<p>A light casts a shadow when its <code>castShadows</code> field is set, which is
+the default for all three light types; clear it on a light that should light
+without occluding. Loaded glTF <code>KHR_lights_punctual</code> lights carry the
+extension's own <code>castShadows</code> where it is given, and default to casting
+for a sun.</p>
 </section>
 
 <section>
@@ -445,6 +447,10 @@ older fixed-function / ARB path, the direct ancestor of the core-profile system:
   <li><a href="tutorials/shadow_2.html">Depth-map Shadows: Shadows in a Frame
     Buffer Object</a> -- the same technique, rendering the depth map off-screen
     into an FBO so the shadow map can be larger than the window.</li>
+  <li><a href="tutorials/shadow_3.html">Shadows from the Scenegraph</a> -- the
+    same scene again, built as scenegraph nodes and lit by the shadow pass
+    described on this page. It imports no OpenGL module and writes no rendering
+    code, which is what the two tutorials above are worth reading for.</li>
 </ul>
 <p>To see the shadow system built into OpenGLContext <em>in use</em> -- rather than
 implemented by hand -- run the demo pictured at the top of this page: animated

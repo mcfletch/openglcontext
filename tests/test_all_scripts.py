@@ -628,10 +628,6 @@ PYTEST_MODULES = [
 
 # Scripts that have known issues or are not standalone
 SKIP_SCRIPTS = [
-    '__init__.py',
-    '_bitmap_font.py',  # Helper module
-    '_fontstyles.py',  # Helper module
-    '_gltf_toggle_driver.py',  # Subprocess driver for test_gltf_view_physics_toggle
     'frust_test_module.py',  # Helper module
     'profile_view.py',  # Interactive profiling tool
     'shader_intro.py',  # Tutorial introduction, not an actual test
@@ -692,6 +688,11 @@ def get_all_test_scripts(include_non_visual: bool = True) -> List[Path]:
 
     for script_path in TESTS_DIR.glob('*.py'):
         name = script_path.name
+
+        # A leading underscore marks a module a demo imports rather than one to
+        # run: font helpers, texture generators, subprocess drivers, __init__.
+        if name.startswith('_'):
+            continue
 
         # Skip various categories
         if name in SKIP_SCRIPTS:
@@ -885,6 +886,7 @@ SCRIPT_CATEGORIES = {
         "scripts": [
             'shadow_1.py',
             'shadow_2.py',
+            'shadow_3.py',
         ],
     },
     'animation': {
