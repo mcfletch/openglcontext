@@ -359,6 +359,25 @@ class wxContext(
     def SwapBuffers (self): # happens to match the wx method
         """Swap the GL buffers (force flush as we do)"""
         glcanvas.GLCanvas.SwapBuffers(self)
+    def setFullscreen( self, fullscreen ):
+        """Fill the screen, or go back to a window.
+
+        The frame the canvas sits in is what fills the screen -- a canvas
+        cannot, and the menu bar and status bar a frame may carry have to go
+        with it.
+        """
+        frame = self.GetTopLevelParent()
+        if frame is None:
+            return False
+        frame.ShowFullScreen( bool( fullscreen ) )
+        return True
+
+    def settingsChanged( self ):
+        """Re-apply the window-level settings a changed definition affects."""
+        from OpenGLContext import renderoptions
+        self.setFullscreen( renderoptions.fullscreen_window( self ) )
+        context.Context.settingsChanged( self )
+
     def getDefaultIcons( cls ):
         """Get the OpenGLContext icons as a wxPython wxIconBundle
 
@@ -393,6 +412,8 @@ class wxContext(
                 instance = cls( frame, *args, **named )
                 instance.SetFocus( )
                 frame.SetSize( instance.contextDefinition.size )
+                if renderoptions.fullscreen_window( instance.contextDefinition ):
+                    instance.setFullscreen( True )
                 icons= instance.getDefaultIcons()
                 if icons is not None:
                     frame.SetIcons( icons )

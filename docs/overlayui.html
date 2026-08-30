@@ -205,6 +205,12 @@ context.overlays.push(bar)</pre>
         window's height already asks for. See
         <a href="#scale">Everything scales with the window</a>.</td>
       <td><code>OPENGLCONTEXT_UI_SCALE</code></td></tr>
+    <tr><td><code>fullscreen</code></td><td>bool</td>
+      <td>Fill the screen rather than open a window of the definition's
+        <code>size</code>. Applying it moves the window a player is already
+        looking at, keeping the GL context and everything loaded into it.
+        Ignored while <code>OPENGLCONTEXT_HIDDEN</code> is set.</td>
+      <td><code>OPENGLCONTEXT_FULLSCREEN</code></td></tr>
   </table>
   <p><strong>The environment variable is the field's default, not a competitor.</strong>
     A field nobody has set reads its environment variable every time the pass

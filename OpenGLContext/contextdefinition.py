@@ -87,6 +87,16 @@ class ContextDefinition( node.Node ):
     title = field.newField( "title", "SFString", 1, "")
     profileFile = field.newField( "profileFile", 'SFString',1,"")
 
+    #: Fill the screen rather than open a window of ``size``
+    #: (env: ``OPENGLCONTEXT_FULLSCREEN``).  A game normally wants this and a
+    #: tool normally does not, so it is the application's choice rather than
+    #: the launcher's.  ``OPENGLCONTEXT_HIDDEN`` outranks it: a window that is
+    #: not meant to appear cannot fill the screen, and a capture subprocess
+    #: that tried would take the display from whoever started it.
+    #: See :meth:`OpenGLContext.context.Context.setFullscreen`.
+    fullscreen = field.newField( "fullscreen", "SFBool", 1,
+                                 lambda: renderoptions.env_flag('OPENGLCONTEXT_FULLSCREEN', False))
+
     #: Movement modes this context offers, as nodes (see
     #: :mod:`OpenGLContext.move.modes`).  Declared rather than hard-coded so a
     #: game states which ways of moving it has and how each is tuned.
@@ -250,6 +260,7 @@ class ContextDefinition( node.Node ):
         'vsync': {'label': 'Wait for refresh (vsync)'},
         'uiScale': {'label': 'Interface size', 'minimum': 0.75, 'maximum': 2.0,
                     'step': 0.25, 'suffix': 'x'},
+        'fullscreen': {'label': 'Full screen'},
         'multisampleSamples': {'label': 'Anti-aliasing samples', 'minimum': -1,
                                'maximum': 16, 'step': 1},
         'pickEnabled': {'label': 'Mouse picking'},
@@ -268,9 +279,10 @@ class ContextDefinition( node.Node ):
         'multisampleSamples', 'vsync',
     )
     #: Fields a settings screen shows under "Interface": how the overlay itself
-    #: is drawn, as opposed to the world.
+    #: is drawn and how much of the display the window takes, as opposed to what
+    #: is in the world.
     INTERFACE_FIELDS = (
-        'uiScale',
+        'uiScale', 'fullscreen',
     )
     #: Fields of the ``audio`` sub-node a settings screen shows under "Sound".
     #: Its own section rather than a corner of "Rendering": a player looking for

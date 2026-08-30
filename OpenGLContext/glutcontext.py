@@ -60,7 +60,28 @@ class GLUTContext(
         from OpenGLContext import renderoptions
         if renderoptions.hidden_window():
             glutHideWindow()
+        elif renderoptions.fullscreen_window(definition):
+            glutFullScreen()
         Context.__init__(self, definition)
+
+    def setFullscreen(self, fullscreen):
+        """Fill the screen, or go back to the size the definition asked for."""
+        if not self.windowID:
+            return False
+        glutSetWindow(self.windowID)
+        if fullscreen:
+            glutFullScreen()
+        else:
+            width, height = [int(i) for i in self.contextDefinition.size]
+            glutPositionWindow(100, 100)
+            glutReshapeWindow(width, height)
+        return True
+
+    def settingsChanged(self):
+        """Re-apply the window-level settings a changed definition affects."""
+        from OpenGLContext import renderoptions
+        self.setFullscreen(renderoptions.fullscreen_window(self))
+        Context.settingsChanged(self)
 
     CONTEXT_DEFINITION_FLAG_MAPPING = (
         ("doubleBuffer", GLUT_DOUBLE, GLUT_SINGLE, GLUT_DOUBLE),

@@ -42,7 +42,10 @@ class PygameContext(
         pygame.display.set_caption(definition.title or self.getApplicationName())
         pygame.key.set_repeat(500,30)
         Context.__init__ (self, definition)
-        self.ViewPort(*definition.size)
+        # The surface's own size, not the requested one: a window filling the
+        # screen was given the desktop's resolution instead of what it asked
+        # for, and a viewport from the request would leave a border undrawn.
+        self.ViewPort(*self.screen.get_size())
 
     def pygameFlagsFromDefinition( cls, definition ):
         """Setup the various non-initialising flags, return init flags"""
@@ -81,16 +84,27 @@ class PygameContext(
         # screen of whoever is running it.
         from OpenGLContext import renderoptions
         hidden = pygame.HIDDEN if renderoptions.hidden_window() else 0
+        # Borderless rather than a mode switch: SDL then leaves the desktop
+        # resolution alone, which is what a window filling the screen is being
+        # asked for.  See renderoptions.fullscreen_window.
+        filling = (pygame.FULLSCREEN | pygame.NOFRAME
+                   if renderoptions.fullscreen_window(definition) else 0)
         if definition.doubleBuffer:
-            return DOUBLEBUF|RESIZABLE|hidden
+            return DOUBLEBUF|RESIZABLE|hidden|filling
         else:
-            return RESIZABLE|hidden
+            return RESIZABLE|hidden|filling
     pygameFlagsFromDefinition = classmethod( pygameFlagsFromDefinition )
     def pygameDisplayMode( self, definition=None ):
         if definition is None:
             definition = self.contextDefinition
+        from OpenGLContext import renderoptions
+        # A size of (0,0) is SDL's "whatever the desktop is at", which is the
+        # resolution a window filling the screen wants; asking for the
+        # definition's size instead would letterbox it.
+        size = ((0, 0) if renderoptions.fullscreen_window(definition)
+                else tuple([int(i) for i in definition.size]))
         self.screen = pygame.display.set_mode(
-            tuple([int(i) for i in definition.size]),
+            size,
             OPENGL | self.pygameFlagsFromDefinition( definition ),
         )
         return self.screen

@@ -1093,6 +1093,18 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         finally:
             contextLock.release()
 
+    def setFullscreen(self, fullscreen):
+        """Fill the screen, or go back to a window; answer whether it happened.
+
+        A backend that can move a live window between the two overrides this.
+        The base answer is False, which is how a caller finds out that a
+        key or a settings toggle has nothing to offer here: the
+        :attr:`ContextDefinition.fullscreen` field still decides how the window
+        is *opened*, since that much needs no backend support beyond the window
+        call every backend already makes.
+        """
+        return False
+
     def settingsChanged(self):
         """The context definition has been edited; re-read what is not per-frame.
 

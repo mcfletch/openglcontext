@@ -166,6 +166,13 @@ needs.</p>
   costs nobody their desktop. Not supported by the Qt backend.</td></tr>
 <tr><td><code>OPENGLCONTEXT_NO_VSYNC</code></td><td>yes/no</td><td>off</td>
   <td><em>Presentation.</em> Do not wait for the compositor on swap.</td></tr>
+<tr><td><code>OPENGLCONTEXT_FULLSCREEN</code></td><td>yes/no</td><td>off</td>
+  <td>Open filling the screen at the display's current resolution rather than
+  a window of <code>ContextDefinition.size</code>. The default for the
+  <code>fullscreen</code> field, which a program sets for itself and the
+  settings screen offers. <code>OPENGLCONTEXT_HIDDEN</code> outranks it: a
+  window that is not meant to appear cannot fill the screen. Honoured by the
+  GLFW, GLUT, Pygame and wx backends.</td></tr>
 <tr><td><code>OPENGLCONTEXT_UI_SCALE</code></td><td>number</td>
   <td><code>1.0</code></td>
   <td>Multiplier on the overlay interface's size. The window height already

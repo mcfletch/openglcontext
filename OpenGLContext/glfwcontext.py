@@ -16,8 +16,24 @@ from OpenGLContext.context import Context
 from OpenGLContext.events import glfwevents
 from OpenGLContext.looptrace import LoopTrace
 import logging
+import warnings
 
 log = logging.getLogger(__name__)
+
+
+def fullscreenMonitor(definition):
+    """The monitor a window built from ``definition`` should fill, or None.
+
+    ``OPENGLCONTEXT_HIDDEN`` wins over the request, because GLFW ignores the
+    visibility hint for a full-screen window: a capture subprocess that asked
+    for both would map itself over the display of whoever started the run.
+    A machine with no monitor attached answers None for the same reason it
+    answers no size -- there is nothing to fill.
+    """
+    from OpenGLContext import renderoptions
+    if not renderoptions.fullscreen_window(definition):
+        return None
+    return glfw.get_primary_monitor() or None
 
 
 class GLFWContext(
@@ -31,6 +47,10 @@ class GLFWContext(
     """
 
     window = None
+    #: Where and how big the window is when it is not filling the screen, as
+    #: (x, y, width, height).  A position of None means the platform has never
+    #: placed this window and should choose.
+    _windowedGeometry = (None, None, 300, 300)
 
     def __init__(self, definition=None, **named):
         # Resolved before the window exists: profile, version, buffers and size
@@ -49,7 +69,14 @@ class GLFWContext(
         # Create window
         width, height = [int(i) for i in definition.size]
         title = definition.title or self.getApplicationName()
-        self.window = glfw.create_window(width, height, title, None, None)
+        # Kept for the trip back out of full-screen, which has to be told a
+        # size and a position: the definition's size is the only statement of
+        # how big a window this application wanted.
+        self._windowedGeometry = (None, None, width, height)
+        monitor = fullscreenMonitor(definition)
+        if monitor is not None:
+            width, height = self._fillMonitor(monitor)
+        self.window = glfw.create_window(width, height, title, monitor, None)
 
         if not self.window:
             glfw.terminate()
@@ -76,7 +103,75 @@ class GLFWContext(
     def settingsChanged(self):
         """Re-apply the window-level settings a changed definition affects."""
         self.applyVSync()
+        self.applyFullscreen()
         Context.settingsChanged(self)
+
+    def _fillMonitor(self, monitor):
+        """The size to ask for on ``monitor``, with the refresh rate to match.
+
+        The monitor's *current* mode, so nothing switches resolution: a mode
+        change is slow, it rearranges the icons on every other desktop the
+        display is showing, and a game that wanted a different resolution would
+        say so in its definition's size rather than by filling the screen.
+        """
+        mode = glfw.get_video_mode(monitor)
+        glfw.window_hint(glfw.REFRESH_RATE, mode.refresh_rate)
+        return int(mode.size.width), int(mode.size.height)
+
+    def applyFullscreen(self, definition=None):
+        """Match the window to what the definition now says about full-screen.
+
+        Called when the settings screen writes the field, so a player can leave
+        a full-screen game without restarting it.  Moving the window between a
+        monitor and the desktop keeps the GL context and everything in it, so
+        nothing is reloaded.
+        """
+        source = self if definition is None else definition
+        self.setFullscreen(fullscreenMonitor(source) is not None)
+
+    def setFullscreen(self, fullscreen):
+        """Fill the screen, or go back to the window this context opened with."""
+        if not self.window:
+            return False
+        # Truthiness, not ``is not None``: the binding hands back a ctypes
+        # pointer either way, and the NULL one that means "windowed" is an
+        # object like any other.
+        already = bool(glfw.get_window_monitor(self.window))
+        if bool(fullscreen) == already:
+            return True
+        if fullscreen:
+            monitor = glfw.get_primary_monitor()
+            if not monitor:
+                return False
+            # Wayland does not tell a client where its window is, and says so
+            # by warning.  A position is the one part of this that can be done
+            # without -- the size is what has to come back, and a compositor
+            # that places windows itself would ignore the position anyway -- so
+            # the complaint is not worth showing a player.
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                try:
+                    x, y = glfw.get_window_pos(self.window)
+                except Exception:
+                    x = y = None
+            width, height = glfw.get_window_size(self.window)
+            self._windowedGeometry = (x, y, width, height)
+            width, height = self._fillMonitor(monitor)
+            glfw.set_window_monitor(self.window, monitor, 0, 0, width, height,
+                                    glfw.get_video_mode(monitor).refresh_rate)
+        else:
+            x, y, width, height = self._windowedGeometry
+            # A window that was born full-screen has no remembered position, so
+            # it is handed back to the platform to place rather than pinned to
+            # the top-left corner of a display it may not be on.
+            if x is None:
+                x, y = 100, 100
+            glfw.set_window_monitor(self.window, None, x, y, width, height,
+                                    glfw.DONT_CARE)
+        # A monitor swap re-creates the drawable underneath us on some
+        # platforms, so the swap interval has to be asked for again.
+        self.applyVSync()
+        return True
 
     def applyVSync(self, definition=None):
         """Wait for the display's refresh, or don't (ContextDefinition.vsync).

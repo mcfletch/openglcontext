@@ -31,7 +31,8 @@ from vrml import protofunctions
 
 log = logging.getLogger(__name__)
 
-__all__ = ['hidden_window','definition', 'flag', 'choice', 'number', 'env_flag', 'env_choice',
+__all__ = ['hidden_window', 'fullscreen_window',
+           'definition', 'flag', 'choice', 'number', 'env_flag', 'env_choice',
            'env_number', 'env_flag_once', 'env_number_once', 'reset_env_cache',
            'clean_environment', 'CHOICES', 'LABELS', 'ENVIRONMENT']
 
@@ -59,6 +60,11 @@ ENVIRONMENT: Tuple[str, ...] = (
     'OPENGLCONTEXT_CAPTURE_FPS',
     'OPENGLCONTEXT_DISABLE_FPS_DISPLAY', 'OPENGLCONTEXT_HIDDEN',
     'OPENGLCONTEXT_NO_VSYNC', 'OPENGLCONTEXT_GLTF_BASELINE',
+    # Filling the screen changes the resolution and the aspect ratio a frame is
+    # rendered at, so it is not merely presentation and a child capture must
+    # not inherit it -- a comparison against a reference rendered in a window
+    # would differ for a reason that has nothing to do with the scene.
+    'OPENGLCONTEXT_FULLSCREEN',
     # A session journal names one file for one session, so a child process
     # that inherited the name would overwrite its parent's; and a replay
     # drives the camera, which would make a reference image depend on a
@@ -142,9 +148,18 @@ LABELS: Dict[str, Tuple[str, ...]] = {
 def definition(source: Any) -> Optional[Any]:
     """The ContextDefinition behind a pass, a render mode or a context.
 
+    A definition answers for itself, because a backend applies the settings
+    that are fixed when the window is built -- the swap interval, whether it
+    fills the screen -- while it is still building it, and there is no context
+    to ask yet.  Left out, every one of those falls back to its environment
+    default and the field the application set is the one thing not consulted.
+
     None when there is nothing to ask, which is the normal case in a unit test
     that instantiates a pass without a window.
     """
+    from OpenGLContext import contextdefinition
+    if isinstance(source, contextdefinition.ContextDefinition):
+        return source
     found = getattr(source, 'contextDefinition', None)
     if found is not None:
         return found
@@ -253,6 +268,24 @@ def hidden_window() -> bool:
     buffer swap is guaranteed not to block waiting to be shown.
     """
     return env_flag('OPENGLCONTEXT_HIDDEN', False)
+
+
+def fullscreen_window(source: Any) -> bool:
+    """Whether the window ``source`` describes should fill the screen.
+
+    One reader for the same reason :func:`hidden_window` is one: every backend
+    needs the answer while it is building its window, and the two questions
+    interact.  A hidden window is never full-screen -- the platforms take
+    "fill the screen" as an instruction to map it, so a capture subprocess that
+    honoured both would put itself over the display of whoever started the run.
+
+    ``source`` is a :class:`ContextDefinition`, a context or a render pass;
+    the field outranks ``OPENGLCONTEXT_FULLSCREEN``, which is only its default.
+    """
+    if hidden_window():
+        return False
+    return flag(source, 'fullscreen',
+                env_flag_once('OPENGLCONTEXT_FULLSCREEN', False))
 
 
 def env_flag(name: str, default: bool) -> bool:

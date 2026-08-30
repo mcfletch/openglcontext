@@ -74,6 +74,34 @@ the machine you are reading this on can run it -- for instance
 <code>scenegraph/text/wglfont.py</code> is Windows font support, and is expected
 to work on Windows.</p>
 
+<h3 id="fullscreen">Filling the screen</h3>
+
+<p>A game normally wants the whole display and a tool normally does not, so
+which it is belongs to the program rather than to whoever launches it:
+<code>ContextDefinition.fullscreen</code>, defaulted from
+<code>OPENGLCONTEXT_FULLSCREEN</code> and offered on the settings screen under
+<em>Interface</em>.</p>
+
+<pre>from OpenGLContext.contextdefinition import ContextDefinition
+MyGame.ContextMainLoop(definition=ContextDefinition(fullscreen=True))</pre>
+
+<p>The window opens at the display's <em>current</em> resolution, so nothing
+switches video modes: a mode change is slow and rearranges the icons on every
+other desktop that display is showing. A program that wants a different
+rendering resolution says so with the definition's <code>size</code>.</p>
+
+<p><code>OPENGLCONTEXT_HIDDEN</code> outranks it. A window that is not meant to
+appear cannot fill the screen -- the platforms take "fill the screen" as an
+instruction to map it -- so a capture subprocess that honoured both would put
+itself over the display of whoever started the run.</p>
+
+<p><code>context.setFullscreen(True/False)</code> moves a window that already
+exists, keeping the GL context and everything loaded into it, and answers
+whether the backend could. GLFW, GLUT and wxPython can; Pygame opens
+full-screen but does not move afterwards, since SDL re-creates the drawable and
+the GL context with it. Applying the settings screen's toggle calls it, so a
+player can leave a full-screen game without restarting.</p>
+
 <p>Rendering runs through the <strong>passes</strong> package described in
 <a href="#passes">Rendering Passes</a> below: a single "flat" pass that observes
 the scenegraph's structure and draws it in a fixed sequence (background, opaque,
