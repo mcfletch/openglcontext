@@ -60,10 +60,8 @@ REPORT_PATH = TESTS_DIR / "report.html"
 #: so that a reference frame keeps matching.
 CAPTURE_SEED = 4242
 
-# Scripts whose captured frame is not a function of the scene, and so are run
-# for their exit status rather than compared against a reference.
-#
 # Scripts captured but not compared, because their picture is not reproducible.
+# They are run for their exit status instead.
 # A capture counts frames rather than seconds (OpenGLContext.video.clock) and
 # seeds the engine's randomness (OPENGLCONTEXT_SEED), so a scene animated from
 # a Timer, a TimeSensor or the world's clock, and one that scatters what it
