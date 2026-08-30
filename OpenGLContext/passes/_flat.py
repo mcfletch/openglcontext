@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod
+from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid
 from OpenGL.GL import *
 from OpenGL.GL import (
     glEnable, glDisable, glDisablei, glBlendFunc, glDepthMask, glDepthFunc,
@@ -721,6 +721,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             # A non-pickable shape masks the id attachment instead, reading
             # through to whatever is behind it.
             masked = self._writeShapeId(shader, path, prog, id_map)
+            self.applyLightGrid(shader, path, tmatrix, bvolume, prog)
 
             try:
                 path[-1].Render(mode=self)
@@ -788,6 +789,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 # Set object ID for MRT selection buffer (stable per-path id),
                 # or mask it for a non-pickable shape.
                 masked = self._writeShapeId(shader, path, prog, id_map)
+                self.applyLightGrid(shader, path, tmatrix, bvolume, prog)
 
                 try:
                     path[-1].RenderTransparent(mode=self)
@@ -820,7 +822,70 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         # frame so it can be told where the viewer is, and the same path
         # bookkeeping that finds the lights will find it.
         lod.LOD,
+        # Likewise: the baked irradiance grid is looked up once a frame and
+        # then sampled per object, so it is found the same way a light is.
+        lightgrid.LightGrid,
     ]
+
+    #: The grid this frame's objects are lit from, or None where the scene
+    #: carries none.  Settled once per frame by :meth:`setupLightGrid`, since
+    #: every object without a lightmap asks for it.
+    _lightGrid: Any = None
+
+    def currentLightGrid(self) -> Optional[Any]:
+        """The baked irradiance grid the scene carries, or None."""
+        return lightgrid.bound_grid(self.paths.get(lightgrid.LightGrid, ()))
+
+    def setupLightGrid(self) -> None:
+        """Settle which grid this frame lights its objects from.
+
+        With no grid the shader is told so once, here, rather than once per
+        object: a scene that has none is the normal case and should cost
+        nothing per draw.
+        """
+        self._lightGrid = self.currentLightGrid()
+        apply = getattr(self.shader_program, 'set_light_grid', None)
+        if apply is not None and self._lightGrid is None:
+            apply()
+
+    def applyLightGrid(self, shader: Any, path: Any, tmatrix: Any,
+                       bvolume: Any, program: Any = None) -> None:
+        """Light the object about to be drawn from where it stands.
+
+        A no-op unless the scene carries a grid, so the per-object lookup is
+        paid for only where there is baked light to look up -- and skipped
+        again for a surface that brought its own lightmap, which is most of a
+        baked world by count.  The shader would ignore the sample for those
+        anyway; taking it would still cost a lookup per surface per frame.
+        """
+        grid = self._lightGrid
+        if grid is None or self._carriesLightmap(path[-1]):
+            return
+        apply = getattr(shader, 'set_light_grid', None)
+        if apply is None:
+            return
+        apply(*grid.sample(self.objectCentre(tmatrix, bvolume)), program=program)
+
+    @staticmethod
+    def _carriesLightmap(shape: Any) -> bool:
+        """Whether this shape's material brings baked light of its own."""
+        appearance = getattr(shape, 'appearance', None)
+        material = getattr(appearance, 'material', None)
+        textures = getattr(material, 'textures', None)
+        return bool(textures) and textures.get('lightmap') is not None
+
+    def objectCentre(self, tmatrix: Any, bvolume: Any) -> Any:
+        """Where in the world the object being drawn is, for a light lookup.
+
+        The middle of what is drawn rather than the origin it hangs from: a
+        figure's origin is between its feet, which in a grid of samples metres
+        apart is as likely to be in the floor as in the room.
+        """
+        centre = getattr(bvolume, 'center', None)
+        local = (0.0, 0.0, 0.0) if centre is None else tuple(
+            float(value) for value in centre)
+        return dot(array(local + (1.0,), 'd'), tmatrix)[:3]
+
     def currentBackground( self ):
         """Find our current background node"""
         paths = self.paths.get( nodetypes.Background, () )
@@ -1325,6 +1390,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 elif not isinstance(amb, (tuple, list)):
                     amb = (float(amb),) * 3
                 self.shader_program.set_scene_ambient(tuple(amb))
+                self.setupLightGrid()
                 # Transmissive (glass) shapes are opaque-alpha but must draw after
                 # the opaque scene so they can sample it as a backdrop; split them
                 # out of the opaque pass unless transmission is disabled.

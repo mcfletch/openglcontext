@@ -114,11 +114,14 @@ class _FlatEffectsMixin:
         shader.use(lit=True)
         if probe is not None:
             probe.bind(shader)
-        # The env probe is world-oriented; the shader samples it via eyeToWorld,
-        # which is otherwise only set when shadows are on. Set it here too.
-        if mode != 'off':
-            eye_to_world = np.linalg.inv(np.asarray(matrix, dtype='d')).astype('f')
-            shader.set_eye_to_world(eye_to_world)
+        # Where the camera is in the world, which is what turns an eye-space
+        # normal into a world-space one. Uploaded every frame rather than only
+        # for the paths that were the first to want it: the env probe is
+        # world-oriented, so are the shadow cascades, and so is the baked
+        # irradiance grid, and a uniform that is right only when some other
+        # feature happens to be switched on is a trap for the next one.
+        eye_to_world = np.linalg.inv(np.asarray(matrix, dtype='d')).astype('f')
+        shader.set_eye_to_world(eye_to_world)
         # ContextDefinition.iblIntensity scales the (un-shadowed) ambient /
         # environment term. Below 1.0 a shadow-casting key light reads clearly
         # instead of being lifted by full-strength ambient. 1.0 = unchanged.
@@ -238,11 +241,12 @@ class _FlatEffectsMixin:
         self.transparent = (mode == 'blend')
         debugFrustum = self.context.contextDefinition.debugBBox
         try:
-            for _obj_index, (_key, mvmatrix, _tmatrix, bvolume, path) in records:
+            for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path) in records:
                 self.matrix = mvmatrix
                 self.renderPath = path
                 shader.set_matrices(mvmatrix, self.projection, program=prog)
                 masked = self._writeShapeId(shader, path, prog, id_map)
+                self.applyLightGrid(shader, path, tmatrix, bvolume, prog)
                 try:
                     if mode == 'blend':
                         path[-1].RenderTransparent(mode=self)

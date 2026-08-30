@@ -387,6 +387,60 @@ watching, and <strong>a capture has nobody watching</strong>: a run started with
 <code>--capture</code> holds the mode it began with for the whole run, so what
 the image shows does not depend on where the climb had got to when the frame was
 taken. The shadow cascades are pinned for a capture for the same reason.</p>
+
+<h3 id="bakedlight">Baked Lighting: Lightmaps and the Light Grid</h3>
+<p>A world whose lighting was solved when it was built carries the answer with
+it rather than computing it again every frame. The renderer reads two records
+of such a solve, and a scene may use either or both.</p>
+<p>A <strong>lightmap</strong> is that light painted onto the surfaces
+themselves, addressed by a second UV set. Give the material a
+<code>lightmap</code> texture, set bit 32 of <code>texCoordMask</code> so it
+samples <code>TEXCOORD_1</code>, and scale its exposure with
+<code>lightmapStrength</code>. It is read as linear light, not as an sRGB
+colour: a baked solution is written straight to eight bits and decoding it
+would leave the level looking unlit.</p>
+<p>That reaches only the surfaces that existed when the world was built.
+Anything that arrives afterwards &mdash; a character, a pickup, a door, a
+projectile &mdash; carries no lightmap coordinate, so in a level that bakes its
+lighting and places no lamps it has nothing lighting it at all. A
+<strong>light grid</strong> is the same solve recorded a second way for them: a
+regular grid of samples over the world, each holding the light arriving at that
+point as an ambient term and a directional one. The pass looks each object's
+own position up in it, so what an object is lit by is where it is standing.</p>
+<pre>from OpenGLContext.scenegraph.lightgrid import LightGrid
+
+scene.children.append(LightGrid(
+    origin=(-40.0, -2.0, -40.0),      # world position of sample (0, 0, 0)
+    spacing=(1.6, 3.2, 1.6),          # metres between samples on each axis
+    counts=[51, 9, 51],               # samples along x, y and z
+    ambient=ambient,                  # one linear colour per sample
+    directional=directional,          # one linear colour per sample
+    direction=direction,              # a unit vector towards the light
+    intensity=2.0,                    # the exposure the lightmaps use
+))</pre>
+<p>The sample arrays are flat, with x varying fastest:
+<code>index = ix + counts[0] * (iy + counts[1] * iz)</code>. Sampling is
+trilinear and clamps at the edges, so an object that walks past the last sample
+keeps the light of the nearest one instead of going dark at an invisible line.
+One grid lights a scene: the first one found with samples in it is used.</p>
+<p>What it costs is one interpolation and three uniforms per object per frame,
+and only for scenes that have a grid at all. What it does not cover:</p>
+<ul>
+  <li><strong>A surface with its own lightmap is left alone.</strong> The two
+    are one solve, and taking both would light the world's geometry twice.</li>
+  <li><strong>One sample per object</strong>, taken at the middle of its
+    bounding volume, so the light does not vary across a single object. For
+    figures and props at the spacing a baked grid uses, it does not need
+    to.</li>
+  <li><strong>Instanced draws are not grid-lit.</strong> A group of shapes
+    collapsed into one draw could only share one sample, which would be the
+    wrong answer for all but one of them.</li>
+  <li>The <a href="renderpasses.html">VRML97 core shader</a> does not read it,
+    as it does not read lightmaps either; baked lighting is a PBR path.</li>
+</ul>
+<p>twig-bb builds one from a Quake 3 map's lightvol lump, in
+<code>twig_bb/lighting.py</code>, which is where the arrangement comes
+from.</p>
 </section>
 
 <section id="shadows">

@@ -536,6 +536,31 @@ class PBRShaderProgram(VRML97ShaderProgram):
         """
         self._set_uniform1f('lightmapStrength', float(strength), self.program)
 
+    def set_light_grid(self, ambient: Any = None, directional: Any = None,
+                       direction: Any = None, program: Any = None) -> None:
+        """Light the next draw from a baked grid, or from none.
+
+        Called with nothing, the next draw takes no grid light -- which is what
+        a scene with no grid, and every draw of a surface that carries its own
+        lightmap, wants.  Otherwise the three are the light at this object's
+        own position: the pass has already done the lookup, so the shader is
+        handed an answer rather than a grid to search.
+
+        A loose uniform rather than a UBO field, because it belongs to the
+        object rather than to the material -- two pickups of one kind are lit
+        differently by standing in different places.
+
+        See :class:`OpenGLContext.scenegraph.lightgrid.LightGrid`.
+        """
+        target = program if program is not None else self.program
+        if ambient is None:
+            self._set_uniform1i('hasLightGrid', 0, target)
+            return
+        self._set_uniform1i('hasLightGrid', 1, target)
+        self._set_uniform3f('lightGridAmbient', ambient, target)
+        self._set_uniform3f('lightGridDirectional', directional, target)
+        self._set_uniform3f('lightGridDirection', direction, target)
+
     def set_vertex_color(self, enabled: bool) -> None:
         """Enable/disable per-vertex color (glTF COLOR_0) modulation of baseColor."""
         self._set_uniform1i('hasVertexColor', 1 if enabled else 0, self.program)

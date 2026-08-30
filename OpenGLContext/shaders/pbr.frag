@@ -289,6 +289,18 @@ uniform sampler2D emissiveTexture;           uniform bool hasEmissive;
 uniform sampler2D lightmapTexture;           uniform bool hasLightmap;
 uniform float lightmapStrength;              // exposure of the baked levels
 
+// The same baked solution, sampled for an object that has no lightmap because
+// it was not there when the world was built -- a character, a pickup, a door.
+// The pass looks the object's own position up in a grid of samples and hands
+// the result down as these three, so what arrives here is already the light at
+// this object: an ambient term from every direction and a directional one from
+// lightGridDirection (world space, pointing towards the light).
+// See OpenGLContext.scenegraph.lightgrid.
+uniform bool hasLightGrid;
+uniform vec3 lightGridAmbient;
+uniform vec3 lightGridDirectional;
+uniform vec3 lightGridDirection;
+
 // Environment / image-based lighting. iblMode: 0=off (flat ambient), 1=analytic
 // (procedural env + analytic split-sum BRDF), 2=full (prefiltered probe + LUT).
 // The probe cubes are world-oriented, sampled via eyeToWorld (declared below).
@@ -795,6 +807,19 @@ void main() {
         ambDiffuse += lightmap * albedo * (1.0 - metallic) * ao;
         ambSpecular += lightmap * (F0 * lmAB.x + specF90 * lmAB.y) * ao;
         irrBack += lightmap;
+    }
+    // The grid lights what the lightmap does not reach, so a surface that has
+    // one is left alone: taking both would light the world's own geometry
+    // twice, once per baked record of the same solve. The directional half is
+    // shaded by the normal -- that is what it is for, and an object lit by the
+    // ambient half alone is a silhouette in one flat colour.
+    if (hasLightGrid && !hasLightmap) {
+        vec3 gridLight = lightGridAmbient
+                       + lightGridDirectional * max(dot(Nw, lightGridDirection), 0.0);
+        vec2 lgAB = envBRDFApprox(NdotV, roughness);
+        ambDiffuse += gridLight * albedo * (1.0 - metallic) * ao;
+        ambSpecular += gridLight * (F0 * lgAB.x + specF90 * lgAB.y) * ao;
+        irrBack += gridLight;
     }
     // Diffuse transmission gives up some reflected-diffuse energy to a back-lit lobe
     // fed by the environment behind the surface (the punctual back lobe is added in

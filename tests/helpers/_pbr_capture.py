@@ -21,6 +21,11 @@ def main() -> int:
     os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '0')
     os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
     os.environ.setdefault('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '8')
+    if mode == 'lightgrid':
+        # The grid is the only thing meant to be lighting this scene. An
+        # environment probe lights both spheres alike and would leave the
+        # comparison measuring the probe.
+        os.environ.setdefault('OPENGLCONTEXT_IBL', 'off')
 
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -148,6 +153,40 @@ def main() -> int:
             DirectionalLight(direction=(0, 0, -1), color=(1, 1, 1), intensity=0.02),
         ])
 
+    def lightgrid_scene():
+        # Two identical spheres and no light worth the name: all the
+        # illumination comes from a baked irradiance grid whose two samples sit
+        # exactly where the spheres do -- bright on the left, black on the
+        # right. Neither sphere carries a lightmap, which is the whole point:
+        # the grid is what lights an object that has none.
+        import numpy as np
+        from OpenGLContext.scenegraph.lightgrid import LightGrid
+
+        grey = dict(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.9)
+
+        def ball(x):
+            return Transform(translation=(x, 0, 0), children=[Shape(
+                geometry=Sphere(radius=1.1),
+                appearance=Appearance(material=PBRMaterial(**grey)))])
+
+        ambient = np.zeros((8, 3), dtype='f')
+        directional = np.zeros((8, 3), dtype='f')
+        # x varies fastest, so the even samples are the left-hand column.
+        ambient[0::2] = 0.05
+        directional[0::2] = 1.2
+        state['pos'] = (0, 0, 5.5)
+        return sceneGraph(children=[
+            ball(-1.5), ball(1.5),
+            LightGrid(counts=[2, 2, 2], origin=(-1.5, -3.0, -3.0),
+                      spacing=(3.0, 6.0, 6.0), ambient=ambient,
+                      directional=directional,
+                      direction=np.tile((0.0, 1.0, 0.0), (8, 1)).astype('f')),
+            # As in lightmap_scene: a near-dark light rather than none, since a
+            # scene with no lights at all is given a headlight that would light
+            # both spheres and hide what the grid contributes.
+            DirectionalLight(direction=(0, 0, -1), color=(1, 1, 1), intensity=0.02),
+        ])
+
     def gltf_scene():
         from OpenGLContext.loaders import gltf
         # sc.group is the model's root Transform (one child Transform per glTF
@@ -175,6 +214,11 @@ def main() -> int:
                 self.sg = teapot_scene()
             elif mode == 'lightmap':
                 self.sg = lightmap_scene()
+            elif mode == 'lightgrid':
+                # No flat ambient fill either: it stands in for lights a scene
+                # does not have, and this one is lit by the grid.
+                self.gltf_scene_ambient = 0.0
+                self.sg = lightgrid_scene()
             else:
                 self.sg = spheres_scene()
             self.platform.setPosition(state['pos'])
