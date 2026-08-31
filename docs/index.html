@@ -4,6 +4,8 @@
     <meta charset="utf-8">
     <title>OpenGLContext</title>
     <link rel="stylesheet" type="text/css" href="style/modern.css">
+    <link rel="stylesheet" type="text/css" href="style/gallery.css">
+    <script src="js/gallery.js" defer></script>
   </head>
   <body>
     <header>
@@ -18,6 +20,63 @@
       <h1>OpenGLContext <span class="subheading">A 3D Engine for Python, on
           PyOpenGL</span></h1>
     </header>
+    <section id="showcase">
+      <!-- gallery: showcase -->
+      <div class="gallery-rotate" data-gallery="showcase" data-interval="6000"
+           style="--slide-width: 1200px" aria-label="What OpenGLContext draws">
+        <figure class="slide">
+          <img src="images/gallery/showcase/glisteel-forest-road.jpg" width="1200" height="675"
+               alt="A car on a two-lane road through dense forest, seen from behind and above">
+          <figcaption><strong>GLinting Steel</strong> &mdash; a lap of a baked 3D Tiles world, streamed in around the car as it drives. <span class="credit">GLinting Steel</span></figcaption>
+        </figure>
+        <figure class="slide">
+          <img data-src="images/gallery/showcase/chess.jpg" width="1200" height="675"
+               alt="A glass and metal chess set on a board, outdoors under a bright sky">
+          <figcaption>Glass, metal and marble under image-based lighting, with screen-space transmission through the glass pieces. <span class="credit">A Beautiful Game, &copy; ASWF and Ed Mackey, CC-BY 4.0</span></figcaption>
+        </figure>
+        <figure class="slide">
+          <img data-src="images/gallery/showcase/forest-walk.jpg" width="1200" height="675"
+               alt="A hillside of firs over undergrowth, seen from standing height">
+          <figcaption><strong><code>oglc-forest</code></strong> &mdash; half a million instanced trees and grass clumps on a real digital elevation model, walked at eye height. <span class="credit">the forest demo</span></figcaption>
+        </figure>
+        <figure class="slide">
+          <img data-src="images/gallery/showcase/tiles-toronto.jpg" width="1200" height="675"
+               alt="A city of blocky buildings stretching to the horizon under a clear sky">
+          <figcaption>An OGC 3D&nbsp;Tiles dataset streamed from an octree, refined by screen-space error as the camera moves. <span class="credit">City of Toronto 3D massing, Open Government Licence</span></figcaption>
+        </figure>
+        <figure class="slide">
+          <img data-src="images/gallery/showcase/crowd.jpg" width="1200" height="675"
+               alt="A field of a hundred and fifty rigged fox figures, each at a different point in a walk or a run">
+          <figcaption>A hundred and fifty rigged figures, posed on the GPU and drawn as one instanced call, each crossing the field on its own. <span class="credit">Fox by PixelMannen and tomkranis, CC-BY 4.0</span></figcaption>
+        </figure>
+        <figure class="slide">
+          <img data-src="images/gallery/showcase/glisteel-viaduct.jpg" width="1200" height="675"
+               alt="A car crossing a railed viaduct over a forested valley, mountains beyond">
+          <figcaption>The circuit is carried over the low ground rather than routed round it: a walled causeway, a viaduct across the valleys, a bore through the hills. <span class="credit">GLinting Steel</span></figcaption>
+        </figure>
+        <figure class="slide">
+          <img data-src="images/gallery/showcase/parthenon.jpg" width="1200" height="675"
+               alt="Inside a Greek temple, looking down the inner colonnade at a painted coffered ceiling">
+          <figcaption>A reconstruction walked from the inside: baked cameras, a painted ceiling, and light through the colonnade. <span class="credit">the Parthenon model, CC0</span></figcaption>
+        </figure>
+        <figure class="slide">
+          <img data-src="images/gallery/showcase/marble-board.jpg" width="1200" height="675"
+               alt="A chrome marble on a tilted tiled board of ramps and gaps">
+          <figcaption><strong><code>oglc-marble</code></strong> &mdash; a generated board, tilted by the player, with the marble rolled by the rigid-body solver. <span class="credit">the marble demo</span></figcaption>
+        </figure>
+        <figure class="slide">
+          <img data-src="images/gallery/showcase/flight-helmet.jpg" width="1200" height="675"
+               alt="A leather flight helmet with goggles and an oxygen mask, lit from the side">
+          <figcaption>Leather, glass, rubber and painted metal on one model, lit by an image-based probe. <span class="credit">FlightHelmet, public domain (CC0)</span></figcaption>
+        </figure>
+      </div>
+      <!-- /gallery -->
+      <p class="technical">Every picture on this site is a frame the engine
+        drew. <a href="images/manifest.toml">manifest.toml</a> holds the recipe
+        for each one and <code>tools/doc_images.py</code> runs them again; what
+        is in them is credited in
+        <a href="images/ATTRIBUTION.md">ATTRIBUTION.md</a>.</p>
+    </section>
     <section id="introduction">
       <h2>Introduction</h2>
       <p class="introduction">OpenGLContext is a 3D engine written in Python on
@@ -43,6 +102,36 @@ oglc-view model.glb</pre>
     </section>
     <section id="features">
       <h2>Features</h2>
+      <ul class="thumb-row">
+        <li><a href="terrain.html"><figure><img src="images/features/terrain.jpg"
+          width="360" height="230" loading="lazy"
+          alt="A forested hillside receding into haze"><figcaption>Terrain &amp;
+          vegetation</figcaption></figure></a></li>
+        <li><a href="water.html"><figure><img src="images/features/water.jpg"
+          width="360" height="230" loading="lazy"
+          alt="Three panels of water: flat, rippled and choppy, with floats riding each"><figcaption>Water</figcaption></figure></a></li>
+        <li><a href="roads.html"><figure><img src="images/features/roads.jpg"
+          width="360" height="230" loading="lazy"
+          alt="A marked road curving away over open ground"><figcaption>Roads</figcaption></figure></a></li>
+        <li><a href="navmesh.html"><figure><img src="images/features/navmesh.jpg"
+          width="360" height="230" loading="lazy"
+          alt="A navigation mesh drawn over a level, with a route through it"><figcaption>Navigation
+          meshes</figcaption></figure></a></li>
+        <li><a href="extrusions.html"><figure><img src="images/features/extrusions.jpg"
+          width="360" height="230" loading="lazy"
+          alt="Swept and lathed shapes: tubes, screws and spirals"><figcaption>Swept
+          geometry</figcaption></figure></a></li>
+        <li><a href="text.html"><figure><img src="images/features/text.jpg"
+          width="360" height="230" loading="lazy"
+          alt="Rendered text in a 3D scene"><figcaption>Text</figcaption></figure></a></li>
+        <li><a href="hud.html"><figure><img src="images/features/hud.jpg"
+          width="360" height="230" loading="lazy"
+          alt="A HUD of meters and messages over a live scene"><figcaption>HUD &amp;
+          overlay UI</figcaption></figure></a></li>
+        <li><a href="editing.html"><figure><img src="images/features/editing.jpg"
+          width="360" height="230" loading="lazy"
+          alt="An editor view with a tri-axis handle on a selected point"><figcaption>Editing</figcaption></figure></a></li>
+      </ul>
       <ul>
         <li><strong>Rendering</strong>
           <ul>
@@ -84,9 +173,10 @@ oglc-view model.glb</pre>
         <li><strong>Worlds</strong>
           <ul>
             <li><a href="terrain.html">Terrain</a> &mdash; splat-textured height
-              fields, and streamed 3D&nbsp;Tiles datasets with screen-space-error
-              LOD and per-tile colliders</li>
-            <li><a href="terrain.html#vegetation">Vegetation</a> &mdash;
+              fields, walked, and <a href="tiles3d.html">streamed
+              3D&nbsp;Tiles</a> datasets with screen-space-error LOD and
+              per-tile colliders</li>
+            <li><a href="vegetation.html">Vegetation</a> &mdash;
               instanced billboards, grass clumps and near-mesh LOD</li>
             <li><a href="water.html">Water</a> &mdash; lakes, rivers and choppy
               weather from one wave field, and water as a medium you are
@@ -96,6 +186,9 @@ oglc-view model.glb</pre>
             <li><a href="baking.html">Baking</a> an authored world into a
               streamable 3D&nbsp;Tiles octree, and
               <a href="editing.html">building an editor</a> to author it in</li>
+            <li>All of it at once in
+              <a href="glisteel.html">GLinting Steel</a> and its
+              <a href="glisteel-editor.html">track editor</a></li>
           </ul>
         </li>
         <li><strong>Simulation</strong>
@@ -132,7 +225,7 @@ oglc-view model.glb</pre>
           <ul>
             <li><a href="gltf.html">glTF&nbsp;2.0 and GLB</a>, with the
               <a href="viewer.html">viewer</a> that opens them</li>
-            <li><a href="terrain.html#tiles3d">OGC 3D&nbsp;Tiles</a>, streamed
+            <li><a href="tiles3d.html">OGC 3D&nbsp;Tiles</a>, streamed
               from an octree of glTF tiles</li>
             <li><a href="vrml97.html">VRML97</a> worlds, and Wavefront OBJ
               models</li>

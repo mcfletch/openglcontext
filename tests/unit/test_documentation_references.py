@@ -72,8 +72,8 @@ class TestDocstringsNameModulesThatExist:
 #: rather than to this one.  They are real, and installing the named package
 #: is what puts them on the path.
 SIBLING_COMMANDS = {
-    'oglc-bake': 'OpenGLContext-editor',
     'oglc-forest': 'openglcontext-forest-demo',
+    'oglc-marble': 'openglcontext-marble-demo',
 }
 
 #: Paths the documentation names inside a sibling package's own checkout, in a
@@ -211,7 +211,7 @@ class TestNoOrphanPages:
     @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
     def test_every_page_is_reachable_from_the_index(self):
         index = DOCS / 'documentation.html'
-        linked = set(re.findall(r'href="([a-z0-9_]+\.html)"',
+        linked = set(re.findall(r'href="([a-z0-9_-]+\.html)"',
                                 index.read_text(encoding='utf-8')))
         pages = {p.name for p in DOCS.glob('*.html')}
         assert not (pages - linked), (

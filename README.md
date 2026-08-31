@@ -6,6 +6,12 @@ VRML97 worlds, draws them through a core-profile pipeline with physically based
 materials, and lets you walk around inside them with game-style physics and
 positional audio.
 
+![A car on a two-lane road through dense forest, seen from behind and above](docs/images/gallery/showcase/glisteel-forest-road.jpg)
+
+*[GLinting Steel](https://github.com/mcfletch/glisteel), a racing game built on
+OpenGLContext: a lap of a baked 3D Tiles world, streamed in around the car as it
+drives.*
+
 The primary focus of the library has always been to provide a way to create
 simple demos and tests for the PyOpenGL library. With the 3.0 release
 OpenGLContext is closer to a game engine than a demonstration library.
@@ -51,6 +57,18 @@ create your own demos or tools.
 
 - **Viewer Application** — `oglc-view model.glb`. With embedded links to sample
   content you can browse through the embedded UI.
+
+| | | |
+|:-:|:-:|:-:|
+| ![A hillside of firs over undergrowth, seen from standing height](docs/images/gallery/showcase/forest-walk.jpg) | ![A field of a hundred and fifty rigged fox figures, each at a different point in a walk or a run](docs/images/gallery/showcase/crowd.jpg) | ![Inside a Greek temple, looking down the inner colonnade at a painted coffered ceiling](docs/images/gallery/showcase/parthenon.jpg) |
+| Half a million instanced trees on a real elevation model | 150 rigged figures posed on the GPU, drawn as one call | A reconstruction walked from the inside |
+| ![A city of blocky buildings stretching to the horizon under a clear sky](docs/images/gallery/showcase/tiles-toronto.jpg) | ![A chrome marble on a tilted tiled board of ramps and gaps](docs/images/gallery/showcase/marble-board.jpg) | ![A leather flight helmet with goggles and an oxygen mask, lit from the side](docs/images/gallery/showcase/flight-helmet.jpg) |
+| 3D Tiles streamed and refined by screen-space error | Rigid-body physics on a generated board | Physically based materials under an image-based probe |
+
+Every picture here is a frame the engine drew, produced by a recipe declared in
+[docs/images/manifest.toml](docs/images/manifest.toml) and run by
+`tools/doc_images.py` in the development workspace. What is *in* them is credited
+in [docs/images/ATTRIBUTION.md](docs/images/ATTRIBUTION.md).
 
 ## Install
 
@@ -155,8 +173,9 @@ needs changing. Everything else here is additive.
   `docs/physics.html`, `docs/navigation.html`.
 
 - **Terrain and 3D Tiles** — an OGC 3D Tiles streaming runtime with
-  screen-space-error LOD, async paging and eviction; splat-textured heightfield
-  terrain; and instanced vegetation. `docs/terrain.html`.
+  screen-space-error LOD, async paging and eviction (`docs/tiles3d.html`);
+  splat-textured heightfield terrain, walked (`docs/terrain.html`); and
+  instanced vegetation (`docs/vegetation.html`).
 
 - **Spatial audio** — VRML97's `Sound` and `AudioClip` play, alongside glTF's
   `KHR_audio_emitter`, through the `omi_audio` package. `docs/audio.html`.

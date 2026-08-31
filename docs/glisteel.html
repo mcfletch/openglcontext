@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>GLinting Steel</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <link rel="stylesheet" type="text/css" href="style/gallery.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>GLinting Steel</h1>
+</header>
+
+<section>
+<p class="introduction">A racing game built on this engine: a car, a forest road, and
+a world too big to load, which streams in around the player as they drive it. It is
+here because it is the engine's heaviest single exercise &mdash; a
+<a href="tiles3d.html">3D&nbsp;Tiles</a> world paging under a moving camera, a
+<a href="roads.html">road</a> carried over the ground it crosses,
+<a href="physics.html">rigid-body</a> collision against tiles that arrived a second
+ago, and a frame budget a game actually has. What it needs, the engine grows; the
+game stays thin.</p>
+
+  <figure class="shot">
+    <img src="images/gallery/showcase/glisteel-forest-road.jpg" width="1200" height="675"
+         alt="A car on a two-lane road through dense forest, seen from behind and above" />
+    <figcaption>A lap of a baked 3D&nbsp;Tiles world, streamed in around the car as it
+    drives.</figcaption>
+  </figure>
+
+  <h2>Driving one</h2>
+  <pre><code>pip install glisteel glisteel-editor
+glisteel-bake --output /tmp/world      # hill country, half a million trees, an 8 km circuit
+glisteel /tmp/world/tileset.json       # drive it</code></pre>
+  <p>The circuit is routed through the land rather than laid on it: on the ground where
+  the ground allows, on a walled causeway over the low ground, on a viaduct across the
+  valleys, and through a bore where neither will do. <code>glisteel --autopilot</code>
+  drives a lap by itself, which is the quickest way to see one and the same code an
+  opponent car runs.</p>
+  <p>The <a href="glisteel-editor.html">track editor</a> is how a circuit of your own is
+  drawn and baked.</p>
+
+  <h2>What it asks of the engine</h2>
+  <table>
+    <tr><th>Part of the game</th><th>What the engine supplies</th></tr>
+    <tr><td>The world it drives on</td>
+        <td><a href="tiles3d.html">Streamed 3D&nbsp;Tiles</a> &mdash; tiles refined by
+        screen-space error around the car, evicted behind it under a memory budget, and
+        registered as static colliders as they arrive, so the car drives on exactly what
+        it can see.</td></tr>
+    <tr><td>The road itself</td>
+        <td><a href="roads.html">Roads</a> &mdash; a centreline and a cross-section swept
+        into a drivable surface, with the earthworks, structures, barriers, banking and
+        signs. The baked road carries its centreline in the tileset's
+        <code>extras</code>, which is how the starting grid, the lap timing and the
+        autopilot find the track inside what they stream.</td></tr>
+    <tr><td>The car</td>
+        <td><a href="physics.html">Physics&nbsp;&amp;&nbsp;Collision</a> &mdash; a
+        raycast vehicle on <code>omi_physics</code>, stepped at a fixed rate, with
+        contacts read on the step that made them.</td></tr>
+    <tr><td>What the car looks like</td>
+        <td><a href="pbr.html">PBR</a> and
+        <a href="ubershader.html">the uber-shader</a> &mdash; painted metal, and a
+        refractive canopy through <code>KHR_materials_transmission</code>, so the cabin
+        seen through the glass is the cabin that is there.</td></tr>
+    <tr><td>What the car reflects</td>
+        <td>Image-based lighting. Painted metal is almost entirely its surroundings, so a
+        car lit by a bare sky gradient reads as a toy; the road knows what it runs
+        through, and hands the renderer a small panorama of that place &mdash; canopy
+        overhead with sky broken through it, a lit portal fore and aft inside a bore,
+        open sky over a treeline on a viaduct.</td></tr>
+    <tr><td>Trees, and what grows under them</td>
+        <td><a href="vegetation.html">Vegetation</a> &mdash; the forest as a table beside
+        the world, drawn as instanced sets chosen against the view.</td></tr>
+    <tr><td>What the driver is told</td>
+        <td><a href="hud.html">The HUD</a> and
+        <a href="overlayui.html">the overlay UI</a> &mdash; the in-world instruments, and
+        the menus, settings and key-binding screens around the race.</td></tr>
+    <tr><td>Rivers and lakes it crosses</td>
+        <td><a href="water.html">Water</a>.</td></tr>
+    <tr><td>Shipping it</td>
+        <td><a href="packaging.html">Packaging</a> &mdash; a frozen bundle and a Debian
+        package carrying their own interpreter, built from the engine's own hooks.</td></tr>
+  </table>
+
+  <figure class="shot">
+    <img src="images/gallery/showcase/glisteel-viaduct.jpg" width="1200" height="675"
+         alt="A car crossing a railed viaduct over a forested valley, mountains beyond" />
+    <figcaption>The circuit is carried over the low ground rather than routed round it:
+    a walled causeway, a viaduct across the valleys, a bore through the
+    hills.</figcaption>
+  </figure>
+
+  <h2>What the game itself is</h2>
+  <p>What is left once the engine has the rest is the part that makes it a game: the
+  car's handling and where the camera watches from, the lap timing, the rules about what
+  ends a run, and the ways of driving.</p>
+  <p><strong>Steering is a design question, not a binding.</strong> A keyboard says a key
+  is down or it is not, and a driver's hands say a great deal more, so the game offers
+  several readings of the same key &mdash; turn the wheels and hold the line between
+  inputs, turn them with nothing put in for you, move the car <em>across</em> the road,
+  take a lane over, or let it drive until you interrupt. Each is a different game on the
+  same physics.</p>
+  <p><strong>A crash is contact</strong>, asked of the physics rather than inferred from
+  how near two cars are, and how hard is the speed they were closing at along the contact
+  when they met. The reading is taken inside the fixed step that made it: resolving a
+  contact is precisely cancelling the velocity that measures how hard it was, so a step
+  later a square-on impact measures as nothing and whether a crash registered would come
+  down to where the frames happened to fall.</p>
+  <p><strong>No vehicle in it is hand-modelled.</strong> The player's car, its wheels and
+  the five traffic vehicles are one run of a Blender script, and the <code>.glb</code>
+  files are build output.</p>
+
+  <h2>The same picture twice</h2>
+  <p>The pictures of the game on this site are taken from a
+  <a href="telemetry.html">recorded session</a> rather than from a live drive. Replaying
+  one drives the engine's clock from the recorded frame times and puts the session's
+  randomness back, so the car reaches the same place on every machine; the capture is
+  then asked for by frame number rather than after a delay, because under a replay the
+  frame is the deterministic thing and the wall clock is not. Two runs write the same
+  bytes.</p>
+  <pre><code>OPENGLCONTEXT_TELEMETRY_REPLAY=sessions/doc-lap.jsonl \
+  glisteel world/tileset.json --view chase --no-hud --autopilot \
+  --capture-frame 1297 --capture viaduct.png</code></pre>
+
+  <h2>Where it lives</h2>
+  <p>GLinting Steel is its own distribution and its own repository,
+  <a href="https://github.com/mcfletch/glisteel">github.com/mcfletch/glisteel</a>, whose
+  <code>README.md</code> is the reference for the game's own modules, its handling
+  constants and its scenarios. The world it drives is baked by
+  <a href="glisteel-editor.html">glisteel-editor</a> over the
+  <a href="baking.html">octree baker</a>.</p>
+
+</section>
+</body></html>

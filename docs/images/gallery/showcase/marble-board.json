@@ -1,0 +1,29 @@
+{
+  "argv": [
+    "tools/capture.py",
+    "--seed",
+    "3",
+    "--difficulty",
+    "8",
+    "--marble",
+    "chrome",
+    "--frames",
+    "120",
+    "--lean",
+    "0.35",
+    "0.2",
+    "--size",
+    "1600x900",
+    "--out",
+    "{png}"
+  ],
+  "credit": "the marble demo",
+  "git": "ff24c13-dirty",
+  "id": "showcase/marble-board",
+  "licence": "MIT; CC0 assets",
+  "producer": "command",
+  "size": [
+    1200,
+    675
+  ]
+}

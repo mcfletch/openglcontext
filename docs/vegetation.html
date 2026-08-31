@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Vegetation</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <link rel="stylesheet" type="text/css" href="style/gallery.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Vegetation</h1>
+</header>
+
+<section>
+<p class="introduction" id="vegetation">A quarter of a million trees is not a quarter
+of a million objects in a scenegraph. Plants are carried as <strong>tables of
+positions</strong> and drawn as <strong>instanced sets</strong> chosen against the
+view each frame: real geometry near the camera, cards beyond it, and a cross-fade
+between them so a tree turns into branches without a step. Ground cover is not
+carried at all &mdash; it is scattered on a world-anchored grid around the camera
+and re-chosen as that moves. Everything standing on the ground reads the same
+<a href="#canopyshade">shade</a>, so a wood is dark under its own canopy.</p>
+<p>There are two paths, and which one a world wants depends on how big it is: a
+<a href="#vegetationfield">field</a> beside the world, or
+<a href="#intile">scattered into the tiles</a> a world streams. The code is
+<code>OpenGLContext.scenegraph.vegetation</code>; the toolkit ships no tree art,
+because art is the caller's.</p>
+
+  <figure class="shot">
+    <img src="images/gallery/showcase/forest-walk.jpg" width="1200" height="675"
+         alt="A hillside of firs over undergrowth, seen from standing height" />
+    <figcaption>The <a href="terrain.html">forest demo</a>: half a million instanced
+    trees and grass clumps on a real digital elevation model, walked at eye
+    height.</figcaption>
+  </figure>
+
+  <h2 id="vegetationfield">A forest as one node</h2>
+  <p>A quarter of a million trees is a table of positions, one instanced draw per
+  species for the cards that stand for the far field, and one more for the real
+  geometry within a hundred metres, with both re-chosen from the table whenever the
+  camera moves far enough to change them.
+  <strong><code>OpenGLContext.scenegraph.vegetation.VegetationField</code></strong>
+  owns that:</p>
+  <pre><code>from OpenGLContext.scenegraph.vegetation import TreeSpecies, VegetationField
+forest = VegetationField(positions, yaws, heights,
+                         [TreeSpecies(name='fir', mesh='fir.npz',
+                                      solid_texture='fir_bark.png',
+                                      foliage_texture='fir_branch.png',
+                                      impostor='fir_imp.png')],
+                         species_id=kind)
+forest.update(camera_position, facing=where_it_looks)   # once a frame</code></pre>
+  <p>A <strong><code>TreeSpecies</code></strong> is what one kind of tree is drawn
+  from: a <code>.npz</code> of named arrays holding a <em>solid</em> part (trunk
+  and branches, opaque) and a <em>foliage</em> part (alpha-masked cards), a texture
+  for each, and the single card the tree becomes at a distance. The near mesh and
+  the cards cross-fade in their own shaders over a window they share, so a tree
+  turns from a card into branches without a step.</p>
+  <p><strong>What is drawn far off is chosen against the view</strong>, which is
+  most of what a four-kilometre forest costs. Give <code>update</code> the
+  camera's <code>view</code> matrix and the cards are chosen against the frustum
+  itself; give it a <code>facing</code> and they are chosen in a cone about it,
+  which is the fallback and is the wrong shape — a camera pitched down at a
+  valley has the trees near it inside the cone and the ones along its own view
+  outside, which draws a hard edge across the forest. Give neither and they are
+  chosen by distance alone, which is what an orbiting view wants.</p>
+  <p>The slack outside the view grows with distance, because a frustum plane
+  meets the ground in a straight line and a card set cut exactly at the view has
+  a ruled edge across the forest the moment anything disagrees about where the
+  view is. Selection is skipped altogether while the camera is nearly still.</p>
+  <p>A baked world can carry its forest this way: see
+  <a href="baking.html#vegetation">Baking a world</a>.</p>
+
+  <h2 id="groundcover">What grows between the trees</h2>
+  <p>A wood with bare ground under it is trees standing on a lawn. The floor of
+  one is <em>cover</em>: clumps of grass you can see the blades of within a few
+  tens of metres, and cards beyond that out to where the haze takes over.
+  <strong><code>OpenGLContext.scenegraph.vegetation.GroundCover</code></strong>
+  draws both.</p>
+  <pre><code>from OpenGLContext.scenegraph.vegetation import (
+    CoverSpecies, GroundCover, control_weight)
+
+cover = GroundCover(
+    field, CoverSpecies(name='grass', card='grass_imp.png',
+                        clump='clump.glb', density=1.6, height=0.5),
+    mask=control_weight(control_image, ['grass', 'forest_floor'],
+                        layers, field.extent),
+    shade=terrain.shade)
+cover.update(camera_position)                    # once a frame</code></pre>
+  <p>None of it is baked. The ground is the same everywhere and there is far too
+  much of it &mdash; a metre-spaced scatter over four kilometres is sixteen
+  million instances &mdash; so the set is scattered on a <em>world-anchored</em>
+  grid around the camera and re-chosen as that moves. A cell's position and its
+  fate are decided by the cell's own hash, so nothing shifts or appears as the
+  disc recentres.</p>
+  <p><strong>Where it grows is decided by the ground itself.</strong> The splat
+  <a href="terrain.html#controlmap">control map</a> already says where the grass and
+  the leaf litter are, and a baked world has the road's corridor painted out of them,
+  so <code>control_weight</code> turns that map into the mask and nothing else has
+  to know about the road. A control map has to be fine enough to resolve what it
+  is masking: over four kilometres, 512 pixels is eight metres each and a road
+  corridor is thinner than one of them.</p>
+  <p><code>density</code> is clumps per square metre before the mask thins it, and
+  <code>height</code> how tall one is in metres. A tuft may wander well past its
+  own cell (<code>COVER_JITTER</code>): kept inside it, the set is still a grid,
+  and from thirty metres a grid reads as diagonal rows of evenly spaced plants.</p>
+
+  <h2 id="clearance">How far the forest is held back</h2>
+  <p>On the ground, a crown reaching over the carriageway is the point &mdash;
+  that is the canopy closing over a forest road &mdash; so the trees are cleared
+  only out of the corridor the road was cut through. Where the road is
+  <em>carried</em>, on an embankment or a causeway's retained fill or a deck, a
+  tree beside it is rooted metres below the surface and a crown of the same reach
+  goes through the structure instead of over the road. The clearance is
+  therefore the corridor where the road is on the land, and the corridor plus a
+  crown where it stands above it. <a href="roads.html">Roads</a> is what draws
+  the road itself.</p>
+
+  <h2 id="canopyshade">How dark it is under the trees</h2>
+  <p>The shade a wood casts on its own floor is baked once into the terrain
+  rather than traced per frame: the trees do not move and neither does the sun.
+  Give a <a href="terrain.html#heightfield">splat terrain</a> the trunk positions and
+  it darkens its static shading under them.</p>
+  <pre><code>terrain.canopy = forest.positions          # (N,3) trunk bases
+terrain.shading                            # the lit grid, in [0, 1]
+terrain.shade(x, z)                        # ...read by world position</code></pre>
+  <p>A tree shades the ground its <em>crown</em> covers, not the cell its trunk
+  stands in, so each one is spread over <code>canopy_crown</code> metres and the
+  total scaled so that one tree per crown-area is a closed canopy. That is what
+  makes the figure mean the same thing at any grid resolution and any planting
+  density: <code>canopy_shade</code> is then how hard a closed canopy darkens the
+  ground and <code>canopy_deepest</code> the most of the light it may take.
+  <code>canopy_spread</code> offsets the shadow towards the sun, because a tree
+  casts along the light rather than straight down.</p>
+  <p><strong>Everything standing on that ground reads the same figure.</strong>
+  Grass lit like an open field, on ground darkened to a fifth, is a row of lamps
+  on the forest floor. So the instance layout every vegetation node shares
+  carries a shade with the position, the yaw and the scale:</p>
+  <pre><code>forest.lit_by(terrain.shade)               # every tree
+GroundCover(..., shade=terrain.shade)      # every clump and card
+cards.update_instances(points, yaws, scales, shades)   # or by hand</code></pre>
+  <p>It defaults to 1 &mdash; full sun &mdash; so a caller with nothing to say
+  about the light says nothing. A world loaded through
+  <code>TilesTerrain</code> wires all of this itself: it is the one place that
+  knows both where the ground is and where the trees on it are.</p>
+
+  <h2 id="intile">Vegetation in a tile</h2>
+  <p>The other path scatters plants onto the surface of a
+  <a href="tiles3d.html">streamed tile</a>, so they page in and out with the ground
+  they stand on rather than being carried beside the world. The scatter is
+  deterministic, area-weighted, and filtered to sensible places (grass elevations,
+  not water or peaks). Every instance shares one prototype so the instancing engine
+  collapses them to a single draw. Trees use a distance LOD &mdash; a full mesh near
+  the camera, a cheap billboard far away &mdash; and grass is a dense blade layer
+  limited to a disc around the viewer.</p>
+  <pre><code>from OpenGLContext.loaders.tiles3d.vegetation import (
+    build_vegetation_lod, build_grass_patch)
+pos, nrm, col, idx = procedural.terrain_patch(-700, 700, -700, 700, 48)
+trees = build_vegetation_lod(pos, idx.reshape(-1, 3), near_mesh, far_billboard,
+                             density=0.00035, seed=7, camera=eye,
+                             near_distance=450,
+                             keep=lambda p: (p[:,1] > 4) &amp; (p[:,1] &lt; 130))</code></pre>
+  <p class="technical"><code>scatter.py</code> (per-triangle uniform barycentric
+  sampling, seeded, with a <code>keep</code> mask) and <code>vegetation.py</code>
+  (<code>group_from_scatter</code>, <code>partition_by_distance</code>,
+  <code>build_vegetation_lod</code>, <code>build_grass_patch</code>).</p>
+
+  <h2 id="footing">Where a plant meets the ground</h2>
+  <p><strong>A placement is the point the plant stands on</strong>, and every
+  vegetation path in the engine agrees on it. The GPU nodes carry it in their
+  vertex data: a billboard quad spans <code>y</code> in <code>[0, 1]</code>,
+  <code>load_clump_glb</code> rebases a clump to <code>y&nbsp;=&nbsp;0</code>, and
+  a tree mesh is authored with its trunk foot at the origin.</p>
+  <p>A scenegraph prototype is whatever its author modelled, and VRML's primitives
+  are centred on their origin &mdash; so a <code>Cone</code> used straight as a
+  shrub would be planted half its height into the hill with its tip showing.
+  <code>group_from_scatter</code> gives a prototype the same contact point the GPU
+  nodes have, by measuring what it occupies and lifting it by its own underside.
+  A prototype already modelled foot-at-origin measures a zero lift and does not
+  move.</p>
+  <pre><code>shrub = Shape(geometry=Cone(bottomRadius=2.5, height=8.0), appearance=green)
+veg = build_vegetation_group(pos, idx.reshape(-1, 3), shrub, density=0.004, seed=1)
+
+group_from_scatter(placements, oak, sink=0.1)     # settle a root flare in
+group_from_scatter(placements, buoy, seat=False)  # modelled about its middle</code></pre>
+  <p><code>sink</code> settles the prototype that far back into the ground, in the
+  units it is modelled in &mdash; what a root flare or a boulder base wants so
+  that it meets the ground rather than perching on it. <code>seat=False</code>
+  keeps the prototype's own origin as the contact point. The seated prototype is
+  wrapped once and shared by every instance, so the scatter is still one draw.</p>
+  <p class="technical"><code>OpenGLContext.loaders.assets.seated(node, sink=0)</code>
+  is the same thing for anything else placed on a surface &mdash; a prop, a rock,
+  a parked car &mdash; and <code>assets.bounds(node)</code> is the measurement
+  under it: the box a subtree occupies in its own root's space, with every
+  <code>Transform</code> applied and no GL context needed.</p>
+
+  <h2>Seeing it work</h2>
+  <p><code>oglc-forest</code> &mdash; the
+  <a href="https://pypi.org/project/openglcontext-forest-demo/">forest demo</a>,
+  a separate distribution &mdash; is this path at full size: 230k GPU-instanced
+  trees with impostor LOD, two layers of camera-following grass, canopy shade over
+  a four-layer splat ground, and the whole of it walked at eye height. It is the
+  deep example; <code>tests/tiles_vegetation.py</code> is the small one.</p>
+  <p class="technical"><code>scenegraph/vegetation/</code> holds the nodes
+  (<code>field.py</code>, <code>cover.py</code>, <code>clumps.py</code>,
+  <code>billboards.py</code>, <code>nearmesh.py</code>, <code>grid.py</code>), and
+  the behaviour is pinned by <code>tests/unit/test_vegetation_field.py</code> and
+  <code>tests/unit/test_terrain_vegetation.py</code>. Instancing itself is
+  <a href="instancing.html">Instanced Geometry</a>.</p>
+
+</section>
+</body></html>

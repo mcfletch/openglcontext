@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "-m",
+    "glisteel_editor.app",
+    "samples/ashdown.glisteel",
+    "--size",
+    "1400x875"
+  ],
+  "credit": "the GLinting Steel track editor",
+  "frames": 150,
+  "git": "19d98d2-dirty",
+  "id": "showcase/track-editor",
+  "licence": "BSD-3-Clause",
+  "producer": "command",
+  "size": [
+    1137,
+    875
+  ]
+}

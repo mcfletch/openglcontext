@@ -1,0 +1,12 @@
+{
+  "credit": "ToyCar, public domain (CC0)",
+  "git": "ff24c13-dirty",
+  "id": "conformance/ToyCar",
+  "licence": "CC0 1.0",
+  "producer": "baseline",
+  "scene": "ToyCar",
+  "size": [
+    900,
+    640
+  ]
+}

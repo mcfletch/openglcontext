@@ -195,7 +195,7 @@ class TestContext(BaseContext):
         writer = GLTFWriter()
         for node in authored_scene():
             writer.add_node(node)
-        directory = tempfile.mkdtemp(prefix='oglc-bake-demo-')
+        directory = tempfile.mkdtemp(prefix='gltf-writer-demo-')
         self.path = os.path.join(directory, 'cairn.glb')
         data = writer.write(self.path)
         self.written = written_counts(writer.document())

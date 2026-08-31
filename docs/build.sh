@@ -4,10 +4,16 @@
 # (see .github/workflows/pages.yml), so run this BEFORE you push whenever the
 # tutorials' source (tests/*.py) or the renderer has changed.
 #
-# Two things are generated:
+# Three things are generated:
 #   1. The code-walkthrough tutorials, extracted from the triple-quoted
 #      commentary in tests/*.py by the 'directdocs' tool (oglctutorials).
 #   2. The rendered screenshots in docs/images/, by generate_doc_images.py.
+#   3. The pictures docs/images/manifest.toml declares, and the gallery blocks
+#      that show them, by the workspace's tools/doc_images.py.  Several of those
+#      come from projects beside this one -- a lap of glisteel, a walk through
+#      the forest demo, a board from the marble demo -- so it runs only in a
+#      checkout of the development workspace, and each picture whose source is
+#      absent is skipped with the committed one left alone.
 #
 # Requirements:
 #   - Tutorials: the 'directdocs' package, which lives in the sibling pyopengl
@@ -36,6 +42,18 @@ fi
 echo "== Rendering doc screenshots -> docs/images/ =="
 python scripts/generate_doc_images.py "$@" \
     || echo "  WARNING: image generation failed (needs a GL display / EGL)"
+
+# 3. The declared pictures and the galleries that show them
+WORKSPACE="$(cd "$REPO/.." && pwd)"
+echo "== Rendering declared pictures -> docs/images/ (workspace tool) =="
+if [ -f "$WORKSPACE/tools/doc_images.py" ]; then
+    ( cd "$WORKSPACE" && python tools/doc_images.py ) \
+        || echo "  WARNING: doc_images.py failed"
+else
+    # A standalone clone has no siblings to photograph; the committed pictures
+    # stay as they are, and the gallery blocks in the pages with them.
+    echo "  SKIP: not in a workspace checkout ($WORKSPACE/tools/doc_images.py)"
+fi
 
 echo
 echo "Done. Review docs/, then commit and push; GitHub Pages will deploy docs/."

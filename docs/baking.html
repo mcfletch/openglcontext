@@ -20,8 +20,8 @@
 <p class="introduction">A world larger than memory is not loaded, it is
 <em>streamed</em>: partitioned into a tree of tiles, each holding the detail
 that suits the distance it is seen from, and paged in as the camera approaches.
-OpenGLContext streams such a world already (<a href="terrain.html">Terrain &amp;
-3D&nbsp;Tiles</a>). This page is about producing one.</p>
+OpenGLContext streams such a world already
+(<a href="tiles3d.html">Streamed 3D&nbsp;Tiles</a>). This page is about producing one.</p>
 <p>Two halves, in two packages. The <strong>glTF writer</strong> is in the engine,
 because writing a model is engine machinery and a game's build step may well
 call it. The <strong>baker</strong> -- the spatial partition, the per-tile level
@@ -32,15 +32,16 @@ a separate install, because no shipped game needs it in its dependency tree.</p>
 
 <section>
 <h2>Bake one now</h2>
-<p><code>oglc-bake</code> comes with the editor package and bakes the world it
-ships with -- hills, a river canyon, a lake and a conifer forest -- into a
-directory you can open with the viewer:</p>
-<pre>pip install OpenGLContext-editor
-oglc-bake --output /tmp/world
+<p><code>glisteel-bake</code> comes with
+<a href="glisteel-editor.html">the track editor</a> and bakes the world that
+toolkit ships with -- hills, a river canyon, a lake, a conifer forest and a
+circuit through them -- into a directory you can open with the viewer:</p>
+<pre>pip install glisteel-editor
+glisteel-bake --output /tmp/world
 oglc-view /tmp/world/tileset.json</pre>
-<p><code>oglc-bake --view</code> runs both steps. The world's size, its tile
+<p><code>glisteel-bake --view</code> runs both steps. The world's size, its tile
 detail and how deep the tree refines are all on the command line:</p>
-<pre>oglc-bake --output /tmp/world --extent 8192 --depth 5 --resolution 65</pre>
+<pre>glisteel-bake --output /tmp/world --extent 8192 --depth 5 --resolution 65</pre>
 <dl>
   <dt><code>--extent</code></dt>
   <dd>how many metres across the world is, centred on the origin.</dd>
@@ -117,7 +118,7 @@ material.textures['baseColor'] = EncodedImage.from_path('bark.jpg', srgb=True)</
 out of the loaded scenegraph, so the two columns are separate measurements
 rather than two views of one number:</p>
 <pre>$ python tests/bake_demo.py
-wrote /tmp/oglc-bake-demo-95gl6ypw/cairn.glb
+wrote /tmp/gltf-writer-demo-95gl6ypw/cairn.glb
                   written    read back
 nodes                   7            7
 meshes                  4            4
@@ -150,8 +151,8 @@ print(len(document['meshes']), 'mesh,', len(document['nodes']), 'nodes')
 scene = load_gltf('/tmp/cairn.glb')                     # mount scene.group to draw</pre>
 <p>That prints <code>1 mesh, 4 nodes</code>. Everything it imports ships with
 OpenGLContext, and so does everything the demo imports: writing a document is the
-engine's half of the split. <code>oglc-bake</code>, the half that turns a world
-into a streamable tileset, comes with
+engine's half of the split. The baker, the half that turns a world into a
+streamable tileset, comes with
 <a href="https://github.com/mcfletch/openglcontext-editor"><code>OpenGLContext-editor</code></a>.</p>
 </section>
 
@@ -329,7 +330,7 @@ forest = VegetationLayer(positions=trees.positions, yaws=trees.yaws,
 files into the world under <code>trees/</code>, and names them from
 <code>extras.vegetation</code>. A baked world is self-contained: it refers to no
 path on the machine that made it. <code>TilesTerrain</code> builds a
-<a href="terrain.html#vegetationfield"><code>VegetationField</code></a> from it
+<a href="vegetation.html#vegetationfield"><code>VegetationField</code></a> from it
 and feeds it the camera each tick.</p>
 <p>The scatter is still decided at bake time. Where the trees stand, how tall
 they are and which kind each is are decisions about the world, made once with the
@@ -353,7 +354,7 @@ forest = VegetationLayer(..., cover=CoverSpecies(
 <p>Its files are copied in like a species' are, and <code>cover_on</code> names
 the ground layers it grows on. Where each clump stands is settled by the viewer
 as the camera moves &mdash; see
-<a href="terrain.html#groundcover">what grows between the trees</a>. Because the
+<a href="vegetation.html#groundcover">what grows between the trees</a>. Because the
 mask is the splat control map, <strong>the control map has to be fine enough to
 resolve the road</strong>: a corridor thinner than one of its pixels is a
 corridor the grass grows over. <code>FieldTerrainLayer(control_size=…)</code>.</p>
@@ -443,8 +444,8 @@ spelled out &mdash; so a world can be renamed or given a picture by editing it.
 A manifest that will not parse reads as <em>absent</em> rather than raising: a
 chooser scanning a directory of worlds should skip the broken one and offer the
 rest.</p>
-<p><code>oglc-bake</code> writes one for every bake, naming the world after the
-output directory unless <code>--name</code> says otherwise.</p>
+<p><code>glisteel-bake</code> writes one for every bake, naming the world after
+the output directory unless <code>--name</code> says otherwise.</p>
 
 <h2>Limits</h2>
 <ul>
@@ -466,7 +467,7 @@ output directory unless <code>--name</code> says otherwise.</p>
 </section>
 
 <footer>
-<p>See also: <a href="terrain.html">Terrain &amp; 3D&nbsp;Tiles</a> for the
+<p>See also: <a href="tiles3d.html">Streamed 3D&nbsp;Tiles</a> for the
 streaming runtime that reads what this writes, <a href="gltf.html">Loading
 glTF</a> for the reader the writer mirrors, <a href="water.html">Water</a> for
 the lakes and rivers a baked world carries, and <a href="instancing.html">Instanced

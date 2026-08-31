@@ -1,0 +1,11 @@
+{
+  "git": "ff24c13-dirty",
+  "id": "features/roads",
+  "licence": "BSD-3-Clause",
+  "producer": "copy",
+  "size": [
+    360,
+    230
+  ],
+  "source": "images/demos/roads_demo.jpg"
+}

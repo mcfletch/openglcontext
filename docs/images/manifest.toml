@@ -1,0 +1,554 @@
+# The pictures the documentation shows, and what draws each one.
+#
+# Rendered by ../../../tools/doc_images.py, which is run from a checkout of the
+# workspace: several of these come from projects that sit beside this one.
+#
+#   tools/doc_images.py --list
+#   tools/doc_images.py --only showcase/glisteel-forest-road
+#   tools/doc_images.py --check
+#
+# `licence` is required, and is the licence of what is *in* the picture: a
+# render of a third-party model carries that model's terms.  Nothing under a
+# non-commercial, share-alike or otherwise restricted licence is declared here
+# -- see ATTRIBUTION.md for the whole list and the reasoning.
+
+[defaults]
+quality = 82
+size = [900, 640]
+
+# --------------------------------------------------------------------------- #
+# Showcase: what the engine draws, on the pages a reader meets first.
+# 16:9, because that is the shape a game window is.
+# --------------------------------------------------------------------------- #
+[[image]]
+id = "showcase/glisteel-forest-road"
+out = "images/gallery/showcase/glisteel-forest-road.jpg"
+size = [1200, 675]
+licence = "BSD-3-Clause; CC0 assets"
+credit = "GLinting Steel"
+alt = "A car on a two-lane road through dense forest, seen from behind and above"
+caption = "<strong>GLinting Steel</strong> &mdash; a lap of a baked 3D Tiles world, streamed in around the car as it drives."
+producer = "command"
+cwd = "glisteel"
+timeout = 900
+# A recorded lap, replayed: the engine's clock is fed the recorded frame
+# times and the seed is put back, so the car reaches the same place every
+# run, and the capture is asked for by frame rather than after a wall-clock
+# delay. Two runs write the same bytes. See glisteel/sessions/README.md.
+replay = "sessions/doc-lap.jsonl"
+argv = ["-m", "glisteel.game", "baked-world/tileset.json", "--size", "1600x900",
+        "--view", "chase", "--no-hud", "--autopilot",
+        "--capture-frame", "569", "--capture", "{png}"]
+
+[[image]]
+id = "showcase/glisteel-viaduct"
+out = "images/gallery/showcase/glisteel-viaduct.jpg"
+size = [1200, 675]
+licence = "BSD-3-Clause; CC0 assets"
+credit = "GLinting Steel"
+alt = "A car crossing a railed viaduct over a forested valley, mountains beyond"
+caption = "The circuit is carried over the low ground rather than routed round it: a walled causeway, a viaduct across the valleys, a bore through the hills."
+producer = "command"
+cwd = "glisteel"
+timeout = 900
+# Frame 1297 of the same recorded lap: mid-viaduct, over the valley.
+replay = "sessions/doc-lap.jsonl"
+argv = ["-m", "glisteel.game", "baked-world/tileset.json", "--size", "1600x900",
+        "--view", "chase", "--no-hud", "--autopilot",
+        "--capture-frame", "1297", "--capture", "{png}"]
+
+[[image]]
+id = "showcase/forest-walk"
+out = "images/gallery/showcase/forest-walk.jpg"
+size = [1200, 675]
+licence = "BSD-3-Clause; CC0 assets"
+credit = "the forest demo"
+alt = "A hillside of firs over undergrowth, seen from standing height"
+caption = "<strong><code>oglc-forest</code></strong> &mdash; half a million instanced trees and grass clumps on a real digital elevation model, walked at eye height."
+producer = "command"
+cwd = "openglcontext-forest"
+harness = "auto-exit"
+frames = 90
+timeout = 900
+argv = ["-m", "openglcontext_forest_demo.run", "--quality", "high", "--seed", "3"]
+
+[[image]]
+id = "showcase/parthenon"
+out = "images/gallery/showcase/parthenon.jpg"
+size = [1200, 675]
+licence = "CC0 1.0"
+credit = "the Parthenon model, CC0"
+alt = "Inside a Greek temple, looking down the inner colonnade at a painted coffered ceiling"
+caption = "A reconstruction walked from the inside: baked cameras, a painted ceiling, and light through the colonnade."
+producer = "copy"
+source = "images/parthenon/5-naos-entering.jpg"
+
+[[image]]
+id = "showcase/flight-helmet"
+out = "images/gallery/showcase/flight-helmet.jpg"
+size = [1200, 675]
+licence = "CC0 1.0"
+credit = "FlightHelmet, public domain (CC0)"
+alt = "A leather flight helmet with goggles and an oxygen mask, lit from the side"
+caption = "Leather, glass, rubber and painted metal on one model, lit by an image-based probe."
+producer = "copy"
+source = "images/flighthelmet.jpg"
+# The source is a 4K screen capture with the developer overlay and the viewer's
+# reference thumbnail in it; the model itself sits right of centre.
+crop = [0.18, 0.16, 0.913, 0.93]
+
+[[image]]
+id = "showcase/marble-board"
+out = "images/gallery/showcase/marble-board.jpg"
+size = [1200, 675]
+licence = "MIT; CC0 assets"
+credit = "the marble demo"
+alt = "A chrome marble on a tilted tiled board of ramps and gaps"
+caption = "<strong><code>oglc-marble</code></strong> &mdash; a generated board, tilted by the player, with the marble rolled by the rigid-body solver."
+producer = "command"
+cwd = "marble-demo"
+timeout = 600
+# The game opens on a board that sits low in its window, so take the lower part
+# of the render rather than scaling the empty sky above it into the slide.
+crop = [0.0, 0.30, 1.0, 1.0]
+argv = ["tools/capture.py", "--seed", "3", "--difficulty", "8", "--marble", "chrome",
+        "--frames", "120", "--lean", "0.35", "0.2", "--size", "1600x900",
+        "--out", "{png}"]
+
+[[image]]
+id = "showcase/track-editor"
+out = "images/gallery/showcase/track-editor.jpg"
+size = [1137, 875]
+licence = "BSD-3-Clause"
+credit = "the GLinting Steel track editor"
+alt = "A track editor: a circuit of numbered points drawn on a shaded relief map with contours, a lake and a river, and a tool palette down the left"
+caption = "A circuit drawn on a landscape, with the bridges and the tunnel the road generator worked out from the ground under the line."
+producer = "command"
+cwd = "glisteel-editor"
+harness = "auto-exit"
+frames = 150
+timeout = 600
+# The map is square and sized by the window's height, so a window wider than
+# that leaves black beside it; take the part the editor actually draws in.
+crop = [0.0, 0.0, 0.8121, 1.0]
+argv = ["-m", "glisteel_editor.app", "samples/ashdown.glisteel", "--size", "1400x875"]
+
+[[image]]
+id = "showcase/crowd"
+out = "images/gallery/showcase/crowd.jpg"
+size = [1200, 675]
+licence = "BSD-3-Clause; model CC-BY 4.0"
+credit = "Fox by PixelMannen and tomkranis, CC-BY 4.0"
+alt = "A field of a hundred and fifty rigged fox figures, each at a different point in a walk or a run"
+caption = "A hundred and fifty rigged figures, posed on the GPU and drawn as one instanced call, each crossing the field on its own."
+producer = "script"
+cwd = "openglcontext"
+module = "crowd_demo"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+env = { OPENGLCONTEXT_SHADOWS = "1" }
+
+[[image]]
+id = "showcase/tiles-toronto"
+out = "images/gallery/showcase/tiles-toronto.jpg"
+size = [1200, 675]
+licence = "BSD-3-Clause; City of Toronto open data"
+credit = "City of Toronto 3D massing, Open Government Licence"
+alt = "A city of blocky buildings stretching to the horizon under a clear sky"
+caption = "An OGC 3D&nbsp;Tiles dataset streamed from an octree, refined by screen-space error as the camera moves."
+producer = "copy"
+source = "images/toronto-3dtiles.jpg"
+crop = [0.0, 0.0, 1.0, 0.94]     # the viewer's key hints run along the bottom
+
+[[image]]
+id = "showcase/chess"
+out = "images/gallery/showcase/chess.jpg"
+size = [1200, 675]
+licence = "CC-BY 4.0"
+credit = "A Beautiful Game, &copy; ASWF and Ed Mackey, CC-BY 4.0"
+alt = "A glass and metal chess set on a board, outdoors under a bright sky"
+caption = "Glass, metal and marble under image-based lighting, with screen-space transmission through the glass pieces."
+producer = "copy"
+source = "images/beautiful-game.jpg"
+# A 4K screen capture: the viewer's reference thumbnail is in the top corner and
+# its caption along the bottom.
+crop = [0.02, 0.14, 0.98, 0.95]
+
+# --------------------------------------------------------------------------- #
+# Features: a small picture per subject, for the row that indexes the pages.
+# Each is the picture that page already shows, cut down to a thumbnail.
+# --------------------------------------------------------------------------- #
+[[image]]
+id = "features/terrain"
+out = "images/features/terrain.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "A forested hillside receding into haze"
+caption = "Terrain and vegetation"
+producer = "copy"
+source = "images/forest-instancing.jpg"
+
+[[image]]
+id = "features/water"
+out = "images/features/water.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "Three panels of water: flat, rippled and choppy, with floats riding each"
+caption = "Water"
+producer = "copy"
+source = "images/demos/water_demo.jpg"
+
+[[image]]
+id = "features/roads"
+out = "images/features/roads.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "A marked road curving away over open ground"
+caption = "Roads"
+producer = "copy"
+source = "images/demos/roads_demo.jpg"
+
+[[image]]
+id = "features/extrusions"
+out = "images/features/extrusions.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "Swept and lathed shapes: tubes, screws and spirals"
+caption = "Swept geometry"
+producer = "copy"
+source = "images/extrusions/shapes.png"
+
+[[image]]
+id = "features/text"
+out = "images/features/text.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "Rendered text in a 3D scene"
+caption = "Text"
+producer = "copy"
+source = "images/text_simple.png"
+
+[[image]]
+id = "features/hud"
+out = "images/features/hud.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "A HUD of meters and messages over a live scene"
+caption = "HUD and overlay UI"
+producer = "copy"
+source = "images/demos/hud_demo.jpg"
+
+[[image]]
+id = "features/editing"
+out = "images/features/editing.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "An editor view with a tri-axis handle on a selected point"
+caption = "Editing"
+producer = "copy"
+source = "images/demos/editing_demo.jpg"
+
+[[image]]
+id = "features/navmesh"
+out = "images/features/navmesh.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "A navigation mesh drawn over a level, with a route through it"
+caption = "Navigation meshes"
+producer = "copy"
+source = "images/demos/navmesh_demo.jpg"
+
+# --------------------------------------------------------------------------- #
+# Conformance: our own renders of the Khronos glTF sample roster, blessed as
+# regression baselines and reused here.  Every one is CC0 or CC-BY 4.0.
+# --------------------------------------------------------------------------- #
+[[image]]
+id = "conformance/FlightHelmet"
+out = "images/gallery/conformance/FlightHelmet.jpg"
+licence = "CC0 1.0"
+credit = "FlightHelmet, public domain (CC0)"
+alt = "A leather flight helmet with goggles and an oxygen mask on a wooden stand"
+caption = "<strong>FlightHelmet</strong> &mdash; leather, glass, rubber and metal, each with its own roughness."
+producer = "baseline"
+scene = "FlightHelmet"
+
+[[image]]
+id = "conformance/SciFiHelmet"
+out = "images/gallery/conformance/SciFiHelmet.jpg"
+licence = "CC0 1.0"
+credit = "SciFiHelmet, public domain (CC0)"
+alt = "A battered dark helmet with heavy surface detail"
+caption = "<strong>SciFiHelmet</strong> &mdash; surface detail carried entirely by the normal map."
+producer = "baseline"
+scene = "SciFiHelmet"
+
+[[image]]
+id = "conformance/AntiqueCamera"
+out = "images/gallery/conformance/AntiqueCamera.jpg"
+licence = "CC0 1.0"
+credit = "AntiqueCamera, &copy; UX3D (CC0)"
+alt = "A plate camera on a wooden tripod"
+caption = "<strong>AntiqueCamera</strong> &mdash; brass, leather and lacquered wood."
+producer = "baseline"
+scene = "AntiqueCamera"
+
+[[image]]
+id = "conformance/ChronographWatch"
+out = "images/gallery/conformance/ChronographWatch.jpg"
+licence = "CC-BY 4.0"
+credit = "ChronographWatch, &copy; Darmstadt Graphics Group, CC-BY 4.0"
+alt = "A gold chronograph wristwatch, its face reflecting the surroundings"
+caption = "<strong>ChronographWatch</strong> &mdash; anisotropic brushed metal under a clearcoat crystal."
+producer = "baseline"
+scene = "ChronographWatch"
+
+[[image]]
+id = "conformance/ToyCar"
+out = "images/gallery/conformance/ToyCar.jpg"
+licence = "CC0 1.0"
+credit = "ToyCar, public domain (CC0)"
+alt = "A small red toy car on a cloth-covered table"
+caption = "<strong>ToyCar</strong> &mdash; clearcoat paint, transmissive glass and sheen on the cloth."
+producer = "baseline"
+scene = "ToyCar"
+
+[[image]]
+id = "conformance/StainedGlassLamp"
+out = "images/gallery/conformance/StainedGlassLamp.jpg"
+licence = "CC-BY 4.0"
+credit = "StainedGlassLamp, &copy; Wayfair, CC-BY 4.0"
+alt = "A Tiffany-style stained glass table lamp"
+caption = "<strong>StainedGlassLamp</strong> &mdash; coloured transmission, with the light passing through the shade."
+producer = "baseline"
+scene = "StainedGlassLamp"
+
+[[image]]
+id = "conformance/GlassVaseFlowers"
+out = "images/gallery/conformance/GlassVaseFlowers.jpg"
+licence = "CC0 1.0"
+credit = "GlassVaseFlowers, public domain (CC0)"
+alt = "Flowers in glass vases on a windowsill in a bright room"
+caption = "<strong>GlassVaseFlowers</strong> &mdash; thin-walled glass in front of a window."
+producer = "baseline"
+scene = "GlassVaseFlowers"
+
+[[image]]
+id = "conformance/SheenWoodLeatherSofa"
+out = "images/gallery/conformance/SheenWoodLeatherSofa.jpg"
+licence = "CC-BY 4.0"
+credit = "SheenWoodLeatherSofa, &copy; Darmstadt Graphics Group, CC-BY 4.0"
+alt = "A brown leather sofa with wooden arms"
+caption = "<strong>SheenWoodLeatherSofa</strong> &mdash; sheen giving leather its soft rim, beside plain varnished wood."
+producer = "baseline"
+scene = "SheenWoodLeatherSofa"
+
+[[image]]
+id = "conformance/MaterialsVariantsShoe"
+out = "images/gallery/conformance/MaterialsVariantsShoe.jpg"
+licence = "CC-BY 4.0"
+credit = "MaterialsVariantsShoe, &copy; Shopify, CC-BY 4.0"
+alt = "A teal running shoe"
+caption = "<strong>MaterialsVariantsShoe</strong> &mdash; one mesh carrying several material sets, of which the loader picks one."
+producer = "baseline"
+scene = "MaterialsVariantsShoe"
+
+[[image]]
+id = "conformance/IridescentDishWithOlives"
+out = "images/gallery/conformance/IridescentDishWithOlives.jpg"
+licence = "CC-BY 4.0"
+credit = "IridescentDishWithOlives, &copy; Wayfair, CC-BY 4.0"
+alt = "A dish of olives under a glass cover on a wooden table"
+caption = "<strong>IridescentDishWithOlives</strong> &mdash; transmission through the cover and iridescence on the dish."
+producer = "baseline"
+scene = "IridescentDishWithOlives"
+
+[[image]]
+id = "conformance/ClearCoatCarPaint"
+out = "images/gallery/conformance/ClearCoatCarPaint.jpg"
+licence = "CC0 1.0"
+credit = "ClearCoatCarPaint, public domain (CC0)"
+alt = "A red sphere with the deep gloss of car paint"
+caption = "<strong>ClearCoatCarPaint</strong> &mdash; a second specular layer over the base, which is what makes paint look wet."
+producer = "baseline"
+scene = "ClearCoatCarPaint"
+
+[[image]]
+id = "conformance/Lantern"
+out = "images/gallery/conformance/Lantern.jpg"
+licence = "CC0 1.0"
+credit = "Lantern, &copy; Microsoft (CC0)"
+alt = "A wrought-iron street lantern on a post"
+caption = "<strong>Lantern</strong> &mdash; painted and rusted iron, with an emissive lamp."
+producer = "baseline"
+scene = "Lantern"
+
+[[image]]
+id = "conformance/MetalRoughSpheres"
+out = "images/gallery/conformance/MetalRoughSpheres.jpg"
+licence = "CC-BY 4.0"
+credit = "MetalRoughSpheres, &copy; Analytical Graphics, CC-BY 4.0"
+alt = "A grid of spheres running from dielectric to metal and from smooth to rough"
+caption = "<strong>MetalRoughSpheres</strong> &mdash; metalness along one axis, roughness along the other. The whole material model in one picture."
+producer = "baseline"
+scene = "MetalRoughSpheres"
+
+[[image]]
+id = "conformance/WaterBottle"
+out = "images/gallery/conformance/WaterBottle.jpg"
+licence = "CC0 1.0"
+credit = "WaterBottle, public domain (CC0)"
+alt = "A brushed metal water bottle with a printed label"
+caption = "<strong>WaterBottle</strong> &mdash; brushed metal under printed decals."
+producer = "baseline"
+scene = "WaterBottle"
+
+[[image]]
+id = "conformance/BoomBox"
+out = "images/gallery/conformance/BoomBox.jpg"
+licence = "CC0 1.0"
+credit = "BoomBox, public domain (CC0)"
+alt = "A spherical portable stereo with a speaker grille and dials"
+caption = "<strong>BoomBox</strong> &mdash; fine metal and plastic detail at a small scale."
+producer = "baseline"
+scene = "BoomBox"
+
+[[image]]
+id = "conformance/Corset"
+out = "images/gallery/conformance/Corset.jpg"
+licence = "CC0 1.0"
+credit = "Corset, &copy; UX3D (CC0)"
+alt = "A laced red and gold corset on a stand"
+caption = "<strong>Corset</strong> &mdash; embroidery and lacing, all of it in the maps rather than the mesh."
+producer = "baseline"
+scene = "Corset"
+
+[[image]]
+id = "conformance/CommercialRefrigerator"
+out = "images/gallery/conformance/CommercialRefrigerator.jpg"
+licence = "CC-BY 4.0"
+credit = "CommercialRefrigerator, &copy; Darmstadt Graphics Group and Sean Thomas, CC-BY 4.0"
+alt = "A glass-fronted shop refrigerator stocked with bottles"
+caption = "<strong>CommercialRefrigerator</strong> &mdash; a stocked cabinet seen through its own glass doors."
+producer = "baseline"
+scene = "CommercialRefrigerator"
+
+[[image]]
+id = "conformance/MosquitoInAmber"
+out = "images/gallery/conformance/MosquitoInAmber.jpg"
+licence = "CC-BY 4.0"
+credit = "MosquitoInAmber, &copy; Sketchfab, CC-BY 4.0"
+alt = "An insect suspended inside a translucent amber pebble"
+caption = "<strong>MosquitoInAmber</strong> &mdash; an object inside a volume that absorbs light on the way through."
+producer = "baseline"
+scene = "MosquitoInAmber"
+
+[[image]]
+id = "conformance/ABeautifulGame"
+out = "images/gallery/conformance/ABeautifulGame.jpg"
+licence = "CC-BY 4.0"
+credit = "A Beautiful Game, &copy; ASWF and Ed Mackey, CC-BY 4.0"
+alt = "A glass and metal chess set laid out on a board"
+caption = "<strong>ABeautifulGame</strong> &mdash; glass pieces on a polished board, the transmission ordered back to front."
+producer = "baseline"
+scene = "ABeautifulGame"
+
+[[image]]
+id = "conformance/CarConcept"
+out = "images/gallery/conformance/CarConcept.jpg"
+licence = "CC-BY 4.0"
+credit = "CarConcept, &copy; Darmstadt Graphics Group, CC-BY 4.0"
+alt = "A low red concept car"
+caption = "<strong>CarConcept</strong> &mdash; clearcoat paint, tinted glass and anisotropic trim on one body."
+producer = "baseline"
+scene = "CarConcept"
+
+[[image]]
+id = "conformance/GlamVelvetSofa"
+out = "images/gallery/conformance/GlamVelvetSofa.jpg"
+licence = "CC-BY 4.0"
+credit = "GlamVelvetSofa, &copy; Wayfair, CC-BY 4.0"
+alt = "A long blue velvet sofa with gold legs"
+caption = "<strong>GlamVelvetSofa</strong> &mdash; velvet, which is sheen doing the work no roughness value can."
+producer = "baseline"
+scene = "GlamVelvetSofa"
+
+[[image]]
+id = "conformance/BarramundiFish"
+out = "images/gallery/conformance/BarramundiFish.jpg"
+licence = "CC0 1.0"
+credit = "BarramundiFish, public domain (CC0)"
+alt = "A silver-green fish, its scales catching the light"
+caption = "<strong>BarramundiFish</strong> &mdash; an organic surface under a subtle clearcoat."
+producer = "baseline"
+scene = "BarramundiFish"
+
+[[image]]
+id = "conformance/SunglassesKhronos"
+out = "images/gallery/conformance/SunglassesKhronos.jpg"
+licence = "CC-BY 4.0"
+credit = "SunglassesKhronos, &copy; Darmstadt Graphics Group, CC-BY 4.0"
+alt = "A pair of aviator sunglasses with mirrored blue lenses"
+caption = "<strong>SunglassesKhronos</strong> &mdash; mirrored, tinted lenses in a thin metal frame."
+producer = "baseline"
+scene = "SunglassesKhronos"
+
+[[image]]
+id = "conformance/GlassHurricaneCandleHolder"
+out = "images/gallery/conformance/GlassHurricaneCandleHolder.jpg"
+licence = "CC-BY 4.0"
+credit = "GlassHurricaneCandleHolder, &copy; Wayfair, CC-BY 4.0"
+alt = "A blue and white glass candle holder on a metal stand"
+caption = "<strong>GlassHurricaneCandleHolder</strong> &mdash; coloured glass with the room refracted through it."
+producer = "baseline"
+scene = "GlassHurricaneCandleHolder"
+
+# --------------------------------------------------------------------------- #
+# The galleries the pages include, by name.
+# --------------------------------------------------------------------------- #
+[[gallery]]
+name = "showcase"
+label = "What OpenGLContext draws"
+interval = 6000
+images = [
+    "showcase/glisteel-forest-road",
+    "showcase/chess",
+    "showcase/forest-walk",
+    "showcase/tiles-toronto",
+    "showcase/crowd",
+    "showcase/glisteel-viaduct",
+    "showcase/parthenon",
+    "showcase/marble-board",
+    "showcase/flight-helmet",
+]
+
+[[gallery]]
+name = "conformance"
+label = "Khronos glTF sample models, rendered by the PBR pass"
+interval = 5000
+images = [
+    "conformance/ABeautifulGame",
+    "conformance/FlightHelmet",
+    "conformance/SciFiHelmet",
+    "conformance/AntiqueCamera",
+    "conformance/ChronographWatch",
+    "conformance/IridescentDishWithOlives",
+    "conformance/GlamVelvetSofa",
+    "conformance/MosquitoInAmber",
+    "conformance/ToyCar",
+    "conformance/StainedGlassLamp",
+    "conformance/MetalRoughSpheres",
+    "conformance/GlassVaseFlowers",
+    "conformance/CarConcept",
+    "conformance/SheenWoodLeatherSofa",
+    "conformance/Corset",
+    "conformance/WaterBottle",
+    "conformance/CommercialRefrigerator",
+    "conformance/Lantern",
+    "conformance/SunglassesKhronos",
+    "conformance/BoomBox",
+    "conformance/GlassHurricaneCandleHolder",
+    "conformance/ClearCoatCarPaint",
+    "conformance/MaterialsVariantsShoe",
+    "conformance/BarramundiFish",
+]

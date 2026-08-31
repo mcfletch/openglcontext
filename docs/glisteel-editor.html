@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>The GLinting Steel track editor</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <link rel="stylesheet" type="text/css" href="style/gallery.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>The GLinting Steel track editor</h1>
+</header>
+
+<section>
+<p class="introduction">Draw a circuit on a landscape, watch the road settle onto the
+ground under it, and bake a world <a href="glisteel.html">the game</a> streams and
+drives. It is the worked example for
+<a href="editing.html">Building an editor</a> &mdash; the tool modes, the plan view,
+the surface picking and the handles are engine features, and what is here is a
+track editor built out of them.</p>
+
+  <figure class="shot">
+    <img src="images/gallery/showcase/track-editor.jpg" width="1137" height="875"
+         alt="A track editor: a circuit of numbered points drawn on a shaded relief map
+              with contours, a lake and a river, and a tool palette down the left" />
+    <figcaption>A circuit drawn on a landscape. The line is the designer's; the two
+    bridges and the tunnel on it are what the road generator made of the ground
+    underneath it.</figcaption>
+  </figure>
+
+  <h2>Drawing one</h2>
+  <pre><code>pip install glisteel-editor
+glisteel-editor                    # a fresh landscape to draw on
+glisteel-editor --terrain canyon   # a different landscape to start from
+glisteel-editor --dem N47E008.hgt --centre 47.5,8.5 --datum 0   # real ground</code></pre>
+  <p>The window is a <strong>map</strong>: the landscape from straight above,
+  orthographic, so a metre is the same number of pixels wherever it is and the line
+  drawn on it is the line the world gets. Click the ground to put a point down, and
+  again, until the circuit closes. <kbd>p</kbd> looks at what you have from an angle,
+  and again goes back. <em>File&nbsp;&rarr;&nbsp;Bake a world</em> writes it out;
+  <em>File&nbsp;&rarr;&nbsp;Drive it</em> puts you in the car.</p>
+  <p>A strip down the left says what the pointer is for &mdash; drawing the route,
+  saying where a lap begins, sculpting the land, putting a spring down, or panning.
+  Whatever the tool in force does not want still moves the map, so a right drag pans
+  and the wheel zooms. <kbd>ctrl-z</kbd> takes back what the <em>tool in force</em> last
+  did: the tools edit different things, and one history over all of them would take back
+  whichever change happened to come last.</p>
+
+  <h2>Where the road goes is worked out, not drawn</h2>
+  <p>A route is a <strong>plan</strong> &mdash; points in world metres, in the order they
+  were drawn, with no heights in them. Where the road actually runs is what the
+  <a href="roads.html">road generator</a> makes of the ground under that line: smoothed,
+  held to a maximum grade, its corners rounded off for the speed it is meant to be driven
+  at, and lifted onto a causeway where it would otherwise run below the waterline. Raise
+  ground under the line and the road climbs it on the next settle.</p>
+  <p>Sculpting works the same way round. A stroke carries fractal detail as a share of
+  its lift, so a raised hill reads as land rather than as a bubble, and the strokes are
+  part of the landscape rather than of the road: they are saved with the project, and
+  they are what the road settles onto.</p>
+  <p>Rivers are not saved either. The project records where water <em>wells up</em>, and
+  the courses are worked out from those springs and the land &mdash; a bed written down
+  would be the river as the land used to be, and would stay there when the land
+  moved.</p>
+
+  <h2>Reading the land</h2>
+  <p>The plan view draws the ground two ways at once, because either alone leaves the
+  designer guessing. <strong>Shaded relief</strong> puts a fixed low sun on the ground's
+  own slope, so a ridge and a valley are different colours rather than the same green;
+  the land is steepened before it is lit, because country a road can be built through is
+  gentle and shading it honestly gives a flat sheet, and the ground is still drawn at the
+  height it really is. <strong>Contours</strong> say by how much, at 10, 25, 50 or 100
+  metres &mdash; of the <em>landscape</em> rather than of the baked ground, so a road's
+  earthworks do not redraw the map being measured against.</p>
+  <p><kbd>p</kbd> swaps to a three-quarter view of the same scene, instantly and with
+  nothing rebuilt, starting where the map was looking. The map is what a line is
+  <em>drawn</em> on; this is what the land is <em>judged</em> on.</p>
+
+  <h2>What a project is</h2>
+  <p>Not the world. The world is baked, is large, and is thrown away and made again
+  whenever a decision changes. A project is the handful of decisions that produced it
+  &mdash; which landscape, and what line was drawn across it &mdash; as JSON a designer
+  can read: a <strong>base</strong> the ground comes from and an ordered stack of
+  <strong>edits</strong> on top of it, the springs, and the routes.</p>
+
+  <h2>Baking one</h2>
+  <p><em>File&nbsp;&rarr;&nbsp;Bake a world</em> writes a
+  <a href="tiles3d.html">3D&nbsp;Tiles</a> world beside the project file, through the
+  <a href="baking.html">octree baker</a>. The circuit goes into the tileset's
+  <code>extras</code> along with it, which is how the game finds the track in what it
+  streams: the starting grid, the lap timing and the autopilot all read it from
+  there. <code>glisteel-bake</code> is the same thing from a shell, and with no
+  arguments it bakes the shipped circuit world.</p>
+  <pre><code>glisteel-bake --output /tmp/world
+glisteel /tmp/world/tileset.json</code></pre>
+
+  <h2>Where it lives</h2>
+  <p>The editor is its own distribution and repository,
+  <a href="https://github.com/mcfletch/glisteel-editor">github.com/mcfletch/glisteel-editor</a>,
+  and it is deliberately thin: the landscape, the road generation and the baker belong to
+  <a href="baking.html">OpenGLContext-editor</a> and to the engine, and the editor's
+  <code>README.md</code> is the reference for its own tools and file format.</p>
+
+</section>
+</body></html>

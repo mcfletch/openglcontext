@@ -1,0 +1,175 @@
+/* The rotating gallery, and the still figures beside it.
+ *
+ * With no JavaScript the first slide is an ordinary figure and the rest are
+ * hidden, so a page is never blank and never a stack of images.  gallery.js
+ * marks the container `is-live` and takes over from there.
+ */
+
+/* `--slide-width` is the render's own pixel width, written into the page beside
+ * the slides: the box grows to the picture and no further, so a wide display
+ * gets the image at its true size with space around it rather than a scaled-up
+ * one.  Below that width `width: auto` applies, so it still shrinks to a narrow
+ * window. */
+.gallery-rotate {
+    margin: .75em auto;
+    max-width: var(--slide-width, max-content);
+    position: relative;
+}
+
+.gallery-rotate .slide {
+    margin: 0;
+}
+
+.gallery-rotate .slide:not(:first-child) {
+    display: none;
+}
+
+.gallery-rotate img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 3px;
+    background-color: #303030;
+}
+
+.gallery-rotate figcaption {
+    color: #557755;
+    font-size: 90%;
+    padding: .4em .2em 0;
+    /* Captions differ in length; a fixed floor stops the controls below them
+     * jumping up and down as the slides advance. */
+    min-height: 3em;
+}
+
+.gallery-rotate figcaption .credit {
+    color: #777777;
+    font-size: 90%;
+}
+
+/* --- once the script has taken over ------------------------------------- */
+
+.gallery-rotate.is-live .slide {
+    display: block;
+    grid-area: 1 / 1;              /* every slide stacked in the one cell */
+    opacity: 0;
+    transition: opacity .6s ease-in-out;
+    pointer-events: none;
+}
+
+.gallery-rotate.is-live .frame {
+    display: grid;
+}
+
+/* Half the picture each: clicking the left of it goes back, the right forward. */
+.gallery-rotate.is-live img {
+    cursor: pointer;
+}
+
+.gallery-rotate.is-live .slide.is-current {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gallery-rotate.is-live .slide {
+        transition: none;
+    }
+}
+
+.gallery-rotate .controls {
+    display: none;
+    align-items: center;
+    gap: .4em;
+    padding: .3em .2em 0;
+}
+
+.gallery-rotate.is-live .controls {
+    display: flex;
+}
+
+.gallery-rotate .controls button {
+    font: inherit;
+    line-height: 1;
+    color: white;
+    background-color: #303030;
+    border: none;
+    border-radius: .3em;
+    padding: .35em .6em;
+    cursor: pointer;
+}
+
+.gallery-rotate .controls button:hover,
+.gallery-rotate .controls button:focus-visible {
+    background-color: #557755;
+}
+
+.gallery-rotate .dots {
+    display: flex;
+    gap: .3em;
+    margin-left: .2em;
+}
+
+.gallery-rotate .dots button {
+    width: .85em;
+    height: .85em;
+    padding: 0;
+    border-radius: 50%;
+    background-color: #c0c0c0;
+}
+
+.gallery-rotate .dots button[aria-current="true"] {
+    background-color: #303030;
+}
+
+/* --- still figures ------------------------------------------------------ */
+
+figure.shot {
+    margin: .75em auto;
+    max-width: max-content;
+}
+
+figure.shot img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 3px;
+}
+
+figure.shot figcaption {
+    color: #557755;
+    font-size: 90%;
+    padding-top: .3em;
+}
+
+/* A row of small pictures, one per feature: as many across as will fit, and
+ * each column capped at the thumbnail's own width so a wide display gets more
+ * of them across rather than larger ones. */
+.thumb-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 360px));
+    justify-content: center;
+    gap: .6em;
+    margin: .75em 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+.thumb-row li,
+.thumb-row figure {
+    margin: 0;
+    padding: 0;
+    text-indent: 0;
+}
+
+.thumb-row img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 3px;
+}
+
+.thumb-row figcaption {
+    color: #557755;
+    font-size: 85%;
+    padding-top: .25em;
+}

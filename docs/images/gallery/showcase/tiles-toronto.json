@@ -1,0 +1,12 @@
+{
+  "credit": "City of Toronto 3D massing, Open Government Licence",
+  "git": "ff24c13-dirty",
+  "id": "showcase/tiles-toronto",
+  "licence": "BSD-3-Clause; City of Toronto open data",
+  "producer": "copy",
+  "size": [
+    1200,
+    675
+  ],
+  "source": "images/toronto-3dtiles.jpg"
+}

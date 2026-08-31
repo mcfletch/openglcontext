@@ -1,0 +1,11 @@
+{
+  "git": "ff24c13-dirty",
+  "id": "features/navmesh",
+  "licence": "BSD-3-Clause",
+  "producer": "copy",
+  "size": [
+    360,
+    230
+  ],
+  "source": "images/demos/navmesh_demo.jpg"
+}

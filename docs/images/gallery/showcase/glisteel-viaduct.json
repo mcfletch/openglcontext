@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "-m",
+    "glisteel.game",
+    "baked-world/tileset.json",
+    "--size",
+    "1600x900",
+    "--view",
+    "chase",
+    "--no-hud",
+    "--autopilot",
+    "--capture-frame",
+    "1297",
+    "--capture",
+    "{png}"
+  ],
+  "credit": "GLinting Steel",
+  "git": "927cf4c-dirty",
+  "id": "showcase/glisteel-viaduct",
+  "licence": "BSD-3-Clause; CC0 assets",
+  "producer": "command",
+  "size": [
+    1200,
+    675
+  ]
+}

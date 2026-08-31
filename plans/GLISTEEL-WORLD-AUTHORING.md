@@ -872,7 +872,7 @@ The three changes, all of them "put this somewhere else":
   and casts no shadow, where a tree of vertex-coloured patches was a hundred shapes that
   did. It also looks incomparably better, which was the reason for doing it.
 - **The forest stopped being tile content.** 379k trees in a
-  [`VegetationField`](../docs/terrain.html#vegetationfield) are two instanced draws per
+  [`VegetationField`](../docs/vegetation.html#vegetationfield) are two instanced draws per
   species over a table, re-chosen when the camera moves eight metres, against 45k trees
   that were per-tile geometry rasterised into three shadow cascades as well as the frame.
 - **Physics stopped reading the drawn geometry.** The ground is

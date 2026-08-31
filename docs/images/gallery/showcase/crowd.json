@@ -1,0 +1,16 @@
+{
+  "credit": "Fox by PixelMannen and tomkranis, CC-BY 4.0",
+  "env": {
+    "OPENGLCONTEXT_SHADOWS": "1"
+  },
+  "frames": 60,
+  "git": "ff24c13-dirty",
+  "id": "showcase/crowd",
+  "licence": "BSD-3-Clause; model CC-BY 4.0",
+  "module": "crowd_demo",
+  "producer": "script",
+  "size": [
+    1200,
+    675
+  ]
+}

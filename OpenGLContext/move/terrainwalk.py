@@ -32,7 +32,7 @@ into, in :meth:`DoEventCascade` -- not ``OnDraw`` -- because the navigation step
 is applied *inside* ``OnDraw`` before the render, and clamping before that step
 lets a held key walk the camera straight through the ground.
 
-See [docs/terrain.html](../../docs/terrain.html) and
+See [docs/terrain.html](../../docs/terrain.html#heightfield) and
 [docs/navigation.html](../../docs/navigation.html).
 """
 import math

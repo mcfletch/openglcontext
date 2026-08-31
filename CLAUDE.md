@@ -54,7 +54,7 @@ OpenGLContext/
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.html
 ├── loaders/          # File formats into the scenegraph -- docs/gltf.html, vrml97.html
 │   ├── gltf/         # glTF 2.0 / GLB
-│   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/terrain.html
+│   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.html
 ├── move/             # Camera, movement modes, walking -- docs/navigation.html
 ├── nav/              # Navigation mesh generated from a collision mesh
 ├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.html
@@ -83,7 +83,7 @@ OpenGLContext/
 │   ├── road*.py      # Roads, roadworks, signs -- docs/roads.html
 │   ├── water/        # Wave field, surface, medium -- docs/water.html
 │   ├── terrain/      # Height fields and splat materials -- docs/terrain.html
-│   ├── vegetation/   # Instanced cover and fields
+│   ├── vegetation/   # Instanced cover and fields -- docs/vegetation.html
 │   └── text/         # Text rendering and font providers -- docs/text.html
 ├── shaders/          # GLSL sources (.vert/.frag plus shared _*.glsl includes)
 ├── telemetry/        # A whole session to one file, and back -- docs/telemetry.html

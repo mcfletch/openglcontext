@@ -3,6 +3,7 @@
     <meta charset="utf-8">
     <title>Terrain &amp; Landscapes, Explained</title>
   <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <link rel="stylesheet" type="text/css" href="style/gallery.css">
 </head>
 <body>
 <header>
@@ -18,575 +19,38 @@
 </header>
 
 <section>
-<p class="introduction">OpenGLContext streams large landscapes as an
-<strong>OGC&nbsp;3D&nbsp;Tiles</strong> octree of <strong>glTF</strong> tiles: a
-screen-space-error traversal refines detail toward the camera, frustum culling keeps
-the resident set a moving window around the view, and tiles page in and out under a
-memory budget on background threads. The same tiles carry per-tile collision meshes,
-so a first-person character <em>walks on exactly what it sees</em>, or flies above and
-drops back to the surface. A procedural generator ships real-world-like features
-&mdash; rolling grassland, a river canyon, a lake and snow-capped mountains &mdash;
-and real heightmaps (DEMs) load through the same path. Vegetation scatters on the
-surface with distance level-of-detail. The indented
-<span class="technical">technical notes</span> point at the code, all under
-<code>OpenGLContext/loaders/tiles3d/</code>.</p>
-<p>There is a second, simpler path for a landscape that fits in memory whole:
-a <a href="#heightfield">height field with a splat-textured surface</a>, walked
-by the same avatar and the same movement modes with no tiles and no baking.</p>
+<p class="introduction">A landscape reaches the screen one of two ways here, and
+which one it wants depends on whether it fits in memory.</p>
+<table>
+  <tr><th>Path</th><th>What it is</th><th>Running on it</th></tr>
+  <tr><td><strong><a href="#heightfield">Height field</a></strong> (this page)</td>
+      <td>An elevation grid over a centred world square, drawn as one splat-textured
+      mesh. A 4&nbsp;km square at 513&sup2; samples is one draw, and the height under
+      any point is arithmetic rather than a ray cast. No tiles, no baking, no
+      streaming.</td>
+      <td>The <a href="https://pypi.org/project/openglcontext-forest-demo/">forest
+      demo</a> &mdash; real Great Smoky Mountains elevation, walked at eye
+      height.</td></tr>
+  <tr><td><strong><a href="tiles3d.html">Streamed 3D&nbsp;Tiles</a></strong></td>
+      <td>An octree of glTF tiles paged in and out around the camera by screen-space
+      error, under a memory budget, each tile carrying its own collision mesh. What a
+      world too big to load needs.</td>
+      <td><a href="glisteel.html">GLinting Steel</a> &mdash; a circuit
+      <a href="baking.html">baked</a> into a world and streamed in around the
+      car.</td></tr>
+</table>
+<p>The two share what stands on the ground: the same
+<a href="vegetation.html">vegetation</a> nodes, the same
+<a href="roads.html">roads</a>, the same <a href="water.html">water</a>, and the same
+<a href="navigation.html">movement modes</a>.</p>
 
-  <h2>Quick start &mdash; walk a world</h2>
-  <p>The viewer is the <code>oglc-terrain</code> command (installed with the package)
-  or, from a checkout, <code>python -m OpenGLContext.bin.terrain_view</code>:</p>
-  <pre><code>oglc-terrain                         # walk the default procedural world
-oglc-terrain --fly                   # start in free-fly
-oglc-terrain --extent 4096 --levels 4   # a bigger, deeper-LOD world (85 tiles)
-oglc-terrain --dem heightmap.png --height-scale 600   # a real heightmap
-oglc-terrain path/to/tileset.json    # view an existing 3D Tiles tileset
-oglc-terrain --size 1280x720 --sse 12 --memory 512    # window + quality/budget</code></pre>
-  <p><strong>Controls:</strong> <code>W A S D</code> move, <code>Q E</code> turn,
-  <code>Shift</code> (hold) sprint, <code>Space</code> jump, <code>G</code> toggles
-  walk&nbsp;/&nbsp;fly, <code>R F</code> rise&nbsp;/&nbsp;descend while flying, and
-  <code>-</code>&nbsp;/&nbsp;<code>=</code> slow down&nbsp;/&nbsp;speed up (fly &amp;
-  sprint). Fly is fast, for covering a big world quickly.</p>
-  <p>A dense forest of instanced conifers and knee-high grass surrounds you, refreshed
-  as you move so it stays dense wherever you walk, with the sun casting shadows through
-  the canopy. Trees and grass are <strong>alpha-cut textured cards</strong> (procedural
-  bark, pine-needle and grass-blade textures) rather than solid geometry, so they read
-  as foliage. Tune density with <code>--density</code> (lower is faster) or drop it with
-  <code>--no-vegetation</code>.</p>
-  <p class="technical">For a procedural/DEM world the close-up ground is a detailed
-  camera-following <strong>textured patch</strong> (photographic CC0 material) rather
-  than the coarse streamed tiles, so it can carry real detail; the streamed tiles are
-  used only to view a raw <code>tileset.json</code>. Materials come from
-  <strong>ambientCG</strong> (CC0, cached under the per-user app-data directory with a
-  provenance manifest) via <code>loaders/cc0.py</code>, with a procedural fallback
-  offline. The download and each map taken out of its archive are size-capped
-  (<code>cc0.MAX_ARCHIVE_BYTES</code>, <code>cc0.MAX_MEMBER_BYTES</code>).
-  Foliage textures and textured glTF prototypes are in
-  <code>loaders/tiles3d/foliage.py</code> (grass/bark/needle generators, CC0-bark
-  option, alpha-MASK cards, instanced); shadows are the engine's cascaded shadow maps
-  (<code>OPENGLCONTEXT_SHADOWS</code>, see <a href="shadows.html">Shadow Mapping</a>).</p>
-  <p class="technical">The viewer is <code>bin/terrain_view.py</code>. It needs the
-  <strong>PBR renderer</strong> (it sets <code>OPENGLCONTEXT_RENDERER=pbr</code> and
-  the GLFW backend itself), because terrain tiles are PBR glTF and their per-vertex
-  colours only render under the PBR pass. Input is bound on both key-down and character
-  events (some Wayland/GLFW setups deliver only the latter), and the character controller
-  drives the camera from <code>OnIdle</code> with the default free-fly navigator unbound
-  so the two don't fight. <strong>Ground collision is analytic</strong>: the avatar is
-  clamped to <code>height_fn(x, z)</code> each frame — exact, matching the visible tiles,
-  and impossible to tunnel through at any frame rate — so no separate collision mesh is
-  needed for the floor. Vegetation is instanced (one shared prototype per layer) with a
-  full-mesh-near / single-cone-far LOD, in two camera-following fields (frequent grass,
-  occasional trees). Water is a translucent plane at the water level.</p>
-
-  <h2 id="tiles3d">Viewing real 3D Tiles datasets <span class="technical">(experimental)</span></h2>
-  <figure>
-    <img src="images/toronto-3dtiles.jpg" width="640px"
-         alt="Toronto's downtown streamed as 3D Tiles: the harbour, the CN Tower and
-              the SkyDome above a map-textured ground" />
-    <figcaption>Open Street Map Tiles view of Toronto Harbour, the CN Tower and the
-    SkyDome</figcaption>
+  <figure class="shot">
+    <img src="images/gallery/showcase/forest-walk.jpg" width="1200" height="675"
+         alt="A hillside of firs over undergrowth, seen from standing height" />
+    <figcaption>A height field at full size: one splat-textured mesh under half a
+    million instanced trees and grass clumps, on a real digital elevation
+    model.</figcaption>
   </figure>
-  <p class="technical"><strong>3D&nbsp;Tiles support is experimental.</strong> A
-  city-sized dataset loads, streams and is walkable, and the known faults are
-  recorded in <code>plans/TILES3D-CITY-VIEWING.md</code>: tiles whose geometry
-  floats above its ground, an initial load that fetches far more of the dataset at
-  once than the view needs, and a frame rate around 30&nbsp;fps at city scale. The
-  APIs here may change while those are dealt with.</p>
-  <p><code>oglc-terrain</code> above is the procedural/DEM playground. To load and
-  stream a <strong>real, third-party OGC&nbsp;3D&nbsp;Tiles dataset</strong> &mdash; a
-  photogrammetry capture, a city model, a GIS terrain &mdash; open it with
-  <code>oglc-view</code>. It is the interactive front end for the <code>loaders/tiles3d</code> runtime and is built for
-  the parts real data actually uses:</p>
-  <pre><code>oglc-view path/to/tileset.json           # a local tileset
-oglc-view https://host/path/tileset.json     # stream a tileset straight from the web
-oglc-view tileset.json --sse 8           # more detail (lower screen-space error)
-oglc-view tileset.json --memory 1024     # bigger tile memory budget (MiB)
-oglc-view tileset.json --capture shot.png    # render one offscreen still, then exit</code></pre>
-  <p>The <code>source</code> is a local path <em>or</em> an <code>http(s)://</code> URL;
-  with a URL the root, its tile content, and any external tilesets are fetched over the
-  network and cached on disk (under <code>~/.cache/openglcontext/tiles3d</code>, or
-  <code>--cache-dir</code>), so each tile downloads once. It auto-frames the whole tileset
-  at startup and lets you <strong>free-fly</strong> with the mouse and <code>W A S D</code>/
-  arrow keys; tiles stream in and out by screen-space error as you move. Supported today:</p>
-
-  <h3>What a tileset is allowed to reach</h3>
-  <p>A <code>tileset.json</code> names its own tile payloads and nested tilesets, so
-  for a tileset from anywhere but this machine those URIs are chosen by whoever wrote
-  it. They are held to the same rules as a glTF document's external references:</p>
-  <ul>
-    <li>a tileset served over <code>http(s)</code> may reference only the
-      <strong>same origin</strong> &mdash; the scheme, host and port it was fetched
-      from &mdash; re-checked on every redirect, so a tile URI cannot name another
-      host or an address on the local network;</li>
-    <li>a tileset loaded from disk may read only files <strong>under its own
-      directory</strong>; and</li>
-    <li>every payload is <strong>size-capped</strong>
-      (<code>tiles3d.fetch.DEFAULT_MAX_TILE_BYTES</code>, 256&nbsp;MiB by default;
-      pass <code>max_bytes</code> to <code>read_bytes</code> for a dataset that
-      genuinely ships larger tiles).</li>
-  </ul>
-  <p><strong>What is unrestricted is which URI you may <em>name</em>, not what the
-  document at it may do.</strong> Naming a URL is a decision only you can make &mdash;
-  the viewer fetches what you point it at, as <code>curl</code> would &mdash; and from
-  there the file is untrusted like any other: the payload is size-capped, redirects on
-  that first fetch are locked to the origin you named (so a server cannot bounce it to
-  a link-local address), and every URI the document goes on to name is confined by the
-  rules above. A dataset split across two hosts needs its own resolver passed to
-  <code>build_runtime_tileset</code>. The policy itself lives in
-  <code>loaders/resolver.py</code>, which is the one place it is written down.</p>
-  <p class="technical">Not yet bounded: the <em>number</em> of tiles a tileset may
-  name. Each payload is capped and the resident set is held to the memory budget, but
-  a hostile tileset can still name unboundedly many tiles and fill the on-disk fetch
-  cache. Recorded in <code>plans/TILES3D-CITY-VIEWING.md</code>.</p>
-  <ul>
-    <li><strong>local files and <code>http(s)://</code> URLs</strong> for the root, tile
-      content and nested tilesets, with an on-disk fetch cache.</li>
-    <li><strong>glTF/GLB and <code>b3dm</code></strong> tile content (the Batched-3D-Model
-      wrapper is unwrapped to its embedded GLB and rendered by the normal glTF loader).</li>
-    <li><strong>box, sphere and geodetic <code>region</code></strong> bounding volumes
-      (regions convert to WGS&nbsp;84 ECEF, as used by Cesium&nbsp;ion / Google
-      Photorealistic / most GIS tilesets).</li>
-    <li><strong>external (nested) tilesets</strong> &mdash; a tile whose content is another
-      <code>.json</code> is loaded and grafted into the tree.</li>
-    <li><strong>The dataset's own frame, brought into the viewer's.</strong> 3D Tiles
-      places tiles in a Z-up frame and this renderer draws a Y-up world, so a dataset
-      is turned to match: an <strong>Earth-centred</strong> one is recentred to the
-      origin (32-bit float precision) and <strong>levelled</strong> at that reference
-      point, so the ground lies in the XZ plane instead of tilting off toward the
-      globe's centre; a <strong>local</strong> one is turned the same quarter turn its
-      content is. Both are what <code>--no-recenter</code> switches off, which gives
-      the dataset exactly as written. Non-identity tile transforms are honoured.</li>
-    <li><strong>The glTF up-axis convention</strong>: 3D Tiles frames are Z-up while
-      glTF content is Y-up, so content is rotated a quarter turn into its tile's frame,
-      as <code>asset.gltfUpAxis</code> asks (<code>Y</code> when a tileset does not say;
-      <code>Z</code> means the content is already in the tile frame, which is what the
-      bakers here write). Without this a conforming export renders on its side.</li>
-    <li><strong>multiple contents per tile</strong> (3D Tiles 1.1 <code>contents</code>),
-      e.g. buildings and trees as separate glTF combined into one tile.</li>
-  </ul>
-  <p class="technical">Tested against Cesium's <code>TilesetWithDiscreteLOD</code> sample
-  (a <code>tileset.json</code> with an ECEF root transform and a
-  <code>low&rarr;medium&rarr;high</code> <code>b3dm</code> LOD chain): the framed view
-  selects the coarse tile and flying closer (or <code>--sse&nbsp;0.02</code>) refines to
-  the finest. Like <code>oglc-terrain</code> it forces the core profile + PBR renderer.
-  A known limitation: a hard camera teleport can hole for a few frames, because REPLACE
-  refinement keeps no standing coarse-LOD fallback resident; gradual flight sharpens in
-  cleanly.</p>
-
-  <h3 id="samples">Sample datasets to try</h3>
-  <p>The <strong>CesiumGS 3D Tiles sample tilesets</strong>
-  (<a href="https://github.com/CesiumGS/3d-tiles-samples">github.com/CesiumGS/3d-tiles-samples</a>,
-  Apache&nbsp;2.0) are small and self-contained, and served over raw GitHub with no
-  authentication &mdash; so you can stream them <strong>straight from the URL, no download
-  step</strong>. These are verified to load:</p>
-  <pre><code># Cesium "dragon" — b3dm, an ECEF transform and a low/medium/high LOD chain
-oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.0/TilesetWithDiscreteLOD/tileset.json
-#   add --sse 0.02 to pull the finest LOD over the network
-
-# 1.1 glTF-native scene — houses and trees, several glTF contents per tile
-oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MetadataGranularities/tileset.json
-
-# 1.1 multiple-contents plane
-oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MultipleContents/tileset.json</code></pre>
-  <p>Each tile is cached under <code>~/.cache/openglcontext/tiles3d</code> on first fetch,
-  so re-runs are offline and instant. Prefer a local copy? Clone the repo
-  (<code>git clone https://github.com/CesiumGS/3d-tiles-samples</code>) and pass a path to
-  <code>&hellip;/1.0/TilesetWithDiscreteLOD/tileset.json</code> instead &mdash; identical
-  result. You can also point the viewer at any tileset you bake yourself with
-  <code>oglc-terrain</code> (see <a href="#making">Making a world</a>) or at your own
-  captures exported to 3D Tiles (RealityCapture, Cesium ion, py3dtiles, etc.).</p>
-  <p class="technical"><strong>Not yet loadable</strong> (the viewer skips or errors on
-  these): point clouds (<code>.pnts</code>), instanced models (<code>.i3dm</code>),
-  composite tiles (<code>.cmpt</code>), and implicit tiling (<code>.subtree</code>) &mdash;
-  so Cesium's <code>TilesetWithTreeBillboards</code> (i3dm), <code>TilesetWithRequestVolume</code>
-  (pnts) and the <code>SparseImplicit*</code> samples don't render yet. Plain
-  <code>http(s)://</code> tilesets stream fine (above); only <strong>API-key services</strong>
-  (Cesium ion, Google Photorealistic 3D Tiles) need auth headers / token handling that
-  isn't wired up &mdash; for those, export or download the tiles first.</p>
-
-  <h2>How it works</h2>
-  <p>Terrain is an OGC 3D Tiles dataset: a <code>tileset.json</code> bounding-volume
-  hierarchy whose leaves are glTF meshes. Every frame the runtime walks the tree,
-  converts each tile's <em>geometric error</em> to a <em>screen-space error</em> (pixels)
-  against the live camera, and refines a tile into its children only while that error
-  exceeds a threshold &mdash; so detail concentrates near the viewer. Frustum culling
-  prunes tiles outside the view, which is what bounds the working set.</p>
-  <p class="technical"><code>screenspaceerror.py</code> (the perspective SSE),
-  <code>tileset.py</code> (the parsed world-space tree; we parse box/sphere ourselves
-  because py3dtiles rejects sphere volumes), <code>traversal.py</code>
-  (<code>select_tiles</code> &rarr; a render set and a speculative <em>want</em> set),
-  and <code>frustum.py</code> (Gribb-Hartmann plane extraction +
-  <code>bounding_sphere</code> tests).</p>
-
-  <p>Streaming is what the traversal <em>decides</em>: wanted tiles that are not
-  resident are queued for background loading (priority by distance); finished loads are
-  uploaded to GL, throttled per frame; and tiles that fall out of the want set are
-  evicted least-recently-wanted-first once the resident bytes exceed the budget. A tile
-  still loading falls back to its nearest resident ancestor, so the world sharpens in
-  rather than popping holes.</p>
-  <p class="technical"><code>loadmanager.py</code> (priority queue + worker pool,
-  cancellable), <code>residency.py</code> (lifecycle
-  <code>UNLOADED&rarr;LOADING&rarr;READY&rarr;RENDERABLE</code>, LRU eviction under a
-  byte budget), and <code>runtime.py</code> (<code>TilesetRuntime.update</code> ties it
-  together each frame). Loading and glTF parsing run off the render thread; only the
-  cheap mount and draw are on the GL thread.</p>
-
-  <p>The runtime is mounted as a scenegraph node, <code>TilesTerrain</code>, so it
-  renders, shadows and picks like any other geometry. Each resident tile also registers
-  its mesh as a static <em>trimesh</em> collider in a physics world, which is what makes
-  the terrain walkable.</p>
-  <p class="technical"><code>scenegraph/tilesterrain.py</code> (the node; call
-  <code>update_for_camera(camera, viewport_height, view_projection=…)</code> each frame
-  before rendering) and <code>physics_colliders.py</code> (streams colliders via the
-  runtime's <code>on_renderable</code>/<code>on_evicted</code> hooks). See
-  <a href="physics.html">Physics&nbsp;&amp;&nbsp;Collision</a> for the character controller.</p>
-
-  <h2 id="osm-export">Exporting a city from OpenStreetMap</h2>
-  <p>A city-sized dataset to fly, walk and page through comes from OpenStreetMap
-  building footprints, extruded to 3D Tiles by
-  <a href="https://github.com/TANK2003/osm-data-3d-tiles">osm-data-3d-tiles</a> (Node,
-  ISC-licensed) and viewed with <code>oglc-view</code> like any other tileset. The
-  generator reads its buildings from a vector-tile server rather than from OSM
-  directly, so an export is four steps: choose the area, put the buildings in front of
-  the generator as MVT tiles, run the generator, then lay the output out so its URIs
-  resolve from disk.</p>
-
-  <h3>1. The area and its source tiles</h3>
-  <p>Pick a bounding box in web mercator (EPSG:3857) metres &mdash; that is what the
-  generator's <code>EXTENT</code> takes &mdash; and put the buildings for it at
-  <code>&lt;TILE_URL&gt;/16/&lt;x&gt;/&lt;y&gt;.pbf</code>: one Mapbox Vector Tile per
-  zoom&nbsp;16 tile of the standard XYZ grid, carrying a layer named
-  <code>buildings</code> whose features are the footprints. Each feature needs
-  <code>osm_id</code> and <code>osm_type</code>, and takes its shape from the OSM tags
-  it carries &mdash; <code>height</code>, <code>levels</code>, <code>roof_type</code>,
-  <code>material</code> and the rest; a footprint with none of them extrudes to the
-  generator's one-storey default. Attributes absent from a feature mean "unknown", so
-  write only the ones the building actually has. The full attribute list is in the
-  sample's <code>specs/mvt-buildings-layer.md</code>.</p>
-  <p>Anything that serves those tiles will do: the generator's companion
-  <code>osm-data-vector-tiles</code> (PostGIS + osm2pgsql), a Tegola or Martin server
-  over your own OSM import, or a directory of <code>.pbf</code> files behind a static
-  server, which is what the worked example does.</p>
-
-  <h3>2. Run the generator</h3>
-  <pre><code>git clone https://github.com/TANK2003/osm-data-3d-tiles
-cd osm-data-3d-tiles &amp;&amp; npm install &amp;&amp; npm install --no-save dotenv
-
-cat &gt; .env &lt;&lt;'ENV'
-TILE_URL=http://localhost:8899          # serves /16/&lt;x&gt;/&lt;y&gt;.pbf
-EXTENT=-8847116.5,5403748.5,-8830418.6,5417593.6   # minX,minY,maxX,maxY, EPSG:3857
-ENV
-
-mkdir -p exported/subtiles exported/b3dm
-npm run generate-tileset -- --projection ecef     # tileset.json + subtiles/
-npm run seed-b3dm -- --tile_json tileset.json     # bake every b3dm up front</code></pre>
-  <p><code>--projection ecef</code> writes an Earth-centred tileset, which is the
-  portable choice: the viewer levels it, and Cesium, QGIS and Giro3D place it on the
-  globe. <code>--projection mercator</code> writes the same content in a local
-  mercator box instead. Seeding is what makes the result stand alone &mdash; without
-  it the tiles are generated on demand by the project's own Express server, and there
-  is nothing to hand to anyone else.</p>
-
-  <h3>3. Lay it out so the URIs resolve</h3>
-  <p>The generator writes content into <code>exported/b3dm/</code> while the
-  sub-tilesets naming it live in <code>exported/subtiles/</code>; those URIs resolve
-  only through its Express server, which looks tiles up by filename. A tileset read
-  from disk or from a static host resolves each URI against the file it appears in, so
-  copy the <code>.b3dm</code> files in beside the sub-tilesets that name them:</p>
-  <pre><code>tileset.json          # root, one child per sub-tileset
-subtiles/12_*.json    # a sub-tileset per zoom 12 tile
-subtiles/16_*.b3dm    # content, a sibling of the sub-tileset naming it</code></pre>
-  <p>Keeping the content inside the directory it is referenced from is also what the
-  viewer requires of a tileset it did not write: a local tileset may read only files
-  under its own directory (see <a href="#samples">above</a>), so a
-  <code>../b3dm/&hellip;</code> reference out of <code>subtiles/</code> is refused. The
-  generator also lists a full 16&times;16 grid of zoom&nbsp;16 children under every
-  zoom&nbsp;12 sub-tileset, including tiles that are open water or outside the area, so
-  drop the children whose content was never written.</p>
-
-  <h3>4. Ground it</h3>
-  <p>The generator exports buildings and nothing else, so on its own an export is
-  a city of facades over a void: nothing to stand on, and from the air no way to
-  tell a street from a rooftop. A second content beside the buildings fixes both
-  &mdash; a quad covering the tile, textured with a map of that tile drawn from
-  OSM roads, water and parks, listed with the buildings under 3D&nbsp;Tiles 1.1
-  <code>contents</code> so the two stream and page together. The worked example
-  below draws its own map tiles rather than fetching rendered ones, which keeps
-  the whole export redistributable under the data's own licence.</p>
-
-  <h3>5. View it</h3>
-  <pre><code>oglc-view path/to/tileset.json           # auto-framed, free-fly
-oglc-view path/to/tileset.json --sse 8 --memory 64   # sharper, small budget: pages hard
-oglc-view path/to/tileset.json --physics # walk it with gravity and collision</code></pre>
-  <p><kbd>g</kbd> drops into the dataset from wherever the camera is &mdash; the
-  avatar takes the camera's position and gravity brings it down to the roof or
-  street below it &mdash; and <kbd>g</kbd> again hands the camera back to
-  free-fly where you left off. In a dataset that says it is in metres (any
-  geospatial tileset) the avatar is a person: 1.8&nbsp;m, walking at
-  3&nbsp;m/s, running at 6 with <kbd>shift</kbd>, and <kbd>f</kbd> flies it.
-  Sized against the extent instead, walking a city would spawn a 300-metre giant
-  in the middle of the lake.</p>
-  <p>A dataset opens <em>over its content</em> rather than outside its bounding
-  sphere &mdash; hovering above the middle of it, close enough that buildings are
-  buildings &mdash; and flying speed is sized to the dataset when it is framed, so
-  a city crosses in about twenty seconds rather than half an hour and the paging
-  is visible as you move. Hold <kbd>shift</kbd> to fly faster still; the settings
-  screen tunes both (see <a href="navigation.html">Movement Modes</a>).</p>
-  <p>A worked end-to-end example of all four steps &mdash; Toronto from High Park to
-  the Don Valley and the Islands, 83,064 buildings in 436 tiles, 41&nbsp;MB &mdash;
-  lives in <code>toronto-3dtiles/</code> beside this checkout: one
-  <code>build.sh</code> over scripts for the Overpass download, the MVT encoding and
-  the layout, plus a verifier that checks every tile's placement against the tile it
-  claims to be. Streamed with <code>--memory 8</code> it loads 152 tiles and evicts
-  92 over a single traverse, which is the paging behaviour a dataset that size is
-  there to exercise.</p>
-  <p class="technical">OpenStreetMap data is ODbL 1.0: an export made this way, and
-  anything derived from it, carries "&copy; OpenStreetMap contributors" and the same
-  licence terms with it.</p>
-
-  <h2 id="making">Making a world</h2>
-  <p>Three sources feed one baker. Each writes a <code>tileset.json</code> plus its
-  <code>.glb</code> tiles and returns the tileset path.</p>
-  <pre><code>from OpenGLContext.loaders.tiles3d import procedural, dem
-
-# 1. Procedural: hills, canyon, lake, mountains (per-vertex coloured, with skirts).
-procedural.build_terrain_tileset("world/", extent=2048, levels=3, tile_res=33)
-
-# 2. A real heightmap (grayscale DEM from QGIS/USGS/SRTM, any format PIL reads):
-dem.build_dem_tileset("dem.png", "world/", extent=4096,
-                      height_scale=600, base=-40, levels=4)
-
-# 3. Your own function y = f(x, z) (numpy arrays in, heights out):
-procedural.build_terrain_tileset("world/", height_fn=my_height_fn)</code></pre>
-  <p>Mount the result and drive it from the camera each frame:</p>
-  <pre><code>from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
-terrain = TilesTerrain("world/tileset.json", max_sse=16.0,
-                       physics_world=world)          # physics_world optional
-# in your render/idle callback, before the pass runs:
-terrain.update_for_camera(eye_xyz, viewport_height, view_projection=vp_matrix)</code></pre>
-  <p class="technical">A <code>quadtree</code> of depth <em>L</em> has
-  <code>sum(4**l)</code> tiles; each is meshed at <code>tile_res</code> vertices per
-  edge, so deeper tiles cover less ground at the same vertex count (finer detail). The
-  procedural field (value-noise fBM + ridged mountains + a carved canyon + a lake
-  basin) is <code>procedural.terrain_height</code>; colours come from height and slope
-  in <code>terrain_colors</code>. A <strong>skirt</strong> is dropped around every tile
-  edge (<code>terrain_patch(skirt_depth=…)</code>) so seams between adjacent LOD tiles
-  show no gaps.</p>
-
-  <h3 id="terrainprofile">Landscapes of your own</h3>
-  <p>The shipped field is four things added together, and a
-  <code>TerrainProfile</code> is how much of each there is: broad rolling
-  <strong>hills</strong>; ridged <strong>mountains</strong> under a mask, so
-  they stand in ranges rather than everywhere; a meandering <strong>canyon</strong>
-  cut into whatever is above it; and a broad <strong>basin</strong> dished out
-  of one region, whose floor is where a lake sits.</p>
-  <pre><code>from OpenGLContext.loaders.tiles3d.procedural import TerrainProfile, terrain_height_for
-
-alps = TerrainProfile(hills=70.0, mountains=900.0, mountain_scale=1400.0,
-                      mountain_cover=0.82, canyon=0.0, basin=0.0, datum=60.0)
-height_fn = terrain_height_for(alps)          # an ordinary height function</code></pre>
-  <p>Every amount is metres of relief and every scale is metres on the ground,
-  so what a landscape is can be read off its profile. <code>seed</code> gives
-  another landscape of the same description — another set of ranges, another
-  course for the river — rather than another kind of landscape.
-  <code>SHIPPED_TERRAIN</code> is the profile <code>terrain_height</code> is,
-  and it does not move: worlds already baked came from those numbers.</p>
-  <p><code>fbm</code> and <code>ridged</code> are the noise the landscape is
-  made of, exposed so that anything adding to it — a sculpted hill, a scatter
-  mask, a splat weight — can be made of the same grain rather than of a second
-  kind of noise that does not match.</p>
-
-  <h2 id="vegetation">Vegetation</h2>
-  <p>There are two paths, and which one a world wants depends on how big it is.</p>
-
-  <h3 id="vegetationfield">A forest as one node</h3>
-  <p>A quarter of a million trees is not a quarter of a million objects in a
-  scenegraph. It is a table of positions, one instanced draw per species for the
-  cards that stand for the far field, and one more for the real geometry within a
-  hundred metres, with both re-chosen from the table whenever the camera moves far
-  enough to change them.
-  <strong><code>OpenGLContext.scenegraph.vegetation.VegetationField</code></strong>
-  owns that:</p>
-  <pre><code>from OpenGLContext.scenegraph.vegetation import TreeSpecies, VegetationField
-forest = VegetationField(positions, yaws, heights,
-                         [TreeSpecies(name='fir', mesh='fir.npz',
-                                      solid_texture='fir_bark.png',
-                                      foliage_texture='fir_branch.png',
-                                      impostor='fir_imp.png')],
-                         species_id=kind)
-forest.update(camera_position, facing=where_it_looks)   # once a frame</code></pre>
-  <p>A <strong><code>TreeSpecies</code></strong> is what one kind of tree is drawn
-  from: a <code>.npz</code> of named arrays holding a <em>solid</em> part (trunk
-  and branches, opaque) and a <em>foliage</em> part (alpha-masked cards), a texture
-  for each, and the single card the tree becomes at a distance. The near mesh and
-  the cards cross-fade in their own shaders over a window they share, so a tree
-  turns from a card into branches without a step.</p>
-  <p><strong>What is drawn far off is chosen against the view</strong>, which is
-  most of what a four-kilometre forest costs. Give <code>update</code> the
-  camera's <code>view</code> matrix and the cards are chosen against the frustum
-  itself; give it a <code>facing</code> and they are chosen in a cone about it,
-  which is the fallback and is the wrong shape — a camera pitched down at a
-  valley has the trees near it inside the cone and the ones along its own view
-  outside, which draws a hard edge across the forest. Give neither and they are
-  chosen by distance alone, which is what an orbiting view wants.</p>
-  <p>The slack outside the view grows with distance, because a frustum plane
-  meets the ground in a straight line and a card set cut exactly at the view has
-  a ruled edge across the forest the moment anything disagrees about where the
-  view is. Selection is skipped altogether while the camera is nearly still.</p>
-  <p>A baked world can carry its forest this way: see
-  <a href="baking.html#vegetation">Baking a world</a>. The toolkit ships no tree
-  art &mdash; art is the caller's.</p>
-
-  <h3 id="groundcover">What grows between the trees</h3>
-  <p>A wood with bare ground under it is trees standing on a lawn. The floor of
-  one is <em>cover</em>: clumps of grass you can see the blades of within a few
-  tens of metres, and cards beyond that out to where the haze takes over.
-  <strong><code>OpenGLContext.scenegraph.vegetation.GroundCover</code></strong>
-  draws both.</p>
-  <pre><code>from OpenGLContext.scenegraph.vegetation import (
-    CoverSpecies, GroundCover, control_weight)
-
-cover = GroundCover(
-    field, CoverSpecies(name='grass', card='grass_imp.png',
-                        clump='clump.glb', density=1.6, height=0.5),
-    mask=control_weight(control_image, ['grass', 'forest_floor'],
-                        layers, field.extent),
-    shade=terrain.shade)
-cover.update(camera_position)                    # once a frame</code></pre>
-  <p>None of it is baked. The ground is the same everywhere and there is far too
-  much of it &mdash; a metre-spaced scatter over four kilometres is sixteen
-  million instances &mdash; so the set is scattered on a <em>world-anchored</em>
-  grid around the camera and re-chosen as that moves. A cell's position and its
-  fate are decided by the cell's own hash, so nothing shifts or appears as the
-  disc recentres.</p>
-  <p><strong>Where it grows is decided by the ground itself.</strong> The splat
-  <a href="#controlmap">control map</a> already says where the grass and the leaf
-  litter are, and a baked world has the road's corridor painted out of them, so
-  <code>control_weight</code> turns that map into the mask and nothing else has
-  to know about the road. A control map has to be fine enough to resolve what it
-  is masking: over four kilometres, 512 pixels is eight metres each and a road
-  corridor is thinner than one of them.</p>
-  <p><code>density</code> is clumps per square metre before the mask thins it, and
-  <code>height</code> how tall one is in metres. A tuft may wander well past its
-  own cell (<code>COVER_JITTER</code>): kept inside it, the set is still a grid,
-  and from thirty metres a grid reads as diagonal rows of evenly spaced plants.</p>
-
-  <h3 id="clearance">How far the forest is held back</h3>
-  <p>On the ground, a crown reaching over the carriageway is the point &mdash;
-  that is the canopy closing over a forest road &mdash; so the trees are cleared
-  only out of the corridor the road was cut through. Where the road is
-  <em>carried</em>, on an embankment or a causeway's retained fill or a deck, a
-  tree beside it is rooted metres below the surface and a crown of the same reach
-  goes through the structure instead of over the road. The clearance is
-  therefore the corridor where the road is on the land, and the corridor plus a
-  crown where it stands above it.</p>
-
-  <h3 id="canopyshade">How dark it is under the trees</h3>
-  <p>The shade a wood casts on its own floor is baked once into the terrain
-  rather than traced per frame: the trees do not move and neither does the sun.
-  Give a <a href="#heightfield">splat terrain</a> the trunk positions and it darkens
-  its static shading under them.</p>
-  <pre><code>terrain.canopy = forest.positions          # (N,3) trunk bases
-terrain.shading                            # the lit grid, in [0, 1]
-terrain.shade(x, z)                        # ...read by world position</code></pre>
-  <p>A tree shades the ground its <em>crown</em> covers, not the cell its trunk
-  stands in, so each one is spread over <code>canopy_crown</code> metres and the
-  total scaled so that one tree per crown-area is a closed canopy. That is what
-  makes the figure mean the same thing at any grid resolution and any planting
-  density: <code>canopy_shade</code> is then how hard a closed canopy darkens the
-  ground and <code>canopy_deepest</code> the most of the light it may take.
-  <code>canopy_spread</code> offsets the shadow towards the sun, because a tree
-  casts along the light rather than straight down.</p>
-  <p><strong>Everything standing on that ground reads the same figure.</strong>
-  Grass lit like an open field, on ground darkened to a fifth, is a row of lamps
-  on the forest floor. So the instance layout every vegetation node shares
-  carries a shade with the position, the yaw and the scale:</p>
-  <pre><code>forest.lit_by(terrain.shade)               # every tree
-GroundCover(..., shade=terrain.shade)      # every clump and card
-cards.update_instances(points, yaws, scales, shades)   # or by hand</code></pre>
-  <p>It defaults to 1 &mdash; full sun &mdash; so a caller with nothing to say
-  about the light says nothing. A world loaded through
-  <code>TilesTerrain</code> wires all of this itself: it is the one place that
-  knows both where the ground is and where the trees on it are.</p>
-
-  <h3>Vegetation in a tile</h3>
-  <p>Vegetation scatters deterministically on the tile surface, area-weighted, and
-  filtered to sensible places (grass elevations, not water or peaks). Every instance
-  shares one prototype so the instancing engine collapses them to a single draw. Trees
-  use a distance LOD &mdash; a full mesh near the camera, a cheap billboard far away
-  &mdash; and grass is a dense blade layer limited to a disc around the viewer.</p>
-  <pre><code>from OpenGLContext.loaders.tiles3d.vegetation import (
-    build_vegetation_lod, build_grass_patch)
-pos, nrm, col, idx = procedural.terrain_patch(-700, 700, -700, 700, 48)
-trees = build_vegetation_lod(pos, idx.reshape(-1, 3), near_mesh, far_billboard,
-                             density=0.00035, seed=7, camera=eye,
-                             near_distance=450,
-                             keep=lambda p: (p[:,1] > 4) & (p[:,1] < 130))</code></pre>
-  <p class="technical"><code>scatter.py</code> (per-triangle uniform barycentric
-  sampling, seeded, with a <code>keep</code> mask) and <code>vegetation.py</code>
-  (<code>group_from_scatter</code>, <code>partition_by_distance</code>,
-  <code>build_vegetation_lod</code>, <code>build_grass_patch</code>).</p>
-
-  <h3 id="footing">Where a plant meets the ground</h3>
-  <p><strong>A placement is the point the plant stands on</strong>, and every
-  vegetation path in the engine agrees on it. The GPU nodes carry it in their
-  vertex data: a billboard quad spans <code>y</code> in <code>[0, 1]</code>,
-  <code>load_clump_glb</code> rebases a clump to <code>y&nbsp;=&nbsp;0</code>, and
-  a tree mesh is authored with its trunk foot at the origin.</p>
-  <p>A scenegraph prototype is whatever its author modelled, and VRML's primitives
-  are centred on their origin &mdash; so a <code>Cone</code> used straight as a
-  shrub would be planted half its height into the hill with its tip showing.
-  <code>group_from_scatter</code> gives a prototype the same contact point the GPU
-  nodes have, by measuring what it occupies and lifting it by its own underside.
-  A prototype already modelled foot-at-origin measures a zero lift and does not
-  move.</p>
-  <pre><code>shrub = Shape(geometry=Cone(bottomRadius=2.5, height=8.0), appearance=green)
-veg = build_vegetation_group(pos, idx.reshape(-1, 3), shrub, density=0.004, seed=1)
-
-group_from_scatter(placements, oak, sink=0.1)     # settle a root flare in
-group_from_scatter(placements, buoy, seat=False)  # modelled about its middle</code></pre>
-  <p><code>sink</code> settles the prototype that far back into the ground, in the
-  units it is modelled in &mdash; what a root flare or a boulder base wants so
-  that it meets the ground rather than perching on it. <code>seat=False</code>
-  keeps the prototype's own origin as the contact point. The seated prototype is
-  wrapped once and shared by every instance, so the scatter is still one draw.</p>
-  <p class="technical"><code>OpenGLContext.loaders.assets.seated(node, sink=0)</code>
-  is the same thing for anything else placed on a surface &mdash; a prop, a rock,
-  a parked car &mdash; and <code>assets.bounds(node)</code> is the measurement
-  under it: the box a subtree occupies in its own root's space, with every
-  <code>Transform</code> applied and no GL context needed.</p>
-
-  <h2>Refining &amp; tuning</h2>
-  <table>
-    <tr><th>Knob</th><th>Effect</th></tr>
-    <tr><td><code>--sse</code> / <code>max_sse</code></td><td>screen-space-error target
-      in pixels; <em>lower = more detail</em> (more tiles, higher cost)</td></tr>
-    <tr><td><code>--memory</code> / <code>memory_budget</code></td><td>resident tile
-      byte budget; smaller forces more aggressive eviction/streaming</td></tr>
-    <tr><td><code>--extent</code>, <code>--levels</code>, <code>--tile-res</code></td>
-      <td>world size, LOD depth (tile count), and per-tile mesh resolution</td></tr>
-    <tr><td><code>prefetch_factor</code></td><td>how far ahead finer tiles load before
-      they are strictly needed (hides pop-in when moving)</td></tr>
-    <tr><td><code>hysteresis</code></td><td>sticky refinement so LOD does not flicker at
-      the threshold</td></tr>
-    <tr><td><code>--dem</code>, <code>--height-scale</code>, <code>--base</code></td>
-      <td>ingest a real heightmap; <code>base</code>&lt;0 sinks low areas below the
-      water level so they read as lakes/sea</td></tr>
-  </table>
-  <p class="technical">The runtime exposes these on <code>TilesetRuntime</code>/
-  <code>TilesTerrain</code> constructors. Frustum culling is enabled by passing a
-  <code>view_projection</code> to <code>update_for_camera</code>; without it, tiles are
-  considered by distance only (useful for tests, wasteful for a real view).</p>
-
-  <h2>Caves, overhangs &amp; arbitrary 3D</h2>
-  <p>Because tiles are ordinary glTF meshes, terrain is not limited to a height surface:
-  a cave, arch or overhang is just a tile with arbitrary geometry, placed in the octree
-  and streamed, culled and collided like any other. A heightfield cannot express the
-  solid-air-solid column of an overhang; a glTF tile can.</p>
-  <p class="technical"><code>sample.build_overhang_tileset</code> bakes an elevated slab
-  over ground (genuine solid-air-solid) that streams, renders and yields a walkable
-  collider &mdash; the pattern a procedural voxel/Transvoxel cave baker would follow.</p>
 
   <h2 id="heightfield">Height-field terrain, walked</h2>
   <p>A landscape that fits in memory whole needs none of the streaming above.
@@ -627,12 +91,12 @@ group_from_scatter(placements, buoy, seat=False)  # modelled about its middle</c
   readers to each other.</p>
   <p><strong>A height function is not the ground; the mesh built from it is.</strong>
   The same rule applies wherever a surface is meshed by sampling a function at
-  vertices &mdash; the streamed tiles above, <code>terrain_patch</code>. What is
-  drawn there is the triangles between those samples, so anything placed on that
-  ground has to be placed against them: scatter over the tile mesh
-  (<code>scatter_on_mesh</code>), or against a sampler that reads it. Feeding the
-  original function to <code>scatter_disc</code> seats plants on a surface that
-  was never drawn.</p>
+  vertices &mdash; the <a href="tiles3d.html">streamed tiles</a>,
+  <code>terrain_patch</code>. What is drawn there is the triangles between those
+  samples, so anything placed on that ground has to be placed against them: scatter
+  over the tile mesh (<code>scatter_on_mesh</code>), or against a sampler that reads
+  it. Feeding the original function to <code>scatter_disc</code> seats plants on a
+  surface that was never drawn.</p>
 
   <h3 id="fromfunction">Where a height field comes from</h3>
   <p>A landscape is <em>authored</em> as a function of <code>(x, z)</code> &mdash;
@@ -652,6 +116,32 @@ HeightField.from_image('terrain-height.png', 1025, 4096.0,
   the ground rises, not where it sits; the two numbers travel with the image.
   Give <code>base</code> and <code>relief</code> explicitly when two fields of one
   landscape have to agree, or they meet in a step.</p>
+
+  <h3 id="terrainprofile">Landscapes of your own</h3>
+  <p>The shipped field is four things added together, and a
+  <code>TerrainProfile</code> is how much of each there is: broad rolling
+  <strong>hills</strong>; ridged <strong>mountains</strong> under a mask, so
+  they stand in ranges rather than everywhere; a meandering <strong>canyon</strong>
+  cut into whatever is above it; and a broad <strong>basin</strong> dished out
+  of one region, whose floor is where a lake sits.</p>
+  <pre><code>from OpenGLContext.loaders.tiles3d.procedural import TerrainProfile, terrain_height_for
+
+alps = TerrainProfile(hills=70.0, mountains=900.0, mountain_scale=1400.0,
+                      mountain_cover=0.82, canyon=0.0, basin=0.0, datum=60.0)
+height_fn = terrain_height_for(alps)          # an ordinary height function</code></pre>
+  <p>Every amount is metres of relief and every scale is metres on the ground,
+  so what a landscape is can be read off its profile. <code>seed</code> gives
+  another landscape of the same description — another set of ranges, another
+  course for the river — rather than another kind of landscape.
+  <code>SHIPPED_TERRAIN</code> is the profile <code>terrain_height</code> is,
+  and it does not move: worlds already baked came from those numbers.</p>
+  <p><code>fbm</code> and <code>ridged</code> are the noise the landscape is
+  made of, exposed so that anything adding to it — a sculpted hill, a scatter
+  mask, a splat weight — can be made of the same grain rather than of a second
+  kind of noise that does not match.</p>
+  <p>The result is an ordinary height function, so it feeds
+  <code>HeightField.from_function</code> above or
+  <a href="tiles3d.html#making">a baked tileset</a> equally.</p>
 
   <h3 id="controlmap">Which ground material shows where</h3>
   <p>The splat's control map is an RGBA image: red is how much of the first
@@ -673,10 +163,10 @@ HeightField.from_image('terrain-height.png', 1025, 4096.0,
   fraction of the pixel away from everything else, so the weights still add to
   one.</p>
   <p><strong>Size the map to the smallest thing it has to say.</strong> The
-  control map is also what decides where <a href="#groundcover">ground cover</a>
-  grows, so a corridor thinner than one of its pixels is a corridor the grass
-  grows straight over. Over four kilometres, 512 pixels is eight metres each and
-  2048 is two.</p>
+  control map is also what decides where
+  <a href="vegetation.html#groundcover">ground cover</a> grows, so a corridor
+  thinner than one of its pixels is a corridor the grass grows straight over. Over
+  four kilometres, 512 pixels is eight metres each and 2048 is two.</p>
 
   <h3 id="fieldphysics">Standing on one</h3>
   <p>A field is a surface, so a vehicle needs triangles.
@@ -696,6 +186,7 @@ ground.update(car_position)                        # once a frame</code></pre>
   the road. <code>holes(x, z) -&gt; mask</code> cuts the collider wherever it is
   set, and the bore's own lining is what the vehicle then drives through.</p>
 
+  <h3>Walking it</h3>
   <p><code>OpenGLContext.move.terrainwalk.TerrainWalkMixin</code> is what walks
   it. It is the terrain form of
   <a href="physics.html#heightfield"><code>PhysicsWalkMixin</code></a>: the same
@@ -739,9 +230,10 @@ ground.update(car_position)                        # once a frame</code></pre>
   it from at or below and left alone above, so a jump rises, an arrival from the
   air falls, and flying over the canopy works. Trunks stop a walker and not a
   flier. Without <code>setupPhysics</code> the mix-in still holds a free-fly
-  camera down on the terrain, which is the older behaviour and is what the
-  offscreen capture and benchmark tools use.</p>
+  camera down on the terrain, which is what the offscreen capture and benchmark
+  tools use.</p>
 
+  <h2>Demos &amp; validation</h2>
   <p><code>oglc-forest</code> &mdash; the
   <a href="https://pypi.org/project/openglcontext-forest-demo/">forest demo</a>,
   a separate distribution &mdash; is this path at full size: real Great Smoky
@@ -749,6 +241,11 @@ ground.update(car_position)                        # once a frame</code></pre>
   impostor LOD, two layers of camera-following grass, and the overlay
   <a href="overlayui.html">settings and key-binding screens</a> on the same keys
   every other program here uses.</p>
+  <ul>
+    <li><code>tests/tiles_terrain.py</code>, <code>tests/tiles_vegetation.py</code>
+      &mdash; minimal heightfield / instanced-vegetation demos.</li>
+    <li><code>tests/tiles_walk.py</code> &mdash; first-person walk/fly.</li>
+  </ul>
   <p class="technical"><code>scenegraph/terrain/</code> (<code>heightfield.py</code>,
   <code>splat.py</code>, <code>control.py</code>),
   <code>scenegraph/vegetation/</code> (instanced clumps, billboards, near meshes
@@ -760,24 +257,6 @@ ground.update(car_position)                        # once a frame</code></pre>
   <code>test_heightfield_datum.py</code>, <code>test_terrain_control.py</code>,
   <code>test_heightfield_colliders.py</code> and
   <code>test_vegetation_field.py</code>.</p>
-
-  <h2>Demos &amp; validation</h2>
-  <ul>
-    <li><code>oglc-terrain</code> &mdash; the procedural/DEM interactive viewer (above).</li>
-    <li><code>oglc-view</code> &mdash; stream and fly a real OGC 3D Tiles
-      <code>tileset.json</code> (b3dm, region volumes, external + ECEF tilesets).</li>
-    <li><code>tests/tiles_landscape.py</code> &mdash; aerial showcase (terrain + vegetation).</li>
-    <li><code>tests/tiles_walk.py</code> &mdash; first-person walk/fly.</li>
-    <li><code>tests/tiles_terrain.py</code>, <code>tests/tiles_vegetation.py</code>
-      &mdash; minimal heightfield / instanced-vegetation demos.</li>
-  </ul>
-  <p class="technical">The behaviour is pinned by <code>tests/tiles3d/</code> (SSE,
-  traversal, residency, load manager, runtime, frustum, procedural terrain, DEM,
-  scatter/vegetation, geomorph/skirts, and <strong>navigation</strong>: gravity settles
-  the avatar on the surface, walking follows it, flying ascends, fly&rarr;walk drops to
-  the surface &mdash; including on the actual streamed colliders) plus offscreen render
-  regressions (<code>tests/test_tiles_*_render.py</code>). Run them with
-  <code>python -m pytest tests/tiles3d/</code>.</p>
 
 </section>
 </body></html>

@@ -14,7 +14,7 @@ An application declares the commands in the script it freezes::
 
     COMMANDS = {
         'glisteel': 'glisteel.game:main',
-        'oglc-bake': 'OpenGLContext_editor.bin.bake:main',
+        'glisteel-bake': 'glisteel_editor.bake:main',
     }
 
     sys.exit(run(COMMANDS))

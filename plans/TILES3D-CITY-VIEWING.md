@@ -1,7 +1,7 @@
 # 3D Tiles: viewing a city-sized dataset
 
 **Status: 🟡 In progress — the feature is marked experimental in
-[docs/terrain.html](../docs/terrain.html#tiles3d).**
+[docs/tiles3d.html](../docs/tiles3d.html#tiles3d).**
 
 A real, city-sized OGC 3D Tiles dataset now loads, streams, is walkable and is
 documented end to end, from OpenStreetMap to the viewer. This records what
@@ -117,6 +117,6 @@ root URI's *content* was trusted -- it is not, and the page now says so.
 ## Related
 
 - [TERRAIN-SYSTEM.md](TERRAIN-SYSTEM.md) — the streaming runtime this builds on.
-- [docs/terrain.html](../docs/terrain.html#osm-export) — how to prepare a
+- [docs/osmcity.html](../docs/osmcity.html) — how to prepare a
   tileset, and the worked Toronto export.
 - `toronto-3dtiles/README.md` — the sample, its licence (ODbL) and its build.

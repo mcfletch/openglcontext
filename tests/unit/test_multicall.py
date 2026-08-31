@@ -67,7 +67,7 @@ def test_declaring_no_commands_is_refused():
 
 
 def test_command_name_reads_the_path_it_is_given():
-    assert multicall.command_name('/opt/glisteel/bin/oglc-bake') == 'oglc-bake'
+    assert multicall.command_name('/opt/glisteel/bin/glisteel-bake') == 'glisteel-bake'
     assert multicall.command_name('glisteel.exe') == 'glisteel'
 
 

@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "-m",
+    "openglcontext_forest_demo.run",
+    "--quality",
+    "high",
+    "--seed",
+    "3"
+  ],
+  "credit": "the forest demo",
+  "frames": 90,
+  "git": "ff24c13-dirty",
+  "id": "showcase/forest-walk",
+  "licence": "BSD-3-Clause; CC0 assets",
+  "producer": "command",
+  "size": [
+    1200,
+    675
+  ]
+}

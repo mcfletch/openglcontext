@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>A city from OpenStreetMap</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <link rel="stylesheet" type="text/css" href="style/gallery.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>A city from OpenStreetMap</h1>
+</header>
+
+<section>
+<p class="introduction" id="osm-export">A city-sized dataset to fly, walk and page
+through comes from OpenStreetMap building footprints, extruded to
+<strong>3D&nbsp;Tiles</strong> by
+<a href="https://github.com/TANK2003/osm-data-3d-tiles">osm-data-3d-tiles</a> (Node,
+ISC-licensed) and viewed with <code>oglc-view</code> like
+<a href="tiles3d.html">any other tileset</a>. The generator reads its buildings from a
+vector-tile server rather than from OSM directly, so an export is five steps: choose
+the area, put the buildings in front of the generator as MVT tiles, run the generator,
+lay the output out so its URIs resolve, and give it ground to stand on.</p>
+
+  <figure class="shot">
+    <img src="images/toronto-3dtiles.jpg" width="640px"
+         alt="Toronto's downtown streamed as 3D Tiles: the harbour, the CN Tower and
+              the SkyDome above a map-textured ground" />
+    <figcaption>Open Street Map Tiles view of Toronto Harbour, the CN Tower and the
+    SkyDome</figcaption>
+  </figure>
+
+  <h2>1. The area and its source tiles</h2>
+  <p>Pick a bounding box in web mercator (EPSG:3857) metres &mdash; that is what the
+  generator's <code>EXTENT</code> takes &mdash; and put the buildings for it at
+  <code>&lt;TILE_URL&gt;/16/&lt;x&gt;/&lt;y&gt;.pbf</code>: one Mapbox Vector Tile per
+  zoom&nbsp;16 tile of the standard XYZ grid, carrying a layer named
+  <code>buildings</code> whose features are the footprints. Each feature needs
+  <code>osm_id</code> and <code>osm_type</code>, and takes its shape from the OSM tags
+  it carries &mdash; <code>height</code>, <code>levels</code>, <code>roof_type</code>,
+  <code>material</code> and the rest; a footprint with none of them extrudes to the
+  generator's one-storey default. Attributes absent from a feature mean "unknown", so
+  write only the ones the building actually has. The full attribute list is in the
+  sample's <code>specs/mvt-buildings-layer.md</code>.</p>
+  <p>Anything that serves those tiles will do: the generator's companion
+  <code>osm-data-vector-tiles</code> (PostGIS + osm2pgsql), a Tegola or Martin server
+  over your own OSM import, or a directory of <code>.pbf</code> files behind a static
+  server, which is what the worked example does.</p>
+
+  <h2>2. Run the generator</h2>
+  <pre><code>git clone https://github.com/TANK2003/osm-data-3d-tiles
+cd osm-data-3d-tiles &amp;&amp; npm install &amp;&amp; npm install --no-save dotenv
+
+cat &gt; .env &lt;&lt;'ENV'
+TILE_URL=http://localhost:8899          # serves /16/&lt;x&gt;/&lt;y&gt;.pbf
+EXTENT=-8847116.5,5403748.5,-8830418.6,5417593.6   # minX,minY,maxX,maxY, EPSG:3857
+ENV
+
+mkdir -p exported/subtiles exported/b3dm
+npm run generate-tileset -- --projection ecef     # tileset.json + subtiles/
+npm run seed-b3dm -- --tile_json tileset.json     # bake every b3dm up front</code></pre>
+  <p><code>--projection ecef</code> writes an Earth-centred tileset, which is the
+  portable choice: the viewer levels it, and Cesium, QGIS and Giro3D place it on the
+  globe. <code>--projection mercator</code> writes the same content in a local
+  mercator box instead. Seeding is what makes the result stand alone &mdash; without
+  it the tiles are generated on demand by the project's own Express server, and there
+  is nothing to hand to anyone else.</p>
+
+  <h2>3. Lay it out so the URIs resolve</h2>
+  <p>The generator writes content into <code>exported/b3dm/</code> while the
+  sub-tilesets naming it live in <code>exported/subtiles/</code>; those URIs resolve
+  only through its Express server, which looks tiles up by filename. A tileset read
+  from disk or from a static host resolves each URI against the file it appears in, so
+  copy the <code>.b3dm</code> files in beside the sub-tilesets that name them:</p>
+  <pre><code>tileset.json          # root, one child per sub-tileset
+subtiles/12_*.json    # a sub-tileset per zoom 12 tile
+subtiles/16_*.b3dm    # content, a sibling of the sub-tileset naming it</code></pre>
+  <p>Keeping the content inside the directory it is referenced from is also what the
+  viewer requires of a tileset it did not write: a local tileset may read only files
+  under its own directory (see
+  <a href="tiles3d.html#tiles3d">what a tileset is allowed to reach</a>), so a
+  <code>../b3dm/&hellip;</code> reference out of <code>subtiles/</code> is refused. The
+  generator also lists a full 16&times;16 grid of zoom&nbsp;16 children under every
+  zoom&nbsp;12 sub-tileset, including tiles that are open water or outside the area, so
+  drop the children whose content was never written.</p>
+
+  <h2>4. Ground it</h2>
+  <p>The generator exports buildings and nothing else, so on its own an export is
+  a city of facades over a void: nothing to stand on, and from the air no way to
+  tell a street from a rooftop. A second content beside the buildings fixes both
+  &mdash; a quad covering the tile, textured with a map of that tile drawn from
+  OSM roads, water and parks, listed with the buildings under 3D&nbsp;Tiles 1.1
+  <code>contents</code> so the two stream and page together. The worked example
+  below draws its own map tiles rather than fetching rendered ones, which keeps
+  the whole export redistributable under the data's own licence.</p>
+
+  <h2>5. View it</h2>
+  <pre><code>oglc-view path/to/tileset.json           # auto-framed, free-fly
+oglc-view path/to/tileset.json --sse 8 --memory 64   # sharper, small budget: pages hard
+oglc-view path/to/tileset.json --physics # walk it with gravity and collision</code></pre>
+  <p><kbd>g</kbd> drops into the dataset from wherever the camera is &mdash; the
+  avatar takes the camera's position and gravity brings it down to the roof or
+  street below it &mdash; and <kbd>g</kbd> again hands the camera back to
+  free-fly where you left off. In a dataset that says it is in metres (any
+  geospatial tileset) the avatar is a person: 1.8&nbsp;m, walking at
+  3&nbsp;m/s, running at 6 with <kbd>shift</kbd>, and <kbd>f</kbd> flies it.
+  Sized against the extent instead, walking a city would spawn a 300-metre giant
+  in the middle of the lake.</p>
+  <p>A dataset opens <em>over its content</em> rather than outside its bounding
+  sphere &mdash; hovering above the middle of it, close enough that buildings are
+  buildings &mdash; and flying speed is sized to the dataset when it is framed, so
+  a city crosses in about twenty seconds rather than half an hour and the paging
+  is visible as you move. Hold <kbd>shift</kbd> to fly faster still; the settings
+  screen tunes both (see <a href="navigation.html">Movement Modes</a>).</p>
+  <p>A worked end-to-end example of all five steps &mdash; Toronto from High Park to
+  the Don Valley and the Islands, 83,064 buildings in 436 tiles, 41&nbsp;MB &mdash;
+  lives in <code>toronto-3dtiles/</code> beside this checkout: one
+  <code>build.sh</code> over scripts for the Overpass download, the MVT encoding and
+  the layout, plus a verifier that checks every tile's placement against the tile it
+  claims to be. Streamed with <code>--memory 8</code> it loads 152 tiles and evicts
+  92 over a single traverse, which is the paging behaviour a dataset that size is
+  there to exercise.</p>
+  <p class="technical">OpenStreetMap data is ODbL 1.0: an export made this way, and
+  anything derived from it, carries "&copy; OpenStreetMap contributors" and the same
+  licence terms with it.</p>
+
+</section>
+</body></html>
