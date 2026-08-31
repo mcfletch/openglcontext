@@ -5,7 +5,9 @@
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-from OpenGLContext.scenegraph.basenodes import *
+from OpenGLContext.scenegraph.basenodes import (
+    sceneGraph,Transform, MouseOver,Sphere, Appearance, Material, Shape
+)
 
 class TestContext( BaseContext ):
     def OnInit( self ):
