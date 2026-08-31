@@ -48,3 +48,13 @@ benchmark_results/
 *.sock
 
 /build/
+
+# Claude Code's per-checkout state. Not all of `.claude/`: `settings.json` is
+# shared project configuration and is tracked on purpose. What is ignored is
+# the machine-local half.
+#
+# `worktrees/` is the one that bites: those are checkouts of this same
+# repository, so an unguarded `git add -A` records them as embedded repos.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
