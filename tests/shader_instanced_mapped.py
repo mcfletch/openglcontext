@@ -137,7 +137,11 @@ class TestContext(BaseContext):
         in vec2 Vertex_texture_coordinate;
         uniform samplerBuffer offsets_table;
         void main() {
-            vec3 offset = texelFetch( offsets_table, gl_InstanceIDARB ).xyz;
+            // gl_InstanceID, not gl_InstanceIDARB: this shader is #version 330
+            // core, where the instance index is a core built-in.  The ARB
+            // spelling belongs to GL_ARB_draw_instanced and only exists in a
+            // shader that asks for that extension.
+            vec3 offset = texelFetch( offsets_table, gl_InstanceID ).xyz;
             vec3 final_position = Vertex_position + offset;
             gl_Position = mat_modelproj * vec4(
                 final_position, 1.0

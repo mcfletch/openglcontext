@@ -8,6 +8,7 @@ from OpenGL.GL import *
 
 
 class TestContext( BaseContext ):
+    profile = 'compatibility'   # reads fixed-function polygon stipple
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         print('glGetPolygonStipple',  glGetPolygonStippleub())

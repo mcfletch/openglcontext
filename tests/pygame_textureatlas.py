@@ -54,7 +54,10 @@ class TestContext( BaseContext ):
             uniform vec3 color;
             varying vec2 texcoord;
             void main() {
-                vec4 tex_color = texture(atlas, texcoord );
+                // texture2D, not texture: the rest of this shader is GLSL 1.10
+                // (attribute/varying/gl_FragColor), where the overloaded
+                // texture() of 1.30 does not exist.
+                vec4 tex_color = texture2D(atlas, texcoord );
                 if (tex_color.r < .05) {
                     discard;
                 }

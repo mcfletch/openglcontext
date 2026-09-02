@@ -80,6 +80,37 @@ RANDOMIZED_SCRIPTS = []
 PIXEL_DIFF_THRESHOLD = 5
 MAX_PERCENT_DIFFERENT = 2.0
 
+#: Scripts whose frame legitimately differs between drivers by more than the
+#: general tolerance, and what each is held to instead.  An entry is a claim
+#: about the script -- that this much of its picture is the driver's to choose
+#: -- so each carries the reason it is here.  The frame is still compared: a
+#: black or wrong-colour frame differs across almost the whole image, which no
+#: number here reaches.
+DRIVER_DEPENDENT_TOLERANCE = {
+    # The *driver* compresses the texture, and the GL specification leaves the
+    # block encoding to the implementation, so two conformant drivers produce
+    # different texels from the same image and no one reference is right for
+    # both.  The differing pixels are spread over the cube's faces at a median
+    # delta of 11 in 255.
+    'nehe6_compressed.py': 10.0,
+    # A specular water surface over a stony bed: nearly every pixel is an edge
+    # or a highlight, which is where rasterization and interpolation
+    # differences land.  Nine tenths of the differing pixels differ by 10 in
+    # 255 -- what is large is how many of them there are, not by how much.
+    'water_demo.py': 8.0,
+}
+
+
+def tolerance_for(script_name):
+    """How much of this script's frame may differ from its reference.
+
+    Takes the name with or without its ``.py``, since a capture is named after
+    the script's stem and the parametrised case after the file.
+    """
+    if not script_name.endswith('.py'):
+        script_name += '.py'
+    return DRIVER_DEPENDENT_TOLERANCE.get(script_name, MAX_PERCENT_DIFFERENT)
+
 
 @dataclass
 class VisualTestResult:
@@ -131,6 +162,10 @@ def _check_coverage_available():
 from OpenGLContext.testing.display import (
     OFFSCREEN_GL_PLATFORMS, display_available as _check_display_available,
 )
+#: The exit code a script uses to say the driver has not got the extension it
+#: was written to exercise.  Scripts have raised it for years; honouring it
+#: here is what turns "this driver lacks GL_ARB_imaging" into a skip.
+from OpenGLContext.testingcontext import REQUIRED_EXTENSION_MISSING
 
 
 def _check_wx_available():
@@ -330,6 +365,13 @@ def _run_script(
             f"stdout:\n{result.stdout}"
         )
 
+    # The exit code a script uses to say the driver lacks the extension it
+    # exists to exercise -- a skip, not a failure.
+    if result.returncode == REQUIRED_EXTENSION_MISSING:
+        pytest.skip(
+            f"{script_path.name}: {result.stdout.strip().splitlines()[-1:]}"
+        )
+
     # Check return code
     if result.returncode != expected_returncode:
         pytest.fail(
@@ -415,6 +457,11 @@ def _run_visual_test(
         status = 'error'
     elif traceback:
         status = 'fail'
+    elif returncode == REQUIRED_EXTENSION_MISSING:
+        # The script asked the driver for an extension it does not have and
+        # said so with the exit code reserved for it.  What the script draws
+        # is that extension, so there is nothing here to run or to compare.
+        status = 'skip'
     elif returncode != 0:
         status = 'fail'
     else:
@@ -437,7 +484,9 @@ def _run_visual_test(
 
             # Compare images
             try:
-                comparison_stats = _compare_images(reference_image_path, result_image_path)
+                comparison_stats = _compare_images(
+                    reference_image_path, result_image_path,
+                    tolerance=tolerance_for(test_name))
 
                 if comparison_stats:
                     # Create diff image
@@ -480,12 +529,14 @@ def _run_visual_test(
     return test_result
 
 
-def _compare_images(reference_path: Path, result_path: Path) -> Optional[Dict[str, Any]]:
+def _compare_images(reference_path: Path, result_path: Path,
+                    tolerance: float = MAX_PERCENT_DIFFERENT) -> Optional[Dict[str, Any]]:
     """Compare two images and return comparison statistics.
 
     Args:
         reference_path: Path to reference image
         result_path: Path to result image
+        tolerance: percent of pixels that may differ (see tolerance_for)
 
     Returns:
         Dict with comparison statistics, or None if comparison failed
@@ -523,7 +574,7 @@ def _compare_images(reference_path: Path, result_path: Path) -> Optional[Dict[st
         # metric is the meaningful one; the old per-pixel ceiling was the maximum
         # possible value and so never rejected anything. max_diff is reported for
         # diagnostics only.
-        is_match = result.percent_different <= MAX_PERCENT_DIFFERENT
+        is_match = result.percent_different <= tolerance
 
         return {
             'shapes_match': True,
@@ -987,6 +1038,11 @@ class TestScripts:
             expect_visual_diff=script_name in RANDOMIZED_SCRIPTS,
             capture_image=True,
         )
+        if result.status == 'skip':
+            pytest.skip(
+                f"{script_name} needs an extension this driver does not have: "
+                f"{result.stdout.strip().splitlines()[-1:]}"
+            )
         if result.status == 'fail':
             if result.traceback:
                 pytest.fail(f"Script produced traceback:\n{result.traceback}")
@@ -1000,7 +1056,7 @@ class TestScripts:
             pytest.fail(
                 f"Visual regression for {script_name}: "
                 f"{stats.get('percent_different', '?')}% of pixels differ "
-                f"(tolerance {MAX_PERCENT_DIFFERENT}%); see {result.diff_image}")
+                f"(tolerance {tolerance_for(script_name)}%); see {result.diff_image}")
 
 
 

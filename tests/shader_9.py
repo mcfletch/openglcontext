@@ -80,13 +80,13 @@ class TestContext( BaseContext ):
         The core calculation for attenuation looks like this:
         '''
         """attenuation = clamp(
-            0.0,
-            1.0,
             1.0 / (
                 attenuations.x + 
                 (attenuations.y * distance) +
                 (attenuations.z * distance * distance)
-            )
+            ),
+            0.0,
+            1.0
         );"""
         '''The default attenuation for legacy OpenGL was
         (1.0, 0.0, 0.0), which is to say, no attenuation at all.
@@ -120,13 +120,13 @@ class TestContext( BaseContext ):
                 );
                 if (distance != 0.0) {
                     attenuation = clamp(
-                        0.0,
-                        1.0,
                         1.0 / (
                             attenuations.x + 
                             (attenuations.y * distance) +
                             (attenuations.z * distance * distance)
-                        )
+                        ),
+                        0.0,
+                        1.0
                     );
                     n_dot_pos *= attenuation;
                     n_dot_half *= attenuation;
