@@ -65,7 +65,10 @@ os.environ.update(OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_BACKEND='glfw',
 WITH_CASTER = 'caster' in sys.argv
 try:
     import glfw, numpy as np
-    from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
+    # The engine's own reader, not a bare glReadPixels: it binds the default
+    # framebuffer and selects GL_BACK first, and a post-process pass leaves its
+    # own FBO bound -- reading that one back gives a black frame.
+    from OpenGLContext.capture import read_back_buffer
     from OpenGLContext import testingcontext
     Base = testingcontext.getInteractive()
     from OpenGLContext.scenegraph import basenodes as b
@@ -99,11 +102,11 @@ try:
     inst = C(); inst.deferRedraw = True
     try: glfw.swap_interval(0)
     except Exception: pass
-    w, h = inst.getViewPort()
-    for _ in range(10):
+    for _ in range(9):
         glfw.poll_events(); inst.OnDraw(force=1)
-    arr = np.frombuffer(bytes(glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE)),
-                        dtype=np.uint8).reshape(h, w, 3).astype(float)
+    # Read between the render and the swap: after a swap the back buffer holds
+    # whatever the driver last left there, which is often black.
+    arr = inst.drawAndReadFrame(read_back_buffer)[0].astype(float)
     r, g, bl = arr[..., 0], arr[..., 1], arr[..., 2]
     grey = (np.abs(r - g) < 25) & (np.abs(g - bl) < 25) & (arr.sum(2) > 60)
     n = int(grey.sum())

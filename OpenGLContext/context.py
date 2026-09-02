@@ -351,42 +351,53 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             self._captureClock.restore()
             self._captureClock = None
 
-    def _autoExitDraw(self):
-        """Render one final frame and capture it before auto-exit.
+    def drawAndReadFrame(self, read):
+        """Draw one frame and call ``read()`` on it before it is presented.
 
-        The auto-exit check runs at the top of OnDraw, where the context is not yet
-        current and the previous frame has already been swapped to the front buffer,
-        so the back buffer holds stale (often black) data. To capture the on-screen
-        image we draw one more frame and read the back buffer *before* that frame's
-        swap, by intercepting the single SwapBuffers that presenting it performs.
+        A caller that draws and *then* reads the back buffer reads the frame
+        before last, or nothing at all: presenting a frame swaps it to the
+        front, leaving the back buffer holding whatever the driver last put
+        there, which on many drivers is black. The only moment the frame just
+        drawn is in the back buffer is between the render and the swap, so this
+        renders one frame and reads it there.
+
+        ``read`` is called with the context current and no arguments; whatever
+        it returns is returned here. Where the render produces no visible change
+        there is no swap to intercept, and ``read`` is called afterwards against
+        the buffer as it stands.
+
+        This is what a test wanting the pixels of a scene should use --
+        ``OpenGLContext.capture.read_back_buffer`` is the usual ``read``.
         """
+        swap = self.SwapBuffers
+        answer = []
+
+        def _readThenSwap():
+            if not answer:
+                answer.append(read())
+            swap()
+
+        self.SwapBuffers = _readThenSwap
+        try:
+            self.OnDraw(force=1)
+        finally:
+            self.SwapBuffers = swap
+        if not answer:
+            self.setCurrent()
+            try:
+                answer.append(read())
+            finally:
+                self.unsetCurrent()
+        return answer[0]
+
+    def _autoExitDraw(self):
+        """Render one final frame and capture it before auto-exit."""
         if not self._autoExitCaptureDir:
             return
         # Suppress the auto-exit branch so the forced redraw below renders normally
         # instead of recursing back into here.
         self._autoExitFrames = None
-        swap = self.SwapBuffers
-        captured = []
-
-        def _captureThenSwap():
-            if not captured:
-                captured.append(True)
-                self._autoExitCapture()
-            swap()
-
-        self.SwapBuffers = _captureThenSwap
-        try:
-            self.OnDraw(force=1)
-        finally:
-            self.SwapBuffers = swap
-        if not captured:
-            # Render produced no visible change, so no swap occurred and the back
-            # buffer was never captured; fall back to a direct read.
-            self.setCurrent()
-            try:
-                self._autoExitCapture()
-            finally:
-                self.unsetCurrent()
+        self.drawAndReadFrame(self._autoExitCapture)
 
     def _autoExitCapture(self):
         """Write the current back buffer to the configured capture path."""
@@ -445,8 +456,19 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         else:
             if not isinstance(definition, contextdefinition.ContextDefinition):
                 definition = contextdefinition.ContextDefinition(**definition)
+            versionWasSet = _fieldIsSet(definition, 'version')
             for key, value in named.items():
                 setattr(definition, key, value)
+            if 'profile' in named and 'version' not in named and not versionWasSet:
+                # The rule ContextDefinition.__init__ applies, applied again
+                # where the profile arrives afterwards: a profile named without
+                # a version settles the version from that profile.  Without it a
+                # compatibility request keeps the 3.3 a core default left behind,
+                # a backend turns "version >= 3" into a context hint, and the
+                # driver answers a compatibility request with a core window --
+                # which fails at the first fixed-function call it was asked for.
+                definition.version = contextdefinition.version_for_profile(
+                    definition.profile)
         if declared and cls.profile and not _fieldIsSet(definition, 'profile'):
             definition.profile = cls.profile
             if not _fieldIsSet(definition, 'version'):
