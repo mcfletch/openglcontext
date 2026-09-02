@@ -46,9 +46,18 @@ def fetch_sample_catalog(cache_dir: Optional[str] = None) -> list[dict[str, Opti
     listed in the repository, each with the URL of its reference screenshot (for
     side-by-side comparison).
 
-    Each Models.md row opens with a model link and an inline screenshot, e.g.::
+    Each Models.md row opens with a model link and an inline screenshot, in
+    either of the two forms the file has used -- Markdown image syntax::
 
         | [Display](Dir/README.md)<br>[![Display](Dir/screenshot/screenshot.jpg)](Dir/README.md)... | description |
+
+    or an HTML tag, which is what it carries now::
+
+        | [Display](Dir/README.md)<br><a href="Dir/README.md"><img src="Dir/screenshot/screenshot.png" width="250px"></a>... |
+
+    Both are read, because the file is upstream's and has changed under us once
+    already: matching only one leaves every ``screenshot_url`` None, which is a
+    catalogue that still looks complete.
 
     ``name`` is the model's directory (url-decoded); the screenshot path is
     relative to the Models/ directory, so it is joined onto ``SAMPLE_MODELS_BASE``.
@@ -56,7 +65,10 @@ def fetch_sample_catalog(cache_dir: Optional[str] = None) -> list[dict[str, Opti
     import re
     text = _fetch_url(SAMPLE_README_URL, cache_dir).decode('utf-8', 'replace')
     link = re.compile(r'\|\s*\[([^\]]+)\]\(([^)]+?)/README\.md\)')
-    shot_re = re.compile(r'!\[[^\]]*\]\(([^)]+?/screenshot/[^)]+)\)')
+    shot_res = (
+        re.compile(r'!\[[^\]]*\]\(([^)]+?/screenshot/[^)]+)\)'),
+        re.compile(r'<img\s[^>]*src="([^"]+?/screenshot/[^"]+)"', re.IGNORECASE),
+    )
     rows = []
     for line in text.splitlines():
         if not line.startswith('| ['):
@@ -66,7 +78,7 @@ def fetch_sample_catalog(cache_dir: Optional[str] = None) -> list[dict[str, Opti
             continue
         display = m.group(1).strip()
         name = urllib.parse.unquote(m.group(2).strip('/').split('/')[-1])
-        sm = shot_re.search(line)
+        sm = next(filter(None, (shot.search(line) for shot in shot_res)), None)
         screenshot_url = None
         if sm:
             shot = urllib.parse.unquote(sm.group(1).strip()).lstrip('./')
