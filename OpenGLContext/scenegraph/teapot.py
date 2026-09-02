@@ -84,9 +84,16 @@ class Teapot(nodetypes.Geometry, node.Node):
     _tessellate_attempts: dict[float, int] = {}
     _MAX_TESSELLATE_ATTEMPTS = 3
 
-    # Shader-path GL resources per sampling:
-    # {steps: {'base_vao','base_count','lid_vao','lid_count'}}.
-    _buffers: dict[float, dict] = {}
+    # Shader-path GL resources per GL context and sampling:
+    # {(gl context, steps): {'base_vao','base_count','lid_vao','lid_count'}}.
+    #
+    # Keyed by context as well as sampling because these are GL *names*, and a
+    # name means something only in the context that issued it.  Keyed by
+    # sampling alone, a second window drew through the first one's VAO -- which
+    # is GL_INVALID_OPERATION at glBindVertexArray, and a teapot that never
+    # appears.  The tessellated arrays (``_arrays``) are ordinary memory and
+    # stay shared: it is only the upload that belongs to a context.
+    _buffers: dict[tuple, dict] = {}
 
     # -- tessellation ------------------------------------------------------
     @classmethod
@@ -303,10 +310,20 @@ class Teapot(nodetypes.Geometry, node.Node):
         glDrawArrays(GL_TRIANGLES, 0, len(array) // FLOATS_PER_VERTEX)
 
     # -- shader / core-profile path ----------------------------------------
+    @staticmethod
+    def _gl_context():
+        """An identifier for the GL context that is current, or None."""
+        try:
+            from OpenGL import contextdata
+            return contextdata.getContext()
+        except Exception:               # pragma: no cover - no GL at all
+            return None
+
     @classmethod
     def _initialize_buffers(cls, steps):
         """Build VAOs/VBOs for the tessellated arrays at ``steps`` (shader path)."""
-        entry = cls._buffers.get(steps)
+        key = (cls._gl_context(), steps)
+        entry = cls._buffers.get(key)
         if entry is not None:
             return entry['base_vao'] is not None
         if not cls._ensure_tessellated(steps):
@@ -350,7 +367,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             base_vao, base_vbo, base_count = make(base_array)
             lid_vao, lid_vbo, lid_count = make(lid_array)
             glBindBuffer(GL_ARRAY_BUFFER, 0)
-            cls._buffers[steps] = {
+            cls._buffers[key] = {
                 'base_vao': base_vao, 'base_vbo': base_vbo, 'base_count': base_count,
                 'lid_vao': lid_vao, 'lid_vbo': lid_vbo, 'lid_count': lid_count,
             }
@@ -359,8 +376,8 @@ class Teapot(nodetypes.Geometry, node.Node):
             return base_vao is not None
         except Exception as e:
             log.error("Failed to initialize teapot buffers (steps %s): %s", steps, e)
-            cls._buffers[steps] = {'base_vao': None, 'base_count': 0,
-                                   'lid_vao': None, 'lid_count': 0}
+            cls._buffers[key] = {'base_vao': None, 'base_count': 0,
+                                 'lid_vao': None, 'lid_count': 0}
             return False
 
     def _render_shader(self, mode, steps):
@@ -374,7 +391,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             log.warning("Cannot render teapot: no shader program")
             return
 
-        bufs = self._buffers[steps]
+        bufs = self._buffers[(self._gl_context(), steps)]
 
         def draw():
             cull_was_enabled = glIsEnabled(GL_CULL_FACE)

@@ -15,6 +15,12 @@ log = logging.getLogger( __name__ )
 
 USE_FLAT = True
 FLAT = None
+#: The GL context ``FLAT``'s programs, buffers and textures belong to.  A pass
+#: holds GL object *names*, which the context that issued them is the only
+#: place they mean anything; handing them to a second context draws through
+#: names its driver never issued.  See shaderpass.get_shader_program, which is
+#: keyed the same way and for the same reason.
+FLAT_CONTEXT = None
 
 
 def report_render_failures() -> None:
@@ -58,18 +64,28 @@ def _core_flatpass_class():
 
 class _defaultRenderPasses( object ):
     def __call__( self,context ):
-        global FLAT
+        global FLAT, FLAT_CONTEXT
+        from OpenGLContext.passes.shaderpass import gl_context_key
+
         sg = context.getSceneGraph()
+        gl_context = gl_context_key()
         # Rebuild when the scenegraph reference itself changes — wholesale
         # replacement (self.sg = new_sg) doesn't fire the per-child dispatcher
         # signals SGObserver listens to, so the cached FlatPass would keep
-        # rendering the old tree.
-        if FLAT is None or FLAT.scene is not sg:
+        # rendering the old tree — and when the GL context changes, since the
+        # pass's GL objects belong to the one that made them.
+        same_context = gl_context == FLAT_CONTEXT
+        if FLAT is None or FLAT.scene is not sg or not same_context:
             # Free the outgoing pass's GPU-side shadow maps before dropping it.
             # We're inside OnDraw with the context current, so this is the safe
             # point to delete those FBOs/textures rather than leak them when the
             # cached pass is replaced on a scenegraph swap.
-            if FLAT is not None and hasattr(FLAT, 'disposeShadowMaps'):
+            #
+            # Only when the outgoing pass belongs to the context that is
+            # current: its FBOs and textures die with their own context, and
+            # deleting names that mean something else here would take this
+            # context's objects instead.
+            if same_context and FLAT is not None and hasattr(FLAT, 'disposeShadowMaps'):
                 try:
                     FLAT.disposeShadowMaps()
                 except Exception as err:
@@ -80,6 +96,7 @@ class _defaultRenderPasses( object ):
                 log.info( 'Using compatibility profile' )
                 from OpenGLContext.passes.flatcompat import FlatPass
             FLAT = FlatPass( sg, context.allContexts )
+            FLAT_CONTEXT = gl_context
             if sg is None:
                 FLAT.integrate( context.renderedChildren()[0] )
         if context.contextDefinition.profile == 'core':

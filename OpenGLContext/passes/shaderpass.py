@@ -458,10 +458,12 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self.unlit_program = self._compile_one(
             'unlit', 'vrml97_unlit.vert', 'vrml97_unlit.frag')
         # shadow_frag: the vertex-colour shader now #includes _shadow_inc, so it
-        # needs the MAX_SHADOW_LIGHTS defines baked in like the lit program (2a).
+        # needs the MAX_SHADOW_LIGHTS defines baked in like the lit program (2a)
+        # -- and validate=False for the same reason the lit program has it,
+        # since it now declares the same differently-targeted shadow samplers.
         self.vertex_color_program = self._compile_one(
             'vertex_color', 'vrml97_vertex_color.vert', 'vrml97_vertex_color.frag',
-            shadow_frag=True)
+            validate=False, shadow_frag=True)
         self.point_program = self._compile_one(
             'point', 'vrml97_point.vert', 'vrml97_point.frag')
         self.line_program = self._compile_one(
@@ -475,14 +477,21 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         if self._ok:
             # Assign shadow samplers to distinct texture units immediately, even
             # when shadows are disabled: the 2D-array and cube shadow samplers
-            # are active in the lit program and must not alias unit 0 (a 2D
-            # target) or every draw fails with GL_INVALID_OPERATION.
+            # are active in every program that includes the shadow code, and
+            # must not alias unit 0 (a 2D target) or every draw fails with
+            # GL_INVALID_OPERATION.  Every shadow receiver, not just the lit
+            # program: the vertex-colour one includes the same samplers, and
+            # otherwise only gets its units when shadows are switched on.
             try:
-                self._bind_program(self.program)
-                self.init_shadow_samplers()
-                self._bind_program(0)
+                for prog in self.shadow_receiver_programs():
+                    self._shadow_program = prog
+                    self._bind_program(prog)
+                    self.init_shadow_samplers()
             except Exception as err:
                 log.error("Shadow sampler init failed: %s", err)
+            finally:
+                self._shadow_program = None
+                self._bind_program(0)
             log.info("VRML97 shader programs compiled (lit ok; "
                      "unlit=%s vc=%s point=%s line=%s depth=%s)",
                      self.unlit_program is not None,
@@ -978,16 +987,39 @@ class ShaderRenderMode:
         return getattr(self._base_mode, name)
 
 
-# Global shader program instance (lazy initialization)
+# The programs, and the GL context they were compiled in (lazy initialization).
 _shader_program: Optional[VRML97ShaderProgram] = None
+_shader_program_context: Any = None
 
 
 def get_shader_program() -> VRML97ShaderProgram:
-    """Get the global VRML97 shader program, compiling if needed."""
-    global _shader_program
-    if _shader_program is None:
+    """The VRML97 shader programs for the context that is current.
+
+    Per context, not per process: a program is a *name* the context that
+    created it issued, and it means nothing in another one.  A second window
+    handed the first one's programs draws through names its driver never
+    issued -- GL_INVALID_VALUE from glUseProgram where the caller is lucky, and
+    some other object's name where it is not.  Recompiling is the cost of the
+    first frame in a context, which is where a shader compile belongs.
+
+    The same keying as the text renderers (``shadertext``) and the shadow
+    capabilities (``shadowcaps``), for the same reason.
+    """
+    global _shader_program, _shader_program_context
+    context = gl_context_key()
+    if _shader_program is None or context != _shader_program_context:
         _shader_program = VRML97ShaderProgram()
+        _shader_program_context = context
     return _shader_program
+
+
+def gl_context_key() -> Any:
+    """An identifier for the GL context that is current, or None."""
+    try:
+        from OpenGL import contextdata
+        return contextdata.getContext()
+    except Exception:                   # pragma: no cover - no GL at all
+        return None
 
 
 def configure_light_from_node(
