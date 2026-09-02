@@ -16,11 +16,12 @@ faces the camera, so the shading there does not depend on how large the sphere
 is drawn -- only on whether the normal is unit length. Skips (not fails) when
 GL is unavailable.
 """
-import os
 import subprocess
 import sys
 
 import pytest
+
+from OpenGLContext import renderoptions
 
 DRIVER = r'''
 import os, sys
@@ -82,9 +83,15 @@ os._exit(0 if STATE['gl_ok'] else 3)
 
 
 def luminance(scale, profile):
+    # What this measures is a pixel, so the render has to be decided by the
+    # call rather than by whatever the session is carrying: importing
+    # OpenGLContext.bin.view puts the viewer's PBR renderer and its IBL
+    # intensity into os.environ for the rest of the run, and a sphere lit
+    # through the uber-shader with a light probe is not the sphere this reasons
+    # about. The driver pins the rest for itself.
     proc = subprocess.run([sys.executable, '-c', DRIVER, str(scale), profile],
                           capture_output=True, text=True, timeout=120,
-                          env=dict(os.environ))
+                          env=renderoptions.clean_environment())
     if proc.returncode == 3:
         pytest.skip('no usable GL context: %s'
                     % proc.stderr.strip().splitlines()[-1:])
