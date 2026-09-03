@@ -24,6 +24,7 @@ import numpy as np
 import ctypes
 import logging
 
+from OpenGLContext import contextresources
 from OpenGLContext.scenegraph import tessellationlod
 from OpenGLContext.scenegraph.vertexsemantics import (
     LOC_TEXCOORD, LOC_NORMAL, LOC_POSITION, LOC_TANGENT,
@@ -310,6 +311,17 @@ class Teapot(nodetypes.Geometry, node.Node):
         glDrawArrays(GL_TRIANGLES, 0, len(array) // FLOATS_PER_VERTEX)
 
     # -- shader / core-profile path ----------------------------------------
+    @classmethod
+    def drop_buffers(cls):
+        """Forget the vertex arrays belonging to the context now current.
+
+        Their names die with it, and the next context the driver hands the same
+        address would otherwise be given them to draw through.
+        """
+        context = cls._gl_context()
+        for key in [key for key in cls._buffers if key[0] == context]:
+            del cls._buffers[key]
+
     @staticmethod
     def _gl_context():
         """An identifier for the GL context that is current, or None."""
@@ -497,3 +509,6 @@ class Teapot(nodetypes.Geometry, node.Node):
                 size=[self.size * 3.0, self.size * 1.6, self.size * 2.0])
         return boundingvolume.cacheVolume(
             self, box, ((self, 'size'), (self, 'steps')))
+
+
+contextresources.on_context_lost(Teapot.drop_buffers)

@@ -84,3 +84,47 @@ def test_dropping_the_owner_unbinds_without_an_explicit_deregister(manager):
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestDeregisteringSeveralAtOnce:
+    """Every handler on one key comes off, however many there are.
+
+    Two live contexts binding the same key put two receivers on one
+    (sender, signal) slot, and the removal walked them with a generator over
+    the very list it was disconnecting from -- so disconnecting the first
+    shifted the second into its place, the walk stepped past it, and the
+    assertion that follows found a handler still registered. It fired as
+    "Event callback de-registration failed", nowhere near the second context
+    that caused it, and only when two happened to be alive at once.
+    """
+
+    def receivers(self, manager, key='k'):
+        from pydispatch import dispatcher
+
+        return dispatcher.getReceivers(sender=None, signal=(manager.type, 0, key))
+
+    def test_two_handlers_on_one_key_both_come_off(self, manager):
+        from pydispatch import dispatcher
+
+        first, second = Recorder(), Recorder()
+        signal = (manager.type, 0, 'k')
+        # Connected directly: registerCallback deregisters before it registers,
+        # so its own path never leaves two in place to be walked.
+        dispatcher.connect(first.handle, sender=None, signal=signal)
+        dispatcher.connect(second.handle, sender=None, signal=signal)
+        assert len(self.receivers(manager)) == 2
+
+        manager._removeCurrentCallbacks('k')
+        assert len(self.receivers(manager)) == 0
+
+    def test_a_handful_on_one_key_all_come_off(self, manager):
+        from pydispatch import dispatcher
+
+        signal = (manager.type, 0, 'k')
+        held = [Recorder() for _ in range(5)]
+        for recorder in held:
+            dispatcher.connect(recorder.handle, sender=None, signal=signal)
+        assert len(self.receivers(manager)) == 5
+
+        manager._removeCurrentCallbacks('k')
+        assert len(self.receivers(manager)) == 0

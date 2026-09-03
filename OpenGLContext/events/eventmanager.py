@@ -138,12 +138,21 @@ class EventManager(object):
         """
         metaKey = (cls.type,capture,key)
         # remove all current watchers...
-        receivers = dispatcher.liveReceivers(
+        #
+        # Settled into a list before any of them is disconnected.  getReceivers
+        # hands back the connection table's own list and liveReceivers walks it
+        # lazily, so disconnecting from inside the walk shortens the list under
+        # it: with two handlers on one key the second slides into the first's
+        # place, the walk steps past it, and the check below finds a handler
+        # still registered.  Two live contexts binding the same key is all it
+        # takes -- which is why it showed up as an occasional failure a long
+        # way from the second context that caused it.
+        receivers = list(dispatcher.liveReceivers(
             dispatcher.getReceivers(
                 sender=node,
                 signal=metaKey,
             )
-        )
+        ))
         receiver = None
         for receiver in receivers:
             if __debug__:
