@@ -27,9 +27,34 @@ def _base_env(monkeypatch, **extra):
     monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'pbr')
     monkeypatch.setenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
     monkeypatch.setenv('OPENGLCONTEXT_NO_VSYNC', '1')
+    # Pinned, not left on auto.  Image-based lighting starts at the mode the
+    # GPU supports and degrades when the recent frame rate sags, so a test that
+    # renders a handful of frames -- reporting almost no frame rate yet -- drops
+    # to 'analytic', while the same test after a warmed-up neighbour sometimes
+    # does not.  That is a coin toss on the picture every measured render then
+    # judges.  'analytic' is what these renders have always effectively had, so
+    # pinning it changes no assertion and removes the toss.
+    monkeypatch.setenv('OPENGLCONTEXT_IBL', 'analytic')
     monkeypatch.setenv('PYOPENGL_PLATFORM', 'egl')
     for k, v in extra.items():
         monkeypatch.setenv(k, str(v))
+
+
+def test_the_render_environment_does_not_adapt(monkeypatch):
+    """A render that gets measured must not depend on how fast the machine is.
+
+    Image-based lighting degrades and climbs back with the frame rate unless
+    something pins it, so a test that renders and then counts pixels sees a
+    different picture depending on what ran before it and how busy the GPU was
+    by the time it started.  That is why a capture pins it, and a measured
+    render is a capture in every respect that matters.  The shadow cascades are
+    pinned here for the same reason.
+    """
+    from OpenGLContext.passes import ibl
+
+    _base_env(monkeypatch)
+    assert not ibl.ibl_is_adaptive()
+    assert ibl.resolve_ibl_mode(requested='auto') == 'analytic'
 
 
 def frames_of(render_scene, children, **named):
