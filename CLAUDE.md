@@ -109,6 +109,8 @@ OpenGLContext/
 ├── context.py        # Base context class
 ├── glfwcontext.py, glutcontext.py, pygamecontext.py, wxcontext.py
 │                     # One per backend, plus *interactive*, *vrml*, *testing*
+├── eglcontext.py     # Offscreen: no window, no display server -- docs/offscreen.html
+├── eglvrmlcontext.py # The VRML97-aware form of it
 ├── interactivecontext.py  # Interactive context with mouse/keyboard
 └── testingcontext.py      # Picks the backend's testing context
 ```

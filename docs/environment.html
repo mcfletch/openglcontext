@@ -65,10 +65,13 @@ needs.</p>
   throughout; <code>compatibility</code> gives the fixed-function pipeline. See
   <a href="renderpasses.html">Core-profile rendering</a>.</td></tr>
 <tr><td><code>OPENGLCONTEXT_BACKEND</code></td><td><code>glfw</code>,
-  <code>glut</code>, <code>pygame</code>, <code>wx</code>, <code>qt</code></td>
+  <code>glut</code>, <code>pygame</code>, <code>wx</code>, <code>qt</code>,
+  <code>egl</code></td>
   <td>chosen by availability</td>
   <td>Which GUI toolkit owns the window. <code>qt</code> needs the separate
-  <code>OpenGLContext-qt</code> distribution installed.</td></tr>
+  <code>OpenGLContext-qt</code> distribution installed. <code>egl</code> owns no
+  window at all and renders offscreen, on Linux and Android &mdash; see
+  <a href="offscreen.html">Rendering offscreen</a>.</td></tr>
 <tr><td><code>OPENGLCONTEXT_RENDERER</code></td><td><code>pbr</code></td>
   <td>unset</td>
   <td><code>pbr</code> selects the metallic/roughness renderer. See
@@ -151,6 +154,12 @@ needs.</p>
 <tr><td><code>OPENGLCONTEXT_PICKING</code></td><td>yes/no</td><td>on</td>
   <td>Object-id picking. Off, the selection pass, its object-id buffer and its
   readback are all skipped &mdash; worth it for a program that never picks.</td></tr>
+<tr><td><code>OPENGLCONTEXT_EGL_DEVICE</code></td><td>device index</td>
+  <td>the first hardware device</td>
+  <td>Which EGL device the offscreen context renders on, for a machine with
+  several. <code>OpenGL.EGL.devices</code> lists them. An index out of range is
+  an error rather than a fallback. See
+  <a href="offscreen.html">Rendering offscreen</a>.</td></tr>
 <tr><td><code>OPENGLCONTEXT_PHYSICS</code></td><td>yes/no</td><td>off</td>
   <td>Whether the viewer walks the scene with gravity and collision rather
   than framing it. See <a href="physics.html">Physics</a>.</td></tr>

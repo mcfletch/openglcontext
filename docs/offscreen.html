@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Rendering offscreen &mdash; a GL context with no window</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Rendering offscreen</h1>
+</header>
+
+<section>
+<p class="introduction">A build machine has no screen, a rendering service has no
+user, and a batch job that turns ten thousand models into ten thousand
+thumbnails has no reason to open a window for any of them.
+<code>OpenGLContext.eglcontext.EGLContext</code> renders without one: it takes a
+GPU directly, draws, and gives the pixels back.</p>
+
+<h2>A context like any other</h2>
+
+<p>It is an ordinary context, so the scenegraph, the render passes, the caches,
+the screenshot machinery and the event model all work unchanged:</p>
+
+<pre><code>from OpenGL.GL import GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor
+from OpenGLContext.eglcontext import EGLContext
+
+class Offscreen(EGLContext):
+    def Render(self, mode=None):
+        EGLContext.Render(self, mode)
+        glClearColor(0.2, 0.3, 0.3, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+Offscreen.ContextMainLoop(size=(640, 480))
+</code></pre>
+
+<p><code>MainLoop</code> renders <code>frameCount</code> frames (one by default)
+and returns, rather than waiting for a user who is not there. An animation being
+rendered frame by frame sets it higher. The context is also a context manager,
+which is usually what a script wants:</p>
+
+<pre><code>with Offscreen(size=(640, 480)) as context:
+    context.OnDraw(force=1)
+    pixels = glReadPixels(0, 0, 640, 480, GL_RGB, GL_UNSIGNED_BYTE)
+</code></pre>
+
+<p>Selecting it by name works too, so an application that already chooses its
+backend needs no code change:</p>
+
+<pre><code>OPENGLCONTEXT_BACKEND=egl python my_application.py
+</code></pre>
+
+<p>Rendering goes to an EGL pbuffer, which is a real default framebuffer. Every
+pass that draws to framebuffer zero, reads it back or takes a screenshot behaves
+exactly as it does on a window, and nothing has to know it is offscreen. A
+pbuffer has a fixed size, so <code>OnResize</code> builds a replacement and drops
+the old one; the GL context survives, and the textures, buffers and programs in
+it survive with it.</p>
+
+<h2>Where this works</h2>
+
+<p>EGL is the GL binding on Linux and Android, and this backend is for those.
+Windows has no EGL of its own &mdash; an installed ANGLE or Mesa provides one,
+but ANGLE offers GL ES rather than desktop GL, so the
+<code>eglBindAPI(EGL_OPENGL_API)</code> this backend needs fails there. macOS has
+no EGL at all.</p>
+
+<p>For offscreen rendering on those platforms, use a windowing backend with a
+hidden window: <code>OPENGLCONTEXT_HIDDEN=1</code> renders and reads back
+identically, and is what <a href="testing.html">the test suite</a> uses. What a
+hidden window cannot do is run with no display server at all, which is the thing
+this backend is for.</p>
+
+<p>Where EGL is absent, constructing an <code>EGLContext</code> raises
+<code>EGLContextError</code> rather than failing obscurely, so an application can
+try it and fall back.</p>
+
+<h2>Which GPU it renders on</h2>
+
+<p>A machine may offer several EGL devices &mdash; a GPU and a CPU rasteriser, or
+several GPUs. By default the engine renders on the first hardware device.
+<code>OpenGL.EGL.devices</code> reports what is there:</p>
+
+<pre><code>&gt;&gt;&gt; from OpenGL.EGL import devices
+&gt;&gt;&gt; for device in devices.devices():
+...     print(device)
+&lt;DeviceInfo 0 radeonsi (hardware)&gt;
+&lt;DeviceInfo 1 &lt;unnamed driver&gt; (software)&gt;
+</code></pre>
+
+<p>Two things change the choice:</p>
+
+<table>
+<tr><th>Variable</th><th>Effect</th></tr>
+<tr>
+  <td><code>OPENGLCONTEXT_EGL_DEVICE</code></td>
+  <td>An index into that list, which overrides everything else. Use it to pin a
+      run to one GPU of several. An index that is out of range, or not a number,
+      is an error naming the variable rather than a silent fallback.</td>
+</tr>
+<tr>
+  <td><code>LIBGL_ALWAYS_SOFTWARE</code>, <code>GALLIUM_DRIVER</code></td>
+  <td>When the environment asks for software rendering, a software device is
+      chosen.</td>
+</tr>
+</table>
+
+<p>Honouring a request for software rendering is not merely a courtesy. Asking
+Mesa for a display on a <em>hardware</em> device while
+<code>LIBGL_ALWAYS_SOFTWARE</code> demands software is a contradiction it detects,
+warns about, and then segfaults on rather than refusing cleanly. Choosing the
+matching device is what keeps the process alive.</p>
+
+<p>Where no device of the preferred kind exists, the first device is used and a
+warning says so: rendering on the other sort beats not rendering.</p>
+
+<h2>Driving a scene with no one at the keyboard</h2>
+
+<p>An offscreen context is still an interactive one &mdash; it has the camera,
+the event managers and the time manager &mdash; but nothing outside it will ever
+deliver a keystroke or a click. A test that wants to know what happens when the
+user picks an object or walks forward supplies the events itself, through
+<a href="eventmodel.html">the event model</a>'s record vocabulary:</p>
+
+<pre><code>from OpenGLContext.events import synthetic
+
+synthetic.dispatch(context, {'type': 'keyboard', 'key': 'w', 'state': 1})
+context.OnDraw(force=1)
+synthetic.dispatch(context, {'type': 'keyboard', 'key': 'w', 'state': 0})
+
+synthetic.dispatch(context, {
+    'type': 'mousebutton', 'button': 0, 'state': 1,
+    'x': 160, 'y': 120, 'pick': True,
+})
+context.OnDraw(force=1)     # a picked event arrives with the pass
+</code></pre>
+
+<p>That is the same vocabulary a telemetry recording writes and its replay reads,
+and the same one the out-of-process event injector speaks, so a script written
+for one drives the others. The <code>pick</code> flag chooses the route: with it
+the event goes to the selection pass and is delivered once the buffer has
+resolved what is under the cursor, which is what a real click does and which
+needs a render; without it the event goes straight to its manager, reaching
+context-level handlers only, which needs no render at all.</p>
+
+<p>The pick readback is asynchronous by default (<code>pickAsync</code>), so a
+picked event is resolved a frame or so after the draw that scheduled it rather
+than within it.</p>
+
+<h2>Time</h2>
+
+<p>The time manager runs as usual, so <code>TimeSensor</code> and
+<code>Timer</code> drive animation offscreen exactly as they do on screen. A
+bounded run puts the engine's clock on a fixed step
+(<code>OPENGLCONTEXT_CAPTURE_FPS</code>), so a sequence rendered here reaches the
+same point on every machine &mdash; see <a href="environment.html">Environment
+Variables</a>.</p>
+
+</section>
+</body>
+</html>

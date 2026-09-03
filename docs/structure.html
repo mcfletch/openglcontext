@@ -69,6 +69,15 @@ which OpenGLContext imports opportunistically. All of them can request a core
 profile, and all of them can create a compatibility-profile context for the
 fixed-function tutorials and for the display-list-backed font providers.</p>
 
+<p>A sixth backend owns no window at all.
+<a href="offscreen.html"><code>eglcontext.EGLContext</code></a> takes a GPU
+directly through EGL and renders to a pbuffer, which is what a build machine, a
+rendering service or a batch job wants: no display server has to be running. It
+is the one backend that is not available everywhere, because EGL is not &mdash;
+it is a Linux and Android facility, and elsewhere a hidden window
+(<code>OPENGLCONTEXT_HIDDEN=1</code>) is the way to render without one being
+seen.</p>
+
 <p>Code that targets one platform is supported on that platform whether or not
 the machine you are reading this on can run it -- for instance
 <code>scenegraph/text/wglfont.py</code> is Windows font support, and is expected

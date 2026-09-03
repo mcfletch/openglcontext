@@ -65,6 +65,10 @@ ENVIRONMENT: Tuple[str, ...] = (
     # not inherit it -- a comparison against a reference rendered in a window
     # would differ for a reason that has nothing to do with the scene.
     'OPENGLCONTEXT_FULLSCREEN',
+    # Which EGL device the offscreen context renders on.  A capture inheriting
+    # it would be rendered by a different GPU -- or by a CPU rasteriser -- than
+    # the reference it is compared against.
+    'OPENGLCONTEXT_EGL_DEVICE',
     # A session journal names one file for one session, so a child process
     # that inherited the name would overwrite its parent's; and a replay
     # drives the camera, which would make a reference image depend on a

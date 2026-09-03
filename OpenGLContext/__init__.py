@@ -41,14 +41,19 @@ Context( 'pygame', 'OpenGLContext.pygamecontext.PyGameContext' )
 Context( 'wx', 'OpenGLContext.wxcontext.wxContext' )
 Context( 'glut', 'OpenGLContext.glutcontext.GLUTContext' )
 Context( 'glfw', 'OpenGLContext.glfwcontext.GLFWContext' )
+# Offscreen: no window, no display server.  One class fills the interactive slot
+# too, because a context nothing can click on has no separate interactive form.
+Context( 'egl', 'OpenGLContext.eglcontext.EGLContext' )
 InteractiveContext( 'pygame', 'OpenGLContext.pygameinteractivecontext.PygameInteractiveContext' )
 InteractiveContext( 'wx', 'OpenGLContext.wxinteractivecontext.wxInteractiveContext' )
 InteractiveContext( 'glut', 'OpenGLContext.glutinteractivecontext.GLUTInteractiveContext' )
 InteractiveContext( 'glfw', 'OpenGLContext.glfwinteractivecontext.GLFWInteractiveContext' )
+InteractiveContext( 'egl', 'OpenGLContext.eglcontext.EGLContext' )
 VRMLContext( 'pygame', 'OpenGLContext.pygamevrmlcontext.VRMLContext' )
 VRMLContext( 'wx', 'OpenGLContext.wxvrmlcontext.VRMLContext' )
 VRMLContext( 'glut', 'OpenGLContext.glutvrmlcontext.VRMLContext' )
 VRMLContext( 'glfw', 'OpenGLContext.glfwvrmlcontext.VRMLContext' )
+VRMLContext( 'egl', 'OpenGLContext.eglvrmlcontext.VRMLContext' )
 
 # Imported for its side effect: the package registers the Qt backend with the
 # registries above as it loads.  Absent unless the separate OpenGLContext-qt

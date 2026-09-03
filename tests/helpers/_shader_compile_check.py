@@ -1,17 +1,17 @@
 """Compile/link every reviewed PBR/IBL/shadow shader in a real GL context.
 
-Run as a subprocess by tests/test_shader_includes.py so a driver-level compile
-failure (a broken #include splice, a bad uniform, an over-budget sampler set)
-is caught the same way the shipping passes would hit it. Creates a surfaceless
-EGL context on an EGL device (headless / CI friendly; see the project memory
-"headless-gl-validation").
+Run as a subprocess by tests/unit/test_shader_includes.py so a driver-level
+compile failure (a broken #include splice, a bad uniform, an over-budget sampler
+set) is caught the same way the shipping passes would hit it.  The context is
+:class:`OpenGLContext.eglcontext.EGLContext`, the engine's offscreen backend, so
+this needs no display and picks its EGL device by the same rules a shipped
+application would.
 
 Exit codes: 0 = all programs compiled/linked, 77 = no GL context (skip),
 1 = at least one program failed (details on stdout).
 """
 import os
 import sys
-import ctypes
 
 os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
 
@@ -22,53 +22,24 @@ SKIP = 77
 
 
 def _make_context():
-    """Surfaceless EGL context on the first EGL device, or None if unavailable."""
+    """The engine's offscreen context, or None where EGL cannot provide one."""
     try:
-        from OpenGL.EGL import (
-            eglInitialize, eglChooseConfig, eglBindAPI, eglCreateContext,
-            eglMakeCurrent, EGL_OPENGL_API, EGL_NO_SURFACE, EGL_NO_CONTEXT,
-            EGL_PBUFFER_BIT, EGL_SURFACE_TYPE, EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
-            EGL_NONE, EGLConfig, EGLint,
-        )
-        from OpenGL.EGL.EXT.device_base import eglQueryDevicesEXT, EGLDeviceEXT
-        from OpenGL.EGL.EXT.platform_device import EGL_PLATFORM_DEVICE_EXT
-        from OpenGL.EGL.EXT.platform_base import eglGetPlatformDisplayEXT
-    except Exception as err:  # EGL not present in this PyOpenGL build
-        print("EGL import failed:", err)
+        from OpenGLContext.eglcontext import EGLContext, EGLContextError
+    except ImportError as err:
+        print("EGL context unavailable:", err)
         return None
     try:
-        devices = (EGLDeviceEXT * 8)()
-        num = EGLint()
-        eglQueryDevicesEXT(8, devices, ctypes.byref(num))
-        for i in range(num.value):
-            dpy = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, devices[i], None)
-            if not dpy:
-                continue
-            if not eglInitialize(dpy, None, None):
-                continue
-            attrs = (EGLint * 7)(
-                EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
-                EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
-                EGL_NONE, 0, 0,
-            )
-            cfg = (EGLConfig * 1)()
-            n = EGLint()
-            eglChooseConfig(dpy, attrs, cfg, 1, ctypes.byref(n))
-            if not n.value:
-                continue
-            eglBindAPI(EGL_OPENGL_API)
-            ctx = eglCreateContext(dpy, cfg[0], EGL_NO_CONTEXT, None)
-            if not ctx:
-                continue
-            if eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, ctx):
-                return dpy
-    except Exception as err:
+        context = EGLContext(size=(64, 64))
+    except EGLContextError as err:
         print("EGL context creation failed:", err)
-    return None
+        return None
+    context.setCurrent()
+    return context
 
 
 def main():
-    if _make_context() is None:
+    context = _make_context()
+    if context is None:
         print("no headless GL context available")
         return SKIP
 
@@ -125,6 +96,9 @@ def main():
         else:
             print("FAIL tripwire: wrong error\n", str(err)[:400])
             fails.append("tripwire")
+
+    context.unsetCurrent()
+    context.close()
 
     if fails:
         print("\nFAILED:", ", ".join(fails))
