@@ -69,6 +69,8 @@ from OpenGL._bytes import as_str
 from OpenGLContext.loaders import base, loader
 from OpenGLContext.scenegraph import basenodes
 import urllib.parse
+
+from OpenGLContext.loaders.loader import join_reference
 from hashlib import md5
 
 
@@ -287,7 +289,7 @@ class OBJHandler(base.BaseHandler):
                         img_url = [values[1], values[1].split("/")[-1]]
                     else:
                         img_url = [values[1]]
-                    img_url = [urllib.parse.urljoin(baseURL, u) for u in img_url]
+                    img_url = [join_reference(baseURL, u) for u in img_url]
                     texture = basenodes.ImageTexture(url=img_url)
                     material.texture = texture
             except Exception as err:

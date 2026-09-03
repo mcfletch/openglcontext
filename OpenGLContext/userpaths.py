@@ -116,7 +116,11 @@ def _xdguserdir(name: str) -> str:
             continue
         value = value.strip().strip('"').strip("'")
         if value.startswith('$HOME'):
-            value = _homedirectory() + value[len('$HOME'):]
+            # Joined rather than concatenated: the file writes the separator
+            # this format uses, and what comes back is a path on this machine.
+            rest = value[len('$HOME'):].lstrip('/')
+            value = os.path.join(_homedirectory(), *rest.split('/')) if rest \
+                else _homedirectory()
         return value
     return ''
 

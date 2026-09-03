@@ -35,6 +35,18 @@ import logging
 log = logging.getLogger(__name__)
 
 
+def url_scheme(url):
+    """The scheme of ``url``, or ``''`` where it is a filesystem path.
+
+    ``urlsplit`` reads the drive letter of a Windows path as a scheme --
+    ``C:\\scenes\\room.wrl`` comes back as the scheme ``c`` -- and every
+    absolute path on that platform is written that way. No registered URL
+    scheme is a single character, so a one-character scheme is a drive letter.
+    """
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    return "" if len(scheme) < 2 else scheme
+
+
 def local_path(url):
     """Filesystem path for a local (no-scheme or ``file://``) URL.
 
@@ -42,12 +54,38 @@ def local_path(url):
     every part of the system that is handed one -- a scene's ``baseURI``, a
     texture, a skin's artwork.
     """
+    if url_scheme(url) == "file":
+        return url2pathname(urllib.parse.urlsplit(url).path)
+    if os.path.splitdrive(url)[0]:
+        # A path with a drive on it is a path, and splitting it as a URL would
+        # take the drive off. splitdrive answers '' on platforms with no drives,
+        # so this is the Windows case and nothing else.
+        return url
     parts = urllib.parse.urlsplit(url)
-    if parts.scheme == "file":
-        return url2pathname(parts.path)
     # plain path (possibly percent-encoded); keep the raw string when there is no
     # path component so relative paths survive unchanged.
     return url2pathname(parts.path) if parts.path else url
+
+
+def join_reference(baseURL, ref):
+    """Resolve a document's reference against where the document itself is.
+
+    ``urljoin`` resolves a reference against a *URL*, and a filesystem path is
+    not one: an absolute Windows path parses as a one-character scheme, and
+    urljoin hands the reference straight back unresolved -- so a model opened by
+    absolute path would find none of its textures.
+
+    The result is separated by ``/``, which every platform reads as a path and
+    which a URL needs.
+    """
+    if url_scheme(baseURL):
+        return urllib.parse.urljoin(baseURL, ref)
+    if url_scheme(ref) or os.path.isabs(ref) or ref.startswith("/"):
+        return ref
+    directory = os.path.dirname(local_path(baseURL))
+    if not directory:
+        return ref
+    return "%s/%s" % (directory.replace(os.sep, "/").rstrip("/"), ref)
 
 
 def _resolver_for(baseURL, max_bytes=DEFAULT_MAX_RESOURCE_BYTES):
@@ -57,7 +95,7 @@ def _resolver_for(baseURL, max_bytes=DEFAULT_MAX_RESOURCE_BYTES):
     resolver confined to the base file's directory. Raises ``IOError`` for a base
     whose scheme we cannot resolve references against.
     """
-    scheme = urllib.parse.urlsplit(baseURL).scheme.lower()
+    scheme = url_scheme(baseURL)
     if scheme in _ALLOWED_URL_SCHEMES:
         return Resolver(base_url=baseURL, max_resource_bytes=max_bytes)
     if scheme in ("", "file"):
@@ -157,7 +195,7 @@ class _Loader(object):
             name = "OpenGLContext.resources.%s" % (module,)
             module = __import__(name, {}, {}, name.split("."))
             return (url, BytesIO(as_8_bit(module.data)), module.source, None)
-        scheme = urllib.parse.urlsplit(url).scheme.lower()
+        scheme = url_scheme(url)
         if scheme in _ALLOWED_URL_SCHEMES:
             log.debug("download: %s", url)
             data = _fetch_url(url)

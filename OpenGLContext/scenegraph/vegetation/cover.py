@@ -26,7 +26,10 @@ same figure to each instance.
 """
 from __future__ import annotations
 
-import os
+# posixpath, not os.path: these join a reference rather than open a file,
+# and a baked world is as likely to be served over http as read off disk.
+# Forward slashes are a path on every platform and a URL as well.
+import posixpath
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence
 
@@ -99,9 +102,9 @@ class CoverSpecies:
     def beside(self, directory: str) -> 'CoverSpecies':
         """The same species with its files resolved against ``directory``."""
         return replace(
-            self, card=os.path.join(directory, self.card),
+            self, card=posixpath.join(directory, self.card),
             clump=(None if not self.clump
-                   else os.path.join(directory, self.clump)))
+                   else posixpath.join(directory, self.clump)))
 
     def to_json(self) -> dict:
         """This species as a baked world carries it."""

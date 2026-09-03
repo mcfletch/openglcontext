@@ -10,6 +10,13 @@ dependencies (:data:`OpenGLContext.packaging.SYSTEM_LIBRARIES`).
 
     oglc-deb --project . --runtime cpython-3.12-x86_64-linux-gnu.tar.gz
 
+The tree handed to :func:`write_deb` states its own file modes, and the archive
+records what the tree says: a program is a file with its execute bit set. A
+filesystem with no execute bit -- Windows -- therefore cannot state which of the
+staged files are programs, and a package built there installs them unexecutable.
+Paths inside the package are separated by ``/`` whatever the build host uses.
+
+
 The runtime is a *relocatable* build -- one that finds its own standard library
 beside itself rather than at a path compiled into it, such as the
 python-build-standalone distributions ``uv python install`` fetches. That is
@@ -216,12 +223,18 @@ def control_paragraph(fields):
 
 
 def _files(root):
-    """Every regular file and symlink in *root*, as sorted relative paths"""
+    """Every regular file and symlink in *root*, as sorted relative paths
+
+    Separated by ``/`` whatever the build host separates paths with: these name
+    files inside the package, which dpkg reads on the machine the package is
+    installed on.
+    """
     found = []
     for directory, dirnames, filenames in os.walk(root):
         dirnames.sort()
         for name in sorted(filenames):
-            found.append(os.path.relpath(os.path.join(directory, name), root))
+            relative = os.path.relpath(os.path.join(directory, name), root)
+            found.append(relative.replace(os.sep, '/'))
     return sorted(found)
 
 

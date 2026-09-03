@@ -7,10 +7,28 @@ import pytest
 from OpenGLContext.packaging import appdir
 
 
+def _can_symlink(tmp_path):
+    """Whether this account may create a symlink here.
+
+    A staged environment has one, so the fixture cannot be built without it.
+    Windows grants the privilege only to an administrator or with Developer
+    Mode on, and asking is the only way to find out.
+    """
+    probe = tmp_path / 'symlink-probe'
+    try:
+        os.symlink(str(tmp_path), str(probe))
+    except (OSError, NotImplementedError, AttributeError):
+        return False
+    os.remove(str(probe))
+    return True
+
+
 class TestRelocation:
     """A tree built in one directory has to run from another."""
 
     def _staged(self, tmp_path):
+        if not _can_symlink(tmp_path):
+            pytest.skip('this account may not create symlinks')
         stage = tmp_path / 'stage'
         venv = stage / 'opt' / 'game' / 'venv'
         (venv / 'bin').mkdir(parents=True)

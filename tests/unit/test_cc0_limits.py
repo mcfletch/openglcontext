@@ -77,8 +77,12 @@ class TestTheCacheLocation:
         monkeypatch.setattr(userpaths, "appdatadirectory", lambda: str(tmp_path))
         assert cc0.cache_dir() == str(tmp_path / "OpenGLContext" / "cc0")
 
-    def test_the_cache_is_not_readable_by_other_accounts(self, tmp_path, monkeypatch):
+    def test_the_cache_is_not_readable_by_other_accounts(self, tmp_path, monkeypatch,
+                                                         posix_modes):
         import os
+
+        if not posix_modes:
+            pytest.skip('this filesystem does not enforce POSIX directory modes')
         from OpenGLContext import userpaths
         monkeypatch.setattr(userpaths, "appdatadirectory", lambda: str(tmp_path))
         created = cc0.cache_dir()

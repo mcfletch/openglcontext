@@ -175,8 +175,11 @@ class TestSavingIsAllOrNothing:
             bindingstore.save_bindings(navigation, path)
         assert list(tmp_path.iterdir()) == []
 
-    def test_the_directory_is_the_users_own(self, navigation, tmp_path):
+    def test_the_directory_is_the_users_own(self, navigation, tmp_path, posix_modes):
         import stat
+
+        if not posix_modes:
+            pytest.skip('this filesystem does not enforce POSIX directory modes')
         directory = tmp_path / 'appdata'
         bindingstore.save_bindings(navigation, str(directory / 'keys.json'))
         mode = stat.S_IMODE(directory.stat().st_mode)

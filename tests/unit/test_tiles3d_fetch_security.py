@@ -149,7 +149,10 @@ class _FakeResponse:
 class TestTheCacheTheTilesRuntimeUses:
     """The tile cache is the resolver's, with the guarantees that carries."""
 
-    def test_the_cache_directory_is_not_world_readable(self, tmp_path, monkeypatch):
+    def test_the_cache_directory_is_not_world_readable(self, tmp_path, monkeypatch,
+                                                       posix_modes):
+        if not posix_modes:
+            pytest.skip('this filesystem does not enforce POSIX directory modes')
         # Another account must not be able to pre-seed a tile this user loads.
         monkeypatch.setattr(resolver, "_urlopen_same_origin",
                             lambda url, base, timeout=30: _FakeResponse(b"glb"))

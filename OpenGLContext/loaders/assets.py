@@ -63,8 +63,13 @@ class AssetLibrary(object):
         return 'AssetLibrary(%r)' % (self.root,)
 
     def path_for(self, relative: str) -> str:
-        """Where a table's model name actually is on disk."""
-        return os.path.join(self.root, relative)
+        """Where a table's model name actually is on disk.
+
+        A table names its models the way a reference is written, with ``/``
+        between the parts; this is a path on the filesystem holding them, so the
+        parts are rejoined with whatever separates a path here.
+        """
+        return os.path.join(self.root, *relative.split('/'))
 
     def load(self, relative: str) -> Optional[Any]:
         """Read one model and hand back a scene nobody else holds, or None.

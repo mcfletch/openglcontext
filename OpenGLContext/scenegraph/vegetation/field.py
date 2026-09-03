@@ -122,14 +122,19 @@ class TreeSpecies:
                 'b_keys': tuple(self.foliage), 'b_tex': self.foliage_texture}
 
     def beside(self, directory: str) -> 'TreeSpecies':
-        """The same species with its files resolved against ``directory``."""
-        import os
+        """The same species with its files resolved against ``directory``.
+
+        posixpath, not os.path: this joins a reference rather than opening a
+        file, and a baked world is as likely to be served over http as read
+        off disk. Forward slashes are a path on every platform and a URL too.
+        """
+        import posixpath
         return replace(
             self,
-            mesh=os.path.join(directory, self.mesh),
-            solid_texture=os.path.join(directory, self.solid_texture),
-            foliage_texture=os.path.join(directory, self.foliage_texture),
-            impostor=os.path.join(directory, self.impostor))
+            mesh=posixpath.join(directory, self.mesh),
+            solid_texture=posixpath.join(directory, self.solid_texture),
+            foliage_texture=posixpath.join(directory, self.foliage_texture),
+            impostor=posixpath.join(directory, self.impostor))
 
     def to_json(self) -> dict:
         """This species as a baked world carries it."""

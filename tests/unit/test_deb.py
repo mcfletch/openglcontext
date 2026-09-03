@@ -12,6 +12,22 @@ import pytest
 from OpenGLContext.packaging import deb
 
 
+def _records_execute_bit(tmp_path):
+    """Whether this filesystem keeps the execute bit a chmod asks for.
+
+    A package's programs are executable, and the builder reads that from the
+    tree it was handed. Windows has no execute bit to read, so a tree staged
+    there cannot state which of its files are programs -- see the note in
+    OpenGLContext/packaging/deb.py.
+    """
+    probe = tmp_path / 'execute-probe'
+    probe.write_text('#!/bin/sh')
+    os.chmod(str(probe), 0o755)
+    recorded = os.stat(str(probe)).st_mode & 0o111
+    os.remove(str(probe))
+    return bool(recorded)
+
+
 class TestVersions:
     """PEP 440 is not Debian's ordering, and a pre-release has to sort first."""
 
@@ -158,6 +174,8 @@ class TestArchive:
             entry = tar.getmember('./usr/games/drive')
             assert (entry.uid, entry.gid) == (0, 0)
             assert (entry.uname, entry.gname) == ('root', 'root')
+            if not _records_execute_bit(tmp_path):
+                pytest.skip('this filesystem does not record an execute bit')
             assert entry.mode == 0o755
 
     def test_dpkg_reads_back_what_was_written(self, tmp_path):
