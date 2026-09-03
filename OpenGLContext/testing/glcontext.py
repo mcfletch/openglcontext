@@ -92,6 +92,11 @@ def _apply_hints(glfw: Any, profile: str, version: Sequence[int],
         raise ValueError('profile must be one of %r, not %r' % (PROFILES, profile))
     glfw.default_window_hints()
     glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
+    # Undecorated as well as unmapped, because a caption bar carries a minimum
+    # width: Windows widens a decorated 96px window to fit the system menu and
+    # the close button, and the framebuffer -- what a capture reads back -- comes
+    # back wider than the size asked for.  Nothing shows this window a frame.
+    glfw.window_hint(glfw.DECORATED, glfw.FALSE)
     if profile != 'any':
         major, minor = version
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, major)
@@ -276,6 +281,13 @@ def hidden_window(title: str = 'OpenGLContext test',
     ``'core'`` one is regardless; and ``hints`` is any further ``{GLFW hint
     name: value}`` a caller needs -- for example ``{'ALPHA_BITS': 0}`` for a
     window whose readback should have no alpha.
+
+    A hint naming part of the framebuffer's format -- ``ALPHA_BITS``,
+    ``DEPTH_BITS``, ``SAMPLES`` -- is a request rather than a requirement: the
+    driver answers with the nearest pixel format it offers. Asking for
+    ``{'ALPHA_BITS': 0}`` gets a colour buffer with eight bits of alpha on a
+    desktop that offers no alpha-less format, so a caller that needs to know
+    what it got should ask the framebuffer rather than assume.
 
     Yields the GLFW window handle, or an :class:`OffscreenWindow` where the
     context came from CGL; :func:`framebuffer_size` reads the size of either.

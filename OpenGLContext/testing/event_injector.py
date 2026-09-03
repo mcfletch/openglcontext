@@ -1,8 +1,20 @@
 """Event injection for automated interactive testing.
 
 This module provides IPC-based event injection for testing interactive
-OpenGLContext applications. Events are sent as JSON messages over
-Unix sockets or stdin.
+OpenGLContext applications. Events are sent as JSON messages over a socket or
+stdin.
+
+Both ends name one path -- ``--event-socket`` on the application, the same
+string to :class:`EventSender` -- and the transport underneath it is whichever
+the platform has. Where there are Unix domain sockets the path is the socket;
+where there are not, the listener takes a loopback TCP port and writes the
+number into a file at that path for the sender to read. The stdin transport
+needs ``fcntl`` and so is POSIX-only.
+
+The loopback port reaches no further than the machine, but it carries no
+filesystem permissions the way a Unix socket does: while an application is
+listening, any process on the same machine can drive it. This is test
+machinery, and what it drives is a program under test.
 
 Usage in test scripts:
     class MyTestContext(EventInjectionMixin, BaseContext):
@@ -23,7 +35,6 @@ From test code:
 """
 
 import argparse
-import fcntl
 import json
 import logging
 import os
@@ -34,6 +45,61 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from OpenGLContext.events import synthetic
 from OpenGLContext.testing.process_exit import flush_and_exit
+
+try:
+    import fcntl
+except ImportError:
+    # POSIX-only, and wanted by one method: making stdin non-blocking.  The
+    # socket transport does not need it, and neither does importing this
+    # module -- which the pytest plugin does, so letting the ImportError out
+    # would take every test on the platform with it.
+    fcntl = None
+
+#: Unix domain sockets carry the event stream where there are any.  Windows has
+#: had them since 1803, but CPython does not expose AF_UNIX there, so on that
+#: platform the stream goes over a loopback TCP connection instead.
+HAVE_UNIX_SOCKETS = hasattr(socket, 'AF_UNIX')
+
+#: The loopback transport's rendezvous: the listener binds port 0, lets the
+#: kernel choose, and writes the number it got into the file the caller named.
+#: The caller therefore still names one path and nothing above here has to know
+#: which transport it got.
+LOOPBACK_HOST = '127.0.0.1'
+
+
+def _stream_socket() -> socket.socket:
+    """A stream socket of whichever family carries events on this platform."""
+    family = socket.AF_UNIX if HAVE_UNIX_SOCKETS else socket.AF_INET
+    return socket.socket(family, socket.SOCK_STREAM)
+
+
+def _bind_listener(sock: socket.socket, path: str) -> None:
+    """Bind *sock* so that a sender naming *path* can reach it."""
+    if HAVE_UNIX_SOCKETS:
+        sock.bind(path)
+        return
+    sock.bind((LOOPBACK_HOST, 0))
+    port = sock.getsockname()[1]
+    # Written whole and moved into place, so a sender that finds the file never
+    # reads half a number: it polls for the file's existence to know we are up.
+    temporary = path + '.partial'
+    with open(temporary, 'w', encoding='ascii') as handle:
+        handle.write('%d\n' % (port,))
+    os.replace(temporary, path)
+
+
+def _sender_address(path: str):
+    """Where a sender should connect to reach the listener named by *path*.
+
+    Raises :class:`FileNotFoundError` while the listener has yet to publish
+    itself, which is the same signal an unbound Unix socket path gives and is
+    what the connect loop already waits on.
+    """
+    if HAVE_UNIX_SOCKETS:
+        return path
+    with open(path, encoding='ascii') as handle:
+        return (LOOPBACK_HOST, int(handle.read().strip()))
+
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +117,8 @@ class EventInjector:
 
         Args:
             context: The OpenGLContext instance to dispatch events to
-            socket_path: Path for Unix domain socket (mutually exclusive with use_stdin)
+            socket_path: Rendezvous path for the socket transport (mutually
+                exclusive with use_stdin)
             use_stdin: Read events from stdin instead of socket
         """
         self.context = context
@@ -68,21 +135,28 @@ class EventInjector:
             self._setup_stdin()
 
     def _setup_socket(self, path: str) -> None:
-        """Set up Unix domain socket listener."""
-        # Remove existing socket file if present
+        """Set up the listener a sender naming *path* can reach."""
+        # Remove whatever a previous run left at the path -- a socket node, or
+        # the published port of a listener that is gone.
         try:
             os.unlink(path)
         except OSError:
             pass
 
-        self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._socket.bind(path)
+        self._socket = _stream_socket()
+        _bind_listener(self._socket, path)
         self._socket.listen(1)
         self._socket.setblocking(False)
         self._conn = None
 
     def _setup_stdin(self) -> None:
         """Set up non-blocking stdin reading."""
+        if fcntl is None:
+            raise RuntimeError(
+                'stdin event injection needs fcntl, which this platform does '
+                'not have; give --event-socket a path to use the socket '
+                'transport instead'
+            )
         # Make stdin non-blocking
         fd = sys.stdin.fileno()
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
@@ -344,10 +418,11 @@ class EventInjectionMixin:
 
 
 class EventSender:
-    """Sends events to a test subprocess via Unix socket.
+    """Sends events to a test subprocess over the injection socket.
 
     Use this class from test code to send events to a running
-    OpenGLContext application.
+    OpenGLContext application. The path given here is the one the application
+    was started with; which transport carries it is settled per platform.
 
     Example:
         sender = EventSender('/tmp/test.sock')
@@ -362,7 +437,7 @@ class EventSender:
         """Initialize the sender.
 
         Args:
-            socket_path: Path to the Unix domain socket
+            socket_path: The path the application was given as --event-socket
         """
         self.socket_path = socket_path
         self._socket: Optional[socket.socket] = None
@@ -376,15 +451,24 @@ class EventSender:
         Returns:
             True if connected, False otherwise
         """
-        self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         start = time.time()
 
         while time.time() - start < timeout:
+            # A fresh socket per attempt: a stream socket whose connect() was
+            # refused cannot be connected again, so retrying on the same one
+            # would fail for a reason that has nothing to do with the listener.
+            attempt = _stream_socket()
             try:
-                self._socket.connect(self.socket_path)
-                return True
-            except (FileNotFoundError, ConnectionRefusedError):
+                attempt.connect(_sender_address(self.socket_path))
+            except (OSError, ValueError):
+                # OSError: the listener has not published itself yet, or has
+                # published and is not yet accepting.  ValueError: the port file
+                # was caught mid-write.  Both mean "not up yet, try again".
+                attempt.close()
                 time.sleep(0.05)  # 50ms between attempts
+            else:
+                self._socket = attempt
+                return True
 
         return False
 

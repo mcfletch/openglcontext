@@ -277,10 +277,16 @@ class GLFWContext(
         # to-back capture subprocesses stall each other's SwapBuffers; a hidden
         # window renders + glReadPixels the same but never maps, so captures don't
         # contend. Pair with OPENGLCONTEXT_NO_VSYNC=1 (swap_interval 0).
+        # It is also undecorated, because a caption bar carries a minimum width:
+        # Windows widens a decorated window narrower than the system menu and the
+        # close button, and a capture then reads back a framebuffer wider than the
+        # size that was asked for. Nothing shows a hidden window its decoration.
         from OpenGLContext import renderoptions
         if renderoptions.hidden_window():
             glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
-        
+            glfw.window_hint(glfw.DECORATED, glfw.FALSE)
+
+
         # If on EGL allow for specifying the EGLDisplay
         # only practical on EGL environments...
 

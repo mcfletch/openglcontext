@@ -426,7 +426,14 @@ class GLUTContext(
         if glutLeaveMainLoop:
             glutLeaveMainLoop()
         try:
-            fgDeinitialize(False)
+            # Asked for as a truth value first, exactly as glutLeaveMainLoop is
+            # above: the name being bound says PyOpenGL declares the entry
+            # point, not that the GLUT in front of us exports it. A build that
+            # does not -- and the GLUT most often found on Windows does not --
+            # raises NullFunctionError from the call, which is not a NameError
+            # and so took the whole shutdown with it.
+            if fgDeinitialize:
+                fgDeinitialize(False)
         except NameError:
             # older PyOpenGL without the FreeGLUT deinitialize function
             pass
