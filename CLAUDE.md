@@ -104,6 +104,7 @@ OpenGLContext/
 ├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition
 ├── screenshot.py     # The F2 key every context binds -- docs/structure.html
+├── contextresources.py   # Caches let go of a GL context's names as it dies
 ├── contextdefinition.py  # The fields a context is configured by
 ├── context.py        # Base context class
 ├── glfwcontext.py, glutcontext.py, pygamecontext.py, wxcontext.py
@@ -881,26 +882,24 @@ the same thing without pytest, for a module-scoped fixture or a scratch script,
 and `gl_available()` answers "can this machine render at all" once for the
 process instead of once per test file.
 
-### The known exception: the load-sensitive instancing test
+### The tests that need a quiet machine: `serial`
 
-One test measures against the *clock* rather than against a value, so a machine
-busy with the rest of the suite fails it and the same machine passes it alone:
-
-| Test | Why it is unstable |
-|---|---|
-| `test_instancing_performance.py::test_instancing_is_faster` | Compares wall-clock frame times with instancing on and off. Under load the margin between them closes. |
-
-Running it alone is enough -- it is purely load-sensitive:
+A test that measures against the *clock* rather than against a value passes on
+an idle machine and fails on one busy with the rest of the suite --
+`test_instancing_performance.py` compares wall-clock frame times with instancing
+on and off, and under load the margin between them closes. Those carry the
+`serial` marker, so a full run is two passes:
 
 ```bash
-/workspaces/OpenGL-dev/.venv/bin/python -m pytest tests/unit/test_instancing_performance.py -q
+/workspaces/OpenGL-dev/.venv/bin/python -m pytest tests/unit -q -m "not serial"
+/workspaces/OpenGL-dev/.venv/bin/python -m pytest tests/unit -q -m serial
 ```
 
-It is not fixed, and it has a real fix available: give it a marker that keeps it
-off a busy machine -- the sibling `omi_physics` project solves exactly that with
-a `serial` marker and a documented two-pass run, see its `pyproject.toml`.
+The second pass is short and has the machine to itself, which is the whole of
+what it needs. The sibling `omi_physics` project marks its own timing checks the
+same way, for the same reason.
 
-The exemption is **that one, on that failure mode, only**: every other failure
+The marker is for **a wall-clock margin and nothing else**: every other failure
 in a full run is a real failure to fix.
 
 **The conformance views are no longer among them.** The Parthenon views used to
