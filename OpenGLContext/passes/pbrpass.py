@@ -641,6 +641,13 @@ class PBRShaderProgram(VRML97ShaderProgram):
         the depth maps bind these units for themselves and what they left is not
         this pass's to assume.
         """
+        if not self.program:
+            # Nothing compiled to read these units, so there is nothing to put
+            # on them. The uniform setters already return on a null program;
+            # this is the same rule for the binds and the active-unit reset,
+            # which are GL calls whether or not a texture was found for a
+            # channel.
+            return
         bound = (id(material), self.program)
         if self._boundTextures == bound:
             return

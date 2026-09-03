@@ -50,15 +50,21 @@ TARGETS_BINDING = 5
 MESH_SLOTS_BINDING = 6
 PALETTE_BINDING = 7
 
-REST_BINDING = 8
-CHANNEL_INDEX_BINDING = 9
-CHANNELS_BINDING = 10
-TIMES_BINDING = 11
-VALUES_BINDING = 12
-TRACKS_BINDING = 13
-FIGURE_LAYERS_BINDING = 14
-LAYERS_BINDING = 15
-MASKS_BINDING = 16
+# The pose-blend pass binds its own ten buffers immediately before dispatching,
+# so its indices need only be distinct within that program -- they are numbered
+# from 1 rather than continuing past the other passes' so that the engine asks
+# for ten binding points rather than seventeen. GL_MAX_SHADER_STORAGE_BUFFER_
+# BINDINGS is 16 on drivers that are not generous, and a program declaring one
+# past it fails to compile rather than degrading.
+REST_BINDING = 1
+CHANNEL_INDEX_BINDING = 2
+CHANNELS_BINDING = 3
+TIMES_BINDING = 4
+VALUES_BINDING = 5
+TRACKS_BINDING = 6
+FIGURE_LAYERS_BINDING = 7
+LAYERS_BINDING = 8
+MASKS_BINDING = 9
 
 #: Threads per work group; matches ``local_size_x`` in every shader here.
 GROUP = 64

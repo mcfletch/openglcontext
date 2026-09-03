@@ -1,6 +1,11 @@
 #version 330 core
 #extension GL_ARB_compute_shader : require
 #extension GL_ARB_shader_storage_buffer_object : require
+// readonly/writeonly are reserved words until GLSL 4.20; the memory
+// qualifiers a storage buffer is declared with come from this extension,
+// so a #version 330 shader that uses them has to ask for it. A permissive
+// compiler takes them without; a strict one rejects the whole shader.
+#extension GL_ARB_shader_image_load_store : require
 
 // One thread per joint of every figure: compose that joint's local transform
 // and every ancestor's, and multiply them into a world matrix.

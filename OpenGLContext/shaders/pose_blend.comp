@@ -1,6 +1,11 @@
 #version 330 core
 #extension GL_ARB_compute_shader : require
 #extension GL_ARB_shader_storage_buffer_object : require
+// readonly/writeonly are reserved words until GLSL 4.20; the memory
+// qualifiers a storage buffer is declared with come from this extension,
+// so a #version 330 shader that uses them has to ask for it. A permissive
+// compiler takes them without; a strict one rejects the whole shader.
+#extension GL_ARB_shader_image_load_store : require
 
 // One thread per joint of every figure: sample whatever clips that figure is
 // playing, blend them layer by layer, and write the joint's translation,
@@ -22,37 +27,37 @@ layout(local_size_x = 64) in;
 layout(std430, binding = 0) writeonly buffer Pose {
     vec4 pose[];                    // three per joint: translation, rotation, scale
 };
-layout(std430, binding = 8) readonly buffer Rest {
+layout(std430, binding = 1) readonly buffer Rest {
     vec4 rest[];                    // the same three, where the model rests
 };
-layout(std430, binding = 9) readonly buffer ChannelIndex {
+layout(std430, binding = 2) readonly buffer ChannelIndex {
     // (clip * joints + slot) * 3 + path -> a channel, or -1 for a joint this
     // clip does not move.
     int channelOf[];
 };
-layout(std430, binding = 10) readonly buffer Channels {
+layout(std430, binding = 3) readonly buffer Channels {
     // keyCount, first key time, first key value, interpolation (0 step,
     // 1 linear, 2 cubic).
     ivec4 channels[];
 };
-layout(std430, binding = 11) readonly buffer Times {
+layout(std430, binding = 4) readonly buffer Times {
     float keyTimes[];
 };
-layout(std430, binding = 12) readonly buffer Values {
+layout(std430, binding = 5) readonly buffer Values {
     vec4 keyValues[];
 };
-layout(std430, binding = 13) readonly buffer Tracks {
+layout(std430, binding = 6) readonly buffer Tracks {
     // clip, time, weight, unused -- one per clip playing on a layer.
     vec4 tracks[];
 };
-layout(std430, binding = 14) readonly buffer FigureLayers {
+layout(std430, binding = 7) readonly buffer FigureLayers {
     ivec4 figureLayers[];           // first layer, how many, unused, unused
 };
-layout(std430, binding = 15) readonly buffer Layers {
+layout(std430, binding = 8) readonly buffer Layers {
     // first track, how many, which mask (-1 for none), the layer's weight.
     vec4 layers[];
 };
-layout(std430, binding = 16) readonly buffer Masks {
+layout(std430, binding = 9) readonly buffer Masks {
     uint maskWords[];               // maskStride words per mask, a bit per joint
 };
 
