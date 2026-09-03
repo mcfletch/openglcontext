@@ -5,6 +5,7 @@ writable or a path that was never valid must cost the recording and never the
 game that is being recorded.
 """
 
+import sys
 import json
 
 
@@ -116,11 +117,17 @@ class TestTheCeiling:
         assert any(record['kind'] == 'end' for record in lines(target))
 
 
+#: The variable naming the user's application-data directory on this platform.
+#: userpaths follows each platform's own convention -- %APPDATA% on Windows,
+#: $XDG_CONFIG_HOME elsewhere -- so a test that redirects it has to say which.
+APPDATA_VARIABLE = 'APPDATA' if sys.platform == 'win32' else 'XDG_CONFIG_HOME'
+
+
 class TestWhereAJournalGoesByDefault:
     def test_it_lands_under_the_user_s_application_data(self, tmp_path,
                                                         monkeypatch):
         from OpenGLContext.telemetry.journal import default_path
-        monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path))
+        monkeypatch.setenv(APPDATA_VARIABLE, str(tmp_path))
         found = default_path()
         assert found.parent == tmp_path / 'OpenGLContext' / 'telemetry'
         assert found.suffix == '.jsonl'
@@ -128,7 +135,7 @@ class TestWhereAJournalGoesByDefault:
     def test_two_runs_do_not_write_the_same_file(self, tmp_path, monkeypatch):
         """The interesting session is rarely the one that has just finished."""
         from OpenGLContext.telemetry.journal import default_path
-        monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path))
+        monkeypatch.setenv(APPDATA_VARIABLE, str(tmp_path))
         assert str(default_path()) != str(default_path('other'))
 
     def test_nowhere_to_put_it_falls_back_rather_than_failing(self, monkeypatch):

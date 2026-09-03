@@ -32,10 +32,16 @@ def test_headless_egl_counts_as_display(monkeypatch):
 
 
 def test_no_display_no_offscreen_is_skip(monkeypatch):
+    """A runner that names neither a display nor an offscreen platform.
+
+    Said of a host whose display *is* named in the environment: DISPLAY and
+    WAYLAND_DISPLAY are X11's and Wayland's. Windows and macOS reach their
+    window server without either, so there the absence says nothing.
+    """
     monkeypatch.delenv('DISPLAY', raising=False)
     monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
     monkeypatch.delenv('PYOPENGL_PLATFORM', raising=False)
-    assert tas._check_display_available() is False
+    assert tas._check_display_available(platform='linux') is False
 
 
 def test_capture_delay_env_override(monkeypatch):

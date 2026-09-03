@@ -17,6 +17,18 @@ from OpenGLContext.testing.subprocess_runner import run_test, run_test_with_pope
 
 
 def _pid_alive(pid: int) -> bool:
+    """Whether *pid* is still running.
+
+    Signal 0 is the POSIX way to ask, and Windows has no signal 0 -- os.kill
+    there takes only the signals it can turn into a terminate, and refuses the
+    question. psutil knows how to ask on either.
+    """
+    try:
+        import psutil
+    except ImportError:
+        pass
+    else:
+        return psutil.pid_exists(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:

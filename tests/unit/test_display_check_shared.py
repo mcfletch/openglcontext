@@ -30,8 +30,20 @@ class TestSharedHelper:
 
     def test_no_display_no_offscreen_is_unavailable(self):
         from OpenGLContext.testing.display import display_available
-        assert display_available({}) is False
-        assert display_available({'PYOPENGL_PLATFORM': 'glx'}) is False
+        assert display_available({}, platform='linux') is False
+        assert display_available({'PYOPENGL_PLATFORM': 'glx'}, platform='linux') is False
+
+    def test_windows_and_macos_always_have_one(self):
+        """Neither names its display in the environment.
+
+        DISPLAY and WAYLAND_DISPLAY are X11 and Wayland; a Windows or macOS
+        session reaches its window server without them, so asking for those
+        variables there answers "headless" for a machine with a screen -- and
+        the whole visual suite skips and reads green.
+        """
+        from OpenGLContext.testing.display import display_available
+        assert display_available({}, platform='win32') is True
+        assert display_available({}, platform='darwin') is True
 
 
 class TestCopiesAgreeOnOffscreen:

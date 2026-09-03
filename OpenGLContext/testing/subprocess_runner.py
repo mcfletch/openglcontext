@@ -90,9 +90,11 @@ def kill_process_tree(pid: int) -> None:
         except psutil.NoSuchProcess:
             pass
     except ImportError:
-        # Fallback: just try to kill the process directly
+        # Fallback: just try to kill the process directly. Windows has no
+        # SIGKILL; os.kill there takes SIGTERM and terminates the process,
+        # which is what the uncatchable signal is being asked for.
         try:
-            os.kill(pid, signal.SIGKILL)
+            os.kill(pid, getattr(signal, 'SIGKILL', signal.SIGTERM))
         except (ProcessLookupError, OSError):
             pass
 

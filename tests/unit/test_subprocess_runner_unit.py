@@ -108,9 +108,21 @@ def test_run_test_with_popen_passes_env_and_args(tmp_path):
 
 
 def _pid_alive(pid: int) -> bool:
-    try:
-        import os
+    """Whether *pid* is still running.
 
+    Signal 0 is the POSIX way to ask, and Windows has no signal 0 -- os.kill
+    there takes only the signals it can turn into a terminate, and refuses the
+    question. psutil knows how to ask on either.
+    """
+    try:
+        import psutil
+    except ImportError:
+        pass
+    else:
+        return psutil.pid_exists(pid)
+    import os
+
+    try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False

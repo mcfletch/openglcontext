@@ -112,3 +112,21 @@ except Exception:
 else:
     _glfw.terminate = lambda: None
     _glfw.destroy_window = lambda window: None
+
+
+@pytest.fixture(scope='session')
+def posix_modes(tmp_path_factory):
+    """Whether this filesystem enforces the POSIX mode a directory asks for.
+
+    The engine creates its private directories with ``mode=0o700``, and on a
+    POSIX filesystem that is what keeps another account out of them. Windows
+    ignores the mode and controls access by ACL instead, reporting 0o777 for
+    every directory -- so the mode says nothing there, and a test that reads it
+    is asking a question the platform does not answer.
+    """
+    import os
+    import stat
+
+    probe = tmp_path_factory.mktemp('modes') / 'private'
+    os.makedirs(str(probe), mode=0o700, exist_ok=True)
+    return not stat.S_IMODE(os.stat(str(probe)).st_mode) & (stat.S_IRWXG | stat.S_IRWXO)
