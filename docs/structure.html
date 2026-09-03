@@ -205,6 +205,44 @@ in Qt 6 and is reported rather than silently dropped, and
 have no default framebuffer on the common EGL platforms, so headless capture
 should use the <code>glfw</code> backend.</p>
 
+<h3 id="context-resources">When a context goes away</h3>
+
+<p>A GL object is a <em>name</em>, and it means something only in the context
+that issued it. The engine's caches of them &mdash; the render pass, the VRML97
+shader programs, the text renderers, the teapot's vertex arrays &mdash; are
+therefore keyed by the GL context as well as by whatever else identifies the
+entry.</p>
+
+<p>Keying alone is not enough. The key is the context's handle, the handle is an
+address, and a driver hands the same address out again for the next context: a
+cache that keys on it and is never told the old context died answers the new one
+with the dead one's names. So a backend announces the death, with the context
+still current and its window still whole, and every cache holding that context's
+names lets go:</p>
+
+<pre>from OpenGLContext import contextresources
+
+contextresources.context_lost()          # the backend, tearing a window down</pre>
+
+<p>Application code that caches GL objects of its own registers to hear the same
+announcement. The callback takes no arguments and runs with the dying context
+current, so it may delete GL objects as well as forget them:</p>
+
+<pre>from OpenGLContext import contextresources
+
+@contextresources.on_context_lost
+def drop_my_cached_objects():
+    ...</pre>
+
+<p>Registering the same callable twice registers it once, and one cache raising
+does not stop the rest from being told. The engine's own caches register as they
+are imported, so a backend has only to make the announcement; <code>glfw</code>,
+<code>glut</code> and <code>qt</code> do.</p>
+
+<p>The test fixtures announce it too, which is what a suite needs: several
+hundred windows open and close in one process, and that is precisely the setting
+in which a driver reuses an address.</p>
+
 <p>The <a href="../pydoc/OpenGLContext.move.viewplatform.html">
 ViewPlatform</a> and <a href="../pydoc/OpenGLContext.move.viewplatformmixin.html">
 ViewPlatformMixin</a> classes provide   a simple navigation interface

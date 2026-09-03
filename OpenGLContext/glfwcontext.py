@@ -12,6 +12,7 @@ except ImportError:
     raise ImportError("The glfw package is required for the GLFW GL Context. Install with: pip install glfw")
 
 from OpenGL.GL import *
+from OpenGLContext import contextresources
 from OpenGLContext.context import Context
 from OpenGLContext.events import glfwevents
 from OpenGLContext.looptrace import LoopTrace
@@ -454,12 +455,11 @@ class GLFWContext(
             # worth reading for.
             self.stopTelemetry('mainloop-ended')
 
-        # Cleanup.  The cached text renderers own GL objects in this context,
-        # so they have to be let go before it is destroyed rather than left for
-        # a later window that the driver hands the same identifier.
+        # Cleanup.  The engine's caches own GL objects in this context, so they
+        # have to be let go before it is destroyed rather than left for a later
+        # window that the driver hands the same identifier.
         if self.window:
-            from OpenGLContext.scenegraph.text import shadertext
-            shadertext.drop_text_renderers()
+            contextresources.context_lost()
             glfw.destroy_window(self.window)
             self.window = None
         glfw.terminate()

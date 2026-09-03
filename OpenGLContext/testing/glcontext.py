@@ -31,6 +31,8 @@ import contextlib
 import os
 from typing import Any, Iterator, Mapping, Sequence
 
+from OpenGLContext import contextresources
+
 #: The profile names :func:`hidden_window` accepts. ``'core'`` is the profile
 #: the shader passes want; ``'compatibility'`` additionally has the
 #: fixed-function state (``GL_LIGHTING`` and friends) the legacy render arms
@@ -143,6 +145,10 @@ def hidden_window(title: str = 'OpenGLContext test',
     try:
         yield window
     finally:
+        # Still current, so the engine's caches can let go of this context's GL
+        # names.  A suite opens hundreds of these in one process, which is the
+        # setting in which a driver hands the same address out again.
+        contextresources.context_lost()
         glfw.destroy_window(window)
 
 

@@ -2,6 +2,7 @@
 '''
 from OpenGL.GL import *
 from OpenGL.GLUT import *
+from OpenGLContext import contextresources
 from OpenGLContext.context import Context
 from OpenGLContext.events import glutevents
 
@@ -186,6 +187,10 @@ class GLUTContext(
         glutDisplayFunc(null_display)
         glutIdleFunc(None)
         if self.windowID:
+            # With the window still whole and its context current, so the caches
+            # holding its GL names let go of them before they stop meaning
+            # anything.
+            contextresources.context_lost()
             glutDestroyWindow(self.windowID)
         if glutLeaveMainLoop:
             glutLeaveMainLoop()

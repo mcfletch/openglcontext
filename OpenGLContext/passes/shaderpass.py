@@ -28,6 +28,7 @@ from OpenGL.GL import (
     glActiveTexture, glBindTexture, glGenSamplers, glSamplerParameteri, glBindSampler,
 )
 from OpenGL.GL import shaders as GL_shaders
+from OpenGLContext import contextresources
 from OpenGLContext.arrays import array
 import numpy as np
 import numpy.typing as npt
@@ -1020,6 +1021,20 @@ def gl_context_key() -> Any:
         return contextdata.getContext()
     except Exception:                   # pragma: no cover - no GL at all
         return None
+
+
+@contextresources.on_context_lost
+def drop_shader_programs() -> None:
+    """Forget the programs belonging to the current GL context.
+
+    Keying alone leaves them reachable by the next context the driver gives the
+    same address to; letting go as the context dies is what makes the key
+    trustworthy.
+    """
+    global _shader_program, _shader_program_context
+    if _shader_program is not None and _shader_program_context == gl_context_key():
+        _shader_program = None
+        _shader_program_context = None
 
 
 def configure_light_from_node(

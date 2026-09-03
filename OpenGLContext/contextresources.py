@@ -23,17 +23,20 @@ The engine's own caches -- the render pass, the VRML97 programs, the text
 renderers, the teapot's vertex arrays -- register themselves as they are
 imported, so a backend only has to make the announcement.
 """
+from __future__ import annotations
+
 import logging
+from typing import Callable, List
 
 log = logging.getLogger(__name__)
 
 __all__ = ['on_context_lost', 'context_lost']
 
 #: Callables to run as a context is destroyed, in the order they registered.
-_callbacks = []
+_callbacks: List[Callable[[], None]] = []
 
 
-def on_context_lost(callback):
+def on_context_lost(callback: Callable[[], None]) -> Callable[[], None]:
     """Call ``callback`` as each GL context is torn down.
 
     ``callback`` takes no arguments and is run with the dying context current,
@@ -46,7 +49,7 @@ def on_context_lost(callback):
     return callback
 
 
-def context_lost():
+def context_lost() -> None:
     """Tell every registered cache that the current GL context is going away.
 
     Called by a backend while the context is still current and its window still

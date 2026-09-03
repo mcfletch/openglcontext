@@ -8,6 +8,7 @@ The pass itself does the work -- ``_flat.FlatPass`` observes the scenegraph's
 structure and renders from the paths it knows are active. This module only picks
 one and hands the context to it.
 """
+from OpenGLContext import contextresources
 from OpenGLContext.passes import viewpointbinding
 import logging
 log = logging.getLogger( __name__ )
@@ -106,3 +107,26 @@ class _defaultRenderPasses( object ):
             viewpointbinding.bind_scene_viewpoint( context )
         return FLAT( context )
 defaultRenderPasses = _defaultRenderPasses()
+
+
+@contextresources.on_context_lost
+def drop_pass() -> None:
+    """Let go of the cached pass when the context that made it dies.
+
+    The context is still current here, so its shadow maps can be deleted rather
+    than leaked; the pass itself goes because every other GL name it holds --
+    programs, buffers, textures -- dies with the context, and the next window
+    the driver hands the same address must not be given them to draw through.
+    """
+    global FLAT, FLAT_CONTEXT
+    from OpenGLContext.passes.shaderpass import gl_context_key
+
+    if FLAT is None or FLAT_CONTEXT != gl_context_key():
+        return
+    if hasattr(FLAT, 'disposeShadowMaps'):
+        try:
+            FLAT.disposeShadowMaps()
+        except Exception as err:
+            log.debug("shadow map disposal on context loss failed: %s", err)
+    FLAT = None
+    FLAT_CONTEXT = None

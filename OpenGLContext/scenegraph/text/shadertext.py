@@ -8,6 +8,7 @@ Uses pre-rendered DejaVu Sans Mono font atlases at multiple sizes.
 """
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
+from OpenGLContext import contextresources
 from OpenGLContext.arrays import array
 import numpy as np
 import ctypes
@@ -421,6 +422,7 @@ def get_text_renderer(font_size=16):
     return _renderers[key]
 
 
+@contextresources.on_context_lost
 def drop_text_renderers():
     """Forget the renderers belonging to the current GL context.
 
