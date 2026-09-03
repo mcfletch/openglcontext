@@ -346,12 +346,17 @@ def select_scenes(only: list[str] | None) -> list[gltf_demos.SceneSpec]:
 
 
 def _gl_renderer() -> dict[str, str]:
-    """The GPU's GL_RENDERER/GL_VERSION, queried in a throwaway hidden context."""
-    code = ("import glfw;glfw.init();glfw.window_hint(glfw.VISIBLE,glfw.FALSE);"
-            "w=glfw.create_window(8,8,'r',None,None);glfw.make_context_current(w);"
+    """The GPU's GL_RENDERER/GL_VERSION, queried in a throwaway hidden context.
+
+    The context asks for the same core profile ``render_view`` pins, because a
+    driver that names the profile in GL_VERSION would otherwise stamp every
+    baseline with one the renders were never made in.
+    """
+    code = ("from OpenGLContext.testing.glcontext import hidden_window;"
             "from OpenGL.GL import glGetString,GL_RENDERER,GL_VERSION;"
-            "print((glGetString(GL_RENDERER) or b'').decode());"
-            "print((glGetString(GL_VERSION) or b'').decode())")
+            "\nwith hidden_window('provenance', size=(8, 8), profile='core'):\n"
+            "    print((glGetString(GL_RENDERER) or b'').decode())\n"
+            "    print((glGetString(GL_VERSION) or b'').decode())")
     try:
         out = subprocess.run(
             [sys.executable, '-c', code], capture_output=True, text=True, timeout=30,

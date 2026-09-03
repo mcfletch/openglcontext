@@ -229,7 +229,10 @@ DEMO_SCENES: Tuple[SceneSpec, ...] = (
     _cube('ChronographWatch'),
     _cube('ClearCoatCarPaint'),
     _cube('ClearcoatWicker'),
-    _cube('CommercialRefrigerator'),
+    # The door swings open and shut over 4.7s; 4.0 is inside the second closed
+    # stretch, so the capture looks through the glass and small differences in
+    # how far the animation ran cannot move the pose.
+    _cube('CommercialRefrigerator', anim_time=4.0),
     SceneSpec('CompareAlphaCoverage', margin=0.95),
     SceneSpec('CompareAmbientOcclusion', margin=0.9),
     _studio('CompareAnisotropy', margin=0.9),

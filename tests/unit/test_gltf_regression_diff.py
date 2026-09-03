@@ -513,6 +513,21 @@ class TestProvenance:
         assert prov['git']                               # a hash or 'unknown', never empty
         assert 'T' in prov['rendered_at']                # ISO timestamp
 
+    def test_the_gl_identity_is_the_one_the_renders_are_made_in(self):
+        """The probe asks for the profile the renders use, not the default one.
+
+        A driver that names the profile in GL_VERSION otherwise stamps every
+        baseline with a compatibility context the renders were never made in,
+        and a reader comparing two baselines is told the wrong thing about the
+        one difference that most changes a frame.
+        """
+        from OpenGLContext.testing.glcontext import gl_available
+
+        if not gl_available():
+            pytest.skip('no GL context can be created in this process')
+        version = R._gl_renderer()['gl_version'].lower()
+        assert 'compatibility' not in version, version
+
 
 class TestBaselineDefault:
     def test_falls_back_to_the_reference_images_submodule(self, monkeypatch):
