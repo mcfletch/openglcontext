@@ -15,16 +15,38 @@ from typing import Any
 
 import pytest
 
+from OpenGLContext.testing import event_injector
 from OpenGLContext.testing.event_injector import (
     EventInjectionMixin,
     EventInjector,
     EventSender,
 )
 
+#: The socket transport runs everywhere -- a Unix socket where the platform has
+#: them, a loopback TCP port where it does not -- so only the stdin transport is
+#: gated: it makes its descriptor non-blocking through fcntl, which is POSIX.
+needs_fcntl = pytest.mark.skipif(
+    event_injector.fcntl is None,
+    reason='this platform has no fcntl for a non-blocking stdin',
+)
+
 
 def _sock_path() -> str:
     path = tempfile.mktemp(suffix='.sock')
     return path
+
+
+def _listening_server(path: str) -> socket.socket:
+    """A listening socket an :class:`EventSender` naming *path* can reach.
+
+    Built through the module's own transport helpers rather than a hand-rolled
+    AF_UNIX socket, so the stand-in server speaks whichever transport the
+    sender will use on this platform.
+    """
+    server = event_injector._stream_socket()
+    event_injector._bind_listener(server, path)
+    server.listen(1)
+    return server
 
 
 def _drain(injector: EventInjector, expected: int, tries: int = 100) -> list:
@@ -152,6 +174,7 @@ def test_read_from_socket_handles_connection_reset():
 # --------------------------------------------------------------------------
 
 
+@needs_fcntl
 def test_stdin_injection_reads_json_lines(monkeypatch):
     """With use_stdin, poll reads and parses JSON lines from stdin."""
     read_fd, write_fd = os.pipe()
@@ -167,6 +190,7 @@ def test_stdin_injection_reads_json_lines(monkeypatch):
     assert events and events[0] == {'type': 'keyboard', 'key': 'x'}
 
 
+@needs_fcntl
 def test_stdin_read_returns_empty_when_no_data(monkeypatch):
     """A stdin with nothing available yields no events (non-blocking read)."""
     read_fd, write_fd = os.pipe()
@@ -187,6 +211,7 @@ def test_read_available_with_no_source_is_empty():
     assert inj.poll() == []
 
 
+@needs_fcntl
 def test_stdin_read_swallows_blocking_error(monkeypatch):
     """A BlockingIOError from a non-blocking stdin read yields empty data."""
     read_fd, write_fd = os.pipe()
@@ -437,9 +462,7 @@ def test_send_event_requires_connection():
 def test_sender_encodes_all_event_kinds():
     """Every send_* helper serialises the documented JSON shape."""
     path = _sock_path()
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.bind(path)
-    server.listen(1)
+    server = _listening_server(path)
     sender = EventSender(path)
     try:
         assert sender.connect(timeout=2.0)
@@ -499,9 +522,7 @@ def test_sender_close_swallows_socket_error():
 def test_sender_close_is_idempotent():
     """close() clears the socket and a second call is harmless."""
     path = _sock_path()
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.bind(path)
-    server.listen(1)
+    server = _listening_server(path)
     sender = EventSender(path)
     try:
         assert sender.connect(timeout=2.0)

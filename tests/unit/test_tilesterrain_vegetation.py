@@ -11,6 +11,7 @@ the species they are drawn from -- and the terrain node builds a
 """
 import json
 import os
+import posixpath
 
 import numpy as np
 import pytest
@@ -91,12 +92,17 @@ class TestMountingTheForest:
 
     def test_the_species_files_are_found_beside_the_tileset(self, tmp_path) -> None:
         """A world is self-contained: its trees are its own files, not paths
-        into whatever machine baked it."""
+        into whatever machine baked it.
+
+        Joined with forward slashes whatever the host uses, because what comes
+        back is a reference to be resolved rather than a path to be opened, and
+        a baked world is as likely to be served over http as read off disk.
+        """
         terrain = TilesTerrain(_world(tmp_path), workers=1)
         try:
             found = terrain.vegetation.species[0]
-            assert found.mesh == os.path.join(str(tmp_path), 'kind0.npz')
-            assert found.impostor == os.path.join(str(tmp_path), 'card0.png')
+            assert found.mesh == posixpath.join(str(tmp_path), 'kind0.npz')
+            assert found.impostor == posixpath.join(str(tmp_path), 'card0.png')
         finally:
             terrain.shutdown()
 

@@ -379,7 +379,12 @@ class TestACleanRenderingEnvironment:
         root = pathlib.Path(renderoptions.__file__).parent
         seen = set()
         for path in root.rglob('*.py'):
-            seen.update(re.findall(r'OPENGLCONTEXT_[A-Z_]+', path.read_text()))
+            # Named, because Python source is UTF-8 and the default here is the
+            # locale's encoding: on a host whose locale is cp1252 the scan stops
+            # at the first source file carrying a character cp1252 has no byte
+            # for, and the variables declared after it go unchecked.
+            seen.update(re.findall(r'OPENGLCONTEXT_[A-Z_]+',
+                                   path.read_text(encoding='utf-8')))
         # The ones that are not about what a frame looks like or how it is
         # produced, and so are deliberately inherited.  Each says why, because
         # the list is the only thing standing between a diagnostic and a

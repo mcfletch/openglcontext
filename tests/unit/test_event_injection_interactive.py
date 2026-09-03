@@ -1,32 +1,23 @@
 """Genuine end-to-end exercise of the event-injection subsystem.
 
-Before this, event_injector.py and the interactive_runner/event_sender fixtures
-were only tested against themselves. This drives a real OpenGLContext through the
-whole path -- socket IPC -> EventInjector -> event manager -> a bound handler --
-by injecting a mouse click and asserting the handler ran.
+Drives a real OpenGLContext through the whole path -- socket IPC ->
+EventInjector -> event manager -> a bound handler -- by injecting a mouse click
+and asserting the handler ran, which is the claim the unit tests around
+event_injector.py cannot make on their own.
 """
 
-import os
-from pathlib import Path
 
 import pytest
 
+from OpenGLContext.testing.display import display_available
 from OpenGLContext.testing.paths import tests_root
 TESTS_DIR = tests_root(__file__)
 TARGET = TESTS_DIR / "helpers" / "interactive_click_target.py"
 CLICK_MARKER = "INJECTED_CLICK_DISPATCHED"
 
 
-def _has_render_target():
-    return bool(
-        os.environ.get('DISPLAY')
-        or os.environ.get('WAYLAND_DISPLAY')
-        or os.environ.get('PYOPENGL_PLATFORM', '').lower() in ('egl', 'osmesa')
-    )
-
-
 @pytest.mark.interactive
-@pytest.mark.skipif(not _has_render_target(), reason="no GL render target available")
+@pytest.mark.skipif(not display_available(), reason="no GL render target available")
 def test_injected_click_reaches_handler(interactive_runner):
     """An injected mouse click is dispatched to the application handler."""
     # GLFW/context startup time varies a lot under parallel CI load, so rather

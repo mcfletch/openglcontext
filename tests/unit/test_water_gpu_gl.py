@@ -34,8 +34,13 @@ try:
 
     class V(Base):
         def OnInit(self):
+            # on_gpu, because that is the claim under test: the sheet is meshed
+            # flat and uploaded once, and the card moves it from wave_time. A
+            # mesh built the other way has the wave baked in at `when` and does
+            # not move at all when wave_time is set.
             sheet = water_surface(-12.0, 12.0, -12.0, 12.0, level=0.0,
-                                  resolution=65, style=CHOPPY, when=0.0)
+                                  resolution=65, style=CHOPPY, when=0.0,
+                                  on_gpu=True)
             # Bright and unlit, so what the picture shows is the shape of the
             # surface rather than what a dark material reflects.
             sheet.wave_style = CHOPPY
@@ -69,9 +74,27 @@ try:
                               gl.GL_UNSIGNED_BYTE)
         return np.frombuffer(raw, np.uint8).reshape(height, width, 3).astype(int)
 
+    def settled():
+        """Draw until two consecutive frames agree, and return that picture.
+
+        Two things make a single frame the wrong thing to compare, and both are
+        the driver's business rather than a number to hard-code here. The
+        analytic-sky IBL converges over several frames, so a picture read before
+        it has is a picture of the convergence. And reading the colour buffer
+        after OnDraw has swapped returns the frame before it, so the first read
+        after changing anything still shows the old state.
+        """
+        previous = frame()
+        for _ in range(30):
+            current = frame()
+            if np.array_equal(current, previous):
+                return current
+            previous = current
+        sys.stderr.write('the picture never settled\n')
+        os._exit(5)
+
     v.sheet.wave_time = 0.0
-    frame()
-    still = frame()
+    still = settled()
     # The same moment twice: a world rendered twice is the same world.
     v.sheet.wave_time = 0.0
     again = frame()
@@ -80,7 +103,7 @@ try:
         os._exit(4)
     # A second later it has moved, and nothing was re-uploaded to do it.
     v.sheet.wave_time = 0.9
-    later = frame()
+    later = settled()
     moved = int((np.abs(still - later).sum(axis=2) > 12).sum())
     sys.stderr.write('pixels that moved: %d\n' % moved)
     if moved < 200:
@@ -114,5 +137,8 @@ def test_the_same_moment_draws_the_same_water():
     if proc.returncode == 3:
         pytest.skip('no usable GL context: %s'
                     % proc.stderr.strip().splitlines()[-1:])
+    assert proc.returncode != 5, (
+        'the picture never stopped changing at a fixed wave time\n%s'
+        % proc.stderr)
     assert proc.returncode != 4, (
         'the same wave time drew two different pictures\n%s' % proc.stderr)

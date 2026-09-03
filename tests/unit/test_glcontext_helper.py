@@ -90,39 +90,40 @@ class TestTheWindowItGives:
 
     def test_a_hint_the_caller_names_reaches_the_window(self):
         """``hints`` is how a test asks for the one thing the arguments do not
-        cover -- here a colour buffer with no alpha in it to read back."""
-        from OpenGL.GL import (
-            GL_FRAMEBUFFER,
-            GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE,
-            glGetFramebufferAttachmentParameteriv,
-        )
+        cover.
+
+        The hint asked about here is a window attribute rather than a
+        framebuffer format, because a format is negotiated: a driver answers
+        ``ALPHA_BITS`` with the nearest pixel format it has, so a colour buffer
+        asked for with no alpha arrives with eight bits of it on a desktop that
+        offers nothing else, and the answer would say more about the driver
+        than about whether the hint was passed on.
+
+        A window attribute is GLFW's own question, so it is asked only of a
+        window GLFW made.
+        """
+        glfw = pytest.importorskip('glfw')
         try:
-            with hidden_window('alpha', hints={'ALPHA_BITS': 0}):
-                bits = glGetFramebufferAttachmentParameteriv(
-                    GL_FRAMEBUFFER, glcontext.color_buffer_attachment(),
-                    GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE)
+            with hidden_window('fixed', hints={'RESIZABLE': 0}) as window:
+                if glcontext.backend() != 'glfw':
+                    pytest.skip('the context did not come from GLFW')
+                assert not glfw.get_window_attrib(window, glfw.RESIZABLE)
         except GLUnavailable as err:
             pytest.skip(str(err))
-        assert int(bits) == 0
 
     def test_a_hint_one_window_asked_for_is_not_given_to_the_next(self):
         """GLFW hints are process-global and sticky, so without a reset the
         window a test gets is the one the *previous* test asked for."""
-        from OpenGL.GL import (
-            GL_FRAMEBUFFER,
-            GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE,
-            glGetFramebufferAttachmentParameteriv,
-        )
+        glfw = pytest.importorskip('glfw')
         try:
-            with hidden_window('no-alpha', hints={'ALPHA_BITS': 0}):
+            with hidden_window('fixed', hints={'RESIZABLE': 0}):
                 pass
-            with hidden_window('plain'):
-                bits = glGetFramebufferAttachmentParameteriv(
-                    GL_FRAMEBUFFER, glcontext.color_buffer_attachment(),
-                    GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE)
+            with hidden_window('plain') as window:
+                if glcontext.backend() != 'glfw':
+                    pytest.skip('the context did not come from GLFW')
+                assert glfw.get_window_attrib(window, glfw.RESIZABLE)
         except GLUnavailable as err:
             pytest.skip(str(err))
-        assert int(bits) > 0
 
     def test_a_core_context_is_forward_compatible(self):
         """The same context :mod:`OpenGLContext.glfwcontext` opens for a real

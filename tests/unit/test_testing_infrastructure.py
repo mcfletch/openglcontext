@@ -9,12 +9,23 @@ import os
 import socket
 import tempfile
 import threading
-import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-import pytest
 import numpy as np
+
+from OpenGLContext.testing import event_injector
+
+
+def _listening_server(path: str) -> socket.socket:
+    """A listening socket an ``EventSender`` naming *path* can reach.
+
+    Delegates to the module's own transport helpers rather than opening an
+    AF_UNIX socket directly, so the stand-in server speaks whichever transport
+    the sender will use on this platform.
+    """
+    server = event_injector._stream_socket()
+    event_injector._bind_listener(server, path)
+    server.listen(1)
+    return server
 
 
 class TestSubprocessRunner:
@@ -133,9 +144,7 @@ class TestEventInjector:
 
         # Create a server socket
         socket_path = tempfile.mktemp(suffix='.sock')
-        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(socket_path)
-        server.listen(1)
+        server = _listening_server(socket_path)
 
         received_data = []
 
@@ -173,9 +182,7 @@ class TestEventInjector:
         from OpenGLContext.testing.event_injector import EventSender
 
         socket_path = tempfile.mktemp(suffix='.sock')
-        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(socket_path)
-        server.listen(1)
+        server = _listening_server(socket_path)
 
         received = []
 

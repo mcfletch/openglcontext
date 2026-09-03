@@ -7,10 +7,9 @@ waits for whatever unrelated event happens to ask for one -- and the menu it
 opened appears when the pointer next moves, seconds later.
 """
 
-import os
-
 import pytest
 
+from OpenGLContext.testing.display import display_available
 from OpenGLContext.testing.paths import tests_root
 
 TESTS_DIR = tests_root(__file__)
@@ -18,16 +17,8 @@ TARGET = TESTS_DIR / "helpers" / "ondemand_click_target.py"
 CLICK_MARKER = "PICKED_CLICK_DISPATCHED"
 
 
-def _has_render_target():
-    return bool(
-        os.environ.get('DISPLAY')
-        or os.environ.get('WAYLAND_DISPLAY')
-        or os.environ.get('PYOPENGL_PLATFORM', '').lower() in ('egl', 'osmesa')
-    )
-
-
 @pytest.mark.interactive
-@pytest.mark.skipif(not _has_render_target(), reason="no GL render target available")
+@pytest.mark.skipif(not display_available(), reason="no GL render target available")
 def test_picked_click_reaches_an_on_demand_application(interactive_runner):
     """One click, through the selection pass, with nothing else asking to draw."""
     events = [
