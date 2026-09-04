@@ -101,6 +101,17 @@ DRIVER_DEPENDENT_TOLERANCE = {
 }
 
 
+def skip_reason(script_name, stdout):
+    """Why this script was skipped, as a sentence.
+
+    The script says which extension it wanted on its way out, and its last line
+    is that sentence.  A script that printed nothing still has to give a reason,
+    since the exit code alone tells a reader only that something was missing.
+    """
+    lines = (stdout or '').strip().splitlines()
+    return '%s: %s' % (script_name, lines[-1].strip() if lines else 'extension missing')
+
+
 def tolerance_for(script_name):
     """How much of this script's frame may differ from its reference.
 
@@ -368,9 +379,7 @@ def _run_script(
     # The exit code a script uses to say the driver lacks the extension it
     # exists to exercise -- a skip, not a failure.
     if result.returncode == REQUIRED_EXTENSION_MISSING:
-        pytest.skip(
-            f"{script_path.name}: {result.stdout.strip().splitlines()[-1:]}"
-        )
+        pytest.skip(skip_reason(script_path.name, result.stdout))
 
     # Check return code
     if result.returncode != expected_returncode:

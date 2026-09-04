@@ -345,6 +345,18 @@ def select_scenes(only: list[str] | None) -> list[gltf_demos.SceneSpec]:
     return [s for s in gltf_demos.iter_scenes() if s.name in wanted]
 
 
+#: Asked in a subprocess, because it opens a window and this command is about
+#: to open its own.
+_PROVENANCE_PROGRAM = """\
+from OpenGLContext.testing.glcontext import hidden_window
+from OpenGL.GL import glGetString, GL_RENDERER, GL_VERSION
+
+with hidden_window('provenance', size=(8, 8), profile='core'):
+    print((glGetString(GL_RENDERER) or b'').decode())
+    print((glGetString(GL_VERSION) or b'').decode())
+"""
+
+
 def _gl_renderer() -> dict[str, str]:
     """The GPU's GL_RENDERER/GL_VERSION, queried in a throwaway hidden context.
 
@@ -352,14 +364,10 @@ def _gl_renderer() -> dict[str, str]:
     driver that names the profile in GL_VERSION would otherwise stamp every
     baseline with one the renders were never made in.
     """
-    code = ("from OpenGLContext.testing.glcontext import hidden_window;"
-            "from OpenGL.GL import glGetString,GL_RENDERER,GL_VERSION;"
-            "\nwith hidden_window('provenance', size=(8, 8), profile='core'):\n"
-            "    print((glGetString(GL_RENDERER) or b'').decode())\n"
-            "    print((glGetString(GL_VERSION) or b'').decode())")
     try:
         out = subprocess.run(
-            [sys.executable, '-c', code], capture_output=True, text=True, timeout=30,
+            [sys.executable, '-c', _PROVENANCE_PROGRAM],
+            capture_output=True, text=True, timeout=30,
             env=dict(os.environ, OPENGLCONTEXT_HIDDEN='1', OPENGLCONTEXT_BACKEND='glfw'),
         ).stdout.splitlines()
         return {'gl_renderer': (out[0].strip() if out else '') or 'unknown',

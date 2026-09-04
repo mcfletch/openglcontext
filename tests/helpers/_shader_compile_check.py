@@ -22,16 +22,26 @@ SKIP = 77
 
 
 def _make_context():
-    """The engine's offscreen context, or None where EGL cannot provide one."""
+    """The engine's offscreen context, or None where EGL cannot provide one.
+
+    Every way of not having a context ends here.  The exit codes say
+    ``0 = compiled, 77 = no GL context, 1 = a program failed``, so a machine
+    whose EGL is absent, whose driver lacks the device extensions, or whose
+    display cannot be initialised has to reach 77: reporting any of those as 1
+    says a shader does not compile, which is a different and untrue claim.
+    """
     try:
         from OpenGLContext.eglcontext import EGLContext, EGLContextError
-    except ImportError as err:
+    except Exception as err:
         print("EGL context unavailable:", err)
         return None
     try:
         context = EGLContext(size=(64, 64))
     except EGLContextError as err:
         print("EGL context creation failed:", err)
+        return None
+    except Exception as err:
+        print("no EGL context available:", err)
         return None
     context.setCurrent()
     return context
@@ -42,7 +52,16 @@ def main():
     if context is None:
         print("no headless GL context available")
         return SKIP
+    try:
+        return _check(context)
+    finally:
+        # However the checks ended, including a failure part-way through them.
+        context.unsetCurrent()
+        context.close()
 
+
+def _check(context):
+    """Compile and link every reviewed program, and report what failed."""
     from OpenGL.GL import shaders as S
     from OpenGL.GL import GL_VERTEX_SHADER, GL_FRAGMENT_SHADER
     from OpenGLContext.passes import shaderpass as SP
@@ -96,9 +115,6 @@ def main():
         else:
             print("FAIL tripwire: wrong error\n", str(err)[:400])
             fails.append("tripwire")
-
-    context.unsetCurrent()
-    context.close()
 
     if fails:
         print("\nFAILED:", ", ".join(fails))

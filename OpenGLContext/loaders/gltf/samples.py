@@ -78,7 +78,11 @@ def fetch_sample_catalog(cache_dir: Optional[str] = None) -> list[dict[str, Opti
             continue
         display = m.group(1).strip()
         name = urllib.parse.unquote(m.group(2).strip('/').split('/')[-1])
-        sm = next(filter(None, (shot.search(line) for shot in shot_res)), None)
+        sm = None
+        for pattern in shot_res:
+            sm = pattern.search(line)
+            if sm:
+                break
         screenshot_url = None
         if sm:
             shot = urllib.parse.unquote(sm.group(1).strip()).lstrip('./')
