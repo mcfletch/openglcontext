@@ -10,7 +10,9 @@ import pytest
 
 from OpenGLContext.testing import glcontext
 from OpenGLContext.testing.glcontext import (
+    GLDescription,
     GLUnavailable,
+    describe_gl,
     gl_available,
     hidden_window,
 )
@@ -121,6 +123,38 @@ class TestTheWindowItGives:
             pytest.skip(str(err))
         assert int(bits) > 0
 
+    def test_a_core_context_is_forward_compatible(self):
+        """The same context :mod:`OpenGLContext.glfwcontext` opens for a real
+        window, which asks for both together -- so a test exercises what ships
+        rather than a context only a test ever gets. macOS gives no core context
+        at all without it, and would skip every GL test in the suite instead."""
+        from OpenGL.GL import (
+            GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT,
+            GL_CONTEXT_FLAGS,
+            glGetIntegerv,
+        )
+        try:
+            with hidden_window('forward'):
+                flags = int(glGetIntegerv(GL_CONTEXT_FLAGS))
+        except GLUnavailable as err:
+            pytest.skip(str(err))
+        assert flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT
+
+    def test_a_compatibility_context_is_not(self):
+        """Forward-compatible means the deprecated entry points are gone, which
+        is the whole of what a compatibility context is asked for."""
+        from OpenGL.GL import (
+            GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT,
+            GL_CONTEXT_FLAGS,
+            glGetIntegerv,
+        )
+        try:
+            with hidden_window('compat', profile='compatibility'):
+                flags = int(glGetIntegerv(GL_CONTEXT_FLAGS))
+        except GLUnavailable as err:
+            pytest.skip(str(err))
+        assert not flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT
+
     def test_a_core_context_follows_a_compatibility_one(self):
         """The GLFW hints are process-global and sticky, so a window asked for
         as core after one asked for as compatibility would inherit the profile
@@ -142,7 +176,7 @@ class TestWhetherThisMachineCanRenderAtAll:
         """Every GL test module used to open a probe window of its own to
         decide whether to skip; the answer cannot change while the process
         lives, so it is asked for once."""
-        monkeypatch.setattr(glcontext, '_AVAILABLE', None)
+        monkeypatch.setattr(glcontext, '_DESCRIPTION', None)
         opened = []
         real = glcontext.hidden_window
 
@@ -157,13 +191,89 @@ class TestWhetherThisMachineCanRenderAtAll:
 
     def test_a_machine_with_no_gl_answers_no_rather_than_raising(
             self, monkeypatch):
-        monkeypatch.setattr(glcontext, '_AVAILABLE', None)
+        monkeypatch.setattr(glcontext, '_DESCRIPTION', None)
 
         def refuse(*args, **named):
             raise GLUnavailable('no GL here')
 
         monkeypatch.setattr(glcontext, 'hidden_window', refuse)
         assert gl_available() is False
+
+
+class TestWhatTheRendererIs:
+    """A CPU rasteriser draws the same picture as a GPU and takes a thousand
+    times as long, so a test that measures speed has nothing to measure on one.
+    :func:`describe_gl` is how the suite -- and a game's suite built on it --
+    finds out which it has."""
+
+    def _description(self, renderer):
+        return GLDescription(vendor='Mesa', renderer=renderer, version='4.5')
+
+    @pytest.mark.parametrize('renderer', [
+        'llvmpipe (LLVM 20.1.2, 256 bits)',
+        'softpipe',
+        'kms_swrast',
+        'SwiftShader Device (Subzero)',
+        'Apple Software Renderer',
+        'GDI Generic',
+    ])
+    def test_a_cpu_rasteriser_is_recognised(self, renderer):
+        assert self._description(renderer).software
+
+    @pytest.mark.parametrize('renderer', [
+        'Radeon 8060S Graphics (radeonsi, gfx1151)',
+        'NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2',
+        'Mesa Intel(R) Iris(R) Xe Graphics',
+        'Apple M1 Pro',
+    ])
+    def test_a_gpu_is_not(self, renderer):
+        assert not self._description(renderer).software
+
+    def test_a_renderer_that_says_nothing_is_taken_for_a_gpu(self):
+        """The safer answer: treating a GPU as software only skips tests that
+        would have run, while the reverse asserts a speed nothing can reach."""
+        assert not self._description('').software
+
+    def test_it_names_the_renderer_it_describes(self):
+        assert 'llvmpipe' in repr(self._description('llvmpipe (LLVM 20)'))
+
+    def test_this_machine_is_described_or_reported_as_having_no_gl(self):
+        description = describe_gl()
+        if description is None:
+            pytest.skip('no GL on this machine')
+        assert description.renderer and description.version
+
+    def test_it_is_worked_out_once(self, monkeypatch):
+        """It costs a window, and the answer cannot change while the process
+        lives."""
+        monkeypatch.setattr(glcontext, '_DESCRIPTION', None)
+        opened = []
+        real = glcontext.hidden_window
+
+        def counted(*args, **named):
+            opened.append(args)
+            return real(*args, **named)
+
+        monkeypatch.setattr(glcontext, 'hidden_window', counted)
+        first, second = describe_gl(), describe_gl()
+        assert first is second
+        assert len(opened) == 1
+
+    def test_a_machine_with_no_gl_describes_nothing_rather_than_raising(
+            self, monkeypatch):
+        monkeypatch.setattr(glcontext, '_DESCRIPTION', None)
+
+        def refuse(*args, **named):
+            raise GLUnavailable('no GL here')
+
+        monkeypatch.setattr(glcontext, 'hidden_window', refuse)
+        assert describe_gl() is None
+
+    def test_being_able_to_render_is_the_same_question(self, monkeypatch):
+        """``gl_available`` and ``describe_gl`` must not disagree, and must not
+        open two probe windows to answer the one question."""
+        monkeypatch.setattr(glcontext, '_DESCRIPTION', None)
+        assert gl_available() is (describe_gl() is not None)
 
 
 class TestTheFixtures:

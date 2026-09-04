@@ -78,6 +78,16 @@ class PygameContext(
                 set( pygame.GL_CONTEXT_MINOR_VERSION, int(version[1]) )
         elif profile == 'compatibility':
             set( pygame.GL_CONTEXT_PROFILE_MASK, pygame.GL_CONTEXT_PROFILE_COMPATIBILITY )
+        return cls.pygameWindowFlags( definition )
+    pygameFlagsFromDefinition = classmethod( pygameFlagsFromDefinition )
+    def pygameWindowFlags( cls, definition ):
+        """The creation flags this definition asks SDL for.
+
+        Reads the definition and the rendering options, and nothing of SDL's
+        state, so the choice can be examined without a display to open a window
+        on.  :meth:`pygameFlagsFromDefinition` is this plus the GL attributes,
+        which do go to SDL and so need it initialised.
+        """
         # SDL takes "do not map it" as a creation flag.  See
         # renderoptions.hidden_window: rendering and reading back are
         # unaffected, and a suite of GL scripts should not take over the
@@ -93,7 +103,7 @@ class PygameContext(
             return DOUBLEBUF|RESIZABLE|hidden|filling
         else:
             return RESIZABLE|hidden|filling
-    pygameFlagsFromDefinition = classmethod( pygameFlagsFromDefinition )
+    pygameWindowFlags = classmethod( pygameWindowFlags )
     def pygameDisplayMode( self, definition=None ):
         if definition is None:
             definition = self.contextDefinition

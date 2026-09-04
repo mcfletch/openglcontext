@@ -133,6 +133,7 @@ def test_uncached_allocates_a_vao_every_frame(perf_results):
     assert uncached["vao_allocations"] > cached["vao_allocations"] * 10
 
 
+@pytest.mark.performance
 def test_cached_is_not_slower(perf_results):
     """Caching must not regress per-frame submission cost."""
     _, cached, uncached = perf_results

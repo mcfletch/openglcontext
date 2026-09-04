@@ -23,17 +23,97 @@ different size, profile or hint. All three **skip** rather than fail where no GL
 target exists, which is what a headless runner without an offscreen platform
 should get -- see :mod:`OpenGLContext.testing.display` for what counts as one.
 
+The plugin also supplies the ``performance`` marker. A test that measures how
+*fast* something draws is asking about the renderer as much as about the code,
+so on a CPU rasteriser -- a CI runner with no GPU, say -- those are skipped
+instead of held to a speed no CPU reaches::
+
+    @pytest.mark.performance
+    def test_instancing_is_faster(gl_context):
+        ...
+
+``OPENGLCONTEXT_PERFORMANCE_TESTS=1`` runs them anyway, and ``=0`` skips them
+whatever the renderer, which is what a shared or throttled machine wants.
+
 The window machinery itself is in :mod:`OpenGLContext.testing.glcontext` and has
 no pytest in it, so a test runner that is not pytest can use it too.
 """
 from __future__ import annotations
 
 import contextlib
-from typing import Any, Callable, Iterator
+import os
+from typing import Any, Callable, Iterator, Mapping
 
 import pytest
 
-from OpenGLContext.testing.glcontext import GLUnavailable, hidden_window
+from OpenGLContext.testing.glcontext import (
+    GLDescription,
+    GLUnavailable,
+    describe_gl,
+    hidden_window,
+)
+
+#: Runs the ``performance`` tests, or refuses to, whatever the renderer is.
+PERFORMANCE_TESTS = 'OPENGLCONTEXT_PERFORMANCE_TESTS'
+
+_TRUE = ('1', 'true', 'yes', 'on')
+_FALSE = ('0', 'false', 'no', 'off')
+
+
+def performance_skip_reason(description: GLDescription | None,
+                            env: Mapping[str, str] | None = None) -> str | None:
+    """Why ``performance`` tests are passed over here, or ``None`` to run them.
+
+    The renderer decides unless :data:`PERFORMANCE_TESTS` overrules it. A value
+    that is neither a yes nor a no is reported rather than swallowed: this
+    variable is how a CI run pins the behaviour, and a typo that quietly
+    reversed the pin would make that run's result a lie. An unset variable and
+    an empty one agree, since that is what an unexported shell variable expands
+    to.
+    """
+    env = os.environ if env is None else env
+    setting = env.get(PERFORMANCE_TESTS, '').strip().lower()
+    if setting:
+        if setting in _TRUE:
+            return None
+        if setting not in _FALSE:
+            raise ValueError(
+                '%s=%r is neither a yes nor a no; use one of %s or %s'
+                % (PERFORMANCE_TESTS, env[PERFORMANCE_TESTS],
+                   ', '.join(_TRUE), ', '.join(_FALSE)))
+        return '%s asks for no performance tests on this run' % (PERFORMANCE_TESTS,)
+    if description is None:
+        return 'there is no GL here to measure'
+    if description.software:
+        return ('%s rasterises on the CPU, so what it takes to draw a frame is '
+                'not what this measures' % (description.renderer,))
+    return None
+
+
+def pytest_configure(config: Any) -> None:
+    config.addinivalue_line(
+        'markers',
+        'performance: asserts how fast something draws, so it needs a GPU to '
+        'draw it; skipped on a CPU rasteriser unless %s says otherwise'
+        % (PERFORMANCE_TESTS,))
+
+
+def pytest_collection_modifyitems(config: Any, items: list) -> None:
+    """Skip the ``performance`` tests where the renderer cannot answer them.
+
+    The reason is worked out once, and only where something is marked: a suite
+    with no performance tests in it should not open a probe window to discover
+    that it has none.
+    """
+    marked = [item for item in items if item.get_closest_marker('performance')]
+    if not marked:
+        return
+    reason = performance_skip_reason(describe_gl())
+    if reason is None:
+        return
+    skip = pytest.mark.skip(reason=reason)
+    for item in marked:
+        item.add_marker(skip)
 
 
 @pytest.fixture

@@ -25,11 +25,13 @@ import pytest
 
 from OpenGLContext.testing.paths import tests_root
 
-# The frame-time assertion below compares wall-clock medians, so a busy GPU/CPU
-# compresses the on/off ratio and makes it read slower than it is. Run it apart
+# The frame-time assertions below compare wall-clock medians, so a busy GPU/CPU
+# compresses the on/off ratio and makes it read slower than it is. Run them apart
 # from the rest of the suite; the draw-call test guards the feature regardless.
 # This is a general hazard rather than a quirk of this file: any assertion about
-# wall-clock time is a claim about the machine as much as about the code.
+# wall-clock time is a claim about the machine as much as about the code -- which
+# is also why those two carry `performance`, and are passed over where the
+# machine rasterises on the CPU.
 pytestmark = pytest.mark.serial
 
 HARNESS = os.path.join(str(tests_root(__file__)), 'helpers',
@@ -90,6 +92,7 @@ def test_instancing_collapses_draw_calls(perf):
     assert off['instanced_draws'] == 0
 
 
+@pytest.mark.performance
 def test_instancing_is_faster(timed):
     on, off = timed
     # Conservative: require at least a 20% frame-time reduction (measured ~2x).
@@ -98,6 +101,7 @@ def test_instancing_is_faster(timed):
         'on=%.2fms off=%.2fms' % (on['median_ms'], off['median_ms']))
 
 
+@pytest.mark.performance
 def test_instancing_is_never_slower_even_at_scale(perf):
     """At 800 shapes the per-frame gather is most of the cost and the two
     modes converge on it, so the *margin* is not worth asserting there — but

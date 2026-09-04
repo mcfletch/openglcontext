@@ -143,10 +143,15 @@ class TestThePygameDisplayMode:
     """SDL takes it as a creation flag, so the definition has to reach it."""
 
     def _flags(self, definition):
-        pygame = pytest.importorskip('pygame')
-        pygame.display.init()
+        """Which flags the window is asked for, without opening one.
+
+        ``pygameWindowFlags`` reads the definition and nothing else, so this
+        runs where SDL has no display to give -- a headless CI runner, or a
+        session whose compositor SDL does not speak.
+        """
+        pytest.importorskip('pygame')
         from OpenGLContext.pygamecontext import PygameContext
-        return PygameContext.pygameFlagsFromDefinition(definition)
+        return PygameContext.pygameWindowFlags(definition)
 
     def test_a_windowed_context_asks_for_no_fullscreen_flag(self):
         import pygame

@@ -83,8 +83,14 @@ class TestPosingTogetherBeatsPosingOneAtATime:
         assert third < everyone
 
 
+@pytest.mark.performance
 class TestScalingAgainstADriver:
-    """The whole frame, offscreen, against a real GPU."""
+    """The whole frame, offscreen, against a real GPU.
+
+    What both of these weigh the pose pipeline against is the cost of *drawing*
+    the figures, so a CPU rasteriser -- where drawing is orders of magnitude
+    dearer -- would let them pass without measuring anything.
+    """
 
     @staticmethod
     def _run(figures, frames, **options):

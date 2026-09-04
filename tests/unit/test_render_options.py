@@ -397,6 +397,9 @@ class TestACleanRenderingEnvironment:
             'OPENGLCONTEXT_STALL_MS',
             'OPENGLCONTEXT_TRACE_STALLS',
             'OPENGLCONTEXT_STALL_TRACE',
+            # Which tests are collected, not what any of them draws.  Nothing
+            # in a render pass reads it.
+            'OPENGLCONTEXT_PERFORMANCE_TESTS',
         }
         assert not (seen - set(renderoptions.ENVIRONMENT) - allowed)
 
