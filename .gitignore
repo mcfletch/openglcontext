@@ -58,3 +58,6 @@ benchmark_results/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+
+# uv lock (byproduct of tox-uv; not tracked for a library)
+uv.lock
