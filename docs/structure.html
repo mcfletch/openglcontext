@@ -225,17 +225,28 @@ entry.</p>
 <p>Keying alone is not enough. The key is the context's handle, the handle is an
 address, and a driver hands the same address out again for the next context: a
 cache that keys on it and is never told the old context died answers the new one
-with the dead one's names. So a backend announces the death, with the context
-still current and its window still whole, and every cache holding that context's
-names lets go:</p>
+with the dead one's names. PyOpenGL's own dispatch tables are keyed the same way
+and have the same exposure &mdash; a recycled handle arrives holding the dead
+context's resolved function pointers.</p>
 
-<pre>from OpenGLContext import contextresources
+<p>So a backend says both things, and <code>Context</code> states the contract
+once so that a backend inherits it rather than having to know it:</p>
 
-contextresources.context_lost()          # the backend, tearing a window down</pre>
+<pre>self.bindContextResources( handle )      # in setCurrent
+self.releaseContextResources( handle )   # as the window is destroyed</pre>
+
+<p><code>releaseContextResources</code> tells the engine's caches, so they can
+<em>delete</em> what they hold rather than merely forget it, and retires
+PyOpenGL's dispatch table for that context. It has to be called <strong>with the
+context still current and its window still whole</strong>, which is the only
+moment either of those is possible. Every backend does:
+<code>glfw</code>, <code>glut</code>, <code>pygame</code>, <code>wx</code>,
+<code>egl</code> and <code>qt</code>.</p>
 
 <p>Application code that caches GL objects of its own registers to hear the same
 announcement. The callback takes no arguments and runs with the dying context
-current, so it may delete GL objects as well as forget them:</p>
+current, so it may delete GL objects as well as forget them, and
+<code>contextresources.context_key()</code> tells it which context that is:</p>
 
 <pre>from OpenGLContext import contextresources
 
@@ -244,9 +255,18 @@ def drop_my_cached_objects():
     ...</pre>
 
 <p>Registering the same callable twice registers it once, and one cache raising
-does not stop the rest from being told. The engine's own caches register as they
-are imported, so a backend has only to make the announcement; <code>glfw</code>,
-<code>glut</code> and <code>qt</code> do.</p>
+does not stop the rest from being told. The registry holds a strong reference for
+the life of the process, which is right for a module-level cache registering at
+import; a callback bound to something shorter-lived hands itself back with
+<code>contextresources.forget_context_lost( callback )</code>.</p>
+
+<p>A cache holds <strong>one entry per context</strong>, not one entry. Two
+windows draw alternately, so a single slot belongs to whichever drew last: every
+frame of every context would miss, rebuild what the other displaced, and abandon
+the displaced entry's GL objects in a context that is still alive and can no
+longer be reached to delete them. <code>renderpass._passes</code>,
+<code>shaderpass._shader_programs</code>, <code>Teapot._buffers</code> and
+<code>shadertext._renderers</code> are all mappings for that reason.</p>
 
 <p>The test fixtures announce it too, which is what a suite needs: several
 hundred windows open and close in one process, and that is precisely the setting

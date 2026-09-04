@@ -30,7 +30,7 @@ observes the scenegraph and drives the rendering callbacks
 the Context exposes.
 """
 from OpenGL.GL import *
-from OpenGLContext import texturecache, plugins
+from OpenGLContext import contextresources, texturecache, plugins
 from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
@@ -934,6 +934,47 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         self.unlockScenegraph()
         Context.currentContext = None
         contextLock.release()
+
+    def bindContextResources(self, handle=None):
+        """Say that ``handle`` is the GL context this thread now draws through.
+
+        PyOpenGL gives each context its own table of resolved entry-point
+        addresses, and this is what tells it which one to dispatch through.
+        Without it the table is re-read only when an entry point needs
+        resolving, so two contexts of differing capability can share a
+        resolution that is right for one of them.
+
+        Every backend calls this from ``setCurrent`` with whatever its
+        windowing library calls the context; ``None`` where it has no handle to
+        give, which costs nothing but the notification.
+        """
+        if handle is None:
+            return
+        from OpenGL import _dispatch
+
+        _dispatch.make_current(handle)
+
+    def releaseContextResources(self, handle=None):
+        """Say that this context is going away, **while it is still current**.
+
+        Two things are holding its GL names.  :mod:`OpenGLContext.contextresources`
+        tells the engine's own caches -- the render pass, the shader programs,
+        the teapot's vertex arrays, the text renderers -- which is the moment
+        they can still *delete* what they hold rather than merely forget it.
+        And PyOpenGL retires its dispatch table for the context, so a handle the
+        driver hands out again does not arrive with the dead context's function
+        pointers already in it.
+
+        Every backend calls this as it destroys a window, before the context
+        goes.  It is the whole of what a backend owes the caches, which is why
+        it is one call and not two.
+        """
+        contextresources.context_lost()
+        if handle is None:
+            return
+        from OpenGL import _dispatch
+
+        _dispatch.forget_context(handle)
 
     @classmethod
     def ContextMainLoop(cls, *args, **named):

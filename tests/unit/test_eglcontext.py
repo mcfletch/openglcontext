@@ -334,3 +334,133 @@ class TestResizing:
     def test_a_zero_size_is_refused(self, context):
         with pytest.raises(eglcontext.EGLContextError):
             context.OnResize(0, 0)
+
+
+class TestAFailedConstructionReleasesWhatItTook:
+    """The module invites an application to try EGL and fall back, so a failure
+    is an expected outcome rather than the end of the process -- and an
+    initialised EGL display left behind on each attempt is a leak per attempt.
+    """
+
+    class _Stopped(Exception):
+        pass
+
+    def _context_failing_at(self, monkeypatch, step):
+        """An EGLContext whose construction fails at one named step."""
+        released = []
+
+        monkeypatch.setattr(
+            eglcontext.EGLContext, '_selectDevice',
+            lambda self: DeviceInfo(index=0, handle=object(), driver='test'),
+        )
+        monkeypatch.setattr(
+            eglcontext.EGLContext, '_openDisplay',
+            lambda self, device: 'display',
+        )
+        monkeypatch.setattr(
+            eglcontext.EGLContext, '_chooseConfig', lambda self, definition: 'config'
+        )
+        monkeypatch.setattr(
+            eglcontext.EGLContext, '_createContext', lambda self, config: 'context'
+        )
+        monkeypatch.setattr(
+            eglcontext.EGLContext, '_createSurface',
+            lambda self, config, width, height: 'surface',
+        )
+        monkeypatch.setattr(eglcontext.EGLContext, '_makeCurrent', lambda self: None)
+        monkeypatch.setattr(
+            eglcontext.EGLContext, '_releaseEGL',
+            lambda self: released.append(
+                (self.display, self.context, self.surface)
+            ),
+        )
+
+        def fails(*arguments, **named):
+            raise eglcontext.EGLContextError('no')
+
+        monkeypatch.setattr(eglcontext.EGLContext, step, fails)
+        with pytest.raises(eglcontext.EGLContextError):
+            eglcontext.EGLContext(size=(4, 4))
+        return released
+
+    @pytest.mark.parametrize(
+        'step',
+        ['_chooseConfig', '_createContext', '_createSurface', '_makeCurrent'],
+    )
+    def test_the_display_is_released(self, monkeypatch, step):
+        released = self._context_failing_at(monkeypatch, step)
+        assert released, 'nothing was released after failing at %s' % (step,)
+        assert released[0][0] == 'display'
+
+    def test_nothing_is_released_that_was_never_taken(self, monkeypatch):
+        released = self._context_failing_at(monkeypatch, '_chooseConfig')
+        # The config failed, so there is no context and no surface to release.
+        assert released[0][1] is None
+        assert released[0][2] is None
+
+    def test_the_engines_caches_are_not_told(self, monkeypatch):
+        """No cache ever saw this context, so announcing its loss would drop
+        another context's objects."""
+        from OpenGLContext import contextresources
+
+        told = []
+        monkeypatch.setattr(
+            contextresources, 'context_lost', lambda: told.append(True)
+        )
+        self._context_failing_at(monkeypatch, '_createContext')
+        assert told == []
+
+
+class TestResizingRefusesADegenerateSize:
+    """A size with a zero or negative dimension is not a surface."""
+
+    @pytest.mark.parametrize(
+        'size', [(0, 0), (0, 100), (100, 0), (-1, 100), (100, -1)]
+    )
+    def test_a_degenerate_size_is_refused(self, monkeypatch, size):
+        """Every one of them: `(width, height) <= (0, 0)` is lexicographic
+        ordering on tuples, which lets 100x0 and 100x-1 straight through."""
+        made = []
+        monkeypatch.setattr(
+            eglcontext.EGLContext, '_createSurface',
+            lambda self, config, width, height: made.append((width, height)),
+        )
+        instance = eglcontext.EGLContext.__new__(eglcontext.EGLContext)
+        with pytest.raises(eglcontext.EGLContextError) as caught:
+            instance.OnResize(*size)
+        assert 'cannot render at' in str(caught.value)
+        assert made == [], 'a surface was made for %r' % (size,)
+
+
+class TestFinishingAFrame:
+    """``eglSwapBuffers`` on a pbuffer has no effect -- the EGL specification
+    says so for any surface that is not a back-buffered window -- so it cannot
+    be what guarantees the frame's commands have been issued."""
+
+    def test_it_flushes(self, monkeypatch):
+        flushed = []
+        monkeypatch.setattr(eglcontext, 'glFlush', lambda: flushed.append(True))
+        instance = eglcontext.EGLContext.__new__(eglcontext.EGLContext)
+        instance.SwapBuffers()
+        assert flushed == [True]
+
+
+class TestConfigAttributesColourBuffer:
+    def test_rgb_asks_for_an_rgb_buffer(self):
+        attributes = eglcontext.configAttributes(rgb=True)
+        pairs = dict(zip(attributes[::2], attributes[1::2], strict=False))
+        assert pairs[eglcontext.EGL.EGL_COLOR_BUFFER_TYPE] == (
+            eglcontext.EGL.EGL_RGB_BUFFER
+        )
+        assert pairs[eglcontext.EGL.EGL_RED_SIZE] == 8
+
+    def test_not_rgb_asks_for_a_luminance_buffer(self):
+        """A parameter that is accepted and ignored is worse than one that is
+        absent: ``rgb=False`` used to leave EGL_RGB_BUFFER pinned and merely
+        decline to say how many bits per channel."""
+        attributes = eglcontext.configAttributes(rgb=False)
+        pairs = dict(zip(attributes[::2], attributes[1::2], strict=False))
+        assert pairs[eglcontext.EGL.EGL_COLOR_BUFFER_TYPE] == (
+            eglcontext.EGL.EGL_LUMINANCE_BUFFER
+        )
+        assert eglcontext.EGL.EGL_RED_SIZE not in pairs

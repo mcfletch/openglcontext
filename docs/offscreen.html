@@ -154,6 +154,35 @@ context-level handlers only, which needs no render at all.</p>
 picked event is resolved a frame or so after the draw that scheduled it rather
 than within it.</p>
 
+<h2>Finishing a frame</h2>
+
+<p>A pbuffer has nothing to present to, so <code>SwapBuffers</code> is a flush:
+the point at which the frame's commands are guaranteed to have been issued to the
+driver, which is what a readback, a capture or an encode after it depends on.
+Every pass calls it where it would on a window, so nothing has to know.</p>
+
+<p><code>eglSwapBuffers</code> is not what does it. The EGL specification gives
+it no effect on any surface that is not a back-buffered window, so on a pbuffer
+it returns <code>EGL_TRUE</code> and issues nothing.</p>
+
+<h2>Resizing</h2>
+
+<p>A pbuffer is created at a fixed size and cannot be resized, so
+<code>OnResize</code> builds a replacement against the same config and drops the
+old one. The GL context survives, so textures, buffers and programs are all still
+there afterwards. A width or a height of zero or less is not a surface and is
+refused by name.</p>
+
+<h2>When construction fails</h2>
+
+<p>Constructing an <code>EGLContext</code> raises
+<code>EGLContextError</code> where this machine cannot provide one &mdash; no
+devices, no config matching the buffers asked for, no desktop GL on the chosen
+device &mdash; so an application can try it and fall back. A failure gives back
+whatever it had already taken, including the initialised EGL display, so an
+application that tries several devices or reduces its request and tries again
+leaks nothing per attempt.</p>
+
 <h2>Time</h2>
 
 <p>The time manager runs as usual, so <code>TimeSensor</code> and

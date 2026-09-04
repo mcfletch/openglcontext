@@ -119,6 +119,26 @@ class PygameContext(
         pygame.display.flip()
 
 
+    def _glHandle(self):
+        """The GL context handle the caches and PyOpenGL key on.
+
+        SDL owns the context and does not name it, so it is read from the
+        platform with the window current -- which for pygame is any time the
+        display is up, since it holds one context.
+        """
+        from OpenGLContext import contextresources
+        return contextresources.context_key()
+
+    def setCurrent(self, blocking=1):
+        """Take the OpenGL focus.
+
+        SDL holds one context and it is always current, so there is nothing to
+        bind; what this adds is telling PyOpenGL which context that is, so its
+        per-context dispatch table is this window's.
+        """
+        Context.setCurrent(self, blocking)
+        self.bindContextResources(self._glHandle())
+
     def MainLoop( self ):
         """Run indefinitely until program is quit"""
         finished = 0
@@ -145,6 +165,10 @@ class PygameContext(
                 if event.type in ( pygame.VIDEORESIZE, pygame.VIDEOEXPOSE):
                     self.triggerRedraw( 0 )
                     break
+        # The loop is over and the display is about to go, so this is the last
+        # moment the caches holding this context's GL names can delete them
+        # rather than be left pointing at a handle SDL will hand out again.
+        self.releaseContextResources( self._glHandle() )
 
     def PygameQuit(self, event):
         """Return a value indicating that the MainLoop should exit"""

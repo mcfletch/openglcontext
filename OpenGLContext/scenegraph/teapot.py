@@ -322,14 +322,9 @@ class Teapot(nodetypes.Geometry, node.Node):
         for key in [key for key in cls._buffers if key[0] == context]:
             del cls._buffers[key]
 
-    @staticmethod
-    def _gl_context():
-        """An identifier for the GL context that is current, or None."""
-        try:
-            from OpenGL import contextdata
-            return contextdata.getContext()
-        except Exception:               # pragma: no cover - no GL at all
-            return None
+    #: The identifier the buffers are keyed by; one implementation, in the
+    #: module that owns the subject.
+    _gl_context = staticmethod(contextresources.context_key)
 
     @classmethod
     def _initialize_buffers(cls, steps):
@@ -379,9 +374,14 @@ class Teapot(nodetypes.Geometry, node.Node):
             base_vao, base_vbo, base_count = make(base_array)
             lid_vao, lid_vbo, lid_count = make(lid_array)
             glBindBuffer(GL_ARRAY_BUFFER, 0)
+            # One record shape from both branches: the failure record below
+            # writes the same keys, so nothing reading one has to know which
+            # branch wrote it.  The VBO names are not kept -- they die with the
+            # context, and storing a name nothing manages invites the belief
+            # that something does.
             cls._buffers[key] = {
-                'base_vao': base_vao, 'base_vbo': base_vbo, 'base_count': base_count,
-                'lid_vao': lid_vao, 'lid_vbo': lid_vbo, 'lid_count': lid_count,
+                'base_vao': base_vao, 'base_count': base_count,
+                'lid_vao': lid_vao, 'lid_count': lid_count,
             }
             log.debug("Teapot buffers (steps %s) initialized: %d base, %d lid vertices",
                       steps, base_count, lid_count)

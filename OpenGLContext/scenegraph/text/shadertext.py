@@ -395,13 +395,9 @@ class ShaderTextRenderer:
 _renderers = {}
 
 
-def _gl_context():
-    """An identifier for the GL context that is current, or None."""
-    try:
-        from OpenGL import contextdata
-        return contextdata.getContext()
-    except Exception:                   # pragma: no cover - no GL at all
-        return None
+#: The identifier the renderers are keyed by; one implementation, in the module
+#: that owns the subject.
+_gl_context = contextresources.context_key
 
 
 def get_text_renderer(font_size=16):

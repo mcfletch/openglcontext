@@ -60,6 +60,7 @@ import logging
 import os
 
 from OpenGL import EGL
+from OpenGL.GL import glFlush
 from OpenGL.EGL.devices import DeviceInfo, devices
 from OpenGL.EGL.EXT.platform_base import eglGetPlatformDisplayEXT
 from OpenGL.EGL.EXT.platform_device import EGL_PLATFORM_DEVICE_EXT
@@ -166,7 +167,11 @@ def configAttributes(
     attributes = [
         EGL.EGL_SURFACE_TYPE, EGL.EGL_PBUFFER_BIT,
         EGL.EGL_RENDERABLE_TYPE, EGL.EGL_OPENGL_BIT,
-        EGL.EGL_COLOR_BUFFER_TYPE, EGL.EGL_RGB_BUFFER,
+        # ``rgb`` picks the kind of colour buffer, not merely how many bits of
+        # one: asking for RGB and then declining to say how wide each channel is
+        # would leave the parameter with nothing to do.
+        EGL.EGL_COLOR_BUFFER_TYPE,
+        EGL.EGL_RGB_BUFFER if rgb else EGL.EGL_LUMINANCE_BUFFER,
     ]
     if rgb:
         attributes += [
@@ -251,15 +256,27 @@ class EGLContext(
         width, height = [int(value) for value in definition.size]
 
         self.device = self._selectDevice()
-        self.display = self._openDisplay(self.device)
-        # Kept: a pbuffer has a fixed size, so resizing means making another one
-        # against the same config.
-        self.config = self._chooseConfig(definition)
-        self.context = self._createContext(self.config)
-        self.surface = self._createSurface(self.config, width, height)
-        # The raw make-current, not setCurrent: the scenegraph lock that one
-        # also takes is set up by Context.__init__, which has not run yet.
-        self._makeCurrent()
+        # Each step raises EGLContextError on failure, and every one of them can:
+        # no config matches the requested buffers, no desktop GL on this device.
+        # The module's own advice is to try EGL and fall back, so a failure is an
+        # expected outcome -- and an initialised display left behind is a leak
+        # per attempt, for an application that tries several devices or reduces
+        # its buffer request and tries again.
+        try:
+            self.display = self._openDisplay(self.device)
+            # Kept: a pbuffer has a fixed size, so resizing means making another
+            # one against the same config.
+            self.config = self._chooseConfig(definition)
+            self.context = self._createContext(self.config)
+            self.surface = self._createSurface(self.config, width, height)
+            # The raw make-current, not setCurrent: the scenegraph lock that one
+            # also takes is set up by Context.__init__, which has not run yet.
+            self._makeCurrent()
+        except BaseException:
+            # Not context_lost(): no cache ever saw this context, and announcing
+            # its loss would drop another context's objects.
+            self._releaseEGL()
+            raise
 
         Context.__init__(self, definition)
         self.ViewPort(width, height)
@@ -339,6 +356,11 @@ class EGLContext(
         """Take the context and the scenegraph lock, then bind the EGL context."""
         Context.setCurrent(self, blocking)
         self._makeCurrent()
+        self.bindContextResources(self._glHandle())
+
+    def _glHandle(self):
+        """The GL context handle the caches and PyOpenGL key on."""
+        return contextresources.context_key()
 
     def OnResize(self, width, height):
         """Render at a new size.
@@ -348,7 +370,7 @@ class EGLContext(
         textures, buffers and programs are all still there afterwards.
         """
         width, height = int(width), int(height)
-        if (width, height) <= (0, 0):
+        if width <= 0 or height <= 0:
             raise EGLContextError('cannot render at %dx%d' % (width, height))
         replacement = self._createSurface(self.config, width, height)
         EGL.eglMakeCurrent(
@@ -364,11 +386,16 @@ class EGLContext(
     def SwapBuffers(self):
         """Finish the frame.
 
-        A pbuffer has nothing to present to, so this is a flush: it is the point
-        at which the rendering commands are guaranteed to have been issued, and
-        readback after it sees a complete frame.
+        A pbuffer has nothing to present to, so this is a flush: the point at
+        which this frame's commands are guaranteed to have been issued to the
+        driver, which is what a readback, a capture or an encode after it
+        depends on.
+
+        ``eglSwapBuffers`` is not what does it.  The EGL specification gives it
+        no effect on any surface that is not a back-buffered window, so on a
+        pbuffer it returns EGL_TRUE and issues nothing.
         """
-        EGL.eglSwapBuffers(self.display, self.surface)
+        glFlush()
 
     def MainLoop(self):
         """Render :attr:`frameCount` frames, then release the context."""
@@ -390,7 +417,20 @@ class EGLContext(
         """
         if self.display is None:
             return
-        contextresources.context_lost()
+        # With the context still current, which is the only moment the caches
+        # holding its GL names can delete them rather than merely forget them.
+        self.releaseContextResources(self._glHandle())
+        self._releaseEGL()
+
+    def _releaseEGL(self):
+        """Give back whatever EGL objects this context has taken.
+
+        Written to be callable part-way through construction, where some of them
+        do not exist yet, as well as from :meth:`close`.  It touches no engine
+        cache, because on the construction path no cache ever saw this context.
+        """
+        if self.display is None:
+            return
         EGL.eglMakeCurrent(
             self.display, EGL.EGL_NO_SURFACE, EGL.EGL_NO_SURFACE, EGL.EGL_NO_CONTEXT
         )

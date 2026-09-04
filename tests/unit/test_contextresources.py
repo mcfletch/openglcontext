@@ -8,18 +8,31 @@ a backend makes the announcement while the context is still current.
 import pytest
 
 from OpenGLContext import contextresources
+# At module scope, so each cache registers its callback while this file is being
+# collected.  A cache imported for the first time inside a test registers itself
+# after ``restore_callbacks`` has taken its snapshot, and the teardown then hands
+# back a registration the whole session needed.
+from OpenGLContext.passes import renderpass, shaderpass
+from OpenGLContext.scenegraph.teapot import Teapot
+from OpenGLContext.scenegraph.text import shadertext
 
 
 @pytest.fixture(autouse=True)
 def restore_callbacks():
-    """Leave the registry exactly as it was found.
+    """Take back what this test registered, and nothing else.
 
-    It is process-wide and populated at import time, so a test that adds to it
-    would otherwise leak a callback into every test that follows.
+    The registry is process-wide and populated at import time, so a test that
+    adds to it would leak a callback into every test that follows.  Restoring a
+    *snapshot* is the wrong way to stop that: a cache imported for the first
+    time during a test registers itself while the test runs, and truncating to
+    the snapshot deregisters it for the rest of the session -- which shows up as
+    a later test finding that cache deaf.
     """
-    saved = list(contextresources._callbacks)
+    before = list(contextresources._callbacks)
     yield
-    contextresources._callbacks[:] = saved
+    for callback in list(contextresources._callbacks):
+        if callback not in before:
+            contextresources.forget_context_lost(callback)
 
 
 class TestTheRegistry:
@@ -72,9 +85,7 @@ def current_context():
     current context set, so a test that assumed no context would seed its cache
     under a key the drop then rightly leaves alone.
     """
-    from OpenGLContext.passes.shaderpass import gl_context_key
-
-    return gl_context_key()
+    return contextresources.context_key()
 
 
 @pytest.fixture
@@ -84,19 +95,19 @@ def restore_caches():
     These are module and class globals the whole session renders through, so a
     sentinel left in one is a failure in some later test rather than in this one.
     """
-    from OpenGLContext.passes import renderpass, shaderpass
-    from OpenGLContext.scenegraph.teapot import Teapot
-    from OpenGLContext.scenegraph.text import shadertext
-
     saved = (dict(shadertext._renderers), dict(Teapot._buffers),
-             shaderpass._shader_program, shaderpass._shader_program_context,
-             renderpass.FLAT, renderpass.FLAT_CONTEXT)
+             dict(shaderpass._shader_programs), dict(renderpass._passes),
+             renderpass.FLAT)
     yield
-    (shadertext._renderers, Teapot._buffers) = ({}, {})
-    shadertext._renderers.update(saved[0])
-    Teapot._buffers.update(saved[1])
-    (shaderpass._shader_program, shaderpass._shader_program_context,
-     renderpass.FLAT, renderpass.FLAT_CONTEXT) = saved[2:]
+    for cache, contents in (
+        (shadertext._renderers, saved[0]),
+        (Teapot._buffers, saved[1]),
+        (shaderpass._shader_programs, saved[2]),
+        (renderpass._passes, saved[3]),
+    ):
+        cache.clear()
+        cache.update(contents)
+    renderpass.FLAT = saved[4]
 
 
 @pytest.mark.usefixtures('restore_caches')
@@ -108,55 +119,39 @@ class TestTheEnginesCachesListen:
     """
 
     def test_the_text_renderers_are_dropped(self, current_context):
-        from OpenGLContext.scenegraph.text import shadertext
-
         shadertext._renderers[(current_context, 32)] = object()
         contextresources.context_lost()
         assert (current_context, 32) not in shadertext._renderers
 
     def test_the_teapots_vertex_arrays_are_dropped(self, current_context):
-        from OpenGLContext.scenegraph.teapot import Teapot
-
         Teapot._buffers[(current_context, 4)] = object()
         contextresources.context_lost()
         assert (current_context, 4) not in Teapot._buffers
 
     def test_the_vrml97_programs_are_dropped(self, current_context):
-        from OpenGLContext.passes import shaderpass
-
-        shaderpass._shader_program = object()
-        shaderpass._shader_program_context = current_context
+        shaderpass._shader_programs[current_context] = object()
         contextresources.context_lost()
-        assert shaderpass._shader_program is None
+        assert current_context not in shaderpass._shader_programs
 
     def test_the_render_pass_is_dropped(self, current_context):
-        from OpenGLContext.passes import renderpass
-
-        renderpass.FLAT = object()
-        renderpass.FLAT_CONTEXT = current_context
+        renderpass._passes[current_context] = object()
         contextresources.context_lost()
-        assert renderpass.FLAT is None
+        assert current_context not in renderpass._passes
 
     def test_another_contexts_entries_are_left_alone(self):
         """Only the dying context's names go; a second window keeps its own."""
-        from OpenGLContext.passes import renderpass, shaderpass
-        from OpenGLContext.scenegraph.teapot import Teapot
-        from OpenGLContext.scenegraph.text import shadertext
-
         other = object()                      # stands in for a second context
         shadertext._renderers[(other, 32)] = object()
         Teapot._buffers[(other, 4)] = object()
-        shaderpass._shader_program = object()
-        shaderpass._shader_program_context = other
-        renderpass.FLAT = object()
-        renderpass.FLAT_CONTEXT = other
+        shaderpass._shader_programs[other] = object()
+        renderpass._passes[other] = object()
 
         contextresources.context_lost()
 
         assert (other, 32) in shadertext._renderers
         assert (other, 4) in Teapot._buffers
-        assert shaderpass._shader_program is not None
-        assert renderpass.FLAT is not None
+        assert other in shaderpass._shader_programs
+        assert other in renderpass._passes
 
 
 class TestTheBackendsAnnounceIt:
@@ -177,6 +172,34 @@ class TestTheBackendsAnnounceIt:
             assert called == []
         assert called == [True]
 
+
+class TestUnregistering:
+    """A callback bound to something that does not live as long as the process
+    has to be able to hand itself back."""
+
+    def test_a_forgotten_callback_is_not_called(self):
+        called = []
+
+        def drop():
+            called.append(True)
+
+        contextresources.on_context_lost(drop)
+        assert contextresources.forget_context_lost(drop) is True
+        contextresources.context_lost()
+        assert called == []
+
+    def test_forgetting_one_never_registered_is_not_an_error(self):
+        assert contextresources.forget_context_lost(lambda: None) is False
+
+    def test_the_others_are_left_alone(self):
+        called = []
+        keep = lambda: called.append('keep')          # noqa: E731
+        drop = lambda: called.append('drop')          # noqa: E731
+        contextresources.on_context_lost(keep)
+        contextresources.on_context_lost(drop)
+        contextresources.forget_context_lost(drop)
+        contextresources.context_lost()
+        assert called == ['keep']
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))

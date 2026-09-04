@@ -8,6 +8,8 @@ The pass itself does the work -- ``_flat.FlatPass`` observes the scenegraph's
 structure and renders from the paths it knows are active. This module only picks
 one and hands the context to it.
 """
+from typing import Any, Dict
+
 from OpenGLContext import contextresources
 from OpenGLContext.passes import viewpointbinding
 import logging
@@ -15,13 +17,24 @@ log = logging.getLogger( __name__ )
 
 
 USE_FLAT = True
+
+#: One pass per GL context.  A pass holds GL object *names* -- programs,
+#: buffers, shadow-map textures -- which the context that issued them is the
+#: only place they mean anything; handing them to a second context draws
+#: through names its driver never issued.
+#:
+#: A mapping rather than one slot, because a program holding two windows draws
+#: both of them.  With one slot each frame of each context displaces the other's
+#: pass and rebuilds its own, and the displaced pass is dropped still holding
+#: shadow maps in a context that is alive -- which nothing can then be told to
+#: delete, since deleting them needs that context current.
+#: ``shaderpass.get_shader_program`` is keyed the same way, for the same reason.
+_passes: Dict[Any, Any] = {}
+
+#: The pass that rendered most recently, whatever context that was in.  For the
+#: demos that toggle ``use_shaders`` on it and for :func:`report_render_failures`;
+#: :data:`_passes` is what dispatch reads.
 FLAT = None
-#: The GL context ``FLAT``'s programs, buffers and textures belong to.  A pass
-#: holds GL object *names*, which the context that issued them is the only
-#: place they mean anything; handing them to a second context draws through
-#: names its driver never issued.  See shaderpass.get_shader_program, which is
-#: keyed the same way and for the same reason.
-FLAT_CONTEXT = None
 
 
 def report_render_failures() -> None:
@@ -63,70 +76,86 @@ def _core_flatpass_class():
     return FlatPass
 
 
+def _dispose( pass_, why ):
+    """Delete a pass's GPU-side shadow maps.
+
+    Only ever called with the pass's own context current, which is what makes
+    deleting the names legitimate: an FBO name means something else in another
+    context, and deleting it there takes that context's object instead.
+    """
+    if hasattr( pass_, 'disposeShadowMaps' ):
+        try:
+            pass_.disposeShadowMaps()
+        except Exception as err:
+            log.debug( "shadow map disposal on %s failed: %s", why, err )
+
+
+def cached_pass( scene, build ):
+    """The pass for the context that is current, built by ``build`` if there is
+    not one for it yet.
+
+    Rebuilt when the scenegraph reference itself changes: wholesale replacement
+    (``self.sg = new_sg``) does not fire the per-child dispatcher signals
+    SGObserver listens to, so the cached pass would keep rendering the old tree.
+    Not rebuilt when another context drew in between, which is the whole point
+    of keying on the context.
+    """
+    global FLAT
+    key = contextresources.context_key()
+    existing = _passes.get( key )
+    if existing is not None and existing.scene is scene:
+        FLAT = existing
+        return existing
+    if existing is not None:
+        # Replacing this context's own pass, with this context current, so its
+        # shadow maps can go rather than be leaked.
+        _dispose( existing, 'pass swap' )
+    FLAT = _passes[key] = build()
+    return FLAT
+
+
 class _defaultRenderPasses( object ):
     def __call__( self,context ):
-        global FLAT, FLAT_CONTEXT
-        from OpenGLContext.passes.shaderpass import gl_context_key
-
         sg = context.getSceneGraph()
-        gl_context = gl_context_key()
-        # Rebuild when the scenegraph reference itself changes — wholesale
-        # replacement (self.sg = new_sg) doesn't fire the per-child dispatcher
-        # signals SGObserver listens to, so the cached FlatPass would keep
-        # rendering the old tree — and when the GL context changes, since the
-        # pass's GL objects belong to the one that made them.
-        same_context = gl_context == FLAT_CONTEXT
-        if FLAT is None or FLAT.scene is not sg or not same_context:
-            # Free the outgoing pass's GPU-side shadow maps before dropping it.
-            # We're inside OnDraw with the context current, so this is the safe
-            # point to delete those FBOs/textures rather than leak them when the
-            # cached pass is replaced on a scenegraph swap.
-            #
-            # Only when the outgoing pass belongs to the context that is
-            # current: its FBOs and textures die with their own context, and
-            # deleting names that mean something else here would take this
-            # context's objects instead.
-            if same_context and FLAT is not None and hasattr(FLAT, 'disposeShadowMaps'):
-                try:
-                    FLAT.disposeShadowMaps()
-                except Exception as err:
-                    log.debug("shadow map disposal on pass swap failed: %s", err)
+
+        def build():
             if context.contextDefinition.profile == 'core':
                 FlatPass = _core_flatpass_class()
             else:
                 log.info( 'Using compatibility profile' )
                 from OpenGLContext.passes.flatcompat import FlatPass
-            FLAT = FlatPass( sg, context.allContexts )
-            FLAT_CONTEXT = gl_context
+            built = FlatPass( sg, context.allContexts )
             if sg is None:
-                FLAT.integrate( context.renderedChildren()[0] )
+                built.integrate( context.renderedChildren()[0] )
+            return built
+
+        pass_ = cached_pass( sg, build )
         if context.contextDefinition.profile == 'core':
             # The core FlatPass takes its camera from the view platform only, so
             # bind the scene's active Viewpoint into the platform here (the legacy
             # path does this inside its scenegraph traversal instead).
             viewpointbinding.bind_scene_viewpoint( context )
-        return FLAT( context )
+        return pass_( context )
 defaultRenderPasses = _defaultRenderPasses()
 
 
 @contextresources.on_context_lost
 def drop_pass() -> None:
-    """Let go of the cached pass when the context that made it dies.
+    """Let go of this context's pass as the context dies.
 
     The context is still current here, so its shadow maps can be deleted rather
     than leaked; the pass itself goes because every other GL name it holds --
     programs, buffers, textures -- dies with the context, and the next window
     the driver hands the same address must not be given them to draw through.
-    """
-    global FLAT, FLAT_CONTEXT
-    from OpenGLContext.passes.shaderpass import gl_context_key
 
-    if FLAT is None or FLAT_CONTEXT != gl_context_key():
+    Only this context's.  Another window's pass is another window's, and it is
+    still drawing.
+    """
+    global FLAT
+    key = contextresources.context_key()
+    dying = _passes.pop( key, None )
+    if dying is None:
         return
-    if hasattr(FLAT, 'disposeShadowMaps'):
-        try:
-            FLAT.disposeShadowMaps()
-        except Exception as err:
-            log.debug("shadow map disposal on context loss failed: %s", err)
-    FLAT = None
-    FLAT_CONTEXT = None
+    _dispose( dying, 'context loss' )
+    if FLAT is dying:
+        FLAT = None

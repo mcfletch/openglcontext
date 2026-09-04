@@ -26,27 +26,67 @@ imported, so a backend only has to make the announcement.
 from __future__ import annotations
 
 import logging
-from typing import Callable, List
+from typing import Any, Callable, List
 
 log = logging.getLogger(__name__)
 
-__all__ = ['on_context_lost', 'context_lost']
+__all__ = [
+    'on_context_lost',
+    'forget_context_lost',
+    'context_lost',
+    'context_key',
+]
 
 #: Callables to run as a context is destroyed, in the order they registered.
 _callbacks: List[Callable[[], None]] = []
+
+
+def context_key() -> Any:
+    """An identifier for the GL context that is current, or ``None``.
+
+    What every cache here keys on, and what a callback compares against to know
+    whether the context going away is the one it holds objects for.  It is the
+    platform's own handle, so it is only unique among *live* contexts -- which
+    is why letting go as a context dies is what makes it trustworthy.
+    """
+    try:
+        from OpenGL import contextdata
+
+        return contextdata.getContext()
+    except Exception:                   # pragma: no cover - no GL at all
+        return None
 
 
 def on_context_lost(callback: Callable[[], None]) -> Callable[[], None]:
     """Call ``callback`` as each GL context is torn down.
 
     ``callback`` takes no arguments and is run with the dying context current,
-    so it may delete GL objects as well as forget them.  Registering the same
+    so it may delete GL objects as well as forget them, and
+    :func:`context_key` tells it which context that is.  Registering the same
     callable twice registers it once.  Returns ``callback``, so this reads as a
     decorator where that suits.
+
+    The registry holds a strong reference for the life of the process, which is
+    right for the module-level caches that register at import.  A callback bound
+    to an object that does not live that long has to be handed back with
+    :func:`forget_context_lost`.
     """
     if callback not in _callbacks:
         _callbacks.append(callback)
     return callback
+
+
+def forget_context_lost(callback: Callable[[], None]) -> bool:
+    """Stop calling ``callback``; True if it was registered.
+
+    Safe to call for one that was not, so an object tearing itself down need
+    not remember whether it got as far as registering.
+    """
+    try:
+        _callbacks.remove(callback)
+    except ValueError:
+        return False
+    return True
 
 
 def context_lost() -> None:
@@ -60,7 +100,7 @@ def context_lost() -> None:
     for callback in list(_callbacks):
         try:
             callback()
-        except Exception as err:                # pragma: no cover - defensive
+        except Exception as err:
             log.warning(
                 "Releasing GL resources for a closing context failed in %r: %s",
                 getattr(callback, '__qualname__', callback), err,

@@ -181,6 +181,17 @@ class GLUTContext(
         '''Acquire the GL "focus"'''
         Context.setCurrent(self)
         glutSetWindow(self.windowID)
+        self.bindContextResources(self._glHandle())
+
+    def _glHandle(self):
+        """The GL context handle the caches and PyOpenGL key on.
+
+        The GLUT window id is not it: what identifies a context to PyOpenGL is
+        the platform's own handle.  Read with this window current, which is the
+        only moment the answer is about this window.
+        """
+        from OpenGLContext import contextresources
+        return contextresources.context_key()
 
     def OnQuit(self, event=None):
         """Quit the application (forcibly)"""
@@ -190,7 +201,7 @@ class GLUTContext(
             # With the window still whole and its context current, so the caches
             # holding its GL names let go of them before they stop meaning
             # anything.
-            contextresources.context_lost()
+            self.releaseContextResources(self._glHandle())
             glutDestroyWindow(self.windowID)
         if glutLeaveMainLoop:
             glutLeaveMainLoop()

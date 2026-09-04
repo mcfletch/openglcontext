@@ -348,6 +348,18 @@ class GLFWContext(
         Context.setCurrent(self)
         if self.window:
             glfw.make_context_current(self.window)
+            self.bindContextResources(self._glHandle())
+
+    def _glHandle(self):
+        """The GL context handle the caches and PyOpenGL key on.
+
+        GLFW's window is not it: what identifies a context to PyOpenGL is the
+        platform's own handle, and asking for it is what the platform layer
+        does.  Read after the window is current, which is the only moment the
+        answer is about this window.
+        """
+        from OpenGLContext import contextresources
+        return contextresources.context_key()
 
     def SwapBuffers(self):
         """Swap the front and back buffers"""
@@ -459,7 +471,7 @@ class GLFWContext(
         # have to be let go before it is destroyed rather than left for a later
         # window that the driver hands the same identifier.
         if self.window:
-            contextresources.context_lost()
+            self.releaseContextResources(self._glHandle())
             glfw.destroy_window(self.window)
             self.window = None
         glfw.terminate()

@@ -988,9 +988,12 @@ class ShaderRenderMode:
         return getattr(self._base_mode, name)
 
 
-# The programs, and the GL context they were compiled in (lazy initialization).
-_shader_program: Optional[VRML97ShaderProgram] = None
-_shader_program_context: Any = None
+#: The programs, per GL context, compiled on the first frame that asks.
+_shader_programs: Dict[Any, VRML97ShaderProgram] = {}
+
+#: The identifier a cache keys on.  One implementation, in the module that owns
+#: the subject; this name is where the passes look for it.
+gl_context_key = contextresources.context_key
 
 
 def get_shader_program() -> VRML97ShaderProgram:
@@ -1000,27 +1003,21 @@ def get_shader_program() -> VRML97ShaderProgram:
     created it issued, and it means nothing in another one.  A second window
     handed the first one's programs draws through names its driver never
     issued -- GL_INVALID_VALUE from glUseProgram where the caller is lucky, and
-    some other object's name where it is not.  Recompiling is the cost of the
-    first frame in a context, which is where a shader compile belongs.
+    some other object's name where it is not.
+
+    A mapping rather than one slot, because a program holding two windows draws
+    both of them: one slot belongs to whichever drew last, so every frame of
+    every context misses and recompiles six programs. Compiling is the cost of
+    the first frame *in a context*, which is where a shader compile belongs.
 
     The same keying as the text renderers (``shadertext``) and the shadow
     capabilities (``shadowcaps``), for the same reason.
     """
-    global _shader_program, _shader_program_context
     context = gl_context_key()
-    if _shader_program is None or context != _shader_program_context:
-        _shader_program = VRML97ShaderProgram()
-        _shader_program_context = context
-    return _shader_program
-
-
-def gl_context_key() -> Any:
-    """An identifier for the GL context that is current, or None."""
-    try:
-        from OpenGL import contextdata
-        return contextdata.getContext()
-    except Exception:                   # pragma: no cover - no GL at all
-        return None
+    program = _shader_programs.get(context)
+    if program is None:
+        program = _shader_programs[context] = VRML97ShaderProgram()
+    return program
 
 
 @contextresources.on_context_lost
@@ -1031,10 +1028,7 @@ def drop_shader_programs() -> None:
     same address to; letting go as the context dies is what makes the key
     trustworthy.
     """
-    global _shader_program, _shader_program_context
-    if _shader_program is not None and _shader_program_context == gl_context_key():
-        _shader_program = None
-        _shader_program_context = None
+    _shader_programs.pop(gl_context_key(), None)
 
 
 def configure_light_from_node(

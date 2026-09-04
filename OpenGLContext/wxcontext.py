@@ -252,6 +252,11 @@ class wxContext(
             self.Bind(wx.EVT_RIGHT_UP, self.wxOnMouseButton )
             self.Bind(wx.EVT_MIDDLE_UP, self.wxOnMouseButton )
             self.Bind(wx.EVT_MOTION, self.wxOnMouseMove )
+            # The canvas going is the end of its GL context, and the caches
+            # holding that context's names have to be told while it is still
+            # whole.  EVT_WINDOW_DESTROY rather than EVT_CLOSE: a canvas is
+            # destroyed with its frame and never sees a close of its own.
+            self.Bind(wx.EVT_WINDOW_DESTROY, self.wxOnWindowDestroy )
             if hasattr( self, 'OnIdle' ):
                 self.Bind(wx.EVT_IDLE, self.wxOnIdle )
 
@@ -328,6 +333,35 @@ class wxContext(
         # commented out!
         #~ context.Context.OnResize( self ) # triggers a redraw
 
+    def _glHandle(self):
+        """The GL context handle the caches and PyOpenGL key on.
+
+        wx owns the context object and does not hand out a platform handle, so
+        it is read from the platform with the canvas current.
+        """
+        from OpenGLContext import contextresources
+        return contextresources.context_key()
+
+    def wxOnWindowDestroy(self, event):
+        """Let go of this context's GL objects as the canvas is destroyed.
+
+        Made current first: the caches may *delete* what they hold rather than
+        merely forget it, and deleting a name needs the context that issued it.
+        """
+        event.Skip()
+        if event.GetEventObject() is not self:
+            return                      # a child's destruction, not ours
+        try:
+            self.setCurrent()
+        except Exception as err:
+            log.debug( "cannot take the context to release it: %s", err )
+            self.releaseContextResources( None )
+            return
+        try:
+            self.releaseContextResources( self._glHandle() )
+        finally:
+            self.unsetCurrent()
+
     def wxOnEraseBackground(self, event):
         """Prevent flashing of the window by capturing and ignoring background erase events
 
@@ -346,6 +380,7 @@ class wxContext(
             """
             context.Context.setCurrent( self )
             self._wx_context.SetCurrent(self)
+            self.bindContextResources( self._glHandle() )
     else:
         def setCurrent (self):
             """Acquire the OpenGL "focus" (wxPython 3.x version)
@@ -356,6 +391,7 @@ class wxContext(
             """
             context.Context.setCurrent( self )
             glcanvas.GLCanvas.SetCurrent(self)
+            self.bindContextResources( self._glHandle() )
     def SwapBuffers (self): # happens to match the wx method
         """Swap the GL buffers (force flush as we do)"""
         glcanvas.GLCanvas.SwapBuffers(self)
