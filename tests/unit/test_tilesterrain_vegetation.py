@@ -150,9 +150,12 @@ class TestWhenItIsWrong:
             TilesTerrain(path, workers=1).shutdown()
 
     def test_a_record_whose_table_is_missing_is_reported(self, tmp_path) -> None:
+        """Named, because a bare Exception is also what a typo in this test
+        would raise: what a manifest promising a table that is not there has to
+        produce is the missing file, and by name."""
         path = _world(tmp_path)
         os.remove(os.path.join(str(tmp_path), 'trees.npz'))
-        with pytest.raises(Exception):
+        with pytest.raises(FileNotFoundError, match='trees.npz'):
             TilesTerrain(path, workers=1).shutdown()
 
 
