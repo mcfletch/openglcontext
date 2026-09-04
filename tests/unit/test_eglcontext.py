@@ -232,7 +232,15 @@ class TestOffscreenRendering:
         renderer.close()
 
     def test_it_works_as_a_context_manager(self):
-        with eglcontext.EGLContext(size=(16, 16)) as context:
+        # Built here rather than through `renderer`, because what is under test
+        # is the construction itself -- so the skip that fixture carries has to
+        # be repeated: a machine with no EGL device cannot answer this one way
+        # or the other, and must say so rather than fail.
+        try:
+            opened = eglcontext.EGLContext(size=(16, 16))
+        except eglcontext.EGLContextError as error:
+            pytest.skip(f'no offscreen EGL context available here: {error}')
+        with opened as context:
             assert context.display is not None
         assert context.display is None
 
