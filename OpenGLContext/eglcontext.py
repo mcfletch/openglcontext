@@ -27,14 +27,20 @@ and a CPU rasteriser, or several GPUs.  By default the engine renders on the
 first hardware device.  Two things change that:
 
 ``OPENGLCONTEXT_EGL_DEVICE``
-    An index into the device list, which overrides everything else.  Use it to
-    pin a run to one GPU of several.
+    An index into the device list.  Use it to pin a run to one GPU of several.
 ``LIBGL_ALWAYS_SOFTWARE`` / ``GALLIUM_DRIVER``
     When the environment asks for software rendering, a software device is
     chosen.  This is not merely a courtesy: asking Mesa for a display on a
     *hardware* device while software rendering is demanded is a contradiction it
     refuses and then crashes on, so honouring the request is what keeps the
     process alive.
+
+The two have to agree.  Where they do not -- a pinned GPU, or a machine with no
+software device on it, while software rendering is demanded -- the request is
+refused with an :class:`EGLContextError` naming both settings, rather than
+served with the device that would take the process down.  Every other mismatch
+falls back: wanting a GPU and finding only a CPU rasteriser is slow, not fatal,
+so it renders and says so in the log.
 
 ``devices()`` reports what is available and what each one is.
 
@@ -91,6 +97,17 @@ _SOFTWARE_DRIVERS = ('llvmpipe', 'softpipe', 'swr', 'swrast', 'lavapipe')
 #: Environment variable pinning the run to one device by index.
 DEVICE_VARIABLE = 'OPENGLCONTEXT_EGL_DEVICE'
 
+#: Said when the environment asks for software rendering and only a GPU is on
+#: offer.  Mesa refuses to force software rasterisation onto a display built on
+#: a hardware device, and having refused it dereferences the screen it declined
+#: to build -- so this pair is not a slow render but a lost process, and the
+#: caller is told which of the two settings to drop.
+_CONTRADICTION = (
+    'software rendering is demanded (LIBGL_ALWAYS_SOFTWARE / GALLIUM_DRIVER) '
+    'but %s, which is a hardware device.  Mesa crashes rather than forcing '
+    'software rasterisation onto one, so drop one of the two settings.'
+)
+
 
 class EGLContextError(RuntimeError):
     """An offscreen context could not be created, or was misconfigured."""
@@ -133,19 +150,25 @@ def chooseDevice(available, environ=None):
                 '%s=%d is out of range; %d device(s) available'
                 % (DEVICE_VARIABLE, index, len(available))
             )
-        return available[index]
+        device = available[index]
+        if prefersSoftware(environ) and not device.software:
+            raise EGLContextError(_CONTRADICTION % (
+                '%s=%d names %r' % (DEVICE_VARIABLE, index, device),
+            ))
+        return device
 
     wantSoftware = prefersSoftware(environ)
     for device in available:
         if device.software == wantSoftware:
             return device
-    # Nothing of the preferred kind. Rendering on the wrong sort of device beats
-    # not rendering, and the caller can see what it got from the log.
-    log.warning(
-        'no %s EGL device available; using %r',
-        'software' if wantSoftware else 'hardware',
-        available[0],
-    )
+    if wantSoftware:
+        raise EGLContextError(_CONTRADICTION % (
+            'the only device(s) here are %s'
+            % ', '.join(repr(device) for device in available),
+        ))
+    # Wanting a GPU and being offered only a CPU rasteriser is merely slow, so
+    # it runs; the caller can see what it got from the log.
+    log.warning('no hardware EGL device available; using %r', available[0])
     return available[0]
 
 

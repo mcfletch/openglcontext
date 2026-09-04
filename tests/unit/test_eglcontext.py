@@ -71,11 +71,21 @@ class TestChooseDevice:
         )
         assert chosen.index == 1
 
-    def test_falls_back_to_the_first_device_when_the_preferred_kind_is_absent(self):
-        """One device and a contrary preference still has to return something."""
-        chosen = eglcontext.chooseDevice(
-            (device(0),), environ={'LIBGL_ALWAYS_SOFTWARE': '1'}
-        )
+    def test_a_gpu_serves_where_no_software_device_was_offered(self):
+        """Wanting software and being offered only a GPU is refused, not
+        substituted: Mesa will not force software rasterisation onto a display
+        built on a hardware device, and having said so it dereferences the
+        screen it declined to build. Rendering on the wrong sort of device does
+        beat not rendering -- but this pair does not render, it dumps core."""
+        with pytest.raises(eglcontext.EGLContextError,
+                           match='LIBGL_ALWAYS_SOFTWARE'):
+            eglcontext.chooseDevice(
+                (device(0),), environ={'LIBGL_ALWAYS_SOFTWARE': '1'}
+            )
+
+    def test_falls_back_to_the_first_device_when_a_gpu_was_wanted(self):
+        """The mismatch the other way round is only slow, so it still runs."""
+        chosen = eglcontext.chooseDevice((device(0, software=True),), environ={})
         assert chosen.index == 0
 
     def test_an_explicit_index_wins(self):
@@ -85,12 +95,26 @@ class TestChooseDevice:
         )
         assert chosen.index == 1
 
-    def test_an_explicit_index_wins_over_the_software_preference(self):
+    def test_an_explicit_gpu_with_software_demanded_is_refused(self):
+        """Explicit or not, this is the pair that crashes; the caller is told
+        which of the two settings to drop rather than losing the process."""
+        with pytest.raises(eglcontext.EGLContextError) as raised:
+            eglcontext.chooseDevice(
+                (device(0), device(1, software=True)),
+                environ={'OPENGLCONTEXT_EGL_DEVICE': '0',
+                         'LIBGL_ALWAYS_SOFTWARE': '1'},
+            )
+        message = str(raised.value)
+        assert 'OPENGLCONTEXT_EGL_DEVICE' in message
+        assert 'LIBGL_ALWAYS_SOFTWARE' in message
+
+    def test_an_explicit_index_naming_the_software_device_is_fine(self):
         chosen = eglcontext.chooseDevice(
             (device(0), device(1, software=True)),
-            environ={'OPENGLCONTEXT_EGL_DEVICE': '0', 'LIBGL_ALWAYS_SOFTWARE': '1'},
+            environ={'OPENGLCONTEXT_EGL_DEVICE': '1',
+                     'LIBGL_ALWAYS_SOFTWARE': '1'},
         )
-        assert chosen.index == 0
+        assert chosen.index == 1
 
     def test_an_out_of_range_index_is_refused_by_name(self):
         with pytest.raises(eglcontext.EGLContextError, match='OPENGLCONTEXT_EGL_DEVICE'):
