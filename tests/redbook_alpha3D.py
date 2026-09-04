@@ -48,7 +48,11 @@
  */
 """
 from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+# 'glut', because the scene is drawn with glutSolidSphere and glutSolidCube:
+# those need GLUT initialised, which only the GLUT backend does. Left to the
+# default backend the window opens and freeglut then refuses the first call
+# for want of glutInit.
+BaseContext = testingcontext.getInteractive( 'glut' )
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *

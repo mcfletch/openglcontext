@@ -28,9 +28,15 @@ def drawCube():
                 try:
                     glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
                     try:
-                        glEnable( GL_VERTEX_ARRAY )
-                        glEnable( GL_NORMAL_ARRAY )
-                        glEnable( GL_TEXTURE_COORD_ARRAY )
+                        # glEnableClientState, not glEnable: the array enables
+                        # are client state, and glEnable takes only the
+                        # capability enums.  Asked the other way it raises
+                        # GL_INVALID_ENUM and the arrays stay switched off, so
+                        # the draw that follows reads whatever was enabled
+                        # before it.
+                        glEnableClientState( GL_VERTEX_ARRAY )
+                        glEnableClientState( GL_NORMAL_ARRAY )
+                        glEnableClientState( GL_TEXTURE_COORD_ARRAY )
                         glVertexPointer( 3, GL_FLOAT, 32, data+20 )
                         glNormalPointer( GL_FLOAT, 32, data+8 )
                         glTexCoordPointer( 2, GL_FLOAT, 32, data )
@@ -41,18 +47,19 @@ def drawCube():
                     data.unbind()
             VBO = draw 
         else:
-            data = array( list(yieldVertices( (2,2,2) )), 'f')
+            # box.yieldVertices, as the buffer path above spells it: there is no
+            # bare yieldVertices in this module to find.
+            data = array( list(box.yieldVertices( (2,2,2) )), 'f')
             def draw():
+                # No unbind to pair with: this path holds a plain array rather
+                # than a buffer object, and nothing was bound to release.
+                glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
                 try:
-                    glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
-                    try:
-                        # interleaved arrays is not 3.1 compatible,
-                        # but this is the old-code path...
-                        glInterleavedArrays( GL_T2F_N3F_V3F, 0, data )
-                        glDrawArrays( GL_TRIANGLES, 0, 36 )
-                    finally:
-                        glPopClientAttrib()
+                    # interleaved arrays is not 3.1 compatible,
+                    # but this is the old-code path...
+                    glInterleavedArrays( GL_T2F_N3F_V3F, 0, data )
+                    glDrawArrays( GL_TRIANGLES, 0, 36 )
                 finally:
-                    data.unbind()
+                    glPopClientAttrib()
             VBO = draw 
     return VBO()

@@ -218,6 +218,21 @@ def _check_glut_available():
         return False
 
 
+def _check_win32ui_available():
+    """Whether pywin32's ``win32ui`` can be imported.
+
+    Being on Windows is not the same as having this: it comes from pywin32,
+    which is a separate install, and the WGL font demos ask it for the device
+    context they build a font in. Without it they cannot run, which is a
+    different thing from the platform being wrong for them.
+    """
+    try:
+        import win32ui
+        return True
+    except Exception:
+        return False
+
+
 def _is_windows():
     """Check if running on Windows."""
     return sys.platform == 'win32'
@@ -234,6 +249,7 @@ HAS_WX = _check_wx_available()
 HAS_PYGAME = _check_pygame_available()
 HAS_GLUT = _check_glut_available()
 HAS_COVERAGE = _check_coverage_available()
+HAS_WIN32UI = _check_win32ui_available()
 IS_WINDOWS = _is_windows()
 
 
@@ -622,8 +638,15 @@ def generate_html_report(results: List[VisualTestResult], output_path: Path) -> 
 # Script Categories
 # =============================================================================
 
-# Scripts that require wxPython
+# Scripts that require wxPython.
+#
+# A script can need more than one thing, and is listed under each: glprint.py
+# draws with WGL bitmap fonts *and* opens a wx window, so on Windows -- where
+# the WGL gate lets it through -- wxPython is what decides whether it can run.
+# Being named here and under WINDOWS_SCRIPTS is the point rather than an
+# oversight.
 WX_SCRIPTS = [
+    'glprint.py',
     'wx_font.py',
     'wx_multiple_contexts.py',
     'wx_with_controls.py',
@@ -641,6 +664,14 @@ WINDOWS_SCRIPTS = [
     'wgl_bitmap_font.py',
     'wgl_font.py',
     'wglpixelformatarb.py',
+]
+
+# Scripts that additionally need pywin32's win32ui, which Windows does not
+# carry on its own: these build a font into a device context they ask it for.
+WIN32UI_SCRIPTS = [
+    'glprint.py',
+    'wgl_bitmap_font.py',
+    'wgl_font.py',
 ]
 
 # Scripts that are test runners (not individual tests)
@@ -771,6 +802,9 @@ def should_skip_script(script_name: str) -> Optional[str]:
 
     if script_name in WINDOWS_SCRIPTS and not IS_WINDOWS:
         return "Windows-only script"
+
+    if script_name in WIN32UI_SCRIPTS and not HAS_WIN32UI:
+        return "pywin32 (win32ui) not available"
 
     if script_name in GLUT_SCRIPTS and not HAS_GLUT:
         return "GLUT not available"
