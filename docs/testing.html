@@ -175,6 +175,33 @@ xvfb-run -a python -m pytest -m "serial and not visual and not performance"</pre
     <code>OPENGLCONTEXT_NO_VSYNC=1</code> stops a swap blocking on a compositor
     frame callback. Set <code>OPENGLCONTEXT_HIDDEN=0</code> to watch a test
     render, which is how you find out why one looks wrong.</p>
+
+  <h3>macOS with no window server</h3>
+  <p><code>hidden_window</code> makes a GLFW window where it can and falls back
+    to <strong>CGL</strong> where it cannot. GLFW asks macOS for an
+    <em>accelerated</em> pixel format and nothing else, so on a machine with no
+    accelerated renderer &mdash; a virtual machine, a CI runner, a session
+    nobody is logged into &mdash; it can create no context at all, whatever
+    hints it is given. CGL is the layer NSGL is built on and will.</p>
+  <p>Nothing a test does has to change. <code>backend()</code> says which one
+    answered, and the two places where a window and an offscreen target differ
+    have an answer that works for both:</p>
+  <dl>
+    <dt><code>framebuffer_size(window)</code></dt>
+    <dd>How big the framebuffer is. The fixtures yield a GLFW window handle
+      under GLFW and an <code>OffscreenWindow</code> under CGL, and a test that
+      wants the size should not have to know which.</dd>
+    <dt><code>color_buffer_attachment()</code></dt>
+    <dd>Which attachment holds the colour: <code>GL_BACK_LEFT</code> for a
+      window, <code>GL_COLOR_ATTACHMENT0</code> for an offscreen target, which
+      is a framebuffer object.</dd>
+  </dl>
+  <p>A CGL context has no drawable and so no framebuffer zero; an offscreen
+    target is bound in its place, and drawing and reading back behave as they do
+    on a window. What macOS does not have is skipped rather than substituted:
+    there is no compatibility profile above 2.1 there, so the fixed-function
+    render arms and <code>gl_context_compat</code> skip with that as the
+    reason.</p>
 </section>
 
 <section id="subprocess">

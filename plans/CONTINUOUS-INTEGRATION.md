@@ -18,7 +18,7 @@ for open source. So the two implementations CI uses are the two that are free:
 | Job | Implementation | What it covers |
 |---|---|---|
 | `llvmpipe` (`ubuntu-latest`, under `xvfb-run`) | Mesa llvmpipe, GL 4.5 core and compatibility | Everything that is not about speed or about pixels matching a blessed image. The same renderer on every run, so a difference between runs means something. |
-| `macos` (`macos-14`, `macos-15`) | Apple GL 4.1 core, on a real GPU | A second vendor's driver. Mesa is lenient; a call that survives on it because of that fails here. No compatibility profile at all, so the fixed-function arms skip. |
+| `macos` (`macos-14`, `macos-15`) | Apple GL through **CGL** | A second vendor's implementation. Mesa is lenient; a call that survives on it because of that fails here. No compatibility profile above 2.1 there, so the fixed-function arms skip. |
 
 `LIBGL_ALWAYS_SOFTWARE=1` reproduces the Linux job on a machine with a GPU,
 which is how a failure seen in CI is chased locally.
@@ -40,10 +40,41 @@ from a CI run's artifacts. Until those exist this job does not pretend to guard
 rendering, and says so rather than raising the tolerance, which would blind the
 GPU runs too.
 
-**`performance` on llvmpipe.** An assertion about how fast something draws is
-unanswerable on a CPU rasteriser: `test_the_animation_half_leaves_the_frame_to_the_drawing`
+**`performance`.** An assertion about how fast something draws is unanswerable
+on a CPU rasteriser: `test_the_animation_half_leaves_the_frame_to_the_drawing`
 would *pass* there, because drawing costs orders of magnitude more, having
-measured nothing. The macOS jobs do run them — those machines have GPUs.
+measured nothing. The llvmpipe job deselects them outright. The macOS jobs do
+not, but what answers there is Apple's CPU renderer as well (see below), so the
+plugin skips them of its own accord and names the renderer in the reason. Timing
+assertions belong on a machine with a GPU in it, which no free runner is.
+
+## macOS has no window server, so GLFW cannot serve it
+
+The first run of the macOS jobs failed before a test ran:
+
+    GLFWError: (65545) NSGL: Failed to find a suitable pixel format
+
+GLFW's `nsgl_context.m` asks for `NSOpenGLPFAAccelerated` unconditionally, and
+those runners are virtual machines with no accelerated renderer for the runner's
+session. No hint changes it; projects that need it patch GLFW's own source. So
+**no GLFW context can be created on one at all** — which also corrects an
+assumption in the table above: what answers there is Apple's CPU renderer, not a
+GPU. That is still the point of the job, since what llvmpipe cannot cover is a
+second *implementation*, not a second speed.
+
+CGL is the layer NSGL and AGL are built on and the only one of the three that
+hands out a context with no window server. `OpenGL.CGL` is the binding for it,
+new in PyOpenGL and public: pixel-format attributes, the three profiles macOS
+offers, renderer ids, error codes, `headless_context()` and `OffscreenTarget`.
+Two things about it are not incidental — there is no framebuffer zero without a
+drawable, so a framebuffer object is bound in its place; and a machine with no
+accelerated renderer cannot be *asked* for one, so the pixel format is chosen by
+trying acceleration, then no preference, then Apple's CPU renderer by id.
+
+`hidden_window` falls back to it where GLFW will not open a window, so nothing a
+test does has to change. `backend()` says which answered; `framebuffer_size()`
+and `color_buffer_attachment()` are the two places a window and an offscreen
+target differ, and answer for both.
 
 ## What it needed
 
@@ -92,6 +123,23 @@ It joins `serial` (needs a quiet machine) and `visual` (compares against a
 blessed image) rather than replacing either. Every `performance` test is also
 `serial`; the reverse does not follow.
 
+## A hazard this uncovered
+
+`OpenGL/_dispatch/_tables.py` holds `ARRAY_TYPES` as a **positional** list, and
+the compiled `OpenGL_accelerate.dispatch` indexes into it. Adding an element
+type shifts every index after it, so a tree whose Python is newer than its built
+extension hands out the *wrong array class* — `GLubyteArray` came back as
+`GLshortArray`, and a `glGetBufferSubData` of 64 bytes returned 128. No error,
+no warning: ten skinning tests failed on a reshape, three call frames away from
+the cause.
+
+Rebuilding the extension is the whole of the fix, and every tox environment
+rebuilds it, which is why only the developer venv was affected. But nothing
+detects the mismatch. The generated `pygl_elements.h` already records the array
+class name beside each index, so `_configure` could compare the names it was
+compiled with against the list it is handed and refuse a mismatch. Worth doing:
+the failure mode is a wrong answer rather than a crash.
+
 ## Still open
 
 - **Per-renderer reference baselines**, so the `visual` tests can run in CI.
@@ -99,5 +147,7 @@ blessed image) rather than replacing either. Every `performance` test is also
   commitment in `docs/structure.html` covers five backends; two of them are
   under test here.
 - **A Python version matrix.** Both jobs run 3.12. The floor is 3.10.
+- **A drift check between `_tables.py` and the built extension**, per the
+  hazard above.
 - **A GPU job**, if one is ever wanted: a self-hosted runner is the only free
   way to a real GPU, and needs the fork-PR precautions that go with one.

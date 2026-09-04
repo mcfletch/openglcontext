@@ -125,20 +125,27 @@ jobs:
           python -m pip install --pre -e .[dev]
 
       - name: Report the renderer under test
+        # Exits non-zero where no context can be made: a suite that found no GL
+        # would skip its way to green having rendered nothing, which reads the
+        # same as a pass.  It also says which backend answered -- GLFW asks
+        # macOS for an accelerated pixel format and nothing else, so on a
+        # runner with no accelerated renderer it makes no context at all and
+        # the CGL fallback is what runs.
         run: |
           python -c "
-          from OpenGLContext.testing.glcontext import describe_gl
-          description = describe_gl()
+          from OpenGLContext.testing import glcontext
+          description = glcontext.describe_gl()
           if description is None:
               raise SystemExit('no GL context could be created')
+          print('backend', glcontext.backend())
           print(description)
           "
 
       - name: Run the tests
         # Apple's GL is 4.1 core with no compatibility profile at all, so the
         # fixed-function render arms have no context to run in and skip. What
-        # this job is here for is the core-profile half against a driver that
-        # is not Mesa.
+        # this job is here for is the core-profile half against an
+        # implementation that is not Mesa.
         run: python -m pytest -v -m "not serial and not visual"
 
       - name: Run the tests that need a quiet machine
