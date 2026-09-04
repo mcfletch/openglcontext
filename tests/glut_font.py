@@ -13,10 +13,16 @@ SHORT_TEST = "Short Str\nHere"
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit(self):
-        """Create the font for use later"""
-        self.font = glutfont.GLUTFontProvider.get( FontStyle( family=["Arial","SANS"]))
+        """Create the font for use later
+
+        The provider is handed this context: GLUT bitmap fonts are refused
+        outside a GLUT context, and up here there is no render mode yet to
+        carry one.
+        """
+        self.font = glutfont.GLUTFontProvider.get(
+            FontStyle( family=["Arial","SANS"]), self )
         self.extraFonts = [
-            glutfont.GLUTFontProvider.get( FontStyle( family=family))
+            glutfont.GLUTFontProvider.get( FontStyle( family=family), self )
             for family in [
                 "SANS", "TYPEWRITER", "SERIF",
             ]

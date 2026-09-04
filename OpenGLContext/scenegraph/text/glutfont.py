@@ -96,14 +96,19 @@ class _GLUTFontProvider (fontprovider.FontProvider):
         when called without a live GLUT context, so we refuse to serve fonts
         in any other backend. getProviderFont catches this and falls back to
         a shader/texture-atlas provider.
+
+        ``mode`` may be a render mode, which carries the context it is drawing
+        for, or the context itself: a program that builds its fonts up front
+        has a context in hand and no mode yet, and asking it to invent one to
+        answer a question about the context is asking the wrong thing.
         """
-        context = getattr( mode, 'context', None )
-        if not getattr( context, 'providesGLUT', False ):
-            raise RuntimeError(
-                """GLUT bitmap fonts require a GLUT context; """
-                """refusing to use them in a non-GLUT environment"""
-            )
-        return super( _GLUTFontProvider, self ).get( fontStyle, mode )
+        for candidate in (getattr( mode, 'context', None ), mode):
+            if getattr( candidate, 'providesGLUT', False ):
+                return super( _GLUTFontProvider, self ).get( fontStyle, mode )
+        raise RuntimeError(
+            """GLUT bitmap fonts require a GLUT context; """
+            """refusing to use them in a non-GLUT environment"""
+        )
     def create( self, fontStyle, mode=None ):
         """Create a new font for the given fontStyle and mode"""
         family, size = self.match(fontStyle, mode)

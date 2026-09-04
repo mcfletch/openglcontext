@@ -52,10 +52,21 @@ FRAMES = 120
 
 
 def _run(mode, shapes=SHAPES):
+    """The harness's reading, or None where this machine cannot render at all.
+
+    Only exit 3 -- the harness's own "no GL" -- is a reason to go without a
+    measurement. Anything else is the harness failing, and is raised with what
+    it said: a run that quietly skips is a performance gate reporting green
+    while measuring nothing, which is the one thing it must never do.
+    """
     proc = subprocess.run([sys.executable, HARNESS, mode, str(shapes), str(FRAMES)],
                           capture_output=True, text=True, timeout=300)
     if proc.returncode == 3:
         return None
+    if proc.returncode != 0:
+        raise AssertionError(
+            'the instancing harness (%s, %d shapes) exited %d:\n%s'
+            % (mode, shapes, proc.returncode, proc.stderr[-2000:]))
     for line in reversed(proc.stdout.strip().splitlines()):
         line = line.strip()
         if line.startswith('{'):
@@ -63,23 +74,28 @@ def _run(mode, shapes=SHAPES):
                 return json.loads(line)
             except ValueError:
                 continue
-    return None
+    raise AssertionError(
+        'the instancing harness (%s, %d shapes) exited 0 but printed no '
+        'reading:\nstdout: %s\nstderr: %s'
+        % (mode, shapes, proc.stdout[-1000:], proc.stderr[-2000:]))
+
+
+def _both(shapes):
+    """One reading each way, or a skip where there is no GL to have them with."""
+    on, off = _run('on', shapes), _run('off', shapes)
+    if on is None or off is None:
+        pytest.skip('no usable GL context for the instancing perf harness')
+    return on, off
 
 
 @pytest.fixture(scope='module')
 def perf():
-    on, off = _run('on'), _run('off')
-    if not on or not off:
-        pytest.skip('no usable GL context for the instancing perf harness')
-    return on, off
+    return _both(SHAPES)
 
 
 @pytest.fixture(scope='module')
 def timed():
-    on, off = _run('on', TIMED_SHAPES), _run('off', TIMED_SHAPES)
-    if not on or not off:
-        pytest.skip('no usable GL context for the instancing perf harness')
-    return on, off
+    return _both(TIMED_SHAPES)
 
 
 def test_instancing_collapses_draw_calls(perf):
