@@ -117,10 +117,12 @@ class EventManager(object):
             if __debug__:
                 log.info( """Register(%(capture)s): %(metaKey)r for node %(node)r -> %(function)r"""%locals())
             dispatcher.connect( function, sender=node, signal=metaKey )
-            assert len(dispatcher.getReceivers(
+            # Live receivers here too, and for the same reason: a dead entry
+            # beside the one just connected is not a second handler.
+            assert len(list(dispatcher.liveReceivers(dispatcher.getReceivers(
                 sender=node,
                 signal=metaKey,
-            )) == 1, """Have != 1 registered handlers for %(metaKey)r for node %(node)r"""%locals()
+            )))) == 1, """Have != 1 registered handlers for %(metaKey)r for node %(node)r"""%locals()
         return previous
     registerCallback = classmethod( registerCallback )
     def _removeCurrentCallbacks(
@@ -162,10 +164,20 @@ class EventManager(object):
                 signal = metaKey,
                 sender=node,
             )
-        assert len(dispatcher.getReceivers(
+        # Live receivers, not raw entries.  A raw entry whose weak reference has
+        # died is not a registered callback -- it is bookkeeping pydispatch has
+        # not swept, and the walk above rightly disconnected nothing for it.
+        #
+        # One arrives whenever a context binds one bound method to two keys, as
+        # every context does: F2 and Alt+S both call requestScreenshot, and
+        # pydispatch keeps one back-reference per receiver, so de-registering
+        # either key takes it away and the object's death then removes nothing.
+        # Counting the tombstone turns opening a second window into an
+        # AssertionError raised from a constructor.
+        assert not list(dispatcher.liveReceivers(dispatcher.getReceivers(
             sender=node,
             signal=metaKey,
-        )) == 0, """Event callback de-registration failed: %(cls)s %(key)s %(node)r"""%locals()
+        ))), """Event callback de-registration failed: %(cls)s %(key)s %(node)r"""%locals()
         return receiver
     _removeCurrentCallbacks = classmethod( _removeCurrentCallbacks )
 
