@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import sys
 from typing import Any, Iterator, Mapping, Sequence
 
 from OpenGLContext import contextresources
@@ -127,6 +128,139 @@ def _check_compatibility(glfw: Any, window: Any) -> None:
             'asked for; GL_LIGHTING is unavailable: %s' % (err,)) from err
 
 
+#: Which GLFW hint names a buffer CGL also takes, and what CGL calls it.
+_CGL_BUFFER_HINTS = {
+    'ALPHA_BITS': 'alpha_size',
+    'DEPTH_BITS': 'depth_size',
+    'STENCIL_BITS': 'stencil_size',
+    'SAMPLES': 'samples',
+}
+
+
+def cgl_profile_for(profile: str, version: Sequence[int]) -> str:
+    """The CGL profile serving this request, or say why there is none.
+
+    macOS offers a legacy 2.1 profile, a 3.2 core one and a 4.1 core one, and
+    no compatibility profile above 2.1 -- so a request for the fixed-function
+    pipeline at 3.3 is refused rather than served with a 2.1 context, which
+    would let the test pass having exercised something else.
+    """
+    major, minor = version
+    if profile == 'any':
+        return 'legacy'
+    if profile == 'compatibility':
+        raise GLUnavailable(
+            'macOS has no compatibility profile above 2.1, and %d.%d was asked '
+            'for; the fixed-function paths cannot run here' % (major, minor))
+    if (major, minor) >= (4, 1):
+        return 'core4'
+    if (major, minor) >= (3, 2):
+        return 'core3'
+    raise GLUnavailable(
+        'a core profile below 3.2 does not exist; %d.%d was asked for'
+        % (major, minor))
+
+
+def cgl_buffer_sizes(hints: Mapping[str, int] | None) -> dict:
+    """The CGL buffer sizes a caller's GLFW hints ask for.
+
+    A hint CGL has no answer for is refused rather than dropped: a test that
+    asked for something and did not get it is a test that passed for the wrong
+    reason.
+    """
+    sizes = {}
+    for name, value in (hints or {}).items():
+        if name not in _CGL_BUFFER_HINTS:
+            raise GLUnavailable(
+                'the %s hint has no CGL equivalent, so this window cannot be '
+                'made without one' % (name,))
+        sizes[_CGL_BUFFER_HINTS[name]] = value
+    return sizes
+
+
+class OffscreenWindow:
+    """What :func:`hidden_window` yields where there is no window.
+
+    A CGL context has no drawable and so no framebuffer zero; ``target`` is the
+    framebuffer object standing in for one, and is bound while this is current.
+    ``size`` is what a caller asks :func:`framebuffer_size` for.
+    """
+
+    __slots__ = ('context', 'size', 'target')
+
+    def __init__(self, context: Any, target: Any, size: Sequence[int]) -> None:
+        self.context = context
+        self.target = target
+        self.size = tuple(size)
+
+    def __repr__(self) -> str:
+        width, height = self.size
+        return '<%s %dx%d>' % (self.__class__.__name__, width, height)
+
+
+def color_buffer_attachment() -> Any:
+    """Which attachment of the drawing framebuffer holds its colour.
+
+    A window's is ``GL_BACK_LEFT``; an offscreen target's is
+    ``GL_COLOR_ATTACHMENT0``, since it is a framebuffer object. A test asking
+    the framebuffer about its own colour buffer has to name the right one.
+    """
+    from OpenGL import GL as gl
+
+    if _BACKEND == 'cgl':
+        return gl.GL_COLOR_ATTACHMENT0
+    return gl.GL_BACK_LEFT
+
+
+def framebuffer_size(window: Any) -> tuple:
+    """How big the framebuffer of ``window`` is, whichever backend made it.
+
+    A test that wants to know should not have to know what made the context.
+    """
+    if isinstance(window, OffscreenWindow):
+        return window.size
+    glfw = _glfw()
+    return tuple(glfw.get_framebuffer_size(window))
+
+
+#: 'glfw', 'cgl', or None until something has been created.
+_BACKEND: str | None = None
+
+
+def backend() -> str | None:
+    """Which backend made the contexts in this process, once one has been."""
+    return _BACKEND
+
+
+@contextlib.contextmanager
+def _cgl_window(size: Sequence[int], profile: str, version: Sequence[int],
+                hints: Mapping[str, int] | None) -> Iterator[Any]:
+    """A CGL context with an offscreen target bound, current for the body."""
+    try:
+        from OpenGL import CGL
+    except ImportError as err:                     # pragma: no cover - old PyOpenGL
+        raise GLUnavailable('this PyOpenGL has no CGL: %s' % (err,)) from err
+    cgl_profile = cgl_profile_for(profile, version)
+    sizes = cgl_buffer_sizes(hints)
+    width, height = size
+    # The pixel format is not what a caller reads back from: with no drawable
+    # there is nothing behind it, and the target below is the framebuffer that
+    # answers.  So a request for no alpha has to reach the target's own format.
+    from OpenGL import GL as gl
+    color_format = gl.GL_RGB8 if sizes.get('alpha_size') == 0 else gl.GL_RGBA8
+    try:
+        with CGL.headless_context(profile=cgl_profile, **sizes) as context:
+            target = CGL.OffscreenTarget(width, height, color_format=color_format)
+            try:
+                yield OffscreenWindow(context, target, (width, height))
+            finally:
+                contextresources.context_lost()
+                target.release()
+    except CGL.CGLError as err:
+        raise GLUnavailable('no CGL %s context here: %s'
+                            % (cgl_profile, err)) from err
+
+
 @contextlib.contextmanager
 def hidden_window(title: str = 'OpenGLContext test',
                   size: Sequence[int] = DEFAULT_SIZE,
@@ -134,7 +268,7 @@ def hidden_window(title: str = 'OpenGLContext test',
                   version: Sequence[int] = DEFAULT_VERSION,
                   forward_compatible: bool = False,
                   hints: Mapping[str, int] | None = None) -> Iterator[Any]:
-    """An unmapped GLFW window, current for the body, gone afterwards.
+    """An unmapped window, current for the body, gone afterwards.
 
     ``title`` names the window (a diagnostic; nothing shows it), ``size`` is
     ``(width, height)`` in pixels, and ``profile`` is one of :data:`PROFILES`.
@@ -143,9 +277,39 @@ def hidden_window(title: str = 'OpenGLContext test',
     name: value}`` a caller needs -- for example ``{'ALPHA_BITS': 0}`` for a
     window whose readback should have no alpha.
 
-    Yields the GLFW window handle. Raises :class:`GLUnavailable` if there is no
-    ``glfw``, no display, or the driver will not give the profile asked for.
+    Yields the GLFW window handle, or an :class:`OffscreenWindow` where the
+    context came from CGL; :func:`framebuffer_size` reads the size of either.
+    Raises :class:`GLUnavailable` if there is no ``glfw``, no display, or the
+    driver will not give the profile asked for.
+
+    **Where GLFW cannot make a context, CGL is tried.** GLFW asks macOS for an
+    accelerated pixel format and nothing else, so on a machine with no
+    accelerated renderer it can make none at all; CGL is the layer underneath
+    and will. There is no framebuffer zero in one, so an offscreen target is
+    bound in its place and drawing and reading back behave as they do on a
+    window.
     """
+    global _BACKEND
+    if _BACKEND != 'cgl':
+        try:
+            with _glfw_window(title, size, profile, version,
+                              forward_compatible, hints) as window:
+                _BACKEND = 'glfw'
+                yield window
+            return
+        except GLUnavailable:
+            if _BACKEND == 'glfw' or sys.platform != 'darwin':
+                raise
+    with _cgl_window(size, profile, version, hints) as window:
+        _BACKEND = 'cgl'
+        yield window
+
+
+@contextlib.contextmanager
+def _glfw_window(title: str, size: Sequence[int], profile: str,
+                 version: Sequence[int], forward_compatible: bool,
+                 hints: Mapping[str, int] | None) -> Iterator[Any]:
+    """An unmapped GLFW window, current for the body, gone afterwards."""
     glfw = _glfw()
     # The engine reads this to pick a backend; a test that goes on to build an
     # OpenGLContext context inside the window gets the one that owns it.

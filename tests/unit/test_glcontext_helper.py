@@ -73,15 +73,18 @@ class TestTheWindowItGives:
         glfw = pytest.importorskip('glfw')
         try:
             with hidden_window('hidden') as window:
+                if glcontext.backend() != 'glfw':
+                    # A CGL context has no window to be mapped or not.
+                    pytest.skip('there is no window under the %s backend'
+                                % (glcontext.backend(),))
                 assert not glfw.get_window_attrib(window, glfw.VISIBLE)
         except GLUnavailable as err:
             pytest.skip(str(err))
 
     def test_it_is_the_size_that_was_asked_for(self):
-        glfw = pytest.importorskip('glfw')
         try:
             with hidden_window('sized', size=(96, 48)) as window:
-                assert tuple(glfw.get_framebuffer_size(window)) == (96, 48)
+                assert glcontext.framebuffer_size(window) == (96, 48)
         except GLUnavailable as err:
             pytest.skip(str(err))
 
@@ -89,7 +92,6 @@ class TestTheWindowItGives:
         """``hints`` is how a test asks for the one thing the arguments do not
         cover -- here a colour buffer with no alpha in it to read back."""
         from OpenGL.GL import (
-            GL_BACK_LEFT,
             GL_FRAMEBUFFER,
             GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE,
             glGetFramebufferAttachmentParameteriv,
@@ -97,7 +99,7 @@ class TestTheWindowItGives:
         try:
             with hidden_window('alpha', hints={'ALPHA_BITS': 0}):
                 bits = glGetFramebufferAttachmentParameteriv(
-                    GL_FRAMEBUFFER, GL_BACK_LEFT,
+                    GL_FRAMEBUFFER, glcontext.color_buffer_attachment(),
                     GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE)
         except GLUnavailable as err:
             pytest.skip(str(err))
@@ -107,7 +109,6 @@ class TestTheWindowItGives:
         """GLFW hints are process-global and sticky, so without a reset the
         window a test gets is the one the *previous* test asked for."""
         from OpenGL.GL import (
-            GL_BACK_LEFT,
             GL_FRAMEBUFFER,
             GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE,
             glGetFramebufferAttachmentParameteriv,
@@ -117,7 +118,7 @@ class TestTheWindowItGives:
                 pass
             with hidden_window('plain'):
                 bits = glGetFramebufferAttachmentParameteriv(
-                    GL_FRAMEBUFFER, GL_BACK_LEFT,
+                    GL_FRAMEBUFFER, glcontext.color_buffer_attachment(),
                     GL_FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE)
         except GLUnavailable as err:
             pytest.skip(str(err))
@@ -284,9 +285,8 @@ class TestTheFixtures:
         assert glGetString(GL_VERSION) is not None
 
     def test_gl_window_makes_the_window_it_is_asked_for(self, gl_window):
-        glfw = pytest.importorskip('glfw')
         window = gl_window('factory', size=(80, 40))
-        assert tuple(glfw.get_framebuffer_size(window)) == (80, 40)
+        assert glcontext.framebuffer_size(window) == (80, 40)
 
     def test_two_windows_can_be_alive_at_once(self, gl_window):
         """A resource cached against one context must not be handed to the
