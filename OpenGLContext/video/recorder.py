@@ -37,7 +37,7 @@ from typing import Any
 
 from OpenGL.GL import (
     GL_BACK, GL_COLOR_ATTACHMENT0, GL_COLOR_BUFFER_BIT, GL_DRAW_FRAMEBUFFER,
-    GL_DRAW_FRAMEBUFFER_BINDING, GL_FRAMEBUFFER, GL_LINEAR, GL_NEAREST,
+    GL_DRAW_FRAMEBUFFER_BINDING, GL_LINEAR, GL_NEAREST,
     GL_READ_FRAMEBUFFER, GL_READ_FRAMEBUFFER_BINDING, GL_RGBA, GL_RGBA8,
     GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER,
     GL_UNSIGNED_BYTE, GL_VIEWPORT, glBindFramebuffer, glBindTexture,
@@ -71,7 +71,13 @@ def load_encoder_api() -> Any:
 
 
 class CaptureTarget:
-    """A texture the encoder reads, and the framebuffer that fills it."""
+    """A texture to copy a finished frame into, and the framebuffer that fills it.
+
+    :class:`VideoRecorder` gets its own targets from the encoder, which on some
+    platforms is the only side that can allocate one. This is here for code
+    doing its own capture -- a screenshot path, a test, a frame handed to
+    something other than an encoder -- that just wants somewhere to blit to.
+    """
 
     def __init__(self, width: int, height: int):
         self.size = (int(width), int(height))
@@ -167,7 +173,6 @@ class VideoRecorder:
         self.limit = self._frame_limit(seconds, frames)
         self._encoder: Any = None
         self._movie: Any = None
-        self._targets: list[CaptureTarget] = []
         self._handles: list[Any] = []
         self._closed = False
 
@@ -201,10 +206,15 @@ class VideoRecorder:
             return False
         if self._encoder is None:
             self._start()
-        slot = self.frames_written % len(self._targets)
-        copy_frame(self._targets[slot].framebuffer, self.size)
-        packets = self._encoder.encode(self._handles[slot],
-                                       timestamp=self._timestamp())
+        size = self.size
+        if size is None:            # pragma: no cover - _start() has settled it
+            raise RecordingUnavailable('the recording never settled on a size')
+        handle = self._handles[self.frames_written % len(self._handles)]
+        # The scope is where a surface shared with another graphics API changes
+        # hands; on a backend that shares nothing it does nothing.
+        with handle.for_drawing():
+            copy_frame(handle.framebuffer, size)
+        packets = self._encoder.encode(handle, timestamp=self._timestamp())
         self._movie.write(packets)
         self.frames_written += 1
         if self.clock is not None:
@@ -228,7 +238,8 @@ class VideoRecorder:
     def _timestamp(self) -> int:
         """When this frame is shown, in the encoder's timescale."""
         numerator, denominator = FixedStepClock._as_ratio(self.fps)
-        return self.frames_written * self._encoder.timescale * denominator // numerator
+        return int(self.frames_written * self._encoder.timescale
+                   * denominator // numerator)
 
     def _start(self) -> None:
         """Open the encoder and the file, sizing the recording to the viewport."""
@@ -244,13 +255,12 @@ class VideoRecorder:
                 *self.size, fps=self.fps, **self.encoder_options)
         except pyopengl_video.EncoderUnavailable as error:
             raise RecordingUnavailable(str(error)) from error
-        # One target per frame the encoder may be holding: it reads a texture
-        # for as long as it holds the frame, and the renderer needs a different
-        # one to draw into meanwhile.
-        self._targets = [CaptureTarget(*self.size)
+        # One input per frame the encoder may be holding: it reads a texture for
+        # as long as it holds the frame, and the renderer needs a different one
+        # to draw into meanwhile. The encoder allocates them because on some
+        # platforms its input is a resource only the driver can make.
+        self._handles = [self._encoder.new_input()
                          for _ in range(self._encoder.input_slots)]
-        self._handles = [self._encoder.register(target.texture)
-                         for target in self._targets]
         self._movie = mp4.MP4Writer(self.path, self._encoder)
         if self.clock is not None:
             self.clock.install()
@@ -269,9 +279,8 @@ class VideoRecorder:
                 self._movie.close()
                 self._encoder.close()
         finally:
-            for target in self._targets:
-                target.close()
-            self._targets = []
+            # Closing the encoder releases the inputs it made, so there is
+            # nothing to give back here beyond letting go of the references.
             self._handles = []
         if self.frames_written:
             log.info('recorded %d frames to %s', self.frames_written, self.path)

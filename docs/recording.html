@@ -33,10 +33,16 @@ draw, and the same run records the same way twice.</p>
     bindings that reach the encoder in the graphics driver:</p>
   <pre>pip install OpenGLContext[video]</pre>
   <p>The encoder itself ships with the driver, so there is nothing else to
-    install. Today that means an NVIDIA card on Linux; a machine without one
-    runs exactly as before, and asking it to record reports what is missing
-    rather than failing part-way through. Without the extra, nothing changes at
-    all: the recorder is only imported when a recording is asked for.</p>
+    install. Today that means an NVIDIA card on Linux or an Intel GPU on
+    Windows; a machine without either runs exactly as before, and asking it to
+    record reports what is missing rather than failing part-way through. Without
+    the extra, nothing changes at all: the recorder is only imported when a
+    recording is asked for.</p>
+  <p>On a machine with more than one GPU the encoder has to be on the same one
+    the renderer is using, or it would be reading memory the renderer never
+    wrote. The recorder picks an encoder that matches the context's own adapter,
+    which on a laptop running OpenGL on its integrated graphics means the
+    integrated encoder — the one on the same die as the frame.</p>
 </section>
 
 <section id="recording">
@@ -209,6 +215,12 @@ with FixedStepClock(fps=60) as clock:
 
 target = CaptureTarget(width, height)
 copy_frame(target.framebuffer, (width, height))   # target.texture now holds the frame</pre>
+  <p><code>CaptureTarget</code> is for code doing its own capture. A recording
+    asks the <em>encoder</em> for its textures instead, because on Windows the
+    encoder reads a Direct3D surface and only the backend can create one; the
+    copy into it happens inside a <code>for_drawing()</code> scope, which is
+    where such a surface passes between the two graphics APIs and does nothing
+    where it need not.</p>
 </section>
 
 <section id="stills">
@@ -223,8 +235,11 @@ copy_frame(target.framebuffer, (width, height))   # target.texture now holds the
   <h2>Limits</h2>
   <ul>
     <li><strong>H.264</strong>, up to 4096&times;4096, in an MP4 file.</li>
-    <li><strong>NVIDIA on Linux</strong>, which is where the encoder can be fed
-      from an OpenGL texture. Intel and AMD are planned.</li>
+    <li><strong>NVIDIA on Linux, Intel on Windows.</strong> AMD, Intel on Linux
+      and NVIDIA on Windows are planned.</li>
+    <li><strong>One GPU per recording.</strong> The encoder reads the frame
+      where the renderer left it, so the two are on the same adapter or there is
+      no recording to be had.</li>
     <li><strong>No audio.</strong> The file has a video track.</li>
     <li>The recording belongs to the OpenGL context that started it, and every
       frame must come from that context's thread.</li>
