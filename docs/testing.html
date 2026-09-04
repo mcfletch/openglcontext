@@ -112,6 +112,53 @@ except GLUnavailable as err:
   <p><code>gl_available()</code> answers whether a context can be created at all
     &mdash; for a module-level <code>skipif</code>, say. It is worked out once
     and remembered, since it cannot change while the process lives.</p>
+  <p><code>describe_gl()</code> answers what the GL <em>is</em>: the vendor,
+    renderer and version strings the driver gave, and whether it rasterises on
+    the CPU. It returns <code>None</code> where no context can be made, and
+    shares the one probe window with <code>gl_available()</code>.</p>
+  <pre>from OpenGLContext.testing.glcontext import describe_gl
+
+description = describe_gl()
+if description is not None and description.software:
+    ...                       # llvmpipe, SwiftShader, GDI Generic, ...</pre>
+</section>
+
+<section id="markers">
+  <h2>Which tests run where</h2>
+  <p>Three markers say what a test needs of the machine it runs on, so a run can
+    ask for the subset that machine can answer.</p>
+  <dl>
+    <dt><code>performance</code></dt>
+    <dd>Asserts how <em>fast</em> something draws. That is a question about the
+      renderer as much as about the code, and a CPU rasteriser answers it
+      wrongly by orders of magnitude &mdash; so the plugin skips these where
+      <code>describe_gl().software</code> is true, and names the renderer in the
+      skip reason. <code>OPENGLCONTEXT_PERFORMANCE_TESTS=1</code> runs them
+      anyway, for somebody profiling the software rasteriser itself;
+      <code>=0</code> skips them whatever the renderer, which is what a shared or
+      throttled machine wants. A value that is neither is an error rather than a
+      silently reversed pin.</dd>
+    <dt><code>serial</code></dt>
+    <dd>Needs a quiet machine. A wall-clock margin closes under concurrent load,
+      so a full run is two passes: <code>-m "not serial"</code> and then
+      <code>-m serial</code>. Every <code>performance</code> test is also
+      <code>serial</code>; the reverse does not follow.</dd>
+    <dt><code>visual</code></dt>
+    <dd>Compares a rendered frame against a blessed reference image. The
+      references are blessed on one renderer, so a second one differs from them
+      by more than the pixel gate allows &mdash; see
+      <a href="#pixels">Comparing pixels</a>.</dd>
+  </dl>
+  <p>Continuous integration runs on two OpenGL implementations, both free for a
+    public repository: Mesa's llvmpipe on a Linux runner under
+    <code>xvfb-run</code>, and Apple's GL on the macOS runners, which are real
+    machines with GPUs. GitHub's GPU runner is a larger runner, billed per
+    minute and never free, whatever the repository's visibility.</p>
+  <pre>xvfb-run -a python -m pytest -m "not serial and not visual and not performance"
+xvfb-run -a python -m pytest -m "serial and not visual and not performance"</pre>
+  <p><code>LIBGL_ALWAYS_SOFTWARE=1</code> reproduces the software-rendered run on
+    a machine that has a GPU, which is how a failure seen in CI is chased
+    locally.</p>
 </section>
 
 <section id="offscreen">

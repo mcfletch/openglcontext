@@ -1,0 +1,145 @@
+name: Tests
+
+# The suite against two unrelated OpenGL implementations, on every push to
+# develop.
+#
+#   * Mesa's llvmpipe on Linux, under Xvfb. GLFW opens its window on the X
+#     server and Mesa rasterises on the CPU: no GPU, and the same renderer on
+#     every run -- which is what makes a difference between runs mean something.
+#   * Apple's GL on the macOS runners, which are real machines with real GPUs.
+#     A second vendor's driver is the half llvmpipe cannot cover: a shader or a
+#     call we get away with under Mesa because Mesa is lenient fails there.
+#
+# Both are free for public repositories. A GPU runner is not: GitHub's is a
+# larger runner, billed per minute on Team/Enterprise plans and never free,
+# whatever the repository's visibility.
+#
+# Two groups of tests are left to a machine with a GPU in it:
+#
+#   `visual` -- the reference images are blessed on one renderer, and a second
+#   renderer's rasterisation differs from them by more than the pixel gate
+#   allows (2-6% of pixels at a mean delta under 1.5/255: precision, not a wrong
+#   render). Comparing against them here would report a driver difference as a
+#   regression. Per-renderer baselines would settle it; until there are some,
+#   this job does not pretend to guard rendering.
+#
+#   `performance` on llvmpipe -- an assertion about how fast something draws is
+#   unanswerable on a CPU rasteriser. The macOS jobs do run them, since those
+#   machines have a GPU. `OpenGLContext.testing.plugin` skips them on a software
+#   renderer of its own accord, so this is belt and braces rather than the only
+#   guard.
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The suite's own conftest sets these; naming them here means a step run
+  # outside pytest (the renderer report below) behaves the same way.
+  OPENGLCONTEXT_HIDDEN: '1'
+  OPENGLCONTEXT_NO_VSYNC: '1'
+  OPENGLCONTEXT_BACKEND: glfw
+
+jobs:
+  llvmpipe:
+    name: Linux / llvmpipe
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Mesa, Xvfb and the libraries GLFW links
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb libgl1 libglx-mesa0 libgl1-mesa-dri libegl1 libegl-mesa0 \
+            libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6 \
+            libxxf86vm1 libxext6
+
+      - name: Install OpenGLContext and its test dependencies
+        # --pre because the stack below this one (PyOpenGL 4.0.0a, PyVRML97
+        # 2.3.4b, TTFQuery 2.0.1a, simpleparse 3.0.0a, omi_audio 0.2.0a) is
+        # published only as pre-releases, which the resolver otherwise skips
+        # and then reports as unavailable.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --pre -e .[dev]
+
+      - name: Report the renderer under test
+        # A suite with no GL target skips its way to green without having
+        # rendered anything, so say what is about to render before anything runs.
+        run: |
+          xvfb-run -a python -c "
+          from OpenGLContext.testing.glcontext import describe_gl
+          description = describe_gl()
+          if description is None:
+              raise SystemExit('no GL context could be created')
+          print(description)
+          "
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+
+      - name: Run the tests
+        run: >
+          xvfb-run -a python -m pytest -v
+          -m "not serial and not visual and not performance"
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+
+      - name: Run the tests that need a quiet machine
+        # Short, and wants the machine to itself: these compare wall-clock
+        # margins, and the ratio compresses under concurrent load.
+        run: >
+          xvfb-run -a python -m pytest -v
+          -m "serial and not visual and not performance"
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+
+  macos:
+    name: macOS ${{ matrix.os }} / Apple GL
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install OpenGLContext and its test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --pre -e .[dev]
+
+      - name: Report the renderer under test
+        run: |
+          python -c "
+          from OpenGLContext.testing.glcontext import describe_gl
+          description = describe_gl()
+          if description is None:
+              raise SystemExit('no GL context could be created')
+          print(description)
+          "
+
+      - name: Run the tests
+        # Apple's GL is 4.1 core with no compatibility profile at all, so the
+        # fixed-function render arms have no context to run in and skip. What
+        # this job is here for is the core-profile half against a driver that
+        # is not Mesa.
+        run: python -m pytest -v -m "not serial and not visual"
+
+      - name: Run the tests that need a quiet machine
+        run: python -m pytest -v -m "serial and not visual"
