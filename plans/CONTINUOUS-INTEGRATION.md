@@ -123,22 +123,23 @@ It joins `serial` (needs a quiet machine) and `visual` (compares against a
 blessed image) rather than replacing either. Every `performance` test is also
 `serial`; the reverse does not follow.
 
-## A hazard this uncovered
+## A hazard this uncovered, and closed
 
-`OpenGL/_dispatch/_tables.py` holds `ARRAY_TYPES` as a **positional** list, and
-the compiled `OpenGL_accelerate.dispatch` indexes into it. Adding an element
-type shifts every index after it, so a tree whose Python is newer than its built
-extension hands out the *wrong array class* — `GLubyteArray` came back as
+`OpenGL/_dispatch/_tables.py` held `ARRAY_TYPES` as a **positional** list that
+the compiled `OpenGL_accelerate.dispatch` indexed into. Adding an element type
+shifted every index after it, so a tree whose Python was newer than its built
+extension handed out the *wrong array class* — `GLubyteArray` came back as
 `GLshortArray`, and a `glGetBufferSubData` of 64 bytes returned 128. No error,
 no warning: ten skinning tests failed on a reshape, three call frames away from
 the cause.
 
-Rebuilding the extension is the whole of the fix, and every tox environment
-rebuilds it, which is why only the developer venv was affected. But nothing
-detects the mismatch. The generated `pygl_elements.h` already records the array
-class name beside each index, so `_configure` could compare the names it was
-compiled with against the list it is handed and refuse a mismatch. Worth doing:
-the failure mode is a wrong answer rather than a crash.
+The name is what crosses now. The element table already carried the class name
+beside the index, so the generated header emits those names in its own order and
+`_configure` takes a *mapping* and fills its own table from it, index by
+compiled index. The order is the extension's alone and no Python file has to
+agree with it; a class it needs and cannot find is refused by name, telling the
+reader to rebuild. `ARRAY_TYPES` is gone: a positional table nothing reads is a
+trap for whoever reads it next.
 
 ## Still open
 
@@ -147,7 +148,5 @@ the failure mode is a wrong answer rather than a crash.
   commitment in `docs/structure.html` covers five backends; two of them are
   under test here.
 - **A Python version matrix.** Both jobs run 3.12. The floor is 3.10.
-- **A drift check between `_tables.py` and the built extension**, per the
-  hazard above.
 - **A GPU job**, if one is ever wanted: a self-hosted runner is the only free
   way to a real GPU, and needs the fork-PR precautions that go with one.
