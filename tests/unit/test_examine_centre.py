@@ -188,60 +188,52 @@ class TestTheSceneBoundsItself:
 class TestHowFarADragTurns:
     """A drag to the edge of the window turned the camera a **full circle**.
 
-    The trackball measures a drag as a fraction of the way from where it started
-    to the edge of the window, and multiplied that by its own default of 2*pi.
-    So half a window put you on the far side of the model and there was no way to
-    look at anything: the pivot being right is not enough if a nudge spins it.
+    The pivot being right is not enough if a nudge spins the camera round it: a
+    drag the height of the window is half a turn, and a tenth of that is a
+    tenth of the turn. How the rate is arrived at is
+    `tests/unit/test_orbit.py`; what this holds is the manager building an
+    orbit that has it.
     """
 
-    def _trackball(self, width=800, height=600, start=(400, 300)):
+    def _orbit(self, width=800, height=600, start=(400, 300)):
         from OpenGLContext.move.examinemanager import ExamineManager
-        from OpenGLContext.quaternion import fromXYZR
-        facing = fromXYZR(0, 1, 0, 0.0)
+        from OpenGLContext.move.orbit import aimAt
+        from OpenGLContext.move.viewplatform import ViewPlatform
 
-        class _Platform:
-            # Named on the outside: an attribute called ``quaternion`` would
-            # shadow the module while the class body is being evaluated.
-            # Homogeneous, as a real ViewPlatform's is.
-            position = np.array([0.0, 0.0, 10.0, 1.0], dtype='d')
-            quaternion = facing
+        platform = ViewPlatform(position=(0.0, 0.0, 10.0))
+        platform.quaternion = aimAt((0.0, 0.0, 10.0), (0.0, 0.0, 0.0))
 
         class _Event:
             def getPickPoint(self):
                 return start
 
         made = ExamineManager.__new__(ExamineManager)
-        made.OnBuildTrackball(_Platform(), (0.0, 0.0, 0.0), _Event(),
-                              width, height)
-        return made.trackball
+        made.OnBuildOrbit(platform, (0.0, 0.0, 0.0), _Event(), width, height)
+        return made.orbit
 
-    def test_a_drag_to_the_edge_is_half_a_turn_not_a_whole_one(self):
+    def _swing(self, orbit, x, y):
+        original = orbit.startOrientation
+        _position, turned = orbit.rotate(x, y)
+        return np.degrees(2.0 * np.arccos(min(1.0, abs(float(np.dot(
+            np.asarray(list(original), 'd'), np.asarray(list(turned), 'd')))))))
+
+    def test_a_drag_the_height_of_the_window_is_half_a_turn(self):
         from OpenGLContext.move import examinemanager
         assert examinemanager.EXAMINE_DRAG_ANGLE == pytest.approx(np.pi)
-        assert self._trackball().dragAngle == pytest.approx(np.pi)
+        assert self._orbit().dragAngle == pytest.approx(np.pi)
 
-    def test_the_far_side_of_the_model_takes_the_whole_window(self):
-        """Not a third of it."""
-        trackball = self._trackball()
-        _position, turned = trackball.update(800, 300)      # centre to right edge
-        original = trackball.originalQuaternion
-        swing = 2.0 * np.arccos(min(1.0, abs(float(
-            np.dot(np.asarray(list(original), 'd'), np.asarray(list(turned), 'd'))))))
-        assert np.degrees(swing) == pytest.approx(180.0, abs=5.0)
+    def test_the_far_side_of_the_model_takes_a_window_height_of_drag(self):
+        assert self._swing(self._orbit(), 400 + 600, 300) == pytest.approx(
+            180.0, abs=1.0)
 
     def test_a_small_drag_is_a_small_turn(self):
-        """A tenth of the way to the edge should not be a quarter turn."""
-        trackball = self._trackball()
-        _position, turned = trackball.update(440, 300)      # 40px of 400 available
-        original = trackball.originalQuaternion
-        swing = 2.0 * np.arccos(min(1.0, abs(float(
-            np.dot(np.asarray(list(original), 'd'), np.asarray(list(turned), 'd'))))))
-        assert np.degrees(swing) < 25.0, np.degrees(swing)
+        """A tenth of the way should not be a quarter turn."""
+        swing = self._swing(self._orbit(), 460, 300)        # 60px of 600
+        assert swing < 25.0, swing
 
     def test_the_distance_to_the_pivot_is_unchanged(self):
         """It is an orbit: the camera goes round the thing, not towards it."""
-        trackball = self._trackball()
-        before = np.linalg.norm(trackball.originalPosition[:3])
-        moved, _turned = trackball.update(600, 400)
-        assert np.linalg.norm(np.asarray(moved, 'd')[:3]) == pytest.approx(before,
+        orbit = self._orbit()
+        moved, _turned = orbit.rotate(600, 400)
+        assert np.linalg.norm(np.asarray(moved, 'd')[:3]) == pytest.approx(10.0,
                                                                           abs=1e-6)

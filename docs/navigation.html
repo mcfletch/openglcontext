@@ -171,6 +171,55 @@ MyContext.ContextMainLoop(definition=definition)</pre>
     as one violent flick of the view.</p>
 </section>
 
+<section id="examine">
+  <h2>Examining: orbit, pan and dolly</h2>
+  <p>Beside the movement modes, every interactive context has the three mouse
+    gestures for looking <em>at</em> something rather than moving through it.
+    They need no declaration: a context that mixes in
+    <code>ViewPlatformMixin</code> has them.</p>
+  <table>
+    <tr><th>Gesture</th><th>Does</th></tr>
+    <tr><td>Right-drag</td><td>Orbits the camera about the point under the
+      cursor</td></tr>
+    <tr><td>Middle-drag</td><td>Pans: the pivot and the camera slide across the
+      view together, so what is under the cursor stays under it</td></tr>
+    <tr><td>Wheel</td><td>Moves the camera toward or away from that point, by
+      20% of the distance a notch</td></tr>
+  </table>
+  <p><strong>What it orbits is what you touched.</strong> The pivot is the
+    world point the click resolved to, so examining the thing you pointed at is
+    the whole gesture. A click that hit nothing falls back to the middle of the
+    scene's own bounding sphere &mdash; and to a point a little ahead of the
+    camera when the camera is <em>inside</em> those bounds, since orbiting the
+    far side of a building you are standing in is not what the gesture means.
+    <code>Context.examineCenter</code> decides, and an application with a better
+    answer overrides it.</p>
+  <p><strong>The orbit is a turntable.</strong> Horizontal movement swings the
+    camera about the world's up axis and vertical movement raises and lowers it,
+    stopping just short of the pole. Between them those two rotations introduce
+    no roll, so the horizon stays where the viewer put it and the view never
+    comes out upside down; a camera that was deliberately rolled keeps its roll
+    rather than being levelled. A drag the height of the window is half a turn,
+    at one rate over the whole window and the same rate in both directions.</p>
+  <p><strong>The camera keeps its aim.</strong> The pivot is rarely the centre
+    of the screen, so a camera turned to face it squarely would jump as the
+    button went down. The gesture measures how far off the pivot the view was
+    pointing when the drag began and carries that through, so the view starts
+    moving from where it already was.</p>
+  <p>The maths is <code>OpenGLContext.move.orbit.TurntableOrbit</code>, which
+    holds no GL and no events &mdash; it is handed a camera, a pivot and pixel
+    coordinates and answers a new position and orientation.
+    <code>ExamineManager</code> drives it from the events, and
+    <code>MovementManager.commandBindings</code> is where the three buttons are
+    named, so an application rebinds them there.
+    <code>ExamineManager.OnBuildOrbit</code> is the customisation point for
+    different behaviour: anything answering <code>rotate(x, y)</code> and
+    <code>cancel()</code> fits the slot, and
+    <code>OpenGLContext.move.trackball.Trackball</code> is the free-spinning
+    arcball alternative, which trades the level horizon for the freedom to turn
+    a model end over end.</p>
+</section>
+
 <section id="bindings">
   <h2>Bindings, and the modifier rule</h2>
   <p>A <code>KeyBinding</code> node carries a <code>command</code> as the mode
@@ -318,8 +367,10 @@ walk.bindings = list(walk.bindings) + [
     a pick event arrives only once the selection buffer resolves it, is dropped
     when the pointer is over nothing, and never arrives at all with
     <code>pickEnabled</code> off &mdash; none of which has anything to do with
-    turning the view. A backend that reports no motion directly (GLUT, pygame,
-    wx) still has its move events sampled.</p>
+    turning the view. Every backend reports it directly; what each has to do to
+    make the motion <em>unbounded</em> differs, and
+    <a href="structure.html#backend-capabilities">What every backend
+    offers</a> says which does what.</p>
   <p>A settings GUI over all of this &mdash; widgets, focus, skinning and a
     rebinding page built from <code>binding_table()</code> &mdash; is built:
     see <a href="overlayui.html">Overlay UI</a>. It generates a page per mode

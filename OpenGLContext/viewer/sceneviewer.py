@@ -962,7 +962,8 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
     def _modeLine(self) -> str:
         if self.physicsWalking:
             return "walk: arrows/WASD move, space jump, f fly   g: free-fly"
-        return "free-fly: arrows move, right-drag examine   g: walk (physics)"
+        return ("free-fly: arrows move, right-drag orbit, middle-drag pan, "
+                "wheel in/out   g: walk (physics)")
 
     #: Every key the viewer answers to.  PageUp/PageDown are the scene's own
     #: cameras -- inside one world that is what they mean -- and Ctrl with them

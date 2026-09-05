@@ -1,5 +1,6 @@
 """Interactions for navigating the context"""
 from gettext import gettext as _
+from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.move import movementmanager
 import math
 
@@ -38,7 +39,14 @@ class Direct( movementmanager.MovementManager ):
         straighten=dict(eventType='keypress', name='-', modifiers=(0,0,0),),
         slower=dict(eventType='keypress', name='[', modifiers=(0,0,0),),
         faster=dict(eventType='keypress', name=']', modifiers=(0,0,0),),
+        # The three gestures every 3D viewer offers: right-drag orbits,
+        # middle-drag pans, and the wheel moves toward or away from what is
+        # being looked at.  The wheel's "buttons" are a notch rather than
+        # anything held; see OpenGLContext.events.mouseevents.WHEEL_UP.
         examine=dict(eventType='mousebutton', button=1, state = 1, modifiers=(0,0,0),),
+        pan=dict(eventType='mousebutton', button=2, state = 1, modifiers=(0,0,0),),
+        zoomin=dict(eventType='mousebutton', button=WHEEL_UP, state = 1, modifiers=(0,0,0),),
+        zoomout=dict(eventType='mousebutton', button=WHEEL_DOWN, state = 1, modifiers=(0,0,0),),
     )
     STEPDISTANCE = 0.5 # 1/2 of a unit
     TURNANGLE = math.pi/32

@@ -66,15 +66,19 @@ class Trackball:
         """Cancel drag rotation, return pos,quat to original values"""
         return self.originalPosition, self.originalQuaternion
         
-    def update( self, newX, newY ):
+    def rotate( self, newX, newY ):
         """Update with new x,y drag coordinates
 
         newX, newY -- the new screen coordinates for the drag
 
         returns a new position and quaternion orientation
+
+        The drag is measured against the whole window, so the same movement
+        turns the same amount wherever it started; see
+        :meth:`OpenGLContext.move.dragwatcher.DragWatcher.uniformFractions`.
         """
         # get the drag fractions
-        x,y = self.watcher.fractions ( newX, newY )
+        x,y = self.watcher.uniformFractions ( newX, newY )
         # multiply by the maximum drag angle
         # note that movement in x creates rotation about y & vice-versa
         # note that OpenGL coordinates make y reversed from "normal" rotation
@@ -89,4 +93,8 @@ class Trackball:
         a = ((xRot *yRot) * self.vector) +  self.center
         b = self.originalQuaternion *xRot *yRot
         return a,b
-        
+
+    #: The generic name for "a drag has moved"; :meth:`rotate` says which of
+    #: the examine gestures this object is.
+    update = rotate
+

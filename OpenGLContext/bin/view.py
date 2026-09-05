@@ -46,7 +46,9 @@ Controls (OpenGLContext's default view-platform navigation)::
     Alt + Up/Down           move up / down (fly)
     Alt + Left/Right        strafe (slide) left / right
     -                       level the horizon
-    right-mouse drag        orbit / examine about a point
+    right-mouse drag        orbit about the point under the cursor
+    middle-mouse drag       pan: carry that point across the view
+    mouse wheel             move toward / away from it
     PgUp / PgDn (or p / n)  cycle named cameras (if any)
     g                       toggle walk (physics) / free-fly
     k                       pause / resume animation; [ / ] switch animation

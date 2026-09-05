@@ -12,6 +12,9 @@ class MovementManager(object):
     commands = [
         # User-name, key, function-name
         (_("Examine"), "examine", "startExamineMode"),
+        (_("Pan"), "pan", "startPanMode"),
+        (_("Zoom In"), "zoomin", "zoomIn"),
+        (_("Zoom Out"), "zoomout", "zoomOut"),
     ]
     commandBindings = dict(
         # key : { addEventHandler parameters }
@@ -52,23 +55,64 @@ class MovementManager(object):
         self.context = None
 
     def startExamineMode(self, event):
-        """(callback) Create an examine mode interaction manager
+        """(callback) Orbit the view about what the pointer is on
 
         This callback creates an instance of
         examinemanager.ExamineManager, which will manage
         the user interaction during an "examination" of
         the scene.
         """
+        return self._startGesture(event)
+
+    def startPanMode(self, event):
+        """(callback) Carry the scene across the view with the pointer"""
         from OpenGLContext.move import examinemanager
 
-        # The context decides: it is what knows how big the scene is and where
-        # the camera is standing in it.  A pivot chosen without that -- the
-        # fixed ten units ahead this used -- makes the drag swing wildly about
-        # a point that has nothing to do with what is on screen.
+        return self._startGesture(event, gesture=examinemanager.PAN)
+
+    def _startGesture(self, event, gesture=None):
+        """Begin one examine gesture about the point the pointer is on"""
+        from OpenGLContext.move import examinemanager
+
+        # The context decides where the pivot is: it is what knows how big the
+        # scene is and where the camera is standing in it.  A pivot chosen
+        # without that makes the drag swing about a point that has nothing to
+        # do with what is on screen.
         center = self.context.examineCenter(event)
-        examinemanager.ExamineManager(
+        return examinemanager.ExamineManager(
             self.context,
             self.platform,
             center,
             event,
+            gesture=gesture or examinemanager.ROTATE,
         )
+
+    def zoomIn(self, event):
+        """(callback) Move one wheel notch toward what is being looked at"""
+        from OpenGLContext.move import examinemanager
+
+        return self._dolly(event, examinemanager.DOLLY_STEP)
+
+    def zoomOut(self, event):
+        """(callback) Move one wheel notch away from what is being looked at"""
+        from OpenGLContext.move import examinemanager
+
+        return self._dolly(event, 1.0 / examinemanager.DOLLY_STEP)
+
+    def _dolly(self, event, factor):
+        """Move the camera along the line to the pivot, keeping its aim
+
+        The same pivot an examine drag would use, so scrolling and dragging
+        agree about what is being looked at.
+        """
+        from OpenGLContext.move import examinemanager
+
+        width, height = self.context.getViewPort()
+        gesture = examinemanager.orbitFor(
+            self.platform, self.context.examineCenter(event), event,
+            width, height,
+        )
+        position, orientation = gesture.dolly(factor)
+        self.platform.position = position
+        self.platform.quaternion = orientation
+        self.context.triggerRedraw(1)
