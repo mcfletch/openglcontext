@@ -37,6 +37,16 @@ _passes: Dict[Any, Any] = {}
 FLAT = None
 
 
+def current_pass():
+    """The pass that draws the context that is current, or ``None``.
+
+    Keyed on the context, as :data:`_passes` is, so a program holding several
+    windows gets the one belonging to the window it is drawing rather than
+    whichever drew last.  There is none before the context's first frame.
+    """
+    return _passes.get( contextresources.context_key() )
+
+
 def report_render_failures() -> None:
     """Say what the session rendered from and could not draw.
 

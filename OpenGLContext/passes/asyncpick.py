@@ -174,6 +174,28 @@ class _AsyncPickMixin:
         if trigger is not None:
             trigger(0)
 
+    def flushAsyncPicks(self, mode: Any = None) -> int:
+        """Deliver every pick still in flight, waiting for the GPU, and say how many.
+
+        :meth:`drainAsyncPicks` delivers only what the GPU has already
+        finished, which is what keeps a frame from stalling on a readback.  A
+        caller that has to act on a pick before it goes on -- a click that
+        chooses what to do next, a test asserting the click arrived -- cannot
+        wait an unknown number of frames for that, because how many it takes is
+        a property of the machine's load rather than of the program.
+
+        Call it with the context current, after the frame that took the click.
+
+        ``mode`` is the render mode the events are dispatched through, and
+        defaults to this pass.
+        """
+        batches = self._async_batches or []
+        self._async_batches = []
+        for batch in batches:
+            self._resolveBatch(mode if mode is not None else self, batch,
+                               block=True)
+        return len(batches)
+
     def drainAsyncPicks(self, mode: Any) -> None:
         """Dispatch any batches whose fence has signalled (non-blocking)."""
         batches = self._async_batches

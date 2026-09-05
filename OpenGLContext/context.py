@@ -1181,6 +1181,32 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         self.triggerRedraw(1)
 
+    def flushPendingPicks(self):
+        """Deliver every pick still in flight, waiting for the GPU, and say how many.
+
+        Pick readback is asynchronous: the selection pass asks the GPU for the
+        object under the cursor and dispatches the click a frame or more later,
+        once the answer has landed, so that a frame never stalls on a readback.
+        How many frames that takes is a property of how busy the machine is.
+
+        Call this where the answer is needed before going on rather than
+        whenever it arrives -- a click that decides what to do next, a test
+        asserting the click was delivered -- having drawn the frame that took
+        the event.  It blocks, which is the cost of asking.
+
+        Returns how many readbacks it waited for, which is 0 where none was
+        outstanding -- a context that has not drawn yet, one picking
+        synchronously, or one whose readback landed during the frame.  The
+        click is delivered in that last case too: an event dispatched while the
+        context is drawing goes on the event cascade queue rather than to its
+        handler, and this empties that queue as a frame would.
+        """
+        pass_ = renderpass.current_pass()
+        flush = getattr(pass_, 'flushAsyncPicks', None)
+        delivered = flush() if flush is not None else 0
+        self.DoEventCascade()
+        return delivered
+
     def triggerRedraw(self, force=0):
         """Indicate to the context that it should redraw when possible
 

@@ -295,12 +295,12 @@ class TestDrivingTheContext:
             'type': 'mousebutton', 'button': 0, 'state': 1, 'x': 32, 'y': 32,
             'pick': True,
         })
-        # The pick readback is asynchronous by default, so it resolves a frame
-        # or so after the draw that scheduled it.
-        for _ in range(4):
-            context.OnDraw(force=1)
-            if clicks:
-                break
+        # The pick readback is asynchronous by default, so the draw that takes
+        # the event schedules it and a later frame delivers it.  How many
+        # frames later is a property of how busy the machine is, so ask for it
+        # rather than drawing a fixed number and hoping.
+        context.OnDraw(force=1)
+        context.flushPendingPicks()
         assert len(clicks) == 1
 
     def test_a_resize_record_reaches_the_context(self, context):
@@ -488,3 +488,64 @@ class TestConfigAttributesColourBuffer:
             eglcontext.EGL.EGL_LUMINANCE_BUFFER
         )
         assert eglcontext.EGL.EGL_RED_SIZE not in pairs
+
+
+class TestFlushingPendingPicks:
+    """A pick is read back asynchronously, so the click it carries arrives some
+    frames after the draw that took it -- how many being a property of how busy
+    the machine is rather than of the program.  A caller that has to act on the
+    click before going on asks for it instead of drawing on and hoping.
+    """
+
+    @pytest.fixture
+    def context(self):
+        try:
+            context = eglcontext.EGLContext(size=(64, 64))
+        except eglcontext.EGLContextError as error:
+            pytest.skip(f'no offscreen EGL context available here: {error}')
+        try:
+            yield context
+        finally:
+            context.close()
+
+    def _clicked(self, context):
+        """Register a click handler, send a picked click, and return the list
+        the handler appends to.
+
+        The handler is held on the test instance because the event manager
+        connects it by weak reference: a function this method alone referenced
+        would be collected when it returned, and the click would be delivered
+        to nothing.
+        """
+        clicks = []
+
+        def onClick(event):
+            clicks.append(event)
+
+        self._handler = onClick
+        context.addEventHandler('mousebutton', button=0, state=1,
+                                function=onClick)
+        synthetic.dispatch(context, {
+            'type': 'mousebutton', 'button': 0, 'state': 1, 'x': 32, 'y': 32,
+            'pick': True,
+        })
+        return clicks
+
+    def test_one_frame_and_a_flush_deliver_the_click(self, context):
+        """However the timing falls: the readback either is still in flight,
+        and waiting for it delivers the click, or it landed mid-frame, and the
+        cascade it was queued on is emptied."""
+        clicks = self._clicked(context)
+        context.OnDraw(force=1)
+        context.flushPendingPicks()
+        assert len(clicks) == 1
+
+    def test_a_context_that_never_drew_has_nothing_to_flush(self, context):
+        assert context.flushPendingPicks() == 0
+
+    def test_flushing_twice_delivers_once(self, context):
+        clicks = self._clicked(context)
+        context.OnDraw(force=1)
+        context.flushPendingPicks()
+        context.flushPendingPicks()
+        assert len(clicks) == 1

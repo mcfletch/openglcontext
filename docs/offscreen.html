@@ -152,7 +152,21 @@ context-level handlers only, which needs no render at all.</p>
 
 <p>The pick readback is asynchronous by default (<code>pickAsync</code>), so a
 picked event is resolved a frame or so after the draw that scheduled it rather
-than within it.</p>
+than within it.  How many frames that takes is a property of how busy the
+machine is, so a caller that has to act on the click before it goes on asks for
+it rather than drawing on and hoping:</p>
+
+<pre>context.OnDraw(force=1)          # the frame that takes the event
+context.flushPendingPicks()      # the click has been delivered by here
+</pre>
+
+<p><code>flushPendingPicks</code> waits for the readbacks still in flight and
+returns how many it waited for.  A readback that landed <em>during</em> the
+frame counts zero and is delivered all the same: an event dispatched while the
+context is drawing goes on the event cascade queue rather than to its handler,
+and the flush empties that queue as the next frame would.  It blocks, which is
+the cost of asking; a loop that is happy to hear about the click whenever it
+arrives should simply keep drawing.</p>
 
 <h2>Finishing a frame</h2>
 
