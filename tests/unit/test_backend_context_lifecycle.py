@@ -50,6 +50,43 @@ def _calls_in(path):
     return names
 
 
+def _calls_within(path, function, depth=3):
+    """Every attribute call one function of a module reaches.
+
+    Follows ``self.something()`` into that method, so a backend that names its
+    teardown -- ``releaseWindow``, ``releaseDisplay``, ``close`` -- rather than
+    writing it out counts as making the call.
+    """
+    source = open(os.path.join(PACKAGE, path), encoding='utf-8').read()
+    tree = ast.parse(source)
+    bodies = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            bodies.setdefault(node.name, node)
+
+    def within(name, remaining):
+        node = bodies.get(name)
+        if node is None or remaining <= 0:
+            return set()
+        names = set()
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.Call):
+                continue
+            parts = []
+            target = inner.func
+            while isinstance(target, ast.Attribute):
+                parts.append(target.attr)
+                target = target.value
+            if isinstance(target, ast.Name):
+                dotted = '.'.join(reversed(parts + [target.id]))
+                names.add(dotted)
+                if target.id == 'self' and len(parts) == 1:
+                    names |= within(parts[0], remaining - 1)
+        return names
+
+    return within(function, depth)
+
+
 class TestEveryBackendAnnouncesTheEndOfAContext:
     @pytest.mark.parametrize('name,path', BACKENDS, ids=[b[0] for b in BACKENDS])
     def test_it_releases_the_context_it_owned(self, name, path):
@@ -57,6 +94,63 @@ class TestEveryBackendAnnouncesTheEndOfAContext:
             '%s never says its context is going, so every cache keyed on the '
             'handle keeps answering for it' % (name,)
         )
+
+    @pytest.mark.parametrize('name,path', BACKENDS, ids=[b[0] for b in BACKENDS])
+    def test_quitting_releases_before_the_process_ends(self, name, path):
+        """``Context.OnQuit`` ends the process with ``os._exit``.
+
+        Nothing after it runs -- no ``finally``, no ``atexit`` hook -- so a
+        backend that leaves the release to the end of its main loop does not
+        release at all on the path a user actually takes, which is pressing
+        Escape or closing the window. The release has to happen in ``OnQuit``,
+        before the base class is called.
+        """
+        assert 'self.releaseContextResources' in _calls_within(path, 'OnQuit'), (
+            "%s releases its context only after its loop, and quitting never "
+            "reaches there" % (name,)
+        )
+
+
+class TestQuittingReallyReleases:
+    """The static contract above, run rather than read.
+
+    Through GLFW, which is the backend this container can open a window on;
+    the shape is the same on every backend, and the static check is what holds
+    the ones a given machine cannot run.
+    """
+
+    def _quit(self, monkeypatch):
+        """Build a window, quit it, and answer what the quit told the caches"""
+        from OpenGLContext.testing.glcontext import gl_available
+
+        if not gl_available():
+            pytest.skip('no GL target available')
+        from OpenGLContext import glfwinteractivecontext
+
+        told = []
+        monkeypatch.setattr(contextresources, 'context_lost',
+                            lambda: told.append('engine'))
+        # The base class ends the process; what is under test is what happens
+        # before it does.
+        monkeypatch.setattr(context_module.Context, 'OnQuit',
+                            lambda self, event=None: told.append('exited'))
+        monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
+        made = glfwinteractivecontext.GLFWInteractiveContext(size=(64, 64))
+        made.OnQuit()
+        return made, told
+
+    def test_the_caches_are_told_before_the_process_ends(self, monkeypatch):
+        _made, told = self._quit(monkeypatch)
+        assert told == ['engine', 'exited'], told
+
+    def test_the_window_is_gone_afterwards(self, monkeypatch):
+        made, _told = self._quit(monkeypatch)
+        assert made.window is None
+
+    def test_quitting_twice_releases_once(self, monkeypatch):
+        made, told = self._quit(monkeypatch)
+        made.OnQuit()
+        assert told.count('engine') == 1
 
 
 class TestTheContractIsStatedOnce:

@@ -37,7 +37,7 @@ __license__ = "BSD-Style, see license.txt for details and exceptions"
 
 from OpenGLContext.plugins import Context,InteractiveContext,VRMLContext,Loader,Node,Adapter
 
-Context( 'pygame', 'OpenGLContext.pygamecontext.PyGameContext' )
+Context( 'pygame', 'OpenGLContext.pygamecontext.PygameContext' )
 Context( 'wx', 'OpenGLContext.wxcontext.wxContext' )
 Context( 'glut', 'OpenGLContext.glutcontext.GLUTContext' )
 Context( 'glfw', 'OpenGLContext.glfwcontext.GLFWContext' )

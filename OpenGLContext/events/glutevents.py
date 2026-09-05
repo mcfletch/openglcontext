@@ -18,12 +18,17 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
     ### KEYBOARD interactions
     def glutOnKeyDown(self, character, x, y):
         """Convert a key-press to a context-style event"""
+        modifiers = glutGetModifiers()
+        if character in self.heldKeys():
+            self.noteNativeRepeat()     # already down, so GLUT is repeating it
+        self.noteKeyDown(character, modifiers)
         self.ProcessEvent(
-            GLUTKeyboardEvent(self, character, x, y, 1, glutGetModifiers())
+            GLUTKeyboardEvent(self, character, x, y, 1, modifiers)
         )
 
     def glutOnKeyUp(self, character, x, y):
         """Convert a key-release to a context-style event"""
+        self.noteKeyUp(character)
         self.ProcessEvent(
             GLUTKeyboardEvent(self, character, x, y, 0, glutGetModifiers())
         )
@@ -32,10 +37,19 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         """Convert character (non-control) press to context event"""
         # need intelligence to determine what should generate a keyboard event
         # currently duplicates can occur.
-        self.ProcessEvent(
-            GLUTKeyboardEvent(self, character, x, y, 1, glutGetModifiers())
-        )
+        self.glutOnKeyDown(character, x, y)
         self.ProcessEvent(GLUTKeypressEvent(self, character, x, y, glutGetModifiers()))
+
+    def emitKey(self, key, state, modifiers):
+        """Send a key transition the window system did not report
+
+        For focus loss, where GLUT delivers no release at all; see
+        :class:`OpenGLContext.events.eventhandlermixin.HeldKeyMixin`.
+        ``modifiers`` is the mask that came with the press, so the synthetic
+        release matches the binding the press did.  A key event carries a
+        pointer position that nothing reads, hence the zeroes.
+        """
+        self.ProcessEvent(GLUTKeyboardEvent(self, key, 0, 0, state, modifiers))
 
     ### MOUSE Interaction
     def glutOnMouseButton(self, button, state, x, y):
@@ -46,9 +60,52 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         self.triggerPick()
 
     def glutOnMouseMove(self, x, y):
-        """Convert mouse-movement to a Context-style event"""
+        """Convert mouse-movement to a Context-style event
+
+        The movement sampler is told directly as well as through the pick
+        queue: a mouse-look mode wants every scrap of motion as it happens,
+        while a pick event is only delivered once the selection buffer resolves
+        it -- and not at all when the pointer is over nothing or picking is off.
+
+        A movement the window made itself -- the warp that keeps a grabbed
+        pointer in the middle of the window -- updates where the pointer is and
+        goes no further: it is not motion the user asked for, and it is not a
+        click on anything.
+
+        Both are told in the pick point's origin, y counting *upward* from the
+        bottom, since that is what everything downstream of the context works
+        in and GLUT counts it the other way.
+        """
+        echo = self.pointerWarpEcho(x, y)
+        record = getattr(self, 'recordPointerMotion', None)
+        if record is not None:
+            if echo:
+                forget = getattr(self, 'forgetPointerOrigin', None)
+                if forget is not None:
+                    forget()
+            record(int(x), self.getViewPort()[1] - int(y))
+        if echo:
+            return
+        self.recentrePointer()
         self.addPickEvent(GLUTMouseMoveEvent(self, x, y))
         self.triggerPick()
+
+    def pointerWarpEcho(self, x, y):
+        """Whether this movement is one the window itself caused
+
+        Answered by the window, which is what does the warping; see
+        :meth:`OpenGLContext.glutcontext.GLUTContext.pointerWarpEcho`.  A
+        window that never warps the pointer never sees an echo.
+        """
+        return False
+
+    def recentrePointer(self):
+        """Put a grabbed pointer back in the middle of the window
+
+        Answered by the window; see
+        :meth:`OpenGLContext.glutcontext.GLUTContext.recentrePointer`.  A
+        window with no pointer capture has nothing to do here.
+        """
 
 
 class GLUTXEvent(object):

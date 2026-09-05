@@ -56,6 +56,15 @@ class wxContext(
     """
     init = None
     calledDoInit = 0
+    #: True while the pointer is hidden and being warped back to the middle of
+    #: the canvas for a mouse-look mode.
+    _pointerGrabbed = False
+    #: Where the pointer was last warped to, so the movement the warp itself
+    #: generates can be told from a real one.
+    _pointerWarpedTo = None
+    #: Set once this canvas's GL objects have been let go, so quitting and the
+    #: canvas's own destruction do not both do it.
+    _released = False
     def __init__(
         self, parent, definition=None, 
         id=-1, pos= wx.DefaultPosition, 
@@ -252,6 +261,10 @@ class wxContext(
             self.Bind(wx.EVT_RIGHT_UP, self.wxOnMouseButton )
             self.Bind(wx.EVT_MIDDLE_UP, self.wxOnMouseButton )
             self.Bind(wx.EVT_MOTION, self.wxOnMouseMove )
+            self.Bind(wx.EVT_MOUSEWHEEL, self.wxOnMouseWheel )
+            # No key-up arrives for a key that was down when focus went
+            # elsewhere; see wxOnKillFocus.
+            self.Bind(wx.EVT_KILL_FOCUS, self.wxOnKillFocus )
             # The canvas going is the end of its GL context, and the caches
             # holding that context's names have to be told while it is still
             # whole.  EVT_WINDOW_DESTROY rather than EVT_CLOSE: a canvas is
@@ -342,15 +355,28 @@ class wxContext(
         from OpenGLContext import contextresources
         return contextresources.context_key()
 
-    def wxOnWindowDestroy(self, event):
-        """Let go of this context's GL objects as the canvas is destroyed.
+    def OnQuit(self, event=None):
+        """Let go of this canvas's GL objects, then end the application
 
-        Made current first: the caches may *delete* what they hold rather than
-        merely forget it, and deleting a name needs the context that issued it.
+        The release happens **here** as well as on the canvas's destruction,
+        because :meth:`Context.OnQuit` ends the process with ``os._exit``:
+        nothing after it runs, no ``finally`` and no ``atexit`` hook, and no
+        destroy event ever arrives.  Pressing Escape is the path a user
+        actually takes.
         """
-        event.Skip()
-        if event.GetEventObject() is not self:
-            return                      # a child's destruction, not ours
+        self.releaseCanvas()
+        return context.Context.OnQuit(self, event)
+
+    def releaseCanvas(self):
+        """Drop this context's GL objects, with its context current
+
+        The caches may *delete* what they hold rather than merely forget it,
+        and deleting a name needs the context that issued it.  Calling this
+        twice is harmless; the second call has nothing to do.
+        """
+        if self._released:
+            return
+        self._released = True
         try:
             self.setCurrent()
         except Exception as err:
@@ -361,6 +387,13 @@ class wxContext(
             self.releaseContextResources( self._glHandle() )
         finally:
             self.unsetCurrent()
+
+    def wxOnWindowDestroy(self, event):
+        """Let go of this context's GL objects as the canvas is destroyed."""
+        event.Skip()
+        if event.GetEventObject() is not self:
+            return                      # a child's destruction, not ours
+        self.releaseCanvas()
 
     def wxOnEraseBackground(self, event):
         """Prevent flashing of the window by capturing and ignoring background erase events
@@ -411,8 +444,82 @@ class wxContext(
     def settingsChanged( self ):
         """Re-apply the window-level settings a changed definition affects."""
         from OpenGLContext import renderoptions
+        self.applyVSync()
         self.setFullscreen( renderoptions.fullscreen_window( self ) )
         context.Context.settingsChanged( self )
+
+    def applyVSync( self, definition=None ):
+        """Wait for the display's refresh, or don't (ContextDefinition.vsync)
+
+        wx names nothing for this, so it goes to the window system's own
+        swap-control extension; see :mod:`OpenGLContext.swapcontrol`, which
+        answers False where there is none.  Asked with this canvas current,
+        since that is the drawable the interval is set for.
+        """
+        from OpenGLContext import renderoptions, swapcontrol
+        source = self if definition is None else definition
+        wanted = renderoptions.flag(
+            source, 'vsync',
+            not renderoptions.env_flag('OPENGLCONTEXT_NO_VSYNC', False))
+        self.setCurrent()
+        try:
+            return swapcontrol.set_swap_interval( 1 if wanted else 0 )
+        finally:
+            self.unsetCurrent()
+
+    def setPointerCapture( self, capture ):
+        """Hide the pointer and keep it in the window, for a mouse-look mode
+
+        wx has no relative-motion mode, so the pointer is warped back to the
+        middle of the canvas after every movement -- which is what makes the
+        motion unbounded, since a pointer that stops at the edge of the screen
+        is a view that stops turning there.  The warp arrives back as an
+        ordinary movement and is recognised and dropped; see
+        :meth:`OpenGLContext.events.wxevents.EventHandlerMixin.wxOnMouseMove`.
+        """
+        capture = bool( capture )
+        self._pointerGrabbed = capture
+        self._pointerWarpedTo = None
+        if capture:
+            self.SetCursor( wx.Cursor( wx.CURSOR_BLANK ) )
+            if not self.HasCapture():
+                self.CaptureMouse()
+        else:
+            self.SetCursor( wx.NullCursor )
+            while self.HasCapture():
+                # wx counts captures, and releases one per call.
+                self.ReleaseMouse()
+        forget = getattr( self, 'forgetPointerOrigin', None )
+        if forget is not None:
+            # Where the pointer is means something different on each side of
+            # this, so the first report afterwards establishes a position
+            # rather than arriving as one flick of the view.
+            forget()
+        if capture:
+            self.recentrePointer()
+        return True
+
+    def recentrePointer( self ):
+        """Put the pointer back in the middle of the canvas, if it is grabbed"""
+        if not self._pointerGrabbed:
+            return
+        size = self.GetClientSize()
+        middle = ( int(size.width) // 2, int(size.height) // 2 )
+        self._pointerWarpedTo = middle
+        self.WarpPointer( *middle )
+
+    def pointerWarpEcho( self, x, y ):
+        """Whether this movement is the one :meth:`recentrePointer` caused
+
+        A movement the program made itself is not motion the user asked for:
+        left in, it cancels out every real movement and mouse-look never turns.
+        """
+        if self._pointerWarpedTo is None:
+            return False
+        echo = ( int(x), int(y) ) == self._pointerWarpedTo
+        if echo:
+            self._pointerWarpedTo = None
+        return echo
 
     def getDefaultIcons( cls ):
         """Get the OpenGLContext icons as a wxPython wxIconBundle
@@ -433,19 +540,21 @@ class wxContext(
 
     def ContextMainLoop( cls, *args, **named ):
         """Initialise the context and start the mainloop"""
+        made = []
         class ContextApp(wx.App):
             def OnInit(self):
                 wx.InitAllImageHandlers()
                 frame = wx.Frame(
-                    None, -1, 
-                    cls.getApplicationName(), 
-                    wx.DefaultPosition, 
+                    None, -1,
+                    cls.getApplicationName(),
+                    wx.DefaultPosition,
                     wx.Size(600,300)
                 )
                 self.SetTopWindow(frame)
                 from OpenGLContext import renderoptions
                 frame.Show( not renderoptions.hidden_window() )
                 instance = cls( frame, *args, **named )
+                made.append( instance )
                 instance.SetFocus( )
                 frame.SetSize( instance.contextDefinition.size )
                 if renderoptions.fullscreen_window( instance.contextDefinition ):
@@ -455,7 +564,17 @@ class wxContext(
                     frame.SetIcons( icons )
                 return True
         app = ContextApp(0)
-        app.MainLoop()
+        try:
+            app.MainLoop()
+        finally:
+            # A loop left while it was still slow -- a closed window, a Ctrl-C
+            # -- holds an episode nobody has written, and what it holds of the
+            # last few seconds is what a session that ended badly is worth
+            # reading for.
+            for instance in made:
+                if instance.stallJournal is not None:
+                    instance.stallJournal.close()
+                instance.stopTelemetry( 'mainloop-ended' )
     ContextMainLoop = classmethod( ContextMainLoop )
 
 

@@ -17,8 +17,15 @@ if pygame.ver < '1.1':
 from OpenGL.GL import *
 from OpenGLContext.context import Context
 from OpenGLContext.events import pygameevents
-import logging 
+from OpenGLContext.looptrace import LoopTrace
+import logging
 log = logging.getLogger( __name__ )
+
+#: How many events one loop iteration will take from SDL's queue before
+#: rendering anyway.  A burst of pointer motion can arrive faster than frames
+#: are drawn, and a loop that drained the whole queue would never reach the
+#: draw while the hand kept moving.
+EVENT_BUDGET = 200
 
 class PygameContext(
     pygameevents.EventHandlerMixin,
@@ -30,6 +37,13 @@ class PygameContext(
     an explicit event handler loop, we provide a default loop method
     called MainLoop.
     """
+    #: What the swap interval was set to when the window was made, so a later
+    #: change to the field can be recognised and reported.
+    _vsyncApplied = None
+    #: Set when the loop should end; a quit event raises it, and MainLoop
+    #: watches it so the display is still up when the caches are told.
+    _finished = False
+
     def __init__(self, definition=None, **named):
         #init pygame
         pygame.display.init()
@@ -105,6 +119,13 @@ class PygameContext(
             return RESIZABLE|hidden|filling
     pygameWindowFlags = classmethod( pygameWindowFlags )
     def pygameDisplayMode( self, definition=None ):
+        """Open (or re-open) the SDL window this context draws into
+
+        **Calling this again destroys the GL context**, and with it every
+        texture, buffer and program the engine's caches hold, so it belongs to
+        opening a window and to nothing else.  A resizable SDL2 window follows
+        the user's drag without being re-made; see :meth:`PygameWindowResized`.
+        """
         if definition is None:
             definition = self.contextDefinition
         from OpenGLContext import renderoptions
@@ -113,9 +134,11 @@ class PygameContext(
         # definition's size instead would letterbox it.
         size = ((0, 0) if renderoptions.fullscreen_window(definition)
                 else tuple([int(i) for i in definition.size]))
+        self._vsyncApplied = self.wantsVSync( definition )
         self.screen = pygame.display.set_mode(
             size,
             OPENGL | self.pygameFlagsFromDefinition( definition ),
+            vsync=1 if self._vsyncApplied else 0,
         )
         return self.screen
     def CallVirtual(self, name, *args, **namedarguments):
@@ -149,46 +172,210 @@ class PygameContext(
         Context.setCurrent(self, blocking)
         self.bindContextResources(self._glHandle())
 
+    ### window-level settings
+    def wantsVSync( self, definition=None ):
+        """Whether this definition asks to wait for the display's refresh"""
+        from OpenGLContext import renderoptions
+        source = self if definition is None else definition
+        return renderoptions.flag(
+            source, 'vsync',
+            not renderoptions.env_flag('OPENGLCONTEXT_NO_VSYNC', False))
+
+    def applyVSync( self, definition=None ):
+        """Answer that the swap interval cannot be changed for a live context
+
+        SDL settles it when the window is made (see
+        :meth:`pygameDisplayMode`), and re-making the window would take the GL
+        context and everything in it with it -- so a change is reported and
+        takes effect the next time the program runs.
+        """
+        if self.wantsVSync( definition ) != self._vsyncApplied:
+            log.info(
+                "vsync is settled when the SDL window is made; the change "
+                "takes effect in a new window"
+            )
+        return False
+
+    def setFullscreen( self, fullscreen ):
+        """Fill the screen, or go back to the window this context opened with
+
+        SDL swaps the window between the two without re-making the GL context,
+        so nothing the engine has uploaded is lost.
+        """
+        if self.screen is None:
+            return False
+        surface = pygame.display.get_surface()
+        already = bool(surface and (surface.get_flags() & pygame.FULLSCREEN))
+        if bool(fullscreen) == already:
+            return True
+        # SDL remembers the windowed size across the trip and puts it back, so
+        # there is nothing to restore here.
+        pygame.display.toggle_fullscreen()
+        self.ViewPort(*pygame.display.get_window_size())
+        self.triggerRedraw(1)
+        return True
+
+    def settingsChanged( self ):
+        """Re-apply the window-level settings a changed definition affects."""
+        from OpenGLContext import renderoptions
+        self.applyVSync()
+        self.setFullscreen(renderoptions.fullscreen_window(self))
+        Context.settingsChanged(self)
+
+    def setPointerCapture( self, capture ):
+        """Grab and hide the pointer for a mouse-look movement mode
+
+        SDL's *relative* mode is the one that reports unbounded motion: the
+        pointer stops moving and only the deltas continue, so a view can go on
+        turning past the edge of the screen.  The grab keeps the events coming
+        while the pointer would have been over another window.
+        """
+        if self.screen is None:
+            return False
+        capture = bool(capture)
+        self._pointerGrabbed = capture
+        pygame.event.set_grab(capture)
+        pygame.mouse.set_visible(not capture)
+        relative = getattr(pygame.mouse, 'set_relative_mode', None)
+        if relative is not None:
+            relative(capture)
+        forget = getattr(self, 'forgetPointerOrigin', None)
+        if forget is not None:
+            # Where the pointer is means something different on each side of
+            # this, so the first report afterwards establishes a position
+            # rather than arriving as one flick of the view.
+            forget()
+        return True
+
+    ### the loop
     def MainLoop( self ):
-        """Run indefinitely until program is quit"""
-        finished = 0
-        renderedFirst = 0
-        counter = range( 100 )
-        while not finished:
-            #draw if needed, else delay a bit
-            timeout = self.drawPollTimeout
-            self.redrawRequest.wait( timeout )
-            if self.redrawRequest.isSet() or (not renderedFirst):
-                renderedFirst = 1
-                self.OnDraw( force = 1)
-            else:
-                self.OnDraw( force = 0)
-            #loop through all pending events
-            for count in counter:
-                event = pygame.event.poll()
-                if not event.type:
-                    self.OnIdle()
-                name = 'Pygame' + pygame.event.event_name(event.type)
-                if not self.CallVirtual(name, event):
-                    finished = 1
-                    break
-                if event.type in ( pygame.VIDEORESIZE, pygame.VIDEOEXPOSE):
-                    self.triggerRedraw( 0 )
-                    break
-        # The loop is over and the display is about to go, so this is the last
-        # moment the caches holding this context's GL names can delete them
-        # rather than be left pointing at a handle SDL will hand out again.
+        """Run until the window is closed
+
+        One render per iteration, whatever arrived: a burst of input -- a
+        mouse-drag rotate, say -- then coalesces into a single frame instead of
+        forcing a full render per event.
+        """
+        self.deferRedraw = True
+        renderedFirst = False
+        # A private trace when a subclass has cleared setupLoopTrace's: a
+        # diagnostic must never be the reason a loop will not run.
+        trace = self.loopTrace or LoopTrace()
+        try:
+            while self.screen is not None and not self._finished:
+                renderedFirst = self._loopIteration( trace, renderedFirst )
+        finally:
+            # A loop left while it was still slow -- a closed window, a Ctrl-C
+            # -- holds an episode nobody has written, and what it holds of the
+            # last few seconds is what a session that ended badly is worth
+            # reading for.
+            if self.stallJournal is not None:
+                self.stallJournal.close()
+            self.stopTelemetry('mainloop-ended')
+            self.releaseDisplay()
+
+    def _loopIteration( self, trace, renderedFirst ):
+        """One pass of the main loop, timed phase by phase
+
+        Answers the new renderedFirst, which is the only state an iteration
+        carries into the next one.  The phases exist because the frame counter
+        can only see the render: an application whose simulation lives in
+        ``OnIdle`` stutters without the counter ever dipping, and the phase
+        that names the culprit is the difference between a rendering problem
+        and a simulation one.  See :mod:`OpenGLContext.looptrace`.
+        """
+        with trace.iteration():
+            with trace.phase('poll'):
+                if not self._pumpEvents():
+                    # Left for MainLoop to act on rather than closing the
+                    # display here: the release belongs in one place, and it
+                    # needs the display still up to take the GL names with it.
+                    self._finished = True
+                    return renderedFirst
+            with trace.phase('repeats'):
+                self.pumpKeyRepeats()
+            with trace.phase('idle'):
+                self.OnIdle()
+            # Wait briefly so input and time events accumulate before
+            # rendering; bounded by drawPollTimeout, so this phase can go up
+            # but never far up.
+            with trace.phase('wait'):
+                self.redrawRequest.wait( self.drawPollTimeout )
+            with trace.phase('draw'):
+                # force=1 when a redraw is pending; force=0 still runs the
+                # event cascade so animations advance, and renders only if they
+                # produced a visible change.
+                if self.redrawRequest.isSet() or not renderedFirst:
+                    renderedFirst = True
+                    self.OnDraw( force = 1 )
+                else:
+                    self.OnDraw( force = 0 )
+        return renderedFirst
+
+    def _pumpEvents( self ):
+        """Dispatch what SDL has queued; answer whether the loop should go on"""
+        for _count in range( EVENT_BUDGET ):
+            event = pygame.event.poll()
+            if not event.type:
+                break
+            name = 'Pygame' + pygame.event.event_name(event.type)
+            if not self.CallVirtual(name, event):
+                return False
+        return True
+
+    def OnQuit(self, event=None):
+        """Let go of this window's GL objects, then end the application
+
+        The release happens **here** rather than after the loop because
+        :meth:`Context.OnQuit` ends the process with ``os._exit``: nothing
+        after it runs, no ``finally`` and no ``atexit`` hook, and closing the
+        window or pressing Escape is the path a user actually takes.
+        """
+        self.releaseDisplay()
+        return Context.OnQuit(self, event)
+
+    def releaseDisplay( self ):
+        """Drop this context's GL objects and let the display go
+
+        The engine's caches own GL objects in this context, so they have to be
+        let go before it is destroyed rather than left for a later window that
+        SDL hands the same identifier.  Calling this twice is harmless; the
+        second call has nothing to do.
+        """
+        if self.screen is None:
+            return
+        self.screen = None
         self.releaseContextResources( self._glHandle() )
+        pygame.display.quit()
 
     def PygameQuit(self, event):
         """Return a value indicating that the MainLoop should exit"""
         return 0
 
+    def PygameWindowClose(self, event):
+        """The window's own close button, which SDL reports separately"""
+        return 0
+
+    def PygameWindowResized(self, event):
+        """Follow the window's new size with the viewport
+
+        Nothing is re-made: SDL2 resizes a ``RESIZABLE`` window in place, and
+        calling ``set_mode`` again to "apply" the size would build a new GL
+        context and strand every object the engine has uploaded into the old
+        one.
+        """
+        width, height = pygame.display.get_window_size()
+        self.contextDefinition.size = (width, height)
+        self.ViewPort(width, height)
+        self.CallVirtual('OnResize', width, height)
+        self.triggerRedraw(1)
+        return 1
+
     def PygameVideoResize(self, event):
-        """Handle the resize of the window"""
-        sizex, sizey = self.contextDefinition.size = event.size
-        self.ViewPort(sizex, sizey)
-        self.pygameDisplayMode()
+        """The older spelling of a resize, for an SDL1-era event queue"""
+        return self.PygameWindowResized(event)
+
+    def PygameVideoExpose(self, event):
+        """The window has been uncovered and wants drawing again"""
         self.triggerRedraw(1)
         return 1
 

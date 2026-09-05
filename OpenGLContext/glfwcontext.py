@@ -186,6 +186,9 @@ class GLFWContext(
         Called again when the setting changes, so a settings screen's Apply
         takes effect without a restart.  ``definition`` is for the call made
         while the window is being built, before the base class has stored it.
+
+        Answers whether the interval was set; see
+        :meth:`OpenGLContext.context.Context.applyVSync`.
         """
         from OpenGLContext import renderoptions
         source = self if definition is None else definition
@@ -197,6 +200,8 @@ class GLFWContext(
         except Exception:
             log.debug("this GLFW build would not set the swap interval",
                       exc_info=True)
+            return False
+        return True
 
     def _setWindowHints(self, definition):
         """Apply ContextDefinition to GLFW window hints"""
@@ -358,7 +363,6 @@ class GLFWContext(
         does.  Read after the window is current, which is the only moment the
         answer is about this window.
         """
-        from OpenGLContext import contextresources
         return contextresources.context_key()
 
     def SwapBuffers(self):
@@ -376,10 +380,31 @@ class GLFWContext(
         self.triggerRedraw(1)
 
     def OnQuit(self, event=None):
-        """Clean up and exit"""
+        """Let go of this window's GL objects, then end the application.
+
+        The release happens **here** rather than after the loop because
+        :meth:`Context.OnQuit` ends the process with ``os._exit``: nothing
+        after it runs, no ``finally`` and no ``atexit`` hook, and closing the
+        window or pressing Escape is the path a user actually takes.
+        """
         if self.window:
             glfw.set_window_should_close(self.window, True)
+        self.releaseWindow()
         return super(GLFWContext, self).OnQuit(event)
+
+    def releaseWindow(self):
+        """Drop this context's GL objects and destroy its window
+
+        The engine's caches own GL objects in this context, so they have to be
+        let go before it is destroyed rather than left for a later window that
+        the driver hands the same identifier.  Calling this twice is harmless;
+        the second call has nothing to do.
+        """
+        if not self.window:
+            return
+        window, self.window = self.window, None
+        self.releaseContextResources(self._glHandle())
+        glfw.destroy_window(window)
 
     def OnIdle(self, *arguments):
         """Animation hook for the GLFW loop.
@@ -467,13 +492,7 @@ class GLFWContext(
             # worth reading for.
             self.stopTelemetry('mainloop-ended')
 
-        # Cleanup.  The engine's caches own GL objects in this context, so they
-        # have to be let go before it is destroyed rather than left for a later
-        # window that the driver hands the same identifier.
-        if self.window:
-            self.releaseContextResources(self._glHandle())
-            glfw.destroy_window(self.window)
-            self.window = None
+        self.releaseWindow()
         glfw.terminate()
 
     def ContextMainLoop(cls, *args, **named):

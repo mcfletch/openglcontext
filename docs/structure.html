@@ -25,7 +25,7 @@ Context</a> interface. Each supported GUI library defines a derived
 Context class which overrides various methods to support the Context API
 (these derived classes are named <a href="../pydoc/OpenGLContext.glutcontext.html">
 GLUTContext</a>,<a href="../pydoc/OpenGLContext.pygamecontext.html">
-PyGameContext</a>, <a href="../pydoc/OpenGLContext.wxcontext.html">
+PygameContext</a>, <a href="../pydoc/OpenGLContext.wxcontext.html">
 wxContext</a>, etceteras).&nbsp; Each   supported GUI will also provide
 a sub-class which uses the mix in <a href="../pydoc/OpenGLContext.interactivecontext.html">
 InteractiveContext</a>, which, through the events package (see below),
@@ -83,6 +83,54 @@ the machine you are reading this on can run it -- for instance
 <code>scenegraph/text/wglfont.py</code> is Windows font support, and is expected
 to work on Windows.</p>
 
+<h3 id="backend-capabilities">What every backend offers</h3>
+
+<p>The toolkit an application already uses should choose a window system, not a
+subset of the engine, so the window-level capabilities are the same on all of
+them. Each is a method on <code>Context</code> that answers <strong>whether it
+happened</strong>, so a caller can tell "this platform will not" from "nobody
+implemented this" and offer the user something else.</p>
+
+<table>
+  <tr><th>Method</th><th>Does</th><th>Where it answers False</th></tr>
+  <tr><td><code>setPointerCapture(on)</code></td>
+    <td>Hides the pointer and reports unbounded motion, which is what
+      mouse-look turns from</td>
+    <td>A window system that will not give a client the pointer &mdash; Qt's
+      Wayland plugin, for one; turning is then limited to the window</td></tr>
+  <tr><td><code>setFullscreen(on)</code></td>
+    <td>Moves a live window to the screen and back, keeping its GL
+      context</td>
+    <td>A machine with no monitor attached</td></tr>
+  <tr><td><code>applyVSync()</code></td>
+    <td>Waits for the display's refresh, or does not
+      (<code>ContextDefinition.vsync</code>)</td>
+    <td>Qt and Pygame, where the interval is part of a surface format settled
+      when the context is made: the change is logged and takes effect in the
+      next window. GLUT and wxPython go through
+      <code>OpenGLContext.swapcontrol</code>, which answers False where the
+      window system offers no swap-control extension</td></tr>
+</table>
+
+<p>Beside those, every backend reports pointer motion to the movement sampler
+as it happens (<code>recordPointerMotion</code>), supplies key-repeat where the
+platform delivers none, and releases every held key when its window loses
+focus &mdash; no platform sends a key-up for a key that was down when focus went
+elsewhere, and without the release the camera keeps moving with nobody touching
+the keyboard. The held-key half is
+<code>events.eventhandlermixin.HeldKeyMixin</code>, shared. See
+<a href="navigation.html">Movement Modes &amp; Navigation</a>.</p>
+
+<p>Each backend's loop has the same shape: the window system's events are
+pumped, then the animation hook, then one render for the iteration whatever
+arrived &mdash; so a burst of input coalesces into a single frame rather than
+forcing a render per event &mdash; with the phases timed by
+<a href="hud.html"><code>looptrace</code></a> and the telemetry and stall
+journals closed as the loop ends. GLUT's is built on
+<code>glutMainLoopEvent</code>; a GLUT without it keeps the older arrangement,
+where the toolkit owns the loop. wxPython's loop is wx's own, and the phases are
+not timed there.</p>
+
 <h3 id="fullscreen">Filling the screen</h3>
 
 <p>A game normally wants the whole display and a tool normally does not, so
@@ -106,10 +154,9 @@ itself over the display of whoever started the run.</p>
 
 <p><code>context.setFullscreen(True/False)</code> moves a window that already
 exists, keeping the GL context and everything loaded into it, and answers
-whether the backend could. GLFW, GLUT and wxPython can; Pygame opens
-full-screen but does not move afterwards, since SDL re-creates the drawable and
-the GL context with it. Applying the settings screen's toggle calls it, so a
-player can leave a full-screen game without restarting.</p>
+whether the backend could. Every backend can. Applying the settings screen's
+toggle calls it, so a player can leave a full-screen game without
+restarting.</p>
 
 <p>Rendering runs through the <strong>passes</strong> package described in
 <a href="#passes">Rendering Passes</a> below: a single "flat" pass that observes
@@ -276,9 +323,11 @@ in which a driver reuses an address.</p>
 ViewPlatform</a> and <a href="../pydoc/OpenGLContext.move.viewplatformmixin.html">
 ViewPlatformMixin</a> classes provide   a simple navigation interface
 using the keyboard arrow keys (walk/fly) and the   ALT-arrow keys
-(pan/slide).&nbsp; These classes make use of the <a href="../pydoc/OpenGLContext.move.trackball.html">Trackball</a>,<a href="../pydoc/OpenGLContext.move.examinemanager.html">
-ExamineManager</a> and <a href="../pydoc/OpenGLContext.move.dragwatcher.html">
-DragWatcher</a> classes as well.</p>
+(pan/slide), plus the three examine gestures &mdash; right-drag to orbit,
+middle-drag to pan, wheel to move toward or away. Those are
+<a href="../pydoc/OpenGLContext.move.orbit.html">TurntableOrbit</a> driven by
+<a href="../pydoc/OpenGLContext.move.examinemanager.html">ExamineManager</a>;
+see <a href="navigation.html#examine">Examining</a>.</p>
 
 <p>An application wanting more than that declares <strong>movement modes</strong>
 on its <code>ContextDefinition</code>: walking, flying, swimming and first-person

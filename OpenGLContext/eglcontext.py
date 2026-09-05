@@ -431,6 +431,17 @@ class EGLContext(
             self.stopTelemetry('mainloop-ended')
             self.close()
 
+    def OnQuit(self, event=None):
+        """Let go of the EGL objects, then end the application.
+
+        The release happens **here** rather than after the loop because
+        :meth:`Context.OnQuit` ends the process with ``os._exit``: nothing
+        after it runs, no ``finally`` and no ``atexit`` hook, and a bounded
+        capture run quits from inside ``OnDraw``.
+        """
+        self.close()
+        return Context.OnQuit(self, event)
+
     def close(self):
         """Release the GL objects, the context, the surface and the display.
 

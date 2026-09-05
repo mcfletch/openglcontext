@@ -11,15 +11,17 @@ class PygameInteractiveContext(
     PygameContext,
 ):
     '''PyGame context providing mouse and keyboard interaction '''
-    def PygameVideoResize(self, event):
-        sizex, sizey = event.size
-        PygameContext.PygameVideoResize(self, event)
-        self.CallVirtual('OnResize', sizex, sizey)
-        return 1
     def PygameActivateEvent(self, event):
         return 1
-    def OnIdle(self): 
-        pass
+    def OnIdle(self, *arguments):
+        """Animation hook for the pygame loop.
+
+        The default Context.OnIdle renders via drawPoll, which would double up
+        with MainLoop's own OnDraw. Demos that animate override this to call
+        triggerRedraw; the base behaviour here is to do nothing and let
+        MainLoop drive rendering.
+        """
+        return 0
 
     
 if __name__ == '__main__':

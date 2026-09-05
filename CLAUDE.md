@@ -52,10 +52,13 @@ OpenGLContext/
 │   ├── gizmo.py      # The tri-axis handle; a drag held to one axis
 │   └── controlnet.py # A NURBS node's control points, as pickable markers
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.html
+│   └── wheel.py      # Rotation reports into whole notches, for the backends
+│                     # whose toolkit states a detent size
 ├── loaders/          # File formats into the scenegraph -- docs/gltf.html, vrml97.html
 │   ├── gltf/         # glTF 2.0 / GLB
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.html
 ├── move/             # Camera, movement modes, walking -- docs/navigation.html
+│   └── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
 ├── nav/              # Navigation mesh generated from a collision mesh
 ├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.html
 ├── passes/           # Rendering passes -- docs/renderpasses.html, flat.html, pbr.html
@@ -104,6 +107,7 @@ OpenGLContext/
 ├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition
 ├── screenshot.py     # The F2 key every context binds -- docs/structure.html
+├── swapcontrol.py    # Waiting for the refresh, for backends that name nothing
 ├── contextresources.py   # Caches let go of a GL context's names as it dies
 ├── contextdefinition.py  # The fields a context is configured by
 ├── context.py        # Base context class

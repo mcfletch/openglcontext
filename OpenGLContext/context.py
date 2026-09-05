@@ -1168,6 +1168,37 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         return False
 
+    def setPointerCapture(self, capture):
+        """Hide and grab the pointer for mouse-look; answer whether it happened.
+
+        Mouse-look needs *unbounded* motion: a pointer that stops at the edge of
+        the screen is a view that stops turning there.  What provides it differs
+        -- a relative-motion mode, a grab, or warping the pointer back to the
+        middle of the window after every movement -- so each backend does it its
+        own way and this says what a backend that cannot do it at all answers.
+
+        False means the caller should not offer mouse-look as though it worked;
+        see
+        :meth:`OpenGLContext.move.viewplatformmixin.ViewPlatformMixin.setPointerCapture`,
+        which is what asks.
+        """
+        return False
+
+    def applyVSync(self, definition=None):
+        """Wait for the display's refresh, or don't; answer whether it happened.
+
+        Off uncaps the frame rate, which is what a benchmark wants.  The field
+        is :attr:`ContextDefinition.vsync` and the settings screen writes it, so
+        a backend that can change the swap interval of a live context re-reads
+        it here.  One that cannot -- where the interval is part of a surface
+        format settled when the context was created -- answers False, and the
+        change takes effect in the next window.
+
+        ``definition`` is for the call a backend makes while its window is being
+        built, before the base class has stored one.
+        """
+        return False
+
     def settingsChanged(self):
         """The context definition has been edited; re-read what is not per-frame.
 

@@ -7,7 +7,6 @@ from OpenGLContext.events.mouseevents import (
 import glfw
 import math
 import os
-import time
 import logging
 
 log = logging.getLogger(__name__)
@@ -44,63 +43,27 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
     translate them to OpenGLContext events.
     """
 
-    # Software key-repeat. GLFW's Wayland platform only emits glfw.REPEAT when
-    # the compositor advertises repeat_info, which a nested/container compositor
-    # often does not -- so holding a key delivers PRESS then nothing, breaking
-    # held-key navigation. We synthesise repeats from PRESS..RELEASE, disabling
-    # it the moment a native glfw.REPEAT proves the platform delivers its own.
-    keyRepeatDelay = 0.4        # seconds held before the first synthetic repeat
-    keyRepeatInterval = 0.05    # seconds between synthetic repeats (~20/s)
-    _nativeRepeat = False
-
-    def _heldKeys(self):
-        held = self.__dict__.get('_heldKeysMap')
-        if held is None:
-            held = self.__dict__['_heldKeysMap'] = {}
-        return held
-
     ### KEYBOARD interactions
     def glfwOnKey(self, window, key, scancode, action, mods):
-        """Convert a key event to a context-style event"""
+        """Convert a key event to a context-style event
+
+        GLFW's Wayland platform emits ``glfw.REPEAT`` only where the compositor
+        advertises ``repeat_info``, which a nested or container compositor often
+        does not, so held-key navigation needs the repeats supplying; see
+        :class:`OpenGLContext.events.eventhandlermixin.HeldKeyMixin`.
+        """
         if action == glfw.PRESS:
-            self._heldKeys()[key] = [mods, time.time() + self.keyRepeatDelay]
-            self._emitKey(key, 1, mods)
+            self.noteKeyDown(key, mods)
+            self.emitKey(key, 1, mods)
         elif action == glfw.RELEASE:
-            self._heldKeys().pop(key, None)
-            self._emitKey(key, 0, mods)
+            self.noteKeyUp(key)
+            self.emitKey(key, 0, mods)
         elif action == glfw.REPEAT:
-            self._nativeRepeat = True   # platform delivers repeat; stop faking it
-            self._emitKey(key, 1, mods)
+            self.noteNativeRepeat()
+            self.emitKey(key, 1, mods)
 
-    def _emitKey(self, key, state, mods):
+    def emitKey(self, key, state, mods):
         self.ProcessEvent(GLFWKeyboardEvent(self, key, state, mods))
-
-    def pumpKeyRepeats(self):
-        """Emit synthetic key-repeat events for currently-held keys.
-
-        Called once per main-loop iteration. A no-op once native repeat is seen
-        or when no key is held.
-        """
-        held = self.__dict__.get('_heldKeysMap')
-        if self._nativeRepeat or not held:
-            return
-        now = time.time()
-        for key, info in list(held.items()):
-            if now >= info[1]:
-                self._emitKey(key, 1, info[0])
-                info[1] = now + self.keyRepeatInterval
-
-    def clearHeldKeys(self):
-        """Let go of every held key, as though each had been released.
-
-        For focus loss, where no RELEASE arrives from the platform: an
-        application that tracks held keys itself -- a movement mode, a game's
-        steering -- only ever learns a key came up from the event, so dropping
-        this map without sending one leaves the key down for ever on its side.
-        """
-        held = self.__dict__.pop('_heldKeysMap', None) or {}
-        for key, info in held.items():
-            self._emitKey(key, 0, info[0])
 
     def glfwOnCharacter(self, window, codepoint):
         """Convert character input to context event"""

@@ -5,12 +5,106 @@ try:
 except ImportError:
     import queue as Queue
 import logging
+import time
 
-log = logging.getLogger(__name__)
 from OpenGL._bytes import as_str
 
+log = logging.getLogger(__name__)
 
-class EventHandlerMixin(object):
+
+class HeldKeyMixin(object):
+    """Which keys are down, and what a platform does not tell us about them
+
+    Two things every backend needs and none of them gets from the window
+    system alone:
+
+    **A key that was down when the window lost focus never comes up.**  No
+    platform sends the release, so anything reading held keys -- navigation
+    above all -- has the key held for the rest of the session, and the camera
+    keeps moving with nobody touching the keyboard.  :meth:`clearHeldKeys`
+    sends the releases the window system did not.
+
+    **Some platforms deliver no key-repeat.**  A held key then arrives as one
+    press and nothing else, which breaks held-key navigation on backends whose
+    movement is driven by repeats.  :meth:`pumpKeyRepeats`, called once per
+    loop iteration, supplies them -- and stops the moment
+    :meth:`noteNativeRepeat` says the platform delivers its own, so a platform
+    that repeats is never doubled.
+
+    A backend mixes this in and implements :meth:`emitKey`; what a key is
+    called is the backend's own business, since this only ever hands back what
+    it was given.
+    """
+
+    #: Seconds a key is held before the first synthetic repeat.
+    keyRepeatDelay = 0.4
+    #: Seconds between synthetic repeats after that (about twenty a second).
+    keyRepeatInterval = 0.05
+
+    _nativeRepeat = False
+
+    def emitKey(self, key, state, modifiers):
+        """Send one key transition to the engine
+
+        Implemented by the backend, which is what knows how to build its own
+        event class.
+        """
+        raise NotImplementedError(
+            '%s must implement emitKey to use held-key tracking'
+            % (self.__class__.__name__,))
+
+    def heldKeys(self):
+        """The keys currently down, as ``{key: modifiers}``"""
+        return dict((key, held[0]) for key, held in self._heldMap().items())
+
+    def noteKeyDown(self, key, modifiers, now=None):
+        """Record that ``key`` went down, and when its first repeat is due"""
+        when = time.time() if now is None else now
+        self._heldMap()[key] = [modifiers, when + self.keyRepeatDelay]
+
+    def noteKeyUp(self, key):
+        """Record that ``key`` came up"""
+        self._heldMap().pop(key, None)
+
+    def noteNativeRepeat(self):
+        """The platform delivers its own key-repeat; stop supplying one"""
+        self._nativeRepeat = True
+
+    def pumpKeyRepeats(self, now=None):
+        """Emit a repeat for every held key that is due one
+
+        Called once per main-loop iteration.  A no-op once native repeat has
+        been seen, and when nothing is held.
+        """
+        held = self.__dict__.get('_heldKeysMap')
+        if self._nativeRepeat or not held:
+            return
+        when = time.time() if now is None else now
+        for key, info in list(held.items()):
+            if when >= info[1]:
+                self.emitKey(key, 1, info[0])
+                info[1] = when + self.keyRepeatInterval
+
+    def clearHeldKeys(self):
+        """Let go of every held key, as though each had been released
+
+        For focus loss, where no release arrives from the platform.  An
+        application that tracks held keys itself only ever learns a key came up
+        from the event, so dropping the map without sending one leaves the key
+        down for ever on its side.
+        """
+        held = self.__dict__.pop('_heldKeysMap', None) or {}
+        for key, info in held.items():
+            self.emitKey(key, 0, info[0])
+
+    def _heldMap(self):
+        held = self.__dict__.get('_heldKeysMap')
+        if held is None:
+            held = self.__dict__['_heldKeysMap'] = {}
+        return held
+
+
+class EventHandlerMixin(HeldKeyMixin):
     """This class provides mix in functionality for contexts
     needing event support.
 
