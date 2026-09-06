@@ -27,6 +27,7 @@ against the upstream Khronos references::
 
     oglc-gltf-regression --bless
 """
+import json
 import os
 
 import pytest
@@ -69,6 +70,15 @@ TOLERANCES = {
         'compounds with the mip level the shader reaches at high roughness. '
         'Generating the chain ourselves would settle it and is the durable fix.'
     ),
+    'GlassBrokenWindow': (
+        5.0,
+        'the same transmission mip chain, seen through the cracked pane. Every '
+        'pixel outside the glass is identical between an NVIDIA RTX 3060 Ti '
+        '(which blessed the baseline) and an Intel UHD 630, and inside it 4% '
+        'differ by a mean of 1.75/255 -- the fracture lines, where the '
+        'roughness is highest and the shader reaches furthest up the chain. '
+        'The durable fix is the one named above, and settles both.'
+    ),
 }
 
 
@@ -105,6 +115,52 @@ def _baseline_path(spec, camera):
     return os.path.join(_BASELINE_ROOT, spec.slug(camera) + '.png')
 
 
+def _recorded(spec, camera):
+    """What the sidecar says this baseline was rendered with, or ``{}``.
+
+    ``oglc-gltf-regression --bless`` writes one JSON file beside each image
+    holding the parameters of the render and the driver that made it.
+    """
+    path = os.path.splitext(_baseline_path(spec, camera))[0] + '.json'
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding='utf-8') as handle:
+        return json.load(handle)
+
+
+def stale_reason(spec, camera, recorded):
+    """Why this baseline is not a picture of this view, or ``None``.
+
+    A baseline is a picture of one scene under one set of parameters.  Change
+    the parameters -- pin an animation to a different second, move the camera,
+    reframe -- and the committed image is a picture of a view that no longer
+    exists, so the comparison against it is not a regression gate but a
+    guaranteed failure whose message says only that pixels differ.
+
+    Reading the parameters back out of the sidecar turns that into what it is:
+    a baseline that needs re-blessing, named as such, and caught without
+    rendering anything.
+    """
+    problems = []
+    if recorded.get('anim_time') != spec.anim_time:
+        problems.append('the animation was pinned at %r and the roster now asks '
+                        'for %r' % (recorded.get('anim_time'), spec.anim_time))
+    framing = recorded.get('framing') or {}
+    # A scene with an explicit eye/look_at is framed by those instead, and the
+    # sidecar records them under their own keys.
+    if spec.eye is None or spec.look_at is None:
+        for key, wanted in (('yaw', spec.yaw), ('elevation', spec.elevation),
+                            ('tilt', spec.tilt), ('margin', spec.margin)):
+            if key in framing and float(framing[key]) != float(wanted):
+                problems.append('%s was %r and the roster now asks for %r'
+                                % (key, framing[key], wanted))
+    size = tuple(recorded.get('size') or ())
+    if size and size != tuple(R.DEFAULT_SIZE):
+        problems.append('it was rendered at %dx%d and the suite renders at %dx%d'
+                        % (size + tuple(R.DEFAULT_SIZE)))
+    return '; '.join(problems) or None
+
+
 @pytest.mark.parametrize("spec,camera", _VIEWS, ids=_IDS)
 def test_view_has_baseline_or_is_waived(spec, camera):
     """Every roster view is either baselined or explicitly waived (no GL needed)."""
@@ -114,6 +170,26 @@ def test_view_has_baseline_or_is_waived(spec, camera):
     assert os.path.exists(baseline), (
         "no baseline for %s -- render it, review against the Khronos reference, "
         "then: oglc-gltf-regression --bless --only %s" % (spec.slug(camera), spec.name))
+
+
+@pytest.mark.parametrize("spec,camera", _VIEWS, ids=_IDS)
+def test_baseline_was_rendered_for_this_view(spec, camera):
+    """The committed image is of the view the roster now describes (no GL needed).
+
+    The companion to the test above, and the same kind of anchor: that one
+    catches a view with no baseline, this one catches a baseline whose view has
+    moved out from under it.
+    """
+    if spec.name in WAIVERS:
+        pytest.xfail("waived (feature unsupported): %s" % WAIVERS[spec.name])
+    recorded = _recorded(spec, camera)
+    if not recorded:
+        pytest.skip('no sidecar beside this baseline to read')
+    reason = stale_reason(spec, camera, recorded)
+    assert reason is None, (
+        "the %s baseline is of a different view: %s. Re-render it, review "
+        "against the Khronos reference, then: oglc-gltf-regression --bless "
+        "--only %s" % (spec.slug(camera), reason, spec.name))
 
 
 @pytest.mark.slow
@@ -129,6 +205,14 @@ def test_view_matches_baseline(spec, camera, tmp_path):
     if not os.path.exists(baseline):
         pytest.fail("no baseline for %s -- bless it first "
                     "(oglc-gltf-regression --bless --only %s)" % (slug, spec.name))
+    # Before rendering rather than after: comparing a frame against a baseline
+    # of another view can only fail, and two minutes of rendering buys a
+    # pixel count in place of the reason.
+    reason = stale_reason(spec, camera, _recorded(spec, camera))
+    if reason is not None:
+        pytest.fail("the %s baseline is of a different view: %s. Re-bless it "
+                    "(oglc-gltf-regression --bless --only %s)"
+                    % (slug, reason, spec.name))
 
     # Load in the same context as an end user: a Khronos sample over its http(s)
     # URL through the resolver, not as a trusted local file.
