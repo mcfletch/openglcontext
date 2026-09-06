@@ -56,6 +56,25 @@ class TestTheShaderCompileHarnessSkips:
         spec.loader.exec_module(module)
         return module
 
+    def _refusing(self, monkeypatch, raised):
+        """The engine offering an offscreen context that will not be built.
+
+        Patched where the harness asks for it rather than in a backend module,
+        so this says the same thing on a machine whose offscreen context is a
+        WGL pbuffer as on one whose is EGL.
+        """
+        from OpenGLContext.context import Context
+
+        class Refuses:
+            __module__ = 'OpenGLContext.testing'
+
+            def __init__(self, *arguments, **named):
+                raise raised
+
+        monkeypatch.setattr(
+            Context, 'getOffscreenContextType', classmethod(lambda cls: Refuses)
+        )
+
     @pytest.mark.parametrize(
         'raised',
         [
@@ -69,21 +88,26 @@ class TestTheShaderCompileHarnessSkips:
     )
     def test_a_machine_without_a_context_is_a_skip(self, monkeypatch, raised):
         harness = self._harness()
-        from OpenGLContext import eglcontext
-
-        def refuses(*arguments, **named):
-            raise raised
-
-        monkeypatch.setattr(eglcontext, 'EGLContext', refuses)
+        self._refusing(monkeypatch, raised)
         assert harness._make_context() is None
 
-    def test_an_egl_error_is_a_skip_with_its_own_message(self, monkeypatch, capsys):
+    def test_no_offscreen_backend_at_all_is_a_skip(self, monkeypatch):
+        """macOS today: nothing registered can render without a window."""
+        from OpenGLContext.context import Context
+
         harness = self._harness()
-        from OpenGLContext import eglcontext
+        monkeypatch.setattr(
+            Context, 'getOffscreenContextType', classmethod(lambda cls: None)
+        )
+        assert harness._make_context() is None
 
-        def refuses(*arguments, **named):
-            raise eglcontext.EGLContextError('no config matched')
-
-        monkeypatch.setattr(eglcontext, 'EGLContext', refuses)
+    def test_a_backends_own_error_is_a_skip_with_its_own_message(
+        self, monkeypatch, capsys
+    ):
+        """Each backend raises its own subclass of RuntimeError and says why;
+        what it said has to reach the reader, since it is the whole account of
+        why nothing was checked."""
+        self._refusing(monkeypatch, RuntimeError('no config matched'))
+        harness = self._harness()
         assert harness._make_context() is None
         assert 'no config matched' in capsys.readouterr().out

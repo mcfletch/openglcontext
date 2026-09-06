@@ -127,6 +127,56 @@ class ContextConfigMixin:
         else:
             return classObject
 
+    #: Platforms whose windowless backend is not the usual one, by the prefix
+    #: ``sys.platform`` starts with.
+    OFFSCREEN_BACKENDS = (
+        ('win32', 'wgl'),
+        ('cygwin', 'wgl'),
+    )
+
+    #: What every other platform renders with no window on: EGL, which needs
+    #: neither a window nor a display server.
+    DEFAULT_OFFSCREEN_BACKEND = 'egl'
+
+    @classmethod
+    def getOffscreenBackendName(cls, platform: "str | None" = None) -> str:
+        """Which backend renders with no window here.
+
+        `platform` defaults to :data:`sys.platform`; pass one to ask about
+        another, which is what lets the mapping be checked anywhere.
+        """
+        if platform is None:
+            platform = sys.platform
+        for prefix, name in cls.OFFSCREEN_BACKENDS:
+            if platform.startswith(prefix):
+                return name
+        return cls.DEFAULT_OFFSCREEN_BACKEND
+
+    @classmethod
+    def getOffscreenContextType(cls, platform: "str | None" = None) -> "type | None":
+        """The Context class that renders with no window here, or None.
+
+        A batch renderer, a build machine or a service returning images wants
+        a context and no window, and which class that is depends on the
+        machine: a WGL pbuffer on Windows, EGL elsewhere.  Both are registered
+        everywhere, so this is which one to ask for::
+
+            offscreen = Context.getOffscreenContextType()
+            if offscreen is None:
+                ...                     # nothing here renders without a window
+            context = offscreen(size=(1920, 1080))
+
+        None where the backend's bindings cannot be loaded -- an EGL with no
+        library behind it, say.  That is the same answer as having no backend
+        at all, and for the caller's purposes it is the same question.
+        """
+        # Named here rather than on getContextType, whose own `type` parameter
+        # shadows the builtin an annotation there would have to name.
+        loaded: "type | None" = cls.getContextType(
+            cls.getOffscreenBackendName(platform), type=plugins.Context
+        )
+        return loaded
+
     @classmethod
     def getDefaultContextType(cls):
         """Get the current user's preference for a default context type

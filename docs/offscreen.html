@@ -108,6 +108,28 @@ obscurely, so an application can try it and fall back. On Windows,
 <code>OpenGLContext.wglcontext.available()</code> answers before anything is
 created, naming the extensions the driver lacks.</p>
 
+<h3>Asking for whichever one is here</h3>
+
+<p>Both backends are registered on every platform, so code that runs on more
+than one asks for the offscreen context rather than naming a class:</p>
+
+<pre>
+from OpenGLContext.context import Context
+
+offscreen = Context.getOffscreenContextType()
+if offscreen is None:
+    ...                            # nothing here renders without a window
+context = offscreen(size=(1920, 1080))
+</pre>
+
+<p><code>None</code> covers both ways of not having one: a platform with no
+backend, and a backend whose bindings will not load &mdash; an EGL with no
+library behind it, say. For the caller those are the same answer, and the
+decision after it is the same one.
+<code>Context.getOffscreenBackendName()</code> gives the name alone
+(<code>'egl'</code> or <code>'wgl'</code>) for a caller that wants to say which
+in a message, and takes a platform to ask about another machine.</p>
+
 <h2>Which GPU it renders on (EGL)</h2>
 
 <p>A machine may offer several EGL devices &mdash; a GPU and a CPU rasteriser, or

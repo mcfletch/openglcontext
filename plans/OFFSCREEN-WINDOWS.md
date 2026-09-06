@@ -135,6 +135,22 @@ GL_INVALID_OPERATION where there is none, and the GL 1.x and 2.0 state cases
 make both. Asking for one is what makes this the same shape as the windowed
 backends rather than a second kind of target every case has to know about.
 
+## Asking for the one this machine has
+
+Two backends do the same job on different platforms, and both are registered
+everywhere, so anything that runs on more than one had to name a class and get
+it wrong half the time. `Context.getOffscreenContextType()` is the question
+instead -- the WGL pbuffer on Windows, EGL elsewhere, `None` where the platform
+has no backend or its bindings will not load, which for a caller is the same
+answer. `docs/offscreen.html` documents it.
+
+The shader compile check is what wanted it. `tests/helpers/_shader_compile_check.py`
+compiles and links every reviewed PBR, IBL and shadow program in a real context,
+and it named `EGLContext` -- so on Windows it reached the "no GL context" exit
+and `test_shader_includes.py` skipped, leaving 23 programs uncompiled on a
+machine that could compile them. They compile there now, against a second
+vendor's GLSL front end, which is most of the value of running them at all.
+
 ## Still open
 
 - **macOS.** `OpenGL.CGL.headless_context` exists and PyOpenGL's harness uses

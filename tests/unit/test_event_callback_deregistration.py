@@ -12,11 +12,20 @@ yet swept, and counting it turns an ordinary second window into an
 """
 
 import gc
+import sys
 
 import pytest
 from pydispatch import dispatcher
 
+from OpenGLContext import plugins
 from OpenGLContext.events.keyboardevents import KeyboardEventManager
+
+#: The backend that renders on no window here -- a WGL pbuffer on Windows, EGL
+#: elsewhere.  Both are registered everywhere, since which one a machine can
+#: actually create is a question its answer already gives.
+OFFSCREEN_BACKEND = (
+    'wgl' if sys.platform.startswith(('win32', 'cygwin')) else 'egl'
+)
 
 
 class _Handler:
@@ -137,22 +146,33 @@ class TestTwoContextsInSequence:
     constructor, a long way from the first context that caused it."""
 
     def test_a_context_can_be_built_after_another_has_gone(self):
+        """Through the offscreen backend, which is a whole context per call.
+
+        The windowed backends share one GLFW window across the suite, so a
+        second *context* is what this needs and the offscreen one is where a
+        test can have it.  Which of the two that is depends on the machine, so
+        the registry is asked rather than a module named -- and a backend whose
+        bindings this platform cannot load says so at the import.
+        """
         pytest.importorskip('glfw')
         from OpenGLContext.testing.glcontext import gl_available
 
         if not gl_available():
             pytest.skip('no GL context can be created in this process')
-        from OpenGLContext import eglcontext
+        try:
+            offscreen = plugins.Context.match(OFFSCREEN_BACKEND).load()
+        except ImportError as error:
+            pytest.skip('no %s bindings here: %s' % (OFFSCREEN_BACKEND, error))
 
         try:
-            first = eglcontext.EGLContext(size=(32, 32))
-        except eglcontext.EGLContextError as error:
-            pytest.skip('no offscreen EGL context available here: %s' % (error,))
+            first = offscreen(size=(32, 32))
+        except RuntimeError as error:
+            pytest.skip('no offscreen context available here: %s' % (error,))
         first.close()
         del first
         gc.collect()
 
-        second = eglcontext.EGLContext(size=(32, 32))
+        second = offscreen(size=(32, 32))
         try:
             assert second.contextDefinition is not None
         finally:

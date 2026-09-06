@@ -3,17 +3,15 @@
 Run as a subprocess by tests/unit/test_shader_includes.py so a driver-level
 compile failure (a broken #include splice, a bad uniform, an over-budget sampler
 set) is caught the same way the shipping passes would hit it.  The context is
-:class:`OpenGLContext.eglcontext.EGLContext`, the engine's offscreen backend, so
-this needs no display and picks its EGL device by the same rules a shipped
-application would.
+whichever of the engine's offscreen backends this machine has --
+``Context.getOffscreenContextType()`` -- so this needs no display, and it picks
+its device by the same rules a shipped application would.
 
 Exit codes: 0 = all programs compiled/linked, 77 = no GL context (skip),
 1 = at least one program failed (details on stdout).
 """
 import os
 import sys
-
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, REPO_ROOT)
@@ -22,26 +20,39 @@ SKIP = 77
 
 
 def _make_context():
-    """The engine's offscreen context, or None where EGL cannot provide one.
+    """The engine's offscreen context, or None where there is none to be had.
 
     Every way of not having a context ends here.  The exit codes say
     ``0 = compiled, 77 = no GL context, 1 = a program failed``, so a machine
-    whose EGL is absent, whose driver lacks the device extensions, or whose
-    display cannot be initialised has to reach 77: reporting any of those as 1
-    says a shader does not compile, which is a different and untrue claim.
+    with no offscreen backend, whose driver lacks the device extensions, or
+    whose display cannot be initialised has to reach 77: reporting any of those
+    as 1 says a shader does not compile, which is a different and untrue claim.
     """
     try:
-        from OpenGLContext.eglcontext import EGLContext, EGLContextError
+        from OpenGLContext.context import Context
+
+        offscreen = Context.getOffscreenContextType()
     except Exception as err:
-        print("EGL context unavailable:", err)
+        print("offscreen context unavailable:", err)
         return None
+    if offscreen is None:
+        print("no offscreen backend on this platform")
+        return None
+    if offscreen.__module__.endswith('eglcontext'):
+        # EGL is reached through PyOpenGL's EGL platform, and the choice is
+        # made once per process.  Only where EGL is the backend: pinning it on
+        # a machine whose offscreen context is a pbuffer would send every GL
+        # call to a library that is not there.
+        os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
     try:
-        context = EGLContext(size=(64, 64))
-    except EGLContextError as err:
-        print("EGL context creation failed:", err)
+        context = offscreen(size=(64, 64))
+    except RuntimeError as err:
+        # Each backend raises its own subclass -- EGLContextError, WGLContextError
+        # -- for a context it could not build, and says why.
+        print("offscreen context creation failed:", err)
         return None
     except Exception as err:
-        print("no EGL context available:", err)
+        print("no offscreen context available:", err)
         return None
     context.setCurrent()
     return context
