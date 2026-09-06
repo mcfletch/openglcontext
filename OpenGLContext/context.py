@@ -87,6 +87,7 @@ try:
     import Queue
 except ImportError:
     import queue as Queue
+import ctypes
 import threading
 from contextlib import nullcontext
 
@@ -95,9 +96,40 @@ contextLock = threading.RLock()
 contextThread = None
 
 
+def contextAddress(handle):
+    """``handle`` as a plain integer, or None where it names no context
+
+    A platform answers with whatever its binding API calls a context, and some
+    of them hand back a fresh ctypes pointer object for each query.  Two such
+    objects pointing at the same context are not equal -- ``==`` on them is
+    identity -- so the address is what the question is really about.
+    """
+    if handle is None:
+        return None
+    if isinstance(handle, int):
+        return handle or None
+    try:
+        return ctypes.cast(handle, ctypes.c_void_p).value
+    except (ctypes.ArgumentError, TypeError):
+        return None
+
+
+def sameContext(one, other):
+    """Whether two context handles name the same GL context"""
+    address = contextAddress(one)
+    return address is not None and address == contextAddress(other)
+
+
 def inContextThread():
-    """Return true if the current thread is the context thread"""
+    """Return true if the current thread is the context thread
+
+    Until a context has claimed one there is no wrong thread to be on, so a
+    backend setting its window up answers true -- which is what the callers
+    are asserting.
+    """
     if threading:
+        if contextThread is None:
+            return 1
         if threading.current_thread() == contextThread:
             return 1
         elif threading.current_thread().name == contextThread.name:
@@ -935,6 +967,37 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         Context.currentContext = None
         contextLock.release()
 
+    #: The GL context handle this context last bound, so a *foreign* one -- a
+    #: context belonging to another window system in the same process -- can be
+    #: told from its own.  See :meth:`releaseForeignContext`.
+    _ownContext = None
+
+    def releaseForeignContext(self):
+        """Let go of a context this one does not own; answer whether there was one
+
+        **A thread may hold one GL context, and a platform's binding APIs do not
+        know about each other.**  On Linux, asking EGL for a thread a GLX
+        context holds is ``EGL_BAD_ACCESS``, and the reverse is an X
+        ``BadAccess`` that Xlib's default error handler turns into a *process
+        exit* -- not an exception anything could answer.
+
+        Two backends alive in one process is not an unusual arrangement: this
+        engine's own suite runs on one backend while several tests open a
+        window through another, and an application embedding a second renderer
+        has the same shape.  So a backend says "let go" before it takes the
+        thread, and the cost is one query where the context already current is
+        its own.
+        """
+        from OpenGL import platform
+
+        try:
+            current = platform.PLATFORM.GetCurrentContext()
+        except Exception:               # pragma: no cover - no GL at all
+            return False
+        if not current or sameContext(current, self._ownContext):
+            return False
+        return bool(platform.PLATFORM.releaseCurrentContext())
+
     def bindContextResources(self, handle=None):
         """Say that ``handle`` is the GL context this thread now draws through.
 
@@ -950,6 +1013,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         if handle is None:
             return
+        self._ownContext = handle
         from OpenGL import _dispatch
 
         _dispatch.make_current(handle)
@@ -1198,6 +1262,49 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         built, before the base class has stored one.
         """
         return False
+
+    def releaseWindow(self):
+        """Let this context's window, and the GL objects in it, go.
+
+        One name for what every backend has to do as it shuts down: tell the
+        caches holding this context's GL names, then destroy the window.
+        Calling it twice is calling it once.
+
+        It is what :meth:`OnQuit` does before the process ends, and what a
+        program that built a context and is finished with it calls.  The base
+        class has no window to let go of.
+        """
+
+    def pumpWindowEvents(self):
+        """Let the window system deliver whatever it has queued; False if it
+        cannot.
+
+        For a program driving its own loop rather than calling ``MainLoop`` --
+        a benchmark, a headless probe, a host application stepping the view
+        from its own timer.  A window that is never pumped is one some
+        platforms decide has stopped responding, and it never sees a keystroke
+        or a resize.
+
+        Every backend that owns a window implements it; the offscreen one has
+        no window system to ask and answers False.
+        """
+        return False
+
+    def setVSync(self, wait):
+        """Wait for the display's refresh from now on, or stop waiting.
+
+        Writes :attr:`ContextDefinition.vsync` and asks the backend to act on
+        it; answers whatever :meth:`applyVSync` did, so a caller learns whether
+        this platform could.
+
+        **This is the call an application makes.**  Uncapping the frame rate is
+        what a benchmark wants, and what a headless capture *needs*: a forced
+        redraw blocks on a buffer swap that nobody is presenting, so a probe
+        renders one frame and then waits for ever.  Reaching for a particular
+        toolkit's swap-interval call instead does nothing on any other backend.
+        """
+        self.contextDefinition.vsync = bool(wait)
+        return bool(self.applyVSync())
 
     def settingsChanged(self):
         """The context definition has been edited; re-read what is not per-frame.

@@ -135,6 +135,10 @@ class PygameContext(
         size = ((0, 0) if renderoptions.fullscreen_window(definition)
                 else tuple([int(i) for i in definition.size]))
         self._vsyncApplied = self.wantsVSync( definition )
+        # SDL takes the thread as it makes the context, and a thread another
+        # window system's context is holding is refused -- fatally, on the GLX
+        # side.  See Context.releaseForeignContext.
+        self.releaseForeignContext()
         self.screen = pygame.display.set_mode(
             size,
             OPENGL | self.pygameFlagsFromDefinition( definition ),
@@ -168,6 +172,11 @@ class PygameContext(
         SDL holds one context and it is always current, so there is nothing to
         bind; what this adds is telling PyOpenGL which context that is, so its
         per-context dispatch table is this window's.
+
+        **Nothing is released here**, unlike every other backend.  SDL offers no
+        way to make its context current again, so letting go of it would be
+        letting go for good; the one release pygame can afford is before the
+        context is made (see :meth:`pygameDisplayMode`).
         """
         Context.setCurrent(self, blocking)
         self.bindContextResources(self._glHandle())
@@ -271,7 +280,7 @@ class PygameContext(
             if self.stallJournal is not None:
                 self.stallJournal.close()
             self.stopTelemetry('mainloop-ended')
-            self.releaseDisplay()
+            self.releaseWindow()
 
     def _loopIteration( self, trace, renderedFirst ):
         """One pass of the main loop, timed phase by phase
@@ -285,11 +294,11 @@ class PygameContext(
         """
         with trace.iteration():
             with trace.phase('poll'):
-                if not self._pumpEvents():
+                self.pumpWindowEvents()
+                if self._finished:
                     # Left for MainLoop to act on rather than closing the
                     # display here: the release belongs in one place, and it
                     # needs the display still up to take the GL names with it.
-                    self._finished = True
                     return renderedFirst
             with trace.phase('repeats'):
                 self.pumpKeyRepeats()
@@ -311,15 +320,22 @@ class PygameContext(
                     self.OnDraw( force = 0 )
         return renderedFirst
 
-    def _pumpEvents( self ):
-        """Dispatch what SDL has queued; answer whether the loop should go on"""
+    def pumpWindowEvents( self ):
+        """Dispatch what SDL has queued; see Context.pumpWindowEvents
+
+        A handler that answers falsely is one saying the loop should end --
+        the quit event, the window's close button -- and that is recorded
+        rather than answered here, so this means "the events were delivered"
+        on every backend alike.
+        """
         for _count in range( EVENT_BUDGET ):
             event = pygame.event.poll()
             if not event.type:
                 break
             name = 'Pygame' + pygame.event.event_name(event.type)
             if not self.CallVirtual(name, event):
-                return False
+                self._finished = True
+                break
         return True
 
     def OnQuit(self, event=None):
@@ -330,10 +346,10 @@ class PygameContext(
         after it runs, no ``finally`` and no ``atexit`` hook, and closing the
         window or pressing Escape is the path a user actually takes.
         """
-        self.releaseDisplay()
+        self.releaseWindow()
         return Context.OnQuit(self, event)
 
-    def releaseDisplay( self ):
+    def releaseWindow( self ):
         """Drop this context's GL objects and let the display go
 
         The engine's caches own GL objects in this context, so they have to be

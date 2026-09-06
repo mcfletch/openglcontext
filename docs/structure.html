@@ -57,19 +57,32 @@ format</a>) and <code>plugins.Node</code>.</p>
 
 <h3>Which backends are supported</h3>
 
-<p><strong>GLFW, GLUT, Pygame, wxPython and Qt/PySide are all first-class
-targets.</strong> Breaking one of them is a regression, not a cleanup, and none
-of them is a candidate for removal. GLFW is what the test suite and the
-visual-regression captures run against, and it is the recommended backend for
-core-profile and PBR rendering; wxPython is the one that embeds a GL canvas
-inside a larger application's window rather than owning the whole window (see
-<code>tests/wx_with_controls.py</code>); Qt/PySide is supported through the
-separate <a href="../pydoc/OpenGLContext_qt.html">OpenGLContext_qt</a> project,
-which OpenGLContext imports opportunistically. All of them can request a core
-profile, and all of them can create a compatibility-profile context for the
+<p><strong>GLFW, GLUT, Pygame, Tkinter, wxPython and Qt/PySide are all
+first-class targets.</strong> Breaking one of them is a regression, not a
+cleanup, and none of them is a candidate for removal. GLFW is what the test
+suite and the visual-regression captures run against, and it is the recommended
+backend for core-profile and PBR rendering; <strong>Tkinter needs nothing
+installed</strong>, since it ships with Python, and is the one to reach for in a
+tool whose dependencies are meant to stay short; wxPython and Tkinter both embed
+a GL view inside a larger application's window rather than owning the whole
+window (see <code>tests/wx_with_controls.py</code>, and
+<code>TkContext(parent=...)</code>); Qt/PySide is supported through the separate
+<a href="../pydoc/OpenGLContext_qt.html">OpenGLContext_qt</a> project, which
+OpenGLContext imports opportunistically. All of them can request a core profile,
+and all of them can create a compatibility-profile context for the
 fixed-function tutorials and for the display-list-backed font providers.</p>
 
-<p>A sixth backend owns no window at all.
+<p class="technical">The Tk backend draws into
+<code>OpenGL.Tk.GLFrame</code> &mdash; PyOpenGL's own widget, which makes a GL
+context on the window Tk hands out, through GLX on X11 and WGL on Windows. Tk
+has no Wayland backend, so a Wayland-only session runs it through XWayland and a
+headless machine runs it under <code>xvfb-run</code>, as GLUT and Pygame also
+need. A Tk window has no native handle until it has been mapped, so
+<code>OPENGLCONTEXT_HIDDEN</code> is honoured by withdrawing the window once the
+context exists: it appears and goes, rather than never appearing, and rendering
+and reading back are unaffected because both happen in the back buffer.</p>
+
+<p>A seventh backend owns no window at all.
 <a href="offscreen.html"><code>eglcontext.EGLContext</code></a> takes a GPU
 directly through EGL and renders to a pbuffer, which is what a build machine, a
 rendering service or a batch job wants: no display server has to be running. It
@@ -101,16 +114,38 @@ implemented this" and offer the user something else.</p>
   <tr><td><code>setFullscreen(on)</code></td>
     <td>Moves a live window to the screen and back, keeping its GL
       context</td>
-    <td>A machine with no monitor attached</td></tr>
+    <td>A machine with no monitor attached, or a session with no window
+      manager to honour the request</td></tr>
   <tr><td><code>applyVSync()</code></td>
     <td>Waits for the display's refresh, or does not
       (<code>ContextDefinition.vsync</code>)</td>
     <td>Qt and Pygame, where the interval is part of a surface format settled
       when the context is made: the change is logged and takes effect in the
-      next window. GLUT and wxPython go through
-      <code>OpenGLContext.swapcontrol</code>, which answers False where the
-      window system offers no swap-control extension</td></tr>
+      next window. GLUT, Tk and wxPython ask the window system's own
+      swap-control extension, and answer False where there is none</td></tr>
+  <tr><td><code>pumpWindowEvents()</code></td>
+    <td>Delivers whatever the window system has queued, for a program driving
+      its own loop rather than calling <code>MainLoop</code></td>
+    <td>The offscreen backend, which has no window system to ask</td></tr>
+  <tr><td><code>releaseWindow()</code></td>
+    <td>Lets the window, and the GL objects in it, go &mdash; one name, so a
+      caller that built a context need not know which backend made it</td>
+    <td>Answers nothing; there is nothing to report about having done it</td></tr>
 </table>
+
+<p><code>context.setVSync(False)</code> is the call an application makes to
+uncap its frame rate: it writes the field and applies it. That matters more
+than it sounds &mdash; a forced redraw blocks on a buffer swap nobody is
+presenting, so a headless capture that does not uncap draws one frame and then
+waits for ever &mdash; and reaching for a particular toolkit's own
+swap-interval call instead does nothing on any other backend.</p>
+
+<p>A context knows how big it is as soon as it exists:
+<code>getViewPort()</code> answers a width, height pair before a single event
+has been pumped, so a program that draws its first frame before entering a loop
+gets a projection matrix, an overlay scale and a picking ray of the right size.
+A window system that reports the size through a resize callback is asked
+directly instead, as the window is made.</p>
 
 <p>Beside those, every backend reports pointer motion to the movement sampler
 as it happens (<code>recordPointerMotion</code>), supplies key-repeat where the

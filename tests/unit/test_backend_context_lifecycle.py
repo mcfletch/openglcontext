@@ -28,6 +28,7 @@ BACKENDS = (
     ('glfw', 'OpenGLContext/glfwcontext.py'),
     ('glut', 'OpenGLContext/glutcontext.py'),
     ('pygame', 'OpenGLContext/pygamecontext.py'),
+    ('tk', 'OpenGLContext/tkcontext.py'),
     ('wx', 'OpenGLContext/wxcontext.py'),
     ('egl', 'OpenGLContext/eglcontext.py'),
 )
@@ -53,9 +54,9 @@ def _calls_in(path):
 def _calls_within(path, function, depth=3):
     """Every attribute call one function of a module reaches.
 
-    Follows ``self.something()`` into that method, so a backend that names its
-    teardown -- ``releaseWindow``, ``releaseDisplay``, ``close`` -- rather than
-    writing it out counts as making the call.
+    Follows ``self.something()`` into that method, so a backend that calls its
+    named teardown -- ``releaseWindow`` -- rather than writing the release out
+    counts as making the call.
     """
     source = open(os.path.join(PACKAGE, path), encoding='utf-8').read()
     tree = ast.parse(source)
@@ -153,6 +154,10 @@ class TestQuittingReallyReleases:
         assert told.count('engine') == 1
 
 
+class _AnyContext:
+    """Any object the contract is called against; it records its own handle."""
+
+
 class TestTheContractIsStatedOnce:
     """A new backend should inherit the contract rather than have to know it."""
 
@@ -166,7 +171,7 @@ class TestTheContractIsStatedOnce:
             contextresources, 'context_lost', lambda: told.append('engine')
         )
         context_module.Context.releaseContextResources(
-            object(), handle=0xC0FFEE
+            _AnyContext(), handle=0xC0FFEE
         )
         assert 'engine' in told
 
@@ -178,7 +183,7 @@ class TestTheContractIsStatedOnce:
         monkeypatch.setattr(
             _dispatch, 'forget_context', lambda handle: told.append(handle)
         )
-        context_module.Context.releaseContextResources(object(), handle=0xC0FFEE)
+        context_module.Context.releaseContextResources(_AnyContext(), handle=0xC0FFEE)
         assert told == [0xC0FFEE]
 
     def test_binding_tells_pyopengl(self, monkeypatch):
@@ -188,7 +193,7 @@ class TestTheContractIsStatedOnce:
         monkeypatch.setattr(
             _dispatch, 'make_current', lambda handle: told.append(handle)
         )
-        context_module.Context.bindContextResources(object(), handle=0xBEEF)
+        context_module.Context.bindContextResources(_AnyContext(), handle=0xBEEF)
         assert told == [0xBEEF]
 
     def test_a_handle_of_none_is_not_an_error(self, monkeypatch):
@@ -198,12 +203,12 @@ class TestTheContractIsStatedOnce:
         monkeypatch.setattr(
             contextresources, 'context_lost', lambda: told.append('engine')
         )
-        context_module.Context.releaseContextResources(object(), handle=None)
+        context_module.Context.releaseContextResources(_AnyContext(), handle=None)
         assert told == ['engine']
 
     def test_neither_half_raises_where_pyopengl_has_no_c_layer(self, monkeypatch):
         from OpenGL import _dispatch
 
         monkeypatch.setattr(_dispatch, 'ACTIVE', False)
-        context_module.Context.bindContextResources(object(), handle=1)
-        context_module.Context.releaseContextResources(object(), handle=1)
+        context_module.Context.bindContextResources(_AnyContext(), handle=1)
+        context_module.Context.releaseContextResources(_AnyContext(), handle=1)

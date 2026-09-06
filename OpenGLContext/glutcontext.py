@@ -4,12 +4,68 @@ import logging
 
 from OpenGL.GL import *
 from OpenGL.GLUT import *
+try:
+    from OpenGL.GLUT import GLUT_INIT_STATE
+except ImportError:                     # pragma: no cover - an original GLUT
+    GLUT_INIT_STATE = None
 from OpenGLContext import contextresources
 from OpenGLContext.context import Context
 from OpenGLContext.events import glutevents
 from OpenGLContext.looptrace import LoopTrace
 
 log = logging.getLogger(__name__)
+
+#: Set once ``glutInit`` has been called in this process.  Read through
+#: :func:`glutInitialised`; nothing outside this module writes it.
+_initialised = False
+
+
+def glutInitialised():
+    """Whether ``glutInit`` has been called in this process
+
+    freeglut offers ``glutGet(GLUT_INIT_STATE)`` and is asked where it does,
+    since a process that initialised GLUT some other way -- a host application,
+    another library -- is one this module has not seen do it.  Where the query
+    is not there, what this module itself did is the best answer available.
+    """
+    if _initialised:
+        return True
+    if not glutGet or GLUT_INIT_STATE is None:
+        return False
+    try:
+        return bool(glutGet(GLUT_INIT_STATE))
+    except Exception:                   # pragma: no cover - an original GLUT
+        return False
+
+
+def ensureGlutInitialised(argv=None):
+    """Call ``glutInit`` unless somebody already has; answer whether it ran
+
+    **Both halves matter, and each is fatal on its own.**  ``glutCreateWindow``
+    before ``glutInit`` makes freeglut print
+
+        freeglut ERROR: Function <glutCreateWindow> called without first
+        calling 'glutInit'.
+
+    and call ``exit()``; a *second* ``glutInit`` makes it say ``illegal
+    glutInit() reinitialization attempt`` and exit as well.  Neither is an
+    exception a caller could answer, so the question is asked here, once, on
+    every path that needs a window -- the constructor as much as
+    :meth:`GLUTContext.ContextMainLoop`.
+    """
+    global _initialised
+    if glutInitialised():
+        _initialised = True
+        return False
+    import sys
+
+    argv = list(sys.argv if argv is None else argv)
+    try:
+        glutInit(argv)
+    except TypeError:                   # an older PyOpenGL wants one string
+        glutInit(' '.join(argv))
+    _initialised = True
+    return True
 
 
 class GLUTContext(
@@ -44,31 +100,48 @@ class GLUTContext(
         definition = self.resolveDefinition(definition, **named)
         self.contextDefinition = definition
 
-        # Note: glutInit is called by ContextMainLoop before this __init__
-        # The order of operations for forward-compatible contexts is critical:
-        # 1. glutInit (already done in ContextMainLoop)
+        # The order of operations for forward-compatible contexts is critical,
+        # and the first step is not optional: a window asked for before
+        # glutInit ends the process.  See ensureGlutInitialised.
+        # 1. glutInit
         # 2. glutInitContextVersion
         # 3. glutInitContextFlags + glutInitContextProfile
         # 4. glutInitDisplayMode
         # 5. glutCreateWindow
 
+        ensureGlutInitialised()
         if glutInitContextVersion and definition.version[0]:
             glutInitContextVersion(*[int(v) for v in definition.version])
         if glutInitContextProfile:
-            # Named either way: a version hint of 3.2 or above with no profile
-            # hint leaves the choice to the driver, and a driver that answers
-            # with a core context has taken the fixed-function pipeline away
-            # from a caller who asked for it.
+            # **Both hints, on both paths.**  GLUT keeps what a window is
+            # created from as process-global state, so a hint only ever set is
+            # a hint left over: a compatibility context asked for after a core
+            # one kept GLUT_FORWARD_COMPATIBLE and arrived with the
+            # fixed-function pipeline removed, every glMatrixMode in it raising
+            # GL_INVALID_OPERATION.  Named either way for the same reason a
+            # profile is named at all: a version hint of 3.2 or above with no
+            # profile hint leaves the choice to the driver, and a driver that
+            # answers with a core context has taken the fixed-function pipeline
+            # away from a caller who asked for it.
             if definition.profile == 'core':
                 glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
                 glutInitContextProfile(GLUT_CORE_PROFILE)
             elif definition.profile == 'compatibility':
+                glutInitContextFlags(0)
                 glutInitContextProfile(GLUT_COMPATIBILITY_PROFILE)
         glutInitDisplayMode(self.glutFlagsFromDefinition(definition))
         # set up window size for newly created windows
         glutInitWindowSize(*[int(i) for i in definition.size])
+        # A new GLUT window takes the thread as it is made, and a thread
+        # another window system's context is holding is an X BadAccess that
+        # ends the process.  See Context.releaseForeignContext.
+        self.releaseForeignContext()
         # create a new rendering window
         self.windowID = glutCreateWindow(definition.title or self.getApplicationName())
+        # Recorded while GLUT's own window is current, which it is the moment
+        # it is made: without it the first setCurrent would take the context
+        # for a foreign one.
+        self.bindContextResources(self._glHandle())
         # GLUT has no "create it hidden" hint, so it is hidden the instant it
         # exists.  See renderoptions.hidden_window: rendering and reading back
         # are unaffected, and a suite of GL scripts should not take over the
@@ -82,6 +155,11 @@ class GLUTContext(
         # rather than read back off self.
         self.applyVSync(definition)
         Context.__init__(self, definition)
+        # GLUT reports a window's size through its reshape callback, which is
+        # delivered by the main loop -- so a context whose first frame is drawn
+        # before the loop has run would size everything from a zero viewport.
+        # The window itself knows, and can be asked.
+        self.ViewPort(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT))
 
     def setFullscreen(self, fullscreen):
         """Fill the screen, or go back to the size the definition asked for."""
@@ -262,6 +340,17 @@ class GLUTContext(
         except NameError:
             glutEntryFunc(self.glutOnEntry)
 
+    def pumpWindowEvents(self):
+        """Dispatch what GLUT has queued; see Context.pumpWindowEvents
+
+        Needs freeglut's ``glutMainLoopEvent``; an original GLUT owns its loop
+        and offers no way to step it, and says so by answering False.
+        """
+        if not glutMainLoopEvent:
+            return False
+        glutMainLoopEvent()
+        return True
+
     def glutOnEntry(self, state):
         """Let go of held keys as the pointer leaves the window
 
@@ -274,10 +363,27 @@ class GLUTContext(
             self.clearHeldKeys()
 
     def setCurrent(self):
-        '''Acquire the GL "focus"'''
+        '''Acquire the GL "focus"
+
+        **Nothing is released here**, unlike every other backend.  GLUT
+        remembers which of its windows is current and ``glutSetWindow`` on that
+        one does nothing, so a context let go of behind its back can never be
+        taken again: after an external release, ``glutSetWindow`` leaves
+        ``glGetString(GL_VERSION)`` answering None.  The one release GLUT can
+        afford is before its window is made, where it is the thing about to
+        take the thread (see ``__init__``).
+        '''
         Context.setCurrent(self)
         glutSetWindow(self.windowID)
-        self.bindContextResources(self._glHandle())
+        handle = self._glHandle()
+        if handle is None and self._ownContext is not None:
+            log.warning(
+                'GLUT cannot take the drawing thread back: something else in '
+                'this process holds a GL context, and GLUT re-makes a window '
+                'current only when it believes another one was. Frames from '
+                'this window will be empty.'
+            )
+        self.bindContextResources(handle)
 
     def _glHandle(self):
         """The GL context handle the caches and PyOpenGL key on.
@@ -287,6 +393,20 @@ class GLUTContext(
         only moment the answer is about this window.
         """
         return contextresources.context_key()
+
+    def releaseWindow(self):
+        """Let this window's GL objects go, then destroy the window
+
+        With the window still whole and its context current, so the caches
+        holding its GL names let go of them before they stop meaning anything.
+        Calling it twice is calling it once.
+        """
+        if not self.windowID:
+            return
+        glutSetWindow(self.windowID)
+        self.releaseContextResources(self._glHandle())
+        glutDestroyWindow(self.windowID)
+        self.windowID = None
 
     def OnIdle(self, *arguments):
         """Animation hook for the GLUT loop
@@ -302,13 +422,7 @@ class GLUTContext(
         self._finished = True
         glutDisplayFunc(null_display)
         glutIdleFunc(None)
-        if self.windowID:
-            # With the window still whole and its context current, so the caches
-            # holding its GL names let go of them before they stop meaning
-            # anything.
-            self.releaseContextResources(self._glHandle())
-            glutDestroyWindow(self.windowID)
-            self.windowID = None
+        self.releaseWindow()
         if glutLeaveMainLoop:
             glutLeaveMainLoop()
         try:
@@ -377,13 +491,10 @@ class GLUTContext(
             if self.stallJournal is not None:
                 self.stallJournal.close()
             self.stopTelemetry('mainloop-ended')
-            if self.windowID:
-                # The engine's caches own GL objects in this context, so they
-                # have to be let go before it is destroyed rather than left for
-                # a later window the driver hands the same identifier.
-                self.releaseContextResources(self._glHandle())
-                glutDestroyWindow(self.windowID)
-                self.windowID = None
+            # The engine's caches own GL objects in this context, so they have
+            # to be let go before it is destroyed rather than left for a later
+            # window the driver hands the same identifier.
+            self.releaseWindow()
 
     def _loopIteration(self, trace, renderedFirst):
         """One pass of the main loop, timed phase by phase
@@ -397,7 +508,7 @@ class GLUTContext(
         """
         with trace.iteration():
             with trace.phase('poll'):
-                glutMainLoopEvent()
+                self.pumpWindowEvents()
             if not self.windowID or self._finished:
                 return renderedFirst
             with trace.phase('repeats'):
@@ -422,16 +533,10 @@ class GLUTContext(
 
     def ContextMainLoop(cls, *args, **named):
         """Mainloop for the GLUT testing context"""
-        from OpenGL.GLUT import glutInit
-
-        # initialize GLUT windowing system
-        import sys
-
-        try:
-            glutInit(sys.argv)
-        except TypeError:
-            glutInit(' '.join(sys.argv))
-
+        # The constructor asks for this too; asking here as well costs nothing
+        # and keeps the windowing system up before anything else in this
+        # method touches it.
+        ensureGlutInitialised()
         render = cls(*args, **named)
         if hasattr(render, 'createMenus'):
             render.createMenus()

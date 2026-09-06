@@ -368,7 +368,9 @@ walk.bindings = list(walk.bindings) + [
     when the pointer is over nothing, and never arrives at all with
     <code>pickEnabled</code> off &mdash; none of which has anything to do with
     turning the view. Every backend reports it directly; what each has to do to
-    make the motion <em>unbounded</em> differs, and
+    make the motion <em>unbounded</em> differs &mdash; a relative-motion mode
+    under SDL, a grab under GLFW and Qt, warping the pointer back to the middle
+    of the window under GLUT, Tk and wx &mdash; and
     <a href="structure.html#backend-capabilities">What every backend
     offers</a> says which does what.</p>
   <p>A settings GUI over all of this &mdash; widgets, focus, skinning and a

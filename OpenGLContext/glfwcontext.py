@@ -83,7 +83,10 @@ class GLFWContext(
             glfw.terminate()
             raise RuntimeError("Failed to create GLFW window")
 
-        # Make context current before calling Context.__init__
+        # Make context current before calling Context.__init__.  Whatever held
+        # the thread is let go of first: a thread another window system's
+        # context is holding is refused.  See Context.releaseForeignContext.
+        self.releaseForeignContext()
         glfw.make_context_current(self.window)
 
         # Before the base class has stored it, so the definition is passed
@@ -282,6 +285,11 @@ class GLFWContext(
         # only practical on EGL environments...
 
 
+    def pumpWindowEvents(self):
+        """Dispatch what GLFW has queued; see Context.pumpWindowEvents"""
+        glfw.poll_events()
+        return True
+
     def setupCallbacks(self):
         """Register GLFW callbacks"""
         if self.window:
@@ -349,9 +357,18 @@ class GLFWContext(
         return True
 
     def setCurrent(self):
-        """Make this context's OpenGL context current"""
+        """Make this context's OpenGL context current
+
+        Whatever held the thread is let go of first.  A thread may have one
+        current context, and a platform's GL binding APIs do not know about
+        each other: GLFW asking EGL for a thread a GLX context holds is
+        ``EGL_BAD_ACCESS``.  That happens wherever two windowing backends are
+        alive in one process -- this suite, an application with a second
+        renderer in it -- and letting go first costs one query.
+        """
         Context.setCurrent(self)
         if self.window:
+            self.releaseForeignContext()
             glfw.make_context_current(self.window)
             self.bindContextResources(self._glHandle())
 
@@ -433,7 +450,7 @@ class GLFWContext(
             # flag a redraw and coalesce pick events (keyed by buttons/modifiers)
             # down to the latest position.
             with trace.phase('poll'):
-                glfw.poll_events()
+                self.pumpWindowEvents()
 
             # Synthesise key-repeat where the platform doesn't deliver it (the
             # GLFW Wayland backend in a nested compositor). No-op otherwise.

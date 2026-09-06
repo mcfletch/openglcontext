@@ -305,6 +305,28 @@ def hidden_window(title: str = 'OpenGLContext test',
         yield window
 
 
+def release_foreign_context() -> bool:
+    """Let go of a GL context this process holds; answer whether there was one
+
+    A thread may hold one context, and a platform's binding APIs do not know
+    about each other: this GLFW asks EGL for the thread, and a GLX context
+    already on it makes that ``EGL_BAD_ACCESS``.  A suite run on any backend
+    but GLFW is exactly that arrangement, since these windows are opened
+    whichever backend the run is on.
+
+    The context let go of belongs to whatever opened it, and that owner is done
+    with it: a test window is made between tests, not during one.
+    """
+    from OpenGL import platform
+
+    try:
+        if not platform.PLATFORM.GetCurrentContext():
+            return False
+        return bool(platform.PLATFORM.releaseCurrentContext())
+    except Exception:                   # pragma: no cover - no GL at all
+        return False
+
+
 @contextlib.contextmanager
 def _glfw_window(title: str, size: Sequence[int], profile: str,
                  version: Sequence[int], forward_compatible: bool,
@@ -318,6 +340,7 @@ def _glfw_window(title: str, size: Sequence[int], profile: str,
         raise GLUnavailable('glfw.init() failed: no display or no GL driver')
     _apply_hints(glfw, profile, version, forward_compatible, hints)
     width, height = size
+    release_foreign_context()
     window = glfw.create_window(width, height, title, None, None)
     if not window:
         raise GLUnavailable('the driver would not create a %dx%d %s window'

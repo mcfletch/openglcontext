@@ -6,6 +6,8 @@ without being copied, that the mesh caches and rebuilds when a field changes, an
 that every node draws in a core profile, which the GLE-backed geometry these
 replace could not do at all.
 """
+import contextlib
+
 import numpy as np
 import pytest
 
@@ -198,22 +200,20 @@ EVERY_NODE = [
 ]
 
 
-def _render_and_count_lit_pixels(node, profile):
-    """Draw one node in a profile and report how much of the frame it covered."""
-    glfw = pytest.importorskip('glfw')
+@contextlib.contextmanager
+def _drawn(node, profile):
+    """One node on screen in ``profile``, on whatever backend this run uses.
+
+    Nothing here names a windowing toolkit.  A test that pinned itself to one
+    while the run was on another got a context from the run's backend and then
+    drove it through the other one's calls -- which on GLUT leaks a window per
+    test until freeglut gives up and ends the process.
+    """
     import os
 
-    import numpy as np
-    from OpenGL.GL import (
-        GL_NO_ERROR, GL_RGB, GL_UNSIGNED_BYTE, glGetError, glReadPixels,
-    )
-
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
     os.environ['OPENGLCONTEXT_PROFILE'] = profile
     os.environ['OPENGLCONTEXT_HIDDEN'] = '1'
     os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
-    if not glfw.init():                          # pragma: no cover - no display
-        pytest.skip('glfw init failed')
 
     from OpenGLContext import testingcontext
     from OpenGLContext.scenegraph.basenodes import PointLight
@@ -235,17 +235,26 @@ def _render_and_count_lit_pixels(node, profile):
     try:
         context.deferRedraw = True
         for _ in range(3):
-            glfw.poll_events()
+            context.pumpWindowEvents()
             context.OnDraw(force=1)
+        yield context
+    finally:
+        context.releaseWindow()
+
+
+def _render_and_count_lit_pixels(node, profile):
+    """Draw one node in a profile and report how much of the frame it covered."""
+    import numpy as np
+    from OpenGL.GL import (
+        GL_NO_ERROR, GL_RGB, GL_UNSIGNED_BYTE, glGetError, glReadPixels,
+    )
+
+    with _drawn(node, profile) as context:
         assert glGetError() == GL_NO_ERROR
         width, height = context.getViewPort()
         raw = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
         pixels = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3)
         return int((pixels.sum(axis=1) > 18).sum())
-    finally:
-        window = getattr(context, 'window', None)
-        if window is not None:
-            glfw.destroy_window(window)
 
 
 @pytest.mark.parametrize('name,make', EVERY_NODE, ids=[n for n, _ in EVERY_NODE])
@@ -264,42 +273,8 @@ def test_every_swept_node_draws_in_a_core_profile(name, make):
     framebuffer with something in it at the end, so "it did not raise" is not
     mistaken for "it drew".
     """
-    glfw = pytest.importorskip('glfw')
-    import os
+    from OpenGL.GL import GL_NO_ERROR, glGetError
 
-    os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
-    os.environ['OPENGLCONTEXT_HIDDEN'] = '1'
-    os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
-    if not glfw.init():                          # pragma: no cover - no display
-        pytest.skip('glfw init failed')
-
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
-    scene = sceneGraph(children=[
-        Shape(geometry=make(),
-              appearance=Appearance(material=Material(diffuseColor=(0.8, 0.7, 0.2)))),
-        __import__('OpenGLContext.scenegraph.basenodes', fromlist=['PointLight'])
-        .PointLight(location=(4, 4, 8)),
-    ])
-
-    class _Ctx(Base):
-        def OnInit(self):
-            self.sg = scene
-
-    try:
-        context = _Ctx()
-    except Exception as err:                     # pragma: no cover - broken GL stack
-        pytest.skip('no usable GL context: %r' % (err,))
-    try:
-        context.deferRedraw = True
-        for _ in range(3):
-            glfw.poll_events()
-            context.OnDraw(force=1)
-        from OpenGL.GL import GL_NO_ERROR, glGetError
+    with _drawn(make(), 'core'):
         assert glGetError() == GL_NO_ERROR, 'GL reported an error drawing %s' % name
-    finally:
-        window = getattr(context, 'window', None)
-        if window is not None:
-            glfw.destroy_window(window)
 

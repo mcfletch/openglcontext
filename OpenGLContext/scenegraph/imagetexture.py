@@ -210,6 +210,12 @@ else:
                     value,
                     context.Context.allContexts,
                 ),
+                # A daemon, so a download that never answers -- or a load
+                # waiting on the context lock for a frame that will not come --
+                # cannot keep the interpreter alive.  Python joins every
+                # non-daemon thread as it shuts down, and an image nobody is
+                # going to see is not a reason to refuse to exit.
+                daemon=True,
             ).start()
             return value
 

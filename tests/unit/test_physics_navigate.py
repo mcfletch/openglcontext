@@ -7,38 +7,51 @@ fight: while a built-in-nav key is held its interpolator glides the camera (its
 timer fires from ``DoEventCascade``, after ``nav.apply``); the instant the timer
 stops, ``nav.apply`` reasserts the character pose and the camera snaps back to the
 last character (auto-walk) location.  The demo must unbind the default manager.
+
+Nothing here names a windowing toolkit: the context comes from whichever backend
+the run is on, keys arrive through the engine's own input records
+(:mod:`OpenGLContext.events.synthetic`), and the window is let go through
+``releaseWindow``, which every backend answers to.  What is under test is the
+demo's camera wiring, and pinning it to one backend meant a run on another was
+four failures about a GL context two window systems were fighting over.
 """
-import os
+import time
+
 import numpy as np
 import pytest
 
+from OpenGLContext.events import synthetic
 from OpenGLContext.testing.glcontext import gl_available
-
 
 gl = pytest.mark.skipif(not gl_available(), reason='no GL target available')
 
 
-def _make_context():
-    os.environ['OPENGLCONTEXT_BACKEND'] = 'glfw'
-    from OpenGLContext import testingcontext        # noqa: F401  (sets base class)
+@pytest.fixture
+def navigator():
+    """The demo, on whatever backend this run uses, let go afterwards"""
     import tests.physics_navigate as nav
-    return nav.TestContext()
 
-
-@gl
-def test_navigate_unbinds_default_movement_manager():
-    ctx = _make_context()
+    context = nav.TestContext()
     try:
-        # The built-in Smooth manager is the second writer that caused the snap.
-        assert ctx.movementManager is None
+        yield context
     finally:
-        import glfw
-        if getattr(ctx, 'window', None):
-            glfw.destroy_window(ctx.window)
+        context.releaseWindow()
+
+
+def _key(context, name, state=1):
+    """One key transition, as the engine's own input record spells it"""
+    synthetic.dispatch(context, {'type': 'keyboard', 'key': name,
+                                 'state': state, 'modifiers': [0, 0, 0]})
 
 
 @gl
-def test_builtin_nav_key_does_not_move_or_snap_the_camera():
+def test_navigate_unbinds_default_movement_manager(navigator):
+    # The built-in Smooth manager is the second writer that caused the snap.
+    assert navigator.movementManager is None
+
+
+@gl
+def test_builtin_nav_key_does_not_move_or_snap_the_camera(navigator):
     """Holding a built-in-nav arrow key must not glide or snap the camera.
 
     Parks the character (auto off, no demo-key input) and drives the built-in
@@ -46,100 +59,89 @@ def test_builtin_nav_key_does_not_move_or_snap_the_camera():
     rendered camera must stay locked to the (stationary) character the whole time
     -- no glide while held, and therefore no snap-back on release.
     """
-    import glfw
-    ctx = _make_context()
-    try:
-        char = ctx.platform_nav.character.position
-        rendered = []
+    character = navigator.platform_nav.character.position
+    rendered = []
 
-        def cam_z():
-            return float(ctx.platform.position[2])
+    def cameraDepth():
+        return float(navigator.platform.position[2])
 
-        def frame():
-            # mirror the MainLoop: OnIdle (nav.apply) then OnDraw (DoEventCascade
-            # runs any movement-manager interpolators, then renders).
-            ctx._auto = False                       # keep the character parked
-            ctx.OnIdle()
-            ctx.OnDraw(force=1)
+    def frame():
+        # mirror the MainLoop: OnIdle (nav.apply) then OnDraw (DoEventCascade
+        # runs any movement-manager interpolators, then renders).
+        navigator._auto = False                 # keep the character parked
+        navigator.OnIdle()
+        navigator.OnDraw(force=1)
 
-        # settle one frame so nav.apply seats the camera on the character
+    # settle one frame so nav.apply seats the camera on the character
+    frame()
+    start = cameraDepth()
+    assert abs(start - float(character[2])) < 1e-6
+
+    # hold <down> (built-in Smooth 'backward') for a stretch of frames.  A held
+    # key arrives as a key-down per repeat, which is what this sends.
+    for _ in range(30):
+        _key(navigator, '<down>', 1)
         frame()
-        start = cam_z()
-        assert abs(start - float(char[2])) < 1e-6
+        rendered.append(cameraDepth())
+    _key(navigator, '<down>', 0)
+    for _ in range(30):
+        frame()
+        rendered.append(cameraDepth())
 
-        # hold <down> (built-in Smooth 'backward') for a stretch of frames
-        for i in range(30):
-            ctx.glfwOnKey(ctx.window, glfw.KEY_DOWN, 0, glfw.PRESS, 0)
-            frame()
-            rendered.append(cam_z())
-        # release and let any interpolator run out
-        ctx.glfwOnKey(ctx.window, glfw.KEY_DOWN, 0, glfw.RELEASE, 0)
-        for i in range(30):
-            frame()
-            rendered.append(cam_z())
-
-        # character never moved, so the camera must never leave it
-        assert float(char[2]) == pytest.approx(float(ctx.platform_nav.character.position[2]))
-        assert max(abs(z - start) for z in rendered) < 1e-3, (
-            'built-in nav moved/snapped the camera: %r' % (
-                [round(z, 3) for z in rendered],))
-    finally:
-        if getattr(ctx, 'window', None):
-            glfw.destroy_window(ctx.window)
+    # character never moved, so the camera must never leave it
+    assert float(character[2]) == pytest.approx(
+        float(navigator.platform_nav.character.position[2]))
+    assert max(abs(depth - start) for depth in rendered) < 1e-3, (
+        'built-in nav moved/snapped the camera: %r'
+        % ([round(depth, 3) for depth in rendered],))
 
 
 @gl
-def test_holding_a_movement_key_repeats():
-    """A held key keeps driving movement via key-repeat.
+def test_holding_a_movement_key_keeps_driving_movement(navigator):
+    """A held key keeps driving movement.
 
-    Movement must bind to 'keyboard' (key-down) events, which key-repeat re-emits,
-    not 'keypress' (typed character) events, which fire once. A single press plus a
-    ``pumpKeyRepeats`` tick (as the main loop runs each frame) must keep the key's
-    timestamp fresh -- otherwise holding w stops after HOLD and you slide back."""
-    import glfw
-    import time
-    ctx = _make_context()
-    try:
-        ctx.keyRepeatDelay = 0.0
-        ctx.keyRepeatInterval = 0.0
-        # one physical key-down for 'w'; the handler must fire from the keyboard
-        # event (proving movement is not on the character/'keypress' channel)
-        ctx.glfwOnKey(ctx.window, glfw.KEY_W, 0, glfw.PRESS, 0)
-        t1 = ctx._keys.get('w')
-        assert t1 is not None, "held key 'w' not registered from a keyboard event"
-        assert ctx._auto is False, "a movement key should take over from auto-walk"
-        # advance the clock a hair, then let key-repeat run with no new press
-        end = time.time() + 0.02
-        while time.time() < end:
-            pass
-        ctx.pumpKeyRepeats()
-        t2 = ctx._keys.get('w')
-        assert t2 is not None and t2 > t1, "key-repeat did not sustain the held key"
-    finally:
-        if getattr(ctx, 'window', None):
-            glfw.destroy_window(ctx.window)
+    Movement must bind to 'keyboard' (key-down) events, which key-repeat
+    re-emits, not 'keypress' (typed character) events, which fire once.  A
+    repeat *is* another key-down, so a second one has to keep the key's
+    timestamp fresh -- otherwise holding w stops after HOLD and you slide back.
+    What supplies the repeats where a platform does not is
+    ``eventhandlermixin.HeldKeyMixin``; see `test_backend_parity.py`.
+    """
+    _key(navigator, 'w', 1)
+    first = navigator._keys.get('w')
+    assert first is not None, "held key 'w' not registered from a keyboard event"
+    assert navigator._auto is False, (
+        'a movement key should take over from auto-walk')
+
+    end = time.time() + 0.02            # advance the clock a hair
+    while time.time() < end:
+        pass
+    _key(navigator, 'w', 1)             # the repeat
+    second = navigator._keys.get('w')
+    assert second is not None and second > first, (
+        'a key-repeat did not sustain the held key')
 
 
 @gl
-def test_qe_turn_directions_match_docs():
+def test_qe_turn_directions_match_docs(navigator):
     """q turns left (yaw decreases), e turns right (yaw increases), per the help."""
-    import glfw
-    import time
-    ctx = _make_context()
-    try:
-        ctx._auto = False
-        nav = ctx.platform_nav
-        now = time.time()
+    navigator._auto = False
+    nav = navigator.platform_nav
+    now = time.time()
 
-        nav.yaw = 0.0
-        ctx._keys = {'q': now}
-        ctx._manual(now, nav, 0.05)
-        assert nav.yaw < 0.0, "q should turn left (yaw < 0)"
+    nav.yaw = 0.0
+    navigator._keys = {'q': now}
+    navigator._manual(now, nav, 0.05)
+    assert nav.yaw < 0.0, 'q should turn left (yaw < 0)'
 
-        nav.yaw = 0.0
-        ctx._keys = {'e': now}
-        ctx._manual(now, nav, 0.05)
-        assert nav.yaw > 0.0, "e should turn right (yaw > 0)"
-    finally:
-        if getattr(ctx, 'window', None):
-            glfw.destroy_window(ctx.window)
+    nav.yaw = 0.0
+    navigator._keys = {'e': now}
+    navigator._manual(now, nav, 0.05)
+    assert nav.yaw > 0.0, 'e should turn right (yaw > 0)'
+
+
+@gl
+def test_it_runs_on_whatever_backend_the_suite_is_using(navigator):
+    """Which is the point of the rest of the file being toolkit-neutral."""
+    assert navigator.getViewPort()[0] > 0
+    assert np.isfinite(np.asarray(navigator.platform.position, 'd')).all()

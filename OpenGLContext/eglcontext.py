@@ -442,6 +442,14 @@ class EGLContext(
         self.close()
         return Context.OnQuit(self, event)
 
+    def releaseWindow(self):
+        """Let this context's GL objects and its EGL objects go
+
+        The name every backend answers to; this one has no window, so it is
+        :meth:`close`.
+        """
+        self.close()
+
     def close(self):
         """Release the GL objects, the context, the surface and the display.
 

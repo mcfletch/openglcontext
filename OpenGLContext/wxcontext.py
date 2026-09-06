@@ -364,10 +364,10 @@ class wxContext(
         destroy event ever arrives.  Pressing Escape is the path a user
         actually takes.
         """
-        self.releaseCanvas()
+        self.releaseWindow()
         return context.Context.OnQuit(self, event)
 
-    def releaseCanvas(self):
+    def releaseWindow(self):
         """Drop this context's GL objects, with its context current
 
         The caches may *delete* what they hold rather than merely forget it,
@@ -393,7 +393,7 @@ class wxContext(
         event.Skip()
         if event.GetEventObject() is not self:
             return                      # a child's destruction, not ours
-        self.releaseCanvas()
+        self.releaseWindow()
 
     def wxOnEraseBackground(self, event):
         """Prevent flashing of the window by capturing and ignoring background erase events
@@ -412,6 +412,7 @@ class wxContext(
             implementation.
             """
             context.Context.setCurrent( self )
+            self.releaseForeignContext()
             self._wx_context.SetCurrent(self)
             self.bindContextResources( self._glHandle() )
     else:
@@ -423,6 +424,7 @@ class wxContext(
             implementation.
             """
             context.Context.setCurrent( self )
+            self.releaseForeignContext()
             glcanvas.GLCanvas.SetCurrent(self)
             self.bindContextResources( self._glHandle() )
     def SwapBuffers (self): # happens to match the wx method
@@ -439,6 +441,14 @@ class wxContext(
         if frame is None:
             return False
         frame.ShowFullScreen( bool( fullscreen ) )
+        return True
+
+    def pumpWindowEvents( self ):
+        """Dispatch what wx has queued; see Context.pumpWindowEvents"""
+        application = wx.GetApp()
+        if application is None:
+            return False
+        application.Yield( True )
         return True
 
     def settingsChanged( self ):

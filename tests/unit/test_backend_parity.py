@@ -21,6 +21,7 @@ import pytest
 
 from OpenGLContext import plugins
 from OpenGLContext.context import Context
+from OpenGLContext.contextdefinition import ContextDefinition
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.dirname(os.path.dirname(HERE))
@@ -31,6 +32,7 @@ BACKENDS = (
     ('glfw', 'OpenGLContext/glfwcontext.py'),
     ('glut', 'OpenGLContext/glutcontext.py'),
     ('pygame', 'OpenGLContext/pygamecontext.py'),
+    ('tk', 'OpenGLContext/tkcontext.py'),
     ('wx', 'OpenGLContext/wxcontext.py'),
 )
 
@@ -46,6 +48,11 @@ CAPABILITIES = (
      'a player has to be able to leave full screen without restarting'),
     ('applyVSync',
      'the settings screen writes the field; something has to read it'),
+    ('pumpWindowEvents',
+     'a program driving its own loop has to be able to deliver input'),
+    ('releaseWindow',
+     'one name for letting a window and the GL objects in it go, so a caller '
+     'that built a context need not know which backend made it'),
 )
 
 
@@ -99,10 +106,15 @@ class TestTheAnswerIsAlwaysAnAnswer:
     nothing at all while looking like a refusal.
     """
 
+    #: `releaseWindow` is not one of these: it lets a window go, and there is
+    #: nothing to answer about having done so.
+    ANSWERING = tuple(entry for entry in CAPABILITIES
+                      if entry[0] != 'releaseWindow')
+
     @pytest.mark.parametrize('name,path', BACKENDS,
                              ids=[b[0] for b in BACKENDS])
-    @pytest.mark.parametrize('capability,why', CAPABILITIES,
-                             ids=[c[0] for c in CAPABILITIES])
+    @pytest.mark.parametrize('capability,why', ANSWERING,
+                             ids=[c[0] for c in ANSWERING])
     def test_every_path_out_returns_something(self, name, path, capability, why):
         for node in ast.walk(ast.parse(_source(path))):
             if isinstance(node, ast.FunctionDef) and node.name == capability:
@@ -130,6 +142,7 @@ class TestEveryBackendReportsPointerMotionAsItHappens:
         'glfw': 'OpenGLContext/events/glfwevents.py',
         'glut': 'OpenGLContext/events/glutevents.py',
         'pygame': 'OpenGLContext/events/pygameevents.py',
+        'tk': 'OpenGLContext/events/tkevents.py',
         'wx': 'OpenGLContext/events/wxevents.py',
     }
 
@@ -163,6 +176,38 @@ class TestTheContractIsStatedOnce:
                              ids=[c[0] for c in CAPABILITIES])
     def test_the_base_context_declares_it(self, capability, why):
         assert callable(getattr(Context, capability, None)), why
+
+    def test_asking_for_vsync_writes_the_field_and_applies_it(self):
+        """`setVSync` is the one call an application makes.
+
+        Uncapping the frame rate is a thing every benchmark and every headless
+        capture wants -- a forced redraw blocks on a swap nobody is presenting
+        -- and each of them used to reach for `glfw.swap_interval` directly,
+        which does nothing on any other backend and warns that GLFW is not
+        initialised on all of them.
+        """
+        applied = []
+
+        class _Backend(Context):
+            def applyVSync(self, definition=None):
+                applied.append(bool(self.contextDefinition.vsync))
+                return True
+
+        made = _Backend.__new__(_Backend)
+        made.contextDefinition = ContextDefinition()
+        assert made.setVSync(False) is True
+        assert applied == [False]
+        assert bool(made.contextDefinition.vsync) is False
+        made.setVSync(True)
+        assert applied == [False, True]
+
+    def test_it_answers_what_the_backend_could_do(self):
+        class _Cannot(Context):
+            pass
+
+        made = _Cannot.__new__(_Cannot)
+        made.contextDefinition = ContextDefinition()
+        assert made.setVSync(False) is False
 
     def test_a_backend_that_cannot_says_so_rather_than_raising(self):
         """`False` is an answer a caller can act on; an AttributeError is not."""
@@ -249,3 +294,165 @@ class TestTheSharedHeldKeyTracking:
         keys.pumpKeyRepeats(now=100.0)
         keys.clearHeldKeys()
         assert keys.emitted == []
+
+
+class TestAContextKnowsItsSizeAsSoonAsItExists:
+    """``getViewPort()`` answers before a single event has been pumped.
+
+    Everything that sizes itself from the window -- the projection matrix, the
+    overlay's scale, a picking ray, a screenshot -- asks the context how big it
+    is, and the first frame is drawn before any toolkit has delivered a resize.
+    A backend that waits to be told its size renders that frame into a zero
+    viewport.
+    """
+
+    def test_the_run_s_backend_reports_a_size(self):
+        from OpenGLContext.testing.glcontext import gl_available
+        if not gl_available():
+            pytest.skip('no GL target available')
+        from OpenGLContext import testingcontext
+        BaseContext = testingcontext.getInteractive()
+
+        class Sized(BaseContext):
+            def Render(self, mode=None):
+                pass
+
+        context = Sized(ContextDefinition(size=(160, 120)))
+        try:
+            width, height = context.getViewPort()
+        finally:
+            context.releaseWindow()
+        assert width > 0 and height > 0, (
+            'the context reported %sx%s before any event was pumped'
+            % (width, height))
+
+
+class TestTheContextThreadCheckBeforeThereIsOne:
+    """``inContextThread`` answers rather than raising.
+
+    Backends call it while setting a window up, which is before any context has
+    claimed a thread -- and until one has, there is no wrong thread to be on.
+    """
+
+    def test_no_context_thread_yet_is_not_the_wrong_thread(self, monkeypatch):
+        from OpenGLContext import context as context_module
+        monkeypatch.setattr(context_module, 'contextThread', None)
+        assert context_module.inContextThread()
+
+
+class TestTellingOneGLContextFromAnother:
+    """Two handles name the same context when they point at the same thing.
+
+    A platform answers with whatever its binding API calls a context, and GLX
+    hands back a fresh ctypes pointer object per query -- two of them at one
+    address are unequal, because ``==`` on a pointer object is identity.  A
+    backend comparing them raw would take its own context for a foreign one and
+    let go of it, which on GLUT it can never take back.
+    """
+
+    def _pointer(self, address):
+        import ctypes
+        return ctypes.cast(ctypes.c_void_p(address), ctypes.POINTER(ctypes.c_int))
+
+    def test_two_pointers_at_one_address_are_one_context(self):
+        from OpenGLContext.context import sameContext
+        one, other = self._pointer(0xBEEF), self._pointer(0xBEEF)
+        assert one != other, 'the hazard this guards has gone away'
+        assert sameContext(one, other)
+
+    def test_pointers_at_different_addresses_are_different_contexts(self):
+        from OpenGLContext.context import sameContext
+        assert not sameContext(self._pointer(0xBEEF), self._pointer(0xC0FFEE))
+
+    def test_an_integer_handle_compares_by_value(self):
+        from OpenGLContext.context import sameContext
+        assert sameContext(0xBEEF, 0xBEEF)
+        assert not sameContext(0xBEEF, 0xC0FFEE)
+
+    def test_nothing_is_never_the_same_context_as_anything(self):
+        """Including another nothing: no context is current, not 'the same one'."""
+        from OpenGLContext.context import sameContext
+        assert not sameContext(None, None)
+        assert not sameContext(0, 0)
+        assert not sameContext(0xBEEF, None)
+
+    def test_a_handle_that_is_no_kind_of_address_names_no_context(self):
+        from OpenGLContext.context import contextAddress
+        assert contextAddress(object()) is None
+
+
+class TestTheProfileAskedForIsTheProfileGiven:
+    """A context's profile does not depend on what was built before it.
+
+    Some window systems keep the parameters a context is created from as
+    process-global state, so a backend that sets only what it wants leaves the
+    rest of the last request in place: a compatibility context asked for after
+    a core one then arrives with the fixed-function pipeline removed, and every
+    ``glMatrixMode`` in it raises ``GL_INVALID_OPERATION``.
+    """
+
+    def _built(self, profile):
+        from OpenGLContext import testingcontext
+        BaseContext = testingcontext.getInteractive()
+
+        class Profiled(BaseContext):
+            def OnInit(self):
+                pass
+
+        return Profiled(profile=profile)
+
+    def test_a_compatibility_context_after_a_core_one_still_has_the_matrix_stack(self):
+        from OpenGLContext.testing.glcontext import gl_available
+        if not gl_available():
+            pytest.skip('no GL target available')
+        from OpenGL.GL import GL_PROJECTION, glMatrixMode
+
+        core = self._built('core')
+        core.releaseWindow()
+        compatibility = self._built('compatibility')
+        try:
+            # Balanced: setCurrent takes context.contextLock and unsetCurrent is
+            # what gives it back.  A test that keeps it holds it for the rest of
+            # the session, and every background loader blocks on it.
+            compatibility.setCurrent()
+            try:
+                glMatrixMode(GL_PROJECTION)
+            finally:
+                compatibility.unsetCurrent()
+        finally:
+            compatibility.releaseWindow()
+
+
+class TestNothingKeepsTheProcessAlive:
+    """A background loader cannot stop the interpreter from exiting.
+
+    Python joins every non-daemon thread as it shuts down.  An image texture
+    loads its URL on a thread that ends by asking each live context to redraw,
+    and ``triggerRedraw`` takes the context lock -- so a loader whose lock never
+    comes is a loader that never finishes, and a process that never exits.  The
+    suite met that as a seven-minute run followed by thirteen minutes of
+    nothing.  An image nobody is going to see is not a reason to refuse to
+    exit.
+    """
+
+    def test_an_image_load_runs_on_a_daemon_thread(self):
+        import threading
+
+        from OpenGLContext.scenegraph import imagetexture
+
+        started = []
+        real = threading.Thread
+
+        class Recording(real):
+            def start(self):
+                started.append(self)
+
+        threading.Thread = Recording
+        try:
+            imagetexture.ImageTexture(url=['no-such-image.png'])
+        finally:
+            threading.Thread = real
+        assert started, 'setting a url started no loader'
+        assert all(thread.daemon for thread in started), (
+            'an image loader can keep the process alive after its last window '
+            'has gone')
