@@ -111,8 +111,8 @@ OpenGLContext/
 ├── contextresources.py   # Caches let go of a GL context's names as it dies
 ├── contextdefinition.py  # The fields a context is configured by
 ├── context.py        # Base context class
-├── glfwcontext.py, glutcontext.py, pygamecontext.py, wxcontext.py
-│                     # One per backend, plus *interactive*, *vrml*, *testing*
+├── glfwcontext.py, glutcontext.py, pygamecontext.py, tkcontext.py,
+│   wxcontext.py      # One per backend, plus *interactive*, *vrml*, *testing*
 ├── eglcontext.py     # Offscreen: no window, no display server -- docs/offscreen.html
 ├── eglvrmlcontext.py # The VRML97-aware form of it
 ├── interactivecontext.py  # Interactive context with mouse/keyboard
@@ -312,7 +312,7 @@ Controls the OpenGL profile used for rendering:
 export OPENGLCONTEXT_PROFILE=compatibility
 ```
 
-All five backends (`glfw`, `glut`, `pygame`, `wx`, `qt`) create a real core
+All six backends (`glfw`, `glut`, `pygame`, `tk`, `wx`, `qt`) create a real core
 context and render identically in one.
 
 **A program that needs a profile declares it**, rather than relying on whoever
@@ -377,6 +377,9 @@ Selects the windowing backend:
 - `glut` - Use GLUT/freeglut (default on many systems)
 - `glfw` - Use GLFW (recommended for core profile)
 - `pygame` - Use Pygame
+- `tk` - Use Tkinter, through PyOpenGL's own `OpenGL.Tk.GLFrame` widget. Needs
+  no package installed, and needs an X display: Tk has no Wayland backend, so a
+  headless machine runs it under `xvfb-run`.
 - `wx` - Use wxPython
 - `qt` - Use Qt 6 / PySide6, from the separate `OpenGLContext-qt` distribution
   (`openglcontext-qt/`). Needs a Qt platform plugin that gives a drawable GL

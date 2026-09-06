@@ -2,9 +2,10 @@
 
 OpenGLContext renders 3D scenes with PyOpenGL, in a window belonging to
 whichever GUI toolkit the application already uses.  GLFW, GLUT, Pygame,
-wxPython and Qt/PySide are all supported; GLFW is the one to reach for with
-the core profile.  A context can own the whole window or sit as one canvas
-inside a larger application.
+Tkinter, wxPython and Qt/PySide are all supported; GLFW is the one to reach
+for with the core profile, and Tkinter the one that needs nothing installed.
+A context can own the whole window or sit as one canvas inside a larger
+application.
 
     from OpenGLContext.viewer import ViewerContext, ViewerOptions
 
@@ -41,6 +42,7 @@ Context( 'pygame', 'OpenGLContext.pygamecontext.PygameContext' )
 Context( 'wx', 'OpenGLContext.wxcontext.wxContext' )
 Context( 'glut', 'OpenGLContext.glutcontext.GLUTContext' )
 Context( 'glfw', 'OpenGLContext.glfwcontext.GLFWContext' )
+Context( 'tk', 'OpenGLContext.tkcontext.TkContext' )
 # Offscreen: no window, no display server.  One class fills the interactive slot
 # too, because a context nothing can click on has no separate interactive form.
 Context( 'egl', 'OpenGLContext.eglcontext.EGLContext' )
@@ -48,11 +50,13 @@ InteractiveContext( 'pygame', 'OpenGLContext.pygameinteractivecontext.PygameInte
 InteractiveContext( 'wx', 'OpenGLContext.wxinteractivecontext.wxInteractiveContext' )
 InteractiveContext( 'glut', 'OpenGLContext.glutinteractivecontext.GLUTInteractiveContext' )
 InteractiveContext( 'glfw', 'OpenGLContext.glfwinteractivecontext.GLFWInteractiveContext' )
+InteractiveContext( 'tk', 'OpenGLContext.tkinteractivecontext.TkInteractiveContext' )
 InteractiveContext( 'egl', 'OpenGLContext.eglcontext.EGLContext' )
 VRMLContext( 'pygame', 'OpenGLContext.pygamevrmlcontext.VRMLContext' )
 VRMLContext( 'wx', 'OpenGLContext.wxvrmlcontext.VRMLContext' )
 VRMLContext( 'glut', 'OpenGLContext.glutvrmlcontext.VRMLContext' )
 VRMLContext( 'glfw', 'OpenGLContext.glfwvrmlcontext.VRMLContext' )
+VRMLContext( 'tk', 'OpenGLContext.tkvrmlcontext.VRMLContext' )
 VRMLContext( 'egl', 'OpenGLContext.eglvrmlcontext.VRMLContext' )
 
 # Imported for its side effect: the package registers the Qt backend with the
