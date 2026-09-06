@@ -3,8 +3,9 @@
 Two layers, as elsewhere in this suite:
 
   * pure Python -- which EGL device the engine picks, and why.  This is where
-    the interesting decision lives, and it runs everywhere: no EGL, no GPU, no
-    display.
+    the interesting decision lives, and it needs no GPU and no display; what it
+    does need is the bindings, so the module skips on a platform with no EGL
+    library for them to bind to.
   * GL -- a real offscreen context, created, made current and drawn into.
     Skipped where EGL cannot provide one.
 
@@ -15,6 +16,8 @@ here takes the process down rather than raising.
 """
 
 import pytest
+
+pytest.importorskip('OpenGL.EGL', exc_type=ImportError)
 
 from OpenGL.EGL.devices import DeviceInfo
 from OpenGLContext import eglcontext
