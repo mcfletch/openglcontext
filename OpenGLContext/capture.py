@@ -15,10 +15,22 @@ import os
 import numpy as np
 from OpenGL.GL import (
     glReadPixels, glReadBuffer, glGetIntegerv, glBindFramebuffer,
-    GL_VIEWPORT, GL_BACK, GL_RGB, GL_UNSIGNED_BYTE, GL_FRAMEBUFFER,
+    GL_VIEWPORT, GL_BACK, GL_FRONT, GL_DOUBLEBUFFER, GL_RGB, GL_UNSIGNED_BYTE,
+    GL_FRAMEBUFFER,
 )
 
 log = logging.getLogger(__name__)
+
+
+def presented_buffer():
+    """Which colour buffer of the default framebuffer holds the finished frame.
+
+    ``GL_BACK`` where there is a back buffer, and ``GL_FRONT`` where there is
+    not.  A surface nothing presents -- an offscreen pbuffer, a single-buffered
+    window -- has one colour buffer, and asking such a framebuffer to read from
+    ``GL_BACK`` is ``GL_INVALID_OPERATION`` rather than a quiet fallback.
+    """
+    return GL_BACK if glGetIntegerv(GL_DOUBLEBUFFER) else GL_FRONT
 
 
 def ensure_pillow():
@@ -46,10 +58,10 @@ def read_back_buffer(hud_height=0):
     width = vp_width
 
     # Read the on-screen result. Bind the default framebuffer first: a post-process
-    # pass (bloom) may leave its own FBO bound, and glReadBuffer(GL_BACK) is invalid
-    # unless the default framebuffer is current.
+    # pass (bloom) may leave its own FBO bound, and naming a default-framebuffer
+    # colour buffer is invalid unless the default framebuffer is current.
     glBindFramebuffer(GL_FRAMEBUFFER, 0)
-    glReadBuffer(GL_BACK)
+    glReadBuffer(presented_buffer())
     raw = glReadPixels(0, y, width, height, GL_RGB, GL_UNSIGNED_BYTE)
     pixels = np.flipud(np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 3)).copy()
     return pixels, width, height

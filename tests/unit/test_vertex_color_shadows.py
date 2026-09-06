@@ -66,8 +66,9 @@ WITH_CASTER = 'caster' in sys.argv
 try:
     import glfw, numpy as np
     # The engine's own reader, not a bare glReadPixels: it binds the default
-    # framebuffer and selects GL_BACK first, and a post-process pass leaves its
-    # own FBO bound -- reading that one back gives a black frame.
+    # framebuffer and selects the buffer the frame is actually in first, and a
+    # post-process pass leaves its own FBO bound -- reading that one back gives
+    # a black frame.
     from OpenGLContext.capture import read_back_buffer
     from OpenGLContext import testingcontext
     Base = testingcontext.getInteractive()

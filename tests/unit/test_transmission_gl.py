@@ -95,7 +95,7 @@ def test_capture_and_bind_roundtrip(gl_context):
     glClear(GL_COLOR_BUFFER_BIT)
     b = TransmissionBuffer()
     b.ensure_size(64, 64)
-    b.capture()                        # reads GL_BACK on the default framebuffer
+    b.capture()                        # reads whichever buffer holds the frame
     b.bind()
     # bind() must leave the active unit restored to unit 0
     assert int(glGetIntegerv(GL_ACTIVE_TEXTURE)) == GL_TEXTURE0

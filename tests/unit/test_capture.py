@@ -5,7 +5,6 @@ reshape/flip logic is verified without a live context; ``save_png``/``SettleCapt
 run for real.
 """
 import numpy as np
-import pytest
 
 from OpenGLContext import capture
 
@@ -24,12 +23,20 @@ def test_save_png_none_pixels_returns_false(tmp_path):
     assert capture.save_png(str(tmp_path / 'x.png'), None) is False
 
 
-def _patch_gl(monkeypatch, width, height, fill):
+def _patch_gl(monkeypatch, width, height, fill, double_buffered=True):
     """Make capture's GL calls report a `width`x`height` viewport whose bytes are
     `fill(x, y)` in OpenGL's bottom-up order."""
-    monkeypatch.setattr(capture, 'glGetIntegerv', lambda _e: (0, 0, width, height))
+    def getInteger(enum):
+        if enum == capture.GL_DOUBLEBUFFER:
+            return double_buffered
+        return (0, 0, width, height)
+
+    monkeypatch.setattr(capture, 'glGetIntegerv', getInteger)
     monkeypatch.setattr(capture, 'glReadBuffer', lambda _b: None)
-    rows = [bytes(fill(x, y)) for y in range(height) for x in range(width)]
+    # Stubbed like the rest: this module states that it needs no live context,
+    # and an entry point left unstubbed makes that true only for a run where
+    # some earlier test happened to leave one behind.
+    monkeypatch.setattr(capture, 'glBindFramebuffer', lambda _t, _f: None)
 
     def fake_read(x, y, w, h, fmt, typ):
         # emulate glReadPixels honouring the y-offset + height we pass it
@@ -58,6 +65,37 @@ def test_read_back_buffer_excludes_hud(monkeypatch):
     # rows captured are GL y in [2..4]; flipped so top is y=4
     assert tuple(pixels[0, 0]) == (4, 0, 0)
     assert tuple(pixels[-1, 0]) == (2, 0, 0)
+
+
+class TestWhichBufferTheFrameIsIn:
+    """A default framebuffer with no back buffer keeps the frame in the front
+    one, and ``glReadBuffer(GL_BACK)`` against it is GL_INVALID_OPERATION --
+    which the offscreen backends meet, since a surface nothing presents has no
+    reason to carry a second colour buffer.
+    """
+
+    def test_a_double_buffered_frame_is_in_the_back_buffer(self, monkeypatch):
+        monkeypatch.setattr(capture, 'glGetIntegerv', lambda _e: True)
+        assert capture.presented_buffer() == capture.GL_BACK
+
+    def test_a_single_buffered_frame_is_in_the_front_buffer(self, monkeypatch):
+        monkeypatch.setattr(capture, 'glGetIntegerv', lambda _e: False)
+        assert capture.presented_buffer() == capture.GL_FRONT
+
+    def test_the_read_asks_for_the_buffer_that_is_there(self, monkeypatch):
+        asked = []
+        _patch_gl(monkeypatch, 2, 2, lambda x, y: (1, 2, 3),
+                  double_buffered=False)
+        monkeypatch.setattr(capture, 'glReadBuffer', asked.append)
+        capture.read_back_buffer()
+        assert asked == [capture.GL_FRONT]
+
+    def test_and_the_back_buffer_where_there_is_one(self, monkeypatch):
+        asked = []
+        _patch_gl(monkeypatch, 2, 2, lambda x, y: (1, 2, 3))
+        monkeypatch.setattr(capture, 'glReadBuffer', asked.append)
+        capture.read_back_buffer()
+        assert asked == [capture.GL_BACK]
 
 
 def test_capture_to_png_skips_blank(monkeypatch, tmp_path):

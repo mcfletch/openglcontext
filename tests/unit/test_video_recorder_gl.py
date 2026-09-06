@@ -56,16 +56,70 @@ def draw_a_distinctive_frame(index=0):
 
 
 def read_back_buffer():
-    """The back buffer as an array, in OpenGL's bottom-up order."""
+    """The finished frame as an array, in OpenGL's bottom-up order."""
     from OpenGL.GL import (
-        GL_BACK, GL_FRAMEBUFFER, GL_RGB, GL_UNSIGNED_BYTE, glBindFramebuffer,
+        GL_FRAMEBUFFER, GL_RGB, GL_UNSIGNED_BYTE, glBindFramebuffer,
         glReadBuffer, glReadPixels,
     )
+
+    from OpenGLContext.capture import presented_buffer
+
     width, height = SIZE
     glBindFramebuffer(GL_FRAMEBUFFER, 0)
-    glReadBuffer(GL_BACK)
+    # Asked rather than assumed: an offscreen surface has no back buffer, and
+    # naming one is GL_INVALID_OPERATION rather than a quiet fallback.
+    glReadBuffer(presented_buffer())
     raw = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
     return np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 3)
+
+
+class TestWhichBufferAFrameIsCopiedFrom:
+    """``copy_frame`` reads the default framebuffer, and which of its colour
+    buffers holds the frame depends on whether it has two.  A surface nothing
+    presents -- an offscreen pbuffer -- has one, and asking it for ``GL_BACK``
+    fails the whole recording on its first frame.
+    """
+
+    def _asked_for(self, monkeypatch, source, double_buffered, **named):
+        from OpenGL.GL import GL_VIEWPORT
+        from OpenGLContext import capture
+        from OpenGLContext.video import recorder
+
+        asked = []
+        monkeypatch.setattr(recorder, 'glReadBuffer', asked.append)
+        monkeypatch.setattr(recorder, 'glBindFramebuffer', lambda _t, _f: None)
+        monkeypatch.setattr(recorder, 'glBlitFramebuffer',
+                            lambda *arguments: None)
+        monkeypatch.setattr(
+            recorder, 'glGetIntegerv',
+            lambda enum: (0, 0, 4, 4) if enum == GL_VIEWPORT else 0)
+        monkeypatch.setattr(capture, 'glGetIntegerv',
+                            lambda _enum: double_buffered)
+        recorder.copy_frame(1, (4, 4), source=source, **named)
+        return asked
+
+    def test_a_double_buffered_frame_comes_from_the_back_buffer(self, monkeypatch):
+        from OpenGL.GL import GL_BACK
+
+        assert self._asked_for(monkeypatch, 0, True) == [GL_BACK]
+
+    def test_a_single_buffered_frame_comes_from_the_front_buffer(self, monkeypatch):
+        from OpenGL.GL import GL_FRONT
+
+        assert self._asked_for(monkeypatch, 0, False) == [GL_FRONT]
+
+    def test_another_framebuffer_is_read_at_its_colour_attachment(self, monkeypatch):
+        """``GL_BACK`` means nothing on a framebuffer object, whatever the
+        default framebuffer happens to have."""
+        from OpenGL.GL import GL_COLOR_ATTACHMENT0
+
+        assert self._asked_for(monkeypatch, 7, False) == [GL_COLOR_ATTACHMENT0]
+
+    def test_a_caller_naming_a_buffer_is_obeyed(self, monkeypatch):
+        from OpenGL.GL import GL_FRONT_LEFT
+
+        assert self._asked_for(
+            monkeypatch, 0, True, buffer=GL_FRONT_LEFT) == [GL_FRONT_LEFT]
 
 
 def read_texture(texture):

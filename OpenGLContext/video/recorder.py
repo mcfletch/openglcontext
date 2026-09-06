@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from OpenGL.GL import (
-    GL_BACK, GL_COLOR_ATTACHMENT0, GL_COLOR_BUFFER_BIT, GL_DRAW_FRAMEBUFFER,
+    GL_COLOR_ATTACHMENT0, GL_COLOR_BUFFER_BIT, GL_DRAW_FRAMEBUFFER,
     GL_DRAW_FRAMEBUFFER_BINDING, GL_LINEAR, GL_NEAREST,
     GL_READ_FRAMEBUFFER, GL_READ_FRAMEBUFFER_BINDING, GL_RGBA, GL_RGBA8,
     GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER,
@@ -106,21 +106,28 @@ class CaptureTarget:
 
 
 def copy_frame(framebuffer: int, size: tuple[int, int],
-               source: int = 0, buffer: int = GL_BACK) -> None:
+               source: int = 0, buffer: int | None = None) -> None:
     """Copy the frame just drawn into `framebuffer`, turning it the right way up.
 
     framebuffer -- where to put it, usually a :class:`CaptureTarget`'s
     size -- the destination's size; a source of another size is scaled into it,
         which is what keeps a recording going across a window resize
     source -- the framebuffer to read, the default one by default
-    buffer -- which of its buffers, the back one by default, which is where the
-        frame lives until it is swapped away
+    buffer -- which of its buffers; by default the one the finished frame is
+        in, which is the back buffer on a window and the front one on a surface
+        nothing presents, and a framebuffer object's first colour attachment.
+        Naming a buffer the framebuffer does not have is GL_INVALID_OPERATION
+        rather than a quiet fallback, so it is asked rather than assumed.
 
     **The destination's Y coordinates run backwards on purpose.** OpenGL's
     framebuffer starts at the bottom left and a video encoder reads a texture
     from its first row and calls that the top of the picture, so the copy has to
     turn the frame over. Doing it in the blit costs nothing.
     """
+    if buffer is None:
+        from OpenGLContext.capture import presented_buffer
+
+        buffer = presented_buffer() if source == 0 else GL_COLOR_ATTACHMENT0
     width, height = size
     previous_read = int(glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING))
     previous_draw = int(glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING))
