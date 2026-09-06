@@ -5,7 +5,15 @@ with, in this project and in one built on it, so what it promises is worth
 holding to: the context is current when the body runs, the window is never
 mapped, the sticky GLFW hints are reset before each one, and there is exactly
 one way to find out that this machine cannot render at all.
+
+Under ``OPENGLCONTEXT_TEST_WINDOWING=offscreen`` there is no window, so the
+cases that ask GLFW about one are skipped there and say why. Everything about
+the *context* -- that it is current, that it is the profile and the size asked
+for -- is asked of both, through the backend-neutral helpers, since that is the
+part the promise is really about.
 """
+import sys
+
 import pytest
 
 from OpenGLContext.testing import glcontext
@@ -17,10 +25,16 @@ from OpenGLContext.testing.glcontext import (
     hidden_window,
 )
 
+glfw_only = pytest.mark.skipif(
+    glcontext.windowing() != 'glfw',
+    reason='asks GLFW about a window, and %s=offscreen has none'
+           % (glcontext.WINDOWING_VARIABLE,))
+
 
 class TestAskingForAContextThatCannotBeGiven:
     """Every refusal is one exception with a reason in it."""
 
+    @glfw_only
     def test_no_glfw_is_a_reason_rather_than_an_import_error(self, monkeypatch):
         import builtins
         real = builtins.__import__
@@ -36,6 +50,7 @@ class TestAskingForAContextThatCannotBeGiven:
             with hidden_window('nope'):
                 pass                                   # pragma: no cover - never runs
 
+    @glfw_only
     def test_a_driver_that_will_not_initialise_says_so(self, monkeypatch):
         glfw = pytest.importorskip('glfw')
         monkeypatch.setattr(glfw, 'init', lambda: False)
@@ -43,6 +58,7 @@ class TestAskingForAContextThatCannotBeGiven:
             with hidden_window('nope'):
                 pass                                   # pragma: no cover - never runs
 
+    @glfw_only
     def test_a_window_the_driver_refuses_says_the_size_and_the_profile(
             self, monkeypatch):
         glfw = pytest.importorskip('glfw')
@@ -69,6 +85,7 @@ class TestTheWindowItGives:
         except GLUnavailable as err:
             pytest.skip(str(err))
 
+    @glfw_only
     def test_it_is_never_mapped(self):
         glfw = pytest.importorskip('glfw')
         try:
@@ -83,11 +100,12 @@ class TestTheWindowItGives:
 
     def test_it_is_the_size_that_was_asked_for(self):
         try:
-            with hidden_window('sized', size=(96, 48)) as window:
-                assert glcontext.framebuffer_size(window) == (96, 48)
+            with hidden_window('sized', size=(96, 48)) as handle:
+                assert glcontext.framebuffer_size(handle) == (96, 48)
         except GLUnavailable as err:
             pytest.skip(str(err))
 
+    @glfw_only
     def test_a_hint_the_caller_names_reaches_the_window(self):
         """``hints`` is how a test asks for the one thing the arguments do not
         cover.
@@ -111,6 +129,7 @@ class TestTheWindowItGives:
         except GLUnavailable as err:
             pytest.skip(str(err))
 
+    @glfw_only
     def test_a_hint_one_window_asked_for_is_not_given_to_the_next(self):
         """GLFW hints are process-global and sticky, so without a reset the
         window a test gets is the one the *previous* test asked for."""
@@ -286,8 +305,8 @@ class TestTheFixtures:
         assert glGetString(GL_VERSION) is not None
 
     def test_gl_window_makes_the_window_it_is_asked_for(self, gl_window):
-        window = gl_window('factory', size=(80, 40))
-        assert glcontext.framebuffer_size(window) == (80, 40)
+        handle = gl_window('factory', size=(80, 40))
+        assert glcontext.framebuffer_size(handle) == (80, 40)
 
     def test_two_windows_can_be_alive_at_once(self, gl_window):
         """A resource cached against one context must not be handed to the
@@ -295,6 +314,131 @@ class TestTheFixtures:
         first = gl_window('one')
         second = gl_window('two')
         assert first != second
+
+
+class TestChoosingHowAContextIsMade:
+    """``OPENGLCONTEXT_TEST_WINDOWING`` is read here and nowhere else, so a
+    suite cannot half-select a windowing mode."""
+
+    def test_nothing_asked_for_is_a_hidden_window(self):
+        assert glcontext.windowing({}) == 'glfw'
+
+    def test_an_empty_setting_is_the_same_as_none(self):
+        """What an unexported shell variable expands to."""
+        assert glcontext.windowing(
+            {glcontext.WINDOWING_VARIABLE: ''}) == 'glfw'
+
+    @pytest.mark.parametrize('name', glcontext.WINDOWINGS)
+    def test_each_name_is_accepted(self, name):
+        assert glcontext.windowing({glcontext.WINDOWING_VARIABLE: name}) == name
+
+    def test_it_is_read_case_and_space_insensitively(self):
+        assert glcontext.windowing(
+            {glcontext.WINDOWING_VARIABLE: '  OFFSCREEN '}) == 'offscreen'
+
+    def test_a_name_nobody_offers_is_refused_with_the_whole_list(self):
+        """A typo here would otherwise select the default silently, and a run
+        meant to prove the windowless path works would prove nothing."""
+        with pytest.raises(ValueError) as raised:
+            glcontext.windowing({glcontext.WINDOWING_VARIABLE: 'sideways'})
+        for name in glcontext.WINDOWINGS:
+            assert name in str(raised.value)
+
+
+class TestWhichPlatformsRenderWithoutAWindow:
+    @pytest.mark.parametrize('platform', ['win32', 'cygwin'])
+    def test_windows_renders_on_a_pbuffer(self, platform):
+        assert glcontext.offscreen_backend(platform) == 'wgl'
+
+    @pytest.mark.parametrize('platform', ['linux', 'darwin'])
+    def test_a_platform_with_no_backend_here_says_so(self, platform):
+        """Said rather than guessed: opening a window for a caller who asked
+        for none is worse than refusing."""
+        assert glcontext.offscreen_backend(platform) is None
+
+    def test_it_reads_the_platform_by_default(self):
+        assert glcontext.offscreen_backend() == glcontext.offscreen_backend(
+            sys.platform)
+
+    def test_asking_for_one_where_there_is_none_names_the_variable(
+            self, monkeypatch):
+        monkeypatch.setattr(glcontext, 'offscreen_backend', lambda: None)
+        with pytest.raises(GLUnavailable, match=glcontext.WINDOWING_VARIABLE):
+            with glcontext.offscreen_window('nope'):
+                pass                                   # pragma: no cover - never runs
+
+
+@pytest.mark.skipif(glcontext.offscreen_backend() is None,
+                    reason='no windowless GL backend on this platform')
+class TestTheWindowlessContext:
+    """The same promises as the hidden window, with no window behind them."""
+
+    def test_the_context_is_current_inside_the_block(self):
+        from OpenGL.GL import GL_VERSION, glGetString
+        try:
+            with glcontext.offscreen_window('current'):
+                assert glGetString(GL_VERSION) is not None
+        except GLUnavailable as err:
+            pytest.skip(str(err))
+
+    def test_it_is_the_size_that_was_asked_for(self):
+        try:
+            with glcontext.offscreen_window('sized', size=(96, 48)) as handle:
+                assert glcontext.framebuffer_size(handle) == (96, 48)
+        except GLUnavailable as err:
+            pytest.skip(str(err))
+
+    def test_it_is_the_profile_that_was_asked_for(self):
+        from OpenGL.GL import (
+            GL_CONTEXT_CORE_PROFILE_BIT, GL_CONTEXT_PROFILE_MASK, glGetIntegerv,
+        )
+        try:
+            with glcontext.offscreen_window('core'):
+                mask = int(glGetIntegerv(GL_CONTEXT_PROFILE_MASK))
+        except GLUnavailable as err:
+            pytest.skip(str(err))
+        assert mask & GL_CONTEXT_CORE_PROFILE_BIT
+
+    def test_a_frame_drawn_into_it_reads_back(self):
+        """A context that creates cleanly and draws nothing is still a context,
+        so this asks for the pixels."""
+        import numpy as np
+        from OpenGL.GL import (
+            GL_COLOR_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, glClear,
+            glClearColor, glReadPixels, glViewport,
+        )
+        try:
+            with glcontext.offscreen_window('drawn', size=(32, 16)):
+                glViewport(0, 0, 32, 16)
+                glClearColor(0.0, 1.0, 0.0, 1.0)
+                glClear(GL_COLOR_BUFFER_BIT)
+                raw = glReadPixels(0, 0, 32, 16, GL_RGB, GL_UNSIGNED_BYTE)
+        except GLUnavailable as err:
+            pytest.skip(str(err))
+        pixels = np.frombuffer(bytes(raw), dtype=np.uint8).reshape(16, 32, 3)
+        assert float(pixels[..., 1].mean()) > 250
+
+    def test_two_can_be_alive_at_once(self):
+        """A resource cached against one context must not be handed to the
+        next, and a test that proves it needs both at the same time."""
+        try:
+            with glcontext.offscreen_window('one') as first:
+                with glcontext.offscreen_window('two') as second:
+                    assert first is not second
+                    glcontext.make_current(first)
+                    glcontext.make_current(second)
+        except GLUnavailable as err:
+            pytest.skip(str(err))
+
+    def test_a_hint_is_ignored_rather_than_refused(self):
+        """``hints`` is GLFW's vocabulary and means nothing without a window;
+        a caller passing one is asking about a window it said it did not
+        want."""
+        try:
+            with glcontext.offscreen_window('hinted', hints={'RESIZABLE': 0}):
+                pass
+        except GLUnavailable as err:
+            pytest.skip(str(err))
 
 
 if __name__ == '__main__':

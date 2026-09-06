@@ -1,8 +1,15 @@
 """The screen-space layers a context draws over its frame, and their order.
 
-None of this needs a window: the layers are laid out against a viewport and a
-font, and what comes back is the list of trees the renderer would paint, in the
-order it would paint them.
+Almost none of this needs a window: the layers are laid out against a viewport
+and a font, and what comes back is the list of trees the renderer would paint,
+in the order it would paint them.
+
+The exception is a :class:`Panel`, whose tree is built through the text
+renderer and so wants a font texture -- and a panel whose texture could not be
+made is left out of the list rather than drawn blank. So the one case that
+opens a panel asks for ``gl_context``; without it that case passed only where
+some earlier test in the run had left a context current, and failed whenever it
+ran first.
 """
 
 import pytest
@@ -165,7 +172,7 @@ class TestDebugOverlay:
 
 
 class TestDrawingOrder:
-    def test_the_hud_is_drawn_under_the_screens(self, metrics):
+    def test_the_hud_is_drawn_under_the_screens(self, gl_context, metrics):
         game = Game()
         layer = HUDLayer()
         game.addHUDLayer(layer)

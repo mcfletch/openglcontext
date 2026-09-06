@@ -330,7 +330,7 @@ def test_the_hook_does_nothing_with_no_overlay(gl_context):
 
 # -- text renderers belong to one GL context ---------------------------------
 
-def test_two_windows_get_their_own_text_renderer(gl_context):
+def test_two_windows_get_their_own_text_renderer(gl_context, gl_window):
     """A texture id means nothing in another context.
 
     The atlas is cached so that nine sizes do not become nine per frame, but
@@ -339,19 +339,20 @@ def test_two_windows_get_their_own_text_renderer(gl_context):
     error.
     """
     from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
+    from OpenGLContext.testing import glcontext
+
     first = get_text_renderer(16)
     assert first.initialize()
-    second_window = glfw.create_window(WIDTH, HEIGHT, "second", None, None)
-    if not second_window:
-        pytest.skip("no second GL window")
+    # Through the fixture rather than the toolkit: it tears the second context
+    # down with the test, and it is the one that knows how this run makes them.
+    second_context = gl_window('second', size=(WIDTH, HEIGHT))
     try:
-        glfw.make_context_current(second_window)
+        glcontext.make_current(second_context)
         second = get_text_renderer(16)
         assert second is not first
         assert second.initialize()
     finally:
-        glfw.destroy_window(second_window)
-        glfw.make_context_current(gl_context)
+        glcontext.make_current(gl_context)
 
 
 def test_the_same_window_keeps_the_one_atlas(gl_context):

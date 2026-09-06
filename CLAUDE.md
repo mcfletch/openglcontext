@@ -118,8 +118,10 @@ OpenGLContext/
 ├── context.py        # Base context class
 ├── glfwcontext.py, glutcontext.py, pygamecontext.py, tkcontext.py,
 │   wxcontext.py      # One per backend, plus *interactive*, *vrml*, *testing*
-├── eglcontext.py     # Offscreen: no window, no display server -- docs/offscreen.html
+├── eglcontext.py     # Offscreen on Linux: no window, no display server -- docs/offscreen.html
 ├── eglvrmlcontext.py # The VRML97-aware form of it
+├── wglcontext.py     # Offscreen on Windows: a WGL pbuffer -- docs/offscreen.html
+├── wglvrmlcontext.py # The VRML97-aware form of it
 ├── interactivecontext.py  # Interactive context with mouse/keyboard
 └── testingcontext.py      # Picks the backend's testing context
 ```
@@ -390,10 +392,16 @@ Selects the windowing backend:
   (`openglcontext-qt/`). Needs a Qt platform plugin that gives a drawable GL
   surface; the Wayland plugin does not in this container, so run Qt work with
   `QT_QPA_PLATFORM=xcb`.
+- `egl` - Offscreen on Linux: no window and no display server (`eglcontext.py`)
+- `wgl` - Offscreen on Windows: a pbuffer, no window on screen (`wglcontext.py`)
 
 ```bash
 export OPENGLCONTEXT_BACKEND=glfw
 ```
+
+The two offscreen backends are the same context class in the plain, interactive
+and VRML slots, because a context nothing can click on has no separate
+interactive form. See [docs/offscreen.html](docs/offscreen.html).
 
 
 ### OPENGLCONTEXT_STALL_MS / OPENGLCONTEXT_TRACE_STALLS
@@ -861,6 +869,14 @@ callback, and a window nothing is showing never gets one.
 **Set `OPENGLCONTEXT_HIDDEN=0` to watch a test render** — which is how you find
 out why one looks wrong. A scratch script outside the suite has to set both
 itself.
+
+**`OPENGLCONTEXT_TEST_WINDOWING=offscreen` runs it with no window at all**, on
+the platform's offscreen backend (a WGL pbuffer on Windows), which is what a
+machine with no desktop or no GLFW needs. The default is `glfw`, the hidden
+window. A test that reaches past the context to the window it came from uses
+`testing.glcontext.make_current` / `release_current` / `framebuffer_size`, which
+work under both, and one that genuinely asks GLFW about a window skips on
+`glcontext.windowing() != 'glfw'`. See [docs/testing.html](docs/testing.html).
 
 Order-dependent GL failures are almost always **context/state pollution** between
 tests. The fix is better isolation, not weaker assertions: prefer the test harness

@@ -105,6 +105,39 @@ def gl_context():
     should ask the framebuffer rather than assume the hint was granted.</p>
 </section>
 
+<section id="windowless">
+  <h2>Or no window at all</h2>
+  <p><code>OPENGLCONTEXT_TEST_WINDOWING=offscreen</code> gives every test a
+    context on a surface the display driver allocates instead of a hidden
+    window, so the suite runs where there is no windowing toolkit to open one
+    with &mdash; a service, a container with no desktop, a machine with no GLFW
+    installed:</p>
+  <pre>OPENGLCONTEXT_TEST_WINDOWING=offscreen pytest tests/unit</pre>
+  <p>The backend is the platform's: a
+    <a href="offscreen.html">WGL pbuffer</a> on Windows. A platform with none
+    says so rather than opening a window the run asked not to have, and
+    <code>OPENGLCONTEXT_TEST_WINDOWING=glfw</code> (the default) is the hidden
+    window described above.</p>
+  <p><strong>What a test gets is the same either way</strong> &mdash; a current
+    context of the profile and size it asked for. What differs is the handle the
+    fixture yields, which is the offscreen context rather than a GLFW window. A
+    test that only needs <em>a</em> context never notices. One that reaches past
+    the context to the window uses the helpers that work under both:</p>
+  <table>
+  <tr><th>Instead of</th><th>Use</th></tr>
+  <tr><td><code>glfw.make_context_current(handle)</code></td>
+      <td><code>glcontext.make_current(handle)</code></td></tr>
+  <tr><td><code>glfw.make_context_current(None)</code></td>
+      <td><code>glcontext.release_current()</code></td></tr>
+  <tr><td><code>glfw.get_framebuffer_size(handle)</code></td>
+      <td><code>glcontext.framebuffer_size(handle)</code></td></tr>
+  </table>
+  <p>A test that genuinely asks GLFW about a window &mdash; whether it is
+    mapped, whether a hint reached it &mdash; has nothing to ask under
+    <code>offscreen</code>, and skips on
+    <code>glcontext.windowing() != 'glfw'</code>.</p>
+</section>
+
 <section id="without-pytest">
   <h2>Without pytest</h2>
   <p>The window machinery has no pytest in it, so a script or another runner can

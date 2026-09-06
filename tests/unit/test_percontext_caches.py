@@ -15,6 +15,7 @@ import pytest
 
 from OpenGLContext import contextresources
 from OpenGLContext.passes import renderpass, shaderpass
+from OpenGLContext.testing import glcontext
 from OpenGLContext.scenegraph import teapot
 from OpenGLContext.scenegraph.text import shadertext
 
@@ -22,19 +23,18 @@ from OpenGLContext.scenegraph.text import shadertext
 @pytest.fixture
 def two_contexts(gl_window):
     """Two live GL contexts, and a way to make either current."""
-    glfw = pytest.importorskip('glfw')
     first = gl_window('cache-a', size=(32, 32))
     second = gl_window('cache-b', size=(32, 32))
 
-    def current(window):
-        glfw.make_context_current(window)
+    def current(handle):
+        glcontext.make_current(handle)
         return contextresources.context_key()
 
     keys = (current(first), current(second))
     if keys[0] == keys[1] or not all(keys):
         pytest.skip('this platform cannot tell two contexts apart')
     yield first, second, current
-    glfw.make_context_current(None)
+    glcontext.release_current()
 
 
 class TestTheShaderProgramsAreHeldPerContext:

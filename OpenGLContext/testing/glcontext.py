@@ -25,6 +25,16 @@ nothing to show.
 so without :func:`glfw.default_window_hints` a context asked for as core would
 be handed to the next caller who wanted compatibility.
 
+**Or no window at all.** ``OPENGLCONTEXT_TEST_WINDOWING=offscreen`` renders on
+a surface the display driver allocates rather than on a hidden window, so the
+suite runs where there is no windowing toolkit to open one with -- see
+:func:`windowing` for which platforms provide one. What a test gets is the same
+either way: a current context of the profile and size it asked for. What
+differs is the handle yielded, so a test reaching past the context to the
+window it came from asks :func:`windowing` first; :func:`make_current`,
+:func:`release_current` and :func:`framebuffer_size` cover what one is usually
+reached for and work under both.
+
 :func:`describe_gl` says what the GL here is -- vendor, renderer, version, and
 whether it rasterises on the CPU. It opens one probe window for the process and
 remembers the answer, and :func:`gl_available` is the same question asked as a
@@ -62,6 +72,22 @@ SOFTWARE_RENDERER_NAMES = (
     'software', 'gdi generic',
 )
 
+#: Environment variable naming how a test's context is made: ``'glfw'`` for a
+#: hidden window, ``'offscreen'`` for no window at all.
+WINDOWING_VARIABLE = 'OPENGLCONTEXT_TEST_WINDOWING'
+
+#: The values it may take.
+WINDOWINGS = ('glfw', 'offscreen')
+
+#: Which offscreen backend each platform has, by the prefix ``sys.platform``
+#: takes there. Windows renders on a WGL pbuffer; a platform absent from this
+#: has no windowless path here and says so rather than opening a window the
+#: caller asked not to have.
+OFFSCREEN_BY_PLATFORM = (
+    ('win32', 'wgl'),
+    ('cygwin', 'wgl'),
+)
+
 
 class GLUnavailable(RuntimeError):
     """No GL context could be created here.
@@ -69,6 +95,41 @@ class GLUnavailable(RuntimeError):
     Carries the reason -- no ``glfw``, no display, a driver that refused the
     profile -- so a caller can report it rather than a bare failure.
     """
+
+
+def windowing(environ: Mapping[str, str] | None = None) -> str:
+    """How a context is made here: ``'glfw'`` or ``'offscreen'``.
+
+    A test that reaches past the context to the window it came from -- to ask
+    GLFW what the window's attributes are, or to hand the handle back to GLFW
+    -- has nothing to reach for under ``'offscreen'``, and asks this so it can
+    skip rather than fail. Everything that only needs *a* current context needs
+    neither the question nor the answer.
+    """
+    if environ is None:
+        environ = os.environ
+    asked = (environ.get(WINDOWING_VARIABLE, '') or '').strip().lower()
+    if not asked:
+        return 'glfw'
+    if asked not in WINDOWINGS:
+        raise ValueError(
+            '%s=%r is not recognised (expected one of %s)'
+            % (WINDOWING_VARIABLE, asked, ', '.join(WINDOWINGS)))
+    return asked
+
+
+def offscreen_backend(platform: str | None = None) -> str | None:
+    """The windowless backend this platform has, or ``None`` where it has none.
+
+    ``platform`` defaults to ``sys.platform``; pass one to ask about another,
+    which is what lets the mapping be checked anywhere.
+    """
+    if platform is None:
+        platform = sys.platform
+    for prefix, name in OFFSCREEN_BY_PLATFORM:
+        if platform.startswith(prefix):
+            return name
+    return None
 
 
 def _glfw() -> Any:
@@ -224,6 +285,10 @@ def framebuffer_size(window: Any) -> tuple:
     """
     if isinstance(window, OffscreenWindow):
         return window.size
+    if hasattr(window, 'width'):
+        # A windowless context of the platform's own -- a WGL pbuffer -- which
+        # was allocated at a size rather than being asked for one.
+        return (window.width, window.height)
     glfw = _glfw()
     return tuple(glfw.get_framebuffer_size(window))
 
@@ -267,13 +332,74 @@ def _cgl_window(size: Sequence[int], profile: str, version: Sequence[int],
 
 
 @contextlib.contextmanager
+def offscreen_window(title: str = 'OpenGLContext test',
+                     size: Sequence[int] = DEFAULT_SIZE,
+                     profile: str = 'core',
+                     version: Sequence[int] = DEFAULT_VERSION,
+                     forward_compatible: bool = False,
+                     hints: Mapping[str, int] | None = None) -> Iterator[Any]:
+    """A GL context on no window at all, current for the body.
+
+    Takes the same arguments as :func:`hidden_window` and yields the offscreen
+    context object in place of a window handle. ``hints`` are GLFW's vocabulary
+    and have no meaning without a window, so they are ignored rather than
+    refused: a caller asking for one is asking about a window it has said it
+    does not want, and the format hints among them were never requirements
+    anyway.
+    """
+    backend = offscreen_backend()
+    if backend is None:
+        raise GLUnavailable(
+            'no windowless GL backend for %s; unset %s to render on a hidden '
+            'window instead' % (sys.platform, WINDOWING_VARIABLE))
+    if backend != 'wgl':                       # pragma: no cover - one today
+        # Named rather than assumed: a platform added to the map above without
+        # a provider here would otherwise import the Windows one and fail
+        # somewhere less obvious.
+        raise GLUnavailable('no provider for the %r offscreen backend'
+                            % (backend,))
+    from OpenGL.WGL import offscreen
+
+    # The engine reads this to pick a backend; a test that goes on to build an
+    # OpenGLContext context inside this one gets the offscreen backend too.
+    os.environ.setdefault('OPENGLCONTEXT_BACKEND', backend)
+    missing = offscreen.available('legacy' if profile == 'any' else profile)
+    if missing:
+        raise GLUnavailable(
+            'this driver offers no offscreen OpenGL: %s missing'
+            % (', '.join(missing),))
+    width, height = size
+    try:
+        context = offscreen.OffscreenContext(
+            width=width, height=height,
+            # 'any' means "a context, whichever kind" -- and below GL 3.2 the
+            # profile mask does not exist, which is what 'legacy' names.
+            profile='legacy' if profile == 'any' else profile,
+            version=(1, 1) if profile == 'any' else tuple(version),
+            forward_compatible=forward_compatible,
+        )
+    except offscreen.WGLError as err:
+        raise GLUnavailable(
+            'the driver would not give a %dx%d %s offscreen context: %s'
+            % (width, height, profile, err)) from err
+    try:
+        yield context
+    finally:
+        # Still current, so the engine's caches can let go of this context's GL
+        # names.  A suite opens hundreds of these in one process, which is the
+        # setting in which a driver hands the same address out again.
+        contextresources.context_lost()
+        context.release()
+
+
+@contextlib.contextmanager
 def hidden_window(title: str = 'OpenGLContext test',
                   size: Sequence[int] = DEFAULT_SIZE,
                   profile: str = 'core',
                   version: Sequence[int] = DEFAULT_VERSION,
                   forward_compatible: bool = False,
                   hints: Mapping[str, int] | None = None) -> Iterator[Any]:
-    """An unmapped window, current for the body, gone afterwards.
+    """A GL context, current for the body, gone afterwards.
 
     ``title`` names the window (a diagnostic; nothing shows it), ``size`` is
     ``(width, height)`` in pixels, and ``profile`` is one of :data:`PROFILES`.
@@ -289,10 +415,12 @@ def hidden_window(title: str = 'OpenGLContext test',
     desktop that offers no alpha-less format, so a caller that needs to know
     what it got should ask the framebuffer rather than assume.
 
-    Yields the GLFW window handle, or an :class:`OffscreenWindow` where the
-    context came from CGL; :func:`framebuffer_size` reads the size of either.
-    Raises :class:`GLUnavailable` if there is no ``glfw``, no display, or the
-    driver will not give the profile asked for.
+    Yields the GLFW window handle; an :class:`OffscreenWindow` where the
+    context came from CGL; or, under
+    ``OPENGLCONTEXT_TEST_WINDOWING=offscreen``, the offscreen context of
+    :func:`offscreen_window`. :func:`framebuffer_size` reads the size of any of
+    them. Raises :class:`GLUnavailable` if there is no ``glfw``, no display, no
+    windowless backend, or the driver will not give the profile asked for.
 
     **Where GLFW cannot make a context, CGL is tried.** GLFW asks macOS for an
     accelerated pixel format and nothing else, so on a machine with no
@@ -302,6 +430,14 @@ def hidden_window(title: str = 'OpenGLContext test',
     window.
     """
     global _BACKEND
+    if windowing() == 'offscreen':
+        # Asked for outright, so neither of the window paths below is tried:
+        # the point of asking is that this machine is not to open one.
+        with offscreen_window(title, size, profile, version,
+                              forward_compatible, hints) as context:
+            _BACKEND = 'offscreen'
+            yield context
+        return
     if _BACKEND != 'cgl':
         try:
             with _glfw_window(title, size, profile, version,
@@ -368,6 +504,36 @@ def _glfw_window(title: str, size: Sequence[int], profile: str,
         # setting in which a driver hands the same address out again.
         contextresources.context_lost()
         glfw.destroy_window(window)
+
+
+def make_current(handle: Any) -> None:
+    """Draw through ``handle`` from here on, whichever backend made it.
+
+    What a test that drives two contexts needs -- a resource cached against the
+    first must not be handed to the second -- said once rather than as a GLFW
+    call in each test module, which is what stops those tests from being
+    GLFW-only.  A windowless context of the platform's own carries the method;
+    anything else is a GLFW window handle.
+    """
+    if hasattr(handle, 'make_current'):
+        handle.make_current()
+        return
+    _glfw().make_context_current(handle)
+
+
+def release_current() -> None:
+    """Leave no context current on this thread.
+
+    The other half of :func:`make_current`: what a test does to show that a
+    cache keyed on the current context answers differently when there is none.
+    """
+    if windowing() == 'offscreen':
+        from OpenGL import WGL
+        from OpenGL.raw.WGL._types import HDC, HGLRC
+
+        WGL.wglMakeCurrent(HDC(0), HGLRC(0))
+        return
+    _glfw().make_context_current(None)
 
 
 class GLDescription:
