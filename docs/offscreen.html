@@ -20,17 +20,22 @@
 <section>
 <p class="introduction">A build machine has no screen, a rendering service has no
 user, and a batch job that turns ten thousand models into ten thousand
-thumbnails has no reason to open a window for any of them.
-<code>OpenGLContext.eglcontext.EGLContext</code> renders without one: it takes a
-GPU directly, draws, and gives the pixels back.</p>
+thumbnails has no reason to open a window for any of them. An offscreen context
+renders without one: it takes a GPU directly, draws, and gives the pixels back.
+There is one per platform &mdash;
+<code>OpenGLContext.eglcontext.EGLContext</code> on Linux and
+<code>OpenGLContext.wglcontext.WGLContext</code> on Windows &mdash; and they
+behave the same way.</p>
 
 <h2>A context like any other</h2>
 
 <p>It is an ordinary context, so the scenegraph, the render passes, the caches,
-the screenshot machinery and the event model all work unchanged:</p>
+the screenshot machinery, the <a href="recording.html">video recorder</a> and the
+event model all work unchanged:</p>
 
 <pre><code>from OpenGL.GL import GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor
-from OpenGLContext.eglcontext import EGLContext
+from OpenGLContext.eglcontext import EGLContext        # Linux
+# from OpenGLContext.wglcontext import WGLContext      # Windows
 
 class Offscreen(EGLContext):
     def Render(self, mode=None):
@@ -54,35 +59,56 @@ which is usually what a script wants:</p>
 <p>Selecting it by name works too, so an application that already chooses its
 backend needs no code change:</p>
 
-<pre><code>OPENGLCONTEXT_BACKEND=egl python my_application.py
+<pre><code>OPENGLCONTEXT_BACKEND=egl python my_application.py     # Linux
+OPENGLCONTEXT_BACKEND=wgl python my_application.py     # Windows
 </code></pre>
 
-<p>Rendering goes to an EGL pbuffer, which is a real default framebuffer. Every
-pass that draws to framebuffer zero, reads it back or takes a screenshot behaves
+<p>Rendering goes to a pbuffer, which is a real default framebuffer. Every pass
+that draws to framebuffer zero, reads it back or takes a screenshot behaves
 exactly as it does on a window, and nothing has to know it is offscreen. A
 pbuffer has a fixed size, so <code>OnResize</code> builds a replacement and drops
 the old one; the GL context survives, and the textures, buffers and programs in
 it survive with it.</p>
 
-<h2>Where this works</h2>
+<h2>Which backend a platform has</h2>
 
-<p>EGL is the GL binding on Linux and Android, and this backend is for those.
-Windows has no EGL of its own &mdash; an installed ANGLE or Mesa provides one,
-but ANGLE offers GL ES rather than desktop GL, so the
-<code>eglBindAPI(EGL_OPENGL_API)</code> this backend needs fails there. macOS has
-no EGL at all.</p>
+<table>
+<tr><th>Platform</th><th>Backend</th><th>What it needs</th></tr>
+<tr>
+  <td>Linux</td>
+  <td><code>egl</code> &mdash; <code>OpenGLContext.eglcontext</code></td>
+  <td>An EGL device. No display server, no compositor, no session.</td>
+</tr>
+<tr>
+  <td>Windows</td>
+  <td><code>wgl</code> &mdash; <code>OpenGLContext.wglcontext</code></td>
+  <td>A display driver offering <code>WGL_ARB_pbuffer</code>, and a window
+      station with a desktop &mdash; which a service in session 0 has. Nothing
+      on screen, no compositor, and no remote-desktop connection that stays
+      open.</td>
+</tr>
+<tr>
+  <td>macOS</td>
+  <td>&mdash;</td>
+  <td>CGL gives a windowless context (<code>OpenGL.CGL</code>) but no default
+      framebuffer, so there is no OpenGLContext backend on it yet. Use a hidden
+      window.</td>
+</tr>
+</table>
 
-<p>For offscreen rendering on those platforms, use a windowing backend with a
-hidden window: <code>OPENGLCONTEXT_HIDDEN=1</code> renders and reads back
-identically, and is what <a href="testing.html">the test suite</a> uses. What a
-hidden window cannot do is run with no display server at all, which is the thing
-this backend is for.</p>
+<p><strong>Where there is none, a hidden window is the fallback.</strong>
+<code>OPENGLCONTEXT_HIDDEN=1</code> on any windowing backend renders and reads
+back identically, and is what <a href="testing.html">the test suite</a> uses by
+default. What a hidden window cannot do is run with no display server or no
+desktop at all, which is the thing these backends are for.</p>
 
-<p>Where EGL is absent, constructing an <code>EGLContext</code> raises
-<code>EGLContextError</code> rather than failing obscurely, so an application can
-try it and fall back.</p>
+<p>Where the platform cannot provide one, constructing the context raises
+<code>EGLContextError</code> or <code>WGLContextError</code> rather than failing
+obscurely, so an application can try it and fall back. On Windows,
+<code>OpenGLContext.wglcontext.available()</code> answers before anything is
+created, naming the extensions the driver lacks.</p>
 
-<h2>Which GPU it renders on</h2>
+<h2>Which GPU it renders on (EGL)</h2>
 
 <p>A machine may offer several EGL devices &mdash; a GPU and a CPU rasteriser, or
 several GPUs. By default the engine renders on the first hardware device.
@@ -120,6 +146,30 @@ matching device is what keeps the process alive.</p>
 
 <p>Where no device of the preferred kind exists, the first device is used and a
 warning says so: rendering on the other sort beats not rendering.</p>
+
+<h2>One window, created and never shown (Windows)</h2>
+
+<p>Windows has no device enumeration to choose from and no windowless context
+call. The calls that build a pbuffer &mdash;
+<code>wglChoosePixelFormatARB</code>, <code>wglCreatePbufferARB</code>,
+<code>wglCreateContextAttribsARB</code> &mdash; are extensions, and an extension
+entry point is resolved through a context that already exists, so there is a
+chicken and egg. The way out of it is a 1&times;1 <code>WS_POPUP</code> window,
+never shown and never given a message loop, used for nothing but resolving those
+entry points. <code>OpenGL.WGL.offscreen</code> makes one per process and the
+pbuffer outlives it.</p>
+
+<p>What that needs is a window station and a desktop; what it does not need is
+anything on screen. The pbuffer is the driver's own memory, so it survives a
+remote-desktop disconnect that would take a window with it &mdash;
+<code>context.surface.lost</code> reports the one case where Windows discards
+what a pbuffer held, and the answer to that is to draw the frame again.</p>
+
+<p>The pbuffer is created on the display driver bound to the process, and the
+pixel format is required to be one the GPU draws.
+<code>OPENGLCONTEXT_WGL_ANY_ACCELERATION=1</code> accepts one that does not
+call itself fully accelerated, which is what an unusual or virtualised adapter
+may need: rendering slowly beats refusing.</p>
 
 <h2>Driving a scene with no one at the keyboard</h2>
 
@@ -179,23 +229,29 @@ Every pass calls it where it would on a window, so nothing has to know.</p>
 it no effect on any surface that is not a back-buffered window, so on a pbuffer
 it returns <code>EGL_TRUE</code> and issues nothing.</p>
 
+<p>The surface is single-buffered, since nothing presents it, so the finished
+frame is in the <em>front</em> buffer rather than the back one. Every capture
+path here asks the framebuffer which it has
+(<code>OpenGLContext.capture.presented_buffer</code>) rather than naming
+<code>GL_BACK</code>, because naming a buffer a framebuffer does not have is
+<code>GL_INVALID_OPERATION</code> and not a quiet fallback.</p>
+
 <h2>Resizing</h2>
 
 <p>A pbuffer is created at a fixed size and cannot be resized, so
-<code>OnResize</code> builds a replacement against the same config and drops the
-old one. The GL context survives, so textures, buffers and programs are all still
-there afterwards. A width or a height of zero or less is not a surface and is
-refused by name.</p>
+<code>OnResize</code> builds a replacement against the same config or pixel
+format and drops the old one. The GL context survives, so textures, buffers and
+programs are all still there afterwards. A width or a height of zero or less is
+not a surface and is refused by name.</p>
 
 <h2>When construction fails</h2>
 
-<p>Constructing an <code>EGLContext</code> raises
-<code>EGLContextError</code> where this machine cannot provide one &mdash; no
-devices, no config matching the buffers asked for, no desktop GL on the chosen
-device &mdash; so an application can try it and fall back. A failure gives back
-whatever it had already taken, including the initialised EGL display, so an
-application that tries several devices or reduces its request and tries again
-leaks nothing per attempt.</p>
+<p>Constructing the context raises <code>EGLContextError</code> or
+<code>WGLContextError</code> where this machine cannot provide one &mdash; no
+devices, no pixel format matching the buffers asked for, no desktop GL, a driver
+with no pbuffers &mdash; so an application can try it and fall back. A failure
+gives back whatever it had already taken, so an application that tries several
+devices or reduces its request and tries again leaks nothing per attempt.</p>
 
 <h2>Time</h2>
 

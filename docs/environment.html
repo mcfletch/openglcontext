@@ -160,6 +160,12 @@ needs.</p>
   several. <code>OpenGL.EGL.devices</code> lists them. An index out of range is
   an error rather than a fallback. See
   <a href="offscreen.html">Rendering offscreen</a>.</td></tr>
+<tr><td><code>OPENGLCONTEXT_WGL_ANY_ACCELERATION</code></td><td>yes/no</td>
+  <td>off</td>
+  <td>Accept a pixel format that does not call itself fully accelerated, for
+  the Windows offscreen context. An unusual or virtualised adapter may
+  advertise no accelerated pbuffer format at all, and rendering slowly beats
+  refusing. See <a href="offscreen.html">Rendering offscreen</a>.</td></tr>
 <tr><td><code>OPENGLCONTEXT_PHYSICS</code></td><td>yes/no</td><td>off</td>
   <td>Whether the viewer walks the scene with gravity and collision rather
   than framing it. See <a href="physics.html">Physics</a>.</td></tr>

@@ -405,6 +405,13 @@ class TestACleanRenderingEnvironment:
             # Which tests are collected, not what any of them draws.  Nothing
             # in a render pass reads it.
             'OPENGLCONTEXT_PERFORMANCE_TESTS',
+            # How a *test* is given a GL context -- a hidden window or a
+            # windowless surface.  It decides nothing about the frame: the same
+            # profile, the same size, the same pixels either way.  And a run
+            # that is windowless because this machine has no window system must
+            # not hand a child one it cannot open, so it is inherited on
+            # purpose.  See OpenGLContext.testing.glcontext.
+            'OPENGLCONTEXT_TEST_WINDOWING',
         }
         assert not (seen - set(renderoptions.ENVIRONMENT) - allowed)
 

@@ -473,12 +473,12 @@ uv pip install -e ".[glfw,gltf]"</pre>
           manages changes to the VRML97 scenegraph</li>
         <li><a href="testing.html">Testing What You Draw</a> -- A hidden GL
           context in the test process, the pytest fixtures that hand one over,
-          running a whole application in a child process, and comparing the
-          pixels that came back</li>
+          running the suite with no window at all, running a whole application
+          in a child process, and comparing the pixels that came back</li>
         <li><a href="offscreen.html">Rendering Offscreen</a> -- A GL context with
-          no window and no display server: taking a GPU directly through EGL,
-          which device gets picked and how to pin one, driving a scene with
-          events nobody typed, and what to use instead on Windows and macOS</li>
+          no window and no display server: an EGL device on Linux and a pbuffer
+          on Windows, which one a platform has, driving a scene with events
+          nobody typed, and what to use instead where there is neither</li>
         <li><strong>Reference</strong>
         <ul>
           <li><a href="environment.html">Environment Variables</a> -- Every
