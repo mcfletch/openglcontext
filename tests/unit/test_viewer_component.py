@@ -193,6 +193,11 @@ class TestTheMixinsComposeCleanly:
         'options',                      # the component's own configuration
         'setMovementManager',           # sizes free-fly stepping to the scene
         'physicsAvatarScale',           # a metric world gets a person, not a giant
+        # Answered by each mix-in that has an opinion and passed on rather than
+        # replaced -- which is the distinction this gate is drawing. A viewer
+        # may be capturing and recording at once, and the frames either still
+        # wants are frames an offscreen loop has to draw.
+        'wantsMoreFrames',
     }
 
     def _declared(self, klass):
@@ -213,6 +218,35 @@ class TestTheMixinsComposeCleanly:
                       SettleCaptureMixin, SceneViewerMixin):
             clashes = self._declared(mixin) & inherited - self.DELIBERATE
             assert not clashes, '%s shadows %s' % (mixin.__name__, sorted(clashes))
+
+    def test_a_deliberate_override_passes_the_question_on(self, monkeypatch):
+        """The distinction the list above draws, asserted on the real class.
+
+        ``wantsMoreFrames`` is on the allowed list because each mix-in answers
+        for itself and then asks the next, and that is only true if the chain
+        reaches the context underneath. Asserting it returns False with nothing
+        pending would not show that -- a mix-in that answered False on its own
+        and asked nobody would pass too -- so the context's own answer is made
+        an unmistakable one and looked for.
+        """
+        from OpenGLContext.context import Context
+        from OpenGLContext.viewer.sceneviewer import ViewerContext
+
+        viewer = ViewerContext.__new__(ViewerContext)
+        viewer.settleCapture = None
+        assert viewer.wantsMoreFrames() is False
+
+        monkeypatch.setattr(Context, 'wantsMoreFrames', lambda self: True)
+        assert viewer.wantsMoreFrames() is True, (
+            'the mix-in answered for the context instead of asking it')
+
+        # And its own answer still comes first, so a pending capture does not
+        # depend on what anything below it says.
+        monkeypatch.setattr(Context, 'wantsMoreFrames', lambda self: False)
+        viewer.setupCapture('somewhere.png')
+        assert viewer.wantsMoreFrames() is True
+        viewer.settleCapture.done = True
+        assert viewer.wantsMoreFrames() is False
 
     def test_the_caption_is_sized_by_the_interface_scale_like_everything_else(self):
         """It used to carry a font size of its own, which no setting reached."""

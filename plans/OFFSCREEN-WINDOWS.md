@@ -69,6 +69,26 @@ than the screenshot. A latent defect for any single-buffered context, not only
 this one. The remaining `GL_BACK` in the package are `glCullFace(GL_BACK)`,
 which is a different question.
 
+**An offscreen main loop drew one frame and stopped, so `--capture` could not
+work through it.** `MainLoop` rendered `frameCount` frames and returned, which
+is right for "render an image, read it back" and wrong for everything that
+cannot say in advance how many frames it needs: a settle capture waits out a
+delay and a frame floor -- ten frames and half a second by default -- because
+the adaptive analytic-sky IBL converges over several frames, and a capture
+taken on the first is of a half-lit scene. `oglc-gltf-demo --capture` through
+the offscreen backend therefore exited zero having written nothing.
+
+`Context.wantsMoreFrames()` is the question the loop now asks past
+`frameCount`, False unless something answers otherwise; `SettleCaptureMixin`
+answers True until the capture has been taken and `RecordingMixin` while a
+recording runs, each passing the question on rather than replacing the answer,
+since a viewer may be doing both. A windowed backend never asks -- it draws
+until the user quits.
+
+`EGLContext` had the same defect. It went unmet because the regression harness
+pins `OPENGLCONTEXT_BACKEND=glfw`, so nothing had asked either offscreen
+backend for a settled capture.
+
 **A stale conformance baseline had nothing naming it.** `CommercialRefrigerator`
 was blessed with no `anim_time`, and `0465a91` later pinned the roster entry to
 4.0 -- so the committed image is of the door swung open and the test renders it

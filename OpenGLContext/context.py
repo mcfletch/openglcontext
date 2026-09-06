@@ -681,6 +681,22 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
 
         os._exit(0)
 
+    def wantsMoreFrames(self):
+        """Whether anything in this context still needs another frame drawn.
+
+        A windowed backend never asks: it draws until the user closes the
+        window. An offscreen one has no user, so it draws ``frameCount`` frames
+        and returns -- and this is how something that cannot say in advance how
+        many frames it needs keeps the loop going. A settle capture draws until
+        the scene has converged and a recording until it has enough frames;
+        neither knows the number when the loop starts.
+
+        Answered by each mixin that has an opinion, passing the question on
+        rather than replacing the answer, since a viewer may be recording and
+        capturing at once.
+        """
+        return False
+
     def OnFrameRate(self, event=None):
         """Show or hide the developer overlay, where the frame rate is drawn"""
         self.toggleDebugOverlay()

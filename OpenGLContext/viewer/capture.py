@@ -45,6 +45,22 @@ class SettleCaptureMixin(object):
         """Whether this run exists to take a picture rather than be looked at."""
         return self.settleCapture is not None
 
+    def wantsMoreFrames(self) -> bool:
+        """A capture that has not been taken yet still needs frames.
+
+        What keeps an offscreen main loop going: it draws ``frameCount``
+        frames, which is one by default, and a capture waits out a settle delay
+        and a frame floor that are both more than that.
+        """
+        if self.settleCapture is not None and not self.settleCapture.done:
+            return True
+        # Passed on rather than answered for: a viewer may be recording and
+        # capturing at once, and the frames either still wants are frames the
+        # loop must draw. The tail is the context's own, which answers False;
+        # a mixin used on its own has no context to ask.
+        following = getattr(super(), 'wantsMoreFrames', None)
+        return bool(following()) if following is not None else False
+
     def tickCapture(self) -> bool:
         """Offer the finished frame to the capture.  Returns whether it took it.
 

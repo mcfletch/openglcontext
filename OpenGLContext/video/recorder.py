@@ -322,6 +322,23 @@ class RecordingMixin(object):
         """Whether this run is being recorded."""
         return self.recorder is not None
 
+    def wantsMoreFrames(self) -> bool:
+        """A recording still running needs frames to record.
+
+        What keeps an offscreen main loop going, which otherwise draws
+        ``frameCount`` frames and returns. A recording bounded by ``seconds``
+        or ``frames`` closes itself and the loop ends with it; one bounded by
+        neither records until something closes it, here as on a window.
+        """
+        if self.recording:
+            return True
+        # Passed on rather than answered for: a viewer may be recording and
+        # capturing at once, and the frames either still wants are frames the
+        # loop must draw. The tail is the context's own, which answers False;
+        # a mixin used on its own has no context to ask.
+        following = getattr(super(), 'wantsMoreFrames', None)
+        return bool(following()) if following is not None else False
+
     def tickRecording(self) -> bool:
         """Offer the finished frame to the recording; True while it wants more.
 

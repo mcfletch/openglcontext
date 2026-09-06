@@ -421,12 +421,22 @@ class EGLContext(
         glFlush()
 
     def MainLoop(self):
-        """Render :attr:`frameCount` frames, then release the context."""
+        """Render frames until nothing wants another, then release the context.
+
+        :attr:`frameCount` is the floor -- one frame, for the common case of
+        rendering an image and reading it back -- and
+        :meth:`~OpenGLContext.context.Context.wantsMoreFrames` is what carries
+        the loop past it. A settle capture waits out a delay and a frame count
+        that are both more than one, and neither is known when the loop starts.
+        """
         try:
-            for _ in range(max(1, int(self.frameCount))):
+            frames = max(1, int(self.frameCount))
+            drawn = 0
+            while drawn < frames or self.wantsMoreFrames():
                 # OnDraw takes and releases the context itself, as it does for
                 # every other backend.
                 self.OnDraw(force=1)
+                drawn += 1
         finally:
             self.stopTelemetry('mainloop-ended')
             self.close()

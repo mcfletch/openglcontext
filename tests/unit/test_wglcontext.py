@@ -338,6 +338,117 @@ class TestResizing:
 
 
 @windows_only
+class TestHowManyFramesTheLoopDraws:
+    """``frameCount`` is the floor, not the ceiling.
+
+    An offscreen ``MainLoop`` has no user to wait for, so it draws a set number
+    of frames and returns -- and one is the right number for "render an image,
+    read it back". But a settle capture draws until the scene has converged and
+    a recording until it has enough frames, and neither knows in advance how
+    many that is. So the loop also asks whether anything still wants one.
+    """
+
+    def contextDrawing(self, wanted):
+        """A context that reports it wants ``wanted`` more frames, counting."""
+        class Counting(wglcontext.WGLContext):
+            drawn = 0
+            remaining = wanted
+
+            def Render(self, mode=None):
+                wglcontext.WGLContext.Render(self, mode)
+                self.drawn += 1
+                self.remaining = max(0, self.remaining - 1)
+
+            def wantsMoreFrames(self):
+                return bool(self.remaining)
+
+        try:
+            return Counting(size=(16, 16))
+        except wglcontext.WGLContextError as error:
+            pytest.skip(f'no offscreen WGL context available here: {error}')
+
+    def test_it_draws_the_frame_count_when_nothing_wants_more(self):
+        context = self.contextDrawing(0)
+        context.MainLoop()
+        assert context.drawn == 1
+
+    def test_it_keeps_drawing_while_something_wants_more(self):
+        """What a settle capture needs: the ten frames and the half second it
+        waits for are more than the one frame `frameCount` asks for."""
+        context = self.contextDrawing(5)
+        context.MainLoop()
+        assert context.drawn == 5
+
+    def test_the_frame_count_is_still_a_floor(self):
+        context = self.contextDrawing(0)
+        context.frameCount = 3
+        context.MainLoop()
+        assert context.drawn == 3
+
+
+class TestWhetherAnythingWantsAnotherFrame:
+    """The question the offscreen loops ask, and who answers it.
+
+    Several mixins may have an opinion at once -- a viewer recording a capture
+    is both -- so each answers for itself and passes the question on rather
+    than replacing the answer.
+    """
+
+    def test_a_context_with_nothing_pending_wants_none(self):
+        from OpenGLContext import context as contextmodule
+
+        instance = contextmodule.Context.__new__(contextmodule.Context)
+        assert instance.wantsMoreFrames() is False
+
+    def test_a_settle_capture_wants_frames_until_it_has_taken_one(self):
+        from OpenGLContext.viewer.capture import SettleCaptureMixin
+
+        class Viewer(SettleCaptureMixin):
+            pass
+
+        viewer = Viewer()
+        viewer.setupCapture(None)
+        assert viewer.wantsMoreFrames() is False
+        viewer.setupCapture('somewhere.png')
+        assert viewer.wantsMoreFrames() is True
+        viewer.settleCapture.done = True
+        assert viewer.wantsMoreFrames() is False
+
+    def test_a_recording_wants_frames_while_it_is_running(self):
+        from OpenGLContext.video.recorder import RecordingMixin
+
+        class Viewer(RecordingMixin):
+            pass
+
+        viewer = Viewer()
+        viewer.setupRecording(None)
+        assert viewer.wantsMoreFrames() is False
+        viewer.recorder = object()          # stands in for a live recording
+        assert viewer.wantsMoreFrames() is True
+
+    def test_each_asks_the_next_rather_than_answering_for_it(self):
+        """A viewer that records *and* captures has two of these in its bases,
+        and the frames one of them still wants are frames the loop must draw
+        whatever the other says."""
+        from OpenGLContext.video.recorder import RecordingMixin
+        from OpenGLContext.viewer.capture import SettleCaptureMixin
+
+        class Base:
+            def wantsMoreFrames(self):
+                return False
+
+        class Viewer(SettleCaptureMixin, RecordingMixin, Base):
+            pass
+
+        viewer = Viewer()
+        viewer.setupCapture(None)
+        viewer.setupRecording(None)
+        assert viewer.wantsMoreFrames() is False
+        viewer.recorder = object()
+        assert viewer.wantsMoreFrames() is True
+
+
+@windows_only
 class TestFinishingAFrame:
     """A pbuffer has nothing to present to, so what ends a frame is a flush --
     the point at which its commands are guaranteed to have reached the driver,
