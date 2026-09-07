@@ -298,7 +298,14 @@ _BACKEND: str | None = None
 
 
 def backend() -> str | None:
-    """Which backend made the contexts in this process, once one has been."""
+    """Which backend made the contexts in this process, once one has been.
+
+    ``'glfw'`` for a hidden window, ``'cgl'`` where GLFW could make no context
+    and CGL did, ``'offscreen'`` for the platform's windowless surface where
+    the run asked for no window at all, and None before anything has been
+    made.  A test asks this where it is about to do something only one of them
+    can answer -- a GLFW window attribute, say.
+    """
     return _BACKEND
 
 
@@ -376,7 +383,10 @@ def offscreen_window(title: str = 'OpenGLContext test',
             # profile mask does not exist, which is what 'legacy' names.
             profile='legacy' if profile == 'any' else profile,
             version=(1, 1) if profile == 'any' else tuple(version),
-            forward_compatible=forward_compatible,
+            # Core implies forward-compatible here for the reason it does on a
+            # window: it is the pair the engine's own backends ask for, and a
+            # test must get the same context whichever mode the run is in.
+            forward_compatible=forward_compatible or profile == 'core',
         )
     except offscreen.WGLError as err:
         raise GLUnavailable(

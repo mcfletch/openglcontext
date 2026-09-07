@@ -67,14 +67,20 @@ class TestWhichHintsCarryAcross:
             glcontext.cgl_buffer_sizes({'RESIZABLE': 1})
 
 
+#: What made the context, as :func:`glcontext.backend` reports it: a hidden
+#: GLFW window, a CGL context where GLFW could make none, or the platform's
+#: windowless surface where the suite was asked for no window at all.
+BACKENDS = ('glfw', 'cgl', 'offscreen')
+
+
 class TestTheBackendSaysWhichItIs:
-    def test_it_names_one_of_the_two(self):
-        assert glcontext.backend() in ('glfw', 'cgl', None)
+    def test_it_names_one_of_them(self):
+        assert glcontext.backend() in BACKENDS + (None,)
 
     def test_a_machine_that_can_render_has_one(self):
         if not glcontext.gl_available():
             pytest.skip('no GL on this machine')
-        assert glcontext.backend() in ('glfw', 'cgl')
+        assert glcontext.backend() in BACKENDS
 
 
 class TestTheSizeIsReadableWhicheverBackendItIs:
