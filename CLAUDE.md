@@ -48,6 +48,8 @@ OpenGLContext/
 ├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.html
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.html
 ├── debug/            # Developer aids: buffer dumps, GL state, leak counts
+├── demos/            # A view inside a Tk or wx application -- docs/embedding.html
+│                     # (the Qt one is in the openglcontext-qt distribution)
 ├── edit/             # Editor toolkit: tool modes, plan/orbit views, handles -- docs/editing.html
 │   ├── gizmo.py      # The tri-axis handle; a drag held to one axis
 │   └── controlnet.py # A NURBS node's control points, as pickable markers
@@ -106,6 +108,8 @@ OpenGLContext/
 ├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.html
 │   └── adapters/     # One per format; what oglc-view dispatches on
 ├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
+├── outline.py        # The scenegraph as rows, for a tree control -- no GL, no
+│                     # toolkit -- docs/embedding.html
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition
 ├── screenshot.py     # The F2 key every context binds -- docs/structure.html
 ├── swapcontrol.py    # Waiting for the refresh, for backends that name nothing

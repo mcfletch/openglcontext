@@ -40,12 +40,66 @@ Walking is not here: it is a capability of *every* interactive context, in
 
 See [docs/gltf.html](../../docs/gltf.html).
 """
+from typing import Any, Dict, Optional
+
 from OpenGLContext.viewer.options import ViewerOptions
 
-__all__ = ['ViewerOptions', 'ViewerContext', 'SceneViewerMixin']
+__all__ = ['ViewerOptions', 'ViewerContext', 'SceneViewerMixin', 'viewerFor']
+
+#: The class built for each backend named, so a program asking twice gets one
+#: class and ``isinstance`` means what a reader expects.
+_viewers: Dict[str, type] = {}
 
 
-def __getattr__(name: str) -> object:
+def viewerFor(backend: Optional[str] = None) -> type:
+    """The viewing context class over *backend*'s window
+
+    backend -- the name a windowing backend is selected by (``tk``, ``qt``,
+        ``wx``, ``glfw``, ``pygame``, ``glut``), or None for whichever the
+        environment and the user's configuration choose, which is what
+        :class:`ViewerContext` already is.
+
+    A program putting a view inside its own window needs the viewer over the
+    toolkit that owns that window, whatever the machine would otherwise pick::
+
+        from OpenGLContext.viewer import viewerFor
+
+        view = viewerFor('tk')(parent=someFrame)
+
+    Raises ``RuntimeError`` naming the backends there are where that one is not
+    among them, or where its toolkit is not installed.
+    """
+    if backend is None:
+        from OpenGLContext.viewer.sceneviewer import ViewerContext
+
+        return ViewerContext
+    if backend not in _viewers:
+        from OpenGLContext import plugins
+        from OpenGLContext.context import Context
+        from OpenGLContext.ui.overlay import OverlayMixin
+        from OpenGLContext.viewer.sceneviewer import SceneViewerMixin
+
+        base = Context.getContextType(backend, plugins.InteractiveContext)
+        if base is None:
+            registered = sorted(plugin.name for plugin in plugins.InteractiveContext.all())
+            raise RuntimeError(
+                "No interactive context is available for %r: it is either not one of the "
+                "registered backends (%s) or its toolkit is not installed -- see the import "
+                "error logged above." % (backend, ', '.join(registered) or 'none')
+            )
+        # ``OverlayMixin`` first, ahead of the navigation the base context
+        # brings, for the reason :class:`ViewerContext` composes itself the same
+        # way: a screen that is up takes the keys and the mouse instead of the
+        # avatar walking off while somebody reads the settings.
+        _viewers[backend] = type(
+            '%sViewerContext' % (backend.title(),),
+            (OverlayMixin, SceneViewerMixin, base),
+            {'__doc__': 'The viewing component over the %s backend.' % (backend,)},
+        )
+    return _viewers[backend]
+
+
+def __getattr__(name: str) -> Any:
     """Import the context classes on demand.
 
     Naming one binds a windowing backend, and a caller who only wants

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Embedding a view &mdash; the engine as one widget in a Tk, Qt or wx application</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Embedding a view in an application</h1>
+</header>
+
+<section>
+<p class="introduction">A thick-client 3D application is a menu bar, a panel of
+controls, and a view of the scene between them &mdash; with the toolkit's own
+main loop running the whole thing. This is how the engine goes in one: which
+call puts the view in a widget, which of the two loops does the driving, and
+what the host has to do that a full-window program does not.</p>
+<p>Three sample programs go with this page, deliberately the same program three
+times so they can be read against one another:</p>
+<table>
+  <tr><th>Toolkit</th><th>Program</th><th>How the view goes in</th><th>Whose loop</th></tr>
+  <tr>
+    <td>Tk</td>
+    <td><code>python -m OpenGLContext.demos.tk_viewer</code></td>
+    <td><code>SceneView(parent=frame)</code></td>
+    <td><code>root.mainloop()</code>, calling <code>loopIteration()</code></td>
+  </tr>
+  <tr>
+    <td>Qt</td>
+    <td><code>python -m OpenGLContext_qt.demos.qt_viewer</code></td>
+    <td><code>view.container(parent)</code></td>
+    <td><code>QApplication.exec()</code>, with the backend's timer</td>
+  </tr>
+  <tr>
+    <td>wx</td>
+    <td><code>python -m OpenGLContext.demos.wx_viewer</code></td>
+    <td>the context <em>is</em> the canvas</td>
+    <td><code>wx.App.MainLoop()</code>, driving itself</td>
+  </tr>
+</table>
+<p>Each takes an optional path or URL to open. They are Tk, Qt and wx because
+those are the backends with a GUI library behind them &mdash; menus, trees,
+dialogs, something to put a view beside. GLFW, Pygame and GLUT are window and
+input libraries with no widgets, so an application on those draws its interface
+with <a href="overlayui.html"><code>OpenGLContext.ui</code></a> instead, which
+<code>oglc-ui-demo</code> shows.</p>
+</section>
+
+<section id="viewer">
+  <h2>The view</h2>
+  <p><a href="viewer.html"><code>ViewerContext</code></a> is the viewer
+    <code>oglc-view</code> is, over whichever backend the environment and the
+    user's configuration chose. A program embedding a view needs it over the
+    toolkit that owns the window it is going into, which is what
+    <code>viewerFor</code> answers:</p>
+  <pre>from OpenGLContext.viewer import viewerFor
+
+class SceneView( viewerFor('tk') ):
+    def hasSceneToShow( self ):
+        return True                     # this application has its own File menu</pre>
+  <p>It takes the name a backend is selected by &mdash; <code>tk</code>,
+    <code>qt</code>, <code>wx</code>, <code>glfw</code>, <code>pygame</code>,
+    <code>glut</code> &mdash; or nothing, for the same class
+    <code>ViewerContext</code> already is. A name that is not a registered
+    backend, or whose toolkit is not installed, raises naming the ones there
+    are. Asking twice gives one class, so <code>isinstance</code> means what a
+    reader expects.</p>
+  <p><code>hasSceneToShow</code> is worth overriding in every embedded view. A
+    viewer started with nothing to show opens its shelf, which is right for
+    <code>oglc-view</code> and wrong inside an application that has a File menu
+    of its own. The engine's other screens stay on their keys &mdash; F1 for the
+    shelf, F10 for the render settings, F6 for the controls &mdash; and an
+    application that wants those keys for itself binds none of them by setting
+    <code>LIBRARY_KEY</code>, <code>SETTINGS_KEY</code> and
+    <code>BINDINGS_KEY</code> to <code>''</code>.</p>
+</section>
+
+<section id="widget">
+  <h2>Putting it in the window</h2>
+  <p>Each backend joins its toolkit's layout in that toolkit's own way:</p>
+  <dl>
+    <dt>Tk</dt>
+    <dd>Build the context with the widget that is to hold it,
+      <code>SceneView(parent=holder)</code>. The context is not itself a widget
+      &mdash; the <code>GLFrame</code> it draws into is <code>context.frame</code>, packed
+      into the parent as it is made.</dd>
+    <dt>Qt</dt>
+    <dd>The window is a <code>QWindow</code>, and
+      <code>view.container(parent)</code> wraps it in a <code>QWidget</code> for
+      a layout. That needs <code>PySide6.QtWidgets</code>, so the application
+      object must be a <code>QApplication</code> rather than a bare
+      <code>QGuiApplication</code> &mdash; <strong>and it must exist before the
+      view is built</strong>, since the view makes one itself if there is none
+      and Qt allows exactly one.</dd>
+    <dt>wx</dt>
+    <dd>The context <em>is</em> a <code>wx.glcanvas.GLCanvas</code>:
+      <code>SceneView(parent, size=(720, 560))</code> goes straight into a
+      sizer.</dd>
+  </dl>
+</section>
+
+<section id="loop">
+  <h2>Whose loop, and who draws</h2>
+  <p>A full-window program calls <code>ContextMainLoop()</code> and the engine
+    owns the loop. An embedded view does not: the host's loop is already
+    running, and the frames have to come out of it. What that takes differs by
+    backend, and it is the one part of embedding that is not the same in all
+    three.</p>
+  <dl>
+    <dt>Tk &mdash; the host drives</dt>
+    <dd>Call <code>loopIteration()</code> from an <code>after</code> callback.
+      It answers False once the view has finished, which is how the host learns
+      that a view quit from inside:
+      <pre>def onFrame( self ):
+    if not self.context.loopIteration():
+        self.root.destroy()             # the view is gone; so is the window
+        return
+    self.root.after( 1, self.onFrame )</pre></dd>
+    <dt>Qt &mdash; the backend drives</dt>
+    <dd><code>view.startRenderTimer()</code>, after the window is shown, and
+      Qt's own timer calls <code>loopIteration</code> from then on. There is no
+      per-frame callback for the host, so a host that wants to know when a scene
+      has arrived overrides <code>onSceneReady()</code>.</dd>
+    <dt>wx &mdash; nothing to do</dt>
+    <dd>The canvas renders from its own paint and idle events, so
+      <code>wx.App.MainLoop()</code> drives the engine by itself.</dd>
+  </dl>
+  <p><strong>Where the host drives the loop, set
+    <code>deferRedraw</code>.</strong> With it, an input event asks for a redraw
+    rather than rendering where it was handled, so a burst of them costs one
+    frame instead of one frame each. Every backend's own <code>MainLoop</code>
+    sets it for exactly this reason, and a host calling
+    <code>loopIteration</code> is standing in for that loop. Leave it alone
+    under wx, where there is no such call and the synchronous redraw is what
+    draws at all.</p>
+  <p><strong>Quitting is not the same as ending the process.</strong> A view
+    inside somebody else's window is a view: the Tk and Qt contexts close it and
+    return, leaving the host running, so the host decides what a finished view
+    means &mdash; in these samples, the window goes with it.
+    <code>releaseWindow()</code> is what gives the driver back every texture,
+    buffer and shader the engine uploaded, and the host calls it as its window
+    closes. The wx context ends the process instead, as
+    <code>Context.OnQuit</code> does by default, so the engine's own Quit and
+    the Escape key end a wx application rather than closing the view in it.</p>
+</section>
+
+<section id="outline">
+  <h2>The scene as a tree</h2>
+  <p><a href="../pydoc/OpenGLContext.outline.html"><code>OpenGLContext.outline</code></a>
+    is the scenegraph as a flat list of rows, with a set of expanded rows and a
+    selection. It holds no GL and knows no toolkit, so one model feeds a
+    <code>ttk.Treeview</code>, a <code>QTreeWidget</code> and a
+    <code>wx.TreeCtrl</code> alike &mdash; and a program that just wants to know
+    what is in the scene it loaded can ask it with no window open at all:</p>
+  <pre>from OpenGLContext.outline import SceneOutline
+
+outline = SceneOutline( context.sg )
+for row in outline.rows:
+    print( '  ' * row.depth, row.label, row.field or '' )
+outline.toggle( outline.rows[1].path )</pre>
+  <p>A row carries the node, its <code>depth</code>, the <code>field</code> it
+    hangs from, its <code>defName</code> and <code>nodeType</code> separately,
+    whether it is <code>expandable</code>, and its <code>path</code> &mdash; the
+    child indices from the root, which is what expansion and selection are
+    recorded as and what a tree item should carry. <code>row.label</code> is the
+    name the file gave the node, or its type where it gave none.</p>
+  <p><strong>Children are the node-valued fields</strong>, in name order: a
+    <code>Transform</code>'s <code>children</code>, and equally a
+    <code>Shape</code>'s <code>geometry</code> and <code>appearance</code>,
+    which the rendering traversal does not descend into and an inspector wants.
+    A field holding a <em>weak</em> reference is passed over &mdash; it points
+    back into the scene rather than down it &mdash; as is a value that is not a
+    node. One node reached by two routes gets a row under each, since that is
+    what <code>USE</code> in a VRML file and a shared mesh in a glTF one look
+    like.</p>
+  <p><code>nodeSummary(node)</code> is the panel beside the tree: the values a
+    node carries in its own right, as <code>(field, text)</code> pairs, with the
+    nodes under it left out and a long value cut to a width you give it.</p>
+</section>
+
+<section id="watching">
+  <h2>Following a scene that changes</h2>
+  <p>Every field of every node announces a change through
+    <a href="eventmodel.html">pydispatcher</a>, which is what lets a panel keep
+    up with an animation moving a node, a route firing into it, or an editor
+    changing it. A <code>SceneOutline</code> listens on the fields that hold
+    other nodes, so the tree follows the scene:</p>
+  <pre>outline = SceneOutline( context.sg, onChange=self.treeNeedsFilling )</pre>
+  <p>and a panel showing one node listens to that node directly:</p>
+  <pre>from pydispatch import dispatcher
+
+dispatcher.connect( self.onNodeChanged, sender=node )
+...
+dispatcher.disconnect( self.onNodeChanged, sender=node )</pre>
+  <p><strong>A change arrives on whichever thread made it.</strong> The viewer
+    loads on a worker thread, so a scene is assembled off the render thread,
+    while a toolkit's widgets belong to the toolkit's own thread. So
+    <code>onChange</code> is a <em>notice</em>, not a place to fill a tree from.
+    Each sample crosses back the way its toolkit does: Tk asks its per-frame
+    callback whether <code>outline.dirty</code>, Qt emits a signal and lets a
+    queued connection deliver it, and wx uses <code>wx.CallAfter</code>. One
+    notice covers every change until the rows are next read, so a scene being
+    built does not flood the host.</p>
+  <p><code>outline.close()</code> lets go of the scene and its subscriptions. A
+    viewer that opens one model after another calls it on the way out, since the
+    rows are what would otherwise keep every scene it has ever shown alive.</p>
+</section>
+
+<section id="loading">
+  <h2>Opening a world</h2>
+  <p><code>openSource(path_or_url)</code> shows something else, and the load
+    runs on a worker thread &mdash; so a slow download leaves the previous scene
+    on screen and the window keeps drawing. It answers False for a source that
+    cannot be found or whose format has no adapter, and a request supersedes the
+    one before it, so clicking quickly through a list is safe. Which formats
+    that covers is the
+    <a href="viewer.html#adapters">adapters'</a> business rather than the
+    application's: glTF and GLB, VRML97, OBJ and 3D&nbsp;Tiles today, and
+    whatever else an adapter is written for.</p>
+  <p><code>onSceneReady()</code> is called on the render thread just after a
+    scene has been built, which is where a host refills its tree from
+    <code>context.sg</code>.</p>
+</section>
+
+<section id="shipping">
+  <h2>Shipping one</h2>
+  <p>An embedded viewer is packaged like any other application built on the
+    engine: <a href="packaging.html">Packaging an application</a> covers
+    freezing it with PyInstaller and building a <code>.deb</code> that carries
+    its own Python. The one thing worth naming there is the toolkit &mdash;
+    <code>packaging.unused_backend_modules(keep=['tk'])</code> leaves the ones
+    the application does not use out of the bundle, which for a Tk or wx program
+    is what keeps a quarter of a gigabyte of Qt from travelling with it.</p>
+</section>
+
+</body>
+</html>

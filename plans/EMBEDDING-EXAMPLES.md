@@ -1,6 +1,7 @@
 # A viewer application, in each GUI toolkit
 
-Status: **Planned** (2026-09-06).
+Status: **Landed** (2026-09-07).  What landed, and what was found doing it, is
+at the end; the plan above it is as it was written.
 
 ## Why
 
@@ -127,3 +128,96 @@ example from the section that currently shows the embedding snippet inline.
 3. `openglcontext-qt/examples/qt_viewer.py`, verified under `QT_QPA_PLATFORM=xcb`.
 4. `examples/wx_viewer.py`, written and marked unverified.
 5. `docs/embedding.html`, and the two pages that link to it.
+
+## What landed
+
+The three programs ship **inside the repositories that own their toolkits**,
+rather than as `examples/` scripts or as distributions of their own:
+`OpenGLContext/demos/tk_viewer.py` and `wx_viewer.py`, and
+`OpenGLContext_qt/demos/qt_viewer.py`.  So they are installed with the engine
+and reachable from a frozen bundle or an installed `.deb` without any packaging
+of their own, and they are run as modules:
+
+```bash
+python -m OpenGLContext.demos.tk_viewer model.glb
+python -m OpenGLContext.demos.wx_viewer model.glb
+python -m OpenGLContext_qt.demos.qt_viewer model.glb
+```
+
+No `[project.scripts]` entries, for the reason the plan gives: a console command
+whose purpose is to be read is in the way of the ones that do work.
+
+### The engine gained two things, not one
+
+`OpenGLContext/outline.py` as planned -- `SceneOutline`, rows of
+`(path, node, depth, field, defName, nodeType, expandable)`, an expanded set, a
+selection, and pydispatcher subscriptions on the node-valued fields so the rows
+follow the scene.  Two decisions the plan did not settle:
+
+- **Children are the node-valued fields**, not `visitor.children`.  The
+  rendering traversal does not descend into a `Shape`'s `geometry` and
+  `appearance`, and those are exactly what an inspector is for.  What is left
+  out is decided by the field rather than by a list of names: a **weak** field
+  points back into the scene rather than down it (every node's `root`), and a
+  value that is not a `Node` is not a row (a scenegraph's `routes`).
+- **`nodeSummary(node)`** came with it -- the values a node carries in its own
+  right, as `(field, text)` pairs -- because the panel beside the tree is the
+  same job and three copies of that loop is three copies too many.
+
+`OpenGLContext.viewer.viewerFor(backend)` is the second, and the plan's own test
+is what asked for it: `ViewerContext` is composed over whichever backend the
+*environment* chose, so a Tk program embedding one had four lines of plug-in
+lookup to write before it could subclass anything.  `viewerFor('tk')` answers
+the viewer over the named backend, cached so asking twice gives one class.
+
+### What the demos had to be told that a full-window program does not
+
+Four things, all of them now in `docs/embedding.html` because none of them is
+guessable:
+
+- **`hasSceneToShow()` wants overriding.**  A viewer with no source opens its
+  shelf, which is right for `oglc-view` and wrong over an application's own File
+  menu.  The engine already documented the override for a host with scenes of
+  its own; an embedded view is that case.
+- **`deferRedraw` is the host's to set** where the host drives the loop.  Every
+  backend's `MainLoop` sets it so a burst of input costs one frame rather than
+  one frame each, and a host calling `loopIteration` is standing in for that
+  loop.  Not under wx, where nothing calls `loopIteration` and the synchronous
+  redraw is what draws at all.
+- **A finished view does not end the host's process** -- deliberately, on Tk and
+  Qt -- so the host has to notice.  Tk's `loopIteration()` answers False, which
+  is the per-frame callback the demo already has; Qt drives its own timer and
+  offers no such hook, so its demo overrides `OnQuit`.
+- **wx quits differently.**  `wxContext.OnQuit` ends the process, where the Tk
+  and Qt contexts close an embedded view and leave the host running.  That is a
+  **parity gap**, not a wx limitation: neither `ContextMainLoop` nor the context
+  records whether it made the frame it lives in, which is what the other two
+  decide on.  Left as it is and written down in the demo and the docs, since
+  wxPython does not build here and the fix would ship unverified.
+
+### Testing
+
+`tests/unit/test_outline.py` covers the model outright: 43 cases, no GL and no
+toolkit, 100% of `outline.py`.  `tests/unit/test_viewer_for_backend.py` covers
+the composition.
+
+The Tk demo is driven through `tests/helpers/_tk_viewer_drive.py`, one
+subprocess per step under a real X server, and the Qt one the same way through
+`openglcontext-qt/tests/helpers/_qt_viewer_drive.py`.  Seven steps each: the
+scene reaches the tree, opening a row opens it in the model, selecting one names
+the node, a change to it reaches the panel, the File menu opens a scene through
+the engine, quitting releases the context, and a view that finishes takes the
+host's window with it.  A subprocess per step because a Tk application is a
+process with one interpreter, and because a second GL context in one process
+picks up the first one's programs.
+
+wx is written from the API and **unverified by running**, stated in its own
+docstring as the plan asked.
+
+Four defects in the demos were found by that harness rather than by reading:
+setting a new scene on the outline clears its `dirty` flag, so a tree refilled
+only on `dirty` never filled at all; refilling a `ttk.Treeview` drops the
+keyboard focus, so the *next* collapse was applied to the root; a placeholder
+item's id parsed as the root's path; and a test that waits *frames* rather than
+seconds gives a loader thread no wall time at all -- an iteration with nothing to
+draw returns at once, and six hundred of them took 0.0 s.

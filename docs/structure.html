@@ -166,6 +166,12 @@ journals closed as the loop ends. GLUT's is built on
 where the toolkit owns the loop. wxPython's loop is wx's own, and the phases are
 not timed there.</p>
 
+<p>An application whose loop is already running keeps it: the view goes in a
+widget beside the rest of the interface, and the frames come out of the host's
+loop rather than the engine's. That is
+<a href="embedding.html">Embedding a view in an application</a>, which covers
+what each of Tk, Qt and wx needs and has a sample program for each.</p>
+
 <h3 id="fullscreen">Filling the screen</h3>
 
 <p>A game normally wants the whole display and a tool normally does not, so
