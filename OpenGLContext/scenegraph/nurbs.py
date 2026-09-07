@@ -3,28 +3,32 @@
 NurbsSurface is a geometry object, drop it
 into a shape to see the objects in a scene.
 
-Note: at the moment, we cannot provide the object space
-extension, due to what appears to be a bug in the PyOpenGL
-library, so the code for that extension is short-circuit.
-
-Shader-based rendering:
-    When mode.shader_mode is True, NURBS surfaces are tessellated using
-    GLU's tessellator callbacks and rendered with VBOs and shaders.
-    This allows NURBS to work in OpenGL core profile.
+A surface is evaluated to triangles by
+:mod:`OpenGLContext.scenegraph.nurbstess` -- control points, knots, weights and
+trimming contours in, positions, normals, texture coordinates, colours and
+indices out -- and the same triangles are drawn under both profiles: through a
+vertex buffer and the pass's shader in core, through the fixed-function pipeline
+in compatibility. Tessellation itself touches no GL, so a surface can be
+evaluated before there is a context to draw it in.
 
 This module holds the surface/curve geometry nodes. Supporting concerns live in
 sibling modules, re-exported below so ``nurbs.X`` resolves:
 
-* :mod:`nurbssampling` -- sampling nodes + object-space-tess probe
+* :mod:`nurbssampling` -- how finely a surface is sampled
 * :mod:`nurbstrim` -- 2D trim primitives
-* :mod:`nurbstess` -- the GLU-callback tessellation-to-VBO service
+* :mod:`nurbstess` -- the evaluator that turns a surface into triangles
 """
 
-from vrml.vrml97 import nurbs, nodetypes
-from vrml import node, field, fieldtypes, protofunctions
-from OpenGL.GLU import *
-from OpenGL.GL import *
 import logging
+from ctypes import c_void_p
+
+import numpy as np
+from opengl_extrusions.nurbs import NurbsError, curve_points
+from vrml.vrml97 import nurbs, nodetypes
+from vrml import field, protofunctions
+
+from OpenGL.GL import *
+from OpenGL.arrays import vbo
 
 log = logging.getLogger(__name__)
 from OpenGLContext import arrays
@@ -42,25 +46,39 @@ from OpenGLContext.scenegraph.nurbssampling import (
     NurbsToleranceSample,
     NurbsDomainDistanceSample,
     defaultSampling,
-    initialise,
 )
 from OpenGLContext.scenegraph.nurbstrim import Polyline2D, NurbsCurve2D, Contour2D
 from OpenGLContext.scenegraph.nurbstess import (
-    NURBSTessellatorCallback,
-    _get_tess_callback,
-    _tessellate_nurbs_surface,
-    _build_nurbs_vbo,
+    COLOR_NORMAL_POSITION_STRIDE,
+    NORMAL_POSITION_STRIDE,
+    SurfaceTessellation,
+    build_surface_vbo,
+    tessellate_surface,
 )
 
 
-# Distance-LOD GLU domain-distance step per level. Level 0 is None -> keep the
-# node's own ``sampling`` (unchanged close-up look); coarser levels override with
-# progressively fewer steps so a far-off surface tessellates far more cheaply.
+# Distance-LOD sampling rate per level. Level 0 is None -> keep the node's own
+# ``sampling`` (unchanged close-up look); coarser levels override with
+# progressively fewer intervals so a far-off surface tessellates far more cheaply.
 NURBS_LOD_STEPS = (None, 16.0, 8.0, 4.0)
+
+# Where each attribute sits in the interleaved vertex, by whether the surface
+# carries colours: (stride, colour offset, normal offset, position offset).
+INTERLEAVED_WITH_COLOR = (COLOR_NORMAL_POSITION_STRIDE, 0, 16, 28)
+INTERLEAVED_PLAIN = (NORMAL_POSITION_STRIDE, None, 0, 12)
+
+#: Points evaluated along a 3D :class:`NurbsCurve` when it names no
+#: ``tessellation`` of its own.
+CURVE_STEPS = 64
 
 
 def nurbs_lod_steps(level):
     return NURBS_LOD_STEPS[min(level, len(NURBS_LOD_STEPS) - 1)]
+
+
+def interleaved_layout(has_colors):
+    """``(stride, color_offset, normal_offset, vertex_offset)`` in bytes."""
+    return INTERLEAVED_WITH_COLOR if has_colors else INTERLEAVED_PLAIN
 
 
 class _SurfaceRenderer(object):
@@ -76,9 +94,6 @@ class _SurfaceRenderer(object):
     geometryType = field.newField("geometryType", "SFString", 1, "polygon")  #
     sampling = field.newField("sampling", "SFNode", 1, defaultSampling)
 
-    # Shader rendering data is stored per-instance to avoid context issues
-    # These are class-level defaults that get overridden on instances
-
     def render(
         self,
         visible=1,  # can skip normals and textures if not
@@ -87,113 +102,95 @@ class _SurfaceRenderer(object):
         transparent=0,  # need to sort triangle geometry...
         mode=None,  # the renderpass object
     ):
-        """Render the surface, with all the attendant error checking"""
-        # Check if we need shader-based rendering
+        """Render the surface, tessellated to triangles"""
+        cached = self._cached_geometry(mode)
+        if cached is None:
+            return 0
+        vertices, indices, count, has_colors = cached
+        if vertices is None or not count:
+            return 0
         if mode is not None and getattr(mode, 'shader_mode', False):
-            return self._render_shader(mode, visible, lit)
+            return self._render_shader(mode, vertices, indices, count, has_colors)
+        return self._render_legacy(vertices, indices, count, has_colors, lit)
 
-        # Legacy fixed-function rendering
-        if lit:
-            # The surface evaluator generates the normals; the pass is what
-            # keeps them unit length after the modelview scales them
-            # (flatcompat.legacyNormalRescale).
-            glEnable(GL_AUTO_NORMAL)
-        try:
-            nurbObject = gluNewNurbsRenderer()
-            try:
-                gluBeginSurface(nurbObject)
-                # do tessellation configuration here
-                try:
-                    self.renderProperties(nurbObject)
-                    if self.renderSurface(nurbObject):
-                        # no point rendering the trimming
-                        # if there is no surface
-                        self.renderTrims(nurbObject)
-                finally:
-                    gluEndSurface(nurbObject)
-            finally:
-                gluDeleteNurbsRenderer(nurbObject)
-        finally:
-            if lit:
-                glDisable(GL_AUTO_NORMAL)
+    # -- the tessellation, built once per LOD level and cached ---------------
+    def _cached_geometry(self, mode):
+        """The surface's buffers for this frame, from the pass's cache.
 
-    def _render_shader(self, mode, visible=1, lit=1):
-        """Render the surface using shader-based pipeline.
-
-        Uses GLU tessellator callbacks to generate geometry, then
-        renders via VBOs with the active shader.
+        One entry per distance-LOD level, so a far-off surface reuses a coarse
+        tessellation instead of the full one (level 0 keeps the node's sampling).
+        Without a pass to cache in -- a caller drawing the node directly -- the
+        buffers are built each time.
         """
-        # Build/update the VBO if needed - use mode.cache to store per-context,
-        # one entry per distance-LOD level so a far-off surface reuses a coarse
-        # tessellation instead of the full one (level 0 keeps the node's sampling).
+        if mode is None or getattr(mode, 'cache', None) is None:
+            return self._build_geometry()
         level = self._lod_level(mode)
-        cache_key = 'nurbs_shader_data_lod%d' % level
+        cache_key = 'nurbs_geometry_lod%d' % level
         cached = mode.cache.getData(self, key=cache_key)
         if cached is None:
-            cached = self._build_shader_geometry_cached(steps=nurbs_lod_steps(level))
+            cached = self._build_geometry(steps=nurbs_lod_steps(level))
             if cached is not None:
-                # Create cache holder with dependencies on NURBS surface data
                 holder = mode.cache.holder(self, cached, key=cache_key)
-                # Add dependencies on fields that affect tessellation
                 self._setup_shader_cache_dependencies(holder)
+        return cached
 
-        if cached is None:
-            return
+    def _build_geometry(self, steps=None):
+        """Tessellate and upload, as ``(vertices, indices, count, has_colors)``.
 
-        shader_vbo, vertex_count, has_colors = cached
+        ``steps`` is a sampling rate override (distance-LOD); ``None`` keeps the
+        node's own sampling.
+        """
+        try:
+            tessellation = self._tessellate(steps=steps)
+        except (NurbsError, ValueError) as err:
+            log.error("Cannot tessellate %s: %s", self, err)
+            return None
+        if tessellation is None:
+            return None
+        return build_surface_vbo(tessellation)
 
-        if shader_vbo is None or vertex_count == 0:
-            return
+    def _tessellate(self, steps=None):
+        """The surface's triangles (subclass hook)."""
+        return None
 
-        # Get shader program from mode
+    # -- drawing -------------------------------------------------------------
+    def _render_shader(self, mode, vertices, indices, count, has_colors):
+        """Draw the tessellation with the pass's shader program."""
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:
-            return
+            return 0
 
-        # If we have per-vertex colors, switch to the vertex color shader
-        # and restore the original shader afterward
+        # With per-vertex colours the pass's lit program has no diffuse input to
+        # read them through, so the vertex-colour program draws instead and the
+        # lit one is put back afterwards.
         switched_shader = False
+        vc_prog = None
         if has_colors:
-            # Switch to vertex color shader for per-vertex color support
             shader_program.use_vertex_color()
             switched_shader = True
             vc_prog = shader_program.vertex_color_program
-            # Re-apply matrices to the new shader
-            # Use mode.matrix which includes accumulated transforms (not getModelView())
-            shader_program.set_matrices(
-                mode.matrix,
-                mode.getProjection(),
-                vc_prog
-            )
-            # Set material properties that vertex color shader still uses
-            # (specular, emissive, ambient, shininess - diffuse comes from vertex color)
-            # Set material uniforms on the vertex color program
-            # These are the non-diffuse properties
+            # mode.matrix carries the accumulated transforms; getModelView() does not.
+            shader_program.set_matrices(mode.matrix, mode.getProjection(), vc_prog)
+            # What the vertex-colour program still takes from the material: the
+            # diffuse term is the vertex colour, the rest is not.
             shader_program._set_uniform3f('specularColor', (0.0, 0.0, 0.0), vc_prog)
             shader_program._set_uniform3f('emissiveColor', (0.0, 0.0, 0.0), vc_prog)
             shader_program._set_uniform1f('ambientIntensity', 0.2, vc_prog)
             shader_program._set_uniform1f('shininess', 0.2, vc_prog)
             shader_program._set_uniform1f('transparency', 0.0, vc_prog)
             shader_program._set_uniform3f('sceneAmbient', (0.2, 0.2, 0.2), vc_prog)
-            # Set up lights on the vertex color program using scene lights
             self._setup_vertex_color_lights(mode, shader_program, vc_prog)
 
-        # Interleaved layout: with colours it's color(4)+normal(3)+vertex(3);
-        # without, normal(3)+vertex(3).
-        from ctypes import c_void_p
-        if has_colors:
-            stride, color_offset, normal_offset, vertex_offset = 40, 0, 16, 28
-        else:
-            stride, color_offset, normal_offset, vertex_offset = 24, None, 0, 12
-
-        # The VBO is already cached per LOD level, so the VAO is cached beside
-        # it: a tessellation change makes a new VBO, which rebuilds the VAO, and
-        # so does a change of whether the surface carries colours, since that is
-        # what the interleaved stride depends on.
+        stride, color_offset, normal_offset, vertex_offset = interleaved_layout(
+            has_colors)
         program = vc_prog if has_colors else shader_program.program
 
+        # The VAO is cached beside the buffers it describes: a tessellation
+        # change makes new buffers, which rebuilds the VAO, and so does a change
+        # of whether the surface carries colours, since that is what the
+        # interleaved stride depends on.
         def _bind_attributes():
-            shader_vbo.bind()
+            vertices.bind()
             glEnableVertexAttribArray(LOC_POSITION)
             glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride,
                                   c_void_p(vertex_offset))
@@ -204,16 +201,17 @@ class _SurfaceRenderer(object):
                 glEnableVertexAttribArray(LOC_COLOR)
                 glVertexAttribPointer(LOC_COLOR, 4, GL_FLOAT, GL_FALSE, stride,
                                       c_void_p(color_offset))
-            shader_vbo.unbind()
+            # The element buffer belongs to the VAO too, so it stays bound.
+            indices.bind()
 
         try:
             vao = get_or_build_vao(
-                self, program, (shader_vbo, bool(has_colors)), _bind_attributes,
-                layout_key=SHARED_LAYOUT)
+                self, program, (vertices, indices, bool(has_colors)),
+                _bind_attributes, layout_key=SHARED_LAYOUT)
             if vao is not None:
                 glBindVertexArray(vao)
                 try:
-                    glDrawArrays(GL_TRIANGLES, 0, vertex_count)
+                    glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, None)
                 finally:
                     glBindVertexArray(0)
             else:
@@ -222,35 +220,82 @@ class _SurfaceRenderer(object):
                 glBindVertexArray(transient)
                 try:
                     _bind_attributes()
-                    glDrawArrays(GL_TRIANGLES, 0, vertex_count)
+                    glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, None)
                 finally:
                     glBindVertexArray(0)
                     glDeleteVertexArrays(1, [transient])
         finally:
-            # Restore the original lit shader if we switched
             if switched_shader:
                 shader_program.use(lit=True, vertex_colors=False)
-                # Re-apply matrices to the restored shader
-                # Use mode.matrix which includes accumulated transforms
                 shader_program.set_matrices(
-                    mode.matrix,
-                    mode.getProjection(),
-                    shader_program.program
-                )
+                    mode.matrix, mode.getProjection(), shader_program.program)
+        return 1
 
-    def _build_shader_geometry_cached(self, steps=None):
-        """Build VBO geometry from GLU tessellation.
+    def _render_legacy(self, vertices, indices, count, has_colors, lit=1):
+        """Draw the tessellation through the fixed-function pipeline."""
+        stride, color_offset, normal_offset, vertex_offset = interleaved_layout(
+            has_colors)
+        fill = self._fill_mode()
+        if fill != GL_FILL:
+            glPolygonMode(GL_FRONT_AND_BACK, fill)
+        vertices.bind()
+        indices.bind()
+        try:
+            glEnableClientState(GL_VERTEX_ARRAY)
+            glVertexPointer(3, GL_FLOAT, stride, vertices + vertex_offset)
+            if lit:
+                glEnableClientState(GL_NORMAL_ARRAY)
+                glNormalPointer(GL_FLOAT, stride, vertices + normal_offset)
+            if has_colors and color_offset is not None:
+                glEnable(GL_COLOR_MATERIAL)
+                glEnableClientState(GL_COLOR_ARRAY)
+                glColorPointer(4, GL_FLOAT, stride, vertices + color_offset)
+            self._apply_face_state()
+            try:
+                glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, indices)
+            finally:
+                glEnable(GL_CULL_FACE)
+                glFrontFace(GL_CCW)
+        finally:
+            glDisableClientState(GL_VERTEX_ARRAY)
+            if lit:
+                glDisableClientState(GL_NORMAL_ARRAY)
+            if has_colors:
+                glDisableClientState(GL_COLOR_ARRAY)
+                glDisable(GL_COLOR_MATERIAL)
+            indices.unbind()
+            vertices.unbind()
+            if fill != GL_FILL:
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+        return 1
 
-        Args:
-            steps: Optional GLU domain-distance step override (distance-LOD).
+    def _fill_mode(self):
+        """``GL_FILL`` or ``GL_LINE``, from ``geometryType``."""
+        if self.geometryType in ("edge", "patch"):
+            return GL_LINE
+        if self.geometryType != "polygon":
+            log.warning(
+                """%s declares geometryType of %s -> ignoring""",
+                self,
+                repr(self.geometryType),
+            )
+            self.geometryType = "polygon"
+        return GL_FILL
 
-        Returns:
-            Tuple of (vbo, vertex_count, has_colors) or None if not supported/failed.
+    def _apply_face_state(self):
+        """Winding and culling, from the surface's ``ccw`` and ``solid`` fields."""
+        surface = self._face_source()
+        if surface is None:
+            return
+        glFrontFace(GL_CCW if surface.ccw else GL_CW)
+        if surface.solid:
+            glEnable(GL_CULL_FACE)
+        else:
+            glDisable(GL_CULL_FACE)
 
-        Subclasses should override to provide surface-specific data.
-        """
-        # Base class returns None - subclasses override with actual implementation
-        return None  # type: ignore[return-value]
+    def _face_source(self):
+        """The node whose ``ccw``/``solid`` fields describe these faces."""
+        return self
 
     # -- distance level-of-detail -----------------------------------------
     def _lod_bounding_sphere(self):
@@ -346,56 +391,33 @@ class _SurfaceRenderer(object):
         # Base class has no fields to depend on - subclasses override
         pass
 
-    def renderProperties(self, nurbObject):
-        """Render any properties (such as tessellation)"""
-        if self.geometryType == "edge":
-            mode = GLU_OUTLINE_PATCH
-        elif self.geometryType == "patch":
-            mode = GLU_OUTLINE_PATCH
-        elif self.geometryType == "polygon":
-            mode = GLU_FILL
-        else:
-            log.warning(
-                """%s declares geometryType of %s -> ignoring""",
-                self,
-                repr(self.geometryType),
-            )
-            self.geometryType = "polygon"
-            mode = GLU_FILL
-        gluNurbsProperty(nurbObject, GLU_DISPLAY_MODE, mode)
-        self.sampling.properties(nurbObject)
 
-    def renderSurface(self, nurbObject):
-        """Render the surface (gluBeginSurface has been called)"""
-        return 1
-
-    def renderTrims(self, nurbObject):
-        """Render any trims for the surface"""
+#: The fields a surface's tessellation is built from: change any of them and the
+#: cached geometry no longer describes the node.
+TESSELLATION_FIELDS = (
+    'controlPoint', 'color', 'weight', 'uKnot', 'vKnot', 'uDimension', 'vDimension',
+)
 
 
 class NurbsSurface(_SurfaceRenderer, nurbs.NurbsSurface):
-    """Surface geometry implemented with gluNurbsSurface
+    """Surface geometry evaluated from its control net and knot vectors
+
     Notes:
-        uOrder/vOrder -- is not currently used, as PyOpenGL
-            calculates the order from the difference
-            between the knot and control point arrays
-        weight -- is not currently used, this is just
-            not-yet-implemented, it's quite feasible
-            to support it
-        uTessellation/vTessellation -- not currently used
-        color -- if present, is applied to the knot array
-            one for one using another call to gluNurbsSurface
+        uOrder/vOrder -- is not used; the degree follows from the difference
+            between the knot and control point counts, which is where a
+            mismatch between the two would show up
+        uTessellation/vTessellation -- not currently used; ``sampling`` says how
+            finely the surface is sampled
+        color -- if present, one colour per control point, evaluated through the
+            same basis as the surface so it follows its control point across the
+            tessellation
+        weight -- if present, one positive weight per control point: the
+            *rational* in NURBS, and what lets a NURBS circle be a circle
     """
 
     def _setup_shader_cache_dependencies(self, holder):
-        """Set up cache dependencies for NurbsSurface shader geometry.
-
-        Tracks controlPoint, color, uKnot, vKnot fields so that cache is
-        invalidated when the surface data changes (e.g., during animation).
-        """
-        # Depend on all fields that affect tessellation
-        for field_name in ('controlPoint', 'color', 'uKnot', 'vKnot',
-                           'uDimension', 'vDimension'):
+        """Invalidate the tessellation when the surface data changes."""
+        for field_name in TESSELLATION_FIELDS:
             field_obj = protofunctions.getField(self, field_name)
             if field_obj is not None:
                 holder.depend(self, field_obj)
@@ -403,66 +425,13 @@ class NurbsSurface(_SurfaceRenderer, nurbs.NurbsSurface):
     def _lod_bounding_sphere(self):
         return self._control_point_sphere(self.controlPoint)
 
-    def _build_shader_geometry_cached(self, steps=None):
-        """Build VBO geometry from GLU tessellation for shader rendering.
-
-        Returns:
-            Tuple of (vbo, vertex_count, has_colors) or None if failed.
-        """
-        try:
-            callback = _tessellate_nurbs_surface(
-                self,
-                trimming_contours=self._get_trimming_contours(),
-                sampling=self.sampling,
-                u_step=steps, v_step=steps,
-            )
-            shader_vbo, vertex_count, has_colors = _build_nurbs_vbo(callback)
-            return (shader_vbo, vertex_count, has_colors)
-        except Exception as e:
-            log.error("Failed to tessellate NURBS surface: %s", e)
-            return None
-
-    def renderSurface(self, nurbObject):
-        """Render this surface"""
-        ## XXX need to add weights
-        # do tessellation configuration here
-        controlPoint = arrays.reshape(
-            self.controlPoint, (self.vDimension, self.uDimension, 3)
+    def _tessellate(self, steps=None):
+        return tessellate_surface(
+            self,
+            trimming_contours=self._get_trimming_contours(),
+            sampling=self.sampling,
+            u_step=steps, v_step=steps,
         )
-        if self.ccw:
-            glFrontFace(GL_CCW)
-        else:
-            glFrontFace(GL_CW)
-        if self.solid:
-            glEnable(GL_CULL_FACE)
-        else:
-            glDisable(GL_CULL_FACE)
-        try:
-            vKnot = self.vKnot.astype("f")
-            uKnot = self.uKnot.astype("f")
-            if len(self.color):
-                glEnable(GL_COLOR_MATERIAL)
-                color = arrays.zeros(
-                    (len(self.controlPoint), 4),
-                    "f",
-                )
-                color[:, :3] = self.color.astype("f")
-                color = arrays.reshape(
-                    color,
-                    (self.vDimension, self.uDimension, 4),
-                )
-                gluNurbsSurface(nurbObject, vKnot, uKnot, color, GL_MAP2_COLOR_4)
-            gluNurbsSurface(
-                nurbObject,
-                vKnot,
-                uKnot,
-                controlPoint,
-                GL_MAP2_VERTEX_3,
-            )
-        finally:
-            glEnable(GL_CULL_FACE)
-            glFrontFace(GL_CCW)
-        return 1
 
 
 class TrimmedSurface(_SurfaceRenderer, nurbs.TrimmedSurface):
@@ -480,19 +449,12 @@ class TrimmedSurface(_SurfaceRenderer, nurbs.TrimmedSurface):
         return self.trimmingContour if self.trimmingContour else None
 
     def _setup_shader_cache_dependencies(self, holder):
-        """Set up cache dependencies for TrimmedSurface shader geometry.
-
-        Tracks the inner surface's fields so that cache is invalidated
-        when the surface data changes (e.g., during animation).
-        """
+        """Invalidate the tessellation when the surface or its trims change."""
         if self.surface:
-            # Depend on inner surface's fields
-            for field_name in ('controlPoint', 'color', 'uKnot', 'vKnot',
-                               'uDimension', 'vDimension'):
+            for field_name in TESSELLATION_FIELDS:
                 field_obj = protofunctions.getField(self.surface, field_name)
                 if field_obj is not None:
                     holder.depend(self.surface, field_obj)
-        # Also depend on our own trimmingContour field
         trim_field = protofunctions.getField(self, 'trimmingContour')
         if trim_field is not None:
             holder.depend(self, trim_field)
@@ -502,59 +464,36 @@ class TrimmedSurface(_SurfaceRenderer, nurbs.TrimmedSurface):
             return None
         return self._control_point_sphere(self.surface.controlPoint)
 
-    def _build_shader_geometry_cached(self, steps=None):
-        """Build VBO geometry from GLU tessellation for shader rendering.
+    def _face_source(self):
+        return self.surface or None
 
-        Returns:
-            Tuple of (vbo, vertex_count, has_colors) or None if failed.
-        """
+    def _tessellate(self, steps=None):
         if not self.surface:
             return None
-
-        # Use surface's sampling if available (it's often set on the inner surface)
+        # The sampling is usually set on the inner surface rather than here.
         sampling = getattr(self.surface, 'sampling', None) or self.sampling
-
-        try:
-            callback = _tessellate_nurbs_surface(
-                self.surface,
-                trimming_contours=self._get_trimming_contours(),
-                sampling=sampling,
-                u_step=steps, v_step=steps,
-            )
-            shader_vbo, vertex_count, has_colors = _build_nurbs_vbo(callback)
-            return (shader_vbo, vertex_count, has_colors)
-        except Exception as e:
-            log.error("Failed to tessellate TrimmedSurface: %s", e)
-            return None
-
-    def renderProperties(self, nurbObject):
-        """Render any properties (such as tessellation)"""
-        self.surface.renderProperties(nurbObject)
-
-    def renderSurface(self, nurbObject):
-        """Render this surface"""
-        if self.surface:
-            self.surface.renderSurface(nurbObject)
-            return 1
-        return 0
-
-    def renderTrims(self, nurbObject):
-        """Render any trims for the surface"""
-        for trim in self.trimmingContour:
-            trim.trim(nurbObject)
+        return tessellate_surface(
+            self.surface,
+            trimming_contours=self._get_trimming_contours(),
+            sampling=sampling,
+            u_step=steps, v_step=steps,
+        )
 
 
 class NurbsCurve(nurbs.NurbsCurve):
     """A 3D nurbs curve (a curvy line in 3D space)
 
+    The curve is evaluated to a polyline and drawn as a line strip, so it draws
+    under both profiles.
+
     Notes:
-        order -- is not currently used, as PyOpenGL
-            calculates the order from the difference
-            between the knot and control point arrays
-        weight -- is not currently used, this is just
-            not-yet-implemented, it's quite feasible
-            to support it
-        tessellation -- not currently used
+        order -- is not used; the degree follows from the difference between the
+            knot and control point counts
+        tessellation -- how many points to evaluate the curve at; left at 0 it
+            takes :data:`CURVE_STEPS`
+        color -- if present, one colour per control point, carried along the
+            curve by the same basis
+        weight -- if present, one positive weight per control point
     """
 
     def render(
@@ -566,33 +505,150 @@ class NurbsCurve(nurbs.NurbsCurve):
         mode=None,  # the renderpass object
     ):
         """Render the curve as a geometry node"""
-        if not len(self.knot) and not len(self.controlPoint):
+        cached = self._cached_points(mode)
+        if cached is None:
             return 0
-        nurbObject = gluNewNurbsRenderer()
+        points, colors = cached
+        if len(points) < 2:
+            return 0
+        if mode is not None and getattr(mode, 'shader_mode', False):
+            return self._render_shader(mode, points, colors)
+        return self._render_legacy(points, colors)
+
+    def _cached_points(self, mode):
+        """``(points, colors)`` for this curve, from the pass's cache."""
+        if mode is None or getattr(mode, 'cache', None) is None:
+            return self._evaluate()
+        cached = mode.cache.getData(self, key='nurbs_curve_points')
+        if cached is None:
+            cached = self._evaluate()
+            if cached is not None:
+                holder = mode.cache.holder(self, cached, key='nurbs_curve_points')
+                for field_name in ('controlPoint', 'knot', 'color', 'weight',
+                                   'tessellation'):
+                    field_obj = protofunctions.getField(self, field_name)
+                    if field_obj is not None:
+                        holder.depend(self, field_obj)
+        return cached
+
+    def _evaluate(self):
+        """Points along the curve, and a colour each where the node gives them.
+
+        ``None`` where the node does not describe a curve; the colours are
+        ``None`` where it carries none.
+        """
+        control = np.asarray(self.controlPoint, dtype=np.float64).reshape(-1, 3)
+        knot = np.asarray(self.knot, dtype=np.float64).ravel()
+        if len(control) < 2 or len(knot) < 2:
+            return None
+        degree = len(knot) - len(control) - 1
+        if degree < 1:
+            log.error(
+                "%s has a knot vector of %d over %d control points"
+                " -> no curve to draw", self, len(knot), len(control))
+            return None
+        count = max(2, int(self.tessellation) or CURVE_STEPS)
+        ts = np.linspace(knot[degree], knot[len(control)], count)
+        weight = np.asarray(self.weight, dtype=np.float64).ravel()
+        weights = weight if weight.size == len(control) else None
         try:
-            gluBeginSurface(nurbObject)
-            # do tessellation configuration here
-            try:
-                # self.renderProperties( nurbObject )
-                if len(self.color):
-                    color = arrays.zeros((len(self.color), 4), "d")
-                    color[:, :3] = self.color
-                    gluNurbsCurve(nurbObject, self.knot, color, GL_MAP1_COLOR_4)
-                if len(self.weight):
-                    points = arrays.zeros(
-                        Numeric.shape(self.controlPoint)[:-1] + (4,), "d"
-                    )
-                    points[:, :3] = self.controlPoint
-                    points[:, 3] = self.weight
-                    type = GL_MAP1_VERTEX_4
-                else:
-                    points = self.controlPoint
-                    type = GL_MAP1_VERTEX_3
-                gluNurbsCurve(nurbObject, self.knot, points, type)
-            finally:
-                gluEndSurface(nurbObject)
+            points = curve_points(control, knot, degree, ts, weights=weights)
+            colors = None
+            color = np.asarray(self.color, dtype=np.float64).reshape(-1, 3)
+            if len(color) == len(control):
+                colors = curve_points(color, knot, degree, ts)
+        except (NurbsError, ValueError) as err:
+            log.error("Cannot evaluate %s: %s", self, err)
+            return None
+        return points.astype(np.float32), (
+            None if colors is None else colors.astype(np.float32))
+
+    def _render_legacy(self, points, colors):
+        """Draw the polyline through the fixed-function pipeline."""
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glVertexPointerf(points)
+        if colors is not None:
+            glEnable(GL_COLOR_MATERIAL)
+            glEnableClientState(GL_COLOR_ARRAY)
+            glColorPointerf(colors)
+        try:
+            glDrawArrays(GL_LINE_STRIP, 0, len(points))
         finally:
-            gluDeleteNurbsRenderer(nurbObject)
+            glDisableClientState(GL_VERTEX_ARRAY)
+            if colors is not None:
+                glDisableClientState(GL_COLOR_ARRAY)
+                glDisable(GL_COLOR_MATERIAL)
+        return 1
+
+    def _render_shader(self, mode, points, colors):
+        """Draw the polyline with the pass's line or unlit program."""
+        shader_program = getattr(mode, 'shader_program', None)
+        if shader_program is None:
+            return 0
+        has_colors = colors is not None
+        if has_colors:
+            shader_program.use_line()
+            program = shader_program.line_program
+        else:
+            shader_program.use(lit=False)
+            program = shader_program.unlit_program
+            shader_program.set_solid_color(
+                getattr(mode, '_solid_color', None) or (1.0, 1.0, 1.0, 1.0))
+        shader_program.set_matrices(mode.matrix, mode.getProjection(), program=program)
+
+        if has_colors:
+            interleaved = np.hstack([points, colors]).astype(np.float32)
+            stride = 24
+        else:
+            interleaved = np.ascontiguousarray(points, dtype=np.float32)
+            stride = 12
+        curve_vbo = self._curve_vbo(interleaved)
+
+        def _bind_attributes():
+            curve_vbo.bind()
+            glEnableVertexAttribArray(LOC_POSITION)
+            glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride, None)
+            if has_colors:
+                glEnableVertexAttribArray(LOC_COLOR)
+                glVertexAttribPointer(LOC_COLOR, 3, GL_FLOAT, GL_FALSE, stride,
+                                      c_void_p(12))
+            curve_vbo.unbind()
+
+        try:
+            vao = get_or_build_vao(
+                self, program, (curve_vbo, has_colors), _bind_attributes,
+                layout_key=SHARED_LAYOUT)
+            if vao is not None:
+                glBindVertexArray(vao)
+                try:
+                    glDrawArrays(GL_LINE_STRIP, 0, len(points))
+                finally:
+                    glBindVertexArray(0)
+            else:
+                transient = glGenVertexArrays(1)
+                glBindVertexArray(transient)
+                try:
+                    _bind_attributes()
+                    glDrawArrays(GL_LINE_STRIP, 0, len(points))
+                finally:
+                    glBindVertexArray(0)
+                    glDeleteVertexArrays(1, [transient])
+        finally:
+            shader_program.use(lit=True)
+        return 1
+
+    def _curve_vbo(self, interleaved):
+        """The curve's vertex buffer, re-uploaded only when its points change."""
+        held = getattr(self, '_curve_gpu', None)
+        if held is None or held.data.shape != interleaved.shape:
+            held = vbo.VBO(interleaved)
+            try:
+                self._curve_gpu = held
+            except (AttributeError, TypeError):
+                pass          # a node that cannot hold one uploads each frame
+        elif not np.array_equal(held.data, interleaved):
+            held.set_array(interleaved)
+        return held
 
     def degree(self):
         """Return degree of a nurbs-curve object"""

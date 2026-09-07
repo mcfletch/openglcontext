@@ -279,6 +279,10 @@ uv pip install -e ".[glfw,gltf]"</pre>
           width="360" height="230" loading="lazy"
           alt="Swept and lathed shapes: tubes, screws and spirals"><figcaption>Swept
           geometry</figcaption></figure></a></li>
+        <li><a href="nurbs.html"><figure><img src="images/features/nurbs.jpg"
+          width="360" height="230" loading="lazy"
+          alt="Four coloured NURBS surfaces meeting in a mound"><figcaption>NURBS
+          surfaces</figcaption></figure></a></li>
         <li><a href="text.html"><figure><img src="images/features/text.jpg"
           width="360" height="230" loading="lazy"
           alt="Rendered text in a 3D scene"><figcaption>Text</figcaption></figure></a></li>
@@ -352,6 +356,12 @@ uv pip install -e ".[glfw,gltf]"</pre>
             rotation-minimizing frames, closed loops, and the constrained
             Delaunay tessellator that fills their caps and any other outline you
             hand it</li>
+          <li><a href="nurbs.html">NURBS Surfaces &amp; Curves</a> --
+            Surfaces, trimmed surfaces and curves from control nets and knot
+            vectors, evaluated to indexed triangle meshes with no GL involved:
+            rational weights, per-control-point colour, trimming loops
+            triangulated to the sampling rate, and a coarser tessellation for a
+            surface far from the camera</li>
           <li><a href="particles.html">Particle Effects</a> -- Fire, smoke,
             sparks, explosions and trails as camera-facing quads in one
             instanced draw: a numpy pool with a packed live set, emitters as
@@ -539,8 +549,8 @@ uv pip install -e ".[glfw,gltf]"</pre>
           <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/box.py">Box</a></li>
           <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/quadrics.py">Sphere,
               Cone and Cylinder</a></li>
-          <li>Non-Uniform Rational B-Splines (NURBS), including surfaces and
-            curves, with trimming</li>
+          <li><a href="nurbs.html">Non-Uniform Rational B-Splines (NURBS)</a>,
+            including surfaces and curves, with trimming</li>
           <ul>
             <li><a href="https://github.com/mcfletch/openglcontext/blob/main/OpenGLContext/scenegraph/nurbs.py">Scenegraph
                 Node</a></li>

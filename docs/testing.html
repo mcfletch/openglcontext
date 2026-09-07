@@ -60,7 +60,7 @@ def gl_context(gl_window):
 
 @pytest.fixture
 def gl_context(gl_window):
-    """The GLU NURBS and tessellator paths, which are compatibility-only."""
+    """The fixed-function draw, which is compatibility-only."""
     return gl_window('nurbs', profile='compatibility')</pre>
   <p>All three <strong>skip</strong> rather than fail where there is no GL
     target, which is what a machine without one should get. A typo in the

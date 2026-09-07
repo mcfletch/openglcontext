@@ -1,0 +1,11 @@
+{
+  "git": "4bd9a15-dirty",
+  "id": "features/nurbs",
+  "licence": "BSD-3-Clause",
+  "producer": "copy",
+  "size": [
+    360,
+    230
+  ],
+  "source": "images/nurbs/surfaces.jpg"
+}

@@ -3,13 +3,8 @@
 The Newell teapot is described as 32 bicubic Bezier patches (see
 :mod:`OpenGLContext.scenegraph.teapot_nurbs_data`).  This module builds a
 :class:`~OpenGLContext.scenegraph.nurbs.NurbsSurface` for each patch and runs
-it through the GLU NURBS tessellators in
-:mod:`OpenGLContext.scenegraph.nurbs` to produce interleaved ``N3F_V3F``
-triangle arrays.
-
-GLU NURBS tessellation drives the GL state machine, so a context must be
-current when these functions are called; tessellation therefore happens
-lazily at first render rather than at import time.
+it through :func:`OpenGLContext.scenegraph.nurbstess.tessellate_surface` to
+produce interleaved ``T2F_N3F_V3F`` triangle arrays.
 
 The Utah Teapot was modelled by Martin Newell in 1975 at the University of
 Utah.  See https://graphics.cs.utah.edu/teapot/ for its history.
@@ -112,9 +107,9 @@ def injective_uv_transforms() -> tuple[
     return base_ext, base_int, lid_ext, lid_int
 
 # Floats per interleaved T2F_N3F_V3F vertex (texcoord, normal, then position).
-# The texcoord is the patch's parametric (u, v) in [0, 1], captured from GLU;
-# it matches the vertex shaders' interleaved layout (loc 0 texcoord, 1 normal,
-# 2 position) so a texture/PBR material can be mapped onto the teapot.
+# The texcoord is the patch's parametric (u, v) in [0, 1]; it matches the vertex
+# shaders' interleaved layout (loc 0 texcoord, 1 normal, 2 position) so a
+# texture/PBR material can be mapped onto the teapot.
 FLOATS_PER_VERTEX = 8
 
 
@@ -137,10 +132,11 @@ def _patch_surface(indices: Any, sampling: Any) -> Any:
     """Build a NurbsSurface for a single 16-point Bezier patch.
 
     The 4x4 control grid is transposed (u and v swapped).  The Newell patch
-    ordering is left-handed relative to GLU's convention, so without this the
-    tessellator emits inward-facing normals and clockwise winding; swapping
-    the parametric directions flips the surface derivatives' cross product and
-    yields outward normals with counter-clockwise winding.
+    ordering is left-handed relative to the sense a NURBS surface's normal is
+    taken in here (see :mod:`OpenGLContext.scenegraph.nurbstess`), so without
+    this the tessellation comes out with inward-facing normals and clockwise
+    winding; swapping the parametric directions flips the surface derivatives'
+    cross product and yields outward normals with counter-clockwise winding.
     """
     points = [_orient(CONTROL_POINTS[i]) for i in indices]
     points = [points[u * 4 + v] for v in range(4) for u in range(4)]
@@ -156,24 +152,20 @@ def _patch_surface(indices: Any, sampling: Any) -> Any:
     )
 
 
-def _emit_face(out: list[float], texcoords: Any, normals: Any, vertices: Any,
-               idx: int, xform: Any, flip: bool) -> None:
-    """Append one T2F_N3F_V3F vertex, atlas-remapped and optionally inverted."""
+def _faces(tessellation: Any, indices: Any, xform: Any, flip: bool) -> np.ndarray:
+    """One T2F_N3F_V3F row per index, atlas-remapped and optionally inverted."""
     su, sv, ou, ov = xform
-    u, v = texcoords[idx] if idx < len(texcoords) else (0.0, 0.0)
-    out.append(ou + su * u)
-    out.append(ov + sv * v)
-    n = normals[idx] if idx < len(normals) else (0.0, 0.0, 1.0)
+    uv = tessellation.texcoords[indices]
+    atlas = np.stack([ou + su * uv[:, 0], ov + sv * uv[:, 1]], axis=-1)
+    normals = tessellation.normals[indices]
     if flip:
-        out.extend((-n[0], -n[1], -n[2]))
-    else:
-        out.extend(n)
-    out.extend(vertices[idx])
+        normals = -normals
+    return np.hstack([atlas, normals, tessellation.positions[indices]])
 
 
-def _emit_patch(callback: Any, out: list[float], ext_xform: Any,
+def _emit_patch(tessellation: Any, out: list[np.ndarray], ext_xform: Any,
                 int_xform: Any = None) -> None:
-    """Append a tessellated patch's triangles to ``out`` as T2F_N3F_V3F floats.
+    """Append a tessellated patch's triangles to ``out`` as T2F_N3F_V3F rows.
 
     ``ext_xform`` is an ``(su, sv, ou, ov)`` affine mapping the patch's raw
     parametric (u, v) in [0, 1] into its exterior slot in the injective atlas
@@ -185,22 +177,17 @@ def _emit_patch(callback: Any, out: list[float], ext_xform: Any,
     Interior faces are back-facing from outside, so backface culling hides them
     there without z-fighting against the coincident exterior faces.
     """
-    vertices = callback.vertices
-    normals = callback.normals
-    texcoords = callback.texcoords
-    triangles = callback.build_triangles()
-    for tri in triangles:
-        for idx in tri:
-            _emit_face(out, texcoords, normals, vertices, idx, ext_xform, False)
+    triangles = tessellation.indices
+    if not len(triangles):
+        return
+    out.append(_faces(tessellation, triangles.ravel(), ext_xform, False))
     if int_xform is not None:
-        for tri in triangles:
-            for idx in (tri[0], tri[2], tri[1]):
-                _emit_face(out, texcoords, normals, vertices, idx, int_xform, True)
+        out.append(_faces(tessellation, triangles[:, ::-1].ravel(), int_xform, True))
 
 
-# GLU domain-distance step per distance-LOD level (finest first). Level 0 keeps
-# the pre-LOD default (30) so a close-up teapot is unchanged; coarser levels use
-# fewer steps, so a far-off teapot tessellates into far fewer triangles.
+# Sampling rate per distance-LOD level (finest first). Level 0 keeps the pre-LOD
+# default (30) so a close-up teapot is unchanged; coarser levels use fewer
+# intervals, so a far-off teapot tessellates into far fewer triangles.
 LOD_STEPS = (30.0, 16.0, 8.0, 4.0)
 
 
@@ -213,21 +200,22 @@ def tessellate_patches(patches: Any, sampling: Any = None, steps: Optional[float
                        int_transforms: Any = None) -> np.ndarray:
     """Tessellate patches into a flat float32 T2F_N3F_V3F array.
 
-    Must be called with a current GL context.  ``steps`` sets the GLU
-    domain-distance U/V step directly (distance-LOD); when None the default
-    sampling is used.  ``ext_transforms``/``int_transforms`` are per-patch
-    atlas affines (parallel to ``patches``); when both are None the raw
-    per-patch parametric (u, v) is used and no interior faces are emitted.
+    ``steps`` sets the sampling rate directly (distance-LOD); when None the
+    default sampling is used.  ``ext_transforms``/``int_transforms`` are
+    per-patch atlas affines (parallel to ``patches``); when both are None the
+    raw per-patch parametric (u, v) is used and no interior faces are emitted.
     """
-    out: list[float] = []
+    out: list[np.ndarray] = []
     for i, indices in enumerate(patches):
         surface = _patch_surface(indices, sampling)
-        callback = nurbs._tessellate_nurbs_surface(
-            surface, sampling=sampling, u_step=steps, v_step=steps, texcoord=True)
+        tessellation = nurbs.tessellate_surface(
+            surface, sampling=sampling, u_step=steps, v_step=steps)
         ext = ext_transforms[i] if ext_transforms is not None else (1.0, 1.0, 0.0, 0.0)
         interior = int_transforms[i] if int_transforms is not None else None
-        _emit_patch(callback, out, ext, interior)
-    return np.array(out, dtype=np.float32)
+        _emit_patch(tessellation, out, ext, interior)
+    if not out:
+        return np.zeros(0, dtype=np.float32)
+    return np.concatenate(out).astype(np.float32).ravel()
 
 
 def tessellate_teapot(sampling: Any = None, steps: Optional[float] = None,
@@ -236,7 +224,7 @@ def tessellate_teapot(sampling: Any = None, steps: Optional[float] = None,
 
     Returns a ``(base, lid)`` pair of flat float32 arrays.  The lid is kept
     separate so it can be drawn or skipped without re-tessellating.  ``steps``
-    selects the GLU U/V step for distance-LOD (see ``steps_for_level``).  When
+    selects the sampling rate for distance-LOD (see ``steps_for_level``).  When
     ``interior`` is True each patch also emits reversed interior faces mapped to
     the interior half of the injective atlas (see :func:`injective_uv_transforms`).
     """

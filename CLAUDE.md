@@ -78,6 +78,7 @@ OpenGLContext/
 │   ├── basenodes.py  # Every registered node class, by name
 │   ├── shape.py      # Binds Appearance to geometry
 │   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.html
+│   ├── nurbs*.py     # NURBS surfaces, curves, trims, sampling -- docs/nurbs.html
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── pbrmaterial.py, pbrmesh.py   # The metallic/roughness material and mesh
 │   ├── lightgrid.py  # Baked irradiance grid: lights what a lightmap cannot

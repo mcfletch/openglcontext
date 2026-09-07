@@ -220,6 +220,16 @@ producer = "copy"
 source = "images/extrusions/shapes.png"
 
 [[image]]
+id = "features/nurbs"
+out = "images/features/nurbs.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "Four coloured NURBS surfaces meeting in a mound"
+caption = "NURBS surfaces"
+producer = "copy"
+source = "images/nurbs/surfaces.jpg"
+
+[[image]]
 id = "features/text"
 out = "images/features/text.jpg"
 size = [360, 230]

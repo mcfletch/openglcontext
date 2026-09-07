@@ -1,101 +1,98 @@
-"""NURBS sampling nodes and the object-space-tessellation extension probe.
+"""NURBS sampling nodes: how finely a surface is tessellated.
 
-The VRML97 sampling nodes (:class:`NurbsToleranceSample`,
-:class:`NurbsDomainDistanceSample`) map a sampling policy onto ``gluNurbsProperty``
-calls, alongside :func:`initialise` / :func:`defaultSampling`. :mod:`nurbs`
-re-exports these names, and the node registrations in
-``OpenGLContext/__init__.py`` resolve them as ``nurbs.NurbsToleranceSample`` etc.
+Each node answers :meth:`~NurbsSampling.steps` with a sampling *rate* for each
+parametric direction -- intervals per unit of knot range -- which
+:mod:`OpenGLContext.scenegraph.nurbstess` multiplies by the surface's own range
+to get the lattice it evaluates. A rate rather than a count, so two surfaces
+sampled at the same rate come out with triangles the same size whatever their
+knots run over.
+
+:mod:`nurbs` re-exports these names, and the node registrations in
+``OpenGLContext/__init__.py`` resolve them as ``nurbs.NurbsToleranceSample``
+etc.
 """
 
 import logging
 from typing import Any
 
-from vrml import node, field
-from OpenGL.GLU import (
-    GLU_DOMAIN_DISTANCE, GLU_OBJECT_PARAMETRIC_ERROR_EXT, GLU_OBJECT_PATH_LENGTH_EXT,
-    GLU_PARAMETRIC_ERROR, GLU_PARAMETRIC_TOLERANCE, GLU_PATH_LENGTH, GLU_SAMPLING_METHOD,
-    GLU_SAMPLING_TOLERANCE, GLU_U_STEP, GLU_V_STEP, gluNurbsProperty,
-)
-from OpenGL.GLU.EXT.object_space_tess import (
-    gluInitObjectSpaceTessEXT,
-)
+from vrml import field, node
 
 log = logging.getLogger(__name__)
 
-object_space_tess: Any = None
+#: A tolerance of 5 -- the default sampling node's -- is a rate of 30, matching
+#: :data:`~OpenGLContext.scenegraph.nurbstess.DEFAULT_STEP`; a tighter tolerance
+#: asks for proportionally more.
+TOLERANCE_RATE = 150.0
 
+#: The rates a tolerance may be turned into. A tolerance is a distance and a
+#: rate is a count, so nothing relates them exactly; these bounds keep the
+#: relation from running away at either end.
+MIN_TOLERANCE_STEPS = 20.0
+MAX_TOLERANCE_STEPS = 100.0
 
-def initialise(context: Any = None) -> bool:
-    """Initialise the NURBs extensions for a context"""
-    global object_space_tess
-    if object_space_tess is None:
-        object_space_tess = gluInitObjectSpaceTessEXT()
-    return bool(object_space_tess)
+#: The methods :class:`NurbsToleranceSample` recognises.
+METHODS = ('screen', 'object')
 
 
 def defaultSampling() -> "NurbsToleranceSample":
-    """Get a default sampling node"""
-    if initialise():
-        return NurbsToleranceSample(method="object", parametric=1, tolerance=5)
-    else:
-        return NurbsToleranceSample(method="screen", parametric=1, tolerance=5)
+    """The sampling a surface gets when its scene names none."""
+    return NurbsToleranceSample(method="screen", parametric=1, tolerance=5)
 
 
 class NurbsSampling(node.Node):
     """A node-type specifying NURBs sampling method and parameters"""
 
+    def steps(self) -> tuple[float, float]:
+        """Sampling rate along u and along v, in intervals per unit of knot range."""
+        raise NotImplementedError(
+            '%s does not say how finely to sample' % (self.__class__.__name__,)
+        )
+
 
 class NurbsToleranceSample(NurbsSampling):
-    """Path-length tolerance sampling
+    """Sampling to a tolerance rather than to a step count
 
     Can be either screen-space or object space,
         method = "screen" -> tolerance in pixels
         method = "object" -> tolerance in object-space coordinates
     and either parametric or not
         if true, tolerance is parametric tolerance (e.g. 0.5)
+
+    The tolerance sets a sampling rate: :data:`TOLERANCE_RATE` divided by it,
+    held between :data:`MIN_TOLERANCE_STEPS` and :data:`MAX_TOLERANCE_STEPS`.
+    A tolerance is a distance on a surface nobody has drawn yet, so a tighter
+    one asks for a finer mesh without promising a deviation; where a scene wants
+    a mesh of a stated size, :class:`NurbsDomainDistanceSample` states it.
     """
 
     method = field.newField("method", "SFString", 1, "screen")  # "screen"/"object"
     parametric = field.newField("parametric", "SFBool", 1, 0)
     tolerance = field.newField("tolerance", "SFFloat", 1, 50.0)
 
-    def properties(self, nurbObject: Any) -> None:
-        """Configure this sampling type"""
-        ### get the appropriate sampling method...
-        methods = (GLU_PATH_LENGTH, GLU_PARAMETRIC_ERROR)
-        if self.method == "object":
-            if not initialise():
-                # do regular (non-extension) screen sampling...
-                log.warning(
-                    """%s declares 'object' sampling method, extension: object_space_tess not available -> ignoring""",
-                    self,
-                )
-                self.method = "screen"
-            else:
-                methods = (GLU_OBJECT_PATH_LENGTH_EXT, GLU_OBJECT_PARAMETRIC_ERROR_EXT)
-        elif self.method != "screen":
+    def steps(self) -> tuple[float, float]:
+        """The rate this tolerance asks for, the same in both directions."""
+        if self.method not in METHODS:
             log.warning(
                 """%s declares %s sampling method, unknown type -> ignoring""",
                 self,
                 repr(self.method),
             )
-        method = methods[self.parametric]
-
-        gluNurbsProperty(nurbObject, GLU_SAMPLING_METHOD, method)
-        if self.parametric:
-            gluNurbsProperty(nurbObject, GLU_PARAMETRIC_TOLERANCE, self.tolerance)
-        else:
-            gluNurbsProperty(nurbObject, GLU_SAMPLING_TOLERANCE, self.tolerance)
+            self.method = "screen"
+        rate = TOLERANCE_RATE / max(1.0, float(self.tolerance))
+        rate = min(MAX_TOLERANCE_STEPS, max(MIN_TOLERANCE_STEPS, rate))
+        return rate, rate
 
 
 class NurbsDomainDistanceSample(NurbsSampling):
-    """Domain-distance parametric u and v coordinate sampling"""
+    """Domain-distance parametric u and v coordinate sampling
+
+    ``uStep`` and ``vStep`` are the sampling rates themselves: intervals per
+    unit of the surface's knot range in that direction.
+    """
 
     uStep = field.newField("uStep", "SFFloat", 1, 100.0)
     vStep = field.newField("vStep", "SFFloat", 1, 100.0)
 
-    def properties(self, nurbObject: Any) -> None:
-        """Configure this sampling type"""
-        gluNurbsProperty(nurbObject, GLU_SAMPLING_METHOD, GLU_DOMAIN_DISTANCE)
-        gluNurbsProperty(nurbObject, GLU_U_STEP, self.uStep)
-        gluNurbsProperty(nurbObject, GLU_V_STEP, self.vStep)
+    def steps(self) -> tuple[float, float]:
+        """The rates the node states."""
+        return float(self.uStep), float(self.vStep)

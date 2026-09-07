@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>NURBS Surfaces and Curves</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+  <style>
+    figure { margin: 1.5em 0; }
+    figure img { max-width: 100%; height: auto; display: block;
+                 border-radius: 6px; background: #111; }
+    figcaption { font-size: 0.9em; opacity: 0.8; margin-top: 0.5em; }
+    table { border-collapse: collapse; margin: 1em 0; }
+    th, td { border: 1px solid #999; padding: 0.4em 0.7em; text-align: left;
+             vertical-align: top; }
+    th { background: rgba(128,128,128,0.15); }
+  </style>
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>NURBS Surfaces and Curves</h1>
+</header>
+
+<section>
+<p>A NURBS surface is a grid of control points with a knot vector along each
+parametric direction: a smooth shape described by a handful of numbers rather
+than by thousands of triangles. <code>NurbsSurface</code> holds one,
+<code>TrimmedSurface</code> cuts pieces out of one, and <code>NurbsCurve</code>
+is the one-dimensional case.</p>
+
+<p>Each is evaluated into an indexed triangle mesh by
+<a href="https://github.com/mcfletch/opengl_extrusions">opengl_extrusions</a>,
+a NumPy geometry generator with no OpenGL in it, and the mesh is what gets
+drawn: <strong>core profile and compatibility profile alike</strong>, lit,
+shadowed, textured and pickable. Evaluation touches no GL at all, so a surface
+can be built before there is a context to draw it in &mdash; on a worker thread
+while a scene loads, or in a test with no window.</p>
+
+<figure>
+  <img src="images/nurbs/surfaces.jpg"
+       alt="Four coloured NURBS surfaces meeting in a mound">
+  <figcaption>Four <code>NurbsSurface</code> patches meeting in a mound, from
+  <code>tests/molehill.py</code>. Each is a 4 by 4 control net; the shading is
+  from the surfaces' own derivatives, so the seams between them are smooth.</figcaption>
+</figure>
+</section>
+
+<section>
+<h2>The nodes</h2>
+
+<table>
+<tr><th>Node</th><th>What it is</th></tr>
+<tr><td><code>NurbsSurface</code></td>
+    <td>a control net, a knot vector each way, and optionally a weight and a
+    colour per control point</td></tr>
+<tr><td><code>TrimmedSurface</code></td>
+    <td>a <code>surface</code> plus the <code>trimmingContour</code> loops that
+    bound the part of it to keep</td></tr>
+<tr><td><code>NurbsCurve</code></td>
+    <td>a curve in space, drawn as a line strip</td></tr>
+<tr><td><code>Contour2D</code></td>
+    <td>one closed trimming loop, built from joined children</td></tr>
+<tr><td><code>Polyline2D</code></td>
+    <td>a straight-sided piece of a loop</td></tr>
+<tr><td><code>NurbsCurve2D</code></td>
+    <td>a curved piece of a loop, in the surface's parameter square</td></tr>
+<tr><td><code>NurbsToleranceSample</code>,<br>
+        <code>NurbsDomainDistanceSample</code></td>
+    <td>how finely a surface is sampled &mdash; see below</td></tr>
+</table>
+
+<p>The <a href="../pydoc/OpenGLContext.scenegraph.teapot.html">Teapot</a> is
+built the same way: its 32 Bezier patches are NURBS surfaces of order 4.</p>
+
+<pre>from OpenGLContext.scenegraph.basenodes import *
+
+KNOT = [0, 0, 0, 0, 1, 1, 1, 1]                 # clamped cubic, 4 points
+surface = NurbsSurface(
+    uDimension=4, vDimension=4,
+    uKnot=KNOT, vKnot=KNOT,
+    controlPoint=[[x, y, 1.0 if 0 &lt; x &lt; 3 and 0 &lt; y &lt; 3 else 0.0]
+                  for y in range(4) for x in range(4)],
+)
+scene = sceneGraph(children=[Shape(geometry=surface,
+                                   appearance=Appearance(material=Material()))])</pre>
+
+<p>A knot vector holds <code>dimension + degree + 1</code> non-decreasing
+values, which is where the degree comes from: a 4-point direction with 8 knots
+is cubic. <code>controlPoint</code> is <em>v-major</em> &mdash; u varies
+fastest, as the VRML97 NURBS proposal specifies.</p>
+</section>
+
+<section>
+<h2>Weights: the rational in NURBS</h2>
+
+<p>The <code>weight</code> field takes one positive number per control point.
+Weights are what let a NURBS circle be a circle rather than an approximation of
+one: a quarter circle is exact as a rational quadratic with the middle weight at
+&radic;2/2, and inexact as any polynomial. Equal weights give the same surface
+as none, so a scene that sets no weights is unaffected.</p>
+
+<pre>root = 2 ** 0.5 / 2
+cylinder = NurbsSurface(
+    uDimension=9, vDimension=2,
+    uKnot=[0, 0, 0, .25, .25, .5, .5, .75, .75, 1, 1, 1],
+    vKnot=[0, 0, 1, 1],                          # degree 1: straight up
+    controlPoint=ring_points,                    # 9 around, twice
+    weight=[1, root, 1, root, 1, root, 1, root, 1] * 2,
+)</pre>
+
+<p>A direction may be degree 1, as the cylinder's length is here: a surface that
+runs straight between two rows of control points is evaluated and shaded like
+any other.</p>
+</section>
+
+<section>
+<h2>Sampling: how many triangles</h2>
+
+<p>A sampling node states a <strong>rate</strong>: sample intervals per unit of
+the surface's knot range. A rate rather than a count, so two surfaces sampled at
+the same rate get triangles of the same size whatever their knots run over
+&mdash; a surface whose knots go 0 to 4 is sampled four times as often as one
+whose knots go 0 to 1.</p>
+
+<table>
+<tr><th>Node</th><th>Field</th><th>Meaning</th></tr>
+<tr><td><code>NurbsDomainDistanceSample</code></td>
+    <td><code>uStep</code>, <code>vStep</code> (default 100)</td>
+    <td>the rate itself, one for each direction</td></tr>
+<tr><td><code>NurbsToleranceSample</code></td>
+    <td><code>tolerance</code> (default 50)</td>
+    <td>a rate of 150/tolerance, held between 20 and 100</td></tr>
+</table>
+
+<p>A surface that names no <code>sampling</code> node gets a tolerance of 5,
+which is a rate of 30: a surface over the usual 0..1 knots comes out as a 30 by
+30 lattice, 1800 triangles. Its <code>method</code> and <code>parametric</code>
+fields are carried for scenes that set them; a tolerance is a distance on a
+surface nobody has drawn yet, so it asks for a finer mesh without promising a
+deviation. Where a scene wants a mesh of a stated size,
+<code>NurbsDomainDistanceSample</code> states it.</p>
+
+<p>One direction is capped at 512 intervals, which is where an unusual knot
+range stops asking for more mesh than any rate intended.</p>
+
+<h3>Distance level of detail</h3>
+
+<p>A surface far from the camera is tessellated at a coarser rate and cached
+separately, so walking towards one rebuilds it once per level rather than every
+frame &mdash; the same
+<a href="../pydoc/OpenGLContext.scenegraph.tessellationlod.html">distance
+metric</a> the teapot and the quadrics use. Level 0 keeps the node's own
+sampling, so a close-up surface looks exactly as it was authored; the coarser
+levels use rates of 16, 8 and 4. Set <code>OPENGLCONTEXT_LOD=off</code> for
+deterministic output.</p>
+</section>
+
+<section>
+<h2>Trimming</h2>
+
+<p>A trimming contour is a closed loop drawn in the surface's parameter square.
+<strong>What lies to a loop's left is kept</strong>, so a counter-clockwise loop
+is a boundary, a clockwise loop inside it is a hole, and a clockwise loop on its
+own encloses nothing at all.</p>
+
+<pre>outer = Contour2D(children=[Polyline2D(point=[[0, 0], [1, 0], [1, 1], [0, 1]])])
+hole = Contour2D(children=[
+    NurbsCurve2D(knot=KNOT,
+                 controlPoint=[[.25, .5], [.25, .75], [.75, .75], [.75, .5]]),
+    Polyline2D(point=[[.75, .5], [.5, .25], [.25, .5]]),
+])
+trimmed = TrimmedSurface(surface=surface, trimmingContour=[outer, hole])</pre>
+
+<figure>
+  <img src="images/nurbs/trimmed.jpg"
+       alt="A curved surface shading from red to green with a cone-shaped hole cut out of it">
+  <figcaption>A <code>TrimmedSurface</code>, from
+  <code>tests/nurbsobject.py</code>: a counter-clockwise square boundary and a
+  clockwise loop inside it, whose top is a <code>NurbsCurve2D</code> and whose
+  point is a <code>Polyline2D</code>. The colours are per control point.</figcaption>
+</figure>
+
+<p>A <code>Contour2D</code>'s children join end to end into one loop: where one
+ends on the point the next begins with, the point is kept once, and the loop
+closes from its last point back to its first. A <code>NurbsCurve2D</code> is
+evaluated at 32 points unless its <code>tessellation</code> field says
+otherwise.</p>
+
+<p>The kept region is triangulated by the same constrained Delaunay tessellator
+the swept geometry's caps use, refined to the triangle size the sampling rate
+asks for &mdash; so a trimmed surface is sampled as finely across its middle as
+an untrimmed one, not only where its outline has vertices. The surface is then
+evaluated at the vertices that come out, which is why a trim follows the
+surface's curvature rather than cutting a flat hole in it.</p>
+
+<p>Trim coordinates are in the surface's own knot ranges, in the order
+<code>(v, u)</code>.</p>
+</section>
+
+<section>
+<h2>Which way a surface faces</h2>
+
+<p>A surface's normal is <code>&part;p/&part;v &times; &part;p/&part;u</code>,
+and its triangles wind to match. A surface that comes out facing away from the
+camera has its two parametric directions the other way round: swap
+<code>uDimension</code> with <code>vDimension</code> and the knot vectors with
+them, or set <code>solid=0</code> to stop the back faces being culled.
+<code>ccw=0</code> reverses the winding the fixed-function pipeline treats as
+front-facing.</p>
+
+<p><code>geometryType</code> takes <code>polygon</code> (the default),
+or <code>edge</code> / <code>patch</code>, which draw the tessellation as
+its edges.</p>
+</section>
+
+<section>
+<h2>Colour</h2>
+
+<p>The <code>color</code> field takes one colour per control point. It is
+evaluated through the same basis as the surface, so a colour follows its control
+point across the tessellation however finely it is sampled, and the surface
+draws through the vertex-colour program with the material supplying everything
+but the diffuse term.</p>
+</section>
+
+<section>
+<h2>Where the code is</h2>
+
+<table>
+<tr><th>Module</th><th>What is in it</th></tr>
+<tr><td><code>scenegraph/nurbs.py</code></td>
+    <td>the geometry nodes and both draw paths</td></tr>
+<tr><td><code>scenegraph/nurbstess.py</code></td>
+    <td>a surface node to triangles; no GL</td></tr>
+<tr><td><code>scenegraph/nurbstrim.py</code></td>
+    <td>the trimming primitives</td></tr>
+<tr><td><code>scenegraph/nurbssampling.py</code></td>
+    <td>the sampling nodes</td></tr>
+<tr><td><code>scenegraph/teapot_nurbs.py</code></td>
+    <td>the Utah Teapot's 32 patches</td></tr>
+</table>
+
+<p>Demonstrations: <code>tests/molehill.py</code> (four surfaces meeting),
+<code>tests/molehill_edit.py</code> (dragging their control points),
+<code>tests/nurbsobject.py</code> (a trimmed surface, animated) and
+<code>tests/teapot_nurbs.py</code>.</p>
+</section>
+
+</body></html>
