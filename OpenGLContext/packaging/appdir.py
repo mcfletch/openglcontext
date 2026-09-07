@@ -39,7 +39,8 @@ import tarfile
 
 log = logging.getLogger(__name__)
 
-__all__ = ['PRUNE', 'build', 'interpreter_platform', 'metadata', 'prune',
+__all__ = ['BACKEND_RUNTIME', 'PRUNE', 'build', 'interpreter_platform',
+           'metadata', 'prune', 'prune_patterns',
            'relocate', 'runtime_directory']
 
 #: What a built environment is made of, under the prefix it is installed at.
@@ -79,6 +80,64 @@ PRUNE = (
     'python/bin/idle*',
     'python/bin/pip*',
 )
+
+#: What each windowing backend needs kept out of :data:`PRUNE`, keyed by the
+#: name the backend is selected with (``OPENGLCONTEXT_BACKEND``).
+#:
+#: Only Tk has an entry, and that is the point of the table: Tk is *part of
+#: CPython*, so an interpreter stripped of what an application "cannot reach"
+#: takes the Tk backend with it and the package installs and then fails to
+#: start. Every other toolkit arrives as a wheel in the environment, and nothing
+#: here prunes those -- so `qt`, `wx`, `pygame` and `glfw` are listed as needing
+#: nothing rather than left out, since a caller naming the backend it uses
+#: should be answered rather than corrected.
+#:
+#: `glut` needs no entry for the same reason as in
+#: :data:`OpenGLContext.packaging.BACKEND_MODULES`: its bindings come from
+#: PyOpenGL, and the GLUT library itself belongs to the machine.
+BACKEND_RUNTIME = {
+    'egl': (),
+    'glfw': (),
+    'glut': (),
+    'pygame': (),
+    'qt': (),
+    'tk': (
+        'python/lib/itcl*',
+        'python/lib/libtcl*',
+        'python/lib/libtk*',
+        'python/lib/tcl*',
+        'python/lib/tdbc*',
+        'python/lib/thread*',
+        'python/lib/tk*',
+        'python/lib/python*/tkinter',
+    ),
+    'wx': (),
+}
+
+
+def prune_patterns(keep=()):
+    """:data:`PRUNE`, less what the named backends need kept
+
+    keep -- the backends the application opens its window with, named as
+        ``OPENGLCONTEXT_BACKEND`` names them.  ``['tk']`` is the one that
+        changes anything; see :data:`BACKEND_RUNTIME`.
+
+    Raises ``ValueError`` for a name that is not a backend, since a typo would
+    otherwise ship a package that installs and will not start -- which is the
+    failure this exists to prevent.
+
+        >>> 'python/lib/python*/tkinter' in prune_patterns()
+        True
+        >>> 'python/lib/python*/tkinter' in prune_patterns(keep=['tk'])
+        False
+    """
+    unknown = [name for name in keep if name not in BACKEND_RUNTIME]
+    if unknown:
+        raise ValueError(
+            'not a windowing backend: %s -- the backends are %s'
+            % (', '.join(sorted(unknown)), ', '.join(sorted(BACKEND_RUNTIME))))
+    wanted = {pattern for name in keep for pattern in BACKEND_RUNTIME[name]}
+    return tuple(pattern for pattern in PRUNE if pattern not in wanted)
 
 
 def runtime_directory(runtime, unpack_into):
@@ -174,7 +233,7 @@ def _ask(python, script, *arguments):
 
 
 def build(runtime, staging, installed, install=(), requirements=(), work=None,
-          unused='prune', quiet=False):
+          unused='prune', keep=(), quiet=False):
     """Assemble a relocatable environment under *staging* to run from *installed*
 
     runtime -- a relocatable CPython, as a directory or a tar archive
@@ -190,10 +249,18 @@ def build(runtime, staging, installed, install=(), requirements=(), work=None,
     unused -- ``'prune'`` to leave out the parts of the interpreter an
         application cannot reach (:data:`PRUNE`), or ``'keep'`` for a complete
         installation
+    keep -- the windowing backends the application uses, which decides what
+        pruning leaves alone.  ``['tk']`` is the one that matters: Tk is part of
+        CPython, so a Tk application whose package did not say so would install
+        and then fail to start.  See :data:`BACKEND_RUNTIME`.
     quiet -- whether to let pip report what it resolved and installed
 
     Returns the path of the environment's interpreter, inside *staging*.
     """
+    # Absolute from here on: a virtual environment records where it was made as
+    # an absolute path, and `relocate` below has to be able to find that string
+    # to rewrite it.  The default build directory is a relative one.
+    staging = os.path.abspath(staging)
     source = runtime_directory(
         runtime, work or os.path.join(os.path.dirname(staging), '_runtime'))
     python_home = os.path.join(staging, RUNTIME)
@@ -227,7 +294,8 @@ def build(runtime, staging, installed, install=(), requirements=(), work=None,
             + arguments
         )
 
-    removed = prune(staging) if unused == 'prune' else []
+    removed = (prune(staging, prune_patterns(keep))
+               if unused == 'prune' else [])
     if removed:
         log.info('left out %d unused part%s of the interpreter',
                  len(removed), '' if len(removed) == 1 else 's')
@@ -296,9 +364,15 @@ def relocate(root, source, target):
     their first block are left alone: a path inside a shared library is part of
     a structure that a substitution of a different length would break.
 
+    *root* and *source* are taken as absolute paths, whatever they are given
+    as: a virtual environment records where it was made in absolute form, so a
+    relative name for the same directory would match nothing and leave every
+    recorded path pointing into a build tree that will not be there.
+
     Returns the paths that were changed.
     """
     changed = []
+    root, source = os.path.abspath(root), os.path.abspath(source)
     prefix = source if source.endswith(os.sep) else source + os.sep
     for directory, dirnames, filenames in os.walk(root):
         for name in sorted(dirnames) + sorted(filenames):

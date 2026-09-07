@@ -233,12 +233,30 @@ dispatcher.disconnect( self.onNodeChanged, sender=node )</pre>
 <section id="shipping">
   <h2>Shipping one</h2>
   <p>An embedded viewer is packaged like any other application built on the
-    engine: <a href="packaging.html">Packaging an application</a> covers
-    freezing it with PyInstaller and building a <code>.deb</code> that carries
-    its own Python. The one thing worth naming there is the toolkit &mdash;
-    <code>packaging.unused_backend_modules(keep=['tk'])</code> leaves the ones
-    the application does not use out of the bundle, which for a Tk or wx program
-    is what keeps a quarter of a gigabyte of Qt from travelling with it.</p>
+    engine, and the samples come with the recipe for both ways of doing it:
+    <code>OpenGLContext/demos/packaging/</code> for the Tk one and
+    <code>OpenGLContext_qt/demos/packaging/</code> for the Qt one, each with a
+    PyInstaller <code>.spec</code>, a script that builds a <code>.deb</code>,
+    and the distribution that turns a demo into an application. Their
+    <code>README.md</code> reads alongside
+    <a href="packaging.html">Packaging an application</a>.</p>
+  <pre>pyinstaller OpenGLContext/demos/packaging/viewer-demos.spec
+OpenGLContext/demos/packaging/build-deb.sh</pre>
+  <p>Two things about it belong to the toolkit rather than to the application.
+    <code>unused_backend_modules(keep=['tk'])</code> leaves the toolkits the
+    application does not use out of the bundle, which for a Tk or wx program is
+    what keeps a quarter of a gigabyte of Qt from travelling with it. And a Tk
+    package must be built with <code>oglc-deb --backend tk</code>: Tk is part of
+    CPython rather than a wheel in the environment, so it is otherwise stripped
+    out with everything else an application "cannot reach", and the package
+    installs and then fails to start.</p>
+  <p>A demo is not a command &mdash;
+    <code>OpenGLContext.demos</code> declares no console scripts, since a
+    command whose purpose is to be read is in the way of the ones that do work
+    &mdash; so shipping one means making it an application. For these that is a
+    <code>pyproject.toml</code> naming a script and nothing else, which is the
+    smallest complete example of what an application of your own already
+    has.</p>
 </section>
 
 </body>

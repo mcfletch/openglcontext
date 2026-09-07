@@ -1,0 +1,39 @@
+# The demo as a distribution, which is what a native package is built from.
+#
+# A demo is not a command: `OpenGLContext.demos` deliberately declares no
+# console scripts, since a command whose purpose is to be read is in the way of
+# the ones that do work.  A package, though, has to have something to put in
+# /usr/bin and something to name in a menu entry -- so shipping one means
+# turning it into an application, and this is the whole of what that takes.
+#
+# There is no code here: the module is the engine's, and this distribution is
+# metadata and an entry point.  That is the shape to copy for an application
+# whose code *is* its own -- add the package, and the dependency on
+# OpenGLContext stays exactly as it is.
+#
+#     oglc-deb --project . --runtime <a relocatable CPython> --backend tk
+#
+# See `../build-deb.sh`, and `docs/packaging.html` in the engine.
+
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openglcontext-viewer-demo"
+version = "1.0.0"
+description = "A view inside a Tk application, as one widget beside the rest"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+authors = [{ name = "Mike C. Fletcher", email = "mcfletch@vrplumber.com" }]
+# Tk needs nothing installed -- it ships with CPython -- so the engine is the
+# whole of it.  A wx build adds `wxPython` here, and a Qt one takes its
+# distribution from openglcontext-qt instead.
+dependencies = ["OpenGLContext"]
+
+[project.scripts]
+oglc-tk-viewer = "OpenGLContext.demos.tk_viewer:main"
+
+[tool.setuptools]
+# No modules of its own: what this distribution installs is the script above.
+packages = []

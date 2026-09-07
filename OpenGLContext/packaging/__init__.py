@@ -16,7 +16,7 @@ to read.
 
     >>> from OpenGLContext import packaging
     >>> packaging.unused_backend_modules(keep=['glfw'])
-    ['OpenGLContext_qt', 'PySide6', 'pygame', 'shiboken6', 'wx']
+    ['OpenGLContext_qt', 'PySide6', 'pygame', 'shiboken6', 'tkinter', 'wx']
 
 Nothing in this package is imported by the engine at run time, and nothing in
 it draws anything.
@@ -27,20 +27,28 @@ __all__ = ['BACKEND_MODULES', 'SESSIONS', 'SESSION_ALTERNATIVE', 'SYSTEM_LIBRARI
            'session_libraries', 'session_recommendations',
            'unused_backend_modules']
 
-#: The third-party modules each windowing backend needs, keyed by the name the
-#: backend is selected with (``OPENGLCONTEXT_BACKEND``, and the name its
-#: plug-ins are registered under in :mod:`OpenGLContext.plugins`).
+#: The modules each windowing backend needs, keyed by the name the backend is
+#: selected with (``OPENGLCONTEXT_BACKEND``, and the name its plug-ins are
+#: registered under in :mod:`OpenGLContext.plugins`).
 #:
 #: The engine's own ``<name>context`` modules are deliberately not listed: they
 #: are a few kilobytes of Python that report the backend as unavailable when
 #: their toolkit is missing, which is what a bundle wants, while the toolkits
 #: themselves are tens to hundreds of megabytes. GLUT has no entry of its own
-#: because its bindings come from PyOpenGL, which every bundle already carries.
+#: because its bindings come from PyOpenGL, which every bundle already carries,
+#: and neither does ``egl``, the offscreen backend, which has no toolkit and no
+#: window -- it is listed so that a bundle rendering without one can say so.
+#:
+#: ``tkinter`` is the standard library rather than a third-party package, and is
+#: named anyway: a freezer follows the import and brings the whole of Tcl/Tk
+#: with it, which is megabytes a bundle that opens no Tk window has no use for.
 BACKEND_MODULES = {
+    'egl': (),
     'glfw': ('glfw',),
     'glut': (),
     'pygame': ('pygame',),
     'qt': ('OpenGLContext_qt', 'PySide6', 'shiboken6'),
+    'tk': ('tkinter',),
     'wx': ('wx',),
 }
 

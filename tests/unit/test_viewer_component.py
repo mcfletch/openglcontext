@@ -199,13 +199,15 @@ class TestTheMixinsComposeCleanly:
         return {name for name in vars(klass) if not name.startswith('__')}
 
     def test_no_viewer_mix_in_shadows_a_context_member_by_accident(self):
+        from OpenGLContext import testingcontext
         from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
         from OpenGLContext.viewer.capture import SettleCaptureMixin
-        from OpenGLContext.viewer.sceneviewer import _Base
         from OpenGLContext.viewer.caption import CaptionMixin
 
+        # The platform's own interactive context, which is what ViewerContext
+        # is composed over.
         inherited = set()
-        for klass in _Base.__mro__:
+        for klass in testingcontext.getInteractive().__mro__:
             inherited |= self._declared(klass)
         for mixin in (AsyncSceneMixin, CaptionMixin,
                       SettleCaptureMixin, SceneViewerMixin):

@@ -552,7 +552,8 @@ def build(project='.', runtime=None, distribution=None, extras=(), requirements=
           prefix=DEFAULT_PREFIX, bindir=DEFAULT_BINDIR,
           section=DEFAULT_SECTION, categories=DEFAULT_CATEGORIES, revision=1,
           icon=None, menu=None, menu_name=None, maintainer=None,
-          output='dist', build_directory=None, unused='prune', quiet=False):
+          output='dist', build_directory=None, unused='prune',
+          keep_backends=(), quiet=False):
     """Build a Debian package for an application, and return where it was written
 
     project -- what pip installs: a project directory, an sdist or a wheel
@@ -582,6 +583,11 @@ def build(project='.', runtime=None, distribution=None, extras=(), requirements=
     icon -- a PNG to install as the package's icon and name in the menu entry
     unused -- ``'prune'`` to leave the parts of the interpreter an application
         cannot reach out of the package, or ``'keep'`` for all of it
+    keep_backends -- the windowing backends the application opens its window
+        with, which decides what pruning leaves alone.  **A Tk application must
+        name ``'tk'``**: Tk is part of CPython rather than a wheel in the
+        environment, so a package that did not say so would install and then
+        fail to start.  See :data:`OpenGLContext.packaging.appdir.BACKEND_RUNTIME`.
     quiet -- whether to let pip report what it resolved and installed
     """
     from OpenGLContext import packaging
@@ -608,6 +614,7 @@ def build(project='.', runtime=None, distribution=None, extras=(), requirements=
         requirements=list(requirements),
         work=os.path.join(build_directory, 'runtime'),
         unused=unused,
+        keep=list(keep_backends),
         quiet=quiet,
     )
     described = appdir.metadata(python, distribution)
@@ -708,6 +715,7 @@ def main(argv=None):
     import logging
 
     from OpenGLContext import packaging
+    from OpenGLContext.packaging import appdir
 
     parser = argparse.ArgumentParser(
         prog='oglc-deb',
@@ -777,6 +785,14 @@ def main(argv=None):
                         help='where to write the package')
     parser.add_argument('--build-directory', default=None, metavar='DIR',
                         help='where to assemble it; build/deb/<package> by default')
+    parser.add_argument('--backend', action='append', default=[],
+                        metavar='NAME', dest='backends',
+                        choices=sorted(appdir.BACKEND_RUNTIME),
+                        help='a windowing backend the application uses, so that '
+                             'what it needs from the interpreter is kept. `tk` '
+                             'is the one that matters -- Tk is part of CPython, '
+                             'and a package that did not name it would install '
+                             'and then fail to start. Repeatable.')
     parser.add_argument('--keep-unused', action='store_true',
                         help='ship the whole interpreter, headers and Tk and '
                              'all, rather than only the parts an application '
@@ -817,6 +833,7 @@ def main(argv=None):
         output=options.output,
         build_directory=options.build_directory,
         unused='keep' if options.keep_unused else 'prune',
+        keep_backends=options.backends,
         quiet=options.quiet,
     )
     print(path)

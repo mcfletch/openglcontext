@@ -127,6 +127,12 @@ include = ["OpenGLContext*"]
 OpenGLContext = [
     "shaders/*.vert", "shaders/*.frag", "shaders/*.glsl",
     "resources/environment/*.jpg",
+    # The exception to the rule above: the demos' packaging recipe is read
+    # rather than opened -- a PyInstaller spec, a build script and the
+    # distribution a .deb is built from -- and it ships so that somebody who
+    # installed the engine rather than cloning it has it. See
+    # demos/packaging/README.md.
+    "demos/packaging/*", "demos/packaging/deb-project/*",
 ]
 
 [tool.ruff]

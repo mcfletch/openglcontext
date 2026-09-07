@@ -71,12 +71,10 @@ from OpenGLContext.viewer.caption import CaptionMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
 from OpenGLContext.viewer.source import resolve_source
 
-if TYPE_CHECKING:
-    from OpenGLContext.context import Context as _Base
-else:
-    _Base = testingcontext.getInteractive()
-
-__all__ = ['KeyBinding', 'SceneViewerMixin', 'ViewerContext']
+# ViewerContext is built by the module __getattr__ at the end of this file
+# rather than defined here, so that importing this module chooses no window
+# system; see it for why.
+__all__ = ['KeyBinding', 'SceneViewerMixin', 'ViewerContext']  # noqa: F822
 
 #: How fast the turntable turns, in radians per second.
 TURNTABLE_RATE = 0.5
@@ -1046,10 +1044,40 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         return time()
 
 
-class ViewerContext(OverlayMixin, SceneViewerMixin, _Base):
-    """The viewing component over this platform's interactive context.
+#: The class :data:`ViewerContext` names, built the first time it is asked for.
+_viewerContext = None
 
-    ``OverlayMixin`` comes **first**, ahead of the navigation the base context
-    brings, so a screen that is up takes the keys and the mouse instead of the
-    avatar walking off while somebody reads the settings.
+
+def __getattr__(name: str) -> Any:
+    """Build ``ViewerContext`` on first use, over this platform's context
+
+    Naming a base class is choosing a window system, and importing this module
+    is not: a program that wants the viewer over a *particular* toolkit --
+    :func:`OpenGLContext.viewer.viewerFor`, and every application embedding a
+    view in its own window -- would otherwise have to be able to resolve a
+    default it is not going to use.  On a machine where that default's toolkit
+    is missing, or in a frozen bundle carrying one toolkit on purpose, asking
+    for the backend that *is* there would fail for the sake of the one that is
+    not.
+
+    A program that does want the default gets it here, and gets the same
+    ``RuntimeError`` naming what could not be resolved.
     """
+    global _viewerContext
+    if name != 'ViewerContext':
+        raise AttributeError("module %r has no attribute %r" % (__name__, name))
+    if _viewerContext is None:
+        class ViewerContext(
+            OverlayMixin, SceneViewerMixin,
+            testingcontext.getInteractive(),    # type: ignore[misc]  # chosen at run time
+        ):
+            """The viewing component over this platform's interactive context.
+
+            ``OverlayMixin`` comes **first**, ahead of the navigation the base
+            context brings, so a screen that is up takes the keys and the mouse
+            instead of the avatar walking off while somebody reads the settings.
+            """
+
+        ViewerContext.__module__ = __name__
+        _viewerContext = ViewerContext
+    return _viewerContext

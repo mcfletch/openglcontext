@@ -2,6 +2,8 @@
 
 import os
 
+import pytest
+
 from OpenGLContext.packaging import appdir
 
 
@@ -44,6 +46,22 @@ class TestRelocation:
         changed = appdir.relocate(str(stage), str(stage), '')
         assert sorted(os.path.basename(path) for path in changed) == [
             'drive', 'python3', 'pyvenv.cfg']
+
+    def test_a_staging_directory_named_relatively_still_relocates(
+            self, tmp_path, monkeypatch):
+        """A venv records where it was made as an absolute path, whatever the
+        caller called the directory.  ``oglc-deb``'s own default build
+        directory is a relative one, so a relative name that matched nothing
+        would leave every shebang and the interpreter symlink pointing into the
+        build tree -- a package that installs and cannot run."""
+        stage, venv = self._staged(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        appdir.relocate('stage', 'stage', '')
+        assert (venv / 'bin' / 'drive').read_text().startswith(
+            '#!/opt/game/venv/bin/python3\n')
+        assert (venv / 'pyvenv.cfg').read_text().startswith(
+            'home = /opt/game/python/bin')
+        assert not os.path.isabs(os.readlink(str(venv / 'bin' / 'python3')))
 
     def test_a_binary_file_is_left_alone(self, tmp_path):
         """Rewriting a path inside a shared library would corrupt it."""
@@ -98,3 +116,44 @@ class TestPruning:
     def test_a_pattern_matching_nothing_is_not_an_error(self, tmp_path):
         prefix = self._runtime(tmp_path)
         assert appdir.prune(str(prefix), patterns=['python/nothing-here']) == []
+
+
+class TestKeepingWhatABackendNeeds:
+    """Tk is part of the interpreter, so an application using it must say so.
+
+    The other toolkits are wheels in the environment, and nothing prunes those.
+    """
+
+    def test_tk_is_not_wanted_by_default(self):
+        assert 'python/lib/python*/tkinter' in appdir.prune_patterns()
+
+    def test_an_application_on_tk_keeps_tkinter_and_tcl(self):
+        patterns = appdir.prune_patterns(keep=['tk'])
+        assert not [p for p in patterns if 'tkinter' in p or p.startswith('python/lib/tcl')]
+
+    def test_what_no_toolkit_can_reach_still_goes(self):
+        patterns = appdir.prune_patterns(keep=['tk'])
+        assert 'python/include' in patterns
+        assert 'python/lib/python*/idlelib' in patterns
+
+    def test_a_backend_with_nothing_in_the_interpreter_changes_nothing(self):
+        """Qt, wx and GLFW arrive as wheels, which are never pruned."""
+        assert appdir.prune_patterns(keep=['qt', 'wx', 'glfw']) == appdir.prune_patterns()
+
+    def test_a_backend_nobody_has_heard_of_says_so(self):
+        with pytest.raises(ValueError) as raised:
+            appdir.prune_patterns(keep=['nonesuch'])
+        assert 'nonesuch' in str(raised.value)
+
+    def test_a_built_environment_keeps_them(self, tmp_path):
+        prefix = tmp_path / 'opt' / 'demo'
+        for relative in ('python/lib/python3.12/tkinter/__init__.py',
+                         'python/lib/tcl9.0/init.tcl',
+                         'python/include/python3.12/Python.h'):
+            path = prefix / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('x')
+        appdir.prune(str(prefix), patterns=appdir.prune_patterns(keep=['tk']))
+        assert (prefix / 'python' / 'lib' / 'python3.12' / 'tkinter').exists()
+        assert (prefix / 'python' / 'lib' / 'tcl9.0').exists()
+        assert not (prefix / 'python' / 'include').exists()

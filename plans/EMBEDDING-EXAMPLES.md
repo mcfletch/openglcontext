@@ -221,3 +221,66 @@ keyboard focus, so the *next* collapse was applied to the root; a placeholder
 item's id parsed as the root's path; and a test that waits *frames* rather than
 seconds gives a loader thread no wall time at all -- an iteration with nothing to
 draw returns at once, and six hundred of them took 0.0 s.
+
+## Shipping one (2026-09-07)
+
+The demos come with the recipe for both ways of delivering an application built
+on the engine, in `OpenGLContext/demos/packaging/` and
+`OpenGLContext_qt/demos/packaging/`: a PyInstaller `.spec` and its `entry.py`,
+a `build-deb.sh`, and a `deb-project/` that turns a demo into a distribution.
+Both ship in the wheel, since somebody who installed the engine rather than
+cloning it should have them.
+
+**A demo is not a command, and a package needs one.** `OpenGLContext.demos`
+declares no console scripts on purpose, so `deb-project/pyproject.toml` is the
+smallest thing that gives one: a name, a dependency and a `[project.scripts]`
+line, with no code of its own. That is also the honest shape for a reader --
+you do not package "the engine", you package your application, and your
+application is a distribution.
+
+Both were built and run rather than written and hoped for, and getting the Tk
+bundle to render found **four defects, three of them shipped**:
+
+- **`unused_backend_modules(keep=['tk'])` raised**: `BACKEND_MODULES` predates
+  the Tk backend and had no entry for it, so the one call an embedded Tk
+  application makes was the one call that could not be made. `egl` was missing
+  for the same reason. `tkinter` is named as Tk's module although it is the
+  standard library, because a freezer follows the import and brings the whole
+  of Tcl/Tk -- megabytes a GLFW bundle has no use for.
+- **`oglc-deb` stripped Tk out of the interpreter it shipped.** `PRUNE` removes
+  what an application "cannot reach", and Tk is *part of CPython* rather than a
+  wheel in the environment, so a Tk package installed and then failed to start.
+  `appdir.BACKEND_RUNTIME` and `prune_patterns(keep=...)` say what a backend
+  needs kept, and `oglc-deb --backend NAME` is how a package says which it is.
+- **`oglc-deb` wrote a package that could not run, with its own default build
+  directory.** A virtual environment records where it was made in absolute
+  form; `relocate` was given the *relative* staging path, matched nothing in
+  the `#!` lines and pyvenv.cfg, and rewrote them into
+  `/where/you/built//opt/<package>/...`, leaving the interpreter symlink
+  pointing into the build tree. Absolute from `build` down, and `relocate`
+  takes its arguments as absolute whatever it is handed.
+- **PyOpenGL's PyInstaller hook missed two families of module reached by name**
+  -- `OpenGL.Tk.context.IMPLEMENTATIONS` (GLX or WGL, chosen from the windowing
+  system Tk turns out to be on) and `OpenGL.raw.<api>._errors` (which every
+  binding `_declarations` builds imports, and only GL's and EGL's are imported
+  statically anywhere). The second is not a Tk problem: any frozen application
+  reaching GLU, GLX, WGL or an ES binding hit it. Both are now read from the
+  same tables the running library uses, so an API or an implementation added to
+  PyOpenGL is carried without an edit to the hook.
+
+The fourth was mine: `viewerFor('tk')` imported `sceneviewer`, whose module body
+resolved the *default* backend -- so asking for the backend that is there failed
+for the sake of the one that is not, which is exactly a one-toolkit bundle.
+`ViewerContext` is now built by a module `__getattr__` on first use, which is
+the same reasoning `OpenGLContext/viewer/__init__.py` already applied one level
+up and had not carried down.
+
+Verified end to end in this container: the frozen bundle renders a frame
+(132 MB, with Tcl/Tk in it and no Qt, wx or pygame), and the `.deb` installs,
+puts `oglc-tk-viewer` in `/usr/bin` with a desktop entry, runs from there and
+renders one. The Qt pair is written from the same options against the same
+tools and is **not built**, a Qt bundle being large enough that doing it on
+every push would be most of a test run; what drifts is held instead --
+`test_demo_packaging.py` in each distribution resolves the `module:attribute`
+strings the tables name, so a renamed module fails there rather than in a build
+nobody runs until a release.

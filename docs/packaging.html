@@ -69,7 +69,14 @@ analysis = Analysis(
     Qt against an application that opens its window with GLFW. Naming the
     backends the application does use leaves the rest out. The engine's own
     <code>&lt;name&gt;context</code> modules stay: they are kilobytes, and they
-    report the backend as unavailable, which is what a bundle wants.</p>
+    report the backend as unavailable, which is what a bundle wants. The names
+    it takes are the ones <code>OPENGLCONTEXT_BACKEND</code> takes &mdash;
+    <code>glfw</code>, <code>glut</code>, <code>pygame</code>, <code>qt</code>,
+    <code>tk</code>, <code>wx</code>, and <code>egl</code> for a bundle that
+    renders offscreen. <code>tkinter</code> is among what it excludes although
+    it is the standard library: a freezer follows the import and brings the
+    whole of Tcl/Tk, which is megabytes for a bundle that opens no Tk
+    window.</p>
 
   <h3>One bundle, several commands</h3>
 
@@ -195,6 +202,15 @@ Recommends: libdecor-0-0, libdecor-0-plugin-1-gtk | libdecor-0-plugin-1-cairo</p
       that ships a tool belonging to another distribution names it here.</li>
     <li><code>--extras A,B</code> &mdash; the project's optional dependencies to
       install with it.</li>
+    <li><code>--backend NAME</code>, repeatable &mdash; a windowing backend the
+      application uses, so that what it needs from the interpreter is kept.
+      <strong>A Tk application must name <code>tk</code></strong>: Tk is part of
+      CPython rather than a wheel in the environment, so it goes with everything
+      else the pruning above leaves out, and a package that did not say so
+      installs and then fails to start. Every other toolkit arrives as a wheel
+      and is never pruned, so naming it changes nothing and is allowed anyway.
+      <code>OpenGLContext.packaging.appdir.BACKEND_RUNTIME</code> is the
+      table.</li>
     <li><code>--session either|wayland|x11|both</code> &mdash; which windowing
       stack the package declares, as above. <code>either</code> by default,
       which takes the machine as it finds it.</li>

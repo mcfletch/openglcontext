@@ -39,6 +39,29 @@ def test_the_result_is_sorted_and_unique():
     assert excluded == sorted(set(excluded))
 
 
+def test_an_application_on_tk_keeps_tkinter():
+    """Tk is a backend like any other here, however unlike the others it is
+    part of CPython."""
+    excluded = packaging.unused_backend_modules(keep=['tk'])
+    assert 'tkinter' not in excluded
+
+
+def test_an_application_on_something_else_leaves_tkinter_out():
+    """It is stdlib, so a freezer takes it for free -- but it brings the whole
+    of Tcl/Tk with it, which is megabytes for a bundle that never opens a Tk
+    window."""
+    assert 'tkinter' in packaging.unused_backend_modules(keep=['glfw'])
+
+
+def test_every_backend_the_engine_registers_can_be_kept():
+    """A name that selects a backend at run time has to be a name a bundle can
+    be built for, or the backend cannot be shipped."""
+    from OpenGLContext import plugins
+
+    for plugin in plugins.InteractiveContext.all():
+        packaging.unused_backend_modules(keep=[plugin.name])
+
+
 def test_an_unknown_backend_is_refused():
     """A typo would otherwise excise the backend the application actually uses."""
     with pytest.raises(ValueError, match='glwf'):

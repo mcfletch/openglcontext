@@ -1,5 +1,6 @@
 """Turning an installed application into a Debian package."""
 
+import contextlib
 import gzip
 import io
 import os
@@ -280,3 +281,61 @@ class TestMaintainer:
     def test_no_author_at_all_is_refused(self):
         with pytest.raises(ValueError):
             deb.maintainer_field('')
+
+
+class TestWhichBackendThePackageIsFor:
+    """Tk lives in the interpreter, so a package for a Tk application has to
+    keep what a package for any other one throws away."""
+
+    def test_the_command_line_takes_a_backend(self):
+        # The parser is built inside main(), so it is read from --help rather
+        # than reached for directly.
+        with contextlib.redirect_stdout(io.StringIO()) as printed:
+            with pytest.raises(SystemExit):
+                deb.main(['--help'])
+        assert '--backend' in printed.getvalue()
+
+    def test_a_backend_nobody_has_heard_of_is_refused(self, capsys):
+        with pytest.raises(SystemExit):
+            deb.main(['--runtime', 'runtime', '--backend', 'nonesuch'])
+        assert 'nonesuch' in capsys.readouterr().err
+
+    def test_a_tk_package_is_built_keeping_tk(self, monkeypatch):
+        asked = {}
+
+        def built(**named):
+            asked.update(named)
+            return '/dist/demo_1.0-1_amd64.deb'
+
+        monkeypatch.setattr(deb, 'build', lambda **named: built(**named))
+        deb.main(['--runtime', 'runtime', '--backend', 'tk', '--quiet'])
+        assert asked['keep_backends'] == ['tk']
+
+    def test_a_package_that_names_no_backend_keeps_none(self, monkeypatch):
+        asked = {}
+        monkeypatch.setattr(deb, 'build',
+                            lambda **named: (asked.update(named), '/x.deb')[1])
+        deb.main(['--runtime', 'runtime', '--quiet'])
+        assert asked['keep_backends'] == []
+
+    def test_the_environment_is_built_with_those_patterns(self, monkeypatch,
+                                                          tmp_path):
+        """Everything past the environment needs a real one, so the build is
+        stopped where the question is answered."""
+        from OpenGLContext.packaging import appdir
+
+        class Stop(Exception):
+            pass
+
+        asked = {}
+
+        def stopping(**named):
+            asked.update(named)
+            raise Stop
+
+        monkeypatch.setattr(appdir, 'build', stopping)
+        with pytest.raises(Stop):
+            deb.build(project='.', runtime='runtime', distribution='demo',
+                      keep_backends=['tk'],
+                      build_directory=str(tmp_path / 'deb'))
+        assert asked['keep'] == ['tk']
