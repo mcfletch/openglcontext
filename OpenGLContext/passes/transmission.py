@@ -21,7 +21,8 @@ from OpenGL.GL import (
     GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER,
     GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T,
     GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_CLAMP_TO_EDGE,
-    GL_READ_BUFFER, GL_READ_FRAMEBUFFER_BINDING, GL_COLOR_ATTACHMENT0,
+    GL_READ_BUFFER, GL_READ_FRAMEBUFFER, GL_READ_FRAMEBUFFER_BINDING,
+    GL_COLOR_ATTACHMENT0,
     glGenTextures, glDeleteTextures, glBindTexture, glActiveTexture,
     glTexParameteri, glTexStorage2D, glCopyTexSubImage2D, glGenerateMipmap,
     glReadBuffer, glGetIntegerv,
@@ -101,9 +102,13 @@ class TransmissionBuffer(object):
         read_fbo = int(glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING))
         # COLOR_ATTACHMENT0 is only valid on a framebuffer object; the default
         # framebuffer holds the frame in the back buffer, or in the front one
-        # where it has no back buffer -- an offscreen surface has none, and
-        # naming a buffer that is not there is GL_INVALID_OPERATION.
-        glReadBuffer(GL_COLOR_ATTACHMENT0 if read_fbo != 0 else presented_buffer())
+        # where it has no back buffer -- an offscreen surface may have none, and
+        # naming a buffer that is not there is GL_INVALID_OPERATION.  Only the
+        # read binding is known to be the default framebuffer here, so that is
+        # the one asked.
+        glReadBuffer(
+            GL_COLOR_ATTACHMENT0 if read_fbo != 0
+            else presented_buffer(GL_READ_FRAMEBUFFER))
         glBindTexture(GL_TEXTURE_2D, self.tex)
         glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, self.w, self.h)
         glGenerateMipmap(GL_TEXTURE_2D)

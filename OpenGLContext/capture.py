@@ -15,22 +15,35 @@ import os
 import numpy as np
 from OpenGL.GL import (
     glReadPixels, glReadBuffer, glGetIntegerv, glBindFramebuffer,
-    GL_VIEWPORT, GL_BACK, GL_FRONT, GL_DOUBLEBUFFER, GL_RGB, GL_UNSIGNED_BYTE,
-    GL_FRAMEBUFFER,
+    glGetFramebufferAttachmentParameteriv,
+    GL_VIEWPORT, GL_BACK, GL_FRONT, GL_RGB, GL_UNSIGNED_BYTE,
+    GL_FRAMEBUFFER, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE, GL_NONE,
 )
 
 log = logging.getLogger(__name__)
 
 
-def presented_buffer():
+def presented_buffer(target=GL_FRAMEBUFFER):
     """Which colour buffer of the default framebuffer holds the finished frame.
 
-    ``GL_BACK`` where there is a back buffer, and ``GL_FRONT`` where there is
-    not.  A surface nothing presents -- an offscreen pbuffer, a single-buffered
-    window -- has one colour buffer, and asking such a framebuffer to read from
-    ``GL_BACK`` is ``GL_INVALID_OPERATION`` rather than a quiet fallback.
+    target -- the binding point the default framebuffer is current on.  A
+        caller that has it bound only for reading names ``GL_READ_FRAMEBUFFER``;
+        the query is about whichever framebuffer is bound there, so the default
+        one has to be.
+
+    ``GL_BACK`` where the framebuffer has a back buffer, and ``GL_FRONT`` where
+    it does not -- a surface nothing presents may carry a single colour buffer,
+    and naming a buffer that is not there is ``GL_INVALID_OPERATION`` rather
+    than a quiet fallback, in either direction.
+
+    The framebuffer is asked which buffers it *has*, rather than asked whether
+    it is double buffered.  Those are different questions: an EGL window
+    surface reports ``GL_DOUBLEBUFFER`` false and still keeps its one colour
+    buffer in ``GL_BACK``, with no front buffer to read at all.
     """
-    return GL_BACK if glGetIntegerv(GL_DOUBLEBUFFER) else GL_FRONT
+    attachment = glGetFramebufferAttachmentParameteriv(
+        target, GL_BACK_LEFT, GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE)
+    return GL_FRONT if int(attachment) == GL_NONE else GL_BACK
 
 
 def ensure_pillow():

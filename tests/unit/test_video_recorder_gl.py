@@ -80,8 +80,8 @@ class TestWhichBufferAFrameIsCopiedFrom:
     fails the whole recording on its first frame.
     """
 
-    def _asked_for(self, monkeypatch, source, double_buffered, **named):
-        from OpenGL.GL import GL_VIEWPORT
+    def _asked_for(self, monkeypatch, source, has_back_buffer, **named):
+        from OpenGL.GL import GL_FRAMEBUFFER_DEFAULT, GL_VIEWPORT
         from OpenGLContext import capture
         from OpenGLContext.video import recorder
 
@@ -93,17 +93,19 @@ class TestWhichBufferAFrameIsCopiedFrom:
         monkeypatch.setattr(
             recorder, 'glGetIntegerv',
             lambda enum: (0, 0, 4, 4) if enum == GL_VIEWPORT else 0)
-        monkeypatch.setattr(capture, 'glGetIntegerv',
-                            lambda _enum: double_buffered)
+        monkeypatch.setattr(
+            capture, 'glGetFramebufferAttachmentParameteriv',
+            lambda *a: GL_FRAMEBUFFER_DEFAULT if has_back_buffer
+            else capture.GL_NONE)
         recorder.copy_frame(1, (4, 4), source=source, **named)
         return asked
 
-    def test_a_double_buffered_frame_comes_from_the_back_buffer(self, monkeypatch):
+    def test_a_frame_comes_from_the_back_buffer_where_there_is_one(self, monkeypatch):
         from OpenGL.GL import GL_BACK
 
         assert self._asked_for(monkeypatch, 0, True) == [GL_BACK]
 
-    def test_a_single_buffered_frame_comes_from_the_front_buffer(self, monkeypatch):
+    def test_a_frame_comes_from_the_front_buffer_where_there_is_not(self, monkeypatch):
         from OpenGL.GL import GL_FRONT
 
         assert self._asked_for(monkeypatch, 0, False) == [GL_FRONT]

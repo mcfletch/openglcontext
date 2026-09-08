@@ -5,6 +5,7 @@ reshape/flip logic is verified without a live context; ``save_png``/``SettleCapt
 run for real.
 """
 import numpy as np
+from OpenGL.GL import GL_FRAMEBUFFER_DEFAULT, GL_READ_FRAMEBUFFER
 
 from OpenGLContext import capture
 
@@ -23,15 +24,20 @@ def test_save_png_none_pixels_returns_false(tmp_path):
     assert capture.save_png(str(tmp_path / 'x.png'), None) is False
 
 
-def _patch_gl(monkeypatch, width, height, fill, double_buffered=True):
+def _patch_buffers(monkeypatch, has_back_buffer):
+    """Report a default framebuffer that does, or does not, carry a back buffer."""
+    def attachment(_target, _attachment, _pname):
+        return GL_FRAMEBUFFER_DEFAULT if has_back_buffer else capture.GL_NONE
+
+    monkeypatch.setattr(
+        capture, 'glGetFramebufferAttachmentParameteriv', attachment)
+
+
+def _patch_gl(monkeypatch, width, height, fill, has_back_buffer=True):
     """Make capture's GL calls report a `width`x`height` viewport whose bytes are
     `fill(x, y)` in OpenGL's bottom-up order."""
-    def getInteger(enum):
-        if enum == capture.GL_DOUBLEBUFFER:
-            return double_buffered
-        return (0, 0, width, height)
-
-    monkeypatch.setattr(capture, 'glGetIntegerv', getInteger)
+    monkeypatch.setattr(capture, 'glGetIntegerv', lambda _e: (0, 0, width, height))
+    _patch_buffers(monkeypatch, has_back_buffer)
     monkeypatch.setattr(capture, 'glReadBuffer', lambda _b: None)
     # Stubbed like the rest: this module states that it needs no live context,
     # and an entry point left unstubbed makes that true only for a run where
@@ -74,18 +80,43 @@ class TestWhichBufferTheFrameIsIn:
     reason to carry a second colour buffer.
     """
 
-    def test_a_double_buffered_frame_is_in_the_back_buffer(self, monkeypatch):
-        monkeypatch.setattr(capture, 'glGetIntegerv', lambda _e: True)
+    def test_a_frame_is_in_the_back_buffer_where_there_is_one(self, monkeypatch):
+        _patch_buffers(monkeypatch, has_back_buffer=True)
         assert capture.presented_buffer() == capture.GL_BACK
 
-    def test_a_single_buffered_frame_is_in_the_front_buffer(self, monkeypatch):
-        monkeypatch.setattr(capture, 'glGetIntegerv', lambda _e: False)
+    def test_a_frame_is_in_the_front_buffer_where_there_is_not(self, monkeypatch):
+        _patch_buffers(monkeypatch, has_back_buffer=False)
         assert capture.presented_buffer() == capture.GL_FRONT
+
+    def test_it_asks_the_framebuffer_the_caller_named(self, monkeypatch):
+        targets = []
+
+        def attachment(target, _attachment, _pname):
+            targets.append(target)
+            return GL_FRAMEBUFFER_DEFAULT
+
+        monkeypatch.setattr(
+            capture, 'glGetFramebufferAttachmentParameteriv', attachment)
+        capture.presented_buffer(GL_READ_FRAMEBUFFER)
+        assert targets == [GL_READ_FRAMEBUFFER]
+
+    def test_double_buffering_is_not_what_decides_it(self, monkeypatch):
+        """An EGL window surface reports ``GL_DOUBLEBUFFER`` false and still
+        keeps its only colour buffer in ``GL_BACK``, with no front buffer to
+        read.  Deciding from that flag asks for the buffer that is missing.
+        """
+        def refuse(enum):
+            raise AssertionError(
+                'presented_buffer asked glGetIntegerv about %s' % (enum,))
+
+        monkeypatch.setattr(capture, 'glGetIntegerv', refuse)
+        _patch_buffers(monkeypatch, has_back_buffer=True)
+        assert capture.presented_buffer() == capture.GL_BACK
 
     def test_the_read_asks_for_the_buffer_that_is_there(self, monkeypatch):
         asked = []
         _patch_gl(monkeypatch, 2, 2, lambda x, y: (1, 2, 3),
-                  double_buffered=False)
+                  has_back_buffer=False)
         monkeypatch.setattr(capture, 'glReadBuffer', asked.append)
         capture.read_back_buffer()
         assert asked == [capture.GL_FRONT]

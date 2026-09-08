@@ -124,14 +124,17 @@ def copy_frame(framebuffer: int, size: tuple[int, int],
     from its first row and calls that the top of the picture, so the copy has to
     turn the frame over. Doing it in the blit costs nothing.
     """
-    if buffer is None:
-        from OpenGLContext.capture import presented_buffer
-
-        buffer = presented_buffer() if source == 0 else GL_COLOR_ATTACHMENT0
     width, height = size
     previous_read = int(glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING))
     previous_draw = int(glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING))
     glBindFramebuffer(GL_READ_FRAMEBUFFER, source)
+    if buffer is None:
+        # Asked once `source` is the read framebuffer, since that is the one the
+        # question is about.
+        from OpenGLContext.capture import presented_buffer
+
+        buffer = (presented_buffer(GL_READ_FRAMEBUFFER) if source == 0
+                  else GL_COLOR_ATTACHMENT0)
     glReadBuffer(buffer)
     source_x, source_y, source_width, source_height = (
         int(value) for value in glGetIntegerv(GL_VIEWPORT))
