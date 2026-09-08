@@ -27,7 +27,18 @@ def test_resolve_uri_joins_urls():
 
 
 def test_resolve_uri_joins_local_paths():
-    assert fetch.resolve_uri("/data/set/", "tile.b3dm") == "/data/set/tile.b3dm"
+    """A relative reference lands beside the tileset that named it.
+
+    Asked of the path rather than of a string: a rooted path like ``/data/set``
+    is on the current drive on Windows, so the answer there is
+    ``C:\\data\\set\\tile.b3dm``, and comparing against a POSIX literal would
+    be asserting the separator rather than the join.
+    """
+    base = os.path.join(os.sep, "data", "set") + os.sep
+    resolved = fetch.resolve_uri(base, "tile.b3dm")
+    assert os.path.isabs(resolved)
+    assert os.path.basename(resolved) == "tile.b3dm"
+    assert os.path.dirname(resolved) == os.path.realpath(base)
 
 
 def test_resolve_uri_confines_a_local_tileset_to_its_own_directory():

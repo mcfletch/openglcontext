@@ -261,12 +261,15 @@ class TestDrivingTheContext:
             'type': 'mousebutton', 'button': 0, 'state': 1, 'x': 32, 'y': 32,
             'pick': True,
         })
-        # The pick readback is asynchronous by default, so it resolves a frame
-        # or so after the draw that scheduled it.
-        for _ in range(4):
-            context.OnDraw(force=1)
-            if clicks:
-                break
+        # The pick readback is asynchronous by default: the pass asks the GPU
+        # for the object under the cursor and dispatches the click once the
+        # answer lands.  How many frames that takes is a property of how busy
+        # the machine is, not of the program, so this draws the frame that
+        # takes the event and then asks for the answer rather than drawing a
+        # fixed number of frames and hoping.  Four was enough alone and not
+        # always enough with the rest of the suite running.
+        context.OnDraw(force=1)
+        context.flushPendingPicks()
         assert len(clicks) == 1
 
     def test_a_resize_record_reaches_the_context(self, context):

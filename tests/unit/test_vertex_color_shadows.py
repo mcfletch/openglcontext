@@ -61,7 +61,16 @@ DRIVER = r'''
 import os, sys
 os.environ.update(OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_BACKEND='glfw',
     OPENGLCONTEXT_DISABLE_FPS_DISPLAY='1', OPENGLCONTEXT_SHADOWS='1',
-    OPENGLCONTEXT_SHADOW_CASCADES='1')
+    OPENGLCONTEXT_SHADOW_CASCADES='1',
+    # Pinned, not left on auto.  Image-based lighting starts at the mode the
+    # GPU supports and degrades when the recent frame rate sags, so a render
+    # made while the machine is busy with the rest of the suite gets a
+    # different ambient term from the same render made alone -- and ambient is
+    # exactly what fills a shadow in.  Unpinned, the two means below closed to
+    # within 4.7% of each other in a full run and stayed 5% apart in isolation,
+    # which is a coin toss rather than a measurement.  See the same pin, for
+    # the same reason, in test_passes_render_gl._base_env.
+    OPENGLCONTEXT_IBL='analytic')
 WITH_CASTER = 'caster' in sys.argv
 try:
     import glfw, numpy as np

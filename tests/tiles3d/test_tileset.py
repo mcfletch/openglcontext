@@ -228,15 +228,24 @@ def test_root_refine_defaults_to_replace():
 
 
 def test_content_uri_resolved_against_base():
+    """A tile's content is named relative to the tileset that listed it.
+
+    Asked of the path rather than of a string: a rooted base is on the current
+    drive on Windows, so the answer there carries a drive letter and
+    backslashes, and a POSIX literal would be asserting the separator rather
+    than the resolution.
+    """
+    base = os.path.join(os.sep, "world") + os.sep
     ts = build_runtime_tileset(
         _tileset({
             "boundingVolume": {"box": [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]},
             "geometricError": 10.0,
             "content": {"uri": "tiles/root.glb"},
         }),
-        base_uri="/world/",
+        base_uri=base,
     )
-    assert ts.root.content_uri == "/world/tiles/root.glb"
+    assert ts.root.content_uri == os.path.join(
+        os.path.realpath(base), "tiles", "root.glb")
 
 
 def test_content_uri_none_when_no_content():
