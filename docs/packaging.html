@@ -72,8 +72,9 @@ analysis = Analysis(
     report the backend as unavailable, which is what a bundle wants. The names
     it takes are the ones <code>OPENGLCONTEXT_BACKEND</code> takes &mdash;
     <code>glfw</code>, <code>glut</code>, <code>pygame</code>, <code>qt</code>,
-    <code>tk</code>, <code>wx</code>, and <code>egl</code> for a bundle that
-    renders offscreen. <code>tkinter</code> is among what it excludes although
+    <code>tk</code>, <code>wx</code>, and, for a bundle that renders offscreen,
+    <code>egl</code> on Linux or <code>wgl</code> on Windows.
+    <code>tkinter</code> is among what it excludes although
     it is the standard library: a freezer follows the import and brings the
     whole of Tcl/Tk, which is megabytes for a bundle that opens no Tk
     window.</p>

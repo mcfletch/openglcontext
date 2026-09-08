@@ -36,8 +36,9 @@ __all__ = ['BACKEND_MODULES', 'SESSIONS', 'SESSION_ALTERNATIVE', 'SYSTEM_LIBRARI
 #: their toolkit is missing, which is what a bundle wants, while the toolkits
 #: themselves are tens to hundreds of megabytes. GLUT has no entry of its own
 #: because its bindings come from PyOpenGL, which every bundle already carries,
-#: and neither does ``egl``, the offscreen backend, which has no toolkit and no
-#: window -- it is listed so that a bundle rendering without one can say so.
+#: and neither do the two offscreen backends -- ``egl`` on Linux and ``wgl`` on
+#: Windows -- which have no toolkit and no window between them. They are listed
+#: so that a bundle rendering without one can say so.
 #:
 #: ``tkinter`` is the standard library rather than a third-party package, and is
 #: named anyway: a freezer follows the import and brings the whole of Tcl/Tk
@@ -49,6 +50,7 @@ BACKEND_MODULES = {
     'pygame': ('pygame',),
     'qt': ('OpenGLContext_qt', 'PySide6', 'shiboken6'),
     'tk': ('tkinter',),
+    'wgl': (),
     'wx': ('wx',),
 }
 
