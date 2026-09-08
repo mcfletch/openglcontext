@@ -71,3 +71,52 @@ def test_thresholds_are_centralized():
     """A single named tolerance constant governs the gate."""
     assert hasattr(tas, 'MAX_PERCENT_DIFFERENT')
     assert hasattr(tas, 'PIXEL_DIFF_THRESHOLD')
+
+
+class TestAFrameThatWasNeverCaptured:
+    """A script asked for a capture that writes none has compared nothing.
+
+    The auto-exit capture reports what went wrong and lets the script finish, so
+    its exit code still says the run went well.  Reading the wrong colour buffer
+    once was enough to make that happen to every script at once, and the gate
+    below is what turns it into a failure rather than two hundred quiet passes.
+    """
+
+    def _script(self, tmp_path, body):
+        path = tmp_path / 'never_draws.py'
+        path.write_text(body)
+        return path
+
+    def test_no_capture_is_a_failure_not_a_pass(self, tmp_path):
+        script = self._script(tmp_path, 'print("ran, drew nothing")\n')
+        result = tas._run_visual_test(script, timeout=60)
+        assert result.status == 'no_capture', (
+            'a script that wrote no frame reported %r' % (result.status,))
+
+    def test_a_script_that_fails_says_so_instead(self, tmp_path):
+        """The exit code is the more useful answer where there is one.  Not
+        ``REQUIRED_EXTENSION_MISSING``, which is the code a script says "there
+        was nothing here to draw" with and is a skip rather than a failure."""
+        script = self._script(tmp_path, 'raise SystemExit(1)\n')
+        result = tas._run_visual_test(script, timeout=60)
+        assert result.status == 'fail'
+
+    def test_a_script_with_nothing_to_draw_is_still_a_skip(self, tmp_path):
+        script = self._script(
+            tmp_path, 'raise SystemExit(%d)\n' % tas.REQUIRED_EXTENSION_MISSING)
+        result = tas._run_visual_test(script, timeout=60)
+        assert result.status == 'skip'
+
+    def test_last_runs_frame_is_not_this_runs_evidence(self, tmp_path):
+        """The result directory is kept between runs, so a stale frame would
+        otherwise stand in for the one this run failed to write."""
+        script = self._script(tmp_path, 'print("ran, drew nothing")\n')
+        stale = tas.RESULT_IMAGES_DIR / 'never_draws.png'
+        tas.RESULT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+        _write(stale, (10, 20, 30))
+        try:
+            result = tas._run_visual_test(script, timeout=60)
+            assert result.status == 'no_capture'
+            assert not stale.exists(), 'the stale frame was left to be compared'
+        finally:
+            stale.unlink(missing_ok=True)

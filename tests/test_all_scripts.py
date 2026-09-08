@@ -127,7 +127,9 @@ def tolerance_for(script_name):
 class VisualTestResult:
     """Result from a visual regression test."""
     script_name: str
-    status: str  # 'pass', 'fail', 'skip', 'error', 'visual_diff_expected'
+    # 'pass', 'fail', 'skip', 'error', 'visual_diff', 'visual_diff_expected',
+    # or 'no_capture' -- asked for a frame, finished, and wrote none
+    status: str
     returncode: int
     stdout: str
     stderr: str
@@ -436,6 +438,11 @@ def _run_visual_test(
     if capture_image:
         env['OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR'] = str(RESULT_IMAGES_DIR)
         env['OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME'] = test_name
+        # Last run's frame is not this run's evidence.  The directory is kept
+        # between runs so a failure can be looked at afterwards, which means a
+        # script that writes no frame this time would otherwise be compared
+        # against the one it wrote before, and pass on it.
+        (RESULT_IMAGES_DIR / f"{test_name}.png").unlink(missing_ok=True)
     if env_overrides:
         env.update(env_overrides)
 
@@ -486,6 +493,17 @@ def _run_visual_test(
 
     result_image_path = RESULT_IMAGES_DIR / f"{test_name}.png"
     reference_image_path = REFERENCE_IMAGES_DIR / f"{test_name}.png"
+
+    if capture_image and status == 'pass' and not result_image_path.exists():
+        # A script that was asked for a capture and exited cleanly without
+        # writing one has verified nothing: the comparison below is what the
+        # test is for, and a missing frame skipped straight past it.  The
+        # auto-exit capture reports what went wrong and lets the script finish,
+        # so the exit code alone still says the run went well -- which is how a
+        # capture that could not read the framebuffer once left two hundred of
+        # these passing without comparing anything.
+        status = 'no_capture'
+        stderr += ('\nNo capture was written to %s.' % result_image_path)
 
     if capture_image and result_image_path.exists():
         result_image = str(result_image_path)
@@ -1078,6 +1096,11 @@ class TestScripts:
             pytest.fail(f"Script failed with return code {result.returncode}")
         elif result.status == 'error':
             pytest.fail(f"Script error: {result.stderr}")
+        elif result.status == 'no_capture':
+            pytest.fail(
+                f"{script_name} was asked for a capture and wrote none, so "
+                f"nothing was compared; the script's own output says why:"
+                f"\n{result.stderr[-2000:]}")
         elif result.status == 'visual_diff':
             # A reference image existed and the render no longer matches it within
             # tolerance. This is a real regression.
