@@ -48,7 +48,6 @@ interactive context has.
 See [docs/gltf.html](../../docs/gltf.html).
 """
 import os
-import sys
 from typing import (
     TYPE_CHECKING, Any, List, NamedTuple, Optional, Sequence, Tuple, cast,
 )
@@ -57,6 +56,7 @@ from OpenGLContext import testingcontext
 from OpenGLContext.scenegraph.light import DirectionalLight, Light, PointLight
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
 from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.viewer import commentary
 from OpenGLContext.viewer import debug
 from OpenGLContext.viewer import environment as env
 from OpenGLContext.viewer import framing
@@ -226,7 +226,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self.source = resolve_source(named)
         if self.source is None:
             if named:
-                sys.stderr.write("ERROR: file not found: %s\n" % (named,))
+                commentary.warn("ERROR: file not found: %s\n" % (named,))
                 raise SystemExit(2)
             return
         try:
@@ -234,14 +234,13 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                             if self.options.format
                             else adapter_for(self.source))
         except UnknownSourceType as error:
-            sys.stderr.write("ERROR: %s\n" % (error,))
+            commentary.warn("ERROR: %s\n" % (error,))
             raise SystemExit(2) from None
         self.adapter.configure(self.options)
 
     def loadScene(self) -> Any:
         """Produce the scene to show.  **Runs on a worker thread: no GL here.**"""
-        sys.stdout.write("Loading %s ...\n" % self.source)
-        sys.stdout.flush()
+        commentary.say("Loading %s ...\n" % self.source)
         return self.adapter.load(cast(str, self.source))
 
     def requestInitialScene(self) -> None:
@@ -264,7 +263,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         if resolved is None:
             self.overlayError = True
             self.overlayText = "Not found: %s" % (source,)
-            sys.stderr.write("ERROR: file not found: %s\n" % (source,))
+            commentary.warn("ERROR: file not found: %s\n" % (source,))
             return False
         try:
             adapter = (adapter_named(format) if format
@@ -272,7 +271,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         except UnknownSourceType as error:
             self.overlayError = True
             self.overlayText = "%s" % (error,)
-            sys.stderr.write("ERROR: %s\n" % (error,))
+            commentary.warn("ERROR: %s\n" % (error,))
             return False
         self.source, self.adapter = resolved, adapter
         # Opening a source directly -- a typed address, a file on the command
@@ -368,8 +367,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self.overlayError = True
         message = str(error).splitlines()[0][:60] if error else 'load failed'
         self.overlayText = "FAILED: %s" % message
-        sys.stderr.write("Load failed: %s\n" % (error,))
-        sys.stderr.flush()
+        commentary.warn("Load failed: %s\n" % (error,))
 
     def onSceneReady(self) -> None:
         """A scene has been built.  Give walking a world to work with.
@@ -383,8 +381,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
             return
         self.physicsPlatform = None
         if not self.enablePhysics(True) and first:
-            sys.stdout.write("Physics: no walkable geometry; using free-fly.\n")
-            sys.stdout.flush()
+            commentary.say("Physics: no walkable geometry; using free-fly.\n")
 
     # -- assembling the scene ---------------------------------------------
     def buildScenegraph(self, scene: Any) -> None:
@@ -441,7 +438,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self.setupAnimation(scene)
 
         if use_cameras:
-            sys.stdout.write("Found %d camera(s); PageUp/PageDown to cycle.\n"
+            commentary.say("Found %d camera(s); PageUp/PageDown to cycle.\n"
                              % len(self.viewpoints))
             self.selectInitialCamera()
         else:
@@ -462,7 +459,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         """
         strays = getattr(scene, 'strays', 0)
         if strays:
-            sys.stdout.write(
+            commentary.say(
                 "Framed on the model: %d part(s) of this file sit up to %.0f times "
                 "its size away and start out of view.\n"
                 % (strays, getattr(scene, 'stray_reach', 0.0)))
@@ -497,7 +494,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         spec = self.options.background
         if spec is None and env.count_backgrounds(scene.group):
             return []
-        backdrop = env.background_for(spec, sys.stderr.write)
+        backdrop = env.background_for(spec, commentary.warn)
         return [backdrop] if backdrop is not None else []
 
     # -- lighting ---------------------------------------------------------
@@ -513,11 +510,9 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
             return []
         found = env.count_lights(scene.group)
         if mode == 'auto' and found:
-            sys.stdout.write("Found %d light(s) in the file; using them.\n" % found)
-            sys.stdout.flush()
+            commentary.say("Found %d light(s) in the file; using them.\n" % found)
             return []
-        sys.stdout.write("Adding a default sun + fill rig.\n")
-        sys.stdout.flush()
+        commentary.say("Adding a default sun + fill rig.\n")
         return self.defaultLights(self.radius)
 
     @staticmethod
@@ -600,7 +595,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
             return
         index = self.resolveCamera(selector)
         if index is None:
-            sys.stderr.write("No camera matching %r; using the first.\n" % selector)
+            commentary.warn("No camera matching %r; using the first.\n" % selector)
             return
         self.viewpoints[index].isBound = True
         self.cameraIndex = index
@@ -649,9 +644,8 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self.physicsYaw = self.options.yaw
         wanted = self.sceneLoaded and self.options.physics
         if not self.setupPhysics(enable=wanted) and wanted:
-            sys.stdout.write("Physics: no walkable geometry; using free-fly.\n")
-        sys.stdout.write("Press 'g' to toggle walk (physics) / free-fly.\n")
-        sys.stdout.flush()
+            commentary.say("Physics: no walkable geometry; using free-fly.\n")
+        commentary.say("Press 'g' to toggle walk (physics) / free-fly.\n")
 
     def declareMovementModes(self) -> None:
         """Say what the ways of moving are, before anything has moved.
@@ -827,10 +821,9 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self._player = scene.player(self._animationIndex, loop=loop)
         if self._player is None:
             return
-        sys.stdout.write("Playing animation [%d/%d] %r (%.2fs).\n" % (
+        commentary.say("Playing animation [%d/%d] %r (%.2fs).\n" % (
             self._animationIndex + 1, len(self._animations),
             self._animationNames[self._animationIndex], self._player.duration))
-        sys.stdout.flush()
         self._player.evaluate(self.pinnedOr(0.0))   # show the first pose at once
 
     def resolveAnimation(self, selector: Any) -> int:
@@ -842,7 +835,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                 return i
         if str(selector).lstrip('-').isdigit():
             return int(selector) % len(self._animations)
-        sys.stderr.write("No animation matching %r; playing the first.\n" % selector)
+        commentary.warn("No animation matching %r; playing the first.\n" % selector)
         return 0
 
     def pinnedOr(self, t: float) -> float:

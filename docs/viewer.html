@@ -72,6 +72,17 @@ location and resolves them against it, so a remote multi-file model opens with
 its geometry and textures intact. See
 <a href="gltf.html">Loading glTF</a>.</p>
 
+<p>The viewer narrates what it is doing as it goes &mdash; the file it is
+opening, the cameras and lights it found in it, the animation it is playing
+&mdash; on standard output. Those lines carry names from the file and from the
+command line, which are arbitrary Unicode, while a console holds only what its
+encoding has room for: a Windows console is a codepage of a couple of hundred
+characters. A character the console cannot show is written escaped &mdash;
+<code>❤</code> as <code>&#92;u2764</code> &mdash; and the model opens
+regardless. Redirect the output to a
+UTF&#8209;8 file, or run with <code>PYTHONIOENCODING=utf-8</code>, to read the
+names as they are written.</p>
+
 <p>A streamed dataset has knobs the other formats do not, and they are on the
 one command line: <code>--sse</code> (screen-space error target in pixels; lower
 is more detail), <code>--memory</code> (resident tile budget in MiB),
