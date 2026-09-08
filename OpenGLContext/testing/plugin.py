@@ -35,6 +35,27 @@ instead of held to a speed no CPU reaches::
 ``OPENGLCONTEXT_PERFORMANCE_TESTS=1`` runs them anyway, and ``=0`` skips them
 whatever the renderer, which is what a shared or throttled machine wants.
 
+**Which context the run gets is settled here**, before anything imports
+``OpenGL``: the PyOpenGL platform from the OS, the windowing backend from what
+will actually import.  So no test module has to set either, and none may -- a
+module-scope ``os.environ`` write happens while pytest is still collecting, and
+becomes the answer for the whole session and for every child process it
+launches.  The plugin puts the ``OPENGLCONTEXT_*`` and ``PYOPENGL_*``
+configuration back to the run's after collection and after every test.
+
+A test that is about **one kind** of context and no other says so, and is
+skipped where that kind cannot be had rather than failing on a machine that was
+never going to serve it::
+
+    @pytest.mark.gl_context(profile='compatibility')
+    def test_the_old_pipeline_still_lights(gl_context_compat):
+        ...
+
+What the marker names is set for the test, reaches any child process it
+launches, and is put back afterwards.  See :mod:`OpenGLContext.testing.gl_env`
+for the rule that tells configuration from the machine, and ``docs/testing.html``
+for the whole of it.
+
 The window machinery itself is in :mod:`OpenGLContext.testing.glcontext` and has
 no pytest in it, so a test runner that is not pytest can use it too.
 """
@@ -46,11 +67,21 @@ from typing import Any, Callable, Iterator, Mapping
 
 import pytest
 
-from OpenGLContext.testing.glcontext import (
+from OpenGLContext.testing import gl_env
+
+# Before anything here imports OpenGL, because the platform module is chosen at
+# import and cannot be changed afterwards.  This is why no test module needs to
+# name it, and why none may: ten of them once did, each on its own account, and
+# the value reached every child the suite launched.
+gl_env.settle_gl_platform()
+gl_env.settle_gl_backend()
+
+from OpenGLContext.testing.glcontext import (  # noqa: E402 -- after the settling
     GLDescription,
     GLUnavailable,
     describe_gl,
     hidden_window,
+    profile_unavailable,
 )
 
 #: Runs the ``performance`` tests, or refuses to, whatever the renderer is.
@@ -90,12 +121,71 @@ def performance_skip_reason(description: GLDescription | None,
     return None
 
 
+#: How a ``gl_context`` marker's keywords are spelled in the environment. A
+#: marker says ``profile='compatibility'``; the engine reads
+#: ``OPENGLCONTEXT_PROFILE``. Any name already in full is passed through, so a
+#: setting with no short spelling still has one place to be written.
+_CONTEXT_PREFIX = 'OPENGLCONTEXT_'
+
+
+def context_asked_for(marker: Any) -> dict[str, str]:
+    """The configuration a ``gl_context`` marker names, ready for the environment.
+
+    ``profile='core'`` becomes ``OPENGLCONTEXT_PROFILE='core'``; a name given
+    in full is left alone. Values are stringified, since that is what an
+    environment holds.
+    """
+    if marker is None:
+        return {}
+    asked = {}
+    for name, value in marker.kwargs.items():
+        if not name.startswith(_CONTEXT_PREFIX):
+            name = _CONTEXT_PREFIX + name.upper()
+        asked[name] = str(value)
+    return asked
+
+
+def context_skip_reason(asked: Mapping[str, str],
+                        available: Callable[[str], bool] | None = None,
+                        profile_available: Callable[[str], str | None] | None = None,
+                        ) -> str | None:
+    """Why this machine cannot serve the context a test asked for, or ``None``.
+
+    Only what was asked for is checked, and only where something was: a test
+    that wants *a* context takes whatever the run settled on, and asking the
+    driver on its behalf would open a probe window to answer a question it did
+    not put.
+    """
+    backend = asked.get(gl_env.GL_BACKEND_VARIABLE)
+    if backend:
+        if available is None:
+            available = gl_env.backend_available
+        if not available(backend):
+            return ('this test is about the %s backend and its toolkit is not '
+                    'installed here' % (backend,))
+    profile = asked.get('OPENGLCONTEXT_PROFILE')
+    if profile:
+        if profile_available is None:
+            profile_available = profile_unavailable
+        refused = profile_available(profile)
+        if refused:
+            return refused
+    return None
+
+
 def pytest_configure(config: Any) -> None:
     config.addinivalue_line(
         'markers',
         'performance: asserts how fast something draws, so it needs a GPU to '
         'draw it; skipped on a CPU rasteriser unless %s says otherwise'
         % (PERFORMANCE_TESTS,))
+    config.addinivalue_line(
+        'markers',
+        'gl_context(profile=..., backend=..., **options): this test is about '
+        'one kind of context and no other. The options are set for the test '
+        'and put back afterwards, and it is skipped where this machine cannot '
+        'give that kind. A test with no marker takes whatever the run settled '
+        'on -- see OpenGLContext.testing.gl_env.')
 
 
 def pytest_collection_modifyitems(config: Any, items: list) -> None:
@@ -114,6 +204,78 @@ def pytest_collection_modifyitems(config: Any, items: list) -> None:
     skip = pytest.mark.skip(reason=reason)
     for item in marked:
         item.add_marker(skip)
+
+
+#: What collection changed, if anything, so a test can say which module did it.
+_COLLECTION_CHANGED: dict[str, str] = {}
+
+
+def collection_changed() -> dict[str, str]:
+    """Configuration that appeared while the test modules were being imported."""
+    return dict(_COLLECTION_CHANGED)
+
+
+def pytest_collection(session: Any) -> None:
+    """Settle the run's configuration, before a single test module is imported.
+
+    *Before*, because importing is when the damage is done and after it there
+    is no way to tell a deliberate session setting from something a module did
+    on its own account. A project's ``conftest.py`` has already run by now,
+    which is right: configuring the session is what a conftest is for.
+    """
+    gl_env.settle_run()
+
+
+def pytest_collection_finish(session: Any) -> None:
+    """Put the configuration back to the run's, and record what moved it.
+
+    A test module must not configure the renderer as it is imported, and
+    ``tests/unit/test_no_configuration_at_import.py`` holds this project's own
+    to that. What no reading of a test module can catch is a module that
+    *imports a program* -- ``OpenGLContext.bin.terrain_view`` settles the
+    renderer as it loads, reasonably, because it is about to draw one. Left
+    standing, that program's choice would be the run's, and every child process
+    launched afterwards would render under it.
+    """
+    _COLLECTION_CHANGED.clear()
+    settled = gl_env.run_configuration()
+    for name, value in gl_env.configuration().items():
+        if settled.get(name) != value:
+            _COLLECTION_CHANGED[name] = value
+    _restore(settled)
+
+
+def _restore(settled: Mapping[str, str]) -> None:
+    """Make the configuration in the environment ``settled`` exactly."""
+    for name in [n for n in os.environ if gl_env.is_configuration(n)]:
+        if name not in settled:
+            del os.environ[name]
+    os.environ.update(settled)
+
+
+@pytest.fixture(autouse=True)
+def gl_configuration(request: Any) -> Iterator[None]:
+    """Set what this test asked for, and put the run's own back afterwards.
+
+    Every test, whether it renders or not: a test that changes the
+    configuration without restoring it changes what every later test draws, and
+    the ones that draw in a child process inherit it silently. One fixture for
+    the whole session rather than one guard per module, so a module that
+    forgets is not a hole.
+    """
+    asked = context_asked_for(request.node.get_closest_marker('gl_context'))
+    if asked:
+        reason = context_skip_reason(asked)
+        if reason:
+            pytest.skip(reason)
+        os.environ.update(asked)
+    before = gl_env.asking(asked)
+    settled = gl_env.run_configuration()
+    try:
+        yield
+    finally:
+        gl_env.asking(before)
+        _restore(settled)
 
 
 @pytest.fixture

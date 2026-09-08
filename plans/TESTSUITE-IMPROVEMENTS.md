@@ -786,3 +786,96 @@ IBL exactly as it already pinned the shadow cascades
 separately nondeterministic because it is animated -- pins its `anim_time`. All
 316 views render the same bytes every time; a difference here now is a
 regression rather than weather.
+
+
+## One place that decides which context a run gets
+
+**Landed 2026-09-07.** Five mechanisms had grown up around one question — which
+kind of GL context a test is given, and what a child process is told about it —
+and each knew a different part of the answer:
+
+1. `renderoptions.clean_environment`, the engine's own, for a tool that spawns
+   a renderer and compares its pixels;
+2. `tests/unit/conftest.py`'s `restore_environment`, autouse for that directory;
+3. `OpenGLContext/testing/gl_env.gl_subprocess_env`, an allow-list of what a
+   child may inherit;
+4. `tests/test_all_scripts.py`'s `_LEAKED_RENDER_CONFIG_VARS`, a deny-list of
+   what it may not;
+5. a snapshot-and-restore around the import, hand-written in six modules that
+   import one of this project's programs.
+
+Two of them were lists of variable names, and a list drifts. The deny-list in
+(4) was missing `PYOPENGL_PLATFORM`. Ten `tests/unit` modules set that at module
+scope — reasonably enough for their own contexts, and necessarily before
+`OpenGL` is imported — which happens while pytest is still *collecting*, so it
+became the whole session's answer and every script's. On Linux `egl` is right
+and nothing showed. On Windows there is no EGL: all 161 scripts inherited it,
+PyOpenGL loaded the Linux platform module, and 148 of them failed with
+`NullFunctionError` from the first GL call. No traceback mentioned a variable.
+Reproduced in six seconds with
+`pytest tests/test_all_scripts.py tests/unit -k addnodes`.
+
+**What replaces them.** `OpenGLContext.testing.gl_env` holds one rule and the
+run's answer to it:
+
+- *Configuration* is anything under `OPENGLCONTEXT_` or `PYOPENGL_`: it says
+  which kind of context a program gets, and it belongs to one test or one run.
+  *Infrastructure* — the display, the driver's variables, the interpreter's
+  paths — says which machine the program is on, and every child needs all of
+  it. A prefix rather than a list, because that is the part that drifted.
+- `settle_gl_platform()` and `settle_gl_backend()` answer the two questions
+  that have to be answered before `OpenGL` is imported, from the OS and from
+  what will actually import. The plugin calls them at its own import, which is
+  the earliest point there is, so **no test module has to and none may**.
+- The run's configuration is taken at `pytest_collection` — *before* a single
+  test module is imported, since importing is when the damage is done and
+  afterwards there is no telling a deliberate session setting from something a
+  module did on its own account — and put back at `pytest_collection_finish`.
+- `gl_subprocess_env()` builds a child from the machine, the run's own
+  configuration, what the running test declared, and what the call names.
+- `import_unconfigured()` imports one of this project's programs — they settle
+  the renderer as they are imported, being programs — without taking its
+  choices for the session.
+- The plugin's autouse `gl_configuration` fixture restores the configuration
+  after every test, for the whole session rather than one directory, and ships
+  with the engine so a game built on it gets the same.
+
+**What a test says.** Nothing, and it takes the run's context: that is most of
+them. A test about *one* kind of context says so and is skipped where that kind
+cannot be had:
+
+```python
+@pytest.mark.gl_context(profile='compatibility')
+def test_the_old_pipeline_still_lights():
+    ...
+```
+
+The marker's options are set for the test, reach any child it launches, and are
+put back afterwards.
+
+**What holds the rule.** `tests/unit/test_no_configuration_at_import.py` reads
+the syntax of every collected module and fails on a module-scope write to a
+configuration variable — descending into an `if` or a `try`, which run on
+import, and not into a `def` or an `if __name__ == '__main__'`, which do not.
+
+Reading a test module cannot catch the other half: a module that *imports a
+program*. `OpenGLContext/bin/terrain_view.py` settles the renderer as it loads,
+reasonably, because it is about to draw one, and twenty test modules import one
+of these to call a function of it. Nothing in the importing module's own source
+says so — and left standing, the program's choice becomes the run's and reaches
+every child process. That is why the configuration is *put back* after
+collection rather than merely forbidden: `RENDERER=pbr`, `SHADOWS=1` and
+`IBL_INTENSITY=0.4` were arriving that way, and passing them to the script suite
+made 37 of its captures render a different scene — 65% of pixels, not tolerance
+creep. `plugin.collection_changed()` records what was undone, and a test names
+anything not already accounted for, so the list is a decision rather than a
+surprise.
+
+**Still open, deliberately:** those programs configure at import, which makes
+importing them a side effect on the process. Emptying that list means moving the
+settings out of their import and into their startup — but they have to be set
+before `OpenGL` loads, which is exactly why they are where they are, so it wants
+its own piece of work rather than being slipped in here.
+
+`renderoptions.clean_environment` stays: it is the *engine's* API, for an
+application spawning a renderer, and must not depend on the testing package.

@@ -621,3 +621,31 @@ def _string(value: Any) -> str:
 def gl_available() -> bool:
     """Whether a GL context can be created in this process at all."""
     return describe_gl() is not None
+
+
+#: Why each profile asked about could not be had, by profile name; ``None``
+#: where it could. Remembered for the same reason :func:`describe_gl` is.
+_PROFILE_REFUSALS: dict = {}
+
+
+def profile_unavailable(profile: str) -> str | None:
+    """Why this driver will not give a ``profile`` context, or ``None``.
+
+    A driver that offers only a core profile refuses a compatibility request
+    outright, and a test about the fixed-function pipeline has nothing to run
+    on there. Asking costs one window per profile for the process, and the
+    answer cannot change while it lives.
+    """
+    if profile not in _PROFILE_REFUSALS:
+        try:
+            with hidden_window('probe %s' % (profile,), profile=profile):
+                _PROFILE_REFUSALS[profile] = None
+        except GLUnavailable as err:
+            _PROFILE_REFUSALS[profile] = (
+                'this test is about a %s context and the driver here will not '
+                'give one: %s' % (profile, err))
+        except Exception as err:               # pragma: no cover - driver-specific
+            _PROFILE_REFUSALS[profile] = (
+                'this test is about a %s context and asking for one here '
+                'failed: %s' % (profile, err))
+    return _PROFILE_REFUSALS[profile]

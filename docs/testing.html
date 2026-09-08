@@ -165,9 +165,17 @@ if description is not None and description.software:
 
 <section id="markers">
   <h2>Which tests run where</h2>
-  <p>Three markers say what a test needs of the machine it runs on, so a run can
+  <p>Four markers say what a test needs of the machine it runs on, so a run can
     ask for the subset that machine can answer.</p>
   <dl>
+    <dt><code>gl_context(profile=..., backend=..., **options)</code></dt>
+    <dd>This test is about <em>one kind</em> of context and no other. The
+      options are set for the test and put back afterwards, they reach any child
+      process it launches, and the test is skipped where this machine cannot
+      give that kind &mdash; a compatibility-profile test on a core-only driver,
+      a GLUT test where GLUT is not installed. A test with no marker takes
+      whatever the run settled on; see
+      <a href="#choosing">Which context a run gets</a>.</dd>
     <dt><code>performance</code></dt>
     <dd>Asserts how <em>fast</em> something draws. That is a question about the
       renderer as much as about the code, and a CPU rasteriser answers it
@@ -199,6 +207,74 @@ xvfb-run -a python -m pytest -m "serial and not visual and not performance"</pre
   <p><code>LIBGL_ALWAYS_SOFTWARE=1</code> reproduces the software-rendered run on
     a machine that has a GPU, which is how a failure seen in CI is chased
     locally.</p>
+</section>
+
+<section id="choosing">
+  <h2>Which context a run gets</h2>
+  <p>Two settings decide what kind of GL a test is given, and both are answered
+    once for the run rather than by each test for itself:</p>
+  <dl>
+    <dt><code>PYOPENGL_PLATFORM</code></dt>
+    <dd>Which of PyOpenGL's platform modules loads, and so which library
+      <code>glViewport</code> is looked for in. Linux is asked for
+      <code>egl</code>, which renders with no X display; everywhere else
+      PyOpenGL's own default is the only right answer &mdash; WGL on Windows,
+      the framework on macOS &mdash; and naming one would name the wrong
+      one.</dd>
+    <dt><code>OPENGLCONTEXT_BACKEND</code></dt>
+    <dd>Which windowing toolkit builds the context: the first of GLFW, pygame,
+      wx and GLUT that will actually import. Left unnamed, the engine takes the
+      first backend that happens to be registered, so two machines with
+      different packages installed run different code.</dd>
+  </dl>
+  <p><code>OpenGLContext.testing.plugin</code> settles both before anything
+    imports <code>OpenGL</code>, so <strong>a test module must not</strong>. A
+    module-scope <code>os.environ</code> write runs while pytest is still
+    collecting, which makes it the whole session's answer and the answer every
+    child process inherits &mdash; and what ran is then decided by collection
+    order. Ten modules once set <code>PYOPENGL_PLATFORM=egl</code> that way,
+    each reasonably for its own context; on Windows, where there is no EGL, the
+    value reached every script the suite launched and made every GL entry point
+    undefined. <code>tests/unit/test_no_configuration_at_import.py</code> holds
+    the suite to the rule.</p>
+  <p>What to do instead, in order of how much a test is asking for:</p>
+  <ul>
+    <li><strong>Nothing</strong> &mdash; take the run's context. Most tests.</li>
+    <li><strong>A fixture</strong> &mdash; <code>gl_context</code>,
+      <code>gl_context_compat</code> or <code>gl_window</code> for an
+      in-process window of a particular profile, which skip where the driver
+      will not give one.</li>
+    <li><strong>The <code>gl_context</code> marker</strong> &mdash; for a test
+      that is about one kind of context, including one that renders in a child
+      process. It sets what it names, passes it to children, puts it back, and
+      skips where the kind cannot be had.</li>
+    <li><strong><code>monkeypatch.setenv</code></strong> &mdash; for a render
+      option one test wants and nothing else does.</li>
+  </ul>
+  <p>The run's own configuration is taken before a single test module is
+    imported, and put back both after collection and after every test. After
+    collection because a module that <em>imports one of this project's
+    programs</em> &mdash; <code>oglc-terrain</code>, <code>oglc-gltf-demo</code>
+    &mdash; picks up that program's choice of renderer, since a program about to
+    draw settles one as it loads; nothing in the importing module's own source
+    says so, and left standing it would become the whole run's.
+    <code>import_unconfigured</code> is how a module says it wants the program
+    and not its choices.</p>
+  <p>Everything under <code>OPENGLCONTEXT_</code> and <code>PYOPENGL_</code> is
+    put back after every test, to what the run settled on. That is
+    <em>configuration</em>: it says what kind of context a program gets. The
+    display, the driver's own variables and the interpreter's paths are the
+    <em>machine</em>, and a child gets all of those &mdash;
+    <code>OpenGLContext.testing.gl_env</code> is where the two are told
+    apart.</p>
+  <pre>from OpenGLContext.testing.gl_env import gl_subprocess_env
+subprocess.run([sys.executable, '-c', DRIVER], env=gl_subprocess_env())</pre>
+  <p>A child built that way gets the machine, the run's own configuration, what
+    the running test declared, and whatever the call names &mdash; and nothing
+    a neighbouring test happened to leave behind.
+    <code>import_unconfigured('OpenGLContext.bin.view')</code> is the same idea
+    for importing one of this project's programs, which settle the renderer as
+    they are imported because they are about to draw.</p>
 </section>
 
 <section id="offscreen">

@@ -34,7 +34,33 @@ log = logging.getLogger(__name__)
 __all__ = ['hidden_window', 'fullscreen_window',
            'definition', 'flag', 'choice', 'number', 'env_flag', 'env_choice',
            'env_number', 'env_flag_once', 'env_number_once', 'reset_env_cache',
-           'clean_environment', 'CHOICES', 'LABELS', 'ENVIRONMENT']
+           'clean_environment', 'is_render_configuration', 'CHOICES', 'LABELS',
+           'CONFIGURATION_PREFIXES', 'ENVIRONMENT']
+
+#: What marks a variable as saying *which kind of render a program gets*, as
+#: against which machine it is running on.  ``OPENGLCONTEXT_`` is this module's
+#: own; ``PYOPENGL_`` covers the platform module, the dispatcher and error
+#: checking, each of which changes what a context is and what a call through it
+#: does.
+#:
+#: A prefix rather than a list, because :data:`ENVIRONMENT` below is a list and
+#: the thing a list does is fall behind: the deny-list that
+#: ``tests/test_all_scripts.py`` kept had no ``PYOPENGL_PLATFORM`` in it, and
+#: that one absence handed every script the suite launched a platform module
+#: that does not exist on the machine it ran on.
+#:
+#: :mod:`OpenGLContext.testing.gl_env` asks this rather than keeping a second
+#: answer, so the engine and its test suite cannot disagree about what a child
+#: process may inherit.
+CONFIGURATION_PREFIXES: Tuple[str, ...] = ('OPENGLCONTEXT_', 'PYOPENGL_')
+
+
+def is_render_configuration(name: str) -> bool:
+    """Whether ``name`` says what kind of render a program gets.
+
+    As against what machine it is running on, which every child needs all of.
+    """
+    return name.startswith(CONFIGURATION_PREFIXES)
 
 #: Every environment variable that changes what a frame looks like or how it is
 #: produced.  Named here because this module is what reads them, and because
