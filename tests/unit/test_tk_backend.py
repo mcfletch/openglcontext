@@ -123,12 +123,15 @@ class TestARealWindow:
     def test_it_renders_the_frame_it_was_asked_for(self):
         reported = _drive('render')
         assert reported['DRAWN'] == 'True'
-        assert reported['PIXEL'] == '64 128 191'
+        assert reported['PIXEL'] == '64 128 192'
 
     def test_the_context_is_the_profile_the_definition_asked_for(self):
         assert _drive('profile')['CORE'] == 'True'
 
     def test_a_compatibility_definition_gets_the_old_pipeline(self):
+        """Asked by using it: a definition naming no version gets a context
+        created without a profile attribute, which reports no profile bit and
+        has the whole of the old pipeline."""
         assert _drive('compatibility')['COMPATIBILITY'] == 'True'
 
     def test_the_viewport_follows_the_widget(self):
@@ -136,11 +139,11 @@ class TestARealWindow:
 
     def test_hidden_takes_the_window_off_the_screen_and_still_renders(self):
         """A capture subprocess should not put a window over the display of
-        whoever started it; the frame is read from the back buffer, which a
-        withdrawn window still has."""
+        whoever started it; the frame is read before the swap, which a
+        withdrawn window reaches just the same."""
         reported = _drive('hidden')
         assert reported['MAPPED'] == 'False'
-        assert reported['PIXEL'] == '64 128 191'
+        assert reported['PIXEL'] == '64 128 192'
 
     def test_the_pointer_can_be_captured_for_mouse_look(self):
         assert _drive('capture')['CAPTURED'] == 'True'

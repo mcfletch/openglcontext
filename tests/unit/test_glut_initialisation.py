@@ -71,7 +71,7 @@ class TestAgainstARealDisplay:
 
     def test_it_renders(self):
         reported = _drive('render')
-        assert reported.get('PIXEL') == '64 128 191', reported['_stderr'][-600:]
+        assert reported.get('PIXEL') == '64 128 192', reported['_stderr'][-600:]
 
     def test_several_contexts_in_one_process(self):
         """One per test is what a suite does, and freeglut has to survive it."""

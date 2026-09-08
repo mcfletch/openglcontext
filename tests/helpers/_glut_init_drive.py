@@ -28,15 +28,37 @@ def say(name, value):
     print('%s %s' % (name, value), flush=True)
 
 
+#: The clear colour, as the bytes it must come back as.  Whole steps of 1/255
+#: so the answer is the same on every driver: a component landing halfway
+#: between two bytes -- 0.5 is 127.5 -- may round either way, and both are
+#: conformant.
+COLOUR = (64, 128, 192)
+
+
 class Driven(GLUTInteractiveContext):
     """A context that clears to a known colour and nothing else"""
+
+    captured = None
 
     def OnInit(self):
         pass
 
     def Render(self, mode=None):
-        glClearColor(0.25, 0.5, 0.75, 1.0)
+        glClearColor(*[component / 255 for component in COLOUR], 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+    def presentFrame(self):
+        """Read the middle of the frame, then put it up.
+
+        This is the one moment the frame is both complete and still there: a
+        swap recycles the back buffer, so a read afterwards returns whatever
+        the driver handed back rather than what was drawn.
+        """
+        width, height = self.getViewPort()
+        read = glReadPixels(width // 2, height // 2, 1, 1, GL_RGB,
+                            GL_UNSIGNED_BYTE)
+        self.captured = ' '.join(str(value) for value in bytes(read))
+        return super().presentFrame()
 
 
 def build():
@@ -49,9 +71,7 @@ def build():
 def render():
     context = Driven(size=(128, 96))
     context.OnDraw(force=1)
-    context.setCurrent()
-    read = glReadPixels(64, 48, 1, 1, GL_RGB, GL_UNSIGNED_BYTE)
-    say('PIXEL', ' '.join(str(value) for value in bytes(read)))
+    say('PIXEL', context.captured)
     context.releaseWindow()
 
 

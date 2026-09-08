@@ -18,11 +18,11 @@ os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 import tkinter                                              # noqa: E402
 
 from OpenGL.GL import (                                     # noqa: E402
-    GL_COLOR_BUFFER_BIT, GL_CONTEXT_COMPATIBILITY_PROFILE_BIT,
-    GL_CONTEXT_CORE_PROFILE_BIT, GL_CONTEXT_PROFILE_MASK, GL_DEPTH_BUFFER_BIT,
-    GL_RGB, GL_UNSIGNED_BYTE, GL_VIEWPORT, glClear, glClearColor,
-    glGetIntegerv, glReadPixels,
+    GL_COLOR_BUFFER_BIT, GL_CONTEXT_CORE_PROFILE_BIT, GL_CONTEXT_PROFILE_MASK,
+    GL_DEPTH_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, GL_VIEWPORT, glClear,
+    glClearColor, glDeleteLists, glGenLists, glGetIntegerv, glReadPixels,
 )
+from OpenGL.error import GLError                            # noqa: E402
 from OpenGLContext import contextresources                  # noqa: E402
 from OpenGLContext.tkinteractivecontext import (            # noqa: E402
     TkInteractiveContext,
@@ -33,22 +33,41 @@ def say(name, value):
     print('%s %s' % (name, value), flush=True)
 
 
+#: The clear colour, as the bytes it must come back as.  Whole steps of 1/255
+#: so the answer is the same on every driver: a component landing halfway
+#: between two bytes -- 0.5 is 127.5 -- may round either way, and both are
+#: conformant.
+COLOUR = (64, 128, 192)
+
+
 class Driven(TkInteractiveContext):
     """A context that clears to a known colour and nothing else"""
+
+    captured = None
 
     def OnInit(self):
         pass
 
     def Render(self, mode=None):
-        glClearColor(0.25, 0.5, 0.75, 1.0)
+        glClearColor(*[component / 255 for component in COLOUR], 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-    def pixel(self):
-        """The colour in the middle of the back buffer, as three integers"""
+    def presentFrame(self):
+        """Read the middle of the frame, then put it up.
+
+        This is the one moment the frame is both complete and still there: a
+        swap recycles the back buffer, so a read afterwards returns whatever
+        the driver handed back rather than what was drawn.
+        """
         width, height = self.getViewPort()
         read = glReadPixels(width // 2, height // 2, 1, 1, GL_RGB,
                             GL_UNSIGNED_BYTE)
-        return ' '.join(str(value) for value in bytes(read))
+        self.captured = ' '.join(str(value) for value in bytes(read))
+        return super().presentFrame()
+
+    def pixel(self):
+        """The colour in the middle of the frame that was drawn last"""
+        return self.captured
 
 
 def built(**named):
@@ -75,10 +94,24 @@ def profile():
 
 
 def compatibility():
+    """Whether the old pipeline is there to use.
+
+    Asked for compatibility without naming a version, the widget creates the
+    context without a profile attribute at all: a profile is a GL 3.2 idea, and
+    naming one with no version asks for 1.0, where a driver ignores it.  Such a
+    context reports ``GL_CONTEXT_PROFILE_MASK`` as zero and carries the old
+    pipeline in full, so the mask is not the question -- the pipeline is, and a
+    display list is the part of it a core profile most plainly lacks.
+    """
     context = built(profile='compatibility')
     context.setCurrent()
-    mask = int(glGetIntegerv(GL_CONTEXT_PROFILE_MASK))
-    say('COMPATIBILITY', bool(mask & GL_CONTEXT_COMPATIBILITY_PROFILE_BIT))
+    try:
+        lists = glGenLists(1)
+    except GLError:
+        say('COMPATIBILITY', False)
+    else:
+        say('COMPATIBILITY', bool(lists))
+        glDeleteLists(lists, 1)
 
 
 def resize():
