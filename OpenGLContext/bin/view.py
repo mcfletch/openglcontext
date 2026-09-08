@@ -72,9 +72,9 @@ in :mod:`OpenGLContext.viewer.adapters`; see docs/gltf.html.
 """
 import argparse
 import os
-import sys
 from typing import Any, Optional
 
+from OpenGLContext.viewer.commentary import say
 from OpenGLContext.viewer.environment import apply_render_env, viewer_defaults
 
 viewer_defaults()   # before anything that renders is imported
@@ -240,9 +240,11 @@ def _list_cameras(source: str, format: Optional[str] = None) -> int:
     adapter = adapter_named(format) if format else adapter_for(source)
     scene = adapter.load(source)
     if not scene.cameras:
-        sys.stdout.write("(no cameras defined in %s)\n" % os.path.basename(source))
+        say("(no cameras defined in %s)\n" % os.path.basename(source))
     for i, camera in enumerate(scene.cameras):
-        sys.stdout.write("%d: %s\n" % (i, camera.get('name') or 'camera'))
+        # An author names a camera in whatever language they work in, and this
+        # listing is how someone finds the name to pass to --camera.
+        say("%d: %s\n" % (i, camera.get('name') or 'camera'))
     return 0
 
 

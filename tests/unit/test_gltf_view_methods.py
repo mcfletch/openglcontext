@@ -3,7 +3,9 @@ don't reach: light counting, camera/animation resolution, overlay text, backgrou
 and light-rig construction, scenegraph assembly and the main() dispatch. The live
 render loop, physics walk and GL overlays need a window and are covered elsewhere."""
 import argparse
+import io
 import os
+import sys
 import types
 
 import pytest
@@ -344,6 +346,24 @@ class TestMainDispatch:
         assert rc == 0
         out = capsys.readouterr().out
         assert '0: front' in out and '1: camera' in out
+
+    def test_a_camera_named_beyond_the_console_is_still_listed(
+            self, tmp_path, monkeypatch):
+        """A glTF author names a camera in whatever language they work in, and
+        a Windows console holds a couple of hundred characters. Listing the
+        cameras is how someone finds the name to pass to ``--camera``, so it
+        has to survive being about one the console cannot spell."""
+        stream = io.TextIOWrapper(io.BytesIO(), encoding='cp1252', newline='')
+        monkeypatch.setattr(sys, 'stdout', stream)
+        model = tmp_path / 'm.glb'
+        model.write_bytes(b'x')
+        monkeypatch.setattr(V, 'adapter_for', lambda src: _StubAdapter(
+            [{'name': 'front'}, {'name': '俯瞰'}]))
+        assert V.main([str(model), '--list-cameras']) == 0
+        stream.flush()
+        out = stream.buffer.getvalue().decode('cp1252')
+        assert '0: front' in out
+        assert '1: \\u4fef\\u77b0' in out
 
     def test_missing_source_opens_the_shelf(self, monkeypatch):
         """``oglc-view`` on its own is a program, not a usage message."""
