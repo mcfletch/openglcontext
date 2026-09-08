@@ -16,13 +16,9 @@ it reports the failure and the fix identically. These tests put the texture
 through the fixed-function texture unit -- the pipeline both those demos draw
 with -- and read the pixel that comes out.
 """
-import os
 
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import numpy as np  # noqa: E402
-import pytest  # noqa: E402
+import numpy as np
+import pytest
 
 pytest.importorskip("glfw")
 PIL = pytest.importorskip("PIL.Image")

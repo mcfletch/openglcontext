@@ -8,21 +8,14 @@ import types
 import numpy as np
 import pytest
 
-# Importing the viewer runs module-level os.environ.setdefault() calls that
-# configure the renderer; snapshot/restore so they don't leak into other GL
-# subprocess tests (mirrors test_gltf_view_cli.py).
-_ENV_KEYS = ('OPENGLCONTEXT_PROFILE', 'OPENGLCONTEXT_RENDERER', 'OPENGLCONTEXT_IBL',
-             'OPENGLCONTEXT_BACKEND', 'OPENGLCONTEXT_SHADOWS',
-             'OPENGLCONTEXT_SHADOW_CASCADES')
-_ENV_SNAPSHOT = {k: os.environ.get(k) for k in _ENV_KEYS}
-from OpenGLContext.bin import terrain_view as T  # noqa: E402
+from OpenGLContext.testing.gl_env import import_unconfigured
+
+# The viewer settles the renderer as it is imported, being a program; these
+# tests read its non-GL helpers, so the settling is put back.
+T = import_unconfigured('OpenGLContext.bin.terrain_view')
+
 from OpenGLContext.loaders.tiles3d import procedural as P  # noqa: E402
 from OpenGLContext.loaders.tiles3d.scatter import Scatter  # noqa: E402
-for _k, _v in _ENV_SNAPSHOT.items():
-    if _v is None:
-        os.environ.pop(_k, None)
-    else:
-        os.environ[_k] = _v
 
 
 def _inst():

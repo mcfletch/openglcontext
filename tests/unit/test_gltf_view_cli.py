@@ -6,22 +6,15 @@ import sys
 
 import pytest
 
-# Importing the viewer runs its module-level os.environ.setdefault() calls
-# (PROFILE/BACKEND/RENDERER=pbr/SHADOWS/...), which configure the renderer when it
-# runs as a program. In-process that would leak into unrelated GL *subprocess* tests
-# (e.g. handing the shadow suite RENDERER=pbr); snapshot and restore around the import.
-_ENV_KEYS = ('OPENGLCONTEXT_PROFILE', 'OPENGLCONTEXT_BACKEND', 'OPENGLCONTEXT_RENDERER',
-             'OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_SHADOW_CASCADES',
-             'OPENGLCONTEXT_IBL_INTENSITY')
-_ENV_SNAPSHOT = {k: os.environ.get(k) for k in _ENV_KEYS}
-from OpenGLContext.bin import view  # noqa: E402
-from OpenGLContext.viewer import source  # noqa: E402
-for _k, _v in _ENV_SNAPSHOT.items():
-    if _v is None:
-        os.environ.pop(_k, None)
-    else:
-        os.environ[_k] = _v
+from OpenGLContext.testing.gl_env import import_unconfigured
 
+# The viewer settles the renderer as it is imported (profile, backend, PBR,
+# shadows), which is right for a program about to draw. These tests read its
+# argument parsing, so the settling is put back rather than handed to every
+# test collected after this one.
+view = import_unconfigured('OpenGLContext.bin.view')
+
+from OpenGLContext.viewer import source  # noqa: E402
 from OpenGLContext.testing.paths import tests_root  # noqa: E402
 TESTS_DIR = str(tests_root(__file__))
 

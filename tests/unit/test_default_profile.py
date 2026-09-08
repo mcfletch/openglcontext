@@ -8,13 +8,8 @@ nothing there.  So core is what a caller gets for free, and compatibility is
 what a program asks for when it means to use the older pipeline.
 """
 
-import os
-
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import numpy as np  # noqa: E402
-import pytest  # noqa: E402
+import numpy as np
+import pytest
 
 pytest_plugins = ['tests.unit.test_passes_render_gl']
 

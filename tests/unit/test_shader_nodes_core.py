@@ -10,13 +10,9 @@ to record into, so with none bound every such call is
 The shader here is core GLSL, and takes its matrix from ``mat_modelproj``, which
 is the uniform the render pass supplies for exactly this.
 """
-import os
 
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import numpy as np  # noqa: E402
-import pytest  # noqa: E402
+import numpy as np
+import pytest
 
 pytest.importorskip("glfw")
 

@@ -173,6 +173,7 @@ def _check_coverage_available():
 from OpenGLContext.testing.display import (
     OFFSCREEN_GL_PLATFORMS, display_available as _check_display_available,
 )
+from OpenGLContext.testing.gl_env import gl_subprocess_env
 #: The exit code a script uses to say the driver has not got the extension it
 #: was written to exercise.  Scripts have raised it for years; honouring it
 #: here is what turns "this driver lacks GL_ARB_imaging" into a skip.
@@ -293,37 +294,22 @@ def _detect_traceback(stderr: str) -> Optional[str]:
     return None
 
 
-# Rendering-configuration environment variables that other test modules set at
-# their module scope to configure their own in-process GL contexts. pytest imports
-# every test module during collection, so those assignments land in this process's
-# environment and, left in place, would be inherited by the scripts launched here --
-# switching the profile/renderer/shadows a script renders under (making captures
-# non-deterministic) or, for the glut backend, breaking window creation entirely on
-# Wayland. Drop them so each script runs in its default configuration, exactly as it
-# does when this file is run on its own.
-_LEAKED_RENDER_CONFIG_VARS = (
-    'OPENGLCONTEXT_PROFILE',
-    'OPENGLCONTEXT_BACKEND',
-    'OPENGLCONTEXT_RENDERER',
-    'OPENGLCONTEXT_SHADOWS',
-    'OPENGLCONTEXT_SHADOW_CASCADES',
-    'OPENGLCONTEXT_IBL',
-    'OPENGLCONTEXT_IBL_INTENSITY',
-    'OPENGLCONTEXT_INSTANCE_MIN',
-    'OPENGLCONTEXT_TRANSMISSION',
-)
-
-
 def _subprocess_env(auto_exit_frames: int = AUTO_EXIT_FRAMES) -> dict:
     """Build the base environment for a launched script.
 
-    Starts from the current environment with the leaked rendering-config vars
-    removed (see _LEAKED_RENDER_CONFIG_VARS), then applies the deterministic
-    settings the visual suite relies on.
+    Through :func:`~OpenGLContext.testing.gl_env.gl_subprocess_env`, which
+    gives the child this machine and the configuration the *run* settled and
+    nothing a single test set for itself. A script must render in its own
+    default configuration -- that is what its reference image was captured
+    under -- and it is launched from the middle of a session in which other
+    tests have been setting profiles, renderers and shadows for themselves.
+
+    A deny-list of what to drop used to stand here, and was missing
+    ``PYOPENGL_PLATFORM``: the ten modules that set it reached every script
+    launched after them, and on a platform with no EGL that made every GL
+    entry point undefined.
     """
-    env = os.environ.copy()
-    for var in _LEAKED_RENDER_CONFIG_VARS:
-        env.pop(var, None)
+    env = gl_subprocess_env()
     # Enable auto-exit so interactive scripts will terminate
     env['OPENGLCONTEXT_AUTO_EXIT_FRAMES'] = str(auto_exit_frames)
     # Disable FPS display for clean screenshots

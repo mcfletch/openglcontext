@@ -23,7 +23,6 @@ import os
 import sys
 
 # Use GLFW backend for core profile support
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
 from OpenGLContext import testingcontext
 

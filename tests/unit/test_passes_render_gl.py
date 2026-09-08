@@ -9,12 +9,8 @@ Each test sets its effect env vars, builds a fresh context, renders, and asserts
 an observable effect (an instanced draw happened, a pick resolved, the framebuffer
 lit up). Skips cleanly when no GL context can be created.
 """
-import os
 
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import pytest  # noqa: E402
+import pytest
 
 glfw = pytest.importorskip("glfw")
 

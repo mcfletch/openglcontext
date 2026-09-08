@@ -7,12 +7,10 @@ the run's summary reaches the log a person will actually see.
 """
 import os
 
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
-import logging  # noqa: E402
+import logging
 
-import pytest  # noqa: E402
+import pytest
 
 pytest.importorskip("glfw")
 

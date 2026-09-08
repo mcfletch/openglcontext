@@ -12,13 +12,9 @@ conversion that is right and never bound looks exactly like one that is wrong.
 Each test here therefore renders a scene chosen to show one of the two failures
 plainly, and measures it.
 """
-import os
 
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import numpy as np  # noqa: E402
-import pytest  # noqa: E402
+import numpy as np
+import pytest
 
 glfw = pytest.importorskip("glfw")
 

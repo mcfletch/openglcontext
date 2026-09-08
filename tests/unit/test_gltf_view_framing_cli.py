@@ -1,18 +1,13 @@
 """The viewer's auto-fit framing is parametrized by --margin/--elevation/--tilt so
 a per-scene metadata entry can pull the camera in on a model that under-fills the
 frame. These exercise the parsing and the frameModel() arithmetic without a GL context."""
-import os
-
 import pytest
 
-_orig = dict(os.environ)
-try:
-    from OpenGLContext.bin import view
-finally:
-    for k in list(os.environ):
-        if k not in _orig:
-            del os.environ[k]
-    os.environ.update(_orig)
+from OpenGLContext.testing.gl_env import import_unconfigured
+
+# The viewer is a program and settles the renderer as it is imported; this
+# imports it to call its argument parsing, which is not.
+view = import_unconfigured('OpenGLContext.bin.view')
 
 
 class TestFramingArgs:

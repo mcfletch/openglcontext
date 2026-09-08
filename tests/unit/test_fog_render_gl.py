@@ -9,13 +9,9 @@ compares the framebuffer.  Absolute colours depend on tone mapping, exposure and
 the driver; the *relations* between two renders of one scene do not, which is
 what these assert.
 """
-import os
 
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import numpy as np  # noqa: E402
-import pytest  # noqa: E402
+import numpy as np
+import pytest
 
 glfw = pytest.importorskip("glfw")
 

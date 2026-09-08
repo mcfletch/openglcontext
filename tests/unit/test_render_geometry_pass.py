@@ -6,12 +6,8 @@ visible from *this* matrix" without the rest of a frame around it.  That is what
 this is, and it is a published part of the pass -- *Depth-map Shadows* calls it
 by name.
 """
-import os
 
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import pytest  # noqa: E402
+import pytest
 
 pytest.importorskip("glfw")
 

@@ -20,8 +20,6 @@ from datetime import datetime
 from pathlib import Path
 
 # Force core profile and GLFW for consistent testing
-os.environ.setdefault('OPENGLCONTEXT_PROFILE', 'core')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()

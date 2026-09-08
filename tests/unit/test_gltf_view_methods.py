@@ -8,23 +8,18 @@ import types
 
 import pytest
 
-# Restore any renderer env vars the module-level setdefault() calls add, so they
-# don't leak into unrelated GL subprocess tests.
-_ENV_KEYS = ('OPENGLCONTEXT_PROFILE', 'OPENGLCONTEXT_BACKEND', 'OPENGLCONTEXT_RENDERER',
-             'OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_IBL_INTENSITY')
-_SNAP = {k: os.environ.get(k) for k in _ENV_KEYS}
-from OpenGLContext.bin import view as V  # noqa: E402
+from OpenGLContext.testing.gl_env import import_unconfigured
+
+# The viewer settles the renderer as it is imported, being a program; these
+# tests read its logic, so the settling is put back.
+V = import_unconfigured('OpenGLContext.bin.view')
+
 from OpenGLContext.viewer import environment  # noqa: E402
 from OpenGLContext.viewer.options import ViewerOptions  # noqa: E402
 from OpenGLContext.scenegraph.light import DirectionalLight  # noqa: E402
 from OpenGLContext.scenegraph.background import Background  # noqa: E402
 from OpenGLContext.scenegraph.group import Group  # noqa: E402
 from OpenGLContext.scenegraph.viewpoint import Viewpoint  # noqa: E402
-for _k, _v in _SNAP.items():
-    if _v is None:
-        os.environ.pop(_k, None)
-    else:
-        os.environ[_k] = _v
 
 
 def _inst():

@@ -14,12 +14,8 @@ A ``Box`` is the pick target because its geometry renders through the core-profi
 shader path; the quadric ``Sphere`` still uses legacy client-state calls that are
 invalid in a core context.
 """
-import os
 
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import pytest  # noqa: E402
+import pytest
 
 glfw = pytest.importorskip("glfw")
 

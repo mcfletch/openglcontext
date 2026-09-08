@@ -8,16 +8,11 @@ import types
 
 import pytest
 
-_ENV_KEYS = ('OPENGLCONTEXT_PROFILE', 'OPENGLCONTEXT_BACKEND', 'OPENGLCONTEXT_RENDERER',
-             'OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_SHADOW_CASCADES',
-             'OPENGLCONTEXT_IBL_INTENSITY', 'OPENGLCONTEXT_ENV_CUBEMAP', 'OPENGLCONTEXT_IBL')
-_SNAP = {k: os.environ.get(k) for k in _ENV_KEYS}
-from OpenGLContext.bin import gltf_demo as D  # noqa: E402
-for _k, _v in _SNAP.items():
-    if _v is None:
-        os.environ.pop(_k, None)
-    else:
-        os.environ[_k] = _v
+from OpenGLContext.testing.gl_env import import_unconfigured
+
+# The demo settles the renderer as it is imported, being a program; this reads
+# its logic rather than running it, so the settling is put back.
+D = import_unconfigured('OpenGLContext.bin.gltf_demo')
 
 
 def _inst():

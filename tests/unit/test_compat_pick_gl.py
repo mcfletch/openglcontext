@@ -11,11 +11,12 @@ frame, then injects a centre-of-viewport pick and renders again. A NameError in
 the pick path is reported distinctly from "no usable GL context" so the bug can
 never masquerade as a skip. Skips (not fails) when GL is unavailable.
 """
-import os
 import subprocess
 import sys
 
 import pytest
+
+from OpenGLContext.testing.gl_env import gl_subprocess_env
 
 DRIVER = r'''
 import os, sys
@@ -89,10 +90,13 @@ os._exit(0)
 '''
 
 
+@pytest.mark.gl_context(profile='compatibility')
 def test_compatibility_profile_pick_does_not_crash():
-    env = dict(os.environ)
+    """Declared, so a driver that offers only a core profile passes this over
+    rather than failing it: there is nothing here for such a driver to run."""
     proc = subprocess.run([sys.executable, '-c', DRIVER],
-                          capture_output=True, text=True, timeout=120, env=env)
+                          capture_output=True, text=True, timeout=120,
+                          env=gl_subprocess_env())
     if proc.returncode == 3:
         pytest.skip('no usable GL context: %s'
                     % proc.stderr.strip().splitlines()[-1:])

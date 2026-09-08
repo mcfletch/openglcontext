@@ -3,19 +3,12 @@ import os
 
 import pytest
 
-# Importing the demo pulls in the viewer, whose module-level os.environ.setdefault
-# calls configure the renderer; snapshot/restore so they don't leak into other GL
-# subprocess tests (mirrors test_gltf_view_cli.py).
-_ENV_KEYS = ('OPENGLCONTEXT_PROFILE', 'OPENGLCONTEXT_BACKEND', 'OPENGLCONTEXT_RENDERER',
-             'OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_SHADOW_CASCADES',
-             'OPENGLCONTEXT_IBL_INTENSITY')
-_ENV_SNAPSHOT = {k: os.environ.get(k) for k in _ENV_KEYS}
-from OpenGLContext.bin import gltf_demo
-for _k, _v in _ENV_SNAPSHOT.items():
-    if _v is None:
-        os.environ.pop(_k, None)
-    else:
-        os.environ[_k] = _v
+from OpenGLContext.testing.gl_env import import_unconfigured
+
+# The demo pulls in the viewer, which settles the renderer as it is imported
+# because it is a program about to draw. This imports it to read its argument
+# parsing, so the settling is put back.
+gltf_demo = import_unconfigured('OpenGLContext.bin.gltf_demo')
 
 
 class TestDemoConfig:

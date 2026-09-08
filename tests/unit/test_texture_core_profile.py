@@ -10,13 +10,9 @@ The same applies to the wrap mode: ``GL_CLAMP`` was the fixed-function pipeline'
 border-sampling clamp and is not a core wrap mode.  ``GL_CLAMP_TO_EDGE`` is,
 and it is what ``GL_CLAMP`` did for a texture with no border set.
 """
-import os
 
-os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-import numpy as np  # noqa: E402
-import pytest  # noqa: E402
+import numpy as np
+import pytest
 
 pytest.importorskip("glfw")
 PIL = pytest.importorskip("PIL.Image")
