@@ -3,11 +3,7 @@ from ttfquery import ttffiles, describe
 import re
 
 ITALICS_FINDER = re.compile( '(italic[s]?)$', re.IGNORECASE )
-try:
-    import string 
-    ascii_letters = string.letters 
-except AttributeError:
-    ascii_letters = string.ascii_letters
+from string import ascii_letters
 
 class TTFRegistry( ttffiles.Registry ):
     """Minor specialisation to provide VRML97 fontstyle matching"""

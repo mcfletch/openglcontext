@@ -16,10 +16,7 @@ import warnings
 import ctypes
 import numpy as np
 from vrml import protofunctions
-try:
-    from itertools import izip_longest as zip_longest
-except ImportError:
-    from itertools import zip_longest
+from itertools import zip_longest
 
 class IndexedLineSet(
     coordinatebounded.CoordinateBounded,

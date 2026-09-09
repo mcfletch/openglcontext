@@ -83,15 +83,12 @@ class LockingError(Exception):
     pass
 
 
-try:
-    import Queue
-except ImportError:
-    import queue as Queue
+import queue
 import ctypes
 import threading
 from contextlib import nullcontext
 
-perf = time.perf_counter if hasattr(time, "perf_counter") else time.clock
+perf = time.perf_counter
 contextLock = threading.RLock()
 contextThread = None
 
@@ -321,7 +318,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         self.setupCallbacks()
         self.allContexts.append(weakref.ref(self))
         self.pickEvents = {}
-        self.eventCascadeQueue = Queue.Queue()
+        self.eventCascadeQueue = queue.Queue()
         self.setupCache()
         self.setupFontProviders()
         self.setupFrameRateCounter()

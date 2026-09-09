@@ -1,9 +1,6 @@
 """Mix in functionality for Context classes needing event support"""
 
-try:
-    import Queue
-except ImportError:
-    import queue as Queue
+import queue
 import logging
 import time
 
@@ -299,7 +296,7 @@ class EventHandlerMixin(HeldKeyMixin):
                 func, args, named = self.eventCascadeQueue.get(0)
                 func(*args, **named)
                 events = events + 1
-            except Queue.Empty:
+            except queue.Empty:
                 break
         return events
 

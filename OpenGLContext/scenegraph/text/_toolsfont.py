@@ -167,7 +167,7 @@ if __name__ == "__main__":
     import os
     import glob
     import traceback
-    testText = [ unicode(chr(x),'latin-1') for x in range(32,256)]
+    testText = [ chr(x) for x in range(32,256)]
     def scan( directory=None ):
         if directory is None:
             directory = os.path.join( os.environ['windir'], 'fonts')
