@@ -37,18 +37,19 @@ class FontProvider(object):
         """Initialize the provider"""
         self.fonts = {}
 
+    @classmethod
     def registerProvider(cls, obj):
         """Register a class as an active font-provider (classmethod)"""
         cls.providers.setdefault(obj.format, []).append(obj)
 
-    registerProvider = classmethod(registerProvider)
 
+    @classmethod
     def getProviders(cls, format):
         """Get providers for a particular format (classmethod)"""
         return cls.providers.get(format, [])
 
-    getProviders = classmethod(getProviders)
 
+    @classmethod
     def getProviderFont(cls, fontStyle, mode=None):
         """Get a font provider & font for given style (classmethod)
 
@@ -105,7 +106,6 @@ class FontProvider(object):
         )
         return None, None
 
-    getProviderFont = classmethod(getProviderFont)
 
     def addFont(self, fontStyle, font, mode=None):
         """Add a new font to the font provider
@@ -174,17 +174,17 @@ class TTFFontProvider(FontProvider):
 
     TTFRegistry = None
 
+    @classmethod
     def setTTFRegistry(cls, registry):
         """Set the TTF registry for the class (global if called on TTFFontProvider)"""
         cls.TTFRegistry = registry
 
-    setTTFRegistry = classmethod(setTTFRegistry)
 
+    @classmethod
     def getTTFRegistry(cls):
         """Set the TTF registry for the class (global if called on TTFFontProvider)"""
         return cls.TTFRegistry
 
-    getTTFRegistry = classmethod(getTTFRegistry)
 
 
 getProviders = FontProvider.getProviders

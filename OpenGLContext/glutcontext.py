@@ -265,6 +265,7 @@ class GLUTContext(
         ("debug", GLUT_DEBUG, 0, 0),
     )
 
+    @classmethod
     def glutFlagsFromDefinition(cls, definition):
         """Create our initialisation flags from a definition"""
         if definition:
@@ -281,7 +282,6 @@ class GLUTContext(
             return result
         return cls.DISPLAYMODE
 
-    glutFlagsFromDefinition = classmethod(glutFlagsFromDefinition)
 
     def setupCallbacks(self):
         '''Setup the various callbacks for this context'''
@@ -538,6 +538,7 @@ class GLUTContext(
                     self.OnDraw(force=0)
         return renderedFirst
 
+    @classmethod
     def ContextMainLoop(cls, *args, **named):
         """Mainloop for the GLUT testing context"""
         # The constructor asks for this too; asking here as well costs nothing
@@ -557,7 +558,6 @@ class GLUTContext(
             )
         return render.MainLoop()
 
-    ContextMainLoop = classmethod(ContextMainLoop)
 
 
 def null_display():

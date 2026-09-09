@@ -518,6 +518,7 @@ class GLFWContext(
         self.releaseWindow()
         glfw.terminate()
 
+    @classmethod
     def ContextMainLoop(cls, *args, **named):
         """Class method to create and run the context"""
         instance = cls(*args, **named)
@@ -533,7 +534,6 @@ class GLFWContext(
 
         return instance.MainLoop()
 
-    ContextMainLoop = classmethod(ContextMainLoop)
 
 
 if __name__ == "__main__":

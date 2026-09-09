@@ -106,12 +106,13 @@ class VRML97Handler(base.BaseHandler):
         finally:
             self.LOCK.release()
 
+    @classmethod
     def dumps(cls, node):
         """Dump node's representation to a VRML97 string"""
         return linearise.Lineariser().linear(node)
 
-    dumps = classmethod(dumps)
 
+    @classmethod
     def dump(cls, node, file):
         """Dump node's representation to a VRML97-formatted file"""
         data = cls.dumps(node)
@@ -121,7 +122,6 @@ class VRML97Handler(base.BaseHandler):
         file.close()
         return data
 
-    dump = classmethod(dump)
 
 
 def defaultHandler():

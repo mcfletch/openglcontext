@@ -384,6 +384,7 @@ class _MouseChangeEvent( MouseEvent ):
         for key,value in named.items():
             setattr( self, key, value )
         super( _MouseChangeEvent, self).__init__()
+    @classmethod
     def fromMoveEvent( cls, event, lastPath, newPath ):
         """Construct synthetic mouse event from a move event"""
         base = event.__dict__.copy()
@@ -392,7 +393,6 @@ class _MouseChangeEvent( MouseEvent ):
         except KeyError:
             pass
         return cls( lastPath=lastPath, newPath=newPath, **base )
-    fromMoveEvent = classmethod( fromMoveEvent )
 class MouseInEvent( _MouseChangeEvent ):
     """Mouse has just begun pointing to a particular path
 
@@ -423,6 +423,7 @@ class MouseOutEvent( _MouseChangeEvent ):
 class _MouseChangeEventManager (MouseEventManager):
     """Manager for _MouseChangeEvent instances
     """
+    @classmethod
     def registerCallback(
         cls,
         buttons = (), modifiers = (0,0,0),
@@ -450,7 +451,6 @@ class _MouseChangeEventManager (MouseEventManager):
         return super( _MouseChangeEventManager, cls).registerCallback(
             key, function, node, capture,
         )
-    registerCallback = classmethod( registerCallback )
 class MouseInEventManager( _MouseChangeEventManager ):
     type = 'mousein'
     def _traversalPaths( self, event ):

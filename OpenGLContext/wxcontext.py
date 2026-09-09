@@ -531,6 +531,7 @@ class wxContext(
             self._pointerWarpedTo = None
         return echo
 
+    @classmethod
     def getDefaultIcons( cls ):
         """Get the OpenGLContext icons as a wxPython wxIconBundle
 
@@ -546,8 +547,8 @@ class wxContext(
             bundle.AddIcon( getIcon(context_icon_png.data) )
             bundle.AddIcon( getIcon(context_icon_small_png.data) )
             return bundle
-    getDefaultIcons = classmethod( getDefaultIcons )
 
+    @classmethod
     def ContextMainLoop( cls, *args, **named ):
         """Initialise the context and start the mainloop"""
         made = []
@@ -585,7 +586,6 @@ class wxContext(
                 if instance.stallJournal is not None:
                     instance.stallJournal.close()
                 instance.stopTelemetry( 'mainloop-ended' )
-    ContextMainLoop = classmethod( ContextMainLoop )
 
 
 def getIcon( data ):

@@ -82,6 +82,7 @@ class EventManager(object):
                     log.debug( '   handler %s -> %r', handler, result )
                 processed = processed or result
         return processed
+    @classmethod
     def registerCallback(
         cls,
         key,
@@ -124,7 +125,7 @@ class EventManager(object):
                 signal=metaKey,
             )))) == 1, """Have != 1 registered handlers for %(metaKey)r for node %(node)r"""%locals()
         return previous
-    registerCallback = classmethod( registerCallback )
+    @classmethod
     def _removeCurrentCallbacks(
         cls, 
         key,
@@ -179,7 +180,6 @@ class EventManager(object):
             signal=metaKey,
         ))), """Event callback de-registration failed: %(cls)s %(key)s %(node)r"""%locals()
         return receiver
-    _removeCurrentCallbacks = classmethod( _removeCurrentCallbacks )
 
 
 class BubblingEventManager( EventManager ):

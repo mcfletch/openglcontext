@@ -187,11 +187,11 @@ else:
     class PILImage(field.Field):
         """Simple field-type for holding PIL image objects"""
 
+        @classmethod
         def defaultDefault(self):
             """Get a default PIL image object"""
             return Image.new("RGB", (1, 1), (255, 0, 0))
 
-        defaultDefault = classmethod(defaultDefault)
 
     class ImageURLField(fieldtypes.MFString):
         """Field for managing interactions with an Image's URL value"""

@@ -61,6 +61,7 @@ class PygameContext(
         # for, and a viewport from the request would leave a border undrawn.
         self.ViewPort(*self.screen.get_size())
 
+    @classmethod
     def pygameFlagsFromDefinition( cls, definition ):
         """Setup the various non-initialising flags, return init flags"""
         set = pygame.display.gl_set_attribute
@@ -93,7 +94,7 @@ class PygameContext(
         elif profile == 'compatibility':
             set( pygame.GL_CONTEXT_PROFILE_MASK, pygame.GL_CONTEXT_PROFILE_COMPATIBILITY )
         return cls.pygameWindowFlags( definition )
-    pygameFlagsFromDefinition = classmethod( pygameFlagsFromDefinition )
+    @classmethod
     def pygameWindowFlags( cls, definition ):
         """The creation flags this definition asks SDL for.
 
@@ -117,7 +118,6 @@ class PygameContext(
             return DOUBLEBUF|RESIZABLE|hidden|filling
         else:
             return RESIZABLE|hidden|filling
-    pygameWindowFlags = classmethod( pygameWindowFlags )
     def pygameDisplayMode( self, definition=None ):
         """Open (or re-open) the SDL window this context draws into
 
@@ -395,6 +395,7 @@ class PygameContext(
         self.triggerRedraw(1)
         return 1
 
+    @classmethod
     def ContextMainLoop( cls, *args, **named ):
         """Initialise the context and start the mainloop"""
         instance = cls( *args, **named )
@@ -408,7 +409,6 @@ class PygameContext(
                 instance.contextDefinition.profileFile
             )
         return instance.MainLoop()
-    ContextMainLoop = classmethod( ContextMainLoop )
 
 
 if __name__ == '__main__':

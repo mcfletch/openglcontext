@@ -9,6 +9,7 @@ class VRMLContext(
     glutinteractivecontext.GLUTInteractiveContext
 ):
     """GLUT-specific VRML97-aware Testing Context"""
+    @classmethod
     def ContextMainLoop( cls, *args, **named ):
         """Mainloop for the GLUT testing context"""
         # initialize GLUT windowing system
@@ -22,4 +23,3 @@ class VRMLContext(
         if hasattr( render, 'createMenus' ):
             render.createMenus()
         glutMainLoop()
-    ContextMainLoop = classmethod( ContextMainLoop )
