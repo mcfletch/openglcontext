@@ -322,7 +322,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         # A new program means the texture units are not known to hold what the
         # last material bound; see :attr:`_boundTextures`.
         self._boundTextures = None
-        glUseProgram(program)
+        # None is a program that was never compiled; 0 is what GL calls no
+        # program, and unbinding is the right answer for both.
+        glUseProgram(program or 0)
         self._active_program = program
 
     def _program_for_default(self) -> int:

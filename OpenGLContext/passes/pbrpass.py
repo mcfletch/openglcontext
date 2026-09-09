@@ -466,9 +466,12 @@ class PBRShaderProgram(VRML97ShaderProgram):
     # -- per-material uniform block (UBO) ----------------------------------
     def _init_material_block(self) -> None:
         """Point the MaterialBlock uniform block at its binding index (once)."""
-        idx = glGetUniformBlockIndex(self.program, 'MaterialBlock')
+        program = self.program
+        if program is None:
+            return                      # nothing compiled, so no block to point
+        idx = glGetUniformBlockIndex(program, 'MaterialBlock')
         if idx != GL_INVALID_INDEX:
-            glUniformBlockBinding(self.program, idx, self.MATERIAL_UBO_BINDING)
+            glUniformBlockBinding(program, idx, self.MATERIAL_UBO_BINDING)
 
     def _upload_material_ubo(self, material: Any) -> int:
         data = pack_material_block(material)

@@ -81,9 +81,22 @@ class ShadowMapArray:
     def texture(self) -> Optional[int]:
         return self.depth_texture
 
-    def _ensure(self, size: int, layers: int) -> bool:
+    def _names(self) -> Optional[Tuple[int, int]]:
+        """The framebuffer and depth texture, or None while either is missing."""
+        if self.fbo is None or self.depth_texture is None:
+            return None
+        return (self.fbo, self.depth_texture)
+
+    def _ensure(self, size: int, layers: int) -> Optional[Tuple[int, int]]:
+        """The framebuffer and depth texture, made if they are not there yet.
+
+        None where the driver would not make them.  Handing back the names
+        rather than a flag is what lets a caller use them: the attributes are
+        Optional because there is a moment before the objects exist, and a
+        caller past this point is past that moment.
+        """
         if self._initialized and size == self.size and layers == self.layers:
-            return True
+            return self._names()
         self.cleanup()
         self.size, self.layers = int(size), int(layers)
         try:
@@ -102,20 +115,22 @@ class ShadowMapArray:
             glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
             glTexParameterfv(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_BORDER_COLOR, [1.0, 1.0, 1.0, 1.0])
             self._initialized = True
-            return True
+            return self._names()
         except Exception as err:
             log.warning("Failed to create CSM array FBO: %s", err)
             self.cleanup()
-            return False
+            return None
 
     def bind_layer(self, layer: int, size: Optional[int] = None,
                    layers: Optional[int] = None) -> bool:
         """Bind one cascade layer for depth rendering (clears it)."""
-        if not self._ensure(size or self.size, layers or self.layers):
+        names = self._ensure(size or self.size, layers or self.layers)
+        if names is None:
             return False
-        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        fbo, depth = names
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo)
         glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                                  self.depth_texture, 0, int(layer))
+                                  depth, 0, int(layer))
         glDrawBuffer(GL_NONE)
         glReadBuffer(GL_NONE)
         if not self._validated:
@@ -170,9 +185,22 @@ class ShadowMapCubeArray:
     def texture(self) -> Optional[int]:
         return self.depth_texture
 
-    def _ensure(self, size: int, num_cubes: int) -> bool:
+    def _names(self) -> Optional[Tuple[int, int]]:
+        """The framebuffer and depth texture, or None while either is missing."""
+        if self.fbo is None or self.depth_texture is None:
+            return None
+        return (self.fbo, self.depth_texture)
+
+    def _ensure(self, size: int, num_cubes: int) -> Optional[Tuple[int, int]]:
+        """The framebuffer and depth texture, made if they are not there yet.
+
+        None where the driver would not make them.  Handing back the names
+        rather than a flag is what lets a caller use them: the attributes are
+        Optional because there is a moment before the objects exist, and a
+        caller past this point is past that moment.
+        """
         if self._initialized and size == self.size and num_cubes == self.num_cubes:
-            return True
+            return self._names()
         self.cleanup()
         self.size, self.num_cubes = int(size), int(num_cubes)
         try:
@@ -189,20 +217,22 @@ class ShadowMapCubeArray:
             glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
             glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
             self._initialized = True
-            return True
+            return self._names()
         except Exception as err:
             log.warning("Failed to create cube-array shadow FBO: %s", err)
             self.cleanup()
-            return False
+            return None
 
     def bind_face(self, cube_index: int, face: int, size: Optional[int] = None,
                   num_cubes: Optional[int] = None) -> bool:
         """Bind one cube's one face (layer-face cube*6+face) for depth rendering."""
-        if not self._ensure(size or self.size, num_cubes or self.num_cubes):
+        names = self._ensure(size or self.size, num_cubes or self.num_cubes)
+        if names is None:
             return False
-        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        fbo, depth = names
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo)
         glFramebufferTextureLayer(
-            GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, self.depth_texture, 0,
+            GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth, 0,
             int(cube_index) * 6 + int(face),
         )
         glDrawBuffer(GL_NONE)
@@ -255,9 +285,22 @@ class ShadowMapCube:
     def texture(self) -> Optional[int]:
         return self.depth_texture
 
-    def _ensure(self, size: int) -> bool:
+    def _names(self) -> Optional[Tuple[int, int]]:
+        """The framebuffer and depth texture, or None while either is missing."""
+        if self.fbo is None or self.depth_texture is None:
+            return None
+        return (self.fbo, self.depth_texture)
+
+    def _ensure(self, size: int) -> Optional[Tuple[int, int]]:
+        """The framebuffer and depth texture, made if they are not there yet.
+
+        None where the driver would not make them.  Handing back the names
+        rather than a flag is what lets a caller use them: the attributes are
+        Optional because there is a moment before the objects exist, and a
+        caller past this point is past that moment.
+        """
         if self._initialized and size == self.size:
-            return True
+            return self._names()
         self.cleanup()
         self.size = int(size)
         try:
@@ -277,11 +320,11 @@ class ShadowMapCube:
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
             glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE)
             self._initialized = True
-            return True
+            return self._names()
         except Exception as err:
             log.warning("Failed to create cube shadow FBO: %s", err)
             self.cleanup()
-            return False
+            return None
 
     def bind_face(self, face: int, size: Optional[int] = None) -> bool:
         """Bind one cube face for depth rendering (clears it).
@@ -291,12 +334,14 @@ class ShadowMapCube:
         once, so the six faces don't each stall the pipeline with a
         glCheckFramebufferStatus + glGetIntegerv round-trip every frame.
         """
-        if not self._ensure(size or self.size):
+        names = self._ensure(size or self.size)
+        if names is None:
             return False
-        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        fbo, depth = names
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo)
         glFramebufferTexture2D(
             GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-            GL_TEXTURE_CUBE_MAP_POSITIVE_X + int(face), self.depth_texture, 0,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_X + int(face), depth, 0,
         )
         glDrawBuffer(GL_NONE)
         glReadBuffer(GL_NONE)

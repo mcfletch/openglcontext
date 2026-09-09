@@ -15,7 +15,8 @@ grows with strength (EmissiveStrengthTest), instead of clamping flat to white.
 from __future__ import annotations
 
 import os
-from typing import Any, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Optional, Tuple
 
 from OpenGL.GL import (
     GL_TRIANGLES, GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA16F, GL_RGBA, GL_FLOAT,
@@ -107,7 +108,8 @@ def _compile(vert: str, frag: str) -> Any:
 
 
 def _color_tex(w: int, h: int, filt: int = GL_LINEAR) -> int:
-    t = glGenTextures(1)
+    # int(), because glGenTextures answers a numpy scalar for a count of one.
+    t = int(glGenTextures(1))
     glBindTexture(GL_TEXTURE_2D, t)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, None)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filt)
@@ -118,6 +120,38 @@ def _color_tex(w: int, h: int, filt: int = GL_LINEAR) -> int:
     return t
 
 
+@dataclass(frozen=True)
+class _Chain:
+    """The vertex array and the three programs a bloom draws with.
+
+    Made once and kept: nothing about them depends on the window size.
+    """
+
+    vao: int
+    bright: int
+    blur: int
+    composite: int
+
+
+@dataclass(frozen=True)
+class _Targets:
+    """The framebuffers and textures a frame of one size is drawn into.
+
+    One record rather than seven attributes because they are made together and
+    released together, and a half-built set is not a thing a frame can be drawn
+    with: a scene texture that outlived the size it was made at would be drawn
+    into at the wrong one.
+    """
+
+    size: Tuple[int, int]
+    bloom_size: Tuple[int, int]
+    scene_fbo: int
+    scene_tex: int
+    depth_rb: int
+    ping_fbo: Tuple[int, int]
+    ping_tex: Tuple[int, int]
+
+
 class BloomPass(object):
     """Per-context HDR scene target + bloom chain (created lazily, resized on demand)."""
 
@@ -126,98 +160,114 @@ class BloomPass(object):
     BLUR_ITERATIONS = 5    # ping-pong passes (each = one H + one V blur)
 
     def __init__(self) -> None:
-        self._size: Optional[Tuple[int, int]] = None
-        self._bloom_size: Optional[Tuple[int, int]] = None
         self._prev_fbo: int = 0
-        self._scene_fbo: Optional[int] = None
-        self._scene_tex: Optional[int] = None
-        self._depth_rb: Optional[int] = None
-        self._ping_fbo: List[Optional[int]] = [None, None]
-        self._ping_tex: List[Optional[int]] = [None, None]
-        self._vao: Optional[int] = None
-        self._prog_bright: Optional[int] = None
-        self._prog_blur: Optional[int] = None
-        self._prog_comp: Optional[int] = None
+        self._chain: Optional[_Chain] = None
+        self._targets: Optional[_Targets] = None
+
+    @property
+    def size(self) -> Optional[Tuple[int, int]]:
+        """What the scene target is sized for, or None while there is none."""
+        return self._targets.size if self._targets else None
+
+    @property
+    def bloom_size(self) -> Optional[Tuple[int, int]]:
+        """The half-resolution size the blur works at."""
+        return self._targets.bloom_size if self._targets else None
 
     # -- lifecycle --------------------------------------------------------
-    def _ensure(self, w: int, h: int) -> None:
-        if self._vao is None:
-            self._vao = glGenVertexArrays(1)
-            self._prog_bright = _compile(_FS_VERT, _BRIGHT_FRAG)
-            self._prog_blur = _compile(_FS_VERT, _BLUR_FRAG)
-            self._prog_comp = _compile(_FS_VERT, _COMPOSITE_FRAG)
-        if self._size == (w, h):
-            return
+    def _ensure(self, w: int, h: int) -> Tuple[_Chain, _Targets]:
+        """The chain and the targets for a frame this size, made if need be."""
+        if self._chain is None:
+            self._chain = _Chain(
+                vao=glGenVertexArrays(1),
+                bright=_compile(_FS_VERT, _BRIGHT_FRAG),
+                blur=_compile(_FS_VERT, _BLUR_FRAG),
+                composite=_compile(_FS_VERT, _COMPOSITE_FRAG),
+            )
+        if self._targets is not None and self._targets.size == (w, h):
+            return self._chain, self._targets
         self._release_targets()
-        self._scene_tex = _color_tex(w, h)
-        self._scene_fbo = glGenFramebuffers(1)
-        glBindFramebuffer(GL_FRAMEBUFFER, self._scene_fbo)
+        scene_tex = _color_tex(w, h)
+        scene_fbo = glGenFramebuffers(1)
+        glBindFramebuffer(GL_FRAMEBUFFER, scene_fbo)
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                               self._scene_tex, 0)
-        self._depth_rb = glGenRenderbuffers(1)
-        glBindRenderbuffer(GL_RENDERBUFFER, self._depth_rb)
+                               scene_tex, 0)
+        depth_rb = glGenRenderbuffers(1)
+        glBindRenderbuffer(GL_RENDERBUFFER, depth_rb)
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, w, h)
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
-                                  self._depth_rb)
+                                  depth_rb)
         bw, bh = max(1, w // 2), max(1, h // 2)     # half-res bloom
-        for i in range(2):
-            self._ping_tex[i] = _color_tex(bw, bh)
-            self._ping_fbo[i] = glGenFramebuffers(1)
-            glBindFramebuffer(GL_FRAMEBUFFER, self._ping_fbo[i])
+        ping_tex, ping_fbo = [], []
+        for _index in range(2):
+            ping_tex.append(_color_tex(bw, bh))
+            ping_fbo.append(glGenFramebuffers(1))
+            glBindFramebuffer(GL_FRAMEBUFFER, ping_fbo[-1])
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                                   self._ping_tex[i], 0)
+                                   ping_tex[-1], 0)
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
-        self._size = (w, h)
-        self._bloom_size = (bw, bh)
+        self._targets = _Targets(
+            size=(w, h), bloom_size=(bw, bh),
+            scene_fbo=scene_fbo, scene_tex=scene_tex, depth_rb=depth_rb,
+            ping_fbo=(ping_fbo[0], ping_fbo[1]),
+            ping_tex=(ping_tex[0], ping_tex[1]),
+        )
+        return self._chain, self._targets
 
     def begin(self, w: int, h: int) -> bool:
         """Bind the HDR scene target and clear it; returns True if bloom is active."""
-        self._ensure(w, h)
+        _chain, targets = self._ensure(w, h)
         self._prev_fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
-        glBindFramebuffer(GL_FRAMEBUFFER, self._scene_fbo)
+        glBindFramebuffer(GL_FRAMEBUFFER, targets.scene_fbo)
         glViewport(0, 0, w, h)
         glClearColor(0.0, 0.0, 0.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         return True
 
     def composite(self) -> None:
-        """Bright-pass + blur the HDR scene and composite it to the previous target."""
-        assert self._size is not None and self._bloom_size is not None
-        w, h = self._size
-        bw, bh = self._bloom_size
+        """Bright-pass + blur the HDR scene and composite it to the previous target.
+
+        Does nothing where :meth:`begin` has not run: there is no scene to
+        composite, and every name below would be missing.
+        """
+        chain, targets = self._chain, self._targets
+        if chain is None or targets is None:
+            return
+        w, h = targets.size
+        bw, bh = targets.bloom_size
         glDisable(GL_DEPTH_TEST)
         glDisable(GL_BLEND)
-        glBindVertexArray(self._vao)
+        glBindVertexArray(chain.vao)
 
         # 1. bright pass -> ping[0] (half res)
-        glBindFramebuffer(GL_FRAMEBUFFER, self._ping_fbo[0])
+        glBindFramebuffer(GL_FRAMEBUFFER, targets.ping_fbo[0])
         glViewport(0, 0, bw, bh)
-        glUseProgram(self._prog_bright)
-        self._bind_tex(self._prog_bright, 'scene', self._scene_tex, 0)
-        glUniform1f(glGetUniformLocation(self._prog_bright, 'threshold'), self.THRESHOLD)
+        glUseProgram(chain.bright)
+        self._bind_tex(chain.bright, 'scene', targets.scene_tex, 0)
+        glUniform1f(glGetUniformLocation(chain.bright, 'threshold'), self.THRESHOLD)
         glDrawArrays(GL_TRIANGLES, 0, 3)
 
         # 2. separable Gaussian blur, ping-ponging between the two half-res targets
-        glUseProgram(self._prog_blur)
+        glUseProgram(chain.blur)
         src, dst = 0, 1
         for i in range(self.BLUR_ITERATIONS * 2):
             horizontal = (i % 2 == 0)
-            glBindFramebuffer(GL_FRAMEBUFFER, self._ping_fbo[dst])
+            glBindFramebuffer(GL_FRAMEBUFFER, targets.ping_fbo[dst])
             glViewport(0, 0, bw, bh)
-            self._bind_tex(self._prog_blur, 'image', self._ping_tex[src], 0)
+            self._bind_tex(chain.blur, 'image', targets.ping_tex[src], 0)
             dx = (1.0 / bw) if horizontal else 0.0
             dy = 0.0 if horizontal else (1.0 / bh)
-            glUniform2f(glGetUniformLocation(self._prog_blur, 'direction'), dx, dy)
+            glUniform2f(glGetUniformLocation(chain.blur, 'direction'), dx, dy)
             glDrawArrays(GL_TRIANGLES, 0, 3)
             src, dst = dst, src
 
         # 3. composite scene + bloom -> the target that was bound before begin()
         glBindFramebuffer(GL_FRAMEBUFFER, self._prev_fbo)
         glViewport(0, 0, w, h)
-        glUseProgram(self._prog_comp)
-        self._bind_tex(self._prog_comp, 'scene', self._scene_tex, 0)
-        self._bind_tex(self._prog_comp, 'bloom', self._ping_tex[src], 1)
-        glUniform1f(glGetUniformLocation(self._prog_comp, 'strength'), self.STRENGTH)
+        glUseProgram(chain.composite)
+        self._bind_tex(chain.composite, 'scene', targets.scene_tex, 0)
+        self._bind_tex(chain.composite, 'bloom', targets.ping_tex[src], 1)
+        glUniform1f(glGetUniformLocation(chain.composite, 'strength'), self.STRENGTH)
         glDrawArrays(GL_TRIANGLES, 0, 3)
 
         glBindVertexArray(0)
@@ -226,7 +276,7 @@ class BloomPass(object):
         glEnable(GL_DEPTH_TEST)
 
     @staticmethod
-    def _bind_tex(prog: Any, name: str, tex: Optional[int], unit: int) -> None:
+    def _bind_tex(prog: int, name: str, tex: int, unit: int) -> None:
         glActiveTexture(GL_TEXTURE0 + unit)
         glBindTexture(GL_TEXTURE_2D, tex)
         loc = glGetUniformLocation(prog, name)
@@ -235,23 +285,25 @@ class BloomPass(object):
 
     # -- cleanup ----------------------------------------------------------
     def _release_targets(self) -> None:
-        for fbo in [self._scene_fbo] + list(self._ping_fbo):
-            if fbo:
-                try:
-                    glDeleteFramebuffers(1, [fbo])
-                except Exception:
-                    pass
-        for tex in [self._scene_tex] + list(self._ping_tex):
-            if tex:
-                try:
-                    glDeleteTextures([tex])
-                except Exception:
-                    pass
-        if self._depth_rb:
+        """Give the size-dependent objects back, whatever the driver says.
+
+        A delete that fails leaks one name; stopping here would leave the pass
+        holding names it has already half-freed, which is worse.
+        """
+        targets, self._targets = self._targets, None
+        if targets is None:
+            return
+        for fbo in (targets.scene_fbo,) + targets.ping_fbo:
             try:
-                glDeleteRenderbuffers(1, [self._depth_rb])
+                glDeleteFramebuffers(1, [fbo])
             except Exception:
                 pass
-        self._scene_fbo = self._scene_tex = self._depth_rb = None
-        self._ping_fbo = [None, None]
-        self._ping_tex = [None, None]
+        for tex in (targets.scene_tex,) + targets.ping_tex:
+            try:
+                glDeleteTextures([tex])
+            except Exception:
+                pass
+        try:
+            glDeleteRenderbuffers(1, [targets.depth_rb])
+        except Exception:
+            pass

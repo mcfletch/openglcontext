@@ -133,10 +133,24 @@ def paint_image(renderer: Any, rect: Rect, url: str,
 SELECTION_INSET = 3.0
 
 
+def _pixels(x: float, y: float, width: float, height: float) -> Rect:
+    """A rectangle on the pixel grid, from measurements that are not.
+
+    A band divides its room among however many pictures are showing, so the
+    arithmetic is fractional and :class:`~.geometry.Rect` counts pixels.  The
+    *edges* are what round: rounding each width on its own lets two
+    side-by-side rectangles land a pixel apart or a pixel over each other,
+    which is a line of background between two pictures or one drawn across the
+    next.  Rounding where they meet gives them the same edge.
+    """
+    left, bottom = round(x), round(y)
+    return Rect(left, bottom, round(x + width) - left, round(y + height) - bottom)
+
+
 def _grown(rect: Rect, by: float) -> Rect:
     """A rectangle enlarged on every side."""
-    return Rect(rect.x - by, rect.y - by, rect.width + by * 2,
-                rect.height + by * 2)
+    return _pixels(rect.x - by, rect.y - by, rect.width + by * 2,
+                   rect.height + by * 2)
 
 
 def _letterboxed(rect: Rect, aspect: float) -> Rect:
@@ -145,8 +159,8 @@ def _letterboxed(rect: Rect, aspect: float) -> Rect:
         return rect
     width = min(rect.width, rect.height * aspect)
     height = width / aspect
-    return Rect(rect.x + (rect.width - width) / 2.0,
-                rect.y + (rect.height - height) / 2.0, width, height)
+    return _pixels(rect.x + (rect.width - width) / 2.0,
+                   rect.y + (rect.height - height) / 2.0, width, height)
 
 
 class Carousel(BoundWidget):
@@ -269,9 +283,9 @@ class Carousel(BoundWidget):
     def arrowRects(self) -> Tuple[Rect, Rect]:
         """The two arrows, at either end of the band."""
         width = min(self.rect.width / 2.0, max(1.0, self.rect.height / 3.0))
-        return (Rect(self.rect.x, self.rect.y, width, self.rect.height),
-                Rect(self.rect.right - width, self.rect.y, width,
-                     self.rect.height))
+        return (_pixels(self.rect.x, self.rect.y, width, self.rect.height),
+                _pixels(self.rect.right - width, self.rect.y, width,
+                        self.rect.height))
 
     def slotRects(self, metrics: FontMetrics) -> List[Rect]:
         """Where each visible item goes, left to right, between the arrows."""
@@ -285,8 +299,8 @@ class Carousel(BoundWidget):
         room = max(0.0, right.x - left.right)
         gap = metrics.char_width * SLOT_GAP
         width = max(0.0, (room - gap * (len(items) - 1)) / len(items))
-        return [Rect(left.right + (width + gap) * index, self.rect.y,
-                     width, self.rect.height)
+        return [_pixels(left.right + (width + gap) * index, self.rect.y,
+                        width, self.rect.height)
                 for index in range(len(items))]
 
     def captionRect(self, slot: Rect, metrics: FontMetrics) -> Rect:
@@ -294,14 +308,14 @@ class Carousel(BoundWidget):
 
         Above the chosen-name line, which has the band's whole width.
         """
-        return Rect(slot.x, slot.y + metrics.char_height + metrics.line_gap,
-                    slot.width, metrics.char_height)
+        return _pixels(slot.x, slot.y + metrics.char_height + metrics.line_gap,
+                       slot.width, metrics.char_height)
 
     def pictureRect(self, slot: Rect, metrics: FontMetrics) -> Rect:
         """The part of a slot the art occupies: above both caption lines."""
         used = (metrics.char_height + metrics.line_gap) * 2
-        return Rect(slot.x, slot.y + used, slot.width,
-                    max(0.0, slot.height - used))
+        return _pixels(slot.x, slot.y + used, slot.width,
+                       max(0.0, slot.height - used))
 
     # -- input -------------------------------------------------------------
     def press(self, x: float, y: float) -> bool:

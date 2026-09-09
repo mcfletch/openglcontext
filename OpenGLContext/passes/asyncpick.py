@@ -103,7 +103,8 @@ class _AsyncPickMixin:
         if not events:
             return
         sb = self._getSelectionBuffer()
-        if not sb._initialized:
+        ready = sb.readyFramebuffer
+        if ready is None:
             return
 
         samples, evs, inb = [], [], []
@@ -119,7 +120,7 @@ class _AsyncPickMixin:
         dz_pid, dz_cap = self._acquirePBO(n * 4)
 
         prev = int(glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING))
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, sb.fbo)
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, ready)
         try:
             glReadBuffer(GL_COLOR_ATTACHMENT1)
             glBindBuffer(GL_PIXEL_PACK_BUFFER, id_pid)
@@ -215,6 +216,8 @@ class _AsyncPickMixin:
         glBindBuffer(GL_PIXEL_PACK_BUFFER, pid)
         ptr = glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, n * 4, GL_MAP_READ_BIT)
         try:
+            if ptr is None:                  # the driver would not map the buffer
+                return frombuffer(bytes(n * 4), dtype='B').copy()
             raw = (ctypes.c_ubyte * (n * 4)).from_address(int(ptr))
             data = frombuffer(bytes(raw), dtype='B').copy()
         finally:

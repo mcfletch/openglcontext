@@ -59,6 +59,16 @@ class SelectionFBO:
         self.current_height = 0
         self._initialized = False
 
+    @property
+    def readyFramebuffer(self) -> Optional[int]:
+        """The framebuffer to bind, or None while there is not one ready.
+
+        ``_initialized`` and holding a framebuffer name are the same fact.  A
+        caller about to bind wants the name, and asking for it this way is the
+        form that cannot reach ``glBindFramebuffer`` with None.
+        """
+        return self.fbo if self._initialized else None
+
     def _ensure_initialized(self, width: int, height: int) -> bool:
         """Ensure FBO is created and sized appropriately.
 
@@ -169,8 +179,11 @@ class SelectionFBO:
         """
         if not self._ensure_initialized(region_width, region_height):
             return False
+        ready = self.readyFramebuffer
+        if ready is None:
+            return False
 
-        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        glBindFramebuffer(GL_FRAMEBUFFER, ready)
         glViewport(0, 0, region_width, region_height)
         return True
 
@@ -219,6 +232,16 @@ class SelectionBufferFBO:
 
         # Object ID to path mapping (rebuilt each frame)
         self.id_map: Dict = {}
+
+    @property
+    def readyFramebuffer(self) -> Optional[int]:
+        """The framebuffer to bind, or None while there is not one ready.
+
+        ``_initialized`` and holding a framebuffer name are the same fact.  A
+        caller about to bind wants the name, and asking for it this way is the
+        form that cannot reach ``glBindFramebuffer`` with None.
+        """
+        return self.fbo if self._initialized else None
 
     def ensure_size(self, width: int, height: int) -> bool:
         """Ensure FBO is created and sized to match viewport.
@@ -356,9 +379,10 @@ class SelectionBufferFBO:
         Returns:
             True if bound successfully
         """
-        if not self._initialized:
+        ready = self.readyFramebuffer
+        if ready is None:
             return False
-        glBindFramebuffer(GL_FRAMEBUFFER, self.fbo)
+        glBindFramebuffer(GL_FRAMEBUFFER, ready)
         # Ensure both attachments are written to
         glDrawBuffers(2, [GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1])
         return True
@@ -394,13 +418,14 @@ class SelectionBufferFBO:
         1x1 on demand from the still-populated FBO (called at frame top, before
         this frame overwrites it).
         """
-        if not self._initialized:
+        ready = self.readyFramebuffer
+        if ready is None:
             return 0, 1.0
         x, y = int(x), int(y)
         if x < 0 or x >= self.width or y < 0 or y >= self.height:
             return 0, 1.0
         prev = int(glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING))
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, self.fbo)
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, ready)
         try:
             glReadBuffer(GL_COLOR_ATTACHMENT1)
             px = array([0, 0, 0, 0], 'B')
@@ -419,11 +444,12 @@ class SelectionBufferFBO:
             target_width: Screen width
             target_height: Screen height
         """
-        if not self._initialized:
+        ready = self.readyFramebuffer
+        if ready is None:
             return
 
         # Blit from our FBO to default framebuffer
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, self.fbo)
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, ready)
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0)
         glReadBuffer(GL_COLOR_ATTACHMENT0)
 

@@ -77,7 +77,8 @@ class TransmissionBuffer(object):
             self.tex = None
         self.w, self.h = w, h
         self.levels = max(1, int(math.floor(math.log2(max(w, h)))) + 1)
-        self.tex = glGenTextures(1)
+        # int(), because glGenTextures answers a numpy scalar for a count of one.
+        self.tex = int(glGenTextures(1))
         glBindTexture(GL_TEXTURE_2D, self.tex)
         glTexStorage2D(GL_TEXTURE_2D, self.levels, GL_RGB8, w, h)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
@@ -109,6 +110,8 @@ class TransmissionBuffer(object):
         glReadBuffer(
             GL_COLOR_ATTACHMENT0 if read_fbo != 0
             else presented_buffer(GL_READ_FRAMEBUFFER))
+        if self.tex is None:
+            return                      # nothing sized yet, so nothing to copy into
         glBindTexture(GL_TEXTURE_2D, self.tex)
         glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, self.w, self.h)
         glGenerateMipmap(GL_TEXTURE_2D)
@@ -116,6 +119,8 @@ class TransmissionBuffer(object):
         glReadBuffer(prev_buffer)
 
     def bind(self) -> None:
+        if self.tex is None:
+            return                      # nothing sized yet, so nothing to bind
         glActiveTexture(GL_TEXTURE0 + self.UNIT)
         glBindTexture(GL_TEXTURE_2D, self.tex)
         glActiveTexture(GL_TEXTURE0)

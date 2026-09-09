@@ -73,12 +73,12 @@ def test_same_size_begin_reuses_targets(gl_context):
     from OpenGLContext.passes.bloom import BloomPass
     bp = BloomPass()
     bp.begin(64, 64)
-    first_fbo = bp._scene_fbo
-    first_tex = bp._scene_tex
+    first_fbo = bp._targets.scene_fbo
+    first_tex = bp._targets.scene_tex
     bp.begin(64, 64)                     # size unchanged -> early return in _ensure
-    assert bp._scene_fbo == first_fbo
-    assert bp._scene_tex == first_tex
-    assert bp._size == (64, 64)
+    assert bp._targets.scene_fbo == first_fbo
+    assert bp._targets.scene_tex == first_tex
+    assert bp.size == (64, 64)
 
 
 def test_resize_reallocates_targets(gl_context):
@@ -86,14 +86,14 @@ def test_resize_reallocates_targets(gl_context):
     from OpenGLContext.passes.bloom import BloomPass
     bp = BloomPass()
     bp.begin(64, 64)
-    old_tex = bp._scene_tex
+    old_tex = bp._targets.scene_tex
     assert old_tex is not None
     bp.begin(96, 48)                     # different size -> _release_targets + realloc
     # The driver may recycle the freed texture name, so the id is not a reliable
     # witness -- the new dimensions are.
-    assert bp._size == (96, 48)
-    assert bp._bloom_size == (48, 24)
-    assert bp._scene_tex is not None
+    assert bp.size == (96, 48)
+    assert bp.bloom_size == (48, 24)
+    assert bp._targets.scene_tex is not None
 
 
 def test_release_targets_swallows_delete_errors(gl_context, monkeypatch):
@@ -110,8 +110,5 @@ def test_release_targets_swallows_delete_errors(gl_context, monkeypatch):
     monkeypatch.setattr(bloom, 'glDeleteTextures', boom)
     monkeypatch.setattr(bloom, 'glDeleteRenderbuffers', boom)
     bp._release_targets()                # every delete throws; must still reset
-    assert bp._scene_fbo is None
-    assert bp._scene_tex is None
-    assert bp._depth_rb is None
-    assert bp._ping_fbo == [None, None]
-    assert bp._ping_tex == [None, None]
+    assert bp._targets is None
+    assert bp.size is None

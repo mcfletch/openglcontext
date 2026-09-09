@@ -206,6 +206,34 @@ class TestWhereEverythingLands:
         band = self.laid(carousel(count=9, visibleCount=5), width=120)
         assert all(slot.width >= 0 for slot in band.slotRects(metrics))
 
+    def test_every_rectangle_it_lays_out_is_whole_pixels(self, metrics):
+        """`Rect` is a screen rectangle and its fields are pixel counts.
+
+        The band divides its room among however many pictures are showing, so
+        the arithmetic is fractional; where it stops being fractional is here.
+        """
+        band = self.laid(carousel(count=9, visibleCount=5))
+        rects = list(band.arrowRects()) + band.slotRects(metrics)
+        rects += [band.captionRect(slot, metrics) for slot in band.slotRects(metrics)]
+        rects += [band.pictureRect(slot, metrics) for slot in band.slotRects(metrics)]
+        wrong = [rect for rect in rects
+                 if not all(isinstance(value, int)
+                            for value in (rect.x, rect.y, rect.width, rect.height))]
+        assert not wrong, wrong
+
+    def test_neighbouring_slots_share_an_edge(self, metrics):
+        """Rounding each width on its own would leave a seam between two.
+
+        The gap the layout asks for is the only space between one picture and
+        the next; a pixel of rounding either way is a line of background
+        showing through, or one picture drawn over another.
+        """
+        band = self.laid(carousel(count=9, visibleCount=5))
+        slots = band.slotRects(metrics)
+        gaps = [far.x - (near.x + near.width)
+                for near, far in zip(slots, slots[1:], strict=False)]
+        assert len(set(gaps)) == 1, 'the gap between pictures varies: %r' % (gaps,)
+
     def test_it_asks_for_room_for_a_picture_and_a_caption(self, metrics):
         _width, height = carousel().content_size(metrics)
         assert height > metrics.char_height * 2

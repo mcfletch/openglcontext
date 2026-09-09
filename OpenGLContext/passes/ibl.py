@@ -232,7 +232,8 @@ def _run_float_render_capability_probe() -> bool:
     prev_tex = int(glGetIntegerv(GL_TEXTURE_BINDING_2D))
     tex = fbo = None
     try:
-        tex = glGenTextures(1)
+        # int(), because glGenTextures answers a numpy scalar for a count of one.
+        tex = int(glGenTextures(1))
         glBindTexture(GL_TEXTURE_2D, tex)
         glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16F, 4, 4)
         fbo = glGenFramebuffers(1)
@@ -412,7 +413,8 @@ class IBLProbe(object):
         # ~2012); it lifts the effective floor for the IBL path above the 3.3 the
         # shaders target. A driver without it raises here and IBL falls back to
         # analytic (ensure_built), rather than there being a glTexImage path.
-        tex = glGenTextures(1)
+        # int(), because glGenTextures answers a numpy scalar for a count of one.
+        tex = int(glGenTextures(1))
         glBindTexture(GL_TEXTURE_CUBE_MAP, tex)
         glTexStorage2D(GL_TEXTURE_CUBE_MAP, levels, GL_RGBA16F, size, size)
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
@@ -426,6 +428,8 @@ class IBLProbe(object):
 
     def _upload_env_faces(self, faces: dict[int, np.ndarray]) -> None:
         """Upload loaded cubemap faces (linear float) into ``self.env``."""
+        if self.env is None:
+            return                      # nothing built, so nothing to upload into
         glBindTexture(GL_TEXTURE_CUBE_MAP, self.env)
         for offset, arr in faces.items():
             glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + offset, 0, 0, 0,
@@ -465,8 +469,11 @@ class IBLProbe(object):
             glActiveTexture(GL_TEXTURE0)
             glBindTexture(GL_TEXTURE_2D, src)
             _uni1i(p, 'equirectMap', 0)
+        env = self.env
+        if env is None:
+            return                      # nothing built, so no cube to render into
         try:
-            self._render_cube_faces(fbo, prog, self.env, self.ENV_SIZE, 0,
+            self._render_cube_faces(fbo, prog, env, self.ENV_SIZE, 0,
                                     setup=bind_equirect)
         finally:
             try:
@@ -478,7 +485,7 @@ class IBLProbe(object):
             except Exception as err:
                 log.debug("IBL equirect program teardown: %s", err)
 
-    def _render_cube_faces(self, fbo: int, prog: int, cube: Optional[int], size: int,
+    def _render_cube_faces(self, fbo: int, prog: int, cube: int, size: int,
                            level: int,
                            setup: Optional[Callable[[int], None]] = None) -> None:
         for face in range(6):
@@ -506,7 +513,7 @@ class IBLProbe(object):
         prefilter sample lower mips to suppress fireflies.
         """
         env_levels = max(1, self.ENV_SIZE.bit_length())
-        self.env = self._make_cube(self.ENV_SIZE, levels=env_levels)
+        self.env = env = self._make_cube(self.ENV_SIZE, levels=env_levels)
         equirect = resolve_equirect_source()
         prefix = environment_cubemap_prefix()
         faces = (load_cubemap_faces(prefix, self.ENV_SIZE)
@@ -518,36 +525,39 @@ class IBLProbe(object):
             self._upload_env_faces(faces)
             log.info("IBL environment loaded from cubemap %r", prefix)
         else:
-            self._render_cube_faces(fbo, env_prog, self.env, self.ENV_SIZE, 0)
-        glBindTexture(GL_TEXTURE_CUBE_MAP, self.env)
+            self._render_cube_faces(fbo, env_prog, env, self.ENV_SIZE, 0)
+        glBindTexture(GL_TEXTURE_CUBE_MAP, env)
         glGenerateMipmap(GL_TEXTURE_CUBE_MAP)
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0)
 
     def _build_irradiance(self, fbo: int, irr_prog: int) -> None:
         """Convolve the env cube into a diffuse-irradiance cube (Lambertian ambient)."""
-        self.irradiance = self._make_cube(self.IRR_SIZE, levels=1)
+        self.irradiance = irradiance = self._make_cube(self.IRR_SIZE, levels=1)
+        env = self.env
 
         def bind_env(prog: int) -> None:
             glActiveTexture(GL_TEXTURE0)
-            glBindTexture(GL_TEXTURE_CUBE_MAP, self.env)
+            glBindTexture(GL_TEXTURE_CUBE_MAP, env or 0)
             _uni1i(prog, 'envMap', 0)
-        self._render_cube_faces(fbo, irr_prog, self.irradiance, self.IRR_SIZE, 0,
+        self._render_cube_faces(fbo, irr_prog, irradiance, self.IRR_SIZE, 0,
                                 setup=bind_env)
 
     def _build_prefilter(self, fbo: int, pre_prog: int) -> None:
         """GGX-importance-sample the env cube into a per-roughness specular mip chain."""
-        self.prefilter = self._make_cube(self.PRE_SIZE, levels=self.PRE_LEVELS)
+        self.prefilter = prefilter = self._make_cube(self.PRE_SIZE,
+                                                    levels=self.PRE_LEVELS)
+        env = self.env
         for lvl in range(self.PRE_LEVELS):
             size = max(1, self.PRE_SIZE >> lvl)
             roughness = lvl / float(max(1, self.PRE_LEVELS - 1))
 
             def bind_env_rough(prog: int, roughness: float = roughness) -> None:
                 glActiveTexture(GL_TEXTURE0)
-                glBindTexture(GL_TEXTURE_CUBE_MAP, self.env)
+                glBindTexture(GL_TEXTURE_CUBE_MAP, env or 0)
                 _uni1i(prog, 'envMap', 0)
                 _uni1f(prog, 'roughness', roughness)
                 _uni1f(prog, 'envResolution', float(self.ENV_SIZE))
-            self._render_cube_faces(fbo, pre_prog, self.prefilter, size, lvl,
+            self._render_cube_faces(fbo, pre_prog, prefilter, size, lvl,
                                     setup=bind_env_rough)
 
     def _build_brdf_lut(self, fbo: int, brdf_prog: int) -> int:
@@ -558,7 +568,7 @@ class IBLProbe(object):
         Returns the framebuffer completeness status after the final draw; the
         caller raises on it only once GL state has been restored.
         """
-        self.brdf = glGenTextures(1)
+        self.brdf = int(glGenTextures(1))
         glBindTexture(GL_TEXTURE_2D, self.brdf)
         glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA16F, self.LUT_SIZE, self.LUT_SIZE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
@@ -633,13 +643,20 @@ class IBLProbe(object):
 
     # -- per-frame binding -------------------------------------------------
     def bind(self, program: Any) -> None:
-        """Bind the probe textures to their units and set prefilterMaxLod."""
+        """Bind the probe textures to their units and set prefilterMaxLod.
+
+        The three are built together and let go of together, so a probe that
+        has not been built has none of them and there is nothing to bind.
+        """
+        irradiance, prefilter, brdf = self.irradiance, self.prefilter, self.brdf
+        if irradiance is None or prefilter is None or brdf is None:
+            return
         glActiveTexture(GL_TEXTURE0 + IBL_UNITS['irradiance'])
-        glBindTexture(GL_TEXTURE_CUBE_MAP, self.irradiance)
+        glBindTexture(GL_TEXTURE_CUBE_MAP, irradiance)
         glActiveTexture(GL_TEXTURE0 + IBL_UNITS['prefilter'])
-        glBindTexture(GL_TEXTURE_CUBE_MAP, self.prefilter)
+        glBindTexture(GL_TEXTURE_CUBE_MAP, prefilter)
         glActiveTexture(GL_TEXTURE0 + IBL_UNITS['brdf'])
-        glBindTexture(GL_TEXTURE_2D, self.brdf)
+        glBindTexture(GL_TEXTURE_2D, brdf)
         glActiveTexture(GL_TEXTURE0)
         program._set_uniform1f('prefilterMaxLod', self.max_lod, program.program)
 
