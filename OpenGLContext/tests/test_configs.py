@@ -16,12 +16,12 @@ class TestContextDefinition( unittest.TestCase ):
         cd = ContextDefinition.fromConfig( cfg )
         assert arrays.allclose(cd.size, [600,600] ), cd.size 
         assert cd.title == "Test Context", cd.title 
-        assert cd.doubleBuffer == False, cd.doubleBuffer
+        assert not cd.doubleBuffer, cd.doubleBuffer
         assert cd.depthBuffer == 16, cd.depthBuffer
         assert cd.accumulationBuffer == 16
         assert cd.stencilBuffer == 16
-        assert cd.rgb == False
-        assert cd.alpha == False 
+        assert not cd.rgb
+        assert not cd.alpha 
         assert cd.multisampleBuffer == 16
         assert cd.multisampleSamples == 4
         assert cd.stereo == 23

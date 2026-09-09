@@ -193,7 +193,7 @@ class OBJHandler(base.BaseHandler):
                     )
                     mesh.children.append(group)
 
-                for i, v in enumerate(values[1:]):
+                for _i, v in enumerate(values[1:]):
                     v_index, t_index, n_index = self._cleanIndex(v)
                     current_vertex_indices.append(v_index)
                     current_texcoord_indices.append(t_index)

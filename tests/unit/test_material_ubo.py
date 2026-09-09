@@ -49,8 +49,10 @@ def test_pbr_material_factors_land_at_their_offsets():
     m.attenuationColor = (0.11, 0.22, 0.33)
     m.attenuationDistance = 5.0
     buf = pack_material_block(m)
-    assert np.allclose(buf[0:3], (0.1, 0.2, 0.3)); assert np.isclose(buf[3], 0.4)
-    assert np.allclose(buf[4:7], (0.6, 0.7, 0.8)); assert np.isclose(buf[7], 0.55)
+    assert np.allclose(buf[0:3], (0.1, 0.2, 0.3))
+    assert np.isclose(buf[3], 0.4)
+    assert np.allclose(buf[4:7], (0.6, 0.7, 0.8))
+    assert np.isclose(buf[7], 0.55)
     assert np.isclose(buf[11], 0.9)      # occlusionStrength (packed after specularColor)
     assert np.isclose(buf[15], 1.25)     # normalScale
     assert np.allclose(buf[16:19], (0.11, 0.22, 0.33))  # attenuationColor
@@ -61,7 +63,8 @@ def test_pbr_material_factors_land_at_their_offsets():
 
 
 def test_unlit_flag_is_int_at_word_28():
-    m = PBRMaterial(); m.unlit = 1
+    m = PBRMaterial()
+    m.unlit = 1
     iv = pack_material_block(m).view(np.int32)
     assert iv[28] == 1
     m.unlit = 0

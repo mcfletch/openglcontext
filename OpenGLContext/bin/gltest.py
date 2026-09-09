@@ -1,7 +1,10 @@
 #! /usr/bin/env python
 """Automated test runner for OpenGLContext contexts"""
 
-import optparse, sys, os, logging
+import optparse
+import sys
+import os
+import logging
 try:
     import configparser as ConfigParser
 except ImportError:
@@ -106,7 +109,7 @@ def main():
     # now, execute the script...
     try:
         os.makedirs(options.output)
-    except (IOError, OSError) as err:
+    except (IOError, OSError):
         pass
     sys.path.insert(0, os.path.dirname(script))
     g = {}

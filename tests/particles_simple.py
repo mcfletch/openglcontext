@@ -20,12 +20,9 @@ import random
 from OpenGLContext.scenegraph.basenodes import *
 try:
     import RandomArray
-except ImportError as err:
+except ImportError:
     RandomArray = None
-try:
-    xrange 
-except NameError:
-    xrange = range
+xrange = range
 # Check if any font provider is available for text display
 # Font providers auto-register when imported (glutfont via GLUT, shaderfont via atlas)
 _font_available = False

@@ -9,7 +9,7 @@ GLFW provides modern OpenGL context creation with support for:
 try:
     import glfw
 except ImportError:
-    raise ImportError("The glfw package is required for the GLFW GL Context. Install with: pip install glfw")
+    raise ImportError("The glfw package is required for the GLFW GL Context. Install with: pip install glfw") from None
 
 from OpenGL.GL import *
 from OpenGLContext import contextresources

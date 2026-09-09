@@ -13,7 +13,10 @@ from OpenGLContext.arrays import array
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.shaders import *
-import time, sys, logging, math
+import time
+import sys
+import logging
+import math
 
 log = logging.getLogger("shaderobjects")
 log.warning("Context %s", BaseContext)

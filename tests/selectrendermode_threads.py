@@ -12,7 +12,9 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
-import time, random, threading
+import time
+import random
+import threading
 from OpenGLContext.scenegraph import basenodes
 
 class TestContext( BaseContext ):
@@ -40,7 +42,7 @@ class TestContext( BaseContext ):
         """
         x,y  = event.getPickPoint()
         print('Click', (x,y))
-        for near, far, names in event.getNameStack():
+        for _near, _far, names in event.getNameStack():
             if names:
                 print('  clicked on #%s'%(names[-1]), event.unproject())
     def OnClick2( self, event ):

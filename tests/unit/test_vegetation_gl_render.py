@@ -37,8 +37,10 @@ def _species_npz(tmp_path):
     I = np.array([0, 1, 2], np.uint32)
     npz = tmp_path / "tree.npz"
     np.savez(str(npz), oP=P, oN=N, oU=U, oI=I, bP=P, bN=N, bU=U, bI=I)
-    otex = tmp_path / "bark.png"; Image.new("RGBA", (4, 4), (90, 60, 40, 255)).save(otex)
-    btex = tmp_path / "leaf.png"; Image.new("RGBA", (4, 4), (40, 120, 40, 255)).save(btex)
+    otex = tmp_path / "bark.png"
+    Image.new("RGBA", (4, 4), (90, 60, 40, 255)).save(otex)
+    btex = tmp_path / "leaf.png"
+    Image.new("RGBA", (4, 4), (40, 120, 40, 255)).save(btex)
     return dict(npz=str(npz), o_keys=("oP", "oN", "oU", "oI"), o_tex=str(otex),
                 b_keys=("bP", "bN", "bU", "bI"), b_tex=str(btex))
 
@@ -67,8 +69,11 @@ def test_billboards_render_composes_with_cull_memo_and_disposes(gl, tmp_path):
 
     # Incoming state the node does not depend on: it composes with the pass's CPU
     # state memo, not with whatever GL happened to be set before it.
-    glEnable(GL_CULL_FACE); glCullFace(GL_FRONT); glFrontFace(GL_CW)
-    glDepthMask(GL_FALSE); glEnable(GL_BLEND)
+    glEnable(GL_CULL_FACE)
+    glCullFace(GL_FRONT)
+    glFrontFace(GL_CW)
+    glDepthMask(GL_FALSE)
+    glEnable(GL_BLEND)
     assert glGetError() == GL_NO_ERROR
 
     node.render(mode)
@@ -170,7 +175,8 @@ def test_lod_window_shared_by_impostor_and_near_mesh(gl, tmp_path):
     assert _uniformf(mesh._prog, "uLodStart") == _uniformf(imp._prog, "uLodStart")
     assert _uniformf(mesh._prog, "uLodEnd") == _uniformf(imp._prog, "uLodEnd")
 
-    imp.dispose(); mesh.dispose()
+    imp.dispose()
+    mesh.dispose()
 
 
 def test_instance_buffer_survives_shrink_then_grow(gl, tmp_path):
@@ -228,7 +234,8 @@ def test_splat_terrain_render_restores_state_and_disposes(gl, tmp_path):
     node = SplatTerrain(hf, ["floor"], str(ctl),
                         material_fn=lambda name, res: {"color": str(tex)})
 
-    glEnable(GL_BLEND); glDepthMask(GL_FALSE)
+    glEnable(GL_BLEND)
+    glDepthMask(GL_FALSE)
     node.render(_mode())
     assert glGetError() == GL_NO_ERROR
     # The terrain draws with cull on + depth write on, then restores the entry state.

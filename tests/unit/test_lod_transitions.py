@@ -94,7 +94,8 @@ def _render(coords, indices, cull=False, view='side', dist=2.8):
     angle, ax, ay, az = VIEWS[view]
     fbo, col, dep, ok = _fbo()
     if not ok:
-        glDeleteFramebuffers(1, [fbo]); glDeleteRenderbuffers(2, [col, dep])
+        glDeleteFramebuffers(1, [fbo])
+        glDeleteRenderbuffers(2, [col, dep])
         pytest.skip('offscreen FBO incomplete on this driver')
     try:
         glViewport(0, 0, S, S)
@@ -102,13 +103,21 @@ def _render(coords, indices, cull=False, view='side', dist=2.8):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glEnable(GL_DEPTH_TEST)
         if cull:
-            glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glFrontFace(GL_CCW)
+            glEnable(GL_CULL_FACE)
+            glCullFace(GL_BACK)
+            glFrontFace(GL_CCW)
             glDisable(GL_LIGHTING)
         else:
-            glDisable(GL_CULL_FACE); glEnable(GL_LIGHTING); glEnable(GL_LIGHT0)
-        glEnable(GL_COLOR_MATERIAL); glColor3f(0.85, 0.85, 0.85)
-        glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluPerspective(45, 1, 0.1, 50)
-        glMatrixMode(GL_MODELVIEW); glLoadIdentity()
+            glDisable(GL_CULL_FACE)
+            glEnable(GL_LIGHTING)
+            glEnable(GL_LIGHT0)
+        glEnable(GL_COLOR_MATERIAL)
+        glColor3f(0.85, 0.85, 0.85)
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluPerspective(45, 1, 0.1, 50)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
         # Light set here, under the identity view, so it is a fixed eye-space
         # direction every call regardless of the object transform below.
         if not cull:
@@ -116,15 +125,19 @@ def _render(coords, indices, cull=False, view='side', dist=2.8):
             glLightfv(GL_LIGHT0, GL_DIFFUSE, [1, 1, 1, 1])
         glTranslatef(0, 0, -dist)
         glRotatef(angle, ax, ay, az)
-        glEnableClientState(GL_VERTEX_ARRAY); glEnableClientState(GL_NORMAL_ARRAY)
-        glVertexPointer(3, GL_FLOAT, 0, v); glNormalPointer(GL_FLOAT, 0, n)
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glEnableClientState(GL_NORMAL_ARRAY)
+        glVertexPointer(3, GL_FLOAT, 0, v)
+        glNormalPointer(GL_FLOAT, 0, n)
         glDrawElements(GL_TRIANGLES, len(idx), GL_UNSIGNED_SHORT, idx)
-        glDisableClientState(GL_VERTEX_ARRAY); glDisableClientState(GL_NORMAL_ARRAY)
+        glDisableClientState(GL_VERTEX_ARRAY)
+        glDisableClientState(GL_NORMAL_ARRAY)
         raw = glReadPixels(0, 0, S, S, GL_RGB, GL_UNSIGNED_BYTE)
         return np.frombuffer(raw, np.uint8).reshape(S, S, 3).astype(np.int16)
     finally:
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
-        glDeleteFramebuffers(1, [fbo]); glDeleteRenderbuffers(2, [col, dep])
+        glDeleteFramebuffers(1, [fbo])
+        glDeleteRenderbuffers(2, [col, dep])
 
 
 def _object_pop(a, b):
@@ -139,7 +152,8 @@ def _interior_holes(img):
     white = img.max(axis=2) > 40
     if white.sum() == 0:
         return 1.0
-    row = np.zeros_like(white); col = np.zeros_like(white)
+    row = np.zeros_like(white)
+    col = np.zeros_like(white)
     for y in range(S):
         xs = np.where(white[y])[0]
         if len(xs):

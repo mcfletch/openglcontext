@@ -64,7 +64,7 @@ class ContextConfigMixin:
         name = None
         try:
             name = open(filename).readline().strip()
-        except IOError as err:
+        except IOError:
             pass
         if not name:
             name = None
@@ -78,14 +78,14 @@ class ContextConfigMixin:
         if not name:
             try:
                 os.remove(filename)
-            except Exception as err:
+            except Exception:
                 return False
             else:
                 return True
         else:
             try:
                 open(filename, "w").write(name)
-            except IOError as err:
+            except IOError:
                 return False
             return True
 
@@ -122,7 +122,7 @@ class ContextConfigMixin:
             return None
         try:
             classObject = entrypoint.load()
-        except ImportError as err:
+        except ImportError:
             return None
         else:
             return classObject
@@ -199,7 +199,7 @@ class ContextConfigMixin:
         if os.path.exists(filename):
             try:
                 name = open(filename).readline().strip()
-            except IOError as err:
+            except IOError:
                 pass
         else:
             log.warning("No default context type in %s", filename)
@@ -215,13 +215,13 @@ class ContextConfigMixin:
         if not name:
             try:
                 os.remove(filename)
-            except Exception as err:
+            except Exception:
                 return False
             else:
                 return True
         else:
             try:
                 open(filename, "w").write(name)
-            except IOError as err:
+            except IOError:
                 return False
             return True

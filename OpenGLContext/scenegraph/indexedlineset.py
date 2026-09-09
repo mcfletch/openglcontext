@@ -59,15 +59,18 @@ class IndexedLineSet(
         for pi, poly in enumerate(indices):
             pc = cidx[pi] if cidx is not None else None
             for k in range(len(poly) - 1):
-                verts.append(points[poly[k]]); verts.append(points[poly[k + 1]])
+                verts.append(points[poly[k]])
+                verts.append(points[poly[k + 1]])
                 if has_col:
                     if pc is not None:
-                        cols.append(colors[pc[k]]); cols.append(colors[pc[k + 1]])
+                        cols.append(colors[pc[k]])
+                        cols.append(colors[pc[k + 1]])
                     else:
                         ci = (self.colorIndex[pi] if len(self.colorIndex)
                               else pi % len(colors))
                         c = colors[int(ci)][:3]
-                        cols.append(c); cols.append(c)
+                        cols.append(c)
+                        cols.append(c)
         pos = np.ascontiguousarray(verts, dtype='f') if verts else np.zeros((0, 3), 'f')
         col = (np.ascontiguousarray(cols, dtype='f') if cols
                else np.ones((len(pos), 3), dtype='f'))
@@ -425,7 +428,7 @@ def expandIndices( indices ):
         if i == -1:
             if len(current)<2:
                 # should warn the user
-                warnings.warn( """IndexedLineSet Polyline of length < 2""")
+                warnings.warn( """IndexedLineSet Polyline of length < 2""", stacklevel=2)
             else:
                 items.append( current )
             current = []

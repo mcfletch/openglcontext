@@ -16,7 +16,8 @@ from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.shaders import *
 from OpenGLContext.scenegraph.quadrics import Sphere
 from OpenGLContext.scenegraph import box
-import math, logging
+import math
+import logging
 log = logging.getLogger( 'shaderobjects' )
 
 STRIDE = 32  # 8 interleaved floats per vertex

@@ -4,7 +4,8 @@
 # (shared with the wgl/pygame variants) resolves the default backend on import.
 from OpenGLContext import testingcontext
 testingcontext.CONFIGURED_BASE = testingcontext.getInteractive( 'glut' )
-import _bitmap_font, _fontstyles
+import _bitmap_font
+import _fontstyles
 from OpenGLContext.scenegraph.text import glutfont
 
 class TestContext( _bitmap_font.TestContext ):

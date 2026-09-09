@@ -22,7 +22,7 @@ from OpenGL.GLU import *
 from OpenGL.constants import GLfloat_3,GLfloat_4
 try:
     from PIL.Image import open
-except ImportError as err:
+except ImportError:
     from Image import open
 
 class TestContext( BaseContext ):
@@ -73,22 +73,22 @@ class TestContext( BaseContext ):
         print(self.usage)
         '''The Lights setup and the Lights method are identical to 
         the code from the NeHe7 translation'''
-        glLightfv( GL_LIGHT1, GL_AMBIENT, GLfloat_4(0.2, .2, .2, 1.0) );
-        glLightfv(GL_LIGHT1, GL_DIFFUSE, GLfloat_3(.8,.8,.8));
-        glLightfv(GL_LIGHT1, GL_POSITION, GLfloat_4(-2,0,3,1) );
+        glLightfv( GL_LIGHT1, GL_AMBIENT, GLfloat_4(0.2, .2, .2, 1.0) )
+        glLightfv(GL_LIGHT1, GL_DIFFUSE, GLfloat_3(.8,.8,.8))
+        glLightfv(GL_LIGHT1, GL_POSITION, GLfloat_4(-2,0,3,1) )
 
     def Render( self, mode):
         BaseContext.Render( self, mode )
         '''As previously, we want to override the default lighting behaviour.'''
         if self.lightsOn:
             glEnable( GL_LIGHTING )
-            glEnable(GL_LIGHT1);
-            glDisable(GL_LIGHT0);
+            glEnable(GL_LIGHT1)
+            glDisable(GL_LIGHT0)
         else:
             glDisable( GL_LIGHTING )
-            glDisable(GL_LIGHT1);
-            glDisable(GL_LIGHT0);
-        glTranslatef(1.5,0.0,self.currentZOffset);
+            glDisable(GL_LIGHT1)
+            glDisable(GL_LIGHT0)
+        glTranslatef(1.5,0.0,self.currentZOffset)
         '''We don't want to filter out back-facing faces'''
         glDisable( GL_CULL_FACE )
         glRotated( 
@@ -116,12 +116,12 @@ class TestContext( BaseContext ):
     def blend( self ):
         """Choose and enable blending mode"""
         if self.blendOn == 0:
-            glDisable(GL_BLEND);
-            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_BLEND)
+            glEnable(GL_DEPTH_TEST)
             glDepthMask( ~0 )
         else:
-            glEnable(GL_BLEND);
-            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_BLEND)
+            glDisable(GL_DEPTH_TEST)
             glBlendFunc( * self.BLENDSTYLES[ self.blendOn] )
             glDepthMask( 0 ) # prevent updates to the depth buffer...
     '''The rest of the tutorial matches the NeHe7 translation.'''
@@ -191,42 +191,66 @@ class TestContext( BaseContext ):
         self.rotationCycle = self.rotationCycle * 2.0
     def drawCube( self ):
         "Draw a cube with both normals and texture coordinates"
-        glBegin(GL_QUADS);
+        glBegin(GL_QUADS)
         glNormal3f( 0.0, 0.0, 1.0)
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
 
-        glNormal3f( 0.0, 0.0,-1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
+        glNormal3f( 0.0, 0.0,-1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
 
         glNormal3f( 0.0, 1.0, 0.0)
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
 
         glNormal3f( 0.0,-1.0, 0.0)
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0, -1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
 
         glNormal3f( 1.0, 0.0, 0.0)
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
 
         glNormal3f(-1.0, 0.0, 0.0)
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
         glEnd()
     
 

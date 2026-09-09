@@ -31,7 +31,7 @@ from OpenGL.GL import *
 import sys
 try:
     from PIL.Image import open
-except ImportError as err:
+except ImportError:
     from Image import open
 from OpenGL.GL.ARB.imaging import *
 from OpenGLContext import arrays
@@ -112,7 +112,7 @@ class TestContext( BaseContext ):
         glPixelStorei(GL_UNPACK_ALIGNMENT,1)
         # copy the texture into the current texture ID
         if convolve:
-            glEnable(GL_CONVOLUTION_2D);
+            glEnable(GL_CONVOLUTION_2D)
             glConvolutionParameteri(
                 GL_CONVOLUTION_2D,
                 GL_CONVOLUTION_BORDER_MODE, 
@@ -130,7 +130,7 @@ class TestContext( BaseContext ):
                 self.FILTER_SIZE, self.FILTER_SIZE,
                 GL_RGBA, GL_FLOAT, self. convolutionKernel
             )
-            setFilter = glGetConvolutionFilter(
+            glGetConvolutionFilter(
                 GL_CONVOLUTION_2D, GL_RGBA, GL_FLOAT 
             )
             #assert setFilter.shape == (4,4)
@@ -144,7 +144,7 @@ class TestContext( BaseContext ):
         """Render scene geometry"""
         BaseContext.Render( self, mode )
         glDisable( GL_LIGHTING) # context lights by default
-        glTranslatef(1.5,0.0,-6.0);
+        glTranslatef(1.5,0.0,-6.0)
         glRotated( systemtime.systemTime()%(8.0)/8 * -360, 1,0,0)
         self.setupTexture()
         self.drawCube()
@@ -167,36 +167,60 @@ class TestContext( BaseContext ):
             
     def drawCube( self ):
         """Draw a cube with texture coordinates"""
-        glBegin(GL_QUADS);
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
+        glBegin(GL_QUADS)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
 
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
 
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
 
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0, -1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
 
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
 
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
         glEnd()
         
     def OnIdle( self, ):

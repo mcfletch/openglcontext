@@ -306,7 +306,7 @@ class wxContext(
         instantiation the paint handler would fail, even
         though we don't actually use the dc at all.
         """
-        dc = wx.PaintDC(self)
+        wx.PaintDC(self)
         size = self.GetClientSize()
         if size.width == 0 or size.height == 0:
             return
@@ -539,7 +539,7 @@ class wxContext(
         """
         try:
             from OpenGLContext.resources import context_icon_png, context_icon_small_png
-        except ImportError as err:
+        except ImportError:
             return None
         else:
             bundle = wx.IconBundle( )

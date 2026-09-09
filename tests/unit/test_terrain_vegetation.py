@@ -42,7 +42,8 @@ def test_sample_matches_grid_points_and_interpolates():
 
 def test_sample_vectorised_equals_scalar():
     hf = ramp_field()
-    xs = np.array([-1.0, 0.0, 0.7, 1.9]); zs = np.array([0.0, 0.3, -0.4, 1.0])
+    xs = np.array([-1.0, 0.0, 0.7, 1.9])
+    zs = np.array([0.0, 0.3, -0.4, 1.0])
     vec = hf.sample(xs, zs)
     scal = np.array([hf.height_at(float(x), float(z)) for x, z in zip(xs, zs)])
     np.testing.assert_allclose(vec, scal, rtol=1e-6)
@@ -56,7 +57,8 @@ def test_slope_of_linear_ramp():
 
 
 def test_mesh_counts_and_unit_normals():
-    R = 5; hf = ramp_field(R=R)
+    R = 5
+    hf = ramp_field(R=R)
     verts, idx = hf.mesh()
     assert verts.shape == (R * R, 6)
     assert idx.shape == ((R - 1) * (R - 1) * 6,)
@@ -68,7 +70,8 @@ def test_mesh_counts_and_unit_normals():
 def test_from_image(tmp_path):
     from PIL import Image
     arr = (np.linspace(0, 65535, 16 * 16).reshape(16, 16)).astype(np.uint16)
-    p = tmp_path / "h.png"; Image.fromarray(arr, mode="I;16").save(p)
+    p = tmp_path / "h.png"
+    Image.fromarray(arr, mode="I;16").save(p)
     hf = HeightField.from_image(str(p), 8, 100.0, 50.0)
     assert hf.res == 8 and hf.extent == 100.0 and hf.relief == 50.0
     assert 0.0 <= hf.height_at(0, 0) <= 50.0
@@ -76,7 +79,8 @@ def test_from_image(tmp_path):
 
 def test_sun_shadow_range_and_shape():
     R = 32
-    grid = np.zeros((R, R)); grid[R // 2, R // 2] = 1.0     # a lone peak
+    grid = np.zeros((R, R))
+    grid[R // 2, R // 2] = 1.0     # a lone peak
     hf = HeightField(grid, 100.0, 40.0)
     lit = hf.sun_shadow((-0.5, -0.72, -0.48), steps=40)
     assert lit.shape == (R, R)
@@ -143,7 +147,8 @@ def test_grass_mask_thins_and_excludes():
 def test_grass_mask_is_world_anchored():
     """A cell's keep/drop under a mask must not change as the disc recentres."""
     hf = HeightField(np.zeros((16, 16)), 1000.0, 10.0)
-    m = lambda x, z: np.full_like(x, 0.5)      # 50% keep, decided per-cell by hash
+    def m(x, z):
+        return np.full_like(x, 0.5)      # 50% keep, decided per-cell by hash
     p1, _, _ = world_grid_scatter(0.0, 0.0, 40.0, 1.0, hf, mask=m)
     p2, _, _ = world_grid_scatter(6.0, 4.0, 40.0, 1.0, hf, mask=m)
     s1 = {(round(x, 3), round(z, 3)) for x, z in p1[:, [0, 2]]}
@@ -202,28 +207,36 @@ def test_poisson_thin_empty():
 def _ribbon(n_rings, x0=0.0, height=1.0):
     """A single blade ribbon: ``n_rings`` cross-rings of 3 verts (left/centre/right),
     rising in +y with UV.v running 0 (root) -> 1 (tip), 4 triangles per gap."""
-    P = []; UV = []
+    P = []
+    UV = []
     for r in range(n_rings):
         v = r / (n_rings - 1)
         for u, ux in ((0.0, -0.05), (0.5, 0.0), (1.0, 0.05)):
-            P.append((x0 + ux, v * height, 0.0)); UV.append((u, v))
+            P.append((x0 + ux, v * height, 0.0))
+            UV.append((u, v))
     idx = []
     for r in range(n_rings - 1):
-        a = r * 3; b = (r + 1) * 3
+        a = r * 3
+        b = (r + 1) * 3
         for k in range(2):
             idx += [a + k, a + k + 1, b + k, a + k + 1, b + k + 1, b + k]
-    P = np.array(P, np.float32); UV = np.array(UV, np.float32)
+    P = np.array(P, np.float32)
+    UV = np.array(UV, np.float32)
     N = np.tile(np.array([0, 0, 1], np.float32), (len(P), 1))
     return P, N, UV, np.array(idx, np.uint32)
 
 
 def _components(P, idx):
-    tris = idx.reshape(-1, 3); parent = list(range(len(P)))
+    tris = idx.reshape(-1, 3)
+    parent = list(range(len(P)))
     def find(a):
-        while parent[a] != a: parent[a] = parent[parent[a]]; a = parent[a]
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
         return a
     for t in tris:
-        for x in t[1:]: parent[find(int(x))] = find(int(t[0]))
+        for x in t[1:]:
+            parent[find(int(x))] = find(int(t[0]))
     return len({find(v) for v in range(len(P))})
 
 
@@ -246,8 +259,10 @@ def test_decimate_preserves_separate_blades():
     # two disjoint ribbons must stay two disjoint blades after decimation
     P0, N0, UV0, i0 = _ribbon(9, x0=0.0)
     P1, N1, UV1, i1 = _ribbon(9, x0=10.0)
-    P = np.concatenate([P0, P1]); N = np.concatenate([N0, N1])
-    UV = np.concatenate([UV0, UV1]); idx = np.concatenate([i0, i1 + len(P0)])
+    P = np.concatenate([P0, P1])
+    N = np.concatenate([N0, N1])
+    UV = np.concatenate([UV0, UV1])
+    idx = np.concatenate([i0, i1 + len(P0)])
     assert _components(P, idx) == 2
     P2, N2, UV2, idx2 = _decimate_ribbons(P, N, UV, idx, length_samples=3)
     assert _components(P2, idx2) == 2
@@ -272,32 +287,46 @@ class _FakePlatform:
 
 
 class _Walker(TerrainWalkMixin):
-    def __init__(self, platform): self.platform = platform; self.redraws = 0
+    def __init__(self, platform):
+        self.platform = platform
+        self.redraws = 0
     def triggerRedraw(self, force=0): self.redraws += 1
 
 
 def test_idle_redraws_only_when_the_view_changes():
-    w = _Walker(_FakePlatform((0.0, 0.0, 0.0))); w.init_walk(ramp_field())
-    w.OnIdle(); assert w.redraws == 1                 # first frame draws
-    w.OnIdle(); assert w.redraws == 1                 # parked: no new draw
-    w.platform.setPosition((5.0, 0.0, 0.0)); w.OnIdle()
+    w = _Walker(_FakePlatform((0.0, 0.0, 0.0)))
+    w.init_walk(ramp_field())
+    w.OnIdle()
+    assert w.redraws == 1                 # first frame draws
+    w.OnIdle()
+    assert w.redraws == 1                 # parked: no new draw
+    w.platform.setPosition((5.0, 0.0, 0.0))
+    w.OnIdle()
     assert w.redraws == 2                             # moved -> draw
-    w.platform.setYaw(0.5); w.OnIdle()
+    w.platform.setYaw(0.5)
+    w.OnIdle()
     assert w.redraws == 3                             # turned in place -> draw
-    w.OnIdle(); assert w.redraws == 3                 # parked again: no new draw
+    w.OnIdle()
+    assert w.redraws == 3                 # parked again: no new draw
 
 
 def test_stream_fires_on_move_or_turn():
-    w = _Walker(_FakePlatform((0.0, 0.0, 0.0))); w.init_walk(ramp_field())
-    moves = []; both = []
+    w = _Walker(_FakePlatform((0.0, 0.0, 0.0)))
+    w.init_walk(ramp_field())
+    moves = []
+    both = []
     w.add_stream(2.0, lambda x, z: moves.append((x, z)))
     w.add_stream(2.0, lambda x, z: both.append((x, z)), turn=math.radians(10))
-    w.OnIdle(); assert len(moves) == 1 and len(both) == 1        # both fire first frame
-    w.platform.setYaw(math.radians(25)); w.OnIdle()
+    w.OnIdle()
+    assert len(moves) == 1 and len(both) == 1        # both fire first frame
+    w.platform.setYaw(math.radians(25))
+    w.OnIdle()
     assert len(moves) == 1 and len(both) == 2                    # turn: only the turn-aware one
-    w.platform.setPosition((0.5, 0.0, 0.5)); w.OnIdle()
+    w.platform.setPosition((0.5, 0.0, 0.5))
+    w.OnIdle()
     assert len(moves) == 1 and len(both) == 2                    # sub-threshold move: neither
-    w.platform.setPosition((5.0, 0.0, 0.0)); w.OnIdle()
+    w.platform.setPosition((5.0, 0.0, 0.0))
+    w.OnIdle()
     assert len(moves) == 2 and len(both) == 3                    # big move: both
 
 
@@ -333,15 +362,18 @@ def test_no_push_when_clear_of_trunks():
 
 
 def _walk(hf, trunk, rad, prev, cur):
-    w = _Walker(_FakePlatform(prev)); w.init_walk(hf, trunk, rad)
+    w = _Walker(_FakePlatform(prev))
+    w.init_walk(hf, trunk, rad)
     w.collide_and_clamp()                      # establish previous position
-    w.platform.setPosition(cur); w.collide_and_clamp()
+    w.platform.setPosition(cur)
+    w.collide_and_clamp()
     return float(w.platform.position[0]), float(w.platform.position[2])
 
 
 def test_swept_collision_blocks_fast_step_through_trunk():
     hf = HeightField(np.zeros((16, 16)), 200.0, 10.0)
-    trunk = np.array([[0.0, 0.0, 0.0]], np.float32); rad = np.array([0.4], np.float32)
+    trunk = np.array([[0.0, 0.0, 0.0]], np.float32)
+    rad = np.array([0.4], np.float32)
     R = rad[0] + TerrainWalkMixin.player_radius
     # a 3m step straight across the ~1.3m trunk in one frame must not tunnel through
     x, z = _walk(hf, trunk, rad, (-1.5, 0, 0.03), (1.5, 0, 0.03))
@@ -351,7 +383,8 @@ def test_swept_collision_blocks_fast_step_through_trunk():
 
 def test_swept_collision_dead_centre_ejects():
     hf = HeightField(np.zeros((16, 16)), 200.0, 10.0)
-    trunk = np.array([[0.0, 0.0, 0.0]], np.float32); rad = np.array([0.4], np.float32)
+    trunk = np.array([[0.0, 0.0, 0.0]], np.float32)
+    rad = np.array([0.4], np.float32)
     # a step passing exactly through the axis (degenerate push direction) still ejects
     x, z = _walk(hf, trunk, rad, (-1.5, 0, 0.0), (1.5, 0, 0.0))
     assert x < 1.5 - 1e-3

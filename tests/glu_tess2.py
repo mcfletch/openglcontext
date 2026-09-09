@@ -59,7 +59,7 @@ class TestContext( BaseContext ):
             glColor3f( t[0]/2.0,t[1]/2.0,t[2]/2.0 )
             return glVertex3f( t[0],t[1],t[2])
         gluTessCallback(self.tess, GLU_TESS_VERTEX_DATA, test)
-        gluTessCallback(self.tess, GLU_TESS_END, glEnd);
+        gluTessCallback(self.tess, GLU_TESS_END, glEnd)
         def combine( points, vertices, weights ):
             #print 'combine called', points, vertices, weights
             return points

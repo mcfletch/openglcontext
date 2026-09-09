@@ -86,64 +86,64 @@ class TestContext( BaseContext ):
         try:
                 
 
-            glClearColor (0.0, 0.0, 0.0, 0.0);
-            glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'));
-            glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'));
-            glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'));
+            glClearColor (0.0, 0.0, 0.0, 0.0)
+            glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'))
+            glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'))
+            glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'))
 
-            glEnable(GL_AUTO_NORMAL);
-            glEnable(GL_NORMALIZE);
+            glEnable(GL_AUTO_NORMAL)
+            glEnable(GL_NORMALIZE)
 
             knots= array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],'f')
-            glPushMatrix();
+            glPushMatrix()
             try:
-                glRotatef(330.0, 1.,0.,0.);
-                glScalef (0.5, 0.5, 0.5);
+                glRotatef(330.0, 1.,0.,0.)
+                glScalef (0.5, 0.5, 0.5)
 
-                gluBeginSurface(self.theNurb);
+                gluBeginSurface(self.theNurb)
                 try:
                     gluNurbsSurface(
                         self.theNurb,
                         knots, knots,
                         self.controlPoints,
                         GL_MAP2_VERTEX_3
-                    );
-                    gluBeginTrim (self.theNurb);
+                    )
+                    gluBeginTrim (self.theNurb)
                     try:
                         gluPwlCurve (self.theNurb, edgePt, GLU_MAP1_TRIM_2)
                     finally:
-                        gluEndTrim (self.theNurb);
+                        gluEndTrim (self.theNurb)
                         
-                    gluBeginTrim (self.theNurb);
+                    gluBeginTrim (self.theNurb)
                     try:
-                        gluNurbsCurve (self.theNurb, curveKnots, curvePt, GLU_MAP1_TRIM_2);
-                        gluPwlCurve (self.theNurb, pwlPt, GLU_MAP1_TRIM_2);
+                        gluNurbsCurve (self.theNurb, curveKnots, curvePt, GLU_MAP1_TRIM_2)
+                        gluPwlCurve (self.theNurb, pwlPt, GLU_MAP1_TRIM_2)
                     finally:
-                        gluEndTrim (self.theNurb);
+                        gluEndTrim (self.theNurb)
                 finally:
-                    gluEndSurface(self.theNurb);
+                    gluEndSurface(self.theNurb)
             finally:
-                glPopMatrix();
-        except:
+                glPopMatrix()
+        except Exception:
             traceback.print_exc()
 
 
     def OnInit( self ):
         self.showPoints = 0
-        self.theNurb = gluNewNurbsRenderer();
+        self.theNurb = gluNewNurbsRenderer()
         self.controlPoints = self.buildControlPoints()
-        gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 100.0);
-        gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL);
+        gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 100.0)
+        gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL)
     def buildControlPoints( self ):
         ctlpoints = zeros( (4,4,3), 'f')
         for u in range( 4 ):
             for v in range( 4):
                 ctlpoints[u][v][0] = 2.0*(u - 1.5)
-                ctlpoints[u][v][1] = 2.0*(v - 1.5);
+                ctlpoints[u][v][1] = 2.0*(v - 1.5)
                 if (u == 1 or u ==2) and (v == 1 or v == 2):
-                    ctlpoints[u][v][2] = 3.0;
+                    ctlpoints[u][v][2] = 3.0
                 else:
-                    ctlpoints[u][v][2] = -3.0;
+                    ctlpoints[u][v][2] = -3.0
         return ctlpoints
 
 

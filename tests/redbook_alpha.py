@@ -68,38 +68,38 @@ class TestContext( BaseContext ):
         """Setup display for display for the given mode"""
         ### NOTE:
         ### required because the context enables by default!
-        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_DEPTH_TEST)
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
-        glEnable (GL_BLEND);
+        glEnable (GL_BLEND)
         glDisable( GL_LIGHTING )
-        glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glShadeModel (GL_FLAT);
+        glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        glShadeModel (GL_FLAT)
 
         if self.leftFirst:
-            self.left();
-            self.right();
+            self.left()
+            self.right()
         else:
-            self.right();
-            self.left();
+            self.right()
+            self.left()
 
 
     def left( self ):
         """draw yellow triangle on LHS of screen"""
-        glBegin (GL_TRIANGLES);
-        glColor4f(1.0, 1.0, 0.0, 0.5);
-        glVertex3f(0.1, 0.9, 0.0);
-        glVertex3f(0.1, 0.1, 0.0);
-        glVertex3f(0.7, 0.5, 0.0);
-        glEnd();
+        glBegin (GL_TRIANGLES)
+        glColor4f(1.0, 1.0, 0.0, 0.5)
+        glVertex3f(0.1, 0.9, 0.0)
+        glVertex3f(0.1, 0.1, 0.0)
+        glVertex3f(0.7, 0.5, 0.0)
+        glEnd()
     def right( self ):
         """draw cyan triangle on RHS of screen"""
-        glBegin (GL_TRIANGLES);
-        glColor4f(0.0, 1.0, 1.0, 0.5);
-        glVertex3f(0.9, 0.9, 0.0); 
-        glVertex3f(0.3, 0.5, 0.0); 
-        glVertex3f(0.9, 0.1, 0.0); 
-        glEnd();
+        glBegin (GL_TRIANGLES)
+        glColor4f(0.0, 1.0, 1.0, 0.5)
+        glVertex3f(0.9, 0.9, 0.0) 
+        glVertex3f(0.3, 0.5, 0.0) 
+        glVertex3f(0.9, 0.1, 0.0) 
+        glEnd()
 
 
 if __name__ == "__main__":

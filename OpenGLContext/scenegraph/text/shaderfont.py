@@ -233,10 +233,14 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
         h = self._char_height
 
         glBegin(GL_QUADS)
-        glTexCoord2f(u0, v1); glVertex2f(0, 0)
-        glTexCoord2f(u1, v1); glVertex2f(w, 0)
-        glTexCoord2f(u1, v0); glVertex2f(w, h)
-        glTexCoord2f(u0, v0); glVertex2f(0, h)
+        glTexCoord2f(u0, v1)
+        glVertex2f(0, 0)
+        glTexCoord2f(u1, v1)
+        glVertex2f(w, 0)
+        glTexCoord2f(u1, v0)
+        glVertex2f(w, h)
+        glTexCoord2f(u0, v0)
+        glVertex2f(0, h)
         glEnd()
 
         glTranslatef(w, 0, 0)

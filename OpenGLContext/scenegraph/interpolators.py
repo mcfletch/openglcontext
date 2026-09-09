@@ -13,8 +13,8 @@ class Interpolator(object):
             return
         previous = None
         previousKey = None
-        start, stop = -1, -1
-        for index, (key, orient) in enumerate(zip(self.key, self.keyValue)):
+        _start, _stop = -1, -1
+        for _index, (key, orient) in enumerate(zip(self.key, self.keyValue)):
             if key > value:
                 if previous is None:
                     self.value_changed = orient
@@ -47,9 +47,8 @@ class SetInterpolator(Interpolator):
         """Given a floating point value, produce a new data-set"""
         if not len(self.key) or not len(self.keyValue):
             return
-        previous = None
         previousKey = None
-        start, stop = -1, -1
+        _start, _stop = -1, -1
         scale = len(self.keyValue) // len(self.key)
         for index, key in enumerate(self.key):
             if key > value:

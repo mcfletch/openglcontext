@@ -30,7 +30,8 @@ class TestContext(BaseContext):
 
     def OnInit(self):
         try:
-            import glfw; glfw.swap_interval(0)
+            import glfw
+            glfw.swap_interval(0)
         except Exception:
             pass
         print("Instanced vegetation scattered over a heightfield surface")

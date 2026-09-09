@@ -81,7 +81,7 @@ class TestContext( BaseContext ):
         BaseContext.Render( self, mode )
         if mode.visible:
             glDisable( GL_LIGHTING) # context lights by default
-            glTranslatef(1.5,0.0,-6.0);
+            glTranslatef(1.5,0.0,-6.0)
             glRotated( self.rotation, 1,0,0)
             glRotated( self.rotation, 0,1,0)
             glRotated( self.rotation, 0,0,1)
@@ -90,7 +90,7 @@ class TestContext( BaseContext ):
             between them being their application model.  We want texture
             0 applied as a simple decal, while we want the light-map 
             to modulate the colour in the base texture.'''
-            glActiveTexture(GL_TEXTURE0); 
+            glActiveTexture(GL_TEXTURE0) 
             glTexParameterf(
                 GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST
             )
@@ -100,7 +100,7 @@ class TestContext( BaseContext ):
             glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL)
             '''Enable the image (with the current texture unit)'''
             self.image()
-            glActiveTexture(GL_TEXTURE1);
+            glActiveTexture(GL_TEXTURE1)
             glTexParameterf(
                 GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST
             )
@@ -118,7 +118,7 @@ class TestContext( BaseContext ):
             from PIL.Image import open
         except ImportError:
             from Image import open
-        glActiveTexture(GL_TEXTURE0_ARB);
+        glActiveTexture(GL_TEXTURE0_ARB)
         return texture.Texture( open(imageName) )
     def loadLightMap( self, imageName = "lightmap1.jpg" ):
         """Load an image from a file using PIL as a lightmap (greyscale)
@@ -127,41 +127,65 @@ class TestContext( BaseContext ):
             from PIL.Image import open
         except ImportError:
             from Image import open
-        glActiveTextureARB(GL_TEXTURE1); 
+        glActiveTextureARB(GL_TEXTURE1) 
         return texture.Texture( open(imageName) )
         
     def drawCube( self ):
         """Draw a cube with texture coordinates"""
-        glBegin(GL_QUADS);
-        mTexture(0.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        mTexture(1.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        mTexture(1.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        mTexture(0.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
+        glBegin(GL_QUADS)
+        mTexture(0.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        mTexture(1.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        mTexture(1.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        mTexture(0.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
 
-        mTexture(1.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        mTexture(1.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        mTexture(0.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        mTexture(0.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
+        mTexture(1.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        mTexture(1.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        mTexture(0.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        mTexture(0.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
 
-        mTexture(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        mTexture(0.0, 0.0); glVertex3f(-1.0,  1.0,  1.0);
-        mTexture(1.0, 0.0); glVertex3f( 1.0,  1.0,  1.0);
-        mTexture(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
+        mTexture(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        mTexture(0.0, 0.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        mTexture(1.0, 0.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        mTexture(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
 
-        mTexture(1.0, 1.0); glVertex3f(-1.0, -1.0, -1.0);
-        mTexture(0.0, 1.0); glVertex3f( 1.0, -1.0, -1.0);
-        mTexture(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        mTexture(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
+        mTexture(1.0, 1.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        mTexture(0.0, 1.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        mTexture(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        mTexture(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
 
-        mTexture(1.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
-        mTexture(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        mTexture(0.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        mTexture(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
+        mTexture(1.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        mTexture(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        mTexture(0.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        mTexture(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
 
-        mTexture(0.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        mTexture(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        mTexture(1.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
-        mTexture(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
+        mTexture(0.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        mTexture(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        mTexture(1.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        mTexture(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
         glEnd()
         
     def OnIdle( self, ):

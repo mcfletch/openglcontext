@@ -164,7 +164,7 @@ class BenchmarkContext(BaseContext):
     def OnIdle(self):
         """Drive the benchmark."""
         if self.current_iteration >= self.num_iterations + self.warmup_frames:
-            print(f"Benchmark complete, finishing...", flush=True)
+            print("Benchmark complete, finishing...", flush=True)
             self._finish_benchmark()
             return
 
@@ -176,7 +176,7 @@ class BenchmarkContext(BaseContext):
 
         if self.current_iteration == self.warmup_frames:
             self.benchmark.start()
-            print(f"Warmup complete, starting benchmark...", flush=True)
+            print("Warmup complete, starting benchmark...", flush=True)
 
         self.current_iteration += 1
 
@@ -320,7 +320,7 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"Selection Benchmark")
+    print("Selection Benchmark")
     print(f"Profile: {os.environ.get('OPENGLCONTEXT_PROFILE', 'compatibility')}")
     print(f"Backend: {os.environ.get('OPENGLCONTEXT_BACKEND', 'default')}")
     print()

@@ -679,7 +679,6 @@ class NurbsCurve(nurbs.NurbsCurve):
                 )
         if len(self.knot[deg:-deg]):
             last = self.knot[deg - 1]
-            lastCount = deg
             for item in self.knot[deg : -(deg - 1)]:
                 if item <= last:
                     return 0, "Knot %s is less than previous knot %s" % (item, last)

@@ -92,7 +92,7 @@ def _capture(glb_path, out):
 
 
 def _green_fraction(arr):
-    r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
+    r, g, _b = arr[..., 0], arr[..., 1], arr[..., 2]
     return float(((g > 90) & (g > r + 30)).mean())
 
 

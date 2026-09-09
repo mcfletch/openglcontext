@@ -28,7 +28,8 @@ def main():
     script: oglc-view is the viewer, and this is the profiling harness
     behind it.
     """
-    import sys, cProfile
+    import sys
+    import cProfile
     if not sys.argv[1:2]:
         print(usage)
         sys.exit(1)

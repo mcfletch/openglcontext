@@ -11,7 +11,8 @@ RGB image).
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
-import numpy,sys
+import numpy
+import sys
 from OpenGL.GL import *
 from OpenGL.GL.ARB.imaging import *
 
@@ -47,17 +48,17 @@ class TestContext( BaseContext ):
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
 
             width, height = self.getViewPort()
-            glMatrixMode(GL_PROJECTION);
+            glMatrixMode(GL_PROJECTION)
             # For some reason the GL_PROJECTION_MATRIX is overflowing with a single push!
             # glPushMatrix()
             matrix = glGetDouble( GL_PROJECTION_MATRIX )
             
-            glLoadIdentity();
+            glLoadIdentity()
             glOrtho(0.0, height or 32, 0.0, width or 32, -1.0, 1.0)
-            glMatrixMode(GL_MODELVIEW);
-            glPushMatrix();
-            glLoadIdentity();
-            glRasterPos2i(40,40);
+            glMatrixMode(GL_MODELVIEW)
+            glPushMatrix()
+            glLoadIdentity()
+            glRasterPos2i(40,40)
 
             glDrawPixels(
                 self.width,
@@ -76,13 +77,13 @@ class TestContext( BaseContext ):
             glDrawPixelsub( GL_LUMINANCE, hist )
         
             # now clean up...
-            glPopMatrix();
-            glMatrixMode(GL_PROJECTION);
+            glPopMatrix()
+            glMatrixMode(GL_PROJECTION)
             # For some reason the GL_PROJECTION_MATRIX is overflowing with a single push!
             # glPopMatrix();
             glLoadMatrixd( matrix ) # should have un-decorated alias for this...
             
-            glMatrixMode(GL_MODELVIEW);
+            glMatrixMode(GL_MODELVIEW)
         
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

@@ -66,7 +66,7 @@ class ExtensionManager(object):
             return self.modules.get(moduleName)
         try:
             module = importFromString(moduleName)
-        except ImportError as err:
+        except ImportError:
             # record fact of failure XXX should use logs...
             log.warning("""Unable to load module for extension %r""", moduleName)
             traceback.print_exc()

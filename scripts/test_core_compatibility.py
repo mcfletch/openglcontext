@@ -408,12 +408,12 @@ def main():
 
     # Generate report
     print()
-    report = generate_report(results, args.output)
+    generate_report(results, args.output)
 
     # Print summary
     core_failures = sum(1 for r in results if r.profile == 'core' and not r.success)
     compat_failures = sum(1 for r in results if r.profile == 'compatibility' and not r.success)
-    print(f'\nSummary:')
+    print('\nSummary:')
     print(f'  Compatibility mode failures: {compat_failures}/{len(scripts)}')
     print(f'  Core mode failures: {core_failures}/{len(scripts)}')
 

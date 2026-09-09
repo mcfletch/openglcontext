@@ -50,7 +50,7 @@ class TestContext( BaseContext ):
             VertexArray=array(VertexArray, 'f')    #Here's the problem line
             IndiceArray=array(IndiceArray, 'I')
         glVertexPointerf(VertexArray)
-        glEnableClientState(GL_VERTEX_ARRAY);
+        glEnableClientState(GL_VERTEX_ARRAY)
         glDrawElementsui(
             GL_TRIANGLES,
             IndiceArray

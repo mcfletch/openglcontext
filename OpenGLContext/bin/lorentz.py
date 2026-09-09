@@ -91,7 +91,7 @@ def lorentz(iterations=100000, start=(0, -2, -1)):
     c = 8.0 / 3.0
     x0, y0, z0 = start
     points = []
-    for n in range(iterations):
+    for _n in range(iterations):
         # lorentz linear function set
         x1 = x0 + h * a * (y0 - x0)
         y1 = y0 + h * (x0 * (b - z0) - y0)

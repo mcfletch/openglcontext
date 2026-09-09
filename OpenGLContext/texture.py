@@ -5,7 +5,8 @@ from OpenGL.GLU import *
 from OpenGL.GL.ARB import texture_non_power_of_two
 from OpenGLContext.arrays import ArrayType
 from PIL import ImageOps, Image
-import traceback, weakref
+import traceback
+import weakref
 import logging
 
 log = logging.getLogger(__name__)
@@ -264,7 +265,7 @@ class Texture(object):
         if not self.NPOT_SUPPORT:
             try:
                 from PIL import Image
-            except ImportError as err:
+            except ImportError:
                 # old style?
                 import Image
             BICUBIC = Image.BICUBIC

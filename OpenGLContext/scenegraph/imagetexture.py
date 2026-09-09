@@ -154,7 +154,7 @@ class _Texture(nodetypes.Texture, node.Node):
 try:
     try:
         from PIL import Image
-    except ImportError as err:
+    except ImportError:
         # old style?
         import Image
     log.info("""Loaded Python Image Library (PIL)""")

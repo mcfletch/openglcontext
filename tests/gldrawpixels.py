@@ -25,7 +25,7 @@ class TestContext( BaseContext ):
         """
         try:
             from PIL.Image import open
-        except ImportError as err:
+        except ImportError:
             from Image import open
         im = open(imageName)
         try:
@@ -53,25 +53,25 @@ black square.
         
         format = GL_RGBA
         type = GL_UNSIGNED_BYTE
-        glEnable(GL_ALPHA_TEST);
-        glAlphaFunc(GL_GREATER,0);
+        glEnable(GL_ALPHA_TEST)
+        glAlphaFunc(GL_GREATER,0)
 ##		glEnable(GL_BLEND);
 ##		glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
 
         width, height = self.getViewPort()
-        glMatrixMode(GL_PROJECTION);
+        glMatrixMode(GL_PROJECTION)
         # For some reason the GL_PROJECTION_MATRIX is overflowing with a single push!
         # glPushMatrix()
         matrix = glGetDouble( GL_PROJECTION_MATRIX )
         
-        glLoadIdentity();
+        glLoadIdentity()
         glOrtho(0.0, height or 32, 0.0, width or 32, -1.0, 1.0)
-        glMatrixMode(GL_MODELVIEW);
-        glPushMatrix();
-        glLoadIdentity();
-        glRasterPos2i(40,40);
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+        glRasterPos2i(40,40)
 
         glDrawPixels(
             self.width,
@@ -81,13 +81,13 @@ black square.
             self.data,
         )
         
-        glPopMatrix();
-        glMatrixMode(GL_PROJECTION);
+        glPopMatrix()
+        glMatrixMode(GL_PROJECTION)
         # For some reason the GL_PROJECTION_MATRIX is overflowing with a single push!
         # glPopMatrix();
         glLoadMatrixd( matrix ) # should have un-decorated alias for this...
         
-        glMatrixMode(GL_MODELVIEW);
+        glMatrixMode(GL_MODELVIEW)
         
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

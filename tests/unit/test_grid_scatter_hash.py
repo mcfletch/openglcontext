@@ -52,7 +52,8 @@ def test_hash_quality_far_from_origin_matches_origin():
         i = np.arange(o, o + 200, dtype=np.int64)
         I, Jm = np.meshgrid(i, i)
         return _cell_hash(I.ravel(), Jm.ravel(), _SEED_JITTER_X)
-    near = block(0); far = block(1_000_000)
+    near = block(0)
+    far = block(1_000_000)
     for h in (near, far):
         assert h.min() >= 0.0 and h.max() < 1.0
         assert abs(h.mean() - 0.5) < 0.02                   # uniform mean
@@ -82,7 +83,8 @@ def test_scatter_world_anchored_far_from_origin():
     def by_cell(pos, yaw, sca):
         return {(round(float(x), 3), round(float(z), 3)): (float(w), float(c))
                 for x, z, w, c in zip(pos[:, 0], pos[:, 2], yaw, sca)}
-    d1 = by_cell(p1, y1, s1); d2 = by_cell(p2, y2, s2)
+    d1 = by_cell(p1, y1, s1)
+    d2 = by_cell(p2, y2, s2)
     shared = set(d1) & set(d2)
     assert len(shared) > 0.8 * min(len(d1), len(d2))
     for k in shared:

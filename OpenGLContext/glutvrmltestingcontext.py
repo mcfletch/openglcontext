@@ -2,7 +2,8 @@
 """
 from OpenGLContext import glutinteractivecontext
 from OpenGLContext import vrmlcontext
-import os, glob
+import os
+import glob
 from OpenGL.GLUT import *
 
 class VRMLContext(

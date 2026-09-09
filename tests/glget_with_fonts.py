@@ -30,18 +30,18 @@ class TestContext( BaseContext ):
         )
         self.strings = []
         self.strings.append( 'Integers/Booleans:' )
-        for name, argument, description in booleanarguments:
+        for name, argument, _description in booleanarguments:
             # really should make "glGet" an alias so this doesn't look so weird...
             result = glGetIntegerv( argument )
             self.strings.append( '  %s -> %s' % (name, result ) )
         self.strings.append( 'Doubles/Floats:' )
-        for name, argument, description in doublearguments:
+        for name, argument, _description in doublearguments:
             result1,result2 = glGetDoublev( argument ), glGetFloatv( argument )
             assert allclose(result1, result2),(result1,result2)
             self.strings.append( '  %s -> %s' % (name, result1 ) )
         
         self.strings.append( 'Strings:' )
-        for name, argument, description in stringarguments:
+        for name, argument, _description in stringarguments:
             # really should make "glGet" an alias so this doesn't look so weird...
             result = glGetString( argument )
             self.strings.append( '  %s -> %s' % (name, result ) )

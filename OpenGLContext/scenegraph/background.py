@@ -93,7 +93,7 @@ class Background(
         """
         if mode.passCount == 0:
             if self.bound:
-                result = spherebackground._SphereBackground.RenderShader( self, mode, clear=True)
+                spherebackground._SphereBackground.RenderShader( self, mode, clear=True)
                 if (
                     self.right.components and
                     self.left.components and

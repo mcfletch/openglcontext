@@ -53,7 +53,7 @@ if __name__ == "__main__":
         def __init__(self, parent, sceneGraph=None):
             wx.Frame.__init__(self, parent, 2400, "VRMLTreeControl Demo", size=(800,600) )
             outerbox = wx.BoxSizer(wx.HORIZONTAL)
-            for x in range( 2 ):
+            for _x in range( 2 ):
                 box = self.createSet()
                 outerbox.Add( box, 1, wx.EXPAND )
             self.SetAutoLayout(True)
@@ -62,7 +62,7 @@ if __name__ == "__main__":
             outerbox = wx.BoxSizer(wx.HORIZONTAL)
             box = wx.BoxSizer(wx.VERTICAL)
             outerbox.Add( box, 5, wx.EXPAND )
-            tID = wx.NewId()
+            wx.NewId()
             context = TestContext(
                 self,
             )

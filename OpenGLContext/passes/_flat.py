@@ -221,7 +221,7 @@ class SGObserver( object ):
         with how long the session has run rather than with what is on screen.
         """
         dropped = []
-        for key, values in self.paths.items():
+        for _key, values in self.paths.items():
             live = []
             for v in values:
                 if v.broken:
@@ -321,7 +321,7 @@ def _color_select_render(pass_obj, mode, toRender, events, *,
     try:
         id_holder = array([0, 0, 0, 0], 'B')
         id_setter = id_holder.view('<I')
-        for index, (key, mvmatrix, tmatrix, bvolume, path) in enumerate(toRender):
+        for index, (_key, mvmatrix, _tmatrix, _bvolume, path) in enumerate(toRender):
             color_id = (index + 1) << id_shift
             id_setter[0] = color_id
             glColor4ubv(id_holder)
@@ -708,7 +708,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
         self.stats.opaque += len(singles)
         self.stats.draws += len(singles)
-        for obj_index, (key, mvmatrix, tmatrix, bvolume, path) in singles:
+        for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path) in singles:
             self.matrix = mvmatrix
             self.renderPath = path
 
@@ -778,7 +778,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         prog = shader.program
 
         try:
-            for obj_index, (key, mvmatrix, tmatrix, bvolume, path) in transparent:
+            for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path) in transparent:
                 self.matrix = mvmatrix
                 self.renderPath = path
 
@@ -1204,10 +1204,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         # positive number can only ever choose the positive number -- and that
         # changes the projection every scene is drawn with, so it is a
         # deliberate change rather than a tidy-up.
-        for (key,mv,tm,bv,path) in toRender:
+        for (_key,_mv,_tm,bv,_path) in toRender:
             try:
                 bv.getPoints()
-            except (AttributeError,boundingvolume.UnboundedObject) as err:
+            except (AttributeError,boundingvolume.UnboundedObject):
                 return 0
         # 101 is to allow the 100 unit background to show... sigh
         return -(101*1.01)
@@ -1484,7 +1484,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         if not id:
             # default VRML lighting...
             from OpenGLContext.scenegraph import light
-            l = light.DirectionalLight( direction = (0,0,-1.0))
+            light.DirectionalLight( direction = (0,0,-1.0))
 #            glLoadMatrixf( matrix )
 #            l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
@@ -1506,7 +1506,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
         debugFrustum = self.context.contextDefinition.debugBBox
-        for key,mvmatrix,tmatrix,bvolume,path in toRender:
+        for key,mvmatrix,_tmatrix,bvolume,path in toRender:
             if not key[0]:
                 self.matrix = mvmatrix
                 self.renderPath = path
@@ -1524,7 +1524,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         setup = False
         debugFrustum = self.context.contextDefinition.debugBBox
         try:
-            for key,mvmatrix,tmatrix,bvolume,path in toRender:
+            for key,mvmatrix,_tmatrix,bvolume,path in toRender:
                 if key[0]:
                     if not setup:
                         setup = True

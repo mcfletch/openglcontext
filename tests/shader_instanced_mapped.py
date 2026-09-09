@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 
 def cleaner(locks, deleter):
-    for (start, stop), sync in locks:
+    for (_start, _stop), sync in locks:
         deleter(sync)
 
 

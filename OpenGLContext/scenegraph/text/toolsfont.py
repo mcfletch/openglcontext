@@ -1,7 +1,9 @@
 """Filled and extruded 3D glyphs from TrueType outlines
 """
 from OpenGLContext.arrays import *
-import weakref, sys, os
+import weakref
+import sys
+import os
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLE import *

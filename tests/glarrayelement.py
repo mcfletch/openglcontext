@@ -15,8 +15,8 @@ class TestContext( BaseContext ):
         glTranslatef( 0,0,-1)
         glVertexPointerd( flower_geometry.points_expanded )
         glNormalPointerf( flower_geometry.normals_expanded )
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_NORMAL_ARRAY);
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glEnableClientState(GL_NORMAL_ARRAY)
         glBegin( GL_TRIANGLES )
         for index in range(len(flower_geometry.points_expanded)):
             glArrayElement( index )

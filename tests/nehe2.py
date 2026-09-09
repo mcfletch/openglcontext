@@ -56,7 +56,7 @@ class TestContext( BaseContext ):
         '''Prevents OpenGL from removing faces which face backward'''
         glDisable( GL_CULL_FACE )
         '''Moves the drawing origin 6 units into the screen and 1.5 units to the left'''
-        glTranslatef(-1.5,0.0,-6.0);
+        glTranslatef(-1.5,0.0,-6.0)
         '''Starts the (legacy) geometry generation mode'''
         glBegin(GL_TRIANGLES)
         glVertex3f( 0.0,  1.0, 0.0)
@@ -65,7 +65,7 @@ class TestContext( BaseContext ):
         glEnd()
         
         '''Moves the drawing origin again, cumulative change is now (1.5,0.0,6.0)'''
-        glTranslatef(3.0,0.0,0.0);
+        glTranslatef(3.0,0.0,0.0)
 
         '''Starts a different geometry generation mode'''
         glBegin(GL_QUADS)
@@ -73,7 +73,7 @@ class TestContext( BaseContext ):
         glVertex3f( 1.0,-1.0, 0.0)
         glVertex3f( 1.0, 1.0, 0.0)
         glVertex3f(-1.0, 1.0, 0.0)
-        glEnd();
+        glEnd()
 
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

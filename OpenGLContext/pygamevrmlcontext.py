@@ -4,7 +4,8 @@ You normally use this module via the testingcontext module.
 """
 from OpenGLContext import pygameinteractivecontext
 from OpenGLContext import vrmlcontext
-import os, glob
+import os
+import glob
 
 class VRMLContext(
     vrmlcontext.VRMLContext,

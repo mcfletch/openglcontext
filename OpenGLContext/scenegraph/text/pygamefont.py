@@ -3,7 +3,9 @@ from OpenGLContext.scenegraph.text import fontprovider, font
 from OpenGL.GL import *
 from pygame import font as pygame_font
 from pygame import image, surfarray, transform
-import pygame, traceback, os
+import pygame
+import traceback
+import os
 from OpenGLContext.arrays import transpose, shape, zeros, contiguous
 import logging
 log = logging.getLogger( __name__ )
@@ -124,7 +126,6 @@ class PyGameBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font
         if __debug__:
             log.info( """lists %s(%s)""", self, repr(value))
         lists = []
-        font = self.font
         for char in value:
             list, metrics = self.getChar( char, mode=mode )
             if list is not None:

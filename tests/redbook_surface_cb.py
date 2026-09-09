@@ -56,11 +56,9 @@ from OpenGL.GLU import *
 from OpenGLContext.arrays import *
 import sys
 
-try:
-    # anyone actually have 1.3???
-    GLU_VERSION_1_3
+if 'GLU_VERSION_1_3' in globals():
     haveNurbsTessellator = 1
-except NameError:
+else:
     from OpenGL.GLU.EXT import nurbs_tessellator
     
 
@@ -75,20 +73,20 @@ class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
 
-        glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'));
-        glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'));
-        glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'));
+        glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'))
+        glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'))
+        glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'))
 
-        glEnable(GL_AUTO_NORMAL);
-        glEnable(GL_NORMALIZE);
+        glEnable(GL_AUTO_NORMAL)
+        glEnable(GL_NORMALIZE)
 
         knots= array ([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0], "f")
-        glPushMatrix();
+        glPushMatrix()
         try:
-            glRotatef(330.0, 1.,0.,0.);
-            glScalef (0.5, 0.5, 0.5);
+            glRotatef(330.0, 1.,0.,0.)
+            glScalef (0.5, 0.5, 0.5)
 
-            gluBeginSurface(self.theNurb);
+            gluBeginSurface(self.theNurb)
             print('knots', knots)
             print("controlPoints", self.controlPoints)
             controlPoints = self.controlPoints
@@ -98,11 +96,11 @@ class TestContext( BaseContext ):
                     knots, knots,
                     controlPoints,
                     GL_MAP2_VERTEX_3
-                );
+                )
             finally:
-                gluEndSurface(self.theNurb);
+                gluEndSurface(self.theNurb)
         finally:
-            glPopMatrix();
+            glPopMatrix()
 
 
 
@@ -118,10 +116,10 @@ class TestContext( BaseContext ):
                     sys.exit(1)
 
         self.showPoints = 1
-        self.theNurb = gluNewNurbsRenderer();
+        self.theNurb = gluNewNurbsRenderer()
         self.controlPoints = self.buildControlPoints()
-        gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 25.0);
-        gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL);
+        gluNurbsProperty(self.theNurb, GLU_SAMPLING_TOLERANCE, 25.0)
+        gluNurbsProperty(self.theNurb, GLU_DISPLAY_MODE, GLU_FILL)
         gluNurbsProperty( self.theNurb, GLU_NURBS_MODE_EXT, GLU_NURBS_TESSELLATOR_EXT)
         
         gluNurbsCallback( self.theNurb, GLU_NURBS_BEGIN, self.OnBegin )
@@ -135,11 +133,11 @@ class TestContext( BaseContext ):
         for u in range( 4 ):
             for v in range( 4):
                 ctlpoints[u][v][0] = 2.0*(u - 1.5)
-                ctlpoints[u][v][1] = 2.0*(v - 1.5);
+                ctlpoints[u][v][1] = 2.0*(v - 1.5)
                 if (u == 1 or u ==2) and (v == 1 or v == 2):
-                    ctlpoints[u][v][2] = 3.0;
+                    ctlpoints[u][v][2] = 3.0
                 else:
-                    ctlpoints[u][v][2] = -3.0;
+                    ctlpoints[u][v][2] = -3.0
         return ctlpoints
     def OnVertex( self, vertex, data = None ):
         print('vertex', vertex, data)

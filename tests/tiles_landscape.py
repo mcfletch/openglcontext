@@ -75,7 +75,8 @@ class TestContext(BaseContext):
         far = Shape(geometry=Box(size=(6.0, 12.0, 1.0)),
                     appearance=Appearance(material=Material(
                         diffuseColor=(0.10, 0.38, 0.12))))
-        keep = lambda p: (p[:, 1] > P.WATER_LEVEL + 4.0) & (p[:, 1] < 130.0)
+        def keep(p):
+            return (p[:, 1] > P.WATER_LEVEL + 4.0) & (p[:, 1] < 130.0)
         return build_vegetation_lod(pos, idx.reshape(-1, 3), near, far,
                                     density=0.00035, seed=7, camera=self._camera(),
                                     near_distance=450.0, scale_range=(0.7, 1.7),

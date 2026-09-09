@@ -36,7 +36,8 @@ class TestContext(BaseContext):
 
     def OnInit(self):
         try:
-            import glfw; glfw.swap_interval(0)
+            import glfw
+            glfw.swap_interval(0)
         except Exception:
             pass
         print("Streamed 3D Tiles terrain: green heightfield that refines up close")

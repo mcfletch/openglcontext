@@ -59,6 +59,6 @@ def test_tileset_quadtree_tile_count(tmp_path):
 
 
 def test_glb_files_written(tmp_path):
-    path = P.build_terrain_tileset(str(tmp_path), extent=512, levels=2, tile_res=17)
+    P.build_terrain_tileset(str(tmp_path), extent=512, levels=2, tile_res=17)
     glbs = [f for f in os.listdir(str(tmp_path)) if f.endswith(".glb")]
     assert len(glbs) == 1 + 4

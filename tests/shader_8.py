@@ -175,7 +175,7 @@ class TestContext( BaseContext ):
             radius = 1 
         ).compile()
         self.uniform_locations = {}
-        for uniform,value in self.UNIFORM_VALUES:
+        for uniform,_value in self.UNIFORM_VALUES:
             location = glGetUniformLocation( self.shader, uniform )
             if location in (None,-1):
                 print('Warning, no uniform: %s'%( uniform ))

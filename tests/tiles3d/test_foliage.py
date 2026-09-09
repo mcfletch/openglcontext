@@ -47,7 +47,8 @@ def test_procedural_ground_maps_and_patch():
     import numpy as np
     maps = F.procedural_ground_maps(seed=2)
     assert "color" in maps
-    hf = lambda x, z: np.full(np.shape(x), 5.0)
+    def hf(x, z):
+        return np.full(np.shape(x), 5.0)
     node = F.ground_patch_node((0, 0, 0), 40.0, hf, maps, res=12)
     assert node is not None
 
@@ -60,8 +61,10 @@ def test_cc0_offline_safe():
 
 
 def test_slope01_flat_vs_steep():
-    flat = lambda x, z: np.zeros(np.shape(x))
-    steep = lambda x, z: np.asarray(x) * 2.0
+    def flat(x, z):
+        return np.zeros(np.shape(x))
+    def steep(x, z):
+        return np.asarray(x) * 2.0
     assert F.slope01(flat, np.array([0.0]), np.array([0.0]))[0] < 0.05
     assert F.slope01(steep, np.array([0.0]), np.array([0.0]))[0] > 1.0
 
@@ -74,7 +77,8 @@ def test_rock_flower_branch_build():
 
 def test_ground_patch_split_dirt_and_rock():
     # a ramp: half flat, half steep -> both dirt and rock primitives present
-    hf = lambda x, z: np.maximum(np.asarray(x), 0.0) * 1.5
+    def hf(x, z):
+        return np.maximum(np.asarray(x), 0.0) * 1.5
     node = F.ground_patch_split((0, 0, 0), 30.0, hf,
                                 F.procedural_ground_maps(seed=1),
                                 F.procedural_ground_maps(seed=2), res=20)
@@ -103,7 +107,8 @@ def test_tree_billboard_and_no_shadow():
 
 
 def test_ground_patch_blended_builds():
-    hf = lambda x, z: np.sin(np.asarray(x) * 0.05) * 10
+    def hf(x, z):
+        return np.sin(np.asarray(x) * 0.05) * 10
     mats = [F.procedural_ground_maps(1)["color"], F.procedural_ground_maps(2)["color"]]
     assert F.ground_patch_blended((0, 0, 0), 60.0, hf, mats, res=16,
                                   tex_size=256) is not None

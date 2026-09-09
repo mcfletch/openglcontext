@@ -312,6 +312,6 @@ class Shape(basenodes.Shape):
             return self.boundingVolume(mode).visible(
                 frustum, matrix, occlusion=occlusion, mode=mode
             )
-        except Exception as err:
+        except Exception:
             tb = traceback.format_exc()
             log.warning("""Failure during Shape.visible check for %r:\n%s""", self, tb)

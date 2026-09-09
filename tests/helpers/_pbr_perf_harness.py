@@ -106,7 +106,7 @@ def main() -> int:
         finally:
             if self.idx_vbo is not None:
                 self.idx_vbo.unbind()
-            for buf, loc, size in self.attr_layout:
+            for buf, _loc, _size in self.attr_layout:
                 buf.unbind()
             glBindVertexArray(0)
             glDeleteVertexArrays(1, [vao])

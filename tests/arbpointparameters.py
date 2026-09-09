@@ -5,7 +5,8 @@ from OpenGLContext import testingcontext
 
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.arrays import *
-import sys, math
+import sys
+import math
 
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.events.timer import Timer

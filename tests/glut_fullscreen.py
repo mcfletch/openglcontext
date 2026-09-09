@@ -18,7 +18,7 @@ class TestContext( BaseContext ):
     def Render( self, mode = None):
         BaseContext.Render( self, mode )
         glDisable( GL_LIGHTING) # context lights by default
-        glTranslatef(1.5,0.0,-6.0);
+        glTranslatef(1.5,0.0,-6.0)
         glRotated( time.time()%(8.0)/8 * -360, 1,0,0)
 
         

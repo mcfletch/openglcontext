@@ -8,7 +8,7 @@ def getTraceback(error=None):
     """Get formatted exception"""
     try:
         return traceback.format_exc( 10 )
-    except Exception as err:
+    except Exception:
         return str(error)
 
 import logging

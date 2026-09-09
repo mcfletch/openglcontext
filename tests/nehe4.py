@@ -46,7 +46,7 @@ class TestContext( BaseContext ):
         BaseContext.Render( self, mode )
         glDisable( GL_LIGHTING) # context lights by default
         glDisable( GL_CULL_FACE)
-        glTranslatef(-1.5,0.0,-6.0);
+        glTranslatef(-1.5,0.0,-6.0)
         '''systemTime is the engine's clock, in seconds.  Taking it
         modulo three gives a value that runs from 0 to 3 and starts
         again, and 360 degrees of that is an object spinning at
@@ -72,7 +72,7 @@ class TestContext( BaseContext ):
         glRotated/glTranslatef functions modify the current matrix.
         '''
         glLoadIdentity()
-        glTranslatef(1.5,0.0,-6.0);
+        glTranslatef(1.5,0.0,-6.0)
         '''Animating as above, but at 1 rev/s'''
         glRotated( systemtime.systemTime()%(1.0)/1 * -360, 1,0,0)
 

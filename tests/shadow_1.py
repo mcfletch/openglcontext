@@ -531,7 +531,7 @@ class TestContext( BaseContext ):
                 GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, None
             )
             '''Now we store the texture in the cache for later passes.'''
-            holder = mode.cache.holder( light,texture,key=self.textureCacheKey)
+            mode.cache.holder( light,texture,key=self.textureCacheKey)
         '''These parameters simply keep us from doing interpolation on the
         data-values for the texture.  If we were to use, for instance
         GL_LINEAR interpolation, our shadows would tend to get "moire"

@@ -214,7 +214,7 @@ class Font(object):
         displayLists = getattr(self, '_displayLists', None)
         if displayLists is None:
             return
-        for key,(dl,metrics) in displayLists.items():
+        for _key,(dl,_metrics) in displayLists.items():
             try:
                 glDeleteLists( dl, 1 )
             except Exception:

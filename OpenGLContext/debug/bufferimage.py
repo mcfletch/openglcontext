@@ -10,7 +10,7 @@ from OpenGL.GL import *
 from OpenGLContext.arrays import *
 try:
     from PIL import Image
-except ImportError as err:
+except ImportError:
     # old style?
     import Image
 

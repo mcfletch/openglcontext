@@ -61,11 +61,13 @@ class TestContext( BaseContext ):
             vertex.Vertex( (x/scale,y/scale,0) ) for (x,y) in outline[::2]
         ]
         vertices.reverse()
-        for type, vertices in self.tess.tessellate( vertices, forceTriangles=0 ):
+        for type, tessellated in self.tess.tessellate( vertices, forceTriangles=0 ):
             glNormal( 0,0,-1 )
             glColor3f( 1,0,0 )
             glBegin( type )
-            for v in vertices:
+            # The tessellated run for this primitive, not the outline that was
+            # handed in: the loop used to rebind `vertices` and read it back.
+            for v in tessellated:
                 glVertex2dv( v.point[:2] )
             glEnd()
 

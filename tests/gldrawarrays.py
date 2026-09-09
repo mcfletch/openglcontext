@@ -14,8 +14,8 @@ class TestContext( BaseContext):
         BaseContext.Render( self, mode )
         glVertexPointerd(flower_geometry.points_expanded )
         glNormalPointerf(flower_geometry.normals_expanded )
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_NORMAL_ARRAY);
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glEnableClientState(GL_NORMAL_ARRAY)
         glDrawArrays(GL_TRIANGLES, 0, len(flower_geometry.points_expanded))
 
 if __name__ == "__main__":

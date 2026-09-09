@@ -2,7 +2,8 @@
 from OpenGLContext.scenegraph.text import fontprovider, font
 from OpenGL.WGL import *
 from OpenGL.GL import *
-import win32ui, win32con
+import win32ui
+import win32con
 import sys
 from OpenGL.WGL import *
 import logging
@@ -68,7 +69,7 @@ class WGLFont(font.Font):
         thread and within the rendering pass!
         """
         for char in value:
-            if not char in self._displayLists:
+            if char not in self._displayLists:
                 self.fastCreate(value, mode)
                 break  # we just created all of them we can
         items = filter(None, map(self._displayLists.get, value))
@@ -88,7 +89,7 @@ class WGLFont(font.Font):
         font = self._uiFont()
         dc.SelectObject(font)
         for char in source:
-            if not char in self._displayLists:
+            if char not in self._displayLists:
                 base, metrics = self._createSingleChar(wgldc, char)
                 self._displayLists[char] = (base, metrics)
 
@@ -114,7 +115,7 @@ class WGLFont(font.Font):
             specification["height"] = int(self.fontStyle.size * 12)
             # need weight seperated
             weight = win32con.FW_NORMAL
-            for wname, weight in WEIGHTNAMES:
+            for wname, _weight in WEIGHTNAMES:
                 if self.fontStyle.style.find(wname) >= 0:
                     break
             specification["weight"] = weight
@@ -140,7 +141,7 @@ class WGLFont(font.Font):
         """
         if not self._lineHeight:
             heights = []
-            for b, m in self._displayLists.values():
+            for _b, m in self._displayLists.values():
                 heights.append(m.height)
             self._lineHeight = max(heights)
         return self._lineHeight

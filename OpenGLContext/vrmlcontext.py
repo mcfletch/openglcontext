@@ -8,7 +8,10 @@ of viewpoint, and similar useful things.
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
-import os, sys, time, traceback
+import os
+import sys
+import time
+import traceback
 from OpenGLContext import framecounter
 from OpenGLContext.loaders.loader import Loader
 import logging
@@ -43,7 +46,7 @@ class VRMLContext(object):
             from OpenGLContext.scenegraph.text import toolsfont
 
             registry = self.getTTFFiles()
-        except ImportError as err:
+        except ImportError:
             log.warning(
                 """Unable to import TTFQuery/FontTools-based TTF-file registry, no TTF font support!"""
             )

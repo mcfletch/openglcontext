@@ -21,7 +21,8 @@ def _surface(scale=1.0):
 
 
 def _mode(dz):
-    m = np.eye(4); m[3, 2] = dz
+    m = np.eye(4)
+    m[3, 2] = dz
     return types.SimpleNamespace(matrix=m)
 
 

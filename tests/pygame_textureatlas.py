@@ -9,7 +9,8 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 import _fontstyles
-import sys, math
+import sys
+import math
 from OpenGLContext.scenegraph.text import pygamefont, fontprovider
 from OpenGLContext.arrays import zeros, array
 from OpenGLContext import texturecache,texture
@@ -81,7 +82,7 @@ class TestContext( BaseContext ):
             self._rendered = True
             atlas = None
             for char in self.testText:
-                if not char in self.maps:
+                if char not in self.maps:
                     dataArray, metrics = self.font.createCharTexture(
                         char, mode=mode 
                     )

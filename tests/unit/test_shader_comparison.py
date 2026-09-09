@@ -101,7 +101,7 @@ Press 't' to test right side against reference
         # Compare
         result = compare_images(self.left_capture.pixels, self.right_capture.pixels)
 
-        print(f"\nPixel Comparison Statistics:")
+        print("\nPixel Comparison Statistics:")
         print(f"  {result}")
 
         if result.is_match(max_diff_threshold=0.1, max_percent_different=5.0):

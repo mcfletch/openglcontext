@@ -707,7 +707,7 @@ class GLSLObject(shaders.GLSLObject):
             self.holderDepend(mode.cache.holder(self, locationMap, "locationMap"))
         try:
             return locationMap[name]
-        except KeyError as err:
+        except KeyError:
             program = self.program(mode)
             if program:
                 try:
@@ -721,7 +721,7 @@ class GLSLObject(shaders.GLSLObject):
                             name,
                             glGetProgramInfoLog(program) if program else 'No program',
                         )
-                        raise RuntimeError(self.compileLog)
+                        raise RuntimeError(self.compileLog) from err
                     raise
                 locationMap[name] = location
                 if location == -1:
@@ -730,7 +730,7 @@ class GLSLObject(shaders.GLSLObject):
             else:
                 raise RuntimeError(
                     "Attempting to get attribute/uniform from failed compile"
-                )
+                ) from None
 
     def sortKey(self, mode, matrix):
         """Produce the sorting key for this shape's appearance/shaders/etc"""

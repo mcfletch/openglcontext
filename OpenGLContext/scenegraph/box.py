@@ -133,49 +133,49 @@ def yieldVertices(size):
     x,y,z = size 
     x,y,z = x/2.0,y/2.0,z/2.0
     normal = ( 0.0, 0.0, 1.0)
-    yield (0.0, 0.0)+ normal + (-x,-y,z);
-    yield (1.0, 0.0)+ normal + (x,-y,z);
-    yield (1.0, 1.0)+ normal + (x,y,z);
-    yield (0.0, 0.0)+ normal + (-x,-y,z);
-    yield (1.0, 1.0)+ normal + (x,y,z);
-    yield (0.0, 1.0)+ normal + (-x,y,z);
+    yield (0.0, 0.0)+ normal + (-x,-y,z)
+    yield (1.0, 0.0)+ normal + (x,-y,z)
+    yield (1.0, 1.0)+ normal + (x,y,z)
+    yield (0.0, 0.0)+ normal + (-x,-y,z)
+    yield (1.0, 1.0)+ normal + (x,y,z)
+    yield (0.0, 1.0)+ normal + (-x,y,z)
 
-    normal = ( 0.0, 0.0,-1.0);
-    yield (1.0, 0.0)+ normal + (-x,-y,-z);
-    yield (1.0, 1.0)+ normal + (-x,y,-z);
-    yield (0.0, 1.0)+ normal + (x,y,-z);
-    yield (1.0, 0.0)+ normal + (-x,-y,-z);
-    yield (0.0, 1.0)+ normal + (x,y,-z);
-    yield (0.0, 0.0)+ normal + (x,-y,-z);
+    normal = ( 0.0, 0.0,-1.0)
+    yield (1.0, 0.0)+ normal + (-x,-y,-z)
+    yield (1.0, 1.0)+ normal + (-x,y,-z)
+    yield (0.0, 1.0)+ normal + (x,y,-z)
+    yield (1.0, 0.0)+ normal + (-x,-y,-z)
+    yield (0.0, 1.0)+ normal + (x,y,-z)
+    yield (0.0, 0.0)+ normal + (x,-y,-z)
 
     normal = ( 0.0, 1.0, 0.0)
-    yield (0.0, 1.0)+ normal + (-x,y,-z);
-    yield (0.0, 0.0)+ normal + (-x,y,z);
-    yield (1.0, 0.0)+ normal + (x,y,z);
-    yield (0.0, 1.0)+ normal + (-x,y,-z);
-    yield (1.0, 0.0)+ normal + (x,y,z);
-    yield (1.0, 1.0)+ normal + (x,y,-z);
+    yield (0.0, 1.0)+ normal + (-x,y,-z)
+    yield (0.0, 0.0)+ normal + (-x,y,z)
+    yield (1.0, 0.0)+ normal + (x,y,z)
+    yield (0.0, 1.0)+ normal + (-x,y,-z)
+    yield (1.0, 0.0)+ normal + (x,y,z)
+    yield (1.0, 1.0)+ normal + (x,y,-z)
 
     normal = ( 0.0,-1.0, 0.0)
-    yield (1.0, 1.0)+ normal + (-x,-y,-z);
-    yield (0.0, 1.0)+ normal + (x,-y,-z);
-    yield (0.0, 0.0)+ normal + (x,-y,z);
-    yield (1.0, 1.0)+ normal + (-x,-y,-z);
-    yield (0.0, 0.0)+ normal + (x,-y,z);
-    yield (1.0, 0.0)+ normal + (-x,-y,z);
+    yield (1.0, 1.0)+ normal + (-x,-y,-z)
+    yield (0.0, 1.0)+ normal + (x,-y,-z)
+    yield (0.0, 0.0)+ normal + (x,-y,z)
+    yield (1.0, 1.0)+ normal + (-x,-y,-z)
+    yield (0.0, 0.0)+ normal + (x,-y,z)
+    yield (1.0, 0.0)+ normal + (-x,-y,z)
 
     normal = ( 1.0, 0.0, 0.0)
-    yield (1.0, 0.0)+ normal + (x,-y,-z);
-    yield (1.0, 1.0)+ normal + (x,y,-z);
-    yield (0.0, 1.0)+ normal + (x,y,z);
-    yield (1.0, 0.0)+ normal + (x,-y,-z);
-    yield (0.0, 1.0)+ normal + (x,y,z);
-    yield (0.0, 0.0)+ normal + (x,-y,z);
+    yield (1.0, 0.0)+ normal + (x,-y,-z)
+    yield (1.0, 1.0)+ normal + (x,y,-z)
+    yield (0.0, 1.0)+ normal + (x,y,z)
+    yield (1.0, 0.0)+ normal + (x,-y,-z)
+    yield (0.0, 1.0)+ normal + (x,y,z)
+    yield (0.0, 0.0)+ normal + (x,-y,z)
 
     normal = (-1.0, 0.0, 0.0)
-    yield (0.0, 0.0)+ normal + (-x,-y,-z);
-    yield (1.0, 0.0)+ normal + (-x,-y,z);
-    yield (1.0, 1.0)+ normal + (-x,y,z);
-    yield (0.0, 0.0)+ normal + (-x,-y,-z);
-    yield (1.0, 1.0)+ normal + (-x,y,z);
-    yield (0.0, 1.0)+ normal + (-x,y,-z);
+    yield (0.0, 0.0)+ normal + (-x,-y,-z)
+    yield (1.0, 0.0)+ normal + (-x,-y,z)
+    yield (1.0, 1.0)+ normal + (-x,y,z)
+    yield (0.0, 0.0)+ normal + (-x,-y,-z)
+    yield (1.0, 1.0)+ normal + (-x,y,z)
+    yield (0.0, 1.0)+ normal + (-x,y,-z)

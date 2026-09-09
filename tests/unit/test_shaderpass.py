@@ -250,7 +250,8 @@ class TestSetUniformCollapse(unittest.TestCase):
         sp._uniform_value_cache = {}
         sp._get_location = lambda name, program: 5
         uploaded = []
-        upload = lambda loc, value: uploaded.append((loc, value))
+        def upload(loc, value):
+            return uploaded.append((loc, value))
         sp._set_uniform('x', 3, None, upload)
         sp._set_uniform('x', 3, None, upload)   # unchanged -> skipped
         sp._set_uniform('x', 4, None, upload)   # changed -> uploaded
@@ -406,7 +407,7 @@ class TestDepthProgram(unittest.TestCase):
         from unittest import mock
         from OpenGLContext.passes import shaderpass
         p = self._program(depth=None)
-        with mock.patch.object(shaderpass, 'glUseProgram') as gu:
+        with mock.patch.object(shaderpass, 'glUseProgram'):
             result = p.use_depth()
         self.assertEqual(result, 10)
 

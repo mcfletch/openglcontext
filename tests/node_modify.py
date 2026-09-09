@@ -6,7 +6,7 @@ import os
 from OpenGLContext.events.timer import Timer
 try:
     from OpenGLContext.loaders.loader import Loader
-except ImportError as err:
+except ImportError:
     print("""This demo requires the VRML97 loader""")
 
 class TestContext( BaseContext ):

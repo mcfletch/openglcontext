@@ -118,7 +118,7 @@ class TestWhereOverTheDatasetItOpens:
         def tile(x, z, children=()):
             bv = types.SimpleNamespace(
                 center=np.array([x, 150.0, z]),
-                bounding_sphere=lambda c=np.array([x, 150.0, z]): (c, 1000.0))
+                bounding_sphere=lambda c=np.array([x, 150.0, z]): (c, 1000.0))  # noqa: B008 - the default is the capture
             return types.SimpleNamespace(
                 bounding_volume=bv, children=list(children),
                 content_uri='t.b3dm' if not children else None,

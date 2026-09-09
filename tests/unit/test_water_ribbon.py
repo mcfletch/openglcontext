@@ -97,7 +97,7 @@ class TestWhatItIsMadeOf:
         mesh = water_ribbon(course, width=6.0, style=FLOWING, when=0.4)
         heights = np.asarray(mesh.positions)[:, 1]
         # Across the ribbon the height barely changes; along it, it does.
-        across = np.asarray(mesh.positions)[:, 2]
+        np.asarray(mesh.positions)[:, 2]
         along = np.asarray(mesh.positions)[:, 0]
         assert np.std(heights[np.argsort(along)][:6]) \
             < np.std(heights) + 1e-9

@@ -19,7 +19,8 @@ def _preprocess(src, defines):
     `#if MAX_SHADOW_LIGHTS > <int>`, `#else`, `#endif` (arbitrarily nested).
     """
     out, stack = [], []          # stack of (active_here,)
-    active = lambda: all(s for s in stack)
+    def active():
+        return all(s for s in stack)
     for line in src.split('\n'):
         s = line.strip()
         if s.startswith('#ifdef'):

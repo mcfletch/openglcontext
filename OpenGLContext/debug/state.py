@@ -30,10 +30,10 @@ class State( dict ):
     """Object for holding a current OpenGL state"""
     def __init__( self ):
         base = {}
-        for name, argument, description in self.booleanarguments:
+        for name, argument, _description in self.booleanarguments:
             result = glGetInteger( argument )
             base[name] = result
-        for name, argument, description in self.stringarguments:
+        for name, argument, _description in self.stringarguments:
             # really should make "glGet" an alias so this doesn't look so weird...
             result = glGetString( argument )
             base[name] = result

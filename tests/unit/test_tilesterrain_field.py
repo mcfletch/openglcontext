@@ -147,7 +147,7 @@ class TestWhenItIsWrong:
     def test_a_record_missing_its_image_is_reported(self, tmp_path) -> None:
         path = _world(tmp_path)
         os.remove(os.path.join(str(tmp_path), 'ground-height.png'))
-        with pytest.raises(Exception):
+        with pytest.raises((OSError, ValueError, RuntimeError)):
             TilesTerrain(path, workers=1).shutdown()
 
     def test_a_record_with_no_layers_is_refused(self, tmp_path) -> None:

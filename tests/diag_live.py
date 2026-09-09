@@ -18,7 +18,10 @@ Usage (Ctrl-C to stop):
 
 Everything after the model path is passed through to the viewer.
 """
-import os, sys, time, statistics
+import os
+import sys
+import time
+import statistics
 
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 
@@ -78,8 +81,11 @@ def _flush(ctx):
             int(100 * win['pick'] / max(1, win['frames'])),
             'ON ' if phys else 'off', win['casc']))
     sys.stderr.flush()
-    win['render'].clear(); win['present'].clear(); win['cadence'].clear()
-    win['pick'] = 0; win['frames'] = 0
+    win['render'].clear()
+    win['present'].clear()
+    win['cadence'].clear()
+    win['pick'] = 0
+    win['frames'] = 0
 
 model = sys.argv[1] if len(sys.argv) > 1 else '/workspaces/OpenGL-dev/parthenon/parthenon.glb'
 sys.argv = ['oglc-gltf', model] + sys.argv[2:]

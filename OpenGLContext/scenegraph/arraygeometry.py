@@ -8,10 +8,7 @@ from OpenGL.arrays import vbo
 import logging
 log = logging.getLogger( __name__ )
 
-try:
-    contiguous
-except NameError:
-    def contiguous( source, typecode=None ):
+def contiguous( source, typecode=None ):
         """Force source to be a contiguous array"""
         if isinstance( source, ArrayType):
             if not hasattr(source, 'iscontiguous' ):
@@ -146,7 +143,7 @@ class ArrayGeometry(object):
             return self._render_shader(mode)
 
         # Legacy rendering path
-        vboAvailable = bool(vbo.get_implementation())
+        bool(vbo.get_implementation())
         glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
         glPushAttrib(GL_ALL_ATTRIB_BITS)
         try:

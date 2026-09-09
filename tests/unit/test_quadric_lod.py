@@ -89,7 +89,8 @@ class TestConeCylinderRadius:
 
 class TestPerLevelCaching:
     def _mode(self, dz):
-        m = np.eye(4); m[3, 2] = dz
+        m = np.eye(4)
+        m[3, 2] = dz
         return types.SimpleNamespace(cache=Cache(), matrix=m)
 
     def test_distance_selects_level_and_caches(self, monkeypatch):

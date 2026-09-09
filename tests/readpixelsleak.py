@@ -6,7 +6,8 @@ BaseContext = testingcontext.getInteractive()
 from OpenGLContext import drawcube
 from OpenGLContext.events import systemtime
 from OpenGL.GL import *
-import os, sys
+import os
+import sys
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -17,7 +18,7 @@ class TestContext( BaseContext ):
     reverseShape = 0
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
-        glTranslatef(1.5,0.0,-6.0);
+        glTranslatef(1.5,0.0,-6.0)
         glRotated( systemtime.systemTime()%(8.0)/8 * -360, 1,0,0)
         drawcube.drawCube()
         width, height = self.getViewPort()
@@ -50,7 +51,7 @@ class TestContext( BaseContext ):
     def SaveTo( self, filename, format="JPEG" ):
         try:
             from PIL import Image # get PIL's functionality...
-        except ImportError as err:
+        except ImportError:
             # old style?
             import Image
         width, height = self.getViewPort()
@@ -68,7 +69,7 @@ class TestContext( BaseContext ):
     def SaveToUB( self ):
         try:
             from PIL import Image # get PIL's functionality...
-        except ImportError as err:
+        except ImportError:
             # old style?
             import Image
         width, height = self.getViewPort()

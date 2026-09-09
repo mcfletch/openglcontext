@@ -249,7 +249,6 @@ class Sphere( basenodes.Sphere, Quadric ):
         """
         ystep = len(longsteps)
         zstep = len(latsteps)
-        xstep = 1
         coords = zeros((zstep,ystep,8), 'f')
         coords[:,:,0] = sin(longsteps)
         coords[:,:,1] = cos(latsteps).reshape( (-1,1))
@@ -337,7 +336,7 @@ class Cone( basenodes.Cone, Quadric ):
         phi = pi/16, longAngle=(pi*2), top=False, cylinder=False
     ):
         """Generate a VBO data-set to render a cone"""
-        tip = (0,height/2.0,0)
+        (0,height/2.0,0)
         longsteps = arange( 0,longAngle+0.000003, phi )
         ystep = len(longsteps)
         zstep = 0

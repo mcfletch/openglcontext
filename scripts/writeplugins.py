@@ -97,8 +97,8 @@ entry_points = {
     ],
 }
 
-for typ, set in entry_points.items():
-    for entry in set:
-        key,cls = entry.split('=')
-        key,cls = key.strip(),cls.strip()
-        print '%s( %r, %r )'%( typ, key, cls.replace( ':', '.') )
+for typ, entries in entry_points.items():
+    for entry in entries:
+        key, cls = entry.split('=')
+        key, cls = key.strip(), cls.strip()
+        print('%s( %r, %r )' % (typ, key, cls.replace(':', '.')))

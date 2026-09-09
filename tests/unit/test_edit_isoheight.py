@@ -63,7 +63,8 @@ class TestPullingAPointOntoAContour:
     def test_flat_ground_leaves_the_point_where_it_is(self) -> None:
         """There is no nearest contour on a plain, and guessing one would move
         the point somewhere the designer did not click."""
-        flat = lambda x, z: np.zeros(np.shape(x))
+        def flat(x, z):
+            return np.zeros(np.shape(x))
         assert snap_to_height(flat, 12.0, 34.0, 5.0) == pytest.approx((12.0, 34.0))
 
 

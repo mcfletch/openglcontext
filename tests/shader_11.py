@@ -227,7 +227,7 @@ class TestContext( BaseContext ):
         uniforms into a separate list and have refactored the uniform resolution
         into a method.'''
         self.uniform_locations = {}
-        for uniform,value in self.UNIFORM_VALUES:
+        for uniform,_value in self.UNIFORM_VALUES:
             self.findUniform( self.shader, uniform )
         self.findUniform( self.shader, 'lights' )
         for uniform in ('modelViewProjection','normalMatrix'):

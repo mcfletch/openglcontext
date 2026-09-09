@@ -7,7 +7,8 @@ from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, 
 from OpenGL.GL import *
 from OpenGL.GL.ARB.occlusion_query import *
 from OpenGL.extensions import alternate
-import sys, logging
+import sys
+import logging
 log = logging.getLogger('TestQuery')
 
 glBeginQuery = alternate( glBeginQuery, glBeginQueryARB )
@@ -38,12 +39,12 @@ class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         query = glGenQueries(1)[0]
-        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-        glDepthMask(GL_FALSE);
-        glBeginQuery(GL_SAMPLES_PASSED, query);
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE)
+        glDepthMask(GL_FALSE)
+        glBeginQuery(GL_SAMPLES_PASSED, query)
         # we'd want a different non-texture mode here, really...
         self.shape.Render( mode )
-        glEndQuery(GL_SAMPLES_PASSED);
+        glEndQuery(GL_SAMPLES_PASSED)
         ready = False 
         log.info('Waiting for completion of query (normal situation is 8 or 9 wait loop iterations)')
         iterations = 0
@@ -54,8 +55,8 @@ class TestContext( BaseContext ):
         log.info('Fragments:  %s', glGetQueryObjectuiv(query, GL_QUERY_RESULT ))
         glDeleteQueries( query )
 
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        glDepthMask(GL_TRUE);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE)
+        glDepthMask(GL_TRUE)
         self.shape.Render( mode )
         
     def OnInit( self ):

@@ -125,7 +125,9 @@ def test_switch_fly_to_walk_drops_to_surface():
 
 def test_avatar_walks_on_streamed_tileset_colliders(tmp_path):
     """Full loop: terrain streams -> per-tile colliders register -> avatar stands on them."""
-    import os, json, math
+    import os
+    import json
+    import math
     from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
     from OpenGLContext.loaders.tiles3d import procedural as PR
 

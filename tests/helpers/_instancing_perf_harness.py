@@ -41,7 +41,8 @@ def _cube():
     for n, verts in faces:
         base = len(pos)
         for vx in verts:
-            pos.append([c * 0.3 for c in vx]); nrm.append(list(n))
+            pos.append([c * 0.3 for c in vx])
+            nrm.append(list(n))
         idx += [base, base + 1, base + 2, base, base + 2, base + 3]
     return (np.array(pos, 'f'), np.array(nrm, 'f'), np.array(idx, np.uint32))
 
@@ -107,14 +108,17 @@ def main():
                 basenodes.Transform(children=kids),
                 basenodes.DirectionalLight(direction=(-.3, -.4, -1.), intensity=1.4)])
 
-    inst = C(); inst.deferRedraw = True
+    inst = C()
+    inst.deferRedraw = True
     try:
         glfw.swap_interval(0)   # disable vsync so timing reflects real work
     except Exception:
         pass
     for i in range(FRAMES):
         glfw.poll_events()
-        counts['single'] = 0; counts['instanced'] = 0; counts['instances'] = 0
+        counts['single'] = 0
+        counts['instanced'] = 0
+        counts['instances'] = 0
         del drawn[:]
         t0 = time.perf_counter()
         inst.OnDraw(force=1)

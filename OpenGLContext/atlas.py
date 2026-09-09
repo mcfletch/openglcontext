@@ -1,5 +1,7 @@
 """Texture atlas implementation"""
-import math, weakref, logging
+import math
+import weakref
+import logging
 from OpenGL.GL import *
 from OpenGLContext.arrays import zeros, array, dot, ArrayType
 from OpenGLContext import texture
@@ -48,15 +50,13 @@ class _Strip( object ):
         return remover 
     def onRemove( self, *args, **named ):
         """Remove map by offset (normally a weakref-release callback)"""
-        update = False
         for mapRef in self.maps:
             referenced = mapRef()
             if referenced is None:
                 try:
                     self.maps.remove( mapRef )
-                except ValueError as err:
+                except ValueError:
                     pass 
-                update = True 
 
 class AtlasError( Exception ):
     """Raised when we can't/shouldn't append to this atlas"""
@@ -174,7 +174,7 @@ class Atlas( object ):
         instance = ImageTexture(
             image = Image.new(format, (1,1), '#ffff00'),
         )
-        holder = mode.cache.holder(instance, self.texture)
+        mode.cache.holder(instance, self.texture)
         return instance
 
 class Map( object ):
@@ -285,7 +285,7 @@ class AtlasManager( object ):
         for atlas in atlases:
             try:
                 return atlas.add( image )
-            except AtlasError as err:
+            except AtlasError:
                 pass 
         atlas = Atlas( d, max_size=self.max_size or self.calculate_max_size() )
         atlases.append( atlas )

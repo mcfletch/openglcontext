@@ -7,7 +7,8 @@ querying metadata regarding a particular font/glyph etc.
 """
 from fontTools import ttLib
 from OpenGLContext.arrays import *
-import weakref, sys
+import weakref
+import sys
 from ttfquery import describe, glyphquery
 import logging
 log = logging.getLogger( __name__ )
@@ -103,7 +104,6 @@ class Font(object):
         """Count the number of glyphs from string present in file"""
         return self.withFont( self._countGlyphs, string )
     def _countGlyphs( self, string ):
-        count = 0
         set = {}
         for character in string:
             set[ glyphquery.explicitGlyph( self.font, character )] = 1
@@ -117,7 +117,7 @@ class Font(object):
         """
         needed = []
         for character in string:
-            if not character in self.glyphs:
+            if character not in self.glyphs:
                 needed.append( character )
         if needed:
             self.withFont( self._createGlyphs, needed )
@@ -132,7 +132,7 @@ class Font(object):
         Returns a compiled glyph for the given character in
         this font.
         """
-        if not character in self.glyphs:
+        if character not in self.glyphs:
             self.withFont( self._createGlyph, character, self.quality )
         return self.glyphs.get (character)
     def _createGlyph( self, character, quality ):
@@ -164,9 +164,13 @@ class Font(object):
 
 
 if __name__ == "__main__":
-    import os, glob, traceback
+    import os
+    import glob
+    import traceback
     testText = [ unicode(chr(x),'latin-1') for x in range(32,256)]
-    def scan( directory = os.path.join( os.environ['windir'], 'fonts')):
+    def scan( directory=None ):
+        if directory is None:
+            directory = os.path.join( os.environ['windir'], 'fonts')
         files = glob.glob( os.path.join(directory, "*.ttf"))
         errors = []
         for file in files:
@@ -176,14 +180,14 @@ if __name__ == "__main__":
                 font = Font(
                     file,
                 )
-            except Exception as err:
+            except Exception:
                 traceback.print_exc()
                 error[1].append( (file, "Couldn't load"))
             else:
                 for character in testText:
                     try:
                         font.getGlyph(character)
-                    except Exception as err:
+                    except Exception:
                         traceback.print_exc()
                         error[1].append( (file, "Character %r failed, aborting font %r"%(character,file)))
                         break

@@ -17,7 +17,8 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.constants import *
 from OpenGL import error
-import traceback, sys
+import traceback
+import sys
 from OpenGLContext.events.timer import Timer
 
 class TestContext( BaseContext ):
@@ -63,14 +64,14 @@ class TestContext( BaseContext ):
             window_pos.glWindowPos2dvARB(())
         except (error.CopyError,GLerror,ValueError) as err:
             print('Correct handling of incorrect parameters', err)
-        except Exception as err:
+        except Exception:
             traceback.print_exc()
             print('Incorrect handling of incorrect parameters')
         try:
             window_pos.glWindowPos3dvARB(())
         except (error.CopyError,GLerror, ValueError) as err:
             print('Correct handling of incorrect parameters', err)
-        except Exception as err:
+        except Exception:
             traceback.print_exc()
             print('Incorrect handling of incorrect parameters')
         
@@ -87,8 +88,8 @@ class TestContext( BaseContext ):
         if mode.visible and not mode.transparent:
             format = GL_RGBA
             type = GL_UNSIGNED_BYTE
-            glEnable(GL_ALPHA_TEST);
-            glAlphaFunc(GL_GREATER,0);
+            glEnable(GL_ALPHA_TEST)
+            glAlphaFunc(GL_GREATER,0)
             glPixelStorei(GL_PACK_ALIGNMENT, 1)
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
 

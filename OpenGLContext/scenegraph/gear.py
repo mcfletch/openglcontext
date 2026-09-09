@@ -283,7 +283,7 @@ class Gear( nodetypes.Geometry, node.Node ):
         glEnd()
 
         # draw outward faces of teeth
-        glBegin(GL_QUAD_STRIP);
+        glBegin(GL_QUAD_STRIP)
         for i in range(teeth):
             angle = i * 2.0*pi / teeth        
             glVertex3f(r1*cos(angle), r1*sin(angle),  width*0.5)
@@ -316,7 +316,7 @@ class Gear( nodetypes.Geometry, node.Node ):
         # draw inside radius cylinder
         glBegin(GL_QUAD_STRIP)
         for i in range(teeth + 1):
-            angle = i * 2.0*pi / teeth;
+            angle = i * 2.0*pi / teeth
             glNormal3f(-cos(angle), -sin(angle), 0.0)
             glVertex3f(r0*cos(angle), r0*sin(angle), -width*0.5)
             glVertex3f(r0*cos(angle), r0*sin(angle), width*0.5)

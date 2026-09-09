@@ -58,7 +58,7 @@ class _SphereBackground( object ):
                 glEnable( GL_COLOR_MATERIAL )
                 glDisable( GL_CULL_FACE )
                 
-                for index in range( int(SEGMENTS) ):
+                for _index in range( int(SEGMENTS) ):
                     first()
                     glRotated( 360.0/SEGMENTS, 0,1,0)
                 glDisableClientState( GL_VERTEX_ARRAY )
@@ -146,7 +146,7 @@ class _SphereBackground( object ):
                     # see note on compile's return value/store value
                     dl = dl[1]
                 if clear:
-                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
                 if dl:
                     if callable( dl ):
                         dl()

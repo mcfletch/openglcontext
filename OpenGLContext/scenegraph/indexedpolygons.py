@@ -340,7 +340,6 @@ class IndexedPolygons(
         if vbos.coord is None:
             return 1
         index_vbo = self._get_index_vbo(mode)
-        program = shader_program.program
 
         glFrontFace(GL_CCW if self.ccw else GL_CW)
         if self.solid:

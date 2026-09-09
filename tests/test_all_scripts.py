@@ -369,7 +369,7 @@ def _run_script(
             timeout=timeout,
             cwd=str(TESTS_DIR),
         )
-    except subprocess.TimeoutExpired as e:
+    except subprocess.TimeoutExpired:
         pytest.fail(f"Script {script_path.name} timed out after {timeout}s")
 
     # Check for tracebacks in stderr

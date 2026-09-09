@@ -29,7 +29,7 @@ class MovementManager(object):
         """Bind this navigation mechanism to the context"""
         self.context = context
         log.info("Binding %r movement manager", self)
-        for title, key, function in self.commands:
+        for _title, key, function in self.commands:
             binding = self.commandBindings.get(key)
             if binding is not None:
                 func = getattr(self, function, None)
@@ -47,7 +47,7 @@ class MovementManager(object):
     def unbind(self, context):
         """Unbind this navigation mechanism from the context"""
         log.info("Unbinding %r movement manager", self)
-        for title, key, function in self.commands:
+        for _title, key, _function in self.commands:
             binding = self.commandBindings.get(key)
             if binding is not None:
                 func = None

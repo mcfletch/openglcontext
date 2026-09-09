@@ -13,7 +13,7 @@ class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         glVertexPointerd( flower_geometry.points )
-        glEnableClientState(GL_VERTEX_ARRAY);
+        glEnableClientState(GL_VERTEX_ARRAY)
         glDrawElementsui(
             GL_TRIANGLES,
             flower_geometry.indices

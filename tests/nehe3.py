@@ -36,7 +36,7 @@ class TestContext( BaseContext ):
         
         '''Now we return to the tutorial, in this geometry we are 
         specifying a colour for each vertex.'''
-        glTranslatef(-1.5,0.0,-6.0);
+        glTranslatef(-1.5,0.0,-6.0)
         glBegin(GL_TRIANGLES)
         glColor3f(1,0,0)
         glVertex3f( 0.0,  1.0, 0.0)
@@ -46,7 +46,7 @@ class TestContext( BaseContext ):
         glVertex3f( 1.0, -1.0, 0.0)
         glEnd()
 
-        glTranslatef(3.0,0.0,0.0);
+        glTranslatef(3.0,0.0,0.0)
         '''Here we specify the colour once for the entire piece of 
         geometry.'''
         glColor3f(0.5,0.5,1.0)

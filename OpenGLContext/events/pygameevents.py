@@ -2,7 +2,8 @@
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
-import pygame, string
+import pygame
+import string
 from pygame.locals import *
 import logging
 

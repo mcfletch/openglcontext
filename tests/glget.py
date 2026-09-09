@@ -8,17 +8,17 @@ class TestContext( BaseContext ):
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )
         print('Integers/Booleans:')
-        for name, argument, description in booleanarguments:
+        for name, argument, _description in booleanarguments:
             # really should make "glGet" an alias so this doesn't look so weird...
             result = glGetIntegerv( argument )
             print('%s -> %s' % (name, result ))
         print('Doubles/Floats:')
-        for name, argument, description in doublearguments:
-            result1,result2 = glGetDoublev( argument ), glGetFloatv( argument )
+        for name, argument, _description in doublearguments:
+            result1,_result2 = glGetDoublev( argument ), glGetFloatv( argument )
             print('%s -> %s' % (name, result1 ))
         
         print('Strings:')
-        for name, argument, description in stringarguments:
+        for name, argument, _description in stringarguments:
             # really should make "glGet" an alias so this doesn't look so weird...
             result = glGetString( argument )
             print('%s -> %s' % (name, result ))

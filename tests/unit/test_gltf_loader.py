@@ -738,7 +738,6 @@ class TestCacheDir:
             == os.path.normpath(base)
 
     def test_fetch_url_uses_default_cache_dir(self, monkeypatch, tmp_path):
-        calls = {}
         monkeypatch.setattr(resolver, '_default_cache_dir', lambda: str(tmp_path / 'c'))
 
         class _Resp:

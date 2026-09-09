@@ -11,7 +11,7 @@ from OpenGL.GL import *
 from OpenGL.GL.EXT.texture_compression_s3tc import *
 try:
     from PIL.Image import open
-except ImportError as err:
+except ImportError:
     from Image import open
 
 class TestContext( BaseContext ):
@@ -50,7 +50,7 @@ class TestContext( BaseContext ):
         """Render scene geometry"""
         BaseContext.Render( self, mode )
         glDisable( GL_LIGHTING) # context lights by default
-        glTranslatef(1.5,0.0,-6.0);
+        glTranslatef(1.5,0.0,-6.0)
         glRotated( systemtime.systemTime()%(8.0)/8 * -360, 1,0,0)
         self.setupTexture()
         self.drawCube()
@@ -64,36 +64,60 @@ class TestContext( BaseContext ):
         glBindTexture(GL_TEXTURE_2D, self.imageID)
     def drawCube( self ):
         """Draw a cube with texture coordinates"""
-        glBegin(GL_QUADS);
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
+        glBegin(GL_QUADS)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
 
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
 
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
 
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0, -1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
 
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
 
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
         glEnd()
         
     def OnIdle( self, ):

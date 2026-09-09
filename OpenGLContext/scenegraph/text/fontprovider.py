@@ -1,6 +1,7 @@
 """Base functionality for font-providers (objects creating fonts)"""
 
-import traceback, weakref
+import traceback
+import weakref
 import logging
 
 log = logging.getLogger(__name__)

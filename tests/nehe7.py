@@ -21,7 +21,7 @@ glLight), we need to explicitly request a compatibility profile OpenGL context.
 from OpenGL.GL import *
 try:
     from PIL.Image import open
-except ImportError as err:
+except ImportError:
     from Image import open
 '''The tutorial uses the GLU function gluBuild2DMipmaps, so we make the
 GLU functions available and continue with our normal setup routines.'''
@@ -81,9 +81,9 @@ class TestContext( BaseContext ):
         as they do not change for the entire run of the application,
         normally code would set these values every time they change,
         often once per render-pass.'''
-        glLightfv( GL_LIGHT1, GL_AMBIENT, GLfloat_4(0.2, .2, .2, 1.0) );
-        glLightfv(GL_LIGHT1, GL_DIFFUSE, GLfloat_3(.8,.8,.8));
-        glLightfv(GL_LIGHT1, GL_POSITION, GLfloat_4(-2,0,3,1) );
+        glLightfv( GL_LIGHT1, GL_AMBIENT, GLfloat_4(0.2, .2, .2, 1.0) )
+        glLightfv(GL_LIGHT1, GL_DIFFUSE, GLfloat_3(.8,.8,.8))
+        glLightfv(GL_LIGHT1, GL_POSITION, GLfloat_4(-2,0,3,1) )
 
     def loadImages( self, imageName = "nehe_crate.bmp" ):
         """Load an image from a file using PIL,
@@ -137,13 +137,13 @@ class TestContext( BaseContext ):
         our rendering.'''
         if self.lightsOn:
             glEnable( GL_LIGHTING )
-            glEnable(GL_LIGHT1);
-            glDisable(GL_LIGHT0);
+            glEnable(GL_LIGHT1)
+            glDisable(GL_LIGHT0)
         else:
             glDisable( GL_LIGHTING )
-            glDisable(GL_LIGHT1);
-            glDisable(GL_LIGHT0);
-        glTranslatef(1.5,0.0,self.currentZOffset);
+            glDisable(GL_LIGHT1)
+            glDisable(GL_LIGHT0)
+        glTranslatef(1.5,0.0,self.currentZOffset)
         glEnable(GL_TEXTURE_2D)
         # re-select our texture, could use other generated textures
         # if we had generated them earlier...
@@ -183,42 +183,66 @@ class TestContext( BaseContext ):
     newly-defined lighting.'''
     def drawCube( self ):
         "Draw a cube with both normals and texture coordinates"
-        glBegin(GL_QUADS);
+        glBegin(GL_QUADS)
         glNormal3f( 0.0, 0.0, 1.0)
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
 
-        glNormal3f( 0.0, 0.0,-1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
+        glNormal3f( 0.0, 0.0,-1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
 
         glNormal3f( 0.0, 1.0, 0.0)
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
 
         glNormal3f( 0.0,-1.0, 0.0)
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0, -1.0, -1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
 
         glNormal3f( 1.0, 0.0, 0.0)
-        glTexCoord2f(1.0, 0.0); glVertex3f( 1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f( 1.0,  1.0, -1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f( 1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 0.0); glVertex3f( 1.0, -1.0,  1.0);
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f( 1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f( 1.0,  1.0, -1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f( 1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f( 1.0, -1.0,  1.0)
 
         glNormal3f(-1.0, 0.0, 0.0)
-        glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, -1.0, -1.0);
-        glTexCoord2f(1.0, 0.0); glVertex3f(-1.0, -1.0,  1.0);
-        glTexCoord2f(1.0, 1.0); glVertex3f(-1.0,  1.0,  1.0);
-        glTexCoord2f(0.0, 1.0); glVertex3f(-1.0,  1.0, -1.0);
+        glTexCoord2f(0.0, 0.0)
+        glVertex3f(-1.0, -1.0, -1.0)
+        glTexCoord2f(1.0, 0.0)
+        glVertex3f(-1.0, -1.0,  1.0)
+        glTexCoord2f(1.0, 1.0)
+        glVertex3f(-1.0,  1.0,  1.0)
+        glTexCoord2f(0.0, 1.0)
+        glVertex3f(-1.0,  1.0, -1.0)
         glEnd()
     
 

@@ -47,7 +47,7 @@ class TestContext(BaseContext):
 
         # chain: a column of links, each held a fixed distance below the previous
         prev, prev_pos = -1, np.array([2.0, 7.0, 0.0])
-        for k in range(5):
+        for _k in range(5):
             pos = prev_pos - (0, 1.0, 0)
             link = self.scene.add_box(size=(0.6, 0.6, 0.6), position=tuple(pos),
                                       color=(0.5, 0.7, 0.9))

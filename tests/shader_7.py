@@ -187,17 +187,6 @@ class TestContext( BaseContext ):
 
         An array-of-structures value looks like this when declared in GLSL:
         '''
-        lightStruct = """
-        // NOTE: this does not work, it compiles, but you will
-        // not be able to fill in the individual members...
-        struct LightSource {
-            vec4 ambient;
-            vec4 diffuse;
-            vec4 specular;
-            vec4 position;
-        };
-        uniform LightSource lights[3];
-        """
         '''When you attempt to retrieve the location for the Uniform
         via:
 
@@ -214,7 +203,7 @@ class TestContext( BaseContext ):
             radius = 1
         ).compile()
         self.uniform_locations = {}
-        for uniform,value in self.UNIFORM_VALUES:
+        for uniform,_value in self.UNIFORM_VALUES:
             location = glGetUniformLocation( self.shader, uniform )
             if location in (None,-1):
                 print('Warning, no uniform: %s'%( uniform ))

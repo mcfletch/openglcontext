@@ -111,7 +111,8 @@ def test_conifer_is_a_multipart_tree():
 def test_scatter_disc_seats_on_surface_within_radius():
     import numpy as np
     from OpenGLContext.loaders.tiles3d.vegetation import scatter_disc
-    hf = lambda x, z: np.full(np.shape(x), 12.0)
+    def hf(x, z):
+        return np.full(np.shape(x), 12.0)
     s = scatter_disc((100.0, 0.0, -50.0), radius=40.0, density=0.05, seed=1,
                      height_fn=hf)
     assert len(s) > 50
@@ -123,7 +124,8 @@ def test_scatter_disc_seats_on_surface_within_radius():
 def test_scatter_disc_keep_filter():
     import numpy as np
     from OpenGLContext.loaders.tiles3d.vegetation import scatter_disc
-    hf = lambda x, z: np.asarray(x) * 0 + np.asarray(z) * 0.0 + 5.0
+    def hf(x, z):
+        return np.asarray(x) * 0 + np.asarray(z) * 0.0 + 5.0
     # keep only the +x half
     s = scatter_disc((0.0, 0.0, 0.0), 50.0, 0.05, seed=2, height_fn=hf,
                      keep=lambda p: p[:, 0] > 0)
@@ -139,7 +141,8 @@ def test_grass_and_bush_prototypes():
 def test_build_forest_patch_has_all_layers():
     import numpy as np
     from OpenGLContext.loaders.tiles3d.vegetation import build_forest_patch
-    hf = lambda x, z: np.full(np.shape(x), 30.0)
+    def hf(x, z):
+        return np.full(np.shape(x), 30.0)
     forest = build_forest_patch((0.0, 0.0, 0.0), hf, seed=5)
     assert len(forest.children) == 3             # grass, shrubs, trees
     grass, shrubs, trees = forest.children

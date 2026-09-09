@@ -20,7 +20,7 @@ class URLField( fieldtypes.MFString ):
     def fset( self, client, value, notify=1 ):
         value = super( URLField, self).fset( client, value, notify )
         imageObject = getattr(client, self.name[:-3])
-        setattr( imageObject, 'url', value )
+        imageObject.url = value
         return value
     def fdel( self, client, notify=1 ):
         value = super( URLField, self).fdel( client, notify )
@@ -128,7 +128,7 @@ class _CubeBackground( object ):
         }
         def all_same( key ):
             current = None
-            for k,value in images.items():
+            for _k,value in images.items():
                 new = getattr(value,key)
                 if current is None:
                     current = new 
@@ -141,7 +141,7 @@ class _CubeBackground( object ):
         tex = texture.CubeTexture( )
         try:
             tex.fromPIL( [(k,i.image) for k,i in images.items()] )
-        except ValueError as err:
+        except ValueError:
             return None
         
         vert_vbo = vbo.VBO( self.CUBE_VERTICES )

@@ -3,7 +3,8 @@
 from OpenGLContext.scenegraph.text import fontprovider, font
 from OpenGL.GL import *
 import wx
-import traceback, os
+import traceback
+import os
 from OpenGLContext.arrays import *
 import logging
 
@@ -191,7 +192,7 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
 
     def lineHeight(self, mode=None):
         """Retrieve normal line-height for this font"""
-        for list, metrics in self._displayLists.values():
+        for _list, metrics in self._displayLists.values():
             return metrics.height
         if __debug__:
             log.warning(

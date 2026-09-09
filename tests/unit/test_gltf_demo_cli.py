@@ -124,7 +124,6 @@ class TestResolveBackground:
         # the 'cube' background must have faces to show out of the box
         prefix = gltf_demo.default_env_prefix()
         assert prefix is not None
-        import os
         for suffix in ('RT', 'LF', 'UP', 'DN', 'FR', 'BK'):
             assert os.path.exists(prefix + suffix + '.jpg')
 
@@ -136,7 +135,6 @@ class TestEnvironmentReflection:
                   'OPENGLCONTEXT_IBL_INTENSITY'):
             monkeypatch.delenv(k, raising=False)
         gltf_demo.apply_environment(gltf_demo.demo_config([]))
-        import os
         assert os.environ.get('OPENGLCONTEXT_ENV_CUBEMAP')
         assert os.environ['OPENGLCONTEXT_IBL'] == 'full'
         assert float(os.environ['OPENGLCONTEXT_IBL_INTENSITY']) > 0.4  # brighter than the shadow default
@@ -144,7 +142,6 @@ class TestEnvironmentReflection:
     def test_explicit_ibl_intensity_wins(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_IBL_INTENSITY', raising=False)
         gltf_demo.apply_environment(gltf_demo.demo_config(['--ibl-intensity', '0.3']))
-        import os
         # apply_environment must not clobber an explicit flag (apply_render_env sets it)
         assert os.environ.get('OPENGLCONTEXT_IBL_INTENSITY') != '0.9'
 

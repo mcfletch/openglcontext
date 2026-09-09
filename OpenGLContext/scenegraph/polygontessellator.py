@@ -1,12 +1,6 @@
 """Class for tessellating polygons using GLU"""
 from OpenGL.GL import *
 from OpenGL.GLU import *
-try:
-    # older PyOpenGL version didn't have the name properly registered, check
-    gluTessVertex
-except NameError:
-    from OpenGL import GLU
-    gluTessVertex = GLU._gluTessVertex
 from OpenGLContext import utilities
 from OpenGLContext import arrays
 import traceback

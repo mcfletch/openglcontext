@@ -18,7 +18,8 @@ from math import cos, sin
 import sys
 try:
     from OpenGL.WGL import *
-    import win32ui, win32con
+    import win32ui
+    import win32con
 except ImportError as err:
     print("""Unable to import Win32 text modules: %s"""%(err,))
     sys.exit( testingcontext.REQUIRED_EXTENSION_MISSING )
@@ -123,7 +124,7 @@ if __name__ == "__main__":
             )
             self.SetTopWindow(frame)
             frame.Show( True )
-            win = TestContext(frame)
+            TestContext(frame)
             return True
     app = MyApp(0)
     app.MainLoop()

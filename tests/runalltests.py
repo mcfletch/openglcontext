@@ -1,6 +1,11 @@
 #! /usr/bin/env python
 """Script to run the "standard" set of OpenGLContext scripts (in this directory)"""
-import os,sys,subprocess,datetime, webbrowser, glob
+import os
+import sys
+import subprocess
+import datetime
+import webbrowser
+import glob
 from OpenGLContext import testingcontext
 PYTHON = sys.executable
 TEST_RUNNER = 'oglc-test'
@@ -42,7 +47,7 @@ def get_scripts():
         if (
             not os.path.basename(x).startswith( '_' )
             and 
-            not os.path.basename(x) in STOP_SET
+            os.path.basename(x) not in STOP_SET
         )
     ])
     return scripts

@@ -194,7 +194,7 @@ class FlatPass( _flat.FlatPass ):
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
         debugFrustum = self.context.contextDefinition.debugBBox
-        for key,mvmatrix,tmatrix,bvolume,path in toRender:
+        for key,mvmatrix,_tmatrix,bvolume,path in toRender:
             if not key[0]:
                 self.matrix = mvmatrix
                 self.renderPath = path
@@ -216,7 +216,7 @@ class FlatPass( _flat.FlatPass ):
         setup = False
         debugFrustum = self.context.contextDefinition.debugBBox
         try:
-            for key,mvmatrix,tmatrix,bvolume,path in toRender:
+            for key,mvmatrix,_tmatrix,bvolume,path in toRender:
                 if key[0]:
                     if not setup:
                         setup = True

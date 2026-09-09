@@ -29,13 +29,13 @@ class TestContext( BaseContext ):
         """Draw scene geometry"""
         BaseContext.Render( self, mode )
         glDisable( GL_LIGHTING) # context lights by default
-        glTranslatef(-1.5,0.0,-6.0);
+        glTranslatef(-1.5,0.0,-6.0)
         '''Animating straight from the clock, with no state of our own'''
         glRotated( systemtime.systemTime()%(3.0)/3 * 360, 0,1,0)
         self.drawPyramid()
 
         glLoadIdentity()
-        glTranslatef(1.5,0.0,-6.0);
+        glTranslatef(1.5,0.0,-6.0)
         glRotated( systemtime.systemTime()%(1.0)/1 * -360, 1,0,0)
         self.drawCube()
     def OnIdle( self, ):
@@ -48,7 +48,7 @@ class TestContext( BaseContext ):
     the Render function is all stuff we've seen before.'''
     def drawPyramid( self ):
         """Draw a multicolored pyramid"""
-        glBegin(GL_TRIANGLES);
+        glBegin(GL_TRIANGLES)
         glColor3f(1.0,0.0,0.0)
         glVertex3f( 0.0, 1.0, 0.0)
         glColor3f(0.0,1.0,0.0)
@@ -58,28 +58,28 @@ class TestContext( BaseContext ):
         glColor3f(1.0,0.0,0.0)
         glVertex3f( 0.0, 1.0, 0.0)
         glColor3f(0.0,0.0,1.0)
-        glVertex3f( 1.0,-1.0, 1.0);
-        glColor3f(0.0,1.0,0.0);
-        glVertex3f( 1.0,-1.0, -1.0);
-        glColor3f(1.0,0.0,0.0);
-        glVertex3f( 0.0, 1.0, 0.0);
-        glColor3f(0.0,1.0,0.0);
-        glVertex3f( 1.0,-1.0, -1.0);
-        glColor3f(0.0,0.0,1.0);
-        glVertex3f(-1.0,-1.0, -1.0);
-        glColor3f(1.0,0.0,0.0);
-        glVertex3f( 0.0, 1.0, 0.0);
-        glColor3f(0.0,0.0,1.0);
-        glVertex3f(-1.0,-1.0,-1.0);
-        glColor3f(0.0,1.0,0.0);
-        glVertex3f(-1.0,-1.0, 1.0);
+        glVertex3f( 1.0,-1.0, 1.0)
+        glColor3f(0.0,1.0,0.0)
+        glVertex3f( 1.0,-1.0, -1.0)
+        glColor3f(1.0,0.0,0.0)
+        glVertex3f( 0.0, 1.0, 0.0)
+        glColor3f(0.0,1.0,0.0)
+        glVertex3f( 1.0,-1.0, -1.0)
+        glColor3f(0.0,0.0,1.0)
+        glVertex3f(-1.0,-1.0, -1.0)
+        glColor3f(1.0,0.0,0.0)
+        glVertex3f( 0.0, 1.0, 0.0)
+        glColor3f(0.0,0.0,1.0)
+        glVertex3f(-1.0,-1.0,-1.0)
+        glColor3f(0.0,1.0,0.0)
+        glVertex3f(-1.0,-1.0, 1.0)
         glEnd()
     def drawCube( self ):
         """Draw a multicolored cube"""
         '''Draw a cube as quads, note that Quads are deprecated in 
         later OpenGL releases, with Triangles being preferred.
         '''
-        glBegin(GL_QUADS);
+        glBegin(GL_QUADS)
         glColor3f(0.0,1.0,0.0)
         glVertex3f( 1.0, 1.0,-1.0)
         glVertex3f(-1.0, 1.0,-1.0)

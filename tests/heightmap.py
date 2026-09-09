@@ -7,7 +7,7 @@ from OpenGLContext.arrays import array
 from OpenGLContext.scenegraph.basenodes import *
 try:
     from PIL import Image
-except ImportError as err:
+except ImportError:
     import Image
 from vrml import arrays
 
