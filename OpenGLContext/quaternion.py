@@ -6,17 +6,29 @@ Note: this is an entirely separate implementation from the PyOpenGL
     will be available, and provides only those methods and helpers
     commonly needed for manipulating rotations.
 """
-from math import *
-from OpenGLContext.arrays import *
+from OpenGLContext import arrays as ar
 from OpenGLContext import utilities
+
+# Named rather than starred, because which implementation answers matters here.
+# This module used `from math import *` followed by `from ...arrays import *`,
+# so the array versions won every name the two share -- and the guards below
+# were written for the scalar ones. `math.acos` raises on an argument just
+# outside its domain, which is what `XYZR` catches; the array one answers
+# `nan`, so the guard never fired and `nan` came back out instead.
+#
+# The rule here: `ar` throughout for the arithmetic. The scalar versions are
+# not interchangeable even on scalars -- `utilities.normalise` answers float32,
+# and numpy keeps a float32 where a Python float is the other operand, so
+# `x * math.sin(r)` rounds the quaternion to single precision where
+# `x * ar.sin(r)` does not.
 
 def fromXYZR( x,y,z, r ):
     """Create a new quaternion from a VRML-style rotation
     x,y,z are the axis of rotation
     r is the rotation in radians."""
     x,y,z = utilities.normalise( (x,y,z) )
-    return Quaternion ( array( [
-        cos(r/2.0), x*(sin(r/2.0)), y*(sin(r/2.0)), z*(sin(r/2.0)),
+    return Quaternion ( ar.array( [
+        ar.cos(r/2.0), x*(ar.sin(r/2.0)), y*(ar.sin(r/2.0)), z*(ar.sin(r/2.0)),
     ]) )
 def fromEuler( x=0,y=0,z=0 ):
     """Create a new quaternion from a 3-element euler-angle
@@ -50,11 +62,11 @@ def fromMatrix( matrix ):
     through the quaternion rather than reading an axis straight off the matrix
     is what keeps it stable at a half turn, where the axis terms vanish.
     """
-    m = asarray( matrix, 'd' )[:3,:3]
+    m = ar.asarray( matrix, 'd' )[:3,:3]
     trace = m[0][0] + m[1][1] + m[2][2]
     if trace > 0:
         # The common case.  s is 4w, and w is furthest from zero here.
-        s = sqrt( trace + 1.0 ) * 2
+        s = ar.sqrt( trace + 1.0 ) * 2
         w, x, y, z = (s/4.0, (m[1][2]-m[2][1])/s,
                       (m[2][0]-m[0][2])/s, (m[0][1]-m[1][0])/s)
     else:
@@ -65,7 +77,7 @@ def fromMatrix( matrix ):
             if m[index][index] > m[largest][largest]:
                 largest = index
         other, third = (largest+1) % 3, (largest+2) % 3
-        s = sqrt( 1.0 + m[largest][largest]
+        s = ar.sqrt( 1.0 + m[largest][largest]
                   - m[other][other] - m[third][third] ) * 2
         axis = [0.0,0.0,0.0]
         axis[largest] = s/4.0
@@ -73,7 +85,7 @@ def fromMatrix( matrix ):
         axis[third] = (m[largest][third] + m[third][largest])/s
         w = (m[other][third] - m[third][other])/s
         x, y, z = axis
-    return Quaternion( array( [w,x,y,z], 'd' ) )
+    return Quaternion( ar.array( [w,x,y,z], 'd' ) )
 
 class Quaternion(object):
     """Quaternion object implementing those methods required
@@ -86,8 +98,8 @@ class Quaternion(object):
         the default values are those for a unit multiplication
         quaternion.
         """
-        elements = asarray( elements, 'd')
-        length = sqrt( sum( elements * elements))
+        elements = ar.asarray( elements, 'd')
+        length = ar.sqrt( ar.sum( elements * elements))
         if length != 1:
             elements = elements/length
         self.internal = elements
@@ -110,21 +122,21 @@ class Quaternion(object):
             x = w1*x2 + x1*w2 + y1*z2 - z1*y2
             y = w1*y2 + y1*w2 + z1*x2 - x1*z2
             z = w1*z2 + z1*w2 + x1*y2 - y1*x2
-            return self.__class__( array([w,x,y,z],'d'))
+            return self.__class__( ar.array([w,x,y,z],'d'))
         else:
-            return dot( self.matrix (), other )
+            return ar.dot( self.matrix (), other )
     def XYZR( self ):
         """Get a VRML-style axis plus rotation form of the rotation.
         Note that this is in radians, not degrees, and that the angle
         is the last, not the first item... (x,y,z,radians)
         """
         w,x,y,z = self.internal
-        try:
-            aw = acos(w)
-        except ValueError:
-            # catches errors where w == 1.00000000002
-            aw = 0
-        scale = sin(aw)
+        # Rounding leaves `w` a hair outside the arc cosine's domain -- 
+        # 1.00000000002 for what should be no rotation at all -- and there the
+        # array implementation answers `nan` rather than raising, so the
+        # domain is clamped rather than an exception caught.
+        aw = ar.acos( min( 1.0, max( -1.0, float(w) ) ) )
+        scale = ar.sin(aw)
         if not scale:
             return (0,1,0,0)
         return (x / scale, y / scale, z / scale, 2 * aw )
@@ -135,7 +147,7 @@ class Quaternion(object):
         is conjugate / length**2 (unit quaternion means length == 1)
         """
         w,x,y,z = self.internal 
-        return self.__class__( array((w,-x,-y,-z),'d'))
+        return self.__class__( ar.array((w,-x,-y,-z),'d'))
     def matrix( self, dtype='f',inverse=False ):
         """Get a rotation matrix representing this rotation
         
@@ -148,7 +160,7 @@ class Quaternion(object):
         w,x,y,z = self.internal
         if inverse:
             x,y,z = -x,-y,-z
-        return array([
+        return ar.array([
             [ 1-2*y*y-2*z*z, 2*x*y+2*w*z, 2*x*z-2*w*y, 0],
             [ 2*x*y-2*w*z, 1-2*x*x-2*z*z, 2*y*z+2*w*x, 0],
             [ 2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y, 0],
@@ -172,17 +184,25 @@ class Quaternion(object):
         
         From code by Halldor Fannar on the 3D game development algos list
         """
-        #first get the dot-product of the two vectors
-        cosValue = sum(self.internal + other.internal)
-        # now get the positive angle in range 0-pi
-        return acos( cosValue )
+        # The dot product, which is what the next line wants. This read
+        # `sum(self.internal + other.internal)` -- the sum of the *addition* --
+        # so two rotations 0.4 radians apart gave 2.55, and the arc cosine of
+        # that is nan.
+        cosValue = float(ar.sum(self.internal * other.internal))
+        # A rotation and its negation are the same rotation, so the nearer of
+        # the two is the one to measure; and rounding can leave the value a
+        # hair outside the arc cosine's domain.
+        cosValue = min(1.0, abs(cosValue))
+        # The angle between two rotations is twice the angle between the
+        # quaternions that carry them.
+        return 2.0 * ar.acos( cosValue )
     def slerp( self, other, fraction = 0, minimalStep= 0.0001):
         """Perform fraction of spherical linear interpolation from this quaternion to other quaternion
 
         Algo is from: http://www.gamasutra.com/features/19980703/quaternions_01.htm
         """
         fraction = float( fraction )
-        cosValue = float(sum(self.internal * other.internal))
+        cosValue = float(ar.sum(self.internal * other.internal))
         # if the cosValue is negative, use negative target and cos values?
         # not sure why, it's just done this way in the sample code
         if cosValue < 0.0:
@@ -193,36 +213,12 @@ class Quaternion(object):
             target = other.internal[::]
         if (1.0- cosValue) > minimalStep:
             # regular spherical linear interpolation
-            angle = acos( cosValue )
-            angleSin = sin( angle )
-            sourceScale = sin( (1.0- fraction) * angle ) / angleSin
-            targetScale = sin( fraction * angle ) / angleSin
+            angle = ar.acos( cosValue )
+            angleSin = ar.sin( angle )
+            sourceScale = ar.sin( (1.0- fraction) * angle ) / angleSin
+            targetScale = ar.sin( fraction * angle ) / angleSin
         else:
             sourceScale = 1.0-fraction
             targetScale = fraction
         return self.__class__( (sourceScale * self.internal)+(targetScale * target) )
 
-
-def test ():
-    print('fromEuler')
-    print(fromEuler( pi/2 ).XYZR())
-    print(fromEuler( y = pi/2 ).XYZR())
-    print(fromEuler( z = pi/2 ).XYZR())
-    print(fromEuler( y = pi/2, z = pi/2 ).matrix())
-    rot = fromEuler( y = pi/2, z = pi/2 ).XYZR()
-    print(fromXYZR(*rot).matrix())
-    print(fromEuler( y = pi/2, z = pi/2 ))
-    first = fromXYZR( 0,1,0,0 )
-    second = fromXYZR( 0,1,0,pi )
-    for fraction in arange( 0.0, 1.0, .01 ):
-        print(first.slerp( second, fraction ))
-    first = fromXYZR( 0,1,0,0 )
-    second = first.inverse()
-    assert allclose( first.internal,second.internal ), (first, second)
-    first = fromXYZR( 0,1,0,pi/2 )
-    second = first.inverse()
-    expected = fromXYZR( 0,1,0,-pi/2)
-    assert allclose( second.internal, expected.internal ), (second,expected )
-
-if __name__== "__main__":
-    test ()
