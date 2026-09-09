@@ -227,7 +227,7 @@ class VegetationField(Group):
                 entry.impostor, width=entry.card_width, near_fade=True))
             self._card_tables.append((self.positions[mine], self.yaws[mine],
                                       self.heights[mine], mine))
-        self.children = ([_drawn(self.near)]                # type: ignore[assignment]
+        self.children = ([_drawn(self.near)]
                          + [_drawn(node) for node in self.impostors])
         if shade is not None:
             self.lit_by(shade)

@@ -20,9 +20,7 @@ from OpenGL.GL import (
     GL_FRAMEBUFFER, GL_RGBA, GL_SCISSOR_TEST, GL_UNSIGNED_BYTE, glBindFramebuffer,
     glClear, glClearColor, glDisable, glEnable, glReadPixels, glScissor, glViewport,
 )
-# array/dot/concatenate/ones are numpy names re-exported through vrml.arrays'
-# star import, which mypy cannot trace across.
-from OpenGLContext.arrays import array, dot, concatenate, ones  # type: ignore[attr-defined]
+from OpenGLContext.arrays import array, dot, concatenate, ones
 import logging
 
 from OpenGLContext.passes.selectionbuffers import SelectionFBO, SelectionBufferFBO
@@ -186,8 +184,7 @@ class SelectionMixin(_AsyncPickMixin):
         Returns:
             Modified projection matrix focused on pick region
         """
-        # identity is numpy.identity re-exported through vrml.arrays' star import.
-        from OpenGLContext.arrays import identity  # type: ignore[attr-defined]
+        from OpenGLContext.arrays import identity
 
         px, py, pw, ph = pick_region
         vx, vy, vw, vh = viewport

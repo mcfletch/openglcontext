@@ -3,6 +3,7 @@
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.ARB import texture_non_power_of_two
+from OpenGL.extensions import available
 from OpenGLContext.arrays import ArrayType
 from PIL import ImageOps, Image
 import traceback
@@ -16,7 +17,7 @@ def _textureDeleter(textureID):
     """Create function to clean up the texture on deletion"""
 
     def cleanup(ref):
-        if glDeleteTextures:
+        if available(glDeleteTextures):
             glDeleteTextures([textureID])
 
     return cleanup

@@ -572,7 +572,7 @@ class _SceneBuilder:
             children.extend(self._audio_emitters(node))
         for child in (node.children or []):
             children.append(self.build(child, world, ancestry, node_visible))
-        group.children = children  # type: ignore[assignment]
+        group.children = children
         return group
 
     @property
@@ -685,7 +685,7 @@ class _SceneBuilder:
         if backdrop is not None:
             root_children.append(backdrop)
         # children is a VRML ChildrenTypedField descriptor that coerces a node list.
-        root.children = root_children  # type: ignore[assignment]
+        root.children = root_children
         self.scene_graph.children = [root]
 
         framed = framing_bounds(self.parts)

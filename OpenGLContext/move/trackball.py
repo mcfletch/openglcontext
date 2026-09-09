@@ -1,5 +1,4 @@
 """Classic trackball mechanism for interactive rotation"""
-from math import *
 from OpenGLContext.arrays import *
 from OpenGL.GLU import *
 from OpenGL.GL import *

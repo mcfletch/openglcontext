@@ -925,11 +925,15 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             return nullcontext()
         return trace.phase(name)
 
-    def initializeEventManagers(self, managerClasses=()):
+    def initializeEventManagers(self):
         """Customisation point for initialising event manager objects
 
-        See:
-            OpenGLContext.events.eventhandlermixin.EventHandlerMixin
+        Does nothing here: a context that handles events mixes in
+        :class:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin`,
+        whose implementation builds the managers its ``EventManagerClasses``
+        names.  Every backend context inherits both, so the two have to take
+        the same arguments -- whichever the MRO reaches has to serve the one
+        call in :meth:`setupCallbacks`.
         """
 
     def setupRedrawRequest(self):

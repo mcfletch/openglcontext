@@ -24,9 +24,7 @@ from OpenGL.GL import (
     GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_LEQUAL, GL_DEPTH_TEST,
     GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT,
 )
-# numpy names re-exported dynamically through OpenGLContext.arrays; mypy cannot
-# see them, so the attr-defined here is a false positive.
-from OpenGLContext.arrays import (  # type: ignore[attr-defined]
+from OpenGLContext.arrays import (
     arange, array, asarray, dot, flatnonzero, zeros,
 )
 from OpenGLContext import frustum

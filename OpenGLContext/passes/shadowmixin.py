@@ -24,7 +24,7 @@ from OpenGL.GL import (
     GL_POLYGON_OFFSET_FILL, GL_CULL_FACE, GL_CULL_FACE_MODE,
     GL_DEPTH_CLAMP, GL_FRAMEBUFFER, GL_FRAMEBUFFER_BINDING, GL_VIEWPORT,
 )
-from OpenGLContext.arrays import dot  # type: ignore[attr-defined]  # numpy re-export via vrml.arrays star import
+from OpenGLContext.arrays import dot  # numpy re-export via vrml.arrays star import
 from OpenGLContext import frustum as frustum_module
 from OpenGLContext.scenegraph import light as light_module
 from OpenGLContext.passes import shadowmath

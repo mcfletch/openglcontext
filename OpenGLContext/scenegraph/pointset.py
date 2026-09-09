@@ -9,7 +9,7 @@ from OpenGLContext.scenegraph.vertexsemantics import (
     LOC_POSITION, LOC_COLOR,
 )
 from OpenGLContext.arrays import array
-from OpenGL.extensions import alternate
+from OpenGL.extensions import alternate, available
 from OpenGL.GL.ARB.point_parameters import *
 from OpenGL.GL.EXT.point_parameters import *
 import ctypes
@@ -89,7 +89,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
             glEnable(GL_POINT_SPRITE)
             glTexEnvi(GL_POINT_SPRITE, GL_COORD_REPLACE, GL_TRUE)
         glPointSize(self.size)
-        if glPointParameterf:
+        if available(glPointParameterf):
             glPointParameterf(GL_POINT_SIZE_MIN, self.minSize)
             glPointParameterf(GL_POINT_SIZE_MAX, self.maxSize)
             glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, self.attenuation)
@@ -98,7 +98,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         glDisable(GL_COLOR_MATERIAL)
         if textured:
             glDisable(GL_POINT_SPRITE)
-        if glPointParameterf:
+        if available(glPointParameterf):
             glPointParameterf(GL_POINT_SIZE_MIN, 0.0)
             glPointParameterf(GL_POINT_SIZE_MAX, 1.0)
             glPointParameterfv(GL_POINT_DISTANCE_ATTENUATION, RESET_ATTENUATION)

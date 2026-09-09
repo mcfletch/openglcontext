@@ -1,6 +1,5 @@
 """Gradient-sphere background node"""
 import os
-from math import *
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
 from OpenGL.GL import shaders as GL_shaders
@@ -27,8 +26,12 @@ class _SphereBackground( object ):
     
     bound = field.newField( 'bound', 'SFBool', 1, 0)
 
-    def compile(self, mode=None):
+    def compile(self, mode):
         """Build the cached display list for this background object
+
+        `mode` is the rendering pass, and is required: the list is built
+        against its matrix.  `Background` mixes this class with
+        `_CubeBackground`, so the two have to agree on what `compile` takes.
 
         Note: we store 2 display lists in the cache, but only return
         one from the compile method.  The second list is the final
@@ -471,5 +474,5 @@ if __name__ == "__main__":
             [1,0,0],
             [.5,0,0],
         ]
-    ).compile())
+    ).colorSet())
     

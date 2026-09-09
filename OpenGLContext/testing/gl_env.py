@@ -146,13 +146,13 @@ def settle_gl_platform(environ: dict | None = None,
     which PyOpenGL would read as a platform named badly rather than as one not
     named.
     """
-    environ = os.environ if environ is None else environ
-    already = environ.get(GL_PLATFORM_VARIABLE)
+    target = os.environ if environ is None else environ
+    already = target.get(GL_PLATFORM_VARIABLE)
     if already:
         return already
     wanted = gl_platform_for(platform)
     if wanted is not None:
-        environ[GL_PLATFORM_VARIABLE] = wanted
+        target[GL_PLATFORM_VARIABLE] = wanted
     return wanted
 
 
@@ -184,15 +184,15 @@ def settle_gl_backend(environ: dict | None = None,
     ``available`` answers whether a backend can be used, for a caller asking
     about a machine other than this one.
     """
-    environ = os.environ if environ is None else environ
-    already = environ.get(GL_BACKEND_VARIABLE)
+    target = os.environ if environ is None else environ
+    already = target.get(GL_BACKEND_VARIABLE)
     if already:
         return already
     if available is None:
         available = backend_available
     for name in GL_BACKENDS:
         if available(name):
-            environ[GL_BACKEND_VARIABLE] = name
+            target[GL_BACKEND_VARIABLE] = name
             return name
     return None
 

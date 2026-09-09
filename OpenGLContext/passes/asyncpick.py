@@ -28,9 +28,7 @@ from OpenGL.GL import (
     glFenceSync, glGenBuffers, glGetIntegerv, glMapBufferRange, glReadBuffer,
     glReadPixels, glUnmapBuffer,
 )
-# frombuffer is numpy.frombuffer re-exported through vrml.arrays' star import,
-# which mypy cannot trace across.
-from OpenGLContext.arrays import frombuffer  # type: ignore[attr-defined]
+from OpenGLContext.arrays import frombuffer
 import logging
 
 if TYPE_CHECKING:

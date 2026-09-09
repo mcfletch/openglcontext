@@ -20,6 +20,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, List
 
+from OpenGL.extensions import available
+
 log = logging.getLogger(__name__)
 
 __all__ = ['set_swap_interval']
@@ -54,7 +56,7 @@ def _glx(interval: int) -> bool:
     from OpenGL import GLX
     from OpenGL.GLX.EXT import swap_control
 
-    if not swap_control.glXSwapIntervalEXT:
+    if not available(swap_control.glXSwapIntervalEXT):
         return False
     display: Any = GLX.glXGetCurrentDisplay()
     drawable: Any = GLX.glXGetCurrentDrawable()

@@ -31,7 +31,7 @@ from OpenGL.GLUT import glutSolidCube
 from vrml.vrml97 import nodetypes
 from vrml import node, field, protofunctions, cache
 from OpenGLContext import frustum, utilities, doinchildmatrix
-from OpenGL.extensions import alternate
+from OpenGL.extensions import alternate, available
 import logging
 
 log = logging.getLogger(__name__)
@@ -302,7 +302,7 @@ class AABoundingBox(BoundingBox):
             ARB_occlusion_query
             GL_HP_occlusion_test
         """
-        if False and glGenQueries:
+        if False and available(glGenQueries):
             query = self.query
             if not self.query:
                 self.query = query = glGenQueries(1)

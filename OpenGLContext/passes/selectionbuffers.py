@@ -30,8 +30,7 @@ from OpenGL.GL import (
     glGenRenderbuffers, glGenTextures, glGetIntegerv, glReadBuffer, glReadPixels,
     glRenderbufferStorage, glTexImage2D, glTexParameteri, glViewport,
 )
-# array is numpy.array re-exported through vrml.arrays' star import.
-from OpenGLContext.arrays import array  # type: ignore[attr-defined]
+from OpenGLContext.arrays import array
 import logging
 
 log = logging.getLogger(__name__)

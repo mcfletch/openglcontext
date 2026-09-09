@@ -120,7 +120,7 @@ class TilesTerrain(Group):
         self._mounted = [node for node in (self._field_node, self.cover,
                                            self.vegetation)
                          if node is not None]
-        self.children = list(self._mounted)     # type: ignore[assignment]
+        self.children = list(self._mounted)
 
     def _mount_field(self, record: Any, base_uri: str,
                      cache_dir: Optional[str]) -> None:
@@ -217,7 +217,7 @@ class TilesTerrain(Group):
         # `children` when the visible set actually changes.
         if list(self.children) != drawables:
             # children is a VRML ChildrenTypedField descriptor that coerces a node list.
-            self.children = drawables  # type: ignore[assignment]
+            self.children = drawables
         return drawables
 
     def wait_for_loads(self, timeout: float = 5.0) -> Any:

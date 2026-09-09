@@ -196,7 +196,7 @@ class GroundCover(Group):
                 points, normals, uv, indices, texture,
                 fade_start=self.clump_radius * CLUMP_FADE,
                 fade_end=self.clump_radius)
-        self.children = [_drawn(node)                # type: ignore[assignment]
+        self.children = [_drawn(node)
                          for node in (self.cards, self.clumps)
                          if node is not None]
 
