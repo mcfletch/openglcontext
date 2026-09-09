@@ -1,9 +1,14 @@
 #! /usr/bin/env python
 """Test of text objects"""
 
+from typing import Any
 from OpenGLContext import testingcontext
 
-BaseContext = testingcontext.getInteractive()
+#: The backend is chosen at run time, so the class this subclasses is not
+
+#: one a checker can name -- which is what Any says here.
+
+BaseContext: Any = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 import logging

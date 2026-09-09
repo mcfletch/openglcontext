@@ -1,13 +1,17 @@
 '''Context functionality using the GLUT windowing API
 '''
 import logging
+from typing import Optional
 
 from OpenGL.GL import *
 from OpenGL.GLUT import *
-try:
-    from OpenGL.GLUT import GLUT_INIT_STATE
-except ImportError:                     # pragma: no cover - an original GLUT
-    GLUT_INIT_STATE = None
+from OpenGL.extensions import available
+from OpenGL import GLUT as _glut
+
+#: What to ask glutGet for to learn whether GLUT is initialised.  freeglut's
+#: own; an original GLUT has no such state, and None is how this module says
+#: the question cannot be put at all.
+INIT_STATE_QUERY: Optional[int] = getattr(_glut, 'GLUT_INIT_STATE', None)
 from OpenGLContext import contextresources
 from OpenGLContext.context import Context
 from OpenGLContext.events import glutevents
@@ -30,10 +34,10 @@ def glutInitialised():
     """
     if _initialised:
         return True
-    if not glutGet or GLUT_INIT_STATE is None:
+    if not available(glutGet) or INIT_STATE_QUERY is None:
         return False
     try:
-        return bool(glutGet(GLUT_INIT_STATE))
+        return bool(glutGet(INIT_STATE_QUERY))
     except Exception:                   # pragma: no cover - an original GLUT
         return False
 
@@ -110,9 +114,9 @@ class GLUTContext(
         # 5. glutCreateWindow
 
         ensureGlutInitialised()
-        if glutInitContextVersion and definition.version[0]:
+        if available(glutInitContextVersion) and definition.version[0]:
             glutInitContextVersion(*[int(v) for v in definition.version])
-        if glutInitContextProfile:
+        if available(glutInitContextProfile):
             # **Both hints, on both paths.**  GLUT keeps what a window is
             # created from as process-global state, so a hint only ever set is
             # a hint left over: a compatibility context asked for after a core
@@ -346,7 +350,7 @@ class GLUTContext(
         Needs freeglut's ``glutMainLoopEvent``; an original GLUT owns its loop
         and offers no way to step it, and says so by answering False.
         """
-        if not glutMainLoopEvent:
+        if not available(glutMainLoopEvent):
             return False
         glutMainLoopEvent()
         return True
@@ -423,7 +427,7 @@ class GLUTContext(
         glutDisplayFunc(null_display)
         glutIdleFunc(None)
         self.releaseWindow()
-        if glutLeaveMainLoop:
+        if available(glutLeaveMainLoop):
             glutLeaveMainLoop()
         try:
             # Asked for as a truth value first, exactly as glutLeaveMainLoop is
@@ -432,7 +436,7 @@ class GLUTContext(
             # does not -- and the GLUT most often found on Windows does not --
             # raises NullFunctionError from the call, which is not a NameError
             # and so took the whole shutdown with it.
-            if fgDeinitialize:
+            if available(fgDeinitialize):
                 fgDeinitialize(False)
         except NameError:
             # older PyOpenGL without the FreeGLUT deinitialize function
@@ -471,7 +475,7 @@ class GLUTContext(
         freeglut -- keeps the older arrangement, where GLUT owns the loop and
         calls back.
         """
-        if not glutMainLoopEvent:
+        if not available(glutMainLoopEvent):
             log.info("this GLUT has no glutMainLoopEvent; "
                      "the toolkit will own the loop")
             return glutMainLoop()
@@ -480,7 +484,7 @@ class GLUTContext(
         self.deferRedraw = True
         # Otherwise freeglut calls exit() from inside the window's close
         # button, and nothing below this line ever runs.
-        if glutSetOption:
+        if available(glutSetOption):
             glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE,
                           GLUT_ACTION_CONTINUE_EXECUTION)
         renderedFirst = False

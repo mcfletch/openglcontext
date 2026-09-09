@@ -1,8 +1,11 @@
 #! /usr/bin/env python
 '''Choose Context class for use as default testing context
 '''
+from typing import Any
 from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+#: The backend is chosen at run time, so the class this subclasses is not
+#: one a checker can name -- which is what Any says here.
+BaseContext: Any = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from vrml.vrml97 import nodetypes
 from OpenGLContext.events import mouseevents

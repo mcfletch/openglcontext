@@ -1,10 +1,13 @@
 #! /usr/bin/env python
 """VRML97 load-and-view demonstration/test"""
+from typing import Any
 import OpenGL 
 OpenGL.ERROR_CHECKING = False 
 #OpenGL.ERROR_ON_COPY = True
 from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+#: The backend is chosen at run time, so the class this subclasses is not
+#: one a checker can name -- which is what Any says here.
+BaseContext: Any = testingcontext.getInteractive()
 from OpenGLContext import vrmlcontext
 import sys
 

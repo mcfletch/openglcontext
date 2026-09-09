@@ -7,6 +7,8 @@ unlikely that nontrivial code will be completely stable across
 all interactive context classes."""
 
 import optparse
+from typing import Any
+
 from OpenGLContext import plugins, context, contextdefinition
 
 # Test-runner can specify the base-class explicitly...
@@ -14,10 +16,14 @@ CONFIGURED_BASE = None
 REQUIRED_EXTENSION_MISSING = 3 # process return-code for a missing extension
 
 
-def getVRML( preference= None ):
+def getVRML( preference: Any = None ) -> Any:
     """Retrieve the preferred VRML-parsing context class
 
     returns BaseContext (a class derived from context.Context)
+
+    Answers ``Any`` rather than ``type[Context]`` because what a caller does
+    with the answer is subclass it, and a base class has to be a class a
+    checker can name -- which this one is not until the backend is chosen.
 
     Raises RuntimeError where there is no such context to be had; see
     :func:`getInteractive`.
@@ -28,13 +34,17 @@ def getVRML( preference= None ):
         context.Context.getContextType( preference, plugins.VRMLContext ),
         preference, plugins.VRMLContext,
     )
-def getInteractive( preference= None ):
+def getInteractive( preference: Any = None ) -> Any:
     """Retrieve the preferred interactive context class
 
     preference -- the name of a windowing backend, or None to use whichever
         the environment and the user's configuration choose
 
     returns BaseContext (a class derived from context.Context)
+
+    Answers ``Any`` rather than ``type[Context]`` because what a caller does
+    with the answer is subclass it, and a base class has to be a class a
+    checker can name -- which this one is not until the backend is chosen.
 
     Raises RuntimeError where the backend is not registered, or is registered
     but will not import because the toolkit it needs is not installed. What a

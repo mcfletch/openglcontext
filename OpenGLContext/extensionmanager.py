@@ -1,4 +1,5 @@
 """Object managing OpenGL extension loading for a Context"""
+from typing import Any
 from OpenGL.GL import glGetString, GL_EXTENSIONS
 from OpenGL.GLU import gluGetString, GLU_EXTENSIONS
 import traceback
@@ -139,7 +140,11 @@ def initialiser(moduleName):
 if __name__ == "__main__":
     from OpenGLContext import testingcontext
 
-    BaseContext = testingcontext.getInteractive()
+    #: The backend is chosen at run time, so the class this subclasses is not
+
+    #: one a checker can name -- which is what Any says here.
+
+    BaseContext: Any = testingcontext.getInteractive()
     from OpenGL import WGL
 
     class TestContext(BaseContext):

@@ -1,14 +1,24 @@
 #! /usr/bin/env python
+from typing import Any
 from OpenGLContext import testingcontext
 
-BaseContext = testingcontext.getInteractive()
+#: The backend is chosen at run time, so the class this subclasses is not
+
+#: one a checker can name -- which is what Any says here.
+
+BaseContext: Any = testingcontext.getInteractive()
 import logging
+from typing import TYPE_CHECKING
+
 from OpenGLContext.arrays import arange
 
 from OpenGLContext.scenegraph.basenodes import *
 
-assert Shape
-assert IndexedLineSet
+if TYPE_CHECKING:
+    # These are registered into basenodes dynamically (plugin entry points), so
+    # mypy cannot see them there; take the types from their defining modules.
+    from OpenGLContext.scenegraph.indexedlineset import IndexedLineSet
+    from OpenGLContext.scenegraph.shape import Shape
 
 
 class LorentzContext(BaseContext):
