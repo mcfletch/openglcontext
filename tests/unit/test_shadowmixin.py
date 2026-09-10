@@ -437,3 +437,58 @@ class TestRenderShadowMapsGuards:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestWhereACallerSetsTheOptOut:
+    """``castsShadow`` is a field of ``Shape``, and the shape is what is read.
+
+    A shadow caster is a renderable, so the pass reaches it through the
+    rendering paths and reads the flag off the node it finds there -- the
+    Shape. Set on the geometry instead it says nothing, and the surface goes
+    on being rasterised into every cascade; a sky drawn as a backdrop, or an
+    acre of alpha-tested grass, is exactly what the flag exists to keep out.
+    """
+
+    def shape(self, **named):
+        from OpenGLContext.scenegraph.box import Box
+        from OpenGLContext.scenegraph.shape import Shape
+
+        return Shape(geometry=Box(), **named)
+
+    def test_it_is_a_declared_field(self):
+        from vrml import protofunctions
+
+        from OpenGLContext.scenegraph.shape import Shape
+
+        declared = {f.name for f in protofunctions.getFields(Shape)}
+        assert 'castsShadow' in declared
+
+    def test_a_shape_casts_unless_it_is_told_not_to(self):
+        assert self.shape().castsShadow
+
+    def test_it_reads_back_what_was_set(self):
+        assert not self.shape(castsShadow=False).castsShadow
+
+    def test_the_caster_pool_leaves_out_a_shape_that_opted_out(self):
+        class Path(list):
+            """What the pass asks of a path: where the node is in the world."""
+
+            def transformMatrix(self):
+                return np.identity(4, 'd')
+
+        mixin = ShadowMapMixin()
+        casting, opted_out = self.shape(), self.shape(castsShadow=False)
+        from vrml.vrml97 import nodetypes
+
+        mixin.paths = {nodetypes.Rendering: [Path([casting]),
+                                             Path([opted_out])]}
+        found = [record[4][-1] for record in mixin._shadowCasterRecords()]
+        assert casting in found
+        assert opted_out not in found
+
+    def test_the_render_set_leaves_out_a_shape_that_opted_out(self):
+        mixin = ShadowMapMixin()
+        mixin.use_shadows = True
+        mixin.renderShadowMaps([_record(np.identity(4, 'd'), None)[:4]
+                                + ([self.shape(castsShadow=False)],)])
+        assert mixin._shadow_bindings == []

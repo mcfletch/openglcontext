@@ -103,7 +103,7 @@ def test_tree_billboard_and_no_shadow():
         if type(n).__name__ == "Shape":
             shapes.append(n)
         stack.extend(getattr(n, "children", None) or [])
-    assert shapes and all(s.castsShadow is False for s in shapes)
+    assert shapes and not any(s.castsShadow for s in shapes)
 
 
 def test_ground_patch_blended_builds():
@@ -132,4 +132,4 @@ def test_the_loaded_billboard_casts_no_shadow():
         if type(current).__name__ == 'Shape':
             shapes.append(current)
         stack.extend(getattr(current, 'children', None) or [])
-    assert shapes and all(s.castsShadow is False for s in shapes)
+    assert shapes and not any(s.castsShadow for s in shapes)
