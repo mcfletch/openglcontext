@@ -209,7 +209,7 @@ def advisory_speed(radius: float, grip: float = GRIP, caution: float = CAUTION,
 SIGHT_REACH = 600.0
 
 
-def sight_distances(line: Any, clear: float,
+def sight_distances(line: Any, clear: Any,
                     reach: float = SIGHT_REACH,
                     closed: bool = True) -> np.ndarray:
     """How far down the road can be seen from each point of it, in metres.
@@ -222,7 +222,9 @@ def sight_distances(line: Any, clear: float,
     cannot.
 
     A straight is seen to the end of ``reach``; a bend of radius *r* is seen
-    about `sqrt(8 * r * clear)` round it. All in metres.
+    about `sqrt(8 * r * clear)` round it. All in metres. ``clear`` is one
+    figure for the whole road, or one per point of ``line`` where what stands
+    beside it changes along its length.
 
     The road between the two points is checked at its middle, which is where an
     arc departs its chord: a road is locally an arc, and its middle is where it
