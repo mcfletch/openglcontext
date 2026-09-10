@@ -9,10 +9,7 @@ Normal-per-face generation
 from OpenGLContext import testingcontext
 
 BaseContext = testingcontext.getInteractive()
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from io import StringIO
+from io import StringIO
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from OpenGLContext.scenegraph import basenodes

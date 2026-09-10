@@ -1,4 +1,6 @@
 """Standard Light-node types"""
+from typing import TYPE_CHECKING, Any
+
 from OpenGL.GL import *
 from math import pi, sqrt
 from vrml.vrml97 import basenodes, nodetypes
@@ -8,7 +10,32 @@ from OpenGLContext.arrays import array, dot, identity
 from OpenGLContext import vectorutilities
 from OpenGLContext.passes.shadowmath import SHADOW_DEPTH_BIAS
 
-class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
+if TYPE_CHECKING:
+    class _LightHost:
+        """The VRML97 light fields ``Light`` reads of the node beside it.
+
+        Each concrete light is that node and this mix-in together --
+        ``class PointLight(basenodes.PointLight, Light)`` -- so the fields
+        resolve along the MRO at run time.  Aliased to ``object`` there, so the
+        MRO is as it was.
+
+        ``location`` and ``direction`` are the exception to "every light has
+        these": a PointLight has a location and no direction, a
+        DirectionalLight the reverse, a SpotLight both.  That is why the code
+        asks with ``hasattr`` and ``getattr`` rather than reading them
+        outright.
+        """
+        on: int
+        color: Any
+        intensity: float
+        ambientIntensity: float
+        location: Any
+        direction: Any
+else:
+    _LightHost = object
+
+
+class Light(_LightHost):#nodetypes.Light, nodetypes.Children, node.Node ):
     """Abstract base class for all lights
 
     attributes:
@@ -29,7 +56,7 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
         ambientIntensity -- ambient light fraction of color
     """
     pointSource = 1.0
-    def Light( self, lightID, mode=None ):
+    def Light( self, lightID: int, mode: Any = None ) -> int:
         """Render light using given light ID for the given mode
 
         This will check for:
@@ -72,7 +99,10 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
         else:
             return 0
 
-    def viewMatrix( self, cutOffAngle=None, aspect=1.0, near=0.1, far=10000, inverse=False ):
+    def viewMatrix(
+        self, cutOffAngle: float | None = None, aspect: float = 1.0,
+        near: float = 0.1, far: float = 10000, inverse: bool = False,
+    ) -> Any:
         """Calculate viewing matrix for our light
 
         Calculate our projection matrix, note that this assumes that
@@ -94,7 +124,7 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
             far,
             inverse=inverse,
         )
-    def modelMatrix( self, direction=None, inverse=False ):
+    def modelMatrix( self, direction: Any = None, inverse: bool = False ) -> Any:
         """World coordinates into this light's own frame
 
         Carries ``location`` to the origin and ``direction`` onto -Z, which
@@ -146,7 +176,7 @@ class PointLight(basenodes.PointLight, Light):
     shadowBias = field.newField('shadowBias', 'SFFloat', 1, SHADOW_DEPTH_BIAS)
     shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
 
-    def effectiveRange(self, threshold=1.0 / 255.0):
+    def effectiveRange(self, threshold: float = 1.0 / 255.0) -> float | None:
         """Distance past which this light's contribution is negligible.
 
         Solves the VRML97 attenuation 1/(c + l*d + q*d^2) scaled by intensity
@@ -168,7 +198,7 @@ class PointLight(basenodes.PointLight, Light):
             return max(0.0, (target - c) / l)
         return None  # constant attenuation only -> unbounded
 
-    def Light( self, lightID, mode = None):
+    def Light( self, lightID: int, mode: Any = None) -> int:
         """Render the light (i.e. cause it to alter the scene"""
         if super(PointLight,self).Light( lightID, mode ):
             glLightf(lightID, GL_CONSTANT_ATTENUATION, self.attenuation[0])
@@ -186,7 +216,7 @@ class SpotLight(basenodes.SpotLight, PointLight):
         (+ Light attributes)
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#SpotLight
     """
-    def Light( self, lightID, mode = None):
+    def Light( self, lightID: int, mode: Any = None) -> int:
         """Render the light (i.e. cause it to alter the scene"""
         if super(SpotLight,self).Light( lightID, mode ):
             # now the spotlight-specific stuff
@@ -212,6 +242,6 @@ class DirectionalLight (basenodes.DirectionalLight, Light):
     shadowBias = field.newField('shadowBias', 'SFFloat', 1, SHADOW_DEPTH_BIAS)
     shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
 
-    def effectiveRange(self, threshold=1.0 / 255.0):
+    def effectiveRange(self, threshold: float = 1.0 / 255.0) -> float | None:
         """Directional lights have no attenuation; range is unbounded."""
         return None

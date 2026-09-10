@@ -13,10 +13,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from io import StringIO
+from io import StringIO
 from OpenGLContext.scenegraph import basenodes
 
 assert basenodes.IndexedFaceSet

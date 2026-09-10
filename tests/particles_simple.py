@@ -18,11 +18,6 @@ from OpenGLContext.arrays import *
 from OpenGLContext.events.timer import Timer
 import random
 from OpenGLContext.scenegraph.basenodes import *
-try:
-    import RandomArray
-except ImportError:
-    RandomArray = None
-xrange = range
 # Check if any font provider is available for text display
 # Font providers auto-register when imported (glutfont via GLUT, shaderfont via atlas)
 _font_available = False
@@ -194,15 +189,12 @@ blue and turning white.""")
                 '''Assign slightly randomized versions of our initial 
                 velocity for each of the re-spawned droplets.  Replace 
                 the current velocities with the new velocities.'''
-                if RandomArray:
-                    velocities = (RandomArray.random( (len(dead),3) ) + [-.5, 0.0, -.5 ]) * initialVelocityVector
-                else:
-                    velocities = [
-                        array( (random.random()-.5, random.random(), random.random()-.5), 'f')* initialVelocityVector
-                        for x in xrange(len(dead))
-                    ]
+                velocities = [
+                    array( (random.random()-.5, random.random(), random.random()-.5), 'f')* initialVelocityVector
+                    for x in range(len(dead))
+                ]
                 def copy( a, ind, b ):
-                    for x in xrange(len(ind)):
+                    for x in range(len(ind)):
                         i = ind[x]
                         a[i] = b[x]
                 copy( self.velocities, dead, velocities)
