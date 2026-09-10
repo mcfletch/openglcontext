@@ -223,6 +223,12 @@ ignore_missing_imports = true
 module = "OpenGLContext.physics.*"
 warn_return_any = false
 
+# These environments resolve the engine's dependencies from an index, so they
+# build only once the versions `[project] dependencies` names are published --
+# between releases some of them exist in this checkout and nowhere else, and
+# uv answers "not available". What holds this project to its declared gates in
+# the meantime is `tools/preflight.py` in the workspace above, which installs
+# every checkout into one environment and runs ruff, mypy and the suite there.
 [tool.tox]
 env_list = ["py310", "py311", "py312", "py313", "py314"]
 
