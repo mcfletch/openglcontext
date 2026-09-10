@@ -95,22 +95,42 @@ class Light(object ):#nodetypes.Light, nodetypes.Children, node.Node ):
             inverse=inverse,
         )
     def modelMatrix( self, direction=None, inverse=False ):
-        """Calculate our model-side matrix"""
+        """World coordinates into this light's own frame
+
+        Carries ``location`` to the origin and ``direction`` onto -Z, which
+        is the transform a shadow pass renders the depth map through.
+        ``inverse=True`` gives the other direction, the light's placement in
+        the world.  ``direction`` overrides the field for a caller that is
+        already tracking one, as the shadow tutorial does for its animated
+        light.
+
+        Which fields exist depends on the light: a ``DirectionalLight`` has a
+        direction and no location, a ``PointLight`` the reverse, a
+        ``SpotLight`` both.  ``rotMatrix`` and ``transMatrix`` answer ``None``
+        for a null rotation and a null translation, so a light at the origin
+        shining down -Z has nothing to compose and gets the identity.
+        """
         if direction is None:
             direction = getattr( self,'direction',None)
-        if direction:
+        # rotMatrix/transMatrix each return (forward, inverse); the
+        # world-to-light matrix is built from the inverse halves.
+        which = bool( not inverse )
+        rotate = translate = None
+        if direction is not None and len( direction ):
             rot = vectorutilities.orientToXYZR( (0,0,-1), direction )
-            # inverse of rotation matrix, hmm...
-            rotate = transformmatrix.rotMatrix( rot )[bool(not inverse)]
-            # inverse of translation matrix...
-            translate = transformmatrix.transMatrix(self.location)[bool(not inverse)]
-            if inverse:
-                return dot( rotate,translate )
-            else:
-                return dot( translate,rotate )
-        else:
-            # *inverse* of translation matrix is forward
-            return transformmatrix.transMatrix(self.location)[bool(not inverse)]
+            rotate = transformmatrix.rotMatrix( rot )[which]
+        location = getattr( self, 'location', None )
+        if location is not None:
+            translate = transformmatrix.transMatrix( location )[which]
+        if rotate is None:
+            if translate is None:
+                return identity( 4, dtype='f' )
+            return translate
+        if translate is None:
+            return rotate
+        if inverse:
+            return dot( rotate,translate )
+        return dot( translate,rotate )
 
 class PointLight(basenodes.PointLight, Light):
     """PointLight node
@@ -157,23 +177,6 @@ class PointLight(basenodes.PointLight, Light):
             return 1
         else:
             return 0
-    def modelMatrix( self, direction=None ):
-        """Calculate our model-side matrix"""
-        if direction is None and hasattr( self, 'direction' ):
-            direction = self.direction
-        rot = vectorutilities.orientToXYZR( (0,0,-1), direction )
-        # inverse of rotation matrix, hmm...
-        rotate = transformmatrix.rotMatrix( rot )[1]
-        # inverse of translation matrix...
-        translate = transformmatrix.transMatrix(self.location)[1]
-        if rotate is not None and translate is not None:
-            return dot( translate,rotate )
-        elif rotate is not None:
-            return rotate 
-        elif translate is not None:
-            return translate 
-        else:
-            return identity((4,4),type='f')
 
 class SpotLight(basenodes.SpotLight, PointLight):
     """SpotLight node

@@ -198,15 +198,14 @@ class _SphereBackground( object ):
                 skys[:,1:] = self.skyColor
                 
                 if maxSky > pi:
-                    # need to compress back to pi
-                    # and possibly do last-element interpolation
-                    t = len(compress( less(skys[:,0],pi,0), skys ))-1
-                    if skys[t,0] == pi:
-                        skys = skys[:t]
-                    else:
-                        skys = skys[:t+1]
+                    # Stops past the south pole are past the far side of the
+                    # sphere; cut at pi, with the colour there interpolated
+                    # between the stops either side of it.
+                    t = len(compress( less(skys[:,0],pi), skys, 0 ))-1
+                    if t+1 < len(skys):
                         skys[t+1] = _linInterp( skys[t],skys[t+1], pi)
-                    
+                    skys = skys[:t+2]
+
             # just to be sure, we sort by angle...
             skys = setSort( skys)
         else:

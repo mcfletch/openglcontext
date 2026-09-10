@@ -1652,27 +1652,52 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     ##	def getUserContextPreferences( cls ):
     ##		"""Retrieve user-specific context preferences"""
     ##		raise NotImplementedError( """Don't have preferences working yet""" )
+    #: The context flavours ``[context] type`` may name, by the ``type_key``
+    #: each plugin registry answers to.
+    CONFIG_CONTEXT_PLUGINS = (
+        plugins.Context,
+        plugins.InteractiveContext,
+        plugins.VRMLContext,
+    )
+
     @staticmethod
     def fromConfig(cfg):
-        """Given a ConfigParser instance, produce a configured sub-class"""
+        """Given a ConfigParser instance, produce a configured sub-class
+
+        ``[context] type`` names the flavour, one of the ``type_key`` values in
+        :attr:`CONFIG_CONTEXT_PLUGINS`, and defaults to ``vrml``; ``[context]
+        gui`` names the backend, and defaults to the user's preference.  The
+        window's own fields come from the ``[contextdefinition]`` section.
+
+        Returns ``None`` when the named backend cannot be loaded, and raises
+        ``ValueError`` when the named flavour is not one there is.
+        """
         from OpenGLContext import contextdefinition
 
-        type = gui = None
+        typeKey = gui = None
         if cfg.has_option("context", "type"):
-            type = cfg.get("context", "type")
+            typeKey = cfg.get("context", "type")
         if cfg.has_option("context", "gui"):
             gui = cfg.get("context", "gui")
-        if type is None:
-            type = "vrml"
-        for plug_type in [
-            plugins.InteractiveContext,
-            plugins.VRMLContext,
-            plugins.Context,
-        ]:
-            if type == plug_type.type_key:
-                type = plug_type
-        baseCls = Context.getContextType(gui, type)
-        baseCls = type(
+        if typeKey is None:
+            typeKey = plugins.VRMLContext.type_key
+        for plugin in Context.CONFIG_CONTEXT_PLUGINS:
+            if typeKey == plugin.type_key:
+                break
+        else:
+            raise ValueError(
+                "%r is not a context type; expected one of %s"
+                % (
+                    typeKey,
+                    ", ".join(
+                        repr(p.type_key) for p in Context.CONFIG_CONTEXT_PLUGINS
+                    ),
+                )
+            )
+        baseCls = Context.getContextType(gui, plugin)
+        if baseCls is None:
+            return None
+        return type(
             "TestingContext",
             (baseCls,),
             {
@@ -1681,7 +1706,6 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
                 ),
             },
         )
-        return baseCls
 
 
 ### Context render-calling child...

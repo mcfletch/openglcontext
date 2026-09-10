@@ -65,20 +65,27 @@ class OutlineGlyph( _toolsfont.Glyph ):
         finally:
             glEnd()
     def renderControlPoints (self, scale = 400.0):
-        """Render the contour control points as dots"""
+        """Render the contour control points as dots
+
+        The blue channel ramps from 0 at the start of each contour to 1 at its
+        end, so the winding order is visible, and red marks the off-curve
+        control points.
+        """
         glPointSize( 4)
         glBegin( GL_POINTS )
         try:
             for contour in self.contours:
+                if not len(contour):
+                    continue
+                # index runs to len-1, so the ramp stays inside [0, 1)
                 delta = 1.0/len(contour)
-                c = 0.0
-                for ((x,y),f),c in [(a,min(c,1.0)) for a in contour]:
+                for index, ((x,y),f) in enumerate( contour ):
+                    c = index*delta
                     if f:
-                        glColor3f( 0,0,c)
+                        glColor3f( 0,0,c )
                     else:
-                        glColor3f( 1,0,c)
-                    glVertex( x/scale,y/scale,0 )
-                    c+=delta
+                        glColor3f( 1,0,c )
+                    glVertex3f( x/scale, y/scale, 0 )
         finally:
             glEnd()
 

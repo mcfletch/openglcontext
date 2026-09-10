@@ -145,13 +145,20 @@ class _GLUTFontProvider (fontprovider.FontProvider):
         GLUT only provides a tiny number of fonts, so
         this method is just scanning through the entire
         set looking for something close.
+
+        ``fontStyle.family`` is VRML97's preference list, so the first name
+        there is a font for wins and the rest are the fallbacks.  Naming
+        nothing GLUT has gives 10-point Times, the closest it comes to
+        VRML97's default.
         """
         # 10 point roman, closest to VRML semantics...
-        family, size = self.bitmapFonts.get( "SERIF" )[0]
+        family, size = self.bitmapFonts[ "SERIF" ][0]
         if fontStyle and fontStyle.family:
             current = None
             for specifier in fontStyle.family:
                 current = self.bitmapFonts.get( specifier.upper() )
+                if current:
+                    break
             if current:
                 # find closest size in the set of available sizes...
                 target = fontStyle.size * self.scale
@@ -173,11 +180,12 @@ class _GLUTFontProvider (fontprovider.FontProvider):
         get each of the font-types which are available.
         """
         return self.bitmapFonts.keys()
+    @staticmethod
     def fontHash(family,size):
         """Given family and size get hashable key for lookups
-        
-        OpenGL-ctypes gives you the underlying GLUT font void*, whereas 
-        PyOpenGL gave you an integer value
+
+        A GLUT font specifier is the underlying font's ``void*``, and a
+        ``c_void_p`` is not hashable, so the pointer's value stands in for it.
         """
         try:
             hash( (family,size))
@@ -185,7 +193,6 @@ class _GLUTFontProvider (fontprovider.FontProvider):
             return (family.value,size)
         else:
             return (family,size)
-    fontHash = staticmethod( fontHash )
 
 GLUTFontProvider = _GLUTFontProvider()
 GLUTFontProvider.registerProvider( GLUTFontProvider )
