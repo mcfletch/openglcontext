@@ -45,7 +45,7 @@ class Background(
     left = field.newField(' left', 'SFNode', default=imagetexture.ImageTexture)
     front = field.newField(' front', 'SFNode', default=imagetexture.ImageTexture)
     bottom = field.newField(' bottom', 'SFNode', default=imagetexture.ImageTexture)
-    def Render( self, mode: Any, clear: int = 1 ) -> None:
+    def Render( self, mode: Any, clear: int = 1 ) -> int:
         """Render the Background
 
         mode -- the RenderingPass object representing
@@ -67,10 +67,13 @@ class Background(
             background depending on whether we have all
             of the image's loaded and all are non-Alpha
             (i.e. you can't see the sphere)
+
+        Answers 1 where something was drawn and 0 where nothing was -- what a
+        background answers, whichever one it is.
         """
         if mode.passCount == 0:
             if self.bound:
-                spherebackground._SphereBackground.Render( self, mode, clear=1)
+                drawn = spherebackground._SphereBackground.Render( self, mode, clear=1)
                 if (
                     self.right.components and
                     self.left.components and
@@ -79,9 +82,11 @@ class Background(
                     self.top.components and
                     self.bottom.components
                 ):
-                    cubebackground._CubeBackground.Render( self, mode, clear=0)
+                    drawn = cubebackground._CubeBackground.Render( self, mode, clear=0)
+                return drawn
+        return 0
 
-    def RenderShader( self, mode: Any, clear: int = 1 ) -> None:
+    def RenderShader( self, mode: Any, clear: int = 1 ) -> int:
         """Render the Background using shader pipeline
 
         mode -- the RenderingPass object representing
@@ -92,10 +97,13 @@ class Background(
         This implementation renders the sphere gradient first using
         shaders, then the cube background (which already uses its
         own shader) on top if images are loaded.
+
+        Answers 1 where something was drawn and 0 where nothing was.
         """
         if mode.passCount == 0:
             if self.bound:
-                spherebackground._SphereBackground.RenderShader( self, mode, clear=True)
+                drawn = spherebackground._SphereBackground.RenderShader(
+                    self, mode, clear=True)
                 if (
                     self.right.components and
                     self.left.components and
@@ -105,6 +113,8 @@ class Background(
                     self.bottom.components
                 ):
                     # CubeBackground already uses its own shader implementation
-                    cubebackground._CubeBackground.Render( self, mode, clear=0)
+                    drawn = cubebackground._CubeBackground.Render( self, mode, clear=0)
+                return drawn
+        return 0
 
     

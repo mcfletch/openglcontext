@@ -115,7 +115,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         return 1
 
     def _render_shader(self, mode: Any, points: Any,
-                       textured: bool = False) -> int:
+                       textured: int = 1) -> int:
         """Render using shader pipeline."""
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:

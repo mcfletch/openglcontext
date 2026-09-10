@@ -67,7 +67,9 @@ class Material(basenodes.Material):
         if not quick:
             return 1.0
         quick()
-        return 1.0 - self.transparency
+        # SFFloat, so a number: named as one, because what this answers is
+        # the alpha the caller sorts and blends by.
+        return 1.0 - float(self.transparency)
     def compile( self, mode: Any = None ) -> Any:
         """Compile material information into readily-rendered format"""
         holder = mode.cache.holder(self, None)

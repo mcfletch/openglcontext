@@ -845,16 +845,19 @@ class ShaderGeometry(shaders.ShaderGeometry):
             for attribute in self.attributes:
                 attribute.render(current, mode)
 
-        vao = shadergeometry.get_or_build_vao(
+        cached = shadergeometry.get_or_build_vao(
             self, program,
             tuple(attribute.buffer.vbo(mode) for attribute in self.attributes),
             build)
-        transient = vao is None
-        if transient:
-            vao = glGenVertexArrays(1)
+        transient = cached is None
+        if cached is None:
+            # Nowhere to keep one, so this VAO lives for this draw and is
+            # deleted below; the attributes have to be specified again.
+            vao = int(glGenVertexArrays(1))
             glBindVertexArray(vao)
             build()
         else:
+            vao = cached
             glBindVertexArray(vao)
         try:
             if self.uniforms:

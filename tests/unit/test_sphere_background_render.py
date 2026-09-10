@@ -17,6 +17,7 @@ import pytest
 
 from vrml import cache
 
+from OpenGLContext.scenegraph import spherebackground
 from OpenGLContext.scenegraph.background import Background
 
 
@@ -182,3 +183,83 @@ class TestTheCompiledSphereIsReused:
         assert mode.cache.getData(background, 'shader_bg') is not None
         background.skyColor = [GREEN, BLUE]
         assert mode.cache.getData(background, 'shader_bg') is None
+
+
+class TestWhatItAnswers:
+    """A background says whether it filled the buffer.
+
+    Every background answers the same way, so a caller deciding whether it
+    still has to clear can ask any of them without knowing which it holds.
+    """
+
+    def test_drawing_answers_one(self, gl_context):
+        background = _bound(skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0])
+        assert background.RenderShader(mode=_Mode(), clear=False) == 1
+
+    def test_an_unbound_background_answers_zero(self, gl_context):
+        background = Background(skyColor=[RED])
+        background.bound = 0
+        assert background.RenderShader(mode=_Mode(), clear=False) == 0
+
+    def test_a_later_pass_answers_zero(self, gl_context):
+        background = _bound(skyColor=[RED])
+        mode = _Mode()
+        mode.passCount = 1
+        assert background.RenderShader(mode=mode, clear=False) == 0
+
+    def test_the_compatibility_path_answers_the_same(self, gl_context_compat):
+        """``Render`` is the fixed-function route to the same picture, and it
+        answers the way the shader route does."""
+        background = _bound(skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0])
+        assert background.Render(mode=_Mode(), clear=False) == 1
+        unbound = Background(skyColor=[RED])
+        unbound.bound = 0
+        assert unbound.Render(mode=_Mode(), clear=False) == 0
+
+
+class TestTheFixedFunctionRouteDrawsTheSphere:
+    """``Background`` mixes the gradient sphere with the image cube.
+
+    Both halves compile against the rendering pass and both are reached
+    through the one node, so each has to build and read its own: the sphere
+    asking the node for "compile" gets the cube's, and asking the pass for its
+    cached data under the shared key gets what the cube put there. Either one
+    leaves a plain gradient sky -- a Background with no images at all --
+    drawing nothing.
+    """
+
+    def _frame_compat(self, background):
+        from OpenGL.GL import (
+            GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_FRAMEBUFFER, GL_RGB,
+            GL_UNSIGNED_BYTE, glBindFramebuffer, glClear, glClearColor,
+            glReadPixels, glViewport,
+        )
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glViewport(0, 0, SIZE, SIZE)
+        glClearColor(0, 0, 0, 1)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        drawn = background.Render(mode=_Mode(), clear=False)
+        raw = glReadPixels(0, 0, SIZE, SIZE, GL_RGB, GL_UNSIGNED_BYTE)
+        image = np.frombuffer(raw, dtype=np.uint8).reshape(SIZE, SIZE, 3)[::-1]
+        return drawn, image.astype(int)
+
+    def test_a_gradient_with_no_images_is_drawn(self, gl_context_compat):
+        background = _bound(
+            skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0],
+            groundColor=[BLUE], groundAngle=[],
+        )
+        drawn, image = self._frame_compat(background)
+        assert drawn == 1
+        assert image.max() > 20, image.reshape(-1, 3).mean(0).tolist()
+
+    def test_the_second_frame_reuses_the_first(self, gl_context_compat):
+        """The display lists are kept against the pass, under a key of the
+        sphere's own."""
+        background = _bound(skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0])
+        mode = _Mode()
+        background.Render(mode=mode, clear=False)
+        first = mode.cache.getData(background, spherebackground.LEGACY_CACHE_KEY)
+        assert first is not None
+        background.Render(mode=mode, clear=False)
+        assert mode.cache.getData(
+            background, spherebackground.LEGACY_CACHE_KEY) is first

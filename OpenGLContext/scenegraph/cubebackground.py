@@ -53,7 +53,7 @@ class _CubeBackground( object ):
     
     bound = field.newField( 'bound', 'SFBool', 1, 0)
     
-    def Render( self, mode: Any, clear: int = 1 ) -> Any:
+    def Render( self, mode: Any, clear: int = 1 ) -> int:
         """Render the cube background
 
         This renders those of our cube-faces which are
@@ -62,13 +62,17 @@ class _CubeBackground( object ):
         After it's finished, it clears the depth-buffer
         to make the geometry appear "behind" everything
         else.
+
+        Answers 1 where the faces were drawn and 0 where there was nothing to
+        draw -- the same answer every background gives, so a caller that wants
+        to know whether the buffer was filled can ask any of them.
         """
         if mode.passCount == 0:
             render_data = mode.cache.getData(self)
             if render_data is None:
                 render_data = self.compile(mode)
                 if not render_data:
-                    return
+                    return 0
             texture, vert_vbo, index_vbo, shader, vertex_loc, mvp_matrix_loc, vao = render_data
             if clear:
                 glClear(
@@ -100,7 +104,9 @@ class _CubeBackground( object ):
                 if not shader_mode:
                     glEnable( GL_LIGHTING )
                     glEnable( GL_COLOR_MATERIAL )
-    
+            return 1
+        return 0
+
     CUBE_VERTICES =  array([
         -100.0,  100.0,  100.0,
         -100.0, -100.0,  100.0,

@@ -99,7 +99,8 @@ class Grouping(object):
         self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
     ) -> List[Any]:
         """List all children which are instances of given types"""
-        return self.__class__.children.byType( self, types )
+        children: ChildrenTypedField = self.__class__.children
+        return children.byType( self, types )
     def visible( self, frustum: Any = None, matrix: Any = None,
                  occlusion: int = 0, mode: Any = None ) -> Any:
         """Check whether this grouping node intersects frustum

@@ -40,6 +40,13 @@ MINANGLE = pi*1.0/4
 MAXANGLE = pi*3.0/4
 SEGMENTS = 32
 
+#: Where the fixed-function display lists are kept in the pass's cache.  A key
+#: of this class's own, because `Background` mixes it with `_CubeBackground`
+#: and both cache against the same node: sharing the default key would have
+#: each of them reading what the other compiled.  The shader path keeps its
+#: buffers under ``'shader_bg'`` for the same reason.
+LEGACY_CACHE_KEY = 'sphere_bg_dl'
+
 class _SphereBackground( object ):
     groundAngle = field.newField( 'groundAngle', 'MFFloat', 1, [])
     groundColor = field.newField( 'groundColor', 'MFColor', 1, [])
@@ -98,7 +105,7 @@ class _SphereBackground( object ):
                 glEnable( GL_CULL_FACE )
                 glFrontFace( GL_CCW )
                 
-                holder = mode.cache.holder(self, (first, second))
+                holder = mode.cache.holder(self, (first, second), LEGACY_CACHE_KEY)
                 for field in protofunctions.getFields( self ):
                     # change to any field requires a recompile
                     if field.name != 'bound':
@@ -106,7 +113,7 @@ class _SphereBackground( object ):
                 return second
             finally:
                 second.end()
-        holder = mode.cache.holder(self, (None, ()))
+        holder = mode.cache.holder(self, (None, ()), LEGACY_CACHE_KEY)
         return None
         
     def buildSphere( self, colorSet: Any ) -> Tuple[Any, Any]:
@@ -168,9 +175,12 @@ class _SphereBackground( object ):
         """
         if mode.passCount == 0:
             if self.bound:
-                dl = mode.cache.getData(self)
+                dl = mode.cache.getData(self, LEGACY_CACHE_KEY)
                 if dl is None:
-                    dl = self.compile( mode=mode )
+                    # This class's own compile, not whichever the MRO offers:
+                    # `Background` mixes it with `_CubeBackground`, whose
+                    # compile builds the image cube and comes first there.
+                    dl = _SphereBackground.compile( self, mode=mode )
                 else:
                     # see note on compile's return value/store value
                     dl = dl[1]

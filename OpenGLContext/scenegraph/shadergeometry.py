@@ -92,7 +92,9 @@ def get_or_build_vao(owner: Any, program: Any, vbo_refs: Sequence[Any],
     vertex attributes; it must NOT draw or disable them. Returns the VAO name.
     Falls back to a transient VAO (returns None) if ``owner`` cannot hold a cache.
     """
-    cache = getattr(owner, '_shader_vao_cache', None)
+    #: key -> (the VBOs the VAO records, the VAO's name)
+    cache: Optional[Dict[int, tuple[Sequence[Any], int]]] = getattr(
+        owner, '_shader_vao_cache', None)
     if cache is None:
         try:
             cache = {}
@@ -107,7 +109,9 @@ def get_or_build_vao(owner: Any, program: Any, vbo_refs: Sequence[Any],
             return vao
         # VBOs were replaced (data changed) -> the recorded pointers are stale.
         glDeleteVertexArrays(1, [vao])
-    vao = glGenVertexArrays(1)
+    # One name asked for is one name answered; the entry point's result follows
+    # the count it was given, so the caller is what knows the shape.
+    vao = int(glGenVertexArrays(1))
     glBindVertexArray(vao)
     try:
         build()
