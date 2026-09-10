@@ -25,8 +25,8 @@ keywords = [
     "TrueType", "text", "VRML", "VRML97", "scenegraph"
 ]
 classifiers = [
-    "Programming Language :: Python",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -47,8 +47,8 @@ dependencies = [
     "pillow",
     "PyOpenGL>=4.0.0a1",
     "PyOpenGL-accelerate>=4.0.0a1",
-    "PyVRML97>=2.3.4b1",
-    "PyVRML97-accelerate>=2.3.4b1",
+    "PyVRML97>=2.3.5a1",
+    "PyVRML97-accelerate>=2.3.5a1",
     "pydispatcher",
     "TTFQuery>=2.0.1a1",
     "simpleparse>=3.0.0a3",
