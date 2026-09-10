@@ -234,7 +234,7 @@ env_list = ["py310", "py311", "py312", "py313", "py314"]
 
 [tool.tox.env_run_base]
 extras = ["dev"]
-# The core dependencies (PyOpenGL 4.0.0a, PyVRML97 2.3.4b, TTFQuery 2.0.1a,
+# The core dependencies (PyOpenGL 4.0.0a, PyVRML97 2.3.5a, TTFQuery 2.0.1a,
 # simpleparse 3.0.0a, omi_audio 0.2.0a) are published only as pre-releases,
 # which uv/pip skip by default; without this the resolver reports them "not
 # available" and the env fails to build. pip_pre is honoured by both the pip and

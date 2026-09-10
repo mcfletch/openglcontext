@@ -593,7 +593,7 @@ class TestCameraSelection:
         inst.selectInitialCamera()
         assert 'No camera matching' in capsys.readouterr().err
 
-    def test_cycle_viewpoint_advances_and_binds(self):
+    def _ready_to_cycle(self, bound):
         inst = self._inst()
         inst.physicsPlatform = None
         inst.physicsWalking = False
@@ -602,10 +602,27 @@ class TestCameraSelection:
         inst._animationNames = []
         inst._animationIndex = 0
         inst._animationPlaying = True
-        inst.getSceneGraph = lambda: types.SimpleNamespace(boundViewpoint=None)
+        inst.getSceneGraph = lambda: types.SimpleNamespace(
+            boundViewpoint=bound)
         inst.triggerRedraw = lambda n: None
+        return inst
+
+    def test_cycle_viewpoint_advances_and_binds(self):
+        inst = self._ready_to_cycle(None)
         inst.nextCamera()
         assert inst.cameraIndex == 1
+
+    def test_cycling_with_nothing_bound_leaves_the_null_node_alone(self):
+        """A scene graph's `boundViewpoint` holds the NULL node until
+        something is bound, and NULL is one object shared by every empty node
+        field in the process -- so writing `isBound` onto it would reach all
+        of them."""
+        from vrml import node as vrmlnode
+
+        inst = self._ready_to_cycle(vrmlnode.NULL)
+        inst.nextCamera()
+        assert inst.cameraIndex == 1
+        assert not hasattr(vrmlnode.NULL, 'isBound')
 
 
 class TestPhysicsInputHandlers:

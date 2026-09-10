@@ -633,7 +633,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         except ValueError:
             index = self.cameraIndex
         following = (index + delta) % len(self.viewpoints)
-        if current is not None:
+        # Truth rather than `is not None`: an SFNode that holds nothing holds
+        # the NULL node, and writing `isBound` onto that writes it onto the
+        # one NULL every empty node field in the process shares.
+        if current:
             current.isBound = False
         self.viewpoints[following].isBound = True
         self.cameraIndex = following

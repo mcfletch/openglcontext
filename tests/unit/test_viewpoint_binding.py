@@ -116,7 +116,10 @@ class TestCoreViewpointBridge:
         monkeypatch.setattr(viewpointbinding.visitor, 'find', lambda ctx, types: [])
         ctx = FakeContext(sg)
         viewpointbinding.bind_scene_viewpoint(ctx)
-        assert getattr(sg, 'boundViewpoint', None) in (None, [])
+        # `boundViewpoint` is an SFNode, so what it holds when it holds
+        # nothing is the NULL node -- which is falsy, and is what the callers
+        # in `context.py` and `sceneviewer.py` test it for.
+        assert not getattr(sg, 'boundViewpoint', None)
         assert ctx.platform.position is None             # platform untouched
 
 

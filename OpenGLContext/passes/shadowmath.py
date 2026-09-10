@@ -114,10 +114,10 @@ def ortho_matrix(left: float, right: float, bottom: float, top: float,
                  near: float, far: float) -> Matrix4:
     """Row-vector orthographic projection (transpose of glOrtho).
 
-    pyvrml97's ``transformmatrix.orthoMatrix`` is in column-vector form, which is
-    inconsistent with ``perspectiveMatrix``; this returns the row-vector form so
     ``eye @ ortho_matrix`` yields clip coordinates, consistent with the rest of
-    the pipeline.
+    the pipeline. The same form as pyvrml97's ``transformmatrix.orthoMatrix``;
+    this one is kept for the guard on a degenerate extent, which a cascade fit
+    can produce and which pyvrml97's answers as an infinity.
     """
     rl = float(right - left) or 1e-6
     tb = float(top - bottom) or 1e-6
