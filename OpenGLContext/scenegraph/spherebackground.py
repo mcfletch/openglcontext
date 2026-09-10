@@ -1,6 +1,6 @@
 """Gradient-sphere background node"""
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
@@ -48,7 +48,7 @@ class _SphereBackground( object ):
     
     bound = field.newField( 'bound', 'SFBool', 1, 0)
 
-    def compile(self, mode):
+    def compile(self, mode: Any) -> Any:
         """Build the cached display list for this background object
 
         `mode` is the rendering pass, and is required: the list is built
@@ -109,8 +109,12 @@ class _SphereBackground( object ):
         holder = mode.cache.holder(self, (None, ()))
         return None
         
-    def buildSphere( self, colorSet ):
-        """Build a coordinate-set for the color/angle mapping"""
+    def buildSphere( self, colorSet: Any ) -> Tuple[Any, Any]:
+        """``(vertices, colours)`` for one segment of the angle:colour set
+
+        A vertex pair per stop between the poles, so a set of only the two
+        poles describes no surface and nothing rasterises.
+        """
         n = len(colorSet)
 
         if len(colorSet) and colorSet[0][0] == 0:
@@ -150,7 +154,7 @@ class _SphereBackground( object ):
         colors[-1] = colorSet[-1,1:]
         return vertices.astype('f'), colors.astype('f')
         
-    def Render( self, mode, clear = 1 ):
+    def Render( self, mode: Any, clear: int = 1 ) -> int:
         """Render the Background
 
         mode -- the RenderingPass object representing
@@ -176,10 +180,10 @@ class _SphereBackground( object ):
                     if callable( dl ):
                         dl()
                     return 1
-                return 0
+        return 0
 
 
-    def colorSet( self ):
+    def colorSet( self ) -> Any:
         """Compound the sky and ground angle:color arrays into a single angle:color array-set"""
         # okay, ground angles are pi-groundA
         if (
@@ -268,7 +272,7 @@ class _SphereBackground( object ):
             skys = self.pushOut(skys,MAXANGLE-(pi/4), MAXANGLE )
             skys = self.pushOut(skys,MINANGLE,MINANGLE+(pi/4) )
         return skys
-    def pushOut( self, colorSet, start,stop ):
+    def pushOut( self, colorSet: Any, start: float, stop: float ) -> Any:
         """Push the colorSet values out to a distance they can be seen
 
         Basically, if there is no value between pi/4 and 3pi/4, insert
@@ -286,10 +290,10 @@ class _SphereBackground( object ):
 
     # Shader-based rendering support
     @staticmethod
-    def _compile_background_shader():
+    def _compile_background_shader() -> Tuple[Any, Dict[str, int]]:
         """The gradient program and its locations, for the current context."""
         key = contextresources.context_key()
-        compiled = _shaders.get(key)
+        compiled: Tuple[Any, Dict[str, int]] | None = _shaders.get(key)
         if compiled is not None:
             return compiled
 
@@ -314,7 +318,7 @@ class _SphereBackground( object ):
         _shaders[key] = compiled
         return compiled
 
-    def compileShader(self, mode=None):
+    def compileShader(self, mode: Any = None) -> Tuple[Any, Any, int] | None:
         """Compile shader-based rendering data for this background.
 
         Returns (vertices_vbo, colors_vbo, vertex_count, rotation_matrices)
@@ -354,7 +358,7 @@ class _SphereBackground( object ):
 
         return (vertices_vbo, colors_vbo, len(every_vertex))
 
-    def RenderShader(self, mode, clear=True):
+    def RenderShader(self, mode: Any, clear: bool = True) -> int:
         """Render the background using shaders.
 
         Args:
@@ -481,7 +485,8 @@ class SphereBackground( _SphereBackground, nodetypes.Background, nodetypes.Child
     
                            
 
-def _linInterp( a,b, atAngle ):
+def _linInterp( a: Any, b: Any, atAngle: float ) -> Any:
+    """The stop between ``a`` and ``b`` at ``atAngle``, or ``b`` where they meet"""
     c,nc = a[1:], b[1:]
     a,na = a[0], b[0]
     if na == a:
@@ -492,7 +497,8 @@ def _linInterp( a,b, atAngle ):
     r[0] = atAngle
     return r
     
-def setSort( set ):
+def setSort( set: Any ) -> Any:
+    """An angle:colour set in ascending order of angle"""
     return take(set, argsort( set[:,0] ), 0)
                 
 if __name__ == "__main__":
