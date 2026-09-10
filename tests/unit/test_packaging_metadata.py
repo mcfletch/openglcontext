@@ -94,6 +94,57 @@ class TestRuntimeDataIsDeclaredAsPackageData:
                 assert (d / (prefix + face + '.jpg')).exists(), prefix + face
 
 
+class TestTheTypeDeclarationsShip:
+    """``py.typed`` and the generated stub are what make the engine checkable.
+
+    Without the marker, a checker reads none of the engine's annotations and
+    every ``Context``, node and render pass resolves to ``Any`` in the projects
+    built on it -- so their own gates pass without having checked a call into
+    the engine at all.  Both files are data rather than modules, so both have
+    to be declared as package data or the wheel does not carry them.
+    """
+
+    def _patterns(self):
+        return _pyproject()['tool']['setuptools']['package-data']['OpenGLContext']
+
+    def test_the_marker_exists(self):
+        assert (ROOT / 'OpenGLContext' / 'py.typed').exists()
+
+    def test_the_marker_is_declared(self):
+        assert 'py.typed' in self._patterns()
+
+    def test_the_node_stub_is_declared(self):
+        assert 'scenegraph/*.pyi' in self._patterns()
+
+    def test_the_node_stub_exists(self):
+        assert (ROOT / 'OpenGLContext' / 'scenegraph' / 'basenodes.pyi').exists()
+
+    @pytest.mark.slow
+    def test_a_built_wheel_carries_them(self, tmp_path):
+        """The declarations are only worth anything if pip installs them.
+
+        A pattern that matches a file in the checkout can still miss the
+        wheel, so this builds one and looks inside it.
+        """
+        import subprocess
+        import sys
+        import zipfile
+
+        result = subprocess.run(
+            [sys.executable, '-m', 'pip', 'wheel', '--no-deps',
+             '--no-build-isolation', '-q', '-w', str(tmp_path), str(ROOT)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr[-4000:]
+        wheels = list(tmp_path.glob('*.whl'))
+        assert wheels, sorted(p.name for p in tmp_path.iterdir())
+        with zipfile.ZipFile(wheels[0]) as archive:
+            names = set(archive.namelist())
+        for wanted in ('OpenGLContext/py.typed',
+                       'OpenGLContext/scenegraph/basenodes.pyi'):
+            assert wanted in names, wanted
+
+
 class TestGeneratedArtifactsPruned:
     def test_generated_regression_images_absent(self):
         # Generated diff/result/reference/debug outputs must not be

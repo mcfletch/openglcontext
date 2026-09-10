@@ -125,6 +125,15 @@ include = ["OpenGLContext*"]
 # `resources/*.txt` shaders are generated Python modules instead, so they travel
 # as code; the cube-map faces are read as files by the demo `cube` background.
 OpenGLContext = [
+    # `py.typed` is what tells a checker the engine's declarations are real.
+    # Without it every `Context`, every scenegraph node and every render pass
+    # resolves to `Any` in the projects built on it, and their own typecheck
+    # gates pass without having checked a single call into the engine.
+    "py.typed",
+    # The node namespace is filled from the plugin registry as it loads, so its
+    # names exist only at run time; `scripts/write_basenodes_stub.py` writes the
+    # declarations and this ships them.
+    "scenegraph/*.pyi",
     "shaders/*.vert", "shaders/*.frag", "shaders/*.glsl",
     "resources/environment/*.jpg",
     # The exception to the rule above: the demos' packaging recipe is read
@@ -193,6 +202,9 @@ ignore = [
 # here does not check an older Python -- it aborts on numpy's own stub before
 # checking anything at all.
 python_version = "3.12"
+# A function with no annotations is not skipped: its body is checked with the
+# parameters implicitly ``Any``, which is where most of the engine's code lives.
+check_untyped_defs = true
 warn_return_any = true
 warn_unused_ignores = true
 ignore_missing_imports = true

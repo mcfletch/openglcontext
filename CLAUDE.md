@@ -76,8 +76,12 @@ OpenGLContext/
 ├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.html
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.html
 ├── resources/        # Generated Python modules holding icons and shader text
+├── py.typed          # The engine's declarations are real -- docs/typing.html
 ├── scenegraph/       # VRML97-style nodes
 │   ├── basenodes.py  # Every registered node class, by name
+│   ├── basenodes.pyi # ...declared, since that namespace is filled at import
+│   │                 # time. `scripts/write_basenodes_stub.py` writes it
+│   ├── _basenodes_stub.py  # ...and this works out what it should say
 │   ├── shape.py      # Binds Appearance to geometry
 │   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.html
 │   ├── nurbs*.py     # NURBS surfaces, curves, trims, sampling -- docs/nurbs.html

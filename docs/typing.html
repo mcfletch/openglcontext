@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html><head>
+    <meta charset="utf-8">
+    <title>Type declarations &mdash; what a checker sees of the engine</title>
+  <link rel="stylesheet" type="text/css" href="style/modern.css">
+</head>
+<body>
+<header>
+      <nav>
+        <ul class="menu">
+          <li><a href="index.html">OpenGLContext</a></li>
+          <li><a href="documentation.html">Docs</a></li>
+          <li><a href="structure.html">Architecture</a></li>
+          <li><a href="https://github.com/mcfletch/openglcontext">GitHub</a></li>
+        </ul>
+      </nav>
+    <h1>Type declarations</h1>
+</header>
+
+<section>
+<p class="introduction">OpenGLContext ships a <code>py.typed</code> marker, so a
+project built on the engine has its calls into the engine checked. A misspelled
+method, a field given a string where it takes a number, a render pass handed the
+wrong kind of mode &mdash; all of these are reported where they are written
+rather than at the frame that runs them.</p>
+
+<h2>Turning it on</h2>
+
+<p>Nothing to turn on. A checker reads the marker from the installed package, so
+mypy or pyright in a project that depends on OpenGLContext picks the
+declarations up as soon as the dependency is installed:</p>
+
+<pre><code>$ mypy mygame/
+mygame/level.py:88: error: "Transform" has no attribute "rotaton"  [attr-defined]
+mygame/level.py:91: error: Argument "size" to "Box" has incompatible type "str"</code></pre>
+
+<p>A project that was already passing its own typecheck may start reporting
+errors the first time it picks up a release that carries the marker. Those are
+calls that were never checked before, not new mistakes.</p>
+
+<h2>The node namespace</h2>
+
+<p><code>OpenGLContext.scenegraph.basenodes</code> is where every node class
+lives under the name a scenegraph uses for it, and it fills itself from the
+plugin registry as it loads. Names created at import time are invisible to a
+checker, which reads source rather than running it, so the package ships
+<code>basenodes.pyi</code> declaring them:</p>
+
+<pre><code>from OpenGLContext.scenegraph.basenodes import *
+
+sg = sceneGraph( children = [
+    Transform( children = [
+        Shape(
+            geometry = Box( size = (1, 1, 1) ),
+            appearance = Appearance( material = Material() ),
+        ),
+    ] ),
+] )</code></pre>
+
+<p>Every one of those names is declared, and so is the star import: the stub
+spells out <code>__all__</code>, which is the only form a checker can expand
+<code>import *</code> against.</p>
+
+<h3>Adding a node</h3>
+
+<p>A node registered with <code>OpenGLContext.plugins.Node</code> in
+<code>OpenGLContext/__init__.py</code> needs a line in the stub, and the script
+writes the whole file from those registrations:</p>
+
+<pre><code>python scripts/write_basenodes_stub.py            # write it
+python scripts/write_basenodes_stub.py --check    # exit non-zero if out of date</code></pre>
+
+<p><code>tests/unit/test_basenodes_stub.py</code> fails while the file on disk
+disagrees with the registry, so a node added without regenerating is caught by
+the suite. The generator reads the registrations without importing them, so it
+runs on a machine with no GL and covers a node whose implementation module will
+not import there.</p>
+
+<h3>A third party's node</h3>
+
+<p>A node an application registers from its own package is not in the stub and
+resolves as <code>Any</code> &mdash; a checker has no declaration for a class it
+was never shown. The node works exactly as a built-in one does; only the
+checking of it differs. An application wanting its own nodes declared can write
+a stub for its own module and reach them through it rather than through
+<code>basenodes</code>.</p>
+
+<h2>What the engine is checked under</h2>
+
+<p>The settings are in <code>[tool.mypy]</code> in
+<a href="https://github.com/mcfletch/openglcontext/blob/main/pyproject.toml">pyproject.toml</a>.
+Two are worth knowing about:</p>
+
+<dl>
+  <dt><code>check_untyped_defs = true</code></dt>
+  <dd>The body of a function with no annotations is checked, with its parameters
+    taken as <code>Any</code>. Without this a checker skips such a function
+    entirely, which is where most of a long-lived codebase's unchecked lines
+    sit.</dd>
+  <dt><code>warn_return_any</code>, off for <code>OpenGLContext.physics.*</code></dt>
+  <dd>numpy's own stubs type array arithmetic as <code>Any</code>, so the
+    warning fires on nearly every array-returning function in the vectorised
+    physics core and buries the genuine reports. Every other check stays on
+    there.</dd>
+</dl>
+
+<p>The version pinned as <code>python_version</code> matches the interpreter the
+project is developed against. It is not a way to check an older Python: numpy's
+shipped stubs use syntax that parses only under 3.12, so a lower value aborts on
+those stubs before checking anything at all.</p>
+
+<h2>What is not declared</h2>
+
+<p>A field on a scenegraph node is created by
+<code>vrml.field.newField</code> at class-definition time, and reads back as the
+field's Python type rather than as the descriptor. A checker follows the
+descriptor, so the type it infers for <code>shape.geometry</code> is the
+declaration <code>newField</code> carries rather than the node class stored
+there; narrow it where the concrete class matters.</p>
+
+<p>The GL entry points come from PyOpenGL, and a module written
+<code>from OpenGL.GL import *</code> gets only the names PyOpenGL exports
+explicitly. The legacy aliases &mdash; <code>GLerror</code> for
+<code>GLError</code> and its kin &mdash; exist at run time but are not among
+them, so new code should use the modern spelling.</p>
+
+</section>
+</body>
+</html>
