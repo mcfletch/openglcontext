@@ -20,8 +20,10 @@ and drive it from the application's own ``mainloop`` by calling
 
 import logging
 import tkinter
+from typing import Any, Optional, Tuple
 
 from OpenGLContext.context import Context
+from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events import tkevents
 from OpenGLContext.looptrace import LoopTrace
 
@@ -41,7 +43,7 @@ log = logging.getLogger(__name__)
 FRAME_INTERVAL = 1
 
 
-def attributesFromDefinition(definition):
+def attributesFromDefinition(definition: Any) -> ContextAttributes:
     """The GL context a ``ContextDefinition`` asks for, as PyOpenGL's Tk widget
     wants it stated
 
@@ -59,10 +61,10 @@ def attributesFromDefinition(definition):
             "The Tk backend provides no accumulation buffer; ignoring the %d "
             "bits requested", definition.accumulationBuffer,
         )
-    version = tuple(int(value) for value in definition.version)
+    major, minor = (int(value) for value in definition.version)
     return ContextAttributes(
         profile=definition.profile,
-        version=version if version[0] else None,
+        version=(major, minor) if major else None,
         doubleBuffer=bool(definition.doubleBuffer),
         alphaSize=8 if definition.alpha else 0,
         depthSize=definition.depthBuffer if definition.depthBuffer > -1 else 24,
@@ -87,23 +89,28 @@ class TkContext(tkevents.EventHandlerMixin, Context):
     sometimes is there anything new to draw.
     """
 
-    #: The GLFrame this draws into.
-    frame = None
+    #: The GLFrame this draws into, or None once it has been let go.
+    frame: Optional[GLFrame] = None
     #: The toplevel this context created, or None where it was given a parent
     #: to sit inside.
-    root = None
+    root: Optional[tkinter.Tk] = None
+    #: Settled by the constructor before the widget exists, so it is never None
+    #: for a context that was built.
+    contextDefinition: ContextDefinition
     #: Set when the loop should end.
     _finished = False
     _renderedFirst = False
-    _frameJob = None
+    #: The pending ``after`` callback that drives the next frame.
+    _frameJob: Optional[str] = None
     #: True while the pointer is hidden and being warped back to the middle of
     #: the window for a mouse-look mode.
     _pointerGrabbed = False
     #: Where the pointer was last warped to, so the movement the warp itself
     #: generates can be told from a real one.
-    _pointerWarpedTo = None
+    _pointerWarpedTo: Optional[Tuple[int, int]] = None
 
-    def __init__(self, definition=None, parent=None, **named):
+    def __init__(self, definition: Any = None, parent: Any = None,
+                 **named: Any) -> None:
         """Create the widget, its GL context, and the engine on top of them
 
         definition -- ContextDefinition (or a dictionary of its fields)
@@ -141,7 +148,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         self.ViewPort(self.frame.winfo_width(), self.frame.winfo_height())
 
     ### the window's own settings
-    def applyHidden(self):
+    def applyHidden(self) -> bool:
         """Take the window off the screen where the environment asked for that
 
         ``OPENGLCONTEXT_HIDDEN`` is for a capture subprocess and for a suite of
@@ -163,7 +170,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
             return True
         return False
 
-    def applyVSync(self, definition=None):
+    def applyVSync(self, definition: Any = None) -> bool:
         """Wait for the display's refresh, or don't (ContextDefinition.vsync)
 
         Answers whether the interval was set; the window system's own
@@ -180,7 +187,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
             return False
         return bool(self.frame.setSwapInterval(1 if wanted else 0))
 
-    def setFullscreen(self, fullscreen):
+    def setFullscreen(self, fullscreen: Any) -> bool:
         """Fill the screen, or go back to the window this context opened with
 
         Tk moves a toplevel between the two without re-making anything, so the
@@ -197,7 +204,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         self.triggerRedraw(1)
         return True
 
-    def isFullscreen(self):
+    def isFullscreen(self) -> bool:
         """Whether this window is filling the screen now
 
         Tk answers the attribute as 0 or 1, and some builds answer it as the
@@ -212,7 +219,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         except (ValueError, TypeError, tkinter.TclError):
             return False
 
-    def settingsChanged(self):
+    def settingsChanged(self) -> None:
         """Re-apply the window-level settings a changed definition affects."""
         from OpenGLContext import renderoptions
 
@@ -220,7 +227,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         self.setFullscreen(renderoptions.fullscreen_window(self))
         Context.settingsChanged(self)
 
-    def setPointerCapture(self, capture):
+    def setPointerCapture(self, capture: Any) -> bool:
         """Hide the pointer and keep it in the window, for a mouse-look mode
 
         Tk has no relative-motion mode, so the pointer is warped back to the
@@ -250,7 +257,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
             self.recentrePointer()
         return True
 
-    def recentrePointer(self):
+    def recentrePointer(self) -> None:
         """Put the pointer back in the middle of the widget, if it is grabbed"""
         if not self._pointerGrabbed or self.frame is None:
             return
@@ -262,7 +269,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         self.frame.event_generate('<Motion>', warp=True,
                                   x=middle[0], y=middle[1])
 
-    def pointerWarpEcho(self, x, y):
+    def pointerWarpEcho(self, x: float, y: float) -> bool:
         """Whether this movement is the one :meth:`recentrePointer` caused
 
         A movement the program made itself is not motion the user asked for:
@@ -276,9 +283,11 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         return echo
 
     ### Context API
-    def setupCallbacks(self):
+    def setupCallbacks(self) -> None:
         """Bind the widget's input events to this context's handlers"""
         frame = self.frame
+        if frame is None:
+            return
         frame.bind('<KeyPress>', self.tkOnKeyDown)
         frame.bind('<KeyRelease>', self.tkOnKeyUp)
         frame.bind('<FocusOut>', self.tkOnFocusOut)
@@ -291,14 +300,14 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         # The widget's own drawing is this context's, so the frame's
         # expose-driven render is replaced rather than left to draw a scene it
         # knows nothing about.
-        frame.redraw = self.drawFrame
-        frame.reshape = self.OnResize
+        frame.redraw = self.drawFrame     # type: ignore[method-assign]  # GLFrame's hook, replaced per instance
+        frame.reshape = self.OnResize     # type: ignore[method-assign]  # GLFrame's hook, replaced per instance
 
-    def tkOnConfigure(self, event):
+    def tkOnConfigure(self, event: Any) -> None:
         """Follow the widget's new size with the viewport"""
         self.OnResize(int(event.width), int(event.height))
 
-    def drawFrame(self):
+    def drawFrame(self) -> None:
         """What the widget draws: one engine frame, without the swap
 
         The frame's own ``render`` makes the context current and swaps
@@ -306,7 +315,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         """
         self.OnDraw(force=1)
 
-    def setCurrent(self, blocking=1):
+    def setCurrent(self, blocking: int = 1) -> None:
         """Take the OpenGL focus"""
         Context.setCurrent(self, blocking)
         if self.frame is not None:
@@ -314,7 +323,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
             self.frame.makeCurrent()
             self.bindContextResources(self._glHandle())
 
-    def _glHandle(self):
+    def _glHandle(self) -> Any:
         """The GL context handle the caches and PyOpenGL key on
 
         The widget's context object is not it: what identifies a context to
@@ -326,12 +335,12 @@ class TkContext(tkevents.EventHandlerMixin, Context):
 
         return contextresources.context_key()
 
-    def SwapBuffers(self):
+    def SwapBuffers(self) -> None:
         """Present the rendered frame"""
         if self.frame is not None:
             self.frame.swapBuffers()
 
-    def OnIdle(self, *arguments):
+    def OnIdle(self, *arguments: Any) -> int:
         """Animation hook for the Tk loop
 
         The default ``Context.OnIdle`` renders through ``drawPoll``, which
@@ -340,12 +349,12 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         """
         return 0
 
-    def OnResize(self, width, height):
+    def OnResize(self, width: int, height: int) -> None:
         """Take the new widget size"""
         self.ViewPort(int(width), int(height))
         self.triggerRedraw(1)
 
-    def OnQuit(self, event=None):
+    def OnQuit(self, event: Any = None) -> Any:
         """Let go of this window's GL objects, then end the application
 
         The release happens **here** rather than after the loop because
@@ -363,7 +372,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
             return 0
         return Context.OnQuit(self, event)
 
-    def releaseWindow(self):
+    def releaseWindow(self) -> None:
         """Drop this context's GL objects and let the widget go
 
         The engine's caches own GL objects in this context, so they have to be
@@ -388,13 +397,13 @@ class TkContext(tkevents.EventHandlerMixin, Context):
                 pass                    # the interpreter is already going
 
     ### the loop
-    def startFrameTimer(self):
+    def startFrameTimer(self) -> Optional[str]:
         """Begin the timer that drives the render loop"""
         if self._frameJob is None and self.frame is not None:
             self._frameJob = self.frame.after(FRAME_INTERVAL, self._frameStep)
         return self._frameJob
 
-    def stopFrameTimer(self):
+    def stopFrameTimer(self) -> None:
         """Stop the render loop's timer"""
         job, self._frameJob = self._frameJob, None
         if job is not None and self.frame is not None:
@@ -403,7 +412,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
             except tkinter.TclError:
                 pass                    # the interpreter is already going
 
-    def _frameStep(self):
+    def _frameStep(self) -> None:
         self._frameJob = None
         if self._finished or self.frame is None:
             return
@@ -411,7 +420,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         if not self._finished and self.frame is not None:
             self._frameJob = self.frame.after(FRAME_INTERVAL, self._frameStep)
 
-    def pumpWindowEvents(self):
+    def pumpWindowEvents(self) -> bool:
         """Dispatch what Tk has queued; see Context.pumpWindowEvents"""
         if self.frame is None:
             return False
@@ -421,7 +430,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
             return False                # the interpreter is already going
         return True
 
-    def loopIteration(self):
+    def loopIteration(self) -> bool:
         """One pass of the render loop, timed phase by phase
 
         Public, because a host application that owns the Tk main loop drives
@@ -453,7 +462,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
                     self.OnDraw(force=0)
         return True
 
-    def MainLoop(self):
+    def MainLoop(self) -> None:
         """Run Tk's event loop with this context rendering inside it"""
         if self.root is None:
             raise RuntimeError(
@@ -479,7 +488,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
             self.releaseWindow()
 
     @classmethod
-    def ContextMainLoop(cls, *args, **named):
+    def ContextMainLoop(cls, *args: Any, **named: Any) -> Any:
         """Create the context and run it as an application"""
         instance = cls(*args, **named)
         if instance.contextDefinition.profileFile:
@@ -500,7 +509,7 @@ if __name__ == "__main__":
     )
 
     class TestRenderer(TkContext):
-        def Render(self, mode=None):
+        def Render(self, mode: Any = None) -> None:
             TkContext.Render(self, mode)
             glClearColor(0.2, 0.3, 0.3, 1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)

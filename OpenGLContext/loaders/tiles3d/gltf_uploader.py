@@ -51,7 +51,7 @@ def _strip_b3dm(data: bytes) -> bytes:
 
 
 class _CombinedScene:
-    """One drawable subtree for a tile that carries several contents (1.1).
+    """One drawable subtree for a tile that carries several contents.
 
     Wraps each parsed content's group under a shared `Group` and exposes the same
     `group`/`center`/`radius` a single `GLTFScene` does, so the uploader and the

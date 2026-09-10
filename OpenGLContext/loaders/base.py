@@ -1,6 +1,7 @@
 """Base loader module for OpenGLContext"""
 
 import logging
+from typing import IO, Any, Tuple, cast
 
 log = logging.getLogger(__name__)
 
@@ -13,7 +14,8 @@ class BaseHandler(object):
     # only compression method the format defines (RFC 1952).
     GZIP_MAGIC = b"\037\213\010"
 
-    def __call__(self, baseURL, filename, file, *args, **named):
+    def __call__(self, baseURL: str, filename: str, file: IO[bytes],
+                 *args: Any, **named: Any) -> Any:
         """Load encoded scenegraph from the file
 
         baseURL -- the URL from which the file was loaded
@@ -34,13 +36,14 @@ class BaseHandler(object):
             log.warning("parse of %s returned NULL document", baseURL)
             raise ValueError("""NULL results for url %s""" % (baseURL,))
 
-    def parse(self, data, baseURL, filename, file, *args, **named):
+    def parse(self, data: Any, baseURL: str, filename: str, file: IO[bytes],
+              *args: Any, **named: Any) -> Tuple[bool, Any]:
         """Parse the loaded data (with the provided meta-information)"""
         raise NotImplementedError(
             """%s does not implement parse method""" % (self.__class__.__name__,)
         )
 
-    def getData(self, baseURL, filename, file):
+    def getData(self, baseURL: str, filename: str, file: IO[bytes]) -> bytes:
         """Retrieve data to be parsed
 
         Will handle gunzipping data which has .gz extension
@@ -63,7 +66,7 @@ class BaseHandler(object):
         return data
 
     @classmethod
-    def isGzip(cls, file):
+    def isGzip(cls, file: IO[bytes]) -> bool:
         """Determine whether the data is a gzip stream
 
         The file is the binary handle the loader opened, so the magic number is
@@ -80,8 +83,9 @@ class BaseHandler(object):
             file.seek(previous)
 
     @classmethod
-    def gunzip(cls, file):
+    def gunzip(cls, file: IO[bytes]) -> IO[bytes]:
         """Get a gzip-aware file for the given file handle"""
         import gzip
 
-        return gzip.GzipFile("", "rb", 9, file)
+        # GzipFile reads and seeks as a binary file without declaring itself one.
+        return cast(IO[bytes], gzip.GzipFile("", "rb", 9, file))

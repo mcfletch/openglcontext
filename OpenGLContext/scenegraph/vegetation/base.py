@@ -11,7 +11,7 @@ The near mesh dithers OUT and the impostor billboard dithers IN across the SAME
 window; sharing one constant pair keeps the two shaders complementary so the
 handoff never shows a seam or a double-draw.
 """
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import numpy as np
 from OpenGL.GL import (
@@ -45,6 +45,17 @@ class InstancedVegBase(vnodes.PointSet):
     #: world-space sun direction, or None for the camera-faced billboards, which use
     #: a flat sun term rather than a per-fragment eye-space sun vector.
     sun: "Optional[np.ndarray]" = None
+
+    if TYPE_CHECKING:
+        # What the preamble needs of the subclass, declared for a checker and
+        # nothing else: each is set by the subclass's own GL init, and a real
+        # declaration here would give every node a shared default.
+        #: The node's own program name.
+        _prog: int
+        #: Uniform name -> location, for that program.
+        U: Dict[str, int]
+        #: The node's axis-aligned extent, as an (x, y, z) size.
+        bounds: Any
 
     def boundingVolume(self, mode: Any) -> "boundingvolume.AABoundingBox":
         return boundingvolume.AABoundingBox(size=self.bounds, center=(0, 0, 0))

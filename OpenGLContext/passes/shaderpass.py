@@ -14,7 +14,9 @@ import os
 import re
 import logging
 from math import cos, sin
-from typing import Any, Dict, FrozenSet, Optional, Tuple, TYPE_CHECKING
+from typing import (
+    Any, Callable, Dict, FrozenSet, Iterable, Optional, Tuple, TYPE_CHECKING,
+)
 
 from OpenGL.GL import (
     GL_FALSE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER,
@@ -41,6 +43,7 @@ log = logging.getLogger(__name__)
 # Type aliases
 Color3 = Tuple[float, float, float]
 Color4 = Tuple[float, float, float, float]
+Vec2 = Tuple[float, float]
 Vec3 = Tuple[float, float, float]
 Vec4 = Tuple[float, float, float, float]
 Matrix4 = npt.NDArray[np.float32]
@@ -91,13 +94,17 @@ def normal_matrix(modelview: Matrix4) -> Matrix4:
     ), dtype='f')
 
 
-def _as_floats(value) -> tuple:
+def _as_floats(value: Iterable[float]) -> Tuple[float, ...]:
     return tuple(float(v) for v in value)
 
 
-def _vec_uploader(gl_fn):
+#: How a uniform's value reaches the GL: a location and an already-normalized value.
+Upload = Callable[[int, Any], None]
+
+
+def _vec_uploader(gl_fn: Callable[..., Any]) -> Upload:
     """Wrap a glUniform{2,3,4}fv into the (loc, value) upload signature."""
-    def upload(loc, value):
+    def upload(loc: int, value: Any) -> None:
         gl_fn(loc, 1, array(value, 'f'))
     return upload
 
@@ -392,7 +399,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self._ok = False
 
     @staticmethod
-    def _delete_shaders(*shaders) -> None:
+    def _delete_shaders(*shaders: Any) -> None:
         """Flag compiled shader objects for deletion once linked into a program.
 
         The program keeps them alive until it is itself deleted, so this just
@@ -405,8 +412,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             except Exception:
                 pass
 
-    def _compile_one(self, label, vert_name, frag_name,
-                     validate=True, shadow_frag=False):
+    def _compile_one(self, label: str, vert_name: str, frag_name: str,
+                     validate: bool = True,
+                     shadow_frag: bool = False) -> Optional[int]:
         """Compile one program in isolation; return its handle or None.
 
         A break in any single shader must degrade only that feature, not take
@@ -936,7 +944,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         return False
 
     def _set_uniform(self, name: str, value: Any, program: Optional[int],
-                     upload) -> None:
+                     upload: Upload) -> None:
         """Shared scalar/vector uniform upload.
 
         Skips when the value is unchanged from the last upload for this program,
@@ -956,7 +964,8 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
     def _set_uniform1f(self, name: str, value: float, program: Optional[int] = None) -> None:
         self._set_uniform(name, float(value), program, glUniform1f)
 
-    def _set_uniform2f(self, name: str, value, program: Optional[int] = None) -> None:
+    def _set_uniform2f(self, name: str, value: Vec2,
+                       program: Optional[int] = None) -> None:
         self._set_uniform(name, _as_floats(value), program, _UPLOAD_2FV)
 
     def _set_uniform3f(self, name: str, value: Vec3, program: Optional[int] = None) -> None:
@@ -1074,12 +1083,14 @@ def configure_light_from_node(
         length = np.sqrt(np.sum(transformed * transformed))
         if length > 0:
             transformed = transformed / length
-        return tuple(transformed)
+        return (float(transformed[0]), float(transformed[1]),
+                float(transformed[2]))
 
     def transform_position(position: Vec3) -> Vec4:
         """Transform position by modelview matrix."""
         if modelview_matrix is None:
-            return tuple(position) + (1.0,)
+            return (float(position[0]), float(position[1]),
+                    float(position[2]), 1.0)
         # For positions, use full 4x4 transform
         # Note: OpenGLContext matrices are row-major (row vectors), so use p @ M
         p = np.array([position[0], position[1], position[2], 1.0], dtype=np.float32)

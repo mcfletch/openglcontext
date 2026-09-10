@@ -1,4 +1,6 @@
 """Node specifying rendering properties affecting the lighting model"""
+from typing import Any
+
 from OpenGL.GL import *
 from vrml.vrml97 import basenodes
 from vrml import protofunctions
@@ -47,8 +49,8 @@ class Material(basenodes.Material):
     datamap = (GL_DIFFUSE, GL_EMISSION, GL_SPECULAR, GL_AMBIENT)
     def render (
         self,
-        mode = None, # the renderpass object
-    ):
+        mode: Any = None, # the renderpass object
+    ) -> float:
         """Called by the Appearance node, returns whether we are transparent or not
 
         This isn't quite right for VRML97, diffuseColor 
@@ -66,7 +68,7 @@ class Material(basenodes.Material):
             return 1.0
         quick()
         return 1.0 - self.transparency
-    def compile( self, mode=None ):
+    def compile( self, mode: Any = None ) -> Any:
         """Compile material information into readily-rendered format"""
         holder = mode.cache.holder(self, None)
         for field in protofunctions.getFields( self ):

@@ -86,3 +86,19 @@ class TestARedrawAskedForDuringStartUp:
         held = _Context(lambda self: None)
         held.DoInit()
         assert held.drawn == 0
+
+    def test_a_context_that_already_defers_goes_on_deferring(self, monkeypatch):
+        """Deferral is a property of the loop, and start-up only borrows it.
+
+        A backend's ``MainLoop`` sets ``deferRedraw`` for the whole session, and
+        a host embedding a context sets it for the same reason; ``wxContext``
+        runs ``DoInit`` from inside that loop, on the first paint.  A context
+        that was deferring before initialisation is still deferring after it.
+        """
+        _stayOnThisThread(monkeypatch)
+        held = _Context(lambda self: None)
+        held.deferRedraw = True
+        held.DoInit()
+        assert held.deferRedraw is True
+        held.triggerRedraw(1)
+        assert held.drawn == 0, 'rendered in the handler, where the loop draws'

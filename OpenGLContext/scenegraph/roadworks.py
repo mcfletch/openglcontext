@@ -563,7 +563,7 @@ def _lamp_pool(line: np.ndarray, station: np.ndarray,
                    for one in lamps])
     reach = max(float(tunnel.lamp_reach), 1e-6)
     near = np.abs(station[:, None] - at[None, :]).min(axis=1)
-    return np.clip(1.0 - near / reach, 0.0, 1.0)
+    return np.asarray(np.clip(1.0 - near / reach, 0.0, 1.0))
 
 
 def _fittings(line: np.ndarray, right: np.ndarray, up: np.ndarray,

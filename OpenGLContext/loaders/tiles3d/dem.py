@@ -41,7 +41,7 @@ def height_function_from_array(
         fz = v - z0
         top = heights[z0, x0] * (1 - fx) + heights[z0, x1] * fx
         bot = heights[z1, x0] * (1 - fx) + heights[z1, x1] * fx
-        return base + height_scale * (top * (1 - fz) + bot * fz)
+        return np.asarray(base + height_scale * (top * (1 - fz) + bot * fz))
 
     return height_fn
 

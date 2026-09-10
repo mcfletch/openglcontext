@@ -10,26 +10,28 @@ from OpenGLContext.scenegraph.basenodes import *
 from vrml.vrml97 import nodetypes
 from OpenGLContext.events import mouseevents
 from gettext import gettext as _
+from typing import List, Tuple
 
 class ChoiceContext( BaseContext ):
     currentChoice = 0
-    def loadChoices( self ):
+    def loadChoices( self ) -> List[Tuple[int, str]]:
         """See which contexts are available"""
         choices = [
             e.name for e in self.getContextTypes()
         ]
         return list(enumerate(choices))
-    def nameForContextType( self, index ):
+    def nameForContextType( self, index: int ) -> str:
+        """The backend name choice *index* stands for, or '' where there is none"""
         if index > -1:
             return self.choices[index][1]
-        return -1,None
-    def setSavedText( self, index ):
+        return ''
+    def setSavedText( self, index: int ) -> int:
         self.savedChoice = self.currentChoice
         self.savedText.string = [ _('Current: %s')%(
             self.nameForContextType( self.savedChoice )
         )]
         return self.savedChoice
-    def OnInit( self ):
+    def OnInit( self ) -> None:
         """Setup callbacks and build geometry for rendering"""
         self.choices = self.loadChoices()
         print('Available Contexts', self.choices)
@@ -200,26 +202,26 @@ class ChoiceContext( BaseContext ):
 #            function = self.OnSave,
 #        )
             
-    def OnNext( self, event ):
+    def OnNext( self, event: Any ) -> None:
         """Clicked the next button"""
         self.currentChoice += 1
         self.currentChoice = self.currentChoice % len( self.choices )
         self.currentChoiceText.string = self.choices[self.currentChoice][1]
         self.triggerRedraw(1)
-    def OnPrevious( self, event ):
+    def OnPrevious( self, event: Any ) -> None:
         """Clicked the previous button"""
         self.currentChoice -= 1
         self.currentChoice = self.currentChoice % len( self.choices )
         self.currentChoiceText.string = self.choices[self.currentChoice][1]
         self.triggerRedraw(1)
         
-    def OnSave( self, event ):
+    def OnSave( self, event: Any ) -> None:
         """Save current choice to the preferences file"""
         self.setDefaultContextType( self.choices[self.currentChoice][1] )
         self.setSavedText( self.currentChoice )
         self.triggerRedraw(1)
 
-def main():
+def main() -> Any:
     """Mainloop redirecting to context's mainloop for operations"""
     return ChoiceContext.ContextMainLoop()
 

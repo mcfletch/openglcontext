@@ -7,6 +7,8 @@ or not a drag is in progress.  The bindings are in
 :mod:`OpenGLContext.move.direct`.
 """
 
+from typing import Any, Tuple
+
 from OpenGLContext.events import eventmanager
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS, WHEEL_UP
 from OpenGLContext.move import orbit
@@ -31,7 +33,8 @@ DOLLY_STEP = 0.8
 NEAR_PLANE_MARGIN = 2.0
 
 
-def orbitFor(platform, centre, event, width, height, **named):
+def orbitFor(platform: Any, centre: Any, event: Any,
+             width: float, height: float, **named: Any) -> orbit.TurntableOrbit:
     """Build a :class:`~OpenGLContext.move.orbit.TurntableOrbit` for a platform
 
     Reads the frustum for the two things a gesture needs from it: the field of
@@ -63,7 +66,8 @@ class ExamineManager (eventmanager.EventManager):
     """
     type = "examine"
 
-    def __init__ (self, context, platform, center, event, gesture=ROTATE):
+    def __init__(self, context: Any, platform: Any, center: Any, event: Any,
+                 gesture: str = ROTATE) -> None:
         """Initialise the ExamineManager
 
         context -- Context instance
@@ -82,7 +86,7 @@ class ExamineManager (eventmanager.EventManager):
         self.OnBind()
 
     ### client API
-    def update( self, event ):
+    def update( self, event: Any ) -> None:
         '''Update the gesture with a new mouse position
 
         This moves the camera, then triggers a redraw of the context.
@@ -90,7 +94,7 @@ class ExamineManager (eventmanager.EventManager):
         follow = self.orbit.pan if self.gesture == PAN else self.orbit.rotate
         self.apply( *follow( *event.getPickPoint() ) )
 
-    def dolly( self, event ):
+    def dolly( self, event: Any ) -> None:
         """Move the camera toward or away from the pivot by one wheel notch"""
         move = getattr( self.orbit, 'dolly', None )
         if move is None:
@@ -100,24 +104,25 @@ class ExamineManager (eventmanager.EventManager):
         self.apply( *move(
             DOLLY_STEP if event.button == WHEEL_UP else 1.0 / DOLLY_STEP ) )
 
-    def apply( self, position, orientation ):
+    def apply( self, position: Any, orientation: Any ) -> None:
         """Put a camera the orbit worked out onto the platform, and redraw"""
         self.platform.position = position
         self.platform.quaternion = orientation
         self.client.triggerRedraw(1)
 
-    def release( self, event ):
+    def release( self, event: Any ) -> None:
         """Trigger cleanup of the examine mode"""
         self.OnUnBind()
 
-    def cancel(self, event):
+    def cancel(self, event: Any) -> None:
         """Cancel the examine mode, return to original position and orientation"""
         position, orientation = self.orbit.cancel ()
         self.OnUnBind()
         self.apply( position, orientation )
 
     ### Customisation points
-    def OnBuildOrbit( self, platform, centre, event, width, height ):
+    def OnBuildOrbit( self, platform: Any, centre: Any, event: Any,
+                      width: float, height: float ) -> None:
         """Build the object that turns the drag into a camera
 
         Customisation point for those wanting different examine behaviour.
@@ -129,17 +134,17 @@ class ExamineManager (eventmanager.EventManager):
         """
         self.orbit = orbitFor( platform, centre, event, width, height )
 
-    def OnBind( self ):
+    def OnBind( self ) -> None:
         """Bind the events needing binding to run the examine mode
         Customisation point for those needing custom controls"""
         self.client.captureEvents("mousebutton", self)
         self.client.captureEvents("mousemove", self)
-    def OnUnBind( self ):
+    def OnUnBind( self ) -> None:
         """UnBind the events for the examine mode
         Customisation point for those needing custom controls"""
         self.client.captureEvents("mousemove", None)
         self.client.captureEvents("mousebutton", None)
-    def ProcessEvent (self, event):
+    def ProcessEvent(self, event: Any) -> None:
         """Respond to events from the system
         Customisation point for those needing custom controls"""
         if event.type == "mousemove":

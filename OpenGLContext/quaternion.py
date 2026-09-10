@@ -6,23 +6,21 @@ Note: this is an entirely separate implementation from the PyOpenGL
     will be available, and provides only those methods and helpers
     commonly needed for manipulating rotations.
 """
+from typing import Any, Tuple
+
 from OpenGLContext import arrays as ar
 from OpenGLContext import utilities
 
-# Named rather than starred, because which implementation answers matters here.
-# This module used `from math import *` followed by `from ...arrays import *`,
-# so the array versions won every name the two share -- and the guards below
-# were written for the scalar ones. `math.acos` raises on an argument just
-# outside its domain, which is what `XYZR` catches; the array one answers
-# `nan`, so the guard never fired and `nan` came back out instead.
-#
-# The rule here: `ar` throughout for the arithmetic. The scalar versions are
-# not interchangeable even on scalars -- `utilities.normalise` answers float32,
-# and numpy keeps a float32 where a Python float is the other operand, so
-# `x * math.sin(r)` rounds the quaternion to single precision where
-# `x * ar.sin(r)` does not.
+# `ar` throughout for the arithmetic, named rather than starred: the array
+# implementations and the scalar ones in `math` are not interchangeable even on
+# scalars. `utilities.normalise` answers float32, and numpy keeps a float32
+# where a Python float is the other operand, so `x * math.sin(r)` would round
+# the quaternion to single precision where `x * ar.sin(r)` does not; and the
+# array arc cosine answers `nan` outside its domain where the scalar one
+# raises, which is why the domain is clamped below rather than an exception
+# caught.
 
-def fromXYZR( x,y,z, r ):
+def fromXYZR( x: float, y: float, z: float, r: float ) -> 'Quaternion':
     """Create a new quaternion from a VRML-style rotation
     x,y,z are the axis of rotation
     r is the rotation in radians."""
@@ -30,7 +28,7 @@ def fromXYZR( x,y,z, r ):
     return Quaternion ( ar.array( [
         ar.cos(r/2.0), x*(ar.sin(r/2.0)), y*(ar.sin(r/2.0)), z*(ar.sin(r/2.0)),
     ]) )
-def fromEuler( x=0,y=0,z=0 ):
+def fromEuler( x: float = 0, y: float = 0, z: float = 0 ) -> 'Quaternion':
     """Create a new quaternion from a 3-element euler-angle
     rotation about x, then y, then z
     """
@@ -49,7 +47,7 @@ def fromEuler( x=0,y=0,z=0 ):
     else:
         return fromXYZR( 0,0,1,z)
 
-def fromMatrix( matrix ):
+def fromMatrix( matrix: Any ) -> 'Quaternion':
     """Create a new quaternion from a rotation matrix.
 
     The inverse of :meth:`Quaternion.matrix`, and in the same row-vector
@@ -91,7 +89,7 @@ class Quaternion(object):
     """Quaternion object implementing those methods required
     to be useful for OpenGL rendering (and not many others)"""
     __slots__ = ('internal','__weakref__')
-    def __init__ (self, elements = (1,0,0,0) ):
+    def __init__ (self, elements: Any = (1,0,0,0) ) -> None:
         """The initializer is a four-element array,
         
         w, x,y,z -- all elements should be doubles/floats
@@ -103,7 +101,7 @@ class Quaternion(object):
         if length != 1:
             elements = elements/length
         self.internal = elements
-    def __mul__( self, other ):
+    def __mul__( self, other: Any ) -> Any:
         """Multiply this quaternion by another quaternion,
         generating a new quaternion which is the combination of the
         rotations represented by the two source quaternions.
@@ -125,22 +123,21 @@ class Quaternion(object):
             return self.__class__( ar.array([w,x,y,z],'d'))
         else:
             return ar.dot( self.matrix (), other )
-    def XYZR( self ):
+    def XYZR( self ) -> Tuple[Any, Any, Any, Any]:
         """Get a VRML-style axis plus rotation form of the rotation.
         Note that this is in radians, not degrees, and that the angle
         is the last, not the first item... (x,y,z,radians)
         """
         w,x,y,z = self.internal
-        # Rounding leaves `w` a hair outside the arc cosine's domain -- 
-        # 1.00000000002 for what should be no rotation at all -- and there the
-        # array implementation answers `nan` rather than raising, so the
-        # domain is clamped rather than an exception caught.
+        # Rounding leaves `w` a hair outside the arc cosine's domain --
+        # 1.00000000002 for what should be no rotation at all -- so the domain
+        # is clamped.
         aw = ar.acos( min( 1.0, max( -1.0, float(w) ) ) )
         scale = ar.sin(aw)
         if not scale:
             return (0,1,0,0)
         return (x / scale, y / scale, z / scale, 2 * aw )
-    def inverse( self ):
+    def inverse( self ) -> 'Quaternion':
         """Construct the inverse of this (unit) quaternion 
         
         Quaternion conjugate is (w,-x,-y,-z), inverse of a quaternion
@@ -148,7 +145,7 @@ class Quaternion(object):
         """
         w,x,y,z = self.internal 
         return self.__class__( ar.array((w,-x,-y,-z),'d'))
-    def matrix( self, dtype='f',inverse=False ):
+    def matrix( self, dtype: str = 'f', inverse: bool = False ) -> Any:
         """Get a rotation matrix representing this rotation
         
         dtype -- specifies the result-type of the matrix, defaults 
@@ -166,17 +163,17 @@ class Quaternion(object):
             [ 2*x*z+2*w*y, 2*y*z-2*w*x, 1-2*x*x-2*y*y, 0],
             [ 0,0,0,1],
         ], dtype=dtype)
-    def __getitem__( self, x ):
+    def __getitem__( self, x: Any ) -> Any:
         return self.internal[x]
-    def __len__( self ):
+    def __len__( self ) -> int:
         return len( self.internal)
-    def __repr__( self ):
+    def __repr__( self ) -> str:
         """Return a human-friendly representation of the quaternion
 
         Currently this representation is as an axis plus rotation (in radians)
         """
         return """<%s XYZR=%s>"""%( self.__class__.__name__, list(self.XYZR()))
-    def delta( self, other ):
+    def delta( self, other: 'Quaternion' ) -> float:
         """Return the angle in radians between this quaternion and another.
 
         Return value is a positive angle in the range 0-pi representing
@@ -184,10 +181,7 @@ class Quaternion(object):
         
         From code by Halldor Fannar on the 3D game development algos list
         """
-        # The dot product, which is what the next line wants. This read
-        # `sum(self.internal + other.internal)` -- the sum of the *addition* --
-        # so two rotations 0.4 radians apart gave 2.55, and the arc cosine of
-        # that is nan.
+        # The dot product of the two quaternions.
         cosValue = float(ar.sum(self.internal * other.internal))
         # A rotation and its negation are the same rotation, so the nearer of
         # the two is the one to measure; and rounding can leave the value a
@@ -195,8 +189,9 @@ class Quaternion(object):
         cosValue = min(1.0, abs(cosValue))
         # The angle between two rotations is twice the angle between the
         # quaternions that carry them.
-        return 2.0 * ar.acos( cosValue )
-    def slerp( self, other, fraction = 0, minimalStep= 0.0001):
+        return float(2.0 * ar.acos( cosValue ))
+    def slerp( self, other: 'Quaternion', fraction: float = 0,
+               minimalStep: float = 0.0001) -> 'Quaternion':
         """Perform fraction of spherical linear interpolation from this quaternion to other quaternion
 
         Algo is from: http://www.gamasutra.com/features/19980703/quaternions_01.htm

@@ -1,4 +1,6 @@
 """VRML97 Inline node"""
+from typing import Any, List, Sequence
+
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import protofunctions, fieldtypes
 from OpenGLContext import context
@@ -9,7 +11,7 @@ log = logging.getLogger(__name__)
 class InlineURLField( fieldtypes.MFString ):
     """Field for managing interactions with an Inline's URL value"""
     fieldType = "MFString"
-    def fset( self, client, value, notify=1 ):
+    def fset( self, client: Any, value: Any, notify: int = 1 ) -> Any:
         """Set the client's URL, then try to load the scene"""
         value = super(InlineURLField, self).fset( client, value, notify )
         import threading
@@ -19,7 +21,7 @@ class InlineURLField( fieldtypes.MFString ):
             args = ( value, context.Context.allContexts,),
         ).start()
         return value
-    def fdel( self, client, notify=1 ):
+    def fdel( self, client: Any, notify: int = 1 ) -> Any:
         """Delete the client's URL, which should delete the scene as well"""
         value = super( InlineURLField, self).fdel( client, notify )
         del client.scenegraph
@@ -32,7 +34,9 @@ class Inline(basenodes.Inline):
         http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Inline
     """
     scenegraph = None
-    def renderedChildren( self, types= (nodetypes.Children, nodetypes.Rendering,) ):
+    def renderedChildren(
+        self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
+    ) -> List[Any]:
         """Choose child from level that is at appropriate range"""
         if self.scenegraph:
             return self.scenegraph.children
@@ -40,7 +44,7 @@ class Inline(basenodes.Inline):
     url = InlineURLField(
         'url', 1, list
     )
-    def loadBackground( self, url, contexts=() ):
+    def loadBackground( self, url: Any, contexts: Sequence[Any] = () ) -> None:
         """Load an image from the given url in the background
 
         url -- SF or MFString URL to load relative to the

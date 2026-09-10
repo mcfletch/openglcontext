@@ -302,7 +302,7 @@ class ConsoleLogHandler(logging.Handler):
         """Stop receiving.  Called when the console closes, and idempotent."""
         self.logger.removeHandler(self)
 
-    def _panelClosed(self, panel: ConsolePanel) -> None:
+    def _panelClosed(self, panel: Panel) -> None:
         self.detach()
 
     def emit(self, record: logging.LogRecord) -> None:

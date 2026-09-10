@@ -93,7 +93,7 @@ def _array_texture(kind: str, layers: "list[str]",
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT)
     glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT)
-    return tid
+    return int(tid)
 
 
 class SplatTerrain(vnodes.PointSet):
@@ -164,8 +164,9 @@ class SplatTerrain(vnodes.PointSet):
                                             crown=self.canopy_crown,
                                             darken=self.canopy_shade,
                                             cap=self.canopy_deepest)
-            self._shading = lit
-        return self._shading
+            self._shading = np.asarray(lit)
+        shading: np.ndarray = self._shading
+        return shading
 
     def shade(self, x: Any, z: Any) -> Any:
         """How much of the sun reaches these world positions, in [0, 1].
@@ -179,7 +180,7 @@ class SplatTerrain(vnodes.PointSet):
                     0, size - 1).astype(int)
         v = np.clip((np.asarray(z, 'd') + extent / 2.0) / extent * (size - 1),
                     0, size - 1).astype(int)
-        return lit[v, u]
+        return np.asarray(lit[v, u])
 
     def _init_gl(self) -> None:
         prog = load_program("terrain_splat.vert", "terrain_splat.frag")

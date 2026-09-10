@@ -1,7 +1,33 @@
 """Module providing translation from wxPython events to OpenGLContext events"""
+import logging
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
+from OpenGLContext.events.mouseevents import WHEEL_UP
 from OpenGLContext.events.wheel import WheelNotches
 import wx
+
+log = logging.getLogger( __name__ )
+
+#: Which of OpenGLContext's button numbers each wx button is.  OpenGLContext
+#: numbers them in the X11 order -- 0 left, 1 right, 2 middle -- because the
+#: wheel takes 3 and 4 there; wx numbers them left, middle, right.
+BUTTON_MAPPING: Dict[int, int] = {
+    wx.MOUSE_BTN_LEFT: 0,
+    wx.MOUSE_BTN_RIGHT: 1,
+    wx.MOUSE_BTN_MIDDLE: 2,
+}
+
+#: Which wx predicate answers whether each of those buttons is down now, for a
+#: drag, where wx names no button at all and the event has to be asked about
+#: each one.  The numbers are :data:`BUTTON_MAPPING`'s, so a drag reports the
+#: button its press did.
+BUTTON_IS_DOWN: Tuple[Tuple[int, str], ...] = (
+    (0, 'LeftIsDown'),
+    (1, 'RightIsDown'),
+    (2, 'MiddleIsDown'),
+)
+
 
 class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
     """wxPython-specific event handler mix-in
@@ -13,10 +39,16 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
     """
     #: Counts a stream of wheel reports into whole notches; wx states its own
     #: detent size on the event, so the counter is built on the first one.
-    _wheelCounter = None
+    _wheelCounter: Optional[WheelNotches] = None
+
+    if TYPE_CHECKING:
+        # What this mix-in needs of the wx canvas beside it.
+        def addPickEvent(self, event: Any) -> Any: ...
+        def triggerPick(self) -> Any: ...
+        def getViewPort(self) -> Tuple[int, int]: ...
 
     ### KEYBOARD interactions
-    def wxOnKeyDown( self, event ):
+    def wxOnKeyDown( self, event: Any ) -> None:
         '''Convert a key-press to a context-style event'''
         code = event.GetKeyCode()
         if code in self.heldKeys():
@@ -24,14 +56,14 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         self.noteKeyDown( code, _modifiersOf( event ) )
         self.ProcessEvent( wxKeyboardEvent( self, event, 1))
         event.Skip()
-    def wxOnKeyUp( self, event ):
+    def wxOnKeyUp( self, event: Any ) -> None:
         '''Convert a key-release to a context-style event'''
         self.noteKeyUp( event.GetKeyCode() )
         self.ProcessEvent( wxKeyboardEvent( self, event, 0))
-    def wxOnCharacter( self, event ):
+    def wxOnCharacter( self, event: Any ) -> None:
         """Convert character (non-control) press to context event"""
         self.ProcessEvent( wxKeypressEvent( self, event))
-    def wxOnKillFocus( self, event ):
+    def wxOnKillFocus( self, event: Any ) -> None:
         """Let go of every held key as the canvas loses focus
 
         No key-up arrives for a key that was down when focus went elsewhere, so
@@ -40,7 +72,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         """
         self.clearHeldKeys()
         event.Skip()
-    def emitKey( self, key, state, modifiers ):
+    def emitKey( self, key: Any, state: int, modifiers: Any ) -> None:
         """Send a key transition the window system did not report
 
         ``modifiers`` is the triple that came with the press, so the synthetic
@@ -52,15 +84,15 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         if hasattr( self, 'currentPass' ):
             made.renderingPass = self.currentPass
         made.modifiers = modifiers
-        made.name = keyboardMapping.get( key )
+        made.name = keyName( key )
         made.state = state
         self.ProcessEvent( made )
     ### MOUSE Interaction
-    def wxOnMouseButton(self, event ):
+    def wxOnMouseButton(self, event: Any ) -> None:
         """Convert mouse-button event to context event"""
         self.addPickEvent( wxMouseButtonEvent( self, event))
         self.triggerPick()
-    def wxOnMouseMove(self, event ):
+    def wxOnMouseMove(self, event: Any ) -> None:
         """Convert mouse-movement event to context event
 
         The movement sampler is told directly as well as through the pick
@@ -87,7 +119,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         self.recentrePointer()
         self.addPickEvent( wxMouseMoveEvent( self, event))
         self.triggerPick()
-    def wxOnMouseWheel(self, event ):
+    def wxOnMouseWheel(self, event: Any ) -> None:
         """Convert scrolling to the pair of button events a wheel notch is
 
         wx reports scrolling as an amount of rotation rather than as the wheel
@@ -105,7 +137,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
                 self.addPickEvent(
                     wxWheelEvent( self, event, button=button, state=state ) )
         self.triggerPick()
-    def pointerWarpEcho( self, x, y ):
+    def pointerWarpEcho( self, x: int, y: int ) -> bool:
         """Whether this movement is one the window itself caused
 
         Answered by the canvas, which is what does the warping; see
@@ -113,7 +145,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         that never warps the pointer never sees an echo.
         """
         return False
-    def recentrePointer( self ):
+    def recentrePointer( self ) -> None:
         """Put a grabbed pointer back in the middle of the window
 
         Answered by the canvas; see
@@ -122,7 +154,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         """
 
 
-def _modifiersOf( wxEventObject ):
+def _modifiersOf( wxEventObject: Any ) -> Tuple[bool, bool, bool]:
     """The shift, control and alt triple a wx event was delivered with
 
     A function rather than a method on the event classes, because the canvas
@@ -136,36 +168,42 @@ def _modifiersOf( wxEventObject ):
         not(not( wxEventObject.AltDown())),
     )
 
+
+def keyName( code: int ) -> str:
+    """The OpenGLContext name of the key a wx key code is
+
+    :data:`keyboardMapping` names the keys wx has a constant for, and the
+    characters below 256.  Anything else is named by its code, so that two keys
+    the table does not list -- the keypad's Enter and the Windows key, say --
+    are still two different keys rather than one binding between them.
+    """
+    return keyboardMapping.get( code, '<unknown-%d>' % (code,) )
+
 class wxXEvent(object):
     """Base-class for all wxPython-specific event classes
 
     Provides method for determining the modifier set from
     wxPython event objects
     """
-    def _getModifiers( self, wxEventObject):
+    def _getModifiers( self, wxEventObject: Any) -> Tuple[bool, bool, bool]:
         """Get a three-tupple of shift, control, alt status"""
         return _modifiersOf( wxEventObject )
 
 class wxMouseButtonEvent( wxXEvent, mouseevents.MouseButtonEvent ):
     """wxPython-specific mouse button event"""
-    BUTTON_MAPPING = ( (0,1), (1,3), (2,2))
-    def __init__( self, context, wxEventObject ):
+    def __init__( self, context: Any, wxEventObject: Any ) -> None:
         super (wxMouseButtonEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
         self.modifiers = self._getModifiers(wxEventObject)
-        self.button = None
-        for local, wxButton in self.BUTTON_MAPPING:
-            if wxButton == wxEventObject.Button:
-                self.button = local
-                self.state = wxEventObject.ButtonDown( wxButton )
-                break
-        if self.button is None:
-            for local, wxButton in self.BUTTON_MAPPING:
-                if wxEventObject.Button( wxButton ):
-                    self.button = local
-                    self.state = wxEventObject.ButtonDown( wxButton )
-                    break
+        wxButton = wxEventObject.GetButton()
+        self.button = BUTTON_MAPPING.get( wxButton, -1 )
+        if self.button < 0:
+            # wx answers MOUSE_BTN_NONE for anything that is not a button
+            # changing state, and there is then no press or release to report.
+            log.warning( """Unrecognised wx mouse button: %s""", wxButton )
+        else:
+            self.state = int( bool( wxEventObject.ButtonDown( wxButton ) ) )
         self.pickPoint = wxEventObject.GetX(), context.getViewPort()[1]- wxEventObject.GetY()
         
 class wxWheelEvent( wxXEvent, mouseevents.MouseButtonEvent ):
@@ -175,7 +213,8 @@ class wxWheelEvent( wxXEvent, mouseevents.MouseButtonEvent ):
     button at all: the button is which way the wheel turned, which the caller
     has already worked out.
     """
-    def __init__( self, context, wxEventObject, button=3, state=0 ):
+    def __init__( self, context: Any, wxEventObject: Any,
+                  button: int = WHEEL_UP, state: int = 0 ) -> None:
         super (wxWheelEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
@@ -186,39 +225,39 @@ class wxWheelEvent( wxXEvent, mouseevents.MouseButtonEvent ):
 
 class wxMouseMoveEvent( wxXEvent, mouseevents.MouseMoveEvent ):
     """wxPython-specific mouse movement event"""
-    def __init__( self, context, wxEventObject ):
+    def __init__( self, context: Any, wxEventObject: Any ) -> None:
         super (wxMouseMoveEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
         self.modifiers = self._getModifiers(wxEventObject)
         buttons = []
-        for local, method in ( (0,"LeftIsDown"), (1,"MiddleIsDown"), (2,"RightIsDown")):
+        for local, method in BUTTON_IS_DOWN:
             if getattr( wxEventObject, method )():
                 buttons.append( local )
-        self.buttons = tuple( buttons )
+        self.buttons = tuple( sorted( buttons ) )
         self.pickPoint = wxEventObject.GetX(), context.getViewPort()[1]- wxEventObject.GetY()
 
 class wxKeyboardEvent( wxXEvent, keyboardevents.KeyboardEvent ):
     """wxPython-specific keyboard event"""
-    def __init__( self, context, wxEventObject, state=0 ):
+    def __init__( self, context: Any, wxEventObject: Any, state: int = 0 ) -> None:
         super (wxKeyboardEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
         self.modifiers = self._getModifiers(wxEventObject)
-        self.name = keyboardMapping.get( wxEventObject.GetKeyCode())	
+        self.name = keyName( wxEventObject.GetKeyCode() )
         self.state = state
 class wxKeypressEvent( wxXEvent, keyboardevents.KeypressEvent ):
     """wxPython-specific key-press event"""
-    def __init__( self, context, wxEventObject):
+    def __init__( self, context: Any, wxEventObject: Any) -> None:
         super (wxKeypressEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
         self.modifiers = self._getModifiers(wxEventObject)
-        self.name = keyboardMapping.get( wxEventObject.GetKeyCode())	
+        self.name = keyName( wxEventObject.GetKeyCode() )
 
 PAGE_UP = wx.WXK_PRIOR if hasattr(wx,'WXK_PRIOR') else wx.WXK_PAGEUP
 PAGE_DOWN = wx.WXK_NEXT if hasattr(wx,'WXK_PRIOR') else wx.WXK_PAGEDOWN
-keyboardMapping = {
+keyboardMapping: Dict[int, str] = {
     wx.WXK_BACK:'<back>',
     wx.WXK_TAB:'<tab>',
     wx.WXK_RETURN:'<return>',

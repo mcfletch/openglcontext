@@ -1,25 +1,16 @@
 """VRML97 context for GLUT
 """
-from OpenGL.GLUT import *
 from OpenGLContext import glutinteractivecontext
 from OpenGLContext import vrmlcontext
+
 
 class VRMLContext(
     vrmlcontext.VRMLContext,
     glutinteractivecontext.GLUTInteractiveContext
 ):
-    """GLUT-specific VRML97-aware Testing Context"""
-    @classmethod
-    def ContextMainLoop( cls, *args, **named ):
-        """Mainloop for the GLUT testing context"""
-        # initialize GLUT windowing system
-        import sys
-        try:
-            glutInit( sys.argv)
-        except TypeError:
-            glutInit( ' '.join(sys.argv))
-        
-        render = cls()
-        if hasattr( render, 'createMenus' ):
-            render.createMenus()
-        glutMainLoop()
+    """GLUT-specific VRML97-aware Testing Context
+
+    ``ContextMainLoop`` is the GLUT context's own: it initialises GLUT once --
+    a second ``glutInit`` ends the process -- builds the menus a VRML context
+    offers, and drives the frame itself.
+    """

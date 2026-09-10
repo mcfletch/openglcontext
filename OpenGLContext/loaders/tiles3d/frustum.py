@@ -45,7 +45,8 @@ def look_at(eye: Any, center: Any, up: Any) -> np.ndarray:
 
 def view_projection(eye: Any, center: Any, up: Any, fovy: float, aspect: float,
                     near: float, far: float) -> np.ndarray:
-    return perspective(fovy, aspect, near, far) @ look_at(eye, center, up)
+    return np.asarray(perspective(fovy, aspect, near, far)
+                      @ look_at(eye, center, up))
 
 
 class Frustum:

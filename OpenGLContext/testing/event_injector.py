@@ -41,7 +41,7 @@ import os
 import socket
 import sys
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 from OpenGLContext.events import synthetic
 from OpenGLContext.testing.process_exit import flush_and_exit
@@ -53,7 +53,7 @@ except ImportError:
     # socket transport does not need it, and neither does importing this
     # module -- which the pytest plugin does, so letting the ImportError out
     # would take every test on the platform with it.
-    fcntl = None
+    fcntl = None  # type: ignore[assignment]  # absence is checked before every use
 
 #: Unix domain sockets carry the event stream where there are any.  Windows has
 #: had them since 1803, but CPython does not expose AF_UNIX there, so on that
@@ -88,7 +88,7 @@ def _bind_listener(sock: socket.socket, path: str) -> None:
     os.replace(temporary, path)
 
 
-def _sender_address(path: str):
+def _sender_address(path: str) -> Union[str, Tuple[str, int]]:
     """Where a sender should connect to reach the listener named by *path*.
 
     Raises :class:`FileNotFoundError` while the listener has yet to publish
@@ -112,7 +112,7 @@ class EventInjector:
         context: Any,
         socket_path: Optional[str] = None,
         use_stdin: bool = False,
-    ):
+    ) -> None:
         """Initialize the event injector.
 
         Args:
@@ -433,7 +433,7 @@ class EventSender:
         sender.close()
     """
 
-    def __init__(self, socket_path: str):
+    def __init__(self, socket_path: str) -> None:
         """Initialize the sender.
 
         Args:

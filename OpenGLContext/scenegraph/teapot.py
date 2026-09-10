@@ -17,6 +17,8 @@ the frame costs far fewer triangles.  A scene that wants a particular density --
 a coarse mesh whose facets are meant to be seen, or one sized to match a
 technique's tolerances -- sets the ``steps`` field and takes distance out of it.
 """
+from typing import Any, Callable, Optional, Tuple
+
 from OpenGL.GL import *
 from vrml.vrml97 import nodetypes
 from vrml import node, field
@@ -98,7 +100,7 @@ class Teapot(nodetypes.Geometry, node.Node):
 
     # -- tessellation ------------------------------------------------------
     @classmethod
-    def _ensure_tessellated(cls, steps):
+    def _ensure_tessellated(cls, steps: float) -> bool:
         """Tessellate the Bezier patches into vertex arrays at ``steps`` once."""
         entry = cls._arrays.get(steps)
         if entry is not None:
@@ -123,13 +125,13 @@ class Teapot(nodetypes.Geometry, node.Node):
                             steps, attempts, e)
             return False
 
-    def _lod_level(self, mode):
+    def _lod_level(self, mode: Any) -> int:
         """Distance-LOD level for this teapot, size-normalized (0 = finest)."""
         center = tuple(c * self.size for c in self._UNIT_CENTER)
         radius = self._UNIT_RADIUS * self.size
         return tessellationlod.lod_level(mode, center, radius)
 
-    def _tessellation_steps(self, mode=None):
+    def _tessellation_steps(self, mode: Any = None) -> float:
         """GLU sampling this teapot's mesh is built at.
 
         The ``steps`` field when it is set, otherwise the sampling the distance
@@ -148,7 +150,7 @@ class Teapot(nodetypes.Geometry, node.Node):
     # field of instanced teapots pays the same vertex detail at every distance,
     # trading that for one draw call. The quadrics make the same trade; see
     # plans/INSTANCED-GEOMETRY.md.
-    def instanceContentKey(self):
+    def instanceContentKey(self) -> Tuple[Any, ...]:
         """Teapots of the same size/lid/solid/steps share one mesh -> one draw.
 
         ``size`` is folded into the instance mesh (the per-instance modelview
@@ -160,7 +162,7 @@ class Teapot(nodetypes.Geometry, node.Node):
                 bool(self.lid), bool(self.solid),
                 round(self._instance_steps(), 6))
 
-    def _instance_steps(self):
+    def _instance_steps(self) -> float:
         """Sampling the baked instance mesh (and the bounding volume) is built at.
 
         Instancing and bounding both need a mesh with no camera to ask, so a node
@@ -172,7 +174,7 @@ class Teapot(nodetypes.Geometry, node.Node):
         from OpenGLContext.scenegraph.teapot_nurbs import steps_for_level
         return steps_for_level(0)
 
-    def _instanceArrays(self):
+    def _instanceArrays(self) -> Optional[Tuple[Any, Any, Any]]:
         """Baked (positions, normals, texcoords) for the instanced mesh, or None.
 
         The mesh at :meth:`_instance_steps` with ``size`` folded into the
@@ -203,7 +205,7 @@ class Teapot(nodetypes.Geometry, node.Node):
     #: what the mesh depends on instead of restating it.
     instanceGPU_depend_fields = ('size', 'lid', 'steps')
 
-    def instanceGPU(self, mode):
+    def instanceGPU(self, mode: Any) -> Any:
         """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
         from OpenGLContext.passes.instancing import build_mesh_gpu
         arrays = self._instanceArrays()
@@ -215,7 +217,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             texcoords=texcoords, indices=None, cache_key='instance_gpu',
             depend_fields=self.instanceGPU_depend_fields)
 
-    def _apply_draw_state(self, mode):
+    def _apply_draw_state(self, mode: Any) -> None:
         """Cull backfaces for the instanced draw, as the single-draw path does.
 
         The tessellated mesh carries reversed interior faces coincident with the
@@ -229,7 +231,8 @@ class Teapot(nodetypes.Geometry, node.Node):
         set_cull_state(mode, True, GL_CCW)
 
     # -- render dispatch ---------------------------------------------------
-    def render(self, visible=1, lit=1, textured=1, transparent=0, mode=None):
+    def render(self, visible: int = 1, lit: int = 1, textured: int = 1,
+               transparent: int = 0, mode: Any = None) -> None:
         """Render the Teapot.
 
         Uses the NURBS-tessellated mesh at :meth:`_tessellation_steps`.  The
@@ -257,7 +260,7 @@ class Teapot(nodetypes.Geometry, node.Node):
         else:
             self._render_legacy(steps)
 
-    def _render_glut(self):
+    def _render_glut(self) -> None:
         """Explicit legacy GLUT-based rendering (useGlut comparison option)."""
         glFrontFace(GL_CW)
         try:
@@ -269,7 +272,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             glFrontFace(GL_CCW)
 
     # -- legacy fixed-function path ----------------------------------------
-    def _render_legacy(self, steps):
+    def _render_legacy(self, steps: float) -> None:
         """Fixed-function rendering of the interleaved T2F_N3F_V3F arrays."""
         base_array, lid_array = self._arrays[steps]
         glPushAttrib(GL_ENABLE_BIT | GL_POLYGON_BIT)
@@ -303,7 +306,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             glPopAttrib()
 
     @staticmethod
-    def _draw_legacy_array(array):
+    def _draw_legacy_array(array: Any) -> None:
         from OpenGLContext.scenegraph.teapot_nurbs import FLOATS_PER_VERTEX
         if array is None or len(array) == 0:
             return
@@ -312,7 +315,7 @@ class Teapot(nodetypes.Geometry, node.Node):
 
     # -- shader / core-profile path ----------------------------------------
     @classmethod
-    def drop_buffers(cls):
+    def drop_buffers(cls) -> None:
         """Forget the vertex arrays belonging to the context now current.
 
         Their names die with it, and the next context the driver hands the same
@@ -327,7 +330,7 @@ class Teapot(nodetypes.Geometry, node.Node):
     _gl_context = staticmethod(contextresources.context_key)
 
     @classmethod
-    def _initialize_buffers(cls, steps):
+    def _initialize_buffers(cls, steps: float) -> bool:
         """Build VAOs/VBOs for the tessellated arrays at ``steps`` (shader path)."""
         key = (cls._gl_context(), steps)
         entry = cls._buffers.get(key)
@@ -342,7 +345,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             )
             stride = FLOATS_PER_VERTEX * 4
 
-            def make(array):
+            def make(array: Any) -> Tuple[Any, Any, int]:
                 count = len(array) // FLOATS_PER_VERTEX
                 if count == 0:
                     return None, None, 0
@@ -392,7 +395,7 @@ class Teapot(nodetypes.Geometry, node.Node):
                                  'lid_vao': None, 'lid_count': 0}
             return False
 
-    def _render_shader(self, mode, steps):
+    def _render_shader(self, mode: Any, steps: float) -> None:
         """Shader-based rendering using the tessellated mesh at ``steps``."""
         if not self._initialize_buffers(steps):
             log.warning("Cannot render teapot: buffers not initialized")
@@ -405,7 +408,7 @@ class Teapot(nodetypes.Geometry, node.Node):
 
         bufs = self._buffers[(self._gl_context(), steps)]
 
-        def draw():
+        def draw() -> None:
             cull_was_enabled = glIsEnabled(GL_CULL_FACE)
             # Interior faces are the reversed copies of the shell; cull backfaces
             # so exterior shows from outside and interior through the mouth,
@@ -425,7 +428,8 @@ class Teapot(nodetypes.Geometry, node.Node):
 
         self._with_scaled_matrix(mode, shader_program, draw)
 
-    def _with_scaled_matrix(self, mode, shader_program, draw):
+    def _with_scaled_matrix(self, mode: Any, shader_program: Any,
+                            draw: Callable[[], None]) -> None:
         """Run ``draw`` with ``size`` folded into the modelview, then restore it.
 
         ``size`` matches glutSolidTeapot's scale argument and is applied here
@@ -456,7 +460,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             shader_program.set_matrices(base_mv, mode.projection)
 
     @staticmethod
-    def _draw_shader_array(vao, count):
+    def _draw_shader_array(vao: Any, count: int) -> None:
         if vao is None or count == 0:
             return
         glBindVertexArray(vao)
@@ -464,7 +468,7 @@ class Teapot(nodetypes.Geometry, node.Node):
         glBindVertexArray(0)
 
     # -- bounding volume ---------------------------------------------------
-    def _mesh_aabb(self):
+    def _mesh_aabb(self) -> Optional[Tuple[Any, Any]]:
         """(min, max) corner of the tessellated unit teapot, or None.
 
         Computed from the T2F_N3F_V3F vertex arrays already in memory rather than
@@ -489,7 +493,7 @@ class Teapot(nodetypes.Geometry, node.Node):
         allv = np.concatenate(chunks, axis=0)
         return allv.min(axis=0), allv.max(axis=0)
 
-    def boundingVolume(self, mode):
+    def boundingVolume(self, mode: Any) -> Any:
         """Create a bounding-volume object for this node."""
         from OpenGLContext.scenegraph import boundingvolume
         current = boundingvolume.getCachedVolume(self)

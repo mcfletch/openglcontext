@@ -1,4 +1,6 @@
 """Events relating to time and timers"""
+from typing import Any
+
 from . import event
 
 class TimeEvent( event.Event ):
@@ -12,10 +14,10 @@ class TimeEvent( event.Event ):
         timetype -- a string specifying the time-event sub-type
             see subclasses in this module for valid specifiers
     """
-    discrete = 1
+    discrete: int = 1
     type = "time"
-    timetype = ""
-    def __init__( self, internal ):
+    timetype: str = ""
+    def __init__( self, internal: Any ) -> None:
         """Initialize the TimeEvent
 
         internal -- pointer to the InternalTime object which
@@ -24,11 +26,13 @@ class TimeEvent( event.Event ):
             values specific to this event.
         """
         super (TimeEvent, self).__init__()
-        self.__internal = internal
-        self.__value = self.__internal.getCurrent()
-        self.__external = self.__internal.getExternal()
-        self.__count = self.__internal.count
-    def __repr__( self ):
+        self.__internal: Any = internal
+        self.__value: float = self.__internal.getCurrent()
+        self.__external: Any = self.__internal.getExternal()
+        self.__count: int = self.__internal.count
+        #: The Timer that dispatches this event, once it has said so.
+        self.__timer: Any = None
+    def __repr__( self ) -> str:
         """Present a meaningful representation of the event"""
         return """<%s value=%s fraction=%s external=%s count=%s>"""% (
             self.__class__.__name__,
@@ -38,7 +42,7 @@ class TimeEvent( event.Event ):
             self.count (),
         )
         
-    def setTimer( self, timer ):
+    def setTimer( self, timer: Any ) -> None:
         """Set (opaque) pointer to a Timer object
 
         This method allows higher-level timer abstractions
@@ -46,7 +50,7 @@ class TimeEvent( event.Event ):
         higher-level operation.
         """
         self.__timer = timer
-    def getTimer( self ):
+    def getTimer( self ) -> Any:
         """Get (opaque) pointer to Timer object
 
         This method allows higher-level timer abstractions
@@ -55,22 +59,23 @@ class TimeEvent( event.Event ):
         """
         return self.__timer
     
-    def getKey( self ):
+    def getKey( self ) -> str:
         """Event API: get the general event type (self.timetype)"""
         return self.timetype
-    def value( self ):
+    def value( self ) -> float:
         """Get the internal time at instantiation"""
         return self.__value
-    def fraction( self ):
+    def fraction( self ) -> float:
         """Get the fractional time at instantiation"""
         return self.value()/self.duration()
-    def external( self ):
+    def external( self ) -> Any:
         """Get the external time at instantiation"""
         return self.__external
-    def duration( self ):
+    def duration( self ) -> float:
         """Get the total internal-time cycle duration"""
-        return self.__internal.duration
-    def count( self ):
+        duration: float = self.__internal.duration
+        return duration
+    def count( self ) -> int:
         """Get the internal-time cycle count at instantiation"""
         return self.__count
     

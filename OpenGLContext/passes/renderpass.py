@@ -8,7 +8,7 @@ The pass itself does the work -- ``_flat.FlatPass`` observes the scenegraph's
 structure and renders from the paths it knows are active. This module only picks
 one and hands the context to it.
 """
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Optional
 
 from OpenGLContext import contextresources
 from OpenGLContext.passes import viewpointbinding
@@ -34,10 +34,10 @@ _passes: Dict[Any, Any] = {}
 #: The pass that rendered most recently, whatever context that was in.  For the
 #: demos that toggle ``use_shaders`` on it and for :func:`report_render_failures`;
 #: :data:`_passes` is what dispatch reads.
-FLAT = None
+FLAT: Optional[Any] = None
 
 
-def current_pass():
+def current_pass() -> Optional[Any]:
     """The pass that draws the context that is current, or ``None``.
 
     Keyed on the context, as :data:`_passes` is, so a program holding several
@@ -59,7 +59,7 @@ def report_render_failures() -> None:
         FLAT.reportFailures()
 
 
-def _core_flatpass_class():
+def _core_flatpass_class() -> type:
     """Core-profile pass class, guarding the experimental PBR import.
 
     The dispatcher must not name ``pbrpass`` unconditionally: an import-time fault
@@ -86,7 +86,7 @@ def _core_flatpass_class():
     return FlatPass
 
 
-def _dispose( pass_, why ):
+def _dispose( pass_: Any, why: str ) -> None:
     """Delete a pass's GPU-side shadow maps.
 
     Only ever called with the pass's own context current, which is what makes
@@ -100,7 +100,7 @@ def _dispose( pass_, why ):
             log.debug( "shadow map disposal on %s failed: %s", why, err )
 
 
-def cached_pass( scene, build ):
+def cached_pass( scene: Any, build: Callable[[], Any] ) -> Any:
     """The pass for the context that is current, built by ``build`` if there is
     not one for it yet.
 
@@ -125,10 +125,10 @@ def cached_pass( scene, build ):
 
 
 class _defaultRenderPasses( object ):
-    def __call__( self,context ):
+    def __call__( self, context: Any ) -> Any:
         sg = context.getSceneGraph()
 
-        def build():
+        def build() -> Any:
             if context.contextDefinition.profile == 'core':
                 FlatPass = _core_flatpass_class()
             else:

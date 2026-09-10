@@ -53,11 +53,13 @@ identically; what it cannot do is run with no desktop).
 
 import logging
 import os
+from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple
 
 from OpenGL.WGL import offscreen
 
 from OpenGLContext import contextresources
 from OpenGLContext.context import Context
+from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.interactivecontext import InteractiveContext
 from OpenGLContext.move import viewplatformmixin
 
@@ -85,7 +87,7 @@ class WGLContextError(RuntimeError):
     """An offscreen context could not be created, or was misconfigured."""
 
 
-def acceleration(environ=None) -> str:
+def acceleration(environ: Optional[Mapping[str, str]] = None) -> str:
     """Which pixel formats this environment will accept, for `offscreen`.
 
     ``'accelerated'`` normally, and ``'any'`` where the environment has asked
@@ -100,16 +102,17 @@ def acceleration(environ=None) -> str:
     return 'accelerated'
 
 
-def available(profile: str = 'core'):
+def available(profile: str = 'core') -> Sequence[str]:
     """The WGL extensions this machine lacks before it can render offscreen.
 
     Empty means yes.  Answers without creating anything, so an application can
     choose between this and a window before committing to either.
     """
-    return offscreen.available(profile)
+    missing: Sequence[str] = offscreen.available(profile)
+    return missing
 
 
-def bufferSizes(definition):
+def bufferSizes(definition: Any) -> Dict[str, Any]:
     """The buffer request a :class:`ContextDefinition` becomes.
 
     Split out because it is the whole of the translation between this package's
@@ -136,7 +139,7 @@ def bufferSizes(definition):
     }
 
 
-def profileFor(definition):
+def profileFor(definition: Any) -> Tuple[str, Tuple[int, ...]]:
     """``(profile, version)`` for ``offscreen``, from a context definition.
 
     The profile mask arrived with GL 3.2 and a driver refuses a request below
@@ -195,9 +198,12 @@ class WGLContext(
 
     #: The :class:`OpenGL.WGL.offscreen.OffscreenContext` this draws on, or
     #: ``None`` once it has been closed.
-    surface = None
+    surface: Optional[offscreen.OffscreenContext] = None
+    #: Settled by the constructor before the GL context exists, so it is never
+    #: None for a context that was built.
+    contextDefinition: ContextDefinition
 
-    def __init__(self, definition=None, **named):
+    def __init__(self, definition: Any = None, **named: Any) -> None:
         # Resolved first: the buffer sizes and the profile are context-creation
         # parameters, so they have to be known before the GL context exists,
         # exactly as the windowed backends resolve them before creating a
@@ -231,32 +237,36 @@ class WGLContext(
 
     # -- the Context contract ----------------------------------------------
 
-    def setCurrent(self, blocking=1):
+    def setCurrent(self, blocking: int = 1) -> None:
         """Take the context and the scenegraph lock, then bind the GL context."""
         Context.setCurrent(self, blocking)
-        self.surface.make_current()
+        if self.surface is not None:
+            self.surface.make_current()
         self.bindContextResources(self._glHandle())
 
-    def _glHandle(self):
+    def _glHandle(self) -> Any:
         """The GL context handle the caches and PyOpenGL key on."""
         return contextresources.context_key()
 
-    def OnResize(self, width, height):
+    def OnResize(self, width: int, height: int) -> None:
         """Render at a new size.
 
         A pbuffer is created at a fixed size and cannot be resized, so this
         builds a replacement and drops the old one.  The GL context survives, so
         textures, buffers and programs are all still there afterwards.
         """
+        surface = self.surface
+        if surface is None:
+            raise WGLContextError('this context has been closed')
         try:
-            self.surface.resize(width, height)
+            surface.resize(width, height)
         except offscreen.WGLError as error:
             raise WGLContextError(str(error)) from error
-        self.contextDefinition.size = (self.surface.width, self.surface.height)
-        self.ViewPort(self.surface.width, self.surface.height)
+        self.contextDefinition.size = (surface.width, surface.height)
+        self.ViewPort(surface.width, surface.height)
         self.triggerRedraw(1)
 
-    def SwapBuffers(self):
+    def SwapBuffers(self) -> None:
         """Finish the frame.
 
         A pbuffer has nothing to present to, so this is a flush: the point at
@@ -268,7 +278,7 @@ class WGLContext(
 
         glFlush()
 
-    def MainLoop(self):
+    def MainLoop(self) -> None:
         """Render frames until nothing wants another, then release the context.
 
         :attr:`frameCount` is the floor -- one frame, for the common case of
@@ -289,7 +299,7 @@ class WGLContext(
             self.stopTelemetry('mainloop-ended')
             self.close()
 
-    def close(self):
+    def close(self) -> None:
         """Release the GL objects, the context and the pbuffer.
 
         The engine's caches hold GL objects belonging to this context, so they
@@ -304,15 +314,15 @@ class WGLContext(
         surface, self.surface = self.surface, None
         surface.release()
 
-    def __enter__(self):
+    def __enter__(self) -> 'WGLContext':
         return self
 
-    def __exit__(self, *exception):
+    def __exit__(self, *exception: Any) -> Literal[False]:
         self.close()
         return False
 
     @classmethod
-    def ContextMainLoop(cls, *args, **named):
+    def ContextMainLoop(cls, *args: Any, **named: Any) -> Any:
         instance = cls(*args, **named)
         if instance.contextDefinition.profileFile:
             import cProfile
@@ -329,7 +339,7 @@ if __name__ == '__main__':
     )
 
     class TestRenderer(WGLContext):
-        def Render(self, mode=None):
+        def Render(self, mode: Any = None) -> None:
             WGLContext.Render(self, mode)
             glClearColor(0.2, 0.3, 0.3, 1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)

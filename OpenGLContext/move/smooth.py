@@ -1,7 +1,10 @@
 """First-person-shooter like movement control"""
+from typing import Any, Sequence
+
 from OpenGLContext.move import direct
 from OpenGLContext import arrays
 from OpenGLContext.events import timer 
+from OpenGLContext.quaternion import Quaternion
 from OpenGLContext.scenegraph import interpolators
 import math
 
@@ -16,13 +19,18 @@ class Smooth( direct.Direct ):
     TURNANGLE = math.pi/64
     TURNDURATION = 0.05
     STEPDISTANCE = .25
-    timer = None
-    posInterpolator = None
-    posTimer = orientTimer = None
-    startOrient = None
-    targetOrient = None
+    #: The interpolators and their timers, built when the mode is bound to a
+    #: context: each is registered with that context and has to be discarded
+    #: with the binding, so there is nothing sensible to hold before one.
+    posTimer: timer.Timer
+    orientTimer: timer.Timer
+    posInterpolator: interpolators.PositionInterpolator
+    orientInterpolator: interpolators.OrientationInterpolator
+    #: Where a turn started and where it is going, while one is in progress.
+    startOrient: Quaternion
+    targetOrient: Quaternion
     
-    def bind( self, context ):
+    def bind( self, context: Any ) -> None:
         super( Smooth, self ).bind( context )
         self.posTimer = timer.Timer( duration = self.STEPDURATION )
         self.posTimer.register( context )
@@ -37,31 +45,35 @@ class Smooth( direct.Direct ):
         self.orientTimer.addEventHandler(
             timetype='fraction', function=self.onOrientFraction,
         )
-    def restartPosTimer( self ):
+    def restartPosTimer( self ) -> None:
         """Restart our timer to go to new location"""
         self.posTimer.stop()
         self.posTimer.start()
-    def restartOrientTimer( self ):
+    def restartOrientTimer( self ) -> None:
         """Restart our timer to go to new location"""
         self.orientTimer.stop()
         self.orientTimer.start()
-    def onPositionFraction( self, event ):
+    def onPositionFraction( self, event: Any ) -> None:
         """Process fractional update of our position"""
         fraction = (event.fraction() / 2.0) + .5
-        x,y,z = self.posInterpolator.on_set_fraction( fraction )
+        target = self.posInterpolator.on_set_fraction( fraction )
+        if target is None:
+            # No keys to interpolate between: there is nowhere to be moving to.
+            return
+        x,y,z = target
         self.platform.position = arrays.array([x,y,z,0.0], 'f' )
-    def onOrientFraction( self, event ):
+    def onOrientFraction( self, event: Any ) -> None:
         """Process fractional update of our position"""
         fraction = (event.fraction() / 2.0) + .5
         self.platform.quaternion = self.startOrient.slerp( self.targetOrient, fraction )
-    def stepRelative( self, x=0,y=0,z=0 ):
+    def stepRelative( self, x: float = 0, y: float = 0, z: float = 0 ) -> None:
         """Step given distance in view-relative coordinates"""
         self.posInterpolator.keyValue = [ 
             self.platform.position[:3], 
             self.platform.relativePosition( x=x,y=y,z=z )[:3],
         ]
         self.restartPosTimer()
-    def turn (self, deltaOrientation= (0,1,0,math.pi/4) ):
+    def turn(self, deltaOrientation: Sequence[float] = (0, 1, 0, math.pi / 4)) -> None:
         turned = self.platform.relativeOrientation( deltaOrientation )
         self.startOrient = self.platform.quaternion # self.platform.quaternion.slerp( turned, .05 )
         self.targetOrient = turned 

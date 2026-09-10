@@ -1,11 +1,12 @@
 """Utilities for processing arrays of vectors"""
-from OpenGLContext.arrays import *
-import math
+from typing import Any, Optional, Tuple
 
-def _aformat( a ):
+from OpenGLContext.arrays import *
+
+def _aformat( a: Any ) -> Any:
     return getattr( a, 'dtype', 'f')
 
-def crossProduct( set1, set2):
+def crossProduct( set1: Any, set2: Any) -> Any:
     """Compute element-wise cross-product of two arrays of vectors.
     
     set1, set2 -- sequence objects with 1 or more
@@ -23,7 +24,7 @@ def crossProduct( set1, set2):
     set2 = reshape( set2, (-1, 3))
     return cross( set1, set2 )
 
-def crossProduct4( set1, set2 ):
+def crossProduct4( set1: Any, set2: Any ) -> Any:
     """Cross-product of 3D vectors stored in 4D arrays
 
     Identical to crossProduct otherwise.
@@ -37,7 +38,7 @@ def crossProduct4( set1, set2 ):
     result[:,3] = 1.0
     return result
 
-def magnitude( vectors ):
+def magnitude( vectors: Any ) -> Any:
     """Calculate the magnitudes of the given vectors
     
     vectors -- sequence object with 1 or more
@@ -52,7 +53,7 @@ def magnitude( vectors ):
     result = sum(vectors*vectors,1 ) # index 1
     sqrt( result, result )
     return result
-def normalise( vectors ):
+def normalise( vectors: Any ) -> Any:
     """Get normalised versions of the vectors.
     
     vectors -- sequence object with 1 or more
@@ -70,7 +71,7 @@ def normalise( vectors ):
     mags = where( mags, mags, 1.0)
     return divide_safe( vectors, mags)
 
-def colinear( points ):
+def colinear( points: Any ) -> Optional[Tuple[Any, Any, Any]]:
     """Given 3 points, determine if they are colinear
 
     Uses the definition which says that points are collinear
@@ -89,12 +90,16 @@ def colinear( points ):
             return (a,b,c)
     return None
 
-def orientToXYZR( a, b ):
+def orientToXYZR( a: Any, b: Any ) -> Tuple[Any, Any, Any, Any]:
     """Calculate axis/angle rotation transforming vec a -> vec b"""
     if allclose(a,b):
         return (0,1,0,0)
     an,bn = normalise( (a,b) )
-    angle = arccos(dot(an,bn))
+    # Rounding leaves the dot product of two nearly opposed unit vectors a hair
+    # outside the arc cosine's domain, where the array implementation answers
+    # `nan` rather than raising -- and a `nan` angle reaches a scene as a
+    # rotation field that turns its node into nothing.
+    angle = arccos(clip(dot(an,bn), -1.0, 1.0))
     x,y,z = crossProduct( a, b )[0]
     if allclose( (x,y,z), 0.0):
         y = 1.0

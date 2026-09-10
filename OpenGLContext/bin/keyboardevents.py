@@ -10,7 +10,7 @@ from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 
 class TestContext( vrmlcontext.VRMLContext, BaseContext ):
-    def OnInit( self ):
+    def OnInit( self ) -> None:
         """Scene set up and initial processing"""
         self.addEventHandler(
             'keypress', name=None, function = self.OnKeyPress
@@ -70,7 +70,7 @@ class TestContext( vrmlcontext.VRMLContext, BaseContext ):
                 ),
             ]
         )
-    def OnKeyBoard( self, event=None ):
+    def OnKeyBoard( self, event: Any = None ) -> bool:
         """Choose a new mapped texture"""
         self.keyboardText.string = [
             event.__class__.__name__,
@@ -80,7 +80,7 @@ class TestContext( vrmlcontext.VRMLContext, BaseContext ):
         ]
         self.triggerRedraw( 1 )
         return True
-    def OnKeyPress( self, event=None ):
+    def OnKeyPress( self, event: Any = None ) -> bool:
         """Choose a new size"""
         self.keypressText.string = [
             event.__class__.__name__,

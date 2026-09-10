@@ -1,9 +1,12 @@
 """Classic trackball mechanism for interactive rotation"""
+from typing import Any, Sequence, Tuple
+
 from OpenGLContext.arrays import *
 from OpenGL.GLU import *
 from OpenGL.GL import *
 
 from OpenGLContext import quaternion
+from OpenGLContext.quaternion import Quaternion
 from OpenGLContext.move import dragwatcher
 
 class Trackball:
@@ -17,12 +20,12 @@ class Trackball:
     eye around the object to view the left side,
     similarly for right, top, bottom.
     '''
-    def __init__ (
-        self, position, quaternion,
-        center,
-        originalX, originalY, width, height,
-        dragAngle= pi*2,
-    ):
+    def __init__(
+        self, position: Any, quaternion: Quaternion,
+        center: Sequence[float],
+        originalX: float, originalY: float, width: float, height: float,
+        dragAngle: float = pi * 2,
+    ) -> None:
         """Initialise the Trackball
 
         position -- object-space original position (camera pos)
@@ -61,11 +64,11 @@ class Trackball:
         self.center = array( [x,y,z,0], 'd')
         self.dragAngle = dragAngle
         self.vector = self.originalPosition - self.center 
-    def cancel (self):
+    def cancel(self) -> Tuple[Any, Quaternion]:
         """Cancel drag rotation, return pos,quat to original values"""
         return self.originalPosition, self.originalQuaternion
         
-    def rotate( self, newX, newY ):
+    def rotate(self, newX: float, newY: float) -> Tuple[Any, Quaternion]:
         """Update with new x,y drag coordinates
 
         newX, newY -- the new screen coordinates for the drag

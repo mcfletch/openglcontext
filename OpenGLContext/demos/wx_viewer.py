@@ -6,11 +6,10 @@ Run it, with a scene to open or without one::
     python -m OpenGLContext.demos.wx_viewer model.glb
     python -m OpenGLContext.demos.wx_viewer https://example.com/scene.gltf
 
-**Written from the API and not verified by running.**  wxPython does not build
-in the container this engine is developed in, so unlike its Tk and Qt siblings
-this program has never been on a screen here.  Read it as what the API says
-rather than as what a machine has confirmed, and see ``plans/BACKEND-PARITY.md``
-for what else about the wx backend that applies to.
+wxPython does not build in the container this engine is developed in, so this
+program is written to the wx API and is not among the demos run there.  See
+``plans/BACKEND-PARITY.md`` for what else about the wx backend that applies
+to.
 
 On GTK3, wxPython makes its GL contexts through EGL, so ``PYOPENGL_PLATFORM``
 must be ``egl`` for PyOpenGL to track the current context.  ``wxcontext`` sets
@@ -46,6 +45,7 @@ The same program is written for Tk in :mod:`OpenGLContext.demos.tk_viewer` and
 for Qt in ``OpenGLContext_qt.demos.qt_viewer``.
 """
 import sys
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # Before OpenGL is imported by anything else: on GTK3 this is what settles
 # PYOPENGL_PLATFORM=egl, without which shader rendering has no context to track.
@@ -74,9 +74,9 @@ class SceneView(viewerFor('wx')):  # type: ignore[misc]  # base chosen at run ti
     """The engine's viewer, as one widget in somebody else's window"""
 
     #: Called on the GUI thread once a scene has been built, if a host set it.
-    onScene = None
+    onScene: Optional[Callable[[], None]] = None
 
-    def hasSceneToShow(self):
+    def hasSceneToShow(self) -> bool:
         """The host opens scenes, so the engine's launch screen stays down
 
         Starting with nothing to show is a viewer with its shelf open, which is
@@ -86,7 +86,7 @@ class SceneView(viewerFor('wx')):  # type: ignore[misc]  # base chosen at run ti
         """
         return True
 
-    def onSceneReady(self):
+    def onSceneReady(self) -> None:
         """A scene has been built and swapped in -- on the render thread
 
         Which is wx's own thread here, since the canvas renders from its paint
@@ -100,7 +100,7 @@ class SceneView(viewerFor('wx')):  # type: ignore[misc]  # base chosen at run ti
 class ViewerFrame(wx.Frame):
     """A window with a menu, a scene tree, and a view of the scene"""
 
-    def __init__(self, source=None):
+    def __init__(self, source: Optional[str] = None) -> None:
         wx.Frame.__init__(self, None, -1, 'OpenGLContext in wx',
                           size=(960, 600))
         #: Set while the tree is being refilled, so the expand and collapse
@@ -122,7 +122,7 @@ class ViewerFrame(wx.Frame):
         self.outline = SceneOutline(
             self.view.sg, onChange=lambda: wx.CallAfter(self.fillTree))
         #: The node the detail panel is following, if any.
-        self.watching = None
+        self.watching: Any = None
 
         # Wired once there is an outline for it to work on, since it runs as
         # soon as anything is opened.
@@ -134,7 +134,7 @@ class ViewerFrame(wx.Frame):
             self.open(source)
 
     # -- building the window ----------------------------------------------
-    def buildMenu(self):
+    def buildMenu(self) -> None:
         """The application's own menu bar, over the engine's two entry points"""
         fileMenu = wx.Menu()
         fileMenu.Append(wx.ID_OPEN, '&Open file…\tCtrl+O')
@@ -148,7 +148,7 @@ class ViewerFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onOpenURL, id=ID_OPEN_URL)
         self.Bind(wx.EVT_MENU, lambda event: self.Close(), id=wx.ID_EXIT)
 
-    def buildPanel(self, parent):
+    def buildPanel(self, parent: Any) -> Any:
         """The tree of the scene, and what the selected node holds"""
         panel = wx.Panel(parent)
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -169,18 +169,18 @@ class ViewerFrame(wx.Frame):
         return panel
 
     # -- the menu ---------------------------------------------------------
-    def onOpenFile(self, event=None):
+    def onOpenFile(self, event: Any = None) -> None:
         with wx.FileDialog(self, 'Open a scene', wildcard=SCENE_FILES,
                            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as chooser:
             if chooser.ShowModal() == wx.ID_OK:
                 self.open(chooser.GetPath())
 
-    def onOpenURL(self, event=None):
+    def onOpenURL(self, event: Any = None) -> None:
         with wx.TextEntryDialog(self, 'Address of a scene:', 'Open URL') as ask:
             if ask.ShowModal() == wx.ID_OK and ask.GetValue():
                 self.open(ask.GetValue())
 
-    def open(self, source):
+    def open(self, source: str) -> None:
         """Show *source*, which may be a path or a URL
 
         The load runs on a worker thread, so this returns at once and the
@@ -189,7 +189,7 @@ class ViewerFrame(wx.Frame):
         self.status.SetLabel('Loading %s' % (source,))
         self.view.openSource(source)
 
-    def onClose(self, event=None):
+    def onClose(self, event: Any = None) -> None:
         """Let go of the scene and the GL context as the window goes
 
         ``releaseWindow`` is what gives the driver back every texture, buffer
@@ -202,14 +202,14 @@ class ViewerFrame(wx.Frame):
         self.Destroy()
 
     # -- the scene --------------------------------------------------------
-    def onSceneReady(self):
+    def onSceneReady(self) -> None:
         """A scene the worker thread loaded has been built and swapped in"""
         self.outline.root = self.view.sg
         self.status.SetLabel(str(self.view.source or ''))
         self.fillTree()
 
     # -- the tree ---------------------------------------------------------
-    def rowLabel(self, row):
+    def rowLabel(self, row: Any) -> str:
         """A row in one column: the node, and the field it hangs from
 
         A ``wx.TreeCtrl`` has no second column -- that is
@@ -218,10 +218,11 @@ class ViewerFrame(wx.Frame):
         does not.
         """
         if row.field in (None, 'children'):
-            return row.label
+            label: str = row.label
+            return label
         return '%s  (%s)' % (row.label, row.field)
 
-    def fillTree(self):
+    def fillTree(self) -> None:
         """Put the outline's rows in the tree, as it stands now"""
         rows = self.outline.rows
         selected = self.outline.selection
@@ -229,7 +230,7 @@ class ViewerFrame(wx.Frame):
         self.tree.Freeze()
         try:
             self.tree.DeleteAllItems()
-            items = {}
+            items: Dict[Tuple[int, ...], Any] = {}
             for row in rows:
                 if not row.path:
                     item = self.tree.AddRoot(self.rowLabel(row))
@@ -251,14 +252,15 @@ class ViewerFrame(wx.Frame):
             self.tree.Thaw()
             self.filling = False
 
-    def pathOf(self, item):
+    def pathOf(self, item: Any) -> Optional[Tuple[int, ...]]:
         """The outline path an item stands for, or None where it stands for
         none -- the placeholder under a closed row, or no item at all"""
         if not item or not item.IsOk():
             return None
-        return self.tree.GetItemData(item)
+        path: Optional[Tuple[int, ...]] = self.tree.GetItemData(item)
+        return path
 
-    def onOpenRow(self, event):
+    def onOpenRow(self, event: Any) -> None:
         """The button beside a row was clicked: open it in the model too"""
         if self.filling:
             return
@@ -267,7 +269,7 @@ class ViewerFrame(wx.Frame):
             self.outline.expand(path)
             self.fillTree()
 
-    def onCloseRow(self, event):
+    def onCloseRow(self, event: Any) -> None:
         if self.filling:
             return
         path = self.pathOf(event.GetItem())
@@ -275,7 +277,7 @@ class ViewerFrame(wx.Frame):
             self.outline.collapse(path)
             self.fillTree()
 
-    def onSelect(self, event=None):
+    def onSelect(self, event: Any = None) -> None:
         if self.filling:
             return
         self.outline.select(self.pathOf(self.tree.GetSelection()))
@@ -283,7 +285,7 @@ class ViewerFrame(wx.Frame):
         self.showDetail()
 
     # -- watching the selected node ---------------------------------------
-    def watch(self, node):
+    def watch(self, node: Any) -> None:
         """Follow *node*'s fields, and stop following whatever came before
 
         Every field of every node announces a change through pydispatcher, so
@@ -296,15 +298,16 @@ class ViewerFrame(wx.Frame):
         if node is not None:
             dispatcher.connect(self.onNodeChanged, sender=node)
 
-    def onNodeChanged(self, signal=None, sender=None, **named):
+    def onNodeChanged(self, signal: Any = None, sender: Any = None,
+                      **named: Any) -> None:
         """A field of the selected node changed, on whichever thread did it"""
         wx.CallAfter(self.showDetail)
 
-    def showDetail(self):
+    def showDetail(self) -> None:
         """Redraw the panel: what the selected node is, and what it holds"""
         row = self.outline.selectedRow
         if row is None:
-            lines = ['Nothing selected']
+            lines: List[str] = ['Nothing selected']
         else:
             lines = ['%s %s' % (row.nodeType, row.defName) if row.defName
                      else row.nodeType]
@@ -315,11 +318,11 @@ class ViewerFrame(wx.Frame):
 class ViewerApplication(wx.App):
     """The application, which owns the loop the engine draws inside"""
 
-    def __init__(self, source=None):
+    def __init__(self, source: Optional[str] = None) -> None:
         self.source = source
         wx.App.__init__(self, False)
 
-    def OnInit(self):
+    def OnInit(self) -> bool:
         wx.InitAllImageHandlers()
         frame = ViewerFrame(source=self.source)
         self.SetTopWindow(frame)
@@ -328,7 +331,7 @@ class ViewerApplication(wx.App):
         return True
 
 
-def main(argv=None):
+def main(argv: Optional[List[str]] = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     # wx renders from the canvas's own paint and idle events, so this is the
     # whole of the loop: there is nothing for the host to drive.

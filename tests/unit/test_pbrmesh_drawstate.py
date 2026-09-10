@@ -171,7 +171,7 @@ class TestDefensiveTeardown:
                             lambda *a: (_ for _ in ()).throw(RuntimeError("bad ctx")))
         gpu = self._bare_gpu()
         gpu.release()                       # exception is caught
-        assert gpu.vao is None              # slot still cleared
+        assert gpu.vao == 0                 # slot still cleared
 
     def test_finalizer_swallows_enqueue_failure(self):
         class _BadQueue:
@@ -181,7 +181,7 @@ class TestDefensiveTeardown:
         gpu = self._bare_gpu(vao=7)
         gpu._pending_deletes = _BadQueue()
         gpu.__del__()                       # append raises -> swallowed, no crash
-        assert gpu.vao is None
+        assert gpu.vao == 0
 
     def test_pending_queue_falls_back_when_context_is_unwritable(self):
         class _Slotted:

@@ -15,29 +15,32 @@ Note:
     This is wall-clock, not CPU time.
 """
 import time
+from typing import Callable, Optional
 
 __all__ = ['systemTime', 'setTimeSource', 'timeSource', 'wallClock']
 
 
-def wallClock():
+def wallClock() -> float:
     """The default source: real time, as it passes."""
     return time.time()
 
 
-_source = wallClock
+_source: Callable[[], float] = wallClock
 
 
-def systemTime():
+def systemTime() -> float:
     """Generate a "real-world" time value"""
     return _source()
 
 
-def timeSource():
+def timeSource() -> Callable[[], float]:
     """The source :func:`systemTime` is currently reading."""
     return _source
 
 
-def setTimeSource(source):
+def setTimeSource(
+    source: Optional[Callable[[], float]],
+) -> Callable[[], float]:
     """Install `source` as the clock, returning the one it replaced.
 
     source -- a callable of no arguments returning seconds as a float, or None

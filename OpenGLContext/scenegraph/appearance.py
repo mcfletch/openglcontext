@@ -1,4 +1,6 @@
 """Appearance node based on VRML 97 model"""
+from typing import Any, Tuple
+
 from vrml.vrml97 import basenodes
 from OpenGL.GL import glColor3f
 from OpenGLContext.arrays import array 
@@ -30,7 +32,7 @@ class Appearance(basenodes.Appearance):
     Reference:
         http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Appearance
     """
-    def render (self, mode=None):
+    def render (self, mode: Any = None) -> Tuple[Any, ...]:
         """Render Appearance, return (lit, textured, alpha, textureToken)
 
         Renders the appearance node, returning 3 status flags
@@ -58,14 +60,14 @@ class Appearance(basenodes.Appearance):
         else:
             textured = 0
         return lit, textured, alpha, textureToken
-    def renderPost( self, textureToken=None, mode=None ):
+    def renderPost( self, textureToken: Any = None, mode: Any = None ) -> None:
         """Cleanup after rendering of this node has completed"""
         if self.texture:
             if self.textureTransform:
                 self.textureTransform.renderPost(textureToken,mode=mode)
             self.texture.renderPost(mode=mode)
 
-    def sortKey( self, mode, matrix ):
+    def sortKey( self, mode: Any, matrix: Any ) -> Tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc
         
         key is:

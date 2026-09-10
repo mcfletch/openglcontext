@@ -12,7 +12,7 @@ only sets up the VAO and issues the draw.
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import numpy as np
 from OpenGL.GL import (
@@ -29,6 +29,11 @@ from OpenGLContext.scenegraph import vertexsemantics
 from OpenGLContext.scenegraph.geometryarrays import (
     GeometryArrays, VertexArray, report_missing_inputs,
 )
+
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
 
 
 class _MeshGPU(object):
@@ -64,7 +69,9 @@ class _MeshGPU(object):
         # safe point by PBRMesh.flush_pending_deletes. A list, not
         # the context, so this GPU object never keeps a context alive.
         self._pending_deletes = pending_deletes
-        self.vao = None
+        #: The VAO's name, or 0 -- which is what GL itself means by "none", and
+        #: what this holds once the object has been released.
+        self.vao: int = 0
         # Persistent instanced-draw resources, built lazily by the instancing
         # module's draw path and reused across frames (no per-frame VAO/VBO churn).
         # The instance VBO is a self-finalizing vbo.VBO; the VAO id is reclaimed
@@ -76,7 +83,7 @@ class _MeshGPU(object):
         self.draw_mode = int(getattr(mesh, 'draw_mode', GL_TRIANGLES))
         self.idx_vbo = None
         if self.indexed:
-            self.idx_vbo = vbo.VBO(mesh.indices, target=GL_ELEMENT_ARRAY_BUFFER)
+            self.idx_vbo = VBO(mesh.indices, target=GL_ELEMENT_ARRAY_BUFFER)
 
         self.attr_layout: list[tuple[Any, int, int]] = []  # (vbo, location, size) recorded into the VAO
         # name -> VBO for the attributes a morph deform re-uploads in place. The
@@ -93,7 +100,7 @@ class _MeshGPU(object):
             data = getattr(mesh, name, None)
             if data is None:
                 continue
-            buf = vbo.VBO(data)
+            buf = VBO(data)
             self.attr_layout.append((buf, loc, size))
             self.arrays[semantic] = VertexArray(buf, size)
             if name in ('positions', 'normals', 'tangents'):
@@ -163,14 +170,14 @@ class _MeshGPU(object):
 
     def release(self) -> None:
         """Delete the VAOs now. Only safe when the owning context is current."""
-        for attr in ('vao', '_instance_vao'):
+        for attr, empty in (('vao', 0), ('_instance_vao', None)):
             vao = getattr(self, attr, None)
-            if vao is not None:
+            if vao:
                 try:
                     glDeleteVertexArrays(1, [vao])
                 except Exception:
                     pass
-                setattr(self, attr, None)
+                setattr(self, attr, empty)
 
     def __del__(self) -> None:
         # Never call GL from a finalizer: GC can run this with no current context
@@ -180,14 +187,14 @@ class _MeshGPU(object):
         # right context is current.
         # getattr defaults: a _MeshGPU built via __new__ (tests) never ran __init__,
         # so the instance-VAO slot may be absent -- a finalizer must not raise.
-        vao = getattr(self, 'vao', None)
+        vao = getattr(self, 'vao', 0)
         ivao = getattr(self, '_instance_vao', None)
-        self.vao = None
+        self.vao = 0
         self._instance_vao = None
         pending = getattr(self, '_pending_deletes', None)
         if pending is not None:
             for v in (vao, ivao):
-                if v is not None:
+                if v:
                     try:
                         pending.append(v)
                     except Exception:
@@ -225,6 +232,13 @@ class PBRMesh(node.Node):
     #: reading the range its fine level holds, since both are posed alike.
     _palette_peer: Any = None
     _palette_base: Optional[int] = None
+
+    #: What moves this mesh's surface on the card, for a mesh that is water: a
+    #: :class:`~OpenGLContext.scenegraph.water.styles.WaterStyle` and the time
+    #: to evaluate it at. ``Shape`` reads both off the geometry and hands them
+    #: to the shader; a mesh that has neither is not water and pays nothing.
+    wave_style: Any = None
+    wave_time: float = 0.0
 
     def __init__(self, positions: Any = None, normals: Any = None, texcoords: Any = None,
                  tangents: Any = None, colors: Any = None, indices: Any = None,
@@ -543,14 +557,15 @@ class PBRMesh(node.Node):
         return boundingvolume.AABoundingBox.fromPoints(
             np.concatenate([moved - reach, moved + reach]))
 
-    def _joint_bounds(self) -> tuple:
+    def _joint_bounds(self) -> Tuple[Any, Any, Any]:
         """Per joint: the centre and radius of the rest vertices it reaches.
 
         Worked out once from the bind pose, which is all it depends on.
         """
         if self._joint_bound_cache is None:
-            rest = (self._base_positions if self._base_positions is not None
-                    else self.positions).astype('d')
+            base = (self._base_positions if self._base_positions is not None
+                    else self.positions)
+            rest = np.asarray(base).astype('d')
             count = int(self.skin_joints.max()) + 1 if len(self.skin_joints) else 0
             low = np.full((count, 3), np.inf)
             high = np.full((count, 3), -np.inf)
@@ -566,7 +581,8 @@ class PBRMesh(node.Node):
             radii = np.where(used, np.linalg.norm(
                 np.where(used[:, None], high - low, 0.0), axis=1) / 2.0, 0.0)
             self._joint_bound_cache = (centres, radii, used)
-        return self._joint_bound_cache
+        centres, radii, used = self._joint_bound_cache
+        return centres, radii, used
 
     # -- rendering ----------------------------------------------------------
     # Cache key under which the per-context VAO+VBOs hang off ``mode.cache``.
@@ -715,7 +731,7 @@ class PBRMesh(node.Node):
             palette = palette_for(mode)
             if palette is not None:
                 palette.write(base, matrices)
-        return base
+        return int(base)
 
     def skin_from_gpu(self, mode: Any, joints: int) -> Optional[int]:
         """Reserve this mesh's palette range for a compute shader to fill.

@@ -20,7 +20,7 @@ from OpenGL.GL import (
     GL_FRAMEBUFFER, GL_RGBA, GL_SCISSOR_TEST, GL_UNSIGNED_BYTE, glBindFramebuffer,
     glClear, glClearColor, glDisable, glEnable, glReadPixels, glScissor, glViewport,
 )
-from OpenGLContext.arrays import array, dot, concatenate, ones
+from OpenGLContext.arrays import array, asarray, dot, concatenate, ones
 import logging
 
 from OpenGLContext.passes.selectionbuffers import SelectionFBO, SelectionBufferFBO
@@ -214,7 +214,7 @@ class SelectionMixin(_AsyncPickMixin):
         pick_matrix[3, 1] = trans_y
 
         # Combine with original projection
-        return dot(self.projection, pick_matrix)
+        return asarray(dot(self.projection, pick_matrix))
 
     def shaderSelectRenderOptimized(self, mode: Any, toRender: List, events: Dict) -> None:
         """Optimized selection render processing each pick point individually.

@@ -252,10 +252,9 @@ def main(argv: Optional[list[str]] = None, prog: str = 'oglc-view') -> Any:
     parser = build_parser(prog)
     options = parser.parse_args(argv, namespace=ViewerOptions())
     source = options.source or os.environ.get('GLTF')
-    if options.list_cameras and not source:
-        parser.error('nothing to list cameras for (pass a path or a URL)')
-
     if options.list_cameras:
+        if not source:
+            parser.error('nothing to list cameras for (pass a path or a URL)')
         try:
             return _list_cameras(resolve_source(source) or source, options.format)
         except UnknownSourceType as error:

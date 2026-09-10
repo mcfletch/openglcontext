@@ -87,3 +87,45 @@ def test_minor_justification_moves_the_whole_block(
     assert [y for _, _, y in placed] == pytest.approx(
         [expected_first, expected_first - 2.0, expected_first - 4.0]
     )
+
+
+class TestTheRenderWrappersHandBackWhatTheyDrew:
+    """``Font.render`` answers with the lines it laid out.
+
+    ``Text.render`` passes that answer on as the geometry's, and the two
+    GL-state wrappers a bitmap font is built from sit in front of it, so each
+    has to carry the answer back out rather than swallow it.
+    """
+
+    def test_the_depth_mask_wrapper_returns_the_lines(self, gl_context_compat, lines):
+        class _Font(fontmodule.NoDepthBufferMixIn, fontmodule.Font):
+            pass
+
+        assert _Font().render(lines) is lines
+
+    def test_the_blending_wrapper_returns_the_lines(self, gl_context_compat):
+        class _Font(fontmodule.BitmapFontMixIn, fontmodule.Font):
+            pass
+
+        empty = []
+        assert _Font().render(empty) is empty
+
+    def test_both_wrappers_together_return_the_lines(self, gl_context_compat):
+        class _Font(
+            fontmodule.NoDepthBufferMixIn, fontmodule.BitmapFontMixIn, fontmodule.Font
+        ):
+            pass
+
+        empty = []
+        assert _Font().render(empty) is empty
+
+
+class TestTheAbstractCustomisationPoints:
+    """What the base class does for a font that has not filled them in."""
+
+    def test_creating_a_character_says_the_font_has_not_implemented_it(self, font):
+        with pytest.raises(NotImplementedError):
+            font.createChar('a')
+
+    def test_the_base_font_compiles_no_display_lists(self, font):
+        assert font.lists('abc') == []

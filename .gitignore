@@ -21,6 +21,9 @@ tests/test.jpg
 *.egg-info
 build
 tests/callcontext.txt
+# OpenGLContext.debug.logcontext appends the frames that reached it to this
+# name in whatever directory the program was started from.
+callcontext.txt
 
 # Generated test-run outputs: keep only the canonical <name>.png baselines,
 # never the diff/result/reference copies the comparison tool writes next to

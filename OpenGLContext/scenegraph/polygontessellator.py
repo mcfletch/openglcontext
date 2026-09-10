@@ -1,4 +1,6 @@
 """Class for tessellating polygons using GLU"""
+from typing import Any, List, Optional, Sequence
+
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext import utilities
@@ -20,14 +22,15 @@ class PolygonTessellator(object):
         module, and degrading to earlier API version if
         necessary.
     """
-    def __init__( self, windingRule = GLU_TESS_WINDING_ODD, ccw=True ):
+    def __init__( self, windingRule: int = GLU_TESS_WINDING_ODD,
+                  ccw: bool = True ) -> None:
         """Initialise the PolygonTessellator"""
         self.reset()
         self.ccw = ccw
         self.windingRule = windingRule
     _controller = None
     @property
-    def controller( self ):
+    def controller( self ) -> Any:
         if not self._controller:
             self._controller = controller = gluNewTess()
             gluTessCallback( controller, GLU_TESS_COMBINE, self.combine )
@@ -36,15 +39,16 @@ class PolygonTessellator(object):
             gluTessCallback( controller, GLU_TESS_END, self.end )
             gluTessProperty( controller, GLU_TESS_WINDING_RULE, self.windingRule )
         return self._controller
-    def reset( self, forceTriangles = 1 ):
+    def reset( self, forceTriangles: int = 1 ) -> None:
         """Reset the tessellator for a new polygon"""
-        self.result = []
-        self.current = []
-        self.type = None
+        self.result: List[Any] = []
+        self.current: List[Any] = []
+        self.type: Optional[int] = None
         self.forceTriangles = forceTriangles
 
 
-    def tessContours( self, contours, forceTriangles=1, normal=None ):
+    def tessContours( self, contours: Sequence[Any], forceTriangles: int = 1,
+                      normal: Any = None ) -> List[Any]:
         """Tessellate polygon defined by (multiple) contours
 
         Occasionally will create new vertices as a blending
@@ -94,7 +98,7 @@ class PolygonTessellator(object):
                 gluTessNormal( self.controller, 0.,0.,0. )
         return self.result
         
-    def tessellate(self, vertices, forceTriangles=1 ):
+    def tessellate(self, vertices: Sequence[Any], forceTriangles: int = 1 ) -> List[Any]:
         """Tessellate polygon defined by vertices
 
         Less general form of tessContours, takes a single
@@ -105,15 +109,16 @@ class PolygonTessellator(object):
         """
         return self.tessContours( [vertices], forceTriangles=forceTriangles)
         
-    def begin( self,  dataType, polygonData=None ):
+    def begin( self, dataType: int, polygonData: Any = None ) -> None:
         """Begin a new tessellation sequence (GLU Tess callback)"""
         assert not self.current, """Tessellation reached begin callback with a non-null current vertex-set, this should never happen: %s"""%(self.current,)
         self.type = dataType
-    def vertex( self, vertex, polygonData=None):
+    def vertex( self, vertex: Any, polygonData: Any = None) -> None:
         """Register a vertex for the current shape (GLU Tess callback)"""
         #self.current.append( vertex )
         self.current.append( vertex )
-    def combine( self, newPosition, vertices, weights, polygonData=None ):
+    def combine( self, newPosition: Any, vertices: Any, weights: Any,
+                 polygonData: Any = None ) -> Any:
         """Blend vertices with weights to create new vertex object (GLU Tess callback)"""
         from OpenGLContext.scenegraph.vertex import Vertex
         attributes = {
@@ -152,7 +157,7 @@ class PolygonTessellator(object):
                     )
         newVertex = Vertex(**attributes)
         return newVertex
-    def end( self, *args, **namedargs ):
+    def end( self, *args: Any, **namedargs: Any ) -> None:
         """Record the end of a tessellated shape (GLU Tess callback)
 
         This method implements the "forceTriangles" semantics by

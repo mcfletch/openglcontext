@@ -2,6 +2,8 @@
 import math
 import weakref
 import logging
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
 from OpenGL.GL import *
 from OpenGLContext.arrays import zeros, array, dot, ArrayType
 from OpenGLContext import texture
@@ -11,21 +13,21 @@ log = logging.getLogger( __name__ )
 
 class _Strip( object ):
     """Strip within the atlas which takes particular set of images"""
-    def __init__( self, atlas, height, yoffset ):
+    def __init__( self, atlas: 'Atlas', height: int, yoffset: int ) -> None:
         """Sets up the strip to receive images"""
         self.atlas = atlas
         self.height = height 
         self.width = 0
         self.yoffset = yoffset
-        self.maps = []
-    def start_coord( self, x ):
+        self.maps: List['weakref.ref[Map]'] = []
+    def start_coord( self, x: int ) -> int:
         """Do we have an empty space sufficient to fit image of width x?
         
         return starting coordinate or -1 if not enough space...
         """
         last = 0
-        for map in self.maps:
-            referenced = map()
+        for mapRef in self.maps:
+            referenced = mapRef()
             if referenced is not None:
                 if referenced.offset[0]-last >= x:
                     return last
@@ -34,29 +36,23 @@ class _Strip( object ):
         if self.atlas.max_size-last >= x:
             return last 
         return -1
-    def add( self, image, start=None ):
+    def add( self, image: Any, start: Optional[int] = None ) -> 'Map':
         """Add the given PIL image to our atlas' image"""
         x,y = image.size
         if start is None:
             start = self.start_coord( x )
         offset = (start,self.yoffset)
-        map = Map( self.atlas, offset, (x,y), image )
-        self.maps.append( weakref.ref( map, self._remover( offset )) )
-        self.atlas.need_updates.append( weakref.ref(map) )
-        return map
-    def _remover( self, offset ):
-        def remover( *args ):
-            self.onRemove( )
-        return remover 
-    def onRemove( self, *args, **named ):
-        """Remove map by offset (normally a weakref-release callback)"""
-        for mapRef in self.maps:
-            referenced = mapRef()
-            if referenced is None:
-                try:
-                    self.maps.remove( mapRef )
-                except ValueError:
-                    pass 
+        result = Map( self.atlas, offset, (x,y), image )
+        self.maps.append( weakref.ref( result, self.onRemove ) )
+        self.atlas.need_updates.append( weakref.ref(result) )
+        return result
+    def onRemove( self, *args: Any, **named: Any ) -> None:
+        """Drop the maps that have been released (a weakref-release callback)
+
+        Rebuilt rather than removed from in place: a released map is found by
+        scanning, and removing during that scan skips the entry after it.
+        """
+        self.maps[:] = [ ref for ref in self.maps if ref() is not None ]
 
 class AtlasError( Exception ):
     """Raised when we can't/shouldn't append to this atlas"""
@@ -71,22 +67,22 @@ class Atlas( object ):
     use for modifying texture coordinates to map from the
     original to the packed coordinates.
     """
-    _local = None
-    _size = None
-    def __init__( self, components=4, dataType='B', max_size=4096 ):
+    _size: Optional[Tuple[int, int, int]] = None
+    def __init__( self, components: int = 4, dataType: str = 'B',
+                  max_size: int = 4096 ) -> None:
         self.components = components
         self.dataType = dataType
-        self.strips = []
+        self.strips: List[_Strip] = []
         self.max_size = max_size
-        self.need_updates = []
-        self.texture = None
+        self.need_updates: List['weakref.ref[Map]'] = []
+        self.texture: Optional[texture.Texture] = None
         log.info( 
             'Allocating a %s-component texture atlas of size %sx%s',
             components,
             max_size,max_size,
         )
     
-    def add( self, image ):
+    def add( self, image: Any ) -> 'Map':
         """Insert a PIL image of values as a sub-texture
         
         Has to find a place within the atlas to insert the 
@@ -96,7 +92,8 @@ class Atlas( object ):
         x,y = image.size 
         strip,start = self.choose_strip( max_x, max_y, x, y )
         return strip.add( image, start=start )
-    def choose_strip( self, max_x,max_y, x,y ):
+    def choose_strip( self, max_x: int, max_y: int,
+                      x: int, y: int ) -> Tuple['_Strip', int]:
         """Find the strip to which we should be added"""
         candidates = [ 
             s 
@@ -129,13 +126,14 @@ class Atlas( object ):
         start = strip.start_coord( x )
         return strip, start
     
-    def size( self ):
+    def size( self ) -> Tuple[int, int, int]:
+        """The atlas texture's width, height and component count"""
         if self._size is None:
             x = y = self.max_size
             self._size = (x,y,self.components)
         return self._size
     
-    def render( self ):
+    def render( self ) -> texture.Texture:
         """Render this texture to the context"""
         if self.texture is None:
             format = [0, GL_LUMINANCE, GL_LUMINANCE_ALPHA, GL_RGB, GL_RGBA ][self.components]
@@ -152,27 +150,26 @@ class Atlas( object ):
         self.texture.bind()
         needs = self.need_updates[:]
         del self.need_updates[:len(needs)]
-        for need in needs:
-            need = need()
+        for reference in needs:
+            need = reference()
             if need is not None:
                 need.update( self.texture )
         return self.texture
-    def cached( self, mode ):
+    def cached( self, mode: Any ) -> texture.Texture:
         """Get cached version of this texture
         
         Note: currently we do *not* properly use mode-level caching
         for the texture object
         """
         return self.render()
-    def debugImageTexture( self, mode ):
+    def debugImageTexture( self, mode: Any ) -> Any:
         """Create a debugging image texture for this texture atlas 
         """
         from OpenGLContext.scenegraph.imagetexture import ImageTexture,Image
         from OpenGLContext.texture import NumpyAdapter
-        from vrml import protofunctions
         format = NumpyAdapter.shapeToMode( self.components )
         instance = ImageTexture(
-            image = Image.new(format, (1,1), '#ffff00'),
+            image = Image.new(format, (1,1)),
         )
         mode.cache.holder(instance, self.texture)
         return instance
@@ -184,16 +181,17 @@ class Map( object ):
     object, i.e. it tries to offer the same API, but with support for 
     Atlas-based maps instead of stand-alone ones.
     """
-    _matrix = None
-    _coords = None
+    _matrix: Any = None
+    _coords: Any = None
     _uploaded = False
-    def __init__( self, atlas, offset, size, image ):
+    def __init__( self, atlas: 'Atlas', offset: Tuple[int, int],
+                  size: Tuple[int, int], image: Any ) -> None:
         self.atlas = atlas 
         self.offset = offset 
         self.size = size
         self.image = image
         self.components = self.atlas.components
-    def matrix( self ):
+    def matrix( self ) -> Any:
         """Calculate a 4x4 transform matrix for texcoords
         
         To manipulate texture coordinates with this matrix 
@@ -209,8 +207,8 @@ class Map( object ):
         if self._matrix is None:
             # translate by self.offset/atlas.size
             # scale by self.size/atlas.size
-            tx,ty,d = self.atlas.size()
-            tx,ty = float(tx),float(ty)
+            width,height,_depth = self.atlas.size()
+            tx,ty = float(width),float(height)
             x,y = self.offset
             sx,sy = self.size 
             self._matrix = transformmatrix.transformMatrix (
@@ -218,37 +216,37 @@ class Map( object ):
                 scale = (sx/tx,sy/ty,1),
             )
         return self._matrix
-    def coords( self ):
+    def coords( self ) -> Any:
         """Return our bottom-left and top-right coordinate pairs"""
         if self._coords is None:
-            tx,ty,d = self.atlas.size()
-            tx,ty = float(tx),float(ty)
+            width,height,_depth = self.atlas.size()
+            tx,ty = float(width),float(height)
             x,y = self.offset
             sx,sy = self.size 
             self._coords = array( ((x/tx,y/ty),((x+sx)/tx,(y+sy)/ty)), 'f')
         return self._coords
     
-    def replace( self, image ):
+    def replace( self, image: Any ) -> None:
         """Replace our current image with given (PIL) image"""
         self._uploaded = False 
         self.image = image 
         self.atlas.need_updates.append( weakref.ref(self) )
-    def update( self, texture ):
-        """Update texture with (new) data in self.image
+    def update( self, target: Any ) -> None:
+        """Update the atlas texture with (new) data in self.image
         
-        This just calls texture.update with our metadata
+        This just calls the texture's update with our metadata
         in order to do the actual copy of the data-pointer.
         """
-        texture.update( 
+        target.update( 
             self.offset, self.size, 
-            texture.pilAsString( self.image),
+            target.pilAsString( self.image),
         )
         self._uploaded = True
     @property 
-    def texture( self ):
+    def texture( self ) -> Any:
         """Retrieve our texture"""
         return self.atlas.cached( None )
-    def __call__( self ):
+    def __call__( self ) -> None:
         """Enable/call our texture"""
         self.atlas.render()
         # should also load our texture-transform matrix.
@@ -258,8 +256,9 @@ class Map( object ):
 
 class AtlasManager( object ):
     """Collection of atlases within the renderer"""
-    def __init__( self, max_size=4096, max_child_size=128 ):
-        self.components = {}
+    def __init__( self, max_size: Optional[int] = 4096,
+                  max_child_size: int = 128 ) -> None:
+        self.components: Dict[int, List[Atlas]] = {}
         self.max_size = max_size
         self.max_child_size = max_child_size
     FORMAT_MAPPING = {
@@ -268,10 +267,10 @@ class AtlasManager( object ):
         'RGB':(3,GL_RGB),
         'RGBA':(4,GL_RGBA),
     }
-    def formatToComponents( self, format ):
+    def formatToComponents( self, format: str ) -> int:
         """Convert PIL format to component count"""
         return self.FORMAT_MAPPING[ format ][0]
-    def add( self, image ):
+    def add( self, image: Any ) -> 'Map':
         """Add the given image to the texture atlas"""
         if isinstance( image, ArrayType ):
             image = texture.NumpyAdapter( image )
@@ -291,12 +290,13 @@ class AtlasManager( object ):
         atlases.append( atlas )
         return atlas.add( image )
     _MAX_MAX_SIZE = 4096
-    def calculate_max_size( self ):
+    def calculate_max_size( self ) -> int:
         """Calculate the maximum size of a texture
         
         Note that this might, for instance, assume a
         single-component texture or some similarly inappropriate
         value...
         """
-        self.max_size = min( (glGetIntegerv(GL_MAX_TEXTURE_SIZE), self._MAX_MAX_SIZE) )
+        self.max_size = min( int(glGetIntegerv(GL_MAX_TEXTURE_SIZE)),
+                             self._MAX_MAX_SIZE )
         return self.max_size

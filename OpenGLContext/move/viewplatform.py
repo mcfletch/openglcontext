@@ -16,9 +16,12 @@ interactive context mixes in; the movement modes in
 a fixed orbit.
 """
 
-from math import pi, atan
+from math import atan2, pi
+from typing import Any, Optional, Sequence, Tuple, Union, cast
+
 from OpenGLContext.arrays import array, negative, radians, dot
 from OpenGLContext import quaternion
+from OpenGLContext.quaternion import Quaternion
 from vrml.vrml97 import transformmatrix
 
 from OpenGL.GL import (
@@ -58,15 +61,23 @@ class ViewPlatform(object):
             view-orientation for the viewing platform
     """
 
+    #: Field of view (degrees), aspect ratio, near and far clipping distances,
+    #: in the order ``gluPerspective`` takes them.
+    frustum: Tuple[float, float, float, float]
+    #: Object-space position, four components.
+    position: Any
+    #: View orientation.
+    quaternion: Quaternion
+
     def __init__(
         self,
-        position=(0, 0, 10),
-        orientation=(0, 1, 0, 0),
-        fieldOfView=pi / 3,
-        aspect=1.0,
-        near=0.3,
-        far=50000,
-    ):
+        position: Sequence[float] = (0, 0, 10),
+        orientation: Union[Sequence[float], Quaternion] = (0, 1, 0, 0),
+        fieldOfView: float = pi / 3,
+        aspect: float = 1.0,
+        near: float = 0.3,
+        far: float = 50000,
+    ) -> None:
         """Initialize the ViewPlatform
 
         position -- 3D coordinate position of the "camera"
@@ -82,7 +93,10 @@ class ViewPlatform(object):
         self.setOrientation(orientation)
         self.setFrustum(fieldOfView, aspect, near, far)
 
-    def setFrustum(self, fieldOfView=pi / 2, aspect=None, near=None, far=None):
+    def setFrustum(self, fieldOfView: float = pi / 2,
+                   aspect: Optional[float] = None,
+                   near: Optional[float] = None,
+                   far: Optional[float] = None) -> None:
         """Set the current frustum values for the "camera"
 
         fieldOfView -- radian angle field of view
@@ -98,7 +112,7 @@ class ViewPlatform(object):
             far = self.frustum[3]
         self.frustum = (fieldOfView * 180.0 / pi, aspect, near, far)
 
-    def setViewport(self, x, y):
+    def setViewport(self, x: float, y: float) -> None:
         """Set the current viewport/window dimensions
 
         x,y -- integer width and height (respectively) of the window
@@ -108,7 +122,7 @@ class ViewPlatform(object):
         """
         self.frustum = (self.frustum[0], float(x) / float(y)) + self.frustum[2:]
 
-    def setPosition(self, position):
+    def setPosition(self, position: Sequence[float]) -> None:
         """Set the current "camera position"
 
         position -- 3D coordinate position to which to
@@ -118,17 +132,18 @@ class ViewPlatform(object):
             (x, y, z) = position
             # shouldn't this last value be 1.0?
             # after all, this is supposed to be an object-space coordinate
-            position = array((x, y, z, 1.0), "f")
+            self.position = array((x, y, z, 1.0), "f")
         elif len(position) != 4:
             raise ValueError(
                 """ViewPlatform setPosition got a position value which is neither 3 nor 4 components in length: %r"""
                 % (position)
             )
         else:
-            position = array(position, "f")
-        self.position = position
+            self.position = array(position, "f")
 
-    def setOrientation(self, orientation):
+    def setOrientation(
+        self, orientation: Union[Sequence[float], Quaternion]
+    ) -> None:
         """Set the current "camera orientation"
 
         orientation -- VRML97-style 4-component orientation,
@@ -142,12 +157,13 @@ class ViewPlatform(object):
             rotation value when passed a VRML97-style
             orientation.
         """
-        if not isinstance(orientation, quaternion.Quaternion):
+        if isinstance(orientation, Quaternion):
+            self.quaternion = orientation
+        else:
             (x, y, z, r) = orientation
-            orientation = quaternion.fromXYZR(x, y, z, -r)
-        self.quaternion = orientation
+            self.quaternion = quaternion.fromXYZR(x, y, z, -r)
 
-    def render(self, mode=None, identity=False):
+    def render(self, mode: Any = None, identity: bool = False) -> None:
         """Perform the actual view-platform setup during rendering
 
         This is really quite a trivial function, given the
@@ -172,7 +188,8 @@ class ViewPlatform(object):
         glRotate(r * RADTODEG, x, y, z)
         glTranslate(*negative(self.position)[:3])
 
-    def viewMatrix(self, trimDepth=None, inverse=False):
+    def viewMatrix(self, trimDepth: Optional[float] = None,
+                   inverse: bool = False) -> Any:
         """Calculate our matrix"""
         fovy, aspect, zNear, zFar = self.frustum
         if trimDepth is not None:
@@ -185,7 +202,7 @@ class ViewPlatform(object):
             inverse=inverse,
         )
 
-    def modelMatrix(self, inverse=False):
+    def modelMatrix(self, inverse: bool = False) -> Any:
         """Calculate our model-side matrix"""
         rotate = self.quaternion.matrix(inverse=inverse)
         # inverse of translation matrix, if inverse, need the forward...
@@ -200,7 +217,7 @@ class ViewPlatform(object):
         else:
             return rotate
 
-    def matrix(self, inverse=False):
+    def matrix(self, inverse: bool = False) -> Any:
         """Calculate total model-view matrix for this view platform"""
         model = self.modelMatrix(inverse=inverse)
         view = self.viewMatrix(inverse=inverse)
@@ -214,7 +231,7 @@ class ViewPlatform(object):
         else:
             return model
 
-    def getNearFar(self):
+    def getNearFar(self) -> Tuple[float, float]:
         """Return the near and far frustum depths
 
         This method isn't actually used in OpenGLContext,
@@ -229,12 +246,14 @@ class ViewPlatform(object):
         """
         return self.frustum[-2:]
 
-    def relativePosition(self, x=0.0, y=0.0, z=0.0):
+    def relativePosition(self, x: float = 0.0, y: float = 0.0, z: float = 0.0) -> Any:
         """Calculate a view-relative position from current position/orientation"""
         delta = self.quaternion * [x, y, z, 0.0]
         return delta + self.position
 
-    def relativeOrientation(self, deltaOrientation=(0, 1, 0, pi / 4)):
+    def relativeOrientation(
+        self, deltaOrientation: Sequence[float] = (0, 1, 0, pi / 4)
+    ) -> Quaternion:
         """Calculate rotation within the current orientation
 
         In essence, this allows you to "turn your head"
@@ -254,9 +273,9 @@ class ViewPlatform(object):
         """
         x, y, z, r = deltaOrientation
         x, y, z, garbage = self.quaternion * [x, y, z, 0]
-        return self.quaternion * quaternion.fromXYZR(x, y, z, -r)
+        return cast(Quaternion, self.quaternion * quaternion.fromXYZR(x, y, z, -r))
 
-    def moveRelative(self, x=0.0, y=0.0, z=0.0):
+    def moveRelative(self, x: float = 0.0, y: float = 0.0, z: float = 0.0) -> None:
         """Move platform to a position relative to the current position
 
         x,y,z -- float vector along which to be moved from
@@ -264,7 +283,7 @@ class ViewPlatform(object):
         """
         self.position = self.relativePosition(x, y, z)
 
-    def straighten(self):
+    def straighten(self) -> None:
         """Re-orient the camera so the horizon is "level"
 
         Commonly needed after a few camera-relative orientation
@@ -281,14 +300,11 @@ class ViewPlatform(object):
         self.setOrientation((0, 1.0, 0, angle))
 
 
-def xytoa(x, y):
-    """Convert an x,y coordinate to a rotation about other axis"""
-    if not x:
-        if y >= 0:
-            return pi / 2
-        else:
-            return -pi / 2
-    if x > 0:
-        return atan(float(y) / x)
-    else:
-        return pi - (atan(float(y) / x))
+def xytoa(x: float, y: float) -> float:
+    """Convert an x,y coordinate to a rotation about the other axis
+
+    The bearing of the vector, in radians, over the whole circle: an angle
+    good only within a half-turn would put a camera facing backwards for half
+    of the compass.
+    """
+    return atan2(float(y), float(x))

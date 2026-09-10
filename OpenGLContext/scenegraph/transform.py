@@ -1,4 +1,6 @@
 """VRML97-style Transform node"""
+from typing import Any, List, Optional, Tuple
+
 import numpy as np
 from OpenGL.GL import *
 from OpenGLContext.scenegraph import grouping, boundingvolume
@@ -22,7 +24,8 @@ class Transform(grouping.Grouping, basenodes.Transform):
     Reference:
         http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Transform
     """
-    def transform( self, mode=None, translate=1, scale=1, rotate=1 ):
+    def transform( self, mode: Any = None, translate: int = 1, scale: int = 1,
+                   rotate: int = 1 ) -> None:
         ''' Perform the actual alteration of the current matrix '''
         if translate and any(self.translation):
             glTranslated(*self.translation)
@@ -55,7 +58,7 @@ class Transform(grouping.Grouping, basenodes.Transform):
                 glRotated( -sa * RADTODEG, sx,sy,sz)
         if centered:
             glTranslated( *(-self.center))
-    def boundingVolume( self, mode ):
+    def boundingVolume( self, mode: Any ) -> Any:
         """Calculate the bounding volume for this node
 
         The bounding volume for a grouping node is
@@ -69,8 +72,8 @@ class Transform(grouping.Grouping, basenodes.Transform):
             return current
         # need to create a new volume and make it depend
         # on the appropriate fields...
-        volumes = []
-        dependencies = [
+        volumes: List[Any] = []
+        dependencies: List[Tuple[Any, Optional[str]]] = [
             (self,'children'),
             (self,'translation'),
             (self,'rotation'),
@@ -98,7 +101,7 @@ class Transform(grouping.Grouping, basenodes.Transform):
             volume = boundingvolume.UnboundedVolume()
         return boundingvolume.cacheVolume( self, volume, dependencies )
     
-    def localMatrix( self, mode=None ):
+    def localMatrix( self, mode: Any = None ) -> Any:
         """Calculate the transform's matrix manually"""
         data = mode.cache.getData( self, 'localMatrix' )
         if data is not None:
@@ -130,16 +133,16 @@ class MatrixTransform( Transform ):
     The stored matrix is row-vector (``p' = p @ M``), matching VRML convention
     and the row-vector forward matrix already used for bounds.
     """
-    _BAKED_KEY = ('baked_local_matrices',)
+    _BAKED_KEY = 'baked_local_matrices'
 
-    def __init__( self, localMatrix=None, **named ):
+    def __init__( self, localMatrix: Any = None, **named: Any ) -> None:
         super(MatrixTransform, self).__init__(**named)
-        self._forward = None
-        self._inverse = None
+        self._forward: Any = None
+        self._inverse: Any = None
         if localMatrix is not None:
             self.setLocalMatrix( localMatrix )
 
-    def setLocalMatrix( self, matrix ):
+    def setLocalMatrix( self, matrix: Any ) -> None:
         m = np.ascontiguousarray( matrix, dtype='d' ).reshape(4, 4)
         self._forward = m
         try:
@@ -150,7 +153,8 @@ class MatrixTransform( Transform ):
         if holder is not None:
             holder.data = (self._forward, self._inverse)
 
-    def localMatrices( self, translate=True, scale=True, rotate=True ):
+    def localMatrices( self, translate: bool = True, scale: bool = True,
+                       rotate: bool = True ) -> Any:
         # Only the all-components matrix is baked; partial requests (e.g. a
         # background's rotate-only) fall back to the TRS fields, which glTF mesh
         # nodes never exercise.
@@ -163,12 +167,13 @@ class MatrixTransform( Transform ):
                 self, (self._forward, self._inverse), key=self._BAKED_KEY )
         return holder
 
-    def localMatrix( self, mode=None ):
+    def localMatrix( self, mode: Any = None ) -> Any:
         if self._forward is None:
             return super(MatrixTransform, self).localMatrix( mode )
         return self._forward
 
-    def transform( self, mode=None, translate=1, scale=1, rotate=1 ):
+    def transform( self, mode: Any = None, translate: int = 1, scale: int = 1,
+                   rotate: int = 1 ) -> None:
         # Legacy fixed-function path: multiply the exact matrix in (row-vector
         # storage transposes to the column-major matrix OpenGL multiplies).
         if self._forward is None:

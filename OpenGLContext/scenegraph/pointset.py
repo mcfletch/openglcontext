@@ -3,6 +3,7 @@
 from OpenGL.GL import *
 from OpenGL.GL import glDeleteVertexArrays
 from OpenGL.arrays import vbo
+from typing import Any, Tuple
 from vrml.vrml97 import basenodes
 from OpenGLContext.scenegraph import coordinatebounded
 from OpenGLContext.scenegraph.vertexsemantics import (
@@ -15,6 +16,12 @@ from OpenGL.GL.EXT.point_parameters import *
 import ctypes
 import numpy as np
 import logging
+
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
 
 log = logging.getLogger(__name__)
 
@@ -38,12 +45,12 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
 
     def render(
         self,
-        visible=1,  # can skip normals and textures if not
-        lit=1,  # can skip normals if not
-        textured=1,  # can skip textureCoordinates if not
-        transparent=0,  # need to sort triangle geometry...
-        mode=None,  # the renderpass object
-    ):
+        visible: int = 1,  # can skip normals and textures if not
+        lit: int = 1,  # can skip normals if not
+        textured: int = 1,  # can skip textureCoordinates if not
+        transparent: int = 0,  # need to sort triangle geometry...
+        mode: Any = None,  # the renderpass object
+    ) -> int:
         """Render the point-set, requires coord attribute be present
 
         if color is present (and has the same length as coord), will
@@ -62,8 +69,9 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         if getattr(mode, 'shader_mode', False):
             return self._render_shader(mode, points, textured=textured)
 
-        # Legacy rendering path
-        glVertexPointerf(points)
+        # Legacy rendering path. The fields are MFVec3f and MFColor, so both
+        # arrays are three components wide.
+        glVertexPointer(3, GL_FLOAT, 0, points)
         glEnableClientState(GL_VERTEX_ARRAY)
 
         if visible and self.color:
@@ -80,7 +88,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
             else:
                 glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE)
                 glEnable(GL_COLOR_MATERIAL)
-                glColorPointerf(colors)
+                glColorPointer(3, GL_FLOAT, 0, colors)
                 glEnableClientState(GL_COLOR_ARRAY)
         glDisable(GL_LIGHTING)
         if textured:
@@ -106,7 +114,8 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         glDisableClientState(GL_COLOR_ARRAY)
         return 1
 
-    def _render_shader(self, mode, points, textured=False):
+    def _render_shader(self, mode: Any, points: Any,
+                       textured: bool = False) -> int:
         """Render using shader pipeline."""
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:
@@ -207,7 +216,8 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         shader_program.use(lit=True)
         return 1
 
-    def _point_buffer(self, mode, points, has_colors):
+    def _point_buffer(self, mode: Any, points: Any,
+                      has_colors: bool) -> Tuple[Any, int]:
         """Return (vbo, stride) for the point data, re-uploading only on change.
 
         A persistent VBO is kept on the node; when coord/color change (tracked
@@ -233,7 +243,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
 
         if gpu is None:
             gpu = self._point_gpu = {
-                'vbo': vbo.VBO(interleaved, usage='GL_DYNAMIC_DRAW'),
+                'vbo': VBO(interleaved, usage='GL_DYNAMIC_DRAW'),
                 'vao': None,
                 'stride': stride,
                 'has_colors': has_colors,
@@ -259,7 +269,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
             holder.depend(self.color, 'color')
         return gpu['vbo'], gpu['stride']
 
-    def boundingVolume(self, mode=None):
+    def boundingVolume(self, mode: Any = None) -> Any:
         """Create a bounding-volume object for this node"""
         from OpenGLContext.scenegraph import boundingvolume
 

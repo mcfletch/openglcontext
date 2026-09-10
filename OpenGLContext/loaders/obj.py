@@ -63,6 +63,7 @@ Note:
 """
 
 import logging
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 log = logging.getLogger(__name__)
 from OpenGL._bytes import as_str
@@ -74,7 +75,7 @@ from OpenGLContext.loaders.loader import join_reference
 from hashlib import md5
 
 
-def _as_text(data):
+def _as_text(data: Union[bytes, str]) -> str:
     """Decode loader bytes to text (mtl/obj content is UTF-8 text)."""
     if isinstance(data, bytes):
         return data.decode("utf-8", "replace")
@@ -86,12 +87,13 @@ class OBJHandler(base.BaseHandler):
 
     filename_extensions = [".obj", ".obj.gz"]
 
-    def defaultMaterial(self):
+    def defaultMaterial(self) -> Any:
         return basenodes.Appearance(
             material=basenodes.Material(diffuseColor=[0.9, 0.9, 0.9]),
         )
 
-    def parse(self, data, baseURL, *args, **named):
+    def parse(self, data: Union[bytes, str], baseURL: str, *args: Any,
+              **named: Any) -> Tuple[bool, Any]:
         """Parse the loaded data (with the provided meta-information)
 
         This implementation simply creates VRML97 scenegraph nodes out
@@ -101,7 +103,7 @@ class OBJHandler(base.BaseHandler):
         text format, so it is decoded once here rather than every keyword
         being spelled twice.
         """
-        data = as_str(data)
+        text = as_str(data)
         sg = basenodes.sceneGraph()
 
         # these three are shared among all shapes
@@ -114,7 +116,7 @@ class OBJHandler(base.BaseHandler):
         group = None  # shape
         material = None  # appearance, material, texture
 
-        materials = {}
+        materials: Dict[str, Any] = {}
 
         # indices are 1-based, the first values are never used...
         vertices = [[0.0, 0.0, 0.0]]
@@ -125,7 +127,7 @@ class OBJHandler(base.BaseHandler):
         current_normal_indices = []
         current_texcoord_indices = []
 
-        for line in data.splitlines():
+        for line in text.splitlines():
             if line.startswith("#"):
                 continue
             values = line.split()
@@ -208,8 +210,8 @@ class OBJHandler(base.BaseHandler):
             group.geometry.texCoordIndex = current_texcoord_indices
             group.geometry.normalIndex = current_normal_indices
         coord.point = vertices
-        normal.normal = normals
-        texCoord.texCoord = tex_coords
+        normal.vector = normals
+        texCoord.point = tex_coords
         return True, sg
 
         # this creates a pointset-only version of the geometry...
@@ -234,15 +236,21 @@ class OBJHandler(base.BaseHandler):
     # basenodes.Background( skyColor=[1,1,1] ),
     # ]
 
-    def _cleanIndex(self, v):
+    def _cleanIndex(self, v: str) -> List[int]:
         """Indices are in the format:
 
         ci/ti/ni where ti and ni can be null
         """
         return ([int(x) for x in [j or 0 for j in v.split("/")]] + [0, 0])[:3]
 
-    def load_material_library(self, url, materials, baseURL=None):
-        """Load the materials in resource into the materials set"""
+    def load_material_library(self, url: str, materials: Dict[str, Any],
+                              baseURL: Optional[str] = None) -> bool:
+        """Load the materials in ``url`` into the ``materials`` mapping.
+
+        Answers whether the library was read. A library that cannot be reached
+        is a warning rather than an error: the model still loads, with the
+        default material wherever it named one of these.
+        """
         # ( resolvedURL, os.path.abspath(filename), file, headers )
         try:
             finalURL, filename, file, headers = loader.Loader(url, baseURL)
@@ -289,13 +297,17 @@ class OBJHandler(base.BaseHandler):
                         img_url = [values[1], values[1].split("/")[-1]]
                     else:
                         img_url = [values[1]]
-                    img_url = [join_reference(baseURL, u) for u in img_url]
+                    # A library reached without a document base resolves its
+                    # images against where the library itself came from.
+                    img_base = baseURL if baseURL is not None else finalURL
+                    img_url = [join_reference(img_base, u) for u in img_url]
                     texture = basenodes.ImageTexture(url=img_url)
                     material.texture = texture
             except Exception as err:
                 log.warning("Parse error in %s (%s): %s", url, values[0], err)
+        return True
 
 
-def defaultHandler():
+def defaultHandler() -> OBJHandler:
     """Default handler instance used for loading standard obj files"""
     return OBJHandler()

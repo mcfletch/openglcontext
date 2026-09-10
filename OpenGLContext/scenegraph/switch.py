@@ -1,5 +1,6 @@
 """VRML97 Switch node"""
 import weakref
+from typing import Any, List, Optional, Tuple
 
 from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext.scenegraph import boundingvolume
@@ -11,7 +12,7 @@ class Switch(basenodes.Switch):
     Reference:
         http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Switch
     """
-    def __init__( self, *args, **named ):
+    def __init__( self, *args: Any, **named: Any ) -> None:
         """Setup watcher for whichChoice and children"""
         super(Switch,self).__init__( *args, **named )
         # What the switch is already showing, so the first assignment naming it
@@ -24,12 +25,12 @@ class Switch(basenodes.Switch):
             signal=('set',self.__class__.whichChoice), 
             sender=self 
         )
-    def _chosen( self ):
+    def _chosen( self ) -> Any:
         """The child `whichChoice` names, or None when it names nothing"""
         if self.whichChoice < 0 or self.whichChoice >= len(self.choice):
             return None
         return self.choice[self.whichChoice]
-    def _onSwitchChange( self, value ):
+    def _onSwitchChange( self, value: Any ) -> None:
         """Tell the world when the switch's child has changed
 
         The watcher fires on every assignment to `whichChoice`, and
@@ -51,7 +52,9 @@ class Switch(basenodes.Switch):
             signal = SWITCH_CHANGE_SIGNAL,
             value = value,
         )
-    def renderedChildren( self, types= (nodetypes.Children, nodetypes.Rendering,) ):
+    def renderedChildren(
+        self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
+    ) -> List[Any]:
         """Children is not the source, choice is"""
         if self.whichChoice < 0 or self.whichChoice >= len(self.choice):
             return []
@@ -60,7 +63,7 @@ class Switch(basenodes.Switch):
             if isinstance( node, types):
                 return [node]
             return []
-    def boundingVolume( self, mode ):
+    def boundingVolume( self, mode: Any ) -> Any:
         """Calculate the bounding volume for this node
 
         The bounding volume for a grouping node is
@@ -74,8 +77,9 @@ class Switch(basenodes.Switch):
             return current
         # need to create a new volume and make it depend
         # on the appropriate fields...
-        volumes = []
-        dependencies = [(self,'choice'),(self,'whichChoice')]
+        volumes: List[Any] = []
+        dependencies: List[Tuple[Any, Optional[str]]] = [
+            (self,'choice'),(self,'whichChoice')]
         unbounded = 0
         for child in self.renderedChildren():
             try:

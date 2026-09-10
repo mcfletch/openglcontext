@@ -155,7 +155,7 @@ def _transform_point(matrix: np.ndarray, point: np.ndarray) -> np.ndarray:
 
 
 def _transform_vector(matrix: np.ndarray, vector: np.ndarray) -> np.ndarray:
-    return matrix[:3, :3] @ np.asarray(vector, dtype="d")
+    return np.asarray(matrix[:3, :3] @ np.asarray(vector, dtype="d"))
 
 
 def _world_bounding_volume(
@@ -317,7 +317,8 @@ def _recenter_offset(root_dict: dict[str, Any]) -> np.ndarray:
 
 def _default_external_resolver(uri: str) -> dict[str, Any]:
     """Read and parse an external tileset (`.json`), local path or http(s) URL."""
-    return json.loads(fetch.read_bytes(uri))
+    tileset: dict[str, Any] = json.loads(fetch.read_bytes(uri))
+    return tileset
 
 
 def build_runtime_tileset(

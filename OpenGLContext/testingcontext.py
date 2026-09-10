@@ -7,7 +7,7 @@ unlikely that nontrivial code will be completely stable across
 all interactive context classes."""
 
 import optparse
-from typing import Any
+from typing import Any, Type
 
 from OpenGLContext import plugins, context, contextdefinition
 
@@ -59,7 +59,7 @@ def getInteractive( preference: Any = None ) -> Any:
         preference, plugins.InteractiveContext,
     )
 
-def _required( found, preference, type ):
+def _required( found: Any, preference: Any, type: Type[plugins.Context] ) -> Any:
     """Return the context class, or say what was asked for and what there is
 
     The import error itself is logged by the plug-in as it fails, which is

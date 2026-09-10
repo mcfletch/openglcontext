@@ -7,6 +7,7 @@ and that the node is discoverable as a bound Background by the render pass.
 import numpy as np
 import pytest
 
+from OpenGLContext import contextresources
 from OpenGLContext.scenegraph.hdrbackground import HDRBackground
 from OpenGLContext.passes import ibl
 from vrml.vrml97 import nodetypes
@@ -97,13 +98,16 @@ def test_setimage_defers_stale_render_data_for_gl_thread():
 
     setImage can run on the async loader thread, so it must not call glDelete;
     the previous compiled skybox is handed to _stale_render_data for the GL
-    thread to free on the next render/drain (else each env change leaks it)."""
+    thread to free on the next render/drain (else each env change leaks it).
+    The queue carries the context each set of objects belongs to, since a name
+    means nothing outside the context that issued it."""
     bg = HDRBackground(image=_panorama())
+    key = contextresources.context_key()
     sentinel = ("tex", "vbo", "ibo", "prog", {}, "vao")
-    bg._render_data = sentinel
+    bg._render_data = {key: sentinel}
     bg.setImage(_panorama())                 # swap to a new panorama
-    assert bg._render_data is None
-    assert bg._stale_render_data == [sentinel]
+    assert bg._render_data == {}
+    assert bg._stale_render_data == [(key, sentinel)]
 
     # Draining frees each queued item exactly once and empties the queue.
     freed = []
@@ -120,11 +124,12 @@ def test_setimage_defers_stale_render_data_for_gl_thread():
 
 def test_setimage_none_also_defers_stale_render_data():
     bg = HDRBackground(image=_panorama())
+    key = contextresources.context_key()
     sentinel = ("tex", "vbo", "ibo", "prog", {}, "vao")
-    bg._render_data = sentinel
+    bg._render_data = {key: sentinel}
     bg.setImage(None)                        # clear
-    assert bg._render_data is None
-    assert bg._stale_render_data == [sentinel]
+    assert bg._render_data == {}
+    assert bg._stale_render_data == [(key, sentinel)]
 
 
 def test_deleting_url_clears_the_panorama(tmp_path):

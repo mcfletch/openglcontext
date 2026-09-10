@@ -80,3 +80,32 @@ def test_outline_provider_skipped_in_shader_mode(
 
     assert provider is None
     assert font is None
+
+
+class TestACharacterTheFontFileHasNoGlyphFor:
+    """A line is measured from its characters' metrics, so every character
+    has to answer with some, drawable or not."""
+
+    class _NoGlyphs:
+        """A ``_toolsfont.Font`` that knows no characters at all."""
+        def getGlyph(self, char):
+            return None
+
+    @pytest.fixture
+    def solid(self):
+        built = toolsfont.ToolsSolidFont.__new__(toolsfont.ToolsSolidFont)
+        built.font = self._NoGlyphs()
+        built.fontStyle = None
+        return built
+
+    def test_there_is_no_display_list(self, solid):
+        display_list, _metrics = solid.createChar('')
+        assert display_list is None
+
+    def test_the_character_takes_up_no_room(self, solid):
+        _list, metrics = solid.createChar('')
+        assert (metrics.width, metrics.height) == (0, 0)
+
+    def test_the_metrics_name_the_character(self, solid):
+        _list, metrics = solid.createChar('')
+        assert metrics.char == ''

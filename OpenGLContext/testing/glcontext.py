@@ -45,7 +45,7 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
-from typing import Any, Iterator, Mapping, Sequence
+from typing import Any, Dict, Iterator, Mapping, Optional, Sequence
 
 from OpenGLContext import contextresources
 
@@ -625,7 +625,7 @@ def gl_available() -> bool:
 
 #: Why each profile asked about could not be had, by profile name; ``None``
 #: where it could. Remembered for the same reason :func:`describe_gl` is.
-_PROFILE_REFUSALS: dict = {}
+_PROFILE_REFUSALS: Dict[str, Optional[str]] = {}
 
 
 def profile_unavailable(profile: str) -> str | None:

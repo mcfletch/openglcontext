@@ -14,15 +14,22 @@ except ImportError:
 from OpenGL.GL import *
 from OpenGLContext import contextresources
 from OpenGLContext.context import Context
+from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events import glfwevents
 from OpenGLContext.looptrace import LoopTrace
 import logging
 import warnings
+from typing import Any, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
+#: What ``glfw.set_window_monitor`` takes to put a window back on the desktop.
+#: GLFW spells it NULL, and the binding declares the parameter as a monitor
+#: pointer -- which nothing can be and still mean "no monitor".
+_WINDOWED: Any = None
 
-def fullscreenMonitor(definition):
+
+def fullscreenMonitor(definition: Any) -> Any:
     """The monitor a window built from ``definition`` should fill, or None.
 
     ``OPENGLCONTEXT_HIDDEN`` wins over the request, because GLFW ignores the
@@ -47,13 +54,18 @@ class GLFWContext(
     for OpenGL core profiles, version selection, and debug contexts.
     """
 
-    window = None
+    #: GLFW's own window handle, or None once it has been destroyed.
+    window: Any = None
+    #: Settled by the constructor before the window exists, so it is never None
+    #: for a context that was built.
+    contextDefinition: ContextDefinition
     #: Where and how big the window is when it is not filling the screen, as
     #: (x, y, width, height).  A position of None means the platform has never
     #: placed this window and should choose.
-    _windowedGeometry = (None, None, 300, 300)
+    _windowedGeometry: Tuple[Optional[int], Optional[int], int, int] = (
+        None, None, 300, 300)
 
-    def __init__(self, definition=None, **named):
+    def __init__(self, definition: Any = None, **named: Any) -> None:
         # Resolved before the window exists: profile, version, buffers and size
         # are all window-creation parameters, so a class that declares a
         # definition has to be consulted now rather than by Context.__init__.
@@ -104,13 +116,13 @@ class GLFWContext(
         fbWidth, fbHeight = glfw.get_framebuffer_size(self.window)
         self.ViewPort(fbWidth, fbHeight)
 
-    def settingsChanged(self):
+    def settingsChanged(self) -> None:
         """Re-apply the window-level settings a changed definition affects."""
         self.applyVSync()
         self.applyFullscreen()
         Context.settingsChanged(self)
 
-    def _fillMonitor(self, monitor):
+    def _fillMonitor(self, monitor: Any) -> Tuple[int, int]:
         """The size to ask for on ``monitor``, with the refresh rate to match.
 
         The monitor's *current* mode, so nothing switches resolution: a mode
@@ -122,7 +134,7 @@ class GLFWContext(
         glfw.window_hint(glfw.REFRESH_RATE, mode.refresh_rate)
         return int(mode.size.width), int(mode.size.height)
 
-    def applyFullscreen(self, definition=None):
+    def applyFullscreen(self, definition: Any = None) -> None:
         """Match the window to what the definition now says about full-screen.
 
         Called when the settings screen writes the field, so a player can leave
@@ -133,7 +145,7 @@ class GLFWContext(
         source = self if definition is None else definition
         self.setFullscreen(fullscreenMonitor(source) is not None)
 
-    def setFullscreen(self, fullscreen):
+    def setFullscreen(self, fullscreen: Any) -> bool:
         """Fill the screen, or go back to the window this context opened with."""
         if not self.window:
             return False
@@ -152,32 +164,33 @@ class GLFWContext(
             # without -- the size is what has to come back, and a compositor
             # that places windows itself would ignore the position anyway -- so
             # the complaint is not worth showing a player.
+            position: Tuple[Optional[int], Optional[int]] = (None, None)
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 try:
-                    x, y = glfw.get_window_pos(self.window)
+                    position = glfw.get_window_pos(self.window)
                 except Exception:
-                    x = y = None
+                    pass
             width, height = glfw.get_window_size(self.window)
-            self._windowedGeometry = (x, y, width, height)
+            self._windowedGeometry = (position[0], position[1], width, height)
             width, height = self._fillMonitor(monitor)
             glfw.set_window_monitor(self.window, monitor, 0, 0, width, height,
                                     glfw.get_video_mode(monitor).refresh_rate)
         else:
-            x, y, width, height = self._windowedGeometry
+            left, top, width, height = self._windowedGeometry
             # A window that was born full-screen has no remembered position, so
             # it is handed back to the platform to place rather than pinned to
             # the top-left corner of a display it may not be on.
-            if x is None:
-                x, y = 100, 100
-            glfw.set_window_monitor(self.window, None, x, y, width, height,
-                                    glfw.DONT_CARE)
+            if left is None or top is None:
+                left, top = 100, 100
+            glfw.set_window_monitor(self.window, _WINDOWED, left, top,
+                                    width, height, glfw.DONT_CARE)
         # A monitor swap re-creates the drawable underneath us on some
         # platforms, so the swap interval has to be asked for again.
         self.applyVSync()
         return True
 
-    def applyVSync(self, definition=None):
+    def applyVSync(self, definition: Any = None) -> bool:
         """Wait for the display's refresh, or don't (ContextDefinition.vsync).
 
         Off uncaps the frame rate, which is what a benchmark wants. It also
@@ -206,7 +219,7 @@ class GLFWContext(
             return False
         return True
 
-    def _setWindowHints(self, definition):
+    def _setWindowHints(self, definition: Any) -> None:
         """Apply ContextDefinition to GLFW window hints"""
         # Reset to defaults
         glfw.default_window_hints()
@@ -291,12 +304,12 @@ class GLFWContext(
         # only practical on EGL environments...
 
 
-    def pumpWindowEvents(self):
+    def pumpWindowEvents(self) -> bool:
         """Dispatch what GLFW has queued; see Context.pumpWindowEvents"""
         glfw.poll_events()
         return True
 
-    def setupCallbacks(self):
+    def setupCallbacks(self) -> None:
         """Register GLFW callbacks"""
         if self.window:
             glfw.set_key_callback(self.window, self._keyCallback)
@@ -308,42 +321,44 @@ class GLFWContext(
             glfw.set_window_close_callback(self.window, self._windowCloseCallback)
             glfw.set_window_focus_callback(self.window, self._windowFocusCallback)
 
-    def _keyCallback(self, window, key, scancode, action, mods):
+    def _keyCallback(self, window: Any, key: int, scancode: int, action: int,
+                     mods: int) -> None:
         """GLFW key callback wrapper"""
         self.glfwOnKey(window, key, scancode, action, mods)
 
-    def _charCallback(self, window, codepoint):
+    def _charCallback(self, window: Any, codepoint: int) -> None:
         """GLFW character callback wrapper"""
         self.glfwOnCharacter(window, codepoint)
 
-    def _mouseButtonCallback(self, window, button, action, mods):
+    def _mouseButtonCallback(self, window: Any, button: int, action: int,
+                             mods: int) -> None:
         """GLFW mouse button callback wrapper"""
         self.glfwOnMouseButton(window, button, action, mods)
 
-    def _cursorPosCallback(self, window, xpos, ypos):
+    def _cursorPosCallback(self, window: Any, xpos: float, ypos: float) -> None:
         """GLFW cursor position callback wrapper"""
         self.glfwOnCursorPos(window, xpos, ypos)
 
-    def _scrollCallback(self, window, xoffset, yoffset):
+    def _scrollCallback(self, window: Any, xoffset: float, yoffset: float) -> None:
         """GLFW scroll callback wrapper"""
         self.glfwOnScroll(window, xoffset, yoffset)
 
-    def _framebufferSizeCallback(self, window, width, height):
+    def _framebufferSizeCallback(self, window: Any, width: int, height: int) -> None:
         """GLFW framebuffer size callback wrapper"""
         self.glfwOnFramebufferSize(window, width, height)
 
-    def _windowCloseCallback(self, window):
+    def _windowCloseCallback(self, window: Any) -> None:
         """GLFW window close callback"""
         self.OnQuit()
 
-    def _windowFocusCallback(self, window, focused):
+    def _windowFocusCallback(self, window: Any, focused: int) -> None:
         """Drop held-key state on focus loss (no RELEASE arrives when unfocused)."""
         if not focused:
             clear = getattr(self, 'clearHeldKeys', None)
             if clear is not None:
                 clear()
 
-    def setPointerCapture(self, capture):
+    def setPointerCapture(self, capture: Any) -> bool:
         """Grab or release the pointer for a mouse-look movement mode.
 
         The disabled cursor is the one that reports unbounded motion: hidden
@@ -362,7 +377,7 @@ class GLFWContext(
                                 bool(capture))
         return True
 
-    def setCurrent(self):
+    def setCurrent(self, blocking: int = 1) -> None:
         """Make this context's OpenGL context current
 
         Whatever held the thread is let go of first.  A thread may have one
@@ -372,13 +387,13 @@ class GLFWContext(
         alive in one process -- this suite, an application with a second
         renderer in it -- and letting go first costs one query.
         """
-        Context.setCurrent(self)
+        Context.setCurrent(self, blocking)
         if self.window:
             self.releaseForeignContext()
             glfw.make_context_current(self.window)
             self.bindContextResources(self._glHandle())
 
-    def _glHandle(self):
+    def _glHandle(self) -> Any:
         """The GL context handle the caches and PyOpenGL key on.
 
         GLFW's window is not it: what identifies a context to PyOpenGL is the
@@ -388,12 +403,12 @@ class GLFWContext(
         """
         return contextresources.context_key()
 
-    def SwapBuffers(self):
+    def SwapBuffers(self) -> None:
         """Swap the front and back buffers"""
         if self.window:
             glfw.swap_buffers(self.window)
 
-    def OnResize(self, width, height):
+    def OnResize(self, width: int, height: int) -> None:
         """Handle window resize"""
         self.setCurrent()
         try:
@@ -402,7 +417,7 @@ class GLFWContext(
             self.unsetCurrent()
         self.triggerRedraw(1)
 
-    def OnQuit(self, event=None):
+    def OnQuit(self, event: Any = None) -> Any:
         """Let go of this window's GL objects, then end the application.
 
         The release happens **here** rather than after the loop because
@@ -415,7 +430,7 @@ class GLFWContext(
         self.releaseWindow()
         return super(GLFWContext, self).OnQuit(event)
 
-    def releaseWindow(self):
+    def releaseWindow(self) -> None:
         """Drop this context's GL objects and destroy its window
 
         The engine's caches own GL objects in this context, so they have to be
@@ -429,7 +444,7 @@ class GLFWContext(
         self.releaseContextResources(self._glHandle())
         glfw.destroy_window(window)
 
-    def OnIdle(self, *arguments):
+    def OnIdle(self, *arguments: Any) -> int:
         """Animation hook for the GLFW loop.
 
         The default Context.OnIdle renders via drawPoll, which would double up
@@ -439,7 +454,7 @@ class GLFWContext(
         """
         return 0
 
-    def _loopIteration(self, trace, renderedFirst):
+    def _loopIteration(self, trace: LoopTrace, renderedFirst: bool) -> bool:
         """One pass of the main loop, timed phase by phase.
 
         Answers the new renderedFirst, which is the only state an iteration
@@ -486,7 +501,7 @@ class GLFWContext(
                     self.OnDraw(force=0)
         return renderedFirst
 
-    def MainLoop(self):
+    def MainLoop(self) -> None:
         """Run the main event loop"""
         # We drive rendering ourselves, so suppress the synchronous in-callback
         # renders triggerPick/triggerRedraw would otherwise do. A burst of input
@@ -519,7 +534,7 @@ class GLFWContext(
         glfw.terminate()
 
     @classmethod
-    def ContextMainLoop(cls, *args, **named):
+    def ContextMainLoop(cls, *args: Any, **named: Any) -> Any:
         """Class method to create and run the context"""
         instance = cls(*args, **named)
 
@@ -539,7 +554,7 @@ class GLFWContext(
 if __name__ == "__main__":
 
     class TestRenderer(GLFWContext):
-        def Render(self, mode=None):
+        def Render(self, mode: Any = None) -> None:
             print('rendering')
             GLFWContext.Render(self, mode)
             glClearColor(0.2, 0.3, 0.3, 1.0)

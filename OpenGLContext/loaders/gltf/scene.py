@@ -305,7 +305,7 @@ def _viewpoints_for_poses(poses: list, scene_graph: SceneGraph, used_defs: set) 
     Each Viewpoint is authored in world space (the loader already resolved the
     camera's world pose), so mounted directly under the scene root it reproduces
     the glTF camera exactly. It is DEF-registered under the camera's name (made
-    unique) so it is addressable, and carries ``near``/``far`` as plain attributes
+    unique) so it is addressable, and carries ``near``/``far`` beside its fields
     for :meth:`Viewpoint.moveTo` to apply. Prefer names over indices, per the
     glTF-camera intent.
     """
@@ -317,8 +317,7 @@ def _viewpoints_for_poses(poses: list, scene_graph: SceneGraph, used_defs: set) 
             fieldOfView=pose['fov'],
             description=pose.get('name') or 'camera',
         )
-        vp.near = pose.get('near')
-        vp.far = pose.get('far')
+        _beside_fields(vp, near=pose.get('near'), far=pose.get('far'))
         scene_graph.regDefName(
             _unique_def(_def_name(pose.get('name'), i), used_defs), vp)
         viewpoints.append(vp)
@@ -361,6 +360,19 @@ def _meter_exposure(light_meter: list, center: Sequence[float]) -> float:
     return min(1.0, TARGET / max(key, TARGET))
 
 
+def _beside_fields(node: Any, **values: Any) -> None:
+    """Attach glTF-only values to *node* as plain attributes.
+
+    A camera's ``near``/``far`` and a punctual light's ``range`` have no VRML97
+    field to land in, and what reads them -- the render pass, and
+    :meth:`~OpenGLContext.scenegraph.viewpoint.Viewpoint.moveTo` -- reaches for
+    them with ``getattr`` and a default. Writing them through here says in one
+    place that they travel beside a node's fields rather than in them.
+    """
+    for name, value in values.items():
+        setattr(node, name, value)
+
+
 def _light_node(light_def: Any,
                 world: np.ndarray) -> "Optional[Union[DirectionalLight, PointLight, SpotLight]]":
     """Build a scenegraph light from a KHR_lights_punctual light + world matrix.
@@ -398,18 +410,18 @@ def _light_node(light_def: Any,
         # exactly the VRML SpotLight.cutOffAngle/beamWidth convention (the outer
         # bound of the cone). Store them as-is; the shader's spot attenuation reads
         # cos(cutOffAngle) directly and the shadow projection uses the full cone FOV
-        # = 2*cutOffAngle. (Previously these were doubled, which lit -- and needed
-        # the shadow matrix to re-halve -- a cone twice the authored width.)
+        # = 2*cutOffAngle.
         spot = light_def.get('spot') or {}
         outer = float(spot.get('outerConeAngle', np.pi / 4.0))
         inner = float(spot.get('innerConeAngle', 0.0))
-        light = SpotLight(location=pos, direction=direction, color=color,
-                          intensity=intensity, castShadows=shadows, attenuation=atten,
-                          cutOffAngle=outer, beamWidth=inner)
+        light: Union[PointLight, SpotLight] = SpotLight(
+            location=pos, direction=direction, color=color,
+            intensity=intensity, castShadows=shadows, attenuation=atten,
+            cutOffAngle=outer, beamWidth=inner)
     else:
         light = PointLight(location=pos, color=color, intensity=intensity,
                            castShadows=shadows, attenuation=atten)
-    light._gltf_range = rng
+    _beside_fields(light, _gltf_range=rng)
     return light
 
 

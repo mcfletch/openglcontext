@@ -6,6 +6,8 @@ core-profile pass is :mod:`OpenGLContext.passes.flatcore`; which of the two
 renders a given context is decided in
 :mod:`OpenGLContext.passes.renderpass`, not chosen by the caller.
 """
+from typing import Any, Dict, List, Sequence
+
 from . import _flat
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
@@ -55,7 +57,7 @@ class FlatPass( _flat.FlatPass ):
     supports_bloom = False
 
     
-    def Render( self, context, mode ):
+    def Render( self, context: Any, mode: Any ) -> None:
         """Render the geometry attached to this flat-renderer's scenegraph"""
         # clear the projection matrix set up by legacy sg
         matrix = self.getModelView()
@@ -123,7 +125,7 @@ class FlatPass( _flat.FlatPass ):
         _flat.presentFrame( context )
         self.matrix = matrix
 
-    def legacyBackgroundRender( self, vp, matrix ):
+    def legacyBackgroundRender( self, vp: Any, matrix: Any ) -> None:
         """Do legacy background rendering"""
         bPath = self.currentBackground( )
         if bPath is not None:
@@ -138,7 +140,7 @@ class FlatPass( _flat.FlatPass ):
             glClearColor(0.0,0.0,0.0,1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
-    def legacyNormalRescale( self ):
+    def legacyNormalRescale( self ) -> None:
         """Have the GL return transformed normals to unit length
 
         The fixed function transforms a normal by the inverse transpose of the
@@ -154,7 +156,7 @@ class FlatPass( _flat.FlatPass ):
         """
         glEnable(GL_NORMALIZE)
 
-    def renderGeometry( self, mvmatrix ):
+    def renderGeometry( self, mvmatrix: Any ) -> None:
         """Draw the geometry, with the state a fixed-function draw depends on
 
         Render sets that state up for a whole frame, but a caller wanting the
@@ -164,12 +166,12 @@ class FlatPass( _flat.FlatPass ):
         self.legacyNormalRescale()
         return super( FlatPass, self ).renderGeometry( mvmatrix )
 
-    def legacyLightRender( self, matrix ):
+    def legacyLightRender( self, matrix: Any ) -> None:
         """Do legacy light-rendering operation"""
         # okay, now visible presentations
         for remaining in range(0,self.MAX_LIGHTS-1):
             glDisable( GL_LIGHT0 + remaining )
-        id = 0
+        bound = 0
         for path in self.paths.get( nodetypes.Light, ()):
             tmatrix = path.transformMatrix()
 
@@ -178,11 +180,11 @@ class FlatPass( _flat.FlatPass ):
             self.renderPath = path
             glLoadMatrixf( localMatrix )
 
-            path[-1].Light( GL_LIGHT0+id, mode=self )
-            id += 1
-            if id >= (self.MAX_LIGHTS-1):
+            path[-1].Light( GL_LIGHT0+bound, mode=self )
+            bound += 1
+            if bound >= (self.MAX_LIGHTS-1):
                 break
-        if not id:
+        if not bound:
             # default VRML lighting...
             from OpenGLContext.scenegraph import light
             l = light.DirectionalLight( direction = (0,0,-1.0))
@@ -190,7 +192,7 @@ class FlatPass( _flat.FlatPass ):
             l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
     
-    def renderOpaque( self, toRender ):
+    def renderOpaque( self, toRender: Sequence[Any] ) -> None:
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
         debugFrustum = self.context.contextDefinition.debugBBox
@@ -204,13 +206,9 @@ class FlatPass( _flat.FlatPass ):
                     path[-1].Render( mode = self )
                     if debugFrustum:
                         bvolume.debugRender( )
-                except Exception:
-                    log.exception(
-                        """Failure in opaque render""",
-                    )
-                    import os 
-                    os._exit(1)
-    def renderTransparent( self, toRender ):
+                except Exception as err:
+                    self.renderFailed( 'opaque', path[-1], err )
+    def renderTransparent( self, toRender: Sequence[Any] ) -> None:
         """Render the transparent geometry from toRender (in forward order)"""
         self.transparent = True
         setup = False
@@ -233,11 +231,7 @@ class FlatPass( _flat.FlatPass ):
                         if debugFrustum:
                             bvolume.debugRender( )
                     except Exception as err:
-                        log.error(
-                            """Failure in %s: %s""",
-                            path[-1].Render,
-                            getTraceback( err ),
-                        )
+                        self.renderFailed( 'transparent', path[-1], err )
         finally:
             self.transparent = False
             if setup:
@@ -248,7 +242,8 @@ class FlatPass( _flat.FlatPass ):
         # Draw shapes deferred from the opaque pass.
         self._renderDeferredTransparent()
 
-    def selectRender( self, mode, toRender, events ):
+    def selectRender( self, mode: Any, toRender: Sequence[Any],
+                      events: Dict[Any, Any] ) -> None:
         """Legacy colour-buffer pick for the compatibility profile.
 
         Packs the id unshifted into RGB and toggles the fixed-function lighting
@@ -261,17 +256,17 @@ class FlatPass( _flat.FlatPass ):
 
     MAX_LIGHTS = -1
 
-    def getProjection (self):
+    def getProjection( self ) -> Any:
         """Retrieve the projection matrix for the rendering pass"""
         return self.projection
-    def getViewport (self):
+    def getViewport( self ) -> Any:
         """Retrieve the viewport parameters for the rendering pass"""
         return self.viewport
-    def getModelView( self ):
+    def getModelView( self ) -> Any:
         """Retrieve the base model-view matrix for the rendering pass"""
         return self.modelView
     
-    def setViewPlatform( self, vp ):
+    def setViewPlatform( self, vp: Any ) -> None:
         """Set our view platform"""
         self.viewPlatform = vp 
         self.projection = vp.viewMatrix().astype('f')

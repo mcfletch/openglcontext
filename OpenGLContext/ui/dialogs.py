@@ -19,7 +19,7 @@ question.
 from __future__ import annotations
 
 from gettext import gettext as _
-from typing import Callable, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence
 
 from OpenGLContext.ui.layout import Column, Row
 from OpenGLContext.ui.panel import Panel
@@ -54,7 +54,7 @@ def confirm(question: str, detail: str = '',
                         accelerator=yes_keys[0] if yes_keys else '')
     no_button = Button(text=no or _('No'), name='no',
                        accelerator=no_keys[0] if no_keys else '')
-    body = [Label(text=question, wrap=True, name='question')]
+    body: List[Any] = [Label(text=question, wrap=True, name='question')]
     if detail:
         body.append(Label(text=detail, wrap=True, name='detail', top=4))
     body.append(Row(children=[Spacer(), no_button, yes_button], spacing=8,

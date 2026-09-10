@@ -2,13 +2,11 @@
 from typing import Any
 from OpenGLContext import testingcontext
 
-#: The backend is chosen at run time, so the class this subclasses is not
-
-#: one a checker can name -- which is what Any says here.
-
+#: The backend is chosen at run time, so the class this subclasses is not one a
+#: checker can name -- which is what Any says here.
 BaseContext: Any = testingcontext.getInteractive()
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Sequence, Tuple
 
 from OpenGLContext.arrays import arange
 
@@ -25,7 +23,7 @@ class LorentzContext(BaseContext):
     initialPosition = (0, 0, 100)
     viewportDimensions = (1024, 768)
 
-    def OnInit(self):
+    def OnInit(self) -> None:
         """Generate scenegraph and lorentz equation on load"""
         count = 10000
         points = lorentz(count)
@@ -77,7 +75,7 @@ class LorentzContext(BaseContext):
         timer = ts.getTimer(self)
         timer.addEventHandler("fraction", function=self.OnTime)
 
-    def OnTime(self, event):
+    def OnTime(self, event: Any) -> None:
         count = int(event.fraction() * 100000)
         points = lorentz(count)
         count = len(points)
@@ -87,20 +85,21 @@ class LorentzContext(BaseContext):
         self.ps.color.color = zip(line, line2, [0] * len(line))
         self.ils.coordIndex = range(len(points))
 
-    def OnSwitch(self, event):
+    def OnSwitch(self, event: Any) -> None:
         """Switch to alternate representation"""
         self.switch.whichChoice = (self.switch.whichChoice + 1) % len(self.switch.choice)
         self.triggerRedraw()
 
 
-def lorentz(iterations=100000, start=(0, -2, -1)):
+def lorentz(iterations: int = 100000,
+            start: Sequence[float] = (0, -2, -1)) -> List[Tuple[float, float, float]]:
     """Calculate the lorentz equation"""
     h = 0.01
     a = 10.0
     b = 28.0
     c = 8.0 / 3.0
     x0, y0, z0 = start
-    points = []
+    points: List[Tuple[float, float, float]] = []
     for _n in range(iterations):
         # lorentz linear function set
         x1 = x0 + h * a * (y0 - x0)
@@ -114,6 +113,10 @@ def lorentz(iterations=100000, start=(0, -2, -1)):
     return points
 
 
-def main():
+def main() -> None:
     logging.basicConfig(level=logging.INFO)
     LorentzContext.ContextMainLoop()
+
+
+if __name__ == "__main__":
+    main()

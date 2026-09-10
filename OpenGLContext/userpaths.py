@@ -16,6 +16,7 @@ folder the desktop shows them rather than anywhere of ours.
 """
 import os
 import sys
+from typing import Optional
 
 __all__ = ['appdatadirectory', 'picturesdirectory']
 
@@ -125,8 +126,11 @@ def _xdguserdir(name: str) -> str:
     return ''
 
 
-def _knownpicturesfolder():  # pragma: no cover - needs Windows
+def _knownpicturesfolder() -> Optional[str]:  # pragma: no cover - needs Windows
     """The Pictures known folder, from the Windows shell; None if it will not say."""
+    if sys.platform != 'win32':
+        # The shell call below is Windows' own; there is no folder to ask for.
+        return None
     import ctypes
     from ctypes import wintypes
 

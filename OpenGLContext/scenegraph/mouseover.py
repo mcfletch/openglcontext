@@ -1,4 +1,6 @@
 """Simple node for constructing mouse-over functionality"""
+from typing import Any
+
 from OpenGLContext.scenegraph.switch import Switch
 from vrml.vrml97 import nodetypes
 from vrml import field
@@ -17,7 +19,7 @@ class MouseOver( nodetypes.Bindable, Switch ):
     PROTO = 'MouseOver'
     bound = False
     whichChoice = field.newField( 'whichChoice', 'SFInt32', 1, 0)
-    def bind( self, context ):
+    def bind( self, context: Any ) -> None:
         """Setup node-specific event callbacks and the like
 
         This uses the context to register callbacks, as should
@@ -33,11 +35,11 @@ class MouseOver( nodetypes.Bindable, Switch ):
                 'mouseout', node=self, 
                 function = self.OnMouseOut,
             )
-    def OnMouseOut( self, event ):
+    def OnMouseOut( self, event: Any ) -> None:
         """Switch back to default state"""
         self.whichChoice = 0
         event.context.triggerRedraw(1)
-    def OnMouseIn( self, event ):
+    def OnMouseIn( self, event: Any ) -> None:
         """Switch back to highlight state"""
         self.whichChoice = 1
         event.context.triggerRedraw(1)

@@ -96,10 +96,10 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
     i1 = int(math.ceil((cx + reach) / s))
     j0 = int(math.floor((cz - reach) / s))
     j1 = int(math.ceil((cz + reach) / s))
-    I, J = np.meshgrid(np.arange(i0, i1 + 1, dtype=np.int64),
-                       np.arange(j0, j1 + 1, dtype=np.int64))
-    I = I.ravel()
-    J = J.ravel()
+    Igrid, Jgrid = np.meshgrid(np.arange(i0, i1 + 1, dtype=np.int64),
+                               np.arange(j0, j1 + 1, dtype=np.int64))
+    I = Igrid.ravel()
+    J = Jgrid.ravel()
 
     def hsh(seed: np.uint32) -> np.ndarray:   # deterministic per-cell [0,1)
         return _cell_hash(I, J, seed)

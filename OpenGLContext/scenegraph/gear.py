@@ -2,11 +2,18 @@
 from vrml import cache
 from OpenGLContext.arrays import *
 from OpenGL.arrays import vbo
+from typing import Any
 from OpenGL.GL import *
 from OpenGL.GLUT import glutSolidTeapot, glutWireTeapot
 from vrml.vrml97 import nodetypes
 from vrml import node, field, fieldtypes
 from OpenGLContext import displaylist
+
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
 
 class Gear( nodetypes.Geometry, node.Node ):
     """Simple Gear geometry (from gears.py)
@@ -22,12 +29,12 @@ class Gear( nodetypes.Geometry, node.Node ):
     
     def render (
             self,
-            visible = 1, # can skip normals and textures if not
-            lit = 1, # can skip normals if not
-            textured = 1, # can skip textureCoordinates if not
-            transparent = 0, # XXX should sort triangle geometry...
-            mode = None, # the renderpass object for which we compile
-        ):
+            visible: int = 1, # can skip normals and textures if not
+            lit: int = 1, # can skip normals if not
+            textured: int = 1, # can skip textureCoordinates if not
+            transparent: int = 0, # XXX should sort triangle geometry...
+            mode: Any = None, # the renderpass object for which we compile
+        ) -> Any:
         """Render the Gear"""
         # Check for shader mode
         if getattr(mode, 'shader_mode', False):
@@ -40,7 +47,7 @@ class Gear( nodetypes.Geometry, node.Node ):
         if quick():
             quick()
 
-    def _render_shader(self, mode):
+    def _render_shader(self, mode: Any) -> Any:
         """Render gear using shader pipeline."""
         from OpenGLContext.scenegraph.geometryarrays import (
             GeometryArrays, render_geometry,
@@ -59,10 +66,8 @@ class Gear( nodetypes.Geometry, node.Node ):
             count=count, positions=vertices, normals=normals,
         ), owner=self, where='Gear')
 
-    def _compile_shader_geometry(self, mode):
+    def _compile_shader_geometry(self, mode: Any) -> Any:
         """Compile gear geometry to VBOs for shader rendering."""
-        from OpenGL.arrays import vbo as vbo_module
-
         # Generate gear triangles
         vertices, normals = self._generate_gear_triangles(
             self.inner_radius,
@@ -76,8 +81,8 @@ class Gear( nodetypes.Geometry, node.Node ):
             return None
 
         # Create VBOs
-        vertex_vbo = vbo_module.VBO(array(vertices, 'f'))
-        normal_vbo = vbo_module.VBO(array(normals, 'f'))
+        vertex_vbo = VBO(array(vertices, 'f'))
+        normal_vbo = VBO(array(normals, 'f'))
 
         shader_data = (vertex_vbo, normal_vbo, len(vertices))
         holder = mode.cache.holder(self, shader_data, 'shader_gear')
@@ -86,7 +91,9 @@ class Gear( nodetypes.Geometry, node.Node ):
         return shader_data
 
     @classmethod
-    def _generate_gear_triangles(cls, inner_radius, outer_radius, width, teeth, tooth_depth):
+    def _generate_gear_triangles(cls, inner_radius: float, outer_radius: float,
+                                 width: float, teeth: int,
+                                 tooth_depth: float) -> Any:
         """Generate triangle vertices and normals for a gear.
 
         Returns (vertices, normals) as lists of 3-tuples.
@@ -186,7 +193,7 @@ class Gear( nodetypes.Geometry, node.Node ):
 
         return vertices, normals
 
-    def boundingVolume( self, mode ):
+    def boundingVolume( self, mode: Any ) -> Any:
         """Create a bounding-volume object for this node"""
         from OpenGLContext.scenegraph import boundingvolume
         current = boundingvolume.getCachedVolume( self )
@@ -204,7 +211,7 @@ class Gear( nodetypes.Geometry, node.Node ):
             ),
         )
 
-    def compile( self, mode  ):
+    def compile( self, mode: Any ) -> Any:
         """Compile this geometry node to display-list
         
         Initial code is taken from the PyOpenGL-Demo gears.py
@@ -228,7 +235,8 @@ class Gear( nodetypes.Geometry, node.Node ):
         finally:
             dl.end()
     @classmethod
-    def gear( cls, inner_radius, outer_radius, width, teeth, tooth_depth):
+    def gear( cls, inner_radius: float, outer_radius: float, width: float,
+              teeth: int, tooth_depth: float) -> None:
         """Generic renderer (not necessarily display-list based"""
         r0 = inner_radius
         r1 = outer_radius - tooth_depth/2.0

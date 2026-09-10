@@ -35,13 +35,12 @@ from vrml.vrml97 import nodetypes
 
 log = logging.getLogger(__name__)
 
-# Shadow depth-pass acne controls, named rather than scattered as literals
-#. Polygon offset is the single *primary* control; the receiver
-# shader adds a small constant depth bias plus a normal offset as secondary.
-# Front-face culling was previously stacked on top of these as a fourth control
-# pushing the same way, which over-biased into peter-panning AND silently
-# dropped shadows from open / single-sided casters -- it has been
-# removed in favour of the per-geometry ``solid`` handling the nodes already do.
+# Shadow depth-pass acne controls, named rather than scattered as literals.
+# Polygon offset is the single *primary* control; the receiver shader adds a
+# small constant depth bias plus a normal offset as secondary.  Nothing culls
+# front faces on top of these: a third control pushing the same way over-biases
+# into peter-panning and drops shadows from open, single-sided casters, and the
+# per-geometry ``solid`` handling the nodes already do covers the same ground.
 SHADOW_POLYGON_OFFSET_FACTOR = 2.0
 SHADOW_POLYGON_OFFSET_UNITS = 4.0
 SHADOW_NORMAL_OFFSET = 0.02    # receiver normal offset, world units (shader)
@@ -119,7 +118,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     # type is declared here (hence the assignment-override ignore).
     _shadow_bindings: Optional[List[dict]] = None  # type: ignore[assignment]
 
-    # Camera-independent caster geometry, cached across frames (R1). The world
+    # Camera-independent caster geometry, cached across frames. The world
     # points and per-caster AABB corners depend only on the casters' transforms
     # and bounding volumes, so they are recomputed only when a caster moves
     # (detected via _casterSignature), not on every camera move.
@@ -132,14 +131,14 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     _caster_geometry_cache: Optional[Dict[tuple, tuple]] = None
     _caster_geometry_previous: Optional[Dict[tuple, tuple]] = None
 
-    # Per-light depth-map reuse (R2). Maps id(light_node) -> the key describing
+    # Per-light depth-map reuse. Maps id(light_node) -> the key describing
     # what the light's cached depth map was last rendered from. A spot/point map
     # is camera-independent, so an unchanged key means last frame's depth is still
     # valid and the depth pass can be skipped. Directional maps re-fit to the
     # camera every frame and are never entered here.
     _depth_map_cache: Optional[dict] = None  # type: ignore[assignment]  # base infers None (assigned in disposeShadowMaps); precise type here
 
-    # Depth-pass instance grouping, cached across frames + lights (R5). The
+    # Depth-pass instance grouping, cached across frames + lights. The
     # group/single partition depends only on the caster set (geometry keys), so a
     # static scene reuses it every frame, and two directional lights that cull to
     # the same occluder set share one build. Keyed on the caster signature (a moved
@@ -349,7 +348,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # Per-caster AABBs of the whole caster pool (not just the camera-visible
         # occluders): each cascade's ortho is fitted to the receiver frustum, so an
         # up-sun caster would be clipped by the near plane and its shadow vanish.
-        # Cached across frames + shared by both directional lights (R1); recomputed
+        # Cached across frames + shared by both directional lights; recomputed
         # only when a caster moves.
         caster_bounds = self._caster_aabb
         # Build every cascade's (view, proj) up front, collecting the receiver
@@ -651,8 +650,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         SAME object while a node is unmoved and a FRESH object once its transform
         or bound changes (the dependency cache in ``vrml/vrml97/nodepath.py``).
         Every shadow cache keyed on this signature -- the camera-independent caster
-        geometry (R1), the per-light depth-map reuse (R2), and the depth-pass
-        grouping (R5) -- rides on that identity. Two silent failure modes if those
+        geometry, the per-light depth-map reuse, and the depth-pass grouping --
+        rides on that identity. Two silent failure modes if those
         methods are ever optimized to break it: reuse a matrix/volume buffer IN
         PLACE on change and the signature never moves, so the shadow maps freeze on
         stale geometry; hand back a fresh wrapper on EVERY call and the signature
@@ -665,7 +664,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     def _refreshCasterData(self) -> List:
         """Rebuild the caster records and (re)derive their camera-independent
         world geometry, reusing the previous frame's world points / AABB corners
-        when no caster has moved (R1).
+        when no caster has moved.
 
         Sets ``_toRender_cache`` (the caster pool for per-light culling),
         ``_caster_points_raw`` (world points, or None) and ``_caster_aabb``
@@ -693,7 +692,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
 
     def _depthMapFresh(self, light_node: Any, transform: Any,
                        array_key: Any) -> bool:
-        """Whether the depth map already stored at ``array_key`` is this light's (R2).
+        """Whether the depth map already stored at ``array_key`` is this light's.
 
         A spot / point shadow map depends only on the light's world transform and
         the caster set -- both camera-independent -- so an unchanged light over an
@@ -897,7 +896,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 skinning(None, program=depth_prog)
 
     def _depthGrouping(self, toRender: List) -> Tuple[List, List]:
-        """Partition depth casters into instanced groups + singles (R4).
+        """Partition depth casters into instanced groups + singles.
 
         Returns ``(groups, singles)``; with instancing disabled every caster is a
         single. The partition depends only on the caster set (geometry keys), not
@@ -908,7 +907,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         if not getattr(self, 'instancing_enabled', False):
             return [], toRender
         # Reuse a previous frame's / other light's partition when the caster set
-        # and this light's visible subset are both unchanged (R5). Building the
+        # and this light's visible subset are both unchanged. Building the
         # key is O(N) id reads, cheaper than build_instance_groups' per-record
         # geometry/material key + winding computation.
         key = (self._caster_sig, tuple(id(rec[4]) for rec in toRender))

@@ -51,6 +51,9 @@ class _FlatEffectsMixin:
 
         def _restoreShapeId(self, masked: Any) -> None: ...
 
+        def applyLightGrid(self, shader: Any, path: Any, tmatrix: Any,
+                           bvolume: Any, program: Any = None) -> None: ...
+
         def currentFog(self) -> Any: ...
 
     # Transmission (KHR_materials_transmission). Filled on the first frame from the
@@ -234,7 +237,7 @@ class _FlatEffectsMixin:
             glEnable(GL_BLEND)
             if id_map is not None:
                 from OpenGLContext.passes._flat import disable_object_id_blend
-                disable_object_id_blend()   # don't blend the picking id (4.6)
+                disable_object_id_blend()   # don't blend the picking id
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
             glDepthMask(0)
 

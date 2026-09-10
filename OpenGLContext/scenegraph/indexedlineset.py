@@ -3,6 +3,8 @@
 Draws through the shader pass under the core profile, and as a display list
 under the compatibility profile.
 """
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
+
 from OpenGL.GL import *
 from OpenGL.GL import glDeleteVertexArrays
 from OpenGL.arrays import vbo
@@ -18,6 +20,12 @@ import numpy as np
 from vrml import protofunctions
 from itertools import zip_longest
 
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
+
 class IndexedLineSet(
     coordinatebounded.CoordinateBounded,
     basenodes.IndexedLineSet
@@ -32,7 +40,7 @@ class IndexedLineSet(
     
     # This code is not OpenGL 3.1 compatible
     """
-    def instanceContentKey(self):
+    def instanceContentKey(self) -> Tuple[Any, ...]:
         """Signature so identical wireframes (same points/index/colour) batch.
 
         Debug collision proxies share one unit box / unit sphere wireframe, so
@@ -43,22 +51,23 @@ class IndexedLineSet(
         col = np.asarray(self.color.color, dtype='f').tobytes() if self.color else b''
         return ('IndexedLineSet', pts, idx, col, bool(self.colorPerVertex))
 
-    def _expand_line_vertices(self):
+    def _expand_line_vertices(self) -> Tuple[Any, Any]:
         """Expand the polylines to flat ``GL_LINES`` vertex/colour pairs (M, 3)."""
         points = np.asarray(self.coord.point, dtype='f')
         indices = expandIndices(self.coordIndex)
-        has_col = bool(self.color and len(self.color.color))
-        colors = np.asarray(self.color.color, dtype='f') if has_col else None
+        colors = (np.asarray(self.color.color, dtype='f')
+                  if self.color and len(self.color.color) else None)
         cidx = None
-        if has_col and self.colorPerVertex:
+        if colors is not None and self.colorPerVertex:
             cidx = (expandIndices(self.colorIndex) if len(self.colorIndex) else indices)
-        verts, cols = [], []
+        verts: List[Any] = []
+        cols: List[Any] = []
         for pi, poly in enumerate(indices):
             pc = cidx[pi] if cidx is not None else None
             for k in range(len(poly) - 1):
                 verts.append(points[poly[k]])
                 verts.append(points[poly[k + 1]])
-                if has_col:
+                if colors is not None:
                     if pc is not None:
                         cols.append(colors[pc[k]])
                         cols.append(colors[pc[k + 1]])
@@ -73,9 +82,10 @@ class IndexedLineSet(
                else np.ones((len(pos), 3), dtype='f'))
         return pos, col
 
-    def instanceGPU(self, mode):
+    def instanceGPU(self, mode: Any) -> "_LineInstanceGPU":
         """Cached ``GL_LINES`` GPU buffers for the shared instanced-line draw path."""
-        gpu = mode.cache.getData(self, key='line_instance_gpu')
+        gpu: Optional[_LineInstanceGPU] = mode.cache.getData(
+            self, key='line_instance_gpu')
         if gpu is not None:
             return gpu
         pos, col = self._expand_line_vertices()
@@ -85,7 +95,7 @@ class IndexedLineSet(
             holder.depend(self, attr)
         return gpu
 
-    def compile( self, mode=None ):
+    def compile( self, mode: Any = None ) -> Any:
         """Compile the IndexedLineSet into a display-list
         """
         if self.coord and len(self.coord.point) and len(self.coordIndex):
@@ -106,6 +116,9 @@ class IndexedLineSet(
             #XXX should do sanity checks here...
             if self.color and len(self.color.color):
                 colors = self.color.color
+                # One entry per polyline, or one per vertex of each polyline;
+                # the loop below tells which by whether the entry is a number.
+                colorIndices: Any
                 if self.colorPerVertex:
                     if len(self.colorIndex):
                         colorIndices = expandIndices( self.colorIndex )
@@ -124,7 +137,7 @@ class IndexedLineSet(
                     glEnable( GL_COLOR_MATERIAL )
                     for index in range(len(indices)):
                         polyline = indices[index]
-                        color = colorIndices[index]
+                        color: Any = colorIndices[index]
                         try:
                             color = int(color)
                         except (TypeError,ValueError):
@@ -168,12 +181,12 @@ class IndexedLineSet(
 
     def render (
         self,
-        visible = 1, # can skip normals and textures if not
-        lit = 1, # can skip normals if not
-        textured = 1, # can skip textureCoordinates if not
-        transparent = 0, # need to sort triangle geometry...
-        mode = None, # the renderpass object for which we compile
-    ):
+        visible: int = 1, # can skip normals and textures if not
+        lit: int = 1, # can skip normals if not
+        textured: int = 1, # can skip textureCoordinates if not
+        transparent: int = 0, # need to sort triangle geometry...
+        mode: Any = None, # the renderpass object for which we compile
+    ) -> int:
         """Render the IndexedFaceSet's geometry for a Shape
 
             visible -- if false, do nothing
@@ -196,7 +209,7 @@ class IndexedLineSet(
             dl()
         return 1
 
-    def _render_shader(self, mode):
+    def _render_shader(self, mode: Any) -> int:
         """Render using shader pipeline for lines with per-vertex color support.
 
         All polylines share one cached, version-keyed VBO (rebuilt only when
@@ -258,7 +271,7 @@ class IndexedLineSet(
         shader_program.use(lit=True)
         return 1
 
-    def _line_buffer(self, mode, has_colors):
+    def _line_buffer(self, mode: Any, has_colors: bool) -> Tuple[Any, int, List[Any]]:
         """Return (vbo, stride, segments) for the polylines, rebuilt only on change.
 
         ``segments`` is a list of (first, count) draw ranges into a single
@@ -273,21 +286,21 @@ class IndexedLineSet(
 
         points = np.asarray(self.coord.point, dtype='f')
         indices = expandIndices(self.coordIndex)
-        colors = None
-        color_indices = None
+        colors: Optional[Any] = None
+        color_indices: List[Any] = []
         if has_colors:
             colors = np.asarray(self.color.color, dtype='f')
             if self.colorPerVertex:
-                color_indices = (expandIndices(self.colorIndex)
-                                 if len(self.colorIndex) else indices)
+                color_indices = list(expandIndices(self.colorIndex)
+                                     if len(self.colorIndex) else indices)
             elif len(self.colorIndex):
                 color_indices = [[ci] * len(indices[i])
                                  for i, ci in enumerate(self.colorIndex)]
             else:
                 color_indices = [[i] * len(poly) for i, poly in enumerate(indices)]
 
-        rows = []
-        segments = []
+        rows: List[Any] = []
+        segments: List[Tuple[int, int]] = []
         first = 0
         width = 6 if has_colors else 3
         for poly_idx, polyline in enumerate(indices):
@@ -295,7 +308,7 @@ class IndexedLineSet(
                 continue
             block = np.empty((len(polyline), width), dtype='f')
             block[:, 0:3] = points[polyline]
-            if has_colors:
+            if colors is not None:
                 poly_color_indices = (color_indices[poly_idx]
                                       if poly_idx < len(color_indices)
                                       else [0] * len(polyline))
@@ -313,7 +326,7 @@ class IndexedLineSet(
 
         if gpu is None:
             gpu = self._line_gpu = {
-                'vbo': vbo.VBO(data, usage='GL_DYNAMIC_DRAW'),
+                'vbo': VBO(data, usage='GL_DYNAMIC_DRAW'),
                 'vao': None,
                 'stride': stride,
                 'has_colors': has_colors,
@@ -342,7 +355,7 @@ class IndexedLineSet(
             holder.depend(self.color, 'color')
         return gpu['vbo'], gpu['stride'], gpu['segments']
 
-    def yeildVertices( self ):
+    def yeildVertices( self ) -> Iterator[Any]:
         """Yield set of vertices to be rendered..."""
         # this is an unfinished start to getting OpenGL 3.1 operation
         if self.coord and len(self.coord.point) and len(self.coordIndex):
@@ -352,6 +365,9 @@ class IndexedLineSet(
             #XXX should do sanity checks here...
             if self.color and len(self.color.color):
                 colors = self.color.color
+                # One entry per polyline, or one per vertex of each polyline;
+                # the loop below tells which by whether the entry is a number.
+                colorIndices: Any
                 if self.colorPerVertex:
                     if len(self.colorIndex):
                         colorIndices = expandIndices( self.colorIndex )
@@ -367,7 +383,7 @@ class IndexedLineSet(
                 # compile the color-friendly ILS
                 for index in range(len(indices)):
                     polyline = indices[index]
-                    color = colorIndices[index]
+                    color: Any = colorIndices[index]
                     try:
                         color = int(color)
                     except (TypeError,ValueError):
@@ -395,9 +411,9 @@ class _LineInstanceGPU(object):
     ``draw_mode`` (GL_LINES), ``indexed`` (False) and an ``_instance_vao`` slot --
     so lines flow through the identical instancing machinery as meshes.
     """
-    def __init__(self, positions, colors):
-        self._pos_vbo = vbo.VBO(np.ascontiguousarray(positions, dtype='f'))
-        self._col_vbo = vbo.VBO(np.ascontiguousarray(colors, dtype='f'))
+    def __init__(self, positions: Any, colors: Any) -> None:
+        self._pos_vbo = VBO(np.ascontiguousarray(positions, dtype='f'))
+        self._col_vbo = VBO(np.ascontiguousarray(colors, dtype='f'))
         self.attr_layout = [(self._pos_vbo, 0, 3), (self._col_vbo, 1, 3)]
         self.idx_vbo = None
         self.indexed = False
@@ -406,7 +422,7 @@ class _LineInstanceGPU(object):
         self._instance_vao = None
         self._instance_vbo = None
 
-    def release(self):
+    def release(self) -> None:
         """Delete the instanced VAO (only safe with the owning context current)."""
         vao = self._instance_vao
         if vao is not None:
@@ -417,10 +433,10 @@ class _LineInstanceGPU(object):
             self._instance_vao = None
 
 
-def expandIndices( indices ):
+def expandIndices( indices: Any ) -> List[List[int]]:
     """Create a set of poly-line definitions"""
-    items = []
-    current = []
+    items: List[List[int]] = []
+    current: List[int] = []
     for i in indices:
         if i == -1:
             if len(current)<2:

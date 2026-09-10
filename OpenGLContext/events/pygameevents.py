@@ -1,13 +1,39 @@
 """Module providing translation from pygame events to OpenGLContext events"""
 
+import re
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
 import pygame
-import string
 from pygame.locals import *
+# Named as well as starred: the star import is how a pygame program is written,
+# but these three are the only names read here and a checker cannot see them
+# through it.
+from pygame.locals import KMOD_ALT, KMOD_CTRL, KMOD_SHIFT
 import logging
 
 log = logging.getLogger(__name__)
+
+#: Keys SDL names in a way the general rule below does not reach.  The keypad's
+#: own Enter is the return key, and the last three are named for what they do
+#: rather than for the legend on the cap, as X11 and wx name them.
+KEY_NAMES: Dict[str, str] = {
+    'space': ' ',
+    'enter': '<return>',
+    'break': '<pause>',
+    'scroll lock': '<scroll>',
+    'left meta': '<start>',
+    'right meta': '<start>',
+}
+
+#: The numeric keypad, which SDL brackets: ``[0]``, ``[/]``.  A digit becomes
+#: ``#0`` and an operator the character it produces, which is how the other
+#: backends spell them.
+KEYPAD = re.compile(r'^\[(.)\]$')
+
+#: A function key, which SDL spells in lower case and OpenGLContext in upper.
+FUNCTION_KEY = re.compile(r'^<f\d+>$')
 
 
 class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
@@ -24,10 +50,16 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
     _pointerGrabbed = False
     #: Where the pointer would be if it had gone on moving, while it is
     #: grabbed and so no longer moving at all.
-    _pygameWalked = None
+    _pygameWalked: Optional[Tuple[int, int]] = None
+
+    if TYPE_CHECKING:
+        # What this mix-in needs of the Pygame context beside it.
+        def addPickEvent(self, event: Any) -> Any: ...
+        def triggerPick(self) -> Any: ...
+        def getViewPort(self) -> Tuple[int, int]: ...
 
     ### KEYBOARD interactions
-    def PygameKeyDown(self, event):
+    def PygameKeyDown(self, event: Any) -> int:
         """Convert a key-press to a context-style event
 
         SDL repeats a held key for itself once
@@ -46,13 +78,13 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
             self.ProcessEvent(PygameKeypressEvent(self, event))
         return 1
 
-    def PygameKeyUp(self, event):
+    def PygameKeyUp(self, event: Any) -> int:
         """Convert a key-release to a context-style event"""
         self.noteKeyUp(event.key)
         self.ProcessEvent(PygameKeyboardEvent(self, event, 0))
         return 1
 
-    def emitKey(self, key, state, modifiers):
+    def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
         """Send a key transition the window system did not report
 
         The name is what the key event carries, so a synthetic release reads
@@ -68,31 +100,31 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         made.state = state
         self.ProcessEvent(made)
 
-    def PygameWindowFocusLost(self, event):
+    def PygameWindowFocusLost(self, event: Any) -> int:
         """Let go of every held key: no release arrives for one held now"""
         self.clearHeldKeys()
         return 1
 
-    def _modifierState(self):
+    def _modifierState(self) -> Tuple[bool, bool, bool]:
         """The (shift, ctrl, alt) triple as the keyboard stands now"""
         mods = pygame.key.get_mods()
         return (bool(mods & KMOD_SHIFT), bool(mods & KMOD_CTRL),
                 bool(mods & KMOD_ALT))
 
     ### MOUSE Interaction
-    def PygameMouseButtonUp(self, event):
+    def PygameMouseButtonUp(self, event: Any) -> int:
         """Convert a mouse-button-release to a context-style event"""
         self.addPickEvent(PygameMouseButtonEvent(self, event, state=0))
         self.triggerPick()
         return 1
 
-    def PygameMouseButtonDown(self, event):
+    def PygameMouseButtonDown(self, event: Any) -> int:
         """Convert a mouse-button-press to a context-style event"""
         self.addPickEvent(PygameMouseButtonEvent(self, event, state=1))
         self.triggerPick()
         return 1
 
-    def PygameMouseMotion(self, event):
+    def PygameMouseMotion(self, event: Any) -> int:
         """Convert a mouse-button-move to a context-style event
 
         The movement sampler is told directly as well as through the pick
@@ -113,7 +145,8 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         self.triggerPick()
         return 1
 
-    def _recordMotion(self, record, event):
+    def _recordMotion(self, record: Callable[[int, int], Any],
+                      event: Any) -> None:
         """Feed one SDL motion event to the sampler, as a position it can take
         a difference from.
 
@@ -146,9 +179,9 @@ class PygameXEvent(object):
             mouse buttons, a three-value list
     """
 
-    CURRENTBUTTONSTATES = [0, 0, 0]
+    CURRENTBUTTONSTATES: List[int] = [0, 0, 0]
 
-    def _getModifiers(self):
+    def _getModifiers(self) -> Tuple[bool, bool, bool]:
         "get the state of the keyboard modifiers"
         mods = pygame.key.get_mods()
         return (
@@ -157,21 +190,34 @@ class PygameXEvent(object):
             not (not (mods & KMOD_ALT)),
         )
 
-    def _translateKey(self, name):
-        "Translate a key from pygame to interactivecontext"
-        if len(name) > 1:
-            if name[0] == "[":
-                name = "#" + name[1]
-            if name not in ("left", "right"):
-                name = name.replace("left", "")
-                name = name.replace("right", "")
-            name = name.replace(" ", "")
-            name = "<" + name + ">"
-            if "<f1>" <= name <= "<f15>":
-                name = name.upper()
+    def _translateKey(self, name: str) -> str:
+        """The OpenGLContext name of a key SDL has named
+
+        The vocabulary is the one
+        :meth:`~OpenGLContext.events.keyboardevents.KeyboardEventManager.registerCallback`
+        documents, which is what every other backend produces, so a binding
+        written once works whichever backend opened the window.
+        """
+        if len(name) <= 1:
+            return name
+        special = KEY_NAMES.get(name)
+        if special is not None:
+            return special
+        keypad = KEYPAD.match(name)
+        if keypad is not None:
+            character = keypad.group(1)
+            return ('#' + character) if character.isdigit() else character
+        if name not in ("left", "right"):
+            # SDL names a paired key by its side ("left shift"); a binding asks
+            # for shift.  The arrow keys are called "left" and "right" outright
+            # and keep their names.
+            name = name.replace("left", "").replace("right", "")
+        name = "<" + name.replace(" ", "") + ">"
+        if FUNCTION_KEY.match(name):
+            return name.upper()
         return name
 
-    def _updateButtons(self, button, state):
+    def _updateButtons(self, button: int, state: int) -> int:
         """Update the tracked state for mouse buttons
 
         pygame is 1+ context button IDs
@@ -194,7 +240,8 @@ class PygameXEvent(object):
 class PygameMouseButtonEvent(PygameXEvent, mouseevents.MouseButtonEvent):
     """Pygame-specific mouse-button state change event"""
 
-    def __init__(self, context, PygameEventObject, state=0):
+    def __init__(self, context: Any, PygameEventObject: Any,
+                 state: int = 0) -> None:
         super(PygameMouseButtonEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -209,7 +256,7 @@ class PygameMouseButtonEvent(PygameXEvent, mouseevents.MouseButtonEvent):
 class PygameMouseMoveEvent(PygameXEvent, mouseevents.MouseMoveEvent):
     """Pygame-specific mouse-movement event"""
 
-    def __init__(self, context, PygameEventObject):
+    def __init__(self, context: Any, PygameEventObject: Any) -> None:
         super(PygameMouseMoveEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -226,7 +273,8 @@ class PygameMouseMoveEvent(PygameXEvent, mouseevents.MouseMoveEvent):
 class PygameKeyboardEvent(PygameXEvent, keyboardevents.KeyboardEvent):
     """Pygame-specific keyboard (character) event"""
 
-    def __init__(self, context, PygameEventObject, state=0):
+    def __init__(self, context: Any, PygameEventObject: Any,
+                 state: int = 0) -> None:
         super(PygameKeyboardEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -238,7 +286,7 @@ class PygameKeyboardEvent(PygameXEvent, keyboardevents.KeyboardEvent):
 class PygameKeypressEvent(PygameXEvent, keyboardevents.KeypressEvent):
     """Pygame-specific key-press (or release) event"""
 
-    def __init__(self, context, PygameEventObject):
+    def __init__(self, context: Any, PygameEventObject: Any) -> None:
         super(PygameKeypressEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass

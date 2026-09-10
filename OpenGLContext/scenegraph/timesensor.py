@@ -1,4 +1,6 @@
 """VRML97 TimeSensor node"""
+from typing import Any
+
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import protofunctions
 from OpenGLContext.events import timer
@@ -15,7 +17,7 @@ class TimeSensor(basenodes.TimeSensor):
     events.  These are normally used to run animations or,
     with scripts, to provide higher-level interactivity.
     """
-    def getTimer( self, context ):
+    def getTimer( self, context: Any ) -> Any:
         """Retrieve the timer for this time-sensor"""
         timerObject = context.cache.getData( self, key='timer' )
         if timerObject is None:
@@ -38,14 +40,14 @@ class TimeSensor(basenodes.TimeSensor):
             )
             timerObject.addEventHandler( "cycle", function = self.onCycle )
         return timerObject
-    def bind( self, context ):
+    def bind( self, context: Any ) -> bool:
         """Bind this time-sensor to a particular context"""
         self.getTimer(context)
         return True
-    def onFraction( self, event ):
+    def onFraction( self, event: Any ) -> None:
         """Handle a fractional event from our Timer"""
         self.fraction_changed = event.fraction()
         self.time = event.value()
-    def onCycle( self, event ):
+    def onCycle( self, event: Any ) -> None:
         """Handle a cycle event from our Timer"""
         self.cycleTime = event.value()

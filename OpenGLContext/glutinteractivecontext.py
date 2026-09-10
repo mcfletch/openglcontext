@@ -1,4 +1,5 @@
 """Interactive context using the GLUT API (provides navigation support)"""
+from typing import Any
 
 from OpenGLContext import interactivecontext, glutcontext, context
 from OpenGLContext.move import viewplatformmixin
@@ -16,7 +17,7 @@ if __name__ == "__main__":
     from drawcube import drawCube
     from OpenGL.GL import glTranslated
     class TestRenderer(GLUTInteractiveContext):
-        def Render( self, mode = None):
+        def Render( self, mode: Any = None) -> None:
             GLUTInteractiveContext.Render (self, mode)
             glTranslated ( 2,0,-4)
             drawCube()

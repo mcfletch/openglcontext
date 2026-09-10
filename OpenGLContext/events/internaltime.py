@@ -1,4 +1,6 @@
 """Track a (potentially scaled) time with respect to an external time"""
+from typing import List, Optional, Sequence
+
 from .timeevents import *
 
 class InternalTime(object):
@@ -10,10 +12,11 @@ class InternalTime(object):
     values, which allows for time reversal, slowdown and speed up.
     """
     def __init__(
-        self, duration=1.0, repeating=0, multiplier = 1.0,
-        current=None, currentCount=None,
-        discreteOnly=0
-    ):
+        self, duration: float = 1.0, repeating: int = 0,
+        multiplier: float = 1.0,
+        current: Optional[float] = None, currentCount: Optional[int] = None,
+        discreteOnly: int = 0,
+    ) -> None:
         """Initialise (but don't start) the timer
         
         duration -- length in seconds (float) for a single cycle
@@ -27,11 +30,15 @@ class InternalTime(object):
             through the set
         discreteOnly -- suppress the generation of fractional events...
         """
-        self.duration = float(duration)
         if not duration:
-            raise ValueError( """%s given %s as a duration, cannot have NULL duration"""%(duration))
+            raise ValueError(
+                """%s given %r as a duration, cannot have NULL duration"""%(
+                    self.__class__.__name__, duration,
+                )
+            )
+        self.duration = float(duration)
         self.active = 0
-        self.lastRealTime = None
+        self.lastRealTime: Optional[float] = None
         self.count = currentCount or 0
         self.repeating = repeating
         self.multiplier = multiplier
@@ -40,7 +47,7 @@ class InternalTime(object):
             self.current = float(current)
         else:
             self._resetCurrent()
-    def __repr__( self ):
+    def __repr__( self ) -> str:
         return """<%s active=%s duration=%s repeating=%s multiplier=%s discreteOnly=%s>"""%(
             self.__class__.__name__,
             self.active,
@@ -50,36 +57,36 @@ class InternalTime(object):
             self.discreteOnly,
         )
         
-    def getCurrent( self ):
+    def getCurrent( self ) -> float:
         """Get current internal time
 
         You could pass this to another internal time
         that's dependent on this time as "realTime"
         """
         return self.current
-    def getFraction( self ):
+    def getFraction( self ) -> float:
         """Get current internal time as fraction of duration.
         """
         return self.current/ self.duration
-    def getExternal( self ):
+    def getExternal( self ) -> Optional[float]:
         """Get the last "external" time passed to the timer"""
         return self.lastRealTime
     
-    def start( self, realTime):
+    def start( self, realTime: float) -> List[TimeEvent]:
         """Start the timer from 0 for forward multipliers, duration for reverse multipliers"""
         self.active = 1
         self.lastRealTime = realTime
         self._resetCurrent()
         self.count = self.count + 1
         return [ StartEvent( self ) ]
-    def pause( self, realTime):
+    def pause( self, realTime: float) -> List[TimeEvent]:
         """Pause the timer, use resume to continue
 
         Note: does not create a FractionalEvent
         """
         self.active = 0
         return [ PauseEvent( self ) ]
-    def resume( self, realTime):
+    def resume( self, realTime: float) -> List[TimeEvent]:
         """Continue a paused timer
 
         Note: does not create a FractionalEvent
@@ -87,7 +94,7 @@ class InternalTime(object):
         self.active = 1
         self.lastRealTime = realTime
         return [ ResumeEvent( self ) ]
-    def stop( self, realTime):
+    def stop( self, realTime: float) -> List[TimeEvent]:
         """Stop this cycle (reset current fraction)"""
         if self.active:
             self.active = 0
@@ -95,9 +102,11 @@ class InternalTime(object):
             return [ FractionalEvent(self), StopEvent( self ) ]
         return []
     
-    def poll( self, realTime):
+    def poll( self, realTime: float) -> Sequence[TimeEvent]:
         """Called by system/clients to determine if there are any waiting events"""
-        if self.active:
+        # An active timer always has a last external time: start and resume are
+        # the only things that make it active, and both record one.
+        if self.active and self.lastRealTime is not None:
             delta = realTime-self.lastRealTime
             self.lastRealTime = realTime
             self.current = self.current + (delta* self.multiplier)
@@ -111,26 +120,26 @@ class InternalTime(object):
         return ( )
 
     # internal utility functions
-    def _naturalFinish( self ):
+    def _naturalFinish( self ) -> bool:
         """Determine if there has been a "natural finish" of the timer"""
         return (
             (self.multiplier > 0 and self.current >= self.duration) or
             (self.multiplier < 0 and self.current <= 0)
         )
-    def _repeats( self ):
+    def _repeats( self ) -> bool:
         """Does the timer repeat, 0-no, 1-yes, >1-yes, count times"""
         return (self.repeating > 0)
         
-    def _finish( self, realTime ):
+    def _finish( self, realTime: float ) -> List[TimeEvent]:
         """Set in active and return finalization events"""
         self.active = 0
         if self.discreteOnly:
             return [ StopEvent( self ), ]
         else:
             return [ FractionalEvent (self), StopEvent( self ), ]
-    def _period( self, realTime ):
+    def _period( self, realTime: float ) -> List[TimeEvent]:
         """Interpret a cycle/period boundary, returning appropriate messages"""
-        messages = []
+        messages: List[TimeEvent] = []
         if self._repeats() and (self.count < self.repeating or self.repeating == 1):
             # repeat forever, or not yet done
             self._resetCurrent( 0 )
@@ -142,7 +151,7 @@ class InternalTime(object):
             # we're finished!
             return self._finish( realTime )
         return messages
-    def _resetCurrent( self, restart = 1 ):
+    def _resetCurrent( self, restart: int = 1 ) -> None:
         """Reset the current cycle
 
         restart -- whether to return to the start of the cycle,

@@ -289,7 +289,8 @@ def _family(names: Iterable[str]) -> Dict[str, str]:
              for name in names}
     for signature, table in FAMILIES:
         if signature <= plain:
-            return table
+            found: Dict[str, str] = table
+            return found
     return {}
 
 

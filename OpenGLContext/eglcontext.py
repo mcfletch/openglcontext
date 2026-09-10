@@ -64,6 +64,7 @@ try it and fall back.
 import ctypes
 import logging
 import os
+from typing import Any, Iterable, List, Literal, Mapping, Optional, Sequence
 
 from OpenGL import EGL
 from OpenGL.GL import glFlush
@@ -73,6 +74,7 @@ from OpenGL.EGL.EXT.platform_device import EGL_PLATFORM_DEVICE_EXT
 
 from OpenGLContext import contextresources
 from OpenGLContext.context import Context
+from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.interactivecontext import InteractiveContext
 from OpenGLContext.move import viewplatformmixin
 
@@ -113,7 +115,7 @@ class EGLContextError(RuntimeError):
     """An offscreen context could not be created, or was misconfigured."""
 
 
-def prefersSoftware(environ=None) -> bool:
+def prefersSoftware(environ: Optional[Mapping[str, str]] = None) -> bool:
     """Whether this environment is asking for software rendering."""
     if environ is None:
         environ = os.environ
@@ -122,7 +124,10 @@ def prefersSoftware(environ=None) -> bool:
     return environ.get('GALLIUM_DRIVER', '').strip().lower() in _SOFTWARE_DRIVERS
 
 
-def chooseDevice(available, environ=None):
+def chooseDevice(
+    available: Iterable[DeviceInfo],
+    environ: Optional[Mapping[str, str]] = None,
+) -> Optional[DeviceInfo]:
     """The device to render on, or ``None`` when there are none.
 
     An explicit ``OPENGLCONTEXT_EGL_DEVICE`` wins.  Otherwise the first device
@@ -173,13 +178,13 @@ def chooseDevice(available, environ=None):
 
 
 def configAttributes(
-    depthBuffer=24,
-    stencilBuffer=8,
-    alpha=False,
-    rgb=True,
-    multisampleSamples=0,
-    multisampleBuffer=0,
-):
+    depthBuffer: int = 24,
+    stencilBuffer: int = 8,
+    alpha: bool = False,
+    rgb: bool = True,
+    multisampleSamples: int = 0,
+    multisampleBuffer: int = 0,
+) -> List[int]:
     """The ``eglChooseConfig`` attribute list for these buffer settings.
 
     Sizes of zero or less are left out rather than requested as zero, so the
@@ -187,7 +192,7 @@ def configAttributes(
     ``-1`` means.  The surface type is always a pbuffer: there is no window, so
     it has to be a surface EGL can make on its own.
     """
-    attributes = [
+    attributes: List[int] = [
         EGL.EGL_SURFACE_TYPE, EGL.EGL_PBUFFER_BIT,
         EGL.EGL_RENDERABLE_TYPE, EGL.EGL_OPENGL_BIT,
         # ``rgb`` picks the kind of colour buffer, not merely how many bits of
@@ -217,7 +222,7 @@ def configAttributes(
     return attributes
 
 
-def _eglArray(values):
+def _eglArray(values: Sequence[int]) -> Any:
     return (EGL.EGLint * len(values))(*[int(value) for value in values])
 
 
@@ -264,13 +269,18 @@ class EGLContext(
     #: wants a sequence sets it higher.
     frameCount = 1
 
-    display = None
-    surface = None
-    context = None
-    device = None
-    config = None
+    #: The EGL objects this context owns, or None before they are made and
+    #: after they have been given back.
+    display: Any = None
+    surface: Any = None
+    context: Any = None
+    device: Optional[DeviceInfo] = None
+    config: Any = None
+    #: Settled by the constructor before the EGL context exists, so it is never
+    #: None for a context that was built.
+    contextDefinition: ContextDefinition
 
-    def __init__(self, definition=None, **named):
+    def __init__(self, definition: Any = None, **named: Any) -> None:
         # Resolved first: the buffer sizes are config-selection parameters, so
         # they have to be known before the EGL context exists, exactly as the
         # windowed backends resolve them before creating a window.
@@ -308,16 +318,18 @@ class EGLContext(
 
     def _selectDevice(self) -> DeviceInfo:
         available = devices()
-        if not available:
+        # chooseDevice answers None only for an empty list, so the two
+        # questions -- are there any, and which -- are one question here.
+        device = chooseDevice(available) if available else None
+        if device is None:
             raise EGLContextError(
                 'no EGL devices; this system cannot create an offscreen EGL '
                 'context (EGL_EXT_device_enumeration is missing or reports none)'
             )
-        device = chooseDevice(available)
         log.info('EGL offscreen context on %r of %d device(s)', device, len(available))
         return device
 
-    def _openDisplay(self, device):
+    def _openDisplay(self, device: DeviceInfo) -> Any:
         display = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, device.handle, None)
         if not display or display == EGL.EGL_NO_DISPLAY:
             raise EGLContextError('eglGetPlatformDisplayEXT gave no display for %r' % (device,))
@@ -327,7 +339,7 @@ class EGLContext(
         log.debug('EGL %d.%d on %r', major.value, minor.value, device)
         return display
 
-    def _chooseConfig(self, definition):
+    def _chooseConfig(self, definition: Any) -> Any:
         if not EGL.eglBindAPI(EGL.EGL_OPENGL_API):
             raise EGLContextError('eglBindAPI(EGL_OPENGL_API) failed; no desktop GL here')
         attributes = configAttributes(
@@ -339,10 +351,10 @@ class EGLContext(
             multisampleBuffer=max(0, definition.multisampleBuffer),
         )
         configs = (EGL.EGLConfig * 1)()
-        found = EGL.EGLint()
+        found = (EGL.EGLint * 1)()
         if not EGL.eglChooseConfig(
-            self.display, _eglArray(attributes), configs, 1, ctypes.byref(found)
-        ) or not found.value:
+            self.display, _eglArray(attributes), configs, 1, found
+        ) or not found[0]:
             raise EGLContextError(
                 'no EGL config matched the requested buffers '
                 '(depth=%s stencil=%s alpha=%s samples=%s)'
@@ -355,13 +367,13 @@ class EGLContext(
             )
         return configs[0]
 
-    def _createContext(self, config):
+    def _createContext(self, config: Any) -> Any:
         context = EGL.eglCreateContext(self.display, config, EGL.EGL_NO_CONTEXT, None)
         if not context or context == EGL.EGL_NO_CONTEXT:
             raise EGLContextError('eglCreateContext failed')
         return context
 
-    def _createSurface(self, config, width, height):
+    def _createSurface(self, config: Any, width: int, height: int) -> Any:
         attributes = _eglArray([EGL.EGL_WIDTH, width, EGL.EGL_HEIGHT, height, EGL.EGL_NONE])
         surface = EGL.eglCreatePbufferSurface(self.display, config, attributes)
         if not surface or surface == EGL.EGL_NO_SURFACE:
@@ -370,22 +382,22 @@ class EGLContext(
 
     # -- the Context contract ----------------------------------------------
 
-    def _makeCurrent(self):
+    def _makeCurrent(self) -> None:
         """Bind the EGL context to this thread, and nothing else."""
         if not EGL.eglMakeCurrent(self.display, self.surface, self.surface, self.context):
             raise EGLContextError('eglMakeCurrent failed')
 
-    def setCurrent(self, blocking=1):
+    def setCurrent(self, blocking: int = 1) -> None:
         """Take the context and the scenegraph lock, then bind the EGL context."""
         Context.setCurrent(self, blocking)
         self._makeCurrent()
         self.bindContextResources(self._glHandle())
 
-    def _glHandle(self):
+    def _glHandle(self) -> Any:
         """The GL context handle the caches and PyOpenGL key on."""
         return contextresources.context_key()
 
-    def OnResize(self, width, height):
+    def OnResize(self, width: int, height: int) -> None:
         """Render at a new size.
 
         An EGL pbuffer is created at a fixed size and cannot be resized, so this
@@ -406,7 +418,7 @@ class EGLContext(
         self.ViewPort(width, height)
         self.triggerRedraw(1)
 
-    def SwapBuffers(self):
+    def SwapBuffers(self) -> None:
         """Finish the frame.
 
         A pbuffer has nothing to present to, so this is a flush: the point at
@@ -420,7 +432,7 @@ class EGLContext(
         """
         glFlush()
 
-    def MainLoop(self):
+    def MainLoop(self) -> None:
         """Render frames until nothing wants another, then release the context.
 
         :attr:`frameCount` is the floor -- one frame, for the common case of
@@ -441,7 +453,7 @@ class EGLContext(
             self.stopTelemetry('mainloop-ended')
             self.close()
 
-    def OnQuit(self, event=None):
+    def OnQuit(self, event: Any = None) -> Any:
         """Let go of the EGL objects, then end the application.
 
         The release happens **here** rather than after the loop because
@@ -452,7 +464,7 @@ class EGLContext(
         self.close()
         return Context.OnQuit(self, event)
 
-    def releaseWindow(self):
+    def releaseWindow(self) -> None:
         """Let this context's GL objects and its EGL objects go
 
         The name every backend answers to; this one has no window, so it is
@@ -460,7 +472,7 @@ class EGLContext(
         """
         self.close()
 
-    def close(self):
+    def close(self) -> None:
         """Release the GL objects, the context, the surface and the display.
 
         The engine's caches hold GL objects belonging to this context, so they
@@ -474,7 +486,7 @@ class EGLContext(
         self.releaseContextResources(self._glHandle())
         self._releaseEGL()
 
-    def _releaseEGL(self):
+    def _releaseEGL(self) -> None:
         """Give back whatever EGL objects this context has taken.
 
         Written to be callable part-way through construction, where some of them
@@ -495,15 +507,15 @@ class EGLContext(
         EGL.eglTerminate(self.display)
         self.display = None
 
-    def __enter__(self):
+    def __enter__(self) -> 'EGLContext':
         return self
 
-    def __exit__(self, *exception):
+    def __exit__(self, *exception: Any) -> Literal[False]:
         self.close()
         return False
 
     @classmethod
-    def ContextMainLoop(cls, *args, **named):
+    def ContextMainLoop(cls, *args: Any, **named: Any) -> Any:
         instance = cls(*args, **named)
         if instance.contextDefinition.profileFile:
             import cProfile
@@ -520,7 +532,7 @@ if __name__ == '__main__':
     )
 
     class TestRenderer(EGLContext):
-        def Render(self, mode=None):
+        def Render(self, mode: Any = None) -> None:
             EGLContext.Render(self, mode)
             glClearColor(0.2, 0.3, 0.3, 1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)

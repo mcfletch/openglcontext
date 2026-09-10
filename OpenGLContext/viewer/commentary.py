@@ -21,6 +21,7 @@ reader loses the character, which is what a line of commentary is worth, rather
 than the render or the error report, which are not.
 """
 import sys
+from typing import Optional, TextIO
 
 __all__ = ['say', 'warn']
 
@@ -35,7 +36,7 @@ def warn(text: str) -> None:
     _write(sys.stderr, text)
 
 
-def _write(stream, text: str) -> None:
+def _write(stream: Optional[TextIO], text: str) -> None:
     """*text* to *stream*, escaping whatever that stream has no encoding for.
 
     The stream is passed in by the caller each time rather than held here, so

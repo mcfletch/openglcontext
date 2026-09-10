@@ -6,6 +6,8 @@ for a VRML97 viewer, such as frame-rate reporting, extraction
 of viewpoint, and similar useful things.
 """
 
+from typing import TYPE_CHECKING, Any
+
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import os
@@ -18,8 +20,22 @@ import logging
 
 log = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    class _Host:
+        """What this mix-in needs of the class beside it.
 
-class VRMLContext(object):
+        Declared for a checker and aliased to ``object`` at run time, so the
+        MRO is exactly what the concrete context's bases make it:
+        :class:`~OpenGLContext.context.Context` is what really provides these,
+        and naming it as a base here would put a second copy in that order.
+        """
+
+        def getTTFFiles(self) -> Any: ...
+else:
+    _Host = object
+
+
+class VRMLContext(_Host):
     """VRML97-loading Context testing class
 
     Major problem here is that we're using testingcontext,
@@ -32,9 +48,9 @@ class VRMLContext(object):
     initialPosition = (0, 0, 10)
     USE_FRUSTUM_CULLING = 1
     USE_OCCLUSION_CULLING = 0
-    sg = None
+    sg: Any = None
 
-    def setupFontProviders(self):
+    def setupFontProviders(self) -> None:
         """Load font providers for the context
 
         See the OpenGLContext.scenegraph.text package for the
@@ -67,9 +83,9 @@ class VRMLContext(object):
                 """Unable to import GLUT-based font renderer, no GLUT bitmap font support (this is unexpected)!"""
             )
 
-    def OnInit(self):
+    def OnInit(self) -> None:
         """Initialise the VRMLContext keyboard shortcuts"""
 
-    def load(self, filename):
+    def load(self, filename: str) -> None:
         """Load given url, replacing current scenegraph"""
         self.sg = Loader.load(filename)

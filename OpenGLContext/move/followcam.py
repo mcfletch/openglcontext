@@ -35,7 +35,7 @@ from OpenGLContext import quaternion
 def _normalize(v: Any) -> np.ndarray:
     v = np.asarray(v, dtype='d')
     n = np.linalg.norm(v)
-    return v / n if n > 1e-12 else v
+    return np.asarray(v / n) if n > 1e-12 else v
 
 
 def look_at_orientation(eye: Any, target: Any,
@@ -69,7 +69,8 @@ def _matrix_to_axis_angle(R: np.ndarray) -> Tuple[float, float, float, float]:
     row-vector one the rest of the engine composes in, so it is handed the
     transpose.
     """
-    return quaternion.fromMatrix(np.asarray(R, 'd').T).XYZR()
+    x, y, z, r = quaternion.fromMatrix(np.asarray(R, 'd').T).XYZR()
+    return float(x), float(y), float(z), float(r)
 
 
 class FollowCamera:

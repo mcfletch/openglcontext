@@ -2,6 +2,7 @@
 """
 from OpenGLContext.scenegraph import imagetexture
 from OpenGL.arrays import vbo
+from typing import Any
 from OpenGLContext.arrays import array
 from vrml import field, protofunctions, fieldtypes, node
 from vrml.vrml97 import basenodes, nodetypes
@@ -13,16 +14,22 @@ from OpenGLContext import texture
 from OpenGLContext.arrays import *
 from math import pi
 
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
+
 class URLField( fieldtypes.MFString ):
     """Cube-background URL field which forwards to the corresponding ImageTexture node's url
     """
     fieldType = "MFString"
-    def fset( self, client, value, notify=1 ):
+    def fset( self, client: Any, value: Any, notify: int = 1 ) -> Any:
         value = super( URLField, self).fset( client, value, notify )
         imageObject = getattr(client, self.name[:-3])
         imageObject.url = value
         return value
-    def fdel( self, client, notify=1 ):
+    def fdel( self, client: Any, notify: int = 1 ) -> Any:
         value = super( URLField, self).fdel( client, notify )
         imageObject = getattr(client, self.name[:-3])
         delattr( imageObject, 'url')
@@ -46,7 +53,7 @@ class _CubeBackground( object ):
     
     bound = field.newField( 'bound', 'SFBool', 1, 0)
     
-    def Render( self, mode, clear=1 ):
+    def Render( self, mode: Any, clear: int = 1 ) -> Any:
         """Render the cube background
 
         This renders those of our cube-faces which are
@@ -116,7 +123,7 @@ class _CubeBackground( object ):
     ], 'H')
 
     # TODO: should have one-per-context...
-    def compile( self, mode ):
+    def compile( self, mode: Any ) -> Any:
         """Compile a VBO with our various triangles to render"""
         images = {
             '-x':self.left,
@@ -126,7 +133,7 @@ class _CubeBackground( object ):
             '-z':self.front,
             '+z':self.back,
         }
-        def all_same( key ):
+        def all_same( key: str ) -> bool:
             current = None
             for _k,value in images.items():
                 new = getattr(value,key)
@@ -144,8 +151,8 @@ class _CubeBackground( object ):
         except ValueError:
             return None
         
-        vert_vbo = vbo.VBO( self.CUBE_VERTICES )
-        index_vbo = vbo.VBO( self.CUBE_INDICES, target=GL_ELEMENT_ARRAY_BUFFER )
+        vert_vbo = VBO( self.CUBE_VERTICES )
+        index_vbo = VBO( self.CUBE_INDICES, target=GL_ELEMENT_ARRAY_BUFFER )
         # this shader is from 
         shader = shaders.compileProgram(
             shaders.compileShader(

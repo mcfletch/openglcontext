@@ -88,7 +88,8 @@ class Panel(RootWidget):
         #: Named actions a widget can trigger.  Each is called with the panel
         #: and the widget, so one command can serve several buttons.
         self.commands: Dict[str, Callable[['Panel', Widget], None]] = {
-            'close': lambda panel, widget: panel.close(widget.value or None),
+            'close': lambda panel, widget: panel.close(
+                getattr(widget, 'value', None) or None),
         }
         #: Keys that act without a control of their own -- a second spelling
         #: of an answer, a shortcut to a page.  Each is called with the panel.

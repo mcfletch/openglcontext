@@ -43,6 +43,7 @@ from OpenGLContext.ui.gallery import Picture
 from OpenGLContext.ui.hudwidgets import HUDGroup, Readout
 from OpenGLContext.viewer.sceneviewer import ViewerContext
 from OpenGLContext.viewer import ViewerOptions
+from OpenGLContext.viewer.caption import CaptionLayer
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders import gltf_demos
 
@@ -395,14 +396,14 @@ class TestContext(ViewerContext):
         self._request_current_model()
 
     # -- the reference thumbnail -----------------------------------------
-    def setupCaption(self):
+    def setupCaption(self) -> 'CaptionLayer':
         """The caption, plus the reference screenshot beside it.
 
         The reference is what makes this a comparison rather than a gallery, so
         it is a picture in the same HUD layer as the caption -- one tree, one
         batched draw, and the cache behind it downloads and evicts on its own.
         """
-        layer = ViewerContext.setupCaption(self)
+        layer: CaptionLayer = ViewerContext.setupCaption(self)
         self.referencePicture = ReferencePicture()
         layer.children = list(layer.children) + [self.referencePicture]
         return layer
@@ -417,7 +418,29 @@ class TestContext(ViewerContext):
         self.referencePicture.url = self.referenceURL()
 
 
-def demo_config(argv: list[str] | None = None) -> ViewerOptions:
+@dataclass
+class DemoOptions(ViewerOptions):
+    """The browser's options: the viewer's, plus which knobs were named
+
+    A per-model profile (:func:`resolve_view`, :func:`resolve_physics`,
+    :func:`resolve_background`) defers to a setting the user gave on the command
+    line, so which ones they gave is recorded rather than guessed at.
+    """
+
+    #: Whether `--physics`/`--no-physics` was on the command line.
+    _physics_explicit: bool = False
+    #: Whether `--turntable` was.
+    _turntable_explicit: bool = False
+    #: Whether `--yaw` was.
+    _yaw_explicit: bool = False
+    #: Whether `--background` was.
+    _background_explicit: bool = False
+    #: The background this run defaults to, which a profile falls back to
+    #: rather than to whatever the previous model left in `background`.
+    _background_default: str | None = None
+
+
+def demo_config(argv: list[str] | None = None) -> DemoOptions:
     """Parse + massage the browser's config (no GL). Separated so it is testable.
 
     The browser centres + turntables every model and ignores embedded cameras, so
@@ -431,7 +454,7 @@ def demo_config(argv: list[str] | None = None) -> ViewerOptions:
                         help='catalogue model to open on, by sample name '
                              '(e.g. DamagedHelmet) or 0-based index; '
                              'default: the MODEL env var, else the first model')
-    args = parser.parse_args(argv, namespace=ViewerOptions())
+    args = parser.parse_args(argv, namespace=DemoOptions())
     args.no_cameras = True
     args.turntable = True
     # Most models read cleanest on black; the per-model profile (resolve_background)

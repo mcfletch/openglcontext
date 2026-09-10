@@ -11,11 +11,13 @@ absolute URL (a local document's references are confined to its directory; a
 remote document's to its origin).
 """
 
+import logging
 import os
 import urllib.parse
 from urllib.request import url2pathname
 from io import BytesIO
-from OpenGL._bytes import bytes, unicode, as_8_bit
+from typing import Any, Dict, IO, List, Optional, Sequence, Tuple, Union
+from OpenGL._bytes import as_8_bit
 from OpenGLContext.loaders.resolver import (
     Resolver,
     _fetch_url,
@@ -23,19 +25,24 @@ from OpenGLContext.loaders.resolver import (
     DEFAULT_MAX_RESOURCE_BYTES,
 )
 
+log = logging.getLogger(__name__)
 
-def as_unicode(u):
+#: What one fetch answers with: the URL it settled on, an open binary stream, the
+#: name to report it under, and the response headers where the transport had any.
+Fetched = Tuple[str, IO[bytes], str, Optional[Any]]
+#: What :meth:`_Loader.__call__` hands a handler: the same four with the name
+#: ahead of the stream, which is the order every handler's ``__call__`` takes.
+Loaded = Tuple[str, str, IO[bytes], Optional[Any]]
+
+
+def as_unicode(u: Union[bytes, str]) -> str:
+    """*u* as text, decoding UTF-8 bytes where that is what arrived."""
     if isinstance(u, bytes):
-        return unicode(u, "utf-8")
+        return u.decode("utf-8")
     return u
 
 
-import logging
-
-log = logging.getLogger(__name__)
-
-
-def url_scheme(url):
+def url_scheme(url: str) -> str:
     """The scheme of ``url``, or ``''`` where it is a filesystem path.
 
     ``urlsplit`` reads the drive letter of a Windows path as a scheme --
@@ -47,7 +54,7 @@ def url_scheme(url):
     return "" if len(scheme) < 2 else scheme
 
 
-def local_path(url):
+def local_path(url: str) -> str:
     """Filesystem path for a local (no-scheme or ``file://``) URL.
 
     The one place that rule lives, so a ``file:`` URL means the same thing to
@@ -67,7 +74,7 @@ def local_path(url):
     return url2pathname(parts.path) if parts.path else url
 
 
-def join_reference(baseURL, ref):
+def join_reference(baseURL: str, ref: str) -> str:
     """Resolve a document's reference against where the document itself is.
 
     ``urljoin`` resolves a reference against a *URL*, and a filesystem path is
@@ -88,7 +95,7 @@ def join_reference(baseURL, ref):
     return "%s/%s" % (directory.replace(os.sep, "/").rstrip("/"), ref)
 
 
-def _resolver_for(baseURL, max_bytes=DEFAULT_MAX_RESOURCE_BYTES):
+def _resolver_for(baseURL: str, max_bytes: int = DEFAULT_MAX_RESOURCE_BYTES) -> Resolver:
     """Build a :class:`Resolver` confining references to ``baseURL``'s scope.
 
     A remote (http(s)) base yields a same-origin resolver; a local base yields a
@@ -114,13 +121,17 @@ class _Loader(object):
 
     def __init__(
         self,
-    ):
+    ) -> None:
         """Initialize the Loader"""
         # One Resolver per base URL, so a document's repeated references (a marble
         # texture used by many shapes) are fetched and memoised once.
-        self._resolvers = {}
+        self._resolvers: Dict[str, Resolver] = {}
 
-    def __call__(self, url, baseURL=None):
+    def __call__(
+        self,
+        url: Union[bytes, str, Sequence[Union[bytes, str]]],
+        baseURL: Optional[str] = None,
+    ) -> Loaded:
         """Load the given multi-value url and call callbacks
 
         url -- vrml97-style url (multi-value string)
@@ -134,12 +145,11 @@ class _Loader(object):
         headers is always None (kept for call-site compatibility).
         """
         log.info("Loading: %s, %s", url, baseURL)
-        url = as_unicode(url)
-        if isinstance(url, unicode):
-            url = [url]
+        if isinstance(url, (bytes, str)):
+            urls: List[str] = [as_unicode(url)]
         else:
-            url = [as_unicode(u) for u in url]
-        for u in url:
+            urls = [as_unicode(u) for u in url]
+        for u in urls:
             try:
                 if baseURL:
                     resolvedURL, file, filename, headers = self.get_reference(u, baseURL)
@@ -150,16 +160,16 @@ class _Loader(object):
                 continue
             if file is not None:
                 return (resolvedURL, filename, file, headers)
-        raise IOError("""Unable to download url %s""" % (url,))
+        raise IOError("""Unable to download url %s""" % (urls,))
 
-    def _resolver(self, baseURL):
+    def _resolver(self, baseURL: str) -> Resolver:
         resolver = self._resolvers.get(baseURL)
         if resolver is None:
             resolver = _resolver_for(baseURL)
             self._resolvers[baseURL] = resolver
         return resolver
 
-    def get_reference(self, ref, baseURL):
+    def get_reference(self, ref: str, baseURL: str) -> Fetched:
         """Resolve and fetch an untrusted reference under ``baseURL``'s policy.
 
         ``ref`` is a raw (relative) reference from the document; the resolver
@@ -176,7 +186,7 @@ class _Loader(object):
         data = resolver.fetch(ref)
         return (target, BytesIO(data), target, None)
 
-    def get(self, url):
+    def get(self, url: str) -> Fetched:
         """Retrieve the given top-level (user-chosen) single-value URL
 
         Unlike a reference (see :meth:`get_reference`), the top-level document is
@@ -189,10 +199,10 @@ class _Loader(object):
         returns (baseURL, file, filename, headers)
         """
         if url.startswith("res://"):
-            module = url[6:]
-            if "." in module:
+            resource = url[6:]
+            if "." in resource:
                 raise ValueError("Invalid character in resource url: %s" % (url,))
-            name = "OpenGLContext.resources.%s" % (module,)
+            name = "OpenGLContext.resources.%s" % (resource,)
             module = __import__(name, {}, {}, name.split("."))
             return (url, BytesIO(as_8_bit(module.data)), module.source, None)
         scheme = url_scheme(url)
@@ -206,9 +216,9 @@ class _Loader(object):
         file = open(path, "rb")
         return (path, file, path, None)
 
-    loadedHandlers = {}
+    loadedHandlers: Dict[str, Any] = {}
 
-    def loadHandlers(self):
+    def loadHandlers(self) -> None:
         """Load all registered handlers"""
         from OpenGLContext import plugins
 
@@ -237,7 +247,7 @@ class _Loader(object):
                         """Loaded loader implementation for %s: %s""", name, loader
                     )
 
-    def findHandler(self, url):
+    def findHandler(self, url: str) -> Optional[Any]:
         """Find registered handler for the url's apparent suffix
 
         TODO: allow for content-type operations after downloading the URL
@@ -249,7 +259,7 @@ class _Loader(object):
                 return self.loadedHandlers[extension]
         return None
 
-    def load(self, url, baseURL=None):
+    def load(self, url: str, baseURL: Optional[str] = None) -> Any:
         """Load the given URL as a scenegraph
 
         url -- the URL (or list of URLs) from which to load
@@ -271,7 +281,7 @@ class _Loader(object):
         # now parse/convert to scenegraph...
         return handler(*result)
 
-    def loads(self, data, baseURL="resource.wrl"):
+    def loads(self, data: bytes, baseURL: str = "resource.wrl") -> Any:
         """Load given raw data as a scenegraph
 
         data -- bytes to parse

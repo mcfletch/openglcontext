@@ -67,6 +67,17 @@ def open_settings(context: Any,
     return opened
 
 
+class SettingsPanel(Panel):
+    """A settings screen, holding the session its controls edit
+
+    The session outlives any one control: an Apply two dialogs deep commits
+    through it, and Cancel reverts the whole draft at once.
+    """
+
+    #: The draft every control on the panel is bound to.
+    session: Optional[SettingsSession] = None
+
+
 def settings_panel(context: Any, session: Optional[SettingsSession] = None,
                    on_apply: Optional[Callable[[SettingsSession], None]] = None
                    ) -> Panel:
@@ -102,7 +113,7 @@ def settings_panel(context: Any, session: Optional[SettingsSession] = None,
     cancel = Button(text=_('Cancel'), name='cancel')
     reset = Button(text=_('Reset to defaults'), role=DANGER, name='reset')
     keys = Button(text=_('Key bindings...'), name='keybindings')
-    panel = Panel(
+    panel = SettingsPanel(
         title=_('Settings'), name=SETTINGS_NAME, modal=True, scrim=True,
         fill=True, preferredColumns=SETTINGS_COLUMNS,
         children=[Column(spacing=8, children=[
@@ -186,7 +197,7 @@ def record_panel(context: Any, session: SettingsSession, title: str,
     """A generated page over one sub-record, with its own Apply and Cancel."""
     apply = Button(text=_('Apply'), role=PRIMARY, name='apply')
     cancel = Button(text=_('Cancel'), name='cancel')
-    panel = Panel(
+    panel = SettingsPanel(
         title=title, modal=True, scrim=True, preferredColumns=60,
         children=[Column(spacing=6, children=[
             ScrollViewport(name='body', flex=1, children=[
@@ -230,7 +241,7 @@ def _audioSection(session: SettingsSession) -> List[Any]:
     if audio is None:
         return []
     return _section(_('Sound'), generate.page_for(
-        audio, include=[name for name in _declared(audio, 'FIELDS')]))
+        audio, include=_declared(audio, 'FIELDS')))
 
 
 def _modeSection(context: Any, session: SettingsSession) -> List[Any]:

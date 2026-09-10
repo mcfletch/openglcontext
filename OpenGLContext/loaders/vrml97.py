@@ -24,13 +24,14 @@ from vrml.vrml97 import parseprocessor
 from OpenGL._bytes import as_str
 import threading
 import logging
+from typing import Any, Dict, IO, Tuple, Union
 
 log = logging.getLogger(__name__)
 
 STANDARD_PROTOTYPES = basenamespaces.basePrototypes.copy()
 
 
-def standardPrototype(prototype, key):
+def standardPrototype(prototype: Any, key: str) -> str:
     """Make the given prototype available as a standard prototype
 
     What this means is that VRML97 files loaded
@@ -41,7 +42,7 @@ def standardPrototype(prototype, key):
     The name registered is the result of protofunctions.name
     for the prototype.
     """
-    name = protofunctions.name(prototype)
+    name = str(protofunctions.name(prototype))
     STANDARD_PROTOTYPES[name] = prototype
     if name != key:
         log.warning(
@@ -79,7 +80,7 @@ class VRML97Handler(base.BaseHandler):
     filename_extensions = [".wrl", ".wrl.gz", ".wrz", ".vrml", ".vrml.gz"]
     LOCK = threading.RLock()
 
-    def __init__(self, prototypes):
+    def __init__(self, prototypes: Dict[str, Any]) -> None:
         """Initialise the file-handler
 
         prototypes -- prototype namespace provided by the
@@ -87,10 +88,10 @@ class VRML97Handler(base.BaseHandler):
         """
         self.prototypes = prototypes
 
-    def parse(self, data, baseURL, *args, **named):
+    def parse(self, data: Any, baseURL: str, *args: Any,
+              **named: Any) -> Tuple[bool, Any]:
         """Parse the loaded data (with the provided meta-information)"""
-        self.LOCK.acquire()
-        try:
+        with self.LOCK:
             success, results, next = _parser.parse(
                 as_str(data),
                 processor=parseprocessor.ParseProcessor(
@@ -98,33 +99,31 @@ class VRML97Handler(base.BaseHandler):
                     baseURI=baseURL,
                 ),
             )
-            if success:
-                sg = results[1]
-            else:
-                sg = None
-            return success, sg
-        finally:
-            self.LOCK.release()
+            return success, results[1] if success else None
 
     @classmethod
-    def dumps(cls, node):
+    def dumps(cls, node: Any) -> str:
         """Dump node's representation to a VRML97 string"""
-        return linearise.Lineariser().linear(node)
-
+        return str(linearise.Lineariser().linear(node))
 
     @classmethod
-    def dump(cls, node, file):
-        """Dump node's representation to a VRML97-formatted file"""
+    def dump(cls, node: Any, file: Union[str, IO[str]]) -> str:
+        """Dump node's representation to a VRML97-formatted file
+
+        ``file`` is a filename to write, or a text file open for writing. A
+        handle the caller opened is left open, so a caller writing several
+        nodes into one file can go on writing to it.
+        """
         data = cls.dumps(node)
         if isinstance(file, str):
-            file = open(file, "w")
-        file.write(data)
-        file.close()
+            with open(file, "w", encoding="utf-8") as handle:
+                handle.write(data)
+        else:
+            file.write(data)
         return data
 
 
-
-def defaultHandler():
+def defaultHandler() -> "VRML97Handler":
     """Produce a default handler object
 
     This is registered in the setup.py as the entry point for this plug-in

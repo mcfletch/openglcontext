@@ -1,5 +1,7 @@
 """Module providing translation from GLUT callbacks to OpenGLContext events"""
 
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
 from OpenGL.GLUT import *
@@ -15,8 +17,14 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
     translate them to OpenGLContext events.
     """
 
+    if TYPE_CHECKING:
+        # What this mix-in needs of the GLUT context beside it.
+        def addPickEvent(self, event: Any) -> Any: ...
+        def triggerPick(self) -> Any: ...
+        def getViewPort(self) -> Tuple[int, int]: ...
+
     ### KEYBOARD interactions
-    def glutOnKeyDown(self, character, x, y):
+    def glutOnKeyDown(self, character: Any, x: int, y: int) -> None:
         """Convert a key-press to a context-style event"""
         modifiers = glutGetModifiers()
         if character in self.heldKeys():
@@ -26,21 +34,21 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
             GLUTKeyboardEvent(self, character, x, y, 1, modifiers)
         )
 
-    def glutOnKeyUp(self, character, x, y):
+    def glutOnKeyUp(self, character: Any, x: int, y: int) -> None:
         """Convert a key-release to a context-style event"""
         self.noteKeyUp(character)
         self.ProcessEvent(
             GLUTKeyboardEvent(self, character, x, y, 0, glutGetModifiers())
         )
 
-    def glutOnCharacter(self, character, x, y):
+    def glutOnCharacter(self, character: Any, x: int, y: int) -> None:
         """Convert character (non-control) press to context event"""
         # need intelligence to determine what should generate a keyboard event
         # currently duplicates can occur.
         self.glutOnKeyDown(character, x, y)
         self.ProcessEvent(GLUTKeypressEvent(self, character, x, y, glutGetModifiers()))
 
-    def emitKey(self, key, state, modifiers):
+    def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
         """Send a key transition the window system did not report
 
         For focus loss, where GLUT delivers no release at all; see
@@ -52,14 +60,14 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         self.ProcessEvent(GLUTKeyboardEvent(self, key, 0, 0, state, modifiers))
 
     ### MOUSE Interaction
-    def glutOnMouseButton(self, button, state, x, y):
+    def glutOnMouseButton(self, button: int, state: int, x: int, y: int) -> None:
         """Convert mouse-press-or-release to a Context-style event"""
         self.addPickEvent(
             GLUTMouseButtonEvent(self, button, state, x, y, glutGetModifiers())
         )
         self.triggerPick()
 
-    def glutOnMouseMove(self, x, y):
+    def glutOnMouseMove(self, x: int, y: int) -> None:
         """Convert mouse-movement to a Context-style event
 
         The movement sampler is told directly as well as through the pick
@@ -90,7 +98,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         self.addPickEvent(GLUTMouseMoveEvent(self, x, y))
         self.triggerPick()
 
-    def pointerWarpEcho(self, x, y):
+    def pointerWarpEcho(self, x: int, y: int) -> bool:
         """Whether this movement is one the window itself caused
 
         Answered by the window, which is what does the warping; see
@@ -99,7 +107,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         """
         return False
 
-    def recentrePointer(self):
+    def recentrePointer(self) -> None:
         """Put a grabbed pointer back in the middle of the window
 
         Answered by the window; see
@@ -117,9 +125,9 @@ class GLUTXEvent(object):
             list
     """
 
-    CURRENTBUTTONSTATES = [0, 0, 0]
+    CURRENTBUTTONSTATES: List[int] = [0, 0, 0]
 
-    def _getModifiers(self, modifierMask):
+    def _getModifiers(self, modifierMask: int) -> Tuple[bool, bool, bool]:
         """Get the 3-tuple of modifier booleans"""
         return (
             not (not (GLUT_ACTIVE_SHIFT & modifierMask)),
@@ -127,7 +135,7 @@ class GLUTXEvent(object):
             not (not (GLUT_ACTIVE_ALT & modifierMask)),
         )
 
-    def _updateButtons(self, button, state):
+    def _updateButtons(self, button: int, state: int) -> Tuple[int, int]:
         """Update the global mouse-button-states with an event's data"""
         if state == GLUT_UP:
             state = 0
@@ -157,7 +165,8 @@ class GLUTXEvent(object):
 class GLUTMouseButtonEvent(GLUTXEvent, mouseevents.MouseButtonEvent):
     """GLUT-specific mouse-button event"""
 
-    def __init__(self, context, button, state, x, y, modifiers=0):
+    def __init__(self, context: Any, button: int, state: int, x: int, y: int,
+                 modifiers: int = 0) -> None:
         super(GLUTMouseButtonEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -169,7 +178,8 @@ class GLUTMouseButtonEvent(GLUTXEvent, mouseevents.MouseButtonEvent):
 class GLUTMouseMoveEvent(GLUTXEvent, mouseevents.MouseMoveEvent):
     """GLUT-specific mouse-move event"""
 
-    def __init__(self, context, x, y, modifiers=0):
+    def __init__(self, context: Any, x: int, y: int,
+                 modifiers: int = 0) -> None:
         super(GLUTMouseMoveEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -185,7 +195,8 @@ class GLUTMouseMoveEvent(GLUTXEvent, mouseevents.MouseMoveEvent):
 class GLUTKeyboardEvent(GLUTXEvent, keyboardevents.KeyboardEvent):
     """GLUT-specific keyboard event"""
 
-    def __init__(self, context, character, x, y, state=1, modifiers=0):
+    def __init__(self, context: Any, character: Any, x: int, y: int,
+                 state: int = 1, modifiers: int = 0) -> None:
         super(GLUTKeyboardEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -197,7 +208,8 @@ class GLUTKeyboardEvent(GLUTXEvent, keyboardevents.KeyboardEvent):
 class GLUTKeypressEvent(GLUTXEvent, keyboardevents.KeypressEvent):
     """GLUT-specific key-press event"""
 
-    def __init__(self, context, character, x, y, modifiers=0):
+    def __init__(self, context: Any, character: Any, x: int, y: int,
+                 modifiers: int = 0) -> None:
         super(GLUTKeypressEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -205,7 +217,7 @@ class GLUTKeypressEvent(GLUTXEvent, keyboardevents.KeypressEvent):
         self.name = keyboardMapping.get(character, character)
 
 
-keyboardMapping = {
+keyboardMapping: Dict[Any, str] = {
     GLUT_KEY_F1: "<F1>",
     GLUT_KEY_F2: "<F2>",
     GLUT_KEY_F3: "<F3>",
@@ -234,7 +246,7 @@ keyboardMapping = {
     b"\177": "<delete>",
     b"\010": "<backspace>",
 }
-buttonMapping = {
+buttonMapping: Dict[Any, int] = {
     GLUT_LEFT_BUTTON: 0,
     GLUT_RIGHT_BUTTON: 1,
     GLUT_MIDDLE_BUTTON: 2,

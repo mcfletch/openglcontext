@@ -1,16 +1,16 @@
-"""Shared framebuffer-capture helpers.
+"""Reading the finished frame out of the framebuffer, and writing it to a PNG
 
-Reading the freshly rendered back buffer and writing it to a PNG was reimplemented
-in half a dozen places (the auto-exit hook, the interactive save-image handler, the
-regression harness, and several test capture runners). They all did the same thing:
-``glReadBuffer(GL_BACK)`` + ``glReadPixels`` + a vertical flip (OpenGL is bottom-up)
-+ a Pillow save. This module is the single home for that logic.
+``glReadBuffer`` + ``glReadPixels`` + a vertical flip (GL numbers rows from the
+bottom of the buffer, an image from the top) + a Pillow save, in one place for
+the auto-exit hook, the interactive save-image handler, the regression harness
+and the test capture runners.
 
 Capture the back buffer from :meth:`OpenGLContext.context.Context.presentFrame`,
 before the swap: reading it *after* the swap returns an older frame.
 """
 import logging
 import os
+from typing import Any, Optional, Tuple
 
 import numpy as np
 from OpenGL.GL import (
@@ -23,7 +23,7 @@ from OpenGL.GL import (
 log = logging.getLogger(__name__)
 
 
-def presented_buffer(target=GL_FRAMEBUFFER):
+def presented_buffer(target: int = GL_FRAMEBUFFER) -> int:
     """Which colour buffer of the default framebuffer holds the finished frame.
 
     target -- the binding point the default framebuffer is current on.  A
@@ -46,7 +46,7 @@ def presented_buffer(target=GL_FRAMEBUFFER):
     return GL_FRONT if int(attachment) == GL_NONE else GL_BACK
 
 
-def ensure_pillow():
+def ensure_pillow() -> Any:
     """Return the Pillow ``Image`` module, or None (with a warning) if unavailable."""
     try:
         from PIL import Image
@@ -56,7 +56,7 @@ def ensure_pillow():
         return None
 
 
-def read_back_buffer(hud_height=0):
+def read_back_buffer(hud_height: int = 0) -> Tuple[Any, int, int]:
     """Read the current back buffer as a top-down RGB uint8 array.
 
     hud_height -- pixels to drop from the *bottom* of the frame (where the HUD /
@@ -80,7 +80,7 @@ def read_back_buffer(hud_height=0):
     return pixels, width, height
 
 
-def save_png(filepath, pixels):
+def save_png(filepath: str, pixels: Any) -> bool:
     """Save a top-down RGB uint8 array to ``filepath`` as PNG. Returns success bool."""
     if pixels is None:
         log.error("No pixels to save")
@@ -93,7 +93,8 @@ def save_png(filepath, pixels):
     return True
 
 
-def capture_to_png(filepath, hud_height=0, skip_blank=True):
+def capture_to_png(filepath: str, hud_height: int = 0,
+                   skip_blank: bool = True) -> bool:
     """Read the back buffer and save it to ``filepath``.
 
     skip_blank -- when True, an all-black frame is not written (the renderer often
@@ -121,16 +122,17 @@ class SettleCapture:
     frames -- whichever is longer wins.
     """
 
-    def __init__(self, path, delay=0.0, min_frames=1, hud_height=0):
+    def __init__(self, path: str, delay: float = 0.0, min_frames: int = 1,
+                 hud_height: int = 0) -> None:
         self.path = path
         self.delay = float(delay)
         self.min_frames = max(1, int(min_frames))
         self.hud_height = hud_height
         self._frames = 0
-        self._start = None
+        self._start: Optional[float] = None
         self.done = False
 
-    def tick(self):
+    def tick(self) -> bool:
         """Advance one frame; capture + return True when settled, else False."""
         if self.done:
             return False

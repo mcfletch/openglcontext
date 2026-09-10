@@ -28,7 +28,8 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Mapping
+from types import ModuleType
+from typing import Callable, Mapping
 
 from OpenGLContext import renderoptions
 
@@ -172,7 +173,7 @@ def backend_available(name: str) -> bool:
 
 
 def settle_gl_backend(environ: dict | None = None,
-                      available=None) -> str | None:
+                      available: Callable[[str], bool] | None = None) -> str | None:
     """Name the windowing backend for this run, and answer what it is.
 
     The first of :data:`GL_BACKENDS` whose toolkit imports.  A run that named
@@ -245,7 +246,7 @@ def asked_configuration() -> dict[str, str]:
     return dict(_ASKED)
 
 
-def import_unconfigured(name: str):
+def import_unconfigured(name: str) -> ModuleType:
     """Import ``name``, and leave the run's configuration as it was.
 
     A program settles the renderer as it is imported, which is right for a

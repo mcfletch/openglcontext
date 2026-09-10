@@ -14,7 +14,9 @@ a context and caches the choice across frames.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import (
+    Any, Callable, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING,
+)
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid
 from OpenGL.GL import *
@@ -34,6 +36,26 @@ from vrml.vrml97 import nodetypes
 from vrml import olist
 from OpenGLContext.scenegraph import shaders
 from pydispatch.dispatcher import connect
+
+if TYPE_CHECKING:
+    class _MatrixUniform:
+        """The 4x4-matrix uniform the pass binds each of its matrices through.
+
+        Its class is one of the set :mod:`OpenGLContext.scenegraph.shaders`
+        builds at import from the GL matrix entry points, so what the pass needs
+        of one is declared here rather than imported.  ``currentValue`` is the
+        base class's customisation point for a value worked out on demand, and
+        the pass replaces it per instance with a function of ``(shader, mode)``.
+        """
+
+        NEED_TRANSPOSE: bool
+        NEED_INVERSE: bool
+        currentValue: Callable[[Any, Any], Any]
+
+        def __init__(self, name: str = '') -> None: ...
+        def render(self, shader: Any, mode: Any) -> Any: ...
+else:
+    _MatrixUniform = shaders.FloatUniformm4
 import logging
 log = logging.getLogger( __name__ )
 
@@ -84,7 +106,7 @@ class SGObserver( object ):
     structure of a scenegraph and uses it to update an internal set
     of paths for all renderable objects in the scenegraph.
     """
-    INTERESTING_TYPES = []
+    INTERESTING_TYPES: List[type] = []
 
     #: Counts changes to the *set* of paths rendered from, so per-path data
     #: gathered against it is rebuilt rather than read against a set it no
@@ -94,20 +116,20 @@ class SGObserver( object ):
     _pathGeneration = 0
     #: The ``(N,8,4)`` array :meth:`_boundingArrays` stacks corners into, kept
     #: so a frame allocates nothing for a scene whose size has not changed.
-    _pointsBuffer = None
+    _pointsBuffer: Optional[Any] = None
     #: The ``(N,4,4)`` array :meth:`_worldMatrices` fills each frame, kept so a
     #: frame allocates nothing for a scene whose size has not changed.
-    _matrixBuffer = None
+    _matrixBuffer: Optional[Any] = None
     #: Which copies of each declared set this gather's frustum kept, by ``id``
     #: of the record's path. Belongs to the gather rather than to the shapes: a
     #: depth pass culling against a light must not read the camera's answer.
-    visiblePlacements = None
+    visiblePlacements: Optional[Dict[int, Any]] = None
 
-    def _pathSetChanged( self ):
+    def _pathSetChanged( self ) -> None:
         """Say that the set of paths to render is not the one last gathered."""
         self._pathGeneration += 1
 
-    def __init__( self, scene, contexts ):
+    def __init__( self, scene: Any, contexts: Any ) -> None:
         """Initialize the FlatPass for this scene and set of contexts
 
         scene -- the scenegraph to manage as a flattened hierarchy
@@ -116,9 +138,10 @@ class SGObserver( object ):
         """
         self.scene = scene
         self.contexts = contexts
-        self.paths = {
-        }
-        self.nodePaths = {}
+        #: Which paths lead to a node of each declared interesting type.
+        self.paths: Dict[type, List[Any]] = {}
+        #: ``id(node)`` -> every live path that ends at it.
+        self.nodePaths: Dict[int, List[Any]] = {}
         if scene:
             self.integrate( scene )
         connect(
@@ -133,7 +156,7 @@ class SGObserver( object ):
             self.onSwitchChange,
             signal = switch.SWITCH_CHANGE_SIGNAL,
         )
-    def integrate( self, node, parentPath=None ):
+    def integrate( self, node: Any, parentPath: Any = None ) -> None:
         """Integrate any children of node which are of interest"""
         if parentPath is None:
             parentPath = nodepath.NodePath( [] )
@@ -157,13 +180,13 @@ class SGObserver( object ):
                 # watch for next's changes...
                 for child in next.renderedChildren( ):
                     todo.append( (child,path) )
-    def npFor( self, node ):
+    def npFor( self, node: Any ) -> List[Any]:
         """For some reason setdefault isn't working for the weakkeydict"""
         current = self.nodePaths.get( id(node) )
         if current is None:
             self.nodePaths[id(node)] = current = []
         return current
-    def onSwitchChange( self, sender, value ):
+    def onSwitchChange( self, sender: Any, value: Any ) -> None:
         """A Switch has chosen a different child, or none at all.
 
         `value` is None for a Switch drawing nothing -- `whichChoice` of -1,
@@ -187,14 +210,14 @@ class SGObserver( object ):
             if value is not None and keeping is None:
                 self.integrate( value, path )
         self.purge()
-    def onChildAdd( self, sender, value ):
+    def onChildAdd( self, sender: Any, value: Any ) -> None:
         """Sender has a new child named value"""
         if hasattr( sender, 'renderedChildren' ):
             children = sender.renderedChildren()
             if value in children:
                 for path in self.npFor( sender ):
                     self.integrate( value, path )
-    def onChildRemove( self, sender, value ):
+    def onChildRemove( self, sender: Any, value: Any ) -> None:
         """Invalidate all paths where sender has value as its child IFF child no longer in renderedChildren"""
         if hasattr( sender, 'renderedChildren' ):
             children = sender.renderedChildren()
@@ -204,7 +227,7 @@ class SGObserver( object ):
                         if childPath[-1] is value:
                             childPath.invalidate()
                 self.purge()
-    def purge( self ):
+    def purge( self ) -> None:
         """Drop every path whose subtree has left the scenegraph
 
         Both records have to let go. ``paths`` is the draw set a render walks;
@@ -250,33 +273,35 @@ class SGObserver( object ):
                 if oid:
                     sel_map.pop( oid, None )
 
-def get_modelview( shader, mode ):
+def get_modelview( shader: Any, mode: Any ) -> Any:
     return mode.matrix 
-def get_projection( shader, mode ):
+def get_projection( shader: Any, mode: Any ) -> Any:
     return mode.projection 
-def get_modelproj( shader, mode ):
+def get_modelproj( shader: Any, mode: Any ) -> Any:
     return dot( mode.matrix, mode.projection )
 
-def get_inv_modelview( shader, mode ):
+def get_inv_modelview( shader: Any, mode: Any ) -> Any:
     return dot( mode.viewPlatform.modelMatrix(inverse=True), mode.renderPath.transformMatrix( inverse=True ) )
-def get_inv_projection( shader, mode ):
+def get_inv_projection( shader: Any, mode: Any ) -> Any:
     return mode.viewPlatform.viewMatrix( mode.maxDepth, inverse=True )
-def get_inv_modelproj( shader, mode ):
+def get_inv_modelproj( shader: Any, mode: Any ) -> Any:
     mv = get_inv_modelview( shader, mode )
     proj = get_inv_projection( shader, mode )
     return dot( proj, mv )
 
-def _color_select_render(pass_obj, mode, toRender, events, *,
-                         id_shift, read_format, setup_fixed_function,
-                         require_pick_enabled):
+def _color_select_render(pass_obj: 'FlatPass', mode: Any, toRender: Sequence[Any],
+                         events: Dict[Any, Any], *,
+                         id_shift: int, read_format: int,
+                         setup_fixed_function: bool,
+                         require_pick_enabled: bool) -> None:
     """Shared legacy colour-buffer pick.
 
     Draws every renderable path in a unique colour-encoded id, reads back the id
     under each pick point and resolves it to a path. The compatibility and
     core-fallback passes differ only in how the id is packed and read and whether
     the fixed-function lighting state is toggled -- passed in here so the ~90-line
-    body lives in one place instead of two copies that had already diverged. This
-    is the legacy fallback; the modern path is ``SelectionMixin`` (MRT).
+    body lives in one place rather than in a copy each. This is the legacy
+    fallback; the modern path is ``SelectionMixin`` (MRT).
     """
     self = pass_obj
     glClearColor(0, 0, 0, 0)
@@ -291,9 +316,9 @@ def _color_select_render(pass_obj, mode, toRender, events, *,
     self.textured = False
 
     matrix = self.matrix
-    id_map = {}
+    id_map: Dict[int, Any] = {}
 
-    pick_points = {}
+    pick_points: Dict[Tuple[int, int], List[Any]] = {}
     min_x, min_y = self.getViewport()[2:]
     max_x, max_y = 0, 0
     offset = 1   # half of the 2px pick square
@@ -351,7 +376,7 @@ def _color_select_render(pass_obj, mode, toRender, events, *,
         glDisable(GL_SCISSOR_TEST)
 
 
-def presentFrame( context ):
+def presentFrame( context: Any ) -> Any:
     """Hand the finished frame to ``context`` to put on the screen.
 
     Not ``SwapBuffers``: presenting the frame is the context's own step, and it
@@ -471,11 +496,11 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     # first-frame block sets _gl_renderer, which those phases read.
     _gl_renderer: str = ''
 
-    def renderShadowMaps(self, toRender):
+    def renderShadowMaps(self, toRender: List[Any]) -> None:
         """Render shadow depth maps before the lit passes (mixin override)."""
         return None   # base pass has no shadows; ShadowMapMixin overrides this
 
-    def bindShadowUniforms(self):
+    def bindShadowUniforms(self) -> None:
         """Bind shadow maps onto the lit program after lights (mixin override)."""
         return None   # base pass has no shadows; ShadowMapMixin overrides this
 
@@ -492,14 +517,31 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         mat_projection inv_projection tps_projection itp_projection
         mat_modelproj inv_modelproj tps_modelproj itp_modelproj'''.split()
 
-    _uniforms = None
+    #: The twelve matrix uniforms :attr:`uniforms` builds, one for each name in
+    #: ``_UNIFORM_NAMES``.  Each is also kept in the list, which is what
+    #: :meth:`applyUniforms` walks; the attributes are how the lazy calculators
+    #: below are attached to the right one.
+    uniform_mat_modelview: '_MatrixUniform'
+    uniform_inv_modelview: '_MatrixUniform'
+    uniform_tps_modelview: '_MatrixUniform'
+    uniform_itp_modelview: '_MatrixUniform'
+    uniform_mat_projection: '_MatrixUniform'
+    uniform_inv_projection: '_MatrixUniform'
+    uniform_tps_projection: '_MatrixUniform'
+    uniform_itp_projection: '_MatrixUniform'
+    uniform_mat_modelproj: '_MatrixUniform'
+    uniform_inv_modelproj: '_MatrixUniform'
+    uniform_tps_modelproj: '_MatrixUniform'
+    uniform_itp_modelproj: '_MatrixUniform'
+
+    _uniforms: Optional[List['_MatrixUniform']] = None
     @property 
-    def uniforms( self ):
+    def uniforms( self ) -> List['_MatrixUniform']:
         if self._uniforms is None:
             self._uniforms = []
             for name in self._UNIFORM_NAMES:
                 attr = 'uniform_%s'%(name,)
-                uniform = shaders.FloatUniformm4( name=name )
+                uniform = _MatrixUniform( name=name )
                 self._uniforms.append( uniform )
                 setattr( self, attr, uniform )
                 if name.startswith( 'tps_' ) or name.startswith( 'itp_' ):
@@ -527,7 +569,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             
         return self._uniforms
     
-    def applyUniforms( self, shader ):
+    def applyUniforms( self, shader: Any ) -> None:
         """Apply our uniforms to the shader as appropriate"""
         for uniform in self.uniforms:
             uniform.render( shader, self )
@@ -566,6 +608,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         from OpenGLContext.passes.shaderpass import configure_light_from_node
 
         shader = self.shader_program
+        assert shader is not None, 'shader lights are only set up in shader mode'
         shader.use(lit=True)  # Ensure shader is bound before setting uniforms
         light_count = 0
         light_paths = self.paths.get(nodetypes.Light, ())
@@ -628,7 +671,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
     @staticmethod
-    def _materialSortKey(rec) -> int:
+    def _materialSortKey(rec: Sequence[Any]) -> int:
         """Group key so shapes sharing one material batch together in the draw.
 
         Identity of the material object; glTF/CAD loaders share one material
@@ -761,7 +804,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         shader.use(lit=True)
         glEnable(GL_BLEND)
         if id_map is not None:
-            disable_object_id_blend()   # don't blend the picking id (4.6)
+            disable_object_id_blend()   # don't blend the picking id
         # Straight (non-premultiplied) alpha src-over: src*srcA + dst*(1-srcA).
         # This is coupled to the shader's alpha output: both the
         # VRML97 (vrml97_lighting.frag: `alpha = 1.0 - transparency`) and PBR
@@ -870,7 +913,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         appearance = getattr(shape, 'appearance', None)
         material = getattr(appearance, 'material', None)
         textures = getattr(material, 'textures', None)
-        return bool(textures) and textures.get('lightmap') is not None
+        return textures is not None and textures.get('lightmap') is not None
 
     def objectCentre(self, tmatrix: Any, bvolume: Any) -> Any:
         """Where in the world the object being drawn is, for a light lookup.
@@ -884,7 +927,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             float(value) for value in centre)
         return dot(array(local + (1.0,), 'd'), tmatrix)[:3]
 
-    def currentBackground( self ):
+    def currentBackground( self ) -> Any:
         """Find our current background node"""
         paths = self.paths.get( nodetypes.Background, () )
         for background in paths:
@@ -896,7 +939,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             return current
         return None
 
-    def currentFog( self ):
+    def currentFog( self ) -> Any:
         """The bound Fog node's path, or None.
 
         Bindable like the background: the first node that says it is bound
@@ -910,7 +953,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     # (stashed on the NodePath) mean the {id: path} map is only mutated when the
     # scene structure changes, not rebuilt every warm frame -- the O(N) build
     # dominated pick cost on 10^5-part scenes. See purge() for invalidation.
-    _sel_id_map = None
+    _sel_id_map: Optional[Dict[int, Any]] = None
     _sel_next = 1
 
     # Instanced-geometry hooks. The base pass never instances; PBRPass overrides
@@ -926,24 +969,25 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """
         return 8
 
-    def _instanceable( self, path ) -> bool:
+    def _instanceable( self, path: Any ) -> bool:
         """Whether this path's geometry can be drawn instanced (base: never)."""
         return False
 
-    def _instanceKey( self, path ):
+    def _instanceKey( self, path: Any ) -> Any:
         """Batch key for a path. Base: geometry + material + texture identity, so a
         group is a set of visually identical shapes. PBRPass widens this to
         geometry + texture set (materials vary per instance via a material array)."""
         from OpenGLContext.passes.instancing import geometry_instance_key
         return geometry_instance_key( path )
 
-    def _drawInstanceGroup( self, group, shader, prog, id_map ):
+    def _drawInstanceGroup( self, group: Any, shader: Any, prog: Any,
+                            id_map: Optional[Dict[int, Any]] ) -> None:
         """Draw one InstanceGroup in a single instanced call (subclass override)."""
         raise NotImplementedError(
             "instancing_enabled is True but _drawInstanceGroup is not implemented"
         )
 
-    def _shapePickable( self, path ):
+    def _shapePickable( self, path: Any ) -> bool:
         """Whether this path's rendered node accepts picks (the default).
 
         The ``pickable`` flag is opt-out: only a Shape explicitly marked
@@ -952,7 +996,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """
         return bool( getattr( path[-1], 'pickable', True ) )
 
-    def _writeShapeId( self, shader, path, prog, id_map ):
+    def _writeShapeId( self, shader: Any, path: Any, prog: Any,
+                       id_map: Optional[Dict[int, Any]] ) -> bool:
         """Set this shape's object id, or mask the id attachment if non-pickable.
 
         Returns True when the id attachment (MRT draw buffer OBJECT_ID_ATTACHMENT)
@@ -969,12 +1014,12 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         glColorMaski( OBJECT_ID_ATTACHMENT, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE )
         return True
 
-    def _restoreShapeId( self, masked ):
+    def _restoreShapeId( self, masked: bool ) -> None:
         """Re-enable writes to the id attachment after a masked (non-pickable) draw."""
         if masked:
             glColorMaski( OBJECT_ID_ATTACHMENT, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE )
 
-    def _objectIdFor( self, path ):
+    def _objectIdFor( self, path: Any ) -> int:
         """Return this path's stable object-id, allocating on first sight.
 
         The id is independent of draw/sort order (transparent shapes reorder with
@@ -990,13 +1035,13 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             self._sel_id_map[oid] = path
         return oid
 
-    def _selectionIdMap( self ):
+    def _selectionIdMap( self ) -> Dict[int, Any]:
         """The persistent {object_id: path} map (created lazily)."""
         if self._sel_id_map is None:
             self._sel_id_map = {}
         return self._sel_id_map
 
-    def renderAudio( self, context ):
+    def renderAudio( self, context: Any ) -> int:
         """Keep the scene's sounds in step with the camera, for this frame.
 
         Delegates to :func:`OpenGLContext.audio.scene.update`; everything the
@@ -1022,7 +1067,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             )
             return 0
 
-    def selectLevels( self, matrix ):
+    def selectLevels( self, matrix: Any ) -> None:
         """Let every LOD node choose its level for where the viewer now is.
 
         Before the render set is gathered, not during it: a level that changes
@@ -1046,7 +1091,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 continue
             node.select( distance )
 
-    def renderSet( self, matrix ):
+    def renderSet( self, matrix: Any ) -> List[Any]:
         """The scene's shapes, culled to the frustum and ordered for drawing.
 
         Every path is asked for its world matrix, because a matrix is what the
@@ -1096,7 +1141,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         toRender.sort( key = lambda x: x[0])
         return toRender
 
-    def _boundingArrays( self, paths ):
+    def _boundingArrays( self, paths: Sequence[Any]
+                         ) -> Tuple[List[Any], Any, Any, Any]:
         """Each path's bounding volume and its corner points, stacked.
 
         Asked of every node every frame rather than remembered: a volume is not
@@ -1123,7 +1169,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         points = self._pointsBuffer
         if points is None or len(points) != count:
             points = self._pointsBuffer = zeros( (count, 8, 4), 'f' )
-        volumes, bounded, drawing = [], [], []
+        volumes: List[Any] = []
+        bounded: List[bool] = []
+        drawing: List[bool] = []
         for index, path in enumerate( paths ):
             node = path[-1]
             nothing = getattr( node, 'drawsNothing', None )
@@ -1150,7 +1198,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         return (volumes, points, array( bounded, dtype=bool ),
                 array( drawing, dtype=bool ))
 
-    def _worldMatrices( self, paths ):
+    def _worldMatrices( self, paths: Sequence[Any] ) -> Any:
         """Every path's world matrix, stacked into one array.
 
         The per-path call stands because the transform cache behind it is what
@@ -1164,7 +1212,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             matrices[index] = path.transformMatrix()
         return matrices
 
-    def _frustumSurvivors( self, matrices, points, bounded, drawing ):
+    def _frustumSurvivors( self, matrices: Any, points: Any, bounded: Any,
+                           drawing: Any ) -> Any:
         """Indices of the paths the frustum does not reject.
 
         A shape is rejected when some clipping plane has all eight of its
@@ -1182,26 +1231,22 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         outside = (distances < 0).all( axis=1 ).any( axis=1 ) & bounded
         return flatnonzero( drawing & ~outside )
 
-    def greatestDepth( self, toRender ):
-        # experimental: adjust our frustum to smaller depth based on
-        # the projected z-depth of bbox points...
-        # **The depths are not read, and have not been.** A depth measured this
-        # way is an eye-space z in front of the camera, so it is never positive;
-        # it starts at zero and only ever decreases. The floor below -- which is
-        # there so the hundred-unit background still shows -- is therefore always
-        # the larger of the two, and the answer is the same constant whatever
-        # the scene contains. Projecting every corner of every shape to reach it
-        # cost a measurable slice of each frame.
-        #
-        # What the scan still decides is whether every record *has* an extent:
-        # one of unknown extent could reach any distance, and a zero is how this
-        # tells the caller not to narrow the projection at all. So that is what
-        # is asked, and nothing else.
-        #
-        # Restoring the depths means fixing the floor -- `max` against a
-        # positive number can only ever choose the positive number -- and that
-        # changes the projection every scene is drawn with, so it is a
-        # deliberate change rather than a tidy-up.
+    def greatestDepth( self, toRender: Sequence[Any] ) -> float:
+        """How far back the projection may be trimmed to, for this frame.
+
+        Zero means "do not trim": one record of unknown extent could reach any
+        distance, so the scan asks every bounding volume whether it has an
+        extent at all and answers zero the moment one does not.
+
+        Everything else answers the constant below, which is the floor that
+        keeps the hundred-unit background inside the frustum.  A depth measured
+        from the shapes would be an eye-space z in front of the camera and so
+        never positive, and the floor is the larger of the two whatever the
+        scene contains; measuring one would mean projecting every corner of
+        every shape to reach a number that is never chosen.  Trimming to the
+        shapes therefore means changing that floor as well, which changes the
+        projection every scene is drawn with.
+        """
         for (_key,_mv,_tm,bv,_path) in toRender:
             try:
                 bv.getPoints()
@@ -1212,7 +1257,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
     _render_mode_logged = False
 
-    def Render( self, context, mode ):
+    def Render( self, context: Any, mode: Any ) -> None:
         """Render the geometry attached to this flat-renderer's scenegraph"""
         # Log render mode once on first frame
         if not self._render_mode_logged:
@@ -1246,10 +1291,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             # display-referred colour directly, so the framebuffer must NOT
             # re-encode. GL_FRAMEBUFFER_SRGB defaults off, but a backend that
             # requests an sRGB-capable default framebuffer can hand it to us
-            # enabled -- which would double-encode and wash the frame out. We
-            # never enable it ourselves (grep confirms), so disabling it once
-            # here, on the first frame with the context current, is enough; any
-            # future pass that turns it on owns restoring it.
+            # enabled -- which would double-encode and wash the frame out. No
+            # pass here enables it, so disabling it once on the first frame with
+            # the context current is enough; a pass that turns it on owns
+            # restoring it.
             try:
                 glDisable(GL_FRAMEBUFFER_SRGB)
             except Exception as err:
@@ -1261,7 +1306,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         self._has_mousemove_handlers = None
         # Deferred runtime-transparent shapes are collected fresh each frame
         #; drained by renderTransparent.
-        self._deferredTransparent = []
+        self._deferredTransparent: List[Any] = []
 
         # clear the projection matrix set up by legacy sg
         matrix = self.getModelView()
@@ -1346,10 +1391,13 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             glCullFace(GL_BACK)
 
             if self.use_shaders:
+                shader_program = self.shader_program
+                assert shader_program is not None, (
+                    'the frame set one where it settled use_shaders')
                 # Render shadow maps before binding the MRT selection FBO; the
                 # shadow pass binds/unbinds its own depth FBOs and restores state.
                 if self.use_shadows:
-                    self.shader_program.use(lit=True)
+                    shader_program.use(lit=True)
                     self.renderShadowMaps(toRender)
 
                 # Render into the MRT selection FBO only while picking is active.
@@ -1375,7 +1423,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 if self.use_shadows:
                     self.bindShadowUniforms()
                 self.iblSetup(matrix)
-                self.shader_program.set_default_material()
+                shader_program.set_default_material()
                 # glTF lighting is IBL + punctual only -- a flat white fill is
                 # non-physical and washes out self-lit scenes (DirectionalLight,
                 # PointLightIntensityTest read pale grey instead of dark + crisp
@@ -1387,7 +1435,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                     amb = (0.2, 0.2, 0.2)
                 elif not isinstance(amb, (tuple, list)):
                     amb = (float(amb),) * 3
-                self.shader_program.set_scene_ambient(tuple(amb))
+                shader_program.set_scene_ambient(tuple(amb))
                 self.setupLightGrid()
                 # Transmissive (glass) shapes are opaque-alpha but must draw after
                 # the opaque scene so they can sample it as a backdrop; split them
@@ -1449,7 +1497,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         self.matrix = matrix
         self.shader_mode = False  # Reset after render
 
-    def legacyBackgroundRender( self, vp, matrix ):
+    def legacyBackgroundRender( self, vp: Any, matrix: Any ) -> None:
         """Do legacy background rendering"""
         bPath = self.currentBackground( )
         if bPath is not None:
@@ -1464,7 +1512,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             glClearColor(0.0,0.0,0.0,1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
-    def legacyLightRender( self, matrix ):
+    def legacyLightRender( self, matrix: Any ) -> None:
         """Do legacy light-rendering operation"""
         id = 0
         for path in self.paths.get( nodetypes.Light, ()):
@@ -1487,7 +1535,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 #            l.Light( GL_LIGHT0, mode = self )
         self.matrix = matrix
     
-    def renderGeometry( self, mvmatrix ):
+    def renderGeometry( self, mvmatrix: Any ) -> None:
         """Draw everything visible from ``mvmatrix``, and nothing else
 
         A whole frame is more than its geometry -- a background, lights, the
@@ -1500,7 +1548,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         self.renderOpaque( toRender )
         self.renderTransparent( toRender )
 
-    def renderOpaque( self, toRender ):
+    def renderOpaque( self, toRender: Sequence[Any] ) -> None:
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
         debugFrustum = self.context.contextDefinition.debugBBox
@@ -1516,7 +1564,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                         bvolume.debugRender( )
                 except Exception as err:
                     self.renderFailed( 'opaque', path[-1], err )
-    def renderTransparent( self, toRender ):
+    def renderTransparent( self, toRender: Sequence[Any] ) -> None:
         """Render the transparent geometry from toRender (in forward order)"""
         self.transparent = True
         setup = False
@@ -1549,7 +1597,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 glEnable( GL_DEPTH_TEST )
         # Draw shapes deferred from the opaque pass.
         self._renderDeferredTransparent()
-    def addTransparent( self, other ):
+    def addTransparent( self, other: Any ) -> None:
         """Defer a shape found transparent during the opaque pass.
 
         `Shape.Render` calls this and returns without drawing when a shape
@@ -1562,7 +1610,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         self._deferredTransparent.append(
             ( self.matrix, self.renderPath, other ) )
 
-    def _renderDeferredTransparent( self ):
+    def _renderDeferredTransparent( self ) -> None:
         """Draw shapes deferred via addTransparent, then clear the queue.
 
         Self-contained blend setup/teardown so it renders correctly whether or
@@ -1593,7 +1641,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             glEnable( GL_DEPTH_TEST )
             self.transparent = False
 
-    def selectRender( self, mode, toRender, events ):
+    def selectRender( self, mode: Any, toRender: Sequence[Any],
+                      events: Dict[Any, Any] ) -> None:
         """Legacy colour-buffer pick fallback for the core/shader FlatPass.
 
         Packs the id shifted 12 bits into RGBA (no fixed-function lighting).
@@ -1605,7 +1654,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             setup_fixed_function=False, require_pick_enabled=False)
 
     MAX_LIGHTS = -1
-    def __call__( self, context ):
+    def __call__( self, context: Any ) -> bool:
         """Overall rendering pass interface for the context client"""
         vp = context.getViewPlatform()
         self.setViewPlatform( vp )
@@ -1644,7 +1693,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         return True # flip yes, for now we always flip...
 
 
-    def calculateFrustum( self ):
+    def calculateFrustum( self ) -> Any:
         """Construct our Frustum instance (currently by extracting from mv matrix)"""
         # TODO: calculate from view platform instead
         self.frustum = frustum.Frustum.fromViewingMatrix(
@@ -1653,17 +1702,17 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         )
         return self.frustum
     
-    def getProjection (self):
+    def getProjection( self ) -> Any:
         """Retrieve the projection matrix for the rendering pass"""
         return self.projection
-    def getViewport (self):
+    def getViewport( self ) -> Any:
         """Retrieve the viewport parameters for the rendering pass"""
         return self.viewport
-    def getModelView( self ):
+    def getModelView( self ) -> Any:
         """Retrieve the base model-view matrix for the rendering pass"""
         return self.modelView
     
-    def setViewPlatform( self, vp ):
+    def setViewPlatform( self, vp: Any ) -> None:
         """Set our view platform"""
         self.viewPlatform = vp 
         self.projection = vp.viewMatrix().astype('f')

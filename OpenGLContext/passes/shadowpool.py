@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from OpenGLContext.passes.shadowmap import ShadowMapArray, ShadowMapCube, ShadowMapCubeArray
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
@@ -45,7 +45,8 @@ class _CascadeControllerMixin:
         """Max cascades the GPU's VRAM budget allows (cascades are a premium)."""
         caps = self._shadow_caps
         vram = getattr(caps, 'total_vram_mb', 0) if caps else 0
-        budget = max(1, min(self.shadow_cascades, self.shader_program.MAX_CASCADES))
+        budget = int(max(1, min(self.shadow_cascades,
+                                self.shader_program.MAX_CASCADES)))
         if not vram:
             return min(budget, 2)      # unknown VRAM: stay conservative
         if vram < 3000:
@@ -63,11 +64,11 @@ class _CascadeControllerMixin:
         60 fps while still using the extra quality when the GPU can afford it.
 
         ``ContextDefinition.shadowCascades`` (or ``OPENGLCONTEXT_SHADOW_CASCADES``)
-        pins the count to a fixed value and bypasses the fps probe entirely. The shared depth array is already
-        allocated at its full ``MAX_CASCADES`` size and never reallocated
-       , so the only remaining source of frame-to-frame variation
-        is *how many* of those layers get rendered; pinning it makes shadow
-        output deterministic for reference-image regression / CI.
+        pins the count to a fixed value and bypasses the fps probe entirely.  The
+        shared depth array is allocated at its full ``MAX_CASCADES`` size and
+        never reallocated, so the only source of frame-to-frame variation is how
+        many of those layers get rendered; pinning it makes shadow output
+        deterministic for reference-image regression and CI.
         """
         from OpenGLContext import renderoptions
         forced = int(renderoptions.number(
@@ -75,11 +76,11 @@ class _CascadeControllerMixin:
             renderoptions.env_number('OPENGLCONTEXT_SHADOW_CASCADES', 0,
                                      integer=True)))
         if forced:
-            return max(1, min(forced, self.shader_program.MAX_CASCADES))
+            return int(max(1, min(forced, self.shader_program.MAX_CASCADES)))
         cap = self._vramCascadeCap()
         if not self.shadow_cascades_adaptive:
-            return max(1, min(self.shadow_cascades, cap,
-                              self.shader_program.MAX_CASCADES))
+            return int(max(1, min(self.shadow_cascades, cap,
+                                  self.shader_program.MAX_CASCADES)))
         fc = getattr(getattr(self, 'context', None), 'frameCounter', None)
         fps = fc.recentFps() if fc is not None else 0.0
         cur = max(1, min(self._adaptive_cascades, cap))
@@ -115,7 +116,7 @@ class _ShadowMapPoolMixin:
     # back to one cube map per slot.
     _shared_array: Optional[ShadowMapArray] = None
     _shared_cube_array: Optional[ShadowMapCubeArray] = None
-    _maps_cube: Optional[dict] = None
+    _maps_cube: Optional[Dict[int, ShadowMapCube]] = None
 
     def disposeShadowMaps(self) -> None:
         """Release every shadow FBO + depth texture this pass allocated.
@@ -134,20 +135,20 @@ class _ShadowMapPoolMixin:
                     pool.cleanup()
                 except Exception as err:
                     log.debug("shadow map cleanup failed: %s", err)
-        for pool in (self._maps_cube or {}).values():
+        for cube in (self._maps_cube or {}).values():
             try:
-                pool.cleanup()
+                cube.cleanup()
             except Exception as err:
                 log.debug("cube shadow map cleanup failed: %s", err)
         self._shared_array = None
         self._shared_cube_array = None
         self._maps_cube = None
         self._shadow_bindings = None
-        # Drop the per-light depth-map reuse cache (R2): its entries key on the
+        # Drop the per-light depth-map reuse cache: its entries key on the
         # now-freed textures + light identities, so a fresh allocation must
         # re-render rather than trust a stale hit.
         self._depth_map_cache = None
-        # Drop the depth grouping cache (R5): it holds render records for the
+        # Drop the depth grouping cache: it holds render records for the
         # outgoing scene.
         self._depth_grouping_cache = None
 
@@ -155,7 +156,7 @@ class _ShadowMapPoolMixin:
     def _array_layers(self) -> int:
         """Layer count of the shared spot+CSM depth array."""
         s = self.shader_program
-        return s.MAX_SHADOW_LIGHTS * s.MAX_CASCADES
+        return int(s.MAX_SHADOW_LIGHTS * s.MAX_CASCADES)
 
     def _shared_map(self) -> ShadowMapArray:
         """The single depth array holding every spot map and CSM cascade.

@@ -115,8 +115,25 @@ class KeyBinding(NamedTuple):
     state: int = 0
 
 
+if TYPE_CHECKING:
+    class _MovementHost:
+        """The movement behaviour every interactive context brings.
+
+        :class:`SceneViewerMixin` refines two of its methods and calls up to
+        them, so they have to be declared somewhere the mix-in can see; they
+        come from :class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin` and
+        :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin` in the
+        assembled context.
+        """
+
+        def physicsAvatarScale(self, low: Any, high: Any) -> float: ...
+        def setMovementManager(self, manager: Any) -> None: ...
+else:
+    _MovementHost = object
+
+
 class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
-                       SettleCaptureMixin, ViewerScreensMixin):
+                       SettleCaptureMixin, ViewerScreensMixin, _MovementHost):
     """Showing one scene: assembly, cameras, animation and the caption."""
 
     #: What to show and how.  A class attribute so a subclass can simply set it.

@@ -23,25 +23,15 @@ Notes regarding general implementation:
     the Flat renderer.
 """
 
+from typing import Any, Optional, Sequence, Tuple
+
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
-from OpenGL.GL.ARB.occlusion_query import *
-from OpenGL.GL.HP.occlusion_test import *
-from OpenGL.GLUT import glutSolidCube
-from vrml.vrml97 import nodetypes
 from vrml import node, field, protofunctions, cache
-from OpenGLContext import frustum, utilities, doinchildmatrix
-from OpenGL.extensions import alternate, available
+from OpenGLContext import frustum
 import logging
 
 log = logging.getLogger(__name__)
-
-glBeginQuery = alternate(glBeginQuery, glBeginQueryARB)
-glDeleteQueries = alternate(glDeleteQueries, glDeleteQueriesARB)
-glEndQuery = alternate(glEndQuery, glEndQueryARB)
-glGenQueries = alternate(glGenQueries, glGenQueriesARB)
-glGetQueryObjectiv = alternate(glGetQueryObjectiv, glGetQueryObjectivARB)
-glGetQueryObjectuiv = alternate(glGetQueryObjectiv, glGetQueryObjectuivARB)
 
 try:
     from vrml.arrays import frustcullaccel
@@ -62,13 +52,12 @@ class BoundingVolume(node.Node):
     a BoundingVolume as their boundingVolume.
     """
 
-    def visible(self, frustum, matrix=None, occlusion=0, mode=None):
+    def visible(self, frustum: Any, matrix: Any = None, occlusion: int = 0,
+                mode: Any = None) -> int:
         """Test whether volume is within given frustum"""
         return 0
 
-    def getPoints(
-        self,
-    ):
+    def getPoints(self) -> Any:
         """Get the points which comprise the volume"""
         return ()
 
@@ -80,16 +69,15 @@ class UnboundedVolume(BoundingVolume):
     an UnboundedVolume if they always wish to be visible.
     """
 
-    def visible(self, frustum, matrix=None, occlusion=0, mode=None):
+    def visible(self, frustum: Any, matrix: Any = None, occlusion: int = 0,
+                mode: Any = None) -> int:
         """Test whether volume is within given frustum
 
         We don't actually do anything here, just return true
         """
         return 1
 
-    def getPoints(
-        self,
-    ):
+    def getPoints(self) -> Any:
         """Signal to parents that we require unbounded operation"""
         raise UnboundedObject("""Attempt to get union of an unbounded volume""")
 
@@ -109,7 +97,8 @@ class BoundingBox(BoundingVolume):
     points = field.newField("points", "MFVec4f", 0, [])
     if frustcullaccel:
         # We have the C extension module, use it
-        def visible(self, frust, matrix=None, occlusion=0, mode=None):
+        def visible(self, frust: Any, matrix: Any = None, occlusion: int = 0,
+                    mode: Any = None) -> int:
             """Determine whether this bounding-box is visible in frustum
 
             frustum -- Frustum object holding the clipping planes
@@ -130,7 +119,8 @@ class BoundingBox(BoundingVolume):
             return not culled
     else:
 
-        def visible(self, frust, matrix=None, occlusion=0, mode=None):
+        def visible(self, frust: Any, matrix: Any = None, occlusion: int = 0,
+                    mode: Any = None) -> int:
             """Determine whether this bounding-box is visible in frustum
 
             frustum -- Frustum object holding the clipping planes
@@ -164,12 +154,12 @@ class BoundingBox(BoundingVolume):
                 )
             return 1
 
-    def getPoints(self):
+    def getPoints(self) -> Any:
         """Return set of points to test against the frustum"""
         return self.points
 
     @staticmethod
-    def union(boxes, matrix=None):
+    def union(boxes: Sequence[Any], matrix: Any = None) -> BoundingVolume:
         """Create BoundingBox union for the given bounding boxes
 
         This uses the getPoints method of the given
@@ -195,21 +185,20 @@ class BoundingBox(BoundingVolume):
             to the box coordinates before calculating the
             resulting axis-aligned bounding box.
         """
-        points = []
+        sets = []
         for box in boxes:
             if box:
-                set = box.getPoints()
-                if len(set) > 0:
-                    points.append(set)
-        if not points:
+                boxPoints = box.getPoints()
+                if len(boxPoints) > 0:
+                    sets.append(boxPoints)
+        if not sets:
             return BoundingVolume()
-        points = tuple(points)
-        points = concatenate(points)
+        points = concatenate(tuple(sets))
         if matrix is not None:
             points = dot(points, matrix)
         return AABoundingBox.fromPoints(points)
 
-    def debugRender(self):
+    def debugRender(self) -> None:
         """Render this bounding box for debugging mode
 
         XXX Should really use points for rendering GL_POINTS
@@ -228,16 +217,8 @@ class AABoundingBox(BoundingBox):
 
     center = field.newField("center", "SFVec3f", 0, (0, 0, 0))
     size = field.newField("size", "SFVec3f", 0, (0, 0, 0))
-    query = field.newField("query", "SFInt32", 0, 0)
 
-    def visible(self, frust, matrix=None, occlusion=0, mode=None):
-        """Allow for occlusion-checking as well as frustum culling"""
-        result = super(AABoundingBox, self).visible(frust, matrix, occlusion, mode)
-        if result and False and occlusion:
-            return self.occlusionVisible(mode=mode)
-        return result
-
-    def getPoints(self):
+    def getPoints(self) -> Any:
         """Return set of points to test against the frustum
 
         If self.points field is not set, will calculate the
@@ -260,7 +241,7 @@ class AABoundingBox(BoundingBox):
             )
         return self.points
 
-    def debugRender(self):
+    def debugRender(self) -> None:
         """Render this bounding box for debugging mode
 
         Draws the bounding box as a set of lines in the
@@ -294,61 +275,8 @@ class AABoundingBox(BoundingBox):
         finally:
             glEnable(GL_LIGHTING)
 
-    def occlusionVisible(self, mode=None):
-        """Render this bounding volume for an occlusion test
-
-        Requires one of:
-            OpenGL 2.x
-            ARB_occlusion_query
-            GL_HP_occlusion_test
-        """
-        if False and available(glGenQueries):
-            query = self.query
-            if not self.query:
-                self.query = query = glGenQueries(1)
-            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE)
-            try:
-                glDepthMask(GL_FALSE)
-                glBeginQuery(GL_SAMPLES_PASSED, query)
-                doinchildmatrix.doInChildMatrix(self._occlusionRender)
-            finally:
-                glEndQuery(GL_SAMPLES_PASSED)
-        # TODO: need to actually retrieve the value, be we want to
-        # finish all child queries at this level before checking that
-        # this particular query passed fragments or not...
-        else:
-            # This code is not OpenGL 3.1 compatible
-            glDepthMask(GL_FALSE)
-            try:
-                try:
-                    glDisable(GL_LIGHTING)
-                    try:
-                        glEnable(occlusion_test.GL_OCCLUSION_TEST_HP)
-                        try:
-                            doinchildmatrix.doInChildMatrix(self._occlusionRender)
-                        finally:
-                            glDisable(occlusion_test.GL_OCCLUSION_TEST_HP)
-                    finally:
-                        glEnable(GL_LIGHTING)
-                finally:
-                    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE)
-            finally:
-                glDepthMask(GL_TRUE)
-            result = glGetBooleanv(occlusion_test.GL_OCCLUSION_TEST_RESULT_HP)
-            return result
-
-    def occlusionRender(self):
-        """Render this box to screen"""
-        doinchildmatrix.doInChildMatrix(self._occlusionRender)
-
-    def _occlusionRender(self):
-        """Do the low-level rendering of the occlusion volume"""
-        glTranslate(*self.center)
-        glScale(*self.size)
-        glutSolidCube(1.0)
-
     @classmethod
-    def fromPoints(cls, points):
+    def fromPoints(cls, points: Any) -> "AABoundingBox":
         """Calculate from an array of points"""
         xes, yes, zes = points[:, 0], points[:, 1], points[:, 2]
         maxX, maxY, maxZ = xes[argmax(xes)], yes[argmax(yes)], zes[argmax(zes)]
@@ -374,11 +302,13 @@ class _Measure(object):
     that needs more than that declines to measure rather than guessing.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.cache = cache.CACHE
 
 
-def boundingSphere(nodes):
+def boundingSphere(
+    nodes: Sequence[Any],
+) -> Optional[Tuple[Tuple[float, ...], float]]:
     """``(centre, radius)`` around a run of nodes, or None if none can be measured.
 
     Nodes with no extent -- a ``Background``, a light, a sensor -- are skipped
@@ -415,7 +345,7 @@ def boundingSphere(nodes):
     return tuple(float(v) for v in center), squared ** 0.5
 
 
-def volumeFromCoordinate(node):
+def volumeFromCoordinate(node: Any) -> BoundingVolume:
     """Calculate a bounding volume for a coordinate node
 
     This should work for all of:
@@ -469,7 +399,9 @@ def volumeFromCoordinate(node):
 ##  identical, we provide this set of two utility methods
 ##  to retrieve and cache the volumes with proper dependency
 ##  setup.
-def cacheVolume(node, volume, nodeFieldPairs=()):
+def cacheVolume(
+    node: Any, volume: BoundingVolume, nodeFieldPairs: Sequence[Any] = ()
+) -> BoundingVolume:
     """Cache bounding volume for the given node
 
     node -- the node associated with the volume
@@ -489,6 +421,8 @@ def cacheVolume(node, volume, nodeFieldPairs=()):
     return volume
 
 
-def getCachedVolume(node):
+def getCachedVolume(node: Any) -> Optional[BoundingVolume]:
     """Get currently-cached bounding volume for the node or None"""
-    return cache.CACHE.getData(node, key="boundingVolume")
+    volume: Optional[BoundingVolume] = cache.CACHE.getData(
+        node, key="boundingVolume")
+    return volume

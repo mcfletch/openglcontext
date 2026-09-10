@@ -36,6 +36,7 @@ import shutil
 import stat
 import subprocess
 import tarfile
+from typing import Any, Dict, List, Sequence, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ BACKEND_RUNTIME = {
 }
 
 
-def prune_patterns(keep=()):
+def prune_patterns(keep: Sequence[str] = ()) -> Tuple[str, ...]:
     """:data:`PRUNE`, less what the named backends need kept
 
     keep -- the backends the application opens its window with, named as
@@ -140,7 +141,7 @@ def prune_patterns(keep=()):
     return tuple(pattern for pattern in PRUNE if pattern not in wanted)
 
 
-def runtime_directory(runtime, unpack_into):
+def runtime_directory(runtime: str, unpack_into: str) -> str:
     """The directory of a relocatable interpreter, unpacking an archive first
 
     runtime -- a directory holding ``bin/python3``, or a tar archive of one.
@@ -163,7 +164,7 @@ def runtime_directory(runtime, unpack_into):
     return _with_interpreter(unpack_into)
 
 
-def _with_interpreter(where):
+def _with_interpreter(where: str) -> str:
     """*where*, or the first directory inside it that holds ``bin/python3``
 
     A directory an interpreter was installed *into* holds one, under a name
@@ -180,7 +181,7 @@ def _with_interpreter(where):
                      % (where,))
 
 
-def interpreter_platform(python):
+def interpreter_platform(python: str) -> str:
     """What ``sysconfig`` calls the platform an interpreter is built for
 
     Asked of the interpreter that will be shipped rather than of the machine
@@ -190,7 +191,7 @@ def interpreter_platform(python):
     return _ask(python, 'import sysconfig; print(sysconfig.get_platform())')
 
 
-def metadata(python, distribution):
+def metadata(python: str, distribution: str) -> Dict[str, Any]:
     """What an installed distribution says about itself, as a dict
 
     Read from the environment that was built rather than from the source tree,
@@ -221,19 +222,23 @@ def metadata(python, distribution):
         '    "scripts": scripts,\n'
         '}))\n'
     )
-    return json.loads(_ask(python, script, distribution))
+    found: Dict[str, Any] = json.loads(_ask(python, script, distribution))
+    return found
 
 
-def _ask(python, script, *arguments):
+def _ask(python: str, script: str, *arguments: str) -> str:
     """Run a one-line script in another interpreter and return what it printed"""
-    return subprocess.run(
+    printed: str = subprocess.run(
         [python, '-c', script, *arguments],
         check=True, stdout=subprocess.PIPE, text=True,
     ).stdout.strip()
+    return printed
 
 
-def build(runtime, staging, installed, install=(), requirements=(), work=None,
-          unused='prune', keep=(), quiet=False):
+def build(runtime: str, staging: str, installed: str,
+          install: Sequence[str] = (), requirements: Sequence[str] = (),
+          work: str | None = None, unused: str = 'prune',
+          keep: Sequence[str] = (), quiet: bool = False) -> str:
     """Assemble a relocatable environment under *staging* to run from *installed*
 
     runtime -- a relocatable CPython, as a directory or a tar archive
@@ -279,7 +284,7 @@ def build(runtime, staging, installed, install=(), requirements=(), work=None,
     subprocess.check_call([base, '-m', 'venv', '--without-pip', environment])
     python = os.path.join(environment, 'bin', 'python3')
 
-    arguments = []
+    arguments: List[str] = []
     for path in requirements:
         arguments += ['--requirement', path]
     arguments += list(install)
@@ -306,7 +311,7 @@ def build(runtime, staging, installed, install=(), requirements=(), work=None,
     return python
 
 
-def prune(prefix, patterns=PRUNE):
+def prune(prefix: str, patterns: Sequence[str] = PRUNE) -> List[str]:
     """Remove what a shipped application has no use for, and report what went
 
     prefix -- a built environment's directory, holding ``python`` and ``venv``
@@ -316,7 +321,7 @@ def prune(prefix, patterns=PRUNE):
     interpreter builds, and which of them ships Tk or a manual is not something
     to have to know.
     """
-    removed = []
+    removed: List[str] = []
     for pattern in patterns:
         for path in sorted(glob.glob(os.path.join(prefix, pattern))):
             if os.path.isdir(path) and not os.path.islink(path):
@@ -327,7 +332,7 @@ def prune(prefix, patterns=PRUNE):
     return removed
 
 
-def _compile(python, staging, installed):
+def _compile(python: str, staging: str, installed: str) -> None:
     """Byte-compile the environment, recording the paths it will be read from
 
     A package is installed read-only under ``/opt``, so an environment that
@@ -345,7 +350,7 @@ def _compile(python, staging, installed):
 
 
 
-def relocate(root, source, target):
+def relocate(root: str, source: str, target: str) -> List[str]:
     """Rewrite the build-time paths in a tree to the ones it will run at
 
     A virtual environment records where it was made: in ``pyvenv.cfg``, in the
@@ -371,7 +376,7 @@ def relocate(root, source, target):
 
     Returns the paths that were changed.
     """
-    changed = []
+    changed: List[str] = []
     root, source = os.path.abspath(root), os.path.abspath(source)
     prefix = source if source.endswith(os.sep) else source + os.sep
     for directory, dirnames, filenames in os.walk(root):
@@ -386,7 +391,7 @@ def relocate(root, source, target):
     return changed
 
 
-def _relocate_link(path, source, prefix, target):
+def _relocate_link(path: str, source: str, prefix: str, target: str) -> bool:
     """Make an absolute symlink into the staging directory a relative one"""
     points_at = os.readlink(path)
     if not os.path.isabs(points_at) or not points_at.startswith(prefix):
@@ -398,7 +403,7 @@ def _relocate_link(path, source, prefix, target):
     return True
 
 
-def _relocate_text(path, source, target):
+def _relocate_text(path: str, source: str, target: str) -> bool:
     """Replace the staging path in a text file with the installed one"""
     with open(path, 'rb') as stream:
         head = stream.read(8192)

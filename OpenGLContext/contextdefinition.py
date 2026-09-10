@@ -1,5 +1,7 @@
 """Definition of a Context's visual parameters"""
 import os
+from typing import Any, Tuple
+
 from vrml import node, field
 
 from OpenGLContext import renderoptions
@@ -13,7 +15,7 @@ from OpenGLContext.audio import settings as audiosettings
 # loaded -- which no application, and no test, can reach afterwards.
 
 
-def _get_default_profile():
+def _get_default_profile() -> str:
     """The OpenGL profile a context gets when nothing asks for one.
 
     ``core`` -- OpenGL 3.3 core, rendered through shaders.  It is the default
@@ -33,7 +35,7 @@ def _get_default_profile():
     return os.environ.get('OPENGLCONTEXT_PROFILE', 'core')
 
 
-def version_for_profile(profile):
+def version_for_profile(profile: str) -> Tuple[int, int]:
     """The OpenGL version a context of ``profile`` needs, unless told otherwise.
 
     Core profile requires at least OpenGL 3.2; the shaders here target 3.3.
@@ -43,12 +45,12 @@ def version_for_profile(profile):
     return (3, 3) if profile == 'core' else (0, 0)
 
 
-def _get_default_version():
+def _get_default_version() -> Tuple[int, int]:
     """The version field's default, from the profile the environment names."""
     return version_for_profile(_get_default_profile())
 
 
-def _get_default_picking():
+def _get_default_picking() -> bool:
     """Whether colour-based scenegraph picking is enabled by default.
 
     Disabled when OPENGLCONTEXT_PICKING is set to a falsey value
@@ -293,7 +295,7 @@ class ContextDefinition( node.Node ):
         'pickEnabled', 'pickAsync', 'debugBBox', 'debugSelection', 'debug',
     )
 
-    def __init__( self, **named ):
+    def __init__( self, **named: Any ) -> None:
         # Zero-argument super, so an instance of this class still finds its own
         # base after the module has been reloaded: the two-argument form looks
         # the class up as a module global, which a reload has rebound to a
@@ -309,7 +311,7 @@ class ContextDefinition( node.Node ):
             self.version = version_for_profile( self.profile )
 
     @classmethod
-    def fromConfig( cls, cfg, section='contextdefinition' ):
+    def fromConfig( cls, cfg: Any, section: str = 'contextdefinition' ) -> 'ContextDefinition':
         """Generate a ContextDefinition from a ConfigParser instance"""
         from vrml import protofunctions
         instance = cls()

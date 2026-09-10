@@ -215,9 +215,9 @@ def test_dispose_frees_compiled_skybox(gl_context):
     from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground(image=_panorama())
     bg.compile(_Mode())
-    assert bg._render_data is not None
+    assert bg._render_data
     bg.dispose()
-    assert bg._render_data is None
+    assert bg._render_data == {}
 
 
 def test_free_render_data_deletes_real_objects(gl_context):
@@ -226,7 +226,7 @@ def test_free_render_data_deletes_real_objects(gl_context):
     bg = HDRBackground(image=_panorama())
     render_data = bg.compile(_Mode())
     H._free_render_data(render_data)            # real texture/VBO/VAO teardown
-    bg._render_data = None
+    bg._render_data = {}
 
 
 def test_free_render_data_ignores_falsey_and_broken_data(gl_context):

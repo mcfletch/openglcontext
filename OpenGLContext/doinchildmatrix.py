@@ -4,9 +4,12 @@ XXX Should add versions for perspective and/or texture
     matrices (use a parameterized base function and
     provide top-level convenience functions to call it).
 """
-from OpenGL.GL import *
+from typing import Any, Callable
 
-def doInChildMatrix( function, *args, **named ):
+from OpenGL.GL import *
+from OpenGL.error import GLError
+
+def doInChildMatrix( function: Callable[..., Any], *args: Any, **named: Any ) -> Any:
     """Do the function in a "child" matrix
 
     This method allows you to perform the given function
@@ -19,8 +22,9 @@ def doInChildMatrix( function, *args, **named ):
     glMatrixMode( GL_MODELVIEW )
     try:
         glPushMatrix()
-    except GLerror:
-        matrix = glGetDouble( GL_MODELVIEW_MATRIX )
+    except GLError:
+        # The stack is full, so the matrix is saved and reloaded by hand.
+        matrix = glGetDoublev( GL_MODELVIEW_MATRIX )
         try:
             return function( *args, **named )
         finally:

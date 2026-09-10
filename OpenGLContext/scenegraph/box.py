@@ -2,9 +2,16 @@
 from vrml import cache
 from OpenGLContext.arrays import array
 from OpenGL.arrays import vbo
+from typing import Any, Iterator, Tuple
 from OpenGL.GL import *
 from vrml.vrml97 import basenodes
 from vrml import protofunctions
+
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
 
 class Box( basenodes.Box ):
     """Simple Box object of given size centered about local origin
@@ -24,11 +31,11 @@ class Box( basenodes.Box ):
     Reference:
         http://www.web3d.org/technicalinfo/specifications/vrml97/part1/nodesRef.html#Box
     """
-    def compile( self, mode=None ):
+    def compile( self, mode: Any = None ) -> Any:
         """Compile the box as a display-list"""
         if vbo.get_implementation():
-            vb = vbo.VBO( array( list(yieldVertices( self.size )), 'f'))
-            def draw( textured=True,lit=True ):
+            vb = VBO( array( list(yieldVertices( self.size )), 'f'))
+            def draw( textured: bool = True, lit: bool = True ) -> None:
                 vb.bind()
                 try:
                     glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
@@ -48,7 +55,7 @@ class Box( basenodes.Box ):
                     vb.unbind()
         else:
             vb = array( list(yieldVertices( self.size )), 'f')
-            def draw(textured=True,lit=True):
+            def draw(textured: bool = True, lit: bool = True) -> None:
                 glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
                 try:
                     glInterleavedArrays( GL_T2F_N3F_V3F, 0, vb )
@@ -59,27 +66,27 @@ class Box( basenodes.Box ):
         holder.depend( self, protofunctions.getField(self, 'size') )
         return draw
 
-    def _get_shader_vbo(self, mode):
+    def _get_shader_vbo(self, mode: Any) -> Any:
         """Get or create VBO for shader rendering."""
         vb = mode.cache.getData(self, 'shader_vbo')
         if vb is None:
-            vb = vbo.VBO(array(list(yieldVertices(self.size)), 'f'))
+            vb = VBO(array(list(yieldVertices(self.size)), 'f'))
             holder = mode.cache.holder(self, vb, 'shader_vbo')
             holder.depend(self, protofunctions.getField(self, 'size'))
         return vb
 
     def render (
             self,
-            visible = 1, # can skip normals and textures if not
-            lit = 1, # can skip normals if not
-            textured = 1, # can skip textureCoordinates if not
-            transparent = 0, # XXX should sort triangle geometry...
-            mode = None, # the renderpass object for which we compile
-        ):
+            visible: int = 1, # can skip normals and textures if not
+            lit: int = 1, # can skip normals if not
+            textured: int = 1, # can skip textureCoordinates if not
+            transparent: int = 0, # XXX should sort triangle geometry...
+            mode: Any = None, # the renderpass object for which we compile
+        ) -> int:
         """Render the Box (build and) call the display list"""
         # Check for shader mode
         if getattr(mode, 'shader_mode', False):
-            return self._render_shader(mode)
+            return int(self._render_shader(mode))
 
         # Legacy rendering path
         vb = mode.cache.getData(self)
@@ -89,7 +96,7 @@ class Box( basenodes.Box ):
             vb(textured=textured,lit=lit)
         return 1
 
-    def _render_shader(self, mode):
+    def _render_shader(self, mode: Any) -> bool:
         """Render the box using the shader pipeline."""
         from OpenGLContext.scenegraph.shadergeometry import VertexFormat
         from OpenGLContext.scenegraph.geometryarrays import (
@@ -100,11 +107,11 @@ class Box( basenodes.Box ):
             vb, VertexFormat.T2F_N3F_V3F, count=36,
         ), owner=self, where='Box')
 
-    def instanceContentKey(self):
+    def instanceContentKey(self) -> Tuple[Any, ...]:
         """Boxes of the same size share geometry, so they batch as instances."""
         return ('Box', tuple(round(float(v), 6) for v in self.size))
 
-    def instanceGPU(self, mode):
+    def instanceGPU(self, mode: Any) -> Any:
         """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
         from OpenGLContext.passes.instancing import build_mesh_gpu
         verts = list(yieldVertices(self.size))   # (u,v, nx,ny,nz, x,y,z) * 36
@@ -115,7 +122,7 @@ class Box( basenodes.Box ):
             mode, self, positions, normals, texcoords, indices=None,
             cache_key='instance_gpu',
             depend_fields=(protofunctions.getField(self, 'size'),))
-    def boundingVolume( self, mode ):
+    def boundingVolume( self, mode: Any ) -> Any:
         """Create a bounding-volume object for this node"""
         from OpenGLContext.scenegraph import boundingvolume
         current = boundingvolume.getCachedVolume( self )
@@ -129,7 +136,7 @@ class Box( basenodes.Box ):
             ( (self, 'size'), ),
         )
 
-def yieldVertices(size):
+def yieldVertices(size: Any) -> Iterator[Any]:
     x,y,z = size 
     x,y,z = x/2.0,y/2.0,z/2.0
     normal = ( 0.0, 0.0, 1.0)

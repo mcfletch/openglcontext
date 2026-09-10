@@ -1,4 +1,6 @@
 """Holder for a single display-list"""
+from typing import Any, Optional
+
 from OpenGL.GL import *
 
 class DisplayList( object ):
@@ -10,7 +12,11 @@ class DisplayList( object ):
     default call method for execution.
     """
     __slots__ = ('list','__weakref__')
-    def __init__( self ):
+
+    #: The list's GL name, or None once it has been released.
+    list: Optional[int]
+
+    def __init__( self ) -> None:
         """Initialize the display list
 
         See:
@@ -19,7 +25,7 @@ class DisplayList( object ):
         self.list = glGenLists (1)
         if self.list == 0:
             raise RuntimeError( """Unable to generate a new display-list, context may not support display lists""")
-    def start( self, mode= GL_COMPILE ):
+    def start( self, mode: int = GL_COMPILE ) -> None:
         """Start defining the display-list
 
         mode can be either:
@@ -27,22 +33,26 @@ class DisplayList( object ):
         See:
             glNewList
         """
+        if self.list is None:
+            raise RuntimeError( """Display list has already been released""" )
         glNewList( self.list, mode )
-    def end( self ):
+    def end( self ) -> None:
         """Finish defining the display-list
 
         See:
             glEndList
         """
         glEndList()
-    def __call__( self ):
+    def __call__( self ) -> None:
         """Call (execute) the display-list
 
         See:
             glCallList
         """
+        if self.list is None:
+            raise RuntimeError( """Display list has already been released""" )
         glCallList( self.list )
-    def __del__( self, glDeleteLists = glDeleteLists ):
+    def __del__( self, glDeleteLists: Any = glDeleteLists ) -> None:
         """Release the display-list, if there is still a context holding it.
 
         A display list outlives its context whenever the window closes before the

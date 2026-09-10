@@ -6,6 +6,10 @@ and glBitmap are not available.
 
 Uses pre-rendered DejaVu Sans Mono font atlases at multiple sizes.
 """
+from __future__ import annotations
+
+from typing import Any
+
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext import contextresources
@@ -29,7 +33,7 @@ class ShaderTextRenderer:
     - Solid background: Text is rendered on a solid color background
     """
 
-    def __init__(self, font_size=16):
+    def __init__(self, font_size: int = 16) -> None:
         """Initialize the text renderer.
 
         Args:
@@ -37,11 +41,11 @@ class ShaderTextRenderer:
                       size from the pre-rendered atlases will be used.
         """
         self._requested_size = font_size
-        self._texture = None
-        self._vao = None
-        self._vbo = None
+        self._texture: int | None = None
+        self._vao: int | None = None
+        self._vbo: int | None = None
         self._initialized = False
-        self._atlas_module = None
+        self._atlas_module: Any = None
 
         # These will be set from the atlas module
         self._char_width = 0
@@ -53,7 +57,7 @@ class ShaderTextRenderer:
         self._chars_per_row = 16
         self._actual_size = 0
 
-    def _load_atlas_module(self):
+    def _load_atlas_module(self) -> bool:
         """Load the appropriate font atlas module."""
         try:
             from OpenGLContext.scenegraph.text import fonts
@@ -77,7 +81,7 @@ class ShaderTextRenderer:
             log.error("Failed to import font atlas: %s", e)
             return False
 
-    def _create_font_texture(self):
+    def _create_font_texture(self) -> bool:
         """Create the font texture from the atlas module."""
         if self._atlas_module is None:
             return False
@@ -88,8 +92,7 @@ class ShaderTextRenderer:
 
             # Load the PNG using PIL
             from PIL import Image
-            img = Image.open(io.BytesIO(png_data))
-            img = img.convert('RGBA')
+            img = Image.open(io.BytesIO(png_data)).convert('RGBA')
 
             # Convert to numpy array (no flip)
             # PIL row 0 (top of image) = atlas row 0 (space, !, etc.)
@@ -117,7 +120,7 @@ class ShaderTextRenderer:
             log.error("Failed to create font texture: %s", e)
             return False
 
-    def initialize(self):
+    def initialize(self) -> bool:
         """Initialize the text renderer (must be called from GL context)."""
         if self._initialized:
             return True
@@ -142,22 +145,22 @@ class ShaderTextRenderer:
             return False
 
     @property
-    def char_width(self):
+    def char_width(self) -> int:
         """Width of a single character in pixels."""
         return self._char_width
 
     @property
-    def char_height(self):
+    def char_height(self) -> int:
         """Height of a single character in pixels."""
         return self._char_height
 
     @property
-    def font_size(self):
+    def font_size(self) -> int:
         """Actual font size being used."""
         return self._actual_size
 
     @property
-    def texture(self):
+    def texture(self) -> int | None:
         """The atlas texture id, or None before initialize() has run.
 
         Exposed so another renderer -- the overlay UI, which batches text and
@@ -166,7 +169,7 @@ class ShaderTextRenderer:
         """
         return self._texture
 
-    def glyph_uv(self, char):
+    def glyph_uv(self, char: str) -> tuple[float, float, float, float]:
         """Texture coordinates for one character, as (u0, v0, u1, v1).
 
         v0 goes with the *bottom* of the quad and v1 with the top: within a
@@ -185,7 +188,7 @@ class ShaderTextRenderer:
                 (col + 1) * self._char_width / self._atlas_width,
                 row * self._char_height / self._atlas_height)
 
-    def measure_text(self, text):
+    def measure_text(self, text: str) -> tuple[int, int]:
         """Measure the dimensions of rendered text.
 
         Args:
@@ -203,8 +206,11 @@ class ShaderTextRenderer:
 
         return (max_width * self._char_width, num_lines * self._char_height)
 
-    def render_text(self, text, x, y, shader_program, viewport_width, viewport_height,
-                    color=(1.0, 1.0, 1.0, 1.0), background_color=None, scale=1.0):
+    def render_text(self, text: str, x: float, y: float, shader_program: Any,
+                    viewport_width: float, viewport_height: float,
+                    color: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+                    background_color: tuple[float, float, float, float] | None = None,
+                    scale: float = 1.0) -> None:
         """Render text at screen position (x, y).
 
         Args:
@@ -236,8 +242,13 @@ class ShaderTextRenderer:
         if not text:
             return
 
+        # initialize() creates the three together or reports failure
+        vao, buffer, texture = self._vao, self._vbo, self._texture
+        if vao is None or buffer is None or texture is None:
+            return
+
         # Build vertex data for all characters
-        vertices = []
+        vertices: list[float] = []
 
         char_w = self._char_width * scale
         char_h = self._char_height * scale
@@ -301,8 +312,8 @@ class ShaderTextRenderer:
         vertex_data = array(vertices, 'f')
 
         # Bind VAO and upload vertex data
-        glBindVertexArray(self._vao)
-        glBindBuffer(GL_ARRAY_BUFFER, self._vbo)
+        glBindVertexArray(vao)
+        glBindBuffer(GL_ARRAY_BUFFER, buffer)
         glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_DYNAMIC_DRAW)
 
         # Use unlit shader for text
@@ -319,7 +330,7 @@ class ShaderTextRenderer:
 
         # Enable texture and set texture uniform
         glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D, self._texture)
+        glBindTexture(GL_TEXTURE_2D, texture)
 
         # Set the texture sampler uniform to texture unit 0
         tex_uniform_loc = glGetUniformLocation(shader_program.unlit_program, 'diffuseTexture')
@@ -392,7 +403,7 @@ class ShaderTextRenderer:
 # merely per size: a renderer owns a texture, a VAO and a VBO, and those names
 # mean nothing in another context, so a second window handed the first
 # window's renderer draws the wrong thing or raises.
-_renderers = {}
+_renderers: dict[tuple[Any, int], ShaderTextRenderer] = {}
 
 
 #: The identifier the renderers are keyed by; one implementation, in the module
@@ -400,7 +411,7 @@ _renderers = {}
 _gl_context = contextresources.context_key
 
 
-def get_text_renderer(font_size=16):
+def get_text_renderer(font_size: int = 16) -> ShaderTextRenderer:
     """Get a text renderer for the specified font size.
 
     One per (GL context, size), built on first use and kept: an atlas costs a
@@ -419,7 +430,7 @@ def get_text_renderer(font_size=16):
 
 
 @contextresources.on_context_lost
-def drop_text_renderers():
+def drop_text_renderers() -> None:
     """Forget the renderers belonging to the current GL context.
 
     Called as a window goes away.  Their GL objects die with the context, and a

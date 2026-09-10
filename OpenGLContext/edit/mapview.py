@@ -184,7 +184,7 @@ class MapViewPlatform(ViewPlatform):
         super(MapViewPlatform, self).__init__(
             position=(view.centre[0], view.ceiling + STAND_OFF, view.centre[1]))
 
-    def setViewport(self, x: int, y: int) -> None:
+    def setViewport(self, x: float, y: float) -> None:
         self.viewport = (int(x), int(y))
 
     @property

@@ -47,6 +47,7 @@ class _AsyncPickMixin:
 
     if TYPE_CHECKING:
         matrix: Any
+        modelView: Any
         projection: Any
         viewport: Any
 

@@ -9,6 +9,8 @@ for bindables (Viewpoint, Background, Fog, NavigationInfo) which only mean
 something where the renderer would encounter them.
 """
 import traceback
+from typing import Any, List, Sequence, Tuple, Type
+
 from vrml.vrml97 import nodetypes
 from vrml import node as _node
 from OpenGLContext.scenegraph import nodepath
@@ -21,14 +23,16 @@ TRAVERSAL_TYPES = (nodetypes.Traversable, nodetypes.Children,
                    _node.PrototypedNode, nodetypes.Rendering)
 
 
-def children(node, types=TRAVERSAL_TYPES):
+def children(node: Any, types: Tuple[type, ...] = TRAVERSAL_TYPES) -> Sequence[Any]:
     """The children of ``node`` to traverse into, or ``()`` when it has none."""
     if hasattr(node, 'renderedChildren'):
-        return node.renderedChildren(types)
+        found: Sequence[Any] = node.renderedChildren(types)
+        return found
     return ()
 
 
-def find(sg, desiredTypes=()):
+def find(sg: Any,
+         desiredTypes: Any = ()) -> List['nodepath.NodePath']:
     """Node-paths to every instance of ``desiredTypes`` within scenegraph ``sg``.
 
     ``desiredTypes`` may be a single type or a sequence of them. Returns a list of
@@ -46,7 +50,7 @@ def find(sg, desiredTypes=()):
     # depth each queued node hangs at, which is what lets one flat list
     # reconstruct the full path to every match.
     todo = [(0, sg)]
-    currentStack = []
+    currentStack: List[Any] = []
     childrenTypes = TRAVERSAL_TYPES + desiredTypes
     while todo:
         index, current = todo.pop(0)

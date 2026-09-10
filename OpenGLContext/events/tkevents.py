@@ -1,5 +1,7 @@
 """Module providing translation from Tkinter events to OpenGLContext events"""
 
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.events.wheel import WheelNotches
@@ -22,11 +24,11 @@ WHEEL_DELTA = 120.0
 #: Which Tk button number is which of OpenGLContext's.  Tk numbers them 1, 2,
 #: 3 for left, middle, right; OpenGLContext numbers them 0, 2, 1, since it
 #: keeps the X11 order where the wheel is 4 and 5.
-BUTTON_MAPPING = {1: 0, 2: 2, 3: 1}
+BUTTON_MAPPING: Dict[int, int] = {1: 0, 2: 2, 3: 1}
 
 #: The Tk button numbers a wheel notch arrives on under X11, and which way each
 #: turns.
-X11_WHEEL_BUTTONS = {4: WHEEL_UP, 5: WHEEL_DOWN}
+X11_WHEEL_BUTTONS: Dict[int, int] = {4: WHEEL_UP, 5: WHEEL_DOWN}
 
 
 class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
@@ -38,10 +40,16 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
     module).
     """
     #: Counts a stream of ``<MouseWheel>`` reports into whole notches.
-    _wheelCounter = None
+    _wheelCounter: Optional[WheelNotches] = None
+
+    if TYPE_CHECKING:
+        # What this mix-in needs of the Tk context beside it.
+        def addPickEvent(self, event: Any) -> Any: ...
+        def triggerPick(self) -> Any: ...
+        def getViewPort(self) -> Tuple[int, int]: ...
 
     ### KEYBOARD interactions
-    def tkOnKeyDown( self, event ):
+    def tkOnKeyDown( self, event: Any ) -> None:
         '''Convert a key-press to a context-style event'''
         name = keyName( event )
         if name in self.heldKeys():
@@ -51,16 +59,16 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         if event.char:
             self.ProcessEvent( tkKeypressEvent( self, event))
 
-    def tkOnKeyUp( self, event ):
+    def tkOnKeyUp( self, event: Any ) -> None:
         '''Convert a key-release to a context-style event'''
         self.noteKeyUp( keyName( event ) )
         self.ProcessEvent( tkKeyboardEvent( self, event, 0))
 
-    def tkOnCharacter( self, event ):
+    def tkOnCharacter( self, event: Any ) -> None:
         """Convert character (non-control) press to context event"""
         self.ProcessEvent( tkKeypressEvent( self, event))
 
-    def tkOnFocusOut( self, event ):
+    def tkOnFocusOut( self, event: Any ) -> None:
         """Let go of every held key as the widget loses focus
 
         No key-up arrives for a key that was down when focus went elsewhere, so
@@ -69,7 +77,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         """
         self.clearHeldKeys()
 
-    def emitKey( self, key, state, modifiers ):
+    def emitKey( self, key: Any, state: int, modifiers: Any ) -> None:
         """Send a key transition the window system did not report
 
         ``modifiers`` is the triple that came with the press, so the synthetic
@@ -86,7 +94,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         self.ProcessEvent( made )
 
     ### MOUSE Interaction
-    def tkOnMouseButton(self, event ):
+    def tkOnMouseButton(self, event: Any ) -> None:
         """Convert mouse-button event to context event
 
         A wheel notch arrives here on X11, where Tk reports it as a press of
@@ -99,14 +107,14 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         self.addPickEvent( tkMouseButtonEvent( self, event, state=1))
         self.triggerPick()
 
-    def tkOnMouseRelease( self, event ):
+    def tkOnMouseRelease( self, event: Any ) -> None:
         """Convert release-of-mouse event to context event"""
         if event.num in X11_WHEEL_BUTTONS:
             return                      # the notch was delivered by the press
         self.addPickEvent( tkMouseButtonEvent( self, event, state=0))
         self.triggerPick()
 
-    def tkOnMouseWheel( self, event ):
+    def tkOnMouseWheel( self, event: Any ) -> None:
         """Convert a Windows or macOS wheel report to notches
 
         Tk states the rotation there rather than naming a button, so each whole
@@ -118,14 +126,14 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         for button in self._wheelCounter.notches( getattr(event, 'delta', 0) ):
             self._postWheel( event, button )
 
-    def _postWheel( self, event, button ):
+    def _postWheel( self, event: Any, button: int ) -> None:
         """One notch, as the press and release of a button that is never held"""
         for state in (1, 0):
             self.addPickEvent(
                 tkWheelEvent( self, event, button=button, state=state ) )
         self.triggerPick()
 
-    def tkOnMouseMove(self, event ):
+    def tkOnMouseMove(self, event: Any ) -> None:
         """Convert mouse-movement event to context event
 
         The movement sampler is told directly as well as through the pick
@@ -152,7 +160,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         self.addPickEvent( tkMouseMoveEvent( self, event))
         self.triggerPick()
 
-    def pointerWarpEcho( self, x, y ):
+    def pointerWarpEcho( self, x: int, y: int ) -> bool:
         """Whether this movement is one the window itself caused
 
         Answered by the context, which is what does the warping; see
@@ -161,7 +169,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         """
         return False
 
-    def recentrePointer( self ):
+    def recentrePointer( self ) -> None:
         """Put a grabbed pointer back in the middle of the window
 
         Answered by the context; see
@@ -170,7 +178,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         """
 
 
-def modifiersOf( tkEventObject ):
+def modifiersOf( tkEventObject: Any ) -> Tuple[bool, bool, bool]:
     """The shift, control and alt triple a Tk event was delivered with
 
     A function rather than a method on the event classes, because the context
@@ -188,7 +196,7 @@ def modifiersOf( tkEventObject ):
     )
 
 
-def keyName( tkEventObject ):
+def keyName( tkEventObject: Any ) -> str:
     """The OpenGLContext name of the key a Tk event is about
 
     Tk names a key by its X keysym, which is what :data:`keyboardMapping`
@@ -198,7 +206,7 @@ def keyName( tkEventObject ):
     if name:
         return name
     if tkEventObject.char:
-        return tkEventObject.char
+        return str( tkEventObject.char )
     return '<%s>' % (tkEventObject.keysym,)
 
 
@@ -208,13 +216,13 @@ class tkXEvent(object):
     Provides method for determining the modifier set from
     Tkinter event objects
     """
-    def _getModifiers( self, tkEventObject):
+    def _getModifiers( self, tkEventObject: Any) -> Tuple[bool, bool, bool]:
         """Get a three-tupple of shift, control, alt status"""
         return modifiersOf( tkEventObject )
 
 class tkMouseButtonEvent( tkXEvent, mouseevents.MouseButtonEvent ):
     """Tkinter-specific mouse button state change event"""
-    def __init__( self, context, tkEventObject, state=1 ):
+    def __init__( self, context: Any, tkEventObject: Any, state: int = 1 ) -> None:
         super (tkMouseButtonEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
@@ -233,7 +241,8 @@ class tkWheelEvent( tkXEvent, mouseevents.MouseButtonEvent ):
     depends on the platform -- a Tk button number on X11, a rotation elsewhere
     -- and the caller has already worked it out.
     """
-    def __init__( self, context, tkEventObject, button=WHEEL_UP, state=0 ):
+    def __init__( self, context: Any, tkEventObject: Any,
+                  button: int = WHEEL_UP, state: int = 0 ) -> None:
         super (tkWheelEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
@@ -244,7 +253,7 @@ class tkWheelEvent( tkXEvent, mouseevents.MouseButtonEvent ):
 
 class tkMouseMoveEvent( tkXEvent, mouseevents.MouseMoveEvent ):
     """Tkinter-specific mouse movement event"""
-    def __init__( self, context, tkEventObject ):
+    def __init__( self, context: Any, tkEventObject: Any ) -> None:
         super (tkMouseMoveEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
@@ -263,7 +272,7 @@ class tkMouseMoveEvent( tkXEvent, mouseevents.MouseMoveEvent ):
 
 class tkKeyboardEvent( tkXEvent, keyboardevents.KeyboardEvent ):
     """Tkinter-specific keyboard event"""
-    def __init__( self, context, tkEventObject, state=0 ):
+    def __init__( self, context: Any, tkEventObject: Any, state: int = 0 ) -> None:
         super (tkKeyboardEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
@@ -273,7 +282,7 @@ class tkKeyboardEvent( tkXEvent, keyboardevents.KeyboardEvent ):
 
 class tkKeypressEvent( tkXEvent, keyboardevents.KeypressEvent ):
     """Tkinter-specific key-press event"""
-    def __init__( self, context, tkEventObject):
+    def __init__( self, context: Any, tkEventObject: Any) -> None:
         super (tkKeypressEvent, self).__init__()
         if hasattr( context, 'currentPass'):
             self.renderingPass = context.currentPass
@@ -281,7 +290,7 @@ class tkKeypressEvent( tkXEvent, keyboardevents.KeypressEvent ):
         self.name = tkEventObject.char
 
 
-keyboardMapping = {
+keyboardMapping: Dict[str, str] = {
     'BackSpace':'<backspace>',
     'Tab':'<tab>',
     'Return':'<return>',

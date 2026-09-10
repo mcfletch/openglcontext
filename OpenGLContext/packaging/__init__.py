@@ -22,6 +22,8 @@ Nothing in this package is imported by the engine at run time, and nothing in
 it draws anything.
 """
 
+from typing import List, Sequence, Set
+
 __all__ = ['BACKEND_MODULES', 'SESSIONS', 'SESSION_ALTERNATIVE', 'SYSTEM_LIBRARIES',
            'WAYLAND_DECORATIONS', 'WAYLAND_LIBRARIES', 'X11_LIBRARIES',
            'session_libraries', 'session_recommendations',
@@ -120,7 +122,7 @@ SESSION_ALTERNATIVE = 'libwayland-client0 | libx11-6'
 #: :func:`session_libraries`.
 SESSIONS = ('either', 'wayland', 'x11', 'both')
 
-def unused_backend_modules(keep=('glfw',)):
+def unused_backend_modules(keep: Sequence[str] = ('glfw',)) -> List[str]:
     """Report the toolkit modules an application keeping only *keep* can leave out
 
     A frozen bundle picks up every toolkit that happens to be installed
@@ -136,29 +138,29 @@ def unused_backend_modules(keep=('glfw',)):
     otherwise quietly excise the toolkit the application actually runs on, and
     for an empty *keep*, which describes an application that cannot draw.
     """
-    keep = list(keep)
-    if not keep:
+    kept_names = list(keep)
+    if not kept_names:
         raise ValueError(
             'An application needs a windowing backend; keep one of %s'
             % (', '.join(sorted(BACKEND_MODULES)),)
         )
-    unknown = [name for name in keep if name not in BACKEND_MODULES]
+    unknown = [name for name in kept_names if name not in BACKEND_MODULES]
     if unknown:
         raise ValueError(
             'Not a windowing backend: %s; known backends are %s'
             % (', '.join(unknown), ', '.join(sorted(BACKEND_MODULES)))
         )
-    kept = set()
-    for name in keep:
+    kept: Set[str] = set()
+    for name in kept_names:
         kept.update(BACKEND_MODULES[name])
-    unused = set()
+    unused: Set[str] = set()
     for name, modules in BACKEND_MODULES.items():
-        if name not in keep:
+        if name not in kept_names:
             unused.update(modules)
     return sorted(unused - kept)
 
 
-def _checked(session):
+def _checked(session: str) -> str:
     """*session*, or a ValueError naming what there is"""
     if session not in SESSIONS:
         raise ValueError(
@@ -168,7 +170,7 @@ def _checked(session):
     return session
 
 
-def session_libraries(session='either'):
+def session_libraries(session: str = 'either') -> List[str]:
     """The libraries a package built for *session* asks the machine for
 
     GLFW opens every windowing library through ``dlopen`` rather than linking
@@ -209,7 +211,7 @@ def session_libraries(session='either'):
     return sorted(asked)
 
 
-def session_recommendations(session='either'):
+def session_recommendations(session: str = 'either') -> List[str]:
     """What a package built for *session* is better for having
 
     Only Wayland has any: X11 decorations are the window manager's business,

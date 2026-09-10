@@ -1,5 +1,7 @@
 """Renderable geometry composed of a geometry object with applied appearance"""
 
+from typing import Any, Optional, Tuple
+
 from OpenGL.GL import *
 from OpenGL.GL import glUseProgram
 from vrml.vrml97 import basenodes
@@ -42,7 +44,7 @@ class Shape(basenodes.Shape):
     # the colour buffer. Default True keeps every existing shape pickable.
     pickable = field.newField('pickable', 'SFBool', 1, True)
 
-    def Render(self, mode=None):
+    def Render(self, mode: Any = None) -> Any:
         """Do run-time rendering of the Shape for the given mode"""
         if not self.geometry:
             return
@@ -89,7 +91,7 @@ class Shape(basenodes.Shape):
                 mode=mode,
             )
 
-    def _render_shader(self, mode):
+    def _render_shader(self, mode: Any) -> Any:
         """Render using shader-based pipeline.
 
         Sets up material and texture uniforms on the shader, then
@@ -179,7 +181,7 @@ class Shape(basenodes.Shape):
         if textured:
             shader_program.unbind_texture()
 
-    def _render_shader_appearance(self, mode):
+    def _render_shader_appearance(self, mode: Any) -> Any:
         """Draw the geometry through the GLSL program the appearance carries.
 
         A `Shader` appearance is an `Appearance` that brings its own program
@@ -208,7 +210,7 @@ class Shape(basenodes.Shape):
             if previous:
                 glUseProgram(previous)
 
-    def RenderTransparent(self, mode):
+    def RenderTransparent(self, mode: Any) -> Any:
         if not self.geometry:
             return False
 
@@ -237,7 +239,7 @@ class Shape(basenodes.Shape):
         finally:
             glPopAttrib()
 
-    def drawsNothing(self):
+    def drawsNothing(self) -> bool:
         """Whether this shape would put nothing on screen this frame.
 
         A shape that says so is left out of the render set entirely, so it
@@ -251,7 +253,7 @@ class Shape(basenodes.Shape):
         """
         return False
 
-    def sortKey(self, mode, matrix):
+    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         if self.appearance:
             key = self.appearance.sortKey(mode, matrix)
@@ -270,9 +272,9 @@ class Shape(basenodes.Shape):
             )[0])
         else:
             distance = 0.0
-        return key[0:2] + (distance,) + key[1:]
+        return tuple(key[0:2]) + (distance,) + tuple(key[1:])
 
-    def boundingVolume(self, mode):
+    def boundingVolume(self, mode: Any) -> Any:
         """Create a bounding-volume object for this node
 
         This is our geometry's boundingVolume, with the
@@ -297,7 +299,8 @@ class Shape(basenodes.Shape):
             ((self, "geometry"), (volume, None)),
         )
 
-    def visible(self, frustum=None, matrix=None, occlusion=0, mode=None):
+    def visible(self, frustum: Any = None, matrix: Any = None,
+                occlusion: int = 0, mode: Any = None) -> Any:
         """Check whether this renderable node intersects frustum
 
         frustum -- the bounding volume frustum with a planes

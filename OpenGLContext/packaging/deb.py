@@ -42,6 +42,7 @@ import re
 import shutil
 import tarfile
 import time
+from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 __all__ = [
     'control_paragraph', 'debian_architecture', 'debian_name', 'debian_version',
@@ -86,12 +87,12 @@ _LOCAL_VERSION = re.compile(r'^[A-Za-z0-9.]+$')
 _PRE_RELEASE = re.compile(r'(?<=\d)(alpha|beta|rc|a|b|c)(?=\d|$)')
 
 
-def have_dpkg():
+def have_dpkg() -> bool:
     """Whether this machine has the Debian tools to read a package back"""
     return bool(shutil.which('dpkg') and shutil.which('dpkg-deb'))
 
 
-def debian_version(version, revision=1):
+def debian_version(version: str, revision: Any = 1) -> str:
     """The Debian version for a Python release *version*
 
     Debian compares versions its own way, and in that ordering a letter sorts
@@ -125,7 +126,7 @@ def debian_version(version, revision=1):
     return '%s-%s' % (upstream, revision)
 
 
-def debian_architecture(platform_tag):
+def debian_architecture(platform_tag: str) -> str:
     """The Debian architecture for an interpreter's ``sysconfig`` platform
 
     platform_tag -- what ``sysconfig.get_platform()`` reports, such as
@@ -145,7 +146,7 @@ def debian_architecture(platform_tag):
         ) from None
 
 
-def describe(summary, body=''):
+def describe(summary: str, body: str = '') -> str:
     """A ``Description`` field: a one-line summary, then an indented body
 
     Every line after the first is indented by a space, and a blank line in the
@@ -164,7 +165,7 @@ def describe(summary, body=''):
 DESCRIPTION_LINES = 12
 
 
-def summarise(description, lines=DESCRIPTION_LINES):
+def summarise(description: str, lines: int = DESCRIPTION_LINES) -> str:
     """The opening prose of a long description, for a control file
 
     A project's long description is its README: a title, some paragraphs, then
@@ -174,7 +175,7 @@ def summarise(description, lines=DESCRIPTION_LINES):
     the text is taken up to the first heading, fence or table, and to at most
     *lines* lines.
     """
-    kept = []
+    kept: List[str] = []
     for line in description.strip().splitlines():
         stripped = line.strip()
         if not kept and (not stripped or stripped.startswith('#')):
@@ -189,7 +190,7 @@ def summarise(description, lines=DESCRIPTION_LINES):
     return '\n'.join(kept)
 
 
-def maintainer_field(author):
+def maintainer_field(author: Any) -> str:
     """A ``Maintainer`` field from a project's author
 
     Python metadata carries an author through an email header, which quotes a
@@ -205,7 +206,7 @@ def maintainer_field(author):
     return '%s <%s>' % (name, address) if name and address else (address or name)
 
 
-def control_paragraph(fields):
+def control_paragraph(fields: Mapping[str, Any]) -> str:
     """Render the control file of a binary package
 
     fields -- the control fields, of which :data:`REQUIRED_FIELDS` have to be
@@ -222,7 +223,7 @@ def control_paragraph(fields):
     return ''.join('%s: %s\n' % (name, given[name]) for name in ordered)
 
 
-def _files(root):
+def _files(root: str) -> List[str]:
     """Every regular file and symlink in *root*, as sorted relative paths
 
     Separated by ``/`` whatever the build host separates paths with: these name
@@ -238,7 +239,7 @@ def _files(root):
     return sorted(found)
 
 
-def md5sums(root):
+def md5sums(root: str) -> str:
     """The ``md5sums`` control file for a tree of installed files
 
     Symlinks are not listed: what a link points at is summed under its own name,
@@ -257,7 +258,7 @@ def md5sums(root):
     return ''.join(lines)
 
 
-def installed_size(root):
+def installed_size(root: str) -> int:
     """How much space the package takes once unpacked, in kibibytes
 
     The number goes in the control file, where a package manager uses it to
@@ -271,7 +272,7 @@ def installed_size(root):
     return max(1, total // 1024)
 
 
-def _timestamp():
+def _timestamp() -> int:
     """The one modification time every entry in the package is given
 
     ``SOURCE_DATE_EPOCH`` where the caller set it, so that building the same
@@ -281,7 +282,8 @@ def _timestamp():
     return int(given) if given.isdigit() else int(time.time())
 
 
-def _tarball(add, when, compression):
+def _tarball(add: Callable[['_Deterministic'], None], when: int,
+             compression: str) -> bytes:
     """A tar archive built by *add*, owned by root, compressed as asked
 
     add -- called with the open ``tarfile`` to put the entries in
@@ -309,24 +311,24 @@ class _Deterministic:
     a package belong to the system rather than to whoever built it.
     """
 
-    def __init__(self, tar, when):
+    def __init__(self, tar: tarfile.TarFile, when: int) -> None:
         self.tar = tar
         self.when = when
 
-    def _stamped(self, info):
+    def _stamped(self, info: tarfile.TarInfo) -> tarfile.TarInfo:
         info.uid = info.gid = 0
         info.uname = info.gname = 'root'
         info.mtime = self.when
         return info
 
-    def file(self, name, data, mode=0o644):
+    def file(self, name: str, data: bytes, mode: int = 0o644) -> None:
         """Add a file with the given bytes"""
         info = tarfile.TarInfo(name)
         info.size = len(data)
         info.mode = mode
         self.tar.addfile(self._stamped(info), io.BytesIO(data))
 
-    def path(self, path, name):
+    def path(self, path: str, name: str) -> None:
         """Add a file, directory or symlink from the filesystem"""
         info = self.tar.gettarinfo(path, arcname=name)
         if info.isfile():
@@ -336,10 +338,10 @@ class _Deterministic:
             self.tar.addfile(self._stamped(info))
 
 
-def _add_tree(root):
+def _add_tree(root: str) -> Callable[['_Deterministic'], None]:
     """Return a function that adds every entry of *root* to a tar archive"""
 
-    def add(tar):
+    def add(tar: '_Deterministic') -> None:
         for directory, dirnames, filenames in os.walk(root):
             dirnames.sort()
             relative = os.path.relpath(directory, root)
@@ -353,14 +355,14 @@ def _add_tree(root):
     return add
 
 
-def _ar_member(name, data, when):
+def _ar_member(name: str, data: bytes, when: int) -> bytes:
     """One member of an ``ar`` archive: a 60-byte header and padded contents"""
     header = '%-16s%-12d%-6d%-6d%-8o%-10d`\n' % (name, when, 0, 0, 0o100644, len(data))
     padding = b'\n' if len(data) % 2 else b''
     return header.encode('ascii') + data + padding
 
 
-def write_deb(data_root, control_files, path):
+def write_deb(data_root: str, control_files: Mapping[str, str], path: str) -> str:
     """Write a binary package
 
     data_root -- the tree to install, laid out as it will appear on the target
@@ -376,7 +378,7 @@ def write_deb(data_root, control_files, path):
     """
     when = _timestamp()
 
-    def add_control(tar):
+    def add_control(tar: '_Deterministic') -> None:
         for name in sorted(control_files):
             text = control_files[name]
             mode = 0o755 if name in MAINTAINER_SCRIPTS else 0o644
@@ -394,7 +396,7 @@ def write_deb(data_root, control_files, path):
     return path
 
 
-def read_deb(path):
+def read_deb(path: str) -> Iterator[Tuple[str, bytes]]:
     """Read back the members of a package, as ``(name, bytes)`` pairs
 
     Enough of the ``ar`` format to check what was written, without asking the
@@ -417,7 +419,7 @@ def read_deb(path):
 _NAME = re.compile(r'^[a-z0-9][a-z0-9+.-]+$')
 
 
-def debian_name(name):
+def debian_name(name: Any) -> str:
     """The Debian package name for a Python distribution name
 
     Debian names are lower case and hold no underscore, so ``twig_bb`` and
@@ -431,7 +433,9 @@ def debian_name(name):
     return candidate
 
 
-def desktop_entry(name, command, summary, categories='Game;', icon=None):
+def desktop_entry(name: str, command: str, summary: str,
+                  categories: str = 'Game;',
+                  icon: Optional[str] = None) -> str:
     """A ``.desktop`` file putting the application in the menu
 
     icon -- the icon's name in the theme, which for a package that ships one is
@@ -467,7 +471,7 @@ DEFAULT_SECTION = 'games'
 DEFAULT_CATEGORIES = 'Game;'
 
 
-def _project_name(project):
+def _project_name(project: str) -> str:
     """The distribution name declared in a project directory's ``pyproject.toml``"""
     path = os.path.join(project, 'pyproject.toml')
     if not os.path.isfile(path):
@@ -484,10 +488,12 @@ def _project_name(project):
         declared = tomllib.load(stream).get('project', {}).get('name')
     if not declared:
         raise ValueError('%s declares no project name; use --distribution' % (path,))
-    return declared
+    name: str = declared
+    return name
 
 
-def _copyright_file(environment, distribution, license_expression):
+def _copyright_file(environment: str, distribution: str,
+                    license_expression: str) -> str:
     """The ``copyright`` file, with whatever licence text the wheel carried
 
     A wheel built to PEP 639 puts its licence files in its ``.dist-info``, so
@@ -504,7 +510,7 @@ def _copyright_file(environment, distribution, license_expression):
     return '\n'.join(lines) + '\n'
 
 
-def _license_files(environment, distribution):
+def _license_files(environment: str, distribution: str) -> Iterator[str]:
     """The licence files the distribution's ``.dist-info`` carries"""
     wanted = distribution.replace('-', '_').lower()
     for libraries in _site_packages(environment):
@@ -519,7 +525,7 @@ def _license_files(environment, distribution):
                     yield os.path.join(directory, filename)
 
 
-def _site_packages(environment):
+def _site_packages(environment: str) -> Iterator[str]:
     """Every ``site-packages`` in an environment"""
     libraries = os.path.join(environment, 'lib')
     for name in sorted(os.listdir(libraries)) if os.path.isdir(libraries) else []:
@@ -528,7 +534,7 @@ def _site_packages(environment):
             yield candidate
 
 
-def _changelog(package, version, maintainer, when):
+def _changelog(package: str, version: str, maintainer: str, when: int) -> str:
     """A Debian changelog with the one entry this package is"""
     import email.utils
 
@@ -541,7 +547,7 @@ def _changelog(package, version, maintainer, when):
     ) % (package, version, maintainer, email.utils.formatdate(when, localtime=False))
 
 
-def _link(root, at, target):
+def _link(root: str, at: str, target: str) -> None:
     """Put a symlink at *at* (inside *root*) pointing at *target*"""
     path = os.path.join(root, at.lstrip('/'))
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -550,7 +556,7 @@ def _link(root, at, target):
     os.symlink(target, path)
 
 
-def _write(root, at, text, mode=0o644):
+def _write(root: str, at: str, text: str, mode: int = 0o644) -> str:
     """Write a text file at *at* (inside *root*)"""
     path = os.path.join(root, at.lstrip('/'))
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -560,13 +566,18 @@ def _write(root, at, text, mode=0o644):
     return path
 
 
-def build(project='.', runtime=None, distribution=None, extras=(), requirements=(),
-          commands=(), depends=(), recommends=(), session='either',
-          prefix=DEFAULT_PREFIX, bindir=DEFAULT_BINDIR,
-          section=DEFAULT_SECTION, categories=DEFAULT_CATEGORIES, revision=1,
-          icon=None, menu=None, menu_name=None, maintainer=None,
-          output='dist', build_directory=None, unused='prune',
-          keep_backends=(), quiet=False):
+def build(project: str = '.', runtime: Optional[str] = None,
+          distribution: Optional[str] = None,
+          extras: Sequence[str] = (), requirements: Sequence[str] = (),
+          commands: Sequence[str] = (), depends: Sequence[str] = (),
+          recommends: Sequence[str] = (), session: str = 'either',
+          prefix: str = DEFAULT_PREFIX, bindir: str = DEFAULT_BINDIR,
+          section: str = DEFAULT_SECTION, categories: str = DEFAULT_CATEGORIES,
+          revision: Any = 1, icon: Optional[str] = None,
+          menu: Optional[str] = None, menu_name: Optional[str] = None,
+          maintainer: Optional[str] = None, output: str = 'dist',
+          build_directory: Optional[str] = None, unused: str = 'prune',
+          keep_backends: Sequence[str] = (), quiet: bool = False) -> str:
     """Build a Debian package for an application, and return where it was written
 
     project -- what pip installs: a project directory, an sdist or a wheel
@@ -690,7 +701,7 @@ def build(project='.', runtime=None, distribution=None, extras=(), requirements=
     return path
 
 
-def _compressed(root, at, text):
+def _compressed(root: str, at: str, text: str) -> str:
     """Write a gzipped text file, as Debian asks a changelog to be"""
     path = os.path.join(root, at.lstrip('/'))
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -702,7 +713,7 @@ def _compressed(root, at, text):
     return path
 
 
-def _install_icon(root, package, icon):
+def _install_icon(root: str, package: str, icon: str) -> str:
     """Install a PNG into the icon theme, and return the name to refer to it by
 
     The icon goes in the directory for its own size, since a theme picks from
@@ -722,7 +733,7 @@ def _install_icon(root, package, icon):
     return package
 
 
-def main(argv=None):
+def main(argv: Optional[Sequence[str]] = None) -> int:
     """``oglc-deb``: build a Debian package for an application on the engine"""
     import argparse
     import logging

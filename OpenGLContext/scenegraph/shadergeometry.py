@@ -17,7 +17,8 @@ interleaved layouts the engine's own geometry is built in:
 """
 from __future__ import annotations
 
-from typing import Dict
+from collections.abc import Callable, Sequence
+from typing import Any, Dict, Optional
 
 from OpenGL.GL import (
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
@@ -60,7 +61,7 @@ class VertexFormat:
 VBO_STRIDE: int = 32
 
 
-def _same_refs(a, b) -> bool:
+def _same_refs(a: Sequence[Any], b: Sequence[Any]) -> bool:
     """Identity comparison of two VBO reference tuples (Nones allowed)."""
     return len(a) == len(b) and all(x is y for x, y in zip(a, b, strict=False))
 
@@ -70,7 +71,9 @@ def _same_refs(a, b) -> bool:
 SHARED_LAYOUT = 0
 
 
-def get_or_build_vao(owner, program, vbo_refs, build, layout_key=None):
+def get_or_build_vao(owner: Any, program: Any, vbo_refs: Sequence[Any],
+                     build: Callable[[], None],
+                     layout_key: Any = None) -> Optional[int]:
     """Return a VAO cached on ``owner``, building it once via ``build``.
 
     A VAO records attribute layout once, so it should be created once and merely

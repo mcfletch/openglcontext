@@ -1,4 +1,6 @@
 """EventManager providing vcr-like control of an InternalTime object"""
+from typing import Any, Callable, Optional
+
 from . import eventmanager, systemtime, internaltime
 from pydispatch import dispatcher
 import logging
@@ -26,8 +28,8 @@ class Timer( eventmanager.EventManager ):
     """
     timerClass = internaltime.InternalTime
     def __init__(
-        self, *arguments, **namedarguments
-    ):
+        self, *arguments: Any, **namedarguments: Any
+    ) -> None:
         """Initialize the Timer
 
         arguments, namedarguments -- passed directly to
@@ -36,14 +38,14 @@ class Timer( eventmanager.EventManager ):
         """
         self.internal = self.timerClass(*arguments, **namedarguments )
         eventmanager.EventManager.__init__ (self)
-    def __repr__( self ):
+    def __repr__( self ) -> str:
         """Get an useful representation of the Timer"""
         return """<%s %s>"""%( self.__class__.__name__, self.internal )
     @property
-    def active( self ):
+    def active( self ) -> int:
         """Delegate to internal"""
         return self.internal.active
-    def register (self, context):
+    def register (self, context: Any) -> None:
         """Register this timer with a given context's time event manager
 
         See:
@@ -57,7 +59,7 @@ class Timer( eventmanager.EventManager ):
         else:
             raise ValueError ("""Attempted to register a Timer for a Context %s without a getTimeManager method"""% (context,))
 
-    def deregister (self, context):
+    def deregister (self, context: Any) -> None:
         """De-register this timer with a given context's time event manager
 
         See:
@@ -70,7 +72,8 @@ class Timer( eventmanager.EventManager ):
                 raise ValueError ("""Attempted to de-register a Timer for a Context %s with a NULL getTimeManager() result"""% (context,))
         else:
             raise ValueError ("""Attempted to de-register a Timer for a Context %s without a getTimeManager method"""% (context,))
-    def addEventHandler( self, timetype ="fraction", function = None ):
+    def addEventHandler( self, timetype: str = "fraction",
+                         function: Any = None ) -> Any:
         """Add/remove handler for the given timetype from this Timer object
 
         timetype -- string value describing the event type, currently
@@ -91,7 +94,7 @@ class Timer( eventmanager.EventManager ):
             function = function,
             node = self,
         )
-    def ProcessEvent(self, event):
+    def ProcessEvent(self, event: Any) -> Any:
         """Dispatch an incoming event
 
         This sub-class sets the Timer as the sender of the
@@ -108,7 +111,9 @@ class Timer( eventmanager.EventManager ):
             processed = processed or result
         return processed
 
-    def _doAndDispatch (self, function, realTime, *arguments,**namedarguments):
+    def _doAndDispatch (self, function: Callable[..., Any],
+                        realTime: Optional[float],
+                        *arguments: Any, **namedarguments: Any) -> int:
         """Internal function to get and dispatch events from internal function
 
         function -- the internaltime method which will generate the events
@@ -124,28 +129,28 @@ class Timer( eventmanager.EventManager ):
             self.ProcessEvent( event )
         return len(events)
 
-    def poll( self, realTime = None ):
+    def poll( self, realTime: Optional[float] = None ) -> int:
         """Poll the internal timer for pending events
 
         Returns the number of events dispatched
         """
         return self._doAndDispatch(self.internal.poll, realTime)
 
-    def start (self, realTime = None):
+    def start (self, realTime: Optional[float] = None) -> None:
         """Start the internal timer"""
         self._doAndDispatch(self.internal.start, realTime)
-    def stop(self, realTime = None):
+    def stop(self, realTime: Optional[float] = None) -> None:
         """Stop the internal timer"""
         self._doAndDispatch(self.internal.stop, realTime)
-    def pause (self, realTime = None):
+    def pause (self, realTime: Optional[float] = None) -> None:
         """Pause the internal timer"""
         self._doAndDispatch(self.internal.pause, realTime)
-    def resume(self, realTime = None):
+    def resume(self, realTime: Optional[float] = None) -> None:
         """Resume the internal timer"""
         self._doAndDispatch(self.internal.resume, realTime)
 
 if __name__ == "__main__":
-    def test ():
+    def test () -> None:
         cases = [
             Timer (duration = 10, repeating = -1),
             Timer (duration = 10, repeating = 2),
@@ -155,7 +160,7 @@ if __name__ == "__main__":
         ]
         for case in cases:
             print(case)
-            def printer (event):
+            def printer (event: Any) -> None:
                 print(event)
             case.addEventHandler ("fraction",printer)
             case.addEventHandler ("start",printer)

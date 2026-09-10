@@ -1,4 +1,6 @@
 """Object which manages the registration and deregistration of timed event generators"""
+from typing import Any, List
+
 from . import systemtime
 
 class TimeEventGeneratorManager(object):
@@ -10,10 +12,10 @@ class TimeEventGeneratorManager(object):
     It provides support for the InternalTime generators
     on which the Timer object is based.
     """
-    def __init__( self ):
+    def __init__( self ) -> None:
         """Initialize the TimeEventGeneratorManager"""
-        self.__generators = []
-    def addEventGenerator( self, generator ):
+        self.__generators: List[Any] = []
+    def addEventGenerator( self, generator: Any ) -> None:
         """Add a new generator to the list of generators
 
         This adds the event generator to the internal list of
@@ -21,11 +23,11 @@ class TimeEventGeneratorManager(object):
         """
         if generator not in self.__generators:
             self.__generators.append( generator )
-    def removeEventGenerator( self, generator ):
+    def removeEventGenerator( self, generator: Any ) -> None:
         """Remove a generator from the list of generators"""
         while generator in self.__generators:
             self.__generators.remove( generator )
-    def __call__( self, client ):
+    def __call__( self, client: Any ) -> int:
         """Poll each event-generator with a simulation time value
         
         Each generator dispatches resulting events.

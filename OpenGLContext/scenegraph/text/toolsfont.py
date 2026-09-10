@@ -1,10 +1,14 @@
 """Filled and extruded 3D glyphs from TrueType outlines
 """
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from OpenGLContext.arrays import *
-import weakref
-import sys
-import os
 from OpenGL.GL import *
+# PyOpenGL generates the type-inferring entry points at import time, so they
+# need naming to be seen.
+from OpenGL.GL import glColor, glNormal, glTranslate, glVertex, glVertexPointerd
 from OpenGL.GLU import *
 from OpenGL.GLE import *
 from OpenGL.arrays import vbo
@@ -13,17 +17,40 @@ from OpenGLContext.scenegraph.vertexsemantics import (
     LOC_NORMAL, LOC_POSITION,
 )
 from OpenGLContext.scenegraph.text import _toolsfont, font, fontprovider
-from ttfquery import glyphquery
 import logging
 log = logging.getLogger( __name__ )
 import numpy as np
+
+if TYPE_CHECKING:
+    class _ToolsHost:
+        """What ``ToolsFontMixIn`` needs of the ``Font`` beside it.
+
+        The mix-in is always declared before ``font.Font`` in a concrete
+        font's bases, so these resolve along the MRO at run time; aliasing
+        this to ``object`` keeps that MRO as it was.  ``fontClass`` and
+        ``fontProvider`` are what the concrete class and its provider fill in.
+        """
+        fontClass: type[_toolsfont.Font]
+        fontProvider: Any
+        fontStyle: Any
+        _displayLists: dict[str, tuple[Any, font.CharacterMetrics]]
+        def normalise( self, value: bytes | str ) -> str: ...
+        def toLines( self, value: bytes | str, mode: Any = None ) -> list[font.Line]: ...
+        def getChar( self, char: str, mode: Any = None ) -> tuple[Any, font.CharacterMetrics]: ...
+        def renderGlyph( self, glyph: Any, mode: Any = None ) -> None: ...
+else:
+    _ToolsHost = object
+
+#: What ``buildShaderGeometry`` hands back: the vertex buffer, how many
+#: vertices are in it, and how far the pen moves after the glyph.
+ShaderGeometry = dict[str, Any]
 
 ### Now the OpenGL-specific stuff...
 class OutlineGlyph( _toolsfont.Glyph ):
     """Glyph that can render to outlines, contours and control-points"""
     DEBUG_RENDER_CONTOUR_HULLS = 0
     DEBUG_RENDER_CONTROL_POINTS = 0
-    def renderOutlines( self, scale = 400.0 ):
+    def renderOutlines( self, scale: float = 400.0 ) -> None:
         """Simplistic rendering of the compiled outlines
         """
         glEnableClientState(GL_VERTEX_ARRAY)
@@ -40,12 +67,12 @@ class OutlineGlyph( _toolsfont.Glyph ):
                 glEnable( GL_LIGHTING )
         finally:
             glDisableClientState(GL_VERTEX_ARRAY)
-    def renderAdvance( self, scale = 400.0):
+    def renderAdvance( self, scale: float = 400.0) -> None:
         """Advance the rendering position by our advance width"""
         glTranslate( self.width/scale, 0,0 )
-    def renderContours(self, scale = 400.0):
+    def renderContours(self, scale: float = 400.0) -> None:
         """Render the contour "hulls" which control the outline"""
-        def contourPoint( record ):
+        def contourPoint( record: Any ) -> None:
             ((x,y),f) = record
             if f:
                 glColor3f( .3,.5,0)
@@ -64,7 +91,7 @@ class OutlineGlyph( _toolsfont.Glyph ):
                     contourPoint( contour[-1] )
         finally:
             glEnd()
-    def renderControlPoints (self, scale = 400.0):
+    def renderControlPoints (self, scale: float = 400.0) -> None:
         """Render the contour control points as dots
 
         The blue channel ramps from 0 at the start of each contour to 1 at its
@@ -94,7 +121,7 @@ class SolidGlyph( OutlineGlyph ):
     tess = polygontessellator.PolygonTessellator()
     DEBUG_RENDER_EXTRUSION_NORMALS = 0
     DEBUG_RENDER_OUTLINES = 0
-    def renderExtrusion( self, scale=400.0, distance=1.0):
+    def renderExtrusion( self, scale: float = 400.0, distance: float = 1.0) -> list[tuple[Any, Any]]:
         """Render the extrusion of the font backward by distance (using GLE)
 
         This is pretty simple, save that there's no good
@@ -131,9 +158,9 @@ class SolidGlyph( OutlineGlyph ):
         finally:
             glFrontFace( GL_CCW )
         return data
-    def _calculateExtrusionData( self, scale = 400.0 ):
+    def _calculateExtrusionData( self, scale: float = 400.0 ) -> list[tuple[Any, Any]]:
         """Calculate extrusion points + normals for the glyph"""
-        def calculateNormal(first,second,third):
+        def calculateNormal(first: Any, second: Any, third: Any) -> tuple[float, float] | None:
             """Calculate an approximate 2D normal for a 3-point set"""
             (x1,y1) = first
             (x2,y2) = second
@@ -161,7 +188,7 @@ class SolidGlyph( OutlineGlyph ):
             result.append( (asarray(points,'d'), asarray(normals,'d')) )
         return result
 
-    def renderCap( self, scale = 400.0, front = 1):
+    def renderCap( self, scale: float = 400.0, front: int = 1) -> list[tuple[int, Any]]:
         """The cap is generated with GLU tessellation routines...
         """
         if self.DEBUG_RENDER_CONTOUR_HULLS:
@@ -187,7 +214,7 @@ class SolidGlyph( OutlineGlyph ):
             glFrontFace( GL_CCW )
         return contours
 
-    def _calculateCapData(self, scale = 400.0 ):
+    def _calculateCapData(self, scale: float = 400.0 ) -> list[tuple[int, Any]]:
         """Calculate the tessellated data-sets for this glyph"""
         vertices = [
             [vertex.Vertex( point=(x/scale,y/scale,0.0) ) for (x,y) in outline]
@@ -203,8 +230,9 @@ class SolidGlyph( OutlineGlyph ):
     # Shader-compatible geometry building methods
     _shader_geometry_cache = None
 
-    def buildShaderGeometry(self, scale=400.0, thickness=0.0,
-                            renderFront=True, renderBack=True, renderSides=True):
+    def buildShaderGeometry(self, scale: float = 400.0, thickness: float = 0.0,
+                            renderFront: bool = True, renderBack: bool = True,
+                            renderSides: bool = True) -> ShaderGeometry:
         """Build VBO-compatible geometry for shader rendering.
 
         Returns a dict with:
@@ -245,7 +273,9 @@ class SolidGlyph( OutlineGlyph ):
 
         # Convert to numpy array: each vertex is [nx, ny, nz, px, py, pz]
         vertex_array = np.array(all_vertices, dtype='f')
-        vertex_vbo = vbo.VBO(vertex_array)
+        # OpenGL.arrays.vbo.VBO is chosen at import time between the accelerated
+        # and the pure-Python class, so a checker reads it as the None it starts as.
+        vertex_vbo = vbo.VBO(vertex_array)  # type: ignore[misc]
 
         return {
             'vertices': vertex_vbo,
@@ -253,7 +283,8 @@ class SolidGlyph( OutlineGlyph ):
             'advance': self.width / scale
         }
 
-    def _buildCapGeometry(self, scale, front=True, z_offset=0.0):
+    def _buildCapGeometry(self, scale: float, front: bool = True,
+                          z_offset: float = 0.0) -> list[list[float]]:
         """Build triangle geometry for front or back cap.
 
         Returns list of [nx, ny, nz, px, py, pz] vertex data.
@@ -274,7 +305,7 @@ class SolidGlyph( OutlineGlyph ):
 
         return result
 
-    def _buildExtrusionGeometry(self, scale, thickness):
+    def _buildExtrusionGeometry(self, scale: float, thickness: float) -> list[list[float]]:
         """Build triangle geometry for glyph sides (extrusion).
 
         Creates quad strips along each contour from z=0 to z=-thickness,
@@ -338,14 +369,14 @@ class _OutlineFont(_toolsfont.Font):
     """Outline-Glyph specialisation of a fonttools-based font"""
     defaultGlyphClass = OutlineGlyph
 
-class ToolsFontMixIn( object ):
+class ToolsFontMixIn( _ToolsHost ):
     """Mixin providing ToolsFont common operations"""
     scale = None
     def __init__(
         self,
-        fontStyle = None,
-        font = None,
-    ):
+        fontStyle: Any = None,
+        font: str | None = None,
+    ) -> None:
         """Initialise the 3D-font object
 
         fontStyle -- fontStyle node for this font, normally
@@ -362,7 +393,7 @@ class ToolsFontMixIn( object ):
         if fontStyle and hasattr( fontStyle, 'quality' ):
             quality = fontStyle.quality
         self.font = self.fontClass( font, quality = quality )
-    def toLines( self, value, mode=None ):
+    def toLines( self, value: bytes | str, mode: Any = None ) -> list[font.Line]:
         """Convert value to a set of expanded lines
 
         Overridden to do entire compilation of the string
@@ -374,7 +405,7 @@ class ToolsFontMixIn( object ):
         )
         return super( ToolsFontMixIn, self ).toLines( value, mode )
         
-    def getScale( self ):
+    def getScale( self ) -> float:
         """Calculate scaling from font units to fontStyle size"""
         if not self.scale:
             height = self.font.charHeight
@@ -383,8 +414,8 @@ class ToolsFontMixIn( object ):
             else:
                 target = 1.0
             self.scale = float(height)/target
-        return self.scale
-    def lists( self, value, mode=None ):
+        return float( self.scale )
+    def lists( self, value: str, mode: Any = None ) -> list[int]:
         """Get a sequence of display-list integers for value
 
         Basically, this does a bit of trickery to do
@@ -405,12 +436,12 @@ class ToolsFontMixIn( object ):
         if __debug__:
             log.info( """lists %s(%s)->%s""", self, repr(value), lists)
         return lists
-    def lineHeight(self, mode=None ):
+    def lineHeight(self, mode: Any = None ) -> float:
         """Retrieve normal line-height for this font
         """
-        return self.font.lineHeight/self.getScale()
+        return float( self.font.lineHeight/self.getScale() )
 
-    def createChar( self, char, mode=None ):
+    def createChar( self, char: str, mode: Any = None ) -> tuple[Any, font.CharacterMetrics]:
         """Create the single-character display list and metrics
 
         In shader mode there is no display list: the glyph is drawn from a
@@ -444,7 +475,8 @@ class ToolsFontMixIn( object ):
                 glEndList()
             return list, metrics
         else:
-            return None, None
+            # nothing in the file for this character; it takes up no room
+            return None, font.CharacterMetrics( char, 0, 0 )
 
 class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
     """A FontTools-provided Solid (polygonal) Font"""
@@ -452,14 +484,14 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
     fontClass = _SolidFont
     shader_compatible = True
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super(ToolsSolidFont, self).__init__(*args, **kwargs)
         # Shader rendering cache: {char: {'start': int, 'count': int, 'advance': float}}
-        self._shader_glyph_index = {}
-        self._shader_vbo = None
-        self._shader_vbo_chars = set()  # Characters included in the VBO
+        self._shader_glyph_index: dict[str, dict[str, Any]] = {}
+        self._shader_vbo: Any = None
+        self._shader_vbo_chars: set[str] = set()  # Characters included in the VBO
 
-    def render(self, lines, fontStyle=None, mode=None):
+    def render(self, lines: Any, fontStyle: Any = None, mode: Any = None) -> Any:
         """Render text, drawing from vertex buffers when in shader mode."""
         if mode is not None and getattr(mode, 'shader_mode', False):
             if isinstance(lines, (bytes, str)):
@@ -470,7 +502,7 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
 
         return super(ToolsSolidFont, self).render(lines, fontStyle, mode)
 
-    def _renderShaderJustified(self, lines, fontStyle, mode):
+    def _renderShaderJustified(self, lines: Any, fontStyle: Any, mode: Any) -> Any:
         """Draw each line at the place the fontStyle justifies it to
 
         The fixed-function path reaches the same positions by translating the
@@ -489,13 +521,13 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
         return lines
 
     @staticmethod
-    def _translated(matrix, x, y):
+    def _translated(matrix: Any, x: float, y: float) -> Any:
         """A copy of matrix moved (x,y) in the frame the matrix describes"""
         result = matrix.copy()
         result[3, :3] += x * matrix[0, :3] + y * matrix[1, :3]
         return result
 
-    def renderGlyph( self, glyph, mode = None ):
+    def renderGlyph( self, glyph: Any, mode: Any = None ) -> None:
         """Render a single glyph
 
         This method can render a significant number of
@@ -541,7 +573,7 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
             glyph.renderExtrusion( scale, distance = thickness )
         glyph.renderAdvance( scale )
 
-    def _getShaderParams(self):
+    def _getShaderParams(self) -> tuple[float, bool, bool, bool, float]:
         """Get rendering parameters from fontStyle."""
         scale = self.getScale()
         renderFront, renderBack, renderSides, thickness = True, True, True, 0.0
@@ -556,7 +588,7 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
                 thickness = self.fontStyle.thickness
         return scale, renderFront, renderBack, renderSides, thickness
 
-    def _ensureShaderVBO(self, text):
+    def _ensureShaderVBO(self, text: str) -> None:
         """Ensure VBO contains geometry for all characters in text.
 
         Rebuilds the VBO if new characters are needed.
@@ -572,8 +604,8 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
 
         scale, renderFront, renderBack, renderSides, thickness = self._getShaderParams()
 
-        all_vertices = []
-        glyph_index = {}
+        all_vertices: list[list[float]] = []
+        glyph_index: dict[str, dict[str, Any]] = {}
 
         for char in sorted(all_chars):
             glyph = self.font.getGlyph(char)
@@ -612,14 +644,15 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
 
         if all_vertices:
             vertex_array = np.array(all_vertices, dtype='f')
-            self._shader_vbo = vbo.VBO(vertex_array)
+            # vbo.VBO reads as None: see buildShaderGeometry
+            self._shader_vbo = vbo.VBO(vertex_array)  # type: ignore[misc]
         else:
             self._shader_vbo = None
 
         self._shader_glyph_index = glyph_index
         self._shader_vbo_chars = all_chars
 
-    def renderShader(self, text, mode):
+    def renderShader(self, text: str, mode: Any) -> None:
         """Render text using shader pipeline.
 
         Args:
@@ -709,7 +742,7 @@ class ToolsOutlineFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
     """
     format = "outline"
     fontClass = _OutlineFont
-    def renderGlyph( self, glyph, mode = None ):
+    def renderGlyph( self, glyph: Any, mode: Any = None ) -> None:
         """Render a single glyph"""
         glyph.renderOutlines( self.getScale() )
         glyph.renderAdvance( self.getScale())
@@ -718,7 +751,7 @@ class _ToolsFontProvider( fontprovider.TTFFontProvider):
     """Singleton for creating new ToolsFont fonts
     """
     format = "" # outline or solid
-    def __init__( self, fontClass ):
+    def __init__( self, fontClass: type[Any] ) -> None:
         super( _ToolsFontProvider, self).__init__()
         # map specifier: _toolsfont.Font sub-class
         self.fontClass = fontClass
@@ -728,7 +761,7 @@ class _ToolsFontProvider( fontprovider.TTFFontProvider):
         self.shader_compatible = fontClass.shader_compatible
         fontClass.fontProvider = self
 
-    def key( self, fontStyle, mode=None ):
+    def key( self, fontStyle: Any = None ) -> Any:
         """Calculate the key for the fontStyle"""
         if not fontStyle:
             return None
@@ -744,7 +777,7 @@ class _ToolsFontProvider( fontprovider.TTFFontProvider):
                 result.append( None )
         return tuple( result )
         
-    def create( self, fontStyle, mode=None ):
+    def create( self, fontStyle: Any, mode: Any = None ) -> Any:
         """Create a new font for the given fontStyle and mode"""
         file, weight, italics = key = self.match(fontStyle, mode)
         # do we already have this filename + size established?
@@ -753,7 +786,7 @@ class _ToolsFontProvider( fontprovider.TTFFontProvider):
         self.fonts[ key ] = bitmapFont
         return bitmapFont
 
-    def match( self, fontStyle, mode=None ):
+    def match( self, fontStyle: Any = None, mode: Any = None ) -> tuple[str, int, int]:
         """Attempt to find matching font-file for our fontstyle
 
         Should match any name passed into addFontFile,

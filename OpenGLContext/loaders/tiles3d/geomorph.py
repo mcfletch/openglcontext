@@ -54,4 +54,4 @@ def parent_heightfield(height_fn: HeightFn, x0: float, x1: float, z0: float,
     tj = (fj - j0)[None, :]
     top = coarse[i0][:, j0] * (1 - tj) + coarse[i0][:, j1] * tj
     bot = coarse[i1][:, j0] * (1 - tj) + coarse[i1][:, j1] * tj
-    return (top * (1 - ti) + bot * ti).astype("f4")
+    return np.asarray(top * (1 - ti) + bot * ti, dtype="f4")

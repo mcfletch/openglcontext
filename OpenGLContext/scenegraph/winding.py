@@ -17,9 +17,9 @@ def _det3(mv: Any) -> float:
     Direct 3x3 solve (no LAPACK), matching pbrmesh._front_face.
     """
     a = mv.tolist() if hasattr(mv, 'tolist') else mv
-    return (a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1])
-            - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
-            + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]))
+    return float(a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1])
+                 - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
+                 + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]))
 
 
 def front_face(ccw: bool, mv: Any = None) -> int:

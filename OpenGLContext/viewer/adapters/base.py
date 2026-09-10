@@ -33,11 +33,11 @@ def scene_bounds(nodes: Iterable[Any]) -> Tuple[Tuple[float, float, float], floa
     instead of dividing by nothing.
     """
     from OpenGLContext.scenegraph.boundingvolume import boundingSphere
-    found = boundingSphere(nodes)
+    found = boundingSphere(list(nodes))
     if found is None:
         return (0.0, 0.0, 0.0), 1.0
     center, radius = found
-    return center, radius or 1.0
+    return (float(center[0]), float(center[1]), float(center[2])), radius or 1.0
 
 
 class ViewerScene(object):

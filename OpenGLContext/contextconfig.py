@@ -13,9 +13,11 @@ two members that name the concrete ``Context`` class directly (``getTTFFiles``,
 import os
 import sys
 import logging
+from typing import Any, List, Optional, Type
+
+from OpenGL.plugins import Plugin
 
 from OpenGLContext import plugins
-from OpenGL._bytes import bytes, unicode
 
 log = logging.getLogger(__name__)
 
@@ -27,12 +29,12 @@ class ContextConfigMixin:
     APPLICATION_NAME = "OpenGLContext"
 
     @classmethod
-    def getApplicationName(cls):
+    def getApplicationName(cls) -> str:
         """Retrieve the application name for configuration purposes"""
         return cls.APPLICATION_NAME
 
     @classmethod
-    def getUserAppDataDirectory(cls):
+    def getUserAppDataDirectory(cls) -> str:
         """Retrieve user-specific configuration directory
 
         Default implementation gives a directory-name in the
@@ -57,7 +59,7 @@ class ContextConfigMixin:
         return path
 
     @classmethod
-    def getDefaultTTFFont(cls, type="sans"):
+    def getDefaultTTFFont(cls, type: str = "sans") -> Optional[str]:
         """Get the current user's preference for a default font"""
         directory = cls.getUserAppDataDirectory()
         filename = os.path.join(directory, "defaultfont-%s.txt" % (type.lower(),))
@@ -71,7 +73,7 @@ class ContextConfigMixin:
         return name
 
     @classmethod
-    def setDefaultTTFFont(cls, name, type="sans"):
+    def setDefaultTTFFont(cls, name: Optional[str], type: str = "sans") -> bool:
         """Set the current user's preference for a default font"""
         directory = cls.getUserAppDataDirectory()
         filename = os.path.join(directory, "defaultfont-%s.txt" % (type.lower(),))
@@ -90,7 +92,10 @@ class ContextConfigMixin:
             return True
 
     @classmethod
-    def getContextTypes(cls, type=plugins.InteractiveContext):
+    def getContextTypes(
+        cls,
+        type: Type[plugins.Context] = plugins.InteractiveContext,
+    ) -> List[Plugin]:
         """Retrieve the set of defined context types
 
         type -- testing type key from setup.py for the registered modules
@@ -98,14 +103,15 @@ class ContextConfigMixin:
         returns list of setuptools entry-point objects which can be passed to
         getContextType( name ) to retrieve the actual context type.
         """
-        return type.all()
+        registered: List[Plugin] = type.all()
+        return registered
 
     @classmethod
     def getContextType(
         cls,
-        entrypoint=None,
-        type=plugins.InteractiveContext,
-    ):
+        entrypoint: Any = None,
+        type: Type[plugins.Context] = plugins.InteractiveContext,
+    ) -> Any:
         """Load a single context type via entry-point resolution
 
         returns a Context sub-class *or* None if there is no such
@@ -115,7 +121,7 @@ class ContextConfigMixin:
         if entrypoint is None:
             entrypoint = cls.getDefaultContextType() or "glfw"
         log.debug("Default context type: %s", entrypoint)
-        if isinstance(entrypoint, (bytes, unicode)):
+        if isinstance(entrypoint, (bytes, str)):
             for ep in cls.getContextTypes(type):
                 if entrypoint == ep.name:
                     return cls.getContextType(ep, type=type)
@@ -139,7 +145,7 @@ class ContextConfigMixin:
     DEFAULT_OFFSCREEN_BACKEND = 'egl'
 
     @classmethod
-    def getOffscreenBackendName(cls, platform: "str | None" = None) -> str:
+    def getOffscreenBackendName(cls, platform: Optional[str] = None) -> str:
         """Which backend renders with no window here.
 
         `platform` defaults to :data:`sys.platform`; pass one to ask about
@@ -153,7 +159,7 @@ class ContextConfigMixin:
         return cls.DEFAULT_OFFSCREEN_BACKEND
 
     @classmethod
-    def getOffscreenContextType(cls, platform: "str | None" = None) -> "type | None":
+    def getOffscreenContextType(cls, platform: Optional[str] = None) -> Optional[type]:
         """The Context class that renders with no window here, or None.
 
         A batch renderer, a build machine or a service returning images wants
@@ -170,15 +176,13 @@ class ContextConfigMixin:
         library behind it, say.  That is the same answer as having no backend
         at all, and for the caller's purposes it is the same question.
         """
-        # Named here rather than on getContextType, whose own `type` parameter
-        # shadows the builtin an annotation there would have to name.
-        loaded: "type | None" = cls.getContextType(
+        loaded: Optional[type] = cls.getContextType(
             cls.getOffscreenBackendName(platform), type=plugins.Context
         )
         return loaded
 
     @classmethod
-    def getDefaultContextType(cls):
+    def getDefaultContextType(cls) -> Optional[str]:
         """Get the current user's preference for a default context type
 
         Checks in order:
@@ -208,8 +212,8 @@ class ContextConfigMixin:
         return name
 
     @classmethod
-    def setDefaultContextType(cls, name):
-        """Set the current user's preference for a default font"""
+    def setDefaultContextType(cls, name: Optional[str]) -> bool:
+        """Set the current user's preference for a default backend"""
         directory = cls.getUserAppDataDirectory()
         filename = os.path.join(directory, "defaultcontext.txt")
         if not name:

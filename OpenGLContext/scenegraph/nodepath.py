@@ -1,5 +1,7 @@
 """node-path implementation for OpenGLContext
 """
+from typing import TYPE_CHECKING, Any, Iterator
+
 from vrml.vrml97 import nodepath, nodetypes
 from vrml.cache import CACHE
 from OpenGLContext import quaternion
@@ -14,7 +16,17 @@ class _NodePath( object ):
     has a transform method.
     """
     __slots__ = ()
-    def transform( self, mode=None, translate=1, scale=1, rotate=1 ):
+
+    if TYPE_CHECKING:
+        # What this mix-in needs of the path class beside it, declared for a
+        # checker and nothing else: ``nodepath.NodePath`` is what supplies them.
+        def __iter__(self) -> Iterator[Any]: ...
+        def transformMatrix(self, translate: bool = True, scale: bool = True,
+                            rotate: bool = True, matrixHolder: bool = False,
+                            inverse: bool = False) -> Any: ...
+
+    def transform( self, mode: Any = None, translate: int = 1,
+                   scale: int = 1, rotate: int = 1 ) -> None:
         """For each Transforming node, do OpenGL transform
 
         Does _not_ push-pop matrices, so do that before
@@ -24,13 +36,13 @@ class _NodePath( object ):
         transform down to the node, without needing a full
         traversal of the scenegraph.
         """
-        matrix = self.transformMatrix( 
-            translate=translate, scale=scale, rotate=rotate
+        matrix = self.transformMatrix(
+            translate=bool(translate), scale=bool(scale), rotate=bool(rotate)
         )
         glMultMatrixf( 
             matrix
         )
-    def quaternion( self ):
+    def quaternion( self ) -> quaternion.Quaternion:
         """Get summary quaternion for all rotations in stack"""
         nodes = [
             node

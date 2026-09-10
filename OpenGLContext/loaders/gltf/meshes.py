@@ -136,7 +136,7 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
         return None, None
     # Vertex attributes must all describe the same vertices, and indices must land
     # inside them; validate up front so a malformed primitive reports which
-    # attribute disagrees rather than crashing deep in the VBO upload (3.11).
+    # attribute disagrees rather than crashing deep in the VBO upload.
     nverts = len(positions)
     for name, arr in (('NORMAL', normals), ('TEXCOORD_0', texcoords),
                       ('TEXCOORD_1', texcoords1),

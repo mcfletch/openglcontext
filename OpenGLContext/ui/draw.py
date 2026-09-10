@@ -522,10 +522,12 @@ class OverlayRenderer:
         one frame to the next.
         """
         found = self._glyphs.get(character)
-        if found is None:
-            found = self._glyphs[character] = tuple(
-                float(value) for value in self._text.glyph_uv(character))
-        return found
+        if found is not None:
+            return found
+        u0, v0, u1, v1 = (float(value)
+                          for value in self._text.glyph_uv(character))
+        self._glyphs[character] = made = (u0, v0, u1, v1)
+        return made
 
     def text(self, text: str, x: int, y: int, colour: Any) -> None:
         """One line of text, with ``y`` the bottom of the character cell.

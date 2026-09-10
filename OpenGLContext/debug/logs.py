@@ -1,15 +1,19 @@
-"""Logging facilities for OpenGLContext
-
-Requires Python 2.4+ traceback module as well as the 
-Python 2.4+ logging module.
-"""
+"""Formatting an exception for a log message"""
+import sys
 import traceback
-def getTraceback(error=None):
-    """Get formatted exception"""
+from typing import Any, Optional
+
+
+def getTraceback(error: Optional[Any] = None) -> str:
+    """Get the formatted traceback of the exception being handled
+
+    With no exception in flight -- a caller holding an error object it did not
+    catch here -- the error's own text is what comes back, since a traceback
+    for it is not available to ask for.
+    """
+    if sys.exc_info()[0] is None:
+        return str(error)
     try:
-        return traceback.format_exc( 10 )
+        return traceback.format_exc(10)
     except Exception:
         return str(error)
-
-import logging
-logging.Logger.getTraceback = staticmethod( getTraceback )

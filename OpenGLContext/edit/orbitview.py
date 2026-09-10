@@ -191,7 +191,7 @@ class OrbitViewPlatform(ViewPlatform):
         super(OrbitViewPlatform, self).__init__(
             position=tuple(view.position()))
 
-    def setViewport(self, x: int, y: int) -> None:
+    def setViewport(self, x: float, y: float) -> None:
         self.viewport = (int(x), int(y))
 
     @property

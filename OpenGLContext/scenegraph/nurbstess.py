@@ -45,6 +45,12 @@ from opengl_extrusions.nurbs import (
 from OpenGL.arrays import vbo
 from OpenGL.GL import GL_ELEMENT_ARRAY_BUFFER
 
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
+
 log = logging.getLogger(__name__)
 
 __all__ = [
@@ -391,8 +397,8 @@ def build_surface_vbo(
     """
     if not tessellation.triangle_count:
         return None, None, 0, False
-    vertices = vbo.VBO(interleave(tessellation))
-    indices = vbo.VBO(
+    vertices = VBO(interleave(tessellation))
+    indices = VBO(
         tessellation.indices.astype(np.uint32, copy=False).ravel(),
         target=GL_ELEMENT_ARRAY_BUFFER,
     )

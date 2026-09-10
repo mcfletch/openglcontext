@@ -1,5 +1,8 @@
 """VRML97-style TextureTransform node"""
+from typing import Any, Optional
+
 from OpenGL.GL import *
+from OpenGL.error import GLError
 from vrml.vrml97 import basenodes
 
 from OpenGLContext.arrays import array, any, allclose
@@ -17,7 +20,8 @@ class TextureTransform(basenodes.TextureTransform):
 
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#TextureTransform
     """
-    def transform( self, mode=None, translate=1, scale=1, rotate=1 ):
+    def transform( self, mode: Any = None, translate: int = 1,
+                   scale: int = 1, rotate: int = 1 ) -> None:
         ''' Perform the actual alteration of the current matrix '''
         if translate and any(self.translation):
             x,y = self.translation
@@ -34,8 +38,8 @@ class TextureTransform(basenodes.TextureTransform):
             glTranslatef( -cx,-cy,0)
     def render(
         self,
-        mode = None, # the renderpass object
-    ):
+        mode: Any = None, # the renderpass object
+    ) -> Optional[Any]:
         """Render the texture transform
 
         returns None or the matrix to be restored
@@ -45,8 +49,8 @@ class TextureTransform(basenodes.TextureTransform):
         try:
             try:
                 glPushMatrix()
-            except GLerror:
-                matrix = glGetDouble( GL_TEXTURE_MATRIX )
+            except GLError:
+                matrix = glGetDoublev( GL_TEXTURE_MATRIX )
                 self.transform()
                 return matrix
             else:
@@ -54,7 +58,7 @@ class TextureTransform(basenodes.TextureTransform):
                 return None
         finally:
             glMatrixMode( GL_MODELVIEW )
-    def renderPost( self, token, mode=None ):
+    def renderPost( self, token: Any, mode: Any = None ) -> None:
         """Restore the texture-transform matrix"""
         glMatrixMode( GL_TEXTURE )
         try:

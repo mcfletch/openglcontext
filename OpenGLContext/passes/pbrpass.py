@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import logging
 import weakref
-from typing import Any, Dict, Iterator, Optional, Sequence
+from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -248,7 +248,7 @@ def pack_material_block(material: Any) -> np.ndarray:
     version = int(getattr(material, '_ubo_version', 0))
     cached = getattr(material, '_packed_block', None)
     if cached is not None and cached[0] == version:
-        return cached[1]
+        return np.asarray(cached[1])
     packed = _pack_material_block(material)
     try:
         material._packed_block = (version, packed)
@@ -323,7 +323,7 @@ def _compile_file(vert_name: str, frag_name: str, validate: bool = True,
 
 
 def _delete_shaders(*shaders: Any) -> None:
-    """Flag standalone shader objects for deletion after they are linked (3.4)."""
+    """Flag standalone shader objects for deletion after they are linked."""
     from OpenGL.GL import glDeleteShader
     for sh in shaders:
         try:
@@ -362,7 +362,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # One GL uniform buffer per material, uploaded once and reused across
         # frames. Weak keys so a buffer's bookkeeping drops when its material is
         # collected (the GL buffer itself is reclaimed at context teardown).
-        self._material_ubos: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+        self._material_ubos: "weakref.WeakKeyDictionary[Any, Tuple[int, int]]" = \
+            weakref.WeakKeyDictionary()
         self._default_material_ubo: Optional[int] = None
         # Per-instance so two programs (or two passes) never share transmission /
         # material-cache state through the class.
@@ -425,7 +426,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         except Exception as err:
             log.error("Failed to compile PBR shader: %s", err)
             self._compiled = True
-            self._clear_programs()  # null every handle; leave _ok False (3.4)
+            self._clear_programs()  # null every handle; leave _ok False
             return False
 
     #: Whether this driver has the texture unit the joint palette needs; False

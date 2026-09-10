@@ -1,7 +1,7 @@
 '''Context functionality using the GLUT windowing API
 '''
 import logging
-from typing import Optional
+from typing import Any, Optional, Sequence, Tuple
 
 from OpenGL.GL import *
 from OpenGL.GLUT import *
@@ -14,6 +14,7 @@ from OpenGL import GLUT as _glut
 INIT_STATE_QUERY: Optional[int] = getattr(_glut, 'GLUT_INIT_STATE', None)
 from OpenGLContext import contextresources
 from OpenGLContext.context import Context
+from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events import glutevents
 from OpenGLContext.looptrace import LoopTrace
 
@@ -24,7 +25,7 @@ log = logging.getLogger(__name__)
 _initialised = False
 
 
-def glutInitialised():
+def glutInitialised() -> bool:
     """Whether ``glutInit`` has been called in this process
 
     freeglut offers ``glutGet(GLUT_INIT_STATE)`` and is asked where it does,
@@ -42,7 +43,7 @@ def glutInitialised():
         return False
 
 
-def ensureGlutInitialised(argv=None):
+def ensureGlutInitialised(argv: Optional[Sequence[str]] = None) -> bool:
     """Call ``glutInit`` unless somebody already has; answer whether it ran
 
     **Both halves matter, and each is fatal on its own.**  ``glutCreateWindow``
@@ -86,18 +87,23 @@ class GLUTContext(
     DISPLAYMODE = GLUT_DOUBLE | GLUT_DEPTH
     currentModifiers = 0
     providesGLUT = True
-    windowID = None
+    #: GLUT's own identifier for this window, or None once it has been
+    #: destroyed.  Every GLUT call about a window names it.
+    windowID: Optional[int] = None
+    #: Settled by the constructor before the window exists, so it is never None
+    #: for a context that was built.
+    contextDefinition: ContextDefinition
     #: True while the pointer is hidden and being warped back to the middle of
     #: the window for a mouse-look mode.
     _pointerGrabbed = False
     #: Where the pointer was last warped to, so the movement the warp itself
     #: generates can be told from a real one.
-    _pointerWarpedTo = None
+    _pointerWarpedTo: Optional[Tuple[int, int]] = None
     #: Set when the loop should end; the window's close button and OnQuit both
     #: raise it, and MainLoop watches it.
     _finished = False
 
-    def __init__(self, definition=None, **named):
+    def __init__(self, definition: Any = None, **named: Any) -> None:
         # set up double buffering and rgb display mode.  Resolved before the
         # window exists, since the display mode and the profile below are both
         # built from it -- see Context.resolveDefinition.
@@ -165,7 +171,7 @@ class GLUTContext(
         # The window itself knows, and can be asked.
         self.ViewPort(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT))
 
-    def setFullscreen(self, fullscreen):
+    def setFullscreen(self, fullscreen: Any) -> bool:
         """Fill the screen, or go back to the size the definition asked for."""
         if not self.windowID:
             return False
@@ -178,14 +184,14 @@ class GLUTContext(
             glutReshapeWindow(width, height)
         return True
 
-    def settingsChanged(self):
+    def settingsChanged(self) -> None:
         """Re-apply the window-level settings a changed definition affects."""
         from OpenGLContext import renderoptions
         self.applyVSync()
         self.setFullscreen(renderoptions.fullscreen_window(self))
         Context.settingsChanged(self)
 
-    def applyVSync(self, definition=None):
+    def applyVSync(self, definition: Any = None) -> bool:
         """Wait for the display's refresh, or don't (ContextDefinition.vsync)
 
         GLUT names nothing for this, so it goes to the window system's own
@@ -201,7 +207,7 @@ class GLUTContext(
             glutSetWindow(self.windowID)
         return swapcontrol.set_swap_interval(1 if wanted else 0)
 
-    def setPointerCapture(self, capture):
+    def setPointerCapture(self, capture: Any) -> bool:
         """Hide the pointer and keep it in the window, for a mouse-look mode
 
         GLUT has no relative-motion mode, so the pointer is warped back to the
@@ -227,7 +233,7 @@ class GLUTContext(
             self.recentrePointer()
         return True
 
-    def recentrePointer(self):
+    def recentrePointer(self) -> None:
         """Put the pointer back in the middle of the window, if it is grabbed"""
         if not self._pointerGrabbed or not self.windowID:
             return
@@ -237,7 +243,7 @@ class GLUTContext(
         self._pointerWarpedTo = middle
         glutWarpPointer(*middle)
 
-    def pointerWarpEcho(self, x, y):
+    def pointerWarpEcho(self, x: float, y: float) -> bool:
         """Whether this movement is the one :meth:`recentrePointer` caused
 
         A movement the program made itself is not motion the user asked for:
@@ -270,7 +276,7 @@ class GLUTContext(
     )
 
     @classmethod
-    def glutFlagsFromDefinition(cls, definition):
+    def glutFlagsFromDefinition(cls, definition: Any) -> int:
         """Create our initialisation flags from a definition"""
         if definition:
             result = 0
@@ -287,64 +293,26 @@ class GLUTContext(
         return cls.DISPLAYMODE
 
 
-    def setupCallbacks(self):
+    def setupCallbacks(self) -> None:
         '''Setup the various callbacks for this context'''
+        if not self.windowID:
+            return
         glutSetWindow(self.windowID)
-        try:
-            glutSetReshapeFuncCallback(self.OnResize)
-            glutReshapeFunc()
-        except NameError:
-            glutReshapeFunc(self.OnResize)
-        try:
-            glutSetDisplayFuncCallback(self.OnRedisplay)
-            glutDisplayFunc()
-        except NameError:
-            glutDisplayFunc(self.OnRedisplay)
-        try:
-            glutSetKeyboardFuncCallback(self.glutOnCharacter)
-            glutKeyboardFunc()
-        except NameError:
-            glutKeyboardFunc(self.glutOnCharacter)
-        try:
-            glutSetKeyboardUpFuncCallback(self.glutOnKeyUp)
-            glutKeyboardUpFunc()
-        except NameError:
-            glutKeyboardUpFunc(self.glutOnKeyUp)
-        try:
-            glutSetSpecialFuncCallback(self.glutOnKeyDown)
-            glutSpecialFunc()
-        except NameError:
-            glutSpecialFunc(self.glutOnKeyDown)
-        try:
-            glutSetSpecialUpFuncCallback(self.glutOnKeyUp)
-            glutSpecialUpFunc()
-        except NameError:
-            glutSpecialUpFunc(self.glutOnKeyUp)
-        try:
-            glutSetMouseFuncCallback(self.glutOnMouseButton)
-            glutMouseFunc()
-        except NameError:
-            glutMouseFunc(self.glutOnMouseButton)
-        try:
-            glutSetMotionFuncCallback(self.glutOnMouseMove)
-            glutMotionFunc()
-        except NameError:
-            glutMotionFunc(self.glutOnMouseMove)
-        try:
-            glutSetPassiveMotionFuncCallback(self.glutOnMouseMove)
-            glutPassiveMotionFunc()
-        except NameError:
-            glutPassiveMotionFunc(self.glutOnMouseMove)
+        glutReshapeFunc(self.OnResize)
+        glutDisplayFunc(self.OnRedisplay)
+        glutKeyboardFunc(self.glutOnCharacter)
+        glutKeyboardUpFunc(self.glutOnKeyUp)
+        glutSpecialFunc(self.glutOnKeyDown)
+        glutSpecialUpFunc(self.glutOnKeyUp)
+        glutMouseFunc(self.glutOnMouseButton)
+        glutMotionFunc(self.glutOnMouseMove)
+        glutPassiveMotionFunc(self.glutOnMouseMove)
         # GLUT reports no focus change; the pointer leaving the window is the
         # nearest thing it has, and it is when a held key is about to stop
         # being reported.  See glutOnEntry.
-        try:
-            glutSetEntryFuncCallback(self.glutOnEntry)
-            glutEntryFunc()
-        except NameError:
-            glutEntryFunc(self.glutOnEntry)
+        glutEntryFunc(self.glutOnEntry)
 
-    def pumpWindowEvents(self):
+    def pumpWindowEvents(self) -> bool:
         """Dispatch what GLUT has queued; see Context.pumpWindowEvents
 
         Needs freeglut's ``glutMainLoopEvent``; an original GLUT owns its loop
@@ -355,7 +323,7 @@ class GLUTContext(
         glutMainLoopEvent()
         return True
 
-    def glutOnEntry(self, state):
+    def glutOnEntry(self, state: int) -> None:
         """Let go of held keys as the pointer leaves the window
 
         GLUT reports no focus change of its own, and this is the moment after
@@ -366,7 +334,7 @@ class GLUTContext(
         if not state:
             self.clearHeldKeys()
 
-    def setCurrent(self):
+    def setCurrent(self, blocking: int = 1) -> None:
         '''Acquire the GL "focus"
 
         **Nothing is released here**, unlike every other backend.  GLUT
@@ -377,8 +345,9 @@ class GLUTContext(
         afford is before its window is made, where it is the thing about to
         take the thread (see ``__init__``).
         '''
-        Context.setCurrent(self)
-        glutSetWindow(self.windowID)
+        Context.setCurrent(self, blocking)
+        if self.windowID:
+            glutSetWindow(self.windowID)
         handle = self._glHandle()
         if handle is None and self._ownContext is not None:
             log.warning(
@@ -389,7 +358,7 @@ class GLUTContext(
             )
         self.bindContextResources(handle)
 
-    def _glHandle(self):
+    def _glHandle(self) -> Any:
         """The GL context handle the caches and PyOpenGL key on.
 
         The GLUT window id is not it: what identifies a context to PyOpenGL is
@@ -398,7 +367,7 @@ class GLUTContext(
         """
         return contextresources.context_key()
 
-    def releaseWindow(self):
+    def releaseWindow(self) -> None:
         """Let this window's GL objects go, then destroy the window
 
         With the window still whole and its context current, so the caches
@@ -412,7 +381,7 @@ class GLUTContext(
         glutDestroyWindow(self.windowID)
         self.windowID = None
 
-    def OnIdle(self, *arguments):
+    def OnIdle(self, *arguments: Any) -> int:
         """Animation hook for the GLUT loop
 
         The default ``Context.OnIdle`` renders through ``drawPoll``, which would
@@ -421,7 +390,7 @@ class GLUTContext(
         """
         return 0
 
-    def OnQuit(self, event=None):
+    def OnQuit(self, event: Any = None) -> Any:
         """Quit the application (forcibly)"""
         self._finished = True
         glutDisplayFunc(null_display)
@@ -443,11 +412,11 @@ class GLUTContext(
             pass
         return super(GLUTContext, self).OnQuit(event)
 
-    def OnRedisplay(self):
+    def OnRedisplay(self) -> None:
         '''windowing library has asked us to redisplay'''
         self.triggerRedraw(1)
 
-    def OnResize(self, width, height):
+    def OnResize(self, width: int, height: int) -> None:
         """Windowing library has resized the window"""
         self.setCurrent()
         try:
@@ -456,13 +425,11 @@ class GLUTContext(
             self.unsetCurrent()
         self.triggerRedraw(1)
 
-    def SwapBuffers(
-        self,
-    ):
+    def SwapBuffers(self) -> None:
         """Implementation: swap the buffers"""
         glutSwapBuffers()  # should really check to be sure we are double buffered
 
-    def MainLoop(self):
+    def MainLoop(self) -> Any:
         """Run the event loop, one iteration at a time
 
         Built on ``glutMainLoopEvent`` rather than ``glutMainLoop`` so the
@@ -507,7 +474,7 @@ class GLUTContext(
             # window the driver hands the same identifier.
             self.releaseWindow()
 
-    def _loopIteration(self, trace, renderedFirst):
+    def _loopIteration(self, trace: LoopTrace, renderedFirst: bool) -> bool:
         """One pass of the main loop, timed phase by phase
 
         Answers the new renderedFirst, which is the only state an iteration
@@ -543,7 +510,7 @@ class GLUTContext(
         return renderedFirst
 
     @classmethod
-    def ContextMainLoop(cls, *args, **named):
+    def ContextMainLoop(cls, *args: Any, **named: Any) -> Any:
         """Mainloop for the GLUT testing context"""
         # The constructor asks for this too; asking here as well costs nothing
         # and keeps the windowing system up before anything else in this
@@ -564,7 +531,7 @@ class GLUTContext(
 
 
 
-def null_display():
+def null_display() -> None:
     return
 
 
@@ -573,7 +540,7 @@ if __name__ == "__main__":
     class TestRenderer(GLUTContext):
         center = 2, 0, -4
 
-        def Render(self, mode=None):
+        def Render(self, mode: Any = None) -> None:
             print('rendering')
             GLUTContext.Render(self, mode)
             print('done render')

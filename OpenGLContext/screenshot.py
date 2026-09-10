@@ -58,13 +58,20 @@ class ScreenshotMixin(object):
     _screenshotPending: bool = False
 
     if TYPE_CHECKING:
+        # What this mix-in needs of the class beside it, declared for a checker
+        # and nothing else: `Context` is what actually provides these, and a
+        # base of that name here would put a second copy in the MRO.  Each
+        # signature has to match the real one -- `getApplicationName` is a
+        # classmethod on `ContextConfigMixin`, and declared as anything else it
+        # is the declaration rather than the code that a checker believes.
         contextDefinition: Any
 
         def addEventHandler(self, eventType: str, *arguments: Any,
                             **named: Any) -> Any: ...
         def triggerRedraw(self, force: int = 0) -> Any: ...
         def getViewPort(self) -> Tuple[int, int]: ...
-        def getApplicationName(self) -> str: ...
+        @classmethod
+        def getApplicationName(cls) -> str: ...
 
     # -- asking for one ---------------------------------------------------
     def setupScreenshotKey(self) -> None:

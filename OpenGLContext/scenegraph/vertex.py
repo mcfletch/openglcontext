@@ -1,4 +1,6 @@
 """Low-level holder for vertex information"""
+from typing import Any
+
 from OpenGLContext.arrays import array
 
 class Vertex(object):
@@ -13,14 +15,14 @@ class Vertex(object):
     )
     def __init__ (
         self,
-        point = (0,0,0),
-        color = None,
-        normal = None,
-        textureCoordinate = None,
-        metaIndex = -1,
-        coordIndex = -1,
-        indexKey = None,
-    ):
+        point: Any = (0,0,0),
+        color: Any = None,
+        normal: Any = None,
+        textureCoordinate: Any = None,
+        metaIndex: int = -1,
+        coordIndex: int = -1,
+        indexKey: Any = None,
+    ) -> None:
         """Initialize the Vertex
 
         point -- three-dimensional coordinate
@@ -38,14 +40,14 @@ class Vertex(object):
         self.metaIndex = int(metaIndex)
         self.coordIndex = int(coordIndex)
         self.indexKey = indexKey
-    def copy( self, metaIndex = - 1 ):
+    def copy( self, metaIndex: int = -1 ) -> "Vertex":
         """Copy the vertex with a different metaIndex"""
         return self.__class__(
             self.point, self.color,
             self.normal, self.textureCoordinate,
             metaIndex,
         )
-    def __repr__( self ):
+    def __repr__( self ) -> str:
         """Get a debugging-friendly representation of the vertex"""
         return """%s((%s),index=%s)"""% (
             self.__class__.__name__,

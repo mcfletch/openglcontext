@@ -456,3 +456,77 @@ class TestNothingKeepsTheProcessAlive:
         assert all(thread.daemon for thread in started), (
             'an image loader can keep the process alive after its last window '
             'has gone')
+
+
+#: Every context class in the package, windowed or offscreen, and the module it
+#: lives in.  Wider than :data:`BACKENDS` because the contract below is about
+#: the ``Context`` API rather than about owning a window.
+CONTEXT_MODULES = BACKENDS + (
+    ('egl', 'OpenGLContext/eglcontext.py'),
+    ('wgl', 'OpenGLContext/wglcontext.py'),
+)
+
+
+def _parameters(path, name):
+    """The parameter names of the first ``def name`` in the module at ``path``"""
+    for node in ast.walk(ast.parse(_source(path))):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            arguments = node.args
+            return [arg.arg for arg in
+                    arguments.posonlyargs + arguments.args + arguments.kwonlyargs]
+    return None
+
+
+class TestTakingTheContextIsTheSameCallEverywhere:
+    """``setCurrent`` takes ``blocking`` on every backend, as the base does.
+
+    The base class acquires the context lock with it, so ``setCurrent(0)`` is
+    how a caller asks for the context *if it is free* and gets a
+    ``LockingError`` rather than a wait.  A backend whose override drops the
+    parameter answers that call with ``TypeError`` instead.
+    """
+
+    @pytest.mark.parametrize('name,path', CONTEXT_MODULES,
+                             ids=[entry[0] for entry in CONTEXT_MODULES])
+    def test_set_current_accepts_blocking(self, name, path):
+        parameters = _parameters(path, 'setCurrent')
+        if parameters is None:
+            return                      # inherits the base class's own
+        assert 'blocking' in parameters, (
+            '%s.setCurrent drops the blocking argument, so setCurrent(0) is a '
+            'TypeError there and a LockingError everywhere else' % (name,))
+
+
+class TestTheVRMLContextsTakeTheirArguments:
+    """``ContextMainLoop(size=..., title=...)`` reaches the constructor.
+
+    It is the one call a program that opens a world makes, and the arguments
+    are how it says what window it wants.
+    """
+
+    def test_the_glut_vrml_context_builds_with_what_it_was_given(self, monkeypatch):
+        pytest.importorskip('OpenGL.GLUT')
+        from OpenGLContext import glutcontext, glutvrmlcontext
+
+        built = []
+
+        class _Stop(Exception):
+            """Ends the call where the window would have been made."""
+
+        class Recording(glutvrmlcontext.VRMLContext):
+            def __init__(self, *arguments, **named):
+                built.append((arguments, named))
+                raise _Stop()
+
+        # Nothing here may reach GLUT: initialising it needs a display, and a
+        # second initialisation ends the process rather than raising.
+        monkeypatch.setattr(glutcontext, 'ensureGlutInitialised',
+                            lambda *arguments, **named: False)
+        monkeypatch.setattr(glutvrmlcontext, 'glutInit',
+                            lambda *arguments: None, raising=False)
+        monkeypatch.setattr(glutvrmlcontext, 'glutMainLoop',
+                            lambda: None, raising=False)
+
+        with pytest.raises(_Stop):
+            Recording.ContextMainLoop(size=(640, 480), title='a world')
+        assert built == [((), {'size': (640, 480), 'title': 'a world'})]

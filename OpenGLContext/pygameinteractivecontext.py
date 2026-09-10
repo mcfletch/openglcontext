@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Interactive context using the PyGame API (provides navigation support)"""
+from typing import Any
+
 from OpenGLContext.pygamecontext import *
 from OpenGLContext import interactivecontext
 from OpenGLContext.move import viewplatformmixin
@@ -11,9 +13,9 @@ class PygameInteractiveContext(
     PygameContext,
 ):
     '''PyGame context providing mouse and keyboard interaction '''
-    def PygameActivateEvent(self, event):
+    def PygameActivateEvent(self, event: Any) -> int:
         return 1
-    def OnIdle(self, *arguments):
+    def OnIdle(self, *arguments: Any) -> int:
         """Animation hook for the pygame loop.
 
         The default Context.OnIdle renders via drawPoll, which would double up
@@ -27,7 +29,7 @@ class PygameInteractiveContext(
 if __name__ == '__main__':
     from drawcube import drawCube
     class TestContext(PygameInteractiveContext):
-        def Render(self, mode):
+        def Render(self, mode: Any = None) -> None:
             glTranslated(0, 0, -3)
             glRotated(30, 1, 0, 0)
             glRotated(30, 0, 1, 0)

@@ -1,13 +1,15 @@
 """Holder for metadata regarding a polygon"""
+from typing import Any
+
 from OpenGLContext.scenegraph import polygontessellator
 from OpenGLContext import vectorutilities, utilities
 from OpenGLContext.arrays import *
 import logging
 log = logging.getLogger( __name__ )
 
-def mag( x, y, z ):
+def mag( x: float, y: float, z: float ) -> float:
     """Get the 3D magnitude of a 3-coordinate vector"""
-    return sqrt(x*x + y*y + z*z)
+    return float(sqrt(x*x + y*y + z*z))
 
 class Polygon( list ):
     """Holder for metadata regarding a particular polygon
@@ -22,7 +24,8 @@ class Polygon( list ):
     easier to use when dealing with triangle-only systems
     such as the array geometry classes.
     """
-    def __init__( self, polyIndex=-1, node=None, points=None, ccw=True ):
+    def __init__( self, polyIndex: int = -1, node: Any = None,
+                  points: Any = None, ccw: bool = True ) -> None:
         """Initialize the polygon
 
         polyIndex -- more accurately "polygon ID", an opaque
@@ -37,9 +40,9 @@ class Polygon( list ):
         super(Polygon, self).__init__( points or [] )
         self.polyIndex = polyIndex
         self.node = node
-        self.normalised = None
+        self.normalised: Any = None
         self.ccw = ccw
-    def normalise( self, tessellate=None ):
+    def normalise( self, tessellate: Any = None ) -> Any:
         """Normalise this polygon to a set of triangle vertices
 
         tesselate -- callable which can accept a Polygon instance
@@ -79,7 +82,7 @@ class Polygon( list ):
         ### doing a sanity check an excluding degenerate polygons exclusively...
         return self.checkVertices()
         
-    def checkVertices( self ):
+    def checkVertices( self ) -> Any:
         """Check set of triangle vertices for possible degeneracy
 
         At the moment this checks for condition:
@@ -122,7 +125,7 @@ class Polygon( list ):
                 ))
         self.normalised = result
         return result
-    def __repr__(self,):
+    def __repr__(self) -> str:
         """Produce code-like representation of the polygon"""
         return """%s([\n\t%s],\n\t%s)"""%(
             self.__class__.__name__,
@@ -142,11 +145,11 @@ class DegeneratePolygon(object):
     generated vertex.
     """
     def __init__(
-        self, 
-        vertices,
-        node=None,
-        reason = "",
-    ):
+        self,
+        vertices: Any,
+        node: Any = None,
+        reason: str = "",
+    ) -> None:
         """Initialize the DegeneratePolygon instance
 
         vertices -- sequence of vertices
@@ -157,7 +160,7 @@ class DegeneratePolygon(object):
         self.node = node
         self.reason = reason
         self.vertices = vertices
-    def __repr__(self,):
+    def __repr__(self) -> str:
         return """%s([\n\t%s],\n\t%s,\n\t%r)"""%(
             self.__class__.__name__,
             "\n\t".join([repr(child) for child in self.vertices]),

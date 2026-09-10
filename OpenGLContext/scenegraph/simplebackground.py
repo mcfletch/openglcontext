@@ -1,4 +1,6 @@
 """Solid-color background node"""
+from typing import Any
+
 from vrml import field, node
 from vrml.vrml97 import nodetypes
 
@@ -25,7 +27,7 @@ class SimpleBackground(nodetypes.Background, nodetypes.Children, node.Node ):
     """
     color = field.newField( 'color', 'SFColor', 1, [0.0, 0.0, 0.0])
     bound = field.newField( 'bound', 'SFBool', 1, 0)
-    def Render (self, mode = None, clear=True):
+    def Render (self, mode: Any = None, clear: bool = True) -> None:
         # should only do this on visible passes...
         if mode.passCount == 0:
             if self.bound and clear:

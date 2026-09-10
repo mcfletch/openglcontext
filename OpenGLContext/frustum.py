@@ -10,6 +10,8 @@ Based on code from:
     http://www.markmorley.com/opengl/frustumculling.html
 """
 
+from typing import Any, Optional
+
 from vrml import fieldtypes, node, protofunctions
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
@@ -18,7 +20,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def viewingMatrix(projection=None, model=None):
+def viewingMatrix(projection: Any = None, model: Any = None) -> Any:
     """Calculate the total viewing matrix from given data
 
     projection -- the projection matrix, if not provided
@@ -43,12 +45,11 @@ def viewingMatrix(projection=None, model=None):
             projection,
             model,
         )
-        if projection:
+        if projection is not None:
             return projection
-        if model:
+        if model is not None:
             return model
-        else:
-            return identity(4, "d")
+        return identity(4, "d")
     return dot(model, projection)
 
 
@@ -67,7 +68,8 @@ class Frustum(node.Node):
     normalized = fieldtypes.SFBool("normalized", 0, 1)
 
     @classmethod
-    def fromViewingMatrix(cls, matrix=None, normalize=1):
+    def fromViewingMatrix(cls, matrix: Any = None,
+                          normalize: int = 1) -> 'Frustum':
         """Extract and calculate frustum clipping planes from OpenGL
 
         The default initializer allows you to create
@@ -120,7 +122,7 @@ class Frustum(node.Node):
         return cls(planes=frustum, normalized=normalize)
 
     @classmethod
-    def normalize(cls, frustum):
+    def normalize(cls, frustum: Any) -> Any:
         """Normalize clipping plane equations"""
         magnitude = sqrt(
             frustum[:, 0] * frustum[:, 0]

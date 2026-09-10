@@ -16,14 +16,14 @@ class TestContext(
     BaseContext 
 ):
     """VRML97-loading Context testing class"""
-    def OnInit( self ):
+    def OnInit( self ) -> None:
         """Load the image on initial load of the application"""
         filename = sys.argv[1]
         self.load( filename )
         vrmlcontext.VRMLContext.OnInit( self )
         BaseContext.OnInit( self )
 
-def main():
+def main() -> None:
     usage = """python -m OpenGLContext.bin.profile_view myscene.wrl
 
     A VRML97 viewer which writes cProfile results to a file named
@@ -36,8 +36,8 @@ def main():
     if not sys.argv[1:2]:
         print(usage)
         sys.exit(1)
-    return cProfile.run( 
-        "TestContext.ContextMainLoop()", 'OpenGLContext.profile' 
+    cProfile.run(
+        "TestContext.ContextMainLoop()", 'OpenGLContext.profile'
     )
 
 if __name__ == "__main__":

@@ -33,10 +33,12 @@ starts, and carried through every frame of it.
 """
 
 from math import asin, atan2, cos, pi, radians, sin, tan
+from typing import Any, Sequence, Tuple, cast
 
 import numpy as np
 
 from OpenGLContext import quaternion
+from OpenGLContext.quaternion import Quaternion
 
 #: Which way is up.  VRML97, glTF and every scene OpenGLContext loads agree on
 #: +Y, and it is what the orbit swings about and what levels the horizon.
@@ -68,16 +70,16 @@ FALLBACK_FORWARD = np.array([0.0, 0.0, -1.0], dtype='d')
 _TINY = 1e-9
 
 
-def _unit(vector, fallback):
+def _unit(vector: Any, fallback: Any) -> np.ndarray:
     """``vector`` scaled to unit length, or ``fallback`` if it has none."""
     vector = np.asarray(vector, dtype='d')[:3]
     length = float(np.linalg.norm(vector))
     if length < _TINY:
         return np.asarray(fallback, dtype='d')[:3].copy()
-    return vector / length
+    return np.asarray(vector / length)
 
 
-def aimAt(position, centre, up=WORLD_UP):
+def aimAt(position: Any, centre: Any, up: Any = WORLD_UP) -> Quaternion:
     """The orientation of a camera at ``position`` looking at ``centre``.
 
     Levelled: the camera's right axis lies in the plane perpendicular to ``up``,
@@ -101,16 +103,17 @@ def aimAt(position, centre, up=WORLD_UP):
     trueUp = np.cross(right, forward)
     # Columns, because ``quaternion * v`` is the matrix times the vector: the
     # camera's own axes are what the local unit vectors have to map to.
-    return quaternion.fromMatrix(np.column_stack([right, trueUp, -forward]))
+    return cast(Quaternion,
+                quaternion.fromMatrix(np.column_stack([right, trueUp, -forward])))
 
 
-def _axis(orientation, local):
+def _axis(orientation: Quaternion, local: Sequence[float]) -> np.ndarray:
     """One of a camera orientation's own axes, in world coordinates"""
     return np.asarray(
         orientation * np.array(tuple(local) + (0.0,), dtype='d'), dtype='d')[:3]
 
 
-def _rollBetween(levelled, orientation):
+def _rollBetween(levelled: Quaternion, orientation: Quaternion) -> float:
     """How far ``orientation`` is rolled from ``levelled``, in radians
 
     A number rather than a rotation, because the axis it turns about is the
@@ -124,14 +127,14 @@ def _rollBetween(levelled, orientation):
                  float(np.dot(level, actual)))
 
 
-def _rolled(levelled, roll):
+def _rolled(levelled: Quaternion, roll: float) -> Quaternion:
     """``levelled`` turned ``roll`` radians about its own view direction"""
     if not roll:
         return levelled
     # The right-hand operand of this multiplication acts in world coordinates,
     # so the axis is the view direction as it is now rather than as it was.
     x, y, z = _axis(levelled, (0.0, 0.0, -1.0))
-    return levelled * quaternion.fromXYZR(x, y, z, -roll)
+    return cast(Quaternion, levelled * quaternion.fromXYZR(x, y, z, -roll))
 
 
 class TurntableOrbit(object):
@@ -151,13 +154,13 @@ class TurntableOrbit(object):
     """
 
     def __init__(
-        self, position, orientation, centre,
-        originalX, originalY, width, height,
-        dragAngle=DRAG_ANGLE,
-        up=WORLD_UP,
-        fieldOfView=DEFAULT_FIELD_OF_VIEW,
-        minimumRadius=MINIMUM_RADIUS,
-    ):
+        self, position: Any, orientation: Quaternion, centre: Any,
+        originalX: float, originalY: float, width: float, height: float,
+        dragAngle: float = DRAG_ANGLE,
+        up: Any = WORLD_UP,
+        fieldOfView: float = DEFAULT_FIELD_OF_VIEW,
+        minimumRadius: float = MINIMUM_RADIUS,
+    ) -> None:
         """Begin a gesture from where the camera is now
 
         position -- world position of the camera, three or four components
@@ -227,7 +230,7 @@ class TurntableOrbit(object):
                                   orientation)
 
     ### the gestures
-    def rotate(self, newX, newY):
+    def rotate(self, newX: float, newY: float) -> Tuple[np.ndarray, Quaternion]:
         """Swing the camera about the pivot to follow the pointer
 
         newX, newY -- where the pointer is now, in pick-point coordinates
@@ -242,7 +245,7 @@ class TurntableOrbit(object):
             self.startElevation - upWindow * self.dragAngle)
         return self._place()
 
-    def dolly(self, factor):
+    def dolly(self, factor: float) -> Tuple[np.ndarray, Quaternion]:
         """Move the camera toward or away from the pivot
 
         factor -- what to multiply the distance by; below one moves closer.
@@ -255,7 +258,7 @@ class TurntableOrbit(object):
         self.radius = max(self.radius * float(factor), self.minimumRadius)
         return self._place()
 
-    def pan(self, newX, newY):
+    def pan(self, newX: float, newY: float) -> Tuple[np.ndarray, Quaternion]:
         """Slide the camera and the pivot together, across the view
 
         newX, newY -- where the pointer is now, in pick-point coordinates
@@ -279,7 +282,7 @@ class TurntableOrbit(object):
         self.centre[:3] += shift
         return self._place()
 
-    def cancel(self):
+    def cancel(self) -> Tuple[np.ndarray, Quaternion]:
         """Give back the camera exactly as this gesture was handed it"""
         return self.startPosition, self.startOrientation
 
@@ -288,22 +291,22 @@ class TurntableOrbit(object):
     update = rotate
 
     ### internals
-    def _fractions(self, newX, newY):
+    def _fractions(self, newX: float, newY: float) -> Tuple[float, float]:
         """How far the pointer has come, as a fraction of the window's height"""
         return ((float(newX) - self.start[0]) / self.span,
                 (float(newY) - self.start[1]) / self.span)
 
-    def _clampElevation(self, elevation):
+    def _clampElevation(self, elevation: float) -> float:
         return max(-ELEVATION_LIMIT, min(ELEVATION_LIMIT, elevation))
 
-    def _direction(self):
+    def _direction(self) -> np.ndarray:
         """The unit vector from the pivot to the camera"""
         flat = cos(self.elevation)
         return (flat * cos(self.azimuth) * self._horizontal
                 + flat * sin(self.azimuth) * self._across
                 + sin(self.elevation) * self.up)
 
-    def _levelled(self, position):
+    def _levelled(self, position: np.ndarray) -> Quaternion:
         """The level orientation looking the way the camera looks, from here
 
         The aim offset travels with the pivot -- the camera keeps looking the
@@ -315,7 +318,7 @@ class TurntableOrbit(object):
         forward = np.asarray(aim * np.append(self._offset, 0.0), dtype='d')[:3]
         return aimAt(position[:3], position[:3] + forward, self.up)
 
-    def _place(self):
+    def _place(self) -> Tuple[np.ndarray, Quaternion]:
         """The camera that the current pivot, radius and angles describe"""
         position = self.centre.copy()
         position[:3] += self.radius * self._direction()
@@ -323,11 +326,11 @@ class TurntableOrbit(object):
         return position, _rolled(self._levelled(position), self._roll)
 
     @staticmethod
-    def _point(value):
+    def _point(value: Any) -> np.ndarray:
         """A world point as a four-component array, whatever length came in"""
         value = np.asarray(value, dtype='d')
         if len(value) >= 4:
-            return value[:4].copy()
+            return np.asarray(value[:4].copy())
         point = np.ones((4,), dtype='d')
         point[:3] = value[:3]
         return point

@@ -1,5 +1,6 @@
 """Interactions for navigating the context"""
 from gettext import gettext as _
+from typing import Any, Sequence
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.move import movementmanager
 import math
@@ -52,7 +53,7 @@ class Direct( movementmanager.MovementManager ):
     TURNANGLE = math.pi/32
 
     ### LOGO-like commands...
-    def turn (self, deltaOrientation= (0,1,0,math.pi/4) ):
+    def turn(self, deltaOrientation: Sequence[float] = (0, 1, 0, math.pi / 4)) -> None:
         """Apply rotation within the current orientation
 
         In essence, this allows you to "turn your head"
@@ -73,72 +74,72 @@ class Direct( movementmanager.MovementManager ):
         self.platform.setOrientation( self.platform.relativeOrientation( deltaOrientation ) )
         self.context.triggerRedraw(1)
 
-    def stepRelative( self, x=0,y=0,z=0 ):
+    def stepRelative( self, x: float = 0, y: float = 0, z: float = 0 ) -> None:
         """Step this distance in relative (view) coordinates"""
         self.platform.moveRelative( x=x,y=y,z=z )
         self.context.triggerRedraw(1)
 
-    def forward( self, event ):
+    def forward( self, event: Any ) -> None:
         """(callback) Move platform forward by STEPDISTANCE
 
         triggers redraw after completion
         """
         self.stepRelative( z = -self.STEPDISTANCE )
-    def backward( self, event ):
+    def backward( self, event: Any ) -> None:
         """(callback) Move platform backward by STEPDISTANCE
 
         triggers redraw after completion
         """
         self.stepRelative( z = self.STEPDISTANCE )
-    def up( self, event ):
+    def up( self, event: Any ) -> None:
         """(callback) Move platform upward by STEPDISTANCE
 
         triggers redraw after completion
         """
         self.stepRelative( y = self.STEPDISTANCE )
-    def down( self, event ):
+    def down( self, event: Any ) -> None:
         """(callback) Move platform downward by STEPDISTANCE
 
         triggers redraw after completion
         """
         self.stepRelative( y = -self.STEPDISTANCE )
-    def left( self, event ):
+    def left( self, event: Any ) -> None:
         """(callback) Move platform left by STEPDISTANCE
 
         triggers redraw after completion
         """
         self.stepRelative( x = -self.STEPDISTANCE )
-    def right( self, event ):
+    def right( self, event: Any ) -> None:
         """(callback) Move platform right by STEPDISTANCE
 
         triggers redraw after completion
         """
         self.stepRelative( x = self.STEPDISTANCE )
-    def turnup( self, event ):
+    def turnup( self, event: Any ) -> None:
         """(callback) Rotates "head" backward (looks upward) by TURNANGLE
 
         triggers redraw after completion
         """
         self.turn( (1.0,0.0,0.0, self.TURNANGLE) )
-    def turndown( self, event ):
+    def turndown( self, event: Any ) -> None:
         """(callback) Rotates "head" forward (looks downward) by TURNANGLE
 
         triggers redraw after completion
         """
         self.turn( (1.0,0.0,0.0, -self.TURNANGLE) )
-    def turnleft( self, event ):
+    def turnleft( self, event: Any ) -> None:
         """(callback) Rotates "head" to the left by TURNANGLE
 
         triggers redraw after completion
         """
         self.turn( (0.0,1.0,0.0, self.TURNANGLE) )
-    def turnright( self, event ):
+    def turnright( self, event: Any ) -> None:
         """(callback) Rotates "head" to the right by TURNANGLE
 
         triggers redraw after completion
         """
         self.turn( (0.0,1.0,0.0, -self.TURNANGLE) )
-    def straighten( self, event ):
+    def straighten( self, event: Any ) -> None:
         """(callback) Straightens the platform orientation
 
         Attempts to make the orientation equal to the
@@ -156,9 +157,9 @@ class Direct( movementmanager.MovementManager ):
         self.platform.straighten()
         self.context.triggerRedraw(1)
 
-    def faster( self, event ):
+    def faster( self, event: Any ) -> None:
         """Increase our walking speed"""
         self.STEPDISTANCE *= 1.5
-    def slower( self, event ):
+    def slower( self, event: Any ) -> None:
         """Decrease our walking speed"""
         self.STEPDISTANCE /= 1.5

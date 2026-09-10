@@ -91,7 +91,14 @@ def environment_cubemap_prefix() -> Optional[str]:
 # probe that was already built notice the env changed and rebuild -- the panorama
 # loads asynchronously, after the first 'full' frame may already have built the
 # procedural probe.
-_EQUIRECT_ENV: dict[str, Any] = {'array': None, 'generation': 0}
+class _EquirectEnv:
+    """The registered panorama and the counter that says it has changed."""
+
+    array: Optional[np.ndarray] = None
+    generation: int = 0
+
+
+_EQUIRECT_ENV = _EquirectEnv()
 
 
 def set_equirect_env(array: Optional[np.ndarray]) -> int:
@@ -102,21 +109,21 @@ def set_equirect_env(array: Optional[np.ndarray]) -> int:
     built :class:`IBLProbe` rebuilds against the new environment.
     """
     if array is None:
-        _EQUIRECT_ENV['array'] = None
+        _EQUIRECT_ENV.array = None
     else:
-        _EQUIRECT_ENV['array'] = np.ascontiguousarray(array, dtype=np.float32)
-    _EQUIRECT_ENV['generation'] += 1
-    return _EQUIRECT_ENV['generation']
+        _EQUIRECT_ENV.array = np.ascontiguousarray(array, dtype=np.float32)
+    _EQUIRECT_ENV.generation += 1
+    return _EQUIRECT_ENV.generation
 
 
 def get_equirect_env() -> Optional[np.ndarray]:
     """The registered equirectangular HDR env array, or None."""
-    return _EQUIRECT_ENV['array']
+    return _EQUIRECT_ENV.array
 
 
 def equirect_env_generation() -> int:
     """Monotonic counter bumped on every :func:`set_equirect_env` call."""
-    return _EQUIRECT_ENV['generation']
+    return _EQUIRECT_ENV.generation
 
 
 def equirect_hdr_path() -> Optional[str]:
@@ -681,7 +688,7 @@ class IBLProbe(object):
 try:
     from OpenGL.GL import glDeleteProgram
 except Exception:  # pragma: no cover
-    def glDeleteProgram(_prog: Any) -> None:
+    def glDeleteProgram(program: int) -> None:
         pass
 
 

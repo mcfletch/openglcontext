@@ -67,7 +67,7 @@ class FixedStepClock:
     counts_frames = True
 
     def __init__(self, fps: float | tuple[int, int] = 60,
-                 start: float | None = None):
+                 start: float | None = None) -> None:
         numerator, denominator = self._as_ratio(fps)
         if numerator <= 0 or denominator <= 0:
             raise ValueError(f'frame rate must be positive, not {fps!r}')

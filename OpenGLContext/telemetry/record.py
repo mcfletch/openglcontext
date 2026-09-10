@@ -136,7 +136,7 @@ class _LogRelay(logging.Handler):
     the write that fails.
     """
 
-    def __init__(self, recorder: SessionRecorder, level: int = logging.WARNING):
+    def __init__(self, recorder: SessionRecorder, level: int = logging.WARNING) -> None:
         super().__init__(level)
         self.recorder = recorder
 

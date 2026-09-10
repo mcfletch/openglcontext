@@ -1,4 +1,8 @@
 """VRML97-like Text node"""
+from __future__ import annotations
+
+from typing import Any
+
 from vrml.vrml97 import basenodes
 from OpenGLContext.scenegraph.text import fontprovider
 from vrml import cache
@@ -28,11 +32,11 @@ class Text( basenodes.Text ):
     """
     def render(
         self,
-        visible = 1, # can skip normals and textures if not
-        lit = 1, # can skip normals if not
-        textured = 1, # can skip textureCoordinates if not
-        mode = None, # the renderpass object
-    ):
+        visible: int = 1, # can skip normals and textures if not
+        lit: int = 1, # can skip normals if not
+        textured: int = 1, # can skip textureCoordinates if not
+        mode: Any = None, # the renderpass object
+    ) -> Any:
         """Render a text-node
 
         Depending on the geometry format of the text,
@@ -48,13 +52,14 @@ class Text( basenodes.Text ):
             return font.render( lines, fontStyle=self.fontStyle, mode=mode )
         else:
             return 0
-    def compile( self, mode=None ):
+    def compile( self, mode: Any = None ) -> tuple[Any, Any, Any]:
         """Compile the text node to provider, font, lines-set"""
         value = '\n'.join( self.string )
         provider, font = fontprovider.FontProvider.getProviderFont(
             self.fontStyle,
             mode=mode
         )
+        dataSet: tuple[Any, Any, Any]
         if (not provider) or (not font):
             dataSet = (None,None,None)
         else:

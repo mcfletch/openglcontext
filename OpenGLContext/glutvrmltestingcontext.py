@@ -1,5 +1,7 @@
-"""VRML97 context for GLUT
+"""VRML97 context for GLUT, with a pop-up menu of worlds to load
 """
+from typing import Any, List
+
 from OpenGLContext import glutinteractivecontext
 from OpenGLContext import vrmlcontext
 import os
@@ -11,12 +13,15 @@ class VRMLContext(
     glutinteractivecontext.GLUTInteractiveContext
 ):
     """GLUT-specific VRML97-aware Testing Context"""
-    worldPaths = []
-    def createMenus( self ):
+    #: What each menu entry loads, indexed by the entry's own value.  Per
+    #: instance, since it is built with the menus and indexed by them.
+    worldPaths: List[str] = []
+    def createMenus( self ) -> Any:
         """Create pop-up menus for the VRML97 context"""
         # get the list of all VRML97 files in our sub-directory
         from OpenGLContext import tests
         from OpenGLContext.tests.resources import test_vrml_set_txt
+        self.worldPaths = []
         base = os.path.join( os.path.dirname( tests.__file__ ), 'wrls', '*.wrl' )
         paths = glob.glob( base )
         fileMenu = glutCreateMenu(self.OnMenuLoad)
@@ -38,7 +43,7 @@ class VRMLContext(
         glutAddSubMenu( "Load URL", urlMenu )
         glutAttachMenu(GLUT_MIDDLE_BUTTON)
         return loadMenu
-    def OnMenuLoad( self, item ):
+    def OnMenuLoad( self, item: int ) -> None:
         """React to a menu-load event"""
         self.load( self.worldPaths[ item ] )
         self.platform.setPosition( self.initialPosition )

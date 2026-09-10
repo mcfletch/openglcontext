@@ -2,6 +2,7 @@
 
 from gettext import gettext as _
 import logging
+from typing import Any, Dict, List, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -9,23 +10,25 @@ log = logging.getLogger(__name__)
 class MovementManager(object):
     """Base class for movement interaction controllers"""
 
-    commands = [
-        # User-name, key, function-name
+    #: User-name, key, function-name for each command the manager offers.
+    commands: List[Tuple[str, str, str]] = [
         (_("Examine"), "examine", "startExamineMode"),
         (_("Pan"), "pan", "startPanMode"),
         (_("Zoom In"), "zoomin", "zoomIn"),
         (_("Zoom Out"), "zoomout", "zoomOut"),
     ]
-    commandBindings = dict(
-        # key : { addEventHandler parameters }
-    )
-    context = None
+    #: key -> the ``addEventHandler`` parameters that raise that command.
+    commandBindings: Dict[str, Dict[str, Any]] = {}
+    #: The context this manager is bound to; None until :meth:`bind`.  It is a
+    #: window-owning Context of whichever backend is running, so it is reached
+    #: by what it can do rather than by a declared type.
+    context: Any = None
 
-    def __init__(self, platform):
+    def __init__(self, platform: Any) -> None:
         """Initialize direct movement with the platform it controls"""
         self.platform = platform
 
-    def bind(self, context):
+    def bind(self, context: Any) -> None:
         """Bind this navigation mechanism to the context"""
         self.context = context
         log.info("Binding %r movement manager", self)
@@ -44,7 +47,7 @@ class MovementManager(object):
                         self.__class__.__name__,
                     )
 
-    def unbind(self, context):
+    def unbind(self, context: Any) -> None:
         """Unbind this navigation mechanism from the context"""
         log.info("Unbinding %r movement manager", self)
         for _title, key, _function in self.commands:
@@ -54,7 +57,7 @@ class MovementManager(object):
                 context.addEventHandler(function=func, **binding)
         self.context = None
 
-    def startExamineMode(self, event):
+    def startExamineMode(self, event: Any) -> Any:
         """(callback) Orbit the view about what the pointer is on
 
         This callback creates an instance of
@@ -64,13 +67,13 @@ class MovementManager(object):
         """
         return self._startGesture(event)
 
-    def startPanMode(self, event):
+    def startPanMode(self, event: Any) -> Any:
         """(callback) Carry the scene across the view with the pointer"""
         from OpenGLContext.move import examinemanager
 
         return self._startGesture(event, gesture=examinemanager.PAN)
 
-    def _startGesture(self, event, gesture=None):
+    def _startGesture(self, event: Any, gesture: Optional[str] = None) -> Any:
         """Begin one examine gesture about the point the pointer is on"""
         from OpenGLContext.move import examinemanager
 
@@ -87,19 +90,19 @@ class MovementManager(object):
             gesture=gesture or examinemanager.ROTATE,
         )
 
-    def zoomIn(self, event):
+    def zoomIn(self, event: Any) -> Any:
         """(callback) Move one wheel notch toward what is being looked at"""
         from OpenGLContext.move import examinemanager
 
         return self._dolly(event, examinemanager.DOLLY_STEP)
 
-    def zoomOut(self, event):
+    def zoomOut(self, event: Any) -> Any:
         """(callback) Move one wheel notch away from what is being looked at"""
         from OpenGLContext.move import examinemanager
 
         return self._dolly(event, 1.0 / examinemanager.DOLLY_STEP)
 
-    def _dolly(self, event, factor):
+    def _dolly(self, event: Any, factor: float) -> None:
         """Move the camera along the line to the pivot, keeping its aim
 
         The same pivot an examine drag would use, so scrolling and dragging

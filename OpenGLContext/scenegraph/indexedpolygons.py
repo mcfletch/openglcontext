@@ -1,5 +1,7 @@
 """Indexed data array geometry type"""
 
+from typing import Any
+
 from vrml.vrml97 import nodetypes
 from vrml import node, field, protofunctions
 from OpenGLContext.scenegraph import coordinatebounded
@@ -12,11 +14,15 @@ from OpenGL.GL import *
 from OpenGLContext.arrays import *
 import logging
 
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
+
 log = logging.getLogger(__name__)
-from math import pi
 
-
-def triangulate_index(index, polygonSides):
+def triangulate_index(index: Any, polygonSides: int) -> Any:
     """``index`` rewritten as triangles, for whatever ``polygonSides`` names.
 
     ``polygonSides`` is a vertex count -- 3 or 4 -- or ``GL_QUAD_STRIP``, the
@@ -62,14 +68,14 @@ def triangulate_index(index, polygonSides):
 
 
 class Holder(object):
-    """Substitutes as object to hold vbo values"""
+    """Holds the four vertex arrays as plain client-memory arrays"""
 
-    coord = None
-    normal = None
-    color = None
-    texCoord = None
+    coord: Any = None
+    normal: Any = None
+    color: Any = None
+    texCoord: Any = None
 
-    def _enableColors(self, node):
+    def _enableColors(self, node: Any) -> int:
         """Enable the colour array if possible"""
         color = self.color
         if color is not None:
@@ -82,7 +88,7 @@ class Holder(object):
         else:
             return 0
 
-    def _enableNormals(self, node):
+    def _enableNormals(self, node: Any) -> int:
         """Enable the normal array if possible"""
         normal = self.normal
         if normal is not None:
@@ -98,7 +104,7 @@ class Holder(object):
             )
             return 0
 
-    def _enableTextures(self, node):
+    def _enableTextures(self, node: Any) -> int:
         """Enable the normal array if possible"""
         tex = self.texCoord
         if tex is not None:
@@ -108,7 +114,7 @@ class Holder(object):
         else:
             return 0
 
-    def _enableCoords(self, node):
+    def _enableCoords(self, node: Any) -> int:
         """Enable the point array if possible"""
         coord = self.coord
         if coord is not None:
@@ -120,9 +126,9 @@ class Holder(object):
 
 
 class VBOHolder(Holder):
-    """VBO-based holder"""
+    """Holds the four vertex arrays as buffer objects on the card"""
 
-    def _enableColors(self, node):
+    def _enableColors(self, node: Any) -> int:
         """Enable the colour array if possible"""
         color = self.color
         if color is not None:
@@ -139,7 +145,7 @@ class VBOHolder(Holder):
         else:
             return 0
 
-    def _enableNormals(self, node):
+    def _enableNormals(self, node: Any) -> int:
         """Enable the normal array if possible"""
         normal = self.normal
         if normal is not None:
@@ -159,7 +165,7 @@ class VBOHolder(Holder):
             )
             return 0
 
-    def _enableTextures(self, node):
+    def _enableTextures(self, node: Any) -> int:
         """Enable the normal array if possible"""
         tex = self.texCoord
         if tex is not None:
@@ -173,7 +179,7 @@ class VBOHolder(Holder):
         else:
             return 0
 
-    def _enableCoords(self, node):
+    def _enableCoords(self, node: Any) -> int:
         """Enable the point array if possible"""
         coord = self.coord
         if coord is not None:
@@ -215,7 +221,7 @@ class IndexedPolygons(
     Basically, the IndexedPolygons node consists of
     a set of data arrays which are enabled or disabled
     by their presence in the node.  Rendering is
-    accomplished using the glDrawElementsui function,
+    accomplished using the glDrawElements function,
     which draws the indexed arrays using the indices
     given.  This allows for very efficient updating
     of the data arrays, since the data arrays are not
@@ -234,12 +240,12 @@ class IndexedPolygons(
 
     def render(
         self,
-        visible=1,  # can skip normals and textures if not
-        lit=1,  # can skip normals if not
-        textured=1,  # can skip textureCoordinates if not
-        transparent=0,  # need to sort triangle geometry...
-        mode=None,  # the renderpass object for which we compile
-    ):
+        visible: int = 1,  # can skip normals and textures if not
+        lit: int = 1,  # can skip normals if not
+        textured: int = 1,  # can skip textureCoordinates if not
+        transparent: int = 0,  # need to sort triangle geometry...
+        mode: Any = None,  # the renderpass object for which we compile
+    ) -> int:
         """Render the IndexedPolygons
 
         visible -- can skip normals and textures if not
@@ -287,16 +293,14 @@ class IndexedPolygons(
             if visible and transparent:
                 self.drawTransparent(constant, mode=mode)
             else:
-                glDrawElementsui(
-                    constant,
-                    self.index,
-                )
+                index = ascontiguousarray(self.index, "I")
+                glDrawElements(constant, index.size, GL_UNSIGNED_INT, index)
         finally:
             glPopAttrib()
             glPopClientAttrib()
         return 1
 
-    def _triangle_index(self, mode):
+    def _triangle_index(self, mode: Any) -> Any:
         """This node's index as triangles, cached against index and polygonSides.
 
         A quad or a quad strip is rewritten by :func:`triangulate_index`; a node
@@ -310,11 +314,11 @@ class IndexedPolygons(
                 holder.depend(self, name)
         return index
 
-    def _get_index_vbo(self, mode):
+    def _get_index_vbo(self, mode: Any) -> Any:
         """Element-array VBO of the triangle index, cached and index-versioned."""
         ivbo = mode.cache.getData(self, key="shader_index")
         if ivbo is None:
-            ivbo = vbo.VBO(
+            ivbo = VBO(
                 ascontiguousarray(self._triangle_index(mode), "I"),
                 target="GL_ELEMENT_ARRAY_BUFFER")
             holder = mode.cache.holder(self, ivbo, key="shader_index")
@@ -322,7 +326,14 @@ class IndexedPolygons(
                 holder.depend(self, name)
         return ivbo
 
-    def _render_shader(self, mode, visible=1, lit=1, textured=1, transparent=0):
+    def _render_shader(
+        self,
+        mode: Any,
+        visible: int = 1,
+        lit: int = 1,
+        textured: int = 1,
+        transparent: int = 0,
+    ) -> int:
         """Core-profile shader rendering path (mirrors ArrayGeometry/Quadric).
 
         Draws the equal-indexed position/normal/texcoord arrays with the VRML97
@@ -330,8 +341,6 @@ class IndexedPolygons(
         node naming quads or a quad strip has its index rewritten into triangles
         once and cached; see :func:`triangulate_index`.
         """
-        from OpenGLContext.scenegraph import shadergeometry as sg
-
         shader_program = getattr(mode, "shader_program", None)
         if shader_program is None or shader_program.program is None:
             return 1
@@ -360,11 +369,12 @@ class IndexedPolygons(
         ), owner=self, where='IndexedPolygons')
         return 1
 
-    def drawTransparent(self, constant, mode=None):
-        """Fairly complex mechanism for drawing sorted polygons"""
-        # we have to create a temporary array of centres for
-        # each polygon, that requires taking the centres and then
-        # creating an index-set that re-orders the polygons...
+    def drawTransparent(self, constant: int, mode: Any = None) -> None:
+        """Draw the polygons back to front, which is the order blending needs
+
+        The polygon centres are in the node's own coordinates, so they are
+        cached and only their projection is redone each pass.
+        """
         centers = mode.cache.getData(self, key="centers")
         if centers is None:
             ## cache centers for future rendering passes...
@@ -376,8 +386,7 @@ class IndexedPolygons(
             )
             holder = mode.cache.holder(self, key="centers", data=centers)
             for name in ("polygonSides", "index", "coord"):
-                field = protofunctions.getField(self, name)
-                holder.depend(self, field)
+                holder.depend(self, protofunctions.getField(self, name))
             for n, attr in [
                 (self.coord, "point"),
             ]:
@@ -386,23 +395,16 @@ class IndexedPolygons(
         assert centers is not None
 
         # get distances to the viewer
-        centers = polygonsort.distances(
+        distances = polygonsort.distances(
             centers,
             modelView=mode.getModelView(),
             projection=mode.getProjection(),
             viewport=mode.getViewport(),
         )
-        assert len(centers) == len(self.index) // self.polygonSides
-        # get the center indices in sorted order
-        indices = argsort(centers)
-        sortedIndices = self.index[:]
-        sortedIndices = reshape(sortedIndices, (-1, self.polygonSides))
-        sortedIndices = take(sortedIndices, indices, 0)
-        # okay, now we can render...
-        glDrawElementsui(
-            constant,
-            sortedIndices,
-        )
+        assert len(distances) == len(self.index) // self.polygonSides
+        sortedIndices = ascontiguousarray(
+            polygonsort.sortIndex(self.index, distances, self.polygonSides), "I")
+        glDrawElements(constant, sortedIndices.size, GL_UNSIGNED_INT, sortedIndices)
 
     NODE_FIELDS = [
         ("coord", "point"),
@@ -411,41 +413,35 @@ class IndexedPolygons(
         ("texCoord", "point"),
     ]
 
-    def get_vbos(self, mode):
-        """Retrieve vertex buffer object source if we support them or None if not"""
-        if vbo.get_implementation():
-            vbos = mode.cache.getData(self, key="vbos")
-            if vbos is None:
-                vbos = VBOHolder()
-                # compile our data to a set of vbos
-                holder = mode.cache.holder(self, key="vbos", data=vbos)
-                for field, attr in self.NODE_FIELDS:
-                    node = getattr(self, field)
-                    value = getattr(node, attr, None)
-                    if value is not None:
-                        setattr(vbos, field, vbo.VBO(value))
-                        # TODO: this is *way* too general, as it will
-                        # cause the *entire* set of VBOs to be discarded
-                        # and recreated whenever *anything* changes!
-                        holder.depend(node, attr)
-                        holder.depend(self, field)
-                holder.depend(self, "index")
-        else:
+    def get_vbos(self, mode: Any) -> Holder:
+        """The holder carrying this node's vertex arrays for the pointer calls
+
+        A driver with buffer objects gets a :class:`VBOHolder`, uploaded once
+        and cached against the fields it was built from.  Without them the
+        pointer calls have to be handed client memory, so the arrays go into a
+        plain :class:`Holder` as they are.
+        """
+        if not vbo.get_implementation():
             vbos = Holder()
-            for field, attr in self.NODE_FIELDS:
-                node = getattr(self, field)
-                if node:
-                    value = getattr(node, attr, ())
-                    setattr(vbos, field, vbo.VBO(value))
-
+            for fieldName, attr in self.NODE_FIELDS:
+                value = getattr(getattr(self, fieldName), attr, None)
+                if value is not None:
+                    setattr(vbos, fieldName, value)
+            return vbos
+        vbos = mode.cache.getData(self, key="vbos")
+        if vbos is None:
+            vbos = VBOHolder()
+            # compile our data to a set of vbos
+            holder = mode.cache.holder(self, key="vbos", data=vbos)
+            for fieldName, attr in self.NODE_FIELDS:
+                fieldNode = getattr(self, fieldName)
+                value = getattr(fieldNode, attr, None)
+                if value is not None:
+                    setattr(vbos, fieldName, VBO(value))
+                    # TODO: this is *way* too general, as it will
+                    # cause the *entire* set of VBOs to be discarded
+                    # and recreated whenever *anything* changes!
+                    holder.depend(fieldNode, attr)
+                    holder.depend(self, fieldName)
+            holder.depend(self, "index")
         return vbos
-
-    def callBound(self, function, array):
-        if hasattr(array, "bind"):
-            array.bind()
-            try:
-                return function(array)
-            finally:
-                array.unbind()
-        else:
-            return function(array)

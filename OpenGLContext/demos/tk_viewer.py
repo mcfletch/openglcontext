@@ -33,6 +33,7 @@ for Qt in ``OpenGLContext_qt.demos.qt_viewer``.
 import sys
 import tkinter
 from tkinter import filedialog, simpledialog, ttk
+from typing import Any, List, Optional, Sequence, Tuple
 
 from pydispatch import dispatcher
 
@@ -52,7 +53,7 @@ SCENE_FILES = [('Scenes', '*.gltf *.glb *.wrl *.wrz *.obj *.json'),
 class SceneView(viewerFor('tk')):  # type: ignore[misc]  # base chosen at run time
     """The engine's viewer, as one widget in somebody else's window"""
 
-    def hasSceneToShow(self):
+    def hasSceneToShow(self) -> bool:
         """The host opens scenes, so the engine's launch screen stays down
 
         Starting with nothing to show is a viewer with its shelf open, which is
@@ -63,12 +64,12 @@ class SceneView(viewerFor('tk')):  # type: ignore[misc]  # base chosen at run ti
         return True
 
 
-def rowId(path):
+def rowId(path: Sequence[int]) -> str:
     """The tree item id for an outline path; :func:`pathOf` is its inverse"""
     return 'row:' + '.'.join(str(index) for index in path)
 
 
-def pathOf(itemId):
+def pathOf(itemId: str) -> Optional[Tuple[int, ...]]:
     """The outline path an item id stands for, or None where it stands for none
 
     Not every item in the tree is a row of the outline: a row waiting to be
@@ -84,7 +85,7 @@ def pathOf(itemId):
 class ViewerApplication:
     """A window with a menu, a scene tree, and a view of the scene"""
 
-    def __init__(self, source=None):
+    def __init__(self, source: Optional[str] = None) -> None:
         self.root = tkinter.Tk()
         self.root.title('OpenGLContext in Tk')
         self.root.geometry('960x600')
@@ -113,9 +114,9 @@ class ViewerApplication:
         self.outline = SceneOutline(self.context.sg)
         #: The scene the tree was filled from, so one that arrives on the
         #: worker thread is noticed as it is swapped in.
-        self.shownScene = None
+        self.shownScene: Any = None
         #: The node the detail panel is following, if any.
-        self.watching = None
+        self.watching: Any = None
 
         self.showDetail()
         if source:
@@ -123,7 +124,7 @@ class ViewerApplication:
         self.root.after(FRAME_INTERVAL, self.onFrame)
 
     # -- building the window ----------------------------------------------
-    def buildMenu(self):
+    def buildMenu(self) -> None:
         """The application's own menu bar, over the engine's two entry points"""
         menubar = tkinter.Menu(self.root)
         fileMenu = tkinter.Menu(menubar, tearoff=False)
@@ -138,7 +139,7 @@ class ViewerApplication:
         self.root.bind_all('<Control-o>', self.onOpenFile)
         self.root.bind_all('<Control-q>', self.onQuit)
 
-    def buildPanel(self, parent):
+    def buildPanel(self, parent: Any) -> ttk.Frame:
         """The tree of the scene, and what the selected node holds"""
         panel = ttk.Frame(parent)
         self.tree = ttk.Treeview(panel, columns=('field',), selectmode='browse')
@@ -158,19 +159,19 @@ class ViewerApplication:
         return panel
 
     # -- the menu ---------------------------------------------------------
-    def onOpenFile(self, event=None):
+    def onOpenFile(self, event: Any = None) -> None:
         chosen = filedialog.askopenfilename(
             parent=self.root, title='Open a scene', filetypes=SCENE_FILES)
         if chosen:
             self.open(chosen)
 
-    def onOpenURL(self, event=None):
+    def onOpenURL(self, event: Any = None) -> None:
         typed = simpledialog.askstring('Open URL', 'Address of a scene:',
                                        parent=self.root)
         if typed:
             self.open(typed)
 
-    def onQuit(self, event=None):
+    def onQuit(self, event: Any = None) -> None:
         """Let go of the scene, the GL context and the window, in that order
 
         The host owns the loop, so quitting is destroying the window rather
@@ -182,7 +183,7 @@ class ViewerApplication:
         self.context.releaseWindow()
         self.root.destroy()
 
-    def open(self, source):
+    def open(self, source: str) -> None:
         """Show *source*, which may be a path or a URL
 
         The load runs on a worker thread, so this returns at once and the
@@ -192,7 +193,7 @@ class ViewerApplication:
         self.context.openSource(source)
 
     # -- the frame --------------------------------------------------------
-    def onFrame(self):
+    def onFrame(self) -> None:
         """One iteration of the engine's loop, driven from Tk's timer
 
         ``loopIteration`` answers False once the view is finished -- quit from
@@ -216,7 +217,7 @@ class ViewerApplication:
         self.root.after(FRAME_INTERVAL, self.onFrame)
 
     # -- the tree ---------------------------------------------------------
-    def fillTree(self):
+    def fillTree(self) -> None:
         """Put the outline's rows in the Treeview, as it stands now
 
         The rows are replaced wholesale rather than reconciled, so the
@@ -241,27 +242,27 @@ class ViewerApplication:
         if self.tree.exists(focused):
             self.tree.focus(focused)
 
-    def onOpenRow(self, event=None):
+    def onOpenRow(self, event: Any = None) -> None:
         """The arrow beside a row was clicked: open it in the model too"""
         path = pathOf(self.tree.focus())
         if path is not None:
             self.outline.expand(path)
             self.fillTree()
 
-    def onCloseRow(self, event=None):
+    def onCloseRow(self, event: Any = None) -> None:
         path = pathOf(self.tree.focus())
         if path is not None:
             self.outline.collapse(path)
             self.fillTree()
 
-    def onSelect(self, event=None):
+    def onSelect(self, event: Any = None) -> None:
         chosen = self.tree.selection()
         self.outline.select(pathOf(chosen[0]) if chosen else None)
         self.watch(self.outline.selected)
         self.showDetail()
 
     # -- watching the selected node ---------------------------------------
-    def watch(self, node):
+    def watch(self, node: Any) -> None:
         """Follow *node*'s fields, and stop following whatever came before
 
         Every field of every node announces a change through pydispatcher, so
@@ -274,7 +275,8 @@ class ViewerApplication:
         if node is not None:
             dispatcher.connect(self.onNodeChanged, sender=node)
 
-    def onNodeChanged(self, signal=None, sender=None, **named):
+    def onNodeChanged(self, signal: Any = None, sender: Any = None,
+                      **named: Any) -> None:
         """A field of the selected node changed, on whichever thread did it
 
         Tk's widgets belong to Tk's thread, so this asks for the panel to be
@@ -282,11 +284,11 @@ class ViewerApplication:
         """
         self.root.after_idle(self.showDetail)
 
-    def showDetail(self):
+    def showDetail(self) -> None:
         """Redraw the panel: what the selected node is, and what it holds"""
         row = self.outline.selectedRow
         if row is None:
-            lines = ['Nothing selected']
+            lines: List[str] = ['Nothing selected']
         else:
             lines = ['%s %s' % (row.nodeType, row.defName) if row.defName
                      else row.nodeType]
@@ -296,11 +298,11 @@ class ViewerApplication:
         self.detail.insert('1.0', '\n'.join(lines))
         self.detail.config(state='disabled')
 
-    def run(self):
+    def run(self) -> None:
         self.root.mainloop()
 
 
-def main(argv=None):
+def main(argv: Optional[List[str]] = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     ViewerApplication(source=argv[0] if argv else None).run()
     return 0

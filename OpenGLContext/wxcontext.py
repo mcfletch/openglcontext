@@ -24,22 +24,17 @@ if '__WXGTK__' in wx.PlatformInfo and 'gtk3' in wx.PlatformInfo:
                 "Set PYOPENGL_PLATFORM=egl before importing OpenGL."
             )
 
+from io import BytesIO
+from typing import Any, List, Optional, Tuple
+
 from wx import glcanvas
 #from wx.glcanvas import *
 from OpenGL.GL import *
 from OpenGLContext import context
+from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events import wxevents
 import logging
 log = logging.getLogger( __name__ )
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from io import BytesIO as StringIO
-
-if wx.VERSION >= (4,):
-    USE_CONTEXT = True
-else:
-    USE_CONTEXT = False
 
 class wxContext(
     glcanvas.GLCanvas, # wxPython OpenGL context
@@ -54,23 +49,26 @@ class wxContext(
     most users wanting to use the wxInteractiveContext class,
     which provides navigation and examination support.
     """
-    init = None
+    init: Optional[int] = None
     calledDoInit = 0
+    #: Settled by the constructor before the canvas exists, so it is never None
+    #: for a context that was built.
+    contextDefinition: ContextDefinition
     #: True while the pointer is hidden and being warped back to the middle of
     #: the canvas for a mouse-look mode.
     _pointerGrabbed = False
     #: Where the pointer was last warped to, so the movement the warp itself
     #: generates can be told from a real one.
-    _pointerWarpedTo = None
+    _pointerWarpedTo: Optional[Tuple[int, int]] = None
     #: Set once this canvas's GL objects have been let go, so quitting and the
     #: canvas's own destruction do not both do it.
     _released = False
     def __init__(
-        self, parent, definition=None, 
-        id=-1, pos= wx.DefaultPosition, 
-        style = wx.WANTS_CHARS, name = "GLContext", 
-        **named
-    ):
+        self, parent: Any, definition: Any = None,
+        id: int = -1, pos: Any = wx.DefaultPosition,
+        style: int = wx.WANTS_CHARS, name: str = "GLContext",
+        **named: Any
+    ) -> None:
         """Initialize the wxContext object and window
 
         parent -- wx.Window parent of the context window
@@ -94,34 +92,26 @@ class wxContext(
         # context attributes below are both built from it -- see
         # Context.resolveDefinition.
         definition = self.resolveDefinition( definition, **named )
-        if USE_CONTEXT:
-            # wxPython Phoenix (4+) has a separate context object...
-            glcanvas.GLCanvas.__init__(
-                self, parent, id=id, pos=pos,
-                size = tuple(int(x) for x in definition.size), style=style, name=name,
-                attribList = self.wxFlagsFromDefinition(definition),
+        glcanvas.GLCanvas.__init__(
+            self, parent, id=id, pos=pos,
+            size = tuple(int(x) for x in definition.size), style=style, name=name,
+            attribList = self.wxFlagsFromDefinition(definition),
+        )
+        # Create context attributes for profile/version selection
+        ctx_attrs = self._wxContextAttrsFromDefinition(definition)
+        self._wx_context = glcanvas.GLContext(
+            self,
+            None,
+            ctx_attrs,
+        )
+        if not self._wx_context.IsOK():
+            log.warning(
+                "Failed to create OpenGL context with requested profile=%s, version=%s. "
+                "Falling back to default context.",
+                definition.profile, definition.version
             )
-            # Create context attributes for profile/version selection
-            ctx_attrs = self._wxContextAttrsFromDefinition(definition)
-            self._wx_context = glcanvas.GLContext(
-                self,
-                None,
-                ctx_attrs,
-            )
-            if not self._wx_context.IsOK():
-                log.warning(
-                    "Failed to create OpenGL context with requested profile=%s, version=%s. "
-                    "Falling back to default context.",
-                    definition.profile, definition.version
-                )
-                # Fallback to default context without specific profile/version
-                self._wx_context = glcanvas.GLContext(self, None)
-        else:
-            glcanvas.GLCanvas.__init__(
-                self, parent, id=id, pos=pos,
-                size = tuple(int(x) for x in definition.size), style=style, name=name,
-                attribList = self.wxFlagsFromDefinition(definition)
-            )
+            # Fallback to default context without specific profile/version
+            self._wx_context = glcanvas.GLContext(self, None)
         # Showing is a step of its own here, so hiding is not taking one.  See
         # renderoptions.hidden_window: rendering and reading back are
         # unaffected, and a suite of GL scripts should not take over the screen
@@ -131,9 +121,9 @@ class wxContext(
             self.Show( )
         context.Context.__init__ (self, definition)
     @classmethod
-    def wxFlagsFromDefinition( cls, definition ):
+    def wxFlagsFromDefinition( cls, definition: Any ) -> List[int]:
         """Determine the flags to pass to he initialiser (attribList)"""
-        attributes = []
+        attributes: List[int] = []
         if definition.rgb:
             attributes.append( glcanvas.WX_GL_RGBA )
         else:
@@ -162,7 +152,7 @@ class wxContext(
         return attributes
 
     @classmethod
-    def _wxContextAttrsFromDefinition(cls, definition):
+    def _wxContextAttrsFromDefinition(cls, definition: Any) -> Any:
         """Create GLContextAttrs for profile/version selection (wxPython 4+).
 
         Supports core profile via OPENGLCONTEXT_PROFILE=core environment variable.
@@ -197,7 +187,7 @@ class wxContext(
         attrs.EndList()
         return attrs
 
-    def DoInit( self ):
+    def DoInit( self ) -> None:
         """Call the OnInit method at a time when the context is valid
 
         This method provides a customization point where
@@ -218,7 +208,7 @@ class wxContext(
         self.Bind(wx.EVT_WINDOW_CREATE, self._OnInitCallback)
 ##		else:
 ##			self._OnInitCallback()
-    def _OnInitCallback( self, event=None ):
+    def _OnInitCallback( self, event: Any = None ) -> None:
         """Callback for GTK initialisation-finished event
 
         On all platforms other than GTK, will be called
@@ -232,7 +222,7 @@ class wxContext(
         if not self.calledDoInit:
             self.calledDoInit = 1
             context.Context.DoInit( self )
-    def setupCallbacks( self ):
+    def setupCallbacks( self ) -> None:
         """Setup various callbacks for this context
 
         Binds most of the wxPython event types to callbacks on this
@@ -273,7 +263,7 @@ class wxContext(
             if hasattr( self, 'OnIdle' ):
                 self.Bind(wx.EVT_IDLE, self.wxOnIdle )
 
-    def ProcessEvent( self, event ):
+    def ProcessEvent( self, event: Any ) -> Any:
         """Dispatch events to appropriate engine based on event type
 
         Because the method named "ProcessEvent" is used by both
@@ -290,7 +280,7 @@ class wxContext(
         else:
             return wxevents.EventHandlerMixin.ProcessEvent( self, event )
 
-    def wxOnPaint(self, event):
+    def wxOnPaint(self, event: Any) -> None:
         """Callback: Called for each paint event
 
         wxOnPaint is responsible for doing all of the processing
@@ -318,7 +308,7 @@ class wxContext(
         self.unsetCurrent()
         self.triggerRedraw(1)
 
-    def wxOnIdle( self, event ):
+    def wxOnIdle( self, event: Any ) -> None:
         """Callback: Handle wxPython idle event notification
 
         The major function of this callback is to virtualize
@@ -330,7 +320,7 @@ class wxContext(
                 wx.Yield()
         event.RequestMore()
 
-    def wxOnSize(self, event):
+    def wxOnSize(self, event: Any) -> None:
         """Handle window re-size event
 
         We actually just trigger a redraw, as the
@@ -346,7 +336,7 @@ class wxContext(
         # commented out!
         #~ context.Context.OnResize( self ) # triggers a redraw
 
-    def _glHandle(self):
+    def _glHandle(self) -> Any:
         """The GL context handle the caches and PyOpenGL key on.
 
         wx owns the context object and does not hand out a platform handle, so
@@ -355,7 +345,7 @@ class wxContext(
         from OpenGLContext import contextresources
         return contextresources.context_key()
 
-    def OnQuit(self, event=None):
+    def OnQuit(self, event: Any = None) -> Any:
         """Let go of this canvas's GL objects, then end the application
 
         The release happens **here** as well as on the canvas's destruction,
@@ -367,7 +357,7 @@ class wxContext(
         self.releaseWindow()
         return context.Context.OnQuit(self, event)
 
-    def releaseWindow(self):
+    def releaseWindow(self) -> None:
         """Drop this context's GL objects, with its context current
 
         The caches may *delete* what they hold rather than merely forget it,
@@ -388,14 +378,14 @@ class wxContext(
         finally:
             self.unsetCurrent()
 
-    def wxOnWindowDestroy(self, event):
+    def wxOnWindowDestroy(self, event: Any) -> None:
         """Let go of this context's GL objects as the canvas is destroyed."""
         event.Skip()
         if event.GetEventObject() is not self:
             return                      # a child's destruction, not ours
         self.releaseWindow()
 
-    def wxOnEraseBackground(self, event):
+    def wxOnEraseBackground(self, event: Any) -> None:
         """Prevent flashing of the window by capturing and ignoring background erase events
 
         As you might imagine, this is just a hack.
@@ -403,34 +393,21 @@ class wxContext(
         pass # Do nothing, to avoid flashing.
 
 
-    if USE_CONTEXT:
-        def setCurrent (self):
-            """Acquire the OpenGL "focus" (wx Pheonix version)
+    def setCurrent (self, blocking: int = 1) -> None:
+        """Acquire the OpenGL "focus"
 
-            Basically this just calls the GUI library SetCurrent
-            method after dispatching to the superclass's
-            implementation.
-            """
-            context.Context.setCurrent( self )
-            self.releaseForeignContext()
-            self._wx_context.SetCurrent(self)
-            self.bindContextResources( self._glHandle() )
-    else:
-        def setCurrent (self):
-            """Acquire the OpenGL "focus" (wxPython 3.x version)
-
-            Basically this just calls the GUI library SetCurrent
-            method after dispatching to the superclass's
-            implementation.
-            """
-            context.Context.setCurrent( self )
-            self.releaseForeignContext()
-            glcanvas.GLCanvas.SetCurrent(self)
-            self.bindContextResources( self._glHandle() )
-    def SwapBuffers (self): # happens to match the wx method
+        Basically this just calls the GUI library SetCurrent
+        method after dispatching to the superclass's
+        implementation.
+        """
+        context.Context.setCurrent( self, blocking )
+        self.releaseForeignContext()
+        self._wx_context.SetCurrent(self)
+        self.bindContextResources( self._glHandle() )
+    def SwapBuffers (self) -> None: # happens to match the wx method
         """Swap the GL buffers (force flush as we do)"""
         glcanvas.GLCanvas.SwapBuffers(self)
-    def setFullscreen( self, fullscreen ):
+    def setFullscreen( self, fullscreen: Any ) -> bool:
         """Fill the screen, or go back to a window.
 
         The frame the canvas sits in is what fills the screen -- a canvas
@@ -443,7 +420,7 @@ class wxContext(
         frame.ShowFullScreen( bool( fullscreen ) )
         return True
 
-    def pumpWindowEvents( self ):
+    def pumpWindowEvents( self ) -> bool:
         """Dispatch what wx has queued; see Context.pumpWindowEvents"""
         application = wx.GetApp()
         if application is None:
@@ -451,14 +428,14 @@ class wxContext(
         application.Yield( True )
         return True
 
-    def settingsChanged( self ):
+    def settingsChanged( self ) -> None:
         """Re-apply the window-level settings a changed definition affects."""
         from OpenGLContext import renderoptions
         self.applyVSync()
         self.setFullscreen( renderoptions.fullscreen_window( self ) )
         context.Context.settingsChanged( self )
 
-    def applyVSync( self, definition=None ):
+    def applyVSync( self, definition: Any = None ) -> bool:
         """Wait for the display's refresh, or don't (ContextDefinition.vsync)
 
         wx names nothing for this, so it goes to the window system's own
@@ -477,7 +454,7 @@ class wxContext(
         finally:
             self.unsetCurrent()
 
-    def setPointerCapture( self, capture ):
+    def setPointerCapture( self, capture: Any ) -> bool:
         """Hide the pointer and keep it in the window, for a mouse-look mode
 
         wx has no relative-motion mode, so the pointer is warped back to the
@@ -509,7 +486,7 @@ class wxContext(
             self.recentrePointer()
         return True
 
-    def recentrePointer( self ):
+    def recentrePointer( self ) -> None:
         """Put the pointer back in the middle of the canvas, if it is grabbed"""
         if not self._pointerGrabbed:
             return
@@ -518,7 +495,7 @@ class wxContext(
         self._pointerWarpedTo = middle
         self.WarpPointer( *middle )
 
-    def pointerWarpEcho( self, x, y ):
+    def pointerWarpEcho( self, x: float, y: float ) -> bool:
         """Whether this movement is the one :meth:`recentrePointer` caused
 
         A movement the program made itself is not motion the user asked for:
@@ -532,7 +509,7 @@ class wxContext(
         return echo
 
     @classmethod
-    def getDefaultIcons( cls ):
+    def getDefaultIcons( cls ) -> Any:
         """Get the OpenGLContext icons as a wxPython wxIconBundle
 
         You can call frame.SetIcons( bundle ) on the bundle returned
@@ -549,11 +526,11 @@ class wxContext(
             return bundle
 
     @classmethod
-    def ContextMainLoop( cls, *args, **named ):
+    def ContextMainLoop( cls, *args: Any, **named: Any ) -> None:
         """Initialise the context and start the mainloop"""
-        made = []
+        made: List['wxContext'] = []
         class ContextApp(wx.App):
-            def OnInit(self):
+            def OnInit(self) -> bool:
                 wx.InitAllImageHandlers()
                 frame = wx.Frame(
                     None, -1,
@@ -588,9 +565,9 @@ class wxContext(
                 instance.stopTelemetry( 'mainloop-ended' )
 
 
-def getIcon( data ):
+def getIcon( data: bytes ) -> Any:
     """Return the data from the resource as a wxIcon"""
-    stream = StringIO(data)
+    stream = BytesIO(data)
     image = wx.Image(stream)
     icon = wx.Icon()
     icon.CopyFromBitmap(wx.Bitmap(image))
@@ -600,10 +577,10 @@ def getIcon( data ):
 
 if __name__ == '__main__':
     from drawcube import drawCube
-    class TestContext(wxContext):
-        def Render(self, mode):
+    class TestRenderer(wxContext):
+        def Render(self, mode: Any = None) -> None:
             glTranslated(0, 0, -3)
             glRotated(30, 1, 0, 0)
             glRotated(40, 0, 1, 0)
             drawCube()
-    TestContext.ContextMainLoop()
+    TestRenderer.ContextMainLoop()

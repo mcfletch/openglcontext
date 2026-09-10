@@ -1,11 +1,16 @@
 """WGL font classes"""
+from __future__ import annotations
+
+from typing import Any
+
 from OpenGLContext.scenegraph.text import fontprovider, font
 from OpenGL.WGL import *
+# The WGL structures arrive from the declaration tables at import time, so
+# they need naming to be seen.
+from OpenGL.WGL import GLYPHMETRICSFLOAT
 from OpenGL.GL import *
 import win32ui
 import win32con
-import sys
-from OpenGL.WGL import *
 import logging
 
 log = logging.getLogger(__name__)
@@ -42,14 +47,14 @@ class WGLFont(font.Font):
     """
 
     format = ""
-    _lineHeight = 0
+    _lineHeight: float = 0
 
     def __init__(
         self,
-        fontStyle=None,
-        deviation=0.005,
-        extrusion=0.0,
-    ):
+        fontStyle: Any = None,
+        deviation: float = 0.005,
+        extrusion: float = 0.0,
+    ) -> None:
         self._displayLists = {}
         self.deviation = deviation
         self.extrusion = extrusion
@@ -57,7 +62,7 @@ class WGLFont(font.Font):
         if __debug__:
             log.info("""Created font %s""", self)
 
-    def lists(self, value, mode=None):
+    def lists(self, value: str, mode: Any = None) -> list[int]:
         """Get a sequence of display-list integers for value
 
         Basically, this does a bit of trickery to do
@@ -75,7 +80,7 @@ class WGLFont(font.Font):
         items = filter(None, map(self._displayLists.get, value))
         return [item[0] for item in items]
 
-    def fastCreate(self, source, mode=None):
+    def fastCreate(self, source: str, mode: Any = None) -> None:
         """Create display list & metrics for all items in char
 
         This is breaking for the "normal" pattern to minimise
@@ -86,21 +91,21 @@ class WGLFont(font.Font):
             log.debug("""  generating displaylists, %s""", repr(source))
         wgldc = wglGetCurrentDC()  # the DC that's doing the work
         dc = win32ui.CreateDCFromHandle(wgldc)
-        font = self._uiFont()
-        dc.SelectObject(font)
+        uiFont = self._uiFont()
+        dc.SelectObject(uiFont)
         for char in source:
             if char not in self._displayLists:
                 base, metrics = self._createSingleChar(wgldc, char)
                 self._displayLists[char] = (base, metrics)
 
-    def _uiFont(self):
+    def _uiFont(self) -> Any:
         """Get the appropriate UI-library font for this font
 
         Note: for some reason this object is _not_ properly
         reference counted.  You will need to hold a reference
         to it until _after_ you've called wglUseFont*
         """
-        specification = {
+        specification: dict[str, Any] = {
             "italic": None,
             "underline": None,
             "name": FAMILYMAPPING.get("SANS"),
@@ -115,8 +120,9 @@ class WGLFont(font.Font):
             specification["height"] = int(self.fontStyle.size * 12)
             # need weight seperated
             weight = win32con.FW_NORMAL
-            for wname, _weight in WEIGHTNAMES:
+            for wname, wvalue in WEIGHTNAMES:
                 if self.fontStyle.style.find(wname) >= 0:
+                    weight = wvalue
                     break
             specification["weight"] = weight
             if self.fontStyle.style.find("ITALIC") >= 0:
@@ -134,19 +140,26 @@ class WGLFont(font.Font):
             specification,
         )
 
-    def lineHeight(self, mode=None):
+    def lineHeight(self, mode: Any = None) -> float:
         """Compute the height of a line for this font
 
-        WGL doesn't really tell us this, so we fudge it...
+        WGL doesn't really tell us this, so we fudge it from the tallest
+        character rasterised so far.
         """
         if not self._lineHeight:
-            heights = []
-            for _b, m in self._displayLists.values():
-                heights.append(m.height)
+            heights = [m.height for _b, m in self._displayLists.values()]
+            if not heights:
+                log.warning(
+                    """lineHeight requested when no characters rasterised, """
+                    """0-height line may result"""
+                )
+                return 0
             self._lineHeight = max(heights)
         return self._lineHeight
 
-    def _createSingleChar(self, wgldc, char, base=None):
+    def _createSingleChar(
+        self, wgldc: Any, char: str, base: int | None = None
+    ) -> tuple[int, font.CharacterMetrics]:
         """Create the single-character (polygonal) display list
 
         Note:
@@ -169,7 +182,7 @@ class WGLFont(font.Font):
                 metrics,  # metrics float structure to be filled
             )
         except Exception:
-            print("""couldn't get outline for character""", repr(char))
+            log.warning("""Unable to get an outline for character %r""", char)
         realMetrics = font.CharacterMetrics(
             char,
             metrics.gmfCellIncX,
@@ -177,7 +190,7 @@ class WGLFont(font.Font):
         )
         return base, realMetrics
 
-    def createChar(self, char, mode=None):
+    def createChar(self, char: str, mode: Any = None) -> tuple[Any, font.CharacterMetrics]:
         """Create a single-character display list"""
         ##		import pdb
         ##		pdb.set_trace()
@@ -210,7 +223,9 @@ class WGLBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, WGLFont):
 
     format = "bitmap"
 
-    def _createSingleChar(self, wgldc, char, base=None):
+    def _createSingleChar(
+        self, wgldc: Any, char: str, base: int | None = None
+    ) -> tuple[int, font.CharacterMetrics]:
         """Create the single-character display list
 
         Because the Bitmap font doesn't get any information

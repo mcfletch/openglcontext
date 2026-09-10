@@ -1,5 +1,5 @@
 """Object managing OpenGL extension loading for a Context"""
-from typing import Any
+from typing import Any, Dict, List, Optional
 from OpenGL.GL import glGetString, GL_EXTENSIONS
 from OpenGL.GLU import gluGetString, GLU_EXTENSIONS
 import traceback
@@ -28,21 +28,21 @@ class ExtensionManager(object):
             the extension)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialise the extension manager
 
         This implementation simply creates the modules attribute.
         """
-        self.modules = {}
+        self.modules: Dict[str, Any] = {}
 
-    def hasExtension(self, moduleName):
+    def hasExtension(self, moduleName: str) -> bool:
         """Query whether an extension is currently loaded
 
         moduleName -- the "cleaned" module name being queried
         """
         return moduleName in self.modules and (not not self.modules.get(moduleName))
 
-    def initExtension(self, moduleName):
+    def initExtension(self, moduleName: str) -> Any:
         """Initialise an extension module for the context
 
         This must be called within a "setcurrent" environment
@@ -89,29 +89,33 @@ class ExtensionManager(object):
                 return None
 
     # convenience queries...
-    def listGL(self):
+    def listGL(self) -> List[bytes]:
         """Return list of OpenGL extension names"""
-        return glGetString(GL_EXTENSIONS).split()
+        names: List[bytes] = glGetString(GL_EXTENSIONS).split()
+        return names
 
-    def listGLU(self):
+    def listGLU(self) -> List[bytes]:
         """Return list of GLU extension names
 
         XXX This is currently broken with PyOpenGL 2.0.1
         """
-        return gluGetString(GLU_EXTENSIONS).split()
+        names: List[bytes] = gluGetString(GLU_EXTENSIONS).split()
+        return names
 
-    def listWGL(self):
+    def listWGL(self) -> List[bytes]:
         """Return list of WGL extension names"""
         extensions_string = self.initExtension(
             "OpenGL.WGL.EXT.extensions_string",
         )
         if extensions_string:
-            return extensions_string.wglGetExtensionsStringEXT().split()
+            names: List[bytes] = \
+                extensions_string.wglGetExtensionsStringEXT().split()
+            return names
         else:
             return []
 
 
-def cleanModuleName(moduleName):
+def cleanModuleName(moduleName: str) -> str:
     """Get a valid PyOpenGL module name for given string
 
     Needs to deal with '_' vs '.' creating a result that's
@@ -119,16 +123,16 @@ def cleanModuleName(moduleName):
     """
     if not moduleName.find("OpenGL") == 0:
         moduleName = "OpenGL_" + moduleName
-    moduleName = moduleName.replace(".", "_").split("_")
-    return ".".join(moduleName[:3]) + "." + "_".join(moduleName[3:])
+    parts = moduleName.replace(".", "_").split("_")
+    return ".".join(parts[:3]) + "." + "_".join(parts[3:])
 
 
-def importFromString(moduleName):
+def importFromString(moduleName: str) -> Any:
     """Import a fully-specified extension-module name"""
     return __import__(moduleName, {}, {}, moduleName.split("."))
 
 
-def initialiser(moduleName):
+def initialiser(moduleName: str) -> str:
     """Compute the initialiser function name from module name"""
     moduleName = moduleName.replace(".", "_")
     parts = moduleName.split("_")[1:]  # strip OpenGL prefix
@@ -148,7 +152,7 @@ if __name__ == "__main__":
     from OpenGL import WGL
 
     class TestContext(BaseContext):
-        def OnInit(self):
+        def OnInit(self) -> None:
             e = self.extensions
             print(e.listGL())
             print(e.listGLU())

@@ -16,36 +16,47 @@ Usage example:
 
     s = state.State ()
     if self.context.lastState:
-        print self.context.lastState.diff( s )
+        print( self.context.lastState.diff( s ) )
     self.context.lastState = s
 
-Note: the state stored is not the entire machine
-state, simply because I haven't implemented that.
-What you get currently is the subset of state
-from the original glGet demo.
+What is captured is the subset of the machine state that
+:attr:`State.booleanarguments` and :attr:`State.stringarguments` name, which is
+fixed-function state: a core-profile context answers none of it.
 """
+from typing import Any, Dict, Tuple
+
 from OpenGL.GL import *
+
+
+def _differs( old: Any, new: Any ) -> bool:
+    """Whether two captured values differ
+
+    A `glGet` answers an array for the multi-valued state -- the clear colour,
+    the viewport -- and comparing two of those with `!=` yields an array of
+    per-element answers rather than one truth value.
+    """
+    if hasattr( old, 'tobytes' ) and hasattr( new, 'tobytes' ):
+        return bool( old.shape != new.shape or old.tobytes() != new.tobytes() )
+    return bool( old != new )
+
 
 class State( dict ):
     """Object for holding a current OpenGL state"""
-    def __init__( self ):
+    def __init__( self ) -> None:
         base = {}
         for name, argument, _description in self.booleanarguments:
-            result = glGetInteger( argument )
-            base[name] = result
+            base[name] = glGetIntegerv( argument )
         for name, argument, _description in self.stringarguments:
-            # really should make "glGet" an alias so this doesn't look so weird...
-            result = glGetString( argument )
-            base[name] = result
+            base[name] = glGetString( argument )
         super( State, self).__init__( base )
-    def diff( self, other ):
+    def diff( self, other: Dict[str, Any] ) -> Dict[str, Tuple[Any, Any]]:
         """Create a difference-state from other (assume other is earlier)
 
         Returns dict of {state-name:(old,new)}
         """
         diffs = {}
         for lkey,lvalue in self.items():
-            if other[lkey] != lvalue:
+            if _differs( other[lkey], lvalue ):
                 diffs[lkey] = (other[lkey],lvalue)
         return diffs
         

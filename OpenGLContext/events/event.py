@@ -1,4 +1,7 @@
 """Base class for all OpenGLContext event objects."""
+from typing import Any, Dict, Optional, Tuple
+
+
 class Event(object):
     """Base class for all local event objects.
 
@@ -14,14 +17,17 @@ class Event(object):
         modifiers -- three-tuple of booleans: (shift, control, alt)
         context -- pointer to the rendering context
     """
-    type = ""
-    context = None
-    renderingPass = None
-    modifiers = (0,0,0) # keyboard modifiers, three-tuple of shift, control, alt
-    def __init__(self):
+    type: str = ""
+    context: Any = None
+    renderingPass: Any = None
+    #: keyboard modifiers, three-tuple of shift, control, alt
+    modifiers: Tuple[int, int, int] = (0, 0, 0)
+
+    def __init__(self) -> None:
         """Initialize common event parameters"""
-        self.visitedNodes = {}
-    def visited (self, key, value = None):
+        self.visitedNodes: Dict[Any, Any] = {}
+
+    def visited(self, key: Any, value: Optional[Any] = None) -> Optional[Any]:
         """Check for or register visitation of the given key
 
         key -- an opaque hashable value, normally the node and
@@ -30,21 +36,26 @@ class Event(object):
             signals that the current value should be returned
 
         return value: previous key value (possibly None)
+
+        This is what stops an event going round a cycle of ROUTEs for ever:
+        the router asks whether a destination has already been reached on this
+        event and gives up when it has (``vrml.route.ROUTE._forward``).
         """
         if value is None:
-            self.visitedNodes.get(key)
-        else:
-            previousValue = self.visitedNodes.get(key)
-            self.visitedNodes[key] = value
-            return previousValue
-    def getKey (self):
+            return self.visitedNodes.get(key)
+        previousValue = self.visitedNodes.get(key)
+        self.visitedNodes[key] = value
+        return previousValue
+
+    def getKey(self) -> Any:
         """Calculate the key for routing within the event manager.
 
         Each subclass will define the appropriate data values for
         inclusion in the key (note that the key must be a hashable
         value).
         """
-    def getPickKey (self):
+
+    def getPickKey(self) -> Any:
         """Calculate the key that makes this event distinct within one frame.
 
         A context holds pending pick events in a mapping under this key (see
@@ -55,11 +66,10 @@ class Event(object):
         that none of them is dropped.
         """
         return self.getKey()
-    def getModifiers( self ):
+
+    def getModifiers(self) -> Tuple[int, int, int]:
         """Retrieve a tuple of the active modifier keys
 
         Format is three Boolean values, (shift, control, alt)
         """
         return self.modifiers
-    
-    

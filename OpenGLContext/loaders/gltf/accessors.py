@@ -14,7 +14,7 @@ whose accessors share one buffer decodes it once.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import numpy as np
 
@@ -35,7 +35,7 @@ _TYPE_COUNT = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4,
 
 
 def _component_dtype(component_type: int) -> type:
-    """numpy dtype for an accessor componentType, or a located ValueError (5c)."""
+    """numpy dtype for an accessor componentType, or a located ValueError."""
     try:
         return _COMPONENT_DTYPE[component_type]
     except KeyError as err:
@@ -45,7 +45,7 @@ def _component_dtype(component_type: int) -> type:
 
 
 def _type_count(accessor_type: str) -> int:
-    """Component count for an accessor ``type``, or a located ValueError (5c)."""
+    """Component count for an accessor ``type``, or a located ValueError."""
     try:
         return _TYPE_COUNT[accessor_type]
     except KeyError as err:
@@ -57,15 +57,18 @@ def _type_count(accessor_type: str) -> int:
 def _buffer_bytes(g: "pygltflib.GLTF2", buffer_index: int, resolver: Resolver) -> bytes:
     """Return the decoded bytes of buffer ``buffer_index`` (decoded once, cached).
 
-    A ``.gltf`` with several accessors sharing one data-URI or GLB binary blob was
-    re-decoding (base64) / re-fetching the whole buffer on every accessor read; the
-    resolver now memoises the decoded bytes by buffer index.
+    Several accessors commonly share one data-URI or GLB binary blob, so the
+    resolver memoises the decoded bytes by buffer index and each buffer is
+    base64-decoded or fetched once however many accessors read from it.
     """
-    cache = getattr(resolver, '_buffers', None) if resolver is not None else None
+    cache: Optional[Dict[int, bytes]] = (
+        getattr(resolver, '_buffers', None) if resolver is not None else None
+    )
     if cache is not None and buffer_index in cache:
         return cache[buffer_index]
     buf = g.buffers[buffer_index]
     uri = getattr(buf, 'uri', None)
+    data: bytes
     if uri is None:
         data = g.binary_blob()
     elif uri.startswith('data:'):
@@ -141,7 +144,7 @@ def _checked_count(count: Any, what: str) -> int:
 
 
 def _shared(resolver: Resolver, kind: str, index: int) -> Optional[np.ndarray]:
-    """A previously decoded array for ``(kind, index)``, if this resolver shares.
+    """The array already decoded for ``(kind, index)``, if this resolver shares.
 
     A resolver built for one load has no share map, so a single load decodes each
     accessor as it always did. A resolver pointed at a

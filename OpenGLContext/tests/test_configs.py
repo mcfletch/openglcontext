@@ -10,7 +10,7 @@ sample_ini = os.path.join(
 )
 
 class TestContextDefinition( unittest.TestCase ):
-    def test_from_config( self ):
+    def test_from_config( self ) -> None:
         cfg = configparser.ConfigParser()
         cfg.read( sample_ini )
         cd = ContextDefinition.fromConfig( cfg )

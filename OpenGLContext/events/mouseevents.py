@@ -1,4 +1,6 @@
 """Events relating to the mouse"""
+from typing import Any, Iterable, Optional, Tuple
+
 from OpenGLContext.events import event, eventmanager
 from OpenGL.GLU import *
 from OpenGLContext.scenegraph import nodepath
@@ -23,7 +25,7 @@ WHEEL_UP, WHEEL_DOWN = 3, 4
 BUTTON_NAME = '<mouse-%d>'
 
 
-def button_name(button):
+def button_name(button: Any) -> str:
     """The input name of a mouse button, as :data:`BUTTON_NAME` spells it."""
     return BUTTON_NAME % (int(button),)
 #: Both of them, for membership tests.
@@ -65,20 +67,20 @@ class MouseEvent( event.Event ):
         viewport -- viewport dimensions
     """
     type = ""
-    viewCoordinate = ()
-    pickPoint = ()
-    worldCoordinate = ()
-    nameStack = ()
-    modelViewMatrix = None
-    projectionMatrix = None
-    viewport = None
-    objectPaths = None
-    stopPropagation = 0
-    processMorePaths = 0
-    currentPath = ()
-    currentNode = None
-    atTarget = 0
-    def getPickPoint( self ):
+    viewCoordinate: Any = ()
+    pickPoint: Tuple[Any, ...] = ()
+    worldCoordinate: Any = ()
+    nameStack: Any = ()
+    modelViewMatrix: Any = None
+    projectionMatrix: Any = None
+    viewport: Any = None
+    objectPaths: Any = None
+    stopPropagation: int = 0
+    processMorePaths: int = 0
+    currentPath: Any = ()
+    currentNode: Any = None
+    atTarget: int = 0
+    def getPickPoint( self ) -> Tuple[Any, ...]:
         """Get the 2D picking point in OpenGL coordinates
         
         Note that OpenGL coordinates are counted from the bottom left
@@ -86,19 +88,19 @@ class MouseEvent( event.Event ):
         which use the upper left corner as the origin.
         """
         return self.pickPoint
-    def getNameStack( self ):
+    def getNameStack( self ) -> Any:
         """Get the name-stack as reported by the rendering pass."""
         return self.nameStack
-    def setNameStack( self, stack ):
+    def setNameStack( self, stack: Any ) -> None:
         """Set the name-stack.  Called by the select render mode"""
         self.nameStack = stack
-    def setObjectPaths( self, paths ):
+    def setObjectPaths( self, paths: Any ) -> None:
         """Set the object-path sets"""
         self.objectPaths = paths
-    def getObjectPaths( self ):
+    def getObjectPaths( self ) -> Any:
         """Get the object-path object (None if not set)"""
         return self.objectPaths
-    def unproject(self, viewCoordinate=None):
+    def unproject(self, viewCoordinate: Any = None) -> Any:
         """Get the world coordinates for viewCoordinate for the event
 
         viewCoordinate -- coordinate to project, if omitted, the
@@ -142,7 +144,7 @@ class MouseEvent( event.Event ):
             self.worldCoordinate = worldCoordinate
         return worldCoordinate
         
-    def project (self, worldCoordinate=None):
+    def project (self, worldCoordinate: Any = None) -> Any:
         """Get the screen coordinates for the event w/out
         the pick-point requires that worldCoordinate and
         rendering pass be available or that the
@@ -182,13 +184,13 @@ class MouseButtonEvent (MouseEvent):
         nameStack -- selection name stack, [(near, far, [names,...]),...]
     """
     type = "mousebutton"
-    button = -1 # which button was depressed
-    state = 0 # the new state of the button, 0 or 1
+    button: int = -1 # which button was depressed
+    state: int = 0 # the new state of the button, 0 or 1
     #: Numbers successive wheel notches; see getPickKey.
     _notchCounter = itertools.count()
 
     @property
-    def name(self):
+    def name(self) -> str:
         """This button's input name; see :func:`button_name`.
 
         Named ``name`` because that is what every other held input calls it:
@@ -196,10 +198,10 @@ class MouseButtonEvent (MouseEvent):
         a thumb produced it.
         """
         return button_name(self.button)
-    def getKey (self):
+    def getKey (self) -> Tuple[Any, ...]:
         """Get the event key used to lookup a handler for this event"""
         return (self.button, self.state, self.getModifiers(),)
-    def getPickKey (self):
+    def getPickKey (self) -> Tuple[Any, ...]:
         """Distinguish one wheel notch from the next; see Event.getPickKey.
 
         Scrolling is reported far faster than frames are drawn, so an ordinary
@@ -209,7 +211,7 @@ class MouseButtonEvent (MouseEvent):
         """
         if self.button not in WHEEL_BUTTONS:
             return self.getKey()
-        key = self.__dict__.get('_pickKey')
+        key: Optional[Tuple[Any, ...]] = self.__dict__.get('_pickKey')
         if key is None:
             key = self.__dict__['_pickKey'] = self.getKey() + (
                 next(MouseButtonEvent._notchCounter),)
@@ -221,11 +223,15 @@ class MouseEventManager( eventmanager.BubblingEventManager ):
 class MouseButtonEventManager (MouseEventManager):
     """Manager for MouseButtonEvent instances"""
     type = MouseButtonEvent.type
-    def registerCallback(
+    # Each manager's registerCallback takes the arguments its own event class
+    # routes on and assembles the key the base method registers under, so the
+    # signatures deliberately differ from the base's (key, function, ...).
+    def registerCallback(  # type: ignore[override]
         self,
-        button= 0, state=0, modifiers = (0,0,0),
-        function = None, node = None, capture = 0,
-    ):
+        button: Any = 0, state: Any = 0,
+        modifiers: Tuple[int, int, int] = (0, 0, 0),
+        function: Any = None, node: Any = None, capture: Any = 0,
+    ) -> Any:
         """Register a function to receive mouse-button events matching
         the given specification  To deregister, pass None as the
         function.
@@ -253,10 +259,9 @@ class MouseButtonEventManager (MouseEventManager):
             
         returns the previous handler or None
         """
+        key: Optional[Tuple[Any, ...]] = None
         if button is not None:
             key = button, state, modifiers
-        else:
-            key = None
         return super( MouseButtonEventManager, self).registerCallback(
             key, function, node, capture,
         )
@@ -281,12 +286,12 @@ class MouseMoveEvent( MouseEvent ):
         nameStack -- selection name stack, [(near, far, [names,...]),...]
     """
     type = "mousemove"
-    dragStart = () # if non-null, the initial position of the drag (viewCoordinates)
-    buttons = ()
-    def getKey (self):
+    dragStart: Any = () # if non-null, the initial position of the drag (viewCoordinates)
+    buttons: Tuple[int, ...] = ()
+    def getKey (self) -> Tuple[Any, ...]:
         """Get the event key used to lookup a handler for this event"""
         return self.getButtons(), self.getModifiers()
-    def getButtons( self ):
+    def getButtons( self ) -> Tuple[int, ...]:
         """Return the active buttons as a tuple of integers."""
         return self.buttons
 
@@ -297,12 +302,14 @@ class MouseMoveEventManager (MouseEventManager):
         generate mousein and mouseout event types.
     """
     type = MouseMoveEvent.type
-    lastPath = ()
-    def registerCallback(
+    lastPath: Any = ()
+    # See MouseButtonEventManager.registerCallback for why the signature
+    # differs from the base method's.
+    def registerCallback(  # type: ignore[override]
         self,
-        buttons = (), modifiers = (0,0,0),
-        function = None, node=None, capture=0
-    ):
+        buttons: Any = (), modifiers: Tuple[int, int, int] = (0, 0, 0),
+        function: Any = None, node: Any = None, capture: Any = 0,
+    ) -> Any:
         """Register a function to receive keyboard events matching
         the given specification  To deregister, pass None as the
         function.
@@ -318,14 +325,13 @@ class MouseMoveEventManager (MouseEventManager):
             
         returns the previous handler or None
         """
+        key: Optional[Tuple[Any, ...]] = None
         if buttons:
             key = buttons, modifiers
-        else:
-            key = None
         return super( MouseMoveEventManager, self).registerCallback(
             key, function, node, capture,
         )
-    def ProcessEvent(self, event):
+    def ProcessEvent(self, event: Any) -> Any:
         """Dispatch an incoming event
 
         This method tracks previously-pointed paths and generates
@@ -377,15 +383,15 @@ class _MouseChangeEvent( MouseEvent ):
     the set of nodes which have _changed_ in the path,
     rather than all nodes in the new/old path.
     """
-    lastPath = ()
-    newPath = ()
-    def __init__( self, **named ):
+    lastPath: Any = ()
+    newPath: Any = ()
+    def __init__( self, **named: Any ) -> None:
         """Initialise the event with named attributes"""
         for key,value in named.items():
             setattr( self, key, value )
         super( _MouseChangeEvent, self).__init__()
     @classmethod
-    def fromMoveEvent( cls, event, lastPath, newPath ):
+    def fromMoveEvent( cls, event: Any, lastPath: Any, newPath: Any ) -> Any:
         """Construct synthetic mouse event from a move event"""
         base = event.__dict__.copy()
         try:
@@ -423,12 +429,14 @@ class MouseOutEvent( _MouseChangeEvent ):
 class _MouseChangeEventManager (MouseEventManager):
     """Manager for _MouseChangeEvent instances
     """
+    # See MouseButtonEventManager.registerCallback for why the signature
+    # differs from the base method's.
     @classmethod
-    def registerCallback(
+    def registerCallback(  # type: ignore[override]
         cls,
-        buttons = (), modifiers = (0,0,0),
-        function = None, node=None, capture=0
-    ):
+        buttons: Any = (), modifiers: Tuple[int, int, int] = (0, 0, 0),
+        function: Any = None, node: Any = None, capture: Any = 0,
+    ) -> Any:
         """Register a function to receive keyboard events matching
         the given specification  To deregister, pass None as the
         function.
@@ -444,16 +452,15 @@ class _MouseChangeEventManager (MouseEventManager):
             
         returns the previous handler or None
         """
+        key: Optional[Tuple[Any, ...]] = None
         if buttons:
             key = buttons, modifiers
-        else:
-            key = None
         return super( _MouseChangeEventManager, cls).registerCallback(
             key, function, node, capture,
         )
 class MouseInEventManager( _MouseChangeEventManager ):
     type = 'mousein'
-    def _traversalPaths( self, event ):
+    def _traversalPaths( self, event: Any ) -> Iterable[Any]:
         """Get the paths to traverse for a given event
 
         In is done on the delta between the previous
@@ -464,7 +471,7 @@ class MouseInEventManager( _MouseChangeEventManager ):
         return (event.newPath[len(shared):], )
 class MouseOutEventManager( _MouseChangeEventManager):
     type = 'mouseout'
-    def _traversalPaths( self, event ):
+    def _traversalPaths( self, event: Any ) -> Iterable[Any]:
         """Get the paths to traverse for a given event
 
         Out is done on the delta between the previous

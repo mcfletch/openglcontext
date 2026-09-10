@@ -251,6 +251,8 @@ class PhysicsWalkMixin(object):
             # pinned one meant it.
             if not first or self.physicsDropIn:
                 self.syncAvatarToCamera(heading=not first, eye=eye)
+                assert self.physicsPlatform is not None, (
+                    'ensurePhysicsWorld has built one by here')
                 self.physicsPlatform.set_fly(False)
             manager = getattr(self, 'movementManager', None)
             if manager is not None and self._freeManager is not None:

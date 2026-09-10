@@ -4,10 +4,8 @@
 from typing import Any
 from OpenGLContext import testingcontext
 
-#: The backend is chosen at run time, so the class this subclasses is not
-
-#: one a checker can name -- which is what Any says here.
-
+#: The backend is chosen at run time, so the class this subclasses is not one a
+#: checker can name -- which is what Any says here.
 BaseContext: Any = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
@@ -21,13 +19,14 @@ from OpenGLContext.scenegraph.text import fontprovider
 
 class TestContext(BaseContext):
     currentStyle = -1
+    #: Family sets to browse, and the one being browsed.  Named here so that a
+    #: machine with no TTF registry still has something to show.
+    families = ["SERIF", "SANS", "TYPEWRITER"]
+    family = "SERIF"
+    styles: list = []
+    currentDefaultName = ""
 
-    def Render(self, mode=0):
-        BaseContext.Render(self, mode)
-        for shape in self.shapes:
-            mode.visit(shape)
-
-    def setupFontProviders(self):
+    def setupFontProviders(self) -> None:
         """Load font providers for the context
 
         See the OpenGLContext.scenegraph.text package for the
@@ -48,8 +47,7 @@ class TestContext(BaseContext):
             fontprovider.setTTFRegistry(
                 registry,
             )
-            self.families = registry.DEFAULT_FAMILY_SETS.keys()
-            self.families.sort()
+            self.families = sorted(registry.DEFAULT_FAMILY_SETS)
             self.family = self.families[0]
         try:
             from OpenGLContext.scenegraph.text import pygamefont
@@ -68,7 +66,7 @@ class TestContext(BaseContext):
                 """Unable to import GLUT-based TTF-file registry, no GLUT bitmap font support!"""
             )
 
-    def OnInit(self):
+    def OnInit(self) -> None:
         print("""You should see a 3D-rendered text message""")
         print("  <p> previous fontstyle")
         print("  <n> next fontstyle")
@@ -122,7 +120,7 @@ class TestContext(BaseContext):
         )
         self.buildStyles()
 
-    def buildStyles(self):
+    def buildStyles(self) -> None:
         """Build the set of styles from which to choose"""
         try:
             self.styles = self.getTTFFiles().familyMembers(self.family)
@@ -139,7 +137,7 @@ class TestContext(BaseContext):
             index = 0
         self.setStyle(index)
 
-    def setStyle(self, index=0):
+    def setStyle(self, index: int = 0) -> None:
         """Set the current font style"""
         if self.styles:
             self.currentStyle = index % (len(self.styles))
@@ -154,27 +152,34 @@ class TestContext(BaseContext):
             ), """Cache wasn't cleared for the text node"""
         self.mainDisplayText()
 
-    def OnPreviousStyle(self, event=None):
-        """Advance to the next font font style"""
+    def clearProviders(self) -> None:
+        """Drop every provider's cached fonts
+
+        Browsing a machine's whole font collection builds a texture per style
+        visited, so the caches are emptied every so often rather than grown
+        until the browse ends.
+        """
+        for providers in fontprovider.FontProvider.providers.values():
+            for provider in providers:
+                provider.clear()
+
+    def OnPreviousStyle(self, event: Any = None) -> None:
+        """Advance to the previous font style"""
         self.currentStyle -= 1
         if not self.currentStyle % 20:
-            providers = fontprovider.FontProvider.getProviders(self.currentStyle)
-            for provider in providers:
-                provider.clear()
+            self.clearProviders()
         self.setStyle(self.currentStyle)
         self.triggerRedraw(1)
 
-    def OnNextStyle(self, event=None):
-        """Advance to the next font font style"""
+    def OnNextStyle(self, event: Any = None) -> None:
+        """Advance to the next font style"""
         self.currentStyle += 1
         if not self.currentStyle % 20:
-            providers = fontprovider.FontProvider.getProviders(self.currentStyle)
-            for provider in providers:
-                provider.clear()
+            self.clearProviders()
         self.setStyle(self.currentStyle)
         self.triggerRedraw(1)
 
-    def OnSetDefault(self, event=None):
+    def OnSetDefault(self, event: Any = None) -> None:
         """Set default font for OpenGLContext to currently displayed"""
         if self.styles:
             name = self.currentDisplay.family[0]
@@ -183,7 +188,7 @@ class TestContext(BaseContext):
             self.defaultDisplayText()
         self.triggerRedraw(1)
 
-    def OnNextFamily(self, event=None):
+    def OnNextFamily(self, event: Any = None) -> None:
         """Choose the next font-family to display"""
         index = self.families.index(self.family)
         index += 1
@@ -193,7 +198,7 @@ class TestContext(BaseContext):
 
         self.triggerRedraw(1)
 
-    def mainDisplayText(self):
+    def mainDisplayText(self) -> list:
         """Decide on what text to display in the main text area"""
         base = []
         if self.styles:
@@ -205,7 +210,7 @@ class TestContext(BaseContext):
         self.displayText.string = base
         return base
 
-    def defaultDisplayText(self):
+    def defaultDisplayText(self) -> None:
         self.currentDefault.family = [self.currentDefaultName]
         self.defaultText.string = ["Current Default", self.currentDefaultName]
 

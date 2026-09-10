@@ -9,21 +9,26 @@ This version was taken from the NeHe tutorials,
 to replace the original which did not include
 texture coordinate information.
 """
+from typing import Callable, Optional
+
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import array
 from OpenGLContext.scenegraph import box
 
-VBO = None
+#: The drawing function, built on the first call to suit what the driver offers.
+VBO: Optional[Callable[[], None]] = None
 
-def drawCube():
+def drawCube() -> None:
     """Draw a cube 2,2,2 units centered around the origin"""
     # draw six faces of a cube
     global VBO 
     if VBO is None:
         if vbo.get_implementation():
-            data = vbo.VBO( array( list(box.yieldVertices( (2,2,2) )), 'f') )
-            def draw():
+            # vbo.VBO starts as None and is replaced by whichever
+            # implementation the module settles on, so a checker sees the None.
+            data = vbo.VBO( array( list(box.yieldVertices( (2,2,2) )), 'f') )  # type: ignore[misc]
+            def draw() -> None:
                 data.bind()
                 try:
                     glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
@@ -47,10 +52,8 @@ def drawCube():
                     data.unbind()
             VBO = draw 
         else:
-            # box.yieldVertices, as the buffer path above spells it: there is no
-            # bare yieldVertices in this module to find.
             data = array( list(box.yieldVertices( (2,2,2) )), 'f')
-            def draw():
+            def draw() -> None:
                 # No unbind to pair with: this path holds a plain array rather
                 # than a buffer object, and nothing was bound to release.
                 glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
@@ -61,5 +64,5 @@ def drawCube():
                     glDrawArrays( GL_TRIANGLES, 0, 36 )
                 finally:
                     glPopClientAttrib()
-            VBO = draw 
-    return VBO()
+            VBO = draw
+    VBO()

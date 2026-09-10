@@ -1,10 +1,12 @@
 '''Simple utility functions that should really be in a C module'''
+from typing import Any, Sequence, Tuple
+
 from OpenGLContext.arrays import (
     cos,sin,array,asarray,zeros,reshape,compress,allclose,dot,
 )
 from OpenGLContext import vectorutilities
 
-def rotMatrix( rota ):
+def rotMatrix( rota: Sequence[float] ) -> Any:
     """Given rotation as x,y,z,a (a in radians), return rotation matrix
 
     Returns a 4x4 rotation matrix for the given rotation,
@@ -23,18 +25,18 @@ def rotMatrix( rota ):
         [ 0,        0,        0,         1]
     ] )
     return R
-def crossProduct( first, second ):
+def crossProduct( first: Any, second: Any ) -> list:
     """Given 2 4-item vectors, return the cross product as a 4-item vector"""
     x,y,z = vectorutilities.crossProduct( first, second )[0]
     return [x,y,z,0]
-def magnitude( vector ):
+def magnitude( vector: Any ) -> Any:
     """Given a 3 or 4-item vector, return the vector's magnitude"""
     return vectorutilities.magnitude( vector[:3] )[0]
-def normalise( vector ):
+def normalise( vector: Any ) -> Any:
     """Given a 3 or 4-item vector, return a 3-item unit vector"""
     return vectorutilities.normalise( vector[:3] )[0]
 
-def pointNormal2Plane( point, normal ):
+def pointNormal2Plane( point: Any, normal: Any ) -> Any:
     """Create parametric equation of plane from point and normal
     """
     point = asarray(point,'f')
@@ -44,12 +46,12 @@ def pointNormal2Plane( point, normal ):
     result[3] = - dot(normal, point)
     return result
 
-def plane2PointNormal( plane ):
+def plane2PointNormal( plane: Any ) -> Tuple[Any, Any]:
     """Get a point and normal from a plane equation"""
     (a,b,c,d) = plane
     return asarray((-d*a,-d*b,-d*c),'f'), asarray((a,b,c),'f')
 
-def combineNormals( normals, weights=None ):
+def combineNormals( normals: Any, weights: Any = None ) -> Any:
     """Given set of N normals, return (weighted) combination"""
     normals = asarray( normals,'d')
     if weights:
@@ -66,7 +68,7 @@ def combineNormals( normals, weights=None ):
             x,y,z = -x,y,-z
     return normalise( (x,y,z) )
 
-def coplanar( points ):
+def coplanar( points: Any ) -> Any:
     """Determine if points are coplanar
 
     All sets of points < 4 are coplanar

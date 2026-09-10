@@ -1,9 +1,11 @@
 """Utility functions for processing triangle vertex arrays"""
+from typing import Any, Tuple
+
 from OpenGLContext.arrays import *
-import math
 from OpenGLContext.vectorutilities import *
 
-def basisVectors( vertices, components = 3, ccw=1 ):
+def basisVectors( vertices: Any, components: int = 3,
+                  ccw: int = 1 ) -> Tuple[Any, Any]:
     """Calculate basis vectors for given triangle vertices
     
     vertices -- x*components array of vertex
@@ -39,7 +41,8 @@ def basisVectors( vertices, components = 3, ccw=1 ):
         # clockwise winding, 
         return thirds-firsts, seconds-thirds
         
-def centers( vertices, vertexCount=3, components = 3  ):
+def centers( vertices: Any, vertexCount: int = 3,
+             components: int = 3 ) -> Any:
     """Calculate polygon center for given polygon vertices
 
     vertices -- x*components array of vertex
@@ -65,7 +68,7 @@ def centers( vertices, vertexCount=3, components = 3  ):
     vertices = divide(vertices, vertexCount, vertices )
     return vertices
 
-def normalPerFace( vertices, ccw=1 ):
+def normalPerFace( vertices: Any, ccw: int = 1 ) -> Any:
     """Calculate triangle normals for given triangle vertices
 
     vertices -- x*3 array of vertex
@@ -79,11 +82,11 @@ def normalPerFace( vertices, ccw=1 ):
     return normalise( crossProduct(a,b))
 
 if __name__ == "__main__":
-    def test():
+    def _demo() -> None:
         data = array( [
             [0,0,0],[1,0,0],[0,1,0],
             [1,0,0],[0,0,0],[0,1,0],
         ],'f')
         print(normalPerFace( data ))
         print(centers( data ))
-    test()
+    _demo()

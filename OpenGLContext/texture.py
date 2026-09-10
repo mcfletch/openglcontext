@@ -1,22 +1,23 @@
 """Resource-manager for textures (with PIL conversions)"""
 
+from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Tuple
+
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GL.ARB import texture_non_power_of_two
 from OpenGL.extensions import available
 from OpenGLContext.arrays import ArrayType
 from PIL import ImageOps, Image
-import traceback
 import weakref
 import logging
 
 log = logging.getLogger(__name__)
 
 
-def _textureDeleter(textureID):
+def _textureDeleter(textureID: int) -> Callable[[Any], None]:
     """Create function to clean up the texture on deletion"""
 
-    def cleanup(ref):
+    def cleanup(ref: Any) -> None:
         if available(glDeleteTextures):
             glDeleteTextures([textureID])
 
@@ -25,7 +26,7 @@ def _textureDeleter(textureID):
 
 class NumpyAdapter(object):
     @classmethod
-    def shapeToMode(cls, size):
+    def shapeToMode(cls, size: int) -> str:
         return {
             3: "RGB",
             4: "RGBA",
@@ -33,21 +34,21 @@ class NumpyAdapter(object):
             1: "L",
         }[size]
 
-    def __init__(self, array):
+    def __init__(self, array: Any) -> None:
         self.size = array.shape[:-1]
         self.mode = self.shapeToMode(array.shape[-1])
-        self.info = {}
+        self.info: Dict[str, Any] = {}
         self.array = array
 
-    def tostring(self, *args, **named):
+    def tostring(self, *args: Any, **named: Any) -> Any:
         return self.array
 
     tobytes = tostring
 
-    def resize(self, *args, **named):
+    def resize(self, *args: Any, **named: Any) -> Any:
         raise RuntimeError("""Don't support numpy image resizing""")
 
-    def transpose(self, mode=None):
+    def transpose(self, mode: Any = None) -> 'NumpyAdapter':
         """Null-operation for transpose to allow processing with PIL expecting code"""
         return self
 
@@ -74,7 +75,7 @@ class Texture(object):
             it (L, L, L, 1) or (L, L, L, A).  See :meth:`store`.
     """
 
-    def __init__(self, image=None, format=None):
+    def __init__(self, image: Any = None, format: Optional[int] = None) -> None:
         """Initialise the texture, if image is not None, store it
 
         image -- optional PIL image to store
@@ -88,12 +89,12 @@ class Texture(object):
 
     def store(
         self,
-        components,
-        format,
-        x,
-        y,
-        image,
-    ):
+        components: int,
+        format: int,
+        x: int,
+        y: int,
+        image: Any,
+    ) -> None:
         """define the texture's parameters...
             components -- number of components (3 or 4 for
                 RGB and RGBA respectively)
@@ -151,7 +152,7 @@ class Texture(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
 
-    def bind(self):
+    def bind(self) -> 'Texture':
         """Make this the texture bound to ``GL_TEXTURE_2D``, and return it.
 
         All a shader needs, and all that uploading into the texture needs.
@@ -161,7 +162,7 @@ class Texture(object):
         glBindTexture(GL_TEXTURE_2D, self.texture)
         return self
 
-    def __call__(self):
+    def __call__(self) -> 'Texture':
         """Bind the texture and switch the fixed-function texture unit on.
 
         The compatibility-profile entry point: ``glEnable(GL_TEXTURE_2D)`` is
@@ -174,15 +175,25 @@ class Texture(object):
         """
         self.bind()
         glEnable(GL_TEXTURE_2D)
+        return self
 
     __enter__ = __call__
 
-    def __exit__(self, typ, val, tb):
+    def __exit__(self, typ: Any, val: Any, tb: Any) -> None:
         """Disable for context-manager behaviour"""
         glDisable(GL_TEXTURE_2D)
 
-    def update(self, lower_left, size, data):
-        """Update the texture with new data"""
+    def update(self, lower_left: Sequence[int], size: Sequence[int],
+               data: Any) -> Any:
+        """Update the texture with new data
+
+        The texture has to have been stored already: the format the update is
+        read as is the one the stored image set.
+        """
+        if self.format is None:
+            raise RuntimeError(
+                """Cannot update a texture that has had no image stored"""
+            )
         glBindTexture(GL_TEXTURE_2D, self.texture)
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
         # copy the texture into the current texture ID
@@ -199,7 +210,7 @@ class Texture(object):
             data,
         )
 
-    def fromPIL(self, image):
+    def fromPIL(self, image: Any) -> int:
         """Automated storage of image data from a PIL Image instance
 
         Uses the ensureRGB method to convert the image to RGB,
@@ -225,12 +236,12 @@ class Texture(object):
         return components
 
     @staticmethod
-    def pilAsString(image):
+    def pilAsString(image: Any) -> Any:
         """Convert PIL image to string pointer"""
         image = ImageOps.flip(image)
         return image.tobytes("raw", image.mode, 0, -1)
 
-    def ensureRGB(self, image):
+    def ensureRGB(self, image: Any) -> Any:
         """Ensure that the PIL image is in RGB mode
 
         Note:
@@ -243,9 +254,9 @@ class Texture(object):
             image = image.convert("RGB")
         return image
 
-    NPOT_SUPPORT = None
+    NPOT_SUPPORT: Optional[bool] = None
 
-    def ensurePow2(self, image):
+    def ensurePow2(self, image: Any) -> Any:
         """Ensure that the PIL image is pow2 x pow2 dimensions
 
         Note:
@@ -264,12 +275,6 @@ class Texture(object):
                     "Implementation requires Power-of-Two textures (very old device?)"
                 )
         if not self.NPOT_SUPPORT:
-            try:
-                from PIL import Image
-            except ImportError:
-                # old style?
-                import Image
-            BICUBIC = Image.BICUBIC
             ### Now resize non-power-of-two images...
             # should check whether it needs it first!
             newSize = bestSize(image.size[0]), bestSize(image.size[1])
@@ -279,7 +284,7 @@ class Texture(object):
                     image.size,
                     image.info,
                 )
-                image = image.resize(newSize, BICUBIC)
+                image = image.resize(newSize, Image.Resampling.BICUBIC)
         return image
 
 
@@ -295,7 +300,7 @@ class CubeTexture(Texture):
         "+z": GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
     }
 
-    def __init__(self, images=None, format=None):
+    def __init__(self, images: Any = None, format: Optional[int] = None) -> None:
         """Initialise the texture, if image is not None, store it
 
         images -- optional name:image mapping with keys from
@@ -305,7 +310,7 @@ class CubeTexture(Texture):
         if images:
             self.fromPIL(images)
 
-    def fromPIL(self, images):
+    def fromPIL(self, images: Any) -> int:
         """Construct the texture from PIL/Numpy arrays"""
         if isinstance(images, dict):
             images = images.items()
@@ -314,7 +319,7 @@ class CubeTexture(Texture):
         ]
         if not len(our_images) == 6:
             raise ValueError("Need six non-null images")
-        components = format = x = y = None
+        components = format = x = y = 0
         final_images = []
         for key, image in our_images:
             if isinstance(image, ArrayType):
@@ -335,12 +340,12 @@ class CubeTexture(Texture):
 
     def store(
         self,
-        components,
-        format,
-        x,
-        y,
-        images,
-    ):
+        components: int,
+        format: int,
+        x: int,
+        y: int,
+        images: Any,
+    ) -> None:
         """Store our images in the appropriate format"""
         self.components = components
         self.format = format
@@ -375,12 +380,12 @@ class CubeTexture(Texture):
                 image,
             )
 
-    def bind(self):
+    def bind(self) -> 'CubeTexture':
         """Make this the texture bound to ``GL_TEXTURE_CUBE_MAP``, and return it."""
         glBindTexture(GL_TEXTURE_CUBE_MAP, self.texture)
         return self
 
-    def __call__(self):
+    def __call__(self) -> 'CubeTexture':
         """Bind the cube map.
 
         A cube map is sampled through a shader's sampler, so there is no
@@ -393,7 +398,7 @@ class CubeTexture(Texture):
 
     __enter__ = __call__
 
-    def __exit__(self, typ, val, tb):
+    def __exit__(self, typ: Any, val: Any, tb: Any) -> None:
         """Disable for context-manager behaviour"""
         # Unbind the texture
         glBindTexture(GL_TEXTURE_CUBE_MAP, 0)
@@ -410,12 +415,12 @@ class MMTexture(Texture):
 
     def store(
         self,
-        components,
-        format,
-        x,
-        y,
-        image,
-    ):
+        components: int,
+        format: int,
+        x: int,
+        y: int,
+        image: Any,
+    ) -> None:
         """define the texture's parameters...
         components -- number of components (3 or 4 for
             RGB and RGBA respectively)
@@ -440,7 +445,7 @@ class MMTexture(Texture):
             image,
         )
 
-    def ensurePow2(self, image):
+    def ensurePow2(self, image: Any) -> Any:
         """Ensure that the PIL image is pow2 x pow2 dimensions
 
         Mip-mapping does this already if I'm not mistaken, so
@@ -449,7 +454,7 @@ class MMTexture(Texture):
         return image
 
 
-def getLengthFormat(image):
+def getLengthFormat(image: Any) -> Tuple[int, int]:
     """Return PIL image component-length and format
 
     This returns the number of components, and the OpenGL
@@ -479,13 +484,13 @@ def getLengthFormat(image):
     return length, format
 
 
-def bestSize(dim):
+def bestSize(dim: int) -> int:
     """Try to figure out the best power-of-2 size for the given dimension
 
     At the moment, this is the next-largest power-of-two
-    which is also <= glGetInteger( GL_MAX_TEXTURE_SIZE ).
+    which is also <= glGetIntegerv( GL_MAX_TEXTURE_SIZE ).
     """
-    boundary = min((glGetInteger(GL_MAX_TEXTURE_SIZE), dim))
+    boundary = min((int(glGetIntegerv(GL_MAX_TEXTURE_SIZE)), dim))
     test = 1
     while test < boundary:
         test = test * 2

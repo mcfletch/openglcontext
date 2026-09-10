@@ -376,7 +376,7 @@ TEST_ITEM_TEMPLATE = """
 class TestReportGenerator:
     """Generates HTML test reports."""
 
-    def __init__(self, title: str = "OpenGLContext Test Report"):
+    def __init__(self, title: str = "OpenGLContext Test Report") -> None:
         """Initialize the report generator.
 
         Args:

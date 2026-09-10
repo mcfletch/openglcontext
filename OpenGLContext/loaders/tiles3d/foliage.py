@@ -34,7 +34,7 @@ def _noise2d(h: int, w: int, scale: int, seed: int) -> np.ndarray:
     fx = (xs - x0)[None, :]
     top = small[y0][:, x0] * (1 - fx) + small[y0][:, x1] * fx
     bot = small[y1][:, x0] * (1 - fx) + small[y1][:, x1] * fx
-    return top * (1 - fy) + bot * fy
+    return np.asarray(top * (1 - fy) + bot * fy)
 
 
 def grass_texture(size: int = 128, blades: int = 26, seed: int = 3) -> np.ndarray:
@@ -494,7 +494,7 @@ def slope01(height_fn: HeightFn, x: np.ndarray, z: np.ndarray,
     z = np.asarray(z, "d")
     hx = np.asarray(height_fn(x + eps, z), "d") - np.asarray(height_fn(x - eps, z), "d")
     hz = np.asarray(height_fn(x, z + eps), "d") - np.asarray(height_fn(x, z - eps), "d")
-    return np.sqrt(hx * hx + hz * hz) / (2 * eps)
+    return np.asarray(np.sqrt(hx * hx + hz * hz) / (2 * eps))
 
 
 def ground_patch_split(center: Sequence[float], radius: float, height_fn: HeightFn,

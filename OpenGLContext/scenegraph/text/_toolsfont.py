@@ -5,17 +5,18 @@ into the ttfquery package, which provides for finding
 system fonts, generating registries of available fonts,
 querying metadata regarding a particular font/glyph etc.
 """
-from fontTools import ttLib
-from OpenGLContext.arrays import *
-import weakref
-import sys
+from __future__ import annotations
+
+from typing import Any, Callable, TypeVar
+
 from ttfquery import describe, glyphquery
 import logging
 log = logging.getLogger( __name__ )
-from OpenGL._bytes import unicode
 
 # don't have any specialisations as of yet, so just include it
 from ttfquery.glyph import Glyph
+
+T = TypeVar("T")
 
 class Font(object):
     """Holder for metadata regarding a particular font
@@ -30,9 +31,20 @@ class Font(object):
         be shared across contexts, with only the display lists
         not being shareable.
     """
-    defaultGlyphClass = Glyph
-    encoding = None
-    def __init__(self, filename, encoding = None, glyphClass = None, quality=3 ):
+    defaultGlyphClass: type[Glyph] = Glyph
+    encoding: Any = None
+    #: The open fontTools font, present only for the duration of withFont.
+    font: Any
+    #: Font-unit metrics, read from the file as it is opened.
+    lineHeight: float
+    charHeight: float
+    def __init__(
+        self,
+        filename: str,
+        encoding: Any = None,
+        glyphClass: type[Glyph] | None = None,
+        quality: int = 3,
+    ) -> None:
         """Initialize the font
 
         filename -- a file source from which to load
@@ -59,22 +71,24 @@ class Font(object):
             the font definition.
         """
         # character: Glyph instance
-        self.glyphs = {}
+        self.glyphs: dict[str, Glyph] = {}
         # glyphName: Glyph instance (short-circuits creation where == glyphs)
-        self.glyphNames = {}
+        self.glyphNames: dict[str, Glyph] = {}
         self.filename = filename
         self.encoding = encoding
         self.quality = quality
         self.glyphClass = glyphClass or self.defaultGlyphClass
         self.withFont( self._generalMetadata )
 
-    def withFont( self, callable, *arguments, **named ):
+    def withFont(
+        self, callable: Callable[..., T], *arguments: Any, **named: Any
+    ) -> T:
         """Call a callable while we have a .font attribute
 
         This method opens the font file and then calls the given
         callable object.  On exit, it eliminates the font.
 
-        XXX Currently this is not reentrant :( 
+        XXX Currently this is not reentrant :(
         """
         if __debug__:
             log.info( """Opening TrueType font %r with fonttools""", self.filename)
@@ -87,7 +101,7 @@ class Font(object):
             except AttributeError:
                 pass
 
-    def _generalMetadata( self ):
+    def _generalMetadata( self ) -> None:
         """Load general meta-data for this font (called via withFont)
 
         Guess the appropriate encoding, query line height,
@@ -100,15 +114,15 @@ class Font(object):
         except Exception:
             log.error( """Unable to load TrueType font from %r""", self.filename)
             raise
-    def countGlyphs( self, string ):
+    def countGlyphs( self, string: str ) -> int:
         """Count the number of glyphs from string present in file"""
         return self.withFont( self._countGlyphs, string )
-    def _countGlyphs( self, string ):
+    def _countGlyphs( self, string: str ) -> int:
         set = {}
         for character in string:
             set[ glyphquery.explicitGlyph( self.font, character )] = 1
         return len(set)
-    def ensureGlyphs( self, string ):
+    def ensureGlyphs( self, string: str ) -> int:
         """Retrieve set of glyphs for the string from file into local cache
 
         (Optimization), take all glyphs represented by the string
@@ -122,11 +136,11 @@ class Font(object):
         if needed:
             self.withFont( self._createGlyphs, needed )
         return len(needed)
-    def _createGlyphs( self, set ):
+    def _createGlyphs( self, set: list[str] ) -> None:
         """Create glyphs for the sequence of passed characters (called via withFont)"""
         for character in set:
             self._createGlyph( character, self.quality )
-    def getGlyph( self, character ):
+    def getGlyph( self, character: str ) -> Glyph | None:
         """Retrieve the appropriate glyph for this character
 
         Returns a compiled glyph for the given character in
@@ -135,7 +149,7 @@ class Font(object):
         if character not in self.glyphs:
             self.withFont( self._createGlyph, character, self.quality )
         return self.glyphs.get (character)
-    def _createGlyph( self, character, quality ):
+    def _createGlyph( self, character: str, quality: int ) -> Glyph:
         """Load glyph outlines from font-file (called via withFont)"""
         if __debug__:
             log.info( """Retrieving glyph for character %r""", character)
@@ -152,8 +166,8 @@ class Font(object):
         self.glyphs[character] = glyph
         self.glyphNames[ glyphName ] = glyph
         return glyph
-        
-    def __repr__( self ):
+
+    def __repr__( self ) -> str:
         """Provide a representation of the Font"""
         return """%s( %r, %r )"""% (
             self.__class__.__name__,
@@ -168,13 +182,14 @@ if __name__ == "__main__":
     import glob
     import traceback
     testText = [ chr(x) for x in range(32,256)]
-    def scan( directory=None ):
+    def scan( directory: str | None = None ) -> list[tuple[str, list[str]]]:
+        """Report every font file in directory this module cannot read"""
         if directory is None:
             directory = os.path.join( os.environ['windir'], 'fonts')
         files = glob.glob( os.path.join(directory, "*.ttf"))
-        errors = []
+        errors: list[tuple[str, list[str]]] = []
         for file in files:
-            error = (file, [])
+            error: tuple[str, list[str]] = (file, [])
             print('\nFile', file)
             try:
                 font = Font(
@@ -182,23 +197,20 @@ if __name__ == "__main__":
                 )
             except Exception:
                 traceback.print_exc()
-                error[1].append( (file, "Couldn't load"))
+                error[1].append( "Couldn't load" )
             else:
                 for character in testText:
                     try:
                         font.getGlyph(character)
                     except Exception:
                         traceback.print_exc()
-                        error[1].append( (file, "Character %r failed, aborting font %r"%(character,file)))
+                        error[1].append( "Character %r failed, aborting font"%(character,))
                         break
             if error[1]:
                 errors.append( error )
         return errors
 
-    errors = scan()
-    print('__________________________')
-    for file,msgs in errors:
+    for file,msgs in scan():
+        print('__________________________')
         print('File', file)
         print("\n".join(msgs))
-
-    

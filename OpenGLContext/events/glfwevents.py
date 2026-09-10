@@ -1,5 +1,7 @@
 """Module providing translation from GLFW callbacks to OpenGLContext events"""
 
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import (
     WHEEL_BUTTONS, WHEEL_DOWN, WHEEL_UP,
@@ -43,8 +45,24 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
     translate them to OpenGLContext events.
     """
 
+    #: What one click of this platform's wheel reports, learned from what
+    #: arrives; see :meth:`_wheelClicks`.
+    _wheelDetent: float = WHEEL_DETENT
+    #: Touchpad rotation reported so far that has not yet made a whole notch.
+    _wheelRemainder: float = 0.0
+
+    if TYPE_CHECKING:
+        # What this mix-in needs of the GLFW context beside it.
+        window: Any
+
+        def addPickEvent(self, event: Any) -> Any: ...
+        def triggerPick(self) -> Any: ...
+        def getViewPort(self) -> Tuple[int, int]: ...
+        def OnResize(self, *arguments: Any) -> Any: ...
+
     ### KEYBOARD interactions
-    def glfwOnKey(self, window, key, scancode, action, mods):
+    def glfwOnKey(self, window: Any, key: int, scancode: int, action: int,
+                  mods: int) -> None:
         """Convert a key event to a context-style event
 
         GLFW's Wayland platform emits ``glfw.REPEAT`` only where the compositor
@@ -62,15 +80,15 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
             self.noteNativeRepeat()
             self.emitKey(key, 1, mods)
 
-    def emitKey(self, key, state, mods):
+    def emitKey(self, key: Any, state: int, mods: Any) -> None:
         self.ProcessEvent(GLFWKeyboardEvent(self, key, state, mods))
 
-    def glfwOnCharacter(self, window, codepoint):
+    def glfwOnCharacter(self, window: Any, codepoint: int) -> None:
         """Convert character input to context event"""
         mods = self._getCurrentModifiers()
         self.ProcessEvent(GLFWKeypressEvent(self, codepoint, mods))
 
-    def _getCurrentModifiers(self):
+    def _getCurrentModifiers(self) -> Tuple[bool, bool, bool]:
         """Get current modifier state by polling GLFW"""
         shift = (glfw.get_key(self.window, glfw.KEY_LEFT_SHIFT) == glfw.PRESS or
                  glfw.get_key(self.window, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS)
@@ -81,7 +99,8 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         return (shift, ctrl, alt)
 
     ### MOUSE Interaction
-    def _cursorToFramebuffer(self, window, x, y):
+    def _cursorToFramebuffer(self, window: Any, x: float,
+                             y: float) -> Tuple[float, float]:
         """Scale a GLFW cursor position to framebuffer pixels.
 
         GLFW reports the cursor in logical window coordinates, but the viewport
@@ -99,7 +118,8 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
             y = y * fb_h / win_h
         return x, y
 
-    def glfwOnMouseButton(self, window, button, action, mods):
+    def glfwOnMouseButton(self, window: Any, button: int, action: int,
+                          mods: int) -> None:
         """Convert mouse-press-or-release to a Context-style event"""
         state = 1 if action == glfw.PRESS else 0
         x, y = glfw.get_cursor_pos(window)
@@ -109,7 +129,8 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         )
         self.triggerPick()
 
-    def glfwOnScroll(self, window, xoffset, yoffset):
+    def glfwOnScroll(self, window: Any, xoffset: float,
+                     yoffset: float) -> None:
         """Convert scrolling to the pair of button events a wheel notch is.
 
         GLFW reports scrolling on a callback of its own, in offsets rather than
@@ -121,12 +142,11 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         notches = self._wheelNotches(yoffset)
         if os.environ.get(WHEEL_DEBUG_ENV):
             log.info('wheel: reported %+.4f, carrying %+.4f, sending %d notch(es)',
-                     float(yoffset), getattr(self, '_wheelRemainder', 0.0),
-                     len(notches))
+                     float(yoffset), self._wheelRemainder, len(notches))
         for button in notches:
             self._emitWheel(window, button)
 
-    def _wheelNotches(self, offset):
+    def _wheelNotches(self, offset: float) -> List[int]:
         """The notches in one report: a wheel's clicks, or a touchpad's sum.
 
         **The two are different devices and are counted differently.**  A wheel
@@ -161,8 +181,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         devices, and half a drag over a pad must not turn the next click of the
         wheel into two.
         """
-        detent = getattr(self, '_wheelDetent', WHEEL_DETENT)
-        clicks = size / detent
+        clicks = size / self._wheelDetent
         whole = int(round(clicks))
         if whole < 1 or abs(clicks - whole) > WHEEL_TOLERANCE:
             self._wheelDetent = size
@@ -176,7 +195,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         Turning back drops what was carried rather than letting a jitter over
         the pad accumulate into a notch the way it is not moving.
         """
-        carried = getattr(self, '_wheelRemainder', 0.0)
+        carried = self._wheelRemainder
         if (carried > 0.0) != (offset > 0.0):
             carried = 0.0
         total = carried + offset
@@ -188,7 +207,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         self._wheelRemainder = total - notches
         return abs(notches)
 
-    def _emitWheel(self, window, button):
+    def _emitWheel(self, window: Any, button: int) -> None:
         """One notch, as the press and release of a button that is never held."""
         x, y = glfw.get_cursor_pos(window)
         x, y = self._cursorToFramebuffer(window, x, y)
@@ -198,7 +217,8 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
             )
         self.triggerPick()
 
-    def glfwOnCursorPos(self, window, xpos, ypos):
+    def glfwOnCursorPos(self, window: Any, xpos: float,
+                        ypos: float) -> None:
         """Convert mouse-movement to a Context-style event.
 
         The movement sampler is told directly as well as through the pick
@@ -220,7 +240,8 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         self.addPickEvent(GLFWMouseMoveEvent(self, int(xpos), int(ypos)))
         self.triggerPick()
 
-    def glfwOnFramebufferSize(self, window, width, height):
+    def glfwOnFramebufferSize(self, window: Any, width: int,
+                              height: int) -> None:
         """Handle framebuffer resize"""
         self.OnResize(width, height)
 
@@ -234,9 +255,9 @@ class GLFWXEvent(object):
             list
     """
 
-    CURRENTBUTTONSTATES = [0, 0, 0]
+    CURRENTBUTTONSTATES: List[int] = [0, 0, 0]
 
-    def _getModifiers(self, modifierMask):
+    def _getModifiers(self, modifierMask: int) -> Tuple[bool, bool, bool]:
         """Get the 3-tuple of modifier booleans from GLFW modifier mask"""
         return (
             bool(modifierMask & glfw.MOD_SHIFT),
@@ -244,7 +265,7 @@ class GLFWXEvent(object):
             bool(modifierMask & glfw.MOD_ALT),
         )
 
-    def _updateButtons(self, button, state):
+    def _updateButtons(self, button: int, state: int) -> Tuple[int, int]:
         """Update the global mouse-button-states with an event's data"""
         index = buttonMapping.get(button)
         if index is None:
@@ -266,7 +287,8 @@ class GLFWXEvent(object):
 class GLFWMouseButtonEvent(GLFWXEvent, mouseevents.MouseButtonEvent):
     """GLFW-specific mouse-button event"""
 
-    def __init__(self, context, button, state, x, y, modifiers=0):
+    def __init__(self, context: Any, button: int, state: int, x: int, y: int,
+                 modifiers: Any = 0) -> None:
         super(GLFWMouseButtonEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -278,7 +300,8 @@ class GLFWMouseButtonEvent(GLFWXEvent, mouseevents.MouseButtonEvent):
 class GLFWMouseMoveEvent(GLFWXEvent, mouseevents.MouseMoveEvent):
     """GLFW-specific mouse-move event"""
 
-    def __init__(self, context, x, y, modifiers=0):
+    def __init__(self, context: Any, x: int, y: int,
+                 modifiers: Any = 0) -> None:
         super(GLFWMouseMoveEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -294,7 +317,8 @@ class GLFWMouseMoveEvent(GLFWXEvent, mouseevents.MouseMoveEvent):
 class GLFWKeyboardEvent(GLFWXEvent, keyboardevents.KeyboardEvent):
     """GLFW-specific keyboard event"""
 
-    def __init__(self, context, key, state=1, modifiers=0):
+    def __init__(self, context: Any, key: int, state: int = 1,
+                 modifiers: Any = 0) -> None:
         super(GLFWKeyboardEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -302,7 +326,7 @@ class GLFWKeyboardEvent(GLFWXEvent, keyboardevents.KeyboardEvent):
         self.name = keyboardMapping.get(key, self._keyToChar(key))
         self.state = state
 
-    def _keyToChar(self, key):
+    def _keyToChar(self, key: int) -> str:
         """Convert GLFW key code to character if it's a printable key"""
         # GLFW key codes for A-Z are the same as ASCII uppercase
         if glfw.KEY_A <= key <= glfw.KEY_Z:
@@ -314,7 +338,7 @@ class GLFWKeyboardEvent(GLFWXEvent, keyboardevents.KeyboardEvent):
         if key == glfw.KEY_SPACE:
             return ' '
         # Punctuation and other printable characters
-        punctuation = {
+        punctuation: Dict[int, str] = {
             glfw.KEY_APOSTROPHE: "'",
             glfw.KEY_COMMA: ",",
             glfw.KEY_MINUS: "-",
@@ -336,7 +360,8 @@ class GLFWKeyboardEvent(GLFWXEvent, keyboardevents.KeyboardEvent):
 class GLFWKeypressEvent(GLFWXEvent, keyboardevents.KeypressEvent):
     """GLFW-specific key-press event (character input)"""
 
-    def __init__(self, context, codepoint, modifiers=0):
+    def __init__(self, context: Any, codepoint: int,
+                 modifiers: Any = 0) -> None:
         super(GLFWKeypressEvent, self).__init__()
         if hasattr(context, "currentPass"):
             self.renderingPass = context.currentPass
@@ -349,7 +374,7 @@ class GLFWKeypressEvent(GLFWXEvent, keyboardevents.KeypressEvent):
 
 
 # Keyboard mapping from GLFW key codes to OpenGLContext key names
-keyboardMapping = {
+keyboardMapping: Dict[int, str] = {
     glfw.KEY_F1: "<F1>",
     glfw.KEY_F2: "<F2>",
     glfw.KEY_F3: "<F3>",
@@ -385,10 +410,32 @@ keyboardMapping = {
     glfw.KEY_CAPS_LOCK: "<capslock>",
     glfw.KEY_NUM_LOCK: "<numlock>",
     glfw.KEY_SCROLL_LOCK: "<scroll>",
+    glfw.KEY_PAUSE: "<pause>",
+    glfw.KEY_LEFT_SUPER: "<start>",
+    glfw.KEY_RIGHT_SUPER: "<start>",
+    # The numeric keypad is its own set of keys, named as the Tk and wx tables
+    # name them: a digit is hashed, an operator is the character it produces,
+    # and its Enter is the return key.
+    glfw.KEY_KP_0: "#0",
+    glfw.KEY_KP_1: "#1",
+    glfw.KEY_KP_2: "#2",
+    glfw.KEY_KP_3: "#3",
+    glfw.KEY_KP_4: "#4",
+    glfw.KEY_KP_5: "#5",
+    glfw.KEY_KP_6: "#6",
+    glfw.KEY_KP_7: "#7",
+    glfw.KEY_KP_8: "#8",
+    glfw.KEY_KP_9: "#9",
+    glfw.KEY_KP_DIVIDE: "/",
+    glfw.KEY_KP_MULTIPLY: "*",
+    glfw.KEY_KP_SUBTRACT: "-",
+    glfw.KEY_KP_ADD: "+",
+    glfw.KEY_KP_DECIMAL: ".",
+    glfw.KEY_KP_ENTER: "<return>",
 }
 
 # Mouse button mapping from GLFW button codes to OpenGLContext button indices
-buttonMapping = {
+buttonMapping: Dict[int, int] = {
     glfw.MOUSE_BUTTON_LEFT: 0,
     glfw.MOUSE_BUTTON_RIGHT: 1,
     glfw.MOUSE_BUTTON_MIDDLE: 2,

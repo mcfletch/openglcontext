@@ -877,7 +877,10 @@ def _build_instance_vao(gpu: Any, arr: np.ndarray, stride: int) -> tuple:
         glVertexAttribDivisor,
     )
     from OpenGL.arrays import vbo
-    inst_vbo = vbo.VBO(arr, usage='GL_DYNAMIC_DRAW')
+    # The name is settled at import between the accelerated class and the Python
+    # one, so what it holds is not known until then.
+    VBO: Any = vbo.VBO
+    inst_vbo = VBO(arr, usage='GL_DYNAMIC_DRAW')
     vao = glGenVertexArrays(1)
     glBindVertexArray(vao)
     # Static per-vertex attributes (position/normal/texcoord/tangent/color).

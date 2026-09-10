@@ -260,7 +260,7 @@ class TestRunner:
         reference_dir: Optional[Union[str, Path]] = None,
         with_coverage: bool = True,
         default_timeout: float = DEFAULT_TIMEOUT,
-    ):
+    ) -> None:
         """Initialize the test runner.
 
         Args:

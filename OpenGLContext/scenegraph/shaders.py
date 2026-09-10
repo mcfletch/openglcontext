@@ -1,10 +1,12 @@
 """Shader node implementation"""
 
+import traceback
+from functools import reduce
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
+
 from OpenGL.GL import *
 from OpenGL.GL import glBindAttribLocation, glUseProgram
 from OpenGL.GL import shaders as GL_shaders
-from OpenGL.GLU import *
-from OpenGL.GLUT import *
 from OpenGL._bytes import as_str, as_8_bit
 from OpenGL import error
 from OpenGL.arrays import vbo
@@ -14,10 +16,6 @@ from vrml.vrml97 import shaders
 import operator
 from vrml import field, node, fieldtypes, protofunctions
 
-try:
-    from functools import reduce
-except ImportError:
-    pass
 from OpenGLContext.scenegraph import (
     polygonsort, boundingvolume, shadergeometry, vertexsemantics,
 )
@@ -26,18 +24,34 @@ LOCAL_ORIGIN = array([[0, 0, 0, 1.0]], "f")
 
 import logging
 
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
+
 log = logging.getLogger(__name__)
 
+def glsl_version() -> List[int]:
+    """``GL_SHADING_LANGUAGE_VERSION`` as ``[major, minor]``
 
-def glsl_version():
-    """Parse GL_SHADING_LANGUAGE_VERSION into [int(major),int(minor)]"""
-    version = glGetString(GL_SHADING_LANGUAGE_VERSION)
-    version = [int(x) for x in version.split(".")[:2]]
-    return version
+    A driver may append its own text after the version -- "3.30 NVIDIA via Cg
+    compiler" -- so only the leading word is read.
+    """
+    version = as_str(glGetString(GL_SHADING_LANGUAGE_VERSION)).split()[0]
+    return [int(x) for x in version.split(".")[:2]]
 
 
 class _Buffer(object):
     """VBO based buffer implementation for generic geometry"""
+
+    if TYPE_CHECKING:
+        # What this mix-in needs of the node beside it, declared for a checker
+        # and nothing else: these are VRML97 fields of the buffer nodes, and a
+        # real declaration here would register a second copy of each.
+        buffer: Any
+        type: Any
+        usage: Any
 
     GL_USAGE_MAPPING = {
         "STREAM_DRAW": GL_STREAM_DRAW,
@@ -58,17 +72,17 @@ class _Buffer(object):
         "TRANSFORM_FEEDBACK": GL_TRANSFORM_FEEDBACK_BUFFER,
     }
 
-    def gl_usage(self):
+    def gl_usage(self) -> int:
         return self.GL_USAGE_MAPPING[as_str(self.usage)]
 
-    def gl_target(self):
+    def gl_target(self) -> int:
         return self.GL_TYPE_MAPPING[as_str(self.type)]
 
-    def vbo(self, mode):
+    def vbo(self, mode: Any) -> Any:
         """Render this buffer on the mode"""
         uploaded = mode.cache.getData(self, "buffer")
         if uploaded is None:
-            uploaded = vbo.VBO(
+            uploaded = VBO(
                 self.buffer,
                 usage=self.gl_usage(),
                 target=self.gl_target(),
@@ -77,13 +91,13 @@ class _Buffer(object):
             holder.depend(self, "buffer")
         return uploaded
 
-    def bind(self, mode):
+    def bind(self, mode: Any) -> Any:
         """Bind this buffer so that we can perform e.g. mappings on it"""
         vbo = self.vbo(mode)
         vbo.bind()
         return vbo
 
-    def unbind(self, mode):
+    def unbind(self, mode: Any) -> Any:
         """Unbind the vbo"""
         vbo = self.vbo(mode)
         vbo.unbind()
@@ -101,7 +115,7 @@ class ShaderIndexBuffer(_Buffer, shaders.ShaderIndexBuffer):
 class ShaderAttribute(shaders.ShaderAttribute):
     """VBO-based buffer implementation for generic geomtry indices"""
 
-    def render(self, shader, mode):
+    def render(self, shader: Any, mode: Any) -> Optional[Tuple[Any, int]]:
         """Set this uniform value for the given shader
 
         This is called at render-time to update the value...
@@ -116,7 +130,8 @@ class ShaderAttribute(shaders.ShaderAttribute):
             return (vbo, location)
         return None
 
-    def renderPost(self, shader, mode, token=None):
+    def renderPost(self, shader: Any, mode: Any,
+                   token: Optional[Tuple[Any, int]] = None) -> None:
         """Undo what :meth:`render` set up, given the token it returned
 
         The token is the (buffer, location) pair, or None when the shader had no
@@ -129,7 +144,7 @@ class ShaderAttribute(shaders.ShaderAttribute):
             vbo.unbind()
             glDisableVertexAttribArray(location)
 
-    def bufferView(self):
+    def bufferView(self) -> Any:
         """Retrieve a view of our buffer that is just this attribute's values"""
         if not self.buffer:
             raise AttributeError("No buffer currently")
@@ -169,7 +184,7 @@ class ShaderAttribute(shaders.ShaderAttribute):
                 """Haven't implemented view support for N dimensional arrays"""
             )
 
-    def boundingVolume(self, mode):
+    def boundingVolume(self, mode: Any) -> Any:
         """Calculate bounding volume of this attribute's current values"""
         current = boundingvolume.getCachedVolume(self)
         if current:
@@ -198,11 +213,17 @@ class _Uniform(object):
 
     warned = False
 
-    def location(self, shader, mode):
+    if TYPE_CHECKING:
+        # What this mix-in needs of the node beside it, declared for a checker
+        # and nothing else: both are VRML97 fields of the uniform nodes.
+        name: Any
+        value: Any
+
+    def location(self, shader: Any, mode: Any) -> Any:
         """Get our location (-1 if not defined/used)"""
         return shader.getLocation(mode, self.name, uniform=True)
 
-    def currentValue(self, shader, mode):
+    def currentValue(self, shader: Any, mode: Any) -> Any:
         """Retrieve the current value for this item
 
         Is a customization point for uniforms that should be calculated on
@@ -214,9 +235,15 @@ class _Uniform(object):
 class FloatUniform(_Uniform, shaders.FloatUniform):
     """Uniform (variable) binding for a shader"""
 
-    NEED_TRANSPOSE = False
+    NEED_TRANSPOSE: Optional[bool] = False
 
-    def render(self, shader, mode, location=None):
+    if TYPE_CHECKING:
+        #: The element shape and the ``glUniform*`` entry point, both filled in
+        #: by :func:`_uniformCls` when it generates the concrete subclass.
+        shape: Tuple[int, ...]
+        baseFunction: Any
+
+    def render(self, shader: Any, mode: Any, location: Optional[int] = None) -> Any:
         """Set this uniform value for the given shader
 
         This is called at render-time to update the value...
@@ -246,7 +273,11 @@ class IntUniform(_Uniform, shaders.IntUniform):
 
 
 class _TextureUniform(_Uniform):
-    def bind(self, shader, mode, index):
+    if TYPE_CHECKING:
+        #: The ``glUniform1i`` the concrete sampler uniforms bind through.
+        baseFunction: Any
+
+    def bind(self, shader: Any, mode: Any, index: int) -> bool:
         location = shader.getLocation(mode, self.name, uniform=True)
         if location is not None and location != -1:
             value = self.currentValue(shader, mode)
@@ -261,7 +292,7 @@ class TextureUniform(_TextureUniform, shaders.TextureUniform):
 
     baseFunction = staticmethod(glUniform1i)
 
-    def render(self, shader, mode, index):
+    def render(self, shader: Any, mode: Any, index: int) -> bool:
         """Bind the actual uniform value"""
         location = shader.getLocation(mode, self.name, uniform=True)
         if location is not None and location != -1:
@@ -279,10 +310,10 @@ class TextureBufferUniform(_TextureUniform, shaders.TextureBufferUniform):
 
     baseFunction = staticmethod(glUniform1i)
 
-    def get_format(self):
+    def get_format(self) -> Any:
         return globals().get("GL_%s" % (self.format))
 
-    def texture(self, mode):
+    def texture(self, mode: Any) -> Any:
         """Render this buffer on the mode"""
         texture = mode.cache.getData(self, "texture")
         if texture is None:
@@ -290,7 +321,7 @@ class TextureBufferUniform(_TextureUniform, shaders.TextureBufferUniform):
             mode.cache.holder(self, texture, "texture")
         return texture
 
-    def render(self, shader, mode, index=0):
+    def render(self, shader: Any, mode: Any, index: int = 0) -> bool:
         """Bind the actual uniform value"""
         location = shader.getLocation(mode, self.name, uniform=True)
         if location is not None and location != -1:
@@ -309,8 +340,9 @@ class TextureBufferUniform(_TextureUniform, shaders.TextureBufferUniform):
         return False
 
 
-def _uniformCls(suffix):
-    def buildCls(name, suffix, size, function, base):
+def _uniformCls(suffix: str) -> None:
+    def buildCls(name: str, suffix: str, size: Tuple[int, ...],
+                 function: Any, base: type) -> None:
         if "m" in suffix:
             NEED_TRANSPOSE = False
         else:
@@ -328,28 +360,22 @@ def _uniformCls(suffix):
         )
         globals()[name] = cls
 
-    function_name = "glUniform"
     if suffix.startswith("m"):
-        size = suffix[1:]
-        function_name = "glUniformMatrix%sfv" % (size,)
-        function = globals()[function_name]
-        size = [int(x) for x in size.split("x")]
-        if len(size) == 1:
-            size = [size[0], size[0]]
-        size = tuple(size)
-        name = "FloatUniform" + suffix
-        buildCls(name, suffix, size, function, FloatUniform)
+        dimensions = suffix[1:]
+        function = globals()["glUniformMatrix%sfv" % (dimensions,)]
+        extent = [int(x) for x in dimensions.split("x")]
+        if len(extent) == 1:
+            extent = [extent[0], extent[0]]
+        buildCls("FloatUniform" + suffix, suffix, tuple(extent), function,
+                 FloatUniform)
     else:
+        base: type
         if suffix.endswith("i"):
-            base = IntUniform
-            name = "IntUniform" + suffix
+            base, prefix = IntUniform, "IntUniform"
         else:
-            base = FloatUniform
-            name = "FloatUniform" + suffix
-        function_name = "glUniform%sv" % (suffix,)
-        function = globals()[function_name]
-        size = (int(suffix[:1]),)
-        buildCls(name, suffix, size, function, base)
+            base, prefix = FloatUniform, "FloatUniform"
+        function = globals()["glUniform%sv" % (suffix,)]
+        buildCls(prefix + suffix, suffix, (int(suffix[:1]),), function, base)
 
 
 FLOAT_UNIFORM_SUFFIXES = (
@@ -377,7 +403,7 @@ class ShaderURLField(fieldtypes.MFString):
 
     fieldType = "MFString"
 
-    def fset(self, client, value, notify=1):
+    def fset(self, client: Any, value: Any, notify: int = 1) -> Any:
         """Set the client's URL, then try to load the image"""
         value = super(ShaderURLField, self).fset(client, value, notify)
         if value:
@@ -394,8 +420,9 @@ class ShaderURLField(fieldtypes.MFString):
             ).start()
         return value
 
-    def loadBackground(self, client, url, contexts):
-        overall = [None] * len(url)
+    def loadBackground(self, client: Any, url: Sequence[Any],
+                       contexts: Sequence[Any]) -> None:
+        overall: List[Any] = [None] * len(url)
         threads = []
         for i, value in enumerate(url):
             import threading
@@ -421,7 +448,8 @@ class ShaderURLField(fieldtypes.MFString):
                     c.triggerRedraw(1)
             return
 
-    def subLoad(self, client, urlFragment, i, overall):
+    def subLoad(self, client: Any, urlFragment: Any, i: int,
+                overall: List[Any]) -> Optional[bool]:
         from OpenGLContext.loaders.loader import Loader
 
         try:
@@ -445,26 +473,27 @@ class ShaderURLField(fieldtypes.MFString):
             urlFragment,
             str(client),
         )
+        return None
 
 
 class GLSLImport(shaders.GLSLImport):
     """GLSL-based importable code library"""
 
-    url = ShaderURLField("url", "MFString", list)
+    url = ShaderURLField("url", 1, list)
 
 
 class GLSLShader(shaders.GLSLShader):
     """GLSL-based shader node"""
 
-    url = ShaderURLField("url", "MFString", list)
-    version = field.newField("version", "SFString", "")
-    compileLog = field.newField(" compileLog", "SFString", "")
+    url = ShaderURLField("url", 1, list)
+    version = field.newField("version", "SFString", 1, "")
+    compileLog = field.newField(" compileLog", "SFString", 0, "")
 
-    def holderDepend(self, holder):
+    def holderDepend(self, holder: Any) -> None:
         holder.depend(self, "source")
         holder.depend(self, "type")
 
-    def compile(self):
+    def compile(self) -> Any:
         if not self.source:
             return False
         source = []
@@ -474,7 +503,7 @@ class GLSLShader(shaders.GLSLShader):
             if not import_lib.source:
                 return False
             source.extend([as_8_bit(x) for x in import_lib.source])
-        if isinstance(self.source, (bytes, unicode)):
+        if isinstance(self.source, (bytes, str)):
             source.append(as_8_bit(self.source))
         else:
             source.extend([as_8_bit(x) for x in self.source])
@@ -496,7 +525,7 @@ class GLSLShader(shaders.GLSLShader):
             return None
         return shader
 
-    def visible(self, *args, **named):
+    def visible(self, *args: Any, **named: Any) -> bool:
         return True
 
 
@@ -534,11 +563,11 @@ class GLSLObject(shaders.GLSLObject):
     """GLSL-based shader object (compiled set of shaders)"""
 
     IMPLEMENTATION = "GLSL"
-    compileLog = field.newField(" compileLog", "SFString", "")
+    compileLog = field.newField(" compileLog", "SFString", 0, "")
     attributes = field.newField("attributes", "MFNode", 1, list)
 
     # we've manually chosen this implementation...
-    def render(self, mode, shader=None):
+    def render(self, mode: Any, shader: Any = None) -> Tuple[Any, ...]:
         """Render our shaders in the current mode"""
         renderer = mode.cache.getData(self)
         if renderer is None:
@@ -550,7 +579,7 @@ class GLSLObject(shaders.GLSLObject):
                 )
         if renderer not in (None, False):
             try:
-                GL_shaders.glUseProgram(renderer)
+                glUseProgram(renderer)
             except error.GLError:
                 log.error(
                     """Failure compiling/linking: %s""",
@@ -584,7 +613,7 @@ class GLSLObject(shaders.GLSLObject):
             return True, True, True, None
         return True, True, True, renderer
 
-    def holderDepend(self, holder):
+    def holderDepend(self, holder: Any) -> Any:
         """Make this holder depend on our compilation vars"""
         for shader in self.shaders:
             # TODO: cache links...
@@ -592,7 +621,7 @@ class GLSLObject(shaders.GLSLObject):
         holder.depend(self, "shaders")
         return holder
 
-    def compile(self, mode, shader=None):
+    def compile(self, mode: Any, shader: Any = None) -> Any:
         """Compile into GLSL linked object"""
         holder = self.holderDepend(mode.cache.holder(self, None))
         # TODO: depend on shader.material as well...
@@ -650,7 +679,7 @@ class GLSLObject(shaders.GLSLObject):
         holder.data = 0
         return None
 
-    def bindAttributeLocations(self, program):
+    def bindAttributeLocations(self, program: Any) -> None:
         """Say where each vertex input arrives, before the program is linked.
 
         Every geometry node in the engine writes its arrays to the locations
@@ -676,20 +705,20 @@ class GLSLObject(shaders.GLSLObject):
                 as_8_bit(name),
             )
 
-    def program(self, mode):
+    def program(self, mode: Any) -> Any:
         """Retrieve our program ID"""
         renderer = mode.cache.getData(self)
         if renderer is None:
             renderer = self.compile(mode)
         return renderer
 
-    def renderPost(self, token, mode):
+    def renderPost(self, token: Any, mode: Any) -> None:
         """Post-render cleanup..."""
         if token:
             glUseProgram(0)
             # TODO: unbind our attributes...
 
-    def getVariable(self, name):
+    def getVariable(self, name: Any) -> Any:
         """Retrieve uniform/attribute by name"""
         name = as_str(name)
         for uniform in self.uniforms:
@@ -697,7 +726,7 @@ class GLSLObject(shaders.GLSLObject):
                 return uniform
         return None
 
-    def getLocation(self, mode, name, uniform=True):
+    def getLocation(self, mode: Any, name: Any, uniform: bool = True) -> Any:
         """Retrieve attribute/uniform location"""
         name = as_str(name)
         locationMap = mode.cache.getData(self, "locationMap")
@@ -732,7 +761,7 @@ class GLSLObject(shaders.GLSLObject):
                     "Attempting to get attribute/uniform from failed compile"
                 ) from None
 
-    def sortKey(self, mode, matrix):
+    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         # TODO: figure out how to handle
         return False, [], None
@@ -745,15 +774,15 @@ class Shader(shaders.Shader):
     uniformIDs = None
     attributeIDs = None
 
-    def render(self, mode=None):
+    def render(self, mode: Any = None) -> Tuple[Any, ...]:
         """Render the shader"""
         current = self.currentImplementation()
         if current:
-            return current.render(mode, self)
+            return tuple(current.render(mode, self))
         else:
             return True, True, True, None
 
-    def currentImplementation(self):
+    def currentImplementation(self) -> Any:
         current = self.current
         if not current:
             for object in self.objects:
@@ -761,16 +790,17 @@ class Shader(shaders.Shader):
                     self.current = current = object
         return self.current
 
-    def renderPost(self, textureToken=None, mode=None):
+    def renderPost(self, textureToken: Any = None, mode: Any = None) -> Any:
         """Cleanup after rendering of this node has completed"""
         if self.current:
             return self.current.renderPost(textureToken, mode)
+        return None
 
-    def sortKey(self, mode, matrix):
+    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         current = self.currentImplementation()
         if current:
-            return current.sortKey(mode, matrix)
+            return tuple(current.sortKey(mode, matrix))
         else:
             return (False, [], None)
 
@@ -778,7 +808,7 @@ class Shader(shaders.Shader):
 class ShaderGeometry(shaders.ShaderGeometry):
     """Renderable geometry type using shaders"""
 
-    def Render(self, mode=None):
+    def Render(self, mode: Any = None) -> Any:
         """Do run-time rendering of the Shape for the given mode"""
         if not self.attributes or not self.appearance:
             return None
@@ -798,7 +828,7 @@ class ShaderGeometry(shaders.ShaderGeometry):
                 if previous:
                     glUseProgram(previous)
 
-    def _renderAttributes(self, current, mode):
+    def _renderAttributes(self, current: Any, mode: Any) -> Any:
         """Draw the slices with this shape's attributes bound.
 
         The attribute pointers are recorded into a vertex array object, which is
@@ -811,7 +841,7 @@ class ShaderGeometry(shaders.ShaderGeometry):
         if not program:
             return False
 
-        def build():
+        def build() -> None:
             for attribute in self.attributes:
                 attribute.render(current, mode)
 
@@ -845,7 +875,7 @@ class ShaderGeometry(shaders.ShaderGeometry):
             if transient:
                 glDeleteVertexArrays(1, [vao])
 
-    def sortKey(self, mode, matrix):
+    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         # distance calculation...
         distance = polygonsort.distances(
@@ -860,9 +890,9 @@ class ShaderGeometry(shaders.ShaderGeometry):
             key = (False, [], None)
         if key[0]:
             distance = -distance
-        return key[0:2] + (distance,) + key[1:]
+        return tuple(key[0:2]) + (distance,) + tuple(key[1:])
 
-    def boundingVolume(self, mode):
+    def boundingVolume(self, mode: Any) -> Any:
         """Create a bounding-volume object for this node
 
         This is our geometry's boundingVolume, with the
@@ -883,7 +913,8 @@ class ShaderGeometry(shaders.ShaderGeometry):
             return boundingvolume.UnboundedVolume()
         return bb
 
-    def visible(self, frustum=None, matrix=None, occlusion=0, mode=None):
+    def visible(self, frustum: Any = None, matrix: Any = None,
+                occlusion: int = 0, mode: Any = None) -> Any:
         """Check whether this renderable node intersects frustum
 
         frustum -- the bounding volume frustum with a planes
@@ -901,6 +932,7 @@ class ShaderGeometry(shaders.ShaderGeometry):
         except Exception:
             tb = traceback.format_exc()
             log.warning("""Failure during Shape.visible check for %r:\n%s""", self, tb)
+            return None
 
 
 class ShaderSlice(shaders.ShaderSlice):

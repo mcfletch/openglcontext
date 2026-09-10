@@ -155,7 +155,7 @@ def grass_tuft(
     height: float = 0.55, color: tuple[float, float, float] = (0.26, 0.45, 0.14)
 ) -> Group:
     """A knee-high grass/weed tuft: crossed thin blades sharing one material."""
-    from OpenGLContext.scenegraph.basenodes import (  # type: ignore[attr-defined]  # basenodes builds node classes dynamically from entry points
+    from OpenGLContext.scenegraph.basenodes import (
         Shape, Box, Appearance, Material,
     )
     mat = Appearance(material=Material(diffuseColor=list(color)))
@@ -172,7 +172,7 @@ def bush(
     size: float = 1.3, color: tuple[float, float, float] = (0.13, 0.31, 0.10)
 ) -> Group:
     """A low shrub: a couple of overlapping foliage blobs."""
-    from OpenGLContext.scenegraph.basenodes import (  # type: ignore[attr-defined]  # basenodes builds node classes dynamically from entry points
+    from OpenGLContext.scenegraph.basenodes import (
         Shape, Sphere, Appearance, Material,
     )
     mat = Appearance(material=Material(diffuseColor=list(color)))
@@ -206,7 +206,7 @@ def build_forest_patch(
     widest with a near-mesh / far-billboard LOD. All layers share one prototype each,
     so the instancing engine draws each in a handful of calls. Rebuild this around the
     camera as it moves to keep a bounded, always-dense field."""
-    from OpenGLContext.scenegraph.basenodes import Shape, Box, Appearance, Material  # type: ignore[attr-defined]  # basenodes builds node classes dynamically from entry points
+    from OpenGLContext.scenegraph.basenodes import Shape, Box, Appearance, Material
 
     def keep(p: np.ndarray) -> np.ndarray:
         return (p[:, 1] > water_level + 2.0) & (p[:, 1] < 135.0)
@@ -240,7 +240,7 @@ def conifer(
     Returned as a `Group` of `Shape`s reused across instances, so the instancing
     engine collapses each sub-part across all trees. Much more tree-like than a single
     cone, still cheap enough for instancing."""
-    from OpenGLContext.scenegraph.basenodes import (  # type: ignore[attr-defined]  # basenodes builds node classes dynamically from entry points
+    from OpenGLContext.scenegraph.basenodes import (
         Shape, Cylinder, Cone, Appearance, Material,
     )
     trunk_h = height * 0.32

@@ -144,8 +144,15 @@ used to render the text. &nbsp;VRML97 is a cross-platform international
 standard, so it tends toward abstraction, rather than concrete
 specification. &nbsp;However, you can specify a particular
 platform-specific name for a font-face as one of the values in the
-family field. &nbsp;OpenGLContext recognizes the following family values
-from the VRML97 standard (bracketed name describes the chosen font):</li>
+family field. &nbsp;The field is a list in <em>preference order</em>: the
+first name this machine has a font for is the one used, and the names
+after it are the fallbacks, so
+<code>family [ "Gill Sans", "SANS" ]</code> asks for Gill Sans and
+settles for whatever sans-serif face is installed. &nbsp;A style naming
+no family, or naming only families nothing is installed for, gets the
+provider's default. &nbsp;OpenGLContext recognizes the following family
+values from the VRML97 standard (bracketed name describes the chosen
+font):</li>
 
   
   <ul>

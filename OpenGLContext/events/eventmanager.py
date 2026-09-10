@@ -1,6 +1,8 @@
 """Abstract base class for all event managers."""
+from typing import Any, Dict, Iterable
+
 from pydispatch import dispatcher
-import logging 
+import logging
 log = logging.getLogger( __name__ )
 
 class EventManager(object):
@@ -24,12 +26,12 @@ class EventManager(object):
     for "modal" operation), overriding the ProcessEvent
     method is likely the most appropriate approach.
     """
-    type = ""
-    def __init__ (self ):
+    type: str = ""
+    def __init__ (self ) -> None:
         """Initialise the event manager"""
-        self.mapping = {
+        self.mapping: Dict[Any, Any] = {
         }
-    def hasReceivers( self ):
+    def hasReceivers( self ) -> bool:
         """Whether any live callback is registered for this manager's event type.
 
         Encapsulates the pydispatch lookup here, in the events layer, so callers
@@ -56,7 +58,7 @@ class EventManager(object):
                         and any( True for _ in dispatcher.liveReceivers( list( receivers ) ) )):
                     return True
         return False
-    def ProcessEvent(self, event):
+    def ProcessEvent(self, event: Any) -> Any:
         """Dispatch an incoming event
 
         The event must define the getKey() method.
@@ -85,11 +87,11 @@ class EventManager(object):
     @classmethod
     def registerCallback(
         cls,
-        key,
-        function = None,
-        node = None,
-        capture = 0,
-    ):
+        key: Any,
+        function: Any = None,
+        node: Any = None,
+        capture: Any = 0,
+    ) -> Any:
         """Register callback function for the given key (possibly node-specific)
 
         key -- as returned by event.getKey()
@@ -127,11 +129,11 @@ class EventManager(object):
         return previous
     @classmethod
     def _removeCurrentCallbacks(
-        cls, 
-        key,
-        node = None,
-        capture = 0,
-    ):
+        cls,
+        key: Any,
+        node: Any = None,
+        capture: Any = 0,
+    ) -> Any:
         """De-register current callbacks, return previous callback
 
         Note:
@@ -210,12 +212,12 @@ class BubblingEventManager( EventManager ):
         currentNode = None
         atTarget = 0
     """
-    type = ""
-    def __init__ (self ):
+    type: str = ""
+    def __init__ (self ) -> None:
         """Initialise the event manager"""
         assert self.type, """EventManager %(self)r created without a non-null "type" attribute"""%locals()
-        
-    def ProcessEvent( self, event ):
+
+    def ProcessEvent( self, event: Any ) -> Any:
         """Modified version of ProcessEvent that dispatches to nodes"""
 ##		if self.type == "mousebutton":
 ##			log.setLevel( DEBUG )
@@ -293,7 +295,8 @@ class BubblingEventManager( EventManager ):
                         log.debug( '   handler %s -> %r', handler, result )
                     processed = processed or result
         return processed
-    def _traversalPaths( self, event ):
+    def _traversalPaths( self, event: Any ) -> Iterable[Any]:
         """Get the paths to traverse for a given event"""
-        return event.getObjectPaths()
+        paths: Iterable[Any] = event.getObjectPaths()
+        return paths
     

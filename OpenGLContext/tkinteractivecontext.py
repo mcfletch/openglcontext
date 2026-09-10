@@ -1,4 +1,5 @@
 """Interactive context using the Tk API (provides navigation support)"""
+from typing import Any
 
 from OpenGLContext import interactivecontext, tkcontext
 from OpenGLContext.move import viewplatformmixin
@@ -16,10 +17,10 @@ if __name__ == "__main__":
     from OpenGLContext.scenegraph.basenodes import Box, Shape, sceneGraph
 
     class TestRenderer(TkInteractiveContext):
-        def OnInit(self):
+        def OnInit(self) -> None:
             self.sg = sceneGraph(children=[Shape(geometry=Box(size=(2, 2, 2)))])
 
-        def getSceneGraph(self):
+        def getSceneGraph(self) -> Any:
             return self.sg
 
     TestRenderer.ContextMainLoop()

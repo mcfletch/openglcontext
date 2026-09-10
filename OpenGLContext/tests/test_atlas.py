@@ -5,10 +5,10 @@ import unittest
 
 class TestAtlas( unittest.TestCase ):
     """Tests for generic atlas algorithms"""
-    def setUp( self ):
+    def setUp( self ) -> None:
         self.atlasManager = AtlasManager( max_size=256 )
     
-    def test_assignment( self ):
+    def test_assignment( self ) -> None:
         """Test that assignments go to the correct strips"""
         map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' )) )
         assert len(self.atlasManager.components) == 1
@@ -33,7 +33,7 @@ class TestAtlas( unittest.TestCase ):
         assert map.atlas is atlas
         assert len(atlas.strips) == 2, len(atlas.strips)
 
-    def test_matrix( self ):
+    def test_matrix( self ) -> None:
         """Test that a texture matrix can produce a proper scale/offset"""
         map = self.atlasManager.add( NumpyAdapter( zeros( (64,64,4),'B' ) ))
         matrix = map.matrix()
@@ -54,7 +54,7 @@ class TestAtlas( unittest.TestCase ):
         set = dot( array( [[0,0,0,1],[1,1,0,1]],'f'), matrix )
         assert allclose( set, [[.25,0,0,1],[.5,.25,0,1]] ), (set,matrix)
 
-    def test_release( self ):
+    def test_release( self ) -> None:
         map = self.atlasManager.add( zeros( (64,64,4),'B' ) )
         del map
         map2 = self.atlasManager.add( zeros( (64,64,4),'B' ) )

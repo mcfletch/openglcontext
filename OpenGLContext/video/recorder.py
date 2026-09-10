@@ -79,7 +79,7 @@ class CaptureTarget:
     something other than an encoder -- that just wants somewhere to blit to.
     """
 
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int) -> None:
         self.size = (int(width), int(height))
         self.texture = int(glGenTextures(1))
         glBindTexture(GL_TEXTURE_2D, self.texture)
@@ -171,7 +171,7 @@ class VideoRecorder:
                  size: tuple[int, int] | None = None,
                  seconds: float | None = None, frames: int | None = None,
                  start_after: float = 0.0, fixed_step: bool = True,
-                 **encoder: Any):
+                 **encoder: Any) -> None:
         self.path = Path(path)
         self.fps = fps
         self.size = size

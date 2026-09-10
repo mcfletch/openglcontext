@@ -134,8 +134,8 @@ class SweptGeometry(nodetypes.Geometry, node.Node):
         if built is None:
             return 0
         if getattr(mode, 'shader_mode', False):
-            return built.render(visible=visible, lit=lit, textured=textured,
-                                transparent=transparent, mode=mode)
+            return int(built.render(visible=visible, lit=lit, textured=textured,
+                                    transparent=transparent, mode=mode))
         return self._render_legacy(built, lit=lit, textured=textured)
 
     def _render_legacy(self, built: Any, lit: int = 1, textured: int = 1) -> int:
@@ -153,17 +153,20 @@ class SweptGeometry(nodetypes.Geometry, node.Node):
             glVertexPointer,
         )
         from OpenGL.arrays import vbo
+        #: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to
+        #: whichever of the accelerated and the pure-Python class it loaded.
+        VBO: Any = vbo.VBO
 
         buffers = getattr(built, '_legacy_buffers', None)
         if buffers is None:
             buffers = {
-                'positions': vbo.VBO(built.positions, target=GL_ARRAY_BUFFER),
-                'indices': vbo.VBO(built.indices, target=GL_ELEMENT_ARRAY_BUFFER),
+                'positions': VBO(built.positions, target=GL_ARRAY_BUFFER),
+                'indices': VBO(built.indices, target=GL_ELEMENT_ARRAY_BUFFER),
             }
             for name in ('normals', 'texcoords'):
                 array = getattr(built, name, None)
                 if array is not None and len(array):
-                    buffers[name] = vbo.VBO(array, target=GL_ARRAY_BUFFER)
+                    buffers[name] = VBO(array, target=GL_ARRAY_BUFFER)
             built._legacy_buffers = buffers
 
         normals = buffers.get('normals') if lit else None

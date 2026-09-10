@@ -53,7 +53,7 @@ rectangles back.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 
 import numpy as np
 
@@ -245,7 +245,7 @@ class HUDLayer(RootWidget):
                 # fill a rectangle on its own.
                 child.arrange(content, metrics)
                 continue
-            offset = child.anchorOffset(metrics)
+            offset = cast(Anchored, child).anchorOffset(metrics)
             # The layer's own width is passed on, so a child that *can* fit
             # itself into less room is told how much there is: a bar of five
             # weapons wants its titles on a desktop and its number keys alone

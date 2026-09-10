@@ -1,4 +1,6 @@
 """VRML97 Background node, with image cube and gradient sphere"""
+from typing import Any
+
 from OpenGLContext.scenegraph import cubebackground, spherebackground, imagetexture
 from vrml import field
 from vrml.vrml97 import basenodes
@@ -43,7 +45,7 @@ class Background(
     left = field.newField(' left', 'SFNode', default=imagetexture.ImageTexture)
     front = field.newField(' front', 'SFNode', default=imagetexture.ImageTexture)
     bottom = field.newField(' bottom', 'SFNode', default=imagetexture.ImageTexture)
-    def Render( self, mode, clear = 1 ):
+    def Render( self, mode: Any, clear: int = 1 ) -> None:
         """Render the Background
 
         mode -- the RenderingPass object representing
@@ -79,7 +81,7 @@ class Background(
                 ):
                     cubebackground._CubeBackground.Render( self, mode, clear=0)
 
-    def RenderShader( self, mode, clear = 1 ):
+    def RenderShader( self, mode: Any, clear: int = 1 ) -> None:
         """Render the Background using shader pipeline
 
         mode -- the RenderingPass object representing

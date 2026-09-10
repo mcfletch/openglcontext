@@ -6,6 +6,8 @@ VRML97 viewpoint-binding mechanism into it, so a Viewpoint authored in a VRML wo
 -- or synthesised for a glTF camera -- becomes bindable there too.
 """
 
+from typing import Any
+
 from vrml.vrml97 import nodetypes
 from OpenGLContext import visitor
 import logging
@@ -13,7 +15,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def bind_scene_viewpoint(context):
+def bind_scene_viewpoint(context: Any) -> None:
     """Move ``context``'s platform to the scene's currently-bound Viewpoint.
 
     The core-profile FlatPass drives the camera purely from the view platform and

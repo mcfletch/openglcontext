@@ -29,6 +29,7 @@ from vrml import field, protofunctions
 
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
+from typing import Any, Optional, Tuple
 
 log = logging.getLogger(__name__)
 from OpenGLContext import arrays
@@ -57,6 +58,11 @@ from OpenGLContext.scenegraph.nurbstess import (
 )
 
 
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
+
 # Distance-LOD sampling rate per level. Level 0 is None -> keep the node's own
 # ``sampling`` (unchanged close-up look); coarser levels override with
 # progressively fewer intervals so a far-off surface tessellates far more cheaply.
@@ -72,11 +78,12 @@ INTERLEAVED_PLAIN = (NORMAL_POSITION_STRIDE, None, 0, 12)
 CURVE_STEPS = 64
 
 
-def nurbs_lod_steps(level):
+def nurbs_lod_steps(level: int) -> Optional[float]:
+    """The sampling step for an LOD level, or None for the surface's own."""
     return NURBS_LOD_STEPS[min(level, len(NURBS_LOD_STEPS) - 1)]
 
 
-def interleaved_layout(has_colors):
+def interleaved_layout(has_colors: bool) -> Any:
     """``(stride, color_offset, normal_offset, vertex_offset)`` in bytes."""
     return INTERLEAVED_WITH_COLOR if has_colors else INTERLEAVED_PLAIN
 
@@ -96,12 +103,12 @@ class _SurfaceRenderer(object):
 
     def render(
         self,
-        visible=1,  # can skip normals and textures if not
-        lit=1,  # can skip normals if not
-        textured=1,  # can skip textureCoordinates if not
-        transparent=0,  # need to sort triangle geometry...
-        mode=None,  # the renderpass object
-    ):
+        visible: int = 1,  # can skip normals and textures if not
+        lit: int = 1,  # can skip normals if not
+        textured: int = 1,  # can skip textureCoordinates if not
+        transparent: int = 0,  # need to sort triangle geometry...
+        mode: Any = None,  # the renderpass object
+    ) -> int:
         """Render the surface, tessellated to triangles"""
         cached = self._cached_geometry(mode)
         if cached is None:
@@ -114,7 +121,7 @@ class _SurfaceRenderer(object):
         return self._render_legacy(vertices, indices, count, has_colors, lit)
 
     # -- the tessellation, built once per LOD level and cached ---------------
-    def _cached_geometry(self, mode):
+    def _cached_geometry(self, mode: Any) -> Any:
         """The surface's buffers for this frame, from the pass's cache.
 
         One entry per distance-LOD level, so a far-off surface reuses a coarse
@@ -134,7 +141,7 @@ class _SurfaceRenderer(object):
                 self._setup_shader_cache_dependencies(holder)
         return cached
 
-    def _build_geometry(self, steps=None):
+    def _build_geometry(self, steps: Optional[float] = None) -> Any:
         """Tessellate and upload, as ``(vertices, indices, count, has_colors)``.
 
         ``steps`` is a sampling rate override (distance-LOD); ``None`` keeps the
@@ -149,12 +156,13 @@ class _SurfaceRenderer(object):
             return None
         return build_surface_vbo(tessellation)
 
-    def _tessellate(self, steps=None):
+    def _tessellate(self, steps: Optional[float] = None) -> Any:
         """The surface's triangles (subclass hook)."""
         return None
 
     # -- drawing -------------------------------------------------------------
-    def _render_shader(self, mode, vertices, indices, count, has_colors):
+    def _render_shader(self, mode: Any, vertices: Any, indices: Any,
+                       count: int, has_colors: bool) -> int:
         """Draw the tessellation with the pass's shader program."""
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:
@@ -189,7 +197,7 @@ class _SurfaceRenderer(object):
         # change makes new buffers, which rebuilds the VAO, and so does a change
         # of whether the surface carries colours, since that is what the
         # interleaved stride depends on.
-        def _bind_attributes():
+        def _bind_attributes() -> None:
             vertices.bind()
             glEnableVertexAttribArray(LOC_POSITION)
             glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride,
@@ -231,7 +239,8 @@ class _SurfaceRenderer(object):
                     mode.matrix, mode.getProjection(), shader_program.program)
         return 1
 
-    def _render_legacy(self, vertices, indices, count, has_colors, lit=1):
+    def _render_legacy(self, vertices: Any, indices: Any, count: int,
+                       has_colors: bool, lit: int = 1) -> int:
         """Draw the tessellation through the fixed-function pipeline."""
         stride, color_offset, normal_offset, vertex_offset = interleaved_layout(
             has_colors)
@@ -269,7 +278,7 @@ class _SurfaceRenderer(object):
                 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
         return 1
 
-    def _fill_mode(self):
+    def _fill_mode(self) -> int:
         """``GL_FILL`` or ``GL_LINE``, from ``geometryType``."""
         if self.geometryType in ("edge", "patch"):
             return GL_LINE
@@ -282,7 +291,7 @@ class _SurfaceRenderer(object):
             self.geometryType = "polygon"
         return GL_FILL
 
-    def _apply_face_state(self):
+    def _apply_face_state(self) -> None:
         """Winding and culling, from the surface's ``ccw`` and ``solid`` fields."""
         surface = self._face_source()
         if surface is None:
@@ -293,16 +302,16 @@ class _SurfaceRenderer(object):
         else:
             glDisable(GL_CULL_FACE)
 
-    def _face_source(self):
+    def _face_source(self) -> Any:
         """The node whose ``ccw``/``solid`` fields describe these faces."""
         return self
 
     # -- distance level-of-detail -----------------------------------------
-    def _lod_bounding_sphere(self):
+    def _lod_bounding_sphere(self) -> Optional[Tuple[Any, float]]:
         """(center, radius) of this surface in local space, or None (subclass hook)."""
         return None
 
-    def _lod_level(self, mode):
+    def _lod_level(self, mode: Any) -> int:
         """Distance-LOD level (0 = finest) for this surface this frame."""
         from OpenGLContext.scenegraph import tessellationlod
         sphere = self._lod_bounding_sphere()
@@ -312,7 +321,7 @@ class _SurfaceRenderer(object):
         return tessellationlod.lod_level(mode, center, radius)
 
     @staticmethod
-    def _control_point_sphere(control_point):
+    def _control_point_sphere(control_point: Any) -> Optional[Tuple[Any, float]]:
         """Local bounding sphere (center, radius) from a control-point array."""
         try:
             cp = arrays.reshape(arrays.array(control_point, 'd'), (-1, 3))
@@ -326,7 +335,8 @@ class _SurfaceRenderer(object):
         radius = 0.5 * float((((hi - lo) ** 2).sum()) ** 0.5)
         return center, (radius or 1.0)
 
-    def _setup_vertex_color_lights(self, mode, shader_program, vc_prog):
+    def _setup_vertex_color_lights(self, mode: Any, shader_program: Any,
+                                   vc_prog: Any) -> None:
         """Set up lights on the vertex color shader program.
 
         Configures the vertex color shader's light uniforms to match
@@ -372,14 +382,14 @@ class _SurfaceRenderer(object):
         else:
             shader_program._set_uniform1i('numLights', light_count, vc_prog)
 
-    def _get_trimming_contours(self):
+    def _get_trimming_contours(self) -> Any:
         """Get trimming contours for this surface.
 
         Subclasses should override if they have trimming.
         """
         return None
 
-    def _setup_shader_cache_dependencies(self, holder):
+    def _setup_shader_cache_dependencies(self, holder: Any) -> None:
         """Set up cache dependencies for shader geometry.
 
         Subclasses should override to add dependencies on their specific fields.
@@ -415,17 +425,17 @@ class NurbsSurface(_SurfaceRenderer, nurbs.NurbsSurface):
             *rational* in NURBS, and what lets a NURBS circle be a circle
     """
 
-    def _setup_shader_cache_dependencies(self, holder):
+    def _setup_shader_cache_dependencies(self, holder: Any) -> None:
         """Invalidate the tessellation when the surface data changes."""
         for field_name in TESSELLATION_FIELDS:
             field_obj = protofunctions.getField(self, field_name)
             if field_obj is not None:
                 holder.depend(self, field_obj)
 
-    def _lod_bounding_sphere(self):
+    def _lod_bounding_sphere(self) -> Optional[Tuple[Any, float]]:
         return self._control_point_sphere(self.controlPoint)
 
-    def _tessellate(self, steps=None):
+    def _tessellate(self, steps: Optional[float] = None) -> Any:
         return tessellate_surface(
             self,
             trimming_contours=self._get_trimming_contours(),
@@ -444,11 +454,11 @@ class TrimmedSurface(_SurfaceRenderer, nurbs.TrimmedSurface):
     and the trimming contours.
     """
 
-    def _get_trimming_contours(self):
+    def _get_trimming_contours(self) -> Any:
         """Get trimming contours for this surface."""
         return self.trimmingContour if self.trimmingContour else None
 
-    def _setup_shader_cache_dependencies(self, holder):
+    def _setup_shader_cache_dependencies(self, holder: Any) -> None:
         """Invalidate the tessellation when the surface or its trims change."""
         if self.surface:
             for field_name in TESSELLATION_FIELDS:
@@ -459,15 +469,15 @@ class TrimmedSurface(_SurfaceRenderer, nurbs.TrimmedSurface):
         if trim_field is not None:
             holder.depend(self, trim_field)
 
-    def _lod_bounding_sphere(self):
+    def _lod_bounding_sphere(self) -> Optional[Tuple[Any, float]]:
         if not self.surface:
             return None
         return self._control_point_sphere(self.surface.controlPoint)
 
-    def _face_source(self):
+    def _face_source(self) -> Any:
         return self.surface or None
 
-    def _tessellate(self, steps=None):
+    def _tessellate(self, steps: Optional[float] = None) -> Any:
         if not self.surface:
             return None
         # The sampling is usually set on the inner surface rather than here.
@@ -498,12 +508,12 @@ class NurbsCurve(nurbs.NurbsCurve):
 
     def render(
         self,
-        visible=1,  # can skip normals and textures if not
-        lit=1,  # can skip normals if not
-        textured=1,  # can skip textureCoordinates if not
-        transparent=0,  # need to sort triangle geometry...
-        mode=None,  # the renderpass object
-    ):
+        visible: int = 1,  # can skip normals and textures if not
+        lit: int = 1,  # can skip normals if not
+        textured: int = 1,  # can skip textureCoordinates if not
+        transparent: int = 0,  # need to sort triangle geometry...
+        mode: Any = None,  # the renderpass object
+    ) -> int:
         """Render the curve as a geometry node"""
         cached = self._cached_points(mode)
         if cached is None:
@@ -515,7 +525,7 @@ class NurbsCurve(nurbs.NurbsCurve):
             return self._render_shader(mode, points, colors)
         return self._render_legacy(points, colors)
 
-    def _cached_points(self, mode):
+    def _cached_points(self, mode: Any) -> Any:
         """``(points, colors)`` for this curve, from the pass's cache."""
         if mode is None or getattr(mode, 'cache', None) is None:
             return self._evaluate()
@@ -531,7 +541,7 @@ class NurbsCurve(nurbs.NurbsCurve):
                         holder.depend(self, field_obj)
         return cached
 
-    def _evaluate(self):
+    def _evaluate(self) -> Optional[Tuple[Any, Any]]:
         """Points along the curve, and a colour each where the node gives them.
 
         ``None`` where the node does not describe a curve; the colours are
@@ -563,14 +573,14 @@ class NurbsCurve(nurbs.NurbsCurve):
         return points.astype(np.float32), (
             None if colors is None else colors.astype(np.float32))
 
-    def _render_legacy(self, points, colors):
+    def _render_legacy(self, points: Any, colors: Any) -> int:
         """Draw the polyline through the fixed-function pipeline."""
         glEnableClientState(GL_VERTEX_ARRAY)
-        glVertexPointerf(points)
+        glVertexPointer(3, GL_FLOAT, 0, points)
         if colors is not None:
             glEnable(GL_COLOR_MATERIAL)
             glEnableClientState(GL_COLOR_ARRAY)
-            glColorPointerf(colors)
+            glColorPointer(3, GL_FLOAT, 0, colors)
         try:
             glDrawArrays(GL_LINE_STRIP, 0, len(points))
         finally:
@@ -580,7 +590,7 @@ class NurbsCurve(nurbs.NurbsCurve):
                 glDisable(GL_COLOR_MATERIAL)
         return 1
 
-    def _render_shader(self, mode, points, colors):
+    def _render_shader(self, mode: Any, points: Any, colors: Any) -> int:
         """Draw the polyline with the pass's line or unlit program."""
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None:
@@ -604,7 +614,7 @@ class NurbsCurve(nurbs.NurbsCurve):
             stride = 12
         curve_vbo = self._curve_vbo(interleaved)
 
-        def _bind_attributes():
+        def _bind_attributes() -> None:
             curve_vbo.bind()
             glEnableVertexAttribArray(LOC_POSITION)
             glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride, None)
@@ -637,11 +647,11 @@ class NurbsCurve(nurbs.NurbsCurve):
             shader_program.use(lit=True)
         return 1
 
-    def _curve_vbo(self, interleaved):
+    def _curve_vbo(self, interleaved: Any) -> Any:
         """The curve's vertex buffer, re-uploaded only when its points change."""
         held = getattr(self, '_curve_gpu', None)
         if held is None or held.data.shape != interleaved.shape:
-            held = vbo.VBO(interleaved)
+            held = VBO(interleaved)
             try:
                 self._curve_gpu = held
             except (AttributeError, TypeError):
@@ -650,11 +660,11 @@ class NurbsCurve(nurbs.NurbsCurve):
             held.set_array(interleaved)
         return held
 
-    def degree(self):
+    def degree(self) -> int:
         """Return degree of a nurbs-curve object"""
         return len(self.knot) - len(self.controlPoint) + 1
 
-    def uniform(self):
+    def uniform(self) -> Tuple[int, str]:
         """Check that curve is "uniform"
 
         * all items in knots are increasing
@@ -685,7 +695,7 @@ class NurbsCurve(nurbs.NurbsCurve):
                 last = item
         return 1, "Uniform"
 
-    def allIncreasing(self):
+    def allIncreasing(self) -> Tuple[int, str]:
         """Check that all items in knots are increasing"""
         if not len(self.knot):
             return 1, "No knots defined"

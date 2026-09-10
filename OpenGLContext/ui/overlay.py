@@ -24,7 +24,9 @@ first::
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple,
+)
 
 import logging
 
@@ -236,7 +238,29 @@ class OverlayStack:
         return self._first(lambda panel: panel.wheel(delta, x, y))
 
 
-class OverlayMixin:
+if TYPE_CHECKING:
+    class _Host:
+        """What :class:`OverlayMixin` needs of the class beside it.
+
+        Declared for a checker and aliased to ``object`` at run time: the
+        context and :class:`~OpenGLContext.ui.screen.ScreenMixin` are what
+        actually provide these, and a real base of either name here would put a
+        second copy in the MRO.  Each signature matches the real one.
+        """
+
+        getInputState: Any
+        suspendPointerCapture: Any
+
+        def getViewPort(self) -> Tuple[int, int]: ...
+        def triggerRedraw(self, force: int = 0) -> Any: ...
+        def overlayMetrics(self) -> Optional[FontMetrics]: ...
+        def screenTrees(self, metrics: FontMetrics,
+                        now: Optional[float] = None) -> List[Any]: ...
+else:
+    _Host = object
+
+
+class OverlayMixin(_Host):
     """Gives a context an overlay stack, its input routing and its drawing.
 
     The HUD half -- the layers under these panels, and the drawing both go
@@ -248,10 +272,6 @@ class OverlayMixin:
     it does not inherit from ``ScreenMixin`` itself.
     """
 
-    # Supplied by the context this is mixed into (annotations only, so the
-    # real methods are still found at run time).
-    getInputState: Any
-    suspendPointerCapture: Any
     _overlays: Optional[OverlayStack] = None
     _overlayActive: bool = False
     _holdingInputs: Optional[Dict['_Claim', bool]] = None

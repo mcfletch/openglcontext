@@ -51,7 +51,7 @@ class TestMeshGPUUpload:
     def test_indexed_mesh_builds_all_attribute_buffers(self, gl):
         mesh = _full_mesh()
         gpu = mesh._gpu(_mode())
-        assert gpu.vao is not None
+        assert gpu.vao != 0
         assert gpu.indexed is True
         assert gpu.count == 3
         assert len(gpu.attr_layout) == 6          # all six optional attrs present
@@ -186,9 +186,9 @@ class TestDynamicDeform:
 class TestResourcesAndQueue:
     def test_release_clears_vaos(self, gl):
         gpu = _full_mesh()._gpu(_mode())
-        assert gpu.vao is not None
+        assert gpu.vao != 0
         gpu.release()
-        assert gpu.vao is None
+        assert gpu.vao == 0
         gpu.release()                                # idempotent
 
     def test_instance_gpu_returns_cached_gpu(self, gl):

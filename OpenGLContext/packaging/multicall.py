@@ -35,11 +35,15 @@ it had been installed as its own console script.
 import importlib
 import os
 import sys
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Set, Union
+
+#: A command is the function itself, or the ``'module:attribute'`` name of one.
+Command = Union[str, Callable[[], Any]]
 
 __all__ = ['command_modules', 'command_name', 'load', 'run']
 
 
-def command_name(path):
+def command_name(path: str) -> str:
     """The command a bundle run as *path* is being asked for
 
     The directory and any executable suffix are not part of the name, so
@@ -55,7 +59,8 @@ def command_name(path):
     return os.path.splitext(leaf)[0]
 
 
-def run(commands, argv=None):
+def run(commands: Mapping[str, Command],
+        argv: Optional[Sequence[str]] = None) -> int:
     """Run the command *argv* names, and report the status to exit with
 
     commands -- the commands this bundle offers, as ``{name: function}``, where
@@ -74,14 +79,14 @@ def run(commands, argv=None):
     if argv is None:
         argv = sys.argv
     name = command_name(argv[0])
-    command = commands.get(name)
-    if command is None:
+    named = commands.get(name)
+    if named is None:
         sys.stderr.write(
             'This bundle has no command called %r. It offers: %s\n'
             % (name, ', '.join(sorted(commands)))
         )
         return 2
-    command = load(command)
+    command = load(named)
     original, sys.argv = sys.argv, list(argv)
     try:
         return command() or 0
@@ -89,7 +94,7 @@ def run(commands, argv=None):
         sys.argv = original
 
 
-def load(command):
+def load(command: Command) -> Callable[[], Any]:
     """The function *command* stands for
 
     A command is either the function itself or a ``'module:attribute'`` name of
@@ -103,17 +108,18 @@ def load(command):
         raise ValueError(
             'A named command is written module:attribute, which %r is not' % (command,)
         )
-    return getattr(importlib.import_module(module), attribute)
+    found: Callable[[], Any] = getattr(importlib.import_module(module), attribute)
+    return found
 
 
-def command_modules(commands):
+def command_modules(commands: Mapping[str, Command]) -> List[str]:
     """The modules the named commands live in, as a sorted list
 
     A freezer follows import statements and so cannot see a command named as a
     string; this is what to tell it about. Commands given as functions are
     already reached by the import that produced them and are not reported.
     """
-    modules = set()
+    modules: Set[str] = set()
     for command in commands.values():
         if not callable(command):
             module = command.partition(':')[0]

@@ -16,7 +16,7 @@ The coordinates are ``(v, u)``, in the surface's own knot ranges -- see the
 parameter conventions in :mod:`OpenGLContext.scenegraph.nurbstess`.
 """
 
-from typing import Any
+from typing import Any, List
 
 import numpy as np
 from opengl_extrusions.nurbs import curve_points
@@ -74,7 +74,7 @@ class Contour2D(nurbs.Contour2D):
         contour that repeats its start at the end is no different from one that
         does not.
         """
-        pieces = []
+        pieces: List[Any] = []
         for child in self.children:
             points = getattr(child, 'points', None)
             if points is None:

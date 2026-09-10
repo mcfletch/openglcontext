@@ -1,10 +1,15 @@
 """wxPython bitmap and texmap fonts"""
 
+from __future__ import annotations
+
+from typing import Any, Iterable
+
 from OpenGLContext.scenegraph.text import fontprovider, font
+# The class below names an attribute `font`, so the metrics class is named
+# directly rather than reached through the module.
+from OpenGLContext.scenegraph.text.font import CharacterMetrics
 from OpenGL.GL import *
 import wx
-import traceback
-import os
 from OpenGLContext.arrays import *
 import logging
 
@@ -40,9 +45,9 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
 
     def __init__(
         self,
-        fontStyle=None,
-        font=None,
-    ):
+        fontStyle: Any = None,
+        font: Any = None,
+    ) -> None:
         """Initialize the wxBitmapFont object
 
         fontStyle -- the FontStyle node which generates
@@ -53,7 +58,7 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
             in which case we will find the appropriate font
             using the wx.FontProvider's match method.
         """
-        self._displayLists = {}
+        self._displayLists: dict[str, tuple[Any, CharacterMetrics]] = {}
         self.fontStyle = fontStyle or None
         if not font:
             if __debug__:
@@ -69,7 +74,9 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
                 )
         self.font = font
 
-    def createChar(self, char, mode=None):
+    def createChar(
+        self, char: str, mode: Any = None
+    ) -> tuple[int | None, CharacterMetrics]:
         """Create the single-character display list"""
         dataArray, metrics = self.createCharTexture(char, mode=mode)
         if dataArray is not None:
@@ -83,24 +90,26 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
             )
         return None, metrics
 
-    def textureToList(self, array, metrics, mode=None):
+    def textureToList(
+        self, array: Any, metrics: CharacterMetrics, mode: Any = None
+    ) -> int:
         """Compile string-form image to a display-list
 
         XXX:
             use a single texture and coordinates for texmap
             version
         """
-        shape = len(array) / (metrics.width * metrics.height)
-        if shape == 2:
-            mode = GL_LUMINANCE_ALPHA
-        elif shape == 4:
-            mode = GL_RGBA
-        elif shape == 3:
-            mode = GL_RGB
+        components = len(array) // (metrics.width * metrics.height)
+        if components == 2:
+            pixelFormat = GL_LUMINANCE_ALPHA
+        elif components == 4:
+            pixelFormat = GL_RGBA
+        elif components == 3:
+            pixelFormat = GL_RGB
         else:
             raise ValueError(
                 """Unsupported array dimension for textureToList, require 2 or 4 items/pixel, got %s"""
-                % (shape(array)[-1],)
+                % (components,)
             )
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
@@ -110,7 +119,8 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
             try:
                 if metrics.char != " ":
                     glDrawPixels(
-                        metrics.width, metrics.height, mode, GL_UNSIGNED_BYTE, array
+                        int(metrics.width), int(metrics.height), pixelFormat,
+                        GL_UNSIGNED_BYTE, array
                     )
                 glBitmap(0, 0, 0, 0, metrics.width, 0, None)
             except Exception:
@@ -122,9 +132,11 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
                 raise
         finally:
             glEndList()
-        return list
+        return int(list)
 
-    def createCharTexture(self, char, mode=None):
+    def createCharTexture(
+        self, char: str, mode: Any = None
+    ) -> tuple[bytes, CharacterMetrics]:
         """Create character's texture/bitmap as a Numeric array w/ width and height
 
         This uses PyGame and Numeric to attempt to create
@@ -161,14 +173,13 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
             % (shape(data), (height, width, 3))
         )
         data = data.tobytes()
-        # ~ print 'data', repr(data)
-        return data, font.CharacterMetrics(
+        return data, CharacterMetrics(
             char,
             width,
             height,
         )
 
-    def lists(self, value, mode=None):
+    def lists(self, value: str, mode: Any = None) -> list[int]:
         """Get a sequence of display-list integers for value
 
         Basically, this does a bit of trickery to do
@@ -190,10 +201,10 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
             log.info("""lists %s(%s)->%s""", self, repr(value), lists)
         return lists
 
-    def lineHeight(self, mode=None):
+    def lineHeight(self, mode: Any = None) -> float:
         """Retrieve normal line-height for this font"""
         for _list, metrics in self._displayLists.values():
-            return metrics.height
+            return float(metrics.height)
         if __debug__:
             log.warning(
                 """lineHeight requested when no characters rasterised, 0-height line may result"""
@@ -212,48 +223,59 @@ class _wxFontProvider(fontprovider.FontProvider):
 
     format = "bitmap"
     scale = 16
-    FAMILYMAPPING = {
+    FAMILYMAPPING: dict[str, tuple[Any, str]] = {
         # really-dumb family:font mappings
         "SERIF": (wx.ROMAN, ""),
         "SANS": (wx.SWISS, ""),
         "ROMAN": (wx.ROMAN, ""),
         "TYPEWRITER": (wx.MODERN, ""),
     }
-    systemNames = None
+    systemNames: list[str] | None = None
 
-    def create(self, fontStyle, mode=None):
+    def create(self, fontStyle: Any, mode: Any = None) -> wxBitmapFont:
         """Create a new font for the given fontStyle and mode"""
         family, face, font = self.match(fontStyle, mode)
         bitmapFont = wxBitmapFont(fontStyle, font=font)
         self.addFont(fontStyle, bitmapFont)
         return bitmapFont
 
-    def match(self, fontStyle, mode=None):
+    def match(self, fontStyle: Any = None, mode: Any = None) -> tuple[Any, str, Any]:
         """Attempt to find matching wxFont for our fontstyle
 
-        This is a really stupid implementation, it just
-        takes the first font that includes the name
-        specified in the fontstyle.
+        ``fontStyle.family`` is VRML97's preference list, so the first name
+        with a font behind it decides the face and the rest are fallbacks.
         """
-        # serif if the VRML default, despite being generally
-        # unsuitable for display in small point-sizes :(
-        family, face = self.FAMILYMAPPING.get("SERIF")
-        if fontStyle and fontStyle.family:
-            for specifier in fontStyle.family:
-                specifier = specifier.lower()
-                current = self.FAMILYMAPPING.get(specifier.upper())
-                if current:
-                    family, face = current
-                    break
-                ## wxPython bug causes a memory error if we do GetFacenames,
-                ## even if we do it inside the mainloop AFAICS!
-                for name in self.enumerate():
-                    if name.find(specifier) > -1:
-                        self.FAMILYMAPPING[specifier] = (wx.DEFAULT, name)
-                        family, face = (wx.DEFAULT, name)
+        found = fontprovider.matchFamily(fontStyle, self._familyFor)
+        if found is None:
+            # serif is the VRML default, despite being generally
+            # unsuitable for display in small point-sizes :(
+            found = self.FAMILYMAPPING["SERIF"]
+        family, face = found
         return self.calculatePointSize(fontStyle, family, face, mode)
 
-    def calculatePointSize(self, fontStyle, family, face, mode=None):
+    def _familyFor(self, specifier: str) -> tuple[Any, str] | None:
+        """The (wx family, face name) for one FontStyle.family name, if any
+
+        A name outside the four generic families is looked for among the
+        installed face names, and the first face carrying it is taken.
+        """
+        key = specifier.upper()
+        current = self.FAMILYMAPPING.get(key)
+        if current:
+            return current
+        ## wxPython bug causes a memory error if we do GetFacenames,
+        ## even if we do it inside the mainloop AFAICS!
+        lowered = specifier.lower()
+        for name in self.enumerate():
+            if name.find(lowered) > -1:
+                found = (wx.DEFAULT, name)
+                self.FAMILYMAPPING[key] = found
+                return found
+        return None
+
+    def calculatePointSize(
+        self, fontStyle: Any, family: Any, face: str, mode: Any = None
+    ) -> tuple[Any, str, Any]:
         """Approximate point size for fontStyle with font"""
         height = 0
         # find pixel-height
@@ -295,7 +317,7 @@ class _wxFontProvider(fontprovider.FontProvider):
             )
         return family, face, font
 
-    def enumerate(self, mode=None):
+    def enumerate(self, mode: Any = None) -> Iterable[str]:
         """Iterate through all available font-keys (whether instantiated or not)
 
         This uses the wxFontEnumerator class to provide a list of

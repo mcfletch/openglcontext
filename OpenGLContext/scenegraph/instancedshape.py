@@ -180,7 +180,7 @@ class InstancedShape(Shape):
         rejected = (distances < 0).all(axis=1).any(axis=1)
         if not rejected.any():
             return placements
-        return placements[~rejected]
+        return np.asarray(placements[~rejected])
 
     def _placedVolume(self, mode: Any) -> Any:
         placements = self.instancePlacements()
@@ -301,7 +301,8 @@ class InstancedModel(Group):
     look like.
     """
 
-    def __init__(self, model: Any = None, parts: Any = None, **named: Any):
+    def __init__(self, model: Any = None, parts: Any = None,
+                 **named: Any) -> None:
         super(InstancedModel, self).__init__(**named)
         self._parts = list(parts) if parts is not None else (
             model_parts(model) if model is not None else [])

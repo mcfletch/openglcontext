@@ -81,7 +81,7 @@ def texture_rgba(source: Any, clamp: bool = True, mipmap: bool = True,
     for p, v in [(GL_TEXTURE_MIN_FILTER, minf), (GL_TEXTURE_MAG_FILTER, GL_LINEAR),
                  (GL_TEXTURE_WRAP_S, wrap), (GL_TEXTURE_WRAP_T, wrap)]:
         glTexParameteri(GL_TEXTURE_2D, p, v)
-    return tid
+    return int(tid)
 
 
 #: How many floats one instance carries, and where each part of it starts. The

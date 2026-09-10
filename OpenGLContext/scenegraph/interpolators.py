@@ -1,5 +1,7 @@
 """Interpolator code for OpenGLContext"""
 
+from typing import TYPE_CHECKING, Any, Optional
+
 from vrml.vrml97 import basenodes
 from OpenGLContext import quaternion
 
@@ -7,18 +9,28 @@ from OpenGLContext import quaternion
 class Interpolator(object):
     """Mix-in class for Interpolators"""
 
-    def on_set_fraction(self, value):
-        """Given a floating point value, produce a new value"""
+    if TYPE_CHECKING:
+        # What this mix-in needs of the node beside it, declared for a checker
+        # and nothing else: all three are VRML97 fields of the interpolator
+        # nodes, and a real declaration here would register a second copy.
+        key: Any
+        keyValue: Any
+        value_changed: Any
+
+    def on_set_fraction(self, value: float) -> Optional[Any]:
+        """The value this fraction names, published and returned
+
+        Answers None only when the node holds no keys to interpolate between.
+        """
         if not len(self.key) or not len(self.keyValue):
-            return
+            return None
         previous = None
-        previousKey = None
-        _start, _stop = -1, -1
-        for _index, (key, orient) in enumerate(zip(self.key, self.keyValue)):
+        previousKey: Optional[float] = None
+        for key, orient in zip(self.key, self.keyValue):
             if key > value:
-                if previous is None:
+                if previousKey is None:
+                    # before the first key: the first value, held
                     self.value_changed = orient
-                    return
                 else:
                     segmentFraction = (value - previousKey) / float(key - previousKey)
                     self.value_changed = self.interpolate(
@@ -26,50 +38,56 @@ class Interpolator(object):
                         orient,
                         segmentFraction,
                     )
-                    return self.value_changed
+                return self.value_changed
             elif key == value:
                 self.value_changed = orient
                 return self.value_changed
             previous, previousKey = orient, key
-        # no key was greater than value, return last value
+        # past the last key: the last value, held
         self.value_changed = self.keyValue[-1]
         return self.value_changed
 
-    def interpolate(self, previous, next, segmentFraction):
+    def interpolate(self, previous: Any, next: Any, segmentFraction: float) -> Any:
         """Interpolate between first and second by given fragment"""
         return (previous * (1 - segmentFraction)) + (next * segmentFraction)
 
 
 class SetInterpolator(Interpolator):
-    """Mix-in class for interpolators generating arrays of values"""
+    """Mix-in class for interpolators generating arrays of values
 
-    def on_set_fraction(self, value):
-        """Given a floating point value, produce a new data-set"""
+    Each key names a whole run of ``keyValue`` entries rather than one, so the
+    run length is ``len(keyValue) // len(key)``.
+    """
+
+    def on_set_fraction(self, value: float) -> Optional[Any]:
+        """The set of values this fraction names, published and returned
+
+        Answers None only when the node holds no keys to interpolate between.
+        """
         if not len(self.key) or not len(self.keyValue):
-            return
-        previousKey = None
-        _start, _stop = -1, -1
+            return None
+        previousKey: Optional[float] = None
         scale = len(self.keyValue) // len(self.key)
         for index, key in enumerate(self.key):
             if key > value:
-                if index == 0:
+                if previousKey is None:
+                    # before the first key: the first set, held
                     self.value_changed = self.keyValue[:scale]
-                    return
                 else:
                     segmentFraction = (value - previousKey) / float(key - previousKey)
                     self.value_changed = self.interpolate(
-                        self.keyValue[(index - 1) * scale : (index) * scale],
-                        self.keyValue[(index) * scale : (index + 1) * scale],
+                        self.keyValue[(index - 1) * scale : index * scale],
+                        self.keyValue[index * scale : (index + 1) * scale],
                         segmentFraction,
                     )
-                    return
+                return self.value_changed
             elif key == value:
                 self.value_changed = self.keyValue[index * scale : (index + 1) * scale]
-                return
+                return self.value_changed
             previousKey = key
-        # no key was greater than value, return last value
+        # past the last key: the last set, held
         self.value_changed = self.keyValue[-scale:]
-        return
+        return self.value_changed
 
 
 class OrientationInterpolator(Interpolator, basenodes.OrientationInterpolator):
@@ -81,7 +99,7 @@ class OrientationInterpolator(Interpolator, basenodes.OrientationInterpolator):
     "script" of sorts to produce simple rotational changes
     """
 
-    def interpolate(self, previous, next, segmentFraction):
+    def interpolate(self, previous: Any, next: Any, segmentFraction: float) -> Any:
         """Interpolate between first and second by given fragment"""
         previous = quaternion.fromXYZR(*previous)
         next = quaternion.fromXYZR(*next)

@@ -3,6 +3,9 @@
 import queue
 import logging
 import time
+from typing import (
+    TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Type,
+)
 
 from OpenGL._bytes import as_str
 
@@ -34,13 +37,13 @@ class HeldKeyMixin(object):
     """
 
     #: Seconds a key is held before the first synthetic repeat.
-    keyRepeatDelay = 0.4
+    keyRepeatDelay: float = 0.4
     #: Seconds between synthetic repeats after that (about twenty a second).
-    keyRepeatInterval = 0.05
+    keyRepeatInterval: float = 0.05
 
-    _nativeRepeat = False
+    _nativeRepeat: bool = False
 
-    def emitKey(self, key, state, modifiers):
+    def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
         """Send one key transition to the engine
 
         Implemented by the backend, which is what knows how to build its own
@@ -50,24 +53,25 @@ class HeldKeyMixin(object):
             '%s must implement emitKey to use held-key tracking'
             % (self.__class__.__name__,))
 
-    def heldKeys(self):
+    def heldKeys(self) -> Dict[Any, Any]:
         """The keys currently down, as ``{key: modifiers}``"""
         return dict((key, held[0]) for key, held in self._heldMap().items())
 
-    def noteKeyDown(self, key, modifiers, now=None):
+    def noteKeyDown(self, key: Any, modifiers: Any,
+                    now: Optional[float] = None) -> None:
         """Record that ``key`` went down, and when its first repeat is due"""
         when = time.time() if now is None else now
         self._heldMap()[key] = [modifiers, when + self.keyRepeatDelay]
 
-    def noteKeyUp(self, key):
+    def noteKeyUp(self, key: Any) -> None:
         """Record that ``key`` came up"""
         self._heldMap().pop(key, None)
 
-    def noteNativeRepeat(self):
+    def noteNativeRepeat(self) -> None:
         """The platform delivers its own key-repeat; stop supplying one"""
         self._nativeRepeat = True
 
-    def pumpKeyRepeats(self, now=None):
+    def pumpKeyRepeats(self, now: Optional[float] = None) -> None:
         """Emit a repeat for every held key that is due one
 
         Called once per main-loop iteration.  A no-op once native repeat has
@@ -82,7 +86,7 @@ class HeldKeyMixin(object):
                 self.emitKey(key, 1, info[0])
                 info[1] = when + self.keyRepeatInterval
 
-    def clearHeldKeys(self):
+    def clearHeldKeys(self) -> None:
         """Let go of every held key, as though each had been released
 
         For focus loss, where no release arrives from the platform.  An
@@ -94,7 +98,7 @@ class HeldKeyMixin(object):
         for key, info in held.items():
             self.emitKey(key, 0, info[0])
 
-    def _heldMap(self):
+    def _heldMap(self) -> Dict[Any, List[Any]]:
         held = self.__dict__.get('_heldKeysMap')
         if held is None:
             held = self.__dict__['_heldKeysMap'] = {}
@@ -122,27 +126,38 @@ class EventHandlerMixin(HeldKeyMixin):
     and handling of events.
     """
 
-    EventManagerClasses = []
-    TimeManagerClass = None
+    #: ``(eventType, managerClass)`` pairs the context builds its managers from.
+    EventManagerClasses: Sequence[Tuple[Optional[str], Type[Any]]] = []
+    #: What drives the TimeSensors and Timers, or None for a context with none.
+    TimeManagerClass: Optional[Type[Any]] = None
 
-    def initializeEventManagers(self):
+    if TYPE_CHECKING:
+        # What this mix-in reaches for on the Context it is mixed into.  The
+        # cascade queue and the drawing flag are how an event that arrives
+        # mid-frame is held until the frame is over.
+        drawing: Any
+        eventCascadeQueue: 'queue.Queue[Any]'
+
+        def triggerRedraw(self, force: int = 0) -> Any: ...
+
+    def initializeEventManagers(self) -> None:
         """Initialize the event manager classes for this context.
 
         This implementation iterates over self.EventManagerClasses
         (a list of (eventType, managerClass) values) and calls
         addEventManager for each item.
         """
-        self.__managers = {}
-        self.__uncaptureDict = {}
+        self.__managers: Dict[Optional[str], Any] = {}
+        self.__uncaptureDict: Dict[str, Any] = {}
         for key, managerClass in self.EventManagerClasses:
             self.addEventManager(key, managerClass())
-        if self.TimeManagerClass:
-            self.__timeManager = self.TimeManagerClass()
-        else:
-            self.__timeManager = None
+        self.__timeManager: Any = (
+            self.TimeManagerClass() if self.TimeManagerClass else None
+        )
 
     ### Client API
-    def addEventHandler(self, eventType, *arguments, **namedarguments):
+    def addEventHandler(self, eventType: Any, *arguments: Any,
+                        **namedarguments: Any) -> None:
         """Add a new event handler function for the given event type
 
         This is the primary client API for dealing with the event system.
@@ -190,7 +205,7 @@ class EventHandlerMixin(HeldKeyMixin):
         else:
             raise KeyError("""Unrecognised EventManager type %s""" % (repr(eventType)))
 
-    def captureEvents(self, eventType, manager=None):
+    def captureEvents(self, eventType: Any, manager: Any = None) -> None:
         """Temporarily capture events of a particular type.
 
         This temporarily replaces a particular manager within the
@@ -211,18 +226,25 @@ class EventHandlerMixin(HeldKeyMixin):
         capture both movement and button events, it should be possible
         to define a single handler to deal with both event types,
         and pass that handler twice, once for each event type.
+
+        A release with no capture behind it does nothing.  The release is the
+        half that is easy to reach twice -- a drag ended by the button coming up
+        and again by the mode being unbound -- and emptying the slot instead
+        would leave the context with no manager for that event type at all.
         """
         eventType = as_str(eventType)
-        if manager:
-            previous = self.addEventManager(eventType, manager)
-            self.__uncaptureDict[eventType] = previous
-        else:
-            previous = self.__uncaptureDict.get(eventType)
-            self.addEventManager(eventType, previous)
-            if previous:
-                del self.__uncaptureDict[eventType]
+        if manager is not None:
+            self.__uncaptureDict[eventType] = self.addEventManager(
+                eventType, manager
+            )
+        elif eventType in self.__uncaptureDict:
+            # Keyed on presence, not on truth: the manager a capture displaced
+            # is None whenever it took over a slot nothing was in, and that is
+            # still a capture to release.
+            self.addEventManager(eventType,
+                                 self.__uncaptureDict.pop(eventType))
 
-    def isCapturingEvents(self, eventType):
+    def isCapturingEvents(self, eventType: Any) -> bool:
         """Whether a manager has taken this event type over for the moment.
 
         A capture is how a drag receives its own events -- it swaps itself into
@@ -234,7 +256,7 @@ class EventHandlerMixin(HeldKeyMixin):
         return as_str(eventType) in self.__uncaptureDict
 
     ### Customisation points
-    def ProcessEvent(self, event):
+    def ProcessEvent(self, event: Any) -> Any:
         """Primary dispatch point for events.
 
         ProcessEvent uses the event's type attribute to determine the
@@ -257,7 +279,8 @@ class EventHandlerMixin(HeldKeyMixin):
         return None
 
     ### Internal API
-    def addEventManager(self, eventType, manager=None):
+    def addEventManager(self, eventType: Optional[str],
+                        manager: Any = None) -> Any:
         """Add an event manager to the internal table of managers.
 
         The return value is the previous manager or None if there was
@@ -267,7 +290,7 @@ class EventHandlerMixin(HeldKeyMixin):
         self.__managers[eventType] = manager
         return returnValue
 
-    def getEventManager(self, eventType):
+    def getEventManager(self, eventType: Optional[str]) -> Any:
         """Retrieve an event manager from the internal table of managers
 
         Returns the appropriate manager, or None if there was no
@@ -277,7 +300,7 @@ class EventHandlerMixin(HeldKeyMixin):
 
     def DoEventCascade(
         self,
-    ):
+    ) -> int:
         """Do pre-rendering event cascade
 
         Returns the total number of events generated by
@@ -293,13 +316,13 @@ class EventHandlerMixin(HeldKeyMixin):
             # should never change during regular use, but it's
             # easy to track...
             try:
-                func, args, named = self.eventCascadeQueue.get(0)
+                func, args, named = self.eventCascadeQueue.get_nowait()
                 func(*args, **named)
                 events = events + 1
             except queue.Empty:
                 break
         return events
 
-    def getTimeManager(self):
+    def getTimeManager(self) -> Any:
         """Get the time-event manager for this context"""
         return self.__timeManager

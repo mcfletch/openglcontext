@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union, cast
 
 from OpenGLContext.loaders.resolver import (
     _check_size, Resolver, _fetch_url, DEFAULT_MAX_RESOURCE_BYTES,
@@ -53,7 +53,7 @@ def _decode_document(data: bytes) -> "pygltflib.GLTF2":
 def _require_pygltflib() -> "type[pygltflib.GLTF2]":
     try:
         from pygltflib import GLTF2
-        return GLTF2
+        return cast('type[pygltflib.GLTF2]', GLTF2)
     except ImportError as err:  # pragma: no cover - dependency guard
         raise ImportError(
             "glTF loading requires 'pygltflib' (pip install pygltflib)"

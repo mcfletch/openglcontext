@@ -5,7 +5,6 @@
 #test and import pygame
 try:
     import pygame
-    from pygame.locals import *
     import pygame.key
     import pygame.display
 except ImportError:
@@ -16,10 +15,19 @@ if pygame.ver < '1.1':
 #import opengl stuff
 from OpenGL.GL import *
 from OpenGLContext.context import Context
+from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events import pygameevents
 from OpenGLContext.looptrace import LoopTrace
 import logging
+from typing import Any, Optional, Tuple
 log = logging.getLogger( __name__ )
+
+# SDL's window flags and GL attributes are reached through `pygame` rather than
+# imported loose, because several of the names it gives them are OpenGL's as
+# well and mean something else there: SDL's GL_STEREO is the twelfth entry in
+# its attribute table, OpenGL's is the enumerant 0x0C33, and SDL answers a
+# request carrying the wrong one with "Unknown OpenGL attribute" -- so the
+# window is never opened at all.
 
 #: How many events one loop iteration will take from SDL's queue before
 #: rendering anyway.  A burst of pointer motion can arrive faster than frames
@@ -37,14 +45,19 @@ class PygameContext(
     an explicit event handler loop, we provide a default loop method
     called MainLoop.
     """
+    #: The SDL surface this draws into, or None once the display has gone.
+    screen: Any = None
+    #: Settled by the constructor before the window exists, so it is never None
+    #: for a context that was built.
+    contextDefinition: ContextDefinition
     #: What the swap interval was set to when the window was made, so a later
     #: change to the field can be recognised and reported.
-    _vsyncApplied = None
+    _vsyncApplied: Optional[bool] = None
     #: Set when the loop should end; a quit event raises it, and MainLoop
     #: watches it so the display is still up when the caches are told.
     _finished = False
 
-    def __init__(self, definition=None, **named):
+    def __init__(self, definition: Any = None, **named: Any) -> None:
         #init pygame
         pygame.display.init()
         # Resolved before the display mode is set, since the profile, version
@@ -62,23 +75,23 @@ class PygameContext(
         self.ViewPort(*self.screen.get_size())
 
     @classmethod
-    def pygameFlagsFromDefinition( cls, definition ):
+    def pygameFlagsFromDefinition( cls, definition: Any ) -> int:
         """Setup the various non-initialising flags, return init flags"""
         set = pygame.display.gl_set_attribute
         if definition.depthBuffer > -1:
-            set( GL_DEPTH_SIZE, definition.depthBuffer )
+            set( pygame.GL_DEPTH_SIZE, definition.depthBuffer )
         if definition.stencilBuffer > -1:
-            set( GL_STENCIL_SIZE, definition.stencilBuffer )
+            set( pygame.GL_STENCIL_SIZE, definition.stencilBuffer )
         if definition.accumulationBuffer > -1:
-            set( GL_ACCUM_ALPHA_SIZE, definition.accumulationBuffer )
-            set( GL_ACCUM_RED_SIZE, definition.accumulationBuffer )
-            set( GL_ACCUM_GREEN_SIZE, definition.accumulationBuffer )
-            set( GL_ACCUM_BLUE_SIZE, definition.accumulationBuffer )
+            set( pygame.GL_ACCUM_ALPHA_SIZE, definition.accumulationBuffer )
+            set( pygame.GL_ACCUM_RED_SIZE, definition.accumulationBuffer )
+            set( pygame.GL_ACCUM_GREEN_SIZE, definition.accumulationBuffer )
+            set( pygame.GL_ACCUM_BLUE_SIZE, definition.accumulationBuffer )
         if definition.multisampleBuffer > -1 and definition.multisampleSamples > -1:
-            set( GL_MULTISAMPLEBUFFERS, definition.multisampleBuffer )
-            set( GL_MULTISAMPLESAMPLES, definition.multisampleSamples )
+            set( pygame.GL_MULTISAMPLEBUFFERS, definition.multisampleBuffer )
+            set( pygame.GL_MULTISAMPLESAMPLES, definition.multisampleSamples )
         if definition.stereo > -1:
-            set( GL_STEREO, definition.stereo )
+            set( pygame.GL_STEREO, definition.stereo )
         # Set OpenGL profile (core vs compatibility) via SDL2
         # SDL_GL_CONTEXT_PROFILE_MASK constants:
         #   SDL_GL_CONTEXT_PROFILE_CORE = 1
@@ -95,7 +108,7 @@ class PygameContext(
             set( pygame.GL_CONTEXT_PROFILE_MASK, pygame.GL_CONTEXT_PROFILE_COMPATIBILITY )
         return cls.pygameWindowFlags( definition )
     @classmethod
-    def pygameWindowFlags( cls, definition ):
+    def pygameWindowFlags( cls, definition: Any ) -> int:
         """The creation flags this definition asks SDL for.
 
         Reads the definition and the rendering options, and nothing of SDL's
@@ -115,10 +128,10 @@ class PygameContext(
         filling = (pygame.FULLSCREEN | pygame.NOFRAME
                    if renderoptions.fullscreen_window(definition) else 0)
         if definition.doubleBuffer:
-            return DOUBLEBUF|RESIZABLE|hidden|filling
+            return int(pygame.DOUBLEBUF|pygame.RESIZABLE|hidden|filling)
         else:
-            return RESIZABLE|hidden|filling
-    def pygameDisplayMode( self, definition=None ):
+            return int(pygame.RESIZABLE|hidden|filling)
+    def pygameDisplayMode( self, definition: Any = None ) -> Any:
         """Open (or re-open) the SDL window this context draws into
 
         **Calling this again destroys the GL context**, and with it every
@@ -141,22 +154,22 @@ class PygameContext(
         self.releaseForeignContext()
         self.screen = pygame.display.set_mode(
             size,
-            OPENGL | self.pygameFlagsFromDefinition( definition ),
+            pygame.OPENGL | self.pygameFlagsFromDefinition( definition ),
             vsync=1 if self._vsyncApplied else 0,
         )
         return self.screen
-    def CallVirtual(self, name, *args, **namedarguments):
+    def CallVirtual(self, name: str, *args: Any, **namedarguments: Any) -> Any:
         "Call a potentially undefined method"
         func = getattr(self, name, lambda *x, **y:1)
         return func( *args, **namedarguments)
 
 
-    def SwapBuffers (self):
+    def SwapBuffers (self) -> None:
         "flip opengl doublebuffers"
         pygame.display.flip()
 
 
-    def _glHandle(self):
+    def _glHandle(self) -> Any:
         """The GL context handle the caches and PyOpenGL key on.
 
         SDL owns the context and does not name it, so it is read from the
@@ -166,7 +179,7 @@ class PygameContext(
         from OpenGLContext import contextresources
         return contextresources.context_key()
 
-    def setCurrent(self, blocking=1):
+    def setCurrent(self, blocking: int = 1) -> None:
         """Take the OpenGL focus.
 
         SDL holds one context and it is always current, so there is nothing to
@@ -182,7 +195,7 @@ class PygameContext(
         self.bindContextResources(self._glHandle())
 
     ### window-level settings
-    def wantsVSync( self, definition=None ):
+    def wantsVSync( self, definition: Any = None ) -> bool:
         """Whether this definition asks to wait for the display's refresh"""
         from OpenGLContext import renderoptions
         source = self if definition is None else definition
@@ -190,7 +203,7 @@ class PygameContext(
             source, 'vsync',
             not renderoptions.env_flag('OPENGLCONTEXT_NO_VSYNC', False))
 
-    def applyVSync( self, definition=None ):
+    def applyVSync( self, definition: Any = None ) -> bool:
         """Answer that the swap interval cannot be changed for a live context
 
         SDL settles it when the window is made (see
@@ -205,7 +218,7 @@ class PygameContext(
             )
         return False
 
-    def setFullscreen( self, fullscreen ):
+    def setFullscreen( self, fullscreen: Any ) -> bool:
         """Fill the screen, or go back to the window this context opened with
 
         SDL swaps the window between the two without re-making the GL context,
@@ -224,14 +237,14 @@ class PygameContext(
         self.triggerRedraw(1)
         return True
 
-    def settingsChanged( self ):
+    def settingsChanged( self ) -> None:
         """Re-apply the window-level settings a changed definition affects."""
         from OpenGLContext import renderoptions
         self.applyVSync()
         self.setFullscreen(renderoptions.fullscreen_window(self))
         Context.settingsChanged(self)
 
-    def setPointerCapture( self, capture ):
+    def setPointerCapture( self, capture: Any ) -> bool:
         """Grab and hide the pointer for a mouse-look movement mode
 
         SDL's *relative* mode is the one that reports unbounded motion: the
@@ -257,7 +270,7 @@ class PygameContext(
         return True
 
     ### the loop
-    def MainLoop( self ):
+    def MainLoop( self ) -> None:
         """Run until the window is closed
 
         One render per iteration, whatever arrived: a burst of input -- a
@@ -282,7 +295,7 @@ class PygameContext(
             self.stopTelemetry('mainloop-ended')
             self.releaseWindow()
 
-    def _loopIteration( self, trace, renderedFirst ):
+    def _loopIteration( self, trace: LoopTrace, renderedFirst: bool ) -> bool:
         """One pass of the main loop, timed phase by phase
 
         Answers the new renderedFirst, which is the only state an iteration
@@ -320,7 +333,7 @@ class PygameContext(
                     self.OnDraw( force = 0 )
         return renderedFirst
 
-    def pumpWindowEvents( self ):
+    def pumpWindowEvents( self ) -> bool:
         """Dispatch what SDL has queued; see Context.pumpWindowEvents
 
         A handler that answers falsely is one saying the loop should end --
@@ -338,7 +351,7 @@ class PygameContext(
                 break
         return True
 
-    def OnQuit(self, event=None):
+    def OnQuit(self, event: Any = None) -> Any:
         """Let go of this window's GL objects, then end the application
 
         The release happens **here** rather than after the loop because
@@ -349,7 +362,7 @@ class PygameContext(
         self.releaseWindow()
         return Context.OnQuit(self, event)
 
-    def releaseWindow( self ):
+    def releaseWindow( self ) -> None:
         """Drop this context's GL objects and let the display go
 
         The engine's caches own GL objects in this context, so they have to be
@@ -363,15 +376,15 @@ class PygameContext(
         self.releaseContextResources( self._glHandle() )
         pygame.display.quit()
 
-    def PygameQuit(self, event):
+    def PygameQuit(self, event: Any) -> int:
         """Return a value indicating that the MainLoop should exit"""
         return 0
 
-    def PygameWindowClose(self, event):
+    def PygameWindowClose(self, event: Any) -> int:
         """The window's own close button, which SDL reports separately"""
         return 0
 
-    def PygameWindowResized(self, event):
+    def PygameWindowResized(self, event: Any) -> int:
         """Follow the window's new size with the viewport
 
         Nothing is re-made: SDL2 resizes a ``RESIZABLE`` window in place, and
@@ -386,17 +399,17 @@ class PygameContext(
         self.triggerRedraw(1)
         return 1
 
-    def PygameVideoResize(self, event):
+    def PygameVideoResize(self, event: Any) -> int:
         """The older spelling of a resize, for an SDL1-era event queue"""
         return self.PygameWindowResized(event)
 
-    def PygameVideoExpose(self, event):
+    def PygameVideoExpose(self, event: Any) -> int:
         """The window has been uncovered and wants drawing again"""
         self.triggerRedraw(1)
         return 1
 
     @classmethod
-    def ContextMainLoop( cls, *args, **named ):
+    def ContextMainLoop( cls, *args: Any, **named: Any ) -> Any:
         """Initialise the context and start the mainloop"""
         instance = cls( *args, **named )
         if instance.contextDefinition.profileFile:
@@ -413,10 +426,10 @@ class PygameContext(
 
 if __name__ == '__main__':
     from drawcube import drawCube
-    class TestContext(PygameContext):
-        def Render(self, mode):
+    class TestRenderer(PygameContext):
+        def Render(self, mode: Any = None) -> None:
             glTranslated(0, 0, -3)
             glRotated(30, 1, 0, 0)
             glRotated(40, 0, 1, 0)
             drawCube()
-    TestContext.ContextMainLoop()
+    TestRenderer.ContextMainLoop()

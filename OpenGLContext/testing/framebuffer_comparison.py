@@ -28,7 +28,7 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 import numpy as np
 from OpenGLContext.capture import ensure_pillow, read_back_buffer, save_png
 from OpenGLContext.testing.process_exit import flush_and_exit
@@ -58,7 +58,12 @@ DEFAULT_HUD_HEIGHT = 0
 class ComparisonResult:
     """Results from comparing two framebuffer captures."""
 
-    def __init__(self, pixels_a, pixels_b, threshold=0.02):
+    def __init__(
+        self,
+        pixels_a: np.ndarray,
+        pixels_b: np.ndarray,
+        threshold: float = 0.02,
+    ) -> None:
         """Calculate comparison statistics.
 
         Args:
@@ -70,14 +75,14 @@ class ComparisonResult:
         self.shape_b = pixels_b.shape
         self.shapes_match = pixels_a.shape == pixels_b.shape
         self.threshold = threshold
+        self.diff_image: Optional[np.ndarray] = None
 
         if not self.shapes_match:
-            self.max_diff = 255
-            self.mean_diff = 255
+            self.max_diff = 255.0
+            self.mean_diff = 255.0
             self.pixels_different = -1
             self.total_pixels = -1
             self.percent_different = 100.0
-            self.diff_image = None
             return
 
         # Calculate differences (as float for precision)
@@ -95,7 +100,11 @@ class ComparisonResult:
         self.total_pixels = pixels_a.shape[0] * pixels_a.shape[1]
         self.percent_different = 100.0 * self.pixels_different / self.total_pixels
 
-    def is_match(self, max_diff_threshold=10, max_percent_different=1.0):
+    def is_match(
+        self,
+        max_diff_threshold: float = 10,
+        max_percent_different: float = 1.0,
+    ) -> bool:
         """Check if images match within acceptable tolerances.
 
         Args:
@@ -110,7 +119,7 @@ class ComparisonResult:
         return (self.max_diff <= max_diff_threshold and
                 self.percent_different <= max_percent_different)
 
-    def __str__(self):
+    def __str__(self) -> str:
         if not self.shapes_match:
             return f"Shape mismatch: {self.shape_a} vs {self.shape_b}"
         return (
@@ -124,7 +133,11 @@ class ComparisonResult:
 class FramebufferCapture:
     """Captures and stores framebuffer contents for comparison."""
 
-    def __init__(self, reference_dir=None, hud_height=DEFAULT_HUD_HEIGHT):
+    def __init__(
+        self,
+        reference_dir: Optional[str] = None,
+        hud_height: int = DEFAULT_HUD_HEIGHT,
+    ) -> None:
         """Initialize capture.
 
         Args:
@@ -133,11 +146,11 @@ class FramebufferCapture:
         """
         self.reference_dir = reference_dir or DEFAULT_REFERENCE_DIR
         self.hud_height = hud_height
-        self.pixels = None
+        self.pixels: Optional[np.ndarray] = None
         self.width = 0
         self.height = 0
 
-    def capture(self, exclude_hud=True):
+    def capture(self, exclude_hud: bool = True) -> np.ndarray:
         """Capture current framebuffer contents.
 
         Args:
@@ -150,7 +163,7 @@ class FramebufferCapture:
         self.pixels, self.width, self.height = read_back_buffer(hud)
         return self.pixels
 
-    def save_image(self, filepath):
+    def save_image(self, filepath: str) -> bool:
         """Save current capture as PNG image.
 
         Args:
@@ -162,9 +175,9 @@ class FramebufferCapture:
         if self.pixels is None:
             log.error("No pixels captured - call capture() first")
             return False
-        return save_png(filepath, self.pixels)
+        return bool(save_png(filepath, self.pixels))
 
-    def load_reference(self, filepath):
+    def load_reference(self, filepath: str) -> Optional[np.ndarray]:
         """Load a reference image.
 
         Args:
@@ -183,7 +196,11 @@ class FramebufferCapture:
         img = Image.open(filepath).convert('RGB')
         return np.array(img, dtype=np.uint8)
 
-    def compare_with_reference(self, reference_path, threshold=5):
+    def compare_with_reference(
+        self,
+        reference_path: str,
+        threshold: float = 5,
+    ) -> Optional[ComparisonResult]:
         """Compare current capture with saved reference.
 
         Args:
@@ -203,7 +220,11 @@ class FramebufferCapture:
         return ComparisonResult(self.pixels, reference, threshold)
 
 
-def compare_images(pixels_a, pixels_b, threshold=5):
+def compare_images(
+    pixels_a: np.ndarray,
+    pixels_b: np.ndarray,
+    threshold: float = 5,
+) -> ComparisonResult:
     """Compare two pixel arrays.
 
     Args:
@@ -217,7 +238,13 @@ def compare_images(pixels_a, pixels_b, threshold=5):
     return ComparisonResult(pixels_a, pixels_b, threshold)
 
 
-def save_comparison_images(reference, result, diff, output_dir, test_name):
+def save_comparison_images(
+    reference: Any,
+    result: np.ndarray,
+    diff: Optional[np.ndarray],
+    output_dir: str,
+    test_name: str,
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Save reference, result, and diff images.
 
     Args:
@@ -254,7 +281,25 @@ def save_comparison_images(reference, result, diff, output_dir, test_name):
     return ref_path, result_path, diff_path
 
 
-class AutomatedRegressionContext:
+if TYPE_CHECKING:
+    class _ContextHost:
+        """What :class:`AutomatedRegressionContext` needs of the context beside it.
+
+        The mix-in is combined with a
+        :class:`~OpenGLContext.context.Context` subclass, which is what owns the
+        window and the frame counter.
+        """
+
+        #: The overlay that measures the frame rate; ``None`` switches it off, so
+        #: a captured frame is the scene and nothing else.
+        frameCounter: Any
+
+        def OnQuit(self, event: Any = None) -> Any: ...
+else:
+    _ContextHost = object
+
+
+class AutomatedRegressionContext(_ContextHost):
     """Mixin for OpenGLContext that adds automated regression testing.
 
     Usage:
@@ -275,13 +320,16 @@ class AutomatedRegressionContext:
     """
 
     test_name = "unnamed_test"
-    _regression_capture = None
-    _regression_args = None
-    _regression_start_time = None
+    _regression_capture: Optional[FramebufferCapture] = None
+    _regression_args: Optional[argparse.Namespace] = None
+    _regression_start_time: float = 0.0
+    _regression_frame_count: int = 0
     _regression_captured = False
 
     @classmethod
-    def add_regression_arguments(cls, parser):
+    def add_regression_arguments(
+        cls, parser: argparse.ArgumentParser
+    ) -> argparse.ArgumentParser:
         """Add regression test arguments to an argument parser."""
         group = parser.add_argument_group('Regression Testing')
         group.add_argument('--record', action='store_true',
@@ -308,7 +356,7 @@ class AutomatedRegressionContext:
         return parser
 
     @classmethod
-    def parse_regression_arguments(cls):
+    def parse_regression_arguments(cls) -> argparse.Namespace:
         """Parse command-line arguments for regression testing."""
         parser = argparse.ArgumentParser()
         cls.add_regression_arguments(parser)
@@ -316,7 +364,9 @@ class AutomatedRegressionContext:
         args, _ = parser.parse_known_args()
         return args
 
-    def setup_regression_test(self, args=None):
+    def setup_regression_test(
+        self, args: Optional[argparse.Namespace] = None
+    ) -> None:
         """Set up automated regression testing.
 
         Call this from OnInit() to enable automated capture/testing.
@@ -342,19 +392,18 @@ class AutomatedRegressionContext:
 
         # We'll check for capture in OnPostRender which we hook
 
-    def _check_regression_capture(self):
+    def _check_regression_capture(self) -> None:
         """Check if it's time to capture and run regression test.
 
         Call this from Render() after rendering is complete.
         """
-        if self._regression_captured:
+        args = self._regression_args
+        capture = self._regression_capture
+        if self._regression_captured or args is None or capture is None:
             return
-        if self._regression_args is None:
-            return
-        if not (self._regression_args.record or self._regression_args.test):
+        if not (args.record or args.test):
             return
 
-        args = self._regression_args
         self._regression_frame_count += 1
         elapsed = time.time() - self._regression_start_time
 
@@ -365,32 +414,33 @@ class AutomatedRegressionContext:
         self._regression_captured = True
 
         # Capture the framebuffer (scene is already rendered)
-        self._regression_capture.capture(exclude_hud=True)
+        capture.capture(exclude_hud=True)
 
         if args.record:
-            self._do_record()
+            self._do_record(args, capture)
         elif args.test:
-            self._do_test()
+            self._do_test(args, capture)
 
         if args.exit_after:
             # Schedule exit
             self.OnQuit()
 
-    def _do_record(self):
+    def _do_record(
+        self, args: argparse.Namespace, capture: FramebufferCapture
+    ) -> None:
         """Record current render as reference image."""
-        args = self._regression_args
         os.makedirs(args.output_dir, exist_ok=True)
         ref_path = os.path.join(args.output_dir, f"{self.test_name}.png")
-        if self._regression_capture.save_image(ref_path):
+        if capture.save_image(ref_path):
             log.info("RECORD: Saved reference image to %s", ref_path)
         else:
             log.error("RECORD: Failed to save reference image")
             flush_and_exit(1)
 
-    def _do_test(self):
+    def _do_test(
+        self, args: argparse.Namespace, capture: FramebufferCapture
+    ) -> None:
         """Test current render against reference."""
-        args = self._regression_args
-
         # Determine reference path
         if args.reference:
             ref_path = args.reference
@@ -403,16 +453,17 @@ class AutomatedRegressionContext:
             flush_and_exit(2)
 
         # Compare with reference
-        result = self._regression_capture.compare_with_reference(ref_path)
+        result = capture.compare_with_reference(ref_path)
         if result is None:
             log.error("TEST FAIL: Could not load reference image: %s", ref_path)
             flush_and_exit(1)
 
         # Save comparison images
-        ref_pixels = self._regression_capture.load_reference(ref_path)
+        ref_pixels = capture.load_reference(ref_path)
+        assert capture.pixels is not None, 'the caller captures before testing'
         save_comparison_images(
             ref_pixels,
-            self._regression_capture.pixels,
+            capture.pixels,
             result.diff_image,
             args.output_dir,
             self.test_name
@@ -459,7 +510,12 @@ class RegressionTestRunner:
         success = runner.test_against_reference(profile='core')
     """
 
-    def __init__(self, test_name, context_class, reference_dir=None):
+    def __init__(
+        self,
+        test_name: str,
+        context_class: type,
+        reference_dir: Optional[str] = None,
+    ) -> None:
         """Initialize the test runner.
 
         Args:
@@ -471,7 +527,11 @@ class RegressionTestRunner:
         self.context_class = context_class
         self.reference_dir = reference_dir or DEFAULT_REFERENCE_DIR
 
-    def run_comparison(self, legacy_profile='compatibility', core_profile='core'):
+    def run_comparison(
+        self,
+        legacy_profile: str = 'compatibility',
+        core_profile: str = 'core',
+    ) -> bool:
         """Run full comparison: record with legacy, test with core.
 
         Args:
@@ -483,8 +543,15 @@ class RegressionTestRunner:
         """
         import subprocess
 
-        # Get the module file for the context class
+        # The comparison is two runs of the context's own module as a script, so
+        # a class defined anywhere with no file of its own cannot be compared.
         module_file = sys.modules[self.context_class.__module__].__file__
+        if module_file is None:
+            log.error(
+                "Cannot run %s: %s comes from a module with no source file",
+                self.test_name, self.context_class.__name__,
+            )
+            return False
 
         # Record reference with legacy profile
         log.info("Recording reference with %s profile...", legacy_profile)
@@ -543,7 +610,7 @@ class VisualRegressionTest:
         reference_dir: str,
         max_diff_threshold: int = 255,
         max_percent_different: float = 2.0,
-    ):
+    ) -> None:
         """Initialize the regression test.
 
         Args:
@@ -636,12 +703,14 @@ class VisualRegressionTest:
         self._result_pixels = result_pixels
 
         if self._reference_pixels is None:
-            if not self.load_reference():
-                self._status = 'skip'
-                return None
+            self.load_reference()
+        reference = self._reference_pixels
+        if reference is None:
+            self._status = 'skip'
+            return None
 
         self._comparison_result = ComparisonResult(
-            self._reference_pixels,
+            reference,
             result_pixels,
             threshold=5,
         )
@@ -738,7 +807,7 @@ class ProfileComparisonTest:
         reference_dir: str,
         reference_profile: str = 'compatibility',
         test_profile: str = 'core',
-    ):
+    ) -> None:
         """Initialize the profile comparison test.
 
         Args:

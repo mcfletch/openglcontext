@@ -57,6 +57,8 @@ XXX This node needs some serious optimization.  Possible approaches:
                 the length of the data-array
 """
 
+from typing import Any, Optional, Tuple
+
 import numpy as np
 from OpenGLContext.scenegraph import coordinatebounded
 from vrml.vrml97 import basenodes
@@ -125,12 +127,12 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
 
     def render(
         self,
-        visible=1,
-        lit=1,
-        textured=1,
-        transparent=0,
-        mode=None,  # the renderpass object for which we compile
-    ):
+        visible: int = 1,
+        lit: int = 1,
+        textured: int = 1,
+        transparent: int = 0,
+        mode: Any = None,  # the renderpass object for which we compile
+    ) -> Any:
         """Render the IndexedFaceSet's geometry for a Shape
 
         visible -- can skip normals and textures if not
@@ -153,12 +155,12 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
 
     def compile(
         self,
-        visible=1,
-        lit=1,
-        textured=1,
-        transparent=0,
-        mode=None,
-    ):
+        visible: int = 1,
+        lit: int = 1,
+        textured: int = 1,
+        transparent: int = 0,
+        mode: Any = None,
+    ) -> Any:
         """Compile the rendering structures for the IndexedFaceSet"""
         set = []
         for cc in COMPILER_CLASSES:
@@ -173,10 +175,10 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         )
 
     # -- instancing -------------------------------------------------------
-    def _hasGeometry(self):
+    def _hasGeometry(self) -> bool:
         return bool(len(self.coordIndex) and self.coord and len(self.coord.point))
 
-    def _instanceArrays(self):
+    def _instanceArrays(self) -> Optional[Tuple[Any, Any, Any]]:
         """Expanded (positions, normals, texcoords) triangle soup for instancing.
 
         Reuses ``ArrayGeometryCompiler`` -- the same tessellation the
@@ -194,7 +196,7 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         vertexArray, colorArray, normalArray, textureCoordinateArray = expanded
         return vertexArray, normalArray, textureCoordinateArray
 
-    def instanceContentKey(self):
+    def instanceContentKey(self) -> Optional[Tuple[Any, ...]]:
         """Hashable signature so distinct-but-identical IFS nodes share one draw.
 
         Covers the scatter case: a bolt, tile or leaf authored as an IFS and used
@@ -207,7 +209,7 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
             return None
         h = hashlib.blake2b(digest_size=16)
 
-        def feed(name, arr):
+        def feed(name: str, arr: Any) -> None:
             if arr is not None and len(arr):
                 h.update(name.encode('ascii'))
                 h.update(np.ascontiguousarray(arr).tobytes())
@@ -222,7 +224,7 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
                 bool(self.normalPerVertex), round(float(self.creaseAngle), 6),
                 bool(self.ccw), bool(self.solid), bool(getattr(self, 'convex', True)))
 
-    def instanceGPU(self, mode):
+    def instanceGPU(self, mode: Any) -> Any:
         """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
         from OpenGLContext.passes.instancing import build_mesh_gpu
         arrays = self._instanceArrays()

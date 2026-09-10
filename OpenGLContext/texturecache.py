@@ -1,5 +1,7 @@
 """Cache of compiled textures for a context"""
 import weakref
+from typing import Any, Callable, Optional, Tuple
+
 from OpenGLContext import atlas
 class TextureCache( object ):
     """Cache ID: texture-object mapping
@@ -10,11 +12,12 @@ class TextureCache( object ):
         need to pass in the mode to the render functions to
         make per-context caches viable.
     """
-    def __init__( self, atlasSize=None ):
-        self.textures = weakref.WeakValueDictionary()
+    def __init__( self, atlasSize: Optional[int] = None ) -> None:
+        self.textures: 'weakref.WeakValueDictionary[Tuple[Any, bool, bool], Any]' = weakref.WeakValueDictionary()
         self.atlases = atlas.AtlasManager( max_size = atlasSize )
-    def getTexture( self, pil, textureClass, mode=None, repeating=False,
-                    atlasable=True ):
+    def getTexture( self, pil: Any, textureClass: Callable[[Any], Any],
+                    mode: Any = None, repeating: bool = False,
+                    atlasable: bool = True ) -> Any:
         """Get a texture for the given pil image and textureClass
 
         repeating -- a texture that tiles cannot share an atlas page with its

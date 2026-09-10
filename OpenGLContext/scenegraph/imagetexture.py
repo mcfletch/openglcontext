@@ -1,8 +1,13 @@
 """ImageTexture and MMImageTexture nodes using PIL"""
 
+from typing import TYPE_CHECKING, Any, Optional, Sequence
+
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from OpenGL.error import GLError
 from OpenGLContext import texture, context
+
+from PIL import Image
 
 # from vrml import cache
 from vrml.vrml97 import basenodes, nodetypes
@@ -20,7 +25,16 @@ class _Texture(nodetypes.Texture, node.Node):
     magFilter = field.newField(" magFilter", "SFInt32", 0, GL_NEAREST)
     components = field.newField(" components", "SFInt32", 1, 0)
 
-    def compile(self, mode=None):
+    if TYPE_CHECKING:
+        # What this mix-in needs of the node it is mixed into, declared for a
+        # checker and nothing else: the image and the two repeat flags are
+        # VRML97 fields of the concrete texture nodes, and declaring them here
+        # as anything but a hint would register a second copy of each field.
+        image: Any
+        repeatS: Any
+        repeatT: Any
+
+    def compile(self, mode: Any = None) -> Any:
         """Compile (store our image in an OpenGL texture)"""
         tex = self.createTexture(self.image, mode=mode)
         # cache this for later use...
@@ -32,7 +46,7 @@ class _Texture(nodetypes.Texture, node.Node):
             self.components = 0
         return tex
 
-    def createTexture(self, image, mode=None):
+    def createTexture(self, image: Any, mode: Any = None) -> Any:
         """Create a new texture-holding object
 
         Uses the TextureCache to try to minimise the
@@ -48,10 +62,10 @@ class _Texture(nodetypes.Texture, node.Node):
 
     def render(
         self,
-        visible=1,
-        lit=1,
-        mode=None,  # the renderpass object for which we compile
-    ):
+        visible: int = 1,
+        lit: int = 1,
+        mode: Any = None,  # the renderpass object for which we compile
+    ) -> Optional[int]:
         """Called by Shape before rendering associated geometry
 
         visible -- whether a visible rendering pass,
@@ -93,7 +107,7 @@ class _Texture(nodetypes.Texture, node.Node):
             return 0
         return 0
 
-    def renderPost(self, mode=None):
+    def renderPost(self, mode: Any = None) -> None:
         """Called after rendering geometry to disable the texture
 
         Note: this does *not* disable the blend mode we established, it
@@ -115,11 +129,11 @@ class _Texture(nodetypes.Texture, node.Node):
                 glLoadIdentity()
             finally:
                 glMatrixMode(GL_MODELVIEW)
-        except GLerror:
-            if glGetBoolean(GL_TEXTURE_2D):
+        except GLError:
+            if glGetBooleanv(GL_TEXTURE_2D):
                 log.error("""Unable to disable GL_TEXTURE_2D for node %s""", self)
 
-    def cached(self, mode=None):
+    def cached(self, mode: Any = None) -> Any:
         """Retrieve cached texture for this mode"""
         try:
             if not self.image:
@@ -132,7 +146,7 @@ class _Texture(nodetypes.Texture, node.Node):
             tex = self.compile(mode=mode)
         return tex
 
-    def transparent(self, mode=None):
+    def transparent(self, mode: Any = None) -> int:
         """Does this texture have an alpha component?"""
         tex = self.cached(mode)
         if tex:
@@ -140,7 +154,7 @@ class _Texture(nodetypes.Texture, node.Node):
         return 0
 
     @classmethod
-    def forTexture(cls, tex, mode):
+    def forTexture(cls, tex: Any, mode: Any) -> "_Texture":
         """Create a fake image texture node for the given on-card texture object"""
         instance = cls(
             image=Image.new(
@@ -151,165 +165,134 @@ class _Texture(nodetypes.Texture, node.Node):
         return instance
 
 
-try:
-    try:
-        from PIL import Image
-    except ImportError:
-        # old style?
-        import Image
-    log.info("""Loaded Python Image Library (PIL)""")
-except ImportError:
-    log.warning("""Python Image Library (PIL) not installed, no Image support available
-http://www.pythonware.com/products/pil/index.htm""")
+class PILImage(field.Field):
+    """Simple field-type for holding PIL image objects"""
 
-    class ImageTexture(basenodes.ImageTexture):
-        """Dummy/stand-in when no PIL available (does nothing)"""
-
-        components = field.newField(" components", "SFInt32", 1, 0)
-
-        def render(
-            self,
-            # Effectively the rendering mode
-            visible=1,  # whether a visible rendering pass, if not, no normals, colours, or textures
-            # Arguments which the shape controls
-            lit=1,  # whether lighting is enabled, if not, no normals
-            mode=None,  # the renderpass object for which we compile
-        ):
-            """Pretend to render the image texture"""
-            return 1
-
-        def renderPost(self, mode=None):
-            """Pretend to shut down after rendering"""
-
-    MMImageTexture = ImageTexture
-else:
-
-    class PILImage(field.Field):
-        """Simple field-type for holding PIL image objects"""
-
-        @classmethod
-        def defaultDefault(self):
-            """Get a default PIL image object"""
-            return Image.new("RGB", (1, 1), (255, 0, 0))
+    @classmethod
+    def defaultDefault(cls) -> Any:
+        """Get a default PIL image object"""
+        return Image.new("RGB", (1, 1), (255, 0, 0))
 
 
-    class ImageURLField(fieldtypes.MFString):
-        """Field for managing interactions with an Image's URL value"""
+class ImageURLField(fieldtypes.MFString):
+    """Field for managing interactions with an Image's URL value"""
 
-        fieldType = "MFString"
+    fieldType = "MFString"
 
-        def __set__(self, client, value, notify=True):
-            """Set the client's URL, then try to load the image"""
-            value = super(ImageURLField, self).fset(client, value, notify=True)
-            import threading
+    def __set__(self, client: Any, value: Any, notify: bool = True) -> Any:
+        """Set the client's URL, then try to load the image"""
+        value = super(ImageURLField, self).fset(client, value, notify=True)
+        import threading
 
-            threading.Thread(
-                name="Background load of %s" % (value),
-                target=client.loadBackground,
-                args=(
-                    value,
-                    context.Context.allContexts,
-                ),
-                # A daemon, so a download that never answers -- or a load
-                # waiting on the context lock for a frame that will not come --
-                # cannot keep the interpreter alive.  Python joins every
-                # non-daemon thread as it shuts down, and an image nobody is
-                # going to see is not a reason to refuse to exit.
-                daemon=True,
-            ).start()
-            return value
+        threading.Thread(
+            name="Background load of %s" % (value),
+            target=client.loadBackground,
+            args=(
+                value,
+                context.Context.allContexts,
+            ),
+            # A daemon, so a download that never answers -- or a load
+            # waiting on the context lock for a frame that will not come --
+            # cannot keep the interpreter alive.  Python joins every
+            # non-daemon thread as it shuts down, and an image nobody is
+            # going to see is not a reason to refuse to exit.
+            daemon=True,
+        ).start()
+        return value
 
-        fset = __set__
+    fset = __set__
 
-        def fdel(self, client, notify=1):
-            """Delete the client's URL, which should delete the image as well"""
-            value = super(ImageURLField, self).fdel(client, notify)
-            del client.image
-            return value
+    def fdel(self, client: Any, notify: int = 1) -> Any:
+        """Delete the client's URL, which should delete the image as well"""
+        value = super(ImageURLField, self).fdel(client, notify)
+        del client.image
+        return value
 
-        __delete__ = fdel
+    __delete__ = fdel
 
-    class ImageTexture(_Texture, basenodes.ImageTexture):
-        """A texture loaded from an image file"""
 
-        image = PILImage(" image", 1, None)
-        url = ImageURLField("url", 1, list)
+class ImageTexture(_Texture, basenodes.ImageTexture):
+    """A texture loaded from an image file"""
 
-        def loadBackground(self, url, contexts=()):
-            """Load an image from the given url in the background
+    image = PILImage(" image", 1, None)
+    url = ImageURLField("url", 1, list)
 
-            url -- SF or MFString URL to load relative to the
-                node's root's baseURL
+    def loadBackground(self, url: Any, contexts: Sequence[Any] = ()) -> Any:
+        """Load an image from the given url in the background
 
-            On success:
-                Sets the resulting PIL image to the
-                client's image property (triggering an un-caching
-                and re-compile if there was a previous image).
+        url -- SF or MFString URL to load relative to the
+            node's root's baseURL
 
-                if contexts, iterate through the list calling
-                context.triggerRedraw(1)
-            """
-            from OpenGLContext.loaders.loader import Loader
+        On success:
+            Sets the resulting PIL image to the
+            client's image property (triggering an un-caching
+            and re-compile if there was a previous image).
 
-            try:
-                baseNode = protofunctions.root(self)
-                if baseNode:
-                    baseURI = baseNode.baseURI
-                else:
-                    baseURI = None
-                result = Loader(url, baseURL=baseURI)
-            except IOError:
-                pass
+            if contexts, iterate through the list calling
+            context.triggerRedraw(1)
+        """
+        from OpenGLContext.loaders.loader import Loader
+
+        try:
+            baseNode = protofunctions.root(self)
+            if baseNode:
+                baseURI = baseNode.baseURI
             else:
-                if result:
-                    baseURL, filename, file, headers = result
-                    image = Image.open(file)
-                    image.info["url"] = baseURL
-                    image.info["filename"] = filename
+                baseURI = None
+            result = Loader(url, baseURL=baseURI)
+        except IOError:
+            pass
+        else:
+            if result:
+                baseURL, filename, file, headers = result
+                image = Image.open(file)
+                image.info["url"] = baseURL
+                image.info["filename"] = filename
 
-                    if image:
-                        return self.setImage(image, contexts)
-
-            # should set client.image to something here to indicate
-            # failure to the user.
-            log.warning(
-                """Unable to load any image from the url %s for the node %s""",
-                url,
-                str(self),
-            )
-
-        def setImage(self, image, contexts=()):
-            """Set PIL image as our new image
-
-            image -- open( ) PIL file with info['url'] and info['filename'] defined
-            """
-            self.image = image
-            self.components = -1
-            for c_reference in contexts:
-                c = c_reference()
-                if c:
-                    c.triggerRedraw(1)
-            return
-
-        def loadFromData(self, data, url=None):
-            """Load (synchronously) from given data"""
-            fh = BytesIO(data)
-            if url is None:
-                url = "memory:%s" % (hash(data),)
-            try:
-                image = Image.open(fh)
-            except IOError as err:
-                log.info("IOError %s opening image", err)
-            else:
                 if image:
-                    self.image = image
-                    self.image.info["url"] = str(url)
-                    self.image.info["file"] = "memory"
-                    self.components = -1
-                    return self.image
-                else:
-                    log.warning("Null image")
-            return None
+                    return self.setImage(image, contexts)
+
+        # should set client.image to something here to indicate
+        # failure to the user.
+        log.warning(
+            """Unable to load any image from the url %s for the node %s""",
+            url,
+            str(self),
+        )
+        return None
+
+    def setImage(self, image: Any, contexts: Sequence[Any] = ()) -> None:
+        """Set PIL image as our new image
+
+        image -- open( ) PIL file with info['url'] and info['filename'] defined
+        """
+        self.image = image
+        self.components = -1
+        for c_reference in contexts:
+            c = c_reference()
+            if c:
+                c.triggerRedraw(1)
+        return
+
+    def loadFromData(self, data: bytes, url: Any = None) -> Any:
+        """Load (synchronously) from given data"""
+        fh = BytesIO(data)
+        if url is None:
+            url = "memory:%s" % (hash(data),)
+        try:
+            image = Image.open(fh)
+        except IOError as err:
+            log.info("IOError %s opening image", err)
+        else:
+            if image:
+                self.image = image
+                self.image.info["url"] = str(url)
+                self.image.info["file"] = "memory"
+                self.components = -1
+                return self.image
+            else:
+                log.warning("Null image")
+        return None
 
 
 class MMImageTexture(ImageTexture):
@@ -330,7 +313,7 @@ class MMImageTexture(ImageTexture):
         GL_LINEAR_MIPMAP_NEAREST,
     )
 
-    def createTexture(self, image, mode=None):
+    def createTexture(self, image: Any, mode: Any = None) -> Any:
         """Create a new texture-holding object"""
         if image:
             return mode.context.textureCache.getTexture(image, texture.MMTexture)
@@ -341,7 +324,7 @@ class MMImageTexture(ImageTexture):
 class PixelTexture(_Texture, basenodes.PixelTexture):
     """PixelTexture, in-file node for small textures"""
 
-    def createTexture(self, image, mode=None):
+    def createTexture(self, image: Any, mode: Any = None) -> Any:
         """Create a new texture-holding object
 
         Uses the TextureCache to try to minimise the

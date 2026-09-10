@@ -6,9 +6,12 @@ fonts and display lists are not available.
 
 This serves as a fallback when glutfont is not available (non-GLUT contexts).
 """
+from __future__ import annotations
+
+from typing import Any, Iterable
+
 from OpenGL.GL import *
 from OpenGLContext.scenegraph.text import fontprovider, font
-from OpenGLContext.arrays import array
 import numpy as np
 import logging
 import io
@@ -23,7 +26,7 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
     font atlas, compatible with OpenGL core profile.
     """
 
-    def __init__(self, fontStyle=None, size=16):
+    def __init__(self, fontStyle: Any = None, size: int = 16) -> None:
         """Initialize the shader bitmap font.
 
         Args:
@@ -32,10 +35,10 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
         """
         self.fontStyle = fontStyle
         self._size = size
-        self._displayLists = {}  # Cache for character metrics
+        self._displayLists: dict[str, tuple[Any, font.CharacterMetrics]] = {}
         self._initialized = False
-        self._texture = None
-        self._atlas_module = None
+        self._texture: int | None = None
+        self._atlas_module: Any = None
 
         # Atlas parameters (will be set from module)
         self._char_width = 0
@@ -46,7 +49,7 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
         self._last_char = 126
         self._chars_per_row = 16
 
-    def _ensure_initialized(self):
+    def _ensure_initialized(self) -> bool:
         """Lazily initialize the font texture."""
         if self._initialized:
             return True
@@ -70,8 +73,7 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
             # Create texture
             png_data = module.get_png_data()
             from PIL import Image
-            img = Image.open(io.BytesIO(png_data))
-            img = img.convert('RGBA')
+            img = Image.open(io.BytesIO(png_data)).convert('RGBA')
             texture_data = np.array(img, dtype=np.uint8)
 
             self._texture = glGenTextures(1)
@@ -94,7 +96,7 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
             log.error("Failed to initialize shader font: %s", e)
             return False
 
-    def createChar(self, char, mode=None):
+    def createChar(self, char: str, mode: Any = None) -> tuple[None, font.CharacterMetrics]:
         """Create metrics for a character.
 
         Note: Unlike GLUT fonts, we don't use display lists.
@@ -109,7 +111,7 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
         # Return None for display list (we don't use them) and metrics
         return None, metrics
 
-    def lists(self, value, mode=None):
+    def lists(self, value: str, mode: Any = None) -> list[int]:
         """Get display lists for value.
 
         For shader fonts, we don't use display lists.
@@ -117,12 +119,12 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
         """
         return []
 
-    def lineHeight(self, mode=None):
+    def lineHeight(self, mode: Any = None) -> float:
         """Get the line height for this font."""
         self._ensure_initialized()
         return int(self._char_height * 1.2)
 
-    def render(self, lines, fontStyle=None, mode=None):
+    def render(self, lines: Any, fontStyle: Any = None, mode: Any = None) -> None:
         """Render text lines.
 
         For shader-based rendering, we need to use the shader pipeline.
@@ -146,7 +148,8 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
             # Legacy fallback - try to use glRasterPos/glBitmap style
             self._render_legacy(lines, fontStyle, mode)
 
-    def _render_shader(self, lines, fontStyle, mode, shader_program):
+    def _render_shader(self, lines: Any, fontStyle: Any, mode: Any,
+                       shader_program: Any) -> None:
         """Render using shader pipeline."""
         from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
 
@@ -172,7 +175,7 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
             color=(1.0, 1.0, 1.0, 1.0)
         )
 
-    def _render_legacy(self, lines, fontStyle, mode):
+    def _render_legacy(self, lines: Any, fontStyle: Any, mode: Any) -> None:
         """Render using legacy OpenGL (compatibility mode).
 
         This uses glRasterPos and textured quads for each character.
@@ -212,7 +215,7 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
             glDisable(GL_TEXTURE_2D)
             glDisable(GL_BLEND)
 
-    def _draw_char_quad(self, char):
+    def _draw_char_quad(self, char: str) -> None:
         """Draw a single character as a textured quad."""
         char_code = ord(char)
         if char_code < self._first_char or char_code > self._last_char:
@@ -245,16 +248,16 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
 
         glTranslatef(w, 0, 0)
 
-    def leftJustify(self, lines, fontStyle, mode=None):
+    def leftJustify(self, lines: Any, fontStyle: Any, mode: Any = None) -> None:
         """Left-justify text."""
         self.render(lines, fontStyle, mode)
 
-    def centerJustify(self, lines, fontStyle, mode=None):
+    def centerJustify(self, lines: Any, fontStyle: Any, mode: Any = None) -> None:
         """Center-justify text."""
         # TODO: proper center justification
         self.render(lines, fontStyle, mode)
 
-    def rightJustify(self, lines, fontStyle, mode=None):
+    def rightJustify(self, lines: Any, fontStyle: Any, mode: Any = None) -> None:
         """Right-justify text."""
         # TODO: proper right justification
         self.render(lines, fontStyle, mode)
@@ -274,14 +277,14 @@ class _ShaderFontProvider(fontprovider.FontProvider):
     # Available sizes from font atlas
     available_sizes = [12, 16, 24, 32, 48]
 
-    def create(self, fontStyle, mode=None):
+    def create(self, fontStyle: Any, mode: Any = None) -> ShaderBitmapFont:
         """Create a new font for the given fontStyle and mode."""
         size = self._get_size(fontStyle)
 
         # Check for existing font
         fontHash = ('shader', size)
         if fontHash in self.fonts:
-            current = self.fonts.get(fontHash)
+            current: ShaderBitmapFont = self.fonts[fontHash]
             self.addFont(fontStyle, current)
             return current
 
@@ -291,7 +294,7 @@ class _ShaderFontProvider(fontprovider.FontProvider):
         self.fonts[fontHash] = shaderFont
         return shaderFont
 
-    def _get_size(self, fontStyle):
+    def _get_size(self, fontStyle: Any) -> int:
         """Get appropriate font size for fontStyle."""
         if fontStyle and hasattr(fontStyle, 'size'):
             target = int(fontStyle.size * self.scale)
@@ -303,7 +306,7 @@ class _ShaderFontProvider(fontprovider.FontProvider):
         best_idx = diffs.index(min(diffs))
         return self.available_sizes[best_idx]
 
-    def key(self, fontStyle=None):
+    def key(self, fontStyle: Any = None) -> Any:
         """Calculate font key for caching."""
         if not fontStyle:
             return None
@@ -312,7 +315,7 @@ class _ShaderFontProvider(fontprovider.FontProvider):
             fontStyle.size,
         )
 
-    def enumerate(self, mode=None):
+    def enumerate(self, mode: Any = None) -> Iterable[str]:
         """Enumerate available fonts."""
         return ['SANS', 'SERIF', 'TYPEWRITER']
 
@@ -321,7 +324,7 @@ class _ShaderFontProvider(fontprovider.FontProvider):
 ShaderFontProvider = _ShaderFontProvider()
 
 
-def register():
+def register() -> None:
     """Register the shader font provider.
 
     Call this to make shader fonts available as a bitmap font provider.
@@ -329,7 +332,7 @@ def register():
     ShaderFontProvider.registerProvider(ShaderFontProvider)
 
 
-def is_available():
+def is_available() -> bool:
     """Check if shader fonts are available (font atlas exists)."""
     try:
         from OpenGLContext.scenegraph.text import fonts

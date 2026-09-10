@@ -1,4 +1,6 @@
 """Common implementation for grouping-type nodes"""
+from typing import Any, List, Optional, Tuple
+
 from OpenGL.GL import *
 from vrml.vrml97 import nodetypes
 from vrml import node, field
@@ -9,7 +11,7 @@ import weakref
 class ChildrenSensitiveField( node.MFNode ):
     """Field sub-class/mix-in for checking children for sensitivity"""
     fieldType = "MFNode"
-    def checkSensitive( self, client, value ):
+    def checkSensitive( self, client: Any, value: Any ) -> Any:
         """Check value to see if there are any sensor children"""
         client.sensitive = 0
         for child in value:
@@ -17,17 +19,18 @@ class ChildrenSensitiveField( node.MFNode ):
                 client.sensitive = 1
                 break
         return value
-    def fset( self, client, value, notify=1 ):
+    def fset( self, client: Any, value: Any, notify: int = 1 ) -> Any:
         """On set, do regular set, then check for sensitivity"""
         value = super( ChildrenSensitiveField, self).fset( client, value, notify )
         return self.checkSensitive(client,value)
-    def fdel( self, client, notify=1):
+    def fdel( self, client: Any, notify: int = 1) -> Any:
         """On del, do regular del, then check for sensitivity"""
-        value = super( ChildrenSensitiveField, self).fset( client, value, notify )
+        value = super( ChildrenSensitiveField, self).fdel( client, notify )
         client.sensitive = 0
         return value
 
-def _cacheClear( signal, sender, subsignal=None, subvalue=None ):
+def _cacheClear( signal: Any, sender: Any, subsignal: Any = None,
+                 subvalue: Any = None ) -> None:
     """Drop the typed views of ``field``, so the next reader rebuilds them.
 
     The views are filtered copies of the field, and the field is the only thing
@@ -51,20 +54,23 @@ def _cacheClear( signal, sender, subsignal=None, subvalue=None ):
 class ChildrenTypedField( ChildrenSensitiveField ):
     """Field sub-class/mix-in for iterating over children by node-types"""
     fieldType = "MFNode"
-    def getCache( self,client ):
+    def getCache( self, client: Any ) -> dict:
         cache_key = '__typed_children_%s__'%(self.name,)
         cache = getattr( client, cache_key, None )
         if cache is None:
             cache = {}
             setattr( client, cache_key, cache )
-            connect( 
-                _cacheClear,
-                signal = ('set',self),
-                sender = client,
-                weak = False,
-            )
+            # Both signals: a deleted field is as much a change to what the
+            # views hold as a written one.
+            for signal in ('set', 'del'):
+                connect(
+                    _cacheClear,
+                    signal = (signal, self),
+                    sender = client,
+                    weak = False,
+                )
         return cache
-    def byType( self, client, types ):
+    def byType( self, client: Any, types: Any ) -> list:
         cache = self.getCache(client)
         new = cache.get( types )
         if new is None:
@@ -89,10 +95,13 @@ class Grouping(object):
     """
     sensitive = field.newField( " sensitive", "SFBool", 0, 0)
     children = ChildrenTypedField( 'children', 1, [])
-    def renderedChildren( self, types= (nodetypes.Children, nodetypes.Rendering,) ):
+    def renderedChildren(
+        self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
+    ) -> List[Any]:
         """List all children which are instances of given types"""
         return self.__class__.children.byType( self, types )
-    def visible( self, frustum=None, matrix=None, occlusion=0, mode=None ):
+    def visible( self, frustum: Any = None, matrix: Any = None,
+                 occlusion: int = 0, mode: Any = None ) -> Any:
         """Check whether this grouping node intersects frustum
 
         frustum -- the bounding volume frustum with a planes
@@ -106,7 +115,7 @@ class Grouping(object):
         
         return self.boundingVolume(mode).visible( frustum, matrix, occlusion=occlusion, mode=mode )
 
-    def boundingVolume( self, mode ):
+    def boundingVolume( self, mode: Any ) -> Any:
         """Calculate the bounding volume for this node
 
         The bounding volume for a grouping node is
@@ -120,8 +129,8 @@ class Grouping(object):
             return current
         # need to create a new volume and make it depend
         # on the appropriate fields...
-        volumes = []
-        dependencies = [(self,'children')]
+        volumes: List[Any] = []
+        dependencies: List[Tuple[Any, Optional[str]]] = [(self,'children')]
         unbounded = 0
         for child in self.children:
             try:

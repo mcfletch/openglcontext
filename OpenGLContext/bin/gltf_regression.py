@@ -331,7 +331,7 @@ def is_regression(result: Any, tolerance: float) -> bool:
     differing beyond the per-channel threshold."""
     if not result.shapes_match:
         return True
-    return result.percent_different > tolerance
+    return bool(result.percent_different > tolerance)
 
 
 # --------------------------------------------------------------------------- #

@@ -3,10 +3,12 @@
 You normally use this module via the testingcontext module.
 """
 
+from typing import Any
+
 from OpenGLContext import tkinteractivecontext
 
 
-def main(TestContext, *args, **named):
+def main(TestContext: Any, *args: Any, **named: Any) -> Any:
     return TestContext.ContextMainLoop(*args, **named)
 
 

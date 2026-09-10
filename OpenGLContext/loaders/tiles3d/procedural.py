@@ -35,7 +35,7 @@ def _hash01(ix: np.ndarray, iz: np.ndarray, seed: int) -> np.ndarray:
 
 
 def _smooth(t: np.ndarray) -> np.ndarray:
-    return t * t * (3.0 - 2.0 * t)
+    return np.asarray(t * t * (3.0 - 2.0 * t))
 
 
 def _value_noise(x: np.ndarray, z: np.ndarray, seed: int) -> np.ndarray:
@@ -49,7 +49,7 @@ def _value_noise(x: np.ndarray, z: np.ndarray, seed: int) -> np.ndarray:
     v11 = _hash01(x0 + 1, z0 + 1, seed)
     top = v00 * (1 - fx) + v10 * fx
     bot = v01 * (1 - fx) + v11 * fx
-    return top * (1 - fz) + bot * fz
+    return np.asarray(top * (1 - fz) + bot * fz)
 
 
 def _fbm(
@@ -278,7 +278,7 @@ def terrain_colors(positions: np.ndarray, normals: np.ndarray,
 
 
 def _lerp(a: np.ndarray, b: np.ndarray, t: np.ndarray) -> np.ndarray:
-    return a * (1.0 - t) + b * t
+    return np.asarray(a * (1.0 - t) + b * t)
 
 
 # --- meshing + glb bake -------------------------------------------------------

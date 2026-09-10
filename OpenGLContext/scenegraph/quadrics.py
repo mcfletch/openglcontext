@@ -15,6 +15,12 @@ from OpenGLContext.arrays import (
 from OpenGLContext import vectorutilities
 from OpenGLContext.scenegraph import tessellationlod
 from OpenGL.arrays import vbo
+from typing import Any, Dict, Tuple
+
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
 
 
 # Distance-LOD tuning (Option B: dense base + gentle steps). A UV quadric's
@@ -32,7 +38,7 @@ LOD_STEP_FACTOR = (1.0, 0.83, 0.67, 0.5)
 LOD_MIN_STEPS = 6
 
 
-def lod_phi( base_phi, level, period ):
+def lod_phi( base_phi: float, level: int, period: float ) -> float:
     """Angular step for an LOD level that divides ``period`` into whole steps.
 
     ``period`` is the angular span the steps must close over: ``pi`` for a
@@ -49,7 +55,7 @@ def lod_phi( base_phi, level, period ):
     return period / steps
 
 
-def mesh_indices( zstep,ystep, xstep=1 ):
+def mesh_indices( zstep: int, ystep: int, xstep: int = 1 ) -> Any:
     # now the indices, same as all quadratics
     indices = zeros( (zstep-1,ystep-1,6),dtype='H' )
     # all indices now render the first rectangle...
@@ -64,12 +70,12 @@ class Quadric( nodetypes.Geometry, node.Node ):
     """Base-class for the various quadratic-type geometry classes"""
     def render (
             self,
-            visible = 1, # can skip normals and textures if not
-            lit = 1, # can skip normals if not
-            textured = 1, # can skip textureCoordinates if not
-            transparent = 0,
-            mode = None, # the renderpass object for which we compile
-        ):
+            visible: int = 1, # can skip normals and textures if not
+            lit: int = 1, # can skip normals if not
+            textured: int = 1, # can skip textureCoordinates if not
+            transparent: int = 0,
+            mode: Any = None, # the renderpass object for which we compile
+        ) -> int:
         """Render the geometry"""
         # Check for shader mode
         if getattr(mode, 'shader_mode', False):
@@ -108,7 +114,7 @@ class Quadric( nodetypes.Geometry, node.Node ):
             coords.unbind()
         return 1
 
-    def _render_shader(self, mode):
+    def _render_shader(self, mode: Any) -> int:
         """Render the quadric using the shader pipeline."""
         from OpenGLContext.scenegraph.shadergeometry import VertexFormat
         from OpenGLContext.scenegraph.geometryarrays import (
@@ -123,11 +129,11 @@ class Quadric( nodetypes.Geometry, node.Node ):
         ), owner=self, where=self.__class__.__name__)
 
     # -- distance level-of-detail -----------------------------------------
-    def _lod_bounding_radius( self ):
+    def _lod_bounding_radius( self ) -> float:
         """Characteristic local radius for the distance metric (subclass hook)."""
         return 1.0
 
-    def _lod_vbos( self, mode ):
+    def _lod_vbos( self, mode: Any ) -> Any:
         """Return the (coords, indices, count) VBOs for this frame's LOD level.
 
         Each level is tessellated and cached separately under ``mode.cache`` so a
@@ -144,22 +150,22 @@ class Quadric( nodetypes.Geometry, node.Node ):
             vbos = self.compile( mode=mode, level=level, key=key )
         return vbos
 
-    def compile( self, mode=None, level=0, key='' ):
+    def compile( self, mode: Any = None, level: int = 0, key: str = '' ) -> Any:
         """Compile this sphere for use on mode"""
         raise NotImplementedError( """Haven't implemented %s compilation yet"""%(self.__class__.__name__,))
 
     # -- instancing -------------------------------------------------------
     # Quadrics share one interleaved V3F_T2F_N3F layout, so one instanced-draw
     # GPU builder serves them all; each subclass supplies its arrays + content key.
-    def _instanceArrays( self ):
+    def _instanceArrays( self ) -> Tuple[Any, Any]:
         """(coords Nx8 interleaved V3F_T2F_N3F, indices) at a fixed LOD level."""
         raise NotImplementedError
 
-    def _instanceDependFields( self ):
+    def _instanceDependFields( self ) -> Tuple[str, ...]:
         """Fields whose change should rebuild the cached instance GPU."""
         return ()
 
-    def instanceGPU( self, mode ):
+    def instanceGPU( self, mode: Any ) -> Any:
         """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing.
 
         De-interleaves the quadric's V3F_T2F_N3F arrays (fixed LOD, so every
@@ -177,58 +183,60 @@ class Sphere( basenodes.Sphere, Quadric ):
     """Sphere geometry rendered with GLU quadratic calls"""
     # Unit spheres are context-independent and shared across instances, one per
     # LOD level (keyed by level -> (coords, indices)).
-    _unitSpheres = None
-    # Base angular step. Raised from the old pi/6 (a chunky 12-gon that made every
-    # LOD step read as an octagon) to pi/12 (a smooth 24-gon), giving headroom for
-    # the gentle LOD schedule to step down without a visible silhouette pop.
+    #: Unit-radius meshes, keyed by the angular step they were tessellated at,
+    #: so every sphere drawn at a given detail shares one tessellation.
+    _unitSpheres: Dict[float, Tuple[Any, Any]] = {}
+    #: Base angular step: pi/12 is a 24-sided silhouette, fine enough that the
+    #: LOD schedule can step down from it without a visible pop.
     phi = field.newField( 'phi', 'SFFloat', 1, pi/12.0)
 
-    def _lod_bounding_radius( self ):
+    def _lod_bounding_radius( self ) -> float:
         return float( self.radius )
 
-    def compile( self, mode=None, level=0, key='' ):
+    def compile( self, mode: Any = None, level: int = 0, key: str = '' ) -> Any:
         """Compile this sphere for use on mode
 
         returns coordvbo,indexvbo,count
         """
         coords, indices = self.compileArrays( level )
-        vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
+        vbos = VBO(coords), VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
         if hasattr(mode,'cache'):
             holder = mode.cache.holder( self, vbos, key=key )
             holder.depend( self, 'radius' )
         return vbos
 
-    def compileArrays( self, level=0 ):
+    def compileArrays( self, level: int = 0 ) -> Tuple[Any, Any]:
         """Compile to arrays at the given LOD level...
 
         returns coordarray, indexarray
         """
-        if Sphere._unitSpheres is None:
-            Sphere._unitSpheres = {}
-        if level not in Sphere._unitSpheres:
-            # one unit sphere per level, tessellated with a coarser phi as the
-            # level rises; level 0 uses the node's base phi (unchanged look).
-            # period=pi: phi must divide the pole-to-pole latitude evenly (which
-            # also closes the 2*pi longitude) or the mesh has a cap/seam gap.
-            Sphere._unitSpheres[level] = self.sphere( lod_phi( self.phi, level, pi ) )
-        coords,indices = Sphere._unitSpheres[level]
+        # period=pi: phi must divide the pole-to-pole latitude evenly (which
+        # also closes the 2*pi longitude) or the mesh has a cap/seam gap.
+        step = lod_phi( self.phi, level, pi )
+        # Keyed on the step rather than on the level, because the step is what
+        # the mesh is: two spheres of different phi at the same level are two
+        # different meshes, and two that resolve to the same step are one.
+        if step not in Sphere._unitSpheres:
+            Sphere._unitSpheres[step] = self.sphere( step )
+        coords,indices = Sphere._unitSpheres[step]
         coords = copy( coords )
         coords[:,0:3] *= self.radius
         return coords, indices
 
-    def instanceContentKey( self ):
+    def instanceContentKey( self ) -> Tuple[Any, ...]:
         """Spheres of the same radius/tessellation share geometry -> one instanced
         draw (the molecular-model case: thousands of identical atoms)."""
         return ('Sphere', round(float(self.radius), 6), round(float(self.phi), 6))
 
-    def _instanceArrays( self ):
+    def _instanceArrays( self ) -> Tuple[Any, Any]:
         return self.compileArrays( 0 )
 
-    def _instanceDependFields( self ):
+    def _instanceDependFields( self ) -> Tuple[str, ...]:
         return ('radius',)
     
     @classmethod
-    def sphere( cls, phi=pi/8.0, latAngle=pi, longAngle=(pi*2) ):
+    def sphere( cls, phi: float = pi/8.0, latAngle: float = pi,
+                longAngle: float = (pi*2) ) -> Tuple[Any, Any]:
         """Create arrays for rendering a unit-sphere
         
         phi -- angle between points on the sphere (stacks/slices)
@@ -242,7 +250,7 @@ class Sphere( basenodes.Sphere, Quadric ):
         return cls._partialSphere( latsteps,longsteps )
 
     @classmethod
-    def _partialSphere( cls, latsteps, longsteps ):
+    def _partialSphere( cls, latsteps: Any, longsteps: Any ) -> Tuple[Any, Any]:
         """Create a partial-sphere data-set for latsteps and longsteps
         
         returns (coordarray, indexarray)
@@ -280,7 +288,7 @@ class Sphere( basenodes.Sphere, Quadric ):
         indices = concatenate( new_indices )
         return coords.reshape((-1,8)), indices.reshape((-1,))
     
-    def boundingVolume( self, mode=None ):
+    def boundingVolume( self, mode: Any = None ) -> Any:
         """Create a bounding-volume object for this node
 
         In this case we use the AABoundingBox, despite
@@ -304,37 +312,38 @@ class Cone( basenodes.Cone, Quadric ):
     """Cone geometry rendered with GLU quadratic calls"""
     _BASE_PHI = pi/16
 
-    def _lod_bounding_radius( self ):
+    def _lod_bounding_radius( self ) -> float:
         return max( float(self.bottomRadius), float(self.height) / 2.0 )
 
-    def compile( self, mode=None, level=0, key='' ):
+    def compile( self, mode: Any = None, level: int = 0, key: str = '' ) -> Any:
         """Compile this sphere for use on mode"""
         coords,indices = self.cone(
             self.height, self.bottomRadius, self.bottom, self.side,
             phi=lod_phi( self._BASE_PHI, level, 2*pi ),   # ring closes over 2*pi
         )
-        vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
+        vbos = VBO(coords), VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
         holder = mode.cache.holder( self, vbos, key=key )
         holder.depend( self, 'bottomRadius' )
         holder.depend( self, 'height' )
         return vbos
 
-    def instanceContentKey( self ):
+    def instanceContentKey( self ) -> Tuple[Any, ...]:
         return ('Cone', round(float(self.height), 6), round(float(self.bottomRadius), 6),
                 bool(self.bottom), bool(self.side))
 
-    def _instanceArrays( self ):
+    def _instanceArrays( self ) -> Tuple[Any, Any]:
         return self.cone( self.height, self.bottomRadius, self.bottom, self.side,
                           phi=lod_phi( self._BASE_PHI, 0, 2*pi ) )
 
-    def _instanceDependFields( self ):
+    def _instanceDependFields( self ) -> Tuple[str, ...]:
         return ('bottomRadius', 'height', 'bottom', 'side')
 
     @classmethod
     def cone(
-        cls, height=2.0, radius=1.0, bottom=True, side=True,
-        phi = pi/16, longAngle=(pi*2), top=False, cylinder=False
-    ):
+        cls, height: float = 2.0, radius: float = 1.0, bottom: bool = True,
+        side: bool = True, phi: float = pi/16, longAngle: float = (pi*2),
+        top: bool = False, cylinder: bool = False
+    ) -> Tuple[Any, Any]:
         """Generate a VBO data-set to render a cone"""
         (0,height/2.0,0)
         longsteps = arange( 0,longAngle+0.000003, phi )
@@ -351,7 +360,8 @@ class Cone( basenodes.Cone, Quadric ):
         coords[:,:,0] = sin(longsteps) * radius
         coords[:,:,2] = cos(longsteps) * radius
         coords[:,:,3] = longsteps/(2*pi)
-        def fill_disk( area, ycoord, normal=(0,-1,0), degenerate=1 ):
+        def fill_disk( area: Any, ycoord: float, normal: Any = (0,-1,0),
+                       degenerate: int = 1 ) -> None:
             """fill in disk elements for given area"""
             # Use integer index, not boolean (numpy boolean indexing differs!)
             other = 1 - degenerate
@@ -366,7 +376,7 @@ class Cone( basenodes.Cone, Quadric ):
             area[degenerate,:,3:5] = .5
             # normal for the disk is all the same...
             area[:,:,5:8] = normal
-        def fill_sides( area ):
+        def fill_sides( area: Any ) -> None:
             """Fill in side-of-cylinder/cone components"""
             if not cylinder:
                 area[0,:,0:3] = (0,height/2.0,0)
@@ -414,7 +424,7 @@ class Cone( basenodes.Cone, Quadric ):
         indices = concatenate( new_indices )
         return coords.reshape( (-1,8)), indices.reshape( (-1,))
     
-    def boundingVolume( self, mode=None ):
+    def boundingVolume( self, mode: Any = None ) -> Any:
         """Create a bounding-volume object for this node
 
         In this case we use the AABoundingBox, despite
@@ -439,35 +449,35 @@ class Cone( basenodes.Cone, Quadric ):
 
 class Cylinder( basenodes.Cylinder, Quadric ):
     """Cylinder geometry rendered with GLU quadratic calls"""
-    def _lod_bounding_radius( self ):
+    def _lod_bounding_radius( self ) -> float:
         return max( float(self.radius), float(self.height) / 2.0 )
 
-    def compile( self, mode=None, level=0, key='' ):
+    def compile( self, mode: Any = None, level: int = 0, key: str = '' ) -> Any:
         """Compile this sphere for use on mode"""
         coords,indices = Cone.cone(
             self.height, self.radius, self.bottom, self.side,
             phi=lod_phi( Cone._BASE_PHI, level, 2*pi ),   # ring closes over 2*pi
             top=self.top, cylinder=True,
         )
-        vbos = vbo.VBO(coords), vbo.VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
+        vbos = VBO(coords), VBO(indices,target = 'GL_ELEMENT_ARRAY_BUFFER' ), len(indices)
         holder = mode.cache.holder( self, vbos, key=key )
         holder.depend( self, 'radius' )
         holder.depend( self, 'height' )
         return vbos
 
-    def instanceContentKey( self ):
+    def instanceContentKey( self ) -> Tuple[Any, ...]:
         return ('Cylinder', round(float(self.height), 6), round(float(self.radius), 6),
                 bool(self.bottom), bool(self.side), bool(self.top))
 
-    def _instanceArrays( self ):
+    def _instanceArrays( self ) -> Tuple[Any, Any]:
         return Cone.cone( self.height, self.radius, self.bottom, self.side,
                           phi=lod_phi( Cone._BASE_PHI, 0, 2*pi ),
                           top=self.top, cylinder=True )
 
-    def _instanceDependFields( self ):
+    def _instanceDependFields( self ) -> Tuple[str, ...]:
         return ('radius', 'height', 'bottom', 'side', 'top')
 
-    def boundingVolume( self, mode=None ):
+    def boundingVolume( self, mode: Any = None ) -> Any:
         """Create a bounding-volume object for this node
 
         In this case we use the AABoundingBox, despite

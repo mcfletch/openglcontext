@@ -185,7 +185,7 @@ def material_is_transparent(material: Any) -> bool:
         return False
     alpha_mode = getattr(material, 'alphaMode', None)
     if alpha_mode is not None:
-        return alpha_mode == 'BLEND'
+        return bool(alpha_mode == 'BLEND')
     return bool(getattr(material, 'transparency', 0.0))
 
 

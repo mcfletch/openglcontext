@@ -1,4 +1,6 @@
 """VRML97 Viewpoint node"""
+from typing import Any
+
 from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext import quaternion
 from OpenGLContext import arrays
@@ -14,7 +16,7 @@ class Viewpoint(basenodes.Viewpoint):
     viewplatform initially and to allow for switching between
     predefined viewpoints within a world.
     """
-    def moveTo( cls, path, context ):
+    def moveTo( cls, path: Any, context: Any ) -> None:
         """Given a node-path to a viewpoint, move context's platform there"""
         matrix = path.transformMatrix( )
         node = path[-1]

@@ -1,4 +1,6 @@
 """Semantics for fractional and absolute dragging"""
+from typing import Tuple
+
 
 class DragWatcher(object):
     """Class providing semantics for fractional and absolute dragging
@@ -7,7 +9,8 @@ class DragWatcher(object):
     and query for both absolute distance dragged, and distance as a
     fraction of the distance to the edges of the window.
     """
-    def __init__ (self, startX, startY, totalX, totalY ):
+    def __init__(self, startX: float, startY: float,
+                 totalX: float, totalY: float) -> None:
         """Initialise the DragWatcher
 
         startX, startY -- initial coordinates for the drag
@@ -15,7 +18,7 @@ class DragWatcher(object):
         """
         self.start = startX, startY
         self.total = totalX, totalY
-    def uniformFractions (self, newX, newY ):
+    def uniformFractions(self, newX: float, newY: float) -> Tuple[float, float]:
         """Calculate fractional delta measured against the whole window
 
         newX, newY -- new selection point from which to calculate
@@ -34,7 +37,7 @@ class DragWatcher(object):
             (newX - self.start[0]) / float(totalX) if totalX else 0.0,
             (newY - self.start[1]) / float(totalY) if totalY else 0.0,
         )
-    def fractions (self, newX, newY ):
+    def fractions(self, newX: float, newY: float) -> Tuple[float, float]:
         """Calculate fractional delta from the start point toward the edge
 
         newX, newY -- new selection point from which to calculate
@@ -44,24 +47,23 @@ class DragWatcher(object):
         distances, so this says "how far toward the edge" rather than "how
         far".  For a movement that has to mean the same amount either way, use
         :meth:`uniformFractions`.
+
+        A drag begun on an edge has no distance to travel toward that edge, and
+        the fraction is then zero however far the pointer goes that way.
         """
         if (newX, newY) == self.start:
-            return 0.0,0.0
+            return 0.0, 0.0
         values = []
         for index, item in ((0, newX), (1, newY)):
-            if item < self.start[index]:
-                value = float(item-self.start[index])/ self.start[index]
-            else:
-                value = float(item-self.start[index])/ (self.total[index]-self.start[index])
-            values.append (value)
-        return values
-    def distances (self, newX, newY ):
+            delta = float(item - self.start[index])
+            span = self.start[index] if delta < 0 else self.total[index] - self.start[index]
+            values.append(delta / span if span else 0.0)
+        return values[0], values[1]
+
+    def distances(self, newX: float, newY: float) -> Tuple[float, float]:
         """Calculate absolute distances from start point
 
         newX, newY -- new selection point from which to calculate
         """
-        if (newX, newY) == self.start:
-            return 0,0
-        else:
-            return newX-self.start[0], newY-self.start[1]
+        return newX - self.start[0], newY - self.start[1]
         

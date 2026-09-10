@@ -1,10 +1,37 @@
 """Base functionality for font-providers (objects creating fonts)"""
 
+from __future__ import annotations
+
+from typing import Any, Callable, Iterable, TypeVar
+
 import traceback
-import weakref
 import logging
 
 log = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+def matchFamily(fontStyle: Any, lookup: Callable[[str], T | None]) -> T | None:
+    """The first font ``lookup`` can find for a name in ``fontStyle.family``
+
+    VRML97 gives ``FontStyle.family`` a list of family names in *preference*
+    order, so a provider serves the first name it has a font for and treats
+    the names after it as fallbacks.
+
+    lookup -- called with one family name; returns the provider's own
+        description of the font for that name, or None if it has none.
+
+    Returns None where the style names no family, or none of the names it
+    does name can be served; the caller chooses its own default from there.
+    """
+    if not fontStyle or not fontStyle.family:
+        return None
+    for specifier in fontStyle.family:
+        result = lookup(specifier)
+        if result is not None:
+            return result
+    return None
 
 
 class FontProvider(object):
@@ -31,26 +58,34 @@ class FontProvider(object):
     """
 
     PROVIDER_SEARCH_ORDER = ["solid", "texture", "bitmap"]
-    providers = {}
+    providers: dict[str, list[FontProvider]] = {}
+    #: The format this provider serves; a concrete provider names its own.
+    format = ""
+    #: Whether the fonts this provider creates can draw in a core-profile
+    #: pass; a provider that only reaches the fixed-function pipeline leaves
+    #: this false and is offered to compatibility-profile passes alone.
+    shader_compatible = False
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the provider"""
-        self.fonts = {}
+        self.fonts: dict[Any, Any] = {}
 
     @classmethod
-    def registerProvider(cls, obj):
+    def registerProvider(cls, obj: FontProvider) -> None:
         """Register a class as an active font-provider (classmethod)"""
         cls.providers.setdefault(obj.format, []).append(obj)
 
 
     @classmethod
-    def getProviders(cls, format):
+    def getProviders(cls, format: str) -> list[FontProvider]:
         """Get providers for a particular format (classmethod)"""
         return cls.providers.get(format, [])
 
 
     @classmethod
-    def getProviderFont(cls, fontStyle, mode=None):
+    def getProviderFont(
+        cls, fontStyle: Any, mode: Any = None
+    ) -> tuple[FontProvider | None, Any]:
         """Get a font provider & font for given style (classmethod)
 
         fontStyle -- a FontStyle for FontStyle3D node, or None,
@@ -107,7 +142,7 @@ class FontProvider(object):
         return None, None
 
 
-    def addFont(self, fontStyle, font, mode=None):
+    def addFont(self, fontStyle: Any, font: Any, mode: Any = None) -> Any:
         """Add a new font to the font provider
 
         fontStyle -- the font style defining the font, may
@@ -121,7 +156,7 @@ class FontProvider(object):
         self.fonts[key] = font
         return font
 
-    def get(self, fontStyle=None, mode=None):
+    def get(self, fontStyle: Any = None, mode: Any = None) -> Any:
         """Get/create a new font for the given fontStyle & mode
 
         fontStyle -- the font style defining the font, may
@@ -133,7 +168,7 @@ class FontProvider(object):
             return self.fonts.get(key)
         return self.create(fontStyle, mode)
 
-    def key(self, fontStyle=None):
+    def key(self, fontStyle: Any = None) -> Any:
         """Calculate our "font key" for the fontStyle
 
         If the font-key changes, we should be invalidating
@@ -149,7 +184,7 @@ class FontProvider(object):
             fontStyle.style,
         )
 
-    def enumerate(self, mode=None):
+    def enumerate(self, mode: Any = None) -> Iterable[Any]:
         """Iterate through all available fonts (whether instantiated or not)
 
         These are the "low level" specifications for the fonts,
@@ -160,11 +195,12 @@ class FontProvider(object):
         as well to allow for more flexibility in content
         authoring.
         """
+        return ()
 
-    def create(self, fontStyle, mode=None):
+    def create(self, fontStyle: Any, mode: Any = None) -> Any:
         """Create a new font for the given fontStyle and mode"""
 
-    def clear(self):
+    def clear(self) -> None:
         """Force clear of the font cache for this provider"""
         self.fonts.clear()
 
@@ -172,16 +208,16 @@ class FontProvider(object):
 class TTFFontProvider(FontProvider):
     """Direct TrueType-font-file-based provider"""
 
-    TTFRegistry = None
+    TTFRegistry: Any = None
 
     @classmethod
-    def setTTFRegistry(cls, registry):
+    def setTTFRegistry(cls, registry: Any) -> None:
         """Set the TTF registry for the class (global if called on TTFFontProvider)"""
         cls.TTFRegistry = registry
 
 
     @classmethod
-    def getTTFRegistry(cls):
+    def getTTFRegistry(cls) -> Any:
         """Set the TTF registry for the class (global if called on TTFFontProvider)"""
         return cls.TTFRegistry
 

@@ -1,18 +1,24 @@
 """OpenGLContext plugin classes"""
+from typing import List, Sequence, Union
+
 from OpenGL import plugins
-from OpenGL._bytes import bytes, unicode
+
+#: What :meth:`Context.match` and :meth:`Loader.match` will search for: one
+#: name, or a sequence of names any of which will do.
+Key = Union[bytes, str, Sequence[object]]
+
 
 class Context( plugins.Plugin ):
     """Data-type storage-format handler"""
-    registry = []
+    registry: List[plugins.Plugin] = []
     type_key = 'context'
     @classmethod
-    def match( cls, key ):
+    def match( cls, key: Key ) -> plugins.Plugin:
         """Determine what platform module to load
-        
+
         key -- name of GUI system for which to load
         """
-        if isinstance( key, (bytes,unicode)):
+        if isinstance( key, (bytes,str)):
             key = [key]
         for plugin in cls.registry:
             if plugin.name in key:
@@ -22,23 +28,23 @@ class Context( plugins.Plugin ):
 class InteractiveContext( Context ):
     """Interaction-providing context"""
     type_key = 'interactive'
-    registry = []
+    registry: List[plugins.Plugin] = []
 
 class VRMLContext( InteractiveContext ):
     """VRML parser/rendering context"""
-    registry = []
+    registry: List[plugins.Plugin] = []
     type_key = 'vrml'
 
 class Loader( plugins.Plugin ):
     """A data-format loader (e.g. vrml97 or obj)"""
-    registry = []
+    registry: List[plugins.Plugin] = []
     @classmethod
-    def match( cls, key ):
+    def match( cls, key: Key ) -> plugins.Plugin:
         """Determine what platform module to load
-        
+
         key -- file-extension or mime-type to load from
         """
-        if isinstance( key, (bytes,unicode)):
+        if isinstance( key, (bytes,str)):
             key = [key]
         for plugin in cls.registry:
             if plugin.name in key:
@@ -53,9 +59,9 @@ class Adapter( plugins.Plugin ):
     typed, and a third party adds a format without editing the viewer.  See
     OpenGLContext.viewer.adapters.
     """
-    registry = []
+    registry: List[plugins.Plugin] = []
     type_key = 'adapter'
 
 class Node( plugins.Plugin ):
     """A particular scenegraph node to be rendered"""
-    registry = []
+    registry: List[plugins.Plugin] = []

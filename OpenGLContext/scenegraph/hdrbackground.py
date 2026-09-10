@@ -15,7 +15,8 @@ geometry, so the background and the objects lit by it share one response.
 import logging
 import os
 import threading
-from typing import Any, Optional
+import weakref
+from typing import Any, Dict, Optional
 
 import numpy as np
 from OpenGL.GL import (
@@ -38,7 +39,13 @@ from OpenGL.arrays import vbo
 from vrml import field, fieldtypes, node
 from vrml.vrml97 import nodetypes
 
-from OpenGLContext import context
+from OpenGLContext import context, contextresources
+
+
+#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
+#: the accelerated and the pure-Python class it loaded.
+VBO: Any = vbo.VBO
+
 
 log = logging.getLogger(__name__)
 
@@ -88,12 +95,36 @@ _CUBE_INDICES = np.array([
 ], 'H')
 
 
+#: The skybox program, per GL context that compiled one. A program is a name
+#: its own context issues, so a second window handed the first one's program
+#: draws through a name its driver never gave out.
+_shaders: Dict[Any, tuple] = {}
+
+#: Every node holding compiled skybox objects, so a context's death can reach
+#: the ones that belong to it.
+_compiled_nodes: "weakref.WeakSet[Any]" = weakref.WeakSet()
+
+
+@contextresources.on_context_lost
+def _drop_context_resources() -> None:
+    """Free the skybox objects of the context now being destroyed.
+
+    Keying alone leaves them reachable by the next context the driver gives the
+    same address to; letting go as the context dies is what makes the key
+    trustworthy.
+    """
+    key = contextresources.context_key()
+    _shaders.pop(key, None)
+    for compiled in list(_compiled_nodes):
+        compiled._drop_render_data(key)
+
+
 def _free_render_data(render_data: Any) -> None:
     """Delete the GL objects of one compiled skybox (texture, cube VBOs, VAO).
 
-    The shader program is shared on the class and kept. Must run on the GL thread,
-    so a decode-thread env change queues its stale data for the next compile rather
-    than deleting here."""
+    The program is left alone: it is shared between every node drawing in that
+    context. Must run on the GL thread with the owning context current, so a
+    decode-thread env change queues its stale data rather than deleting here."""
     if not render_data:
         return
     tex, vert_vbo, index_vbo, program, locations, vao = render_data
@@ -133,10 +164,10 @@ class _HDRBackground(object):
     # Decoded (H, W, 3) linear float32 panorama, or None until it loads.
     _equirect: Optional[np.ndarray] = None
 
-    _shader: Any = None
-    _shader_locations: Optional[dict[str, int]] = None
-    # Compiled skybox GL objects from a superseded panorama, awaiting deletion on
-    # the GL thread (see setImage / _drain_stale_render_data).
+    # Compiled skybox GL objects from a superseded panorama, awaiting deletion
+    # on the GL thread, as (context key, render data) pairs -- the objects mean
+    # nothing outside the context that issued them, so the drain takes only the
+    # pairs belonging to whichever context is current.
     _stale_render_data: Optional[list[Any]] = None
 
     # -- loading -----------------------------------------------------------
@@ -179,12 +210,15 @@ class _HDRBackground(object):
         # on the async loader thread, so the old GL objects cannot be deleted here;
         # queue them for the GL thread to free (else every env change leaks a float
         # panorama texture plus its cube VBOs/VAO).
-        if self._render_data is not None:
+        compiled = self._render_data
+        if compiled:
+            # A single store, so the render thread reads either the whole old
+            # mapping or the whole new one.
+            self._render_data = {}
             stale = self._stale_render_data
             if stale is None:
                 stale = self._stale_render_data = []
-            stale.append(self._render_data)
-            self._render_data = None
+            stale.extend(compiled.items())
         ibl.set_equirect_env(self._equirect)
         for c_reference in contexts:
             c = c_reference()
@@ -193,10 +227,13 @@ class _HDRBackground(object):
         return self._equirect
 
     # -- shader ------------------------------------------------------------
-    @classmethod
-    def _compile_shader(cls) -> tuple[Any, Any]:
-        if cls._shader is not None:
-            return cls._shader, cls._shader_locations
+    @staticmethod
+    def _compile_shader() -> tuple[Any, Any]:
+        """The skybox program and its uniform locations, for the current context."""
+        key = contextresources.context_key()
+        compiled = _shaders.get(key)
+        if compiled is not None:
+            return compiled
         from OpenGLContext.passes.shaderpass import preprocess_shader
         vert = preprocess_shader('hdr_background.vert')
         frag = preprocess_shader('hdr_background.frag')
@@ -204,17 +241,24 @@ class _HDRBackground(object):
             GL_shaders.compileShader(vert, GL_VERTEX_SHADER),
             GL_shaders.compileShader(frag, GL_FRAGMENT_SHADER),
             validate=False)
-        cls._shader = program
-        cls._shader_locations = {
+        compiled = (program, {
             'aPosition': glGetAttribLocation(program, 'aPosition'),
             'mvpMatrix': glGetUniformLocation(program, 'mvpMatrix'),
             'equirectMap': glGetUniformLocation(program, 'equirectMap'),
             'exposure': glGetUniformLocation(program, 'exposure'),
             'hdrOutput': glGetUniformLocation(program, 'hdrOutput'),
-        }
-        return cls._shader, cls._shader_locations
+        })
+        _shaders[key] = compiled
+        return compiled
 
-    _render_data: Optional[tuple[Any, ...]] = None
+    #: Compiled skybox objects, one entry per GL context this node has drawn in.
+    _render_data: Dict[Any, tuple] = {}
+
+    def _drop_render_data(self, key: Any) -> None:
+        """Free this node's skybox objects for one context (that context current)."""
+        compiled = self._render_data.pop(key, None)
+        if compiled is not None:
+            _free_render_data(compiled)
 
     def compile(self, mode: Any = None) -> Optional[tuple[Any, ...]]:
         """Build (once) the float panorama texture + cube VBOs + VAO for the skybox."""
@@ -232,12 +276,18 @@ class _HDRBackground(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glBindTexture(GL_TEXTURE_2D, 0)
 
-        vert_vbo = vbo.VBO(_CUBE_VERTICES)
-        index_vbo = vbo.VBO(_CUBE_INDICES, target=GL_ELEMENT_ARRAY_BUFFER)
+        vert_vbo = VBO(_CUBE_VERTICES)
+        index_vbo = VBO(_CUBE_INDICES, target=GL_ELEMENT_ARRAY_BUFFER)
         vao = glGenVertexArrays(1)
         program, locations = self._compile_shader()
-        self._render_data = (tex, vert_vbo, index_vbo, program, locations, vao)
-        return self._render_data
+        compiled = (tex, vert_vbo, index_vbo, program, locations, vao)
+        if type(self)._render_data is self._render_data:
+            # First compile for this node: give it a mapping of its own rather
+            # than writing into the class's empty default.
+            self._render_data = {}
+        self._render_data[contextresources.context_key()] = compiled
+        _compiled_nodes.add(self)
+        return compiled
 
     def _upload_panorama(self, arr: np.ndarray, w: int, h: int) -> None:
         """Upload the panorama to the bound 2D texture, float if the GPU supports it.
@@ -262,29 +312,33 @@ class _HDRBackground(object):
                      GL_UNSIGNED_BYTE, rgba8)
 
     def _drain_stale_render_data(self) -> None:
-        """Delete skybox GL objects queued by a superseded panorama (GL thread)."""
+        """Delete queued skybox GL objects belonging to the current context."""
         stale = self._stale_render_data
         if not stale:
             return
-        self._stale_render_data = []
-        for render_data in stale:
+        key = contextresources.context_key()
+        mine = [pair for pair in stale if pair[0] == key]
+        if not mine:
+            return
+        self._stale_render_data = [pair for pair in stale if pair[0] != key]
+        for _key, render_data in mine:
             _free_render_data(render_data)
 
     def dispose(self) -> None:
-        """Free every skybox GL object this node holds. Call on the GL thread."""
+        """Free this node's skybox GL objects for the current GL context."""
         self._drain_stale_render_data()
-        if self._render_data is not None:
-            _free_render_data(self._render_data)
-            self._render_data = None
+        self._drop_render_data(contextresources.context_key())
 
     # -- rendering ---------------------------------------------------------
-    def _render(self, mode: Any, clear: bool = True) -> int:
+    def _render(self, mode: Any, clear: bool = True,
+                shader_mode: bool = False) -> int:
         if getattr(mode, 'passCount', 0) != 0 or not self.bound:
             return 0
         self._drain_stale_render_data()   # free GL objects a prior env change queued
         if self._equirect is None:
             return 0
-        render_data = self._render_data or self.compile(mode)
+        render_data = (self._render_data.get(contextresources.context_key())
+                       or self.compile(mode))
         if render_data is None:
             return 0
         tex, vert_vbo, index_vbo, program, locations, vao = render_data
@@ -292,7 +346,8 @@ class _HDRBackground(object):
         if clear:
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
 
-        shader_mode = getattr(mode, 'shader_mode', False)
+        # Fixed-function lighting means nothing to a program-drawn sky, and
+        # naming GL_LIGHTING at all is an invalid enumerant in a core profile.
         if not shader_mode:
             glDisable(GL_LIGHTING)
         depth_test = glIsEnabled(GL_DEPTH_TEST)
@@ -353,11 +408,12 @@ class _HDRBackground(object):
 
     def RenderShader(self, mode: Any, clear: bool = True) -> int:
         """Shader-mode (core-profile) skybox render."""
-        return self._render(mode, clear=clear)
+        return self._render(mode, clear=clear, shader_mode=True)
 
     def Render(self, mode: Any, clear: bool = True) -> int:
         """Compatibility-mode render (also shader-based; HDR has no fixed path)."""
-        return self._render(mode, clear=clear)
+        return self._render(mode, clear=clear,
+                            shader_mode=bool(getattr(mode, 'shader_mode', False)))
 
 
 class HDRBackground(_HDRBackground, nodetypes.Background, nodetypes.Children,

@@ -392,7 +392,9 @@ class TerrainContext(BaseContext):
         hf = cast("P.HeightFn", self.height_fn)
 
         def rocky(p: np.ndarray) -> np.ndarray:
-            return self._KEEP(p) & (foliage.slope01(hf, p[:, 0], p[:, 2]) > 0.12)
+            steep: np.ndarray = (self._KEEP(p)
+                                 & (foliage.slope01(hf, p[:, 0], p[:, 2]) > 0.12))
+            return steep
 
         kids: list[Any] = []
         if self._rock_protos:

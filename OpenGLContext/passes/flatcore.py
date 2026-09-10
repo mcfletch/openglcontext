@@ -9,7 +9,7 @@ profile and renderer.  Shadow mapping comes from
 :class:`~OpenGLContext.passes.shadowmixin.ShadowMapMixin`.
 """
 import os
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from OpenGLContext import renderoptions
 from . import _flat
@@ -116,12 +116,12 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
             self, 'instancing',
             renderoptions.env_flag_once('OPENGLCONTEXT_INSTANCING', True))
 
-    def _instanceable(self, path) -> bool:
+    def _instanceable(self, path: Any) -> bool:
         """Geometry drawable through the shared instanced path -- anything exposing
         an ``instanceGPU(mode)`` (PBRMesh, Box, Sphere, ...)."""
         return hasattr(getattr(path[-1], 'geometry', None), 'instanceGPU')
 
-    def _instanceKey(self, path):
+    def _instanceKey(self, path: Any) -> Any:
         """Group by (geometry-content, material): distinct same-shape geometry
         nodes sharing a Material batch (a sphere field of many Sphere nodes). With
         collapse off, fall back to node-identity grouping (USE/DEF only)."""
@@ -134,7 +134,8 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
             return geometry_content_instance_key(path)
         return geometry_instance_key(path)
 
-    def _drawInstanceGroup(self, group, shader, prog, id_map) -> None:
+    def _drawInstanceGroup(self, group: Any, shader: Any, prog: Any,
+                           id_map: Optional[Dict[int, Any]]) -> None:
         """Draw an InstanceGroup through the VRML97 lit program in one call.
 
         Binds the group's single representative material (per-instance material

@@ -138,8 +138,8 @@ def quat_normalize_rows(q: np.ndarray) -> np.ndarray:
         lengths = np.where(empty, 1.0, lengths)
         out = q / lengths[:, None]
         out[empty] = _IDENTITY_ROTATION
-        return out
-    return q / lengths[:, None]
+        return np.asarray(out)
+    return np.asarray(q / lengths[:, None])
 
 
 def quat_slerp_rows(q0: np.ndarray, q1: np.ndarray,
@@ -265,14 +265,14 @@ class Sampler(object):
         a, b = self._key(i), self._key(i + 1)
         if self.is_rotation:
             return quat_slerp(a, b, u)
-        return a + (b - a) * u
+        return np.asarray(a + (b - a) * u)
 
     # -- helpers ----------------------------------------------------------
     def _key(self, i: int) -> np.ndarray:
         """Value of keyframe i (accounts for the CUBICSPLINE 3-per-key layout)."""
         if self.interpolation == 'CUBICSPLINE':
-            return self.values[3 * i + 1]
-        return self.values[i]
+            return np.asarray(self.values[3 * i + 1])
+        return np.asarray(self.values[i])
 
     def _eval_cubic(self, i: int, u: float, t: float) -> np.ndarray:
         n = len(self.times)
@@ -296,7 +296,7 @@ class Sampler(object):
         out = h00 * v0 + h10 * dt * b0 + h01 * v1 + h11 * dt * a1
         if self.is_rotation:
             out = quat_normalize(out)
-        return out
+        return np.asarray(out)
 
 
 class Channel(object):
