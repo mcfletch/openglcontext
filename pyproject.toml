@@ -240,7 +240,15 @@ extras = ["dev"]
 # available" and the env fails to build. pip_pre is honoured by both the pip and
 # the uv installers.
 pip_pre = true
-commands = [["pytest", { replace = "posargs", extend = true }]]
+# Two passes, because a `serial` test compares wall-clock frame times and the
+# ratio it is asserting compresses on a machine busy with the rest of the
+# suite. The marker only means something if something acts on it, and a matrix
+# cell -- running beside whatever else the machine is doing -- is where that
+# matters most. The second pass is short and has the machine to itself.
+commands = [
+    ["pytest", "-m", "not serial", { replace = "posargs", extend = true }],
+    ["pytest", "-m", "serial", { replace = "posargs", extend = true }],
+]
 
 [tool.pytest.ini_options]
 testpaths = ["OpenGLContext/tests", "tests"]
