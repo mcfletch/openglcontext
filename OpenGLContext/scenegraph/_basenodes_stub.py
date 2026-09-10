@@ -20,7 +20,7 @@ from __future__ import annotations
 import ast
 import collections
 import os
-from typing import Dict, Iterator, List, Tuple
+from typing import Dict, Iterator, List, Optional, Tuple
 
 #: Where the ``Node(...)`` registrations live, relative to the package root.
 REGISTRY_MODULE = '__init__.py'
@@ -60,7 +60,7 @@ DYNAMIC_FAMILIES = (
 )
 
 
-def _dynamic_base(module: str, attribute: str):
+def _dynamic_base(module: str, attribute: str) -> Optional[Tuple[str, str]]:
     """The ``(module, base)`` a dynamically built node derives from, or None."""
     for family_module, prefix, base in DYNAMIC_FAMILIES:
         if module == family_module and attribute.startswith(prefix):
@@ -159,12 +159,12 @@ def stub_text(source: str) -> str:
     """
     lines = [HEADER]
     grouped = imports(registrations(source))
-    bases = sorted({
+    found = (
         _dynamic_base(module, attribute)
         for module, entries in grouped.items()
         for attribute, _name in entries
-        if _dynamic_base(module, attribute)
-    })
+    )
+    bases = sorted({pair for pair in found if pair is not None})
     if bases:
         for module, base in bases:
             lines.append('from %s import %s as _%s\n' % (module, base, base))

@@ -62,7 +62,7 @@ class ShaderTextRenderer:
         try:
             from OpenGLContext.scenegraph.text import fonts
             actual_size, module = fonts.get_closest_atlas(self._requested_size)
-            if module is None:
+            if module is None or actual_size is None:
                 log.error("No font atlas available")
                 return False
 

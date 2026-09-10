@@ -20,7 +20,16 @@ Cancel becomes real.
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Iterator, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING, Any, Callable, Iterator, List, Optional, Tuple, cast,
+)
+
+if TYPE_CHECKING:
+    # 3.11's Self, used to say that a widget's callback is handed *that*
+    # widget.  Under TYPE_CHECKING because the runtime floor is 3.10 and
+    # `from __future__ import annotations` above leaves every annotation a
+    # string, so nothing evaluates it there.
+    from typing import Self
 
 from vrml import field, node
 
@@ -115,11 +124,14 @@ class Widget(GUINode, node.Node):
     #: Not fields -- a callable is not something to serialise -- but taken by
     #: the constructor anyway, so a tree can be written as one expression
     #: instead of built and then walked back through to wire up.
-    on_activate: Optional[Callable[['Widget'], None]] = None
-    on_change: Optional[Callable[['Widget'], None]] = None
+    #: `Self` rather than `Widget`: the callback is handed the widget it was
+    #: given to, so a `MenuItem`'s reads `w.checked` and a `Slider`'s reads
+    #: `w.value` without the caller naming a type it already chose.
+    on_activate: Optional[Callable[['Self'], None]] = None
+    on_change: Optional[Callable[['Self'], None]] = None
 
-    def __init__(self, on_activate: Optional[Callable[['Widget'], None]] = None,
-                 on_change: Optional[Callable[['Widget'], None]] = None,
+    def __init__(self, on_activate: Optional[Callable[['Self'], None]] = None,
+                 on_change: Optional[Callable[['Self'], None]] = None,
                  **named: Any) -> None:
         super(Widget, self).__init__(**named)
         if on_activate is not None:
@@ -277,7 +289,10 @@ class Widget(GUINode, node.Node):
     def activate(self) -> None:
         """Do whatever this widget does when it is clicked or Entered."""
         if self.on_activate is not None:
-            self.on_activate(self)
+            # The constructor is the only way one gets here, and it stores the
+            # callback on the widget the caller wrote it for -- which is what
+            # `Self` says and what a checker cannot see across the assignment.
+            cast(Callable[['Widget'], None], self.on_activate)(self)
         dispatch = getattr(self.root(), 'dispatch', None)
         if dispatch is not None:
             dispatch(self)
@@ -285,7 +300,7 @@ class Widget(GUINode, node.Node):
     def changed(self) -> None:
         """Announce that the value this widget edits has moved."""
         if self.on_change is not None:
-            self.on_change(self)
+            cast(Callable[['Widget'], None], self.on_change)(self)
         notify = getattr(self.root(), 'valueChanged', None)
         if notify is not None:
             notify(self)

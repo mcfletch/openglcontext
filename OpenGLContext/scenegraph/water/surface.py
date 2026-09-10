@@ -38,7 +38,7 @@ the world. What being *inside* it is like is
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any, Optional, Tuple
+from typing import Any, Iterator, Optional, Tuple
 
 import numpy as np
 
@@ -192,7 +192,9 @@ def _heading(style: 'WaterStyle') -> float:
     return 0.0
 
 
-def _phases(style: 'WaterStyle', x: Any, z: Any, when: float):
+def _phases(
+    style: 'WaterStyle', x: Any, z: Any, when: float
+) -> Iterator[Tuple[Any, float, float, float]]:
     """Each train's phase at every point, and its own amplitude."""
     heading = _heading(style)
     x = np.asarray(x, dtype='d')

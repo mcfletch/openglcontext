@@ -205,6 +205,12 @@ python_version = "3.12"
 # A function with no annotations is not skipped: its body is checked with the
 # parameters implicitly ``Any``, which is where most of the engine's code lives.
 check_untyped_defs = true
+# Every definition states its types, and a new one that does not is an error
+# here rather than a hole a caller finds later: an unannotated parameter is
+# ``Any``, and an ``Any`` travelling through a call is a check that reports
+# success without having compared anything.
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
 warn_return_any = true
 warn_unused_ignores = true
 ignore_missing_imports = true
