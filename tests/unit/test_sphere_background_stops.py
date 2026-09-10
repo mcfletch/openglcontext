@@ -77,6 +77,42 @@ class TestSkyStopsPastTheSouthPole:
         assert 0.0 < red < 1.0, red
 
 
+class TestASkyColourWithNoAngle:
+    """One ``skyColor`` and no ``skyAngle`` is a plain sky of that colour.
+
+    VRML97 gives ``skyAngle`` one fewer value than ``skyColor``, so a single
+    colour has no angle at all and is the whole sky -- the first thing anyone
+    writes who wants a background that is not black.  A ground under it does
+    not take the sky away; it covers the bottom of the same sphere.
+    """
+
+    def test_the_sky_survives_a_ground(self):
+        found = Background(
+            skyColor=[BLUE],
+            groundColor=[(0.2, 0.4, 0.1), (0.2, 0.4, 0.1)],
+            groundAngle=[pi / 2.0],
+        ).colorSet()
+        angles = [float(stop[0]) for stop in found]
+        _assert_spans_the_sphere(angles)
+        assert angles[0] == 0.0, angles
+        assert tuple(round(float(v), 5) for v in found[0][1:]) == BLUE, found[0]
+
+    def test_the_ground_is_still_there(self):
+        found = Background(
+            skyColor=[BLUE],
+            groundColor=[(0.2, 0.4, 0.1), (0.2, 0.4, 0.1)],
+            groundAngle=[pi / 2.0],
+        ).colorSet()
+        assert tuple(round(float(v), 5) for v in found[-1][1:]) == (0.2, 0.4, 0.1)
+
+    def test_a_ground_colour_with_no_angle_leaves_the_sky_alone(self):
+        """``groundAngle`` empty gives the ground no extent to cover."""
+        found = Background(skyColor=[BLUE], groundColor=[(0.2, 0.4, 0.1)]).colorSet()
+        _assert_spans_the_sphere([float(stop[0]) for stop in found])
+        for stop in found:
+            assert tuple(round(float(v), 5) for v in stop[1:]) == BLUE, stop
+
+
 class TestSkyAndGroundPastTheSouthPole:
     """Ground stops cap the sky, and the cut at ``pi`` happens first."""
 

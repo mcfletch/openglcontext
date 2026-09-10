@@ -1,18 +1,40 @@
 """Gradient-sphere background node"""
 import os
+from typing import Any, Dict
+
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
+# PyOpenGL generates the type-inferring entry points at import time, so
+# they need naming to be seen.
+from OpenGL.GL import glColor, glColorPointerf, glVertexPointerf
 from OpenGL.GL import shaders as GL_shaders
 from OpenGL.arrays import vbo
 
 from vrml import cache
 from vrml import field, protofunctions, node
 from vrml.vrml97 import nodetypes
-from OpenGLContext import displaylist
+from OpenGLContext import contextresources, displaylist
 import bisect
 
 # Shader directory path
 SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
+
+#: The gradient program, per GL context that compiled one.  A program is a name
+#: its own context issues, so a second window handed the first one's program
+#: draws through a name its driver never gave out.
+_shaders: Dict[Any, Any] = {}
+
+
+@contextresources.on_context_lost
+def _drop_context_resources() -> None:
+    """Forget the program of the context now being destroyed.
+
+    Keying alone leaves it reachable by the next context the driver gives the
+    same address to; letting go as the context dies is what makes the key
+    trustworthy.  The sphere's own vertex buffers live in the render pass's
+    cache, which lets go of its own.
+    """
+    _shaders.pop(contextresources.context_key(), None)
 
 MINANGLE = pi*1.0/4
 MAXANGLE = pi*3.0/4
@@ -208,6 +230,14 @@ class _SphereBackground( object ):
 
             # just to be sure, we sort by angle...
             skys = setSort( skys)
+        elif len(self.skyColor):
+            # VRML97 gives skyAngle one fewer value than skyColor, so a single
+            # colour has no angle at all and is the sky all over -- down to
+            # wherever the ground starts.  Two stops rather than one, because
+            # both the ground capping below and pushOut work between a pair.
+            skys = zeros( (2,4), 'f')
+            skys[:,1:] = self.skyColor[0]
+            skys[1,0] = pi
         else:
             skys = zeros((0,4),'f')
         # now need to cap skys to ground's minimum value...
@@ -255,14 +285,13 @@ class _SphereBackground( object ):
         return colorSet
 
     # Shader-based rendering support
-    _background_shader = None
-    _background_shader_locations = None
-
-    @classmethod
-    def _compile_background_shader(cls):
-        """Compile the background shader program (class-level singleton)."""
-        if cls._background_shader is not None:
-            return cls._background_shader, cls._background_shader_locations
+    @staticmethod
+    def _compile_background_shader():
+        """The gradient program and its locations, for the current context."""
+        key = contextresources.context_key()
+        compiled = _shaders.get(key)
+        if compiled is not None:
+            return compiled
 
         vert_path = os.path.join(SHADER_DIR, 'vrml97_background.vert')
         frag_path = os.path.join(SHADER_DIR, 'vrml97_background.frag')
@@ -276,15 +305,14 @@ class _SphereBackground( object ):
         fragment_shader = GL_shaders.compileShader(frag_source, GL_FRAGMENT_SHADER)
         program = GL_shaders.compileProgram(vertex_shader, fragment_shader)
 
-        locations = {
+        compiled = (program, {
             'aPosition': glGetAttribLocation(program, 'aPosition'),
             'aColor': glGetAttribLocation(program, 'aColor'),
             'modelViewMatrix': glGetUniformLocation(program, 'modelViewMatrix'),
             'projectionMatrix': glGetUniformLocation(program, 'projectionMatrix'),
-        }
-        cls._background_shader = program
-        cls._background_shader_locations = locations
-        return program, locations
+        })
+        _shaders[key] = compiled
+        return compiled
 
     def compileShader(self, mode=None):
         """Compile shader-based rendering data for this background.
@@ -315,13 +343,16 @@ class _SphereBackground( object ):
             all_vertices.append(rotated)
             all_colors.append(colors)
 
-        all_vertices = concatenate(all_vertices, axis=0)
-        all_colors = concatenate(all_colors, axis=0)
+        every_vertex = concatenate(all_vertices, axis=0)
+        every_colour = concatenate(all_colors, axis=0)
 
-        vertices_vbo = vbo.VBO(all_vertices.astype('f'))
-        colors_vbo = vbo.VBO(all_colors.astype('f'))
+        # OpenGL.arrays.vbo.VBO is chosen at import time between the
+        # accelerated and the pure-Python class, so a checker reads it as
+        # the None it starts as.
+        vertices_vbo = vbo.VBO(every_vertex.astype('f'))    # type: ignore[misc]
+        colors_vbo = vbo.VBO(every_colour.astype('f'))      # type: ignore[misc]
 
-        return (vertices_vbo, colors_vbo, len(all_vertices))
+        return (vertices_vbo, colors_vbo, len(every_vertex))
 
     def RenderShader(self, mode, clear=True):
         """Render the background using shaders.
