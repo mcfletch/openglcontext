@@ -29,13 +29,19 @@ through ``passes.renderpass.defaultRenderPasses``. The pass
 observes the scenegraph and drives the rendering callbacks
 the Context exposes.
 """
+# Annotations are strings at run time, so a name only a checker needs -- the
+# backend classes, the recording and telemetry types -- is declared under
+# TYPE_CHECKING and written plainly rather than in quotes.
+from __future__ import annotations
+
 from OpenGL.GL import *
 from OpenGLContext import contextresources, texturecache, plugins
 from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node, cache
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+from collections.abc import Callable, Mapping, Sequence
 import weakref
 import os
 import sys
@@ -64,7 +70,7 @@ _Read = TypeVar('_Read')
 Point = Sequence[float]
 
 
-def _fieldIsSet(definition: "ContextDefinition", name: str) -> bool:
+def _fieldIsSet(definition: ContextDefinition, name: str) -> bool:
     """Whether ``name`` holds a value, as opposed to resolving to its default.
 
     A field default is a callable the field runs on first read, so reading the
@@ -110,10 +116,10 @@ from contextlib import AbstractContextManager, nullcontext
 
 perf = time.perf_counter
 contextLock = threading.RLock()
-contextThread: "threading.Thread | None" = None
+contextThread: threading.Thread | None = None
 
 
-def contextAddress(handle: Any) -> "int | None":
+def contextAddress(handle: Any) -> int | None:
     """``handle`` as a plain integer, or None where it names no context
 
     A platform answers with whatever its binding API calls a context, and some
@@ -253,14 +259,14 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             compatibility (legacy) entry points.
     """
 
-    currentContext: "Context | None" = None
-    allContexts: "list[weakref.ref[Context]]" = []
+    currentContext: Context | None = None
+    allContexts: list[weakref.ref[Context]] = []
     renderPasses = renderpass.defaultRenderPasses
-    frameCounter: "FrameCounter | None" = None
-    loopTrace: "LoopTrace | None" = None
-    stallJournal: "StallJournal | None" = None
-    telemetry: "SessionRecording | ReplaySession | None" = None
-    contextDefinition: "ContextDefinition | None" = None
+    frameCounter: FrameCounter | None = None
+    loopTrace: LoopTrace | None = None
+    stallJournal: StallJournal | None = None
+    telemetry: SessionRecording | ReplaySession | None = None
+    contextDefinition: ContextDefinition | None = None
     #: The OpenGL profile a subclass needs, when that is all it has to say:
     #: ``profile = 'compatibility'`` on a demo that draws with the
     #: fixed-function pipeline.  It is applied over :attr:`contextDefinition`
@@ -268,18 +274,18 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     #: inherit the size, buffers and rendering features its base declared.
     #: ``None`` leaves the choice to the definition, and thence to
     #: ``OPENGLCONTEXT_PROFILE``.  See :meth:`resolveDefinition`.
-    profile: "str | None" = None
+    profile: str | None = None
 
     ### State flags/values
     # Set to false to trigger a redraw on the next available iteration
-    alreadyDrawn: "int | None" = None
-    drawing: "int | None" = None
+    alreadyDrawn: int | None = None
+    drawing: int | None = None
     # When true, triggerRedraw/triggerPick only flag a redraw request rather
     # than rendering synchronously in-thread. Backends that drive their own
     # render loop (e.g. GLFW) set this so a burst of input events coalesces
     # into a single render per loop iteration instead of one render per event.
     deferRedraw = False
-    viewportDimensions: "tuple[int, int]" = (0, 0)
+    viewportDimensions: tuple[int, int] = (0, 0)
     drawPollTimeout = 0.01
     coreProfile = False
     # True only for backends that have called glutInit and can safely use
@@ -290,11 +296,11 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     # Auto-exit support for automated testing
     # Set OPENGLCONTEXT_AUTO_EXIT_FRAMES environment variable to exit after N frames
     # Set OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR to capture screenshot before exit
-    _autoExitFrames: "int | None" = None
+    _autoExitFrames: int | None = None
     _autoExitFrameCount = 0
-    _autoExitCaptureDir: "str | None" = None
+    _autoExitCaptureDir: str | None = None
     #: The frame-counting clock this run advances, if it is a capture.
-    _captureClock: "FixedStepClock | None" = None
+    _captureClock: FixedStepClock | None = None
 
     ### Node-like attributes
     PROTO = "Context"
@@ -312,7 +318,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         def getEventManager(self, eventType: Any) -> Any: ...
 
     def __init__(
-        self, definition: "ContextDefinition | Mapping[str, Any] | None" = None
+        self, definition: ContextDefinition | Mapping[str, Any] | None = None
     ) -> None:
         """Establish the Context working environment
 
@@ -351,8 +357,8 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         self.setupDefaultEventCallbacks()
         self.setupCallbacks()
         self.allContexts.append(weakref.ref(self))
-        self.pickEvents: "dict[tuple[str, Any], Any]" = {}
-        self.eventCascadeQueue: "queue.Queue[Any]" = queue.Queue()
+        self.pickEvents: dict[tuple[str, Any], Any] = {}
+        self.eventCascadeQueue: queue.Queue[Any] = queue.Queue()
         self.setupCache()
         self.setupFontProviders()
         self.setupFrameRateCounter()
@@ -387,7 +393,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             self._autoExitCaptureDir = capture_dir
             log.info(f"Auto-exit capture enabled: screenshots will be saved to {capture_dir}")
 
-    def setupCaptureClock(self) -> "FixedStepClock | None":
+    def setupCaptureClock(self) -> FixedStepClock | None:
         """Put this run on a frame-counting clock if it is a capture.
 
         Before DoInit, so that a Timer or TimeSensor built while the scene is
@@ -414,7 +420,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             self._captureClock.restore()
             self._captureClock = None
 
-    def drawAndReadFrame(self, read: "Callable[[], _Read]") -> _Read:
+    def drawAndReadFrame(self, read: Callable[[], _Read]) -> _Read:
         """Draw one frame and call ``read()`` on it before it is presented.
 
         A caller that draws and *then* reads the back buffer reads the frame
@@ -433,7 +439,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         ``OpenGLContext.capture.read_back_buffer`` is the usual ``read``.
         """
         swap = self.SwapBuffers
-        answer: "list[_Read]" = []
+        answer: list[_Read] = []
 
         def _readThenSwap() -> None:
             if not answer:
@@ -488,9 +494,9 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     @classmethod
     def resolveDefinition(
         cls,
-        definition: "ContextDefinition | Mapping[str, Any] | None" = None,
+        definition: ContextDefinition | Mapping[str, Any] | None = None,
         **named: Any,
-    ) -> "ContextDefinition":
+    ) -> ContextDefinition:
         """The definition a context of this class should be created from.
 
         A backend calls this at the top of its ``__init__``, before it opens
@@ -544,8 +550,8 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         return definition
 
     def setDefinition(
-        self, definition: "ContextDefinition | Mapping[str, Any] | None"
-    ) -> "ContextDefinition":
+        self, definition: ContextDefinition | Mapping[str, Any] | None
+    ) -> ContextDefinition:
         """Store the definition this context was created from, and read it.
 
         The backend has normally resolved it already and passes it here; an
@@ -927,8 +933,8 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         session = self.telemetry
         return False if session is None else session.overdue(name)
 
-    def startTelemetry(self, path: "str | None" = None,
-                       **named: Any) -> "SessionRecording":
+    def startTelemetry(self, path: str | None = None,
+                       **named: Any) -> SessionRecording:
         """Begin recording this session to path (None for a dated default)
 
         What a "report a problem" menu item calls: recording can start at
@@ -955,7 +961,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
                 log.debug('could not close the session recording', exc_info=True)
             self.telemetry = None
 
-    def tracePhase(self, name: str) -> "AbstractContextManager[None]":
+    def tracePhase(self, name: str) -> AbstractContextManager[None]:
         """Charge the wrapped block to a named phase of the loop iteration
 
         Answers a do-nothing context manager when there is no trace, so
@@ -1220,7 +1226,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             self.drawing = None
             self.unsetCurrent()
 
-    def drawPoll(self, timeout: "float | None" = None) -> int:
+    def drawPoll(self, timeout: float | None = None) -> int:
         """Wait timeout seconds for a redraw request
 
         timeout -- timeout in seconds, if None, use
@@ -1317,7 +1323,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         return False
 
-    def applyVSync(self, definition: "ContextDefinition | None" = None) -> bool:
+    def applyVSync(self, definition: ContextDefinition | None = None) -> bool:
         """Wait for the display's refresh, or don't; answer whether it happened.
 
         Off uncaps the frame rate, which is what a benchmark wants.  The field
@@ -1492,7 +1498,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if self.contextDefinition:
             self.contextDefinition.size = width, height
 
-    def getViewPort(self) -> "tuple[int, int]":
+    def getViewPort(self) -> tuple[int, int]:
         """Method to retrieve the current dimensions of the context
 
         Return value is a width, height tuple. See Context.ViewPort
@@ -1530,7 +1536,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         key = getattr(event, 'getPickKey', event.getKey)()
         self.pickEvents[(event.type, key)] = event
 
-    def getPickEvents(self) -> "dict[tuple[str, Any], Any]":
+    def getPickEvents(self) -> dict[tuple[str, Any], Any]:
         """Get the currently active pick-events"""
         return self.pickEvents
 
@@ -1558,7 +1564,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
                 return True
         return False
 
-    def sceneBounds(self) -> "tuple[Point, float] | None":
+    def sceneBounds(self) -> tuple[Point, float] | None:
         """``(centre, radius)`` around this context's scene, or None.
 
         What is on screen and how big it is -- for framing a camera on it, or
@@ -1614,7 +1620,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         return platform.quaternion * [0, 0, -ahead, 0] + platform.position
 
     @staticmethod
-    def _withinScene(point: Point, bounds: "tuple[Point, float] | None") -> bool:
+    def _withinScene(point: Point, bounds: tuple[Point, float] | None) -> bool:
         """Whether a picked point is near enough the scene to be part of it.
 
         Generously: a bounding sphere already overstates a scene's extent, and
@@ -1656,7 +1662,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         return getattr(self, "sg", None)
 
-    def renderedChildren(self, types: Any = None) -> "tuple[Any, ...]":
+    def renderedChildren(self, types: Any = None) -> tuple[Any, ...]:
         """Get the rendered children of the scenegraph"""
         sg = self.getSceneGraph()
         if not sg:
@@ -1668,9 +1674,9 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     # (getApplicationName, getUserAppDataDirectory, get/setDefault*, getContextType*).
     # getTTFFiles and fromConfig stay here: they name the concrete Context class
     # directly.
-    ttfFileRegistry: "TTFRegistry | None" = None
+    ttfFileRegistry: TTFRegistry | None = None
 
-    def getTTFFiles(self) -> "TTFRegistry":
+    def getTTFFiles(self) -> TTFRegistry:
         """Get TrueType font-file registry object"""
         registry = self.ttfFileRegistry
         if registry is None:
@@ -1716,7 +1722,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     )
 
     @staticmethod
-    def fromConfig(cfg: "ConfigParser") -> "type[Context] | None":
+    def fromConfig(cfg: ConfigParser) -> type[Context] | None:
         """Given a ConfigParser instance, produce a configured sub-class
 
         ``[context] type`` names the flavour, one of the ``type_key`` values in
@@ -1775,14 +1781,14 @@ class _ContextRenderNode(nodetypes.Rendering, nodetypes.Children, node.Node):
         """Delegate rendering to the mode.context.Render method"""
         return mode.context.Render(mode)
 
-    def sortKey(self, passes: Any, matrix: Any) -> "tuple[Any, ...]":
+    def sortKey(self, passes: Any, matrix: Any) -> tuple[Any, ...]:
         return (0, None)
 
 
 ContextRenderNode = _ContextRenderNode()
 
 
-def getCurrentContext() -> "Context | None":
+def getCurrentContext() -> Context | None:
     """Get the currently-rendering context
 
     This function allows code running during the render cycle
