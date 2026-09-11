@@ -412,6 +412,13 @@ class TestACleanRenderingEnvironment:
             # not hand a child one it cannot open, so it is inherited on
             # purpose.  See OpenGLContext.testing.glcontext.
             'OPENGLCONTEXT_TEST_WINDOWING',
+            # Whether a process hands its GL contexts back or leaks them on the
+            # way out.  Nothing about a frame: it is read after the last one
+            # has been drawn.  Inherited on purpose -- a child renders on the
+            # same driver as its parent, so the answer is the same one, and
+            # inheriting it spares the child a probe of its own.  See
+            # OpenGLContext.testing.glfwteardown.
+            'OPENGLCONTEXT_GLFW_TEARDOWN',
         }
         assert not (seen - set(renderoptions.ENVIRONMENT) - allowed)
 

@@ -42,47 +42,34 @@ def reset_environment_memos() -> Iterator[None]:
     clear()
 
 
-# Putting the renderer configuration back after every test used to be done
-# here, for this directory only -- which is one directory short: the modules
-# that set it at import are here, and `tests/test_all_scripts.py`, which
-# inherits it into every script it launches, is not. It is the shipped plugin's
-# `gl_configuration` fixture now, so it covers the whole session and a project
-# built on the engine gets it too. See OpenGLContext.testing.gl_env.
+# Putting the renderer configuration back after every test is the shipped
+# plugin's `gl_configuration` fixture, so it covers the whole session and a
+# project built on the engine gets it too. This directory alone would be one
+# directory short: the modules that set it at import are here, and
+# `tests/test_all_scripts.py`, which inherits it into every script it launches,
+# is not. See OpenGLContext.testing.gl_env.
 
 
-# Tearing down a GLFW context on this Wayland/EGL stack corrupts the heap. A
-# hidden core window built and then destroyed reproduces it with no OpenGLContext
-# in the loop, and gdb puts the fault squarely in the driver, not in us:
-#
-#     free(): invalid size   -> abort
-#       __libc_free
-#       libgallium-25.2.8 (Mesa)          <- invalid free
-#       libEGL_mesa.so.0
-#       destroyContextEGL
-#       _glfwDestroyWindowWayland
-#       glfwDestroyWindow                 (and the same path under glfwTerminate)
-#
-# So both ``glfwDestroyWindow`` and ``glfwTerminate`` free an EGL context through
-# Mesa's Gallium driver, which frees a bad pointer and aborts.  The abort lands
-# in whatever runs next -- often a later test's ``glfw.poll_events`` or its own
-# teardown -- long after the assertions that "caused" it have passed, which is
-# why it reads as flaky cross-test pollution rather than one broken test.  A
-# SIGABRT cannot be caught, so a single teardown takes the whole run down.
-#
-# A test process has no need to hand these back at all: ``glfw.init()`` returns
-# immediately when the library is already initialised, and the OS reclaims every
-# context and window when the process exits.  Neutralise both teardown calls for
-# the session (patched here at conftest import, before any fixture runs) so the
-# driver's broken free is never reached.  The hidden windows a run leaks cost a
-# little memory until it ends and nothing more.  Remove this once the Mesa/GLFW
-# Wayland-EGL context teardown no longer faults.
-try:
-    import glfw as _glfw
-except Exception:
-    pass
-else:
-    _glfw.terminate = lambda: None
-    _glfw.destroy_window = lambda window: None
+# Whether a GLFW context can be handed back at all is a question about the
+# driver, and some stacks abort the process answering it.
+# `OpenGLContext.testing.glfwteardown` asks it, once per session and through
+# the shipped plugin, so the answer covers the whole run rather than this
+# directory: a stack that frees its contexts cleanly keeps the engine's own
+# release path -- the one a user's application runs on exit -- under test.
+
+
+@pytest.fixture
+def render_scene(monkeypatch):
+    """Build a context around a scenegraph, render frames, count what ran.
+
+    Seven modules in this directory ask for it, so it is a fixture of the
+    directory rather than one imported out of whichever test module happens to
+    hold it. :mod:`tests.unit.glrender` is the machinery, and carries the rest
+    of what those modules share.
+    """
+    from tests.unit import glrender
+
+    yield from glrender.render_scene_factory(monkeypatch)
 
 
 @pytest.fixture(scope='session')

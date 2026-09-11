@@ -138,6 +138,57 @@ def gl_context():
     <code>glcontext.windowing() != 'glfw'</code>.</p>
 </section>
 
+<section id="teardown">
+  <h2>Handing the contexts back</h2>
+  <p>A window closes through the context that owns it, and the engine's caches
+    are told while that context is still current: the render pass, the shader
+    programs, the text renderers and the teapot's vertex arrays all hold GL
+    <em>names</em>, and a name means something only in the context that issued
+    it. Closing one of two windows without making it current first retires the
+    wrong one &mdash; the live context loses its programs, and the closed
+    context's names stay reachable by whatever the driver hands the address to
+    next.</p>
+  <p>Some driver stacks fault while freeing a context, from inside the driver
+    and with nothing of ours on the stack. Two have been seen, both under
+    GLFW's Wayland backend, which reaches the driver through EGL: an NVIDIA one
+    that kills roughly <strong>one teardown in ten</strong> inside
+    <code>libnvidia-eglcore</code>, and a Mesa one that aborts on a bad free.
+    A fault at teardown lands in whatever runs next, so it reads as flaky
+    pollution between tests rather than as one broken test, and a
+    <code>SIGABRT</code> cannot be caught: one teardown takes the whole run
+    down. A test process has no need to hand its contexts back at all &mdash;
+    the OS reclaims every one of them as the process exits &mdash; so on such a
+    stack both teardown calls are stood down for the session and the windows a
+    run leaks cost a little memory until it ends.</p>
+  <p><strong>Which stack this is, is asked rather than assumed.</strong>
+    <code>OpenGLContext.testing.glfwteardown</code> builds a window in a child
+    process and frees it; if the child aborts, this machine is one of them.
+    Where it does not, the engine's own release path &mdash; the code a user's
+    application runs on exit &mdash; runs as it normally does, and so stays
+    under test. That is what stops the workaround outliving the driver defect:
+    it retires itself on the first machine that no longer needs it. The plugin
+    settles this once, before anything opens a window.</p>
+  <p><strong>The probe frees a hundred contexts, not one.</strong> The fault it
+    is looking for is a fraction of teardowns rather than every one, so a short
+    probe would answer &ldquo;sound&rdquo; on a faulting stack most of the time
+    and wave the run through to crash as it would have anyway. A hundred cycles
+    puts the chance of missing a one-in-ten fault at three in a hundred
+    thousand, and costs nothing measurable: starting the child and opening the
+    first window is the whole expense, so the probe takes about a third of a
+    second either way.</p>
+  <p><code>OPENGLCONTEXT_GLFW_TEARDOWN</code> pins the answer for a run whose
+    stack is already known, which also skips the probe:</p>
+  <table>
+  <tr><th>Value</th><th>What the run does</th></tr>
+  <tr><td><code>auto</code> (the default)</td>
+      <td>Ask this machine, once, and act on the answer.</td></tr>
+  <tr><td><code>native</code></td>
+      <td>Release every context, whatever the driver does with it.</td></tr>
+  <tr><td><code>neutralised</code></td>
+      <td>Leak them: destroy no window and terminate no library.</td></tr>
+  </table>
+</section>
+
 <section id="without-pytest">
   <h2>Without pytest</h2>
   <p>The window machinery has no pytest in it, so a script or another runner can

@@ -67,7 +67,7 @@ from typing import Any, Callable, Iterator, Mapping
 
 import pytest
 
-from OpenGLContext.testing import gl_env
+from OpenGLContext.testing import gl_env, glfwteardown
 
 # Before anything here imports OpenGL, because the platform module is chosen at
 # import and cannot be changed afterwards.  This is why no test module needs to
@@ -76,6 +76,7 @@ from OpenGLContext.testing import gl_env
 gl_env.settle_gl_platform()
 gl_env.settle_gl_backend()
 
+from OpenGLContext.testing import glcontext              # noqa: E402
 from OpenGLContext.testing.glcontext import (  # noqa: E402 -- after the settling
     GLDescription,
     GLUnavailable,
@@ -89,6 +90,9 @@ PERFORMANCE_TESTS = 'OPENGLCONTEXT_PERFORMANCE_TESTS'
 
 _TRUE = ('1', 'true', 'yes', 'on')
 _FALSE = ('0', 'false', 'no', 'off')
+
+#: What this session settled on for GLFW teardown, so a run can say which.
+_TEARDOWN: dict[str, str] = {}
 
 
 def performance_skip_reason(description: GLDescription | None,
@@ -186,6 +190,21 @@ def pytest_configure(config: Any) -> None:
         'and put back afterwards, and it is skipped where this machine cannot '
         'give that kind. A test with no marker takes whatever the run settled '
         'on -- see OpenGLContext.testing.gl_env.')
+    # Before any fixture runs, because what it settles is what happens when the
+    # first window closes.  Only where this run makes GLFW windows: a run on an
+    # offscreen backend frees nothing through GLFW, and asking would spend a
+    # child process to learn something it cannot act on.
+    if glcontext.windowing() == 'glfw':
+        _TEARDOWN['decided'] = glfwteardown.settle_for_session()
+
+
+def glfw_teardown() -> str:
+    """``'native'``, ``'neutralised'``, ``'unavailable'`` -- or ``''`` unasked.
+
+    See :mod:`OpenGLContext.testing.glfwteardown` for what each means and what
+    decides between them.
+    """
+    return _TEARDOWN.get('decided', '')
 
 
 def pytest_collection_modifyitems(config: Any, items: list) -> None:
