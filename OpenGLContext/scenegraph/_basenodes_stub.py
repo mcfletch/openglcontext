@@ -20,7 +20,7 @@ from __future__ import annotations
 import ast
 import collections
 import os
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 #: Where the ``Node(...)`` registrations live, relative to the package root.
 REGISTRY_MODULE = '__init__.py'
@@ -63,9 +63,13 @@ DYNAMIC_FAMILIES = (
 def _dynamic_base(module: str, attribute: str) -> Optional[Tuple[str, str]]:
     """The ``(module, base)`` a dynamically built node derives from, or None."""
     for family_module, prefix, base in DYNAMIC_FAMILIES:
-        if module == family_module and attribute.startswith(prefix):
-            if attribute != prefix:
-                return family_module, base
+        if module != family_module or not attribute.startswith(prefix):
+            continue
+        if attribute == prefix:
+            # The base class itself rather than one built over it: it is
+            # written out in its module, so a checker reads it already.
+            return None
+        return family_module, base
     return None
 
 
@@ -128,18 +132,27 @@ def _calls(body: List[ast.stmt], bindings: Dict[str, str]
             )
 
 
-def registrations(source: str) -> Iterator[Tuple[str, str]]:
+def registrations(source: str) -> List[Tuple[str, str]]:
     """The ``(name, import path)`` pairs of every ``Node(...)`` call in *source*.
 
-    Both have to be worked out statically: a name a stub cannot spell is a
-    name a checker cannot resolve.  A registration whose arguments are not
-    literals -- or a literal plus an enclosing loop's variable -- raises, so
-    an unreadable one is reported rather than quietly left out of the stub.
+    Both have to be worked out statically: a name a stub cannot spell is a name
+    a checker cannot resolve.  A registration whose arguments are neither
+    literals nor a literal joined to an enclosing loop's variable raises
+    ``ValueError``, naming the expression that could not be read -- and the
+    call raises rather than the iteration, so the fault is reported against the
+    registration rather than against whoever consumed the answer.
+
+    Two shapes are passed over instead: a ``Node(`` call short of arguments,
+    which could not have registered anything either since both are required,
+    and a loop whose target unpacks a tuple, which nothing registers through.
+    What catches a node that went missing for any reason is the comparison with
+    the running registry in ``tests/unit/test_basenodes_stub.py``, which reads
+    what was registered rather than what was written.
     """
-    return _calls(ast.parse(source).body, {})
+    return list(_calls(ast.parse(source).body, {}))
 
 
-def imports(pairs: Iterator[Tuple[str, str]]) -> Dict[str, List[Tuple[str, str]]]:
+def imports(pairs: Iterable[Tuple[str, str]]) -> Dict[str, List[Tuple[str, str]]]:
     """Group ``(name, import path)`` pairs into module -> [(attribute, name)]."""
     grouped: Dict[str, List[Tuple[str, str]]] = collections.defaultdict(list)
     for name, path in pairs:

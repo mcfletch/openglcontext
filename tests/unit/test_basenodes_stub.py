@@ -122,6 +122,18 @@ class TestReadingTheRegistrations:
         with pytest.raises(ValueError):
             self._pairs("Node( NAMES[0], 'pkg.m.C' )")
 
+    def test_it_is_the_call_that_reports_one(self):
+        """Rather than whoever iterates the answer later: a generator defers
+        the whole reading, so the fault surfaces against a line that did
+        nothing but consume it."""
+        with pytest.raises(ValueError):
+            _basenodes_stub.registrations("Node( NAMES[0], 'pkg.m.C' )")
+
+    def test_the_pairs_can_be_read_more_than_once(self):
+        source = "Node( 'Box', 'pkg.box.Box' )"
+        found = _basenodes_stub.registrations(source)
+        assert list(found) == list(found) == [('Box', 'pkg.box.Box')]
+
     def test_a_loop_over_something_unreadable_is_reported(self):
         with pytest.raises(ValueError):
             self._pairs("for s in SUFFIXES:\n    Node( 'N'+s, 'pkg.m.N'+s )\n")
@@ -130,6 +142,31 @@ class TestReadingTheRegistrations:
         """Nothing registers that way; a checker-visible name needs a plain target."""
         source = "for a, b in (('x', 'y'),):\n    Node( 'N'+a, 'pkg.m.N'+a )\n"
         assert self._pairs(source) == []
+
+
+class TestTheDynamicFamilies:
+    """A node built by ``type()`` has no class statement for a checker to read,
+    so the stub declares it as the base it was built over."""
+
+    def base(self, module, attribute):
+        return _basenodes_stub._dynamic_base(module, attribute)
+
+    def test_a_built_subclass_is_declared_as_its_base(self):
+        module, prefix, expected = _basenodes_stub.DYNAMIC_FAMILIES[0]
+        assert self.base(module, prefix + '1f') == (module, expected)
+
+    def test_the_base_class_itself_is_not_one_of_them(self):
+        """It is written out in its module, so a checker already reads it."""
+        module, prefix, _base = _basenodes_stub.DYNAMIC_FAMILIES[0]
+        assert self.base(module, prefix) is None
+
+    def test_a_name_from_another_module_is_not_one_either(self):
+        _module, prefix, _base = _basenodes_stub.DYNAMIC_FAMILIES[0]
+        assert self.base('some.other.module', prefix + '1f') is None
+
+    def test_an_unrelated_name_in_the_family_module_is_not_one(self):
+        module, _prefix, _base = _basenodes_stub.DYNAMIC_FAMILIES[0]
+        assert self.base(module, 'TextureUniform') is None
 
 
 class TestFindingThePackage:
