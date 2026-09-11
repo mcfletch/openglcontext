@@ -509,9 +509,17 @@ def _glfw_window(title: str, size: Sequence[int], profile: str,
     try:
         yield window
     finally:
-        # Still current, so the engine's caches can let go of this context's GL
-        # names.  A suite opens hundreds of these in one process, which is the
-        # setting in which a driver hands the same address out again.
+        # *This* window current first.  `contextresources.context_lost` names
+        # the context that is current, and a test that drove a second window
+        # left that one current -- so the caches would be told about the wrong
+        # context and this one's GL names would stay reachable.  A suite opens
+        # hundreds of these in one process, which is the setting in which a
+        # driver hands the same address out again, and a cache still holding
+        # the dead context's programs answers with them.
+        try:
+            glfw.make_context_current(window)
+        except Exception:               # pragma: no cover - needs a lost window
+            pass
         contextresources.context_lost()
         glfw.destroy_window(window)
 

@@ -481,8 +481,14 @@ class EGLContext(
         """
         if self.display is None:
             return
-        # With the context still current, which is the only moment the caches
-        # holding its GL names can delete them rather than merely forget them.
+        # This context current first: it is the only moment the caches holding
+        # its GL names can delete them rather than merely forget them, and the
+        # caches are told which context is going by asking which one is
+        # current -- so closing one of two would otherwise retire the wrong.
+        try:
+            self._makeCurrent()
+        except Exception:               # pragma: no cover - needs a lost display
+            pass
         self.releaseContextResources(self._glHandle())
         self._releaseEGL()
 

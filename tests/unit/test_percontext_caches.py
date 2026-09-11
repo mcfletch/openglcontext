@@ -150,6 +150,91 @@ class TestTheRenderPassIsHeldPerContext:
         assert self._pass_for(first, current, scene) is a
 
 
+class TestClosingAWindowLetsGoOfItsOwnContext:
+    """A key is only unique among *live* contexts, so a cache entry that
+    outlives its window is reachable by the next window the driver hands the
+    same address to -- which then draws through names its own context never
+    issued."""
+
+    def test_the_last_window_open_is_not_the_one_being_closed(self, gl_window):
+        """Two windows, closed in turn: whichever was left current when the
+        first of them went is the one the caches would hear about, and the
+        other one's programs would stay reachable for ever."""
+        import contextlib
+
+        def opened(stack, title):
+            try:
+                return stack.enter_context(
+                    glcontext.hidden_window(title, size=(32, 32)))
+            except glcontext.GLUnavailable as err:
+                pytest.skip('a second context cannot be made here: %s' % (err,))
+
+        with contextlib.ExitStack() as open_windows:
+            first = opened(open_windows, 'cache-close-a')
+            second = opened(open_windows, 'cache-close-b')
+            glcontext.make_current(first)
+            shaderpass.get_shader_program()
+            glcontext.make_current(second)
+            shaderpass.get_shader_program()
+            held = len(shaderpass._shader_programs)
+            if held < 2:
+                pytest.skip('this platform cannot tell two contexts apart')
+        assert not shaderpass._shader_programs, (
+            '%d of %d shader programs outlived the contexts that issued them'
+            % (len(shaderpass._shader_programs), held))
+
+
+class TestAContextReleasesItsOwnResources:
+    """The same question for the engine's own backend context, which is the
+    path a user's application takes when it closes a window."""
+
+    @pytest.fixture
+    def two_engine_contexts(self):
+        """Two live :class:`GLFWContext` instances, both released afterwards."""
+        from OpenGLContext import testingcontext
+
+        if glcontext.windowing() != 'glfw':
+            pytest.skip('this run does not make GLFW windows')
+        Base = testingcontext.getInteractive()
+
+        class _Ctx(Base):
+            def OnInit(self):
+                self.sg = None
+
+        built = []
+        try:
+            for _each in range(2):
+                context = _Ctx()
+                context.deferRedraw = True
+                built.append(context)
+        except Exception as err:      # pragma: no cover - only on a broken stack
+            for context in built:
+                context.releaseWindow()
+            pytest.skip('no usable GL context: %r' % (err,))
+        try:
+            yield built
+        finally:
+            for context in built:
+                context.releaseWindow()
+
+    def test_releasing_the_one_that_is_not_current(self, two_engine_contexts):
+        """Its GL names are the ones to forget -- not the current context's,
+        which is alive and will go on drawing with them."""
+        first, second = two_engine_contexts
+        first.setCurrent()
+        mine = shaderpass.get_shader_program()
+        second.setCurrent()
+        theirs = shaderpass.get_shader_program()
+        if mine is theirs:
+            pytest.skip('this platform cannot tell two contexts apart')
+        first.releaseWindow()                  # while `second` is current
+        second.setCurrent()
+        assert shaderpass.get_shader_program() is theirs, (
+            "the live context's programs were dropped instead")
+        assert mine not in shaderpass._shader_programs.values(), (
+            'the released context left its programs reachable')
+
+
 class TestEveryCacheKeysTheSameWay:
     """Four caches, one question.  A fifth added later should not have to
     reinvent the answer."""

@@ -437,10 +437,20 @@ class GLFWContext(
         let go before it is destroyed rather than left for a later window that
         the driver hands the same identifier.  Calling this twice is harmless;
         the second call has nothing to do.
+
+        This window is made current first.  The caches are told which context
+        is going by asking which one *is* current, so an application closing
+        one of two windows would otherwise retire the wrong one -- dropping a
+        live context's programs, and leaving the closed context's names
+        reachable by whatever the driver hands the address to next.
         """
         if not self.window:
             return
         window, self.window = self.window, None
+        try:
+            glfw.make_context_current(window)
+        except Exception:               # pragma: no cover - needs a lost window
+            pass
         self.releaseContextResources(self._glHandle())
         glfw.destroy_window(window)
 

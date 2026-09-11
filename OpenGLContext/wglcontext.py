@@ -308,8 +308,14 @@ class WGLContext(
         """
         if self.surface is None:
             return
-        # With the context still current, which is the only moment the caches
-        # holding its GL names can delete them rather than merely forget them.
+        # This context current first: it is the only moment the caches holding
+        # its GL names can delete them rather than merely forget them, and the
+        # caches are told which context is going by asking which one is
+        # current -- so closing one of two would otherwise retire the wrong.
+        try:
+            self.surface.make_current()
+        except Exception:               # pragma: no cover - needs a lost surface
+            pass
         self.releaseContextResources(self._glHandle())
         surface, self.surface = self.surface, None
         surface.release()
