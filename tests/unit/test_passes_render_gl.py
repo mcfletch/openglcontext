@@ -15,25 +15,7 @@ import pytest
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes  # noqa: E402
-
-
-def _base_env(monkeypatch, **extra):
-    monkeypatch.setenv('OPENGLCONTEXT_PROFILE', 'core')
-    monkeypatch.setenv('OPENGLCONTEXT_BACKEND', 'glfw')
-    monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'pbr')
-    monkeypatch.setenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
-    monkeypatch.setenv('OPENGLCONTEXT_NO_VSYNC', '1')
-    # Pinned, not left on auto.  Image-based lighting starts at the mode the
-    # GPU supports and degrades when the recent frame rate sags, so a test that
-    # renders a handful of frames -- reporting almost no frame rate yet -- drops
-    # to 'analytic', while the same test after a warmed-up neighbour sometimes
-    # does not.  That is a coin toss on the picture every measured render then
-    # judges.  'analytic' is what these renders have always effectively had, so
-    # pinning it changes no assertion and removes the toss.
-    monkeypatch.setenv('OPENGLCONTEXT_IBL', 'analytic')
-    monkeypatch.setenv('PYOPENGL_PLATFORM', 'egl')
-    for k, v in extra.items():
-        monkeypatch.setenv(k, str(v))
+from tests.unit.glrender import base_env, frames_of  # noqa: E402,F401
 
 
 def test_the_render_environment_does_not_adapt(monkeypatch):
@@ -48,189 +30,9 @@ def test_the_render_environment_does_not_adapt(monkeypatch):
     """
     from OpenGLContext.passes import ibl
 
-    _base_env(monkeypatch)
+    base_env(monkeypatch)
     assert not ibl.ibl_is_adaptive()
     assert ibl.resolve_ibl_mode(requested='auto') == 'analytic'
-
-
-def frames_of(render_scene, children, **named):
-    """Every finished frame ``children`` draws, as an (H, W, 3) array each.
-
-    Read inside ``SwapBuffers``, which is the only moment a finished frame is
-    still in the back buffer -- after the swap it is gone, and a core-profile
-    context will not let the front buffer be read at all. It is also where
-    ``SettleCapture`` reads, so this sees what a screenshot would.
-    """
-    from OpenGLContext.capture import read_back_buffer
-    from OpenGLContext import glfwcontext
-
-    frames = []
-    original = glfwcontext.GLFWContext.SwapBuffers
-
-    def capturing(self):
-        frames.append(read_back_buffer()[0])
-        return original(self)
-
-    glfwcontext.GLFWContext.SwapBuffers = capturing
-    try:
-        render_scene(children, **named)
-    finally:
-        glfwcontext.GLFWContext.SwapBuffers = original
-    assert frames, 'the scene drew no frames at all'
-    return frames
-
-
-class _Rendered:
-    def __init__(self, context, counters):
-        self.context = context
-        self.instanced_calls = counters['instanced_calls']
-        self.instances = counters['instances']
-        self.single_draws = counters['single']
-        self.shadow_passes = counters['shadow']
-        self.transmissive_passes = counters['transmissive']
-        self.legacy_pick_passes = counters['legacy_pick']
-        self.bloom_composites = counters['bloom']
-
-
-@pytest.fixture
-def render_scene(monkeypatch):
-    """Factory: build a context around a scenegraph and render frames.
-
-    Returns a callable(children, frames=4, picks=None, mrt=True) -> _Rendered and
-    tears the window down afterward.
-    """
-    windows = []
-    contexts = []
-
-    def run(children, frames=4, picks=None, mrt=True, shadows=None):
-        from OpenGLContext.passes import (
-            instancing, selection, flateffects, shadowmixin, pbrpass, flatcore,
-        )
-        from OpenGLContext.scenegraph import pbrmesh
-
-        if shadows is not None:
-            # use_shadows is a class attribute resolved from the environment at
-            # import time, so set it directly for a deterministic per-test verdict.
-            monkeypatch.setattr(pbrpass.PBRPass, 'use_shadows', shadows, raising=False)
-            monkeypatch.setattr(flatcore.FlatPass, 'use_shadows', shadows, raising=False)
-
-        counters = {'instanced_calls': 0, 'instances': 0, 'single': 0,
-                    'shadow': 0, 'transmissive': 0, 'legacy_pick': 0, 'bloom': 0}
-        orig_draw = instancing.draw_instanced_mesh
-
-        def counting_draw(gpu, mvs, oids, material_indices=None, **named):
-            counters['instanced_calls'] += 1
-            counters['instances'] += len(mvs)
-            return orig_draw(gpu, mvs, oids, material_indices)
-
-        monkeypatch.setattr(instancing, 'draw_instanced_mesh', counting_draw)
-
-        orig_single = pbrmesh._MeshGPU.draw
-
-        def counting_single(self):
-            counters['single'] += 1
-            return orig_single(self)
-
-        monkeypatch.setattr(pbrmesh._MeshGPU, 'draw', counting_single)
-
-        def _spy(cls, name, key):
-            orig = getattr(cls, name)
-
-            def wrapper(self, *a, **k):
-                counters[key] += 1
-                return orig(self, *a, **k)
-
-            monkeypatch.setattr(cls, name, wrapper)
-
-        _spy(shadowmixin.ShadowMapMixin, 'renderShadowMaps', 'shadow')
-        _spy(flateffects._FlatEffectsMixin, 'shaderRenderTransmissive', 'transmissive')
-        _spy(flateffects._FlatEffectsMixin, '_end_bloom', 'bloom')
-        _spy(selection.SelectionMixin, 'shaderSelectRenderOptimized', 'legacy_pick')
-
-        if not mrt:
-            monkeypatch.setattr(selection.SelectionMixin, 'use_mrt_selection', False)
-
-        if not glfw.init():
-            pytest.skip("glfw init failed")
-
-        from OpenGLContext import testingcontext
-        Base = testingcontext.getInteractive()
-
-        sg = basenodes.sceneGraph(children=children)
-
-        class _Ctx(Base):
-            def OnInit(self):
-                self.sg = sg
-                if picks is not None:
-                    self.contextDefinition.pickAsync = False
-                    self.addEventHandler('mousebutton', button=0, state=1,
-                                         function=lambda e: None)
-
-        try:
-            inst = _Ctx()
-        except Exception as err:      # pragma: no cover - only on a broken GL stack
-            pytest.skip("no usable GL context: %r" % (err,))
-        inst.deferRedraw = True
-        win = getattr(inst, 'window', None)
-        if win is not None:
-            windows.append(win)
-        try:
-            glfw.swap_interval(0)
-        except Exception:
-            pass
-
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
-        w, h = inst.getViewPort()
-        pick_points = picks(w, h) if callable(picks) else picks
-        for i in range(frames):
-            glfw.poll_events()
-            if pick_points is not None and 1 <= i <= 2:
-                for (px, py) in pick_points:
-                    ev = MouseButtonEvent()
-                    ev.button = 0
-                    ev.state = 1
-                    ev.modifiers = (0, 0, 0)
-                    ev.pickPoint = (px, py)
-                    inst.addPickEvent(ev)
-                inst.triggerPick()
-            inst.OnDraw(force=1)
-
-        contexts.append(inst)
-        return _Rendered(inst, counters)
-
-    yield run
-
-    # Full-context teardown must be bulletproof: a later test's glfw.terminate()
-    # (test_pbrmaterial's gl fixture) segfaults if this context's GL resources are
-    # finalized after the GL context is gone. So drop the context and force its
-    # VBO/FBO finalizers to run WHILE its window is still current, then destroy the
-    # window and hard-reset glfw so no state from the full context survives into the
-    # next test.
-    import gc
-
-    from OpenGLContext.passes import renderpass
-
-    # `renderpass.FLAT` is a module global holding the pass that last rendered,
-    # and it outlives the window it belongs to.  Left set, it hands the next
-    # test a shader program whose GL context is gone -- which reads as "there
-    # is a pass" to anything that asks, on a machine where there is not.
-    renderpass.FLAT = None
-    contexts.clear()
-    gc.collect()                       # run GL finalizers against the live context
-    for win in windows:
-        try:
-            glfw.destroy_window(win)
-        except Exception:
-            pass
-    try:
-        glfw.make_context_current(None)
-    except Exception:
-        pass
-    gc.collect()
-    try:
-        glfw.terminate()               # hard reset: no leaked window/context state
-    except Exception:
-        pass
 
 
 def _sphere_shape(x, radius=1.0, color=(0.3, 0.6, 0.9)):
@@ -252,7 +54,7 @@ def _no_gl_error():
 
 class TestInstancedPBRRender:
     def test_shared_geometry_collapses_to_instanced_draw(self, render_scene, monkeypatch):
-        _base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='2')
+        base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='2')
         children = [_sphere_shape(x) for x in (-2.5, -1.5, -0.5, 0.5, 1.5, 2.5)]
         children.append(_key_light())
         r = render_scene(children, frames=4)
@@ -265,7 +67,7 @@ class TestInstancedPBRRender:
 
 class TestShadowedRender:
     def test_shadow_casting_light_runs_depth_pass(self, render_scene, monkeypatch):
-        _base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1',
+        base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1',
                   OPENGLCONTEXT_SHADOW_CASCADES='1', OPENGLCONTEXT_INSTANCE_MIN='2')
         children = [_sphere_shape(x) for x in (-1.5, 0.0, 1.5)] + [_key_light()]
         r = render_scene(children, frames=5, shadows=True)
@@ -276,7 +78,7 @@ class TestShadowedRender:
 
 class TestMultiLightShadows:
     def test_directional_spot_and_point_shadows_render(self, render_scene, monkeypatch):
-        _base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1',
+        base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1',
                   OPENGLCONTEXT_SHADOW_CASCADES='1', OPENGLCONTEXT_INSTANCE_MIN='2')
         children = [
             _sphere_shape(x) for x in (-1.5, 0.0, 1.5)
@@ -296,7 +98,7 @@ class TestMultiLightShadows:
 
 class TestBloomRender:
     def test_bloom_wrap_composites(self, render_scene, monkeypatch):
-        _base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_BLOOM='1',
+        base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_BLOOM='1',
                   OPENGLCONTEXT_INSTANCE_MIN='2')
         children = [_sphere_shape(0.0, color=(0.9, 0.9, 0.9))] + [_key_light()]
         r = render_scene(children, frames=4)
@@ -307,7 +109,7 @@ class TestBloomRender:
 
 class TestTransmissiveRender:
     def test_glass_shape_runs_transmissive_pass(self, render_scene, monkeypatch):
-        _base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999')
+        base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999')
         from OpenGLContext.scenegraph.pbrmesh import PBRMesh
         from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
@@ -328,7 +130,7 @@ class TestTransmissiveRender:
         assert _no_gl_error()
 
     def test_blend_mode_transmission_runs(self, render_scene, monkeypatch):
-        _base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999',
+        base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999',
                   OPENGLCONTEXT_TRANSMISSION='blend')
         from OpenGLContext.scenegraph.pbrmesh import PBRMesh
         from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
@@ -350,7 +152,7 @@ class TestTransmissiveRender:
 
 class TestLegacyColourPick:
     def test_pick_center_resolves_through_legacy_path(self, render_scene, monkeypatch):
-        _base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999')
+        base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999')
         # instance-min high so shapes render per-object (the legacy pick path renders
         # each candidate object with a unique colour id).
         children = [_sphere_shape(0.0, radius=2.0)] + [_key_light()]

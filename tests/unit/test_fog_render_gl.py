@@ -18,7 +18,6 @@ glfw = pytest.importorskip("glfw")
 from OpenGLContext.scenegraph import basenodes  # noqa: E402
 from OpenGLContext.scenegraph.fog import Fog  # noqa: E402
 
-pytest_plugins = ['tests.unit.test_passes_render_gl']
 
 #: How far down -Z the box sits, and the fog ranges either side of that: one
 #: that has barely started at the box and one that is nearly finished.
@@ -36,8 +35,8 @@ def shader_paths(monkeypatch):
     memo around each test, so a variable set at import time is read before
     anything can act on it and cleared before anything does.
     """
-    from tests.unit.test_passes_render_gl import _base_env
-    _base_env(monkeypatch)
+    from tests.unit.glrender import base_env
+    base_env(monkeypatch)
 
 
 def box_scene(*extra):
@@ -55,7 +54,7 @@ def box_scene(*extra):
 
 def rendered(render_scene, *extra):
     """The middle of the frame this scene draws."""
-    from tests.unit.test_passes_render_gl import frames_of
+    from tests.unit.glrender import frames_of
     return middle(frames_of(render_scene, box_scene(*extra))[-1])
 
 

@@ -20,7 +20,6 @@ glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes  # noqa: E402
 
-pytest_plugins = ['tests.unit.test_passes_render_gl']
 
 #: The wall the shadows land on: far enough back to fill the frame, wide enough
 #: that the light's map has to cover a large area, which is where too small a
@@ -38,8 +37,8 @@ BOX_CENTRE = (1.5, 1.5, WALL_FACE + BOX / 2.0)
 @pytest.fixture(autouse=True)
 def shadowed_env(monkeypatch):
     """Shadows on, in the core profile, with the frame-rate probe out of it."""
-    from tests.unit.test_passes_render_gl import _base_env
-    _base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='3')
+    from tests.unit.glrender import base_env
+    base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='3')
 
 
 def wall_scene(light):
@@ -100,7 +99,7 @@ def pole_scene():
 
 def foot_gap(render_scene):
     """Pixels between the pole's foot and the nearest shadow it casts."""
-    from tests.unit.test_passes_render_gl import frames_of
+    from tests.unit.glrender import frames_of
     image = frames_of(render_scene, pole_scene(), frames=6)[-1].astype(int)
     lit = frames_of(render_scene, pole_scene(), frames=6, shadows=False)[-1].astype(int)
     if image.shape != lit.shape:
@@ -120,7 +119,7 @@ def foot_gap(render_scene):
 
 def frame(render_scene, light):
     """The last frame the wall scene draws with ``light`` in it."""
-    from tests.unit.test_passes_render_gl import frames_of
+    from tests.unit.glrender import frames_of
     return frames_of(render_scene, wall_scene(light), frames=6)[-1].astype(int)
 
 

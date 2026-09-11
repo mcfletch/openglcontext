@@ -11,7 +11,6 @@ what a program asks for when it means to use the older pipeline.
 import numpy as np
 import pytest
 
-pytest_plugins = ['tests.unit.test_passes_render_gl']
 
 from OpenGLContext.contextdefinition import (  # noqa: E402
     ContextDefinition, _get_default_profile, version_for_profile,
@@ -50,8 +49,8 @@ class TestGeneratedGeometryDrawsWithNothingSet:
 
     @pytest.fixture(autouse=True)
     def no_profile_named(self, monkeypatch):
-        from tests.unit.test_passes_render_gl import _base_env
-        _base_env(monkeypatch)
+        from tests.unit.glrender import base_env
+        base_env(monkeypatch)
         monkeypatch.delenv('OPENGLCONTEXT_PROFILE', raising=False)
 
     def test_the_context_opens_a_core_profile(self, render_scene):

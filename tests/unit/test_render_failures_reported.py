@@ -16,7 +16,6 @@ pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes  # noqa: E402
 
-pytest_plugins = ['tests.unit.test_passes_render_gl']
 
 
 class _Exploding(basenodes.Box):
@@ -37,8 +36,8 @@ def failing_scene():
 
 @pytest.fixture(autouse=True)
 def shader_paths(monkeypatch):
-    from tests.unit.test_passes_render_gl import _base_env
-    _base_env(monkeypatch)
+    from tests.unit.glrender import base_env
+    base_env(monkeypatch)
 
 
 class TestTheFailureIsRecordedAndCountedOnce:

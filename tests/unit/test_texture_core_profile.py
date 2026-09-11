@@ -19,7 +19,6 @@ PIL = pytest.importorskip("PIL.Image")
 
 from OpenGLContext.scenegraph import basenodes  # noqa: E402
 
-pytest_plugins = ['tests.unit.test_passes_render_gl']
 
 
 @pytest.fixture(autouse=True)
@@ -29,8 +28,8 @@ def shader_paths(monkeypatch):
     The PBR renderer binds its own material textures and never reaches
     ``_Texture.render``, so the path under test here is the flat core one.
     """
-    from tests.unit.test_passes_render_gl import _base_env
-    _base_env(monkeypatch)
+    from tests.unit.glrender import base_env
+    base_env(monkeypatch)
     monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
 
 
