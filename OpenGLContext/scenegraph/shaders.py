@@ -417,6 +417,11 @@ class ShaderURLField(fieldtypes.MFString):
                     value,
                     context.Context.allContexts,
                 ),
+                # A daemon, as ImageURLField's is: Python joins every
+                # non-daemon thread as it shuts down, and a fetch that never
+                # answers -- or a redraw request waiting on the context lock
+                # for a frame that will not come -- must not refuse the exit.
+                daemon=True,
             ).start()
         return value
 
@@ -431,6 +436,7 @@ class ShaderURLField(fieldtypes.MFString):
                 name="Background load of %s" % (value),
                 target=self.subLoad,
                 args=(client, value, i, overall),
+                daemon=True,
             )
             t.start()
             threads.append(t)

@@ -220,19 +220,31 @@ class TestAContextReleasesItsOwnResources:
     def test_releasing_the_one_that_is_not_current(self, two_engine_contexts):
         """Its GL names are the ones to forget -- not the current context's,
         which is alive and will go on drawing with them."""
+        # Every setCurrent is paired with its unsetCurrent: each one takes the
+        # process-wide context lock, and a test that leaves it held blocks
+        # every background load that asks for a redraw for the rest of the run.
         first, second = two_engine_contexts
         first.setCurrent()
-        mine = shaderpass.get_shader_program()
+        try:
+            mine = shaderpass.get_shader_program()
+        finally:
+            first.unsetCurrent()
         second.setCurrent()
-        theirs = shaderpass.get_shader_program()
-        if mine is theirs:
-            pytest.skip('this platform cannot tell two contexts apart')
-        first.releaseWindow()                  # while `second` is current
+        try:
+            theirs = shaderpass.get_shader_program()
+            if mine is theirs:
+                pytest.skip('this platform cannot tell two contexts apart')
+            first.releaseWindow()              # while `second` is current
+        finally:
+            second.unsetCurrent()
         second.setCurrent()
-        assert shaderpass.get_shader_program() is theirs, (
-            "the live context's programs were dropped instead")
-        assert mine not in shaderpass._shader_programs.values(), (
-            'the released context left its programs reachable')
+        try:
+            assert shaderpass.get_shader_program() is theirs, (
+                "the live context's programs were dropped instead")
+            assert mine not in shaderpass._shader_programs.values(), (
+                'the released context left its programs reachable')
+        finally:
+            second.unsetCurrent()
 
 
 class TestEveryCacheKeysTheSameWay:

@@ -19,6 +19,9 @@ class InlineURLField( fieldtypes.MFString ):
             name = "Background load of %s"%(value),
             target = client.loadBackground,
             args = ( value, context.Context.allContexts,),
+            # A daemon, as ImageURLField's is: a scene that never arrives is
+            # not a reason for the interpreter to refuse to exit.
+            daemon = True,
         ).start()
         return value
     def fdel( self, client: Any, notify: int = 1 ) -> Any:
