@@ -2,11 +2,24 @@
 
 ## Development environment: real OpenGL IS available
 
-This is a **Wayland** dev container with **full NVIDIA OpenGL** support (`WAYLAND_DISPLAY` set).
+This is a **Wayland** dev container with **hardware-accelerated OpenGL** (`WAYLAND_DISPLAY` set).
 Real GL runs here — render, benchmark, and reproduce visual bugs directly via the **GLFW default
 context** (backend `glfw`; a hidden window with `glfw.window_hint(glfw.VISIBLE, glfw.FALSE)` works).
-Do **not** claim the sandbox is headless or that GL can't run. EGL/OSMesa default-display init fails
-in this container; that is a quirk of those paths, NOT evidence that GL is unavailable — use GLFW.
+The `egl` backend renders with no window at all, and `LIBGL_ALWAYS_SOFTWARE=1` gives llvmpipe where
+a run wants a deterministic rasteriser. Do **not** claim the sandbox is headless or that GL can't run.
+
+**Ask which GPU this is rather than assuming** — the container has been rebuilt on different
+hardware, and a fault can be specific to one vendor's driver:
+
+```bash
+/workspaces/OpenGL-dev/.venv/bin/python -c \
+  "from OpenGLContext.testing.glcontext import describe_gl; print(describe_gl())"
+```
+
+At the time of writing that answers AMD Radeon (radeonsi, Mesa). It matters: the teardown segfault
+PyOpenGL's `tests/README.md` records — roughly one context teardown in ten, inside
+`libnvidia-eglcore` — appears on **NVIDIA only**, so a machine like this one cannot reproduce it
+and a green run here says nothing about it. See `OpenGLContext.testing.glfwteardown`.
 
 ## Project Overview
 
