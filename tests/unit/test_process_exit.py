@@ -92,8 +92,12 @@ def test_flush_and_exit_writes_coverage_file(tmp_path):
             """
         )
     )
+    # Where the data goes is said here rather than inherited: a COVERAGE_FILE
+    # in the environment -- a CI job's, a regression run's -- would otherwise
+    # send the child's data file somewhere this test does not look.
     result = subprocess.run(
-        [sys.executable, '-m', 'coverage', 'run', '--parallel-mode', str(target)],
+        [sys.executable, '-m', 'coverage', 'run', '--parallel-mode',
+         '--data-file', str(tmp_path / '.coverage'), str(target)],
         capture_output=True,
         text=True,
         cwd=str(tmp_path),
