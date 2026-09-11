@@ -47,15 +47,18 @@ class TestSharedHelper:
 
 
 class TestCopiesAgreeOnOffscreen:
-    """The exact bug: the visual-regression copy must count EGL as a usable
-    render target, like the other copies, so it doesn't false-skip on headless CI."""
+    """The exact bug: a copy that must count EGL as a usable render target,
+    like the shared helper does, so it doesn't false-skip on headless CI."""
 
-    def test_visual_regression_counts_egl(self, monkeypatch):
+    def test_visual_regression_keeps_no_copy(self):
+        """It has none at all, which is the strongest form of not drifting.
+
+        The tests that needed one drove a script the package no longer ships;
+        `tests/test_all_scripts.py` is what runs the scripts now, and its copy
+        is the one below.
+        """
         import test_visual_regression as tvr
-        monkeypatch.delenv('DISPLAY', raising=False)
-        monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
-        monkeypatch.setenv('PYOPENGL_PLATFORM', 'egl')
-        assert tvr._check_display_available() is True
+        assert not hasattr(tvr, '_check_display_available')
 
     def test_all_scripts_counts_egl(self, monkeypatch):
         import test_all_scripts as tas

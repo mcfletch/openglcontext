@@ -730,7 +730,6 @@ SLOW_SCRIPTS = {
     'molehill_edit.py': SLOW_TIMEOUT,
     'shader_instanced_mapped.py': SLOW_TIMEOUT,
     'shader_instanced.py': SLOW_TIMEOUT,
-    'teapot_comparison.py': SLOW_TIMEOUT,
     'test_shader_comprehensive.py': SLOW_TIMEOUT,
 }
 

@@ -1,40 +1,20 @@
-"""Visual regression tests for OpenGLContext rendering.
+"""What the visual regression machinery is, and where it lives.
 
-These tests run rendering scripts in subprocesses and compare output
-against saved reference images. Tests are parametrized to run with
-both compatibility and core profiles.
-
-Note: Most existing test scripts don't support the --exit-after flag needed
-for automated testing. This module tests the scripts that have been updated
-to support automated regression testing (using AutomatedRegressionContext mixin).
-
-The tests collect coverage from subprocess runs using --parallel-mode,
-which is automatically combined by conftest.py after the test session.
+Comparing a rendered frame with a reference image is
+``OpenGLContext.testing.framebuffer_comparison``, and reporting on a run is
+``OpenGLContext.testing.report_generator``; ``tests/test_all_scripts.py`` is
+what drives the scripts through them. These hold that arrangement to one
+implementation -- the shared helpers -- and cover the comparison arithmetic
+those helpers do.
 """
 
-import os
-import subprocess
-import sys
-from pathlib import Path
-
 import pytest
-
-PROFILES = ['compatibility', 'core']
 
 # Test directory paths
 from OpenGLContext.testing.paths import tests_root
 TESTS_DIR = tests_root(__file__)
 PROJECT_ROOT = TESTS_DIR.parent
 REFERENCE_IMAGES_DIR = TESTS_DIR / 'reference_images'
-
-# Scripts that have been updated to support automated testing with --exit-after
-# These scripts use the AutomatedRegressionContext mixin.
-AUTOMATED_TEST_SCRIPTS = [
-    'teapot_comparison.py',
-]
-
-# Default timeout for subprocess tests
-DEFAULT_TIMEOUT = 60
 
 
 class TestModuleImports:
@@ -137,117 +117,8 @@ class TestComparisonResult:
 #. The duplicate copy that was here has been removed.
 
 
-def _check_coverage_available():
-    """Check if coverage module is available."""
-    try:
-        import coverage
-        return hasattr(coverage, 'Coverage')
-    except ImportError:
-        return False
 
-
-def _check_display_available():
-    """Check if OpenGL rendering is possible (windowed or offscreen EGL/OSMesa).
-
-    Delegates to the shared helper so this copy can't drift back to a
-    windowed-only check that false-skips the visual suite on headless CI.
-    """
-    from OpenGLContext.testing.display import display_available
-    return display_available()
-
-
-def _build_coverage_command(script_path, args=None, with_coverage=True):
-    """Build command to run script with optional coverage collection."""
-    if with_coverage and _check_coverage_available():
-        cmd = [
-            sys.executable, '-m', 'coverage', 'run',
-            '--parallel-mode',
-            '--source=OpenGLContext',
-            str(script_path)
-        ]
-    else:
-        cmd = [sys.executable, str(script_path)]
-
-    if args:
-        cmd.extend(args)
-    return cmd
-
-
-@pytest.mark.visual
-class TestTeapotRegression:
-    """Subprocess tests for teapot rendering regression.
-
-    These tests run the teapot_comparison.py script in subprocesses
-    and verify the rendering works correctly. Coverage is collected
-    from subprocess runs.
-    """
-
-    @pytest.fixture
-    def output_dir(self, tmp_path):
-        """Create a temporary output directory for test images."""
-        output = tmp_path / 'teapot_output'
-        output.mkdir()
-        return output
-
-    @pytest.mark.skipif(not _check_display_available(), reason="No display available")
-    def test_teapot_compatibility_record(self, output_dir):
-        """Test teapot rendering in compatibility mode (record)."""
-        script_path = TESTS_DIR / 'teapot_comparison.py'
-        if not script_path.exists():
-            pytest.skip(f"Script not found: {script_path}")
-
-        env = os.environ.copy()
-        env['OPENGLCONTEXT_PROFILE'] = 'compatibility'
-
-        cmd = _build_coverage_command(
-            script_path,
-            args=['--record', '--output-dir', str(output_dir), '--exit-after'],
-        )
-
-        result = subprocess.run(
-            cmd,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=DEFAULT_TIMEOUT,
-            cwd=str(PROJECT_ROOT),
-        )
-
-        # Check subprocess completed
-        assert result.returncode == 0, f"Teapot compat failed:\n{result.stderr}"
-
-        # Check output image was created
-        output_files = list(output_dir.glob('*.png'))
-        assert len(output_files) > 0, "No output image created"
-
-    @pytest.mark.skipif(not _check_display_available(), reason="No display available")
-    def test_teapot_core_record(self, output_dir):
-        """Test teapot rendering in core profile mode (record)."""
-        script_path = TESTS_DIR / 'teapot_comparison.py'
-        if not script_path.exists():
-            pytest.skip(f"Script not found: {script_path}")
-
-        env = os.environ.copy()
-        env['OPENGLCONTEXT_PROFILE'] = 'core'
-        env['OPENGLCONTEXT_BACKEND'] = 'glfw'
-
-        cmd = _build_coverage_command(
-            script_path,
-            args=['--record', '--output-dir', str(output_dir), '--exit-after'],
-        )
-
-        result = subprocess.run(
-            cmd,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=DEFAULT_TIMEOUT,
-            cwd=str(PROJECT_ROOT),
-        )
-
-        # Check subprocess completed
-        assert result.returncode == 0, f"Teapot core failed:\n{result.stderr}"
-
-        # Check output image was created
-        output_files = list(output_dir.glob('*.png'))
-        assert len(output_files) > 0, "No output image created"
+# Teapot rendering is compared against a reference image by the visual suite,
+# which drives `run_teapot_regression.py`, `teapot_ceramic.py` and
+# `teapot_nurbs.py` through `tests/test_all_scripts.py`; the two profiles are
+# swept by `scripts/profile_sweep.py`.
