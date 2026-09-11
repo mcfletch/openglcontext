@@ -85,23 +85,23 @@ def pick_context(monkeypatch):
 
     yield build
 
+    # Through the context that owns the window -- `GLFWContext.releaseWindow`,
+    # what a user's application runs on exit. It drops this context's GL names
+    # from the engine's caches while the context is still current, and only
+    # then destroys the window. Destroying the handle directly leaves those
+    # caches holding names for a context that is gone, which the next window
+    # the driver gives the same address to reads back as its own.
     import gc
+    for inst in contexts:
+        inst.releaseWindow()
     contexts.clear()
+    windows.clear()
     gc.collect()
-    for win in windows:
-        try:
-            glfw.destroy_window(win)
-        except Exception:
-            pass
     try:
         glfw.make_context_current(None)
     except Exception:
         pass
     gc.collect()
-    try:
-        glfw.terminate()
-    except Exception:
-        pass
     pbrpass._renderer_is_pbr_cache = None
 
 
