@@ -202,6 +202,16 @@ ignore = [
 # here does not check an older Python -- it aborts on numpy's own stub before
 # checking anything at all.
 python_version = "3.12"
+# What is in the gate. The package ships ``py.typed``, so this is the surface a
+# consumer's checker reads, and naming it here is what lets a bare ``mypy`` in
+# this directory run the same check CI and ``tools/preflight.py`` run.
+#
+# Run it against an environment that has the stack installed non-editable --
+# ``tox -e typecheck``, or the workspace's ``tools/preflight.py``. An editable
+# install reaches its package through an import hook a checker cannot follow,
+# so every sibling resolves to ``Any`` there and the run reports thousands of
+# ``name-defined`` errors that say nothing about this code.
+files = ["OpenGLContext"]
 # A function with no annotations is not skipped: its body is checked with the
 # parameters implicitly ``Any``, which is where most of the engine's code lives.
 check_untyped_defs = true
@@ -250,12 +260,27 @@ commands = [
     ["pytest", "-m", "serial", { replace = "posargs", extend = true }],
 ]
 
+# The shipped declarations, checked the way a consumer's checker reads them.
+# `[tool.mypy]` says what is in the gate, so the run needs no paths. The install
+# is not editable: an editable one reaches the package through an import hook
+# mypy cannot follow, and every sibling then resolves to `Any`.
+[tool.tox.env.typecheck]
+extras = ["dev"]
+pip_pre = true
+package = "wheel"
+commands = [["mypy", { replace = "posargs", extend = true }]]
+
 [tool.pytest.ini_options]
 testpaths = ["OpenGLContext/tests", "tests"]
 # The GL-window fixtures the rendering tests ask for (gl_context, gl_window,
 # gl_context_compat) ship in the package, so an application built on the engine
 # turns on the same ones the same way -- see docs/testing.html.
-addopts = "-p OpenGLContext.testing.plugin"
+#
+# `-ra` makes every run state its skips and xfails rather than folding them into
+# a count. A skip is how a suite goes green without having run something, and a
+# number at the end of a run says nothing about which platform fact each one is
+# standing on -- or whether one of them is a test stepping around a defect.
+addopts = "-p OpenGLContext.testing.plugin -ra"
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

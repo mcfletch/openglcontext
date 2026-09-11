@@ -109,6 +109,30 @@ project is developed against. It is not a way to check an older Python: numpy's
 shipped stubs use syntax that parses only under 3.12, so a lower value aborts on
 those stubs before checking anything at all.</p>
 
+<p><code>files</code> names the package, so <code>mypy</code> with no arguments
+in the checkout runs the same check the project holds itself to. Run it against
+an environment with the stack installed <em>non-editable</em>:</p>
+
+<pre><code>tox -e typecheck</code></pre>
+
+<p>An editable install reaches its package through an import hook a checker
+cannot follow, so every sibling resolves to <code>Any</code> in such an
+environment and the run reports thousands of <code>name-defined</code> errors
+that say nothing about this code.</p>
+
+<h2>The stack below</h2>
+
+<p>What a checker can say about an engine call is limited by what the packages
+under it declare, and each of those ships its own marker: <a
+href="https://pypi.org/project/PyOpenGL/">PyOpenGL</a> declares the GL entry
+points, <a href="https://pypi.org/project/PyVRML97/">PyVRML97</a> the scenegraph
+model, <a href="https://pypi.org/project/PyDispatcher/">PyDispatcher</a> the
+observer mechanism every field change travels through, and <a
+href="https://pypi.org/project/SimpleParse/">SimpleParse</a> the parser
+generator. A package in that chain without a marker is not an error &mdash; a
+checker reads its calls as <code>Any</code> and reports nothing about them,
+which looks the same as a clean run.</p>
+
 <h2>What is not declared</h2>
 
 <p>A field on a scenegraph node is created by
