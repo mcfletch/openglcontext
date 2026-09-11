@@ -38,6 +38,20 @@ class TestFromXYZR:
     def test_a_zero_angle_is_the_identity(self):
         assert unit(fromXYZR(0, 1, 0, 0)) == pytest.approx([1, 0, 0, 0])
 
+    def test_the_axis_keeps_double_precision(self):
+        """An axis whose unit form is not exact in single precision -- and a
+        camera orientation or an animated rotation is rarely axis-aligned. The
+        rounding is invisible in one rotation and accumulates over a chain of
+        them, so it has to not happen at all rather than be small."""
+        axis = np.array([1.0, 2.0, 3.0])
+        expected = axis / np.linalg.norm(axis)
+        recovered = np.array(fromXYZR(1.0, 2.0, 3.0, 0.7).XYZR()[:3])
+        assert np.allclose(recovered, expected, rtol=0, atol=1e-15)
+
+    def test_the_angle_comes_back_to_double_precision(self):
+        assert fromXYZR(1.0, 2.0, 3.0, 0.7).XYZR()[3] == pytest.approx(
+            0.7, rel=0, abs=1e-15)
+
 
 class TestFromEuler:
     """Rotations about x, then y, then z."""

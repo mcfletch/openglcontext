@@ -13,21 +13,25 @@ from OpenGLContext import utilities
 
 # `ar` throughout for the arithmetic, named rather than starred: the array
 # implementations and the scalar ones in `math` are not interchangeable even on
-# scalars. `utilities.normalise` answers float32, and numpy keeps a float32
-# where a Python float is the other operand, so `x * math.sin(r)` would round
-# the quaternion to single precision where `x * ar.sin(r)` does not; and the
-# array arc cosine answers `nan` outside its domain where the scalar one
-# raises, which is why the domain is clamped below rather than an exception
-# caught.
+# scalars. The array arc cosine answers `nan` outside its domain where the
+# scalar one raises, which is why the domain is clamped in `XYZR` rather than
+# an exception caught there.
+#
+# A quaternion is double throughout. `vectorutilities.normalise` keeps the
+# dtype it is handed and takes a plain sequence as single, so an axis written
+# as Python floats would be rounded to about seven digits before any rotation
+# was built from it -- which is invisible in one rotation and accumulates
+# through a chain of them.
 
 def fromXYZR( x: float, y: float, z: float, r: float ) -> 'Quaternion':
     """Create a new quaternion from a VRML-style rotation
     x,y,z are the axis of rotation
     r is the rotation in radians."""
-    x,y,z = utilities.normalise( (x,y,z) )
+    x,y,z = utilities.normalise( ar.asarray( (x,y,z), 'd' ) )
+    half = r/2.0
     return Quaternion ( ar.array( [
-        ar.cos(r/2.0), x*(ar.sin(r/2.0)), y*(ar.sin(r/2.0)), z*(ar.sin(r/2.0)),
-    ]) )
+        ar.cos(half), x*ar.sin(half), y*ar.sin(half), z*ar.sin(half),
+    ], 'd' ) )
 def fromEuler( x: float = 0, y: float = 0, z: float = 0 ) -> 'Quaternion':
     """Create a new quaternion from a 3-element euler-angle
     rotation about x, then y, then z
@@ -178,8 +182,6 @@ class Quaternion(object):
 
         Return value is a positive angle in the range 0-pi representing
         the minimum angle between the two quaternion rotations.
-        
-        From code by Halldor Fannar on the 3D game development algos list
         """
         # The dot product of the two quaternions.
         cosValue = float(ar.sum(self.internal * other.internal))
