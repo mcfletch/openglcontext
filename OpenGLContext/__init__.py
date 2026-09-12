@@ -32,7 +32,7 @@ It is also the primary suite of test cases PyOpenGL is verified against.
 Documentation is under `docs/`, indexed by `docs/documentation.html`.
 '''
 
-__version__ = "3.0.0a3"
+__version__ = "3.0.0a4"
 __author__ = "Michael Colin Fletcher"
 __license__ = "BSD-Style, see license.txt for details and exceptions"
 
