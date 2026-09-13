@@ -285,10 +285,24 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 # Backstop timeout so a single hung GL test can never wedge the whole session,
-# independent of the custom subprocess runner's own per-script timeouts (4.36).
-# Set via the ini key rather than addopts so a checkout without pytest-timeout
-# only warns about an unknown option instead of erroring on `--timeout`.
+# independent of the custom subprocess runner's own per-script timeouts (whose
+# ceiling is 120s). The slowest test that legitimately runs to completion takes
+# about 25 seconds, so this is a wide margin rather than a deadline.
+# Set via the ini keys rather than addopts so a checkout without pytest-timeout
+# only warns about unknown options instead of erroring on `--timeout`.
 timeout = 300
+# The thread method, not the default signal one. pytest-timeout's signal method
+# raises out of a SIGALRM handler, and a Python signal handler runs only when
+# the main thread next executes bytecode -- which a thread waiting on CPython's
+# import lock never does, because that lock is taken with the GIL released and
+# is not interruptible. A suite that loads resources on worker threads can
+# therefore reach a state that no signal can rescue: SIGALRM does nothing,
+# SIGTERM does nothing, and the run sits until somebody sends SIGKILL. The
+# thread method is a watchdog thread instead: it prints every thread's stack and
+# ends the process, which turns such a hang into a red run with the evidence in
+# it. The cost is that it ends the session rather than failing one test, and
+# that is the right trade -- a timeout here is a defect to stop and fix.
+timeout_method = "thread"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "visual: marks tests as visual regression tests",

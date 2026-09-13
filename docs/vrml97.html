@@ -188,9 +188,11 @@ also underpins <a href="https://github.com/mcfletch/pyvrml97">PyVRML97</a>). The
 grammar uses the "cut" production to raise a <code>SyntaxError</code> when a file
 isn't properly formed. &nbsp;You can catch those, as well as
 <code>IOError</code>s, around the call to "load". &nbsp;Note, however, that for
-certain resources (image textures at the moment), the actual loading of the
-textures is done in separate worker threads, which will print messages if errors
-are encountered during loading.</p>
+certain resources (image textures, inlined scenes, shader sources and HDR
+panoramas), the actual loading is done on the background loader pool, which logs
+a message rather than raising where a resource cannot be read. See
+<a href="structure.html#background-loading">Loading without stopping the
+frame</a> for how to wait for those to finish.</p>
 
 <p>You can register a new prototype for use by the VRML97 loader by
 calling the standardPrototype function in the loader module with your

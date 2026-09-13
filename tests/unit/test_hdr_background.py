@@ -73,17 +73,14 @@ def test_is_a_background_node():
 
 
 def test_url_field_assignment_triggers_load(tmp_path):
-    """Assigning .url spawns a loader thread; joining it installs the panorama."""
-    import threading
+    """Assigning .url loads in the background; waiting for it installs the panorama."""
+    from OpenGLContext.loaders import background
     from tests.unit.test_hdr_loader import encode_flat
     p = tmp_path / "viaurl.hdr"
     p.write_bytes(encode_flat(_panorama(8, 16)))
     bg = HDRBackground()
     bg.url = [str(p)]
-    # find and join the loader thread the field spawned
-    for t in threading.enumerate():
-        if t.name.startswith("HDR background load"):
-            t.join(timeout=10)
+    assert background.wait_for_idle(20), "the panorama never loaded"
     assert bg._equirect is not None
     assert ibl.get_equirect_env() is not None
 
@@ -134,15 +131,13 @@ def test_setimage_none_also_defers_stale_render_data():
 
 def test_deleting_url_clears_the_panorama(tmp_path):
     """`del bg.url` runs the field's fdel, which clears the installed image."""
-    import threading
+    from OpenGLContext.loaders import background
     from tests.unit.test_hdr_loader import encode_flat
     p = tmp_path / "todelete.hdr"
     p.write_bytes(encode_flat(_panorama(8, 16)))
     bg = HDRBackground()
-    bg.url = [str(p)]                        # stores the field value + spawns loader
-    for t in threading.enumerate():
-        if t.name.startswith("HDR background load"):
-            t.join(timeout=10)
+    bg.url = [str(p)]                        # stores the field value, queues the load
+    assert background.wait_for_idle(20), "the panorama never loaded"
     assert bg._equirect is not None
     del bg.url                               # HDRURLField.fdel -> setImage(None)
     assert bg._equirect is None

@@ -1,5 +1,6 @@
 """Shader node implementation"""
 
+import contextlib
 import traceback
 from functools import reduce
 from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
@@ -12,6 +13,7 @@ from OpenGL import error
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import array, reshape
 from OpenGLContext import context
+from OpenGLContext.loaders import background
 from vrml.vrml97 import shaders
 import operator
 from vrml import field, node, fieldtypes, protofunctions
@@ -398,6 +400,15 @@ for suffix in FLOAT_UNIFORM_SUFFIXES + INT_UNIFORM_SUFFIXES:
     _uniformCls(suffix)
 
 
+def prepare_shader_loading() -> None:
+    """Make a background shader load's imports, here on the calling thread.
+
+    The fetch runs on a loader thread, and a first-use import taken there is
+    one nothing can interrupt -- see :mod:`OpenGLContext.loaders.background`.
+    """
+    import OpenGLContext.loaders.loader                   # noqa: F401
+
+
 class ShaderURLField(fieldtypes.MFString):
     """Field for managing interactions with a Shader's URL value"""
 
@@ -407,41 +418,22 @@ class ShaderURLField(fieldtypes.MFString):
         """Set the client's URL, then try to load the image"""
         value = super(ShaderURLField, self).fset(client, value, notify)
         if value:
-            import threading
-
-            threading.Thread(
-                name="Background load of %s" % (value),
-                target=self.loadBackground,
-                args=(
-                    client,
-                    value,
-                    context.Context.allContexts,
-                ),
-                # A daemon, as ImageURLField's is: Python joins every
-                # non-daemon thread as it shuts down, and a fetch that never
-                # answers -- or a redraw request waiting on the context lock
-                # for a frame that will not come -- must not refuse the exit.
-                daemon=True,
-            ).start()
+            background.load_in_background(
+                value, self.loadBackground, client, value,
+                context.Context.allContexts,
+                prepare=prepare_shader_loading,
+            )
         return value
 
     def loadBackground(self, client: Any, url: Sequence[Any],
                        contexts: Sequence[Any]) -> None:
-        overall: List[Any] = [None] * len(url)
-        threads = []
-        for i, value in enumerate(url):
-            import threading
+        """Fetch every fragment of the shader and join them into its source.
 
-            t = threading.Thread(
-                name="Background load of %s" % (value),
-                target=self.subLoad,
-                args=(client, value, i, overall),
-                daemon=True,
-            )
-            t.start()
-            threads.append(t)
-        for t in threads:
-            t.join()
+        The fragments are read one after another on the one loader thread: a
+        shader is a handful of small files, and the pool already runs the
+        shaders of a scene alongside each other.
+        """
+        overall: List[Any] = [self.subLoad(client, value) for value in url]
         result = [x for x in overall if x is not None]
         if len(result) == len(overall):
             client.source = "\n".join([as_str(r) for r in result])
@@ -454,8 +446,8 @@ class ShaderURLField(fieldtypes.MFString):
                     c.triggerRedraw(1)
             return
 
-    def subLoad(self, client: Any, urlFragment: Any, i: int,
-                overall: List[Any]) -> Optional[bool]:
+    def subLoad(self, client: Any, urlFragment: Any) -> Optional[bytes]:
+        """The bytes one of a shader's urls holds, or None where it has none."""
         from OpenGLContext.loaders.loader import Loader
 
         try:
@@ -470,8 +462,8 @@ class ShaderURLField(fieldtypes.MFString):
         else:
             if result:
                 baseURL, filename, file, headers = result
-                overall[i] = file.read()
-                return True
+                with contextlib.closing(file):
+                    return file.read()
         # should set client.image to something here to indicate
         # failure to the user.
         log.warning(

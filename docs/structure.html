@@ -447,6 +447,46 @@ scenegraph:</p>
     <a href="gltf.html">Loading glTF</a>).</li>
   <li>Wavefront OBJ.</li>
 </ul>
+
+<h3 id="background-loading">Loading without stopping the frame</h3>
+<p>Setting the <code>url</code> of an <code>ImageTexture</code>, an
+<code>Inline</code>, a <code>GLSLShader</code> or an <code>HDRBackground</code>
+returns at once and the fetch, the decode and the parse run on
+<code>OpenGLContext.loaders.background</code>'s pool. The pool holds
+<code>background.WORKERS</code> daemon threads (four), started as work arrives,
+so a scene naming several hundred textures costs four threads rather than
+several hundred. A load that raises is logged with the url it was given and the
+worker carries on.</p>
+
+<p>A test or a tool that wants the scene complete before it looks at it
+waits:</p>
+<pre>from OpenGLContext.loaders import background
+
+texture = ImageTexture(url=['brick.png'])
+background.wait_for_idle(20)        # True once every load has finished
+print(background.pending())         # how many are still going</pre>
+
+<p><code>wait_for_idle</code> answers <code>False</code> if the timeout expires
+first, and waits for work submitted while it is waiting &mdash; which is what a
+scene whose first file names the rest of them needs. A caller wanting loads of
+its own that do not queue behind the scenegraph's builds its own
+<code>background.LoadPool</code> and calls <code>shutdown()</code> when it is
+done with it; the engine's own pool lives as long as the process.</p>
+
+<p class="technical">A load submitted with a <code>prepare</code> callable has
+it run <strong>on the submitting thread</strong>, and that is where each of the
+url fields makes the imports its load will need &mdash; PIL's per-format plugin
+modules, the loader, the format handlers, the lighting probe. A module being
+imported for the first time is imported under CPython's import lock, which is
+taken with the GIL released and which no Python signal handler can interrupt: a
+thread waiting for it answers to no <code>SIGTERM</code>, no
+<code>KeyboardInterrupt</code> and no test runner's timeout. Keeping first-use
+imports on the thread that asked for the load keeps them ordinary,
+interruptible work, and raises an <code>ImportError</code> where a caller can
+see it. A load of your own submitted through
+<code>background.load_in_background</code> should pass a <code>prepare</code>
+for the same reason.</p>
+
 <p>The <strong>viewer</strong> package is the reusable viewer itself &mdash;
 loading a scene without freezing the window, default lighting, auto-framing,
 cameras and animations, the caption, screenshots, a library of samples to open,

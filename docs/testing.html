@@ -371,6 +371,30 @@ subprocess.run([sys.executable, '-c', DRIVER], env=gl_subprocess_env())</pre>
     reason.</p>
 </section>
 
+<section id="timeouts">
+  <h2>A test that stops answering</h2>
+  <p>The suite runs under <code>pytest-timeout</code>, configured in
+    <code>pyproject.toml</code> as <code>timeout = 300</code> with
+    <code>timeout_method = "thread"</code>. The slowest test that legitimately
+    runs to completion takes about 25 seconds, so the limit is a backstop rather
+    than a deadline.</p>
+  <p>The method matters as much as the number. The default <em>signal</em>
+    method raises out of a <code>SIGALRM</code> handler, and a Python signal
+    handler runs only when the main thread next executes bytecode &mdash; which a
+    thread waiting on CPython's import lock never does, because that lock is
+    taken with the GIL released and is not interruptible. A process that reaches
+    that state answers to no signal at all: neither the timeout nor
+    <code>SIGTERM</code> reaches it, and only <code>SIGKILL</code> ends it. The
+    <em>thread</em> method is a watchdog thread instead, which prints every
+    thread's stack and ends the process, so such a hang is a red run with the
+    evidence in it. It ends the whole session rather than failing one test,
+    which is the right trade: a timeout here is a defect to stop and fix.</p>
+  <p>A test that waits on a background resource load waits on the loader pool
+    rather than on a thread name or a sleep &mdash; see
+    <a href="structure.html#background-loading">Loading without stopping the
+    frame</a>.</p>
+</section>
+
 <section id="subprocess">
   <h2>A whole application, in a child process</h2>
   <p>Some tests are about the application rather than about a pass: that it

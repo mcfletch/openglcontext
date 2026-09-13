@@ -4,9 +4,24 @@ from typing import Any, List, Sequence
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import protofunctions, fieldtypes
 from OpenGLContext import context
+from OpenGLContext.loaders import background
 import logging
 
 log = logging.getLogger(__name__)
+
+
+def prepare_scene_loading() -> None:
+    """Make an inlined scene's imports, here on the calling thread.
+
+    The scene is parsed on a loader thread, and a first-use import taken there
+    is one nothing can interrupt -- see
+    :mod:`OpenGLContext.loaders.background`.  Reading a scene means the parser
+    for its format, which the loader imports from the plugin registry the
+    first time it is asked for a handler, so that is done here.
+    """
+    from OpenGLContext.loaders.loader import Loader
+    Loader.loadHandlers()
+
 
 class InlineURLField( fieldtypes.MFString ):
     """Field for managing interactions with an Inline's URL value"""
@@ -14,15 +29,10 @@ class InlineURLField( fieldtypes.MFString ):
     def fset( self, client: Any, value: Any, notify: int = 1 ) -> Any:
         """Set the client's URL, then try to load the scene"""
         value = super(InlineURLField, self).fset( client, value, notify )
-        import threading
-        threading.Thread(
-            name = "Background load of %s"%(value),
-            target = client.loadBackground,
-            args = ( value, context.Context.allContexts,),
-            # A daemon, as ImageURLField's is: a scene that never arrives is
-            # not a reason for the interpreter to refuse to exit.
-            daemon = True,
-        ).start()
+        background.load_in_background(
+            value, client.loadBackground, value, context.Context.allContexts,
+            prepare=prepare_scene_loading,
+        )
         return value
     def fdel( self, client: Any, notify: int = 1 ) -> Any:
         """Delete the client's URL, which should delete the scene as well"""

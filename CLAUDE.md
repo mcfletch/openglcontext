@@ -73,6 +73,8 @@ OpenGLContext/
 │   └── wheel.py      # Rotation reports into whole notches, for the backends
 │                     # whose toolkit states a detent size
 ├── loaders/          # File formats into the scenegraph -- docs/gltf.html, vrml97.html
+│   ├── background.py # The pool a url field hands its fetch to, and the rule
+│   │                 # that its imports are made by the submitting thread
 │   ├── gltf/         # glTF 2.0 / GLB
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.html
 ├── move/             # Camera, movement modes, walking -- docs/navigation.html

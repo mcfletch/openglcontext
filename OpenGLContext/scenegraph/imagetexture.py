@@ -1,11 +1,13 @@
 """ImageTexture and MMImageTexture nodes using PIL"""
 
+import contextlib
 from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.error import GLError
 from OpenGLContext import texture, context
+from OpenGLContext.loaders import background
 
 from PIL import Image
 
@@ -174,6 +176,19 @@ class PILImage(field.Field):
         return Image.new("RGB", (1, 1), (255, 0, 0))
 
 
+def prepare_image_loading() -> None:
+    """Make a background image load's imports, here on the calling thread.
+
+    The fetch and the decode run on a loader thread, and a first-use import
+    taken there is one nothing can interrupt -- see
+    :mod:`OpenGLContext.loaders.background`.  PIL imports a module per image
+    format the first time it opens or saves anything, and the fetch itself
+    needs the loader, so both are made here.
+    """
+    import OpenGLContext.loaders.loader                   # noqa: F401
+    Image.init()
+
+
 class ImageURLField(fieldtypes.MFString):
     """Field for managing interactions with an Image's URL value"""
 
@@ -182,22 +197,13 @@ class ImageURLField(fieldtypes.MFString):
     def __set__(self, client: Any, value: Any, notify: bool = True) -> Any:
         """Set the client's URL, then try to load the image"""
         value = super(ImageURLField, self).fset(client, value, notify=True)
-        import threading
-
-        threading.Thread(
-            name="Background load of %s" % (value),
-            target=client.loadBackground,
-            args=(
-                value,
-                context.Context.allContexts,
-            ),
-            # A daemon, so a download that never answers -- or a load
-            # waiting on the context lock for a frame that will not come --
-            # cannot keep the interpreter alive.  Python joins every
-            # non-daemon thread as it shuts down, and an image nobody is
-            # going to see is not a reason to refuse to exit.
-            daemon=True,
-        ).start()
+        background.load_in_background(
+            value,
+            client.loadBackground,
+            value,
+            context.Context.allContexts,
+            prepare=prepare_image_loading,
+        )
         return value
 
     fset = __set__
@@ -245,12 +251,16 @@ class ImageTexture(_Texture, basenodes.ImageTexture):
         else:
             if result:
                 baseURL, filename, file, headers = result
-                image = Image.open(file)
+                with contextlib.closing(file):
+                    image = Image.open(file)
+                    # Decoded here rather than by whoever first looks at the
+                    # pixels: PIL reads lazily, so an image left undecoded
+                    # holds the file it came from open -- six of them for a
+                    # cubemap -- and does its reading on the thread that draws.
+                    image.load()
                 image.info["url"] = baseURL
                 image.info["filename"] = filename
-
-                if image:
-                    return self.setImage(image, contexts)
+                return self.setImage(image, contexts)
 
         # should set client.image to something here to indicate
         # failure to the user.

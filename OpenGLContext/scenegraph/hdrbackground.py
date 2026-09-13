@@ -14,7 +14,6 @@ geometry, so the background and the objects lit by it share one response.
 """
 import logging
 import os
-import threading
 import weakref
 from typing import Any, Dict, Optional
 
@@ -40,6 +39,7 @@ from vrml import field, fieldtypes, node
 from vrml.vrml97 import nodetypes
 
 from OpenGLContext import context, contextresources
+from OpenGLContext.loaders import background
 
 
 #: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
@@ -48,6 +48,19 @@ VBO: Any = vbo.VBO
 
 
 log = logging.getLogger(__name__)
+
+
+def prepare_panorama_loading() -> None:
+    """Make a background panorama load's imports, here on the calling thread.
+
+    The fetch and the RGBE decode run on a loader thread, and a first-use
+    import taken there is one nothing can interrupt -- see
+    :mod:`OpenGLContext.loaders.background`.  A decoded panorama is handed
+    straight to the image-based lighting probe, so that comes too.
+    """
+    from OpenGLContext.loaders import hdr                 # noqa: F401
+    from OpenGLContext.loaders import resolver            # noqa: F401
+    from OpenGLContext.passes import ibl                  # noqa: F401
 
 
 class HDRURLField(fieldtypes.MFString):
@@ -62,12 +75,11 @@ class HDRURLField(fieldtypes.MFString):
     def __set__(self, client: Any, value: Any, notify: bool = True) -> Any:
         value = super(HDRURLField, self).fset(client, value, notify=True)
         if value:
-            threading.Thread(
-                name="HDR background load %s" % (value,),
-                target=client.loadBackground,
-                args=(value, context.Context.allContexts),
-                daemon=True,
-            ).start()
+            background.load_in_background(
+                value, client.loadBackground, value,
+                context.Context.allContexts,
+                prepare=prepare_panorama_loading,
+            )
         return value
 
     fset = __set__
