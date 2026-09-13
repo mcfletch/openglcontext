@@ -379,6 +379,14 @@ uv pip install -e ".[glfw,gltf]"</pre>
             the <code>oglc-terrain</code> viewer -- plus what a third-party
             <code>tileset.json</code> is allowed to reach (support is
             <a href="tiles3d.html#tiles3d">experimental</a>)</li>
+          <li><a href="contentpacks.html">Content Packs</a> -- Data an
+            application fetches rather than ships: the registry it declares its
+            levels, worlds and art in, consent and progress for a download the
+            frame loop must not block on, digests, the base pack a first run
+            needs before its menu, thumbnails so a chooser can show third-party
+            content <em>before</em> downloading it, and
+            <code>OPENGLCONTEXT_CONTENT</code> for a packaged, offline or CI
+            run</li>
           <li><a href="osmcity.html">A city from OpenStreetMap</a> -- Building
             footprints extruded to a 3D&nbsp;Tiles dataset and streamed: the
             vector tiles the generator reads, laying the output out so its URIs

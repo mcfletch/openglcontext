@@ -60,6 +60,9 @@ OpenGLContext/
 ├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.html
 ├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.html
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.html
+├── contentpacks/     # Data an application fetches rather than ships: the
+│                     # registry, the store, safe extraction and the polled
+│                     # download job -- docs/contentpacks.html
 ├── debug/            # Developer aids: buffer dumps, GL state, leak counts
 ├── demos/            # A view inside a Tk or wx application -- docs/embedding.html
 │                     # (the Qt one is in the openglcontext-qt distribution)

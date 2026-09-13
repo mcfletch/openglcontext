@@ -419,6 +419,13 @@ class TestACleanRenderingEnvironment:
             # inheriting it spares the child a probe of its own.  See
             # OpenGLContext.testing.glfwteardown.
             'OPENGLCONTEXT_GLFW_TEARDOWN',
+            # Where content packs are found instead of downloading them. It
+            # names the same data whichever process reads it, and a child that
+            # did not inherit it would go to the network for content its parent
+            # already has on disk -- or fail, on a machine that has no network
+            # and is pointed at a local copy for exactly that reason. See
+            # OpenGLContext.contentpacks.store.
+            'OPENGLCONTEXT_CONTENT',
         }
         assert not (seen - set(renderoptions.ENVIRONMENT) - allowed)
 
