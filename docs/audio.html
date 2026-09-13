@@ -640,6 +640,35 @@ handle.stop()               # likewise; no caller ever has to test first</pre>
   <pre>from omi_audio import synth
 engine.clips.put('ping', synth.impact(0.4, seed=1))
 engine.play('ping', priority=1.0)</pre>
+
+  <p>To put one <em>in a scene</em> rather than play it directly, hand it to an
+    <code>AudioSource</code> with <code>useClip()</code>. There is nothing to
+    name and nothing to register: the source takes the clip, and everything
+    after that is the path a decoded clip takes, so a synthesised sound is
+    positioned, attenuated, panned and voiced exactly as any other.</p>
+  <pre>source = AudioSource(loop=True, gain=0.0)
+source.useClip(synth.tone(400.0, 2.0, harmonics=7, fade=0.0))
+emitter = AudioEmitter(sources=[source])
+...
+source.gain = 0.3            # every frame, from whatever is being simulated
+source.playbackRate = 1.8</pre>
+  <p>That is how a sound a game <em>computes</em> is made &mdash; a motor note
+    whose pitch is road speed, wind that goes as the square of it, a footstep
+    varied so two in a row are not the same one twice. The clip arrives at the
+    engine's own sample rate, resampled if it is not already there, because the
+    mixer runs at the rate the device was opened at and a clip at another would
+    play at the wrong pitch; that is the same courtesy
+    <code>ClipCache.put()</code> does a clip registered by name. A clip handed
+    over this way takes precedence over <code>url</code> and over a document's
+    audio library &mdash; an application that hands one over has said which
+    sound it means.</p>
+  <p>A loop wants a clip whose end meets its beginning. A ramp at each end
+    &mdash; <code>fade</code>, which every generator applies by default so a
+    one-shot does not click &mdash; becomes a pulse at the loop rate, which is a
+    sound of its own. Pass <code>fade=0.0</code> and give <code>tone()</code> a
+    whole number of cycles, or use <code>rumble()</code> with
+    <code>decay=0.0</code> and <code>attack=0.0</code>, which holds its level
+    throughout and joins noise to noise.</p>
 </section>
 
 <section id="gltf">

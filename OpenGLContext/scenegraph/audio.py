@@ -148,8 +148,32 @@ class AudioSource(node.Node):
         self._clip: Any = None
         self._resolved = False
         self._library: Any = None
+        self._made: Any = None
         self._source: Optional[model.AudioSource] = None
         self._record = model.AudioSource()
+
+    def useClip(self, clip: Any) -> None:
+        """Play a clip the application made, rather than one ``url`` names.
+
+        :mod:`omi_audio.synth` builds clips out of arithmetic, and a sound a
+        game *computes* -- a motor note from wheel speed, wind from road speed,
+        a footstep varied so that two in a row are not the same one twice --
+        has no file behind it to put in :attr:`url`.  Handing the clip over is
+        the whole of it; everything after this is the path a decoded clip
+        takes, so such a sound is positioned, attenuated, mixed and voiced
+        exactly as any other.
+
+        The clip arrives at the engine's own sample rate, resampled if it is
+        not already there, because the mixer runs at the rate the device was
+        opened at and a clip at another would play at the wrong pitch.  That is
+        the same courtesy :meth:`omi_audio.clip.ClipCache.put` does a clip
+        registered by name.
+
+        Takes precedence over :attr:`url` and over a document's audio library:
+        an application that hands a clip over has said which sound it means.
+        """
+        self._made = clip
+        self._resolved = False
 
     def useLibrary(self, library: Any, source: model.AudioSource) -> None:
         """Take this source's clip from a glTF document's audio library.
@@ -179,9 +203,19 @@ class AudioSource(node.Node):
         """
         if not self._resolved:
             self._resolved = True
-            self._clip = (self._fromLibrary(engine) if self._library is not None
-                          else self._fromUrl(engine))
+            if self._made is not None:
+                self._clip = self._atEngineRate(self._made, engine)
+            elif self._library is not None:
+                self._clip = self._fromLibrary(engine)
+            else:
+                self._clip = self._fromUrl(engine)
         return self._clip
+
+    @staticmethod
+    def _atEngineRate(clip: Any, engine: Any) -> Any:
+        """``clip`` at the rate the mixer runs at, resampled if it is not."""
+        rate = engine.clips.sample_rate
+        return clip if clip.sample_rate == rate else clip.resampled(rate)
 
     def _fromLibrary(self, engine: Any) -> Any:
         """The clip the document's own audio library resolves for this source."""

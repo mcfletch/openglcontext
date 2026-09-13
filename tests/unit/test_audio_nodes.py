@@ -103,6 +103,40 @@ class TestAudioSourceNode:
         source = audionodes.AudioSource(url=['beep'])
         assert source.clip(engine) is source.clip(engine)
 
+    def test_a_clip_the_application_made_is_played_as_it_is(self, engine):
+        """A sound out of arithmetic rather than out of a file.
+
+        :mod:`omi_audio.synth` makes clips, and a game that varies one with
+        what it is simulating -- a motor note by wheel speed, wind by road
+        speed -- has nothing to name in ``url``.
+        """
+        made = synth.tone(440.0, 1.0, sample_rate=8000)
+        source = audionodes.AudioSource()
+        source.useClip(made)
+        assert source.clip(engine) is made
+
+    def test_one_at_another_rate_arrives_at_the_engines(self, engine):
+        """Otherwise it plays at the wrong pitch: the mixer takes the rate it
+        was opened at, which is why :meth:`ClipCache.put` resamples too."""
+        source = audionodes.AudioSource()
+        source.useClip(synth.tone(440.0, 1.0, sample_rate=44100))
+        assert source.clip(engine).sample_rate == engine.clips.sample_rate
+
+    def test_it_wins_over_a_url(self, engine):
+        """The application asked for this one by handing it over."""
+        made = synth.tone(660.0, 1.0, sample_rate=8000)
+        source = audionodes.AudioSource(url=['beep'])
+        source.useClip(made)
+        assert source.clip(engine) is made
+
+    def test_and_an_emitter_plays_it(self, engine):
+        """The whole point: through the same path a decoded clip takes."""
+        source = audionodes.AudioSource(loop=True)
+        source.useClip(synth.tone(440.0, 1.0, sample_rate=8000))
+        emitter = audionodes.AudioEmitter(sources=[source])
+        emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        assert engine.active_voices == 1
+
     def test_the_settings_read_back_as_a_khr_source_record(self):
         source = audionodes.AudioSource(gain=0.5, loop=True, playbackRate=2.0)
         record = source.record()
