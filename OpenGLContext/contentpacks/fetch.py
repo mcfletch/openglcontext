@@ -225,10 +225,32 @@ class FetchJob:
         self._stop = False
         self._thread: threading.Thread | None = None
 
+    def start(self) -> 'FetchJob':
+        """Begin now, on a worker thread; returns self, so it can be chained.
+
+        :meth:`poll` starts the job itself, so most callers never need this: a
+        job nobody polls is one nobody is waiting for. Use it where the download
+        should be under way before the next frame is drawn.
+        """
+        if self._thread is None and self.packs:
+            self._thread = threading.Thread(target=self._work, daemon=True,
+                                            name='contentpacks-fetch')
+            self._thread.start()
+        return self
+
     def cancel(self) -> None:
-        """Ask the worker to stop. Acted on between chunks."""
+        """Ask the worker to stop. Acted on between chunks.
+
+        What the *user* asked for, which is not the same as what happened:
+        :attr:`cancelled` says the job stopped because of it, and like
+        everything else a caller reads it is published by :meth:`poll`.
+        """
         with self._lock:
             self._stop = True
+
+    def human_total(self) -> str:
+        """How much this job is, as the user consented to read it."""
+        return '%d MB' % (round(self.total_bytes / 1e6),)
 
     def poll(self) -> None:
         """Publish what the worker has managed, and start it the first time.
@@ -243,9 +265,7 @@ class FetchJob:
             # "finished after the first poll" depend on the scheduler.
             self.finished, self.state = True, 'nothing to fetch'
             return
-        if self._thread is None:
-            self._thread = threading.Thread(target=self._work, daemon=True)
-            self._thread.start()
+        self.start()
         with self._lock:
             done, current = self._done_bytes, self._current
             roots, failed = list(self._roots), self._failed

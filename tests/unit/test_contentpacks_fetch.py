@@ -327,6 +327,49 @@ class TestAJobTheFrameLoopPolls:
             job.poll()
         assert job.roots == roots and seen == []
 
+    def test_it_can_be_started_before_the_next_frame(self, served, store,
+                                                     cache) -> None:
+        """`start()` begins without publishing, so `finished` still says what
+        the last poll saw -- which for a job never polled is nothing."""
+        where, base = served
+        make_tarball(where, 'a.tar.gz')
+        job = fetch.FetchJob([pack(base + '/a.tar.gz')], store, cache_dir=cache)
+        assert job.start() is job
+        job._thread.join(10.0)
+        assert not job.finished, 'nobody polled, so nobody was told'
+        job.poll()
+        assert job.finished and not job.failed
+
+    def test_starting_twice_runs_one_worker(self, served, store, cache) -> None:
+        where, base = served
+        make_tarball(where, 'a.tar.gz')
+        job = fetch.FetchJob([pack(base + '/a.tar.gz')], store, cache_dir=cache)
+        assert job.start()._thread is job.start()._thread
+
+    def test_starting_an_empty_job_starts_nothing(self, store, cache) -> None:
+        job = fetch.FetchJob([], store, cache_dir=cache).start()
+        assert job._thread is None
+        job.poll()
+        assert job.finished
+
+    def test_what_the_user_consented_to_reads_in_megabytes(self, store,
+                                                           cache) -> None:
+        job = fetch.FetchJob([pack('https://example.invalid/a.tar.gz',
+                                   approximate_bytes=41_711_739)],
+                             store, cache_dir=cache)
+        assert job.human_total() == '42 MB'
+
+    def test_a_cancel_is_what_was_asked_and_poll_says_what_happened(
+            self, served, store, cache) -> None:
+        """Asking is the caller's own act; whether it stopped the job is not."""
+        where, base = served
+        make_tarball(where, 'a.tar.gz', ['f%d' % n for n in range(8)],
+                     big=64 * 1024)
+        job = fetch.FetchJob([pack(base + '/a.tar.gz')], store, cache_dir=cache)
+        job.cancel()
+        assert not job.cancelled, 'nothing has been polled yet'
+        self.drive(job)
+        assert job.cancelled and job.failed is None
 
 class TestWhatTheFirstRunNeeds:
     def test_a_base_pack_not_here_is_named(self, tmp_path, store) -> None:
