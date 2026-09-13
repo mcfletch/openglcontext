@@ -638,8 +638,18 @@ panel = Panel(title='Movement', modal=True, preferredColumns=48, children=[
     <tr><td><code>hud</code></td><td>The layout protocol and the box.</td></tr>
     <tr><td><code>ui.layout</code></td><td>Row, Column, Grid.</td></tr>
     <tr><td><code>ui.widgets</code></td>
-      <td>Label, Button, Toggle, Select, Slider, TextField, NumberField,
-        KeyCapture.</td></tr>
+      <td>Label, Button, Toggle, Select, Slider, ProgressBar, TextField,
+        NumberField, KeyCapture.</td></tr>
+    <tr><td><code>ProgressBar</code></td>
+      <td>How far something has got — a download, a bake, a world streaming in.
+        <strong>Not a disabled slider</strong>: a <code>Slider</code> is a
+        control, taking focus and input, and its value is the user's;
+        a <code>ProgressBar</code> reports, takes no focus, and its value is
+        somebody else's news. <code>fraction</code> is held between 0 and 1
+        rather than validated, since it comes from a job measuring itself and a
+        bar is not the place to raise about arithmetic elsewhere;
+        <code>text</code> is drawn over it, because "Ashdown — 40%" says more
+        than a bar alone and a bar alone says more than a number.</td></tr>
     <tr><td><code>ui.scroll</code></td><td>The clipping viewport and its bar.</td></tr>
     <tr><td><code>ui.panel</code></td>
       <td>One screen: focus, accelerators, modality, commands. Walked with

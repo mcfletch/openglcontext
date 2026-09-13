@@ -488,6 +488,51 @@ class Spacer(Widget):
     flex = field.newField('flex', 'SFFloat', 1, 1.0)
 
 
+class ProgressBar(Widget):
+    """How far something has got, when the something takes long enough to say.
+
+    A 450 MB download, a bake, a world streaming in: each is a wait somebody
+    sits through, and a wait with no end in sight is the one that feels broken.
+
+    **Not a disabled slider.** A :class:`Slider` is a control -- it takes focus,
+    it takes input, and its value is the user's. This reports: it takes no
+    focus, has no thumb to grab, and its value is somebody else's news. That is
+    also why ``fraction`` is clamped rather than validated: it comes from a job
+    measuring itself against a size it was told, and a bar is not the place to
+    raise about arithmetic somewhere else.
+
+    ``text`` is drawn over the bar where there is one -- "Ashdown — 40%" says
+    more than a bar alone, and a bar alone says more than a number.
+    """
+
+    PROTO = 'ProgressBar'
+    #: How much is done, 0 to 1. Anything outside that is held to it.
+    fraction = field.newField('fraction', 'SFFloat', 1, 0.0)
+    #: What is being waited for, drawn over the bar. Empty draws none.
+    text = field.newField('text', 'SFString', 1, '')
+
+    @property
+    def filled(self) -> float:
+        """``fraction``, held between none and all."""
+        return max(0.0, min(1.0, float(self.fraction)))
+
+    def filled_rect(self) -> Any:
+        """The part of the bar that is done."""
+        return Rect(self.rect.x, self.rect.y,
+                    int(round(self.rect.width * self.filled)),
+                    self.rect.height)
+
+    def paint(self, renderer: Any) -> None:
+        skin = renderer.skin
+        renderer.pill(self.rect, skin.trackFill)
+        done = self.filled_rect()
+        if not done.empty:
+            renderer.pill(done, skin.thumbFill)
+        if self.text:
+            renderer.lines(self.rect, [str(self.text)],
+                           self.textColour(renderer), align='center')
+
+
 class Button(BoundWidget):
     """A clickable action, with an emphasis and an optional accelerator."""
 
