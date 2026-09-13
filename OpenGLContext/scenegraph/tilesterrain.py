@@ -24,7 +24,7 @@ import io
 import json
 import math
 import os
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.loaders.tiles3d import fetch
@@ -146,6 +146,26 @@ class TilesTerrain(Group):
             self.field, layers, _beside(base_uri, record['control'], cache_dir))
         self._field_node = Shape(geometry=self.ground,
                                  appearance=Appearance(material=Material()))
+
+    @property
+    def holes(self) -> "Optional[Callable[[Any, Any], Any]]":
+        """Where the ground is not there — over a tunnel's bore, say.
+
+        Settable after the terrain is built, and it has to be: a game reads a
+        tileset to stand the ground up and reads it again to find the roads, and
+        only the roads know where a bore runs. The mesh is not built until the
+        first draw, so anything set before then is in time.
+
+        Hand the same callable to
+        :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` and
+        what is drawn and what is driven on are the same surface.
+        """
+        return None if self.ground is None else self.ground.holes
+
+    @holes.setter
+    def holes(self, holes: "Optional[Callable[[Any, Any], Any]]") -> None:
+        if self.ground is not None:
+            self.ground.holes = holes
 
     def _mount_vegetation(self, record: Any, base_uri: str,
                           cache_dir: Optional[str]) -> None:

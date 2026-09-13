@@ -180,8 +180,23 @@ class HeightField:
         rise: np.ndarray = np.hypot(sx, sz)
         return rise
 
-    def mesh(self) -> "tuple[np.ndarray, np.ndarray]":
+    def mesh(self, holes: "Optional[Callable[[Any, Any], Any]]" = None
+             ) -> "tuple[np.ndarray, np.ndarray]":
         """Interleaved (position, normal) vertices and triangle indices for the grid.
+
+        :param holes: ``holes(x, z) -> mask`` over arrays of world positions,
+            true where the ground is not there — over a tunnel's bore, say. A
+            triangle is dropped when its centre is in a hole.
+
+        A height field is a surface, so a hill with a road running *through* it
+        has no way to say it is hollow. ``holes`` is that way. The rule is the
+        one :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders`
+        applies, to the letter, so the surface a player sees and the surface a
+        car meets are the same surface — agreeing by construction rather than by
+        care. Pass the same callable to both.
+
+        Only triangles go; the vertices stay. One nothing indexes costs a little
+        memory and saves renumbering every index that survives.
 
         :returns: ``(vertices Nx6 float32, indices uint32)`` — a regular triangulated
             grid over the world square with per-vertex normals from the gradient.
@@ -208,7 +223,12 @@ class HeightField:
         idx[:, 3] = b
         idx[:, 4] = c
         idx[:, 5] = d2
-        return inter, idx.ravel()
+        if holes is None:
+            return inter, idx.ravel()
+        triangles = idx.reshape(-1, 3)
+        centre = inter[:, :3][triangles].mean(axis=1)
+        missing = np.asarray(holes(centre[:, 0], centre[:, 2]), bool)
+        return inter, triangles[~missing].ravel()
 
     def sun_shadow(self, sun: "np.ndarray | tuple[float, float, float]",
                    steps: int = 170, softness: float = 35.0,

@@ -118,6 +118,11 @@ class SplatTerrain(vnodes.PointSet):
         ground one tree shades.
     :param canopy_spread: how far the canopy's shadow is offset towards the sun,
         in metres -- trees cast along the light, not straight down.
+    :param holes: ``holes(x, z) -> mask``, true where the ground is not there --
+        over a tunnel's bore, say. Hand the *same* callable to
+        :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` and the
+        surface drawn and the surface collided against are the same surface; see
+        :meth:`~OpenGLContext.scenegraph.terrain.HeightField.mesh`.
     """
     def __init__(self, height_field: "HeightField", layers: "list[str]", control: Any,
                  sun: "tuple[float, float, float]" = DEFAULT_SUN,
@@ -126,9 +131,11 @@ class SplatTerrain(vnodes.PointSet):
                  canopy_shade: float = CANOPY_SHADE,
                  canopy_deepest: float = CANOPY_DEEPEST,
                  canopy_crown: float = CANOPY_CROWN,
-                 canopy_spread: float = CANOPY_SPREAD) -> None:
+                 canopy_spread: float = CANOPY_SPREAD,
+                 holes: "Optional[Callable[[Any, Any], Any]]" = None) -> None:
         super(SplatTerrain, self).__init__()
         self.hf = height_field
+        self.holes = holes
         self.layers = layers
         self.control = control
         if material_fn is None:
@@ -184,7 +191,7 @@ class SplatTerrain(vnodes.PointSet):
 
     def _init_gl(self) -> None:
         prog = load_program("terrain_splat.vert", "terrain_splat.frag")
-        inter, idx = self.hf.mesh()
+        inter, idx = self.hf.mesh(holes=self.holes)
         vao = glGenVertexArrays(1)
         glBindVertexArray(vao)
         vb = glGenBuffers(1)
