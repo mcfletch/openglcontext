@@ -20,6 +20,7 @@ The metrics take images and return numbers, so they are tested without a window.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any, Sequence
 
@@ -30,6 +31,7 @@ __all__ = [
     "object_pop",
     "silhouette",
     "safe_distance",
+    "FrameCost",
     "LODProbe",
     "LevelReport",
     "measure_chain",
@@ -147,6 +149,31 @@ class LevelReport:
     _share: float = 1.0
 
 
+@dataclass(frozen=True)
+class _Upload:
+    """One mesh resident on the card: what draws it, and how many indices."""
+
+    vao: int
+    buffers: list[int]
+    count: int
+
+
+@dataclass(frozen=True)
+class FrameCost:
+    """What one mesh costs to draw, measured rather than counted.
+
+    ``median_ms`` is the middle frame of the run and ``fps`` is its reciprocal.
+    Both are the *renderer's* rate with the geometry already resident: there is
+    no swap, no compositor and no upload in the timed loop, so the number says
+    what the triangles cost and nothing else.
+    """
+
+    frames: int
+    triangles: int
+    median_ms: float
+    fps: float
+
+
 class LODProbe:
     """Renders a mesh offscreen so two levels can be compared pixel for pixel.
 
@@ -179,8 +206,13 @@ void main() {
     FRAGMENT = """#version 330 core
 in vec3 eyeNormal;
 in vec3 eyePosition;
+uniform int wireframe;
 out vec4 fragColour;
 void main() {
+    if (wireframe != 0) {
+        fragColour = vec4(0.02, 0.03, 0.05, 1.0);
+        return;
+    }
     vec3 normal = normalize(eyeNormal);
     vec3 toLight = normalize(vec3(0.35, 0.55, 1.0));
     vec3 toEye = normalize(-eyePosition);
@@ -252,6 +284,7 @@ void main() {
         centre: Any,
         fovy: float = 45.0,
         rotation: float = 0.0,
+        edges: bool = False,
     ) -> Any:
         """One render, as an ``(n, n, 3)`` array of bytes.
 
@@ -259,41 +292,110 @@ void main() {
         mesh. The near plane is set from it rather than fixed, so a camera a
         millimetre from the surface still has usable depth precision -- which is
         what the close end of a sweep asks for.
+
+        ``edges`` draws the triangle wireframe over the shading. A level of
+        detail *is* a triangle count, and a picture of the shaded surface says
+        nothing about where those triangles went, so a gallery of levels wants
+        them visible.
         """
+        upload = self._upload(positions, normals, indices)
+        try:
+            self._configure(distance, radius, centre, fovy, rotation)
+            self._draw(upload, edges)
+            return self.read()
+        finally:
+            self._discard(upload)
+
+    def frame_cost(
+        self,
+        positions: Any,
+        normals: Any,
+        indices: Any,
+        distance: float,
+        radius: float,
+        centre: Any,
+        fovy: float = 45.0,
+        rotation: float = 0.0,
+        edges: bool = False,
+        frames: int = 60,
+        warmup: int = 5,
+    ) -> FrameCost:
+        """What this mesh costs to draw, measured by drawing it repeatedly.
+
+        The geometry is uploaded once and drawn ``frames`` times, so what is
+        timed is the draw rather than the upload -- which is the question a
+        level of detail poses, since the buffers are resident either way.
+
+        There is no swap and no display involved: the target is this probe's own
+        framebuffer, so no compositor throttles the loop to a refresh rate and
+        the number is the renderer's rather than the monitor's. ``glFinish``
+        before each clock reading is what makes it the renderer's too, since a
+        driver is otherwise free to still be working when the call returns.
+
+        The **median** frame is reported. A mean is moved by the one frame in
+        which the driver decided to compile something.
+        """
+        from OpenGL.GL import glFinish
+
+        if frames < 1:
+            raise ValueError("frames must be at least one, got %r" % (frames,))
+        upload = self._upload(positions, normals, indices)
+        try:
+            self._configure(distance, radius, centre, fovy, rotation)
+            for _ in range(max(0, int(warmup))):
+                self._draw(upload, edges)
+            glFinish()
+            taken = []
+            for _ in range(int(frames)):
+                started = time.perf_counter()
+                self._draw(upload, edges)
+                glFinish()
+                taken.append(time.perf_counter() - started)
+            median = float(np.median(taken)) * 1000.0
+            return FrameCost(
+                frames=int(frames),
+                triangles=upload.count // 3,
+                median_ms=median,
+                fps=1000.0 / median if median > 0.0 else float("inf"),
+            )
+        finally:
+            self._discard(upload)
+
+    def read(self) -> Any:
+        """The probe's framebuffer as an ``(n, n, 3)`` array of bytes."""
+        from OpenGL.GL import (
+            GL_FRAMEBUFFER,
+            GL_RGB,
+            GL_UNSIGNED_BYTE,
+            glBindFramebuffer,
+            glReadPixels,
+        )
+
+        glBindFramebuffer(GL_FRAMEBUFFER, self._framebuffer)
+        try:
+            raw = glReadPixels(0, 0, self.size, self.size, GL_RGB, GL_UNSIGNED_BYTE)
+        finally:
+            glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        # GL reads bottom row first; flip so a saved picture is the right way
+        # up. The metric is unaffected either way, but a contact sheet that
+        # is upside down is a contact sheet nobody checks the numbers against.
+        return np.frombuffer(raw, np.uint8).reshape(self.size, self.size, 3)[::-1]
+
+    def _upload(self, positions: Any, normals: Any, indices: Any) -> _Upload:
+        """Put one mesh on the card and hand back what draws it."""
         from OpenGL.GL import (
             GL_ARRAY_BUFFER,
-            GL_COLOR_BUFFER_BIT,
-            GL_DEPTH_BUFFER_BIT,
-            GL_DEPTH_TEST,
             GL_ELEMENT_ARRAY_BUFFER,
             GL_FALSE,
             GL_FLOAT,
-            GL_FRAMEBUFFER,
-            GL_RGB,
             GL_STATIC_DRAW,
-            GL_TRIANGLES,
-            GL_UNSIGNED_BYTE,
-            GL_UNSIGNED_INT,
             glBindBuffer,
-            glBindFramebuffer,
             glBindVertexArray,
             glBufferData,
-            glClear,
-            glClearColor,
-            glDeleteBuffers,
-            glDeleteVertexArrays,
-            glDrawElements,
-            glEnable,
             glEnableVertexAttribArray,
             glGenBuffers,
             glGenVertexArrays,
-            glGetUniformLocation,
-            glReadPixels,
-            glUniformMatrix3fv,
-            glUniformMatrix4fv,
-            glUseProgram,
             glVertexAttribPointer,
-            glViewport,
         )
 
         positions = np.ascontiguousarray(positions, dtype="f4")
@@ -313,48 +415,106 @@ void main() {
             glVertexAttribPointer(location, 3, GL_FLOAT, GL_FALSE, 0, None)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffers[2])
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL_STATIC_DRAW)
+        glBindVertexArray(0)
+        return _Upload(vao=vao, buffers=buffers, count=len(indices))
 
-        try:
-            glBindFramebuffer(GL_FRAMEBUFFER, self._framebuffer)
-            glViewport(0, 0, self.size, self.size)
-            glClearColor(0.0, 0.0, 0.0, 1.0)
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-            glEnable(GL_DEPTH_TEST)
-            glUseProgram(self._program)
+    def _discard(self, upload: _Upload) -> None:
+        from OpenGL.GL import glBindVertexArray, glDeleteBuffers, glDeleteVertexArrays
 
-            near = max(distance - radius, distance * 1e-3, 1e-6)
-            projection = _perspective(fovy, 1.0, near, distance + 3.0 * radius + 1e-6)
-            modelview = _look_at(distance, radius, np.asarray(centre, dtype="d"), rotation)
-            glUniformMatrix4fv(
-                glGetUniformLocation(self._program, "projection"),
-                1,
-                GL_FALSE,
-                np.ascontiguousarray(projection.T, dtype="f4"),
-            )
-            glUniformMatrix4fv(
-                glGetUniformLocation(self._program, "modelview"),
-                1,
-                GL_FALSE,
-                np.ascontiguousarray(modelview.T, dtype="f4"),
-            )
-            glUniformMatrix3fv(
-                glGetUniformLocation(self._program, "normalMatrix"),
-                1,
-                GL_FALSE,
-                np.ascontiguousarray(modelview[:3, :3].T, dtype="f4"),
-            )
+        glBindVertexArray(0)
+        glDeleteBuffers(len(upload.buffers), upload.buffers)
+        glDeleteVertexArrays(1, [upload.vao])
 
-            glDrawElements(GL_TRIANGLES, len(indices), GL_UNSIGNED_INT, None)
-            raw = glReadPixels(0, 0, self.size, self.size, GL_RGB, GL_UNSIGNED_BYTE)
-            # GL reads bottom row first; flip so a saved picture is the right way
-            # up. The metric is unaffected either way, but a contact sheet that
-            # is upside down is a contact sheet nobody checks the numbers against.
-            return np.frombuffer(raw, np.uint8).reshape(self.size, self.size, 3)[::-1]
-        finally:
-            glBindFramebuffer(GL_FRAMEBUFFER, 0)
+    def _configure(
+        self, distance: float, radius: float, centre: Any, fovy: float, rotation: float
+    ) -> None:
+        """Bind the framebuffer and set the camera for the draws that follow."""
+        from OpenGL.GL import (
+            GL_DEPTH_TEST,
+            GL_FALSE,
+            GL_FRAMEBUFFER,
+            glBindFramebuffer,
+            glEnable,
+            glGetUniformLocation,
+            glUniformMatrix3fv,
+            glUniformMatrix4fv,
+            glUseProgram,
+            glViewport,
+        )
+
+        glBindFramebuffer(GL_FRAMEBUFFER, self._framebuffer)
+        glViewport(0, 0, self.size, self.size)
+        glEnable(GL_DEPTH_TEST)
+        glUseProgram(self._program)
+
+        near = max(distance - radius, distance * 1e-3, 1e-6)
+        projection = _perspective(fovy, 1.0, near, distance + 3.0 * radius + 1e-6)
+        modelview = _look_at(distance, radius, np.asarray(centre, dtype="d"), rotation)
+        glUniformMatrix4fv(
+            glGetUniformLocation(self._program, "projection"),
+            1,
+            GL_FALSE,
+            np.ascontiguousarray(projection.T, dtype="f4"),
+        )
+        glUniformMatrix4fv(
+            glGetUniformLocation(self._program, "modelview"),
+            1,
+            GL_FALSE,
+            np.ascontiguousarray(modelview.T, dtype="f4"),
+        )
+        glUniformMatrix3fv(
+            glGetUniformLocation(self._program, "normalMatrix"),
+            1,
+            GL_FALSE,
+            np.ascontiguousarray(modelview[:3, :3].T, dtype="f4"),
+        )
+
+    def _draw(self, upload: _Upload, edges: bool) -> None:
+        """Clear and draw the mesh once, with the wireframe over it or not."""
+        from OpenGL.GL import (
+            GL_COLOR_BUFFER_BIT,
+            GL_DEPTH_BUFFER_BIT,
+            GL_FILL,
+            GL_FRONT_AND_BACK,
+            GL_LINE,
+            GL_POLYGON_OFFSET_FILL,
+            GL_TRIANGLES,
+            GL_UNSIGNED_INT,
+            glBindVertexArray,
+            glClear,
+            glClearColor,
+            glDisable,
+            glDrawElements,
+            glEnable,
+            glGetUniformLocation,
+            glPolygonMode,
+            glPolygonOffset,
+            glUniform1i,
+        )
+
+        glBindVertexArray(upload.vao)
+        glClearColor(0.0, 0.0, 0.0, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        wire = glGetUniformLocation(self._program, "wireframe")
+        glUniform1i(wire, 0)
+        if not edges:
+            glDrawElements(GL_TRIANGLES, upload.count, GL_UNSIGNED_INT, None)
             glBindVertexArray(0)
-            glDeleteBuffers(3, buffers)
-            glDeleteVertexArrays(1, [vao])
+            return
+        # The fill is pushed away from the eye so the lines drawn over it win
+        # the depth test along their whole length rather than in stripes.
+        glEnable(GL_POLYGON_OFFSET_FILL)
+        glPolygonOffset(1.0, 1.0)
+        glDrawElements(GL_TRIANGLES, upload.count, GL_UNSIGNED_INT, None)
+        glDisable(GL_POLYGON_OFFSET_FILL)
+        glUniform1i(wire, 1)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+        try:
+            glDrawElements(GL_TRIANGLES, upload.count, GL_UNSIGNED_INT, None)
+        finally:
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+            glUniform1i(wire, 0)
+            glBindVertexArray(0)
 
     def release(self) -> None:
         """Give the framebuffer, its renderbuffers and the program back."""

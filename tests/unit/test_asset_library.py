@@ -9,6 +9,7 @@ one with an invisible car in it.
 
 No GL: a loaded model is a scenegraph of arrays.
 """
+
 import logging
 import math
 
@@ -16,7 +17,12 @@ import numpy as np
 import pytest
 
 from OpenGLContext.loaders.assets import (
-    AssetLibrary, bounds, brighten, recolour, shapes,
+    merged_mesh,
+    AssetLibrary,
+    bounds,
+    brighten,
+    recolour,
+    shapes,
 )
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
@@ -28,8 +34,8 @@ from OpenGLContext.scenegraph.transform import Transform
 
 def _quad(material=None):
     return PBRMesh(
-        positions=np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)], 'f'),
-        normals=np.array([(0, 0, 1)] * 4, 'f'),
+        positions=np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)], "f"),
+        normals=np.array([(0, 0, 1)] * 4, "f"),
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32),
         material=material,
     )
@@ -39,90 +45,94 @@ def _quad(material=None):
 def library(tmp_path):
     """A library holding one two-material model, ``car.glb``."""
     paint = PBRMaterial(baseColor=(0.62, 0.09, 0.07), metallic=0.55, roughness=0.32)
-    paint.DEF = 'paint'
+    paint.DEF = "paint"
     glass = PBRMaterial(baseColor=(0.1, 0.13, 0.16), transmission=1.0, ior=1.52)
-    glass.DEF = 'glass'
-    (tmp_path / 'cars').mkdir()
-    write_glb([SceneNode(mesh=_quad(paint), name='body'),
-               SceneNode(mesh=_quad(glass), name='glass')],
-              path=str(tmp_path / 'cars' / 'car.glb'))
+    glass.DEF = "glass"
+    (tmp_path / "cars").mkdir()
+    write_glb(
+        [SceneNode(mesh=_quad(paint), name="body"), SceneNode(mesh=_quad(glass), name="glass")],
+        path=str(tmp_path / "cars" / "car.glb"),
+    )
     return AssetLibrary(str(tmp_path))
 
 
 # --- finding and loading ------------------------------------------------------
 
+
 def test_path_for_resolves_under_the_root(library, tmp_path):
-    assert library.path_for('cars/car.glb') == str(tmp_path / 'cars' / 'car.glb')
+    assert library.path_for("cars/car.glb") == str(tmp_path / "cars" / "car.glb")
 
 
 def test_load_returns_the_scene_with_its_names(library):
     """A load hands back the whole scene: geometry, named nodes, named materials."""
-    scene = library.load('cars/car.glb')
+    scene = library.load("cars/car.glb")
     assert len(list(shapes(scene.group))) == 2
-    assert scene.getDEF('body') is not None
-    assert sorted(scene.materials) == ['glass', 'paint']
+    assert scene.getDEF("body") is not None
+    assert sorted(scene.materials) == ["glass", "paint"]
 
 
 def test_load_of_a_missing_file_is_none_and_warns(library, caplog):
     """A model that is not there leaves the caller without one, and says so."""
     with caplog.at_level(logging.WARNING):
-        assert library.load('cars/nothing.glb') is None
-    assert 'cars/nothing.glb' in caplog.text
+        assert library.load("cars/nothing.glb") is None
+    assert "cars/nothing.glb" in caplog.text
 
 
 def test_load_of_a_corrupt_file_is_none_and_warns(library, tmp_path, caplog):
-    (tmp_path / 'cars' / 'broken.glb').write_bytes(b'not a glb at all')
+    (tmp_path / "cars" / "broken.glb").write_bytes(b"not a glb at all")
     with caplog.at_level(logging.WARNING):
-        assert library.load('cars/broken.glb') is None
-    assert 'broken.glb' in caplog.text
+        assert library.load("cars/broken.glb") is None
+    assert "broken.glb" in caplog.text
 
 
 def test_each_load_is_the_caller_s_own(library):
     """Two loads are two models: repainting one leaves the other alone."""
-    mine, yours = library.load('cars/car.glb'), library.load('cars/car.glb')
+    mine, yours = library.load("cars/car.glb"), library.load("cars/car.glb")
     assert mine is not yours
-    mine.materials['paint'].baseColor = (0.0, 1.0, 0.0)
-    assert tuple(yours.materials['paint'].baseColor) == pytest.approx((0.62, 0.09, 0.07))
+    mine.materials["paint"].baseColor = (0.0, 1.0, 0.0)
+    assert tuple(yours.materials["paint"].baseColor) == pytest.approx((0.62, 0.09, 0.07))
 
 
 # --- sharing one copy ---------------------------------------------------------
 
+
 def test_shared_hands_back_one_copy(library):
     """Callers that only draw a model share it, and share the parse."""
-    assert library.shared('cars/car.glb') is library.shared('cars/car.glb')
+    assert library.shared("cars/car.glb") is library.shared("cars/car.glb")
 
 
 def test_shared_and_load_are_different_copies(library):
     """A caller that means to repaint asks to load, and gets its own."""
-    assert library.load('cars/car.glb') is not library.shared('cars/car.glb')
+    assert library.load("cars/car.glb") is not library.shared("cars/car.glb")
 
 
 def test_shared_remembers_a_failure(library, caplog):
     """A model that will not load is not retried, and is warned about once."""
     with caplog.at_level(logging.WARNING):
-        assert library.shared('cars/nothing.glb') is None
-        assert library.shared('cars/nothing.glb') is None
+        assert library.shared("cars/nothing.glb") is None
+        assert library.shared("cars/nothing.glb") is None
     assert len([one for one in caplog.records if one.levelno >= logging.WARNING]) == 1
-    assert 'cars/nothing.glb' in caplog.text
+    assert "cars/nothing.glb" in caplog.text
 
 
 def test_clear_drops_what_was_shared(library):
     """Clearing lets the next call read the file again."""
-    first = library.shared('cars/car.glb')
+    first = library.shared("cars/car.glb")
     library.clear()
-    assert library.shared('cars/car.glb') is not first
+    assert library.shared("cars/car.glb") is not first
 
 
 # --- painting -----------------------------------------------------------------
 
+
 def test_shapes_finds_every_shape(library):
-    scene = library.load('cars/car.glb')
+    scene = library.load("cars/car.glb")
     assert [one.geometry.positions.shape[0] for one in shapes(scene.group)] == [4, 4]
 
 
 def test_recolour_paints_the_whole_subtree(library):
     """One colour over a model, for art whose colour is all it says."""
-    scene = library.load('cars/car.glb')
+    scene = library.load("cars/car.glb")
     assert recolour(scene.group, (0.0, 0.4, 0.8)) == 2
     for material in scene.materials.values():
         assert tuple(material.baseColor) == pytest.approx((0.0, 0.4, 0.8))
@@ -130,34 +140,35 @@ def test_recolour_paints_the_whole_subtree(library):
 
 def test_recolour_leaves_the_rest_of_the_material_alone(library):
     """What makes glass read as glass is not its colour."""
-    scene = library.load('cars/car.glb')
+    scene = library.load("cars/car.glb")
     recolour(scene.group, (1.0, 1.0, 1.0))
-    assert scene.materials['glass'].transmission == pytest.approx(1.0)
-    assert scene.materials['glass'].ior == pytest.approx(1.52)
-    assert scene.materials['paint'].metallic == pytest.approx(0.55)
+    assert scene.materials["glass"].transmission == pytest.approx(1.0)
+    assert scene.materials["glass"].ior == pytest.approx(1.52)
+    assert scene.materials["paint"].metallic == pytest.approx(0.55)
 
 
 def test_recolour_with_glow_lights_the_model_from_inside(library):
-    scene = library.load('cars/car.glb')
+    scene = library.load("cars/car.glb")
     recolour(scene.group, (0.2, 0.4, 0.6), glow=0.5)
-    assert tuple(scene.materials['paint'].emissiveColor) == pytest.approx((0.1, 0.2, 0.3))
+    assert tuple(scene.materials["paint"].emissiveColor) == pytest.approx((0.1, 0.2, 0.3))
 
 
 def test_brighten_keeps_each_material_its_own_colour(library):
     """A floor of light, not a repaint: the reds stay red and the greys grey."""
-    scene = library.load('cars/car.glb')
+    scene = library.load("cars/car.glb")
     assert brighten(scene.group, 0.5) == 2
-    assert tuple(scene.materials['paint'].emissiveColor) == pytest.approx((0.31, 0.045, 0.035))
-    assert tuple(scene.materials['paint'].baseColor) == pytest.approx((0.62, 0.09, 0.07))
+    assert tuple(scene.materials["paint"].emissiveColor) == pytest.approx((0.31, 0.045, 0.035))
+    assert tuple(scene.materials["paint"].baseColor) == pytest.approx((0.62, 0.09, 0.07))
 
 
 # --- how big a model is -------------------------------------------------------
+
 
 class TestBounds:
     """The box a model occupies, which is what a collider is cut from."""
 
     def test_it_measures_the_geometry(self, library):
-        low, high = bounds(library.load('cars/car.glb').group)
+        low, high = bounds(library.load("cars/car.glb").group)
         assert low == pytest.approx((0.0, 0.0, 0.0), abs=1e-6)
         assert high == pytest.approx((1.0, 1.0, 0.0), abs=1e-6)
 
@@ -169,16 +180,19 @@ class TestBounds:
         assert high == pytest.approx((3.0, 0.0, 0.5), abs=1e-6)
 
     def test_transforms_compose_through_the_tree(self):
-        inner = Transform(children=[Shape(geometry=_quad(), appearance=Appearance())],
-                          scale=(2.0, 2.0, 2.0))
+        inner = Transform(
+            children=[Shape(geometry=_quad(), appearance=Appearance())], scale=(2.0, 2.0, 2.0)
+        )
         outer = Transform(children=[inner], translation=(0.0, 1.0, 0.0))
         low, high = bounds(outer)
         assert low == pytest.approx((0.0, 1.0, 0.0), abs=1e-6)
         assert high == pytest.approx((2.0, 3.0, 0.0), abs=1e-6)
 
     def test_a_rotation_turns_the_box(self):
-        turned = Transform(children=[Shape(geometry=_quad(), appearance=Appearance())],
-                           rotation=(0.0, 0.0, 1.0, math.pi / 2.0))
+        turned = Transform(
+            children=[Shape(geometry=_quad(), appearance=Appearance())],
+            rotation=(0.0, 0.0, 1.0, math.pi / 2.0),
+        )
         low, high = bounds(turned)
         assert low == pytest.approx((-1.0, 0.0, 0.0), abs=1e-6)
         assert high == pytest.approx((0.0, 1.0, 0.0), abs=1e-6)
@@ -219,17 +233,15 @@ class TestVariants:
     """
 
     def test_the_same_key_hands_back_the_same_copy(self, library):
-        first = library.variant('cars/car.glb', 'red')
-        assert library.variant('cars/car.glb', 'red') is first
+        first = library.variant("cars/car.glb", "red")
+        assert library.variant("cars/car.glb", "red") is first
 
     def test_a_different_key_is_a_different_copy(self, library):
-        assert library.variant('cars/car.glb', 'red') is not \
-            library.variant('cars/car.glb', 'blue')
+        assert library.variant("cars/car.glb", "red") is not library.variant("cars/car.glb", "blue")
 
     def test_a_variant_is_not_the_shared_copy(self, library):
         """Changing one must not change the model everything else draws."""
-        assert library.variant('cars/car.glb', 'red') is not \
-            library.shared('cars/car.glb')
+        assert library.variant("cars/car.glb", "red") is not library.shared("cars/car.glb")
 
     def test_it_is_prepared_once_however_often_it_is_asked_for(self, library):
         made = []
@@ -238,47 +250,99 @@ class TestVariants:
             made.append(scene)
 
         for _ in range(4):
-            library.variant('cars/car.glb', 'red', prepare=prepare)
+            library.variant("cars/car.glb", "red", prepare=prepare)
         assert len(made) == 1
 
     def test_what_prepare_did_is_what_every_caller_gets(self, library):
-        library.variant('cars/car.glb', 'red',
-                        prepare=lambda scene: recolour(scene.group, (1, 0, 0)))
-        again = library.variant('cars/car.glb', 'red')
-        painted = [shape.appearance.material.baseColor
-                   for shape in shapes(again.group)]
-        assert all(tuple(colour)[:3] == pytest.approx((1, 0, 0))
-                   for colour in painted)
+        library.variant(
+            "cars/car.glb", "red", prepare=lambda scene: recolour(scene.group, (1, 0, 0))
+        )
+        again = library.variant("cars/car.glb", "red")
+        painted = [shape.appearance.material.baseColor for shape in shapes(again.group)]
+        assert all(tuple(colour)[:3] == pytest.approx((1, 0, 0)) for colour in painted)
 
     def test_two_keys_are_painted_independently(self, library):
-        for key, colour in (('red', (1, 0, 0)), ('blue', (0, 0, 1))):
-            library.variant('cars/car.glb', key,
-                            prepare=lambda scene, c=colour: recolour(scene.group, c))
-        red = shapes(library.variant('cars/car.glb', 'red').group)
-        assert tuple(next(red).appearance.material.baseColor)[:3] == \
-            pytest.approx((1, 0, 0))
+        for key, colour in (("red", (1, 0, 0)), ("blue", (0, 0, 1))):
+            library.variant(
+                "cars/car.glb", key, prepare=lambda scene, c=colour: recolour(scene.group, c)
+            )
+        red = shapes(library.variant("cars/car.glb", "red").group)
+        assert tuple(next(red).appearance.material.baseColor)[:3] == pytest.approx((1, 0, 0))
 
     def test_a_colour_makes_a_usable_key(self, library):
         """Which is how a caller keys one: by the colour it is painting it."""
-        assert library.variant('cars/car.glb', (0.7, 0.2, 0.1)) is \
-            library.variant('cars/car.glb', (0.7, 0.2, 0.1))
+        assert library.variant("cars/car.glb", (0.7, 0.2, 0.1)) is library.variant(
+            "cars/car.glb", (0.7, 0.2, 0.1)
+        )
 
     def test_a_model_that_will_not_load_is_none(self, library, caplog):
         with caplog.at_level(logging.WARNING):
-            assert library.variant('cars/missing.glb', 'red') is None
+            assert library.variant("cars/missing.glb", "red") is None
 
     def test_and_is_remembered_as_absent(self, library, caplog):
         with caplog.at_level(logging.WARNING):
-            library.variant('cars/missing.glb', 'red')
-            library.variant('cars/missing.glb', 'red')
+            library.variant("cars/missing.glb", "red")
+            library.variant("cars/missing.glb", "red")
         assert len(caplog.records) == 1
 
     def test_prepare_is_not_called_for_a_model_that_did_not_load(self, library):
         made = []
-        library.variant('cars/missing.glb', 'red', prepare=made.append)
+        library.variant("cars/missing.glb", "red", prepare=made.append)
         assert made == []
 
     def test_clear_drops_the_variants_too(self, library):
-        first = library.variant('cars/car.glb', 'red')
+        first = library.variant("cars/car.glb", "red")
         library.clear()
-        assert library.variant('cars/car.glb', 'red') is not first
+        assert library.variant("cars/car.glb", "red") is not first
+
+
+class TestMergingAModelIntoOneMesh:
+    """A model is often several primitives; a reduction wants one surface.
+
+    A material each, or a 16-bit index limit that split one scan into chunks of
+    65,535 vertices -- either way, decimating the pieces apart leaves a seam
+    along every join, because neither side knows the other shares its edge.
+    """
+
+    def test_one_shape_comes_back_as_itself(self):
+        shape = Shape(geometry=_quad())
+        attributes, indices = merged_mesh(shape)
+        assert attributes["POSITION"] == pytest.approx(shape.geometry.positions)
+        assert np.array_equal(indices, shape.geometry.indices)
+
+    def test_two_shapes_become_one_mesh_with_the_indices_moved_along(self):
+        group = Transform(children=[Shape(geometry=_quad()), Shape(geometry=_quad())])
+        attributes, indices = merged_mesh(group)
+        assert len(attributes["POSITION"]) == 8
+        assert len(indices) == 12
+        # The second primitive's triangles name the second primitive's vertices.
+        assert indices[:6].max() == 3
+        assert indices[6:].min() == 4
+
+    def test_a_placed_shape_arrives_where_it_is_placed(self):
+        """World space, so the pieces of a model line up the way they are drawn."""
+        group = Transform(translation=(10.0, 0.0, 0.0), children=[Shape(geometry=_quad())])
+        attributes, _indices = merged_mesh(group)
+        assert attributes["POSITION"][:, 0].min() == pytest.approx(10.0)
+
+    def test_normals_are_turned_with_the_geometry(self):
+        group = Transform(
+            rotation=(1.0, 0.0, 0.0, math.pi / 2.0), children=[Shape(geometry=_quad())]
+        )
+        attributes, _indices = merged_mesh(group)
+        # The quad's +Z normal turned a quarter turn about X points along -Y.
+        assert attributes["NORMAL"][0] == pytest.approx((0.0, -1.0, 0.0), abs=1e-6)
+        assert np.linalg.norm(attributes["NORMAL"], axis=1) == pytest.approx(1.0)
+
+    def test_a_subtree_with_no_geometry_merges_to_nothing(self):
+        assert merged_mesh(Transform(children=[])) is None
+
+    def test_a_mesh_with_no_normals_is_given_the_surface_s_own(self):
+        """A reduction needs them, and a shaded picture of the result needs them."""
+        bare = PBRMesh(
+            positions=np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0)], "f"),
+            indices=np.array([0, 1, 2], np.uint32),
+        )
+        attributes, _indices = merged_mesh(Shape(geometry=bare))
+        assert attributes["NORMAL"].shape == (3, 3)
+        assert attributes["NORMAL"][0] == pytest.approx((0.0, 0.0, 1.0), abs=1e-6)

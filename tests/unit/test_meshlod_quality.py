@@ -16,6 +16,83 @@ def _image(value, size=8):
     return np.full((size, size, 3), value, dtype=np.uint8)
 
 
+def _tetrahedron():
+    """A shape coarse enough that its own edges are several pixels apart."""
+    positions = np.asarray(
+        [(1.0, 1.0, 1.0), (1.0, -1.0, -1.0), (-1.0, 1.0, -1.0), (-1.0, -1.0, 1.0)],
+        dtype="f4",
+    )
+    indices = np.asarray([0, 1, 2, 0, 3, 1, 0, 2, 3, 1, 3, 2], dtype=np.uint32)
+    normals = positions / np.linalg.norm(positions, axis=1)[:, None]
+    return positions, normals.astype("f4"), indices
+
+
+class TestDrawingTheEdges:
+    """``edges=True`` puts the triangle structure on top of the shading.
+
+    A level of detail is a triangle count, and a picture of the shaded surface
+    says nothing about where those triangles went. Drawing the wireframe over
+    the fill is what makes a gallery of levels legible.
+    """
+
+    def test_the_edges_darken_the_inside_without_moving_the_outline(self, gl_context):
+        positions, normals, indices = _tetrahedron()
+        with quality.LODProbe(size=96) as probe:
+            plain = probe.render(positions, normals, indices, 4.0, 1.8, (0.0, 0.0, 0.0))
+            wired = probe.render(positions, normals, indices, 4.0, 1.8, (0.0, 0.0, 0.0), edges=True)
+        covered = quality.silhouette(plain)
+        assert np.any(covered), "the probe drew nothing to put edges on"
+        # The edges are drawn on the object, not around it: every pixel the
+        # shaded render covers is still covered, and the only pixels gained are
+        # the rim a rasterised line puts half outside the triangle it bounds.
+        gained = quality.silhouette(wired) & ~covered
+        assert np.all(quality.silhouette(wired)[covered])
+        assert np.count_nonzero(gained) < 0.1 * np.count_nonzero(covered)
+        # And inside it, the wireframe can only take light away.
+        assert int(wired[covered].sum()) < int(plain[covered].sum())
+
+    def test_a_plain_render_is_unchanged_by_the_option_existing(self, gl_context):
+        positions, normals, indices = _tetrahedron()
+        with quality.LODProbe(size=64) as probe:
+            once = probe.render(positions, normals, indices, 4.0, 1.8, (0.0, 0.0, 0.0))
+            again = probe.render(
+                positions, normals, indices, 4.0, 1.8, (0.0, 0.0, 0.0), edges=False
+            )
+        assert np.array_equal(once, again)
+
+
+class TestWhatALevelCostsToDraw:
+    """A level's triangle count is not what a renderer pays; drawing it is."""
+
+    def test_it_reports_what_it_drew(self, gl_context):
+        positions, normals, indices = _tetrahedron()
+        with quality.LODProbe(size=64) as probe:
+            cost = probe.frame_cost(
+                positions, normals, indices, 4.0, 1.8, (0.0, 0.0, 0.0), frames=8, warmup=2
+            )
+        assert cost.frames == 8
+        assert cost.triangles == len(indices) // 3
+        assert cost.median_ms > 0.0
+        assert cost.fps == pytest.approx(1000.0 / cost.median_ms)
+
+    def test_it_leaves_the_picture_the_plain_render_would_have(self, gl_context):
+        """The number comes from drawing the mesh, not from counting it."""
+        positions, normals, indices = _tetrahedron()
+        with quality.LODProbe(size=64) as probe:
+            wanted = probe.render(positions, normals, indices, 4.0, 1.8, (0.0, 0.0, 0.0))
+            probe.frame_cost(
+                positions, normals, indices, 4.0, 1.8, (0.0, 0.0, 0.0), frames=4, warmup=1
+            )
+            drawn = probe.read()
+        assert np.array_equal(drawn, wanted)
+
+    def test_it_refuses_to_measure_nothing(self, gl_context):
+        positions, normals, indices = _tetrahedron()
+        with quality.LODProbe(size=32) as probe:
+            with pytest.raises(ValueError, match="frames"):
+                probe.frame_cost(positions, normals, indices, 4.0, 1.8, (0.0, 0.0, 0.0), frames=0)
+
+
 class TestSilhouette:
     def test_the_background_is_not_the_object(self):
         picture = _image(0)
@@ -84,7 +161,7 @@ class TestSafeDistance:
 
     def test_a_level_bad_everywhere_is_never_safe(self):
         found = quality.safe_distance(self.DISTANCES, [0.9] * 5, budget=0.02)
-        assert found == float('inf')
+        assert found == float("inf")
 
     def test_a_flat_run_takes_the_further_sample(self):
         found = quality.safe_distance([1.0, 2.0], [0.02, 0.02], budget=0.02)
@@ -93,20 +170,20 @@ class TestSafeDistance:
 
 class TestBoundingSphere:
     def test_it_holds_every_point(self):
-        points = np.asarray([(-1.0, 0, 0), (3.0, 0, 0), (0, 2.0, 0)], dtype='f4')
+        points = np.asarray([(-1.0, 0, 0), (3.0, 0, 0), (0, 2.0, 0)], dtype="f4")
         centre, radius = meshchain.bounding_sphere(points)
         assert np.all(np.linalg.norm(points - centre, axis=1) <= radius + 1e-6)
 
     def test_a_dense_side_does_not_drag_the_centre(self):
         """Box centre, not point average: a lopsided sampling must not tilt it."""
-        crowd = np.zeros((500, 3), dtype='f4')
+        crowd = np.zeros((500, 3), dtype="f4")
         crowd[:, 0] = -1.0
-        points = np.concatenate([crowd, np.asarray([(1.0, 0, 0)], dtype='f4')])
+        points = np.concatenate([crowd, np.asarray([(1.0, 0, 0)], dtype="f4")])
         centre, _radius = meshchain.bounding_sphere(points)
         assert centre[0] == pytest.approx(0.0)
 
     def test_an_empty_mesh_has_no_extent(self):
-        centre, radius = meshchain.bounding_sphere(np.zeros((0, 3), dtype='f4'))
+        centre, radius = meshchain.bounding_sphere(np.zeros((0, 3), dtype="f4"))
         assert radius == 0.0
         assert np.all(centre == 0.0)
 
@@ -136,7 +213,7 @@ class TestSafeDistanceIsNotFooledByTheNearField:
     def test_a_single_bad_sample_far_out_still_counts(self):
         """Something wrong at distance is wrong however good the near field is."""
         pops = [0.0, 0.0, 0.0, 0.0, 0.0, 0.9]
-        assert quality.safe_distance(self.DISTANCES, pops, budget=0.02) == float('inf')
+        assert quality.safe_distance(self.DISTANCES, pops, budget=0.02) == float("inf")
 
 
 class TestPopBreakdown:

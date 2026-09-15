@@ -26,6 +26,7 @@ to mount, ``getDEF`` finds a node by the name it was authored under,
 :func:`recolour` and :func:`brighten` paint a whole subtree, for art whose
 colour is the whole of what it says.
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,7 +40,7 @@ from OpenGLContext.loaders.gltf.transforms import _local_matrix_rv
 
 log = logging.getLogger(__name__)
 
-__all__ = ['AssetLibrary', 'bounds', 'brighten', 'recolour', 'seated', 'shapes']
+__all__ = ["AssetLibrary", "bounds", "brighten", "merged_mesh", "recolour", "seated", "shapes"]
 
 
 class AssetLibrary(object):
@@ -60,7 +61,7 @@ class AssetLibrary(object):
         self._variants: dict[Any, Optional[Any]] = {}
 
     def __repr__(self) -> str:
-        return 'AssetLibrary(%r)' % (self.root,)
+        return "AssetLibrary(%r)" % (self.root,)
 
     def path_for(self, relative: str) -> str:
         """Where a table's model name actually is on disk.
@@ -69,7 +70,7 @@ class AssetLibrary(object):
         between the parts; this is a path on the filesystem holding them, so the
         parts are rejoined with whatever separates a path here.
         """
-        return os.path.join(self.root, *relative.split('/'))
+        return os.path.join(self.root, *relative.split("/"))
 
     def load(self, relative: str) -> Optional[Any]:
         """Read one model and hand back a scene nobody else holds, or None.
@@ -80,8 +81,8 @@ class AssetLibrary(object):
         """
         try:
             return load_gltf(self.path_for(relative))
-        except Exception:                      # noqa: BLE001 - art, not rules
-            log.warning('could not load the model %s', relative, exc_info=True)
+        except Exception:  # noqa: BLE001 - art, not rules
+            log.warning("could not load the model %s", relative, exc_info=True)
             return None
 
     def shared(self, relative: str) -> Optional[Any]:
@@ -99,8 +100,9 @@ class AssetLibrary(object):
             self._shared[relative] = self.load(relative)
         return self._shared[relative]
 
-    def variant(self, relative: str, key: Any,
-                prepare: Optional[Callable[[Any], Any]] = None) -> Optional[Any]:
+    def variant(
+        self, relative: str, key: Any, prepare: Optional[Callable[[Any], Any]] = None
+    ) -> Optional[Any]:
         """One copy of a model per ``key``, prepared once and then shared.
 
         Between :meth:`shared`, which is one copy of a model as it was authored,
@@ -140,10 +142,110 @@ class AssetLibrary(object):
 
 def shapes(node: Any) -> Iterator[Any]:
     """Every ``Shape`` in a subtree, in the order it was built."""
-    if getattr(node, 'geometry', None) is not None:
+    if getattr(node, "geometry", None) is not None:
         yield node
-    for child in getattr(node, 'children', None) or ():
+    for child in getattr(node, "children", None) or ():
         yield from shapes(child)
+
+
+def merged_mesh(node: Any) -> "Optional[Tuple[dict, np.ndarray]]":
+    """A subtree's triangle meshes as one glTF-shaped mesh in world space.
+
+    Returns ``({'POSITION': (v, 3), 'NORMAL': (v, 3)}, indices)``, or None where
+    the subtree holds no triangles.
+
+    A model is rarely one primitive. It is one per material, and one per 65,535
+    vertices wherever an exporter wrote 16-bit indices -- a scan of half a
+    million triangles arrives as twenty-five pieces that happen to touch. Work
+    that asks about the *surface* rather than about the draw calls wants them
+    back together: a decimator handed the pieces separately keeps a seam along
+    every join, because neither side knows the other shares its edge.
+
+    Positions and normals are brought into world space, so the pieces line up
+    the way they are drawn. A primitive carrying no normals is given the
+    surface's own, since anything measuring or shading the result needs them.
+
+        from OpenGLContext.loaders.assets import merged_mesh
+        from OpenGLContext.loaders.gltf import load_gltf
+
+        attributes, indices = merged_mesh(load_gltf('scan.glb').group)
+    """
+    from OpenGLContext.loaders.gltf.meshes import estimate_normals
+
+    positions: list = []
+    normals: list = []
+    triangles: list = []
+    _merge(node, np.eye(4), positions, normals, triangles, (), [0])
+    if not positions:
+        return None
+    merged = np.concatenate(positions).astype("f4")
+    indices = np.concatenate(triangles).astype(np.uint32)
+    together = np.concatenate(normals) if normals else None
+    if together is None or len(together) != len(merged):
+        together = estimate_normals(merged, indices)
+    return {"POSITION": merged, "NORMAL": np.ascontiguousarray(together, dtype="f4")}, indices
+
+
+def _merge(
+    node: Any,
+    world: np.ndarray,
+    positions: list,
+    normals: list,
+    triangles: list,
+    ancestry: Tuple[int, ...],
+    offset: list,
+) -> None:
+    """Append one subtree's world-space vertices and triangles to the lists."""
+    from OpenGLContext.loaders.gltf.meshes import estimate_normals
+
+    # Cycle-detect on the path rather than globally: one mesh mounted under
+    # several transforms is several instances, and each belongs at its own.
+    if id(node) in ancestry:
+        return
+    ancestry = ancestry + (id(node),)
+    if (
+        hasattr(node, "translation")
+        or hasattr(node, "rotation")
+        or getattr(node, "_forward", None) is not None
+    ):
+        try:
+            world = np.asarray(_local_matrix_rv(node), dtype="d") @ world
+        except Exception:
+            log.warning(
+                "%r has a pose that does not resolve; merged at its parent", node, exc_info=True
+            )
+    geometry = getattr(node, "geometry", None)
+    mesh = _triangle_arrays(geometry)
+    if mesh is not None:
+        points, faces, given = mesh
+        placed = np.column_stack([points, np.ones(len(points))]) @ world
+        positions.append(placed[:, :3])
+        if given is None:
+            given = estimate_normals(points, faces)
+        # Normals are directions: the translation must not reach them, and a
+        # scaled transform would need its inverse transpose. Renormalising is
+        # what keeps a uniformly-scaled model's shading right either way.
+        turned = np.asarray(given, dtype="d") @ world[:3, :3]
+        lengths = np.linalg.norm(turned, axis=1)
+        turned[lengths > 0] /= lengths[lengths > 0][:, None]
+        normals.append(turned)
+        triangles.append(np.asarray(faces).reshape(-1) + offset[0])
+        offset[0] += len(points)
+    for child in getattr(node, "children", None) or ():
+        _merge(child, world, positions, normals, triangles, ancestry, offset)
+
+
+def _triangle_arrays(geometry: Any) -> Any:
+    """``(positions, indices, normals-or-None)`` of an indexed triangle mesh."""
+    from OpenGL.GL import GL_TRIANGLES
+
+    points = getattr(geometry, "positions", None)
+    faces = getattr(geometry, "indices", None)
+    if points is None or faces is None or not len(faces):
+        return None
+    if getattr(geometry, "draw_mode", GL_TRIANGLES) != GL_TRIANGLES:
+        return None
+    return np.asarray(points), np.asarray(faces).reshape(-1), getattr(geometry, "normals", None)
 
 
 def brighten(node: Any, glow: float) -> int:
@@ -158,11 +260,11 @@ def brighten(node: Any, glow: float) -> int:
     amount = float(glow)
     touched = 0
     for material in _materials(node):
-        own: Any = getattr(material, 'baseColor', None)
+        own: Any = getattr(material, "baseColor", None)
         if own is None:
-            own = getattr(material, 'diffuseColor', (1.0, 1.0, 1.0))
+            own = getattr(material, "diffuseColor", (1.0, 1.0, 1.0))
         lit = tuple(float(value) * amount for value in own)
-        if hasattr(material, 'emissiveColor'):
+        if hasattr(material, "emissiveColor"):
             material.emissiveColor = lit
         touched += 1
     return touched
@@ -190,8 +292,11 @@ def recolour(node: Any, colour: Sequence[float], glow: float = 0.0) -> int:
     lit = tuple(value * float(glow) for value in wanted)
     touched = 0
     for material in _materials(node):
-        for name, value in (('baseColor', wanted), ('diffuseColor', wanted),
-                            ('emissiveColor', lit)):
+        for name, value in (
+            ("baseColor", wanted),
+            ("diffuseColor", wanted),
+            ("emissiveColor", lit),
+        ):
             if hasattr(material, name):
                 setattr(material, name, value)
         touched += 1
@@ -216,7 +321,7 @@ def bounds(node: Any) -> "Optional[Tuple[np.ndarray, np.ndarray]]":
     _measure(node, np.eye(4), boxes)
     if not boxes:
         return None
-    stacked = np.asarray(boxes, dtype='d')
+    stacked = np.asarray(boxes, dtype="d")
     return stacked[:, 0].min(axis=0), stacked[:, 1].max(axis=0)
 
 
@@ -245,6 +350,7 @@ def seated(node: Any, sink: float = 0.0) -> Any:
         return node
     lift = -float(measured[0][1]) - float(sink)
     from OpenGLContext.scenegraph.transform import Transform
+
     return Transform(translation=[0.0, lift, 0.0], children=[node])
 
 
@@ -252,13 +358,16 @@ def _measure(node: Any, parent: np.ndarray, boxes: list) -> None:
     """Accumulate one subtree's world-space boxes into ``boxes``."""
     # Row-vector convention, as the renderer and the glTF loader both use:
     # p_world = p_local @ local @ parent.
-    world = (_local_matrix_rv(node) @ parent
-             if getattr(node, 'translation', None) is not None else parent)
-    local = _local_points(getattr(node, 'geometry', None))
+    world = (
+        _local_matrix_rv(node) @ parent
+        if getattr(node, "translation", None) is not None
+        else parent
+    )
+    local = _local_points(getattr(node, "geometry", None))
     if local is not None:
         placed = np.column_stack([local, np.ones(len(local))]) @ world
         boxes.append((placed[:, :3].min(axis=0), placed[:, :3].max(axis=0)))
-    for child in (getattr(node, 'children', None) or ()):
+    for child in getattr(node, "children", None) or ():
         _measure(child, world, boxes)
 
 
@@ -272,19 +381,19 @@ def _local_points(geometry: Any) -> "Optional[np.ndarray]":
     """
     if geometry is None:
         return None
-    points = getattr(geometry, 'positions', None)
+    points = getattr(geometry, "positions", None)
     if points is None:
-        points = getattr(getattr(geometry, 'coord', None), 'point', None)
+        points = getattr(getattr(geometry, "coord", None), "point", None)
     if points is not None and len(points):
-        return np.asarray(points, dtype='d').reshape(-1, 3)
-    volume = getattr(geometry, 'boundingVolume', None)
+        return np.asarray(points, dtype="d").reshape(-1, 3)
+    volume = getattr(geometry, "boundingVolume", None)
     if volume is None:
         return None
     try:
         # No render pass to ask, so this is only the geometry that can answer
         # from its own fields; one that needs the pass (a cache, a font) says so
         # by raising, and contributes nothing rather than stopping the measure.
-        corners = np.asarray(volume(None).getPoints(), dtype='d')
+        corners = np.asarray(volume(None).getPoints(), dtype="d")
     except Exception:
         return None
     return corners.reshape(-1, corners.shape[-1])[:, :3] if len(corners) else None
@@ -293,6 +402,6 @@ def _local_points(geometry: Any) -> "Optional[np.ndarray]":
 def _materials(node: Any) -> Iterator[Any]:
     """The material of every shape in a subtree that has one."""
     for shape in shapes(node):
-        material = getattr(getattr(shape, 'appearance', None), 'material', None)
+        material = getattr(getattr(shape, "appearance", None), "material", None)
         if material is not None:
             yield material
