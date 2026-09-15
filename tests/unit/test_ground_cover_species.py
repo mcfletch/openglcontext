@@ -106,6 +106,221 @@ class TestEachPlantHasItsOwnGround:
         assert float(cover.rung('high').cards.scales.mean()) \
             > 4 * float(cover.rung('low').cards.scales.mean())
 
+    def test_a_species_averages_the_height_it_states(self) -> None:
+        """Not most of it. A scan measured 0.4 m, so a field of them is 0.4 m
+        of plant on average -- a spread that ran from half to full would make
+        every plant in the world quietly smaller than what was scanned."""
+        cover = _cover([_species('fern', height=0.4)], card_radius=120.0)
+        cover.update((0.0, 0.0, 0.0))
+        assert float(cover.rungs[0].cards.scales.mean()) \
+            == pytest.approx(0.4, abs=0.02)
+
+    def test_plants_of_one_species_are_not_all_the_same_size(self) -> None:
+        cover = _cover([_species('fern', height=0.4)], card_radius=120.0)
+        cover.update((0.0, 0.0, 0.0))
+        assert float(cover.rungs[0].cards.scales.std()) > 0.02
+
+
+class TestThinningTheWholeFieldAtOnce:
+    """What a quality setting moves. Each species says how much of itself there
+    should be; a machine that cannot draw that much wants less of all of them,
+    in proportion, rather than a different set of plants."""
+
+    def test_it_grows_what_the_species_say_by_default(self) -> None:
+        cover = _cover(card_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        assert cover.density_scale == 1.0
+        assert len(cover.rungs[0].cards.pos)
+
+    def test_thinning_it_leaves_less_of_it(self) -> None:
+        full = _cover(card_radius=100.0)
+        full.update((0.0, 0.0, 0.0))
+        thin = _cover(card_radius=100.0)
+        thin.density_scale = 0.25
+        thin.update((0.0, 0.0, 0.0))
+        assert len(thin.rungs[0].cards.pos) \
+            < 0.4 * len(full.rungs[0].cards.pos)
+
+    def test_every_species_is_thinned_together(self) -> None:
+        """A field that dropped one plant entirely would change what the
+        ground is made of, not how much of it there is."""
+        cover = _cover([_species('grass', density=3.0),
+                        _species('fern', density=0.5)], card_radius=100.0)
+        cover.density_scale = 0.3
+        cover.update((0.0, 0.0, 0.0))
+        assert all(len(rung.cards.pos) for rung in cover.rungs)
+
+
+class TestPlantsThatGrowInPatches:
+    """Undergrowth is not evenly spread. Ferns stand in beds and shrubs in
+    thickets, with grass through and between them; a wood where every plant is
+    equally likely everywhere reads as a seeded lawn. Each species says how
+    much it clumps and how big a clump is, and the answer is a world-anchored
+    field, so a bed of nettles is in the same place every time you walk past."""
+
+    def _density_map(self, cover, name, reach=110.0, cells=11):
+        """How much of one species stands in each square of a coarse grid."""
+        cover.update((0.0, 0.0, 0.0))
+        points = cover.rung(name).cards.pos
+        edges = np.linspace(-reach, reach, cells + 1)
+        counted, _x, _z = np.histogram2d(points[:, 0], points[:, 2],
+                                         bins=[edges, edges])
+        return counted
+
+    def test_an_even_species_is_much_the_same_everywhere(self) -> None:
+        cover = _cover([_species('grass', density=3.0, patchiness=0.0)],
+                       card_radius=120.0)
+        counted = self._density_map(cover, 'grass')
+        assert counted.std() < 0.35 * counted.mean()
+
+    def test_a_patchy_species_is_thick_in_places_and_absent_in_others(self) -> None:
+        cover = _cover([_species('fern', density=3.0, patchiness=1.0,
+                                 patch_metres=40.0)], card_radius=120.0)
+        counted = self._density_map(cover, 'fern')
+        assert counted.std() > 0.9 * counted.mean()
+        assert counted.min() < 0.25 * counted.max()
+
+    def test_a_patchy_species_still_grows_about_as_much_of_itself(self) -> None:
+        """Density is plants per square metre, and it has to keep meaning that
+        or every patchy plant quietly thins the whole world out.
+
+        Counted over a stretch of country rather than one disc: beds are tens of
+        metres across, so a single disc holds few enough of them that whether it
+        happens to contain one is most of the answer. Over a walk it evens out,
+        and that is the scale the figure is a figure for.
+        """
+        def grown(patchiness):
+            cover = _cover([_species('fern', density=2.0,
+                                     patchiness=patchiness,
+                                     patch_metres=24.0)], card_radius=150.0)
+            total = 0
+            for step in range(9):              # nine discs, a kilometre apart
+                cover.update((step * 1000.0, 0.0, step * 700.0))
+                total += len(cover.rungs[0].cards.pos)
+            return total
+        assert grown(1.0) == pytest.approx(grown(0.0), rel=0.15)
+
+    def test_a_bed_is_in_the_same_place_every_time_you_pass(self) -> None:
+        cover = _cover([_species('fern', density=3.0, patchiness=1.0,
+                                 patch_metres=30.0)], card_radius=140.0)
+        cover.update((0.0, 0.0, 0.0))
+        watched = {tuple(np.round(one, 3)) for one in cover.rungs[0].cards.pos
+                   if abs(one[0]) < 25.0 and abs(one[2]) < 25.0}
+        cover.update((70.0, 0.0, 0.0))
+        after = {tuple(np.round(one, 3)) for one in cover.rungs[0].cards.pos}
+        assert watched and watched <= after
+
+    def test_two_species_do_not_cluster_in_the_same_places(self) -> None:
+        """Or the wood would have bare ground and one heap of everything."""
+        cover = _cover([_species('fern', density=3.0, patchiness=1.0,
+                                 patch_metres=40.0),
+                        _species('nettle', density=3.0, patchiness=1.0,
+                                 patch_metres=40.0)], card_radius=120.0)
+        fern = self._density_map(cover, 'fern').ravel()
+        nettle = self._density_map(cover, 'nettle').ravel()
+        agreement = np.corrcoef(fern, nettle)[0, 1]
+        assert abs(agreement) < 0.5
+
+    def test_a_bigger_patch_size_makes_bigger_beds(self) -> None:
+        small = _cover([_species('fern', density=3.0, patchiness=1.0,
+                                 patch_metres=12.0)], card_radius=120.0)
+        large = _cover([_species('fern', density=3.0, patchiness=1.0,
+                                 patch_metres=60.0)], card_radius=120.0)
+        # Over a coarse grid, small beds average out within a square and large
+        # ones do not, so the coarse map of the large one varies more.
+        assert self._density_map(large, 'fern').std() \
+            > self._density_map(small, 'fern').std()
+
+    def test_patchiness_still_stops_where_the_ground_says_no(self) -> None:
+        """A bed of ferns does not grow through the mask that keeps cover off
+        the rock and out of the road."""
+        def nothing_west(x, z):
+            return np.where(np.asarray(x, 'd') < 0.0, 0.0, 1.0)
+        cover = _cover([_species('fern', density=3.0, patchiness=1.0)],
+                       card_radius=120.0, mask=nothing_west)
+        cover.update((0.0, 0.0, 0.0))
+        assert float(cover.rungs[0].cards.pos[:, 0].min()) > -2.0
+
+
+class TestWhatGrowsUnderTheTreesAndWhatDoesNot:
+    """A wood is not equally green all through. Under a closed canopy there is
+    almost nothing on the floor; where the trees stand apart, and along the
+    edges of clearings, scrub and shrubs take over. The terrain works out how
+    much tree cover stands over each patch of ground, so a species says what
+    band of that it grows under and the wood arranges itself."""
+
+    def _stand(self, west=1.2, east=0.15):
+        """Closed canopy on the west side, a thin scatter on the east."""
+        def at(x, z):
+            return np.where(np.asarray(x, 'd') < 0.0, west, east)
+        return at
+
+    def _edges(self):
+        """Closed canopy fading out to open ground, west to east."""
+        def at(x, z):
+            return np.clip((100.0 - np.asarray(x, 'd')) / 200.0, 0.0, 1.0)
+        return at
+
+    def test_a_shade_plant_keeps_out_of_the_open(self) -> None:
+        cover = _cover([_species('fern', density=3.0, canopy=(0.6, 1.6))],
+                       card_radius=120.0, canopy=self._stand())
+        cover.update((0.0, 0.0, 0.0))
+        points = cover.rungs[0].cards.pos
+        assert len(points)
+        assert float((points[:, 0] > 5.0).mean()) < 0.05
+
+    def test_a_shrub_keeps_out_of_a_closed_stand(self) -> None:
+        """Where the trees are dense the shrubs will not grow."""
+        cover = _cover([_species('shrub', density=3.0, canopy=(0.05, 0.6))],
+                       card_radius=120.0, canopy=self._stand())
+        cover.update((0.0, 0.0, 0.0))
+        points = cover.rungs[0].cards.pos
+        assert len(points)
+        assert float((points[:, 0] < -5.0).mean()) < 0.05
+
+    def test_a_shrub_is_thickest_where_the_trees_thin_out(self) -> None:
+        """The transition, which is where scrub actually grows: a band that
+        stops short of bare ground peaks at the edge rather than in the open."""
+        cover = _cover([_species('shrub', density=4.0, canopy=(0.15, 0.7))],
+                       card_radius=140.0, canopy=self._edges())
+        cover.update((0.0, 0.0, 0.0))
+        across = cover.rungs[0].cards.pos[:, 0]
+        under = int((across < -70.0).sum())          # closed canopy
+        margin = int((np.abs(across) < 30.0).sum())  # the thinning edge
+        open_ground = int((across > 70.0).sum())
+        assert margin > 3 * under
+        assert margin > open_ground
+
+    def test_a_straggler_at_the_edge_of_its_cover_is_a_small_one(self) -> None:
+        """Rather than a full-sized shrub that happens to be standing there."""
+        cover = _cover([_species('shrub', density=6.0, height=1.0,
+                                 canopy=(0.15, 0.7))],
+                       card_radius=140.0, canopy=self._edges())
+        cover.update((0.0, 0.0, 0.0))
+        points = cover.rungs[0].cards.pos
+        scales = cover.rungs[0].cards.scales
+        # cover runs (100 - x) / 200, so the middle of the (0.15, 0.7) band is
+        # around x = 15 and its lower edge around x = 60.
+        best = scales[np.abs(points[:, 0] - 15.0) < 15.0]
+        edge = scales[(points[:, 0] > 48.0) & (points[:, 0] < 64.0)]
+        assert len(best) and len(edge)
+        assert float(best.mean()) > float(edge.mean())
+
+    def test_a_plant_with_no_preference_grows_anywhere(self) -> None:
+        cover = _cover([_species('grass', density=3.0)], card_radius=120.0,
+                       canopy=self._stand())
+        cover.update((0.0, 0.0, 0.0))
+        across = cover.rungs[0].cards.pos[:, 0]
+        assert (across < -20.0).any() and (across > 20.0).any()
+
+    def test_a_preference_needs_ground_that_knows_about_its_trees(self) -> None:
+        """With no closure to read, a band cannot be honoured, and a wood with
+        no cover at all is worse than one that ignores the preference."""
+        cover = _cover([_species('shrub', density=3.0, canopy=(0.05, 0.6))],
+                       card_radius=120.0)
+        cover.update((0.0, 0.0, 0.0))
+        assert len(cover.rungs[0].cards.pos)
+
 
 class TestTheCardsBeyondTheGeometry:
     def test_the_far_field_reaches_further_than_the_near_one(self) -> None:
@@ -192,6 +407,26 @@ class TestTheGeometryNearTheCamera:
         drawn = cover.rungs[0].clumps_near._instance_rows()
         assert float(np.hypot(drawn[:, 0] - 5.0, drawn[:, 2]).max()) \
             <= 30.0 * CLUMP_LOD_FRAC + 1.0            # ...yet centred on the camera
+
+    def test_walking_does_not_make_the_field_pulse(self, tmp_path) -> None:
+        """The property the cache and the per-frame re-centring exist for.
+
+        A disc re-scattered only every so often, and drawn where it was
+        scattered, thins out ahead of the walker and fills back in at each
+        re-scatter -- which reads as the mid-distance cover pulsing in density
+        as you walk. Re-centring what is *drawn* on the live camera every frame
+        is what removes it, so the count in a band ahead holds steady across
+        several re-scatter boundaries."""
+        cover = self._clumped(tmp_path, card_radius=90.0)
+        counted = []
+        for step in np.arange(0.0, 36.0, 1.0):    # across three re-scatters
+            cover.update((0.0, 0.0, float(step)))
+            drawn = cover.rungs[0].clumps_far._instance_rows()
+            ahead = drawn[:, 2] - step
+            counted.append(int(((ahead > 18.0) & (ahead < 28.0)).sum()))
+        counted = np.asarray(counted)
+        assert counted.mean() > 0
+        assert np.abs(np.diff(counted)).max() < 0.35 * counted.mean()
 
     def test_retuning_moves_the_fade_windows_with_the_radius(self, tmp_path) -> None:
         cover = self._clumped(tmp_path)

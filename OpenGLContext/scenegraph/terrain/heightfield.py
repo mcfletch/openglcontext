@@ -250,6 +250,49 @@ class HeightField:
             occ = np.maximum(occ, shifted - (hm + d * tan_elev))
         return (1.0 - strength * np.clip(occ / softness, 0, 1)).astype(np.float32)
 
+    def canopy_density(self, tree_pos: np.ndarray, resolution: int,
+                       sun: "np.ndarray | tuple[float, float, float] | None" = None,
+                       spread: float = 7.0, crown: float = 8.0) -> np.ndarray:
+        """How closed the canopy is over each cell: 0 open, 1 a crown deep.
+
+        A tree covers the ground its *crown* covers, not the cell its trunk
+        stands in, so each one is spread over ``crown`` metres and the total
+        scaled so that one tree per crown-area reads as 1. That is what makes
+        the figure mean the same thing at any grid resolution and any planting
+        density.
+
+        Unclamped, and that is the point: past a certain density more trees
+        cannot take any more light, so :meth:`canopy_shadow` stops
+        distinguishing a stand with gaps in it from a closed one. Both are dark.
+        They are not the same place to *stand* in, though -- one has room for
+        shrubs and the other does not -- so what grows on a forest floor is
+        decided from this rather than from the shade.
+
+        With a ``sun`` the cover is offset toward it by ``spread``, which is
+        where a tree's shade falls; without one it sits over the trunks, which
+        is where the tree itself is.
+        """
+        offset = np.zeros(2)
+        if sun is not None:
+            toward = -np.asarray(sun, float)
+            flat = math.hypot(toward[0], toward[2])
+            offset = (-toward[[0, 2]] / max(flat, 1e-3)) * spread
+        extent = self.extent
+        x = np.asarray(tree_pos, float)[:, 0] + offset[0]
+        z = np.asarray(tree_pos, float)[:, 2] + offset[1]
+        cx = np.clip((x + extent / 2) / extent * (resolution - 1),
+                     0, resolution - 1).astype(int)
+        cz = np.clip((z + extent / 2) / extent * (resolution - 1),
+                     0, resolution - 1).astype(int)
+        counted = np.zeros((resolution, resolution), np.float32)
+        np.add.at(counted, (cz, cx), 1.0)
+        # Blurred as floats. Through an 8-bit image the count is clipped before
+        # it is spread, which flattens exactly the peaks the shade is made of.
+        radius = max(crown / 2.0 / (extent / (resolution - 1)), 0.5)
+        spread_out: np.ndarray = (_blurred(counted, radius)
+                                  * (2.0 * math.pi * radius * radius))
+        return spread_out
+
     def canopy_shadow(self, lit: np.ndarray, tree_pos: np.ndarray,
                       sun: "np.ndarray | tuple[float, float, float]",
                       spread: float = 7.0, crown: float = 8.0,
@@ -258,30 +301,11 @@ class HeightField:
 
         ``tree_pos`` is an (N, 3) array of trunk world positions, offset toward
         the sun by ``spread`` because a tree shades along the light rather than
-        straight down.
-
-        A tree shades the ground its *crown* covers, not the cell its trunk
-        stands in, so each one is spread over ``crown`` metres and the total is
-        scaled so that one tree per crown-area is a closed canopy. That is what
-        makes the figure mean something at any grid resolution and any planting
-        density: ``darken`` is then how hard a closed canopy darkens the ground
-        and ``cap`` the most of the light it may take.
+        straight down. How much cover there is over each cell is
+        :meth:`canopy_density`; ``darken`` is how hard a closed canopy darkens
+        the ground and ``cap`` the most of the light it may take.
         """
-        SR = lit.shape[0]
-        ts = -np.asarray(sun, float)
-        hn = math.hypot(ts[0], ts[2])
-        off = (-ts[[0, 2]] / max(hn, 1e-3)) * spread
-        E = self.extent
-        sx = np.asarray(tree_pos, float)[:, 0] + off[0]
-        sz = np.asarray(tree_pos, float)[:, 2] + off[1]
-        gx = np.clip((sx + E / 2) / E * (SR - 1), 0, SR - 1).astype(int)
-        gz = np.clip((sz + E / 2) / E * (SR - 1), 0, SR - 1).astype(int)
-        dens = np.zeros((SR, SR), np.float32)
-        np.add.at(dens, (gz, gx), 1.0)
-        # Blurred as floats. Through an 8-bit image the count is clipped before
-        # it is spread, which flattens exactly the peaks the shade is made of.
-        radius = max(crown / 2.0 / (E / (SR - 1)), 0.5)
-        dens = _blurred(dens, radius) * (2.0 * math.pi * radius * radius)
+        dens = self.canopy_density(tree_pos, lit.shape[0], sun, spread, crown)
         shaded: np.ndarray = (
             lit * (1.0 - np.clip(dens * darken, 0, cap))).astype(np.float32)
         return shaded

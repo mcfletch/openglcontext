@@ -1,118 +1,126 @@
 # Ground cover diversity
 
-**Status: in progress.**
+**Status: landed, less the release upload.**
 
-One kind of grass is what the forest floor is made of today. `GroundCover` takes
-a single `CoverSpecies`, and the forest demo does not use it at all — it builds
-its own richer chain in `scene.py`. This plan makes ground cover a *set* of
-plants, moves the demo's chain into the engine so a baked world gets it too, and
-brings in a set of CC0 scanned plants to fill it.
+One kind of grass is what the forest floor was made of. `GroundCover` took a
+single `CoverSpecies`, and the forest demo did not use it at all — it built its
+own richer chain in `scene.py`. This made ground cover a *set* of plants, moved
+the demo's chain into the engine so a baked world gets it too, and brought in CC0
+scanned plants to fill it.
 
-## Where the pieces are now
+## Where the pieces were
 
-Two chains draw the same thing at different qualities.
+Two chains drew the same thing at different qualities.
 
-`GroundCover` (`scenegraph/vegetation/cover.py`) is the engine's: one species,
-one clump-geometry rung, one card disc, re-scattered when the camera has moved
-`SETTLED_METRES`. `TilesTerrain._mount_cover` builds one from a baked world's
-`cover` record, so glisteel and anything else driving a streamed world gets this
-one.
+`GroundCover` (`scenegraph/vegetation/cover.py`) was the engine's: one species,
+one clump-geometry rung, one card disc. `TilesTerrain._mount_cover` builds one
+from a baked world's `cover` record, so glisteel and anything else driving a
+streamed world got that one.
 
-The forest demo's (`openglcontext_forest_demo/scene.py`) is better, and is not
-reusable by anything:
+The forest demo's was better, and no game could reach it: two geometry rungs, two
+card discs, a cached scatter re-selected against the live camera every frame, and
+live retuning for the quality presets. Engine work sitting where no test could
+put it under a microscope either.
 
-- **two** geometry rungs — full detail to `CLUMP_LOD_FRAC * radius`, a coarser
-  mesh to `radius` — so the outer four fifths of the disc, which is most of the
-  instances, costs a fifth of the triangles;
-- **two** card discs — a mid one fading in exactly where the clumps fade out, and
-  a coarse far one out to `grass_far_radius`;
-- a cached scatter over a disc wider than the drawn one, with the drawn subsets
-  re-selected against the *live* camera every frame, so the disc never lags the
-  walk;
-- live retuning of every radius and density, which is what the quality presets
-  move.
+## What landed
 
-A demo carrying that is the wrong way round: it is engine work sitting where no
-game can reach it, and where no test can either.
+### The engine
 
-## What is built
+**`world_grid_scatter` gained a `salt`**, mixed into the cell hash, so each
+species scatters on its own world-anchored grid at its own density and no two
+contend for a cell. And a `scale_range`, because the old half-to-full spread
+meant a species stating 0.4 m averaged 0.28 m — every plant in the world quietly
+smaller than the model it was scanned from.
 
-### 1. A scatter stream per species
+**`Patches`** turns a species into beds. `patchiness` runs 0 (as likely here as
+anywhere) to 1 (thickets with bare ground between) and `patch_metres` is how far
+across one is, over a smooth world-anchored field (`world_noise`) so a bed of
+nettles is in the same place every time you walk past. Density keeps meaning
+plants per square metre: a mask can only *remove* plants, so a patchy species is
+scattered on a finer grid and thinned back rather than simply reduced.
 
-`world_grid_scatter` gains a `salt`, mixed into the cell hash. Each species then
-scatters on its own world-anchored grid at its own density — sparse ferns on a
-coarse grid, dense grass on a fine one — and no two species contend for a cell.
-Determinism and the pop-free property are per species exactly as they were.
+**`SplatTerrain.closure` / `canopy_cover`** — how closed the canopy is, 0 open
+and 1 a crown deep, *unclamped*. The shading is clamped at `canopy_deepest`, so
+past that a stand with gaps in it and a closed one are equally dark; they are not
+equally full, and which of the two you are standing in is what decides whether
+shrubs grow. `HeightField.canopy_density` is the half of `canopy_shadow` that
+already computed it.
 
-The alternative, one scatter partitioned by a per-instance species hash, ties
-every species to one grid spacing and makes density a share rather than a figure
-in plants per square metre. The cost is the same either way: the cells are the
-same cells, divided differently.
+**`CoverSpecies`** gained `clump_mesh`/`clump_far_mesh` (which mesh of a file is
+which rung), `card_width`, `sun_level`, `patchiness`, `patch_metres` and
+`canopy` — the band of tree cover the plant grows under. A plant near the edge of
+its band grows, but smaller (`STRAGGLER`).
 
-### 2. `CoverSpecies` says what a plant is, at both rungs
+**`GroundCover`** takes a sequence and owns the whole chain: two geometry rungs
+and two card discs per species, the wide cache with per-frame re-selection, a
+`retune` for the quality presets, a `density_scale` over the whole set, and the
+`compute_*`/`apply_*` split so the scatter can run off the render thread. A
+single species is still accepted and means a set of one.
 
-Added: `clump_far` (the coarse geometry rung), `card_width`, `sun_level`, and
-`source_height` — the real height of the plant the model was scanned from, in
-metres, so a species' default size is the plant's own rather than a guess.
+`load_clump_glb` gained a `mesh` selector, by index or name.
 
-### 3. `GroundCover` takes a sequence and owns the whole chain
+### The bake
 
-The demo's chain, moved: two geometry rungs and two card discs per species, the
-wide cache with per-frame re-selection, and a `retune` for the quality presets.
-`GroundCover(field, species)` accepts one species or many; a world record carries
-a list.
+`OpenGLContext_editor.assets` — authoring, so it lives in the editor toolkit —
+with `oglc-bake-plants` over it. Four facts shaped it:
 
-`scene.py` then constructs one and streams it, and glisteel inherits both the
-diversity and the better LOD through `TilesTerrain`.
+- **The glTF download has no alpha.** The base colour is a JPEG and these plants
+  are alpha-cut cards; the mask ships as its own map (`Alpha`, `opacity` or
+  `Mask`, per asset), and is merged back in.
+- **One file is often several plants.** `fern_02` is four fern clumps in four
+  nodes — four variants for one download. `--per-asset` keeps the fullest few,
+  by triangle count: the *tallest* tufts of a published grass are its leggy seed
+  stalks, which is the one thing a card cannot show.
+- **Triangle counts are authored for a render.** `opengl_decimate` brings them to
+  a field's budget, in one reduction read off at both rungs. Border preservation
+  is what keeps an alpha card's silhouette.
+- **The texture must not be baked in twice.** One `.glb` per source asset holds
+  every variant and rung against one embedded image.
 
-### 4. Baking a scanned plant into a clump
+The billboard is rendered from the geometry itself, so the two agree across the
+distance where they cross-fade, and the card is cut to the plant's own aspect
+rather than squeezed into a square.
 
-[Poly Haven](https://polyhaven.com/) publishes scanned plants as glTF under
-**CC0**, which is compatible with the BSD terms everything here ships under and
-carries no attribution requirement. Credit is given anyway, in
-`ASSET-LICENSES.md`, in the pack's `copyright`, and in `CREDITS.txt`.
+**Downloads and the library's own answers are cached per user**
+(`OPENGLCONTEXT_POLYHAVEN`, beside the rest of OpenGLContext's cached assets), so
+a re-bake and a second world wanting the same plant ask Poly Haven for nothing.
 
-`OpenGLContext_editor.assets` fetches and bakes them. It is authoring, so it
-lives in the editor toolkit: an editor imports it, a shipped game does not.
+### The plants
 
-Four facts decide the shape of the bake:
+Six, all CC0, from Poly Haven: `grass_medium_01` and `grass_medium_02` (the
+carpet, even), `periwinkle_plant` (flowers through the grass), `fern_02` (beds,
+in shade), `nettle_plant` (beds, in the thinner cover) and `shrub_04` (thickets,
+where the trees stand apart and along the edges of clearings).
 
-- **The glTF download has no alpha.** Its base colour is a JPEG, and these plants
-  are alpha-cut cards. The mask is published beside the model as its own map
-  (`Alpha`, or `opacity`, or `Mask`, depending on the asset), so the bake merges
-  it into the base colour and writes one RGBA cutout texture.
-- **One file can hold several plants.** `fern_02` is four fern clumps as four
-  nodes — four variants for the price of one download.
-- **Triangle counts are authored for a render, not a field.** `shrub_04` is
-  27,000 triangles for one shrub against the ~500 the shipped clump runs at, so
-  the bake decimates with `opengl_decimate`, whose border preservation is what
-  keeps an alpha card's silhouette. A bake-time dependency only: nothing
-  decimates at runtime.
-- **The texture must not be baked in twice.** A 1k RGBA texture is about a
-  megabyte, and a variant-and-LOD per file would carry it eight times over. One
-  `.glb` per source asset holds every variant and rung against one embedded
-  image, and `load_clump_glb` gains a `mesh` selector to choose among them.
+`shrub_01` is deliberately left out. It is a 2.6 m hedge strip — 156,000
+triangles of separate leaf islands — and at a field's budget the decimator
+removes whole leaves and leaves bare twigs. Even at full detail it covers 5% of
+its card, because it is a strip rather than a clump. `dead_tree_trunk_02` is left
+out as well: a four-metre fallen log is scenery, not cover, and a camera-facing
+card is the wrong far rung for something that long. Both want the prop path,
+which is its own piece of work.
 
-### 5. The plants
+### The demo and the worlds
 
-Seven, from the Poly Haven pine-forest collection: `grass_medium_01`,
-`grass_medium_02`, `shrub_01`, `shrub_04`, `fern_02` (four variants),
-`nettle_plant` and `periwinkle_plant`.
+`scene.py` constructs one `GroundCover` and streams it; `quality.py` moves
+`density_scale` and the three radii through it. The dead config knobs went with
+the chain they drove (`clump_density`, `clump_scale`, `grass_mid_*`,
+`grass_sun`, `*_length_samples`), replaced by `--cover-density` and
+`--grass-card-radius`.
 
-`dead_tree_trunk_02` is deliberately left out. It is a four-metre fallen log —
-scenery, not cover — and a camera-facing card is the wrong far rung for something
-that long. It wants the prop or near-mesh path, which is its own piece of work.
-
-### 6. Shipping them
-
-The forest demo's art is a content pack fetched before the first frame. The
-baked cover joins it, and the pack goes to **`content-v2`**: one pack holding
-everything rather than a second to keep in step.
+`VegetationLayer.cover` takes a set and writes a `species` list;
+`TilesTerrain._mount_cover` reads either that or the bare record a world baked
+before this carries. `shipped_cover` reads the demo's `cover.json`, so a
+glisteel world gets the same plants.
 
 ## Open
 
-- The release asset for `content-v2` has to be built and uploaded to the
-  repository's releases before the catalogue entry resolves;
-  `tools/release_content.py` builds it and records the digest.
-- glisteel's own packs carry the baked cover for its worlds once the editor's
-  world bake writes the species list.
+- **The `content-v2` release asset has to be uploaded.**
+  `tools/release_content.py --tag content-v2` has built `forest-art.tar.gz`
+  (65.5 MB, sha256 `f7d7aa99d4d4…`) and written the digest into `packs.json`;
+  the file itself has to be attached to that tag on the repository before the
+  catalogue entry resolves.
+- glisteel's own packs carry the baked cover once its worlds are re-baked.
+- The `canopy` bands are in crowns deep, so they are tuned to how densely a
+  particular world was planted. The forest demo's runs 0–18. A world planted
+  differently wants its own figures.

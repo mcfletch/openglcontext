@@ -102,6 +102,38 @@ def test_scatter_outputs_within_documented_ranges():
     assert (d <= 60.0 + 1e-3).all()
 
 
+class TestHowMuchInstancesVaryInSize:
+    """A scatter of identical plants reads as a printed pattern, so every
+    instance is scaled by a hash of its own cell. What that spread is around
+    has to be the caller's, though: a species that says it is 0.4 m tall and
+    comes out averaging 0.28 m is 0.4 m of nothing."""
+
+    def test_the_default_spread_is_the_one_it_always_had(self) -> None:
+        hf = flat_field()
+        scale = world_grid_scatter(0.0, 0.0, 40.0, 1.0, hf, scale_mul=2.0)[2]
+        assert scale.min() >= 1.0 - 1e-6
+        assert scale.max() <= 2.0 + 1e-6
+
+    def test_a_named_spread_is_what_comes_out(self) -> None:
+        hf = flat_field()
+        scale = world_grid_scatter(0.0, 0.0, 40.0, 1.0, hf, scale_mul=2.0,
+                                   scale_range=(0.7, 1.3))[2]
+        assert scale.min() >= 1.4 - 1e-6
+        assert scale.max() <= 2.6 + 1e-6
+
+    def test_a_spread_about_one_averages_what_was_asked_for(self) -> None:
+        hf = flat_field()
+        scale = world_grid_scatter(0.0, 0.0, 60.0, 1.0, hf, scale_mul=0.4,
+                                   scale_range=(0.7, 1.3))[2]
+        assert float(scale.mean()) == pytest.approx(0.4, abs=0.02)
+
+    def test_plants_still_vary(self) -> None:
+        hf = flat_field()
+        scale = world_grid_scatter(0.0, 0.0, 60.0, 1.0, hf, scale_mul=0.4,
+                                   scale_range=(0.7, 1.3))[2]
+        assert float(scale.std()) > 0.02
+
+
 class TestOneGridPerSpecies:
     """A salt gives each kind of plant its own world-anchored grid.
 

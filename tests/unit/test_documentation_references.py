@@ -74,6 +74,7 @@ class TestDocstringsNameModulesThatExist:
 SIBLING_COMMANDS = {
     'oglc-forest': 'openglcontext-forest-demo',
     'oglc-marble': 'openglcontext-marble-demo',
+    'oglc-bake-plants': 'openglcontext-editor',
 }
 
 #: Paths the documentation names inside a sibling package's own checkout, in a

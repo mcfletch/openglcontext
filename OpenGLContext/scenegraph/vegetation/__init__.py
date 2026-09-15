@@ -11,7 +11,9 @@
   that keeps the near geometry and the far cards fed as the camera moves.
 - :class:`GroundCover` and :class:`CoverSpecies` — what grows between them,
   scattered on a world-anchored grid around the camera and masked by the splat
-  control map, so grass stops at the verge without knowing about roads.
+  control map, so grass stops at the verge without knowing about roads. A
+  species says how much it gathers into beds (:class:`Patches`) and what light
+  it grows in, so a wood has thickets and clearings rather than a seeded lawn.
 
 :data:`LOD_NEAR`/:data:`LOD_FAR` are the shared mesh-to-impostor cross-fade window,
 driving both the near-mesh and impostor shaders so their handoff stays seamless.
@@ -26,9 +28,14 @@ from OpenGLContext.scenegraph.vegetation.cover import (
     control_weight,
 )
 from OpenGLContext.scenegraph.vegetation.field import TreeSpecies, VegetationField
-from OpenGLContext.scenegraph.vegetation.grid import world_grid_scatter
+from OpenGLContext.scenegraph.vegetation.grid import (
+    Patches,
+    world_grid_scatter,
+    world_noise,
+)
 
 __all__ = ["InstancedBillboards", "InstancedMeshLOD", "InstancedClumps",
-           "load_clump_glb", "world_grid_scatter", "LOD_NEAR", "LOD_FAR",
+           "load_clump_glb", "world_grid_scatter", "world_noise", "Patches",
+           "LOD_NEAR", "LOD_FAR",
            "TreeSpecies", "VegetationField", "CoverSpecies", "GroundCover",
            "control_weight"]

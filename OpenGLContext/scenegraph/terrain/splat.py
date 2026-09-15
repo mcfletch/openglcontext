@@ -151,6 +151,7 @@ class SplatTerrain(vnodes.PointSet):
         self.canopy_spread = float(canopy_spread)
         self._gl: Any = None
         self._shading: Any = None
+        self._closure: Any = None
         self._disabled = False
 
     @property
@@ -180,14 +181,46 @@ class SplatTerrain(vnodes.PointSet):
 
         Arrays in, array out, for a caller placing a great many things at once.
         """
-        lit = self.shading
-        size = lit.shape[0]
+        return self._sampled(self.shading, x, z)
+
+    @property
+    def closure(self) -> np.ndarray:
+        """How closed the canopy is over each cell: 0 open, 1 a crown deep.
+
+        Unclamped, unlike :attr:`shading`, which is what makes it the thing to
+        place plants by: past a certain density more trees take no more light,
+        so a stand with gaps in it and a closed one shade the floor alike. They
+        are not alike to stand in -- one has room for shrubs and the other does
+        not. See
+        :meth:`~OpenGLContext.scenegraph.terrain.heightfield.HeightField.canopy_density`.
+        """
+        if self._closure is None:
+            resolution = self.shading.shape[0]
+            self._closure = (
+                np.zeros((resolution, resolution), np.float32)
+                if self.canopy is None or not len(self.canopy)
+                else self.hf.canopy_density(self.canopy, resolution,
+                                            crown=self.canopy_crown))
+        closure: np.ndarray = self._closure
+        return closure
+
+    def canopy_cover(self, x: Any, z: Any) -> Any:
+        """How closed the canopy is over these world positions.
+
+        Arrays in, array out, like :meth:`shade`, and read the same way -- a
+        caller placing a great many plants asks once for all of them.
+        """
+        return self._sampled(self.closure, x, z)
+
+    def _sampled(self, grid: np.ndarray, x: Any, z: Any) -> Any:
+        """A grid over this terrain's extent, read at world positions."""
+        size = grid.shape[0]
         extent = self.hf.extent
         u = np.clip((np.asarray(x, 'd') + extent / 2.0) / extent * (size - 1),
                     0, size - 1).astype(int)
         v = np.clip((np.asarray(z, 'd') + extent / 2.0) / extent * (size - 1),
                     0, size - 1).astype(int)
-        return np.asarray(lit[v, u])
+        return np.asarray(grid[v, u])
 
     def _init_gl(self) -> None:
         prog = load_program("terrain_splat.vert", "terrain_splat.frag")

@@ -57,7 +57,7 @@ import numpy as np
 
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
-from OpenGLContext.scenegraph.vegetation.grid import world_grid_scatter
+from OpenGLContext.scenegraph.vegetation.grid import Patches, world_grid_scatter
 
 if TYPE_CHECKING:
     from OpenGLContext.scenegraph.terrain.heightfield import HeightField
@@ -111,6 +111,22 @@ FAR_SHARE = 0.01
 #: to resolve contributes nothing but a draw.
 FAR_SCALE = 1.5
 
+#: How far across a bed of one species is by default, in metres. Big enough to
+#: walk into and out of, small enough that a clearing holds several.
+PATCH_METRES = 26.0
+
+#: How small a plant standing where it barely belongs is, as a fraction of its
+#: full size. A shrub at the dim edge of where shrubs grow is a straggler, not a
+#: full-sized shrub that happens to be there -- so the same field that decides
+#: whether it grows at all also decides how well.
+STRAGGLER = 0.55
+
+#: How much taller and shorter than its species a plant may be. Centred on 1, so
+#: a species that says it is 0.4 m tall grows plants averaging 0.4 m: what the
+#: spread is *around* has to be the figure the species states, or every plant in
+#: the world is quietly smaller than the model it was scanned from.
+SIZE_SPREAD = (0.7, 1.3)
+
 #: How far a plant may wander from its cell, as a fraction of the cell. Over 1,
 #: so a plant may land in its neighbour's ground: kept inside its own, the set is
 #: still a grid, and from thirty metres a grid reads as diagonal rows of evenly
@@ -151,6 +167,25 @@ class CoverSpecies:
     ``density`` is plants per square metre before the mask thins it, ``height``
     how tall one is in metres, ``card_width`` how wide its card is as a fraction
     of that, and ``sun_level`` how flatly the card is lit.
+
+    **Where it grows, not just how much.** Undergrowth is not evenly spread:
+    ferns stand in beds and shrubs in thickets, with grass through and between
+    them. ``patchiness`` runs from 0 -- as likely here as anywhere, which is
+    what a grass or a small flower wants -- to 1, gathered into beds with bare
+    ground between; ``patch_metres`` is how far across one bed is.
+
+    ``canopy`` is how much tree cover the plant grows under, as a band
+    ``(least, most)`` of the terrain's own closure -- 0 on open ground, 1 with
+    a crown's worth of tree over every square metre (see
+    :meth:`~OpenGLContext.scenegraph.terrain.splat.SplatTerrain.canopy_cover`).
+    It is what puts shrubs where the trees stand apart and along the edges of
+    clearings and keeps them out of a closed stand, and what keeps a shade
+    plant off open ground. ``None`` grows anywhere. A plant near the edge of
+    its band grows, but smaller -- see :data:`STRAGGLER`.
+
+    The *closure* rather than the shade, because the shade is clamped: past a
+    certain density more trees take no more light, so a stand with gaps in it
+    and a closed one are equally dark and not at all equally full.
     """
 
     name: str
@@ -162,6 +197,9 @@ class CoverSpecies:
     height: float = COVER_HEIGHT
     card_width: float = CARD_WIDTH
     sun_level: float = CARD_SUN
+    patchiness: float = 0.0
+    patch_metres: float = PATCH_METRES
+    canopy: Optional[tuple] = None
 
     def __repr__(self) -> str:
         return 'CoverSpecies(%s)' % (self.name,)
@@ -190,7 +228,10 @@ class CoverSpecies:
                 'clumpMesh': self.clump_mesh,
                 'clumpFarMesh': self.clump_far_mesh,
                 'density': self.density, 'height': self.height,
-                'cardWidth': self.card_width, 'sunLevel': self.sun_level}
+                'cardWidth': self.card_width, 'sunLevel': self.sun_level,
+                'patchiness': self.patchiness,
+                'patchMetres': self.patch_metres,
+                'canopy': None if self.canopy is None else list(self.canopy)}
 
     @classmethod
     def from_json(cls, record: Any) -> 'CoverSpecies':
@@ -202,7 +243,11 @@ class CoverSpecies:
                    density=float(record.get('density', 2.2)),
                    height=float(record.get('height', COVER_HEIGHT)),
                    card_width=float(record.get('cardWidth', CARD_WIDTH)),
-                   sun_level=float(record.get('sunLevel', CARD_SUN)))
+                   sun_level=float(record.get('sunLevel', CARD_SUN)),
+                   patchiness=float(record.get('patchiness', 0.0)),
+                   patch_metres=float(record.get('patchMetres', PATCH_METRES)),
+                   canopy=(None if record.get('canopy') is None
+                           else tuple(record['canopy'])))
 
 
 def control_weight(image: Any, wanted: Sequence[str], layers: Sequence[str],
@@ -281,6 +326,11 @@ class CoverRung:
         #: :meth:`GroundCover.select` always has plants to draw out to the full
         #: radius even once the cache's centre has fallen behind the camera.
         self.cache: Optional[tuple] = None
+        #: Where this species gathers itself, and what that costs the grid it
+        #: is scattered on -- see
+        #: :class:`~OpenGLContext.scenegraph.vegetation.grid.Patches`.
+        self.patches = Patches(species.patchiness, species.patch_metres,
+                               species.salt)
 
     @property
     def nodes(self) -> "list[Any]":
@@ -324,6 +374,10 @@ class GroundCover(Group):
     one :class:`CoverSpecies` or a sequence of them.
     ``mask(x, z) -> weight`` says where it grows; see :func:`control_weight`.
     ``shade(x, z) -> sun`` says how much of the sun reaches it, in [0, 1].
+    ``canopy(x, z) -> closure`` says how much tree cover stands over it, which
+    is what a species' own ``canopy`` band is read against -- it is how a wood
+    comes to have thickets where the trees thin out and a bare floor where they
+    do not.
 
     Call :meth:`update` once a frame with where the camera is. A caller with a
     worker thread splits that instead: :meth:`compute_near` and
@@ -339,6 +393,7 @@ class GroundCover(Group):
                  far_radius: float = FAR_RADIUS,
                  mask: Optional[Callable[[Any, Any], Any]] = None,
                  shade: Optional[Callable[[Any, Any], Any]] = None,
+                 canopy: Optional[Callable[[Any, Any], Any]] = None,
                  sun: "tuple[float, float, float]" = CLUMP_SUN,
                  **named: Any) -> None:
         super().__init__(**named)
@@ -353,9 +408,16 @@ class GroundCover(Group):
         self.far_radius = max(float(far_radius), self.card_radius)
         self.mask = mask
         self.shade = shade
+        #: How much tree cover stands over a place, which is what decides what
+        #: grows there rather than how it is lit.
+        self.canopy = canopy
         #: How many times a disc has been scattered, which is the cost a caller
         #: wondering what the cover is spending should watch.
         self.selections = 0
+        #: A multiplier on every species' density, which is what a quality
+        #: setting moves: a machine that cannot draw this much cover wants less
+        #: of all of it, in proportion, rather than a different set of plants.
+        self.density_scale = 1.0
         self.rungs = [CoverRung(one, self.clump_radius, self.card_radius,
                                 self.far_radius, sun) for one in kinds]
         # children is a VRML ChildrenTypedField descriptor that coerces a node list.
@@ -389,12 +451,42 @@ class GroundCover(Group):
 
     # -- the scatter, which is pure numpy and touches no GL --------------------
 
-    def _scatter(self, x: float, z: float, radius: float, density: float,
-                 height: float, salt: int) -> tuple:
+    def _suits(self, rung: CoverRung) -> Callable[[Any, Any], Any]:
+        """How well one species does at a place, in [0, 1].
+
+        Three things at once, because they all answer the same question and the
+        scatter can only be told once: the ground's own mask (where cover may
+        grow at all), the species' beds, and the canopy light it wants. A plant
+        scores 0 where any of them says no.
+        """
+        ground, patches = self.mask, rung.patches
+        band, closure = rung.species.canopy, self.canopy
+
+        def at(x: Any, z: Any) -> Any:
+            fit = patches.weight(x, z)
+            if ground is not None:
+                fit = fit * np.clip(np.asarray(ground(x, z), 'd'), 0.0, 1.0)
+            if band is not None and closure is not None:
+                fit = fit * _band(np.asarray(closure(x, z), 'd'), band)
+            return fit
+        return at
+
+    def _scatter(self, rung: CoverRung, x: float, z: float, radius: float,
+                 density: float, height: float) -> tuple:
         """One disc of one species, with how much sun reaches each plant."""
+        kind = rung.species
         points, yaws, scales = world_grid_scatter(
-            x, z, radius, density, self.field, scale_mul=height,
-            jitter=COVER_JITTER, mask=self.mask, salt=salt)
+            x, z, radius, rung.patches.density_for(density), self.field,
+            scale_mul=height, jitter=COVER_JITTER, mask=self._suits(rung),
+            salt=kind.salt, scale_range=SIZE_SPREAD)
+        if kind.canopy is not None and self.canopy is not None and len(points):
+            # A plant at the edge of the cover it wants is a straggler rather
+            # than a full-sized one that happens to be there.
+            fit = _band(
+                np.asarray(self.canopy(points[:, 0], points[:, 2]), 'd'),
+                kind.canopy)
+            scales = (scales * (STRAGGLER + (1.0 - STRAGGLER) * fit)
+                      ).astype('f4')
         lit = (None if self.shade is None
                else np.asarray(self.shade(points[:, 0], points[:, 2]), 'f4'))
         return points, yaws, scales, lit
@@ -410,12 +502,12 @@ class GroundCover(Group):
         out = []
         for rung in self.rungs:
             kind = rung.species
-            cards = self._scatter(x, z, self.card_radius,
-                                  kind.density * CARD_SHARE, kind.height,
-                                  kind.salt)
+            density = kind.density * self.density_scale
+            cards = self._scatter(rung, x, z, self.card_radius,
+                                  density * CARD_SHARE, kind.height)
             clumps = (None if rung.clumps_near is None else self._scatter(
-                x, z, self.clump_radius + CLUMP_STREAM_MARGIN, kind.density,
-                kind.height, kind.salt))
+                rung, x, z, self.clump_radius + CLUMP_STREAM_MARGIN, density,
+                kind.height))
             out.append((cards, clumps))
         return out
 
@@ -428,10 +520,11 @@ class GroundCover(Group):
 
     def compute_far(self, x: float, z: float) -> list:
         """Scatter the coarse field that runs out to the haze. No GL."""
-        return [self._scatter(x, z, self.far_radius,
-                              rung.species.density * FAR_SHARE,
-                              rung.species.height * FAR_SCALE,
-                              rung.species.salt) for rung in self.rungs]
+        return [self._scatter(rung, x, z, self.far_radius,
+                              rung.species.density * self.density_scale
+                              * FAR_SHARE,
+                              rung.species.height * FAR_SCALE)
+                for rung in self.rungs]
 
     def apply_far(self, payload: list) -> None:
         """Stage what :meth:`compute_far` produced. Render thread."""
@@ -486,6 +579,22 @@ class GroundCover(Group):
             self._far_at = at.copy()
             self.apply_far(self.compute_far(x, z))
         self.select(x, z)
+
+
+def _band(value: Any, limits: Any) -> Any:
+    """How far inside ``(low, high)`` a value is, in [0, 1], with soft edges.
+
+    1 across the middle of the band and falling to 0 at each end over a fifth of
+    its width, so a species thins out of the light it wants rather than stopping
+    at a line -- a hard edge here would draw a contour across the wood.
+    """
+    low, high = float(limits[0]), float(limits[1])
+    edge = max((high - low) * 0.2, 1e-6)
+    value = np.asarray(value, 'd')
+    rising = np.clip((value - low) / edge, 0.0, 1.0)
+    falling = np.clip((high - value) / edge, 0.0, 1.0)
+    inside = np.minimum(rising, falling)
+    return inside * inside * (3.0 - 2.0 * inside)     # smoothstep, no crease
 
 
 def _walked(at: np.ndarray, was: Optional[np.ndarray]) -> float:

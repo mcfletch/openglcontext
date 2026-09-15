@@ -347,12 +347,25 @@ and none of those blades is a decision anybody made, so what travels is the
 recipe:</p>
 <pre>from OpenGLContext.scenegraph.vegetation import CoverSpecies
 
-forest = VegetationLayer(..., cover=CoverSpecies(
-                             name='grass', card='grass_imp.png',
-                             clump='clump.glb', density=1.6, height=0.5),
+forest = VegetationLayer(..., cover=[
+                             CoverSpecies(name='grass', card='grass_card.png',
+                                          clump='grass.glb', density=11.0,
+                                          height=0.15, patchiness=0.25),
+                             CoverSpecies(name='fern', card='fern_card.png',
+                                          clump='fern.glb', density=0.7,
+                                          height=0.43, patchiness=0.7,
+                                          canopy=(3.0, 16.0))],
                          cover_on=['grass', 'forest_floor'])</pre>
-<p>Its files are copied in like a species' are, and <code>cover_on</code> names
-the ground layers it grows on. Where each clump stands is settled by the viewer
+<p>A <em>set</em> of plants, because a forest floor is grass and fern and nettle
+and shrub rather than one plant repeated; one species on its own is still
+accepted and means a set of one. Each says how densely it grows, how much it
+gathers into beds, and what depth of tree cover it grows under &mdash; so a
+world comes out with thickets where the trees thin and a bare floor where they
+do not. <code>oglc-bake-plants</code> is what turns published scans into them;
+see <a href="vegetation.html#coverassets">where the plants come from</a>.</p>
+<p>Their files are copied in like a species' are, and a file two of them share
+&mdash; two variants baked from one scan &mdash; is copied once.
+<code>cover_on</code> names the ground layers they grow on. Where each clump stands is settled by the viewer
 as the camera moves &mdash; see
 <a href="vegetation.html#groundcover">what grows between the trees</a>. Because the
 mask is the splat control map, <strong>the control map has to be fine enough to
