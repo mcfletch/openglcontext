@@ -272,7 +272,12 @@ class TestTheGroundCoverAWorldCarries:
             'extent': 2048.0, 'base': field.base, 'relief': max(field.relief, 1.0),
             'resolution': 33, 'layers': ['grass', 'dirt'],
         }
-        if cover:
+        if cover == 'several':
+            document['extras']['vegetation']['cover'] = {
+                'on': ['grass'], 'species': [
+                    {'name': 'grass', 'card': 'blade.png', 'density': 1.5},
+                    {'name': 'fern', 'card': 'frond.png', 'density': 0.3}]}
+        elif cover:
             document['extras']['vegetation']['cover'] = {
                 'name': 'grass', 'card': 'blade.png', 'clump': None,
                 'density': 1.5, 'height': 0.5, 'on': ['grass'],
@@ -284,7 +289,18 @@ class TestTheGroundCoverAWorldCarries:
         terrain = TilesTerrain(self._covered(tmp_path), workers=1)
         try:
             assert terrain.cover is not None
-            assert terrain.cover.species.card.endswith('blade.png')
+            assert terrain.cover.species[0].card.endswith('blade.png')
+        finally:
+            terrain.shutdown()
+
+    def test_a_world_that_names_a_set_of_plants_grows_them_all(
+            self, tmp_path) -> None:
+        """A floor is grass and fern and nettle, not one plant repeated."""
+        terrain = TilesTerrain(self._covered(tmp_path, cover='several'),
+                               workers=1)
+        try:
+            assert [one.name for one in terrain.cover.species] \
+                == ['grass', 'fern']
         finally:
             terrain.shutdown()
 

@@ -1003,3 +1003,50 @@ class TestTheWallACarMeetsOnADeck:
         assert len(wall.indices) % 3 == 0
         assert len(wall.indices) > 0
         assert int(wall.indices.max()) < len(wall.positions)
+
+
+class TestABarrierHoldsACarOnTheDeck:
+    """The one thing a vehicle parapet is for, and the one thing nothing here
+    asked of it.
+
+    Every test above measures what can be *seen* past a barrier. None measures
+    whether a car can get over it -- and a car could. The solid part was
+    0.35 m, which is a footway kerb: a wheel of radius 0.33 climbs it, the body
+    goes over the railing above (which is, by design, almost entirely holes),
+    and the car ends up riding along the top of the parapet. Seen on the
+    shipped Beacon track at 69 km/h, two wheels in the air, and mired in the
+    trees a few seconds later.
+
+    A parapet that restrains a vehicle is solid to about the height of the
+    thing it is restraining. The railing above it is still holes, so what a
+    driver can see down past is unchanged in kind -- only in degree.
+    """
+
+    #: The hero car's wheel, in metres; a kerb this tall is one it drives up.
+    WHEEL = 0.33
+    #: How far up the bodywork sits, so the solid part meets the car rather
+    #: than passing under it.
+    BODY = 0.5
+
+    def test_the_solid_part_is_taller_than_a_wheel(self) -> None:
+        assert BarrierProfile().kerb > self.WHEEL
+
+    def test_and_by_enough_that_a_wheel_does_not_ride_up_it(self) -> None:
+        """Level with the axle is a ramp; the wheel has to meet a face."""
+        assert BarrierProfile().kerb >= self.WHEEL * 1.5
+
+    def test_and_it_reaches_the_bodywork(self) -> None:
+        """So a car that does climb it meets the parapet rather than floating
+        over on its floor."""
+        assert BarrierProfile().kerb >= self.BODY
+
+    def test_the_railing_still_stands_above_it(self) -> None:
+        """Solid to the waist and holes above: a wall would turn a crossing
+        into a corridor, which is the whole reason for the shape."""
+        assert not BarrierProfile().solid
+        assert BarrierProfile().height > BarrierProfile().kerb
+
+    def test_and_there_is_still_something_to_see_down_past(self) -> None:
+        """A driver's eye is about 1.2 m over the carriageway and the barrier
+        stands a metre and a half to the side."""
+        assert BarrierProfile().sightline(eye=1.2, offset=1.5) > 10.0

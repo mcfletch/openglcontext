@@ -44,10 +44,10 @@ def _cover(**named):
 
 class TestWhatItHolds:
     def test_a_card_layer_is_always_built(self) -> None:
-        assert _cover().cards is not None
+        assert _cover().rungs[0].cards is not None
 
     def test_clumps_are_built_only_when_there_is_a_clump(self) -> None:
-        assert _cover().clumps is None
+        assert _cover().rungs[0].clumps_near is None
 
     def test_the_rungs_are_its_children(self) -> None:
         assert len(_cover().children) >= 1
@@ -78,16 +78,16 @@ class TestWhereItGrows:
     def test_it_follows_the_camera(self) -> None:
         cover = _cover(card_radius=120.0)
         cover.update((0.0, 0.0, 0.0))
-        here = cover.cards.pos.copy()
+        here = cover.rungs[0].cards.pos.copy()
         cover.update((400.0, 0.0, 0.0))
-        assert float(cover.cards.pos[:, 0].mean()) \
+        assert float(cover.rungs[0].cards.pos[:, 0].mean()) \
             > float(here[:, 0].mean()) + 100.0
 
     def test_it_reaches_as_far_as_it_is_told(self) -> None:
         cover = _cover(card_radius=90.0)
         cover.update((0.0, 0.0, 0.0))
-        assert float(np.hypot(cover.cards.pos[:, 0],
-                              cover.cards.pos[:, 2]).max()) <= 91.0
+        assert float(np.hypot(cover.rungs[0].cards.pos[:, 0],
+                              cover.rungs[0].cards.pos[:, 2]).max()) <= 91.0
 
     def test_it_sits_on_the_ground(self) -> None:
         def sloping(x, z):
@@ -95,14 +95,14 @@ class TestWhereItGrows:
         field = HeightField(np.ones((33, 33)), EXTENT, 7.0)
         cover = GroundCover(field, _species(), card_radius=80.0)
         cover.update((0.0, 0.0, 0.0))
-        assert np.allclose(cover.cards.pos[:, 1], 7.0, atol=0.01)
+        assert np.allclose(cover.rungs[0].cards.pos[:, 1], 7.0, atol=0.01)
 
     def test_denser_means_more_of_it(self) -> None:
         thin = _cover(species=_species(density=0.5), card_radius=100.0)
         thick = _cover(species=_species(density=4.0), card_radius=100.0)
         thin.update((0.0, 0.0, 0.0))
         thick.update((0.0, 0.0, 0.0))
-        assert len(thick.cards.pos) > len(thin.cards.pos) * 4
+        assert len(thick.rungs[0].cards.pos) > len(thin.rungs[0].cards.pos) * 4
 
     def test_standing_still_costs_nothing(self) -> None:
         cover = _cover(card_radius=100.0)
@@ -122,10 +122,10 @@ class TestWhereItGrows:
         """World-anchored, so nothing appears or shifts as you drive past."""
         cover = _cover(card_radius=150.0)
         cover.update((0.0, 0.0, 0.0))
-        watched = {tuple(np.round(one, 3)) for one in cover.cards.pos
+        watched = {tuple(np.round(one, 3)) for one in cover.rungs[0].cards.pos
                    if abs(one[0]) < 30.0 and abs(one[2]) < 30.0}
         cover.update((60.0, 0.0, 0.0))
-        after = {tuple(np.round(one, 3)) for one in cover.cards.pos}
+        after = {tuple(np.round(one, 3)) for one in cover.rungs[0].cards.pos}
         assert watched and watched <= after
 
 
@@ -142,14 +142,14 @@ class TestWhereItDoesNot:
                               EXTENT)
         cover = _cover(card_radius=400.0, mask=mask)
         cover.update((0.0, 0.0, 0.0))
-        assert float(cover.cards.pos[:, 0].min()) > -60.0
+        assert float(cover.rungs[0].cards.pos[:, 0].min()) > -60.0
 
     def test_it_still_grows_where_the_mask_allows(self) -> None:
         mask = control_weight(self._control(), ['grass'], ['grass', 'rock'],
                               EXTENT)
         cover = _cover(card_radius=400.0, mask=mask)
         cover.update((0.0, 0.0, 0.0))
-        assert len(cover.cards.pos) > 100
+        assert len(cover.rungs[0].cards.pos) > 100
 
     def test_a_weight_is_read_by_world_position(self) -> None:
         mask = control_weight(self._control(), ['grass'], ['grass', 'rock'],
@@ -166,7 +166,7 @@ class TestWhereItDoesNot:
     def test_without_a_mask_it_grows_everywhere(self) -> None:
         cover = _cover(card_radius=200.0)
         cover.update((0.0, 0.0, 0.0))
-        assert float(cover.cards.pos[:, 0].min()) < -150.0
+        assert float(cover.rungs[0].cards.pos[:, 0].min()) < -150.0
 
 
 if __name__ == '__main__':
@@ -185,25 +185,26 @@ class TestItStandsInTheSameLightAsTheGroundDoes:
     def test_without_a_shade_it_is_all_in_full_sun(self) -> None:
         cover = _cover(card_radius=100.0)
         cover.update((0.0, 0.0, 0.0))
-        assert cover.cards.shades is None
+        assert cover.rungs[0].cards.shades is None
 
     def test_with_one_each_card_carries_its_own(self) -> None:
         cover = _cover(card_radius=100.0, shade=self._shade())
         cover.update((0.0, 0.0, 0.0))
-        assert len(cover.cards.shades) == len(cover.cards.pos)
+        assert len(cover.rungs[0].cards.shades) == len(cover.rungs[0].cards.pos)
 
     def test_the_shaded_side_is_darker(self) -> None:
         cover = _cover(card_radius=100.0, shade=self._shade())
         cover.update((0.0, 0.0, 0.0))
-        west = cover.cards.shades[cover.cards.pos[:, 0] < -10.0]
-        east = cover.cards.shades[cover.cards.pos[:, 0] > 10.0]
+        west = cover.rungs[0].cards.shades[cover.rungs[0].cards.pos[:, 0] < -10.0]
+        east = cover.rungs[0].cards.shades[cover.rungs[0].cards.pos[:, 0] > 10.0]
         assert float(west.mean()) < 0.3 < float(east.mean())
 
     def test_the_clumps_are_shaded_too(self) -> None:
         cover = _cover(card_radius=100.0, shade=self._shade())
-        cover.clumps = _Recording()
+        cover.rungs[0].clumps_near = _Recording()
+        cover.rungs[0].clumps_far = _Recording()
         cover.update((0.0, 0.0, 0.0))
-        assert cover.clumps.shades is not None
+        assert cover.rungs[0].clumps_near.shades is not None
 
 
 class _Recording:
@@ -224,7 +225,7 @@ class TestItDoesNotGrowInRows:
 
     def _spacing(self, cover):
         """How far each tuft is from its nearest neighbour."""
-        points = cover.cards.pos[:, [0, 2]]
+        points = cover.rungs[0].cards.pos[:, [0, 2]]
         near = points[np.hypot(points[:, 0], points[:, 1]) < 25.0]
         gaps = np.hypot(near[:, None, 0] - near[None, :, 0],
                         near[:, None, 1] - near[None, :, 1])
@@ -240,4 +241,4 @@ class TestItDoesNotGrowInRows:
     def test_it_still_covers_the_ground(self) -> None:
         cover = _cover(card_radius=60.0, species=_species(density=1.0))
         cover.update((0.0, 0.0, 0.0))
-        assert len(cover.cards.pos) > 2500
+        assert len(cover.rungs[0].cards.pos) > 2500

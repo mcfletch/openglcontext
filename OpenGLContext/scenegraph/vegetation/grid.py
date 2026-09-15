@@ -10,7 +10,7 @@ dissolve). Returns arrays ready for
 :meth:`~OpenGLContext.scenegraph.vegetation.billboards.InstancedBillboards.update_instances`.
 """
 import math
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional, TypeVar
 
 import numpy as np
 
@@ -32,7 +32,12 @@ _C_J = np.uint32(0x85EBCA77)
 _INV_24 = 1.0 / float(1 << 24)
 
 
-def _mix32(h: np.ndarray) -> np.ndarray:
+#: The mixer takes a whole grid of cell indices or a single seed, and gives back
+#: what it was given: one avalanche serves both.
+_Mixable = TypeVar('_Mixable', np.ndarray, np.uint32)
+
+
+def _mix32(h: _Mixable) -> _Mixable:
     """Finalize a uint32 array with the lowbias32 avalanche (murmur-style).
 
     Every input bit affects every output bit, so nearby cell indices and nearby
@@ -44,6 +49,20 @@ def _mix32(h: np.ndarray) -> np.ndarray:
     h = h * np.uint32(0x846CA68B)
     h = h ^ (h >> np.uint32(16))
     return h
+
+
+def _salted(seed: np.uint32, salt: int) -> np.uint32:
+    """``seed`` moved onto the stream ``salt`` names.
+
+    Ground cover is several species at once and each wants its own grid, so the
+    salt has to reach every stream: salting the cell index instead would move
+    all of them together and leave two species standing in each other's places.
+    The salt is avalanched before it is mixed in, so adjacent salts -- which is
+    what a species index is -- give unrelated streams. Salt 0 is the seed
+    itself, because ``_mix32(0)`` is 0: an unsalted scatter is the scatter that
+    was there before there were salts to ask for.
+    """
+    return np.uint32(seed ^ _mix32(np.uint32(salt & 0xFFFFFFFF)))
 
 
 def _cell_hash(I: np.ndarray, J: np.ndarray, seed: np.uint32) -> np.ndarray:
@@ -67,7 +86,8 @@ def _cell_hash(I: np.ndarray, J: np.ndarray, seed: np.uint32) -> np.ndarray:
 def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
                        height_field: "HeightField", scale_mul: float = 0.7,
                        jitter: float = 0.95,
-                       mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None
+                       mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
+                       salt: int = 0,
                        ) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
     """Deterministic disc of instances around ``(cx, cz)`` on a world-anchored grid.
 
@@ -86,6 +106,11 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
         its weight, decided by the cell's own deterministic hash — so grass thins where
         the weight falls and vanishes on non-grass ground, and the keep set is
         world-anchored (a cell's fate never changes as the disc recentres, no popping).
+    :param salt: which grid this is. Ground cover is several species at once, each at
+        its own density; a salt of its own gives each one an independent
+        world-anchored grid, so no two species stand in the same places and each keeps
+        the pop-free property separately. Any integer. The default is the one grid
+        there has always been.
     :returns: ``(positions Nx3 float32, yaws N float32, scales N float32)``.
     """
     s = 1.0 / math.sqrt(density)
@@ -102,7 +127,7 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
     J = Jgrid.ravel()
 
     def hsh(seed: np.uint32) -> np.ndarray:   # deterministic per-cell [0,1)
-        return _cell_hash(I, J, seed)
+        return _cell_hash(I, J, _salted(seed, salt))
     fx = hsh(_SEED_JITTER_X)
     fz = hsh(_SEED_JITTER_Z)
     px = I * s + (fx - 0.5) * s * jitter

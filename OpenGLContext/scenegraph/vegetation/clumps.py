@@ -103,19 +103,43 @@ def _decimate_ribbons(P: np.ndarray, N: np.ndarray, UV: np.ndarray, idx: np.ndar
     return (P[used], N[used], UV[used], old2new[nt].ravel().astype(np.uint32))
 
 
-def load_clump_glb(path: str, normalize_height: bool = True,
-                   length_samples: Optional[int] = None
-                   ) -> "tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, Image.Image]":
-    """Load a single-mesh ``.glb`` clump into ``(P, N, UV, idx, tex_image)``.
+def _mesh_index(meshes: "list[dict]", wanted: "int | str") -> int:
+    """Which of a file's meshes ``wanted`` names.
 
-    Extracts the first mesh's POSITION/NORMAL/TEXCOORD_0/indices and the first
-    embedded image (returned as a decoded ``PIL.Image``, so nothing is written
-    beside the asset). With
+    A name rather than a position, where the caller has one: the rungs of a
+    plant are written in whatever order the bake walked its variants, and a
+    species naming ``fern_a_far`` should not become a different plant because
+    another variant was added before it.
+    """
+    if isinstance(wanted, int):
+        return wanted
+    for index, entry in enumerate(meshes):
+        if entry.get('name') == wanted:
+            return index
+    raise KeyError(
+        "no mesh named %r; this file holds %s"
+        % (wanted, ', '.join(repr(entry.get('name')) for entry in meshes)))
+
+
+def load_clump_glb(path: str, normalize_height: bool = True,
+                   length_samples: Optional[int] = None,
+                   mesh: "int | str" = 0,
+                   ) -> "tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, Image.Image]":
+    """Load a clump mesh out of a ``.glb`` into ``(P, N, UV, idx, tex_image)``.
+
+    Extracts a mesh's POSITION/NORMAL/TEXCOORD_0/indices and the first embedded
+    image (returned as a decoded ``PIL.Image``, so nothing is written beside the
+    asset). With
     ``normalize_height`` the mesh is rescaled so it is exactly 1.0 unit tall with
     its base at ``y=0``, so a per-instance scale reads directly as blade height in
     world units. ``length_samples`` (int) decimates each blade ribbon to that many
     cross-rings for LOD headroom (see :func:`_decimate_ribbons`); ``None`` keeps the
     source tessellation.
+
+    ``mesh`` is which one to read, by index or by name. A file may hold every
+    variant of a plant and every geometry rung of each, against the one cutout
+    texture they share -- a 1k RGBA texture is about a megabyte, and a file per
+    rung would carry it over and over.
     """
     with open(path, 'rb') as fh:
         d = fh.read()
@@ -138,7 +162,7 @@ def load_clump_glb(path: str, normalize_height: bool = True,
         arr = np.frombuffer(bd, _CT[a['componentType']], a['count'] * _NC[a['type']], o)
         return arr.reshape(a['count'], _NC[a['type']])
 
-    pr = g['meshes'][0]['primitives'][0]
+    pr = g['meshes'][_mesh_index(g['meshes'], mesh)]['primitives'][0]
     P = read(pr['attributes']['POSITION']).astype(np.float32)
     N = read(pr['attributes']['NORMAL']).astype(np.float32)
     UV = read(pr['attributes']['TEXCOORD_0']).astype(np.float32)

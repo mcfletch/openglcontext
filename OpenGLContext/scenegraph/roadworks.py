@@ -80,6 +80,28 @@ class BarrierProfile:
     at eye height turns the crossing into a corridor and hides the only thing
     the structure was for. :meth:`sightline` is that as a number.
 
+    **And it has to hold a car**, which is what decides how low the kerb may
+    go. A solid part of 0.35 m looks like a parapet and restrains nothing: a
+    road wheel is 0.33 m in radius, so it climbs one at any speed, the bodywork
+    passes over a railing that is by design almost entirely holes, and the car
+    ends up riding along the top of the barrier. That is not a thought
+    experiment -- it is the shipped Beacon track at 69 km/h, two wheels in the
+    air, mired in the trees a few seconds later, and it was the whole of why
+    the autopilot could not finish a lap there.
+
+    So the solid part is waist-high on the car it restrains rather than
+    ankle-high: taller than a wheel by half again, and up to where the bodywork
+    is, so a wheel meets a face instead of a ramp. The railing above is
+    unchanged and still almost entirely holes, so what a driver sees down past
+    it changes in degree and not in kind.
+
+    **The two pull against each other and 0.5 m is where they meet**: half a
+    metre is a wheel and a half, it reaches the bodywork, and it still leaves a
+    driver in the near lane 12.7 degrees of downward view, against the twelve
+    that :class:`TestWhatADriverCanSeePastTheBarrier` asks for. There is no
+    room in that for a taller kerb, so a deck that needs a stronger parapet
+    wants a different shape rather than a bigger number here.
+
     ``rails`` is how many horizontal bars the railing has and ``rail_depth``
     how thick one is; ``post_spacing`` and ``post_width`` are the uprights
     carrying them. A ``kerb`` at or above ``height`` is a **wall**, and no
@@ -88,7 +110,7 @@ class BarrierProfile:
     """
 
     height: float = 1.1
-    kerb: float = 0.35
+    kerb: float = 0.5
     width: float = 0.28
     post_spacing: float = 2.5
     post_width: float = 0.09

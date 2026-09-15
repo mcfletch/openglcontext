@@ -102,6 +102,57 @@ def test_scatter_outputs_within_documented_ranges():
     assert (d <= 60.0 + 1e-3).all()
 
 
+class TestOneGridPerSpecies:
+    """A salt gives each kind of plant its own world-anchored grid.
+
+    Ground cover is several species at once, each at its own density. Scattering
+    them from one stream would make every species land on the same cells; a salt
+    mixed into the cell hash gives each its own, so the ferns and the grass are
+    placed independently and each keeps the pop-free property on its own.
+    """
+
+    def test_the_default_salt_places_what_it_always_placed(self) -> None:
+        """Nothing shipped moves: an unsalted scatter is the old scatter."""
+        hf = flat_field()
+        plain = world_grid_scatter(10.0, -20.0, 40.0, 1.0, hf)
+        salted = world_grid_scatter(10.0, -20.0, 40.0, 1.0, hf, salt=0)
+        for a, b in zip(plain, salted):
+            np.testing.assert_array_equal(a, b)
+
+    def test_two_species_do_not_stand_in_the_same_places(self) -> None:
+        hf = flat_field()
+        one = world_grid_scatter(0.0, 0.0, 50.0, 1.0, hf, salt=1)[0]
+        two = world_grid_scatter(0.0, 0.0, 50.0, 1.0, hf, salt=2)[0]
+        here = {(round(float(x), 4), round(float(z), 4))
+                for x, z in zip(one[:, 0], one[:, 2])}
+        there = {(round(float(x), 4), round(float(z), 4))
+                 for x, z in zip(two[:, 0], two[:, 2])}
+        assert len(here & there) < 0.02 * len(here)
+
+    def test_a_salted_scatter_is_still_world_anchored(self) -> None:
+        """The property the module exists for holds per species, not just once."""
+        hf = flat_field()
+        first = world_grid_scatter(0.0, 0.0, 60.0, 1.0, hf, salt=7)[0]
+        watched = {tuple(np.round(one, 3)) for one in first
+                   if abs(one[0]) < 20.0 and abs(one[2]) < 20.0}
+        moved = world_grid_scatter(25.0, 0.0, 60.0, 1.0, hf, salt=7)[0]
+        assert watched and watched <= {tuple(np.round(one, 3)) for one in moved}
+
+    def test_a_salted_scatter_is_as_uniform_as_an_unsalted_one(self) -> None:
+        hf = flat_field()
+        for salt in (0, 3, 2 ** 31 + 11):
+            yaw = world_grid_scatter(1e6, 1e6, 60.0, 1.0, hf, salt=salt)[1]
+            assert abs(float(yaw.mean()) - math.pi) < 0.12
+            assert len(np.unique((yaw * 10).astype(int))) >= 60
+
+    def test_a_salt_may_be_any_integer(self) -> None:
+        """Species are salted by index or by a name's hash; neither is bounded."""
+        hf = flat_field()
+        for salt in (-5, 0, 2 ** 63 - 1):
+            assert len(world_grid_scatter(0.0, 0.0, 20.0, 1.0, hf,
+                                          salt=salt)[0]) > 0
+
+
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-v"]))

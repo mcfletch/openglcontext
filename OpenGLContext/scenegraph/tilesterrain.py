@@ -197,6 +197,10 @@ class TilesTerrain(Group):
         roads, where the road's corridor is not. It is lit by the same shading
         the terrain under it carries, so a clearing and a forest floor are as
         different for the grass as they are for the ground.
+
+        A world names one kind of plant or a set of them. The set is the record
+        with a ``species`` list in it; the bare record is the one plant, which
+        is what a world baked before there were sets of them carries.
         """
         if not record or self.field is None or self.ground is None:
             return
@@ -204,7 +208,9 @@ class TilesTerrain(Group):
             CoverSpecies, GroundCover, control_weight,
         )
         beside = base_uri if fetch.is_url(base_uri) else base_uri.rstrip(os.sep)
-        species = CoverSpecies.from_json(record).beside(beside)
+        named = record.get('species')
+        species = [CoverSpecies.from_json(entry).beside(beside)
+                   for entry in (named if named is not None else [record])]
         wanted = list(record.get('on') or ())
         mask = (control_weight(self.ground.control, wanted,
                                self.ground.layers, self.field.extent)

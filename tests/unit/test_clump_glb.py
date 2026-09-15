@@ -132,5 +132,104 @@ def test_length_samples_decimates_triangles(tmp_path):
     assert len(idx_dec) % 3 == 0                    # still whole triangles
 
 
+def _many_glb_bytes(parts):
+    """Pack several named meshes against ONE embedded PNG.
+
+    What a baked plant is: every variant of it and every geometry rung, sharing
+    the one cutout texture they were all scanned from.
+    """
+    png = io.BytesIO()
+    Image.new("RGBA", (2, 2), (40, 120, 40, 255)).save(png, format="PNG")
+    png_bytes = png.getvalue()
+
+    data, views, accessors, meshes = bytearray(), [], [], []
+
+    def view(blob):
+        views.append({"buffer": 0, "byteOffset": len(data),
+                      "byteLength": len(blob)})
+        data.extend(blob)
+        while len(data) % 4:
+            data.append(0)
+        return len(views) - 1
+
+    for name, P, N, UV, idx in parts:
+        P = np.asarray(P, '<f4')
+        N = np.asarray(N, '<f4')
+        UV = np.asarray(UV, '<f4')
+        idx = np.asarray(idx, '<u4')
+        first = len(accessors)
+        for blob, kind, count in ((P.tobytes(), "VEC3", len(P)),
+                                  (N.tobytes(), "VEC3", len(N)),
+                                  (UV.tobytes(), "VEC2", len(UV))):
+            accessors.append({"bufferView": view(blob), "componentType": 5126,
+                              "count": count, "type": kind})
+        accessors.append({"bufferView": view(idx.tobytes()),
+                          "componentType": 5125, "count": len(idx),
+                          "type": "SCALAR"})
+        meshes.append({"name": name, "primitives": [{
+            "attributes": {"POSITION": first, "NORMAL": first + 1,
+                           "TEXCOORD_0": first + 2},
+            "indices": first + 3}]})
+    image_view = view(png_bytes)
+
+    gltf = {"asset": {"version": "2.0"},
+            "buffers": [{"byteLength": len(data)}], "bufferViews": views,
+            "accessors": accessors, "meshes": meshes,
+            "images": [{"bufferView": image_view, "mimeType": "image/png"}]}
+    js = json.dumps(gltf).encode("utf-8")
+    while len(js) % 4:
+        js += b' '
+    out = bytearray()
+    out += struct.pack('<III', 0x46546C67, 2,
+                       12 + 8 + len(js) + 8 + len(data))
+    out += struct.pack('<II', len(js), 0x4E4F534A) + js
+    out += struct.pack('<II', len(data), 0x004E4942) + bytes(data)
+    return bytes(out)
+
+
+class TestOneFileHoldsEveryRungOfAPlant:
+    """A baked plant is several meshes against one texture.
+
+    A 1k cutout texture is about a megabyte; a file per variant and rung would
+    carry it over and over. So the variants and the near/far rungs live in one
+    file and are chosen by name or by index.
+    """
+
+    def _plant(self, tmp_path):
+        near = _two_blades()
+        coarse = _ribbon(n_rings=3)
+        path = tmp_path / "fern.glb"
+        path.write_bytes(_many_glb_bytes([
+            ("fern_a_near", *near), ("fern_a_far", *coarse)]))
+        return str(path)
+
+    def test_the_first_mesh_is_what_it_reads_by_default(self, tmp_path) -> None:
+        path = self._plant(tmp_path)
+        assert len(load_clump_glb(path)[3]) \
+            == len(load_clump_glb(path, mesh=0)[3])
+
+    def test_a_rung_can_be_asked_for_by_index(self, tmp_path) -> None:
+        path = self._plant(tmp_path)
+        assert len(load_clump_glb(path, mesh=1)[3]) \
+            < len(load_clump_glb(path, mesh=0)[3])
+
+    def test_a_rung_can_be_asked_for_by_name(self, tmp_path) -> None:
+        path = self._plant(tmp_path)
+        np.testing.assert_array_equal(load_clump_glb(path, mesh='fern_a_far')[3],
+                                      load_clump_glb(path, mesh=1)[3])
+
+    def test_every_rung_reads_the_same_texture(self, tmp_path) -> None:
+        path = self._plant(tmp_path)
+        assert load_clump_glb(path, mesh=0)[4].tobytes() \
+            == load_clump_glb(path, mesh=1)[4].tobytes()
+
+    def test_a_name_the_file_does_not_have_says_what_it_does(self,
+                                                             tmp_path) -> None:
+        path = self._plant(tmp_path)
+        with pytest.raises(KeyError) as raised:
+            load_clump_glb(path, mesh='fern_b_near')
+        assert 'fern_a_near' in str(raised.value)      # names what there is
+
+
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
