@@ -77,6 +77,11 @@ OpenGLContext/
 │   │                 # that its imports are made by the submitting thread
 │   ├── gltf/         # glTF 2.0 / GLB
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.html
+├── meshlod/          # Levels of detail decimated from a mesh, and what each
+│                     # one costs to look at -- plans/MESH-DECIMATION.md
+│   ├── chain.py      # One reduction, sliced into rungs by opengl_decimate
+│   └── quality.py    # What a level looks like, measured by rendering it:
+│                     # the outline it changes and the shading it changes
 ├── move/             # Camera, movement modes, walking -- docs/navigation.html
 │   └── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
 ├── nav/              # Navigation mesh generated from a collision mesh

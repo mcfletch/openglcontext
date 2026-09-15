@@ -46,6 +46,60 @@ rather than quietly:
    geometric accuracy. Hoppe's extended quadric is what closes it properly, and
    it is what is left of M2.
 
+### Measured on real assets
+
+**Quality, on Poly Haven's `marble_bust_01` (CC0, 17,456 triangles).** Levels
+built by halving, measured by `OpenGLContext.meshlod` rendering each against the
+original over distances from touching the surface to sixty-four radii out. The
+share of the object's own pixels that change, split into outline and shading:
+
+| Level | Triangles | Outline change | Shading change |
+|---|---|---|---|
+| 1 | 8,728 | 0.04 – 0.12% | 2.3 – 6.6% |
+| 2 | 4,364 | 0.12 – 0.30% | 11.2 – 14.7% |
+| 3 | 2,182 | 0.27 – 0.91% | 19.5 – 24.7% |
+| 4 | 1,090 | 0.49 – 1.36% | 31.5 – 36.5% |
+| 5 | 544 | 0.98 – 2.04% | 42.5 – 47.1% |
+
+**The shape survives; the shading is what goes.** At a thirty-second of the
+triangles the outline still moves by one to two per cent -- the face is
+recognisable, the eyes and nose still read. What degrades is faceting, and it
+degrades steadily rather than suddenly.
+
+That splits the remaining work cleanly. More triangles are not what the coarse
+levels need: a normal map baked from the fine mesh (M10) is, and it is worth
+more than any amount of decimator tuning.
+
+**Carrying normals beats recomputing them, measured.** A surviving corner keeps
+the normal it arrived with, so a flat triangle shades like the curve it
+replaced. Against recomputing them from the coarse surface, on the same bust:
+3.0–6.6% shading change at half the triangles instead of 9.0–14.0%, with an
+identical outline. `build_chain` carries by default for that reason.
+
+**Speed, on Poly Haven's `coastal_cliff_04` (CC0, 1,537,926 triangles).** Three
+defects found by profiling the real scan rather than the synthetic shapes:
+
+| | Before | After |
+|---|---|---|
+| `classify` | 18.7 s | 1.55 s |
+| Per contraction, allocated | 3.84 MB | 0.005 MB |
+
+- **Classification was a per-corner Python pass** over 4.6M corners, and two
+  `np.unique(..., axis=0)` calls that sort rows as voids. Fan connectivity is now
+  whole-array hooking and pointer-jumping, and edge pairs are encoded as one
+  `int64` so the sort is an integer sort.
+- **Every contraction copied the whole position array** to move one vertex --
+  18.5 MB per contraction on this scan, which is what made the reduction
+  quadratic. Now only the affected corners are gathered.
+- **Counting live faces scanned a 1.5M-element flag array**, once per
+  contraction. Now a running total.
+
+**Still open, and the reason M4 is not optional.** A 50% reduction of the cliff
+was killed by the out-of-memory killer: the heap holds an entry per candidate
+edge -- 2.3M Python tuples for this mesh -- and that is before the quadrics.
+Memory, not just time, is what stops the pure-Python path at this scale. The
+batch-independent-set schedule and the compiled core are both aimed at it.
+
 The rest of this document is the plan as it stands.
 
 ## What this is for
