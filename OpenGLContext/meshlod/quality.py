@@ -26,13 +26,13 @@ from typing import Any, Sequence
 import numpy as np
 
 __all__ = [
-    'CHANNEL_DELTA',
-    'object_pop',
-    'silhouette',
-    'safe_distance',
-    'LODProbe',
-    'LevelReport',
-    'measure_chain',
+    "CHANNEL_DELTA",
+    "object_pop",
+    "silhouette",
+    "safe_distance",
+    "LODProbe",
+    "LevelReport",
+    "measure_chain",
 ]
 
 #: How far one channel must move for a pixel to count as changed, out of 255.
@@ -107,10 +107,10 @@ def safe_distance(distances: Sequence[float], pops: Sequence[float], budget: flo
     than snapped to one, so the answer does not depend on how finely the sweep
     was taken. ``inf`` means no distance is far enough.
     """
-    span = np.asarray(distances, dtype='d')
-    measured = np.asarray(pops, dtype='d')
+    span = np.asarray(distances, dtype="d")
+    measured = np.asarray(pops, dtype="d")
     if not len(span) or measured[-1] > budget:
-        return float('inf')
+        return float("inf")
     # The first sample, walking in from the far end, that breaks the budget.
     over = np.flatnonzero(measured > budget)
     if not len(over):
@@ -202,11 +202,22 @@ void main() {
 
     def _build(self) -> None:
         from OpenGL.GL import (
-            GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT, GL_DEPTH_COMPONENT24,
-            GL_FRAGMENT_SHADER, GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE, GL_RENDERBUFFER,
-            GL_RGBA8, GL_VERTEX_SHADER, glBindFramebuffer, glBindRenderbuffer,
-            glCheckFramebufferStatus, glFramebufferRenderbuffer, glGenFramebuffers,
-            glGenRenderbuffers, glRenderbufferStorage,
+            GL_COLOR_ATTACHMENT0,
+            GL_DEPTH_ATTACHMENT,
+            GL_DEPTH_COMPONENT24,
+            GL_FRAGMENT_SHADER,
+            GL_FRAMEBUFFER,
+            GL_FRAMEBUFFER_COMPLETE,
+            GL_RENDERBUFFER,
+            GL_RGBA8,
+            GL_VERTEX_SHADER,
+            glBindFramebuffer,
+            glBindRenderbuffer,
+            glCheckFramebufferStatus,
+            glFramebufferRenderbuffer,
+            glGenFramebuffers,
+            glGenRenderbuffers,
+            glRenderbufferStorage,
         )
         from OpenGL.GL.shaders import compileProgram, compileShader
 
@@ -229,9 +240,7 @@ void main() {
         complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
         if not complete:
-            raise RuntimeError(
-                'offscreen framebuffer incomplete at %dx%d' % (self.size, self.size)
-            )
+            raise RuntimeError("offscreen framebuffer incomplete at %dx%d" % (self.size, self.size))
 
     def render(
         self,
@@ -252,18 +261,43 @@ void main() {
         what the close end of a sweep asks for.
         """
         from OpenGL.GL import (
-            GL_ARRAY_BUFFER, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_DEPTH_TEST,
-            GL_ELEMENT_ARRAY_BUFFER, GL_FALSE, GL_FLOAT, GL_FRAMEBUFFER, GL_RGB,
-            GL_STATIC_DRAW, GL_TRIANGLES, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT,
-            glBindBuffer, glBindFramebuffer, glBindVertexArray, glBufferData, glClear,
-            glClearColor, glDeleteBuffers, glDeleteVertexArrays, glDrawElements, glEnable,
-            glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays,
-            glGetUniformLocation, glReadPixels, glUniformMatrix3fv, glUniformMatrix4fv,
-            glUseProgram, glVertexAttribPointer, glViewport,
+            GL_ARRAY_BUFFER,
+            GL_COLOR_BUFFER_BIT,
+            GL_DEPTH_BUFFER_BIT,
+            GL_DEPTH_TEST,
+            GL_ELEMENT_ARRAY_BUFFER,
+            GL_FALSE,
+            GL_FLOAT,
+            GL_FRAMEBUFFER,
+            GL_RGB,
+            GL_STATIC_DRAW,
+            GL_TRIANGLES,
+            GL_UNSIGNED_BYTE,
+            GL_UNSIGNED_INT,
+            glBindBuffer,
+            glBindFramebuffer,
+            glBindVertexArray,
+            glBufferData,
+            glClear,
+            glClearColor,
+            glDeleteBuffers,
+            glDeleteVertexArrays,
+            glDrawElements,
+            glEnable,
+            glEnableVertexAttribArray,
+            glGenBuffers,
+            glGenVertexArrays,
+            glGetUniformLocation,
+            glReadPixels,
+            glUniformMatrix3fv,
+            glUniformMatrix4fv,
+            glUseProgram,
+            glVertexAttribPointer,
+            glViewport,
         )
 
-        positions = np.ascontiguousarray(positions, dtype='f4')
-        normals = np.ascontiguousarray(normals, dtype='f4')
+        positions = np.ascontiguousarray(positions, dtype="f4")
+        normals = np.ascontiguousarray(normals, dtype="f4")
         indices = np.ascontiguousarray(indices, dtype=np.uint32).reshape(-1)
 
         vao = int(glGenVertexArrays(1))
@@ -290,16 +324,25 @@ void main() {
 
             near = max(distance - radius, distance * 1e-3, 1e-6)
             projection = _perspective(fovy, 1.0, near, distance + 3.0 * radius + 1e-6)
-            modelview = _look_at(distance, radius, np.asarray(centre, dtype='d'), rotation)
+            modelview = _look_at(distance, radius, np.asarray(centre, dtype="d"), rotation)
             glUniformMatrix4fv(
-                glGetUniformLocation(self._program, 'projection'), 1, GL_FALSE,
-                np.ascontiguousarray(projection.T, dtype='f4'))
+                glGetUniformLocation(self._program, "projection"),
+                1,
+                GL_FALSE,
+                np.ascontiguousarray(projection.T, dtype="f4"),
+            )
             glUniformMatrix4fv(
-                glGetUniformLocation(self._program, 'modelview'), 1, GL_FALSE,
-                np.ascontiguousarray(modelview.T, dtype='f4'))
+                glGetUniformLocation(self._program, "modelview"),
+                1,
+                GL_FALSE,
+                np.ascontiguousarray(modelview.T, dtype="f4"),
+            )
             glUniformMatrix3fv(
-                glGetUniformLocation(self._program, 'normalMatrix'), 1, GL_FALSE,
-                np.ascontiguousarray(modelview[:3, :3].T, dtype='f4'))
+                glGetUniformLocation(self._program, "normalMatrix"),
+                1,
+                GL_FALSE,
+                np.ascontiguousarray(modelview[:3, :3].T, dtype="f4"),
+            )
 
             glDrawElements(GL_TRIANGLES, len(indices), GL_UNSIGNED_INT, None)
             raw = glReadPixels(0, 0, self.size, self.size, GL_RGB, GL_UNSIGNED_BYTE)
@@ -316,7 +359,9 @@ void main() {
     def release(self) -> None:
         """Give the framebuffer, its renderbuffers and the program back."""
         from OpenGL.GL import (
-            glDeleteFramebuffers, glDeleteProgram, glDeleteRenderbuffers,
+            glDeleteFramebuffers,
+            glDeleteProgram,
+            glDeleteRenderbuffers,
         )
 
         if self._renderbuffers:
@@ -339,7 +384,7 @@ void main() {
 def _perspective(fovy: float, aspect: float, near: float, far: float) -> Any:
     """A perspective projection, row-major with the translation in the last row."""
     f = 1.0 / np.tan(np.radians(fovy) / 2.0)
-    out = np.zeros((4, 4), dtype='d')
+    out = np.zeros((4, 4), dtype="d")
     out[0, 0] = f / aspect
     out[1, 1] = f
     out[2, 2] = (far + near) / (near - far)
@@ -364,12 +409,12 @@ def _look_at(distance: float, radius: float, centre: Any, rotation: float) -> An
             [-np.sin(angle), 0.0, np.cos(angle), 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ],
-        dtype='d',
+        dtype="d",
     )
     del radius
-    move = np.eye(4, dtype='d')
-    move[:3, 3] = -np.asarray(centre, dtype='d')
-    back = np.eye(4, dtype='d')
+    move = np.eye(4, dtype="d")
+    move[:3, 3] = -np.asarray(centre, dtype="d")
+    back = np.eye(4, dtype="d")
     back[2, 3] = -distance
     return back @ turn @ move
 
@@ -402,8 +447,8 @@ def measure_chain(
     reports = []
     references = [
         probe.render(
-            reference.attributes['POSITION'],
-            reference.attributes['NORMAL'],
+            reference.attributes["POSITION"],
+            reference.attributes["NORMAL"],
             reference.indices,
             distance=(1.0 + multiple) * chain.radius,
             radius=chain.radius,
@@ -421,8 +466,8 @@ def measure_chain(
                 shadings.append(0.0)
                 continue
             rendered = probe.render(
-                level.attributes['POSITION'],
-                level.attributes['NORMAL'],
+                level.attributes["POSITION"],
+                level.attributes["NORMAL"],
                 level.indices,
                 distance=(1.0 + multiple) * chain.radius,
                 radius=chain.radius,

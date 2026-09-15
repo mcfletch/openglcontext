@@ -25,7 +25,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-__all__ = ['LODLevel', 'LODChain', 'build_chain']
+__all__ = ["LODLevel", "LODChain", "build_chain"]
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,7 @@ class LODLevel:
     @property
     def vertex_count(self) -> int:
         """Vertices at this level."""
-        return len(self.attributes['POSITION'])
+        return len(self.attributes["POSITION"])
 
 
 class LODChain(Sequence[LODLevel]):
@@ -64,7 +64,7 @@ class LODChain(Sequence[LODLevel]):
 
     def __init__(self, levels: Sequence[LODLevel], centre: Any, radius: float) -> None:
         self._levels = tuple(levels)
-        self.centre = np.asarray(centre, dtype='d')
+        self.centre = np.asarray(centre, dtype="d")
         self.radius = float(radius)
 
     def __len__(self) -> int:
@@ -74,8 +74,8 @@ class LODChain(Sequence[LODLevel]):
         return self._levels[index]
 
     def __repr__(self) -> str:
-        counts = ', '.join(str(level.triangle_count) for level in self._levels)
-        return '<LODChain %s triangles>' % (counts,)
+        counts = ", ".join(str(level.triangle_count) for level in self._levels)
+        return "<LODChain %s triangles>" % (counts,)
 
 
 def bounding_sphere(positions: Any) -> tuple[Any, float]:
@@ -85,7 +85,7 @@ def bounding_sphere(positions: Any) -> tuple[Any, float]:
     on one side of a model does not drag the centre into it and leave the
     silhouette lopsided in the measurements.
     """
-    points = np.asarray(positions, dtype='d')
+    points = np.asarray(positions, dtype="d")
     if not len(points):
         return np.zeros(3), 0.0
     centre = 0.5 * (points.max(axis=0) + points.min(axis=0))
@@ -114,7 +114,7 @@ def build_chain(
     """
     from opengl_decimate import SimplifyOptions, certify as certification, collapse_sequence
 
-    positions = np.asarray(attributes['POSITION'])
+    positions = np.asarray(attributes["POSITION"])
     centre, radius = bounding_sphere(positions)
     original = len(np.asarray(indices).reshape(-1)) // 3
 
@@ -134,16 +134,14 @@ def build_chain(
     # The outline is identical either way, since normals do not move a vertex.
     # `recompute_normals=True` is still worth having where the input's normals
     # are wrong or absent.
-    options.setdefault('recompute_normals', False)
+    options.setdefault("recompute_normals", False)
     sequence = collapse_sequence(
         attributes, indices, SimplifyOptions(target_ratio=ratio, **options)
     )
 
     built = [
         LODLevel(
-            attributes={
-                name: np.asarray(value).copy() for name, value in attributes.items()
-            },
+            attributes={name: np.asarray(value).copy() for name, value in attributes.items()},
             indices=np.ascontiguousarray(indices, dtype=np.uint32).reshape(-1),
             error=0.0,
             vertex_map=np.arange(len(positions), dtype=np.int64),
@@ -164,7 +162,7 @@ def build_chain(
             error = certification.surface_deviation(
                 positions,
                 indices,
-                result.attributes['POSITION'],
+                result.attributes["POSITION"],
                 result.indices,
                 samples=4000,
             ).max

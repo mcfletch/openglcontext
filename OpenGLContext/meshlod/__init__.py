@@ -13,6 +13,7 @@ fraction of the object's own pixels that change when a level is swapped in, at a
 given distance. That number is what the switching distances are derived from.
 """
 
+from OpenGLContext.meshlod.asset import LODAsset, LODEntry, sidecar_name, write_chain
 from OpenGLContext.meshlod.chain import LODChain, LODLevel, build_chain
 from OpenGLContext.meshlod.quality import (
     LODProbe,
@@ -24,13 +25,18 @@ from OpenGLContext.meshlod.quality import (
 
 __all__ = [
     # Making the levels
-    'build_chain',
-    'LODChain',
-    'LODLevel',
+    "build_chain",
+    "LODChain",
+    "LODLevel",
+    # Keeping them on disk, and reading back only the one that is wanted
+    "write_chain",
+    "LODAsset",
+    "LODEntry",
+    "sidecar_name",
     # Finding out whether they are any good
-    'LODProbe',
-    'measure_chain',
-    'object_pop',
-    'safe_distance',
-    'silhouette',
+    "LODProbe",
+    "measure_chain",
+    "object_pop",
+    "safe_distance",
+    "silhouette",
 ]
