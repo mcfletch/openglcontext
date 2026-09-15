@@ -40,7 +40,16 @@ from OpenGLContext.loaders.gltf.transforms import _local_matrix_rv
 
 log = logging.getLogger(__name__)
 
-__all__ = ["AssetLibrary", "bounds", "brighten", "merged_mesh", "recolour", "seated", "shapes"]
+__all__ = [
+    "AssetLibrary",
+    "bounds",
+    "brighten",
+    "merged_by_material",
+    "merged_mesh",
+    "recolour",
+    "seated",
+    "shapes",
+]
 
 
 class AssetLibrary(object):
@@ -148,54 +157,93 @@ def shapes(node: Any) -> Iterator[Any]:
         yield from shapes(child)
 
 
+def merged_by_material(node: Any) -> "list":
+    """A subtree's triangle meshes in world space, one merged mesh per material.
+
+    Returns ``[(material, attributes, indices), ...]`` in the order the
+    materials were first met, where ``attributes`` carries ``POSITION``,
+    ``NORMAL`` and -- wherever any piece of the group had them --
+    ``TEXCOORD_0``.
+
+    A model cannot become *one* mesh without losing what it looks like, since a
+    mesh draws with one material. Grouping by material is the most that can be
+    merged while keeping that, and it is enough for the usual case: what splits
+    a model into primitives is generally the 65,535 vertices a 16-bit index can
+    name, not a change of material.
+
+        for material, attributes, indices in merged_by_material(scene.group):
+            level = simplify(attributes, indices, options)
+    """
+    collected: list = []
+    _merge(node, np.eye(4), collected, ())
+    groups: dict[int, list] = {}
+    order: list = []
+    for material, piece in collected:
+        key = id(material)
+        if key not in groups:
+            groups[key] = [material, []]
+            order.append(key)
+        groups[key][1].append(piece)
+    return [(groups[key][0],) + _joined(groups[key][1]) for key in order]
+
+
 def merged_mesh(node: Any) -> "Optional[Tuple[dict, np.ndarray]]":
     """A subtree's triangle meshes as one glTF-shaped mesh in world space.
 
-    Returns ``({'POSITION': (v, 3), 'NORMAL': (v, 3)}, indices)``, or None where
-    the subtree holds no triangles.
+    Returns ``({'POSITION': (v, 3), 'NORMAL': (v, 3), ...}, indices)``, or None
+    where the subtree holds no triangles. Materials are ignored: this is for
+    work that asks about the *surface*, where a model's primitives are in the
+    way.
 
     A model is rarely one primitive. It is one per material, and one per 65,535
     vertices wherever an exporter wrote 16-bit indices -- a scan of half a
-    million triangles arrives as twenty-five pieces that happen to touch. Work
-    that asks about the *surface* rather than about the draw calls wants them
-    back together: a decimator handed the pieces separately keeps a seam along
-    every join, because neither side knows the other shares its edge.
+    million triangles arrives as twenty-five pieces that happen to touch. A
+    decimator handed the pieces separately keeps a seam along every join,
+    because neither side knows the other shares its edge.
 
     Positions and normals are brought into world space, so the pieces line up
     the way they are drawn. A primitive carrying no normals is given the
     surface's own, since anything measuring or shading the result needs them.
+    Use :func:`merged_by_material` where the result has to be drawn with the
+    model's own materials.
 
         from OpenGLContext.loaders.assets import merged_mesh
         from OpenGLContext.loaders.gltf import load_gltf
 
         attributes, indices = merged_mesh(load_gltf('scan.glb').group)
     """
-    from OpenGLContext.loaders.gltf.meshes import estimate_normals
-
-    positions: list = []
-    normals: list = []
-    triangles: list = []
-    _merge(node, np.eye(4), positions, normals, triangles, (), [0])
-    if not positions:
+    collected: list = []
+    _merge(node, np.eye(4), collected, ())
+    if not collected:
         return None
-    merged = np.concatenate(positions).astype("f4")
-    indices = np.concatenate(triangles).astype(np.uint32)
-    together = np.concatenate(normals) if normals else None
-    if together is None or len(together) != len(merged):
-        together = estimate_normals(merged, indices)
-    return {"POSITION": merged, "NORMAL": np.ascontiguousarray(together, dtype="f4")}, indices
+    return _joined([piece for _material, piece in collected])
 
 
-def _merge(
-    node: Any,
-    world: np.ndarray,
-    positions: list,
-    normals: list,
-    triangles: list,
-    ancestry: Tuple[int, ...],
-    offset: list,
-) -> None:
-    """Append one subtree's world-space vertices and triangles to the lists."""
+def _joined(pieces: "Sequence") -> "Tuple[dict, np.ndarray]":
+    """Several world-space pieces as one mesh, indices moved along."""
+    positions, normals, texcoords, triangles = [], [], [], []
+    offset = 0
+    textured = any(piece[2] is not None for piece in pieces)
+    for points, turned, uv, faces in pieces:
+        positions.append(points)
+        normals.append(turned)
+        if textured:
+            # A piece without its own is given zeroes rather than the group
+            # losing the coordinates every other piece brought.
+            texcoords.append(np.zeros((len(points), 2), "f4") if uv is None else uv)
+        triangles.append(np.asarray(faces).reshape(-1) + offset)
+        offset += len(points)
+    attributes = {
+        "POSITION": np.ascontiguousarray(np.concatenate(positions), dtype="f4"),
+        "NORMAL": np.ascontiguousarray(np.concatenate(normals), dtype="f4"),
+    }
+    if textured:
+        attributes["TEXCOORD_0"] = np.ascontiguousarray(np.concatenate(texcoords), dtype="f4")
+    return attributes, np.concatenate(triangles).astype(np.uint32)
+
+
+def _merge(node: Any, world: np.ndarray, collected: list, ancestry: Tuple[int, ...]) -> None:
+    """Append ``(material, (positions, normals, texcoords, indices))`` per mesh."""
     from OpenGLContext.loaders.gltf.meshes import estimate_normals
 
     # Cycle-detect on the path rather than globally: one mesh mounted under
@@ -214,12 +262,10 @@ def _merge(
             log.warning(
                 "%r has a pose that does not resolve; merged at its parent", node, exc_info=True
             )
-    geometry = getattr(node, "geometry", None)
-    mesh = _triangle_arrays(geometry)
+    mesh = _triangle_arrays(getattr(node, "geometry", None))
     if mesh is not None:
-        points, faces, given = mesh
+        points, faces, given, uv = mesh
         placed = np.column_stack([points, np.ones(len(points))]) @ world
-        positions.append(placed[:, :3])
         if given is None:
             given = estimate_normals(points, faces)
         # Normals are directions: the translation must not reach them, and a
@@ -228,15 +274,14 @@ def _merge(
         turned = np.asarray(given, dtype="d") @ world[:3, :3]
         lengths = np.linalg.norm(turned, axis=1)
         turned[lengths > 0] /= lengths[lengths > 0][:, None]
-        normals.append(turned)
-        triangles.append(np.asarray(faces).reshape(-1) + offset[0])
-        offset[0] += len(points)
+        material = getattr(getattr(node, "appearance", None), "material", None)
+        collected.append((material, (placed[:, :3], turned, uv, faces)))
     for child in getattr(node, "children", None) or ():
-        _merge(child, world, positions, normals, triangles, ancestry, offset)
+        _merge(child, world, collected, ancestry)
 
 
 def _triangle_arrays(geometry: Any) -> Any:
-    """``(positions, indices, normals-or-None)`` of an indexed triangle mesh."""
+    """``(positions, indices, normals, texcoords)`` of an indexed triangle mesh."""
     from OpenGL.GL import GL_TRIANGLES
 
     points = getattr(geometry, "positions", None)
@@ -245,7 +290,12 @@ def _triangle_arrays(geometry: Any) -> Any:
         return None
     if getattr(geometry, "draw_mode", GL_TRIANGLES) != GL_TRIANGLES:
         return None
-    return np.asarray(points), np.asarray(faces).reshape(-1), getattr(geometry, "normals", None)
+    return (
+        np.asarray(points),
+        np.asarray(faces).reshape(-1),
+        getattr(geometry, "normals", None),
+        getattr(geometry, "texcoords", None),
+    )
 
 
 def brighten(node: Any, glow: float) -> int:

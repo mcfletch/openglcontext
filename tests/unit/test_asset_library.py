@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext.loaders.assets import (
+    merged_by_material,
     merged_mesh,
     AssetLibrary,
     bounds,
@@ -346,3 +347,73 @@ class TestMergingAModelIntoOneMesh:
         attributes, _indices = merged_mesh(Shape(geometry=bare))
         assert attributes["NORMAL"].shape == (3, 3)
         assert attributes["NORMAL"][0] == pytest.approx((0.0, 0.0, 1.0), abs=1e-6)
+
+
+class TestMergingOneMeshPerMaterial:
+    """A textured model cannot become one mesh: a mesh draws with one material.
+
+    Grouping by material is the most a reduction can merge without losing what
+    the surface looks like, and it is enough -- what splits a model into
+    primitives is usually the index width, not the material.
+    """
+
+    def _two_materials(self):
+        red, blue = PBRMaterial(baseColor=(1, 0, 0)), PBRMaterial(baseColor=(0, 0, 1))
+        return (
+            red,
+            blue,
+            Transform(
+                children=[
+                    Shape(geometry=_quad(), appearance=Appearance(material=red)),
+                    Shape(geometry=_quad(), appearance=Appearance(material=blue)),
+                    Shape(geometry=_quad(), appearance=Appearance(material=red)),
+                ]
+            ),
+        )
+
+    def test_the_pieces_sharing_a_material_become_one_mesh(self):
+        red, blue, group = self._two_materials()
+        grouped = merged_by_material(group)
+        assert len(grouped) == 2
+        by_material = {
+            id(material): (attributes, indices) for material, attributes, indices in grouped
+        }
+        assert len(by_material[id(red)][1]) == 12  # two quads
+        assert len(by_material[id(blue)][1]) == 6  # one
+
+    def test_each_group_is_a_mesh_in_its_own_right(self):
+        _red, _blue, group = self._two_materials()
+        for _material, attributes, indices in merged_by_material(group):
+            assert len(attributes["POSITION"]) == len(attributes["NORMAL"])
+            assert indices.max() < len(attributes["POSITION"])
+
+    def test_the_order_is_the_order_the_materials_were_met_in(self):
+        """So a caller's report reads the same way twice."""
+        red, blue, group = self._two_materials()
+        assert [id(m) for m, _a, _i in merged_by_material(group)] == [id(red), id(blue)]
+
+    def test_texture_coordinates_come_along(self):
+        """Without them a decimated mesh cannot be drawn with its own texture."""
+        uv = np.array([(0, 0), (1, 0), (1, 1), (0, 1)], "f")
+        mesh = _quad()
+        mesh.texcoords = uv
+        grouped = merged_by_material(Shape(geometry=mesh, appearance=Appearance()))
+        assert grouped[0][1]["TEXCOORD_0"] == pytest.approx(uv)
+
+    def test_a_group_where_only_some_pieces_have_uvs_still_merges(self):
+        """The ones without get zeroes rather than the group losing them all."""
+        material = PBRMaterial()
+        textured, bare = _quad(), _quad()
+        textured.texcoords = np.array([(0, 0), (1, 0), (1, 1), (0, 1)], "f")
+        group = Transform(
+            children=[
+                Shape(geometry=textured, appearance=Appearance(material=material)),
+                Shape(geometry=bare, appearance=Appearance(material=material)),
+            ]
+        )
+        _material, attributes, _indices = merged_by_material(group)[0]
+        assert attributes["TEXCOORD_0"].shape == (8, 2)
+        assert attributes["TEXCOORD_0"][4:] == pytest.approx(0.0)
+
+    def test_a_subtree_with_no_geometry_groups_to_nothing(self):
+        assert merged_by_material(Transform(children=[])) == []
