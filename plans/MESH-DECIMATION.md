@@ -94,11 +94,62 @@ defects found by profiling the real scan rather than the synthetic shapes:
 - **Counting live faces scanned a 1.5M-element flag array**, once per
   contraction. Now a running total.
 
-**Still open, and the reason M4 is not optional.** A 50% reduction of the cliff
-was killed by the out-of-memory killer: the heap holds an entry per candidate
-edge -- 2.3M Python tuples for this mesh -- and that is before the quadrics.
-Memory, not just time, is what stops the pure-Python path at this scale. The
-batch-independent-set schedule and the compiled core are both aimed at it.
+**M4 landed, and it is what made the scale target real.** The NumPy loop ran
+at 371 contractions a second and needed half a gigabyte of face-per-point sets
+before it started. The same algorithm in Cython -- the faces on a point as a
+doubly-linked list over a fixed pool of 3F incidences, the queue as parallel
+arrays -- reduces the cliff to 50% in 6.3 seconds and to 2% in 9.4, under a
+gigabyte, and takes a 6,982,937-triangle tree to 5% in 67 seconds. That is
+120,000 contractions a second against 371.
+
+It is the *same* reduction: the compiled and NumPy paths produce identical
+contractions in identical order, which took two things. The queue is seeded
+from the caller's edge list in the caller's order, because equal-priced edges
+separate on the serial they were queued with and a flat region is full of edges
+costing nothing. And staleness is a version per point rather than a comparison
+of prices -- a stale entry whose price has not changed is exactly what a flat
+region produces.
+
+**A correction.** The killed run recorded above was blamed on the reduction's
+memory. It was not: the certification was allocating a
+``(block, triangles, 3)`` temporary -- 256 points against 1.5M triangles is
+nine gigabytes for one block. Blocking over triangles as well as points bounds
+it. The reduction's own memory was never what failed.
+
+The compiled path is the accelerator the plan called Rust. It is **Cython**,
+for a concrete reason: there is no Rust toolchain in the development container,
+and Cython is what `opengl_extrusions`, `omi_physics` and `PyOpenGL-accelerate`
+already use, so the build, the fallback and the wheel matrix all follow a shape
+this workspace has.
+
+### What the levels ship as
+
+Baking is not optional at the scale this targets: two hundred assets at seconds
+each cannot be decimated when a player opens a door. The chain is baked once and
+shipped, and the file it ships in is **existing standards rather than a new
+format**:
+
+- **`MSFT_lod`** declares the levels. The node carrying it is the finest, `ids`
+  lists the coarser alternatives in decreasing detail, and
+  `MSFT_screencoverage` says where each takes over. A reader that does not know
+  the extension draws the finest level, which is the right default.
+- **A glb may point outside itself.** Its binary chunk is buffer zero and is the
+  one buffer with no `uri`; every other buffer is an ordinary glTF buffer and
+  may name an external file. The coarsest level rides inside the glb, so the
+  file always draws something; each finer level is a sidecar the operating
+  system never opens until it is wanted.
+- **glTF is addressable.** `accessor -> bufferView -> buffer` is an offset and a
+  length, so a level is a seek and a read, and opening a file parses only the
+  JSON chunk.
+
+`OpenGLContext.meshlod.asset` writes and reads that, and the streaming claims
+are tested by deleting the other levels' files.
+
+**3D Tiles is the alternative and is not the same tool.** The engine already
+implements it, and it is the right answer for streaming a *scene* -- a spatial
+hierarchy of many tiles, with refinement and geometric error. For one asset with
+discrete levels it puts a tileset in front of every model. The two compose: a 3D
+Tiles tile's content can be a glTF using `MSFT_lod`.
 
 The rest of this document is the plan as it stands.
 
